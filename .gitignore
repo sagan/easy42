@@ -1,0 +1,6 @@
+/web/dist
+node_modules
+/bin
+
+# ignore all root dir files by default
+/*.*

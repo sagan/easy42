@@ -1,0 +1,110 @@
+@import '@xyflow/react/dist/style.css';
+
+:root {
+  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  color-scheme: light;
+  background-color: #F8FAFC;
+  color: #0F172A;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  user-select: none;
+  background-color: #F8FAFC;
+}
+
+code, pre, .mono-font {
+  font-family: 'Fira Code', monospace !important;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #F1F5F9;
+}
+::-webkit-scrollbar-thumb {
+  background: #CBD5E1;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94A3B8;
+}
+
+/* React Flow Canvas Overrides */
+.react-flow__background {
+  background-color: #F8FAFC !important;
+}
+
+.react-flow__controls {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.08), 0 2px 4px -2px rgba(0, 0, 0, 0.08) !important;
+  border: 1px solid #E2E8F0 !important;
+  border-radius: 10px !important;
+  overflow: hidden;
+  background: #FFFFFF !important;
+}
+
+.react-flow__controls-button {
+  background: #FFFFFF !important;
+  border-bottom: 1px solid #E2E8F0 !important;
+  color: #64748B !important;
+  fill: #64748B !important;
+}
+
+.react-flow__controls-button:hover {
+  background: #F1F5F9 !important;
+  color: #0F172A !important;
+  fill: #0F172A !important;
+}
+
+.react-flow__minimap {
+  background-color: #FFFFFF !important;
+  border: 1px solid #E2E8F0 !important;
+  border-radius: 10px !important;
+  overflow: hidden;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05) !important;
+}
+
+/* Custom Edge Glow & Animation */
+@keyframes dashdraw {
+  to {
+    stroke-dashoffset: -20;
+  }
+}
+
+.edge-unsynced {
+  stroke-dasharray: 6, 6;
+  animation: dashdraw 1s linear infinite;
+  stroke: #D97706 !important;
+}
+
+.edge-synced {
+  stroke: #4F46E5 !important;
+}
+
+/* Node Handle styling */
+.react-flow__handle {
+  width: 10px !important;
+  height: 10px !important;
+  background-color: #4F46E5 !important;
+  border: 2px solid #FFFFFF !important;
+  transition: transform 0.2s ease, background-color 0.2s ease;
+}
+
+.react-flow__handle:hover {
+  transform: scale(1.4);
+  background-color: #0891B2 !important;
+}
+
+/* Glassmorphic Panels */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid #E2E8F0;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+}
