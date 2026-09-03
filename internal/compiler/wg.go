@@ -37,7 +37,7 @@ func GenerateWgConfigContent(
 
 	listenPort := selfEnd.ListenPort
 	if listenPort == 0 && peerNode != nil {
-		listenPort = DerivePortFromASN(peerNode.ASN)
+		listenPort = DerivePortFromIP(peerNode.IP)
 	}
 
 	peerAddrOnly, err := DeriveIPv6LinkLocalAddressOnly(peerNode.IP)
@@ -73,7 +73,7 @@ func GenerateWgConfigContent(
 		if peerEnd != nil && peerEnd.ListenPort > 0 {
 			peerListenPort = peerEnd.ListenPort
 		} else if selfNode != nil {
-			peerListenPort = DerivePortFromASN(selfNode.ASN)
+			peerListenPort = DerivePortFromIP(selfNode.IP)
 		}
 		derivedEP, _ := ResolvePeerEndpoint(selfNode, peerNode, nil, peerListenPort)
 		endpoint = derivedEP

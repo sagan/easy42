@@ -1,7 +1,7 @@
 import React, { memo } from 'react';
 import { Handle, Position, NodeProps } from '@xyflow/react';
 import { Box, Typography, Chip, IconButton, Tooltip } from '@mui/material';
-import { Server, MoreVertical, Globe, HardDrive } from 'lucide-react';
+import { Server, MoreVertical, Globe, HardDrive, Tag } from 'lucide-react';
 import { Node, NodeStatus } from '../../types/api';
 
 export interface NodeData {
@@ -146,6 +146,30 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
             {node.entrypoints?.filter(e => e.ip && e.ip !== '').length || 0} Endpoints
           </Typography>
         </Box>
+
+        {/* Node Tags */}
+        {node.tags && node.tags.length > 0 && (
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 0.5, alignItems: 'center' }}>
+            <Tag size={11} color="#64748B" />
+            {node.tags.map((tag) => (
+              <Chip
+                key={tag}
+                label={`#${tag}`}
+                size="small"
+                sx={{
+                  height: 18,
+                  fontSize: '0.625rem',
+                  fontWeight: 600,
+                  backgroundColor: 'rgba(8, 145, 178, 0.08)',
+                  color: '#0891B2',
+                  border: '1px solid rgba(8, 145, 178, 0.25)',
+                  borderRadius: '4px',
+                  px: 0.2,
+                }}
+              />
+            ))}
+          </Box>
+        )}
       </Box>
     </Box>
   );

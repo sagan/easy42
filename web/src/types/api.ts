@@ -21,6 +21,7 @@ export interface Node {
   tags?: string[];
   x?: number;
   y?: number;
+  modified_at?: string;
 }
 
 export interface LinkEnd {
@@ -39,6 +40,7 @@ export interface Link {
   from: LinkEnd;
   to: LinkEnd;
   tags?: string[];
+  modified_at?: string;
 }
 
 export interface InterfaceInfo {
@@ -101,7 +103,11 @@ export interface SyncAction {
   target_file: string;
   file_content?: string;
   diff?: string;
+  command?: string;
   description: string;
+  needs_apply?: boolean;
+  status?: 'pending' | 'synced';
+  diff_status?: 'create' | 'update' | 'delete' | 'synced';
 }
 
 export interface SyncResult {
@@ -116,4 +122,39 @@ export interface SyncResult {
 export interface SyncStatus {
   last_sync: string;
   results: SyncResult[];
+}
+
+export interface StateInterface {
+  name: string;
+  target_file: string;
+  config_hash: string;
+  peer_node?: string;
+  peer_pub_key?: string;
+  listen_port?: number;
+  address?: string;
+  status: string;
+  latest_handshake?: string;
+  working_state?: 'working' | 'not_working' | 'unknown';
+  transfer_rx_bytes?: number;
+  transfer_tx_bytes?: number;
+  applied_at?: string;
+}
+
+export interface StateNode {
+  name: string;
+  host: string;
+  last_seen?: string;
+  interfaces: Record<string, StateInterface>;
+}
+
+export interface NetworkState {
+  version: number;
+  updated_at: string;
+  nodes: Record<string, StateNode>;
+}
+
+export interface UpdateStateResponse {
+  success: boolean;
+  state: NetworkState;
+  warnings?: string[];
 }

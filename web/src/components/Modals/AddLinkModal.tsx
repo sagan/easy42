@@ -16,6 +16,7 @@ import {
 import { Link as LinkIcon, ArrowRightLeft, Edit2 } from 'lucide-react';
 import { api } from '../../api/client';
 import { Node, Link } from '../../types/api';
+import { derivePortFromIP } from '../../utils/port';
 
 interface AddLinkModalProps {
   open: boolean;
@@ -78,10 +79,10 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
     if (linkToEdit) return;
 
     if (toNode) {
-      setFromPort(Number(toNode.asn % 100000));
+      setFromPort(derivePortFromIP(toNode.ip));
     }
     if (fromNode) {
-      setToPort(Number(fromNode.asn % 100000));
+      setToPort(derivePortFromIP(fromNode.ip));
     }
 
     const getUsedEpMTU = (targetNode?: Node, sourceNode?: Node) => {
@@ -272,7 +273,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                     size="small"
                     value={fromPort}
                     onChange={(e) => setFromPort(Number(e.target.value))}
-                    helperText={`Derived from AS${toNode.asn}`}
+                    helperText={toNode.ip ? `Derived from ${toNode.ip}` : 'Default port: 20000'}
                   />
                   <TextField
                     label="MTU"
@@ -310,7 +311,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                     size="small"
                     value={toPort}
                     onChange={(e) => setToPort(Number(e.target.value))}
-                    helperText={`Derived from AS${fromNode.asn}`}
+                    helperText={fromNode.ip ? `Derived from ${fromNode.ip}` : 'Default port: 20000'}
                   />
                   <TextField
                     label="MTU"

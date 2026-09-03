@@ -341,4 +341,101 @@ func TestSyncMeshEmptyGraph(t *testing.T) {
 	if strings.TrimSpace(wSync.Body.String()) != "[]" {
 		t.Fatalf("Expected [] from sync execute on empty graph, got: %s", wSync.Body.String())
 	}
+
+	// 3. Test POST /api/sync?force=true with empty graph
+	reqSyncForce := httptest.NewRequest("POST", "/api/sync?force=true", nil)
+	reqSyncForce.AddCookie(cookie)
+	wSyncForce := httptest.NewRecorder()
+	srv.router.ServeHTTP(wSyncForce, reqSyncForce)
+
+	if wSyncForce.Code != http.StatusOK {
+		t.Fatalf("Sync force failed: %d %s", wSyncForce.Code, wSyncForce.Body.String())
+	}
+
+	// 4. Test GET /api/state
+	reqState := httptest.NewRequest("GET", "/api/state", nil)
+	reqState.AddCookie(cookie)
+	wState := httptest.NewRecorder()
+	srv.router.ServeHTTP(wState, reqState)
+
+	if wState.Code != http.StatusOK {
+		t.Fatalf("Get state failed: %d %s", wState.Code, wState.Body.String())
+	}
+
+	// 5. Test POST /api/state/update
+	reqStateUpdate := httptest.NewRequest("POST", "/api/state/update", nil)
+	reqStateUpdate.AddCookie(cookie)
+	wStateUpdate := httptest.NewRecorder()
+	srv.router.ServeHTTP(wStateUpdate, reqStateUpdate)
+
+	if wStateUpdate.Code != http.StatusOK {
+		t.Fatalf("Update state failed: %d %s", wStateUpdate.Code, wStateUpdate.Body.String())
+	}
 }
+
+func TestCreateMeshLinksAPI(t *testing.T) {
+	srv, tempDir, initPass := setupTestServer(t)
+	defer os.RemoveAll(tempDir)
+
+	// Login
+	loginBody, _ := json.Marshal(map[string]string{"password": initPass})
+	reqLogin := httptest.NewRequest("POST", "/api/auth/login", bytes.NewReader(loginBody))
+	wLogin := httptest.NewRecorder()
+	srv.router.ServeHTTP(wLogin, reqLogin)
+	cookie := wLogin.Result().Cookies()[0]
+
+	// Add 3 nodes
+	nodes := []config.Node{
+		{Name: "n1", Host: "10.0.0.1", IP: "192.168.100.1", Interface: "lo", ASN: 4299420001, Tags: []string{"zone1"}},
+		{Name: "n2", Host: "10.0.0.2", IP: "192.168.100.2", Interface: "lo", ASN: 4299420002, Tags: []string{"zone1"}},
+		{Name: "n3", Host: "10.0.0.3", IP: "192.168.100.3", Interface: "lo", ASN: 4299420003, Tags: []string{"zone2"}},
+	}
+	for _, n := range nodes {
+		b, _ := json.Marshal(n)
+		req := httptest.NewRequest("POST", "/api/nodes", bytes.NewReader(b))
+		req.AddCookie(cookie)
+		w := httptest.NewRecorder()
+		srv.router.ServeHTTP(w, req)
+		if w.Code != http.StatusCreated {
+			t.Fatalf("AddNode failed: %d %s", w.Code, w.Body.String())
+		}
+	}
+
+	// Create mesh for subset ["n1", "n2"]
+	meshBody, _ := json.Marshal(map[string]any{"nodes": []string{"n1", "n2"}})
+	reqMesh := httptest.NewRequest("POST", "/api/links/mesh", bytes.NewReader(meshBody))
+	reqMesh.AddCookie(cookie)
+	wMesh := httptest.NewRecorder()
+	srv.router.ServeHTTP(wMesh, reqMesh)
+
+	if wMesh.Code != http.StatusCreated {
+		t.Fatalf("CreateMesh failed: %d %s", wMesh.Code, wMesh.Body.String())
+	}
+
+	var createdLinks []*config.Link
+	if err := json.Unmarshal(wMesh.Body.Bytes(), &createdLinks); err != nil {
+		t.Fatalf("Unmarshal created links failed: %v", err)
+	}
+	if len(createdLinks) != 1 {
+		t.Fatalf("Expected 1 link created between n1 and n2, got %d", len(createdLinks))
+	}
+
+	// Now create mesh for all nodes
+	reqMeshAll := httptest.NewRequest("POST", "/api/links/mesh", bytes.NewReader([]byte("{}")))
+	reqMeshAll.AddCookie(cookie)
+	wMeshAll := httptest.NewRecorder()
+	srv.router.ServeHTTP(wMeshAll, reqMeshAll)
+
+	if wMeshAll.Code != http.StatusCreated {
+		t.Fatalf("CreateMeshAll failed: %d %s", wMeshAll.Code, wMeshAll.Body.String())
+	}
+
+	var createdLinksAll []*config.Link
+	if err := json.Unmarshal(wMeshAll.Body.Bytes(), &createdLinksAll); err != nil {
+		t.Fatalf("Unmarshal created links all failed: %v", err)
+	}
+	if len(createdLinksAll) != 2 {
+		t.Fatalf("Expected 2 additional links created for full mesh of 3, got %d", len(createdLinksAll))
+	}
+}
+

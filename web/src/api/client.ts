@@ -1,4 +1,4 @@
-import { AuthStatus, Node, Link, ProbeResult, NodeStatus, SyncAction, SyncResult, SyncStatus } from '../types/api';
+import { AuthStatus, Node, Link, ProbeResult, NodeStatus, SyncAction, SyncResult, SyncStatus, NetworkState, UpdateStateResponse } from '../types/api';
 
 const API_BASE = '/api';
 
@@ -100,6 +100,11 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(data),
     }),
+  createFullMesh: (nodes?: string[]) =>
+    request<Link[]>('/links/mesh', {
+      method: 'POST',
+      body: JSON.stringify({ nodes }),
+    }),
   updateLink: (data: {
     from_node: string;
     to_node: string;
@@ -119,10 +124,14 @@ export const api = {
       method: 'DELETE',
     }),
 
-  // Sync
+  // Sync & State
   getSyncPreview: () => request<SyncAction[]>('/sync/preview').then((res) => res || []),
-  executeSync: () => request<SyncResult[]>('/sync', {
+  executeSync: (force?: boolean) => request<SyncResult[]>(`/sync${force ? '?force=true' : ''}`, {
     method: 'POST',
   }).then((res) => res || []),
   getSyncStatus: () => request<SyncStatus>('/sync/status'),
+  updateState: () => request<UpdateStateResponse>('/state/update', {
+    method: 'POST',
+  }),
+  getState: () => request<NetworkState>('/state'),
 };

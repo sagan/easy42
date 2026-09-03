@@ -137,20 +137,8 @@ func ProbeHost(client *ssh.Client, host string, existingNodes []config.Node) (*P
 		}
 	}
 
-	// 5. Generate unique ASN in 4299420000-4299429999
-	usedASNs := make(map[uint64]bool)
-	for _, n := range existingNodes {
-		usedASNs[n.ASN] = true
-	}
-	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	var suggestedASN uint64 = 4299420001
-	for {
-		candidate := uint64(4299420000 + r.Intn(9999) + 1)
-		if !usedASNs[candidate] {
-			suggestedASN = candidate
-			break
-		}
-	}
+	// 5. Determine Suggested ASN (latest recently created/modified node's ASN)
+	suggestedASN := DetermineSuggestedASN(existingNodes)
 
 	// Determine target interface's MTU (fallbacks to 1500)
 	targetMTU := determineTargetMTU(client, host, ifaces, suggestedIface)
@@ -323,4 +311,38 @@ func determineTargetMTU(client *ssh.Client, host string, ifaces []config.Interfa
 	}
 
 	return targetMTU
+}
+
+// DetermineSuggestedASN returns the suggested ASN for a new node.
+// It uses a single same ASN across the network by default: the ASN of the latest
+// recently created or modified node. If there are no existing nodes (or none have
+// an ASN set), it falls back to generating a random ASN in 4299420000..4299429999.
+func DetermineSuggestedASN(existingNodes []config.Node) uint64 {
+	if len(existingNodes) > 0 {
+		var latestNode *config.Node
+		var latestTime time.Time
+		for i := range existingNodes {
+			n := &existingNodes[i]
+			if n.ASN == 0 {
+				continue
+			}
+			if latestNode == nil {
+				latestNode = n
+				latestTime = n.ModifiedAt
+			} else if !n.ModifiedAt.IsZero() && (latestTime.IsZero() || n.ModifiedAt.After(latestTime)) {
+				latestNode = n
+				latestTime = n.ModifiedAt
+			} else if latestTime.IsZero() && n.ModifiedAt.IsZero() {
+				// Fallback to insertion/slice order if timestamps are zero
+				latestNode = n
+			}
+		}
+		if latestNode != nil && latestNode.ASN > 0 {
+			return latestNode.ASN
+		}
+	}
+
+	// Fallback when network has no existing nodes with valid ASN
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	return uint64(4299420000 + r.Intn(9999) + 1)
 }

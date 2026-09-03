@@ -98,10 +98,10 @@ func ResolvePeerEndpointWithEntrypoint(nodeFrom *config.Node, nodeTo *config.Nod
 		if len(targetListenPort) > 0 && targetListenPort[0] > 0 {
 			port = targetListenPort[0]
 		} else if nodeFrom != nil {
-			// By default, nodeTo listens on port derived from nodeFrom.ASN
-			port = DerivePortFromASN(nodeFrom.ASN)
+			// By default, nodeTo listens on port derived from nodeFrom.IP
+			port = DerivePortFromIP(nodeFrom.IP)
 		} else {
-			port = DerivePortFromASN(nodeTo.ASN)
+			port = DerivePortFromIP(nodeTo.IP)
 		}
 	}
 

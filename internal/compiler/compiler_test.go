@@ -28,6 +28,27 @@ func TestDeriveIPv6LinkLocal(t *testing.T) {
 	}
 }
 
+func TestDerivePortFromIP(t *testing.T) {
+	port1 := DerivePortFromIP("192.168.100.1")
+	if port1 != 25532 {
+		t.Fatalf("Expected port 25532 for 192.168.100.1, got %d", port1)
+	}
+
+	port2 := DerivePortFromIP("192.168.100.2")
+	if port2 != 28389 {
+		t.Fatalf("Expected port 28389 for 192.168.100.2, got %d", port2)
+	}
+
+	portEmpty := DerivePortFromIP("")
+	if portEmpty != 20000 {
+		t.Fatalf("Expected port 20000 for empty IP, got %d", portEmpty)
+	}
+
+	if port1 < 20000 || port1 > 29999 || port2 < 20000 || port2 > 29999 {
+		t.Fatalf("Port out of range 20000-29999")
+	}
+}
+
 func TestDerivePortFromASN(t *testing.T) {
 	port := DerivePortFromASN(4299420001)
 	if port != 20001 {
@@ -66,8 +87,8 @@ func TestResolvePeerEndpoint(t *testing.T) {
 	}
 
 	ep, port := ResolvePeerEndpoint(nodeA, nodeB, nil)
-	if ep != "2.2.2.2:20001" || port != 20001 {
-		t.Fatalf("Expected 2.2.2.2:20001 / 20001, got %s / %d", ep, port)
+	if ep != "2.2.2.2:25532" || port != 25532 {
+		t.Fatalf("Expected 2.2.2.2:25532 / 25532, got %s / %d", ep, port)
 	}
 
 	// Test with explicit target listen port
@@ -137,7 +158,7 @@ func TestGenerateWgConfigContent(t *testing.T) {
 	if !strings.Contains(conf, "MTU = 1420") {
 		t.Fatalf("MTU = 1420 not in config:\n%s", conf)
 	}
-	if !strings.Contains(conf, "2.2.2.2:20001") {
+	if !strings.Contains(conf, "2.2.2.2:25532") {
 		t.Fatalf("Endpoint not correctly set in config:\n%s", conf)
 	}
 

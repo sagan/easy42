@@ -2,6 +2,7 @@ package compiler
 
 import (
 	"fmt"
+	"hash/fnv"
 	"net"
 	"strconv"
 	"strings"
@@ -40,7 +41,21 @@ func DeriveIPv6LinkLocalAddressOnly(ipv4Str string) (string, error) {
 	return parts[0], nil
 }
 
-// DerivePortFromASN extracts the last 5 digits of an ASN (e.g. 4299420001 -> 20001)
+// DerivePortFromIP derives a default WireGuard listen port based on peer IP:
+// 20000 + hash(other_end_peer_ip) % 10000 (range 20000-29999).
+// It uses FNV-1a 32-bit hash for an even, random, and deterministic distribution.
+func DerivePortFromIP(ip string) int {
+	clean := strings.TrimSpace(ip)
+	if clean == "" {
+		return 20000
+	}
+	h := fnv.New32a()
+	h.Write([]byte(clean))
+	return 20000 + int(h.Sum32()%10000)
+}
+
+// DerivePortFromASN extracts the last 5 digits of an ASN (e.g. 4299420001 -> 20001).
+// Deprecated: use DerivePortFromIP instead.
 func DerivePortFromASN(asn uint64) int {
 	last5 := int(asn % 100000)
 	if last5 >= 1024 && last5 <= 65535 {

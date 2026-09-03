@@ -2,6 +2,7 @@ package ssh
 
 import (
 	"testing"
+	"time"
 
 	"easy42/internal/config"
 )
@@ -68,5 +69,50 @@ func TestSanitizeNodeName(t *testing.T) {
 		if got != tt.expected {
 			t.Errorf("sanitizeNodeName(%q) = %q; want %q", tt.input, got, tt.expected)
 		}
+	}
+}
+
+func TestDetermineSuggestedASN(t *testing.T) {
+	// 1. Empty network: random 429942XXXX
+	asnEmpty := DetermineSuggestedASN(nil)
+	if asnEmpty < 4299420000 || asnEmpty > 4299429999 {
+		t.Errorf("Expected ASN in DN42 range, got %d", asnEmpty)
+	}
+
+	// 2. Single node: should match that node's ASN
+	t1 := time.Now().Add(-10 * time.Minute)
+	nodes := []config.Node{
+		{Name: "node-a", ASN: 4299421234, ModifiedAt: t1},
+	}
+	if got := DetermineSuggestedASN(nodes); got != 4299421234 {
+		t.Errorf("Expected single node ASN 4299421234, got %d", got)
+	}
+
+	// 3. Multiple nodes: should pick the most recently modified node's ASN
+	t2 := time.Now().Add(-5 * time.Minute)
+	nodes = append(nodes, config.Node{
+		Name:       "node-b",
+		ASN:        4299425678,
+		ModifiedAt: t2,
+	})
+	if got := DetermineSuggestedASN(nodes); got != 4299425678 {
+		t.Errorf("Expected most recent node-b ASN 4299425678, got %d", got)
+	}
+
+	// 4. Update node-a with newer timestamp: should now pick node-a's ASN
+	t3 := time.Now()
+	nodes[0].ModifiedAt = t3
+	nodes[0].ASN = 4299429999
+	if got := DetermineSuggestedASN(nodes); got != 4299429999 {
+		t.Errorf("Expected updated node-a ASN 4299429999, got %d", got)
+	}
+
+	// 5. Legacy nodes without ModifiedAt: pick the last valid node
+	legacyNodes := []config.Node{
+		{Name: "legacy-1", ASN: 4299420001},
+		{Name: "legacy-2", ASN: 4299420002},
+	}
+	if got := DetermineSuggestedASN(legacyNodes); got != 4299420002 {
+		t.Errorf("Expected last legacy node ASN 4299420002, got %d", got)
 	}
 }

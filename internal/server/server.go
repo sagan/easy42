@@ -88,13 +88,16 @@ func New(cfg Config) *Server {
 			// Links
 			r.Get("/links", s.handleGetLinks)
 			r.Post("/links", s.handleAddLink)
+			r.Post("/links/mesh", s.handleCreateMeshLinks)
 			r.Put("/links", s.handleUpdateLink)
 			r.Delete("/links", s.handleDeleteLink)
 
-			// Sync
+			// Sync & State
 			r.Get("/sync/preview", s.handleSyncPreview)
 			r.Post("/sync", s.handleExecuteSync)
 			r.Get("/sync/status", s.handleSyncStatus)
+			r.Post("/state/update", s.handleUpdateState)
+			r.Get("/state", s.handleGetState)
 		})
 	})
 

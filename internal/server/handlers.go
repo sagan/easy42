@@ -2,7 +2,9 @@ package server
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"easy42/internal/config"
@@ -228,6 +230,10 @@ func (s *Server) handleAddNode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if saved := s.mgr.GetNode(node.Name); saved != nil {
+		writeJSON(w, http.StatusCreated, saved)
+		return
+	}
 	writeJSON(w, http.StatusCreated, node)
 }
 
@@ -244,6 +250,14 @@ func (s *Server) handleUpdateNode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	targetName := node.Name
+	if strings.TrimSpace(targetName) == "" {
+		targetName = name
+	}
+	if saved := s.mgr.GetNode(targetName); saved != nil {
+		writeJSON(w, http.StatusOK, saved)
+		return
+	}
 	writeJSON(w, http.StatusOK, node)
 }
 
@@ -265,12 +279,16 @@ func (s *Server) handleUpdateNodePosition(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{
+	resp := map[string]any{
 		"success": true,
 		"name":    name,
 		"x":       req.X,
 		"y":       req.Y,
-	})
+	}
+	if saved := s.mgr.GetNode(name); saved != nil && !saved.ModifiedAt.IsZero() {
+		resp["modified_at"] = saved.ModifiedAt
+	}
+	writeJSON(w, http.StatusOK, resp)
 }
 
 func (s *Server) handleDeleteNode(w http.ResponseWriter, r *http.Request) {
@@ -365,6 +383,34 @@ func (s *Server) handleAddLink(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusCreated, link)
+}
+
+type createMeshRequest struct {
+	Nodes []string `json:"nodes,omitempty"`
+}
+
+func (s *Server) handleCreateMeshLinks(w http.ResponseWriter, r *http.Request) {
+	var req createMeshRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil && err != io.EOF {
+		writeError(w, http.StatusBadRequest, "Invalid request payload")
+		return
+	}
+
+	links, err := s.mgr.CreateFullMesh(req.Nodes)
+	if err != nil {
+		if err == crypto.ErrVaultLocked {
+			writeError(w, http.StatusLocked, "Vault is locked. Unlock with password first.")
+			return
+		}
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	if links == nil {
+		links = []*config.Link{}
+	}
+
+	writeJSON(w, http.StatusCreated, links)
 }
 
 type updateLinkRequest struct {
@@ -482,7 +528,16 @@ func (s *Server) handleSyncPreview(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleExecuteSync(w http.ResponseWriter, r *http.Request) {
-	results, err := s.mgr.ExecuteSync()
+	force := r.URL.Query().Get("force") == "true"
+	if !force && r.Body != nil {
+		var req struct {
+			Force bool `json:"force"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		force = req.Force
+	}
+
+	results, err := s.mgr.ExecuteSync(force)
 	if err != nil {
 		if err == crypto.ErrVaultLocked {
 			writeError(w, http.StatusLocked, "Vault is locked. Unlock with password first.")
@@ -496,6 +551,29 @@ func (s *Server) handleExecuteSync(w http.ResponseWriter, r *http.Request) {
 		results = []config.SyncResult{}
 	}
 	writeJSON(w, http.StatusOK, results)
+}
+
+func (s *Server) handleUpdateState(w http.ResponseWriter, r *http.Request) {
+	state, warnings, err := s.mgr.UpdateState()
+	if err != nil {
+		if err == crypto.ErrVaultLocked {
+			writeError(w, http.StatusLocked, "Vault is locked. Unlock with password first.")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"success":  true,
+		"state":    state,
+		"warnings": warnings,
+	})
+}
+
+func (s *Server) handleGetState(w http.ResponseWriter, r *http.Request) {
+	state := s.mgr.GetNetworkState()
+	writeJSON(w, http.StatusOK, state)
 }
 
 func (s *Server) handleSyncStatus(w http.ResponseWriter, r *http.Request) {

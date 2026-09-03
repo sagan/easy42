@@ -4,6 +4,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"easy42/internal/compiler"
 	"easy42/internal/config"
@@ -79,17 +80,17 @@ func TestAddLinkMTU(t *testing.T) {
 	}
 
 	// Link ports and endpoints
-	if link.From.ListenPort != 20002 {
-		t.Errorf("Expected link.From.ListenPort = 20002, got %d", link.From.ListenPort)
+	if link.From.ListenPort != 28389 {
+		t.Errorf("Expected link.From.ListenPort = 28389, got %d", link.From.ListenPort)
 	}
-	if link.From.Endpoint != "2.2.2.2:20001" {
-		t.Errorf("Expected link.From.Endpoint = '2.2.2.2:20001', got '%s'", link.From.Endpoint)
+	if link.From.Endpoint != "2.2.2.2:25532" {
+		t.Errorf("Expected link.From.Endpoint = '2.2.2.2:25532', got '%s'", link.From.Endpoint)
 	}
-	if link.To.ListenPort != 20001 {
-		t.Errorf("Expected link.To.ListenPort = 20001, got %d", link.To.ListenPort)
+	if link.To.ListenPort != 25532 {
+		t.Errorf("Expected link.To.ListenPort = 25532, got %d", link.To.ListenPort)
 	}
-	if link.To.Endpoint != "1.1.1.1:20002" {
-		t.Errorf("Expected link.To.Endpoint = '1.1.1.1:20002', got '%s'", link.To.Endpoint)
+	if link.To.Endpoint != "1.1.1.1:28389" {
+		t.Errorf("Expected link.To.Endpoint = '1.1.1.1:28389', got '%s'", link.To.Endpoint)
 	}
 
 	// Test wg config content contains MTU = 1420
@@ -365,3 +366,169 @@ func TestUpdateNodePosition(t *testing.T) {
 		t.Fatalf("Expected coordinates preserved after UpdateNode: X=%v, Y=%v", n.X, n.Y)
 	}
 }
+
+func TestNodeAndLinkModifiedAt(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "easy42-engine-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	store := config.NewStore(tempDir)
+	pass, err := store.Initialize()
+	if err != nil {
+		t.Fatalf("Failed to init store: %v", err)
+	}
+
+	mgr := NewManager(store)
+	if err := mgr.Unlock(pass); err != nil {
+		t.Fatalf("Failed to unlock manager: %v", err)
+	}
+
+	nodeA := config.Node{
+		Name:      "node-a",
+		Host:      "1.1.1.1",
+		IP:        "192.168.100.1",
+		Interface: "lo",
+		ASN:       4299420001,
+	}
+	nodeB := config.Node{
+		Name:      "node-b",
+		Host:      "2.2.2.2",
+		IP:        "192.168.100.2",
+		Interface: "lo",
+		ASN:       4299420002,
+	}
+
+	if err := mgr.AddNode(nodeA); err != nil {
+		t.Fatalf("AddNode nodeA failed: %v", err)
+	}
+	nA := mgr.FindNode("node-a")
+	if nA == nil || nA.ModifiedAt.IsZero() {
+		t.Fatalf("Expected node-a to have non-zero ModifiedAt after AddNode")
+	}
+	tA1 := nA.ModifiedAt
+
+	time.Sleep(10 * time.Millisecond)
+
+	if err := mgr.AddNode(nodeB); err != nil {
+		t.Fatalf("AddNode nodeB failed: %v", err)
+	}
+	nB := mgr.FindNode("node-b")
+	if nB == nil || nB.ModifiedAt.IsZero() {
+		t.Fatalf("Expected node-b to have non-zero ModifiedAt after AddNode")
+	}
+	if !nB.ModifiedAt.After(tA1) {
+		t.Fatalf("Expected node-b ModifiedAt (%v) to be after node-a (%v)", nB.ModifiedAt, tA1)
+	}
+
+	// Add link
+	link, err := mgr.AddLink("node-a", "node-b", 0, 0, nil)
+	if err != nil {
+		t.Fatalf("AddLink failed: %v", err)
+	}
+	if link.ModifiedAt.IsZero() {
+		t.Fatalf("Expected link to have non-zero ModifiedAt after AddLink")
+	}
+	tLink1 := link.ModifiedAt
+
+	time.Sleep(10 * time.Millisecond)
+
+	// Update node position
+	if err := mgr.UpdateNodePosition("node-a", 100, 200); err != nil {
+		t.Fatalf("UpdateNodePosition failed: %v", err)
+	}
+	nA = mgr.FindNode("node-a")
+	if !nA.ModifiedAt.After(tA1) {
+		t.Fatalf("Expected node-a ModifiedAt updated after UpdateNodePosition")
+	}
+	tA2 := nA.ModifiedAt
+
+	time.Sleep(10 * time.Millisecond)
+
+	// Update node
+	updatedA := *nA
+	updatedA.Host = "1.1.1.2"
+	if err := mgr.UpdateNode("node-a", updatedA); err != nil {
+		t.Fatalf("UpdateNode failed: %v", err)
+	}
+	nA = mgr.FindNode("node-a")
+	if !nA.ModifiedAt.After(tA2) {
+		t.Fatalf("Expected node-a ModifiedAt updated after UpdateNode")
+	}
+
+	time.Sleep(10 * time.Millisecond)
+
+	// Update link
+	updatedLink, err := mgr.UpdateLink("node-a", "node-b", 51821, 51822, []string{"fast"})
+	if err != nil {
+		t.Fatalf("UpdateLink failed: %v", err)
+	}
+	if !updatedLink.ModifiedAt.After(tLink1) {
+		t.Fatalf("Expected link ModifiedAt updated after UpdateLink")
+	}
+}
+
+func TestCreateFullMesh(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "easy42-mesh-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	store := config.NewStore(tempDir)
+	pass, err := store.Initialize()
+	if err != nil {
+		t.Fatalf("Failed to init store: %v", err)
+	}
+
+	mgr := NewManager(store)
+	if err := mgr.Unlock(pass); err != nil {
+		t.Fatalf("Failed to unlock manager: %v", err)
+	}
+
+	nodes := []config.Node{
+		{Name: "node-1", Host: "10.0.0.1", IP: "192.168.100.1", Interface: "lo", ASN: 4299420001, Tags: []string{"core"}},
+		{Name: "node-2", Host: "10.0.0.2", IP: "192.168.100.2", Interface: "lo", ASN: 4299420002, Tags: []string{"core"}},
+		{Name: "node-3", Host: "10.0.0.3", IP: "192.168.100.3", Interface: "lo", ASN: 4299420003, Tags: []string{"edge"}},
+	}
+	for _, n := range nodes {
+		if err := mgr.AddNode(n); err != nil {
+			t.Fatalf("AddNode %s failed: %v", n.Name, err)
+		}
+	}
+
+	// 1. Create mesh for only the "core" tagged nodes: node-1 and node-2
+	added, err := mgr.CreateFullMesh([]string{"node-1", "node-2"})
+	if err != nil {
+		t.Fatalf("CreateFullMesh failed: %v", err)
+	}
+	if len(added) != 1 {
+		t.Fatalf("Expected 1 link added between 2 nodes, got %d", len(added))
+	}
+
+	// Calling again should add 0 links
+	addedAgain, err := mgr.CreateFullMesh([]string{"node-1", "node-2"})
+	if err != nil {
+		t.Fatalf("CreateFullMesh repeat failed: %v", err)
+	}
+	if len(addedAgain) != 0 {
+		t.Fatalf("Expected 0 links added when mesh already exists, got %d", len(addedAgain))
+	}
+
+	// 2. Create mesh across all 3 nodes (should add missing links for node-3 with node-1 and node-2 = 2 new links)
+	addedAll, err := mgr.CreateFullMesh(nil)
+	if err != nil {
+		t.Fatalf("CreateFullMesh all failed: %v", err)
+	}
+	if len(addedAll) != 2 {
+		t.Fatalf("Expected 2 links added for full mesh of 3 nodes, got %d", len(addedAll))
+	}
+
+	// Total links in config should be 3
+	cfg := store.Get()
+	if len(cfg.Links) != 3 {
+		t.Fatalf("Expected 3 total links, got %d", len(cfg.Links))
+	}
+}
+

@@ -3,6 +3,7 @@ package engine
 import (
 	"errors"
 	"fmt"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -25,6 +26,7 @@ var (
 type Manager struct {
 	mu          sync.RWMutex
 	store       *config.Store
+	stateStore  *config.StateStore
 	vault       *crypto.KeyVault
 	pool        *ssh.ClientPool
 	statuses    map[string]*config.NodeStatus
@@ -34,8 +36,11 @@ type Manager struct {
 
 // NewManager creates a new Manager instance
 func NewManager(store *config.Store) *Manager {
+	stateStore := config.NewStateStore(store.DataDir())
+	_, _ = stateStore.Load()
 	return &Manager{
 		store:       store,
+		stateStore:  stateStore,
 		vault:       crypto.NewKeyVault(),
 		pool:        ssh.NewClientPool(),
 		statuses:    make(map[string]*config.NodeStatus),
@@ -46,6 +51,16 @@ func NewManager(store *config.Store) *Manager {
 // Store returns the underlying store
 func (m *Manager) Store() *config.Store {
 	return m.store
+}
+
+// StateStore returns the underlying state store
+func (m *Manager) StateStore() *config.StateStore {
+	return m.stateStore
+}
+
+// GetNetworkState returns the current recorded state
+func (m *Manager) GetNetworkState() *config.NetworkState {
+	return m.stateStore.Get()
 }
 
 // Vault returns the KeyVault
@@ -200,6 +215,11 @@ func (m *Manager) FindNode(name string) *config.Node {
 	return nil
 }
 
+// GetNode finds a node by name (alias to FindNode)
+func (m *Manager) GetNode(name string) *config.Node {
+	return m.FindNode(name)
+}
+
 // AddNode adds a new node to the topology
 func (m *Manager) AddNode(node config.Node) error {
 	m.mu.Lock()
@@ -238,6 +258,7 @@ func (m *Manager) AddNode(node config.Node) error {
 		})
 	}
 
+	node.ModifiedAt = time.Now().UTC()
 	cfg.Nodes = append(cfg.Nodes, node)
 	return m.store.Save(cfg)
 }
@@ -283,6 +304,9 @@ func (m *Manager) UpdateNode(name string, updated config.Node) error {
 		})
 	}
 
+	now := time.Now().UTC()
+	updated.ModifiedAt = now
+
 	// Update links connected to this node if name or IP changed
 	oldNode := cfg.Nodes[idx]
 	if updated.Name != name {
@@ -290,10 +314,12 @@ func (m *Manager) UpdateNode(name string, updated config.Node) error {
 			if cfg.Links[i].From.Name == name {
 				cfg.Links[i].From.Name = updated.Name
 				cfg.Links[i].To.Interface = compiler.GetInterfaceName(updated.Name)
+				cfg.Links[i].ModifiedAt = now
 			}
 			if cfg.Links[i].To.Name == name {
 				cfg.Links[i].To.Name = updated.Name
 				cfg.Links[i].From.Interface = compiler.GetInterfaceName(updated.Name)
+				cfg.Links[i].ModifiedAt = now
 			}
 		}
 	}
@@ -303,9 +329,11 @@ func (m *Manager) UpdateNode(name string, updated config.Node) error {
 			for i := range cfg.Links {
 				if cfg.Links[i].From.Name == updated.Name {
 					cfg.Links[i].From.Address = newAddr
+					cfg.Links[i].ModifiedAt = now
 				}
 				if cfg.Links[i].To.Name == updated.Name {
 					cfg.Links[i].To.Address = newAddr
+					cfg.Links[i].ModifiedAt = now
 				}
 			}
 		}
@@ -357,6 +385,7 @@ func (m *Manager) UpdateNode(name string, updated config.Node) error {
 				} else {
 					cfg.Links[i].To.PersistentKeepalive = 0
 				}
+				cfg.Links[i].ModifiedAt = now
 			}
 		}
 	}
@@ -386,6 +415,7 @@ func (m *Manager) UpdateNodePosition(name string, x float64, y float64) error {
 
 	cfg.Nodes[idx].X = &x
 	cfg.Nodes[idx].Y = &y
+	cfg.Nodes[idx].ModifiedAt = time.Now().UTC()
 
 	return m.store.Save(cfg)
 }
@@ -413,6 +443,8 @@ func (m *Manager) DeleteNode(name string) error {
 	}
 	cfg.Links = newLinks
 
+	_ = m.stateStore.RemoveNode(name)
+
 	return m.store.Save(cfg)
 }
 
@@ -430,38 +462,9 @@ func (m *Manager) GetLinks() []config.Link {
 }
 
 // AddLink creates a new WireGuard link between two nodes with keypairs and parameters.
-// Optional customMTU can specify [fromMTU, toMTU] (relative to node1Name, node2Name).
-func (m *Manager) AddLink(node1Name, node2Name string, listenPort1, listenPort2 int, tags []string, customMTU ...int) (*config.Link, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	if !m.vault.IsUnlocked() {
-		return nil, crypto.ErrVaultLocked
-	}
-
-	cfg := m.store.Get()
-	var n1, n2 *config.Node
-	for i := range cfg.Nodes {
-		if cfg.Nodes[i].Name == node1Name {
-			n1 = &cfg.Nodes[i]
-		}
-		if cfg.Nodes[i].Name == node2Name {
-			n2 = &cfg.Nodes[i]
-		}
-	}
-	if n1 == nil || n2 == nil {
-		return nil, errors.New("one or both nodes not found")
-	}
-
-	customMTU1 := 0
-	customMTU2 := 0
-	if len(customMTU) >= 1 && customMTU[0] > 0 {
-		customMTU1 = customMTU[0]
-	}
-	if len(customMTU) >= 2 && customMTU[1] > 0 {
-		customMTU2 = customMTU[1]
-	}
-
+// buildLink creates and configures a Link between two nodes with keypairs, addresses, ports, endpoints, and MTU.
+// Must be called with m.mu held and vault unlocked.
+func (m *Manager) buildLink(cfg *config.Config, n1, n2 *config.Node, listenPort1, listenPort2 int, tags []string, customMTU1, customMTU2 int) (*config.Link, error) {
 	// Lexicographical ordering: from.Name < to.Name
 	fromNode, toNode := n1, n2
 	fromPort, toPort := listenPort1, listenPort2
@@ -470,13 +473,6 @@ func (m *Manager) AddLink(node1Name, node2Name string, listenPort1, listenPort2 
 		fromNode, toNode = toNode, fromNode
 		fromPort, toPort = toPort, fromPort
 		fromCustomMTU, toCustomMTU = toCustomMTU, fromCustomMTU
-	}
-
-	// Check duplicate link
-	for _, l := range cfg.Links {
-		if l.From.Name == fromNode.Name && l.To.Name == toNode.Name {
-			return nil, ErrLinkAlreadyExist
-		}
 	}
 
 	// Generate WireGuard keypairs for both ends
@@ -508,10 +504,10 @@ func (m *Manager) AddLink(node1Name, node2Name string, listenPort1, listenPort2 
 	}
 
 	if fromPort == 0 {
-		fromPort = compiler.DerivePortFromASN(toNode.ASN)
+		fromPort = compiler.DerivePortFromIP(toNode.IP)
 	}
 	if toPort == 0 {
-		toPort = compiler.DerivePortFromASN(fromNode.ASN)
+		toPort = compiler.DerivePortFromIP(fromNode.IP)
 	}
 
 	fromEP, _, epTo := compiler.ResolvePeerEndpointWithEntrypoint(fromNode, toNode, nil, toPort)
@@ -568,7 +564,7 @@ func (m *Manager) AddLink(node1Name, node2Name string, listenPort1, listenPort2 
 		toMTU = toCustomMTU
 	}
 
-	link := config.Link{
+	link := &config.Link{
 		From: config.LinkEnd{
 			Name:                fromNode.Name,
 			Interface:           compiler.GetInterfaceName(toNode.Name),
@@ -591,15 +587,148 @@ func (m *Manager) AddLink(node1Name, node2Name string, listenPort1, listenPort2 
 			PersistentKeepalive: toKeepalive,
 			MTU:                 toMTU,
 		},
-		Tags: tags,
+		Tags:       tags,
+		ModifiedAt: time.Now().UTC(),
 	}
 
-	cfg.Links = append(cfg.Links, link)
+	return link, nil
+}
+
+// AddLink adds a new WireGuard link between two nodes.
+// Optional customMTU can specify [fromMTU, toMTU] (relative to node1Name, node2Name).
+func (m *Manager) AddLink(node1Name, node2Name string, listenPort1, listenPort2 int, tags []string, customMTU ...int) (*config.Link, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if !m.vault.IsUnlocked() {
+		return nil, crypto.ErrVaultLocked
+	}
+
+	cfg := m.store.Get()
+	var n1, n2 *config.Node
+	for i := range cfg.Nodes {
+		if cfg.Nodes[i].Name == node1Name {
+			n1 = &cfg.Nodes[i]
+		}
+		if cfg.Nodes[i].Name == node2Name {
+			n2 = &cfg.Nodes[i]
+		}
+	}
+	if n1 == nil || n2 == nil {
+		return nil, errors.New("one or both nodes not found")
+	}
+
+	customMTU1 := 0
+	customMTU2 := 0
+	if len(customMTU) >= 1 && customMTU[0] > 0 {
+		customMTU1 = customMTU[0]
+	}
+	if len(customMTU) >= 2 && customMTU[1] > 0 {
+		customMTU2 = customMTU[1]
+	}
+
+	// Lexicographical ordering: from.Name < to.Name
+	fromName, toName := n1.Name, n2.Name
+	if strings.Compare(fromName, toName) > 0 {
+		fromName, toName = toName, fromName
+	}
+
+	// Check duplicate link
+	for _, l := range cfg.Links {
+		if l.From.Name == fromName && l.To.Name == toName {
+			return nil, ErrLinkAlreadyExist
+		}
+	}
+
+	link, err := m.buildLink(cfg, n1, n2, listenPort1, listenPort2, tags, customMTU1, customMTU2)
+	if err != nil {
+		return nil, err
+	}
+
+	cfg.Links = append(cfg.Links, *link)
 	if err := m.store.Save(cfg); err != nil {
 		return nil, err
 	}
 
-	return &link, nil
+	return link, nil
+}
+
+// CreateFullMesh creates missing links between specified nodes (or all nodes if nil/empty)
+// using default ports and MTU.
+func (m *Manager) CreateFullMesh(nodeNames []string) ([]*config.Link, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if !m.vault.IsUnlocked() {
+		return nil, crypto.ErrVaultLocked
+	}
+
+	cfg := m.store.Get()
+	var targetNodes []*config.Node
+
+	if len(nodeNames) == 0 {
+		for i := range cfg.Nodes {
+			targetNodes = append(targetNodes, &cfg.Nodes[i])
+		}
+	} else {
+		nodeMap := make(map[string]*config.Node)
+		for i := range cfg.Nodes {
+			nodeMap[cfg.Nodes[i].Name] = &cfg.Nodes[i]
+		}
+		for _, name := range nodeNames {
+			if n, ok := nodeMap[name]; ok {
+				targetNodes = append(targetNodes, n)
+			}
+		}
+	}
+
+	if len(targetNodes) < 2 {
+		return nil, errors.New("at least two nodes are required to create a mesh")
+	}
+
+	var addedLinks []*config.Link
+	now := time.Now().UTC()
+
+	for i := 0; i < len(targetNodes); i++ {
+		for j := i + 1; j < len(targetNodes); j++ {
+			n1 := targetNodes[i]
+			n2 := targetNodes[j]
+
+			// Lexicographical ordering
+			fromName, toName := n1.Name, n2.Name
+			if strings.Compare(fromName, toName) > 0 {
+				fromName, toName = toName, fromName
+			}
+
+			// Check if link already exists
+			exists := false
+			for _, l := range cfg.Links {
+				if l.From.Name == fromName && l.To.Name == toName {
+					exists = true
+					break
+				}
+			}
+			if exists {
+				continue
+			}
+
+			link, err := m.buildLink(cfg, n1, n2, 0, 0, nil, 0, 0)
+			if err != nil {
+				return nil, fmt.Errorf("failed to create link between %s and %s: %w", n1.Name, n2.Name, err)
+			}
+			link.ModifiedAt = now
+			cfg.Links = append(cfg.Links, *link)
+			addedLinks = append(addedLinks, link)
+		}
+	}
+
+	if len(addedLinks) > 0 {
+		if err := m.store.Save(cfg); err != nil {
+			return nil, err
+		}
+	}
+
+	return addedLinks, nil
 }
 
 // UpdateLink updates parameters (listen ports, custom MTUs, tags) of an existing WireGuard link
@@ -684,6 +813,7 @@ func (m *Manager) UpdateLink(node1Name, node2Name string, listenPort1, listenPor
 	} else {
 		link.To.PersistentKeepalive = 0
 	}
+	link.ModifiedAt = time.Now().UTC()
 
 	if err := m.store.Save(cfg); err != nil {
 		return nil, err
@@ -801,6 +931,7 @@ func (m *Manager) PlanSync() ([]config.SyncAction, error) {
 	copy(links, cfg.Links)
 	m.mu.RUnlock()
 
+	currentState := m.stateStore.Get()
 	actions := make([]config.SyncAction, 0)
 
 	// 1. Detect unused/deleted wg42* interfaces on remote devices by running `wg`
@@ -850,6 +981,9 @@ func (m *Manager) PlanSync() ([]config.SyncAction, error) {
 							Command:     fmt.Sprintf("wg-quick down %s && rm -f %s", iface, targetFile),
 							Description: fmt.Sprintf("Remove deleted interface %s on %s", iface, node.Name),
 							FileContent: fmt.Sprintf("# Deleted interface %s is no longer in graph.\n# Action: wg-quick down %s && rm -f %s\n", iface, iface, targetFile),
+							NeedsApply:  true,
+							Status:      "pending",
+							DiffStatus:  "delete",
 						})
 						cleanActionsMu.Unlock()
 					}
@@ -858,6 +992,40 @@ func (m *Manager) PlanSync() ([]config.SyncAction, error) {
 		}()
 	}
 	wg.Wait()
+
+	// Also check stateStore for recorded interfaces that are no longer expected
+	for _, n := range nodes {
+		expected := expectedIfacesPerNode[n.Name]
+		if stNode, ok := currentState.Nodes[n.Name]; ok {
+			for ifaceName := range stNode.Interfaces {
+				if strings.HasPrefix(ifaceName, "wg42") && !expected[ifaceName] {
+					alreadyAdded := false
+					for _, ca := range cleanActions {
+						if ca.NodeName == n.Name && ca.Interface == ifaceName {
+							alreadyAdded = true
+							break
+						}
+					}
+					if !alreadyAdded {
+						targetFile := fmt.Sprintf("/etc/wireguard/%s.conf", ifaceName)
+						cleanActions = append(cleanActions, config.SyncAction{
+							NodeName:    n.Name,
+							Host:        n.Host,
+							Type:        config.ActionDeleteConfig,
+							Interface:   ifaceName,
+							TargetFile:  targetFile,
+							Command:     fmt.Sprintf("wg-quick down %s && rm -f %s", ifaceName, targetFile),
+							Description: fmt.Sprintf("Remove deleted interface %s on %s", ifaceName, n.Name),
+							FileContent: fmt.Sprintf("# Deleted interface %s is no longer in graph.\n# Action: wg-quick down %s && rm -f %s\n", ifaceName, ifaceName, targetFile),
+							NeedsApply:  true,
+							Status:      "pending",
+							DiffStatus:  "delete",
+						})
+					}
+				}
+			}
+		}
+	}
 
 	// Sort clean actions for determinism
 	sort.Slice(cleanActions, func(i, j int) bool {
@@ -880,6 +1048,24 @@ func (m *Manager) PlanSync() ([]config.SyncAction, error) {
 		fromConf, err := compiler.GenerateWgConfigContent(fromNode, toNode, &link.From, &link.To, m.vault)
 		if err == nil {
 			targetFile := fmt.Sprintf("/etc/wireguard/%s.conf", link.From.Interface)
+			desiredHash := config.HashConfig(compiler.NormalizeConfig(fromConf))
+
+			needsApply := true
+			status := "pending"
+			diffStatus := "create"
+
+			if stNode, ok := currentState.Nodes[fromNode.Name]; ok {
+				if stIface, ok := stNode.Interfaces[link.From.Interface]; ok {
+					if stIface.ConfigHash == desiredHash {
+						needsApply = false
+						status = "synced"
+						diffStatus = "synced"
+					} else {
+						diffStatus = "update"
+					}
+				}
+			}
+
 			actions = append(actions, config.SyncAction{
 				NodeName:    fromNode.Name,
 				Host:        fromNode.Host,
@@ -888,6 +1074,9 @@ func (m *Manager) PlanSync() ([]config.SyncAction, error) {
 				TargetFile:  targetFile,
 				FileContent: fromConf,
 				Description: fmt.Sprintf("Configure %s on %s (peer %s)", link.From.Interface, fromNode.Name, toNode.Name),
+				NeedsApply:  needsApply,
+				Status:      status,
+				DiffStatus:  diffStatus,
 			})
 		}
 
@@ -895,6 +1084,24 @@ func (m *Manager) PlanSync() ([]config.SyncAction, error) {
 		toConf, err := compiler.GenerateWgConfigContent(toNode, fromNode, &link.To, &link.From, m.vault)
 		if err == nil {
 			targetFile := fmt.Sprintf("/etc/wireguard/%s.conf", link.To.Interface)
+			desiredHash := config.HashConfig(compiler.NormalizeConfig(toConf))
+
+			needsApply := true
+			status := "pending"
+			diffStatus := "create"
+
+			if stNode, ok := currentState.Nodes[toNode.Name]; ok {
+				if stIface, ok := stNode.Interfaces[link.To.Interface]; ok {
+					if stIface.ConfigHash == desiredHash {
+						needsApply = false
+						status = "synced"
+						diffStatus = "synced"
+					} else {
+						diffStatus = "update"
+					}
+				}
+			}
+
 			actions = append(actions, config.SyncAction{
 				NodeName:    toNode.Name,
 				Host:        toNode.Host,
@@ -903,9 +1110,23 @@ func (m *Manager) PlanSync() ([]config.SyncAction, error) {
 				TargetFile:  targetFile,
 				FileContent: toConf,
 				Description: fmt.Sprintf("Configure %s on %s (peer %s)", link.To.Interface, toNode.Name, fromNode.Name),
+				NeedsApply:  needsApply,
+				Status:      status,
+				DiffStatus:  diffStatus,
 			})
 		}
 	}
+
+	// Sort actions: pending (NeedsApply == true) first, then synced. Within each group sort by NodeName and Interface
+	sort.Slice(actions, func(i, j int) bool {
+		if actions[i].NeedsApply != actions[j].NeedsApply {
+			return actions[i].NeedsApply // true comes before false
+		}
+		if actions[i].NodeName != actions[j].NodeName {
+			return actions[i].NodeName < actions[j].NodeName
+		}
+		return actions[i].Interface < actions[j].Interface
+	})
 
 	if actions == nil {
 		actions = []config.SyncAction{}
@@ -914,14 +1135,26 @@ func (m *Manager) PlanSync() ([]config.SyncAction, error) {
 }
 
 // ExecuteSync executes planned actions across nodes
-func (m *Manager) ExecuteSync() ([]config.SyncResult, error) {
+func (m *Manager) ExecuteSync(force ...bool) ([]config.SyncResult, error) {
+	isForce := len(force) > 0 && force[0]
 	actions, err := m.PlanSync()
 	if err != nil {
 		return nil, err
 	}
 
-	results := make([]config.SyncResult, 0)
+	var actionsToRun []config.SyncAction
 	for _, act := range actions {
+		if isForce || act.NeedsApply {
+			actionsToRun = append(actionsToRun, act)
+		}
+	}
+
+	if len(actionsToRun) == 0 {
+		return []config.SyncResult{}, nil
+	}
+
+	results := make([]config.SyncResult, 0)
+	for _, act := range actionsToRun {
 		start := time.Now()
 		res := config.SyncResult{
 			NodeName: act.NodeName,
@@ -944,6 +1177,7 @@ func (m *Manager) ExecuteSync() ([]config.SyncResult, error) {
 				res.Error = fmt.Sprintf("Failed to clean interface %s: %v", act.Interface, err)
 			} else {
 				res.Success = true
+				_ = m.stateStore.RemoveInterface(act.NodeName, act.Interface)
 			}
 			res.Duration = float64(time.Since(start).Milliseconds())
 			results = append(results, res)
@@ -952,7 +1186,7 @@ func (m *Manager) ExecuteSync() ([]config.SyncResult, error) {
 
 		// Check current remote file
 		currentContent, _ := ssh.ReadRemoteFile(sftpClient, act.TargetFile)
-		needsUpdate := compiler.NeedsUpdate(currentContent, act.FileContent)
+		needsUpdate := isForce || compiler.NeedsUpdate(currentContent, act.FileContent)
 		if needsUpdate {
 			if err := ssh.AtomicWriteFile(sftpClient, act.TargetFile, []byte(act.FileContent), 0600); err != nil {
 				res.Success = false
@@ -986,6 +1220,32 @@ func (m *Manager) ExecuteSync() ([]config.SyncResult, error) {
 		res.Success = true
 		res.Duration = float64(time.Since(start).Milliseconds())
 		results = append(results, res)
+
+		// Record successful application in stateStore
+		hash := config.HashConfig(compiler.NormalizeConfig(act.FileContent))
+		existingState := m.stateStore.Get()
+		var existingHandshake *time.Time
+		workingState := config.WorkingStateUnknown
+		var existingRx, existingTx int64
+		if stNode, ok := existingState.Nodes[act.NodeName]; ok {
+			if stIface, ok := stNode.Interfaces[act.Interface]; ok {
+				existingHandshake = stIface.LatestHandshake
+				workingState = stIface.WorkingState
+				existingRx = stIface.TransferRxBytes
+				existingTx = stIface.TransferTxBytes
+			}
+		}
+		_ = m.stateStore.UpdateInterface(act.NodeName, act.Host, config.StateInterface{
+			Name:            act.Interface,
+			TargetFile:      act.TargetFile,
+			ConfigHash:      hash,
+			Status:          "active",
+			LatestHandshake: existingHandshake,
+			WorkingState:    workingState,
+			TransferRxBytes: existingRx,
+			TransferTxBytes: existingTx,
+			AppliedAt:       time.Now(),
+		})
 	}
 
 	if results == nil {
@@ -998,6 +1258,217 @@ func (m *Manager) ExecuteSync() ([]config.SyncResult, error) {
 	m.mu.Unlock()
 
 	return results, nil
+}
+
+// UpdateState connects to all devices via SSH/SFTP to fetch their live state and update state.json
+func (m *Manager) UpdateState() (*config.NetworkState, []string, error) {
+	m.mu.RLock()
+	cfg := m.store.Get()
+	nodes := make([]config.Node, len(cfg.Nodes))
+	copy(nodes, cfg.Nodes)
+	links := make([]config.Link, len(cfg.Links))
+	copy(links, cfg.Links)
+	m.mu.RUnlock()
+
+	type linkMetaInfo struct {
+		peerNode            string
+		peerPubKey          string
+		persistentKeepalive int
+	}
+	linkMeta := make(map[string]map[string]linkMetaInfo)
+	for _, link := range links {
+		// End From
+		if linkMeta[link.From.Name] == nil {
+			linkMeta[link.From.Name] = make(map[string]linkMetaInfo)
+		}
+		ka := 0
+		if link.From.PersistentKeepalive > 0 || link.To.PersistentKeepalive > 0 {
+			ka = 25
+		}
+		linkMeta[link.From.Name][link.From.Interface] = linkMetaInfo{
+			peerNode:            link.To.Name,
+			peerPubKey:          link.To.PublicKey,
+			persistentKeepalive: ka,
+		}
+
+		// End To
+		if linkMeta[link.To.Name] == nil {
+			linkMeta[link.To.Name] = make(map[string]linkMetaInfo)
+		}
+		linkMeta[link.To.Name][link.To.Interface] = linkMetaInfo{
+			peerNode:            link.From.Name,
+			peerPubKey:          link.From.PublicKey,
+			persistentKeepalive: ka,
+		}
+	}
+
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	var warnings []string
+
+	type nodeIfaceResult struct {
+		nodeName string
+		host     string
+		ifaces   map[string]config.StateInterface
+	}
+	results := make([]nodeIfaceResult, 0, len(nodes))
+
+	for _, n := range nodes {
+		node := n
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			sshClient, sftpClient, err := m.pool.GetClient(node.Host)
+			if err != nil {
+				mu.Lock()
+				warnings = append(warnings, fmt.Sprintf("%s: failed to connect: %v", node.Name, err))
+				mu.Unlock()
+				return
+			}
+
+			// Query WireGuard interface and peer statuses
+			wgStatus, _ := ssh.QueryWireGuardStatus(sshClient)
+			wgMap := make(map[string]*config.WgInterfaceStatus)
+			for i := range wgStatus {
+				wgMap[wgStatus[i].Name] = &wgStatus[i]
+			}
+
+			// 1. Find all wg42*.conf files in /etc/wireguard
+			filesOut, _ := ssh.RunCommand(sshClient, "ls -1 /etc/wireguard/wg42*.conf 2>/dev/null")
+			lines := strings.Split(strings.TrimSpace(filesOut), "\n")
+
+			nodeIfaces := make(map[string]config.StateInterface)
+			for _, line := range lines {
+				filePath := strings.TrimSpace(line)
+				if filePath == "" {
+					continue
+				}
+				base := filepath.Base(filePath)
+				ifaceName := strings.TrimSuffix(base, ".conf")
+				if !strings.HasPrefix(ifaceName, "wg42") {
+					continue
+				}
+
+				// Read file content
+				content, readErr := ssh.ReadRemoteFile(sftpClient, filePath)
+				if readErr != nil {
+					catOut, catErr := ssh.RunCommand(sshClient, fmt.Sprintf("cat %s", filePath))
+					if catErr == nil {
+						content = catOut
+					}
+				}
+
+				hash := config.HashConfig(compiler.NormalizeConfig(content))
+				status := "down"
+				isStarted := ssh.IsInterfaceStarted(sshClient, ifaceName)
+				if isStarted {
+					status = "active"
+				}
+
+				meta := linkMeta[node.Name][ifaceName]
+				var latestHandshake time.Time
+				var rxBytes, txBytes int64
+				keepalive := meta.persistentKeepalive
+
+				if wgInfo, ok := wgMap[ifaceName]; ok && len(wgInfo.Peers) > 0 {
+					var matchedPeer *config.WgPeerStatus
+					for pIdx := range wgInfo.Peers {
+						if meta.peerPubKey != "" && wgInfo.Peers[pIdx].PublicKey == meta.peerPubKey {
+							matchedPeer = &wgInfo.Peers[pIdx]
+							break
+						}
+					}
+					if matchedPeer == nil {
+						matchedPeer = &wgInfo.Peers[0]
+					}
+					latestHandshake = matchedPeer.LatestHandshake
+					rxBytes = matchedPeer.TransferRxBytes
+					txBytes = matchedPeer.TransferTxBytes
+					if matchedPeer.PersistentKeepalive > 0 {
+						keepalive = matchedPeer.PersistentKeepalive
+					}
+				}
+
+				now := time.Now()
+				var handshakePtr *time.Time
+				workingState := config.WorkingStateUnknown
+
+				if !isStarted {
+					workingState = config.WorkingStateNotWorking
+				} else if !latestHandshake.IsZero() {
+					handshakePtr = &latestHandshake
+					if now.Sub(latestHandshake) <= 3*time.Minute {
+						workingState = config.WorkingStateWorking
+					} else {
+						if keepalive > 0 {
+							workingState = config.WorkingStateNotWorking
+						} else {
+							workingState = config.WorkingStateUnknown
+						}
+					}
+				} else {
+					if keepalive > 0 {
+						workingState = config.WorkingStateNotWorking
+					} else {
+						workingState = config.WorkingStateUnknown
+					}
+				}
+
+				nodeIfaces[ifaceName] = config.StateInterface{
+					Name:            ifaceName,
+					TargetFile:      filePath,
+					ConfigHash:      hash,
+					PeerNode:        meta.peerNode,
+					PeerPubKey:      meta.peerPubKey,
+					Status:          status,
+					LatestHandshake: handshakePtr,
+					WorkingState:    workingState,
+					TransferRxBytes: rxBytes,
+					TransferTxBytes: txBytes,
+					AppliedAt:       time.Now(),
+				}
+			}
+
+			mu.Lock()
+			results = append(results, nodeIfaceResult{
+				nodeName: node.Name,
+				host:     node.Host,
+				ifaces:   nodeIfaces,
+			})
+			mu.Unlock()
+		}()
+	}
+	wg.Wait()
+
+	// Update state store
+	currentState := m.stateStore.Get()
+	activeNodeNames := make(map[string]bool)
+	for _, n := range nodes {
+		activeNodeNames[n.Name] = true
+	}
+
+	// Remove deleted nodes from state
+	for stName := range currentState.Nodes {
+		if !activeNodeNames[stName] {
+			delete(currentState.Nodes, stName)
+		}
+	}
+
+	// Merge probed node interfaces
+	for _, res := range results {
+		currentState.Nodes[res.nodeName] = config.StateNode{
+			Name:       res.nodeName,
+			Host:       res.host,
+			LastSeen:   time.Now(),
+			Interfaces: res.ifaces,
+		}
+	}
+
+	if err := m.stateStore.Save(currentState); err != nil {
+		return nil, warnings, fmt.Errorf("failed to save updated state: %w", err)
+	}
+
+	return currentState, warnings, nil
 }
 
 // GetLastSyncResults returns the latest sync execution results

@@ -11,11 +11,11 @@ import {
   CircularProgress,
   Alert,
   MenuItem,
-  Chip,
   IconButton,
   Tooltip,
+  Chip,
 } from '@mui/material';
-import { Search, Plus, Trash2, Server, Globe, Shield, Edit2 } from 'lucide-react';
+import { Search, Plus, Trash2, Server, Globe, Shield, Edit2, Tag } from 'lucide-react';
 import { api } from '../../api/client';
 import { Node, Entrypoint } from '../../types/api';
 
@@ -52,6 +52,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
   const [ip, setIp] = useState('');
   const [iface, setIface] = useState('lo');
   const [asn, setAsn] = useState<number>(4299420001);
+  const [nodeTags, setNodeTags] = useState('');
   const [entrypoints, setEntrypoints] = useState<EditableEntrypoint[]>([
     { id: 'nat-fallback', ip: '', portStr: '', tagStr: 'nat', mtuStr: '', isNone: true },
   ]);
@@ -67,6 +68,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
       setIp(nodeToEdit.ip);
       setIface(nodeToEdit.interface);
       setAsn(nodeToEdit.asn);
+      setNodeTags(nodeToEdit.tags?.join(', ') || '');
       setDiscoveredIps([]);
       setProbeError(null);
       setSaveError(null);
@@ -110,6 +112,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
       setIp('');
       setIface('lo');
       setAsn(4299420001);
+      setNodeTags('');
       setEntrypoints([
         { id: 'nat-fallback', ip: '', portStr: '', tagStr: 'nat', mtuStr: '', isNone: true },
       ]);
@@ -257,6 +260,11 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
       return entry;
     });
 
+    const parsedTags = nodeTags
+      .split(',')
+      .map((t) => t.trim())
+      .filter(Boolean);
+
     const newNode: Node = {
       name: name.trim(),
       host: sshHost.trim(),
@@ -264,6 +272,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
       interface: iface.trim(),
       asn: Number(asn),
       entrypoints: finalEntrypoints,
+      tags: parsedTags.length > 0 ? parsedTags : undefined,
       x: nodeToEdit?.x,
       y: nodeToEdit?.y,
     };
@@ -414,6 +423,43 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                 disabled={saving}
               />
             </Box>
+
+            <Box>
+              <TextField
+                fullWidth
+                label="Node Tags (comma-separated)"
+                size="small"
+                value={nodeTags}
+                onChange={(e) => setNodeTags(e.target.value)}
+                placeholder="e.g. core, eu, gateway"
+                helperText="Categorize this node (e.g. core, eu, gateway) for grouping and filtering"
+                disabled={saving}
+              />
+              {nodeTags.split(',').map((t) => t.trim()).filter(Boolean).length > 0 && (
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 0.75, alignItems: 'center' }}>
+                  <Tag size={13} color="#64748B" />
+                  {nodeTags
+                    .split(',')
+                    .map((t) => t.trim())
+                    .filter(Boolean)
+                    .map((tag) => (
+                      <Chip
+                        key={tag}
+                        label={`#${tag}`}
+                        size="small"
+                        sx={{
+                          height: 20,
+                          fontSize: '0.65rem',
+                          fontWeight: 600,
+                          backgroundColor: 'rgba(8, 145, 178, 0.08)',
+                          color: '#0891B2',
+                          border: '1px solid rgba(8, 145, 178, 0.25)',
+                        }}
+                      />
+                    ))}
+                </Box>
+              )}
+            </Box>
           </Box>
 
           {/* Step 3: Entrypoints */}
@@ -441,16 +487,18 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                       key={ep.id}
                       sx={{
                         display: 'flex',
-                        alignItems: 'center',
+                        flexDirection: { xs: 'column', sm: 'row' },
+                        alignItems: { xs: 'flex-start', sm: 'center' },
                         justifyContent: 'space-between',
+                        gap: 1.5,
                         p: 1.5,
                         borderRadius: 2,
                         backgroundColor: '#FFFBEB',
                         border: '1px solid #FDE68A',
                       }}
                     >
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Shield size={16} color="#D97706" />
+                      <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, flex: 1, minWidth: 0 }}>
+                        <Shield size={16} color="#D97706" style={{ marginTop: 2, flexShrink: 0 }} />
                         <Box>
                           <Typography variant="body2" sx={{ color: '#B45309', fontWeight: 700, fontSize: '0.8rem' }}>
                             Strictly NAT / Firewall Fallback (Outbound only)
@@ -461,11 +509,32 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                         </Box>
                       </Box>
 
-                      <Chip
-                        label={ep.tagStr || 'nat'}
-                        size="small"
-                        sx={{ fontSize: '0.65rem', backgroundColor: '#FEF3C7', color: '#B45309' }}
-                      />
+                      <Box sx={{ width: { xs: '100%', sm: 180 }, flexShrink: 0 }}>
+                        <TextField
+                          label="Tags"
+                          size="small"
+                          placeholder="nat"
+                          value={ep.tagStr}
+                          onChange={(e) => handleUpdateEntrypoint(ep.id, 'tagStr', e.target.value)}
+                          helperText="Default: nat"
+                          fullWidth
+                          sx={{
+                            backgroundColor: '#FFFFFF',
+                            borderRadius: 1,
+                            '& .MuiInputBase-input': {
+                              fontSize: '0.8rem',
+                              py: 0.8,
+                            },
+                            '& .MuiInputLabel-root': {
+                              fontSize: '0.8rem',
+                            },
+                            '& .MuiFormHelperText-root': {
+                              fontSize: '0.65rem',
+                              color: '#B45309',
+                            },
+                          }}
+                        />
+                      </Box>
                     </Box>
                   );
                 }
@@ -513,7 +582,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                         placeholder="e.g. 51820, 2000-2999"
                         value={ep.portStr}
                         onChange={(e) => handleUpdateEntrypoint(ep.id, 'portStr', e.target.value)}
-                        helperText="Blank for auto ASN"
+                        helperText="Blank for auto port"
                       />
 
                       <TextField

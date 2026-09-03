@@ -17,12 +17,14 @@ import { Box, Typography } from '@mui/material';
 import { Network } from 'lucide-react';
 import { NodeCard } from './NodeCard';
 import { CustomEdge } from './CustomEdge';
-import { Node, Link, NodeStatus } from '../../types/api';
+import { Node, Link, NodeStatus, NetworkState } from '../../types/api';
 
 interface TopologyGraphProps {
   nodes: Node[];
   links: Link[];
   nodeStatuses: Record<string, NodeStatus>;
+  networkState?: NetworkState | null;
+  selectedTag?: string;
   onSelectNode: (node: Node) => void;
   onSelectLink: (link: Link) => void;
   onConnectNodes: (sourceName: string, targetName: string) => void;
@@ -41,6 +43,8 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
   nodes,
   links,
   nodeStatuses,
+  networkState,
+  selectedTag,
   onSelectNode,
   onSelectLink,
   onConnectNodes,
@@ -74,10 +78,36 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
     });
   }, [nodes, nodeStatuses, onSelectNode]);
 
-  // Convert easy42 links to React Flow edges
+  // Convert easy42 links to React Flow edges with derived working state
   const initialEdges: Edge[] = useMemo(() => {
     return links.map((link) => {
       const edgeId = `link-${link.from.name}-${link.to.name}`;
+
+      const fromIface = networkState?.nodes?.[link.from.name]?.interfaces?.[link.from.interface];
+      const toIface = networkState?.nodes?.[link.to.name]?.interfaces?.[link.to.interface];
+
+      let workingState: 'working' | 'not_working' | 'unknown' = 'unknown';
+      let latestHandshake: string | undefined = undefined;
+      let rxBytes = 0;
+      let txBytes = 0;
+
+      if (fromIface?.working_state === 'working' || toIface?.working_state === 'working') {
+        workingState = 'working';
+      } else if (fromIface?.working_state === 'not_working' || toIface?.working_state === 'not_working') {
+        workingState = 'not_working';
+      } else if (fromIface?.working_state === 'unknown' || toIface?.working_state === 'unknown') {
+        workingState = 'unknown';
+      }
+
+      const hsFrom = fromIface?.latest_handshake ? new Date(fromIface.latest_handshake).getTime() : 0;
+      const hsTo = toIface?.latest_handshake ? new Date(toIface.latest_handshake).getTime() : 0;
+      if (hsFrom > 0 || hsTo > 0) {
+        latestHandshake = hsFrom >= hsTo ? fromIface?.latest_handshake : toIface?.latest_handshake;
+      }
+
+      rxBytes = (fromIface?.transfer_rx_bytes || 0) + (toIface?.transfer_rx_bytes || 0);
+      txBytes = (fromIface?.transfer_tx_bytes || 0) + (toIface?.transfer_tx_bytes || 0);
+
       return {
         id: edgeId,
         source: link.from.name,
@@ -85,11 +115,15 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
         type: 'customEdge',
         data: {
           link,
+          workingState,
+          latestHandshake,
+          transferRxBytes: rxBytes,
+          transferTxBytes: txBytes,
           onSelect: onSelectLink,
         } as unknown as Record<string, unknown>,
       };
     });
-  }, [links, onSelectLink]);
+  }, [links, networkState, onSelectLink]);
 
   const [flowNodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [flowEdges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
@@ -169,10 +203,12 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
             <Network size={32} color="#4F46E5" />
           </Box>
           <Typography variant="h6" sx={{ fontWeight: 700, color: '#0F172A' }}>
-            No Nodes in Mesh
+            {selectedTag && selectedTag !== 'All' ? `No Nodes with tag "${selectedTag}"` : 'No Nodes in Mesh'}
           </Typography>
           <Typography variant="body2" sx={{ color: '#64748B', maxWidth: 360, textAlign: 'center' }}>
-            Click &quot;Add Node&quot; above to discover and connect your Linux servers via WireGuard.
+            {selectedTag && selectedTag !== 'All'
+              ? 'Try selecting a different tag filter from the toolbar above.'
+              : 'Click "Add Node" above to discover and connect your Linux servers via WireGuard.'}
           </Typography>
         </Box>
       ) : null}

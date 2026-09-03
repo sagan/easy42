@@ -9,21 +9,44 @@ import {
   CircularProgress,
   Alert,
   Tooltip,
+  Chip,
 } from '@mui/material';
-import { X, Trash2, Link as LinkIcon, Key, ArrowRightLeft, Edit2 } from 'lucide-react';
+import { X, Trash2, Link as LinkIcon, Key, ArrowRightLeft, Edit2, Activity } from 'lucide-react';
 import { api } from '../../api/client';
-import { Link } from '../../types/api';
+import { Link, NetworkState } from '../../types/api';
 
 interface LinkDetailDrawerProps {
   link: Link | null;
+  networkState?: NetworkState | null;
   open: boolean;
   onClose: () => void;
   onEditLink: (link: Link) => void;
   onLinkDeleted: (from: string, to: string) => void;
 }
 
+function formatBytes(bytes: number): string {
+  if (!bytes || bytes <= 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+function formatHandshakeAgo(dateStr?: string): string {
+  if (!dateStr) return '';
+  const date = new Date(dateStr);
+  const diffSec = Math.floor((Date.now() - date.getTime()) / 1000);
+  if (diffSec < 0) return 'now';
+  if (diffSec < 60) return `${diffSec}s`;
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return `${diffMin}m`;
+  const diffHours = Math.floor(diffMin / 60);
+  return `${diffHours}h`;
+}
+
 export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
   link,
+  networkState,
   open,
   onClose,
   onEditLink,
@@ -109,6 +132,88 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
       </Box>
 
       <Divider sx={{ borderColor: '#E2E8F0', mb: 2.5 }} />
+
+      {/* Live Connection Health Card */}
+      {(() => {
+        const fromIface = networkState?.nodes?.[link.from.name]?.interfaces?.[link.from.interface];
+        const toIface = networkState?.nodes?.[link.to.name]?.interfaces?.[link.to.interface];
+
+        let workingState: 'working' | 'not_working' | 'unknown' = 'unknown';
+        if (fromIface?.working_state === 'working' || toIface?.working_state === 'working') {
+          workingState = 'working';
+        } else if (fromIface?.working_state === 'not_working' || toIface?.working_state === 'not_working') {
+          workingState = 'not_working';
+        }
+
+        const hsFrom = fromIface?.latest_handshake ? new Date(fromIface.latest_handshake) : null;
+        const hsTo = toIface?.latest_handshake ? new Date(toIface.latest_handshake) : null;
+        let newestHandshake: Date | null = null;
+        if (hsFrom && hsTo) {
+          newestHandshake = hsFrom >= hsTo ? hsFrom : hsTo;
+        } else {
+          newestHandshake = hsFrom || hsTo;
+        }
+
+        const totalRx = (fromIface?.transfer_rx_bytes || 0) + (toIface?.transfer_rx_bytes || 0);
+        const totalTx = (fromIface?.transfer_tx_bytes || 0) + (toIface?.transfer_tx_bytes || 0);
+
+        return (
+          <Box
+            sx={{
+              p: 2,
+              mb: 2.5,
+              borderRadius: 2,
+              backgroundColor:
+                workingState === 'working'
+                  ? '#ECFDF5'
+                  : workingState === 'not_working'
+                  ? '#FEF2F2'
+                  : '#F8FAFC',
+              border: '1px solid',
+              borderColor:
+                workingState === 'working'
+                  ? '#A7F3D0'
+                  : workingState === 'not_working'
+                  ? '#FECDD3'
+                  : '#E2E8F0',
+            }}
+          >
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#1E293B', display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Activity size={16} color={workingState === 'working' ? '#059669' : workingState === 'not_working' ? '#DC2626' : '#64748B'} />
+                Tunnel Health
+              </Typography>
+              <Chip
+                label={workingState === 'working' ? 'WORKING' : workingState === 'not_working' ? 'NOT WORKING' : 'UNKNOWN'}
+                size="small"
+                sx={{
+                  fontWeight: 700,
+                  fontSize: '0.65rem',
+                  bgcolor: workingState === 'working' ? '#10B981' : workingState === 'not_working' ? '#EF4444' : '#94A3B8',
+                  color: '#FFFFFF',
+                }}
+              />
+            </Box>
+
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.8 }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                <Typography variant="caption" sx={{ color: '#64748B' }}>Latest Handshake:</Typography>
+                <Typography variant="caption" sx={{ fontWeight: 600, color: '#1E293B' }}>
+                  {newestHandshake ? `${newestHandshake.toLocaleTimeString()} (${formatHandshakeAgo(newestHandshake.toISOString())} ago)` : 'None observed'}
+                </Typography>
+              </Box>
+              {(totalRx > 0 || totalTx > 0) && (
+                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <Typography variant="caption" sx={{ color: '#64748B' }}>Observed Transfer:</Typography>
+                  <Typography variant="caption" sx={{ fontWeight: 600, color: '#1E293B' }}>
+                    ↓ {formatBytes(totalRx)} / ↑ {formatBytes(totalTx)}
+                  </Typography>
+                </Box>
+              )}
+            </Box>
+          </Box>
+        );
+      })()}
 
       {/* Specifications */}
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>

@@ -111,6 +111,7 @@ type Node struct {
 	Tags        []string     `json:"tags,omitempty"`
 	X           *float64     `json:"x,omitempty"`          // Graph X coordinate
 	Y           *float64     `json:"y,omitempty"`          // Graph Y coordinate
+	ModifiedAt  time.Time    `json:"modified_at,omitempty"`// Last updated timestamp
 }
 
 // LinkEnd represents one endpoint of a WireGuard link
@@ -128,9 +129,10 @@ type LinkEnd struct {
 
 // Link represents a WireGuard link between two nodes
 type Link struct {
-	From LinkEnd  `json:"from"`
-	To   LinkEnd  `json:"to"`
-	Tags []string `json:"tags,omitempty"`
+	From       LinkEnd   `json:"from"`
+	To         LinkEnd   `json:"to"`
+	Tags       []string  `json:"tags,omitempty"`
+	ModifiedAt time.Time `json:"modified_at,omitempty"`// Last updated timestamp
 }
 
 // InterfaceInfo represents an interface on a remote machine
@@ -196,6 +198,9 @@ type SyncAction struct {
 	Diff        string     `json:"diff,omitempty"`
 	Command     string     `json:"command,omitempty"`
 	Description string     `json:"description"`
+	NeedsApply  bool       `json:"needs_apply"`
+	Status      string     `json:"status,omitempty"`      // "pending" | "synced"
+	DiffStatus  string     `json:"diff_status,omitempty"` // "create" | "update" | "delete" | "synced"
 }
 
 // SyncResult represents the execution result of sync actions

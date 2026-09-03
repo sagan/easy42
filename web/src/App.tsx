@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { ThemeProvider, CssBaseline, Box, CircularProgress, Typography } from '@mui/material';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { ThemeProvider, CssBaseline, Box, CircularProgress, Typography, Snackbar, Alert } from '@mui/material';
 import { theme } from './theme';
 import { api } from './api/client';
-import { Node, Link, NodeStatus } from './types/api';
+import { Node, Link, NodeStatus, NetworkState } from './types/api';
 import { Navbar } from './components/Navbar';
 import { TopologyGraph } from './components/Topology/TopologyGraph';
 import { NodeDetailDrawer } from './components/Topology/NodeDetailDrawer';
@@ -23,6 +23,7 @@ export const App: React.FC = () => {
   const [nodes, setNodes] = useState<Node[]>([]);
   const [links, setLinks] = useState<Link[]>([]);
   const [nodeStatuses, setNodeStatuses] = useState<Record<string, NodeStatus>>({});
+  const [networkState, setNetworkState] = useState<NetworkState | null>(null);
   const [, setLoadingData] = useState(false);
 
   // Selected for drawers
@@ -39,6 +40,111 @@ export const App: React.FC = () => {
   const [unlockOpen, setUnlockOpen] = useState(false);
   const [syncOpen, setSyncOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [updatingState, setUpdatingState] = useState(false);
+  const [stateToast, setStateToast] = useState<{ message: string; severity: 'success' | 'warning' | 'error' | 'info' } | null>(null);
+
+  // Tag filter
+  const [selectedTag, setSelectedTag] = useState<string>('All');
+
+  // Unique tags across all nodes
+  const uniqueTags = useMemo(() => {
+    const set = new Set<string>();
+    nodes.forEach((n) => {
+      n.tags?.forEach((t) => {
+        const trimmed = t.trim();
+        if (trimmed) set.add(trimmed);
+      });
+    });
+    return Array.from(set).sort();
+  }, [nodes]);
+
+  // If selected tag is no longer available, fallback to 'All'
+  useEffect(() => {
+    if (selectedTag !== 'All' && !uniqueTags.includes(selectedTag)) {
+      setSelectedTag('All');
+    }
+  }, [selectedTag, uniqueTags]);
+
+  // Displayed nodes and links filtered by selected tag
+  const displayedNodes = useMemo(() => {
+    if (selectedTag === 'All') return nodes;
+    return nodes.filter((n) => n.tags && n.tags.includes(selectedTag));
+  }, [nodes, selectedTag]);
+
+  const displayedLinks = useMemo(() => {
+    const displayedNames = new Set(displayedNodes.map((n) => n.name));
+    return links.filter(
+      (l) => displayedNames.has(l.from.name) && displayedNames.has(l.to.name)
+    );
+  }, [links, displayedNodes]);
+
+  // Missing links between displayed nodes
+  const missingMeshLinksCount = useMemo(() => {
+    if (displayedNodes.length < 2) return 0;
+    let count = 0;
+    for (let i = 0; i < displayedNodes.length; i++) {
+      for (let j = i + 1; j < displayedNodes.length; j++) {
+        const n1 = displayedNodes[i].name;
+        const n2 = displayedNodes[j].name;
+        const exists = links.some(
+          (l) =>
+            (l.from.name === n1 && l.to.name === n2) ||
+            (l.from.name === n2 && l.to.name === n1)
+        );
+        if (!exists) count++;
+      }
+    }
+    return count;
+  }, [displayedNodes, links]);
+
+  // Create full mesh handler
+  const handleCreateFullMesh = async () => {
+    if (displayedNodes.length < 2) {
+      setStateToast({
+        message: 'At least 2 displayed nodes are required to create a full mesh.',
+        severity: 'warning',
+      });
+      return;
+    }
+
+    if (missingMeshLinksCount === 0) {
+      setStateToast({
+        message: 'All displayed nodes are already fully connected in a mesh.',
+        severity: 'info',
+      });
+      return;
+    }
+
+    if (!isUnlocked) {
+      setUnlockOpen(true);
+      return;
+    }
+
+    const confirmMsg = `Create full mesh network between ${displayedNodes.length} displayed nodes? This will automatically add ${missingMeshLinksCount} missing link(s).`;
+    if (!window.confirm(confirmMsg)) {
+      return;
+    }
+
+    try {
+      const nodeNames = displayedNodes.map((n) => n.name);
+      const added = await api.createFullMesh(nodeNames);
+      await loadData();
+      setStateToast({
+        message: `Full mesh established: added ${added.length} new link(s) between displayed nodes.`,
+        severity: 'success',
+      });
+    } catch (err: unknown) {
+      const e = err as Error & { status?: number };
+      if (e.status === 423) {
+        setUnlockOpen(true);
+      } else {
+        setStateToast({
+          message: `Failed to create full mesh: ${e.message}`,
+          severity: 'error',
+        });
+      }
+    }
+  };
 
   const checkAuth = useCallback(async () => {
     try {
@@ -56,14 +162,16 @@ export const App: React.FC = () => {
   const loadData = useCallback(async () => {
     setLoadingData(true);
     try {
-      const [nodesData, linksData, statusesData] = await Promise.all([
+      const [nodesData, linksData, statusesData, stateData] = await Promise.all([
         api.getNodes(),
         api.getLinks(),
         api.getNodeStatuses().catch(() => ({})),
+        api.getState().catch(() => null),
       ]);
       setNodes(nodesData || []);
       setLinks(linksData || []);
       setNodeStatuses(statusesData || {});
+      setNetworkState(stateData);
     } catch {
       // Handled
     } finally {
@@ -199,6 +307,33 @@ export const App: React.FC = () => {
     setNodeStatuses((prev) => ({ ...prev, [status.name]: status }));
   };
 
+  const handleUpdateState = async () => {
+    setUpdatingState(true);
+    try {
+      const res = await api.updateState();
+      await loadData();
+      if (res.warnings && res.warnings.length > 0) {
+        setStateToast({
+          message: `Network state reconciled with warnings: ${res.warnings.join('; ')}`,
+          severity: 'warning',
+        });
+      } else {
+        setStateToast({
+          message: 'Network state successfully fetched from all devices and state.json reconciled.',
+          severity: 'success',
+        });
+      }
+    } catch (err: unknown) {
+      const e = err as Error;
+      setStateToast({
+        message: `Failed to update state: ${e.message}`,
+        severity: 'error',
+      });
+    } finally {
+      setUpdatingState(false);
+    }
+  };
+
   if (checkingAuth) {
     return (
       <ThemeProvider theme={theme}>
@@ -243,9 +378,14 @@ export const App: React.FC = () => {
       <Box sx={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: '#F8FAFC' }}>
         {/* Navigation Bar */}
         <Navbar
-          nodeCount={nodes.length}
-          linkCount={links.length}
+          nodeCount={displayedNodes.length}
+          totalNodeCount={nodes.length}
+          linkCount={displayedLinks.length}
+          totalLinkCount={links.length}
           isUnlocked={isUnlocked}
+          uniqueTags={uniqueTags}
+          selectedTag={selectedTag}
+          onSelectTag={setSelectedTag}
           onAddNode={() => {
             setNodeToEdit(null);
             setAddNodeOpen(true);
@@ -256,7 +396,12 @@ export const App: React.FC = () => {
             setLinkToEdit(null);
             setAddLinkOpen(true);
           }}
+          onCreateFullMesh={handleCreateFullMesh}
+          missingMeshLinksCount={missingMeshLinksCount}
+          displayedNodeCount={displayedNodes.length}
           onSync={() => setSyncOpen(true)}
+          onUpdateState={handleUpdateState}
+          updatingState={updatingState}
           onUnlockToggle={handleUnlockToggle}
           onOpenSettings={() => setSettingsOpen(true)}
           onLogout={handleLogout}
@@ -265,9 +410,11 @@ export const App: React.FC = () => {
         {/* Visual Topology Editor */}
         <Box sx={{ flex: 1, position: 'relative' }}>
           <TopologyGraph
-            nodes={nodes}
-            links={links}
+            nodes={displayedNodes}
+            links={displayedLinks}
             nodeStatuses={nodeStatuses}
+            networkState={networkState}
+            selectedTag={selectedTag}
             onSelectNode={handleSelectNode}
             onSelectLink={handleSelectLink}
             onConnectNodes={handleConnectNodes}
@@ -288,6 +435,7 @@ export const App: React.FC = () => {
 
         <LinkDetailDrawer
           link={selectedLink}
+          networkState={networkState}
           open={Boolean(selectedLink)}
           onClose={() => setSelectedLink(null)}
           onEditLink={handleEditLink}
@@ -349,6 +497,24 @@ export const App: React.FC = () => {
             setSelectedLink(null);
           }}
         />
+
+        <Snackbar
+          open={Boolean(stateToast)}
+          autoHideDuration={6000}
+          onClose={() => setStateToast(null)}
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+        >
+          {stateToast ? (
+            <Alert
+              onClose={() => setStateToast(null)}
+              severity={stateToast.severity}
+              variant="filled"
+              sx={{ width: '100%', borderRadius: 2 }}
+            >
+              {stateToast.message}
+            </Alert>
+          ) : undefined}
+        </Snackbar>
       </Box>
     </ThemeProvider>
   );

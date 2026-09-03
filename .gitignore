@@ -4,3 +4,4 @@ node_modules
 
 # ignore all root dir files by default
 /*.*
+/easy42

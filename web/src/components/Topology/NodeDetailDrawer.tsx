@@ -11,7 +11,7 @@ import {
   Alert,
   Tooltip,
 } from '@mui/material';
-import { X, Trash2, RefreshCw, Server, Globe, HardDrive, Shield, Activity, Edit2 } from 'lucide-react';
+import { X, Trash2, RefreshCw, Server, Globe, HardDrive, Shield, Activity, Edit2, Tag } from 'lucide-react';
 import { api } from '../../api/client';
 import { Node, NodeStatus } from '../../types/api';
 
@@ -163,6 +163,36 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
           <Typography variant="body2" className="mono-font" sx={{ fontWeight: 700, color: '#4F46E5', mt: 0.5 }}>
             AS{node.asn}
           </Typography>
+        </Box>
+
+        {/* Node Tags */}
+        <Box sx={{ p: 1.5, borderRadius: 2, backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0' }}>
+          <Typography variant="caption" sx={{ color: '#64748B', display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
+            <Tag size={12} /> Tags
+          </Typography>
+          {node.tags && node.tags.length > 0 ? (
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 0.5 }}>
+              {node.tags.map((tag) => (
+                <Chip
+                  key={tag}
+                  label={`#${tag}`}
+                  size="small"
+                  sx={{
+                    height: 22,
+                    fontSize: '0.7rem',
+                    fontWeight: 600,
+                    backgroundColor: 'rgba(8, 145, 178, 0.08)',
+                    color: '#0891B2',
+                    border: '1px solid rgba(8, 145, 178, 0.25)',
+                  }}
+                />
+              ))}
+            </Box>
+          ) : (
+            <Typography variant="caption" sx={{ color: '#94A3B8', fontStyle: 'italic', display: 'block', mt: 0.5 }}>
+              No tags assigned
+            </Typography>
+          )}
         </Box>
 
         {/* External Entrypoints */}
