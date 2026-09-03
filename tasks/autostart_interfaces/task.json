@@ -1,0 +1,7 @@
+{
+  "id": "autostart_interfaces",
+  "title": "WireGuard Autostart Service",
+  "description": "Installs and enables an autostart service (systemd, OpenRC, or procd) to automatically bring up all wg42* WireGuard interfaces on boot.",
+  "category": "System & Network",
+  "weight": 50
+}

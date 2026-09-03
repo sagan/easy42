@@ -336,12 +336,33 @@ func (s *Server) handleRefreshNodeStatus(w http.ResponseWriter, r *http.Request)
 	writeJSON(w, http.StatusOK, status)
 }
 
+func (s *Server) handleGetNodeBirdConfig(w http.ResponseWriter, r *http.Request) {
+	name := chi.URLParam(r, "name")
+	birdConfig, err := s.mgr.GenerateBirdConfig(name)
+	if err != nil {
+		writeError(w, http.StatusNotFound, err.Error())
+		return
+	}
+
+	if r.URL.Query().Get("raw") == "true" || r.Header.Get("Accept") == "text/plain" {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		_, _ = w.Write([]byte(birdConfig))
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"node":   name,
+		"config": birdConfig,
+	})
+}
+
 // Link Handlers
 
 func (s *Server) handleGetLinks(w http.ResponseWriter, r *http.Request) {
 	links := s.mgr.GetLinks()
 	writeJSON(w, http.StatusOK, links)
 }
+
 
 type addLinkRequest struct {
 	FromNode string   `json:"from_node"`

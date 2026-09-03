@@ -258,6 +258,10 @@ func (m *Manager) AddNode(node config.Node) error {
 		})
 	}
 
+	if node.Table <= 0 {
+		node.Table = 254
+	}
+
 	node.ModifiedAt = time.Now().UTC()
 	cfg.Nodes = append(cfg.Nodes, node)
 	return m.store.Save(cfg)
@@ -302,6 +306,10 @@ func (m *Manager) UpdateNode(name string, updated config.Node) error {
 			IP:   "",
 			Tags: []string{"nat"},
 		})
+	}
+
+	if updated.Table <= 0 {
+		updated.Table = 254
 	}
 
 	now := time.Now().UTC()
@@ -1117,10 +1125,58 @@ func (m *Manager) PlanSync() ([]config.SyncAction, error) {
 		}
 	}
 
-	// Sort actions: pending (NeedsApply == true) first, then synced. Within each group sort by NodeName and Interface
+	// 3. Node BIRD configurations
+	for _, n := range nodes {
+		node := n
+		birdConf, err := compiler.GenerateBirdConfig(&node, nodes, links)
+		if err != nil {
+			continue
+		}
+
+		targetFile := compiler.DefaultBirdConfigPath
+		desiredHash := config.HashConfig(compiler.NormalizeConfig(birdConf))
+
+		needsApply := true
+		status := "pending"
+		diffStatus := "create"
+
+		if stNode, ok := currentState.Nodes[node.Name]; ok {
+			if stNode.BirdConfigHash != "" {
+				if stNode.BirdConfigHash == desiredHash {
+					needsApply = false
+					status = "synced"
+					diffStatus = "synced"
+				} else {
+					diffStatus = "update"
+				}
+			}
+		}
+
+		actions = append(actions, config.SyncAction{
+			NodeName:    node.Name,
+			Host:        node.Host,
+			Type:        config.ActionSyncBirdConfig,
+			Interface:   "bird",
+			TargetFile:  targetFile,
+			FileContent: birdConf,
+			Command:     "birdc configure",
+			Description: fmt.Sprintf("Configure BIRD routing (%s) on %s", targetFile, node.Name),
+			NeedsApply:  needsApply,
+			Status:      status,
+			DiffStatus:  diffStatus,
+		})
+	}
+
+	// Sort actions: pending (NeedsApply == true) first, then synced.
+	// Within each group, order by actionPriority (clean/delete -> wireguard -> bird), then NodeName and Interface
 	sort.Slice(actions, func(i, j int) bool {
 		if actions[i].NeedsApply != actions[j].NeedsApply {
 			return actions[i].NeedsApply // true comes before false
+		}
+		pI := actionPriority(actions[i].Type)
+		pJ := actionPriority(actions[j].Type)
+		if pI != pJ {
+			return pI < pJ
 		}
 		if actions[i].NodeName != actions[j].NodeName {
 			return actions[i].NodeName < actions[j].NodeName
@@ -1187,6 +1243,40 @@ func (m *Manager) ExecuteSync(force ...bool) ([]config.SyncResult, error) {
 		// Check current remote file
 		currentContent, _ := ssh.ReadRemoteFile(sftpClient, act.TargetFile)
 		needsUpdate := isForce || compiler.NeedsUpdate(currentContent, act.FileContent)
+
+		// Handle BIRD configuration update
+		if act.Type == config.ActionSyncBirdConfig {
+			if needsUpdate {
+				if err := ssh.AtomicWriteFile(sftpClient, act.TargetFile, []byte(act.FileContent), 0644); err != nil {
+					res.Success = false
+					res.Error = fmt.Sprintf("Failed to write BIRD config: %v", err)
+					res.Duration = float64(time.Since(start).Milliseconds())
+					results = append(results, res)
+					continue
+				}
+
+				// Apply BIRD configuration on remote device
+				out, err := ssh.RunCommand(sshClient, "birdc configure")
+				res.Output = strings.TrimSpace(out)
+				if err != nil {
+					res.Success = false
+					res.Error = fmt.Sprintf("Failed to apply BIRD config (birdc configure): %v", err)
+					res.Duration = float64(time.Since(start).Milliseconds())
+					results = append(results, res)
+					continue
+				}
+			}
+
+			res.Success = true
+			res.Duration = float64(time.Since(start).Milliseconds())
+			results = append(results, res)
+
+			// Record successful application in stateStore
+			hash := config.HashConfig(compiler.NormalizeConfig(act.FileContent))
+			_ = m.stateStore.UpdateBirdState(act.NodeName, act.Host, hash, time.Now())
+			continue
+		}
+
 		if needsUpdate {
 			if err := ssh.AtomicWriteFile(sftpClient, act.TargetFile, []byte(act.FileContent), 0600); err != nil {
 				res.Success = false
@@ -1456,11 +1546,14 @@ func (m *Manager) UpdateState() (*config.NetworkState, []string, error) {
 
 	// Merge probed node interfaces
 	for _, res := range results {
+		existingNode := currentState.Nodes[res.nodeName]
 		currentState.Nodes[res.nodeName] = config.StateNode{
-			Name:       res.nodeName,
-			Host:       res.host,
-			LastSeen:   time.Now(),
-			Interfaces: res.ifaces,
+			Name:           res.nodeName,
+			Host:           res.host,
+			LastSeen:       time.Now(),
+			BirdConfigHash: existingNode.BirdConfigHash,
+			BirdAppliedAt:  existingNode.BirdAppliedAt,
+			Interfaces:     res.ifaces,
 		}
 	}
 
@@ -1481,3 +1574,57 @@ func (m *Manager) GetLastSyncResults() (time.Time, []config.SyncResult) {
 	}
 	return m.lastSync, res
 }
+
+// GenerateBirdConfig generates the BIRD configuration for a given node
+func (m *Manager) GenerateBirdConfig(nodeName string) (string, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	cfg := m.store.Get()
+	var targetNode *config.Node
+	for i := range cfg.Nodes {
+		if cfg.Nodes[i].Name == nodeName {
+			targetNode = &cfg.Nodes[i]
+			break
+		}
+	}
+	if targetNode == nil {
+		return "", fmt.Errorf("node %s not found", nodeName)
+	}
+
+	return compiler.GenerateBirdConfig(targetNode, cfg.Nodes, cfg.Links)
+}
+
+// GenerateBirdConfigWithTemplate generates BIRD config using a custom template
+func (m *Manager) GenerateBirdConfigWithTemplate(nodeName string, tmplContent string) (string, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	cfg := m.store.Get()
+	var targetNode *config.Node
+	for i := range cfg.Nodes {
+		if cfg.Nodes[i].Name == nodeName {
+			targetNode = &cfg.Nodes[i]
+			break
+		}
+	}
+	if targetNode == nil {
+		return "", fmt.Errorf("node %s not found", nodeName)
+	}
+
+	return compiler.GenerateBirdConfigWithTemplate(tmplContent, targetNode, cfg.Nodes, cfg.Links)
+}
+
+func actionPriority(t config.ActionType) int {
+	switch t {
+	case config.ActionDeleteConfig, config.ActionDownInterface:
+		return 1
+	case config.ActionCreateConfig, config.ActionUpdateConfig, config.ActionSyncConfig, config.ActionUpInterface:
+		return 2
+	case config.ActionSyncBirdConfig:
+		return 3
+	default:
+		return 4
+	}
+}
+

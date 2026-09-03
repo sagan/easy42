@@ -87,3 +87,50 @@ func TestStateStoreLifecycle(t *testing.T) {
 		t.Errorf("state.json is empty")
 	}
 }
+
+func TestStateStoreBirdState(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "easy42-bird-state-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	store := NewStateStore(tempDir)
+	_, _ = store.Load()
+
+	appliedAt := time.Now().Truncate(time.Second)
+	testHash := HashConfig("router id 192.168.100.1;")
+
+	if err := store.UpdateBirdState("node-1", "10.0.0.1", testHash, appliedAt); err != nil {
+		t.Fatalf("UpdateBirdState failed: %v", err)
+	}
+
+	// Verify in-memory state
+	node, ok := store.Get().Nodes["node-1"]
+	if !ok {
+		t.Fatalf("Expected node-1 in state")
+	}
+	if node.BirdConfigHash != testHash {
+		t.Errorf("Expected hash %s, got %s", testHash, node.BirdConfigHash)
+	}
+	if node.BirdAppliedAt == nil || !node.BirdAppliedAt.Equal(appliedAt) {
+		t.Errorf("Expected appliedAt %v, got %v", appliedAt, node.BirdAppliedAt)
+	}
+
+	// Reload from disk in a new StateStore instance
+	store2 := NewStateStore(tempDir)
+	st2, err := store2.Load()
+	if err != nil {
+		t.Fatalf("Load store2 failed: %v", err)
+	}
+	nodeLoaded, ok := st2.Nodes["node-1"]
+	if !ok {
+		t.Fatalf("Expected node-1 in loaded store2")
+	}
+	if nodeLoaded.BirdConfigHash != testHash {
+		t.Errorf("Loaded hash mismatch: %s vs %s", nodeLoaded.BirdConfigHash, testHash)
+	}
+	if nodeLoaded.BirdAppliedAt == nil || !nodeLoaded.BirdAppliedAt.Equal(appliedAt) {
+		t.Errorf("Loaded appliedAt mismatch: %v vs %v", appliedAt, nodeLoaded.BirdAppliedAt)
+	}
+}

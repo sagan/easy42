@@ -11,6 +11,11 @@ export interface Entrypoint {
   mtu?: number;
 }
 
+export interface KernelRouteRule {
+  table: number;
+  prefixes: string[];
+}
+
 export interface Node {
   name: string;
   host: string;
@@ -19,10 +24,14 @@ export interface Node {
   asn: number;
   entrypoints?: Entrypoint[];
   tags?: string[];
+  table?: number;
+  static_routes?: string[];
+  routes?: KernelRouteRule[];
   x?: number;
   y?: number;
   modified_at?: string;
 }
+
 
 export interface LinkEnd {
   name: string;
@@ -144,6 +153,8 @@ export interface StateNode {
   name: string;
   host: string;
   last_seen?: string;
+  bird_config_hash?: string;
+  bird_applied_at?: string;
   interfaces: Record<string, StateInterface>;
 }
 
@@ -157,4 +168,32 @@ export interface UpdateStateResponse {
   success: boolean;
   state: NetworkState;
   warnings?: string[];
+}
+
+export interface TaskMeta {
+  id: string;
+  title: string;
+  description: string;
+  category: string;
+  weight: number;
+}
+
+export type TaskCheckStatus = 'ready' | 'done' | 'incompatible' | 'error';
+
+export interface TaskStatusResult {
+  task_id: string;
+  node_name: string;
+  status: TaskCheckStatus;
+  message: string;
+  exit_code: number;
+  duration_ms: number;
+}
+
+export interface TaskRunResult {
+  task_id: string;
+  node_name: string;
+  success: boolean;
+  output: string;
+  exit_code: number;
+  duration_ms: number;
 }

@@ -15,9 +15,9 @@ import {
   Tooltip,
   Chip,
 } from '@mui/material';
-import { Search, Plus, Trash2, Server, Globe, Shield, Edit2, Tag } from 'lucide-react';
+import { Search, Plus, Trash2, Server, Globe, Shield, Edit2, Tag, Network } from 'lucide-react';
 import { api } from '../../api/client';
-import { Node, Entrypoint } from '../../types/api';
+import { Node, Entrypoint, KernelRouteRule } from '../../types/api';
 
 interface AddNodeModalProps {
   open: boolean;
@@ -53,6 +53,16 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
   const [iface, setIface] = useState('lo');
   const [asn, setAsn] = useState<number>(4299420001);
   const [nodeTags, setNodeTags] = useState('');
+  // BIRD / BGP state
+  const [table, setTable] = useState<number>(254);
+  const [staticRoutesStr, setStaticRoutesStr] = useState('');
+  interface EditableKernelRoute {
+    id: string;
+    table: number | '';
+    prefixesStr: string;
+  }
+  const [kernelRoutes, setKernelRoutes] = useState<EditableKernelRoute[]>([]);
+
   const [entrypoints, setEntrypoints] = useState<EditableEntrypoint[]>([
     { id: 'nat-fallback', ip: '', portStr: '', tagStr: 'nat', mtuStr: '', isNone: true },
   ]);
@@ -69,6 +79,19 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
       setIface(nodeToEdit.interface);
       setAsn(nodeToEdit.asn);
       setNodeTags(nodeToEdit.tags?.join(', ') || '');
+      setTable(nodeToEdit.table ?? 254);
+      setStaticRoutesStr(nodeToEdit.static_routes?.join(', ') || '');
+      if (nodeToEdit.routes && nodeToEdit.routes.length > 0) {
+        setKernelRoutes(
+          nodeToEdit.routes.map((r, idx) => ({
+            id: `kr-${idx}-${Date.now()}`,
+            table: r.table,
+            prefixesStr: r.prefixes?.join(', ') || '',
+          }))
+        );
+      } else {
+        setKernelRoutes([]);
+      }
       setDiscoveredIps([]);
       setProbeError(null);
       setSaveError(null);
@@ -113,6 +136,9 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
       setIface('lo');
       setAsn(4299420001);
       setNodeTags('');
+      setTable(254);
+      setStaticRoutesStr('');
+      setKernelRoutes([]);
       setEntrypoints([
         { id: 'nat-fallback', ip: '', portStr: '', tagStr: 'nat', mtuStr: '', isNone: true },
       ]);
@@ -205,6 +231,27 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
     );
   };
 
+  const handleAddKernelRoute = () => {
+    setKernelRoutes([
+      ...kernelRoutes,
+      {
+        id: `kr-${Date.now()}`,
+        table: '',
+        prefixesStr: '',
+      },
+    ]);
+  };
+
+  const handleRemoveKernelRoute = (id: string) => {
+    setKernelRoutes(kernelRoutes.filter((r) => r.id !== id));
+  };
+
+  const handleUpdateKernelRoute = (id: string, field: 'table' | 'prefixesStr', value: any) => {
+    setKernelRoutes(
+      kernelRoutes.map((r) => (r.id === id ? { ...r, [field]: value } : r))
+    );
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim() || !sshHost.trim() || !ip.trim()) {
@@ -265,6 +312,22 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
       .map((t) => t.trim())
       .filter(Boolean);
 
+    const parsedStaticRoutes = staticRoutesStr
+      .split(/[\n,]+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    const parsedRoutes: KernelRouteRule[] = kernelRoutes
+      .filter((kr) => typeof kr.table === 'number' && !isNaN(kr.table) && kr.prefixesStr.trim())
+      .map((kr) => ({
+        table: Number(kr.table),
+        prefixes: kr.prefixesStr
+          .split(/[\n,]+/)
+          .map((p) => p.trim())
+          .filter(Boolean),
+      }))
+      .filter((kr) => kr.prefixes.length > 0);
+
     const newNode: Node = {
       name: name.trim(),
       host: sshHost.trim(),
@@ -273,6 +336,9 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
       asn: Number(asn),
       entrypoints: finalEntrypoints,
       tags: parsedTags.length > 0 ? parsedTags : undefined,
+      table: Number(table) || 254,
+      static_routes: parsedStaticRoutes.length > 0 ? parsedStaticRoutes : undefined,
+      routes: parsedRoutes.length > 0 ? parsedRoutes : undefined,
       x: nodeToEdit?.x,
       y: nodeToEdit?.y,
     };
@@ -610,11 +676,163 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
             </Box>
           </Box>
 
+          {/* Step 4: BIRD / BGP Routing */}
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Network size={16} color="#4F46E5" />
+              <Typography variant="caption" sx={{ color: '#475569', fontWeight: 700, letterSpacing: '0.5px' }}>
+                STEP 4: BIRD & BGP ROUTING
+              </Typography>
+            </Box>
+
+            <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
+              <TextField
+                label="Kernel Routing Table ID"
+                type="number"
+                size="small"
+                value={table}
+                onChange={(e) => setTable(Number(e.target.value))}
+                helperText="Kernel table bird exports BGP routes to (default 254)"
+                disabled={saving}
+              />
+
+              <TextField
+                label="Static BGP Prefixes"
+                size="small"
+                value={staticRoutesStr}
+                onChange={(e) => setStaticRoutesStr(e.target.value)}
+                placeholder="e.g. 192.168.100.0/24"
+                helperText="Unconditionally advertised via BGP (comma-separated)"
+                disabled={saving}
+              />
+            </Box>
+
+            {staticRoutesStr.split(/[\n,]+/).map((s) => s.trim()).filter(Boolean).length > 0 && (
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                {staticRoutesStr
+                  .split(/[\n,]+/)
+                  .map((s) => s.trim())
+                  .filter(Boolean)
+                  .map((prefix) => (
+                    <Chip
+                      key={prefix}
+                      label={prefix}
+                      size="small"
+                      sx={{
+                        height: 22,
+                        fontSize: '0.7rem',
+                        fontWeight: 600,
+                        backgroundColor: 'rgba(79, 70, 229, 0.08)',
+                        color: '#4F46E5',
+                        border: '1px solid rgba(79, 70, 229, 0.25)',
+                      }}
+                    />
+                  ))}
+              </Box>
+            )}
+
+            {/* Imported Kernel Route Rules */}
+            <Box sx={{ mt: 1 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.2 }}>
+                <Box>
+                  <Typography variant="caption" sx={{ color: '#475569', fontWeight: 700, display: 'block' }}>
+                    KERNEL ROUTE IMPORTS ({kernelRoutes.length})
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: '#94A3B8', fontSize: '0.7rem' }}>
+                    Broadcast routes learned from specific kernel routing tables if they match prefixes.
+                  </Typography>
+                </Box>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  startIcon={<Plus size={14} />}
+                  onClick={handleAddKernelRoute}
+                  sx={{ fontSize: '0.75rem', py: 0.3 }}
+                >
+                  Add Table Import
+                </Button>
+              </Box>
+
+              {kernelRoutes.length === 0 ? (
+                <Box
+                  sx={{
+                    p: 1.5,
+                    borderRadius: 2,
+                    backgroundColor: '#F8FAFC',
+                    border: '1px dashed #CBD5E1',
+                    textAlign: 'center',
+                  }}
+                >
+                  <Typography variant="caption" sx={{ color: '#94A3B8', fontStyle: 'italic' }}>
+                    No kernel table imports configured. Click &quot;Add Table Import&quot; to import LAN subnets.
+                  </Typography>
+                </Box>
+              ) : (
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                  {kernelRoutes.map((kr) => (
+                    <Box
+                      key={kr.id}
+                      sx={{
+                        p: 1.5,
+                        borderRadius: 2,
+                        backgroundColor: '#F8FAFC',
+                        border: '1px solid #E2E8F0',
+                        display: 'flex',
+                        flexDirection: { xs: 'column', sm: 'row' },
+                        alignItems: { xs: 'stretch', sm: 'center' },
+                        gap: 1.5,
+                      }}
+                    >
+                      <Box sx={{ width: { xs: '100%', sm: 130 }, flexShrink: 0 }}>
+                        <TextField
+                          label="Kernel Table"
+                          type="number"
+                          size="small"
+                          placeholder="e.g. 100"
+                          value={kr.table}
+                          onChange={(e) =>
+                            handleUpdateKernelRoute(
+                              kr.id,
+                              'table',
+                              e.target.value === '' ? '' : Number(e.target.value)
+                            )
+                          }
+                          fullWidth
+                          helperText="Table ID"
+                        />
+                      </Box>
+                      <Box sx={{ flex: 1 }}>
+                        <TextField
+                          label="Prefixes (BIRD syntax)"
+                          size="small"
+                          placeholder="e.g. 10.0.0.0/8+, 192.168.0.0/16+"
+                          value={kr.prefixesStr}
+                          onChange={(e) => handleUpdateKernelRoute(kr.id, 'prefixesStr', e.target.value)}
+                          fullWidth
+                          helperText="e.g. 10.0.0.0/8+, 192.168.0.0/16+"
+                        />
+                      </Box>
+                      <IconButton
+                        size="small"
+                        color="error"
+                        onClick={() => handleRemoveKernelRoute(kr.id)}
+                        sx={{ alignSelf: { xs: 'flex-end', sm: 'center' }, mt: { xs: -1, sm: 0 } }}
+                      >
+                        <Trash2 size={16} />
+                      </IconButton>
+                    </Box>
+                  ))}
+                </Box>
+              )}
+            </Box>
+          </Box>
+
           {saveError && (
             <Alert severity="error" sx={{ borderRadius: 2 }}>
               {saveError}
             </Alert>
           )}
+
         </DialogContent>
 
         <DialogActions sx={{ px: 3, py: 2, borderTop: '1px solid #E2E8F0', backgroundColor: '#F8FAFC' }}>

@@ -32,6 +32,7 @@ import {
   ChevronDown,
   Share2,
   Tag,
+  Wrench,
 } from 'lucide-react';
 
 interface NavbarProps {
@@ -51,6 +52,7 @@ interface NavbarProps {
   onSync: () => void;
   onUpdateState?: () => void;
   updatingState?: boolean;
+  onOpenHelper?: () => void;
   onUnlockToggle: () => void;
   onOpenSettings: () => void;
   onLogout: () => void;
@@ -73,6 +75,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onSync,
   onUpdateState,
   updatingState,
+  onOpenHelper,
   onUnlockToggle,
   onOpenSettings,
   onLogout,
@@ -337,6 +340,31 @@ export const Navbar: React.FC<NavbarProps> = ({
               {updatingState ? 'Updating State...' : 'Update State'}
             </Button>
           </Tooltip>
+
+          {onOpenHelper && (
+            <Tooltip title="Device Config Helper Tasks">
+              <Button
+                variant="outlined"
+                size="small"
+                startIcon={<Wrench size={16} />}
+                onClick={onOpenHelper}
+                sx={{
+                  borderColor: '#CBD5E1',
+                  color: '#334155',
+                  fontWeight: 600,
+                  fontSize: '0.8rem',
+                  textTransform: 'none',
+                  '&:hover': {
+                    borderColor: '#4F46E5',
+                    backgroundColor: 'rgba(79, 70, 229, 0.05)',
+                    color: '#4F46E5',
+                  },
+                }}
+              >
+                Device Helper
+              </Button>
+            </Tooltip>
+          )}
 
           <Button
             variant="contained"

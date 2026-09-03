@@ -15,7 +15,7 @@ import {
   AccordionDetails,
   Tooltip,
 } from '@mui/material';
-import { RefreshCw, CheckCircle2, XCircle, ChevronDown, FileCode, Check, Trash2, Zap, Radio, CheckCheck } from 'lucide-react';
+import { RefreshCw, CheckCircle2, XCircle, ChevronDown, FileCode, Check, Trash2, Zap, Radio, CheckCheck, Network } from 'lucide-react';
 import { api } from '../../api/client';
 import { SyncAction, SyncResult } from '../../types/api';
 
@@ -222,6 +222,11 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
                       <Typography variant="body2" sx={{ fontWeight: 600, color: '#0F172A' }}>
                         {res.node_name} — {res.action}
                       </Typography>
+                      {res.output && (
+                        <Typography variant="caption" className="mono-font" sx={{ color: '#059669', display: 'block', mt: 0.2 }}>
+                          {res.output}
+                        </Typography>
+                      )}
                       {res.error && (
                         <Typography variant="caption" sx={{ color: '#E11D48', display: 'block' }}>
                           {res.error}
@@ -268,13 +273,13 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
 
             {pendingActions.length === 0 && safeActions.length > 0 && (
               <Alert severity="success" sx={{ borderRadius: 2 }}>
-                All WireGuard links are currently in sync with recorded device states. You can use <strong>Force Apply All</strong> to re-push configs from scratch, or <strong>Update State</strong> to refresh from remote hosts.
+                All WireGuard interfaces and BIRD routing configurations are currently in sync with recorded device states. You can use <strong>Force Apply All</strong> to re-push configs from scratch, or <strong>Update State</strong> to refresh from remote hosts.
               </Alert>
             )}
 
             {safeActions.length === 0 && (
               <Alert severity="info" sx={{ borderRadius: 2 }}>
-                No WireGuard links or interfaces configured yet.
+                No mesh nodes or links configured yet.
               </Alert>
             )}
 
@@ -300,6 +305,8 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flex: 1 }}>
                           {act.type === 'delete_config' || act.type === 'down_interface' || act.diff_status === 'delete' ? (
                             <Trash2 size={16} color="#DC2626" />
+                          ) : act.type === 'sync_bird' ? (
+                            <Network size={16} color="#0284C7" />
                           ) : (
                             <FileCode size={16} color="#4F46E5" />
                           )}
@@ -308,7 +315,7 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
                               {act.description}
                             </Typography>
                             <Typography variant="caption" className="mono-font" sx={{ color: '#64748B', fontSize: '0.7rem' }}>
-                              {act.host}:{act.target_file}
+                              {act.host}:{act.target_file} {act.command ? `• (${act.command})` : ''}
                             </Typography>
                           </Box>
                           {act.diff_status === 'delete' || act.type === 'delete_config' ? (
@@ -333,6 +340,11 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
                         </Box>
                       </AccordionSummary>
                       <AccordionDetails sx={{ pt: 0 }}>
+                        {act.command && act.file_content && (
+                          <Box sx={{ mb: 1, p: 0.8, borderRadius: 1, backgroundColor: '#F1F5F9', border: '1px solid #E2E8F0', fontSize: '0.72rem', color: '#334155' }}>
+                            <strong>Apply Command:</strong> <code>{act.command}</code>
+                          </Box>
+                        )}
                         <Box
                           component="pre"
                           className="mono-font"

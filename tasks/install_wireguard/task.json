@@ -1,0 +1,7 @@
+{
+  "id": "install_wireguard",
+  "title": "Install WireGuard",
+  "description": "Installs WireGuard and wireguard-tools on the device using the native package manager.",
+  "category": "Packages",
+  "weight": 10
+}

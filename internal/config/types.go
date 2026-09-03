@@ -100,19 +100,29 @@ func (e *Entrypoint) IsNone() bool {
 	return strings.TrimSpace(e.IP) == ""
 }
 
+// KernelRouteRule represents routes to import from a specific Linux kernel table into BIRD
+type KernelRouteRule struct {
+	Table    int      `json:"table"`
+	Prefixes []string `json:"prefixes"`
+}
+
 // Node represents a device/node in the network
 type Node struct {
-	Name        string       `json:"name"`                 // Max 11 chars hostname
-	Host        string       `json:"host"`                 // SSH host / alias / IP
-	IP          string       `json:"ip"`                   // Main IPv4 (e.g. 192.168.100.1)
-	Interface   string       `json:"interface"`            // Main IP interface name (e.g. lo, dn42, eth0)
-	ASN         uint64       `json:"asn"`                  // AS Number (default in 4299420000..4299429999)
-	Entrypoints []Entrypoint `json:"entrypoints,omitempty"`// External entrypoints
-	Tags        []string     `json:"tags,omitempty"`
-	X           *float64     `json:"x,omitempty"`          // Graph X coordinate
-	Y           *float64     `json:"y,omitempty"`          // Graph Y coordinate
-	ModifiedAt  time.Time    `json:"modified_at,omitempty"`// Last updated timestamp
+	Name         string            `json:"name"`                   // Max 11 chars hostname
+	Host         string            `json:"host"`                   // SSH host / alias / IP
+	IP           string            `json:"ip"`                     // Main IPv4 (e.g. 192.168.100.1)
+	Interface    string            `json:"interface"`              // Main IP interface name (e.g. lo, dn42, eth0)
+	ASN          uint64            `json:"asn"`                    // AS Number (default in 4299420000..4299429999)
+	Entrypoints  []Entrypoint      `json:"entrypoints,omitempty"`  // External entrypoints
+	Tags         []string          `json:"tags,omitempty"`
+	Table        int               `json:"table,omitempty"`         // Main routing table bird used to export BGP learned routing to (defaults to 254)
+	StaticRoutes []string          `json:"static_routes,omitempty"` // CIDR prefix list unconditionally broadcast via BGP
+	Routes       []KernelRouteRule `json:"routes,omitempty"`        // Kernel routes imported from kernel tables and broadcast via BGP
+	X            *float64          `json:"x,omitempty"`            // Graph X coordinate
+	Y            *float64          `json:"y,omitempty"`            // Graph Y coordinate
+	ModifiedAt   time.Time         `json:"modified_at,omitempty"`  // Last updated timestamp
 }
+
 
 // LinkEnd represents one endpoint of a WireGuard link
 type LinkEnd struct {
@@ -185,6 +195,7 @@ const (
 	ActionUpInterface  ActionType = "up_interface"
 	ActionSyncConfig   ActionType = "sync_config"
 	ActionDownInterface ActionType = "down_interface"
+	ActionSyncBirdConfig ActionType = "sync_bird"
 )
 
 // SyncAction represents a planned action on a target node

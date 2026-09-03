@@ -532,3 +532,87 @@ func TestCreateFullMesh(t *testing.T) {
 	}
 }
 
+func TestGenerateBirdConfig(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "easy42-bird-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	store := config.NewStore(tempDir)
+	pass, err := store.Initialize()
+	if err != nil {
+		t.Fatalf("Failed to init store: %v", err)
+	}
+
+	mgr := NewManager(store)
+	if err := mgr.Unlock(pass); err != nil {
+		t.Fatalf("Failed to unlock manager: %v", err)
+	}
+
+	nodeA := config.Node{
+		Name:      "node-a",
+		Host:      "10.0.0.1",
+		IP:        "192.168.10.1",
+		Interface: "lo",
+		ASN:       4299420001,
+		StaticRoutes: []string{
+			"192.168.10.0/24",
+		},
+		Routes: []config.KernelRouteRule{
+			{
+				Table:    101,
+				Prefixes: []string{"10.10.0.0/16+"},
+			},
+		},
+	}
+	nodeB := config.Node{
+		Name:      "node-b",
+		Host:      "10.0.0.2",
+		IP:        "192.168.10.2",
+		Interface: "lo",
+		ASN:       4299420002,
+	}
+
+	if err := mgr.AddNode(nodeA); err != nil {
+		t.Fatalf("AddNode A failed: %v", err)
+	}
+	if err := mgr.AddNode(nodeB); err != nil {
+		t.Fatalf("AddNode B failed: %v", err)
+	}
+
+	// Verify default table was set to 254
+	savedNodeA := mgr.GetNode("node-a")
+	if savedNodeA.Table != 254 {
+		t.Fatalf("Expected table 254, got %d", savedNodeA.Table)
+	}
+
+	// Add link
+	if _, err := mgr.AddLink("node-a", "node-b", 0, 0, []string{"mesh"}); err != nil {
+		t.Fatalf("AddLink failed: %v", err)
+	}
+
+	// Generate BIRD config for node-a
+	birdConf, err := mgr.GenerateBirdConfig("node-a")
+	if err != nil {
+		t.Fatalf("GenerateBirdConfig failed: %v", err)
+	}
+
+	expected := []string{
+		"define SELF_IP = 192.168.10.1;",
+		"define SELF_AS = 4299420001;",
+		"define TABLE = 254;",
+		"protocol kernel kernel_101 {",
+		"kernel table 101;",
+		"route 192.168.10.0/24 reject;",
+		"protocol bgp 'easy42_peer_node-b' from easy42_peer {",
+		"as 4299420002;",
+	}
+	for _, exp := range expected {
+		if !strings.Contains(birdConf, exp) {
+			t.Fatalf("Expected %q in birdConf:\n%s", exp, birdConf)
+		}
+	}
+}
+
+

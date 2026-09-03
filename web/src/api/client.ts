@@ -1,4 +1,4 @@
-import { AuthStatus, Node, Link, ProbeResult, NodeStatus, SyncAction, SyncResult, SyncStatus, NetworkState, UpdateStateResponse } from '../types/api';
+import { AuthStatus, Node, Link, ProbeResult, NodeStatus, SyncAction, SyncResult, SyncStatus, NetworkState, UpdateStateResponse, TaskMeta, TaskStatusResult, TaskRunResult } from '../types/api';
 
 const API_BASE = '/api';
 
@@ -83,6 +83,7 @@ export const api = {
   refreshNodeStatus: (name: string) => request<NodeStatus>(`/nodes/${encodeURIComponent(name)}/status`, {
     method: 'POST',
   }),
+  getNodeBirdConfig: (name: string) => request<{ node: string; config: string }>(`/nodes/${encodeURIComponent(name)}/bird`),
 
   // Links
   getLinks: () => request<Link[]>('/links'),
@@ -134,4 +135,17 @@ export const api = {
     method: 'POST',
   }),
   getState: () => request<NetworkState>('/state'),
+
+  // Helper Tasks
+  getTasks: () => request<TaskMeta[]>('/tasks').then((res) => res || []),
+  checkTaskStatus: (taskId: string, nodes?: string[]) =>
+    request<Record<string, TaskStatusResult>>(`/tasks/${encodeURIComponent(taskId)}/status`, {
+      method: 'POST',
+      body: JSON.stringify({ nodes }),
+    }),
+  runTask: (taskId: string, nodes: string[]) =>
+    request<Record<string, TaskRunResult>>(`/tasks/${encodeURIComponent(taskId)}/run`, {
+      method: 'POST',
+      body: JSON.stringify({ nodes }),
+    }),
 };

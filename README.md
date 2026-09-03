@@ -147,7 +147,23 @@ In topology UI, clicking "Sync" button will trigger the backend to sync settings
 
 The UI displays "unsynced" links in graph as different style.
 
+## Device Config Helper
+
+The **Device Config Helper** enables running one-time, idempotent configuration and bootstrapping tasks on managed devices over SSH/SFTP.
+
+Tasks are structured as embedded scripts in the `tasks/` directory:
+- `status.sh`: Determines if a task is applicable, already applied (`exit 10`), ready to execute (`exit 0`), or incompatible (`exit 20`).
+- `run.sh`: Idempotently executes the task, ensuring atomicity, backups, and validation.
+- `task.json`: Task metadata (id, title, description, category, weight).
+
+### Available Built-in Tasks:
+- `install_wireguard`: Installs WireGuard and wireguard-tools across Debian, Ubuntu, CentOS/RHEL/Rocky, Alpine, and Arch.
+- `install_bird`: Installs BIRD 2 / BIRD Internet Routing Daemon and enables the system service.
+- `config_bird`: Adds `include "/etc/bird_easy42.conf";` to the main `/etc/bird/bird.conf` (with backup and syntax validation).
+- `sysctl_params`: Configures IP forwarding and loose reverse path filtering (`rp_filter=0`) in `/etc/sysctl.d/99-easy42.conf`.
+- `autostart_interfaces`: Installs `/etc/systemd/system/easy42-wg-autostart.service` to automatically bring up all `wg42*` interfaces on boot.
+
 ## Development Phrases
 
 - Phrase 1 (current phrase): backend, frontend, topology editing UI (nodes, links), wg management functions. In this phrase it only update device `/etc/wireguard/wg*.conf` files and run `wg / wg-quick` to spawn interfaces or udpate / sync wg conf.
-- Phrase 2: node service persistence (use systemd to auto-start wg interface on startup). bird / BGP related functions. We will design details later.
+- Phrase 2: node service persistence (use systemd to auto-start wg interface on startup). bird / BGP related functions. Device Config Helper.

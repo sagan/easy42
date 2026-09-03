@@ -439,3 +439,114 @@ func TestCreateMeshLinksAPI(t *testing.T) {
 	}
 }
 
+func TestGetNodeBirdConfigAPI(t *testing.T) {
+	srv, tempDir, initPass := setupTestServer(t)
+	defer os.RemoveAll(tempDir)
+
+	// Login
+	loginBody, _ := json.Marshal(map[string]string{"password": initPass})
+	req := httptest.NewRequest("POST", "/api/auth/login", bytes.NewReader(loginBody))
+	w := httptest.NewRecorder()
+	srv.router.ServeHTTP(w, req)
+	cookie := w.Result().Cookies()[0]
+
+	// Add node
+	node := config.Node{
+		Name:      "gateway1",
+		Host:      "192.168.1.1",
+		IP:        "192.168.50.100",
+		Interface: "lo",
+		ASN:       4299420001,
+		StaticRoutes: []string{
+			"192.168.50.0/24",
+		},
+		Routes: []config.KernelRouteRule{
+			{
+				Table:    100,
+				Prefixes: []string{"10.0.0.0/8+"},
+			},
+		},
+	}
+	bodyNode, _ := json.Marshal(node)
+	reqNode := httptest.NewRequest("POST", "/api/nodes", bytes.NewReader(bodyNode))
+	reqNode.AddCookie(cookie)
+	wNode := httptest.NewRecorder()
+	srv.router.ServeHTTP(wNode, reqNode)
+	if wNode.Code != http.StatusCreated {
+		t.Fatalf("AddNode failed: %d %s", wNode.Code, wNode.Body.String())
+	}
+
+	// 1. Test JSON response
+	reqBird := httptest.NewRequest("GET", "/api/nodes/gateway1/bird", nil)
+	reqBird.AddCookie(cookie)
+	wBird := httptest.NewRecorder()
+	srv.router.ServeHTTP(wBird, reqBird)
+
+	if wBird.Code != http.StatusOK {
+		t.Fatalf("GetBirdConfig failed: %d %s", wBird.Code, wBird.Body.String())
+	}
+	var res map[string]any
+	if err := json.Unmarshal(wBird.Body.Bytes(), &res); err != nil {
+		t.Fatalf("Failed to parse JSON response: %v", err)
+	}
+	confStr, ok := res["config"].(string)
+	if !ok || !strings.Contains(confStr, "define SELF_IP = 192.168.50.100;") {
+		t.Fatalf("Unexpected bird config content: %v", res)
+	}
+
+	// 2. Test raw text response
+	reqBirdRaw := httptest.NewRequest("GET", "/api/nodes/gateway1/bird?raw=true", nil)
+	reqBirdRaw.AddCookie(cookie)
+	wBirdRaw := httptest.NewRecorder()
+	srv.router.ServeHTTP(wBirdRaw, reqBirdRaw)
+
+	if wBirdRaw.Code != http.StatusOK {
+		t.Fatalf("GetBirdConfig raw failed: %d %s", wBirdRaw.Code, wBirdRaw.Body.String())
+	}
+	if !strings.Contains(wBirdRaw.Body.String(), "define SELF_AS = 4299420001;") {
+		t.Fatalf("Expected raw bird config with SELF_AS, got:\n%s", wBirdRaw.Body.String())
+	}
+}
+
+func TestTasksAPI(t *testing.T) {
+	srv, tempDir, initPass := setupTestServer(t)
+	defer os.RemoveAll(tempDir)
+
+	// Login
+	loginBody, _ := json.Marshal(map[string]string{"password": initPass})
+	req := httptest.NewRequest("POST", "/api/auth/login", bytes.NewReader(loginBody))
+	w := httptest.NewRecorder()
+	srv.router.ServeHTTP(w, req)
+	cookie := w.Result().Cookies()[0]
+
+	// 1. GET /api/tasks
+	reqTasks := httptest.NewRequest("GET", "/api/tasks", nil)
+	reqTasks.AddCookie(cookie)
+	wTasks := httptest.NewRecorder()
+	srv.router.ServeHTTP(wTasks, reqTasks)
+
+	if wTasks.Code != http.StatusOK {
+		t.Fatalf("GetTasks failed: %d %s", wTasks.Code, wTasks.Body.String())
+	}
+
+	var taskList []map[string]any
+	if err := json.Unmarshal(wTasks.Body.Bytes(), &taskList); err != nil {
+		t.Fatalf("Failed to parse tasks response: %v", err)
+	}
+
+	if len(taskList) < 5 {
+		t.Fatalf("Expected at least 5 tasks, got %d", len(taskList))
+	}
+
+	// 2. Test unknown task status
+	reqBadTask := httptest.NewRequest("POST", "/api/tasks/unknown_task_123/status", nil)
+	reqBadTask.AddCookie(cookie)
+	wBadTask := httptest.NewRecorder()
+	srv.router.ServeHTTP(wBadTask, reqBadTask)
+
+	if wBadTask.Code != http.StatusBadRequest {
+		t.Fatalf("Expected 400 for unknown task, got %d", wBadTask.Code)
+	}
+}
+
+

@@ -37,10 +37,12 @@ type StateInterface struct {
 
 // StateNode represents the actual applied/observed state of a node
 type StateNode struct {
-	Name       string                    `json:"name"`
-	Host       string                    `json:"host"`
-	LastSeen   time.Time                 `json:"last_seen,omitempty"`
-	Interfaces map[string]StateInterface `json:"interfaces"` // key: interface name e.g. "wg42node2"
+	Name           string                    `json:"name"`
+	Host           string                    `json:"host"`
+	LastSeen       time.Time                 `json:"last_seen,omitempty"`
+	BirdConfigHash string                    `json:"bird_config_hash,omitempty"`
+	BirdAppliedAt  *time.Time                `json:"bird_applied_at,omitempty"`
+	Interfaces     map[string]StateInterface `json:"interfaces"` // key: interface name e.g. "wg42node2"
 }
 
 // NetworkState represents the recorded state in state.json
@@ -191,6 +193,40 @@ func (s *StateStore) UpdateInterface(nodeName, host string, iface StateInterface
 	node.Host = host
 	node.LastSeen = time.Now()
 	node.Interfaces[iface.Name] = iface
+	s.state.Nodes[nodeName] = node
+
+	return s.saveLocked()
+}
+
+// UpdateBirdState records or updates the applied BIRD config hash for a node
+func (s *StateStore) UpdateBirdState(nodeName, host, configHash string, appliedAt time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.state == nil {
+		s.state = &NetworkState{
+			Version:   1,
+			UpdatedAt: time.Now(),
+			Nodes:     make(map[string]StateNode),
+		}
+	}
+
+	node, exists := s.state.Nodes[nodeName]
+	if !exists {
+		node = StateNode{
+			Name:       nodeName,
+			Host:       host,
+			LastSeen:   time.Now(),
+			Interfaces: make(map[string]StateInterface),
+		}
+	}
+	if node.Interfaces == nil {
+		node.Interfaces = make(map[string]StateInterface)
+	}
+	node.Host = host
+	node.LastSeen = time.Now()
+	node.BirdConfigHash = configHash
+	node.BirdAppliedAt = &appliedAt
 	s.state.Nodes[nodeName] = node
 
 	return s.saveLocked()

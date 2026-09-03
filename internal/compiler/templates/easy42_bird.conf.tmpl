@@ -1,0 +1,98 @@
+define SELF_IP = {{ .ip }};
+define SELF_AS = {{ .asn }};
+define TABLE = {{ .table }};
+
+define INTERNET = [ 0.0.0.0/0, 0.0.0.0/1, 128.0.0.0/1 ];
+
+router id SELF_IP;
+
+protocol device {
+    scan time 10;
+}
+
+protocol kernel kernel_v4 {
+    ipv4 {
+        export filter {
+            # Force Linux to use this source IP
+            krt_prefsrc = SELF_IP;
+            if source ~ [ RTS_BGP, RTS_STATIC ] then accept;
+            reject;
+        };
+        import none;
+    };
+    kernel table TABLE;
+}
+
+{{range .routes}}
+protocol kernel kernel_{{ .table}} {
+    learn;
+    kernel table {{.table}};
+    ipv4 {
+        # implicitly uses table master4
+        import filter {
+            # sanity check: reject internet routes
+            if net ~ INTERNET then reject;
+            {{range .prefixes}}
+            if net ~ {{.}} then accept;
+            {{end}}
+            reject;
+        };
+        export none;
+    };
+}
+{{end}}
+
+# easy42 network use ipv4 only but DN42 or other networks may export ipv6
+protocol kernel kernel_v6 {
+    ipv6 {
+        export filter {
+            if source ~ [ RTS_BGP ] then accept;
+            reject;
+        };
+        import none;
+    };
+    kernel table TABLE;
+}
+
+protocol static static_self {
+    ipv4;
+    route SELF_IP/32 reject;
+}
+
+{{if .static_routes}}
+protocol static static_v4 {
+    ipv4;
+    {{range .static_routes}}
+    # reject is strictly local (kernel) only. It generates "unreachable" kernel routing table
+    route {{.}} reject;
+    {{end}}
+}
+{{end}}
+
+template bgp easy42_peer {
+    # Required for link-local peering
+    direct; 
+    ipv4 {
+        # This tells Bird to send IPv4 routes over the IPv6 session
+        extended next hop on;
+        next hop self;
+        
+        import all; 
+        export filter {
+            if net ~ INTERNET then reject;
+            accept;
+        };
+    };
+    ipv6 {
+        next hop self;
+        import all;
+        export all;
+    };
+}
+
+{{range .links}}
+protocol bgp 'easy42_peer_{{.remote.name}}' from easy42_peer {
+    local {{ .local.address }} as SELF_AS;
+    neighbor {{ .remote.address }} % '{{ .local.interface }}' as {{ .remote_node.asn }};
+}
+{{end}}

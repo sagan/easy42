@@ -37,6 +37,30 @@ func RunCommand(client *ssh.Client, command string) (string, error) {
 	return stdout.String(), nil
 }
 
+// RunCommandWithExitCode executes a command and returns stdout, stderr, exit code, and execution error
+func RunCommandWithExitCode(client *ssh.Client, command string) (string, string, int, error) {
+	session, err := client.NewSession()
+	if err != nil {
+		return "", "", -1, fmt.Errorf("failed to create ssh session: %w", err)
+	}
+	defer session.Close()
+
+	var stdout, stderr bytes.Buffer
+	session.Stdout = &stdout
+	session.Stderr = &stderr
+
+	runErr := session.Run(command)
+	exitCode := 0
+	if runErr != nil {
+		if exitErr, ok := runErr.(*ssh.ExitError); ok {
+			exitCode = exitErr.ExitStatus()
+		} else {
+			exitCode = -1
+		}
+	}
+	return stdout.String(), stderr.String(), exitCode, runErr
+}
+
 // IsInterfaceUp checks if a network interface is present and UP
 func IsInterfaceUp(client *ssh.Client, iface string) bool {
 	out, err := RunCommand(client, fmt.Sprintf("ip link show %s", iface))

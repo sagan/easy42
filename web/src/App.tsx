@@ -12,6 +12,7 @@ import { AddLinkModal } from './components/Modals/AddLinkModal';
 import { UnlockModal } from './components/Modals/UnlockModal';
 import { SyncProgressModal } from './components/Modals/SyncProgressModal';
 import { SettingsModal } from './components/Modals/SettingsModal';
+import { DeviceHelperModal } from './components/Modals/DeviceHelperModal';
 import { LoginPage } from './components/Login/LoginPage';
 
 export const App: React.FC = () => {
@@ -40,6 +41,8 @@ export const App: React.FC = () => {
   const [unlockOpen, setUnlockOpen] = useState(false);
   const [syncOpen, setSyncOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [helperOpen, setHelperOpen] = useState(false);
+  const [helperInitialNode, setHelperInitialNode] = useState<string | undefined>(undefined);
   const [updatingState, setUpdatingState] = useState(false);
   const [stateToast, setStateToast] = useState<{ message: string; severity: 'success' | 'warning' | 'error' | 'info' } | null>(null);
 
@@ -402,6 +405,10 @@ export const App: React.FC = () => {
           onSync={() => setSyncOpen(true)}
           onUpdateState={handleUpdateState}
           updatingState={updatingState}
+          onOpenHelper={() => {
+            setHelperInitialNode(undefined);
+            setHelperOpen(true);
+          }}
           onUnlockToggle={handleUnlockToggle}
           onOpenSettings={() => setSettingsOpen(true)}
           onLogout={handleLogout}
@@ -431,6 +438,10 @@ export const App: React.FC = () => {
           onEditNode={handleEditNode}
           onNodeDeleted={handleNodeDeleted}
           onStatusRefreshed={handleStatusRefreshed}
+          onOpenHelper={(nodeName) => {
+            setHelperInitialNode(nodeName);
+            setHelperOpen(true);
+          }}
         />
 
         <LinkDetailDrawer
@@ -496,6 +507,13 @@ export const App: React.FC = () => {
             setSelectedNode(null);
             setSelectedLink(null);
           }}
+        />
+
+        <DeviceHelperModal
+          open={helperOpen}
+          onClose={() => setHelperOpen(false)}
+          nodes={nodes}
+          initialNode={helperInitialNode}
         />
 
         <Snackbar

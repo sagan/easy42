@@ -120,6 +120,26 @@ var nodeRemoveCmd = &cobra.Command{
 	},
 }
 
+var nodeBirdCmd = &cobra.Command{
+	Use:   "bird [name]",
+	Short: "Generate BIRD BGP routing configuration for a node",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		name := args[0]
+		store := config.NewStore(GetDataDir())
+		if _, err := store.Load(); err != nil {
+			return err
+		}
+		mgr := engine.NewManager(store)
+		birdConf, err := mgr.GenerateBirdConfig(name)
+		if err != nil {
+			return err
+		}
+		fmt.Print(birdConf)
+		return nil
+	},
+}
+
 func init() {
 	nodeAddCmd.Flags().StringVarP(&nodeName, "name", "n", "", "Node name (max 11 chars)")
 	nodeAddCmd.Flags().StringVarP(&nodeHost, "host", "H", "", "SSH host or alias")
@@ -134,5 +154,7 @@ func init() {
 	nodeCmd.AddCommand(nodeAddCmd)
 	nodeCmd.AddCommand(nodeProbeCmd)
 	nodeCmd.AddCommand(nodeRemoveCmd)
+	nodeCmd.AddCommand(nodeBirdCmd)
 	RootCmd.AddCommand(nodeCmd)
 }
+

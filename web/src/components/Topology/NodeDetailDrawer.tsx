@@ -10,8 +10,12 @@ import {
   CircularProgress,
   Alert,
   Tooltip,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
 } from '@mui/material';
-import { X, Trash2, RefreshCw, Server, Globe, HardDrive, Shield, Activity, Edit2, Tag } from 'lucide-react';
+import { X, Trash2, RefreshCw, Server, Globe, HardDrive, Shield, Activity, Edit2, Tag, Network, FileCode, Wrench } from 'lucide-react';
 import { api } from '../../api/client';
 import { Node, NodeStatus } from '../../types/api';
 
@@ -23,6 +27,7 @@ interface NodeDetailDrawerProps {
   onEditNode: (node: Node) => void;
   onNodeDeleted: (name: string) => void;
   onStatusRefreshed: (status: NodeStatus) => void;
+  onOpenHelper?: (nodeName: string) => void;
 }
 
 export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
@@ -33,12 +38,30 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
   onEditNode,
   onNodeDeleted,
   onStatusRefreshed,
+  onOpenHelper,
 }) => {
   const [refreshing, setRefreshing] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [viewingBird, setViewingBird] = useState(false);
+  const [birdConfig, setBirdConfig] = useState<string | null>(null);
+  const [loadingBird, setLoadingBird] = useState(false);
 
   if (!node) return null;
+
+  const handleOpenBirdConfig = async () => {
+    setViewingBird(true);
+    setLoadingBird(true);
+    try {
+      const res = await api.getNodeBirdConfig(node.name);
+      setBirdConfig(res.config);
+    } catch (err: unknown) {
+      const e = err as Error;
+      setBirdConfig(`# Failed to load BIRD config: ${e.message}`);
+    } finally {
+      setLoadingBird(false);
+    }
+  };
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -226,7 +249,91 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
           </Box>
         </Box>
 
+        {/* BIRD / BGP Routing */}
+        <Box>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+            <Typography variant="caption" sx={{ color: '#475569', fontWeight: 700, letterSpacing: '0.5px', display: 'flex', alignItems: 'center', gap: 0.8 }}>
+              <Network size={14} color="#4F46E5" /> ROUTING (BIRD & BGP)
+            </Typography>
+            <Button
+              size="small"
+              variant="text"
+              startIcon={<FileCode size={13} />}
+              onClick={handleOpenBirdConfig}
+              sx={{ fontSize: '0.7rem', py: 0.2, px: 1, color: '#4F46E5', fontWeight: 600 }}
+            >
+              View Config
+            </Button>
+          </Box>
+
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+            {/* Kernel Routing Table */}
+            <Box sx={{ p: 1.2, borderRadius: 1.5, backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Typography variant="caption" sx={{ color: '#64748B' }}>
+                Export Table:
+              </Typography>
+              <Chip
+                label={`Table ${node.table ?? 254}`}
+                size="small"
+                sx={{ height: 20, fontSize: '0.7rem', fontWeight: 600, backgroundColor: 'rgba(79, 70, 229, 0.08)', color: '#4F46E5' }}
+              />
+            </Box>
+
+            {/* Static Routes */}
+            <Box sx={{ p: 1.2, borderRadius: 1.5, backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0' }}>
+              <Typography variant="caption" sx={{ color: '#64748B', display: 'block', mb: 0.5 }}>
+                Static BGP Prefixes:
+              </Typography>
+              {node.static_routes && node.static_routes.length > 0 ? (
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                  {node.static_routes.map((sr) => (
+                    <Chip
+                      key={sr}
+                      label={sr}
+                      size="small"
+                      className="mono-font"
+                      sx={{ height: 20, fontSize: '0.65rem', backgroundColor: '#EDE9FE', color: '#6D28D9' }}
+                    />
+                  ))}
+                </Box>
+              ) : (
+                <Typography variant="caption" sx={{ color: '#94A3B8', fontStyle: 'italic' }}>
+                  None configured
+                </Typography>
+              )}
+            </Box>
+
+            {/* Kernel Route Imports */}
+            <Box sx={{ p: 1.2, borderRadius: 1.5, backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0' }}>
+              <Typography variant="caption" sx={{ color: '#64748B', display: 'block', mb: 0.5 }}>
+                Kernel Table Imports ({node.routes?.length || 0}):
+              </Typography>
+              {node.routes && node.routes.length > 0 ? (
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.8 }}>
+                  {node.routes.map((rule, idx) => (
+                    <Box key={idx} sx={{ p: 0.8, borderRadius: 1, backgroundColor: '#FFFFFF', border: '1px solid #CBD5E1' }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.8, mb: 0.4 }}>
+                        <Chip label={`Table ${rule.table}`} size="small" sx={{ height: 18, fontSize: '0.65rem', fontWeight: 600 }} />
+                      </Box>
+                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.4 }}>
+                        {rule.prefixes?.map((p) => (
+                          <Chip key={p} label={p} size="small" variant="outlined" className="mono-font" sx={{ height: 18, fontSize: '0.62rem' }} />
+                        ))}
+                      </Box>
+                    </Box>
+                  ))}
+                </Box>
+              ) : (
+                <Typography variant="caption" sx={{ color: '#94A3B8', fontStyle: 'italic' }}>
+                  None configured
+                </Typography>
+              )}
+            </Box>
+          </Box>
+        </Box>
+
         {/* Runtime Status */}
+
         {status && (
           <Box sx={{ mt: 1 }}>
             <Typography variant="caption" sx={{ color: '#475569', fontWeight: 700, mb: 1, display: 'block', letterSpacing: '0.5px' }}>
@@ -288,6 +395,26 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
 
       {/* Footer Actions */}
       <Box sx={{ mt: 'auto', pt: 3, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+        {onOpenHelper && (
+          <Button
+            fullWidth
+            variant="outlined"
+            startIcon={<Wrench size={16} />}
+            onClick={() => onOpenHelper(node.name)}
+            disabled={refreshing || deleting}
+            sx={{
+              borderColor: '#4F46E5',
+              color: '#4F46E5',
+              fontWeight: 600,
+              '&:hover': {
+                borderColor: '#3730A3',
+                backgroundColor: 'rgba(79, 70, 229, 0.06)',
+              },
+            }}
+          >
+            Device Config Helper
+          </Button>
+        )}
         <Button
           fullWidth
           variant="contained"
@@ -320,6 +447,80 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
           </Button>
         </Box>
       </Box>
+
+      {/* BIRD Config Dialog */}
+      <Dialog open={viewingBird} onClose={() => setViewingBird(false)} maxWidth="md" fullWidth>
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', pb: 1, borderBottom: '1px solid #E2E8F0' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <FileCode size={20} color="#4F46E5" />
+            <Typography variant="h6" sx={{ fontWeight: 700, fontSize: '1.05rem' }}>
+              BIRD Configuration: {node.name}
+            </Typography>
+          </Box>
+          <IconButton size="small" onClick={() => setViewingBird(false)}>
+            <X size={18} />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent sx={{ pt: 2, pb: 1 }}>
+          <Alert severity="info" sx={{ mb: 2, fontSize: '0.8rem', borderRadius: 2 }}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.5 }}>
+              Standard Device Path: <code>/etc/bird_easy42.conf</code>
+            </Typography>
+            <Typography variant="body2" sx={{ fontSize: '0.78rem', color: '#334155', mb: 0.5 }}>
+              easy42 automatically deploys this configuration to <code>/etc/bird_easy42.conf</code> and executes <code>birdc configure</code> on the node during synchronization.
+            </Typography>
+            <Typography variant="body2" sx={{ fontSize: '0.78rem', color: '#334155' }}>
+              Ensure your main BIRD config (<code>/etc/bird/bird.conf</code> or <code>/etc/bird.conf</code>) removes any conflicting default skeleton protocols and includes:
+            </Typography>
+            <Box component="code" sx={{ display: 'block', mt: 0.5, p: 0.8, bgcolor: '#EEF2FF', borderRadius: 1, fontFamily: 'monospace', color: '#4338CA', fontSize: '0.75rem', fontWeight: 600 }}>
+              include "/etc/bird_easy42.conf";
+            </Box>
+          </Alert>
+
+          {loadingBird ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
+              <CircularProgress size={32} />
+            </Box>
+          ) : (
+            <Box
+              component="pre"
+              className="mono-font"
+              sx={{
+                m: 0,
+                p: 2,
+                borderRadius: 2,
+                backgroundColor: '#0F172A',
+                color: '#38BDF8',
+                fontSize: '0.78rem',
+                lineHeight: 1.5,
+                maxHeight: '60vh',
+                overflow: 'auto',
+                border: '1px solid #334155',
+              }}
+            >
+              {birdConfig || '# No config generated'}
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ px: 3, py: 1.5, borderTop: '1px solid #E2E8F0', backgroundColor: '#F8FAFC' }}>
+          <Button
+            size="small"
+            variant="outlined"
+            onClick={() => {
+              if (birdConfig) {
+                navigator.clipboard.writeText(birdConfig);
+              }
+            }}
+            disabled={!birdConfig || loadingBird}
+          >
+            Copy Config
+          </Button>
+          <Button size="small" variant="contained" onClick={() => setViewingBird(false)}>
+            Close
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Drawer>
   );
 };
+

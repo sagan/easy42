@@ -84,6 +84,7 @@ func New(cfg Config) *Server {
 			r.Post("/nodes/probe", s.handleProbeNode)
 			r.Get("/nodes/status", s.handleGetNodeStatuses)
 			r.Post("/nodes/{name}/status", s.handleRefreshNodeStatus)
+			r.Get("/nodes/{name}/bird", s.handleGetNodeBirdConfig)
 
 			// Links
 			r.Get("/links", s.handleGetLinks)
@@ -98,6 +99,11 @@ func New(cfg Config) *Server {
 			r.Get("/sync/status", s.handleSyncStatus)
 			r.Post("/state/update", s.handleUpdateState)
 			r.Get("/state", s.handleGetState)
+
+			// Device Helper Tasks
+			r.Get("/tasks", s.handleGetTasks)
+			r.Post("/tasks/{id}/status", s.handleTaskStatus)
+			r.Post("/tasks/{id}/run", s.handleTaskRun)
 		})
 	})
 
