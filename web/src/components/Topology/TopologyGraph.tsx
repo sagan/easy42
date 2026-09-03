@@ -12,12 +12,51 @@ import {
   Node as FlowNode,
   BackgroundVariant,
   OnNodeDrag,
+  Viewport,
+  OnMoveEnd,
 } from '@xyflow/react';
 import { Box, Typography } from '@mui/material';
 import { Network } from 'lucide-react';
 import { NodeCard } from './NodeCard';
 import { CustomEdge } from './CustomEdge';
 import { Node, Link, NodeStatus, NetworkState } from '../../types/api';
+
+const STORAGE_KEY_VIEWPORT = 'easy42_graph_viewport';
+const STORAGE_KEY_ZOOM = 'easy42_graph_zoom';
+
+const getStoredViewport = (): Viewport | undefined => {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_VIEWPORT);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (
+        parsed &&
+        typeof parsed.zoom === 'number' &&
+        !isNaN(parsed.zoom) &&
+        typeof parsed.x === 'number' &&
+        !isNaN(parsed.x) &&
+        typeof parsed.y === 'number' &&
+        !isNaN(parsed.y)
+      ) {
+        return {
+          x: parsed.x,
+          y: parsed.y,
+          zoom: parsed.zoom,
+        };
+      }
+    }
+    const rawZoom = localStorage.getItem(STORAGE_KEY_ZOOM);
+    if (rawZoom) {
+      const zoom = parseFloat(rawZoom);
+      if (!isNaN(zoom)) {
+        return { x: 0, y: 0, zoom };
+      }
+    }
+  } catch (e) {
+    console.error('Failed to load graph viewport from localStorage', e);
+  }
+  return undefined;
+};
 
 interface TopologyGraphProps {
   nodes: Node[];
@@ -162,6 +201,17 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
     [onNodePositionChange]
   );
 
+  const initialViewport = useMemo(() => getStoredViewport(), []);
+
+  const handleMoveEnd: OnMoveEnd = useCallback((_event, viewport) => {
+    try {
+      localStorage.setItem(STORAGE_KEY_VIEWPORT, JSON.stringify(viewport));
+      localStorage.setItem(STORAGE_KEY_ZOOM, JSON.stringify(viewport.zoom));
+    } catch (e) {
+      console.error('Failed to save viewport to localStorage', e);
+    }
+  }, []);
+
   const onConnect = useCallback(
     (connection: Connection) => {
       if (connection.source && connection.target && connection.source !== connection.target) {
@@ -222,7 +272,9 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
         onConnect={onConnect}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
-        fitView
+        defaultViewport={initialViewport}
+        fitView={!initialViewport}
+        onMoveEnd={handleMoveEnd}
         attributionPosition="bottom-left"
       >
         <Background variant={BackgroundVariant.Dots} gap={20} size={1.2} color="#CBD5E1" />

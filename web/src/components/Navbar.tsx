@@ -77,7 +77,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenSettings,
   onLogout,
 }) => {
-  const [linkMenuAnchor, setLinkMenuAnchor] = useState<null | HTMLElement>(null);
+  const [addMenuAnchor, setAddMenuAnchor] = useState<null | HTMLElement>(null);
 
   return (
     <AppBar
@@ -198,11 +198,13 @@ export const Navbar: React.FC<NavbarProps> = ({
 
         {/* Action Controls */}
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+          {/* Multiple Options Add Dropdown Menu */}
           <Button
             variant="outlined"
             size="small"
             startIcon={<Plus size={16} />}
-            onClick={onAddNode}
+            endIcon={<ChevronDown size={14} />}
+            onClick={(e) => setAddMenuAnchor(e.currentTarget)}
             sx={{
               borderColor: '#CBD5E1',
               color: '#1E293B',
@@ -212,31 +214,12 @@ export const Navbar: React.FC<NavbarProps> = ({
               },
             }}
           >
-            Add Node
-          </Button>
-
-          {/* Multiple Options Add Link Dropdown Menu */}
-          <Button
-            variant="outlined"
-            size="small"
-            startIcon={<LinkIcon size={16} />}
-            endIcon={<ChevronDown size={14} />}
-            onClick={(e) => setLinkMenuAnchor(e.currentTarget)}
-            sx={{
-              borderColor: '#CBD5E1',
-              color: '#1E293B',
-              '&:hover': {
-                borderColor: '#0891B2',
-                backgroundColor: 'rgba(8, 145, 178, 0.05)',
-              },
-            }}
-          >
-            Add Link
+            Add
           </Button>
           <Menu
-            anchorEl={linkMenuAnchor}
-            open={Boolean(linkMenuAnchor)}
-            onClose={() => setLinkMenuAnchor(null)}
+            anchorEl={addMenuAnchor}
+            open={Boolean(addMenuAnchor)}
+            onClose={() => setAddMenuAnchor(null)}
             anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
             transformOrigin={{ vertical: 'top', horizontal: 'left' }}
             PaperProps={{
@@ -251,7 +234,25 @@ export const Navbar: React.FC<NavbarProps> = ({
           >
             <MenuItem
               onClick={() => {
-                setLinkMenuAnchor(null);
+                setAddMenuAnchor(null);
+                onAddNode();
+              }}
+              sx={{ borderRadius: 1.5, py: 1 }}
+            >
+              <ListItemIcon sx={{ minWidth: 32, color: '#4F46E5' }}>
+                <Server size={18} />
+              </ListItemIcon>
+              <ListItemText
+                primary={<Typography variant="body2" sx={{ fontWeight: 600, color: '#0F172A' }}>Add Node</Typography>}
+                secondary={<Typography variant="caption" sx={{ color: '#64748B' }}>Configure new network node</Typography>}
+              />
+            </MenuItem>
+
+            <Divider sx={{ my: 0.5, borderColor: '#F1F5F9' }} />
+
+            <MenuItem
+              onClick={() => {
+                setAddMenuAnchor(null);
                 onAddLink();
               }}
               sx={{ borderRadius: 1.5, py: 1 }}
@@ -269,7 +270,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
             <MenuItem
               onClick={() => {
-                setLinkMenuAnchor(null);
+                setAddMenuAnchor(null);
                 onCreateFullMesh();
               }}
               disabled={displayedNodeCount < 2}
@@ -304,8 +305,8 @@ export const Navbar: React.FC<NavbarProps> = ({
                     {displayedNodeCount < 2
                       ? 'Need at least 2 displayed nodes'
                       : missingMeshLinksCount === 0
-                      ? 'All displayed nodes already meshed'
-                      : `Add ${missingMeshLinksCount} missing link(s) between ${displayedNodeCount} nodes`}
+                        ? 'All displayed nodes already meshed'
+                        : `Add ${missingMeshLinksCount} missing link(s) between ${displayedNodeCount} nodes`}
                   </Typography>
                 }
               />
