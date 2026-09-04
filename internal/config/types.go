@@ -8,13 +8,22 @@ import (
 	"time"
 )
 
+// NetworkSettings represents global network-wide peering and routing configurations
+type NetworkSettings struct {
+	PublicASN      uint64   `json:"public_asn,omitempty"`      // Public / DN42 ASN (e.g. 4242421234)
+	ConfedMembers  string   `json:"confed_members,omitempty"`  // Confederation member range/set, e.g. "4224420000..4224429999"
+	ExportPrefixes []string `json:"export_prefixes,omitempty"` // Prefixes permitted to export to external peers
+	ImportPrefixes []string `json:"import_prefixes,omitempty"` // Prefixes accepted from external peers
+}
+
 // Config represents the top-level configuration stored in config.json
 type Config struct {
-	PasswordHash  string `json:"password_hash"`
-	EncryptedDEK  string `json:"encrypted_dek"`
-	SessionSecret string `json:"session_secret"`
-	Nodes         []Node `json:"nodes"`
-	Links         []Link `json:"links"`
+	PasswordHash    string          `json:"password_hash"`
+	EncryptedDEK    string          `json:"encrypted_dek"`
+	SessionSecret   string          `json:"session_secret"`
+	NetworkSettings NetworkSettings `json:"network_settings,omitempty"`
+	Nodes           []Node          `json:"nodes"`
+	Links           []Link          `json:"links"`
 }
 
 // PortSpec handles single ports (51820), port ranges ("2000-2999"), or object ({port, external_port})
@@ -108,32 +117,33 @@ type KernelRouteRule struct {
 
 // Node represents a device/node in the network
 type Node struct {
-	Name         string            `json:"name"`                   // Max 11 chars hostname
-	Host         string            `json:"host"`                   // SSH host / alias / IP
-	IP           string            `json:"ip"`                     // Main IPv4 (e.g. 192.168.100.1)
-	Interface    string            `json:"interface"`              // Main IP interface name (e.g. lo, dn42, eth0)
-	ASN          uint64            `json:"asn"`                    // AS Number (default in 4299420000..4299429999)
-	Entrypoints  []Entrypoint      `json:"entrypoints,omitempty"`  // External entrypoints
+	Name         string            `json:"name"`                  // Max 11 chars hostname
+	Host         string            `json:"host,omitempty"`        // SSH host / alias / IP (omitted for external peers)
+	IsExternal   bool              `json:"is_external,omitempty"` // True if external unmanaged peer (e.g. DN42)
+	Description  string            `json:"description,omitempty"` // Optional description / contact info
+	IP           string            `json:"ip,omitempty"`          // Main IPv4 (e.g. 192.168.100.1)
+	Interface    string            `json:"interface,omitempty"`   // Main IP interface name (e.g. lo, dn42, eth0)
+	ASN          uint64            `json:"asn"`                   // AS Number (default in 4224420000..4224429999 or external ASN)
+	Entrypoints  []Entrypoint      `json:"entrypoints,omitempty"` // External entrypoints
 	Tags         []string          `json:"tags,omitempty"`
 	Table        int               `json:"table,omitempty"`         // Main routing table bird used to export BGP learned routing to (defaults to 254)
 	StaticRoutes []string          `json:"static_routes,omitempty"` // CIDR prefix list unconditionally broadcast via BGP
 	Routes       []KernelRouteRule `json:"routes,omitempty"`        // Kernel routes imported from kernel tables and broadcast via BGP
-	X            *float64          `json:"x,omitempty"`            // Graph X coordinate
-	Y            *float64          `json:"y,omitempty"`            // Graph Y coordinate
-	ModifiedAt   time.Time         `json:"modified_at,omitempty"`  // Last updated timestamp
+	X            *float64          `json:"x,omitempty"`             // Graph X coordinate
+	Y            *float64          `json:"y,omitempty"`             // Graph Y coordinate
+	ModifiedAt   time.Time         `json:"modified_at,omitempty"`   // Last updated timestamp
 }
-
 
 // LinkEnd represents one endpoint of a WireGuard link
 type LinkEnd struct {
 	Name                string `json:"name"`
-	Interface           string `json:"interface"`            // e.g. wg42<peer>
-	Address             string `json:"address"`              // e.g. fe80::192:168:100:10/64
-	ListenPort          int    `json:"listen_port"`          // Local device wg listening port
-	Endpoint            string `json:"endpoint,omitempty"`   // External access endpoint (optional)
-	PrivateKey          string `json:"private_key,omitempty"`// Encrypted base64 wireguard private key
-	PublicKey           string `json:"public_key"`           // Wireguard public key
-	PersistentKeepalive int    `json:"persistent_keepalive"` // Keepalive interval (25 or 0)
+	Interface           string `json:"interface"`             // e.g. wg42<peer>
+	Address             string `json:"address"`               // e.g. fe80::192:168:100:10/64
+	ListenPort          int    `json:"listen_port"`           // Local device wg listening port
+	Endpoint            string `json:"endpoint,omitempty"`    // External access endpoint (optional)
+	PrivateKey          string `json:"private_key,omitempty"` // Encrypted base64 wireguard private key
+	PublicKey           string `json:"public_key"`            // Wireguard public key
+	PersistentKeepalive int    `json:"persistent_keepalive"`  // Keepalive interval (25 or 0)
 	MTU                 int    `json:"mtu,omitempty"`
 }
 
@@ -142,7 +152,7 @@ type Link struct {
 	From       LinkEnd   `json:"from"`
 	To         LinkEnd   `json:"to"`
 	Tags       []string  `json:"tags,omitempty"`
-	ModifiedAt time.Time `json:"modified_at,omitempty"`// Last updated timestamp
+	ModifiedAt time.Time `json:"modified_at,omitempty"` // Last updated timestamp
 }
 
 // InterfaceInfo represents an interface on a remote machine
@@ -189,12 +199,12 @@ type NodeStatus struct {
 type ActionType string
 
 const (
-	ActionCreateConfig ActionType = "create_config"
-	ActionUpdateConfig ActionType = "update_config"
-	ActionDeleteConfig ActionType = "delete_config"
-	ActionUpInterface  ActionType = "up_interface"
-	ActionSyncConfig   ActionType = "sync_config"
-	ActionDownInterface ActionType = "down_interface"
+	ActionCreateConfig   ActionType = "create_config"
+	ActionUpdateConfig   ActionType = "update_config"
+	ActionDeleteConfig   ActionType = "delete_config"
+	ActionUpInterface    ActionType = "up_interface"
+	ActionSyncConfig     ActionType = "sync_config"
+	ActionDownInterface  ActionType = "down_interface"
 	ActionSyncBirdConfig ActionType = "sync_bird"
 )
 
@@ -216,10 +226,10 @@ type SyncAction struct {
 
 // SyncResult represents the execution result of sync actions
 type SyncResult struct {
-	NodeName string    `json:"node_name"`
-	Action   string    `json:"action"`
-	Success  bool      `json:"success"`
-	Error    string    `json:"error,omitempty"`
-	Output   string    `json:"output,omitempty"`
-	Duration float64   `json:"duration_ms"`
+	NodeName string  `json:"node_name"`
+	Action   string  `json:"action"`
+	Success  bool    `json:"success"`
+	Error    string  `json:"error,omitempty"`
+	Output   string  `json:"output,omitempty"`
+	Duration float64 `json:"duration_ms"`
 }

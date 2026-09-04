@@ -88,12 +88,30 @@ func (s *Store) Initialize() (string, error) {
 		return "", fmt.Errorf("failed to generate session secret: %w", err)
 	}
 
+	prefixes := []string{
+		"172.20.0.0/14{21,29}", // dn42
+		"172.20.0.0/24{28,32}", // dn42 Anycast
+		"172.21.0.0/24{28,32}", // dn42 Anycast
+		"172.22.0.0/24{28,32}", // dn42 Anycast
+		"172.23.0.0/24{28,32}", // dn42 Anycast
+		"172.31.0.0/16+",       // ChaosVPN
+		"10.100.0.0/14+",       // ChaosVPN
+		"10.0.0.0/8{15,24}",    // Freifunk.net
+		"10.127.0.0/16+",       // NeoNetwork
+		"fd00::/8{44,64}",      // DN42 ipv6
+	}
 	cfg := &Config{
 		PasswordHash:  passHash,
 		EncryptedDEK:  encryptedDEK,
 		SessionSecret: sessionSecret,
-		Nodes:         make([]Node, 0),
-		Links:         make([]Link, 0),
+		NetworkSettings: NetworkSettings{
+			PublicASN:      4242420001,
+			ConfedMembers:  "4224420000..4224429999",
+			ExportPrefixes: prefixes,
+			ImportPrefixes: prefixes,
+		},
+		Nodes: make([]Node, 0),
+		Links: make([]Link, 0),
 	}
 
 	data, err := json.MarshalIndent(cfg, "", "  ")

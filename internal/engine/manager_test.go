@@ -34,7 +34,7 @@ func TestAddLinkMTU(t *testing.T) {
 		Host:      "192.168.1.1",
 		IP:        "192.168.100.1",
 		Interface: "lo",
-		ASN:       4299420001,
+		ASN:       4224420001,
 		Entrypoints: []config.Entrypoint{
 			{
 				IP:   "1.1.1.1",
@@ -48,7 +48,7 @@ func TestAddLinkMTU(t *testing.T) {
 		Host:      "192.168.1.2",
 		IP:        "192.168.100.2",
 		Interface: "lo",
-		ASN:       4299420002,
+		ASN:       4224420002,
 		Entrypoints: []config.Entrypoint{
 			{
 				IP:   "2.2.2.2",
@@ -108,7 +108,7 @@ func TestAddLinkMTU(t *testing.T) {
 		Host:      "192.168.1.3",
 		IP:        "192.168.100.3",
 		Interface: "lo",
-		ASN:       4299420003,
+		ASN:       4224420003,
 		Entrypoints: []config.Entrypoint{
 			{
 				IP:   "3.3.3.3",
@@ -122,7 +122,7 @@ func TestAddLinkMTU(t *testing.T) {
 		Host:      "192.168.1.4",
 		IP:        "192.168.100.4",
 		Interface: "lo",
-		ASN:       4299420004,
+		ASN:       4224420004,
 		Entrypoints: []config.Entrypoint{
 			{
 				IP:   "4.4.4.4",
@@ -184,14 +184,14 @@ func TestUpdateLink(t *testing.T) {
 		Host:      "192.168.1.1",
 		IP:        "192.168.100.1",
 		Interface: "lo",
-		ASN:       4299420001,
+		ASN:       4224420001,
 	}
 	nodeB := config.Node{
 		Name:      "node-b",
 		Host:      "192.168.1.2",
 		IP:        "192.168.100.2",
 		Interface: "lo",
-		ASN:       4299420002,
+		ASN:       4224420002,
 	}
 
 	_ = mgr.AddNode(nodeA)
@@ -247,14 +247,14 @@ func TestPlanSyncCleanDeletedLinks(t *testing.T) {
 		Host:      "127.0.0.1",
 		IP:        "192.168.100.1",
 		Interface: "lo",
-		ASN:       4299420001,
+		ASN:       4224420001,
 	}
 	nodeB := config.Node{
 		Name:      "node-b",
 		Host:      "127.0.0.1",
 		IP:        "192.168.100.2",
 		Interface: "lo",
-		ASN:       4299420002,
+		ASN:       4224420002,
 	}
 
 	_ = mgr.AddNode(nodeA)
@@ -321,7 +321,7 @@ func TestUpdateNodePosition(t *testing.T) {
 		Host:      "192.168.1.10",
 		IP:        "192.168.100.10",
 		Interface: "lo",
-		ASN:       4299420010,
+		ASN:       4224420010,
 	}
 	if err := mgr.AddNode(node); err != nil {
 		t.Fatalf("Failed to add node: %v", err)
@@ -390,14 +390,14 @@ func TestNodeAndLinkModifiedAt(t *testing.T) {
 		Host:      "1.1.1.1",
 		IP:        "192.168.100.1",
 		Interface: "lo",
-		ASN:       4299420001,
+		ASN:       4224420001,
 	}
 	nodeB := config.Node{
 		Name:      "node-b",
 		Host:      "2.2.2.2",
 		IP:        "192.168.100.2",
 		Interface: "lo",
-		ASN:       4299420002,
+		ASN:       4224420002,
 	}
 
 	if err := mgr.AddNode(nodeA); err != nil {
@@ -488,9 +488,9 @@ func TestCreateFullMesh(t *testing.T) {
 	}
 
 	nodes := []config.Node{
-		{Name: "node-1", Host: "10.0.0.1", IP: "192.168.100.1", Interface: "lo", ASN: 4299420001, Tags: []string{"core"}},
-		{Name: "node-2", Host: "10.0.0.2", IP: "192.168.100.2", Interface: "lo", ASN: 4299420002, Tags: []string{"core"}},
-		{Name: "node-3", Host: "10.0.0.3", IP: "192.168.100.3", Interface: "lo", ASN: 4299420003, Tags: []string{"edge"}},
+		{Name: "node-1", Host: "10.0.0.1", IP: "192.168.100.1", Interface: "lo", ASN: 4224420001, Tags: []string{"core"}},
+		{Name: "node-2", Host: "10.0.0.2", IP: "192.168.100.2", Interface: "lo", ASN: 4224420002, Tags: []string{"core"}},
+		{Name: "node-3", Host: "10.0.0.3", IP: "192.168.100.3", Interface: "lo", ASN: 4224420003, Tags: []string{"edge"}},
 	}
 	for _, n := range nodes {
 		if err := mgr.AddNode(n); err != nil {
@@ -555,7 +555,7 @@ func TestGenerateBirdConfig(t *testing.T) {
 		Host:      "10.0.0.1",
 		IP:        "192.168.10.1",
 		Interface: "lo",
-		ASN:       4299420001,
+		ASN:       4224420001,
 		StaticRoutes: []string{
 			"192.168.10.0/24",
 		},
@@ -571,7 +571,7 @@ func TestGenerateBirdConfig(t *testing.T) {
 		Host:      "10.0.0.2",
 		IP:        "192.168.10.2",
 		Interface: "lo",
-		ASN:       4299420002,
+		ASN:       4224420002,
 	}
 
 	if err := mgr.AddNode(nodeA); err != nil {
@@ -600,13 +600,13 @@ func TestGenerateBirdConfig(t *testing.T) {
 
 	expected := []string{
 		"define SELF_IP = 192.168.10.1;",
-		"define SELF_AS = 4299420001;",
+		"define SELF_AS = 4224420001;",
 		"define TABLE = 254;",
 		"protocol kernel kernel_101 {",
 		"kernel table 101;",
 		"route 192.168.10.0/24 reject;",
 		"protocol bgp 'easy42_peer_node-b' from easy42_peer {",
-		"as 4299420002;",
+		"as 4224420002;",
 	}
 	for _, exp := range expected {
 		if !strings.Contains(birdConf, exp) {
@@ -615,4 +615,125 @@ func TestGenerateBirdConfig(t *testing.T) {
 	}
 }
 
+func TestExternalNodeAndPeering(t *testing.T) {
+	tmpDir := t.TempDir()
+	store := config.NewStore(tmpDir)
+	rawPass, err := store.Initialize()
+	if err != nil {
+		t.Fatalf("Failed to init store: %v", err)
+	}
+
+	mgr := NewManager(store)
+	if err := mgr.Unlock(rawPass); err != nil {
+		t.Fatalf("Failed to unlock manager: %v", err)
+	}
+
+	// 1. Test NetworkSettings
+	netSettings := config.NetworkSettings{
+		PublicASN:      4242421234,
+		ConfedMembers:  "4224420000..4224429999",
+		ExportPrefixes: []string{"172.20.1.0/24"},
+		ImportPrefixes: []string{"172.20.0.0/14{21,29}"},
+	}
+	if err := mgr.UpdateNetworkSettings(netSettings); err != nil {
+		t.Fatalf("UpdateNetworkSettings failed: %v", err)
+	}
+	loadedSettings := mgr.GetNetworkSettings()
+	if loadedSettings.PublicASN != 4242421234 {
+		t.Fatalf("Expected PublicASN 4242421234, got %d", loadedSettings.PublicASN)
+	}
+
+	// 2. Add Managed Node
+	managed := config.Node{
+		Name:      "gw1",
+		Host:      "10.0.0.1",
+		IP:        "192.168.100.1",
+		Interface: "lo",
+		ASN:       4224420001,
+	}
+	if err := mgr.AddNode(managed); err != nil {
+		t.Fatalf("AddNode managed failed: %v", err)
+	}
+
+	// 3. Add External Node (no Host, no IP)
+	external := config.Node{
+		Name:        "peer-dn42",
+		IsExternal:  true,
+		ASN:         4242429876,
+		Description: "External DN42 peer",
+	}
+	if err := mgr.AddNode(external); err != nil {
+		t.Fatalf("AddNode external failed: %v", err)
+	}
+
+	// External node should have no "none" entrypoint forced
+	savedExt := mgr.GetNode("peer-dn42")
+	if savedExt == nil || !savedExt.IsExternal {
+		t.Fatalf("Expected saved node to be external")
+	}
+
+	// 4. Test CreateFullMesh ignores external nodes
+	addedLinks, err := mgr.CreateFullMesh(nil)
+	if err == nil && len(addedLinks) > 0 {
+		t.Fatalf("Expected CreateFullMesh to not create links with only 1 managed node")
+	}
+
+	// 5. Add external link with custom properties
+	fromEnd := config.LinkEnd{
+		Name:       "gw1",
+		ListenPort: 51820,
+		Address:    "fe80::1001/64",
+	}
+	toEnd := config.LinkEnd{
+		Name:       "peer-dn42",
+		Endpoint:   "remote.dn42.org:51820",
+		Address:    "fe80::9876/64",
+		PublicKey:  "dGhpcy1pcy1hLXRlc3QtcHVibGljLWtleS0xMjM0NQ==",
+	}
+	extLink, err := mgr.AddLinkAdvanced("gw1", "peer-dn42", &fromEnd, &toEnd, []string{"dn42"})
+	if err != nil {
+		t.Fatalf("AddLinkAdvanced failed: %v", err)
+	}
+
+	// Verify only gw1 has private key
+	if extLink.From.Name == "gw1" {
+		if extLink.From.PrivateKey == "" {
+			t.Errorf("Expected gw1 to have private key")
+		}
+		if extLink.To.PrivateKey != "" {
+			t.Errorf("Expected external peer to have no private key")
+		}
+		if extLink.To.PublicKey != toEnd.PublicKey {
+			t.Errorf("Expected external peer public key preserved")
+		}
+	} else {
+		if extLink.To.PrivateKey == "" {
+			t.Errorf("Expected gw1 to have private key")
+		}
+		if extLink.From.PrivateKey != "" {
+			t.Errorf("Expected external peer to have no private key")
+		}
+	}
+
+	// 6. Test RefreshNodeStatus for external node returns connected/synthetic without SSH
+	status, err := mgr.RefreshNodeStatus("peer-dn42")
+	if err != nil || !status.Connected {
+		t.Fatalf("Expected external node status connected, err: %v", err)
+	}
+
+	// 7. Verify BIRD config includes confederation and external peering template
+	birdConf, err := mgr.GenerateBirdConfig("gw1")
+	if err != nil {
+		t.Fatalf("GenerateBirdConfig gw1 failed: %v", err)
+	}
+	if !strings.Contains(birdConf, "define CONFED_AS = 4242421234;") {
+		t.Errorf("Expected define CONFED_AS in bird config:\n%s", birdConf)
+	}
+	if !strings.Contains(birdConf, "confederation CONFED_AS;") {
+		t.Errorf("Expected confederation CONFED_AS; in bird config:\n%s", birdConf)
+	}
+	if !strings.Contains(birdConf, "template bgp external_peer") {
+		t.Errorf("Expected template bgp external_peer in bird config:\n%s", birdConf)
+	}
+}
 

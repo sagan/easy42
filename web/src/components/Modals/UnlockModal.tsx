@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState } from "react";
 import {
   Dialog,
   DialogTitle,
@@ -10,9 +10,9 @@ import {
   Typography,
   CircularProgress,
   Alert,
-} from '@mui/material';
-import { KeyRound } from 'lucide-react';
-import { api } from '../../api/client';
+} from "@mui/material";
+import { KeyRound } from "lucide-react";
+import { api } from "../../api/client";
 
 interface UnlockModalProps {
   open: boolean;
@@ -21,7 +21,7 @@ interface UnlockModalProps {
 }
 
 export const UnlockModal: React.FC<UnlockModalProps> = ({ open, onClose, onUnlocked }) => {
-  const [password, setPassword] = useState('');
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -34,12 +34,12 @@ export const UnlockModal: React.FC<UnlockModalProps> = ({ open, onClose, onUnloc
 
     try {
       await api.unlock(password);
-      setPassword('');
+      setPassword("");
       onUnlocked();
       onClose();
     } catch (err: unknown) {
       const e = err as Error;
-      setError(e.message || 'Incorrect password');
+      setError(e.message || "Incorrect password");
     } finally {
       setLoading(false);
     }
@@ -47,30 +47,31 @@ export const UnlockModal: React.FC<UnlockModalProps> = ({ open, onClose, onUnloc
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth>
-      <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1.5, pb: 1, borderBottom: '1px solid #E2E8F0' }}>
+      <DialogTitle sx={{ display: "flex", alignItems: "center", gap: 1.5, pb: 1, borderBottom: "1px solid #E2E8F0" }}>
         <Box
           sx={{
             width: 34,
             height: 34,
             borderRadius: 2,
-            backgroundColor: 'rgba(217, 119, 6, 0.1)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: '#D97706',
+            backgroundColor: "rgba(217, 119, 6, 0.1)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            color: "#D97706",
           }}
         >
           <KeyRound size={18} />
         </Box>
-        <Typography variant="h6" sx={{ fontWeight: 700, color: '#0F172A' }}>
+        <Typography variant="h6" sx={{ fontWeight: 700, color: "#0F172A" }}>
           Unlock easy42 Vault
         </Typography>
       </DialogTitle>
 
       <form onSubmit={handleUnlock}>
-        <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 2.5 }}>
-          <Typography variant="body2" sx={{ color: '#64748B' }}>
-            The master key vault is locked in memory. Please enter your administrator password to unlock sensitive WireGuard keys.
+        <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2, pt: 2.5 }}>
+          <Typography variant="body2" sx={{ color: "#64748B" }}>
+            The master key vault is locked in memory. Please enter your administrator password to unlock sensitive
+            WireGuard keys.
           </Typography>
 
           <TextField
@@ -92,8 +93,8 @@ export const UnlockModal: React.FC<UnlockModalProps> = ({ open, onClose, onUnloc
           )}
         </DialogContent>
 
-        <DialogActions sx={{ px: 3, py: 2, borderTop: '1px solid #E2E8F0', backgroundColor: '#F8FAFC' }}>
-          <Button onClick={onClose} disabled={loading} sx={{ color: '#64748B' }}>
+        <DialogActions sx={{ px: 3, py: 2, borderTop: "1px solid #E2E8F0", backgroundColor: "#F8FAFC" }}>
+          <Button onClick={onClose} disabled={loading} sx={{ color: "#64748B" }}>
             Cancel
           </Button>
           <Button
@@ -102,9 +103,9 @@ export const UnlockModal: React.FC<UnlockModalProps> = ({ open, onClose, onUnloc
             color="warning"
             disabled={loading || !password}
             startIcon={loading ? <CircularProgress size={16} color="inherit" /> : null}
-            sx={{ fontWeight: 700, color: '#FFFFFF' }}
+            sx={{ fontWeight: 700, color: "#FFFFFF" }}
           >
-            {loading ? 'Unlocking...' : 'Unlock Vault'}
+            {loading ? "Unlocking..." : "Unlock Vault"}
           </Button>
         </DialogActions>
       </form>

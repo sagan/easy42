@@ -36,13 +36,24 @@ func GenerateWgConfigContent(
 	}
 
 	listenPort := selfEnd.ListenPort
-	if listenPort == 0 && peerNode != nil {
+	if listenPort == 0 && peerNode != nil && !peerNode.IsExternal && peerNode.IP != "" {
 		listenPort = DerivePortFromIP(peerNode.IP)
 	}
 
-	peerAddrOnly, err := DeriveIPv6LinkLocalAddressOnly(peerNode.IP)
-	if err != nil {
-		return "", fmt.Errorf("failed to derive peer link-local address for node %s: %w", peerNode.Name, err)
+	peerAddrOnly := ""
+	if peerEnd != nil && peerEnd.Address != "" {
+		peerAddrOnly = strings.TrimSpace(peerEnd.Address)
+		if idx := strings.Index(peerAddrOnly, "/"); idx != -1 {
+			peerAddrOnly = peerAddrOnly[:idx]
+		}
+	} else if peerNode != nil && peerNode.IP != "" {
+		derived, err := DeriveIPv6LinkLocalAddressOnly(peerNode.IP)
+		if err == nil {
+			peerAddrOnly = derived
+		}
+	}
+	if peerAddrOnly == "" {
+		peerAddrOnly = "fe80::1"
 	}
 
 	var buf bytes.Buffer
@@ -68,7 +79,7 @@ func GenerateWgConfigContent(
 
 	// Resolve endpoint if selfEnd.Endpoint is set or derived
 	endpoint := selfEnd.Endpoint
-	if endpoint == "" {
+	if endpoint == "" && peerNode != nil && !peerNode.IsExternal {
 		peerListenPort := 0
 		if peerEnd != nil && peerEnd.ListenPort > 0 {
 			peerListenPort = peerEnd.ListenPort

@@ -23,7 +23,7 @@ func TestBuildNodeContextAndGenerateBirdConfig(t *testing.T) {
 		Host:      "10.0.0.1",
 		IP:        "192.168.100.1",
 		Interface: "eth0",
-		ASN:       4299420001,
+		ASN:       4224420001,
 		Table:     0, // should default to 254
 		StaticRoutes: []string{
 			"192.168.100.0/24",
@@ -44,7 +44,7 @@ func TestBuildNodeContextAndGenerateBirdConfig(t *testing.T) {
 		Host:      "10.0.0.2",
 		IP:        "192.168.100.2",
 		Interface: "eth0",
-		ASN:       4299420002,
+		ASN:       4224420002,
 		Table:     254,
 	}
 
@@ -101,8 +101,8 @@ func TestBuildNodeContextAndGenerateBirdConfig(t *testing.T) {
 	if remote1["name"] != "router2" {
 		t.Fatalf("Expected remote name router2, got %v", remote1["name"])
 	}
-	if remoteNode1["asn"].(uint64) != 4299420002 {
-		t.Fatalf("Expected remote ASN 4299420002, got %v", remoteNode1["asn"])
+	if remoteNode1["asn"].(uint64) != 4224420002 {
+		t.Fatalf("Expected remote ASN 4224420002, got %v", remoteNode1["asn"])
 	}
 
 	// 2. Generate BIRD config for Node 1
@@ -113,7 +113,7 @@ func TestBuildNodeContextAndGenerateBirdConfig(t *testing.T) {
 
 	expectedSnippets := []string{
 		"define SELF_IP = 192.168.100.1;",
-		"define SELF_AS = 4299420001;",
+		"define SELF_AS = 4224420001;",
 		"define TABLE = 254;",
 		"router id SELF_IP;",
 		"protocol kernel kernel_v4",
@@ -129,7 +129,7 @@ func TestBuildNodeContextAndGenerateBirdConfig(t *testing.T) {
 		"template bgp easy42_peer",
 		"protocol bgp 'easy42_peer_router2' from easy42_peer {",
 		"local fe80::c0a8:6401 as SELF_AS;",
-		"neighbor fe80::c0a8:6402 % 'wg42router2' as 4299420002;",
+		"neighbor fe80::c0a8:6402 % 'wg42router2' as 4224420002;",
 	}
 
 	for _, s := range expectedSnippets {
@@ -146,10 +146,10 @@ func TestBuildNodeContextAndGenerateBirdConfig(t *testing.T) {
 
 	expectedSnippetsNode2 := []string{
 		"define SELF_IP = 192.168.100.2;",
-		"define SELF_AS = 4299420002;",
+		"define SELF_AS = 4224420002;",
 		"protocol bgp 'easy42_peer_router1' from easy42_peer {",
 		"local fe80::c0a8:6402 as SELF_AS;",
-		"neighbor fe80::c0a8:6401 % 'wg42router1' as 4299420001;",
+		"neighbor fe80::c0a8:6401 % 'wg42router1' as 4224420001;",
 	}
 
 	for _, s := range expectedSnippetsNode2 {
@@ -163,12 +163,12 @@ func TestDeriveAddressFallback(t *testing.T) {
 	nodeA := config.Node{
 		Name: "nodeA",
 		IP:   "192.168.10.1",
-		ASN:  4299420001,
+		ASN:  4224420001,
 	}
 	nodeB := config.Node{
 		Name: "nodeB",
 		IP:   "192.168.10.2",
-		ASN:  4299420002,
+		ASN:  4224420002,
 	}
 
 	// Link without explicit addresses or interface names
@@ -206,3 +206,62 @@ func TestDeriveAddressFallback(t *testing.T) {
 		t.Fatalf("Expected derived interface wg42nodeB, got %v", local["interface"])
 	}
 }
+
+func TestBGPConfederationAndExternalPeering(t *testing.T) {
+	nodeManaged := config.Node{
+		Name:      "router1",
+		IP:        "192.168.100.1",
+		Interface: "lo",
+		ASN:       4224420001,
+	}
+	nodeExternal := config.Node{
+		Name:       "dn42peer",
+		IsExternal: true,
+		ASN:        4242421234,
+	}
+
+	netSettings := &config.NetworkSettings{
+		PublicASN:      4242429999,
+		ConfedMembers:  "4224420000..4224429999",
+		ExportPrefixes: []string{"172.20.10.0/24"},
+		ImportPrefixes: []string{"172.20.0.0/14{21,29}"},
+	}
+
+	link := config.Link{
+		From: config.LinkEnd{
+			Name:       "router1",
+			Interface:  "wg42dn42peer",
+			Address:    "fe80::1/64",
+			ListenPort: 51820,
+		},
+		To: config.LinkEnd{
+			Name:      "dn42peer",
+			Interface: "wg42router1",
+			Address:   "fe80::2/64",
+			Endpoint:  "peer.dn42.net:51820",
+			PublicKey: "PeErPuBlIcKeY1234567890=",
+		},
+	}
+
+	conf, err := GenerateBirdConfig(&nodeManaged, []config.Node{nodeManaged, nodeExternal}, []config.Link{link}, netSettings)
+	if err != nil {
+		t.Fatalf("GenerateBirdConfig with external peer failed: %v", err)
+	}
+
+	expectedSnippets := []string{
+		"define CONFED_AS = 4242429999;",
+		"confederation CONFED_AS;",
+		"confederation member [ 4224420000..4224429999 ];",
+		"template bgp external_peer {",
+		"protocol bgp 'ext_peer_dn42peer' from external_peer {",
+		"local fe80::1 as CONFED_AS;",
+		"neighbor fe80::2 % 'wg42dn42peer' as 4242421234;",
+	}
+
+	for _, s := range expectedSnippets {
+		if !strings.Contains(conf, s) {
+			t.Errorf("Missing expected snippet in config with external peer:\nSnippet: %s\nGenerated:\n%s", s, conf)
+		}
+	}
+}
+

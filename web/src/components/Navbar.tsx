@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState } from "react";
 import {
   AppBar,
   Toolbar,
@@ -16,7 +16,7 @@ import {
   Divider,
   Select,
   FormControl,
-} from '@mui/material';
+} from "@mui/material";
 import {
   Plus,
   Link as LinkIcon,
@@ -33,7 +33,7 @@ import {
   Share2,
   Tag,
   Wrench,
-} from 'lucide-react';
+} from "lucide-react";
 
 interface NavbarProps {
   nodeCount: number;
@@ -87,74 +87,77 @@ export const Navbar: React.FC<NavbarProps> = ({
       position="static"
       elevation={0}
       sx={{
-        backgroundColor: '#FFFFFF',
-        borderBottom: '1px solid #E2E8F0',
+        backgroundColor: "#FFFFFF",
+        borderBottom: "1px solid #E2E8F0",
         zIndex: 10,
       }}
     >
-      <Toolbar sx={{ justifyContent: 'space-between', minHeight: 64 }}>
+      <Toolbar sx={{ justifyContent: "space-between", minHeight: 64 }}>
         {/* Brand */}
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
           <Box
             sx={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
               width: 38,
               height: 38,
               borderRadius: 2,
-              background: 'linear-gradient(135deg, #4F46E5 0%, #0891B2 100%)',
-              boxShadow: '0 2px 8px rgba(79, 70, 229, 0.3)',
+              background: "linear-gradient(135deg, #4F46E5 0%, #0891B2 100%)",
+              boxShadow: "0 2px 8px rgba(79, 70, 229, 0.3)",
             }}
           >
             <Network size={22} color="#FFFFFF" />
           </Box>
           <Box>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Typography variant="h6" sx={{ fontWeight: 800, letterSpacing: '-0.5px', lineHeight: 1, color: '#0F172A' }}>
-                easy<span style={{ color: '#0891B2' }}>42</span>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <Typography
+                variant="h6"
+                sx={{ fontWeight: 800, letterSpacing: "-0.5px", lineHeight: 1, color: "#0F172A" }}
+              >
+                easy<span style={{ color: "#0891B2" }}>42</span>
               </Typography>
               <Chip
                 label="Mesh Manager"
                 size="small"
                 sx={{
                   height: 20,
-                  fontSize: '0.65rem',
+                  fontSize: "0.65rem",
                   fontWeight: 700,
-                  backgroundColor: 'rgba(79, 70, 229, 0.08)',
-                  color: '#4F46E5',
-                  border: '1px solid rgba(79, 70, 229, 0.2)',
+                  backgroundColor: "rgba(79, 70, 229, 0.08)",
+                  color: "#4F46E5",
+                  border: "1px solid rgba(79, 70, 229, 0.2)",
                 }}
               />
             </Box>
-            <Typography variant="caption" sx={{ color: '#64748B', fontSize: '0.75rem' }}>
+            <Typography variant="caption" sx={{ color: "#64748B", fontSize: "0.75rem" }}>
               Linux & WireGuard Overlay Network
             </Typography>
           </Box>
         </Box>
 
         {/* Mesh Stats & Tag Filter */}
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
           <Chip
             icon={<Server size={14} color="#4F46E5" />}
-            label={selectedTag === 'All' ? `${totalNodeCount} Nodes` : `${nodeCount}/${totalNodeCount} Nodes`}
+            label={selectedTag === "All" ? `${totalNodeCount} Nodes` : `${nodeCount}/${totalNodeCount} Nodes`}
             size="small"
             sx={{
-              backgroundColor: '#F1F5F9',
-              border: '1px solid #E2E8F0',
-              color: '#334155',
+              backgroundColor: "#F1F5F9",
+              border: "1px solid #E2E8F0",
+              color: "#334155",
               fontWeight: 600,
               px: 0.5,
             }}
           />
           <Chip
             icon={<Layers size={14} color="#0891B2" />}
-            label={selectedTag === 'All' ? `${totalLinkCount} Links` : `${linkCount}/${totalLinkCount} Links`}
+            label={selectedTag === "All" ? `${totalLinkCount} Links` : `${linkCount}/${totalLinkCount} Links`}
             size="small"
             sx={{
-              backgroundColor: '#F1F5F9',
-              border: '1px solid #E2E8F0',
-              color: '#334155',
+              backgroundColor: "#F1F5F9",
+              border: "1px solid #E2E8F0",
+              color: "#334155",
               fontWeight: 600,
               px: 0.5,
             }}
@@ -167,31 +170,38 @@ export const Navbar: React.FC<NavbarProps> = ({
               onChange={(e) => onSelectTag(e.target.value)}
               displayEmpty
               startAdornment={
-                <Box sx={{ display: 'flex', alignItems: 'center', mr: 0.75, color: selectedTag === 'All' ? '#64748B' : '#0891B2' }}>
+                <Box
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    mr: 0.75,
+                    color: selectedTag === "All" ? "#64748B" : "#0891B2",
+                  }}
+                >
                   <Tag size={13} />
                 </Box>
               }
               sx={{
                 height: 28,
-                fontSize: '0.75rem',
+                fontSize: "0.75rem",
                 fontWeight: 600,
                 borderRadius: 1.5,
-                backgroundColor: selectedTag === 'All' ? '#F8FAFC' : 'rgba(8, 145, 178, 0.08)',
-                color: selectedTag === 'All' ? '#334155' : '#0891B2',
-                '& .MuiSelect-select': { py: 0.3, pr: 3, pl: 0.5 },
-                '& .MuiOutlinedInput-notchedOutline': {
-                  borderColor: selectedTag === 'All' ? '#CBD5E1' : 'rgba(8, 145, 178, 0.3)',
+                backgroundColor: selectedTag === "All" ? "#F8FAFC" : "rgba(8, 145, 178, 0.08)",
+                color: selectedTag === "All" ? "#334155" : "#0891B2",
+                "& .MuiSelect-select": { py: 0.3, pr: 3, pl: 0.5 },
+                "& .MuiOutlinedInput-notchedOutline": {
+                  borderColor: selectedTag === "All" ? "#CBD5E1" : "rgba(8, 145, 178, 0.3)",
                 },
-                '&:hover .MuiOutlinedInput-notchedOutline': {
-                  borderColor: '#0891B2',
+                "&:hover .MuiOutlinedInput-notchedOutline": {
+                  borderColor: "#0891B2",
                 },
               }}
             >
-              <MenuItem value="All" sx={{ fontSize: '0.8rem', fontWeight: 600 }}>
+              <MenuItem value="All" sx={{ fontSize: "0.8rem", fontWeight: 600 }}>
                 Tag: All ({totalNodeCount})
               </MenuItem>
               {uniqueTags.map((tag) => (
-                <MenuItem key={tag} value={tag} sx={{ fontSize: '0.8rem', fontWeight: 600, color: '#0891B2' }}>
+                <MenuItem key={tag} value={tag} sx={{ fontSize: "0.8rem", fontWeight: 600, color: "#0891B2" }}>
                   #{tag}
                 </MenuItem>
               ))}
@@ -200,7 +210,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         </Box>
 
         {/* Action Controls */}
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
           {/* Multiple Options Add Dropdown Menu */}
           <Button
             variant="outlined"
@@ -209,11 +219,11 @@ export const Navbar: React.FC<NavbarProps> = ({
             endIcon={<ChevronDown size={14} />}
             onClick={(e) => setAddMenuAnchor(e.currentTarget)}
             sx={{
-              borderColor: '#CBD5E1',
-              color: '#1E293B',
-              '&:hover': {
-                borderColor: '#4F46E5',
-                backgroundColor: 'rgba(79, 70, 229, 0.05)',
+              borderColor: "#CBD5E1",
+              color: "#1E293B",
+              "&:hover": {
+                borderColor: "#4F46E5",
+                backgroundColor: "rgba(79, 70, 229, 0.05)",
               },
             }}
           >
@@ -223,15 +233,15 @@ export const Navbar: React.FC<NavbarProps> = ({
             anchorEl={addMenuAnchor}
             open={Boolean(addMenuAnchor)}
             onClose={() => setAddMenuAnchor(null)}
-            anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
-            transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+            anchorOrigin={{ vertical: "bottom", horizontal: "left" }}
+            transformOrigin={{ vertical: "top", horizontal: "left" }}
             PaperProps={{
               sx: {
                 minWidth: 270,
                 p: 0.5,
                 borderRadius: 2,
-                boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
-                border: '1px solid #E2E8F0',
+                boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)",
+                border: "1px solid #E2E8F0",
               },
             }}
           >
@@ -242,16 +252,24 @@ export const Navbar: React.FC<NavbarProps> = ({
               }}
               sx={{ borderRadius: 1.5, py: 1 }}
             >
-              <ListItemIcon sx={{ minWidth: 32, color: '#4F46E5' }}>
+              <ListItemIcon sx={{ minWidth: 32, color: "#4F46E5" }}>
                 <Server size={18} />
               </ListItemIcon>
               <ListItemText
-                primary={<Typography variant="body2" sx={{ fontWeight: 600, color: '#0F172A' }}>Add Node</Typography>}
-                secondary={<Typography variant="caption" sx={{ color: '#64748B' }}>Configure new network node</Typography>}
+                primary={
+                  <Typography variant="body2" sx={{ fontWeight: 600, color: "#0F172A" }}>
+                    Add Node
+                  </Typography>
+                }
+                secondary={
+                  <Typography variant="caption" sx={{ color: "#64748B" }}>
+                    Configure new network node
+                  </Typography>
+                }
               />
             </MenuItem>
 
-            <Divider sx={{ my: 0.5, borderColor: '#F1F5F9' }} />
+            <Divider sx={{ my: 0.5, borderColor: "#F1F5F9" }} />
 
             <MenuItem
               onClick={() => {
@@ -260,16 +278,24 @@ export const Navbar: React.FC<NavbarProps> = ({
               }}
               sx={{ borderRadius: 1.5, py: 1 }}
             >
-              <ListItemIcon sx={{ minWidth: 32, color: '#0891B2' }}>
+              <ListItemIcon sx={{ minWidth: 32, color: "#0891B2" }}>
                 <LinkIcon size={18} />
               </ListItemIcon>
               <ListItemText
-                primary={<Typography variant="body2" sx={{ fontWeight: 600, color: '#0F172A' }}>Add Link</Typography>}
-                secondary={<Typography variant="caption" sx={{ color: '#64748B' }}>Custom point-to-point link</Typography>}
+                primary={
+                  <Typography variant="body2" sx={{ fontWeight: 600, color: "#0F172A" }}>
+                    Add Link
+                  </Typography>
+                }
+                secondary={
+                  <Typography variant="caption" sx={{ color: "#64748B" }}>
+                    Custom point-to-point link
+                  </Typography>
+                }
               />
             </MenuItem>
 
-            <Divider sx={{ my: 0.5, borderColor: '#F1F5F9' }} />
+            <Divider sx={{ my: 0.5, borderColor: "#F1F5F9" }} />
 
             <MenuItem
               onClick={() => {
@@ -279,13 +305,13 @@ export const Navbar: React.FC<NavbarProps> = ({
               disabled={displayedNodeCount < 2}
               sx={{ borderRadius: 1.5, py: 1 }}
             >
-              <ListItemIcon sx={{ minWidth: 32, color: '#4F46E5' }}>
+              <ListItemIcon sx={{ minWidth: 32, color: "#4F46E5" }}>
                 <Share2 size={18} />
               </ListItemIcon>
               <ListItemText
                 primary={
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Typography variant="body2" sx={{ fontWeight: 600, color: '#0F172A' }}>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                    <Typography variant="body2" sx={{ fontWeight: 600, color: "#0F172A" }}>
                       Create full mesh
                     </Typography>
                     {missingMeshLinksCount > 0 && (
@@ -294,21 +320,21 @@ export const Navbar: React.FC<NavbarProps> = ({
                         size="small"
                         sx={{
                           height: 18,
-                          fontSize: '0.65rem',
+                          fontSize: "0.65rem",
                           fontWeight: 700,
-                          backgroundColor: 'rgba(79, 70, 229, 0.1)',
-                          color: '#4F46E5',
+                          backgroundColor: "rgba(79, 70, 229, 0.1)",
+                          color: "#4F46E5",
                         }}
                       />
                     )}
                   </Box>
                 }
                 secondary={
-                  <Typography variant="caption" sx={{ color: '#64748B' }}>
+                  <Typography variant="caption" sx={{ color: "#64748B" }}>
                     {displayedNodeCount < 2
-                      ? 'Need at least 2 displayed nodes'
+                      ? "Need at least 2 displayed nodes"
                       : missingMeshLinksCount === 0
-                        ? 'All displayed nodes already meshed'
+                        ? "All displayed nodes already meshed"
                         : `Add ${missingMeshLinksCount} missing link(s) between ${displayedNodeCount} nodes`}
                   </Typography>
                 }
@@ -325,19 +351,19 @@ export const Navbar: React.FC<NavbarProps> = ({
               onClick={onUpdateState}
               disabled={updatingState}
               sx={{
-                borderColor: '#CBD5E1',
-                color: '#334155',
+                borderColor: "#CBD5E1",
+                color: "#334155",
                 fontWeight: 600,
-                fontSize: '0.8rem',
-                textTransform: 'none',
-                '&:hover': {
-                  borderColor: '#0284C7',
-                  backgroundColor: 'rgba(2, 132, 199, 0.05)',
-                  color: '#0284C7',
+                fontSize: "0.8rem",
+                textTransform: "none",
+                "&:hover": {
+                  borderColor: "#0284C7",
+                  backgroundColor: "rgba(2, 132, 199, 0.05)",
+                  color: "#0284C7",
                 },
               }}
             >
-              {updatingState ? 'Updating State...' : 'Update State'}
+              {updatingState ? "Updating State..." : "Update State"}
             </Button>
           </Tooltip>
 
@@ -349,15 +375,15 @@ export const Navbar: React.FC<NavbarProps> = ({
                 startIcon={<Wrench size={16} />}
                 onClick={onOpenHelper}
                 sx={{
-                  borderColor: '#CBD5E1',
-                  color: '#334155',
+                  borderColor: "#CBD5E1",
+                  color: "#334155",
                   fontWeight: 600,
-                  fontSize: '0.8rem',
-                  textTransform: 'none',
-                  '&:hover': {
-                    borderColor: '#4F46E5',
-                    backgroundColor: 'rgba(79, 70, 229, 0.05)',
-                    color: '#4F46E5',
+                  fontSize: "0.8rem",
+                  textTransform: "none",
+                  "&:hover": {
+                    borderColor: "#4F46E5",
+                    backgroundColor: "rgba(79, 70, 229, 0.05)",
+                    color: "#4F46E5",
                   },
                 }}
               >
@@ -373,9 +399,9 @@ export const Navbar: React.FC<NavbarProps> = ({
             startIcon={<RefreshCw size={16} />}
             onClick={onSync}
             sx={{
-              background: 'linear-gradient(135deg, #4F46E5 0%, #3730A3 100%)',
+              background: "linear-gradient(135deg, #4F46E5 0%, #3730A3 100%)",
               fontWeight: 700,
-              color: '#FFFFFF',
+              color: "#FFFFFF",
             }}
           >
             Sync Mesh
@@ -387,12 +413,12 @@ export const Navbar: React.FC<NavbarProps> = ({
               size="small"
               onClick={onOpenSettings}
               sx={{
-                border: '1px solid #E2E8F0',
-                color: '#64748B',
-                '&:hover': {
-                  color: '#4F46E5',
-                  borderColor: '#CBD5E1',
-                  backgroundColor: 'rgba(79, 70, 229, 0.06)',
+                border: "1px solid #E2E8F0",
+                color: "#64748B",
+                "&:hover": {
+                  color: "#4F46E5",
+                  borderColor: "#CBD5E1",
+                  backgroundColor: "rgba(79, 70, 229, 0.06)",
                 },
               }}
             >
@@ -406,10 +432,10 @@ export const Navbar: React.FC<NavbarProps> = ({
               size="small"
               onClick={onUnlockToggle}
               sx={{
-                border: '1px solid',
-                borderColor: isUnlocked ? 'rgba(5, 150, 105, 0.3)' : 'rgba(217, 119, 6, 0.3)',
-                backgroundColor: isUnlocked ? 'rgba(5, 150, 105, 0.08)' : 'rgba(217, 119, 6, 0.08)',
-                color: isUnlocked ? '#059669' : '#D97706',
+                border: "1px solid",
+                borderColor: isUnlocked ? "rgba(5, 150, 105, 0.3)" : "rgba(217, 119, 6, 0.3)",
+                backgroundColor: isUnlocked ? "rgba(5, 150, 105, 0.08)" : "rgba(217, 119, 6, 0.08)",
+                color: isUnlocked ? "#059669" : "#D97706",
               }}
             >
               {isUnlocked ? <Unlock size={18} /> : <Lock size={18} />}
@@ -422,9 +448,9 @@ export const Navbar: React.FC<NavbarProps> = ({
               size="small"
               onClick={onLogout}
               sx={{
-                border: '1px solid #E2E8F0',
-                color: '#64748B',
-                '&:hover': { color: '#E11D48', backgroundColor: 'rgba(225, 29, 72, 0.06)' },
+                border: "1px solid #E2E8F0",
+                color: "#64748B",
+                "&:hover": { color: "#E11D48", backgroundColor: "rgba(225, 29, 72, 0.06)" },
               }}
             >
               <LogOut size={18} />

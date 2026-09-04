@@ -1,4 +1,4 @@
-import React, { useMemo, useCallback } from 'react';
+import React, { useMemo, useCallback } from "react";
 import {
   ReactFlow,
   Background,
@@ -14,15 +14,15 @@ import {
   OnNodeDrag,
   Viewport,
   OnMoveEnd,
-} from '@xyflow/react';
-import { Box, Typography } from '@mui/material';
-import { Network } from 'lucide-react';
-import { NodeCard } from './NodeCard';
-import { CustomEdge } from './CustomEdge';
-import { Node, Link, NodeStatus, NetworkState } from '../../types/api';
+} from "@xyflow/react";
+import { Box, Typography } from "@mui/material";
+import { Network } from "lucide-react";
+import { NodeCard } from "./NodeCard";
+import { CustomEdge } from "./CustomEdge";
+import { Node, Link, NodeStatus, NetworkState } from "../../types/api";
 
-const STORAGE_KEY_VIEWPORT = 'easy42_graph_viewport';
-const STORAGE_KEY_ZOOM = 'easy42_graph_zoom';
+const STORAGE_KEY_VIEWPORT = "easy42_graph_viewport";
+const STORAGE_KEY_ZOOM = "easy42_graph_zoom";
 
 const getStoredViewport = (): Viewport | undefined => {
   try {
@@ -31,11 +31,11 @@ const getStoredViewport = (): Viewport | undefined => {
       const parsed = JSON.parse(raw);
       if (
         parsed &&
-        typeof parsed.zoom === 'number' &&
+        typeof parsed.zoom === "number" &&
         !isNaN(parsed.zoom) &&
-        typeof parsed.x === 'number' &&
+        typeof parsed.x === "number" &&
         !isNaN(parsed.x) &&
-        typeof parsed.y === 'number' &&
+        typeof parsed.y === "number" &&
         !isNaN(parsed.y)
       ) {
         return {
@@ -53,7 +53,7 @@ const getStoredViewport = (): Viewport | undefined => {
       }
     }
   } catch (e) {
-    console.error('Failed to load graph viewport from localStorage', e);
+    console.error("Failed to load graph viewport from localStorage", e);
   }
   return undefined;
 };
@@ -101,12 +101,12 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
       const defaultX = total === 1 ? centerX : centerX + radius * Math.cos(angle);
       const defaultY = total === 1 ? centerY : centerY + radius * Math.sin(angle);
 
-      const x = typeof node.x === 'number' ? node.x : defaultX;
-      const y = typeof node.y === 'number' ? node.y : defaultY;
+      const x = typeof node.x === "number" ? node.x : defaultX;
+      const y = typeof node.y === "number" ? node.y : defaultY;
 
       return {
         id: node.name,
-        type: 'customNode',
+        type: "customNode",
         position: { x, y },
         data: {
           node,
@@ -125,17 +125,17 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
       const fromIface = networkState?.nodes?.[link.from.name]?.interfaces?.[link.from.interface];
       const toIface = networkState?.nodes?.[link.to.name]?.interfaces?.[link.to.interface];
 
-      let workingState: 'working' | 'not_working' | 'unknown' = 'unknown';
+      let workingState: "working" | "not_working" | "unknown" = "unknown";
       let latestHandshake: string | undefined = undefined;
       let rxBytes = 0;
       let txBytes = 0;
 
-      if (fromIface?.working_state === 'working' || toIface?.working_state === 'working') {
-        workingState = 'working';
-      } else if (fromIface?.working_state === 'not_working' || toIface?.working_state === 'not_working') {
-        workingState = 'not_working';
-      } else if (fromIface?.working_state === 'unknown' || toIface?.working_state === 'unknown') {
-        workingState = 'unknown';
+      if (fromIface?.working_state === "working" || toIface?.working_state === "working") {
+        workingState = "working";
+      } else if (fromIface?.working_state === "not_working" || toIface?.working_state === "not_working") {
+        workingState = "not_working";
+      } else if (fromIface?.working_state === "unknown" || toIface?.working_state === "unknown") {
+        workingState = "unknown";
       }
 
       const hsFrom = fromIface?.latest_handshake ? new Date(fromIface.latest_handshake).getTime() : 0;
@@ -147,22 +147,27 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
       rxBytes = (fromIface?.transfer_rx_bytes || 0) + (toIface?.transfer_rx_bytes || 0);
       txBytes = (fromIface?.transfer_tx_bytes || 0) + (toIface?.transfer_tx_bytes || 0);
 
+      const fromNode = nodes.find((n) => n.name === link.from.name);
+      const toNode = nodes.find((n) => n.name === link.to.name);
+      const isExternal = Boolean(fromNode?.is_external || toNode?.is_external);
+
       return {
         id: edgeId,
         source: link.from.name,
         target: link.to.name,
-        type: 'customEdge',
+        type: "customEdge",
         data: {
           link,
           workingState,
           latestHandshake,
           transferRxBytes: rxBytes,
           transferTxBytes: txBytes,
+          isExternal,
           onSelect: onSelectLink,
         } as unknown as Record<string, unknown>,
       };
     });
-  }, [links, networkState, onSelectLink]);
+  }, [nodes, links, networkState, onSelectLink]);
 
   const [flowNodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [flowEdges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
@@ -173,7 +178,7 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
       const currentPosMap = new Map(currentNodes.map((n) => [n.id, n.position]));
       return initialNodes.map((n) => {
         const nodeData = (n.data as { node?: Node })?.node;
-        if (typeof nodeData?.x === 'number' && typeof nodeData?.y === 'number') {
+        if (typeof nodeData?.x === "number" && typeof nodeData?.y === "number") {
           return { ...n, position: { x: nodeData.x, y: nodeData.y } };
         }
         const existingPos = currentPosMap.get(n.id);
@@ -198,7 +203,7 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
         onNodePositionChange?.(n.id, x, y);
       }
     },
-    [onNodePositionChange]
+    [onNodePositionChange],
   );
 
   const initialViewport = useMemo(() => getStoredViewport(), []);
@@ -208,7 +213,7 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
       localStorage.setItem(STORAGE_KEY_VIEWPORT, JSON.stringify(viewport));
       localStorage.setItem(STORAGE_KEY_ZOOM, JSON.stringify(viewport.zoom));
     } catch (e) {
-      console.error('Failed to save viewport to localStorage', e);
+      console.error("Failed to save viewport to localStorage", e);
     }
   }, []);
 
@@ -219,23 +224,23 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
       }
       setEdges((eds) => addEdge(connection, eds));
     },
-    [onConnectNodes, setEdges]
+    [onConnectNodes, setEdges],
   );
 
   return (
-    <Box sx={{ width: '100%', height: 'calc(100vh - 64px)', position: 'relative', backgroundColor: '#F8FAFC' }}>
+    <Box sx={{ width: "100%", height: "calc(100vh - 64px)", position: "relative", backgroundColor: "#F8FAFC" }}>
       {nodes.length === 0 ? (
         <Box
           sx={{
-            position: 'absolute',
+            position: "absolute",
             inset: 0,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
             gap: 2,
             zIndex: 5,
-            pointerEvents: 'none',
+            pointerEvents: "none",
           }}
         >
           <Box
@@ -243,21 +248,21 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
               width: 64,
               height: 64,
               borderRadius: 4,
-              backgroundColor: 'rgba(79, 70, 229, 0.08)',
-              border: '1px dashed rgba(79, 70, 229, 0.3)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
+              backgroundColor: "rgba(79, 70, 229, 0.08)",
+              border: "1px dashed rgba(79, 70, 229, 0.3)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
             }}
           >
             <Network size={32} color="#4F46E5" />
           </Box>
-          <Typography variant="h6" sx={{ fontWeight: 700, color: '#0F172A' }}>
-            {selectedTag && selectedTag !== 'All' ? `No Nodes with tag "${selectedTag}"` : 'No Nodes in Mesh'}
+          <Typography variant="h6" sx={{ fontWeight: 700, color: "#0F172A" }}>
+            {selectedTag && selectedTag !== "All" ? `No Nodes with tag "${selectedTag}"` : "No Nodes in Mesh"}
           </Typography>
-          <Typography variant="body2" sx={{ color: '#64748B', maxWidth: 360, textAlign: 'center' }}>
-            {selectedTag && selectedTag !== 'All'
-              ? 'Try selecting a different tag filter from the toolbar above.'
+          <Typography variant="body2" sx={{ color: "#64748B", maxWidth: 360, textAlign: "center" }}>
+            {selectedTag && selectedTag !== "All"
+              ? "Try selecting a different tag filter from the toolbar above."
               : 'Click "Add Node" above to discover and connect your Linux servers via WireGuard.'}
           </Typography>
         </Box>

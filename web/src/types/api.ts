@@ -16,11 +16,20 @@ export interface KernelRouteRule {
   prefixes: string[];
 }
 
+export interface NetworkSettings {
+  public_asn?: number;
+  confed_members?: string;
+  export_prefixes?: string[];
+  import_prefixes?: string[];
+}
+
 export interface Node {
   name: string;
-  host: string;
-  ip: string;
-  interface: string;
+  host?: string;
+  is_external?: boolean;
+  description?: string;
+  ip?: string;
+  interface?: string;
   asn: number;
   entrypoints?: Entrypoint[];
   tags?: string[];
@@ -31,7 +40,6 @@ export interface Node {
   y?: number;
   modified_at?: string;
 }
-
 
 export interface LinkEnd {
   name: string;
@@ -115,8 +123,8 @@ export interface SyncAction {
   command?: string;
   description: string;
   needs_apply?: boolean;
-  status?: 'pending' | 'synced';
-  diff_status?: 'create' | 'update' | 'delete' | 'synced';
+  status?: "pending" | "synced";
+  diff_status?: "create" | "update" | "delete" | "synced";
 }
 
 export interface SyncResult {
@@ -143,7 +151,7 @@ export interface StateInterface {
   address?: string;
   status: string;
   latest_handshake?: string;
-  working_state?: 'working' | 'not_working' | 'unknown';
+  working_state?: "working" | "not_working" | "unknown";
   transfer_rx_bytes?: number;
   transfer_tx_bytes?: number;
   applied_at?: string;
@@ -178,7 +186,7 @@ export interface TaskMeta {
   weight: number;
 }
 
-export type TaskCheckStatus = 'ready' | 'done' | 'incompatible' | 'error';
+export type TaskCheckStatus = "ready" | "done" | "incompatible" | "error";
 
 export interface TaskStatusResult {
   task_id: string;

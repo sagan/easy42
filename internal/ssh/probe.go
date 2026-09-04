@@ -316,7 +316,7 @@ func determineTargetMTU(client *ssh.Client, host string, ifaces []config.Interfa
 // DetermineSuggestedASN returns the suggested ASN for a new node.
 // It uses a single same ASN across the network by default: the ASN of the latest
 // recently created or modified node. If there are no existing nodes (or none have
-// an ASN set), it falls back to generating a random ASN in 4299420000..4299429999.
+// an ASN set), it falls back to generating a random ASN in 4224420000..4224429999.
 func DetermineSuggestedASN(existingNodes []config.Node) uint64 {
 	if len(existingNodes) > 0 {
 		var latestNode *config.Node
@@ -344,5 +344,5 @@ func DetermineSuggestedASN(existingNodes []config.Node) uint64 {
 
 	// Fallback when network has no existing nodes with valid ASN
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	return uint64(4299420000 + r.Intn(9999) + 1)
+	return uint64(4224420000 + r.Intn(9999) + 1)
 }

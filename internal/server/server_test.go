@@ -159,8 +159,8 @@ func TestUpdateLinkAPI(t *testing.T) {
 	cookie := w.Result().Cookies()[0]
 
 	// Add two nodes
-	nodeA := config.Node{Name: "n1", Host: "1.1.1.1", IP: "10.0.0.1", Interface: "lo", ASN: 4299420001}
-	nodeB := config.Node{Name: "n2", Host: "2.2.2.2", IP: "10.0.0.2", Interface: "lo", ASN: 4299420002}
+	nodeA := config.Node{Name: "n1", Host: "1.1.1.1", IP: "10.0.0.1", Interface: "lo", ASN: 4224420001}
+	nodeB := config.Node{Name: "n2", Host: "2.2.2.2", IP: "10.0.0.2", Interface: "lo", ASN: 4224420002}
 	bodyA, _ := json.Marshal(nodeA)
 	reqA := httptest.NewRequest("POST", "/api/nodes", bytes.NewReader(bodyA))
 	reqA.AddCookie(cookie)
@@ -240,7 +240,7 @@ func TestUpdateNodePositionAPI(t *testing.T) {
 		Host:      "192.168.1.50",
 		IP:        "192.168.100.50",
 		Interface: "lo",
-		ASN:       4299420050,
+		ASN:       4224420050,
 	}
 	bodyNode, _ := json.Marshal(node)
 	reqNode := httptest.NewRequest("POST", "/api/nodes", bytes.NewReader(bodyNode))
@@ -386,9 +386,9 @@ func TestCreateMeshLinksAPI(t *testing.T) {
 
 	// Add 3 nodes
 	nodes := []config.Node{
-		{Name: "n1", Host: "10.0.0.1", IP: "192.168.100.1", Interface: "lo", ASN: 4299420001, Tags: []string{"zone1"}},
-		{Name: "n2", Host: "10.0.0.2", IP: "192.168.100.2", Interface: "lo", ASN: 4299420002, Tags: []string{"zone1"}},
-		{Name: "n3", Host: "10.0.0.3", IP: "192.168.100.3", Interface: "lo", ASN: 4299420003, Tags: []string{"zone2"}},
+		{Name: "n1", Host: "10.0.0.1", IP: "192.168.100.1", Interface: "lo", ASN: 4224420001, Tags: []string{"zone1"}},
+		{Name: "n2", Host: "10.0.0.2", IP: "192.168.100.2", Interface: "lo", ASN: 4224420002, Tags: []string{"zone1"}},
+		{Name: "n3", Host: "10.0.0.3", IP: "192.168.100.3", Interface: "lo", ASN: 4224420003, Tags: []string{"zone2"}},
 	}
 	for _, n := range nodes {
 		b, _ := json.Marshal(n)
@@ -456,7 +456,7 @@ func TestGetNodeBirdConfigAPI(t *testing.T) {
 		Host:      "192.168.1.1",
 		IP:        "192.168.50.100",
 		Interface: "lo",
-		ASN:       4299420001,
+		ASN:       4224420001,
 		StaticRoutes: []string{
 			"192.168.50.0/24",
 		},
@@ -503,7 +503,7 @@ func TestGetNodeBirdConfigAPI(t *testing.T) {
 	if wBirdRaw.Code != http.StatusOK {
 		t.Fatalf("GetBirdConfig raw failed: %d %s", wBirdRaw.Code, wBirdRaw.Body.String())
 	}
-	if !strings.Contains(wBirdRaw.Body.String(), "define SELF_AS = 4299420001;") {
+	if !strings.Contains(wBirdRaw.Body.String(), "define SELF_AS = 4224420001;") {
 		t.Fatalf("Expected raw bird config with SELF_AS, got:\n%s", wBirdRaw.Body.String())
 	}
 }
@@ -549,4 +549,116 @@ func TestTasksAPI(t *testing.T) {
 	}
 }
 
+func TestNetworkSettingsAndExternalPeeringAPI(t *testing.T) {
+	srv, tempDir, initPass := setupTestServer(t)
+	defer os.RemoveAll(tempDir)
+
+	// Login
+	loginBody, _ := json.Marshal(map[string]string{"password": initPass})
+	req := httptest.NewRequest("POST", "/api/auth/login", bytes.NewReader(loginBody))
+	w := httptest.NewRecorder()
+	srv.router.ServeHTTP(w, req)
+	cookie := w.Result().Cookies()[0]
+
+	// 1. GET /api/settings/network (initially empty)
+	reqGetSettings := httptest.NewRequest("GET", "/api/settings/network", nil)
+	reqGetSettings.AddCookie(cookie)
+	wGetSettings := httptest.NewRecorder()
+	srv.router.ServeHTTP(wGetSettings, reqGetSettings)
+	if wGetSettings.Code != http.StatusOK {
+		t.Fatalf("GetNetworkSettings failed: %d %s", wGetSettings.Code, wGetSettings.Body.String())
+	}
+
+	// 2. PUT /api/settings/network
+	settingsUpdate := config.NetworkSettings{
+		PublicASN:      4242421234,
+		ConfedMembers:  "4224420000..4224429999",
+		ExportPrefixes: []string{"172.20.10.0/24"},
+		ImportPrefixes: []string{"172.20.0.0/14{21,29}"},
+	}
+	bodyPutSettings, _ := json.Marshal(settingsUpdate)
+	reqPutSettings := httptest.NewRequest("PUT", "/api/settings/network", bytes.NewReader(bodyPutSettings))
+	reqPutSettings.AddCookie(cookie)
+	wPutSettings := httptest.NewRecorder()
+	srv.router.ServeHTTP(wPutSettings, reqPutSettings)
+	if wPutSettings.Code != http.StatusOK {
+		t.Fatalf("PutNetworkSettings failed: %d %s", wPutSettings.Code, wPutSettings.Body.String())
+	}
+
+	var savedSettings config.NetworkSettings
+	_ = json.Unmarshal(wPutSettings.Body.Bytes(), &savedSettings)
+	if savedSettings.PublicASN != 4242421234 {
+		t.Errorf("Expected PublicASN 4242421234, got %d", savedSettings.PublicASN)
+	}
+
+	// 3. Add Managed Node via POST /api/nodes
+	nodeManaged := config.Node{
+		Name:      "r1",
+		Host:      "10.0.0.1",
+		IP:        "192.168.100.1",
+		Interface: "lo",
+		ASN:       4224420001,
+	}
+	bodyMNode, _ := json.Marshal(nodeManaged)
+	reqMNode := httptest.NewRequest("POST", "/api/nodes", bytes.NewReader(bodyMNode))
+	reqMNode.AddCookie(cookie)
+	wMNode := httptest.NewRecorder()
+	srv.router.ServeHTTP(wMNode, reqMNode)
+	if wMNode.Code != http.StatusCreated {
+		t.Fatalf("Add managed node failed: %d %s", wMNode.Code, wMNode.Body.String())
+	}
+
+	// 4. Add External Node via POST /api/nodes (no host, no ip)
+	nodeExt := config.Node{
+		Name:        "extpeer",
+		IsExternal:  true,
+		ASN:         4242429999,
+		Description: "External Peer Router",
+	}
+	bodyExtNode, _ := json.Marshal(nodeExt)
+	reqExtNode := httptest.NewRequest("POST", "/api/nodes", bytes.NewReader(bodyExtNode))
+	reqExtNode.AddCookie(cookie)
+	wExtNode := httptest.NewRecorder()
+	srv.router.ServeHTTP(wExtNode, reqExtNode)
+	if wExtNode.Code != http.StatusCreated {
+		t.Fatalf("Add external node failed: %d %s", wExtNode.Code, wExtNode.Body.String())
+	}
+
+	// 5. Add Link between r1 and extpeer with custom ends
+	addLinkReq := map[string]any{
+		"from_node": "r1",
+		"to_node":   "extpeer",
+		"from": map[string]any{
+			"name":        "r1",
+			"listen_port": 51820,
+			"address":     "fe80::1001/64",
+		},
+		"to": map[string]any{
+			"name":       "extpeer",
+			"endpoint":   "peer.dn42.net:51820",
+			"address":    "fe80::9999/64",
+			"public_key": "dGhpcy1pcy1hLXRlc3QtcHVibGljLWtleS0xMjM0NQ==",
+		},
+	}
+	bodyLink, _ := json.Marshal(addLinkReq)
+	reqLink := httptest.NewRequest("POST", "/api/links", bytes.NewReader(bodyLink))
+	reqLink.AddCookie(cookie)
+	wLink := httptest.NewRecorder()
+	srv.router.ServeHTTP(wLink, reqLink)
+	if wLink.Code != http.StatusCreated {
+		t.Fatalf("AddLinkAdvanced failed: %d %s", wLink.Code, wLink.Body.String())
+	}
+
+	// 6. Test GET BIRD config via /api/nodes/r1/bird
+	reqBird := httptest.NewRequest("GET", "/api/nodes/r1/bird", nil)
+	reqBird.AddCookie(cookie)
+	wBird := httptest.NewRecorder()
+	srv.router.ServeHTTP(wBird, reqBird)
+	if wBird.Code != http.StatusOK {
+		t.Fatalf("GetNodeBirdConfig failed: %d %s", wBird.Code, wBird.Body.String())
+	}
+	if !strings.Contains(wBird.Body.String(), "confederation CONFED_AS;") {
+		t.Errorf("Expected confederation CONFED_AS in bird config: %s", wBird.Body.String())
+	}
+}
 

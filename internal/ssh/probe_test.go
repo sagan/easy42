@@ -73,46 +73,46 @@ func TestSanitizeNodeName(t *testing.T) {
 }
 
 func TestDetermineSuggestedASN(t *testing.T) {
-	// 1. Empty network: random 429942XXXX
+	// 1. Empty network: random 422442XXXX
 	asnEmpty := DetermineSuggestedASN(nil)
-	if asnEmpty < 4299420000 || asnEmpty > 4299429999 {
+	if asnEmpty < 4224420000 || asnEmpty > 4224429999 {
 		t.Errorf("Expected ASN in DN42 range, got %d", asnEmpty)
 	}
 
 	// 2. Single node: should match that node's ASN
 	t1 := time.Now().Add(-10 * time.Minute)
 	nodes := []config.Node{
-		{Name: "node-a", ASN: 4299421234, ModifiedAt: t1},
+		{Name: "node-a", ASN: 4224421234, ModifiedAt: t1},
 	}
-	if got := DetermineSuggestedASN(nodes); got != 4299421234 {
-		t.Errorf("Expected single node ASN 4299421234, got %d", got)
+	if got := DetermineSuggestedASN(nodes); got != 4224421234 {
+		t.Errorf("Expected single node ASN 4224421234, got %d", got)
 	}
 
 	// 3. Multiple nodes: should pick the most recently modified node's ASN
 	t2 := time.Now().Add(-5 * time.Minute)
 	nodes = append(nodes, config.Node{
 		Name:       "node-b",
-		ASN:        4299425678,
+		ASN:        4224425678,
 		ModifiedAt: t2,
 	})
-	if got := DetermineSuggestedASN(nodes); got != 4299425678 {
-		t.Errorf("Expected most recent node-b ASN 4299425678, got %d", got)
+	if got := DetermineSuggestedASN(nodes); got != 4224425678 {
+		t.Errorf("Expected most recent node-b ASN 4224425678, got %d", got)
 	}
 
 	// 4. Update node-a with newer timestamp: should now pick node-a's ASN
 	t3 := time.Now()
 	nodes[0].ModifiedAt = t3
-	nodes[0].ASN = 4299429999
-	if got := DetermineSuggestedASN(nodes); got != 4299429999 {
-		t.Errorf("Expected updated node-a ASN 4299429999, got %d", got)
+	nodes[0].ASN = 4224429999
+	if got := DetermineSuggestedASN(nodes); got != 4224429999 {
+		t.Errorf("Expected updated node-a ASN 4224429999, got %d", got)
 	}
 
 	// 5. Legacy nodes without ModifiedAt: pick the last valid node
 	legacyNodes := []config.Node{
-		{Name: "legacy-1", ASN: 4299420001},
-		{Name: "legacy-2", ASN: 4299420002},
+		{Name: "legacy-1", ASN: 4224420001},
+		{Name: "legacy-2", ASN: 4224420002},
 	}
-	if got := DetermineSuggestedASN(legacyNodes); got != 4299420002 {
-		t.Errorf("Expected last legacy node ASN 4299420002, got %d", got)
+	if got := DetermineSuggestedASN(legacyNodes); got != 4224420002 {
+		t.Errorf("Expected last legacy node ASN 4224420002, got %d", got)
 	}
 }

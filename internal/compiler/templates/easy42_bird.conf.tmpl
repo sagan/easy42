@@ -6,6 +6,12 @@ define INTERNET = [ 0.0.0.0/0, 0.0.0.0/1, 128.0.0.0/1 ];
 
 router id SELF_IP;
 
+{{if .confed_as}}
+define CONFED_AS = {{ .confed_as }};
+confederation CONFED_AS;
+confederation member {{ .confed_members }};
+{{end}}
+
 protocol device {
     scan time 10;
 }
@@ -56,7 +62,7 @@ protocol kernel kernel_v6 {
 
 protocol static static_self {
     ipv4;
-    route SELF_IP/32 reject;
+    route {{ .ip }}/32 reject;
 }
 
 {{if .static_routes}}
@@ -90,9 +96,56 @@ template bgp easy42_peer {
     };
 }
 
+{{if .has_external_links}}
+define EXT_IMPORT_V4 = {{ .ext_import_v4 }};
+define EXT_IMPORT_V6 = {{ .ext_import_v6 }};
+define EXT_EXPORT_V4 = {{ .ext_export_v4 }};
+define EXT_EXPORT_V6 = {{ .ext_export_v6 }};
+
+template bgp external_peer {
+    direct;
+    ipv4 {
+        extended next hop on;
+        next hop self;
+        import filter {
+            if net ~ INTERNET then reject;
+            if net ~ EXT_IMPORT_V4 then accept;
+            reject;
+        };
+        export filter {
+            if net ~ INTERNET then reject;
+            if (source ~ [ RTS_STATIC, RTS_BGP ]) && (net ~ EXT_EXPORT_V4) then accept;
+            reject;
+        };
+    };
+    ipv6 {
+        next hop self;
+        import filter {
+            if net ~ EXT_IMPORT_V6 then accept;
+            reject;
+        };
+        export filter {
+            if (source ~ [ RTS_STATIC, RTS_BGP ]) && (net ~ EXT_EXPORT_V6) then accept;
+            reject;
+        };
+    };
+}
+{{end}}
+
 {{range .links}}
+{{if .is_external}}
+protocol bgp 'ext_peer_{{.remote.name}}' from external_peer {
+    local {{ .local.address }} as {{ if $.confed_as }}CONFED_AS{{ else }}SELF_AS{{ end }};
+    {{if .remote.is_link_local}}
+    neighbor {{ .remote.address }} % '{{ .local.interface }}' as {{ .remote_node.asn }};
+    {{else}}
+    neighbor {{ .remote.address }} as {{ .remote_node.asn }};
+    {{end}}
+}
+{{else}}
 protocol bgp 'easy42_peer_{{.remote.name}}' from easy42_peer {
     local {{ .local.address }} as SELF_AS;
     neighbor {{ .remote.address }} % '{{ .local.interface }}' as {{ .remote_node.asn }};
 }
+{{end}}
 {{end}}

@@ -229,8 +229,8 @@ func (m *Manager) AddNode(node config.Node) error {
 	if len(node.Name) == 0 || len(node.Name) > 11 {
 		return errors.New("node name must be between 1 and 11 characters")
 	}
-	if node.Host == "" || node.IP == "" {
-		return errors.New("host and IP are required")
+	if !node.IsExternal && (node.Host == "" || node.IP == "") {
+		return errors.New("host and IP are required for managed nodes")
 	}
 
 	cfg := m.store.Get()
@@ -238,24 +238,26 @@ func (m *Manager) AddNode(node config.Node) error {
 		if strings.EqualFold(existing.Name, node.Name) {
 			return fmt.Errorf("node with name %s already exists", node.Name)
 		}
-		if existing.IP == node.IP {
+		if node.IP != "" && !node.IsExternal && !existing.IsExternal && existing.IP == node.IP {
 			return fmt.Errorf("node with IP %s already exists (%s)", node.IP, existing.Name)
 		}
 	}
 
-	// Ensure "none" entrypoint exists at the end
-	hasNone := false
-	for _, ep := range node.Entrypoints {
-		if ep.IsNone() {
-			hasNone = true
-			break
+	if !node.IsExternal {
+		// Ensure "none" entrypoint exists at the end
+		hasNone := false
+		for _, ep := range node.Entrypoints {
+			if ep.IsNone() {
+				hasNone = true
+				break
+			}
 		}
-	}
-	if !hasNone {
-		node.Entrypoints = append(node.Entrypoints, config.Entrypoint{
-			IP:   "",
-			Tags: []string{"nat"},
-		})
+		if !hasNone {
+			node.Entrypoints = append(node.Entrypoints, config.Entrypoint{
+				IP:   "",
+				Tags: []string{"nat"},
+			})
+		}
 	}
 
 	if node.Table <= 0 {
@@ -293,19 +295,21 @@ func (m *Manager) UpdateNode(name string, updated config.Node) error {
 		}
 	}
 
-	// Ensure "none" endpoint exists
-	hasNone := false
-	for _, ep := range updated.Entrypoints {
-		if ep.IsNone() {
-			hasNone = true
-			break
+	if !updated.IsExternal {
+		// Ensure "none" endpoint exists
+		hasNone := false
+		for _, ep := range updated.Entrypoints {
+			if ep.IsNone() {
+				hasNone = true
+				break
+			}
 		}
-	}
-	if !hasNone {
-		updated.Entrypoints = append(updated.Entrypoints, config.Entrypoint{
-			IP:   "",
-			Tags: []string{"nat"},
-		})
+		if !hasNone {
+			updated.Entrypoints = append(updated.Entrypoints, config.Entrypoint{
+				IP:   "",
+				Tags: []string{"nat"},
+			})
+		}
 	}
 
 	if updated.Table <= 0 {
@@ -472,7 +476,7 @@ func (m *Manager) GetLinks() []config.Link {
 // AddLink creates a new WireGuard link between two nodes with keypairs and parameters.
 // buildLink creates and configures a Link between two nodes with keypairs, addresses, ports, endpoints, and MTU.
 // Must be called with m.mu held and vault unlocked.
-func (m *Manager) buildLink(cfg *config.Config, n1, n2 *config.Node, listenPort1, listenPort2 int, tags []string, customMTU1, customMTU2 int) (*config.Link, error) {
+func (m *Manager) buildLink(cfg *config.Config, n1, n2 *config.Node, listenPort1, listenPort2 int, tags []string, customMTU1, customMTU2 int, linkParams ...*config.Link) (*config.Link, error) {
 	// Lexicographical ordering: from.Name < to.Name
 	fromNode, toNode := n1, n2
 	fromPort, toPort := listenPort1, listenPort2
@@ -483,51 +487,140 @@ func (m *Manager) buildLink(cfg *config.Config, n1, n2 *config.Node, listenPort1
 		fromCustomMTU, toCustomMTU = toCustomMTU, fromCustomMTU
 	}
 
-	// Generate WireGuard keypairs for both ends
-	kpFrom, err := crypto.GenerateWgKeyPair()
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate keypair for %s: %w", fromNode.Name, err)
-	}
-	kpTo, err := crypto.GenerateWgKeyPair()
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate keypair for %s: %w", toNode.Name, err)
+	if fromNode.IsExternal && toNode.IsExternal {
+		return nil, errors.New("cannot link two external nodes")
 	}
 
-	encPrivFrom, err := m.vault.EncryptField(kpFrom.PrivateKey)
-	if err != nil {
-		return nil, err
-	}
-	encPrivTo, err := m.vault.EncryptField(kpTo.PrivateKey)
-	if err != nil {
-		return nil, err
-	}
-
-	fromAddr, err := compiler.DeriveIPv6LinkLocal(fromNode.IP)
-	if err != nil {
-		return nil, err
-	}
-	toAddr, err := compiler.DeriveIPv6LinkLocal(toNode.IP)
-	if err != nil {
-		return nil, err
+	var customFromEnd, customToEnd *config.LinkEnd
+	if len(linkParams) > 0 && linkParams[0] != nil {
+		lp := linkParams[0]
+		if lp.From.Name == fromNode.Name {
+			customFromEnd = &lp.From
+			customToEnd = &lp.To
+		} else if lp.To.Name == fromNode.Name {
+			customFromEnd = &lp.To
+			customToEnd = &lp.From
+		}
 	}
 
-	if fromPort == 0 {
-		fromPort = compiler.DerivePortFromIP(toNode.IP)
-	}
-	if toPort == 0 {
-		toPort = compiler.DerivePortFromIP(fromNode.IP)
+	var encPrivFrom, pubKeyFrom string
+	var encPrivTo, pubKeyTo string
+
+	if fromNode.IsExternal {
+		if customFromEnd != nil && customFromEnd.PublicKey != "" {
+			pubKeyFrom = customFromEnd.PublicKey
+		}
+	} else {
+		kpFrom, err := crypto.GenerateWgKeyPair()
+		if err != nil {
+			return nil, fmt.Errorf("failed to generate keypair for %s: %w", fromNode.Name, err)
+		}
+		encPriv, err := m.vault.EncryptField(kpFrom.PrivateKey)
+		if err != nil {
+			return nil, err
+		}
+		encPrivFrom = encPriv
+		pubKeyFrom = kpFrom.PublicKey
 	}
 
-	fromEP, _, epTo := compiler.ResolvePeerEndpointWithEntrypoint(fromNode, toNode, nil, toPort)
-	toEP, _, epFrom := compiler.ResolvePeerEndpointWithEntrypoint(toNode, fromNode, nil, fromPort)
+	if toNode.IsExternal {
+		if customToEnd != nil && customToEnd.PublicKey != "" {
+			pubKeyTo = customToEnd.PublicKey
+		}
+	} else {
+		kpTo, err := crypto.GenerateWgKeyPair()
+		if err != nil {
+			return nil, fmt.Errorf("failed to generate keypair for %s: %w", toNode.Name, err)
+		}
+		encPriv, err := m.vault.EncryptField(kpTo.PrivateKey)
+		if err != nil {
+			return nil, err
+		}
+		encPrivTo = encPriv
+		pubKeyTo = kpTo.PublicKey
+	}
+
+	fromAddr := ""
+	if customFromEnd != nil && customFromEnd.Address != "" {
+		fromAddr = customFromEnd.Address
+	} else if fromNode.IP != "" {
+		fromAddr, _ = compiler.DeriveIPv6LinkLocal(fromNode.IP)
+	}
+	if fromAddr == "" {
+		fromAddr = "fe80::1/64"
+	}
+
+	toAddr := ""
+	if customToEnd != nil && customToEnd.Address != "" {
+		toAddr = customToEnd.Address
+	} else if toNode.IP != "" {
+		toAddr, _ = compiler.DeriveIPv6LinkLocal(toNode.IP)
+	}
+	if toAddr == "" {
+		toAddr = "fe80::2/64"
+	}
+
+	if customFromEnd != nil && customFromEnd.ListenPort > 0 {
+		fromPort = customFromEnd.ListenPort
+	}
+	if customToEnd != nil && customToEnd.ListenPort > 0 {
+		toPort = customToEnd.ListenPort
+	}
+	if fromPort == 0 && !fromNode.IsExternal {
+		if toNode.IP != "" {
+			fromPort = compiler.DerivePortFromIP(toNode.IP)
+		} else {
+			fromPort = 51820
+		}
+	}
+	if toPort == 0 && !toNode.IsExternal {
+		if fromNode.IP != "" {
+			toPort = compiler.DerivePortFromIP(fromNode.IP)
+		} else {
+			toPort = 51820
+		}
+	}
+
+	fromEP := ""
+	toEP := ""
+	var epTo, epFrom *config.Entrypoint
+	if customFromEnd != nil && customFromEnd.Endpoint != "" {
+		fromEP = customFromEnd.Endpoint
+	}
+	if customToEnd != nil && customToEnd.Endpoint != "" {
+		toEP = customToEnd.Endpoint
+	}
+
+	if !fromNode.IsExternal && !toNode.IsExternal {
+		if fromEP == "" {
+			fromEP, _, epTo = compiler.ResolvePeerEndpointWithEntrypoint(fromNode, toNode, nil, toPort)
+		}
+		if toEP == "" {
+			toEP, _, epFrom = compiler.ResolvePeerEndpointWithEntrypoint(toNode, fromNode, nil, fromPort)
+		}
+	} else if toNode.IsExternal {
+		if fromEP == "" && toEP != "" {
+			fromEP = toEP
+		}
+	} else if fromNode.IsExternal {
+		if toEP == "" && fromEP != "" {
+			toEP = fromEP
+		}
+	}
 
 	fromKeepalive := 0
-	if toEP != "" {
+	if toEP != "" || (toNode.IsExternal && fromEP != "") {
 		fromKeepalive = 25
 	}
 	toKeepalive := 0
-	if fromEP != "" {
+	if fromEP != "" || (fromNode.IsExternal && toEP != "") {
 		toKeepalive = 25
+	}
+	if customFromEnd != nil && customFromEnd.PersistentKeepalive > 0 {
+		fromKeepalive = customFromEnd.PersistentKeepalive
+	}
+	if customToEnd != nil && customToEnd.PersistentKeepalive > 0 {
+		toKeepalive = customToEnd.PersistentKeepalive
 	}
 
 	// Determine LinkEnd MTU: used entrypoint mtu minus 80 (wg overhead)
@@ -571,6 +664,12 @@ func (m *Manager) buildLink(cfg *config.Config, n1, n2 *config.Node, listenPort1
 	if toCustomMTU > 0 {
 		toMTU = toCustomMTU
 	}
+	if customFromEnd != nil && customFromEnd.MTU > 0 {
+		fromMTU = customFromEnd.MTU
+	}
+	if customToEnd != nil && customToEnd.MTU > 0 {
+		toMTU = customToEnd.MTU
+	}
 
 	link := &config.Link{
 		From: config.LinkEnd{
@@ -580,7 +679,7 @@ func (m *Manager) buildLink(cfg *config.Config, n1, n2 *config.Node, listenPort1
 			ListenPort:          fromPort,
 			Endpoint:            fromEP,
 			PrivateKey:          encPrivFrom,
-			PublicKey:           kpFrom.PublicKey,
+			PublicKey:           pubKeyFrom,
 			PersistentKeepalive: fromKeepalive,
 			MTU:                 fromMTU,
 		},
@@ -591,7 +690,7 @@ func (m *Manager) buildLink(cfg *config.Config, n1, n2 *config.Node, listenPort1
 			ListenPort:          toPort,
 			Endpoint:            toEP,
 			PrivateKey:          encPrivTo,
-			PublicKey:           kpTo.PublicKey,
+			PublicKey:           pubKeyTo,
 			PersistentKeepalive: toKeepalive,
 			MTU:                 toMTU,
 		},
@@ -605,6 +704,11 @@ func (m *Manager) buildLink(cfg *config.Config, n1, n2 *config.Node, listenPort1
 // AddLink adds a new WireGuard link between two nodes.
 // Optional customMTU can specify [fromMTU, toMTU] (relative to node1Name, node2Name).
 func (m *Manager) AddLink(node1Name, node2Name string, listenPort1, listenPort2 int, tags []string, customMTU ...int) (*config.Link, error) {
+	return m.AddLinkAdvanced(node1Name, node2Name, nil, nil, tags, customMTU...)
+}
+
+// AddLinkAdvanced creates a link with full custom LinkEnd properties (useful for external peering)
+func (m *Manager) AddLinkAdvanced(node1Name, node2Name string, fromEnd, toEnd *config.LinkEnd, tags []string, customMTU ...int) (*config.Link, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -648,7 +752,27 @@ func (m *Manager) AddLink(node1Name, node2Name string, listenPort1, listenPort2 
 		}
 	}
 
-	link, err := m.buildLink(cfg, n1, n2, listenPort1, listenPort2, tags, customMTU1, customMTU2)
+	var lp *config.Link
+	if fromEnd != nil || toEnd != nil {
+		lp = &config.Link{}
+		if fromEnd != nil {
+			lp.From = *fromEnd
+		}
+		if toEnd != nil {
+			lp.To = *toEnd
+		}
+	}
+
+	listenPort1 := 0
+	listenPort2 := 0
+	if fromEnd != nil {
+		listenPort1 = fromEnd.ListenPort
+	}
+	if toEnd != nil {
+		listenPort2 = toEnd.ListenPort
+	}
+
+	link, err := m.buildLink(cfg, n1, n2, listenPort1, listenPort2, tags, customMTU1, customMTU2, lp)
 	if err != nil {
 		return nil, err
 	}
@@ -676,7 +800,9 @@ func (m *Manager) CreateFullMesh(nodeNames []string) ([]*config.Link, error) {
 
 	if len(nodeNames) == 0 {
 		for i := range cfg.Nodes {
-			targetNodes = append(targetNodes, &cfg.Nodes[i])
+			if !cfg.Nodes[i].IsExternal {
+				targetNodes = append(targetNodes, &cfg.Nodes[i])
+			}
 		}
 	} else {
 		nodeMap := make(map[string]*config.Node)
@@ -685,7 +811,9 @@ func (m *Manager) CreateFullMesh(nodeNames []string) ([]*config.Link, error) {
 		}
 		for _, name := range nodeNames {
 			if n, ok := nodeMap[name]; ok {
-				targetNodes = append(targetNodes, n)
+				if !n.IsExternal {
+					targetNodes = append(targetNodes, n)
+				}
 			}
 		}
 	}
@@ -720,9 +848,13 @@ func (m *Manager) CreateFullMesh(nodeNames []string) ([]*config.Link, error) {
 				continue
 			}
 
-			link, err := m.buildLink(cfg, n1, n2, 0, 0, nil, 0, 0)
+			// Generate default ports
+			fromPort := compiler.DerivePortFromIP(n2.IP)
+			toPort := compiler.DerivePortFromIP(n1.IP)
+
+			link, err := m.buildLink(cfg, n1, n2, fromPort, toPort, nil, 0, 0)
 			if err != nil {
-				return nil, fmt.Errorf("failed to create link between %s and %s: %w", n1.Name, n2.Name, err)
+				return nil, err
 			}
 			link.ModifiedAt = now
 			cfg.Links = append(cfg.Links, *link)
@@ -806,23 +938,153 @@ func (m *Manager) UpdateLink(node1Name, node2Name string, listenPort1, listenPor
 		link.Tags = tags
 	}
 
-	// Re-resolve endpoints and keepalives with updated ports
-	fromEP, _, _ := compiler.ResolvePeerEndpointWithEntrypoint(fromNode, toNode, nil, link.To.ListenPort)
-	toEP, _, _ := compiler.ResolvePeerEndpointWithEntrypoint(toNode, fromNode, nil, link.From.ListenPort)
-	link.From.Endpoint = fromEP
-	link.To.Endpoint = toEP
-	if toEP != "" {
-		link.From.PersistentKeepalive = 25
-	} else {
-		link.From.PersistentKeepalive = 0
-	}
-	if fromEP != "" {
-		link.To.PersistentKeepalive = 25
-	} else {
-		link.To.PersistentKeepalive = 0
+	isExternalLink := fromNode.IsExternal || toNode.IsExternal
+	if !isExternalLink {
+		// Re-resolve endpoints and keepalives with updated ports
+		fromEP, _, _ := compiler.ResolvePeerEndpointWithEntrypoint(fromNode, toNode, nil, link.To.ListenPort)
+		toEP, _, _ := compiler.ResolvePeerEndpointWithEntrypoint(toNode, fromNode, nil, link.From.ListenPort)
+		link.From.Endpoint = fromEP
+		link.To.Endpoint = toEP
+		if toEP != "" {
+			link.From.PersistentKeepalive = 25
+		} else {
+			link.From.PersistentKeepalive = 0
+		}
+		if fromEP != "" {
+			link.To.PersistentKeepalive = 25
+		} else {
+			link.To.PersistentKeepalive = 0
+		}
 	}
 	link.ModifiedAt = time.Now().UTC()
 
+	if err := m.store.Save(cfg); err != nil {
+		return nil, err
+	}
+
+	return link, nil
+}
+
+// UpdateLinkAdvanced updates any parameters of an existing link, including addresses, endpoints, and public keys
+func (m *Manager) UpdateLinkAdvanced(node1Name, node2Name string, customFrom, customTo *config.LinkEnd, tags []string) (*config.Link, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	cfg := m.store.Get()
+	var n1, n2 *config.Node
+	for i := range cfg.Nodes {
+		if cfg.Nodes[i].Name == node1Name {
+			n1 = &cfg.Nodes[i]
+		}
+		if cfg.Nodes[i].Name == node2Name {
+			n2 = &cfg.Nodes[i]
+		}
+	}
+	if n1 == nil || n2 == nil {
+		return nil, errors.New("one or both nodes not found")
+	}
+
+	fromNode, toNode := n1, n2
+	fromEnd, toEnd := customFrom, customTo
+	if strings.Compare(fromNode.Name, toNode.Name) > 0 {
+		fromNode, toNode = toNode, fromNode
+		fromEnd, toEnd = toEnd, fromEnd
+	}
+
+	linkIdx := -1
+	for i, l := range cfg.Links {
+		if l.From.Name == fromNode.Name && l.To.Name == toNode.Name {
+			linkIdx = i
+			break
+		}
+	}
+	if linkIdx == -1 {
+		return nil, ErrLinkNotFound
+	}
+
+	link := &cfg.Links[linkIdx]
+
+	if fromEnd != nil {
+		if fromEnd.ListenPort > 0 {
+			link.From.ListenPort = fromEnd.ListenPort
+		}
+		if fromEnd.Address != "" {
+			link.From.Address = fromEnd.Address
+		}
+		if fromEnd.Endpoint != "" {
+			link.From.Endpoint = fromEnd.Endpoint
+		}
+		if fromEnd.MTU > 0 {
+			link.From.MTU = fromEnd.MTU
+		}
+		if fromEnd.PersistentKeepalive >= 0 {
+			link.From.PersistentKeepalive = fromEnd.PersistentKeepalive
+		}
+		if fromNode.IsExternal && fromEnd.PublicKey != "" {
+			link.From.PublicKey = fromEnd.PublicKey
+		}
+	}
+
+	if toEnd != nil {
+		if toEnd.ListenPort > 0 {
+			link.To.ListenPort = toEnd.ListenPort
+		}
+		if toEnd.Address != "" {
+			link.To.Address = toEnd.Address
+		}
+		if toEnd.Endpoint != "" {
+			link.To.Endpoint = toEnd.Endpoint
+		}
+		if toEnd.MTU > 0 {
+			link.To.MTU = toEnd.MTU
+		}
+		if toEnd.PersistentKeepalive >= 0 {
+			link.To.PersistentKeepalive = toEnd.PersistentKeepalive
+		}
+		if toNode.IsExternal && toEnd.PublicKey != "" {
+			link.To.PublicKey = toEnd.PublicKey
+		}
+	}
+
+	if tags != nil {
+		link.Tags = tags
+	}
+
+	isExternalLink := fromNode.IsExternal || toNode.IsExternal
+	if !isExternalLink {
+		if (fromEnd == nil || fromEnd.Endpoint == "") && (toEnd == nil || toEnd.Endpoint == "") {
+			fromEP, _, _ := compiler.ResolvePeerEndpointWithEntrypoint(fromNode, toNode, nil, link.To.ListenPort)
+			toEP, _, _ := compiler.ResolvePeerEndpointWithEntrypoint(toNode, fromNode, nil, link.From.ListenPort)
+			link.From.Endpoint = fromEP
+			link.To.Endpoint = toEP
+			if toEP != "" {
+				link.From.PersistentKeepalive = 25
+			} else {
+				link.From.PersistentKeepalive = 0
+			}
+			if fromEP != "" {
+				link.To.PersistentKeepalive = 25
+			} else {
+				link.To.PersistentKeepalive = 0
+			}
+		}
+	} else if toNode.IsExternal {
+		if link.From.Endpoint == "" && toEnd != nil && toEnd.Endpoint != "" {
+			link.From.Endpoint = toEnd.Endpoint
+		}
+		if link.From.Endpoint != "" && link.From.PersistentKeepalive == 0 {
+			link.From.PersistentKeepalive = 25
+		}
+	} else if fromNode.IsExternal {
+		if link.To.Endpoint == "" && fromEnd != nil && fromEnd.Endpoint != "" {
+			link.To.Endpoint = fromEnd.Endpoint
+		}
+		if link.To.Endpoint != "" && link.To.PersistentKeepalive == 0 {
+			link.To.PersistentKeepalive = 25
+		}
+	}
+
+	link.ModifiedAt = time.Now().UTC()
 	if err := m.store.Save(cfg); err != nil {
 		return nil, err
 	}
@@ -875,6 +1137,20 @@ func (m *Manager) RefreshNodeStatus(nodeName string) (*config.NodeStatus, error)
 	node := m.FindNode(nodeName)
 	if node == nil {
 		return nil, ErrNodeNotFound
+	}
+
+	if node.IsExternal {
+		status := &config.NodeStatus{
+			Name:      node.Name,
+			Host:      "external",
+			LastSeen:  time.Now(),
+			Connected: true,
+			Hostname:  node.Name,
+		}
+		m.mu.Lock()
+		m.statuses[nodeName] = status
+		m.mu.Unlock()
+		return status, nil
 	}
 
 	status := &config.NodeStatus{
@@ -961,6 +1237,9 @@ func (m *Manager) PlanSync() ([]config.SyncAction, error) {
 	var cleanActions []config.SyncAction
 
 	for _, n := range nodes {
+		if n.IsExternal {
+			continue
+		}
 		node := n
 		wg.Add(1)
 		go func() {
@@ -1003,6 +1282,9 @@ func (m *Manager) PlanSync() ([]config.SyncAction, error) {
 
 	// Also check stateStore for recorded interfaces that are no longer expected
 	for _, n := range nodes {
+		if n.IsExternal {
+			continue
+		}
 		expected := expectedIfacesPerNode[n.Name]
 		if stNode, ok := currentState.Nodes[n.Name]; ok {
 			for ifaceName := range stNode.Interfaces {
@@ -1052,83 +1334,90 @@ func (m *Manager) PlanSync() ([]config.SyncAction, error) {
 			continue
 		}
 
-		// 1. From node end
-		fromConf, err := compiler.GenerateWgConfigContent(fromNode, toNode, &link.From, &link.To, m.vault)
-		if err == nil {
-			targetFile := fmt.Sprintf("/etc/wireguard/%s.conf", link.From.Interface)
-			desiredHash := config.HashConfig(compiler.NormalizeConfig(fromConf))
+		// 1. From node end (only if fromNode is managed)
+		if !fromNode.IsExternal {
+			fromConf, err := compiler.GenerateWgConfigContent(fromNode, toNode, &link.From, &link.To, m.vault)
+			if err == nil {
+				targetFile := fmt.Sprintf("/etc/wireguard/%s.conf", link.From.Interface)
+				desiredHash := config.HashConfig(compiler.NormalizeConfig(fromConf))
 
-			needsApply := true
-			status := "pending"
-			diffStatus := "create"
+				needsApply := true
+				status := "pending"
+				diffStatus := "create"
 
-			if stNode, ok := currentState.Nodes[fromNode.Name]; ok {
-				if stIface, ok := stNode.Interfaces[link.From.Interface]; ok {
-					if stIface.ConfigHash == desiredHash {
-						needsApply = false
-						status = "synced"
-						diffStatus = "synced"
-					} else {
-						diffStatus = "update"
+				if stNode, ok := currentState.Nodes[fromNode.Name]; ok {
+					if stIface, ok := stNode.Interfaces[link.From.Interface]; ok {
+						if stIface.ConfigHash == desiredHash {
+							needsApply = false
+							status = "synced"
+							diffStatus = "synced"
+						} else {
+							diffStatus = "update"
+						}
 					}
 				}
-			}
 
-			actions = append(actions, config.SyncAction{
-				NodeName:    fromNode.Name,
-				Host:        fromNode.Host,
-				Type:        config.ActionSyncConfig,
-				Interface:   link.From.Interface,
-				TargetFile:  targetFile,
-				FileContent: fromConf,
-				Description: fmt.Sprintf("Configure %s on %s (peer %s)", link.From.Interface, fromNode.Name, toNode.Name),
-				NeedsApply:  needsApply,
-				Status:      status,
-				DiffStatus:  diffStatus,
-			})
+				actions = append(actions, config.SyncAction{
+					NodeName:    fromNode.Name,
+					Host:        fromNode.Host,
+					Type:        config.ActionSyncConfig,
+					Interface:   link.From.Interface,
+					TargetFile:  targetFile,
+					FileContent: fromConf,
+					Description: fmt.Sprintf("Configure %s on %s (peer %s)", link.From.Interface, fromNode.Name, toNode.Name),
+					NeedsApply:  needsApply,
+					Status:      status,
+					DiffStatus:  diffStatus,
+				})
+			}
 		}
 
-		// 2. To node end
-		toConf, err := compiler.GenerateWgConfigContent(toNode, fromNode, &link.To, &link.From, m.vault)
-		if err == nil {
-			targetFile := fmt.Sprintf("/etc/wireguard/%s.conf", link.To.Interface)
-			desiredHash := config.HashConfig(compiler.NormalizeConfig(toConf))
+		// 2. To node end (only if toNode is managed)
+		if !toNode.IsExternal {
+			toConf, err := compiler.GenerateWgConfigContent(toNode, fromNode, &link.To, &link.From, m.vault)
+			if err == nil {
+				targetFile := fmt.Sprintf("/etc/wireguard/%s.conf", link.To.Interface)
+				desiredHash := config.HashConfig(compiler.NormalizeConfig(toConf))
 
-			needsApply := true
-			status := "pending"
-			diffStatus := "create"
+				needsApply := true
+				status := "pending"
+				diffStatus := "create"
 
-			if stNode, ok := currentState.Nodes[toNode.Name]; ok {
-				if stIface, ok := stNode.Interfaces[link.To.Interface]; ok {
-					if stIface.ConfigHash == desiredHash {
-						needsApply = false
-						status = "synced"
-						diffStatus = "synced"
-					} else {
-						diffStatus = "update"
+				if stNode, ok := currentState.Nodes[toNode.Name]; ok {
+					if stIface, ok := stNode.Interfaces[link.To.Interface]; ok {
+						if stIface.ConfigHash == desiredHash {
+							needsApply = false
+							status = "synced"
+							diffStatus = "synced"
+						} else {
+							diffStatus = "update"
+						}
 					}
 				}
-			}
 
-			actions = append(actions, config.SyncAction{
-				NodeName:    toNode.Name,
-				Host:        toNode.Host,
-				Type:        config.ActionSyncConfig,
-				Interface:   link.To.Interface,
-				TargetFile:  targetFile,
-				FileContent: toConf,
-				Description: fmt.Sprintf("Configure %s on %s (peer %s)", link.To.Interface, toNode.Name, fromNode.Name),
-				NeedsApply:  needsApply,
-				Status:      status,
-				DiffStatus:  diffStatus,
-			})
+				actions = append(actions, config.SyncAction{
+					NodeName:    toNode.Name,
+					Host:        toNode.Host,
+					Type:        config.ActionSyncConfig,
+					Interface:   link.To.Interface,
+					TargetFile:  targetFile,
+					FileContent: toConf,
+					Description: fmt.Sprintf("Configure %s on %s (peer %s)", link.To.Interface, toNode.Name, fromNode.Name),
+					NeedsApply:  needsApply,
+					Status:      status,
+					DiffStatus:  diffStatus,
+				})
+			}
 		}
 	}
 
 	// 3. Node BIRD configurations
 	for _, n := range nodes {
+		if n.IsExternal {
+			continue
+		}
 		node := n
-		birdConf, err := compiler.GenerateBirdConfig(&node, nodes, links)
+		birdConf, err := compiler.GenerateBirdConfig(&node, nodes, links, &cfg.NetworkSettings)
 		if err != nil {
 			continue
 		}
@@ -1592,7 +1881,7 @@ func (m *Manager) GenerateBirdConfig(nodeName string) (string, error) {
 		return "", fmt.Errorf("node %s not found", nodeName)
 	}
 
-	return compiler.GenerateBirdConfig(targetNode, cfg.Nodes, cfg.Links)
+	return compiler.GenerateBirdConfig(targetNode, cfg.Nodes, cfg.Links, &cfg.NetworkSettings)
 }
 
 // GenerateBirdConfigWithTemplate generates BIRD config using a custom template
@@ -1612,7 +1901,31 @@ func (m *Manager) GenerateBirdConfigWithTemplate(nodeName string, tmplContent st
 		return "", fmt.Errorf("node %s not found", nodeName)
 	}
 
-	return compiler.GenerateBirdConfigWithTemplate(tmplContent, targetNode, cfg.Nodes, cfg.Links)
+	return compiler.GenerateBirdConfigWithTemplate(tmplContent, targetNode, cfg.Nodes, cfg.Links, &cfg.NetworkSettings)
+}
+
+// GetNetworkSettings returns current network settings from config
+func (m *Manager) GetNetworkSettings() config.NetworkSettings {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	cfg := m.store.Get()
+	if cfg == nil {
+		return config.NetworkSettings{}
+	}
+	return cfg.NetworkSettings
+}
+
+// UpdateNetworkSettings updates the global network settings in config.json
+func (m *Manager) UpdateNetworkSettings(settings config.NetworkSettings) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	cfg := m.store.Get()
+	if cfg == nil {
+		return config.ErrConfigNotFound
+	}
+	cfg.NetworkSettings = settings
+	return m.store.Save(cfg)
 }
 
 func actionPriority(t config.ActionType) int {

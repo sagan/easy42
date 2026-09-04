@@ -365,14 +365,16 @@ func (s *Server) handleGetLinks(w http.ResponseWriter, r *http.Request) {
 
 
 type addLinkRequest struct {
-	FromNode string   `json:"from_node"`
-	ToNode   string   `json:"to_node"`
-	FromPort int      `json:"from_port,omitempty"`
-	ToPort   int      `json:"to_port,omitempty"`
-	FromMTU  int      `json:"from_mtu,omitempty"`
-	ToMTU    int      `json:"to_mtu,omitempty"`
-	MTU      int      `json:"mtu,omitempty"`
-	Tags     []string `json:"tags,omitempty"`
+	FromNode string          `json:"from_node"`
+	ToNode   string          `json:"to_node"`
+	FromPort int             `json:"from_port,omitempty"`
+	ToPort   int             `json:"to_port,omitempty"`
+	FromMTU  int             `json:"from_mtu,omitempty"`
+	ToMTU    int             `json:"to_mtu,omitempty"`
+	MTU      int             `json:"mtu,omitempty"`
+	Tags     []string        `json:"tags,omitempty"`
+	From     *config.LinkEnd `json:"from,omitempty"`
+	To       *config.LinkEnd `json:"to,omitempty"`
 }
 
 func (s *Server) handleAddLink(w http.ResponseWriter, r *http.Request) {
@@ -380,6 +382,15 @@ func (s *Server) handleAddLink(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid link payload")
 		return
+	}
+
+	fromNode := req.FromNode
+	toNode := req.ToNode
+	if fromNode == "" && req.From != nil {
+		fromNode = req.From.Name
+	}
+	if toNode == "" && req.To != nil {
+		toNode = req.To.Name
 	}
 
 	fromMTU := req.FromMTU
@@ -393,7 +404,14 @@ func (s *Server) handleAddLink(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	link, err := s.mgr.AddLink(req.FromNode, req.ToNode, req.FromPort, req.ToPort, req.Tags, fromMTU, toMTU)
+	var link *config.Link
+	var err error
+	if req.From != nil || req.To != nil {
+		link, err = s.mgr.AddLinkAdvanced(fromNode, toNode, req.From, req.To, req.Tags, fromMTU, toMTU)
+	} else {
+		link, err = s.mgr.AddLink(fromNode, toNode, req.FromPort, req.ToPort, req.Tags, fromMTU, toMTU)
+	}
+
 	if err != nil {
 		if err == crypto.ErrVaultLocked {
 			writeError(w, http.StatusLocked, "Vault is locked. Unlock with password first.")
@@ -500,7 +518,14 @@ func (s *Server) handleUpdateLink(w http.ResponseWriter, r *http.Request) {
 		toMTU = req.To.MTU
 	}
 
-	link, err := s.mgr.UpdateLink(fromNode, toNode, fromPort, toPort, req.Tags, fromMTU, toMTU)
+	var link *config.Link
+	var err error
+	if req.From != nil || req.To != nil {
+		link, err = s.mgr.UpdateLinkAdvanced(fromNode, toNode, req.From, req.To, req.Tags)
+	} else {
+		link, err = s.mgr.UpdateLink(fromNode, toNode, fromPort, toPort, req.Tags, fromMTU, toMTU)
+	}
+
 	if err != nil {
 		if err == crypto.ErrVaultLocked {
 			writeError(w, http.StatusLocked, "Vault is locked. Unlock with password first.")
@@ -511,6 +536,28 @@ func (s *Server) handleUpdateLink(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, link)
+}
+
+// Network Settings Handlers
+
+func (s *Server) handleGetNetworkSettings(w http.ResponseWriter, r *http.Request) {
+	settings := s.mgr.GetNetworkSettings()
+	writeJSON(w, http.StatusOK, settings)
+}
+
+func (s *Server) handleUpdateNetworkSettings(w http.ResponseWriter, r *http.Request) {
+	var settings config.NetworkSettings
+	if err := json.NewDecoder(r.Body).Decode(&settings); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid network settings payload")
+		return
+	}
+
+	if err := s.mgr.UpdateNetworkSettings(settings); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, settings)
 }
 
 func (s *Server) handleDeleteLink(w http.ResponseWriter, r *http.Request) {

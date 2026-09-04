@@ -7,6 +7,7 @@ import (
 
 	"easy42/internal/config"
 	"easy42/internal/engine"
+
 	"github.com/spf13/cobra"
 )
 
@@ -145,7 +146,7 @@ func init() {
 	nodeAddCmd.Flags().StringVarP(&nodeHost, "host", "H", "", "SSH host or alias")
 	nodeAddCmd.Flags().StringVarP(&nodeIP, "ip", "i", "", "Main IPv4 address")
 	nodeAddCmd.Flags().StringVar(&nodeIface, "iface", "lo", "Main IP interface name")
-	nodeAddCmd.Flags().Uint64VarP(&nodeASN, "asn", "a", 4299420001, "AS number")
+	nodeAddCmd.Flags().Uint64VarP(&nodeASN, "asn", "a", 4224420001, "AS number")
 	_ = nodeAddCmd.MarkFlagRequired("name")
 	_ = nodeAddCmd.MarkFlagRequired("host")
 	_ = nodeAddCmd.MarkFlagRequired("ip")
@@ -157,4 +158,3 @@ func init() {
 	nodeCmd.AddCommand(nodeBirdCmd)
 	RootCmd.AddCommand(nodeCmd)
 }
-

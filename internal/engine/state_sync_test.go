@@ -32,14 +32,14 @@ func TestPlanSyncDiffingWithState(t *testing.T) {
 		Host:      "127.0.0.1",
 		IP:        "192.168.100.1",
 		Interface: "lo",
-		ASN:       4299420001,
+		ASN:       4224420001,
 	}
 	nodeB := config.Node{
 		Name:      "node-b",
 		Host:      "127.0.0.1",
 		IP:        "192.168.100.2",
 		Interface: "lo",
-		ASN:       4299420002,
+		ASN:       4224420002,
 	}
 
 	if err := mgr.AddNode(nodeA); err != nil {
@@ -196,7 +196,7 @@ func TestPlanSyncBirdConfigDiffing(t *testing.T) {
 		Host:      "127.0.0.1",
 		IP:        "192.168.100.5",
 		Interface: "lo",
-		ASN:       4299420005,
+		ASN:       4224420005,
 	}
 	if err := mgr.AddNode(node); err != nil {
 		t.Fatalf("AddNode failed: %v", err)
@@ -250,7 +250,7 @@ func TestPlanSyncBirdConfigDiffing(t *testing.T) {
 	}
 
 	// Update node ASN, BIRD config diff should be triggered
-	node.ASN = 4299420099
+	node.ASN = 4224420099
 	_ = mgr.UpdateNode(node.Name, node)
 
 	actionsAfterNodeUpdate, err := mgr.PlanSync()

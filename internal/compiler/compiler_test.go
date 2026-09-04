@@ -50,12 +50,12 @@ func TestDerivePortFromIP(t *testing.T) {
 }
 
 func TestDerivePortFromASN(t *testing.T) {
-	port := DerivePortFromASN(4299420001)
+	port := DerivePortFromASN(4224420001)
 	if port != 20001 {
 		t.Fatalf("Expected port 20001, got %d", port)
 	}
 
-	port2 := DerivePortFromASN(4299425182)
+	port2 := DerivePortFromASN(4224425182)
 	if port2 != 25182 {
 		t.Fatalf("Expected port 25182, got %d", port2)
 	}
@@ -64,7 +64,7 @@ func TestDerivePortFromASN(t *testing.T) {
 func TestResolvePeerEndpoint(t *testing.T) {
 	nodeA := &config.Node{
 		Name: "node-a",
-		ASN:  4299420001,
+		ASN:  4224420001,
 		IP:   "192.168.100.1",
 		Entrypoints: []config.Entrypoint{
 			{
@@ -76,7 +76,7 @@ func TestResolvePeerEndpoint(t *testing.T) {
 
 	nodeB := &config.Node{
 		Name: "node-b",
-		ASN:  4299420002,
+		ASN:  4224420002,
 		IP:   "192.168.100.2",
 		Entrypoints: []config.Entrypoint{
 			{
@@ -101,13 +101,13 @@ func TestResolvePeerEndpoint(t *testing.T) {
 func TestGenerateWgConfigContent(t *testing.T) {
 	nodeA := &config.Node{
 		Name: "node-a",
-		ASN:  4299420001,
+		ASN:  4224420001,
 		IP:   "192.168.100.1",
 	}
 
 	nodeB := &config.Node{
 		Name: "node-b",
-		ASN:  4299420002,
+		ASN:  4224420002,
 		IP:   "192.168.100.2",
 		Entrypoints: []config.Entrypoint{
 			{

@@ -77,7 +77,7 @@ func TestLiveSyncCleanUnusedInterface(t *testing.T) {
 		Host:      host,
 		IP:        "172.24.3.243",
 		Interface: "ens3",
-		ASN:       4299424309,
+		ASN:       4224424309,
 	}
 	if err := mgr.AddNode(node); err != nil {
 		t.Fatalf("Failed to add node: %v", err)
@@ -169,14 +169,14 @@ func TestLiveSyncStartsUnstartedInterface(t *testing.T) {
 		Host:      host,
 		IP:        "172.24.3.243",
 		Interface: "ens3",
-		ASN:       4299424309,
+		ASN:       4224424309,
 	}
 	nodeB := config.Node{
 		Name:      "testnodeb",
 		Host:      host,
 		IP:        "172.24.3.244",
 		Interface: "ens3",
-		ASN:       4299424310,
+		ASN:       4224424310,
 	}
 	if err := mgr.AddNode(nodeA); err != nil {
 		t.Fatalf("Failed to add nodeA: %v", err)

@@ -54,7 +54,7 @@ func DerivePortFromIP(ip string) int {
 	return 20000 + int(h.Sum32()%10000)
 }
 
-// DerivePortFromASN extracts the last 5 digits of an ASN (e.g. 4299420001 -> 20001).
+// DerivePortFromASN extracts the last 5 digits of an ASN (e.g. 4224420001 -> 20001).
 // Deprecated: use DerivePortFromIP instead.
 func DerivePortFromASN(asn uint64) int {
 	last5 := int(asn % 100000)

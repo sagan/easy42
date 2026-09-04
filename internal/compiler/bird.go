@@ -32,7 +32,7 @@ func GetDefaultBirdTemplate() (string, error) {
 //	{
 //	  "name": "node1",
 //	  "ip": "192.168.100.1",
-//	  "asn": 4299420001,
+//	  "asn": 4224420001,
 //	  "table": 254,
 //	  "static_routes": [...],
 //	  "routes": [...],
@@ -44,10 +44,15 @@ func GetDefaultBirdTemplate() (string, error) {
 //	      "remote_node": { "name": ..., "asn": ..., "ip": ... }
 //	    }
 //	  ]
-//	}
-func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.Link) (map[string]any, error) {
+// BuildNodeContext converts a Node and its connected links into a context map suitable for template execution.
+func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.Link, netSettings ...*config.NetworkSettings) (map[string]any, error) {
 	if node == nil {
 		return nil, fmt.Errorf("node cannot be nil")
+	}
+
+	var settings *config.NetworkSettings
+	if len(netSettings) > 0 && netSettings[0] != nil {
+		settings = netSettings[0]
 	}
 
 	// 1. Convert node struct to map[string]any via JSON serialization to preserve json tag naming
@@ -73,6 +78,31 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 	ctx["asn"] = node.ASN
 	ctx["ASN"] = node.ASN
 
+	// NetworkSettings / BGP Confederation support
+	if settings != nil && settings.PublicASN > 0 {
+		ctx["confed_as"] = settings.PublicASN
+		ctx["ConfedAS"] = settings.PublicASN
+
+		confedMembers := strings.TrimSpace(settings.ConfedMembers)
+		if confedMembers == "" {
+			confedMembers = "4224420000..4224429999"
+		}
+		if !strings.HasPrefix(confedMembers, "[") {
+			confedMembers = "[ " + confedMembers + " ]"
+		}
+		ctx["confed_members"] = confedMembers
+		ctx["ConfedMembers"] = confedMembers
+	}
+
+	var exportPrefixes, importPrefixes []string
+	if settings != nil {
+		exportPrefixes = settings.ExportPrefixes
+		importPrefixes = settings.ImportPrefixes
+	}
+	ctx["ext_import_v4"] = formatPrefixList(importPrefixes, []string{"172.20.0.0/14{21,29}"}, false)
+	ctx["ext_import_v6"] = formatPrefixList(importPrefixes, []string{"fd00::/8{44,64}"}, true)
+	ctx["ext_export_v4"] = formatPrefixList(exportPrefixes, []string{"172.20.0.0/14+"}, false)
+	ctx["ext_export_v6"] = formatPrefixList(exportPrefixes, []string{"fd00::/8+"}, true)
 
 	// 3. Normalize routes and static routes
 	routes := node.Routes
@@ -88,13 +118,11 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 	ctx["routes"] = routeMaps
 	ctx["kernel_routes"] = routeMaps
 
-
 	if node.StaticRoutes == nil {
 		ctx["static_routes"] = []string{}
 	} else {
 		ctx["static_routes"] = node.StaticRoutes
 	}
-
 
 	// 4. Index allNodes by name for fast lookup
 	nodeByName := make(map[string]*config.Node)
@@ -104,6 +132,7 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 
 	// 5. Build links for this node
 	var nodeLinks []map[string]any
+	hasExternalLinks := false
 	for _, l := range links {
 		var localEnd, remoteEnd *config.LinkEnd
 		var remoteNode *config.Node
@@ -118,6 +147,12 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 			remoteNode = nodeByName[l.From.Name]
 		} else {
 			continue
+		}
+
+		isExternal := false
+		if (remoteNode != nil && remoteNode.IsExternal) || node.IsExternal {
+			isExternal = true
+			hasExternalLinks = true
 		}
 
 		localMap := linkEndToContextMap(localEnd, node, remoteEnd.Name)
@@ -140,13 +175,16 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 			remoteNodeMap["Name"] = remoteNode.Name
 			remoteNodeMap["IP"] = remoteNode.IP
 			remoteNodeMap["Interface"] = remoteNode.Interface
-
+			remoteNodeMap["is_external"] = remoteNode.IsExternal
+			remoteNodeMap["IsExternal"] = remoteNode.IsExternal
 		} else {
 			remoteNodeMap = map[string]any{
-				"name": remoteEnd.Name,
-				"Name": remoteEnd.Name,
-				"asn":  uint64(0),
-				"ASN":  uint64(0),
+				"name":        remoteEnd.Name,
+				"Name":        remoteEnd.Name,
+				"asn":         uint64(0),
+				"ASN":         uint64(0),
+				"is_external": false,
+				"IsExternal":  false,
 			}
 		}
 
@@ -164,12 +202,36 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 			"Remote":      remoteMap,
 			"remote_node": remoteNodeMap,
 			"RemoteNode":  remoteNodeMap,
+			"is_external": isExternal,
+			"IsExternal":  isExternal,
 		})
 	}
 
 	ctx["links"] = nodeLinks
 	ctx["Links"] = nodeLinks
+	ctx["has_external_links"] = hasExternalLinks
+	ctx["HasExternalLinks"] = hasExternalLinks
 	return ctx, nil
+}
+
+// formatPrefixList formats a list of IP prefixes into a BIRD set string like "[ 172.20.0.0/14{21,29} ]"
+func formatPrefixList(prefixes []string, defaultList []string, isV6 bool) string {
+	var list []string
+	for _, p := range prefixes {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		if isV6 && strings.Contains(p, ":") {
+			list = append(list, p)
+		} else if !isV6 && !strings.Contains(p, ":") {
+			list = append(list, p)
+		}
+	}
+	if len(list) == 0 {
+		list = defaultList
+	}
+	return "[ " + strings.Join(list, ", ") + " ]"
 }
 
 // linkEndToContextMap transforms a LinkEnd into a map for BIRD template use.
@@ -213,6 +275,8 @@ func linkEndToContextMap(end *config.LinkEnd, node *config.Node, peerName string
 		mtu = end.MTU
 	}
 
+	isLinkLocal := strings.HasPrefix(strings.ToLower(addr), "fe80:")
+
 	return map[string]any{
 		"name":                 name,
 		"Name":                 name,
@@ -220,19 +284,20 @@ func linkEndToContextMap(end *config.LinkEnd, node *config.Node, peerName string
 		"Interface":            iface,
 		"address":              addr,
 		"Address":              addr,
+		"is_link_local":        isLinkLocal,
+		"IsLinkLocal":          isLinkLocal,
 		"listen_port":          listenPort,
-		"ListenPort":          listenPort,
+		"ListenPort":           listenPort,
 		"endpoint":             endpoint,
 		"Endpoint":             endpoint,
 		"public_key":           pubKey,
 		"PublicKey":            pubKey,
 		"persistent_keepalive": keepalive,
-		"PersistentKeepalive": keepalive,
+		"PersistentKeepalive":  keepalive,
 		"mtu":                  mtu,
 		"MTU":                  mtu,
 	}
 }
-
 
 // GenerateBirdConfigWithTemplate executes a custom template with the node context
 func GenerateBirdConfigWithTemplate(
@@ -240,8 +305,9 @@ func GenerateBirdConfigWithTemplate(
 	node *config.Node,
 	allNodes []config.Node,
 	links []config.Link,
+	netSettings ...*config.NetworkSettings,
 ) (string, error) {
-	ctx, err := BuildNodeContext(node, allNodes, links)
+	ctx, err := BuildNodeContext(node, allNodes, links, netSettings...)
 	if err != nil {
 		return "", err
 	}
@@ -274,10 +340,11 @@ func GenerateBirdConfig(
 	node *config.Node,
 	allNodes []config.Node,
 	links []config.Link,
+	netSettings ...*config.NetworkSettings,
 ) (string, error) {
 	tmplContent, err := GetDefaultBirdTemplate()
 	if err != nil {
 		return "", err
 	}
-	return GenerateBirdConfigWithTemplate(tmplContent, node, allNodes, links)
+	return GenerateBirdConfigWithTemplate(tmplContent, node, allNodes, links, netSettings...)
 }

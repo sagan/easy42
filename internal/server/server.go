@@ -93,6 +93,10 @@ func New(cfg Config) *Server {
 			r.Put("/links", s.handleUpdateLink)
 			r.Delete("/links", s.handleDeleteLink)
 
+			// Network Settings
+			r.Get("/settings/network", s.handleGetNetworkSettings)
+			r.Put("/settings/network", s.handleUpdateNetworkSettings)
+
 			// Sync & State
 			r.Get("/sync/preview", s.handleSyncPreview)
 			r.Post("/sync", s.handleExecuteSync)

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from "react";
 import {
   Dialog,
   DialogTitle,
@@ -23,21 +23,10 @@ import {
   FormControl,
   Select,
   MenuItem,
-} from '@mui/material';
-import {
-  Wrench,
-  CheckCircle2,
-  XCircle,
-  Play,
-  RotateCw,
-  X,
-  Terminal,
-  Server,
-  HelpCircle,
-  Tag,
-} from 'lucide-react';
-import { api } from '../../api/client';
-import { Node, TaskMeta, TaskStatusResult, TaskRunResult } from '../../types/api';
+} from "@mui/material";
+import { Wrench, CheckCircle2, XCircle, Play, RotateCw, X, Terminal, Server, HelpCircle, Tag } from "lucide-react";
+import { api } from "../../api/client";
+import { Node, TaskMeta, TaskStatusResult, TaskRunResult } from "../../types/api";
 
 interface DeviceHelperModalProps {
   open: boolean;
@@ -46,18 +35,13 @@ interface DeviceHelperModalProps {
   initialNode?: string;
 }
 
-export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({
-  open,
-  onClose,
-  nodes,
-  initialNode,
-}) => {
+export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ open, onClose, nodes, initialNode }) => {
   const [tasks, setTasks] = useState<TaskMeta[]>([]);
   const [loadingTasks, setLoadingTasks] = useState(false);
-  const [selectedTaskId, setSelectedTaskId] = useState<string>('');
+  const [selectedTaskId, setSelectedTaskId] = useState<string>("");
 
   // Tag filter state
-  const [selectedTag, setSelectedTag] = useState<string>('All');
+  const [selectedTag, setSelectedTag] = useState<string>("All");
 
   // Unique tags across all nodes
   const uniqueTags = useMemo(() => {
@@ -73,7 +57,7 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({
 
   // Nodes filtered by tag
   const filteredNodes = useMemo(() => {
-    if (selectedTag === 'All') return nodes;
+    if (selectedTag === "All") return nodes;
     return nodes.filter((n) => n.tags && n.tags.includes(selectedTag));
   }, [nodes, selectedTag]);
 
@@ -103,7 +87,7 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({
       setCheckingNodes({});
       setRunningNodes({});
       setActiveLogNode(null);
-      setSelectedTag('All');
+      setSelectedTag("All");
 
       // Default selected nodes: initialNode if provided, otherwise all nodes
       if (initialNode && nodes.some((n) => n.name === initialNode)) {
@@ -126,7 +110,7 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({
       }
     } catch (err: unknown) {
       const e = err as Error;
-      setError(e.message || 'Failed to fetch helper tasks');
+      setError(e.message || "Failed to fetch helper tasks");
     } finally {
       setLoadingTasks(false);
     }
@@ -163,9 +147,7 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({
   const isSomeFilteredSelected = selectedFilteredCount > 0 && selectedFilteredCount < filteredNodes.length;
 
   const toggleSelectNode = (name: string) => {
-    setSelectedNodes((prev) =>
-      prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name]
-    );
+    setSelectedNodes((prev) => (prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name]));
   };
 
   // Run status check on selected nodes (or specific node)
@@ -187,7 +169,7 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({
       setStatuses((prev) => ({ ...prev, ...res }));
     } catch (err: unknown) {
       const e = err as Error;
-      setError(e.message || 'Status check failed');
+      setError(e.message || "Status check failed");
     } finally {
       setCheckingNodes((prev) => {
         const next = { ...prev };
@@ -224,7 +206,7 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({
       handleCheckStatus(target);
     } catch (err: unknown) {
       const e = err as Error;
-      setError(e.message || 'Task execution failed');
+      setError(e.message || "Task execution failed");
     } finally {
       setRunningNodes((prev) => {
         const next = { ...prev };
@@ -268,13 +250,13 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({
           size="small"
           label="Not Checked"
           variant="outlined"
-          sx={{ color: 'text.disabled', borderColor: 'divider' }}
+          sx={{ color: "text.disabled", borderColor: "divider" }}
         />
       );
     }
 
     switch (st.status) {
-      case 'done':
+      case "done":
         return (
           <Chip
             size="small"
@@ -284,7 +266,7 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({
             sx={{ fontWeight: 600 }}
           />
         );
-      case 'ready':
+      case "ready":
         return (
           <Chip
             size="small"
@@ -294,25 +276,19 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({
             sx={{ fontWeight: 600 }}
           />
         );
-      case 'incompatible':
+      case "incompatible":
         return (
           <Chip
             size="small"
             icon={<HelpCircle size={13} />}
             label="Not Applicable"
-            sx={{ bgcolor: 'action.disabledBackground', color: 'text.secondary' }}
+            sx={{ bgcolor: "action.disabledBackground", color: "text.secondary" }}
           />
         );
-      case 'error':
+      case "error":
       default:
         return (
-          <Chip
-            size="small"
-            icon={<XCircle size={13} />}
-            label="Check Failed"
-            color="error"
-            sx={{ fontWeight: 600 }}
-          />
+          <Chip size="small" icon={<XCircle size={13} />} label="Check Failed" color="error" sx={{ fontWeight: 600 }} />
         );
     }
   };
@@ -325,34 +301,34 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({
       fullWidth
       PaperProps={{
         sx: {
-          height: '85vh',
-          display: 'flex',
-          flexDirection: 'column',
-          bgcolor: 'background.paper',
-          backgroundImage: 'none',
+          height: "85vh",
+          display: "flex",
+          flexDirection: "column",
+          bgcolor: "background.paper",
+          backgroundImage: "none",
         },
       }}
     >
       {/* Title */}
       <DialogTitle
         sx={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
           borderBottom: 1,
-          borderColor: 'divider',
+          borderColor: "divider",
           py: 1.5,
           px: 3,
         }}
       >
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
           <Box
             sx={{
               p: 0.8,
               borderRadius: 1.5,
-              bgcolor: 'primary.main',
-              color: 'primary.contrastText',
-              display: 'flex',
+              bgcolor: "primary.main",
+              color: "primary.contrastText",
+              display: "flex",
             }}
           >
             <Wrench size={20} />
@@ -371,31 +347,34 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({
         </IconButton>
       </DialogTitle>
 
-      <DialogContent sx={{ p: 0, display: 'flex', flex: 1, overflow: 'hidden' }}>
+      <DialogContent sx={{ p: 0, display: "flex", flex: 1, overflow: "hidden" }}>
         {/* Left Sidebar: Task List */}
         <Box
           sx={{
             width: 300,
             borderRight: 1,
-            borderColor: 'divider',
-            display: 'flex',
-            flexDirection: 'column',
-            bgcolor: 'background.default',
+            borderColor: "divider",
+            display: "flex",
+            flexDirection: "column",
+            bgcolor: "background.default",
           }}
         >
-          <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
-            <Typography variant="subtitle2" sx={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, color: 'text.secondary' }}>
+          <Box sx={{ p: 2, borderBottom: 1, borderColor: "divider" }}>
+            <Typography
+              variant="subtitle2"
+              sx={{ fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, color: "text.secondary" }}
+            >
               Available Tasks
             </Typography>
           </Box>
 
-          <Box sx={{ flex: 1, overflowY: 'auto', p: 1.5 }}>
+          <Box sx={{ flex: 1, overflowY: "auto", p: 1.5 }}>
             {loadingTasks ? (
-              <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
+              <Box sx={{ display: "flex", justifyContent: "center", p: 4 }}>
                 <CircularProgress size={24} />
               </Box>
             ) : tasks.length === 0 ? (
-              <Typography variant="body2" color="text.secondary" sx={{ p: 2, textAlign: 'center' }}>
+              <Typography variant="body2" color="text.secondary" sx={{ p: 2, textAlign: "center" }}>
                 No tasks available
               </Typography>
             ) : (
@@ -409,35 +388,31 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({
                       p: 1.5,
                       mb: 1,
                       borderRadius: 1.5,
-                      cursor: 'pointer',
+                      cursor: "pointer",
                       border: 1,
-                      borderColor: isSelected ? 'primary.main' : 'divider',
-                      bgcolor: isSelected ? 'action.selected' : 'background.paper',
-                      transition: 'all 0.15s ease',
-                      '&:hover': {
-                        borderColor: 'primary.light',
-                        bgcolor: 'action.hover',
+                      borderColor: isSelected ? "primary.main" : "divider",
+                      bgcolor: isSelected ? "action.selected" : "background.paper",
+                      transition: "all 0.15s ease",
+                      "&:hover": {
+                        borderColor: "primary.light",
+                        bgcolor: "action.hover",
                       },
                     }}
                   >
-                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.5 }}>
+                    <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 0.5 }}>
                       <Typography variant="subtitle2" sx={{ fontWeight: isSelected ? 700 : 600 }}>
                         {task.title}
                       </Typography>
-                      <Chip
-                        size="small"
-                        label={task.category}
-                        sx={{ fontSize: '0.65rem', height: 18 }}
-                      />
+                      <Chip size="small" label={task.category} sx={{ fontSize: "0.65rem", height: 18 }} />
                     </Box>
                     <Typography
                       variant="caption"
                       color="text.secondary"
                       sx={{
-                        display: '-webkit-box',
+                        display: "-webkit-box",
                         WebkitLineClamp: 2,
-                        WebkitBoxOrient: 'vertical',
-                        overflow: 'hidden',
+                        WebkitBoxOrient: "vertical",
+                        overflow: "hidden",
                         lineHeight: 1.3,
                       }}
                     >
@@ -451,12 +426,14 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({
         </Box>
 
         {/* Right Main Area: Task Details, Node Selection & Status Matrix */}
-        <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <Box sx={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
           {selectedTask ? (
-            <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', p: 2.5 }}>
+            <Box sx={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", p: 2.5 }}>
               {/* Task Header */}
-              <Box sx={{ mb: 2, p: 2, borderRadius: 2, bgcolor: 'background.default', border: 1, borderColor: 'divider' }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+              <Box
+                sx={{ mb: 2, p: 2, borderRadius: 2, bgcolor: "background.default", border: 1, borderColor: "divider" }}
+              >
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 0.5 }}>
                   <Typography variant="h6" sx={{ fontWeight: 700 }}>
                     {selectedTask.title}
                   </Typography>
@@ -474,8 +451,8 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({
               )}
 
               {/* Action Toolbar */}
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+              <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1.5 }}>
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
                   <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
                     Target Devices ({selectedNodes.length} / {nodes.length} selected)
                   </Typography>
@@ -488,33 +465,40 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({
                         onChange={(e) => setSelectedTag(e.target.value)}
                         displayEmpty
                         startAdornment={
-                          <Box sx={{ display: 'flex', alignItems: 'center', mr: 0.75, color: selectedTag === 'All' ? 'text.secondary' : 'primary.main' }}>
+                          <Box
+                            sx={{
+                              display: "flex",
+                              alignItems: "center",
+                              mr: 0.75,
+                              color: selectedTag === "All" ? "text.secondary" : "primary.main",
+                            }}
+                          >
                             <Tag size={13} />
                           </Box>
                         }
                         sx={{
                           height: 28,
-                          fontSize: '0.75rem',
+                          fontSize: "0.75rem",
                           fontWeight: 600,
                           borderRadius: 1.5,
-                          backgroundColor: selectedTag === 'All' ? 'background.paper' : 'rgba(79, 70, 229, 0.08)',
-                          color: selectedTag === 'All' ? 'text.primary' : 'primary.main',
-                          '& .MuiSelect-select': { py: 0.3, pr: 3, pl: 0.5 },
-                          '& .MuiOutlinedInput-notchedOutline': {
-                            borderColor: selectedTag === 'All' ? 'divider' : 'primary.light',
+                          backgroundColor: selectedTag === "All" ? "background.paper" : "rgba(79, 70, 229, 0.08)",
+                          color: selectedTag === "All" ? "text.primary" : "primary.main",
+                          "& .MuiSelect-select": { py: 0.3, pr: 3, pl: 0.5 },
+                          "& .MuiOutlinedInput-notchedOutline": {
+                            borderColor: selectedTag === "All" ? "divider" : "primary.light",
                           },
-                          '&:hover .MuiOutlinedInput-notchedOutline': {
-                            borderColor: 'primary.main',
+                          "&:hover .MuiOutlinedInput-notchedOutline": {
+                            borderColor: "primary.main",
                           },
                         }}
                       >
-                        <MenuItem value="All" sx={{ fontSize: '0.8rem', fontWeight: 600 }}>
+                        <MenuItem value="All" sx={{ fontSize: "0.8rem", fontWeight: 600 }}>
                           Tag: All ({nodes.length})
                         </MenuItem>
                         {uniqueTags.map((tag) => {
                           const count = nodes.filter((n) => n.tags && n.tags.includes(tag)).length;
                           return (
-                            <MenuItem key={tag} value={tag} sx={{ fontSize: '0.8rem', fontWeight: 600 }}>
+                            <MenuItem key={tag} value={tag} sx={{ fontSize: "0.8rem", fontWeight: 600 }}>
                               #{tag} ({count})
                             </MenuItem>
                           );
@@ -523,7 +507,7 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({
                     </FormControl>
                   )}
                 </Box>
-                <Box sx={{ display: 'flex', gap: 1 }}>
+                <Box sx={{ display: "flex", gap: 1 }}>
                   <Button
                     size="small"
                     variant="outlined"
@@ -547,7 +531,7 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({
               </Box>
 
               {/* Node Table */}
-              <TableContainer component={Paper} variant="outlined" sx={{ flex: 1, overflowY: 'auto', mb: 2 }}>
+              <TableContainer component={Paper} variant="outlined" sx={{ flex: 1, overflowY: "auto", mb: 2 }}>
                 <Table size="small" stickyHeader>
                   <TableHead>
                     <TableRow>
@@ -563,13 +547,15 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({
                       <TableCell sx={{ fontWeight: 700 }}>Host / IP</TableCell>
                       <TableCell sx={{ fontWeight: 700 }}>Status</TableCell>
                       <TableCell sx={{ fontWeight: 700 }}>Details</TableCell>
-                      <TableCell align="right" sx={{ fontWeight: 700 }}>Action</TableCell>
+                      <TableCell align="right" sx={{ fontWeight: 700 }}>
+                        Action
+                      </TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
                     {filteredNodes.length === 0 && (
                       <TableRow>
-                        <TableCell colSpan={6} sx={{ textAlign: 'center', py: 4, color: 'text.secondary' }}>
+                        <TableCell colSpan={6} sx={{ textAlign: "center", py: 4, color: "text.secondary" }}>
                           No devices match tag #{selectedTag}
                         </TableCell>
                       </TableRow>
@@ -585,52 +571,47 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({
                           key={node.name}
                           hover
                           selected={isSelected}
-                          sx={{ '&:last-child td, &:last-child th': { border: 0 } }}
+                          sx={{ "&:last-child td, &:last-child th": { border: 0 } }}
                         >
                           <TableCell padding="checkbox">
-                            <Checkbox
-                              size="small"
-                              checked={isSelected}
-                              onChange={() => toggleSelectNode(node.name)}
-                            />
+                            <Checkbox size="small" checked={isSelected} onChange={() => toggleSelectNode(node.name)} />
                           </TableCell>
                           <TableCell>
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                               <Server size={14} />
                               <Typography variant="body2" sx={{ fontWeight: 600 }}>
                                 {node.name}
                               </Typography>
-                              {node.tags && node.tags.map((t) => (
-                                <Chip key={t} size="small" label={t} sx={{ height: 16, fontSize: '0.65rem' }} />
-                              ))}
+                              {node.tags &&
+                                node.tags.map((t) => (
+                                  <Chip key={t} size="small" label={t} sx={{ height: 16, fontSize: "0.65rem" }} />
+                                ))}
                             </Box>
                           </TableCell>
                           <TableCell>
-                            <Typography variant="caption" sx={{ fontFamily: 'monospace' }}>
+                            <Typography variant="caption" sx={{ fontFamily: "monospace" }}>
                               {node.host || node.ip}
                             </Typography>
                           </TableCell>
-                          <TableCell>
-                            {renderStatusBadge(node.name)}
-                          </TableCell>
+                          <TableCell>{renderStatusBadge(node.name)}</TableCell>
                           <TableCell>
                             <Typography
                               variant="caption"
-                              color={st?.status === 'error' ? 'error.main' : 'text.secondary'}
+                              color={st?.status === "error" ? "error.main" : "text.secondary"}
                               sx={{
-                                display: 'block',
+                                display: "block",
                                 maxWidth: 280,
-                                whiteSpace: 'nowrap',
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
+                                whiteSpace: "nowrap",
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
                               }}
                               title={st?.message}
                             >
-                              {st?.message || '—'}
+                              {st?.message || "—"}
                             </Typography>
                           </TableCell>
                           <TableCell align="right">
-                            <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 0.5 }}>
+                            <Box sx={{ display: "flex", justifyContent: "flex-end", gap: 0.5 }}>
                               <Tooltip title="Check Status on this node">
                                 <span>
                                   <IconButton
@@ -669,23 +650,23 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({
                   sx={{
                     borderRadius: 2,
                     border: 1,
-                    borderColor: 'divider',
-                    bgcolor: '#0f172a',
-                    color: '#f8fafc',
+                    borderColor: "divider",
+                    bgcolor: "#0f172a",
+                    color: "#f8fafc",
                     p: 1.5,
                     maxHeight: 220,
-                    display: 'flex',
-                    flexDirection: 'column',
+                    display: "flex",
+                    flexDirection: "column",
                   }}
                 >
-                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1 }}>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                       <Terminal size={16} />
-                      <Typography variant="subtitle2" sx={{ fontWeight: 700, fontFamily: 'monospace' }}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 700, fontFamily: "monospace" }}>
                         Execution Output
                       </Typography>
                     </Box>
-                    <Box sx={{ display: 'flex', gap: 0.5 }}>
+                    <Box sx={{ display: "flex", gap: 0.5 }}>
                       {Object.keys(runResults).map((n) => {
                         const r = runResults[n];
                         return (
@@ -693,14 +674,20 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({
                             key={n}
                             size="small"
                             label={n}
-                            icon={r.success ? <CheckCircle2 size={12} color="#4ade80" /> : <XCircle size={12} color="#f87171" />}
+                            icon={
+                              r.success ? (
+                                <CheckCircle2 size={12} color="#4ade80" />
+                              ) : (
+                                <XCircle size={12} color="#f87171" />
+                              )
+                            }
                             onClick={() => setActiveLogNode(n)}
                             sx={{
-                              bgcolor: activeLogNode === n ? '#334155' : '#1e293b',
-                              color: '#f8fafc',
-                              cursor: 'pointer',
-                              border: activeLogNode === n ? '1px solid #38bdf8' : 'none',
-                              fontSize: '0.75rem',
+                              bgcolor: activeLogNode === n ? "#334155" : "#1e293b",
+                              color: "#f8fafc",
+                              cursor: "pointer",
+                              border: activeLogNode === n ? "1px solid #38bdf8" : "none",
+                              fontSize: "0.75rem",
                               height: 22,
                             }}
                           />
@@ -712,25 +699,32 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({
                   <Box
                     sx={{
                       flex: 1,
-                      overflowY: 'auto',
-                      bgcolor: '#020617',
+                      overflowY: "auto",
+                      bgcolor: "#020617",
                       p: 1.5,
                       borderRadius: 1,
-                      fontFamily: 'monospace',
-                      fontSize: '0.8rem',
-                      whiteSpace: 'pre-wrap',
-                      wordBreak: 'break-all',
+                      fontFamily: "monospace",
+                      fontSize: "0.8rem",
+                      whiteSpace: "pre-wrap",
+                      wordBreak: "break-all",
                     }}
                   >
                     {activeLogNode && runResults[activeLogNode] ? (
                       <>
-                        <Box sx={{ color: runResults[activeLogNode].success ? '#4ade80' : '#f87171', mb: 0.5, fontWeight: 600 }}>
-                          [{activeLogNode}] {runResults[activeLogNode].success ? '✓ Succeeded' : '✗ Failed'} in {runResults[activeLogNode].duration_ms}ms
+                        <Box
+                          sx={{
+                            color: runResults[activeLogNode].success ? "#4ade80" : "#f87171",
+                            mb: 0.5,
+                            fontWeight: 600,
+                          }}
+                        >
+                          [{activeLogNode}] {runResults[activeLogNode].success ? "✓ Succeeded" : "✗ Failed"} in{" "}
+                          {runResults[activeLogNode].duration_ms}ms
                         </Box>
-                        {runResults[activeLogNode].output || '(no output)'}
+                        {runResults[activeLogNode].output || "(no output)"}
                       </>
                     ) : (
-                      <Typography variant="caption" sx={{ color: '#64748b' }}>
+                      <Typography variant="caption" sx={{ color: "#64748b" }}>
                         Select a node above to view stdout/stderr output
                       </Typography>
                     )}
@@ -739,7 +733,7 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({
               )}
             </Box>
           ) : (
-            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 1 }}>
+            <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", flex: 1 }}>
               <Typography variant="body2" color="text.secondary">
                 Select a task on the left
               </Typography>
@@ -748,7 +742,7 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({
         </Box>
       </DialogContent>
 
-      <DialogActions sx={{ px: 3, py: 1.5, borderTop: 1, borderColor: 'divider' }}>
+      <DialogActions sx={{ px: 3, py: 1.5, borderTop: 1, borderColor: "divider" }}>
         <Button onClick={onClose} variant="outlined">
           Close
         </Button>
