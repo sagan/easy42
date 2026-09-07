@@ -77,18 +77,8 @@ func GenerateWgConfigContent(
 	buf.WriteString(fmt.Sprintf("PublicKey = %s\n", peerEnd.PublicKey))
 	buf.WriteString(fmt.Sprintf("AllowedIPs = %s/128, 0.0.0.0/0, ::/0\n", peerAddrOnly))
 
-	// Resolve endpoint if selfEnd.Endpoint is set or derived
-	endpoint := selfEnd.Endpoint
-	if endpoint == "" && peerNode != nil && !peerNode.IsExternal {
-		peerListenPort := 0
-		if peerEnd != nil && peerEnd.ListenPort > 0 {
-			peerListenPort = peerEnd.ListenPort
-		} else if selfNode != nil {
-			peerListenPort = DerivePortFromIP(selfNode.IP)
-		}
-		derivedEP, _ := ResolvePeerEndpoint(selfNode, peerNode, nil, peerListenPort)
-		endpoint = derivedEP
-	}
+	// Resolve endpoint if selfEnd.Endpoint is set or derived (resolves domain to IP if selfEnd.UseIp is true)
+	endpoint := ResolveLinkEndpoint(selfNode, peerNode, selfEnd, peerEnd)
 
 	if endpoint != "" {
 		buf.WriteString(fmt.Sprintf("Endpoint = %s\n", endpoint))

@@ -135,10 +135,10 @@ func TestPlanSyncDiffingWithState(t *testing.T) {
 		AppliedAt:  time.Now(),
 	})
 
-	birdA, _ := compiler.GenerateBirdConfig(&nodeA, []config.Node{nodeA, nodeB}, []config.Link{*link})
+	birdA, _ := compiler.GenerateBirdConfig(&nodeA, []config.Node{nodeA, nodeB}, []config.Link{*link}, &mgr.store.Get().NetworkSettings)
 	_ = mgr.StateStore().UpdateBirdState("node-a", "127.0.0.1", config.HashConfig(compiler.NormalizeConfig(birdA)), time.Now())
 
-	birdB, _ := compiler.GenerateBirdConfig(&nodeB, []config.Node{nodeA, nodeB}, []config.Link{*link})
+	birdB, _ := compiler.GenerateBirdConfig(&nodeB, []config.Node{nodeA, nodeB}, []config.Link{*link}, &mgr.store.Get().NetworkSettings)
 	_ = mgr.StateStore().UpdateBirdState("node-b", "127.0.0.1", config.HashConfig(compiler.NormalizeConfig(birdB)), time.Now())
 
 	actions3, err := mgr.PlanSync()

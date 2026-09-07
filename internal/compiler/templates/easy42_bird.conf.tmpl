@@ -62,7 +62,7 @@ protocol kernel kernel_v6 {
 
 protocol static static_self {
     ipv4;
-    route {{ .ip }}/32 reject;
+    route SELF_IP/32 reject;
 }
 
 {{if .static_routes}}

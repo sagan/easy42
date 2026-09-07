@@ -51,6 +51,8 @@ export interface LinkEnd {
   public_key: string;
   persistent_keepalive: number;
   mtu?: number;
+  use_ip?: boolean;
+  resolved_endpoint?: string;
 }
 
 export interface Link {

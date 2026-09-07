@@ -34,7 +34,7 @@ if [ ! -f /etc/bird_easy42.conf ]; then
 fi
 
 echo "Adding include to $CONF_FILE..."
-printf "\n# Added by easy42 Device Helper\ninclude \"/etc/bird_easy42.conf\";\n" | $SUDO tee -a "$CONF_FILE" >/dev/null
+printf "\n# Added by easy42 Device Helper\ninclude \"/etc/bird_easy42.conf\";\n" | $SUDO tee "$CONF_FILE" >/dev/null
 
 # Verify syntax if bird is installed
 if command -v bird >/dev/null 2>&1; then

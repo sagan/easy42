@@ -460,7 +460,7 @@ func (m *Manager) DeleteNode(name string) error {
 	return m.store.Save(cfg)
 }
 
-// GetLinks returns all links
+// GetLinks returns all links with resolved endpoints populated
 func (m *Manager) GetLinks() []config.Link {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -468,8 +468,19 @@ func (m *Manager) GetLinks() []config.Link {
 	if cfg == nil {
 		return nil
 	}
+	nodeMap := make(map[string]*config.Node, len(cfg.Nodes))
+	for i := range cfg.Nodes {
+		nodeMap[cfg.Nodes[i].Name] = &cfg.Nodes[i]
+	}
+
 	res := make([]config.Link, len(cfg.Links))
-	copy(res, cfg.Links)
+	for i := range cfg.Links {
+		res[i] = cfg.Links[i]
+		fromNode := nodeMap[res[i].From.Name]
+		toNode := nodeMap[res[i].To.Name]
+		res[i].From.ResolvedEndpoint = compiler.ResolveLinkEndpoint(fromNode, toNode, &res[i].From, &res[i].To)
+		res[i].To.ResolvedEndpoint = compiler.ResolveLinkEndpoint(toNode, fromNode, &res[i].To, &res[i].From)
+	}
 	return res
 }
 
@@ -671,6 +682,15 @@ func (m *Manager) buildLink(cfg *config.Config, n1, n2 *config.Node, listenPort1
 		toMTU = customToEnd.MTU
 	}
 
+	fromUseIP := false
+	if customFromEnd != nil {
+		fromUseIP = customFromEnd.UseIp
+	}
+	toUseIP := false
+	if customToEnd != nil {
+		toUseIP = customToEnd.UseIp
+	}
+
 	link := &config.Link{
 		From: config.LinkEnd{
 			Name:                fromNode.Name,
@@ -682,6 +702,7 @@ func (m *Manager) buildLink(cfg *config.Config, n1, n2 *config.Node, listenPort1
 			PublicKey:           pubKeyFrom,
 			PersistentKeepalive: fromKeepalive,
 			MTU:                 fromMTU,
+			UseIp:               fromUseIP,
 		},
 		To: config.LinkEnd{
 			Name:                toNode.Name,
@@ -693,10 +714,14 @@ func (m *Manager) buildLink(cfg *config.Config, n1, n2 *config.Node, listenPort1
 			PublicKey:           pubKeyTo,
 			PersistentKeepalive: toKeepalive,
 			MTU:                 toMTU,
+			UseIp:               toUseIP,
 		},
 		Tags:       tags,
 		ModifiedAt: time.Now().UTC(),
 	}
+
+	link.From.ResolvedEndpoint = compiler.ResolveLinkEndpoint(fromNode, toNode, &link.From, &link.To)
+	link.To.ResolvedEndpoint = compiler.ResolveLinkEndpoint(toNode, fromNode, &link.To, &link.From)
 
 	return link, nil
 }
@@ -957,6 +982,8 @@ func (m *Manager) UpdateLink(node1Name, node2Name string, listenPort1, listenPor
 		}
 	}
 	link.ModifiedAt = time.Now().UTC()
+	link.From.ResolvedEndpoint = compiler.ResolveLinkEndpoint(fromNode, toNode, &link.From, &link.To)
+	link.To.ResolvedEndpoint = compiler.ResolveLinkEndpoint(toNode, fromNode, &link.To, &link.From)
 
 	if err := m.store.Save(cfg); err != nil {
 		return nil, err
@@ -1023,6 +1050,7 @@ func (m *Manager) UpdateLinkAdvanced(node1Name, node2Name string, customFrom, cu
 		if fromNode.IsExternal && fromEnd.PublicKey != "" {
 			link.From.PublicKey = fromEnd.PublicKey
 		}
+		link.From.UseIp = fromEnd.UseIp
 	}
 
 	if toEnd != nil {
@@ -1044,6 +1072,7 @@ func (m *Manager) UpdateLinkAdvanced(node1Name, node2Name string, customFrom, cu
 		if toNode.IsExternal && toEnd.PublicKey != "" {
 			link.To.PublicKey = toEnd.PublicKey
 		}
+		link.To.UseIp = toEnd.UseIp
 	}
 
 	if tags != nil {
@@ -1085,6 +1114,8 @@ func (m *Manager) UpdateLinkAdvanced(node1Name, node2Name string, customFrom, cu
 	}
 
 	link.ModifiedAt = time.Now().UTC()
+	link.From.ResolvedEndpoint = compiler.ResolveLinkEndpoint(fromNode, toNode, &link.From, &link.To)
+	link.To.ResolvedEndpoint = compiler.ResolveLinkEndpoint(toNode, fromNode, &link.To, &link.From)
 	if err := m.store.Save(cfg); err != nil {
 		return nil, err
 	}

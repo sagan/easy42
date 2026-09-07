@@ -12,6 +12,9 @@ import {
   Alert,
   MenuItem,
   Divider,
+  FormControlLabel,
+  Switch,
+  Chip,
 } from "@mui/material";
 import { Link as LinkIcon, ArrowRightLeft, Edit2, Globe } from "lucide-react";
 import { api } from "../../api/client";
@@ -47,6 +50,8 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
   const [toPort, setToPort] = useState<number>(0);
   const [fromMtu, setFromMtu] = useState<number>(1420);
   const [toMtu, setToMtu] = useState<number>(1420);
+  const [fromUseIp, setFromUseIp] = useState<boolean>(false);
+  const [toUseIp, setToUseIp] = useState<boolean>(false);
 
   // External peering custom fields
   const [localAddress, setLocalAddress] = useState("");
@@ -92,6 +97,8 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
         setRemoteEndpoint("");
         setRemotePublicKey("");
       }
+      setFromUseIp(Boolean(linkToEdit.from.use_ip));
+      setToUseIp(Boolean(linkToEdit.to.use_ip));
       setError(null);
     } else {
       setFromNodeName(initialFrom || "");
@@ -104,6 +111,8 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
       setRemoteAddress("fe80::2/64");
       setRemoteEndpoint("");
       setRemotePublicKey("");
+      setFromUseIp(false);
+      setToUseIp(false);
       setError(null);
     }
   }, [open, linkToEdit, initialFrom, initialTo, nodes]);
@@ -182,6 +191,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
           address: localAddress.trim() || "fe80::1/64",
           endpoint: remoteEndpoint.trim() || undefined,
           mtu: managedMtuVal,
+          use_ip: managedNode === fromNode ? fromUseIp : toUseIp,
         };
 
         const externalEnd = {
@@ -201,6 +211,8 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
             to_node: toNodeName,
             from: reqFrom,
             to: reqTo,
+            from_use_ip: fromUseIp,
+            to_use_ip: toUseIp,
           });
           onLinkUpdated?.(updated);
         } else {
@@ -209,6 +221,8 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
             to_node: toNodeName,
             from: reqFrom,
             to: reqTo,
+            from_use_ip: fromUseIp,
+            to_use_ip: toUseIp,
           });
           onLinkAdded?.(link);
         }
@@ -221,6 +235,20 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
             to_port: toPort || undefined,
             from_mtu: fromMtu || undefined,
             to_mtu: toMtu || undefined,
+            from_use_ip: fromUseIp,
+            to_use_ip: toUseIp,
+            from: {
+              ...linkToEdit.from,
+              listen_port: fromPort || undefined,
+              mtu: fromMtu || undefined,
+              use_ip: fromUseIp,
+            },
+            to: {
+              ...linkToEdit.to,
+              listen_port: toPort || undefined,
+              mtu: toMtu || undefined,
+              use_ip: toUseIp,
+            },
           });
           onLinkUpdated?.(updated);
         } else {
@@ -231,6 +259,14 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
             to_port: toPort || undefined,
             from_mtu: fromMtu || undefined,
             to_mtu: toMtu || undefined,
+            from_use_ip: fromUseIp,
+            to_use_ip: toUseIp,
+            from: {
+              use_ip: fromUseIp,
+            },
+            to: {
+              use_ip: toUseIp,
+            },
           });
           onLinkAdded?.(link);
         }
@@ -405,6 +441,30 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                     helperText="Default: 1420"
                   />
                 </Box>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      size="small"
+                      checked={managedNode === fromNode ? fromUseIp : toUseIp}
+                      onChange={(e) => {
+                        if (managedNode === fromNode) setFromUseIp(e.target.checked);
+                        else setToUseIp(e.target.checked);
+                      }}
+                      color="primary"
+                    />
+                  }
+                  label={
+                    <Box>
+                      <Typography variant="body2" sx={{ fontSize: "0.8rem", fontWeight: 600, color: "#1E293B" }}>
+                        Use IP (Resolve external peer domain to IP)
+                      </Typography>
+                      <Typography variant="caption" sx={{ color: "#64748B", display: "block", fontSize: "0.72rem" }}>
+                        Resolves remote endpoint hostname to IP in easy42 server and uses IP in {managedNode.name}'s WireGuard config.
+                      </Typography>
+                    </Box>
+                  }
+                  sx={{ alignItems: "flex-start", ml: 0, mt: 1.5 }}
+                />
               </Box>
 
               {/* External Peer Configuration */}
@@ -448,6 +508,47 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                   helperText="WireGuard public key of the external node"
                   required
                 />
+                {remoteEndpoint && (
+                  <Box
+                    sx={{
+                      mt: 1.5,
+                      p: 1.2,
+                      borderRadius: 1.5,
+                      bgcolor: "#FFFFFF",
+                      border: "1px solid #DDD6FE",
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                    }}
+                  >
+                    <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600 }}>
+                      Actually Used Endpoint:
+                    </Typography>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 0.8 }}>
+                      <Typography variant="caption" className="mono-font" sx={{ color: "#059669", fontWeight: 700 }}>
+                        {(managedNode === fromNode ? fromUseIp : toUseIp)
+                          ? linkToEdit?.from.resolved_endpoint ||
+                            linkToEdit?.to.resolved_endpoint ||
+                            "(Resolves domain to IP on server)"
+                          : remoteEndpoint}
+                      </Typography>
+                      {(managedNode === fromNode ? fromUseIp : toUseIp) && (
+                        <Chip
+                          label="IP"
+                          size="small"
+                          sx={{
+                            height: 16,
+                            fontSize: "0.6rem",
+                            fontWeight: 800,
+                            bgcolor: "rgba(16, 185, 129, 0.15)",
+                            color: "#059669",
+                            borderRadius: "4px",
+                          }}
+                        />
+                      )}
+                    </Box>
+                  </Box>
+                )}
               </Box>
             </Box>
           ) : (
@@ -490,6 +591,84 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                       helperText="Default: 1420 (-80 overhead)"
                     />
                   </Box>
+
+                  <Box
+                    sx={{
+                      mt: 1.5,
+                      p: 1.5,
+                      borderRadius: 1.5,
+                      backgroundColor: "rgba(255, 255, 255, 0.7)",
+                      border: "1px solid #C7D2FE",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 1,
+                    }}
+                  >
+                    <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600 }}>
+                        Peer Endpoint:
+                      </Typography>
+                      <Typography variant="caption" className="mono-font" sx={{ color: "#D97706", fontWeight: 600 }}>
+                        {linkToEdit?.from.endpoint ||
+                          (toNode?.entrypoints?.[0]?.ip
+                            ? `${toNode.entrypoints[0].ip}:${toPort || (fromNode?.ip ? derivePortFromIP(fromNode.ip) : 20000)}`
+                            : "Dynamic / Automatic")}
+                      </Typography>
+                    </Box>
+
+                    <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600 }}>
+                        Actually Used Endpoint:
+                      </Typography>
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 0.8 }}>
+                        <Typography variant="caption" className="mono-font" sx={{ color: "#059669", fontWeight: 700 }}>
+                          {linkToEdit?.from.resolved_endpoint ||
+                            (fromUseIp
+                              ? "(Resolves domain to IP on server)"
+                              : linkToEdit?.from.endpoint ||
+                                (toNode?.entrypoints?.[0]?.ip
+                                  ? `${toNode.entrypoints[0].ip}:${toPort || (fromNode?.ip ? derivePortFromIP(fromNode.ip) : 20000)}`
+                                  : "Dynamic / None"))}
+                        </Typography>
+                        {fromUseIp && (
+                          <Chip
+                            label="IP"
+                            size="small"
+                            sx={{
+                              height: 16,
+                              fontSize: "0.6rem",
+                              fontWeight: 800,
+                              bgcolor: "rgba(16, 185, 129, 0.15)",
+                              color: "#059669",
+                              borderRadius: "4px",
+                            }}
+                          />
+                        )}
+                      </Box>
+                    </Box>
+
+                    <FormControlLabel
+                      control={
+                        <Switch
+                          size="small"
+                          checked={fromUseIp}
+                          onChange={(e) => setFromUseIp(e.target.checked)}
+                          color="primary"
+                        />
+                      }
+                      label={
+                        <Box>
+                          <Typography variant="body2" sx={{ fontSize: "0.8rem", fontWeight: 600, color: "#1E293B" }}>
+                            Use IP (Resolve peer endpoint domain to IP)
+                          </Typography>
+                          <Typography variant="caption" sx={{ color: "#64748B", display: "block", fontSize: "0.72rem" }}>
+                            Resolves peer's endpoint hostname to IP in easy42 server and uses IP in {fromNode.name}'s WireGuard config.
+                          </Typography>
+                        </Box>
+                      }
+                      sx={{ alignItems: "flex-start", ml: 0, mt: 0.5 }}
+                    />
+                  </Box>
                 </Box>
 
                 {/* To Node End */}
@@ -521,6 +700,84 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                       value={toMtu}
                       onChange={(e) => setToMtu(Number(e.target.value))}
                       helperText="Default: 1420 (-80 overhead)"
+                    />
+                  </Box>
+
+                  <Box
+                    sx={{
+                      mt: 1.5,
+                      p: 1.5,
+                      borderRadius: 1.5,
+                      backgroundColor: "rgba(255, 255, 255, 0.7)",
+                      border: "1px solid #A5F3FC",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 1,
+                    }}
+                  >
+                    <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600 }}>
+                        Peer Endpoint:
+                      </Typography>
+                      <Typography variant="caption" className="mono-font" sx={{ color: "#D97706", fontWeight: 600 }}>
+                        {linkToEdit?.to.endpoint ||
+                          (fromNode?.entrypoints?.[0]?.ip
+                            ? `${fromNode.entrypoints[0].ip}:${fromPort || (toNode?.ip ? derivePortFromIP(toNode.ip) : 20000)}`
+                            : "Dynamic / Automatic")}
+                      </Typography>
+                    </Box>
+
+                    <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600 }}>
+                        Actually Used Endpoint:
+                      </Typography>
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 0.8 }}>
+                        <Typography variant="caption" className="mono-font" sx={{ color: "#059669", fontWeight: 700 }}>
+                          {linkToEdit?.to.resolved_endpoint ||
+                            (toUseIp
+                              ? "(Resolves domain to IP on server)"
+                              : linkToEdit?.to.endpoint ||
+                                (fromNode?.entrypoints?.[0]?.ip
+                                  ? `${fromNode.entrypoints[0].ip}:${fromPort || (toNode?.ip ? derivePortFromIP(toNode.ip) : 20000)}`
+                                  : "Dynamic / None"))}
+                        </Typography>
+                        {toUseIp && (
+                          <Chip
+                            label="IP"
+                            size="small"
+                            sx={{
+                              height: 16,
+                              fontSize: "0.6rem",
+                              fontWeight: 800,
+                              bgcolor: "rgba(16, 185, 129, 0.15)",
+                              color: "#059669",
+                              borderRadius: "4px",
+                            }}
+                          />
+                        )}
+                      </Box>
+                    </Box>
+
+                    <FormControlLabel
+                      control={
+                        <Switch
+                          size="small"
+                          checked={toUseIp}
+                          onChange={(e) => setToUseIp(e.target.checked)}
+                          color="primary"
+                        />
+                      }
+                      label={
+                        <Box>
+                          <Typography variant="body2" sx={{ fontSize: "0.8rem", fontWeight: 600, color: "#1E293B" }}>
+                            Use IP (Resolve peer endpoint domain to IP)
+                          </Typography>
+                          <Typography variant="caption" sx={{ color: "#64748B", display: "block", fontSize: "0.72rem" }}>
+                            Resolves peer's endpoint hostname to IP in easy42 server and uses IP in {toNode.name}'s WireGuard config.
+                          </Typography>
+                        </Box>
+                      }
+                      sx={{ alignItems: "flex-start", ml: 0, mt: 0.5 }}
                     />
                   </Box>
                 </Box>

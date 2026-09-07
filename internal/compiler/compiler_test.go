@@ -1,6 +1,8 @@
 package compiler
 
 import (
+	"fmt"
+	"net"
 	"strings"
 	"testing"
 
@@ -170,5 +172,89 @@ func TestGenerateWgConfigContent(t *testing.T) {
 	}
 	if !strings.Contains(confCustom, "MTU = 1380") {
 		t.Fatalf("Expected custom MTU = 1380, got:\n%s", confCustom)
+	}
+
+	// Test UseIp = false vs true with domain endpoint
+	origLookup := DefaultLookupIP
+	defer func() { DefaultLookupIP = origLookup }()
+	DefaultLookupIP = func(host string) ([]net.IP, error) {
+		if host == "vpn.example.com" {
+			return []net.IP{net.ParseIP("93.184.216.34")}, nil
+		}
+		return nil, fmt.Errorf("unknown host")
+	}
+
+	endA.Endpoint = "vpn.example.com:51820"
+	endA.UseIp = false
+	confDomain, err := GenerateWgConfigContent(nodeA, nodeB, endA, endB, vault)
+	if err != nil {
+		t.Fatalf("GenerateWgConfigContent with domain failed: %v", err)
+	}
+	if !strings.Contains(confDomain, "Endpoint = vpn.example.com:51820") {
+		t.Fatalf("Expected domain endpoint, got:\n%s", confDomain)
+	}
+
+	// Now set UseIp = true
+	endA.UseIp = true
+	confIP, err := GenerateWgConfigContent(nodeA, nodeB, endA, endB, vault)
+	if err != nil {
+		t.Fatalf("GenerateWgConfigContent with UseIp failed: %v", err)
+	}
+	if !strings.Contains(confIP, "Endpoint = 93.184.216.34:51820") {
+		t.Fatalf("Expected resolved IP endpoint 93.184.216.34:51820, got:\n%s", confIP)
+	}
+}
+
+func TestResolveEndpointToIP(t *testing.T) {
+	origLookup := DefaultLookupIP
+	defer func() { DefaultLookupIP = origLookup }()
+
+	DefaultLookupIP = func(host string) ([]net.IP, error) {
+		switch host {
+		case "peer.example.org":
+			return []net.IP{net.ParseIP("203.0.113.50")}, nil
+		case "ipv6.example.org":
+			return []net.IP{net.ParseIP("2001:db8::10")}, nil
+		case "fail.example.org":
+			return nil, fmt.Errorf("dns lookup failed")
+		default:
+			return nil, fmt.Errorf("host not found")
+		}
+	}
+
+	// 1. Domain with IPv4 resolution
+	res1 := ResolveEndpointToIP("peer.example.org:51820")
+	if res1 != "203.0.113.50:51820" {
+		t.Errorf("Expected 203.0.113.50:51820, got %s", res1)
+	}
+
+	// 2. Domain with IPv6 resolution
+	res2 := ResolveEndpointToIP("ipv6.example.org:51820")
+	if res2 != "[2001:db8::10]:51820" {
+		t.Errorf("Expected [2001:db8::10]:51820, got %s", res2)
+	}
+
+	// 3. Already IPv4
+	res3 := ResolveEndpointToIP("198.51.100.1:51820")
+	if res3 != "198.51.100.1:51820" {
+		t.Errorf("Expected 198.51.100.1:51820, got %s", res3)
+	}
+
+	// 4. Already IPv6
+	res4 := ResolveEndpointToIP("[2001:db8::1]:51820")
+	if res4 != "[2001:db8::1]:51820" {
+		t.Errorf("Expected [2001:db8::1]:51820, got %s", res4)
+	}
+
+	// 5. DNS failure fallback
+	res5 := ResolveEndpointToIP("fail.example.org:51820")
+	if res5 != "fail.example.org:51820" {
+		t.Errorf("Expected fail.example.org:51820, got %s", res5)
+	}
+
+	// 6. Empty endpoint
+	res6 := ResolveEndpointToIP("")
+	if res6 != "" {
+		t.Errorf("Expected empty string, got %s", res6)
 	}
 }

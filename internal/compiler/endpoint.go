@@ -1,9 +1,110 @@
 package compiler
 
 import (
-	"easy42/internal/config"
+	"fmt"
+	"net"
+	"strconv"
 	"strings"
+
+	"easy42/internal/config"
 )
+
+// LookupIPFunc defines the signature for IP lookup functions
+type LookupIPFunc func(host string) ([]net.IP, error)
+
+// DefaultLookupIP is the DNS IP resolver function used by ResolveEndpointToIP, swappable for testing
+var DefaultLookupIP LookupIPFunc = net.LookupIP
+
+// ResolveEndpointToIP resolves a domain/hostname inside an endpoint string (e.g. "vpn.example.com:51820")
+// to an IP address (e.g. "1.2.3.4:51820" or "[2001:db8::1]:51820").
+// If the endpoint already contains a numeric IP, or if resolution fails, it returns the endpoint unchanged.
+func ResolveEndpointToIP(endpoint string) string {
+	endpoint = strings.TrimSpace(endpoint)
+	if endpoint == "" {
+		return ""
+	}
+
+	host, portStr, err := net.SplitHostPort(endpoint)
+	if err != nil {
+		// Might not have a port or might be malformed
+		host = endpoint
+		portStr = ""
+	}
+
+	// Remove brackets around IPv6 if any
+	cleanHost := strings.TrimPrefix(strings.TrimSuffix(host, "]"), "[")
+
+	// If already a valid IP address, return original endpoint
+	if ip := net.ParseIP(cleanHost); ip != nil {
+		return endpoint
+	}
+
+	// Perform DNS lookup
+	ips, err := DefaultLookupIP(cleanHost)
+	if err != nil || len(ips) == 0 {
+		return endpoint
+	}
+
+	// Prefer IPv4 for compatibility, fallback to first available IP
+	var selectedIP string
+	for _, ip := range ips {
+		if ip4 := ip.To4(); ip4 != nil {
+			selectedIP = ip4.String()
+			break
+		}
+	}
+	if selectedIP == "" {
+		selectedIP = ips[0].String()
+	}
+
+	if portStr != "" {
+		port, err := strconv.Atoi(portStr)
+		if err == nil {
+			return FormatHostPort(selectedIP, port)
+		}
+		if strings.Contains(selectedIP, ":") && !strings.HasPrefix(selectedIP, "[") {
+			return fmt.Sprintf("[%s]:%s", selectedIP, portStr)
+		}
+		return fmt.Sprintf("%s:%s", selectedIP, portStr)
+	}
+
+	return selectedIP
+}
+
+// ResolveLinkEndpoint determines the actually used endpoint for selfNode's connection to peerNode.
+// If selfEnd.UseIp is true, any hostname in the endpoint will be resolved to an IP in easy42 server.
+func ResolveLinkEndpoint(
+	selfNode *config.Node,
+	peerNode *config.Node,
+	selfEnd *config.LinkEnd,
+	peerEnd *config.LinkEnd,
+) string {
+	if selfEnd == nil {
+		return ""
+	}
+
+	endpoint := selfEnd.Endpoint
+	if endpoint == "" && peerEnd != nil && peerEnd.Endpoint != "" {
+		endpoint = peerEnd.Endpoint
+	}
+
+	if endpoint == "" && peerNode != nil && !peerNode.IsExternal {
+		peerListenPort := 0
+		if peerEnd != nil && peerEnd.ListenPort > 0 {
+			peerListenPort = peerEnd.ListenPort
+		} else if selfNode != nil {
+			peerListenPort = DerivePortFromIP(selfNode.IP)
+		}
+		derivedEP, _ := ResolvePeerEndpoint(selfNode, peerNode, nil, peerListenPort)
+		endpoint = derivedEP
+	}
+
+	if endpoint != "" && selfEnd.UseIp {
+		endpoint = ResolveEndpointToIP(endpoint)
+	}
+
+	return endpoint
+}
 
 // ResolvePeerEndpoint resolves the endpoint string that nodeFrom should use to connect to nodeTo
 func ResolvePeerEndpoint(nodeFrom *config.Node, nodeTo *config.Node, usedPorts map[int]bool, targetListenPort ...int) (string, int) {

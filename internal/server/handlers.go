@@ -365,16 +365,18 @@ func (s *Server) handleGetLinks(w http.ResponseWriter, r *http.Request) {
 
 
 type addLinkRequest struct {
-	FromNode string          `json:"from_node"`
-	ToNode   string          `json:"to_node"`
-	FromPort int             `json:"from_port,omitempty"`
-	ToPort   int             `json:"to_port,omitempty"`
-	FromMTU  int             `json:"from_mtu,omitempty"`
-	ToMTU    int             `json:"to_mtu,omitempty"`
-	MTU      int             `json:"mtu,omitempty"`
-	Tags     []string        `json:"tags,omitempty"`
-	From     *config.LinkEnd `json:"from,omitempty"`
-	To       *config.LinkEnd `json:"to,omitempty"`
+	FromNode  string          `json:"from_node"`
+	ToNode    string          `json:"to_node"`
+	FromPort  int             `json:"from_port,omitempty"`
+	ToPort    int             `json:"to_port,omitempty"`
+	FromMTU   int             `json:"from_mtu,omitempty"`
+	ToMTU     int             `json:"to_mtu,omitempty"`
+	FromUseIP *bool           `json:"from_use_ip,omitempty"`
+	ToUseIP   *bool           `json:"to_use_ip,omitempty"`
+	MTU       int             `json:"mtu,omitempty"`
+	Tags      []string        `json:"tags,omitempty"`
+	From      *config.LinkEnd `json:"from,omitempty"`
+	To        *config.LinkEnd `json:"to,omitempty"`
 }
 
 func (s *Server) handleAddLink(w http.ResponseWriter, r *http.Request) {
@@ -402,6 +404,19 @@ func (s *Server) handleAddLink(w http.ResponseWriter, r *http.Request) {
 		if toMTU <= 0 {
 			toMTU = req.MTU
 		}
+	}
+
+	if req.FromUseIP != nil {
+		if req.From == nil {
+			req.From = &config.LinkEnd{}
+		}
+		req.From.UseIp = *req.FromUseIP
+	}
+	if req.ToUseIP != nil {
+		if req.To == nil {
+			req.To = &config.LinkEnd{}
+		}
+		req.To.UseIp = *req.ToUseIP
 	}
 
 	var link *config.Link
@@ -453,16 +468,18 @@ func (s *Server) handleCreateMeshLinks(w http.ResponseWriter, r *http.Request) {
 }
 
 type updateLinkRequest struct {
-	FromNode string          `json:"from_node"`
-	ToNode   string          `json:"to_node"`
-	FromPort int             `json:"from_port,omitempty"`
-	ToPort   int             `json:"to_port,omitempty"`
-	FromMTU  int             `json:"from_mtu,omitempty"`
-	ToMTU    int             `json:"to_mtu,omitempty"`
-	MTU      int             `json:"mtu,omitempty"`
-	Tags     []string        `json:"tags,omitempty"`
-	From     *config.LinkEnd `json:"from,omitempty"`
-	To       *config.LinkEnd `json:"to,omitempty"`
+	FromNode  string          `json:"from_node"`
+	ToNode    string          `json:"to_node"`
+	FromPort  int             `json:"from_port,omitempty"`
+	ToPort    int             `json:"to_port,omitempty"`
+	FromMTU   int             `json:"from_mtu,omitempty"`
+	ToMTU     int             `json:"to_mtu,omitempty"`
+	FromUseIP *bool           `json:"from_use_ip,omitempty"`
+	ToUseIP   *bool           `json:"to_use_ip,omitempty"`
+	MTU       int             `json:"mtu,omitempty"`
+	Tags      []string        `json:"tags,omitempty"`
+	From      *config.LinkEnd `json:"from,omitempty"`
+	To        *config.LinkEnd `json:"to,omitempty"`
 }
 
 func (s *Server) handleUpdateLink(w http.ResponseWriter, r *http.Request) {
@@ -518,9 +535,34 @@ func (s *Server) handleUpdateLink(w http.ResponseWriter, r *http.Request) {
 		toMTU = req.To.MTU
 	}
 
+	if req.FromUseIP != nil {
+		if req.From == nil {
+			req.From = &config.LinkEnd{}
+		}
+		req.From.UseIp = *req.FromUseIP
+	}
+	if req.ToUseIP != nil {
+		if req.To == nil {
+			req.To = &config.LinkEnd{}
+		}
+		req.To.UseIp = *req.ToUseIP
+	}
+
 	var link *config.Link
 	var err error
 	if req.From != nil || req.To != nil {
+		if req.From != nil && req.From.ListenPort == 0 && fromPort > 0 {
+			req.From.ListenPort = fromPort
+		}
+		if req.To != nil && req.To.ListenPort == 0 && toPort > 0 {
+			req.To.ListenPort = toPort
+		}
+		if req.From != nil && req.From.MTU == 0 && fromMTU > 0 {
+			req.From.MTU = fromMTU
+		}
+		if req.To != nil && req.To.MTU == 0 && toMTU > 0 {
+			req.To.MTU = toMTU
+		}
 		link, err = s.mgr.UpdateLinkAdvanced(fromNode, toNode, req.From, req.To, req.Tags)
 	} else {
 		link, err = s.mgr.UpdateLink(fromNode, toNode, fromPort, toPort, req.Tags, fromMTU, toMTU)

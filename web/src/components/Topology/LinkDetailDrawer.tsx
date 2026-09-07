@@ -293,8 +293,52 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
                 Peer Endpoint:
               </Typography>
               <Typography variant="caption" className="mono-font" sx={{ color: "#D97706", fontWeight: 600 }}>
-                {link.from.endpoint || "Dynamic / None"}
+                {link.from.endpoint || "Dynamic / Automatic"}
               </Typography>
+            </Box>
+
+            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <Typography variant="caption" sx={{ color: "#64748B" }}>
+                Actually Used Endpoint:
+              </Typography>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 0.8 }}>
+                <Typography variant="caption" className="mono-font" sx={{ color: "#059669", fontWeight: 700 }}>
+                  {link.from.resolved_endpoint || link.from.endpoint || "Dynamic / None"}
+                </Typography>
+                {link.from.use_ip && (
+                  <Chip
+                    label="IP Resolved"
+                    size="small"
+                    sx={{
+                      height: 18,
+                      fontSize: "0.62rem",
+                      fontWeight: 700,
+                      bgcolor: "rgba(16, 185, 129, 0.15)",
+                      color: "#059669",
+                      borderRadius: 1,
+                    }}
+                  />
+                )}
+              </Box>
+            </Box>
+
+            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <Typography variant="caption" sx={{ color: "#64748B" }}>
+                Use IP (DNS Resolve):
+              </Typography>
+              <Chip
+                label={link.from.use_ip ? "Enabled" : "Disabled"}
+                size="small"
+                sx={{
+                  height: 20,
+                  fontSize: "0.65rem",
+                  fontWeight: 700,
+                  bgcolor: link.from.use_ip ? "rgba(16, 185, 129, 0.12)" : "rgba(148, 163, 184, 0.15)",
+                  color: link.from.use_ip ? "#059669" : "#64748B",
+                  border: "1px solid",
+                  borderColor: link.from.use_ip ? "rgba(16, 185, 129, 0.3)" : "rgba(148, 163, 184, 0.2)",
+                }}
+              />
             </Box>
 
             <Box sx={{ mt: 0.5 }}>
@@ -408,8 +452,52 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
                 Peer Endpoint:
               </Typography>
               <Typography variant="caption" className="mono-font" sx={{ color: "#D97706", fontWeight: 600 }}>
-                {link.to.endpoint || "Dynamic / None"}
+                {link.to.endpoint || "Dynamic / Automatic"}
               </Typography>
+            </Box>
+
+            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <Typography variant="caption" sx={{ color: "#64748B" }}>
+                Actually Used Endpoint:
+              </Typography>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 0.8 }}>
+                <Typography variant="caption" className="mono-font" sx={{ color: "#059669", fontWeight: 700 }}>
+                  {link.to.resolved_endpoint || link.to.endpoint || "Dynamic / None"}
+                </Typography>
+                {link.to.use_ip && (
+                  <Chip
+                    label="IP Resolved"
+                    size="small"
+                    sx={{
+                      height: 18,
+                      fontSize: "0.62rem",
+                      fontWeight: 700,
+                      bgcolor: "rgba(16, 185, 129, 0.15)",
+                      color: "#059669",
+                      borderRadius: 1,
+                    }}
+                  />
+                )}
+              </Box>
+            </Box>
+
+            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <Typography variant="caption" sx={{ color: "#64748B" }}>
+                Use IP (DNS Resolve):
+              </Typography>
+              <Chip
+                label={link.to.use_ip ? "Enabled" : "Disabled"}
+                size="small"
+                sx={{
+                  height: 20,
+                  fontSize: "0.65rem",
+                  fontWeight: 700,
+                  bgcolor: link.to.use_ip ? "rgba(16, 185, 129, 0.12)" : "rgba(148, 163, 184, 0.15)",
+                  color: link.to.use_ip ? "#059669" : "#64748B",
+                  border: "1px solid",
+                  borderColor: link.to.use_ip ? "rgba(16, 185, 129, 0.3)" : "rgba(148, 163, 184, 0.2)",
+                }}
+              />
             </Box>
 
             <Box sx={{ mt: 0.5 }}>

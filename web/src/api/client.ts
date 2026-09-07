@@ -118,6 +118,8 @@ export const api = {
     to_port?: number;
     from_mtu?: number;
     to_mtu?: number;
+    from_use_ip?: boolean;
+    to_use_ip?: boolean;
     mtu?: number;
     tags?: string[];
     from?: Partial<Link["from"]>;
@@ -139,6 +141,8 @@ export const api = {
     to_port?: number;
     from_mtu?: number;
     to_mtu?: number;
+    from_use_ip?: boolean;
+    to_use_ip?: boolean;
     mtu?: number;
     tags?: string[];
     from?: Partial<Link["from"]>;

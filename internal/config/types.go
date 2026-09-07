@@ -145,6 +145,16 @@ type LinkEnd struct {
 	PublicKey           string `json:"public_key"`            // Wireguard public key
 	PersistentKeepalive int    `json:"persistent_keepalive"`  // Keepalive interval (25 or 0)
 	MTU                 int    `json:"mtu,omitempty"`
+	UseIp               bool   `json:"use_ip,omitempty"`           // Resolve peer's endpoint domain to IP in easy42 server
+	ResolvedEndpoint    string `json:"resolved_endpoint,omitempty"`// Automatically resolved / actually used endpoint
+}
+
+// UseIP returns whether UseIp is enabled on the LinkEnd
+func (l *LinkEnd) UseIP() bool {
+	if l == nil {
+		return false
+	}
+	return l.UseIp
 }
 
 // Link represents a WireGuard link between two nodes

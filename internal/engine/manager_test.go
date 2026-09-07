@@ -1,6 +1,8 @@
 package engine
 
 import (
+	"fmt"
+	"net"
 	"os"
 	"strings"
 	"testing"
@@ -221,6 +223,108 @@ func TestUpdateLink(t *testing.T) {
 	// Keypairs must be preserved
 	if updated.From.PublicKey != origPubKeyA {
 		t.Errorf("Expected public key to remain identical")
+	}
+}
+
+func TestLinkUseIpAndResolvedEndpoint(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "easy42-engine-useip-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	store := config.NewStore(tempDir)
+	pass, err := store.Initialize()
+	if err != nil {
+		t.Fatalf("Failed to init store: %v", err)
+	}
+
+	mgr := NewManager(store)
+	if err := mgr.Unlock(pass); err != nil {
+		t.Fatalf("Failed to unlock manager: %v", err)
+	}
+
+	origLookup := compiler.DefaultLookupIP
+	defer func() { compiler.DefaultLookupIP = origLookup }()
+	compiler.DefaultLookupIP = func(host string) ([]net.IP, error) {
+		if host == "peer.testdomain.com" {
+			return []net.IP{net.ParseIP("198.51.100.99")}, nil
+		}
+		return nil, fmt.Errorf("lookup error")
+	}
+
+	nodeA := config.Node{
+		Name:      "node-a",
+		Host:      "192.168.1.1",
+		Interface: "lo",
+		ASN:       4224420001,
+		IP:        "192.168.100.1",
+	}
+	nodeB := config.Node{
+		Name:      "node-b",
+		Host:      "192.168.1.2",
+		Interface: "lo",
+		ASN:       4224420002,
+		IP:        "192.168.100.2",
+		Entrypoints: []config.Entrypoint{
+			{IP: "peer.testdomain.com"},
+		},
+	}
+	if err := mgr.AddNode(nodeA); err != nil {
+		t.Fatalf("AddNode nodeA failed: %v", err)
+	}
+	if err := mgr.AddNode(nodeB); err != nil {
+		t.Fatalf("AddNode nodeB failed: %v", err)
+	}
+
+	// Add link with from.UseIp = false
+	link, err := mgr.AddLinkAdvanced("node-a", "node-b", &config.LinkEnd{UseIp: false}, &config.LinkEnd{}, nil)
+	if err != nil {
+		t.Fatalf("AddLinkAdvanced failed: %v", err)
+	}
+	if link.From.UseIp {
+		t.Errorf("Expected link.From.UseIp to be false")
+	}
+
+	links := mgr.GetLinks()
+	if len(links) != 1 {
+		t.Fatalf("Expected 1 link, got %d", len(links))
+	}
+	if links[0].From.UseIp {
+		t.Errorf("Expected From.UseIp to be false")
+	}
+	if !strings.Contains(links[0].From.ResolvedEndpoint, "peer.testdomain.com") {
+		t.Errorf("Expected domain in From.ResolvedEndpoint when UseIp=false, got %s", links[0].From.ResolvedEndpoint)
+	}
+
+	// Update link with from.UseIp = true
+	updated, err := mgr.UpdateLinkAdvanced("node-a", "node-b", &config.LinkEnd{UseIp: true}, &config.LinkEnd{}, nil)
+	if err != nil {
+		t.Fatalf("UpdateLinkAdvanced failed: %v", err)
+	}
+	if !updated.From.UseIp {
+		t.Errorf("Expected updated From.UseIp to be true")
+	}
+	if !strings.Contains(updated.From.ResolvedEndpoint, "198.51.100.99") {
+		t.Errorf("Expected resolved IP in From.ResolvedEndpoint when UseIp=true, got %s", updated.From.ResolvedEndpoint)
+	}
+
+	// Verify GetLinks also returns resolved IP
+	links = mgr.GetLinks()
+	if !links[0].From.UseIp {
+		t.Errorf("Expected GetLinks From.UseIp to be true")
+	}
+	if !strings.Contains(links[0].From.ResolvedEndpoint, "198.51.100.99") {
+		t.Errorf("Expected GetLinks From.ResolvedEndpoint to contain 198.51.100.99, got %s", links[0].From.ResolvedEndpoint)
+	}
+
+	// Verify generated WireGuard config for nodeA uses the resolved IP
+	wgConf, err := compiler.GenerateWgConfigContent(&nodeA, &nodeB, &links[0].From, &links[0].To, mgr.Vault())
+	if err != nil {
+		t.Fatalf("GenerateWgConfigContent failed: %v", err)
+	}
+	if !strings.Contains(wgConf, "Endpoint = 198.51.100.99:") {
+		t.Errorf("Expected wg config to contain Endpoint = 198.51.100.99:, got:\n%s", wgConf)
 	}
 }
 
