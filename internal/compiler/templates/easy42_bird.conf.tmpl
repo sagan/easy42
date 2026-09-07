@@ -4,13 +4,11 @@ define TABLE = {{ .table }};
 
 define INTERNET = [ 0.0.0.0/0, 0.0.0.0/1, 128.0.0.0/1 ];
 
-router id SELF_IP;
-
 {{if .confed_as}}
 define CONFED_AS = {{ .confed_as }};
-confederation CONFED_AS;
-confederation member {{ .confed_members }};
 {{end}}
+
+router id SELF_IP;
 
 protocol device {
     scan time 10;
@@ -21,7 +19,7 @@ protocol kernel kernel_v4 {
         export filter {
             # Force Linux to use this source IP
             krt_prefsrc = SELF_IP;
-            if source ~ [ RTS_BGP, RTS_STATIC ] then accept;
+            if source ~ [ RTS_BGP ] then accept;
             reject;
         };
         import none;
@@ -62,7 +60,7 @@ protocol kernel kernel_v6 {
 
 protocol static static_self {
     ipv4;
-    route SELF_IP/32 reject;
+    route {{ .ip }}/32 reject;
 }
 
 {{if .static_routes}}
@@ -77,7 +75,13 @@ protocol static static_v4 {
 
 template bgp easy42_peer {
     # Required for link-local peering
-    direct; 
+    direct;
+
+    {{if .confed_as}}
+    confederation CONFED_AS;
+    confederation member yes;
+    {{end}}
+
     ipv4 {
         # This tells Bird to send IPv4 routes over the IPv6 session
         extended next hop on;
