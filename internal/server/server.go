@@ -85,6 +85,7 @@ func New(cfg Config) *Server {
 			r.Get("/nodes/status", s.handleGetNodeStatuses)
 			r.Post("/nodes/{name}/status", s.handleRefreshNodeStatus)
 			r.Get("/nodes/{name}/bird", s.handleGetNodeBirdConfig)
+			r.Get("/nodes/{name}/nftables", s.handleGetNodeNftablesConfig)
 
 			// Links
 			r.Get("/links", s.handleGetLinks)

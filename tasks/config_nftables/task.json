@@ -1,0 +1,7 @@
+{
+  "id": "config_nftables",
+  "title": "Configure Nftables Autostart",
+  "description": "Includes /etc/easy42.nft in the system nftables configuration file (/etc/nftables.conf or /etc/nftables.nft) and ensures nftables autostart.",
+  "category": "Configuration",
+  "weight": 35
+}

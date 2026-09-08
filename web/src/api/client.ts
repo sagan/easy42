@@ -108,6 +108,8 @@ export const api = {
     }),
   getNodeBirdConfig: (name: string) =>
     request<{ node: string; config: string }>(`/nodes/${encodeURIComponent(name)}/bird`),
+  getNodeNftablesConfig: (name: string) =>
+    request<{ node: string; config: string }>(`/nodes/${encodeURIComponent(name)}/nftables`),
 
   // Links
   getLinks: () => request<Link[]>("/links"),

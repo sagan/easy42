@@ -1513,6 +1513,51 @@ func (m *Manager) PlanSync() ([]config.SyncAction, error) {
 		})
 	}
 
+	// 4. Node nftables configurations
+	for _, n := range nodes {
+		if n.IsExternal {
+			continue
+		}
+		node := n
+		nftConf, err := compiler.GenerateNftablesConfig(&node, nodes, links, &cfg.NetworkSettings)
+		if err != nil {
+			continue
+		}
+
+		targetFile := compiler.DefaultNftablesConfigPath
+		desiredHash := config.HashConfig(compiler.NormalizeConfig(nftConf))
+
+		needsApply := true
+		status := "pending"
+		diffStatus := "create"
+
+		if stNode, ok := currentState.Nodes[node.Name]; ok {
+			if stNode.NftablesConfigHash != "" {
+				if stNode.NftablesConfigHash == desiredHash {
+					needsApply = false
+					status = "synced"
+					diffStatus = "synced"
+				} else {
+					diffStatus = "update"
+				}
+			}
+		}
+
+		actions = append(actions, config.SyncAction{
+			NodeName:    node.Name,
+			Host:        node.Host,
+			Type:        config.ActionSyncNftablesConfig,
+			Interface:   "nftables",
+			TargetFile:  targetFile,
+			FileContent: nftConf,
+			Command:     targetFile,
+			Description: fmt.Sprintf("Configure nftables firewall (%s) on %s", targetFile, node.Name),
+			NeedsApply:  needsApply,
+			Status:      status,
+			DiffStatus:  diffStatus,
+		})
+	}
+
 	// Sort actions: pending (NeedsApply == true) first, then synced.
 	// Within each group, order by actionPriority (clean/delete -> wireguard -> bird), then NodeName and Interface
 	sort.Slice(actions, func(i, j int) bool {
@@ -1620,6 +1665,43 @@ func (m *Manager) ExecuteSync(force ...bool) ([]config.SyncResult, error) {
 			// Record successful application in stateStore
 			hash := config.HashConfig(compiler.NormalizeConfig(act.FileContent))
 			_ = m.stateStore.UpdateBirdState(act.NodeName, act.Host, hash, time.Now())
+			continue
+		}
+
+		// Handle nftables configuration update
+		if act.Type == config.ActionSyncNftablesConfig {
+			if needsUpdate {
+				if err := ssh.AtomicWriteFile(sftpClient, act.TargetFile, []byte(act.FileContent), 0755); err != nil {
+					res.Success = false
+					res.Error = fmt.Sprintf("Failed to write nftables config: %v", err)
+					res.Duration = float64(time.Since(start).Milliseconds())
+					results = append(results, res)
+					continue
+				}
+
+				// Apply nftables rules on remote device
+				cmd := act.Command
+				if cmd == "" {
+					cmd = "/etc/easy42.nft"
+				}
+				out, err := ssh.RunCommand(sshClient, fmt.Sprintf("chmod +x %s 2>/dev/null; %s", act.TargetFile, cmd))
+				res.Output = strings.TrimSpace(out)
+				if err != nil {
+					res.Success = false
+					res.Error = fmt.Sprintf("Failed to apply nftables rules (%s): %v", cmd, err)
+					res.Duration = float64(time.Since(start).Milliseconds())
+					results = append(results, res)
+					continue
+				}
+			}
+
+			res.Success = true
+			res.Duration = float64(time.Since(start).Milliseconds())
+			results = append(results, res)
+
+			// Record successful application in stateStore
+			hash := config.HashConfig(compiler.NormalizeConfig(act.FileContent))
+			_ = m.stateStore.UpdateNftablesState(act.NodeName, act.Host, hash, time.Now())
 			continue
 		}
 
@@ -1929,12 +2011,14 @@ func (m *Manager) UpdateState() (*config.NetworkState, []string, error) {
 	for _, res := range results {
 		existingNode := currentState.Nodes[res.nodeName]
 		currentState.Nodes[res.nodeName] = config.StateNode{
-			Name:           res.nodeName,
-			Host:           res.host,
-			LastSeen:       time.Now(),
-			BirdConfigHash: existingNode.BirdConfigHash,
-			BirdAppliedAt:  existingNode.BirdAppliedAt,
-			Interfaces:     res.ifaces,
+			Name:               res.nodeName,
+			Host:               res.host,
+			LastSeen:           time.Now(),
+			BirdConfigHash:     existingNode.BirdConfigHash,
+			BirdAppliedAt:      existingNode.BirdAppliedAt,
+			NftablesConfigHash: existingNode.NftablesConfigHash,
+			NftablesAppliedAt:  existingNode.NftablesAppliedAt,
+			Interfaces:         res.ifaces,
 		}
 	}
 
@@ -1996,6 +2080,46 @@ func (m *Manager) GenerateBirdConfigWithTemplate(nodeName string, tmplContent st
 	return compiler.GenerateBirdConfigWithTemplate(tmplContent, targetNode, cfg.Nodes, cfg.Links, &cfg.NetworkSettings)
 }
 
+// GenerateNftablesConfig generates the nftables configuration for a given node
+func (m *Manager) GenerateNftablesConfig(nodeName string) (string, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	cfg := m.store.Get()
+	var targetNode *config.Node
+	for i := range cfg.Nodes {
+		if cfg.Nodes[i].Name == nodeName {
+			targetNode = &cfg.Nodes[i]
+			break
+		}
+	}
+	if targetNode == nil {
+		return "", fmt.Errorf("node %s not found", nodeName)
+	}
+
+	return compiler.GenerateNftablesConfig(targetNode, cfg.Nodes, cfg.Links, &cfg.NetworkSettings)
+}
+
+// GenerateNftablesConfigWithTemplate generates nftables config using a custom template
+func (m *Manager) GenerateNftablesConfigWithTemplate(nodeName string, tmplContent string) (string, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	cfg := m.store.Get()
+	var targetNode *config.Node
+	for i := range cfg.Nodes {
+		if cfg.Nodes[i].Name == nodeName {
+			targetNode = &cfg.Nodes[i]
+			break
+		}
+	}
+	if targetNode == nil {
+		return "", fmt.Errorf("node %s not found", nodeName)
+	}
+
+	return compiler.GenerateNftablesConfigWithTemplate(tmplContent, targetNode, cfg.Nodes, cfg.Links, &cfg.NetworkSettings)
+}
+
 // GetNetworkSettings returns current network settings from config
 func (m *Manager) GetNetworkSettings() config.NetworkSettings {
 	m.mu.RLock()
@@ -2031,8 +2155,10 @@ func actionPriority(t config.ActionType) int {
 		return 2
 	case config.ActionSyncBirdConfig:
 		return 3
-	default:
+	case config.ActionSyncNftablesConfig:
 		return 4
+	default:
+		return 5
 	}
 }
 

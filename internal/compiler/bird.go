@@ -89,6 +89,13 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 		delete(ctx, "external_ip")
 	}
 
+	extIP6 := strings.TrimSpace(node.ExternalIP6)
+	if extIP6 != "" {
+		ctx["external_ip6"] = extIP6
+	} else {
+		delete(ctx, "external_ip6")
+	}
+
 	// NetworkSettings / BGP Confederation / Community support
 	var commExternal string
 	if settings != nil && settings.PublicASN > 0 {
@@ -199,6 +206,7 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 			remoteNodeMap["name"] = remoteNode.Name
 			remoteNodeMap["ip"] = remoteNode.IP
 			remoteNodeMap["external_ip"] = remoteNode.ExternalIP
+			remoteNodeMap["external_ip6"] = remoteNode.ExternalIP6
 			remoteNodeMap["interface"] = remoteNode.Interface
 			remoteNodeMap["is_external"] = remoteNode.IsExternal
 		} else {

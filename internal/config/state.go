@@ -40,9 +40,11 @@ type StateNode struct {
 	Name           string                    `json:"name"`
 	Host           string                    `json:"host"`
 	LastSeen       time.Time                 `json:"last_seen,omitempty"`
-	BirdConfigHash string                    `json:"bird_config_hash,omitempty"`
-	BirdAppliedAt  *time.Time                `json:"bird_applied_at,omitempty"`
-	Interfaces     map[string]StateInterface `json:"interfaces"` // key: interface name e.g. "wg42node2"
+	BirdConfigHash     string                    `json:"bird_config_hash,omitempty"`
+	BirdAppliedAt      *time.Time                `json:"bird_applied_at,omitempty"`
+	NftablesConfigHash string                    `json:"nftables_config_hash,omitempty"`
+	NftablesAppliedAt  *time.Time                `json:"nftables_applied_at,omitempty"`
+	Interfaces         map[string]StateInterface `json:"interfaces"` // key: interface name e.g. "wg42node2"
 }
 
 // NetworkState represents the recorded state in state.json
@@ -227,6 +229,40 @@ func (s *StateStore) UpdateBirdState(nodeName, host, configHash string, appliedA
 	node.LastSeen = time.Now()
 	node.BirdConfigHash = configHash
 	node.BirdAppliedAt = &appliedAt
+	s.state.Nodes[nodeName] = node
+
+	return s.saveLocked()
+}
+
+// UpdateNftablesState records or updates the applied nftables config hash for a node
+func (s *StateStore) UpdateNftablesState(nodeName, host, configHash string, appliedAt time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.state == nil {
+		s.state = &NetworkState{
+			Version:   1,
+			UpdatedAt: time.Now(),
+			Nodes:     make(map[string]StateNode),
+		}
+	}
+
+	node, exists := s.state.Nodes[nodeName]
+	if !exists {
+		node = StateNode{
+			Name:       nodeName,
+			Host:       host,
+			LastSeen:   time.Now(),
+			Interfaces: make(map[string]StateInterface),
+		}
+	}
+	if node.Interfaces == nil {
+		node.Interfaces = make(map[string]StateInterface)
+	}
+	node.Host = host
+	node.LastSeen = time.Now()
+	node.NftablesConfigHash = configHash
+	node.NftablesAppliedAt = &appliedAt
 	s.state.Nodes[nodeName] = node
 
 	return s.saveLocked()

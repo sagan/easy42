@@ -356,6 +356,26 @@ func (s *Server) handleGetNodeBirdConfig(w http.ResponseWriter, r *http.Request)
 	})
 }
 
+func (s *Server) handleGetNodeNftablesConfig(w http.ResponseWriter, r *http.Request) {
+	name := chi.URLParam(r, "name")
+	nftConfig, err := s.mgr.GenerateNftablesConfig(name)
+	if err != nil {
+		writeError(w, http.StatusNotFound, err.Error())
+		return
+	}
+
+	if r.URL.Query().Get("raw") == "true" || r.Header.Get("Accept") == "text/plain" {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		_, _ = w.Write([]byte(nftConfig))
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"node":   name,
+		"config": nftConfig,
+	})
+}
+
 // Link Handlers
 
 func (s *Server) handleGetLinks(w http.ResponseWriter, r *http.Request) {

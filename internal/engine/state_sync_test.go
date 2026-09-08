@@ -59,8 +59,8 @@ func TestPlanSyncDiffingWithState(t *testing.T) {
 	if err != nil {
 		t.Fatalf("PlanSync failed: %v", err)
 	}
-	if len(actions) != 4 {
-		t.Fatalf("Expected 4 actions (2 WG + 2 BIRD), got %d", len(actions))
+	if len(actions) != 6 {
+		t.Fatalf("Expected 6 actions (2 WG + 2 BIRD + 2 NFT), got %d", len(actions))
 	}
 	for _, act := range actions {
 		if !act.NeedsApply {
@@ -91,8 +91,8 @@ func TestPlanSyncDiffingWithState(t *testing.T) {
 	if err != nil {
 		t.Fatalf("PlanSync 2 failed: %v", err)
 	}
-	if len(actions2) != 4 {
-		t.Fatalf("Expected 4 actions, got %d", len(actions2))
+	if len(actions2) != 6 {
+		t.Fatalf("Expected 6 actions, got %d", len(actions2))
 	}
 
 	var nodeAWgAction, nodeBWgAction *config.SyncAction
@@ -140,6 +140,12 @@ func TestPlanSyncDiffingWithState(t *testing.T) {
 
 	birdB, _ := compiler.GenerateBirdConfig(&nodeB, []config.Node{nodeA, nodeB}, []config.Link{*link}, &mgr.store.Get().NetworkSettings)
 	_ = mgr.StateStore().UpdateBirdState("node-b", "127.0.0.1", config.HashConfig(compiler.NormalizeConfig(birdB)), time.Now())
+
+	nftA, _ := compiler.GenerateNftablesConfig(&nodeA, []config.Node{nodeA, nodeB}, []config.Link{*link}, &mgr.store.Get().NetworkSettings)
+	_ = mgr.StateStore().UpdateNftablesState("node-a", "127.0.0.1", config.HashConfig(compiler.NormalizeConfig(nftA)), time.Now())
+
+	nftB, _ := compiler.GenerateNftablesConfig(&nodeB, []config.Node{nodeA, nodeB}, []config.Link{*link}, &mgr.store.Get().NetworkSettings)
+	_ = mgr.StateStore().UpdateNftablesState("node-b", "127.0.0.1", config.HashConfig(compiler.NormalizeConfig(nftB)), time.Now())
 
 	actions3, err := mgr.PlanSync()
 	if err != nil {
@@ -269,6 +275,107 @@ func TestPlanSyncBirdConfigDiffing(t *testing.T) {
 	}
 	if birdActionUpdated.DiffStatus != "update" {
 		t.Errorf("Expected DiffStatus 'update', got %s", birdActionUpdated.DiffStatus)
+	}
+}
+
+func TestNftablesConfigStateSync(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "easy42-nft-sync-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	store := config.NewStore(tempDir)
+	pass, err := store.Initialize()
+	if err != nil {
+		t.Fatalf("Initialize failed: %v", err)
+	}
+
+	mgr := NewManager(store)
+	if err := mgr.Unlock(pass); err != nil {
+		t.Fatalf("Failed to unlock: %v", err)
+	}
+
+	node := config.Node{
+		Name:        "nft-node",
+		Host:        "127.0.0.1",
+		IP:          "192.168.100.5",
+		ExternalIP:  "172.20.229.13",
+		ExternalIP6: "fd42:a159:f9f0::d",
+		Interface:   "lo",
+		ASN:         4224420005,
+	}
+	if err := mgr.AddNode(node); err != nil {
+		t.Fatalf("AddNode failed: %v", err)
+	}
+
+	actions, err := mgr.PlanSync()
+	if err != nil {
+		t.Fatalf("PlanSync failed: %v", err)
+	}
+
+	var nftAction *config.SyncAction
+	for i := range actions {
+		if actions[i].Type == config.ActionSyncNftablesConfig && actions[i].NodeName == "nft-node" {
+			nftAction = &actions[i]
+			break
+		}
+	}
+	if nftAction == nil {
+		t.Fatalf("Expected nftables sync action for nft-node")
+	}
+	if nftAction.TargetFile != "/etc/easy42.nft" {
+		t.Errorf("Expected target file /etc/easy42.nft, got %s", nftAction.TargetFile)
+	}
+	if nftAction.Command != "/etc/easy42.nft" {
+		t.Errorf("Expected command '/etc/easy42.nft', got %s", nftAction.Command)
+	}
+	if !nftAction.NeedsApply {
+		t.Errorf("Expected NeedsApply initially")
+	}
+
+	// Record synced nftables state
+	hash := config.HashConfig(compiler.NormalizeConfig(nftAction.FileContent))
+	_ = mgr.StateStore().UpdateNftablesState("nft-node", "10.0.0.1", hash, time.Now())
+
+	actionsAfterSync, err := mgr.PlanSync()
+	if err != nil {
+		t.Fatalf("PlanSync after state update failed: %v", err)
+	}
+	var nftActionSynced *config.SyncAction
+	for i := range actionsAfterSync {
+		if actionsAfterSync[i].Type == config.ActionSyncNftablesConfig && actionsAfterSync[i].NodeName == "nft-node" {
+			nftActionSynced = &actionsAfterSync[i]
+			break
+		}
+	}
+	if nftActionSynced.NeedsApply {
+		t.Errorf("Expected nftables action to be synced (needsApply = false)")
+	}
+	if nftActionSynced.DiffStatus != "synced" {
+		t.Errorf("Expected DiffStatus 'synced', got %s", nftActionSynced.DiffStatus)
+	}
+
+	// Update node ExternalIP, nftables config diff should be triggered
+	node.ExternalIP = "172.20.229.99"
+	_ = mgr.UpdateNode(node.Name, node)
+
+	actionsAfterNodeUpdate, err := mgr.PlanSync()
+	if err != nil {
+		t.Fatalf("PlanSync after node update failed: %v", err)
+	}
+	var nftActionUpdated *config.SyncAction
+	for i := range actionsAfterNodeUpdate {
+		if actionsAfterNodeUpdate[i].Type == config.ActionSyncNftablesConfig && actionsAfterNodeUpdate[i].NodeName == "nft-node" {
+			nftActionUpdated = &actionsAfterNodeUpdate[i]
+			break
+		}
+	}
+	if !nftActionUpdated.NeedsApply {
+		t.Errorf("Expected nftables action to need apply after ExternalIP change")
+	}
+	if nftActionUpdated.DiffStatus != "update" {
+		t.Errorf("Expected DiffStatus 'update', got %s", nftActionUpdated.DiffStatus)
 	}
 }
 

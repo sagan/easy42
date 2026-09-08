@@ -134,3 +134,44 @@ func TestStateStoreBirdState(t *testing.T) {
 		t.Errorf("Loaded appliedAt mismatch: %v vs %v", appliedAt, nodeLoaded.BirdAppliedAt)
 	}
 }
+
+func TestUpdateNftablesState(t *testing.T) {
+	tempDir := t.TempDir()
+	store := NewStateStore(tempDir)
+
+	appliedAt := time.Now().Truncate(time.Second)
+	testHash := HashConfig("table inet easy42 { }")
+
+	if err := store.UpdateNftablesState("node-1", "10.0.0.1", testHash, appliedAt); err != nil {
+		t.Fatalf("UpdateNftablesState failed: %v", err)
+	}
+
+	// Verify in-memory state
+	node, ok := store.Get().Nodes["node-1"]
+	if !ok {
+		t.Fatalf("Expected node-1 in state")
+	}
+	if node.NftablesConfigHash != testHash {
+		t.Errorf("Expected hash %s, got %s", testHash, node.NftablesConfigHash)
+	}
+	if node.NftablesAppliedAt == nil || !node.NftablesAppliedAt.Equal(appliedAt) {
+		t.Errorf("Expected appliedAt %v, got %v", appliedAt, node.NftablesAppliedAt)
+	}
+
+	// Reload from disk in a new StateStore instance
+	store2 := NewStateStore(tempDir)
+	st2, err := store2.Load()
+	if err != nil {
+		t.Fatalf("Load store2 failed: %v", err)
+	}
+	nodeLoaded, ok := st2.Nodes["node-1"]
+	if !ok {
+		t.Fatalf("Expected node-1 in loaded store2")
+	}
+	if nodeLoaded.NftablesConfigHash != testHash {
+		t.Errorf("Loaded hash mismatch: %s vs %s", nodeLoaded.NftablesConfigHash, testHash)
+	}
+	if nodeLoaded.NftablesAppliedAt == nil || !nodeLoaded.NftablesAppliedAt.Equal(appliedAt) {
+		t.Errorf("Loaded appliedAt mismatch: %v vs %v", appliedAt, nodeLoaded.NftablesAppliedAt)
+	}
+}

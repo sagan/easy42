@@ -59,6 +59,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
   const [table, setTable] = useState<number>(254);
   const [externalTable, setExternalTable] = useState<number | "">("");
   const [externalIp, setExternalIp] = useState("");
+  const [externalIp6, setExternalIp6] = useState("");
   const [staticRoutesStr, setStaticRoutesStr] = useState("");
   interface EditableKernelRoute {
     id: string;
@@ -88,6 +89,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
       setTable(nodeToEdit.table ?? 254);
       setExternalTable(nodeToEdit.external_table ?? "");
       setExternalIp(nodeToEdit.external_ip || "");
+      setExternalIp6(nodeToEdit.external_ip6 || "");
       setStaticRoutesStr(nodeToEdit.static_routes?.join(", ") || "");
       if (nodeToEdit.routes && nodeToEdit.routes.length > 0) {
         setKernelRoutes(
@@ -147,6 +149,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
       setTable(254);
       setExternalTable("");
       setExternalIp("");
+      setExternalIp6("");
       setStaticRoutesStr("");
       setKernelRoutes([]);
       setEntrypoints([{ id: "nat-fallback", ip: "", portStr: "", tagStr: "nat", mtuStr: "", isNone: true }]);
@@ -367,6 +370,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
             ? Number(externalTable)
             : undefined,
         external_ip: externalIp.trim() ? externalIp.trim() : undefined,
+        external_ip6: externalIp6.trim() ? externalIp6.trim() : undefined,
         static_routes: parsedStaticRoutes.length > 0 ? parsedStaticRoutes : undefined,
         routes: parsedRoutes.length > 0 ? parsedRoutes : undefined,
         x: nodeToEdit?.x,
@@ -872,6 +876,16 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                     onChange={(e) => setExternalIp(e.target.value)}
                     placeholder="e.g. 172.20.100.1"
                     helperText="Source IP for external routes in external table (optional)"
+                    disabled={saving}
+                  />
+
+                  <TextField
+                    label="External IPv6 Address (DN42)"
+                    size="small"
+                    value={externalIp6}
+                    onChange={(e) => setExternalIp6(e.target.value)}
+                    placeholder="e.g. fd42:a159:f9f0::1"
+                    helperText="Source IPv6 for external peering SNAT rules (optional)"
                     disabled={saving}
                   />
 

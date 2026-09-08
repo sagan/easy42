@@ -12,12 +12,13 @@ import (
 )
 
 var (
-	nodeName       string
-	nodeHost       string
-	nodeIP         string
-	nodeExternalIP string
-	nodeIface      string
-	nodeASN        uint64
+	nodeName        string
+	nodeHost        string
+	nodeIP          string
+	nodeExternalIP  string
+	nodeExternalIP6 string
+	nodeIface       string
+	nodeASN         uint64
 )
 
 var nodeCmd = &cobra.Command{
@@ -61,6 +62,7 @@ var nodeAddCmd = &cobra.Command{
 			Host:        nodeHost,
 			IP:          nodeIP,
 			ExternalIP:  nodeExternalIP,
+			ExternalIP6: nodeExternalIP6,
 			Interface:   nodeIface,
 			ASN:         nodeASN,
 			Entrypoints: make([]config.Entrypoint, 0),
@@ -143,11 +145,32 @@ var nodeBirdCmd = &cobra.Command{
 	},
 }
 
+var nodeNftCmd = &cobra.Command{
+	Use:   "nft [name]",
+	Short: "Generate nftables firewall rules for a node",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		name := args[0]
+		store := config.NewStore(GetDataDir())
+		if _, err := store.Load(); err != nil {
+			return err
+		}
+		mgr := engine.NewManager(store)
+		nftConf, err := mgr.GenerateNftablesConfig(name)
+		if err != nil {
+			return err
+		}
+		fmt.Print(nftConf)
+		return nil
+	},
+}
+
 func init() {
 	nodeAddCmd.Flags().StringVarP(&nodeName, "name", "n", "", "Node name (max 11 chars)")
 	nodeAddCmd.Flags().StringVarP(&nodeHost, "host", "H", "", "SSH host or alias")
 	nodeAddCmd.Flags().StringVarP(&nodeIP, "ip", "i", "", "Main IPv4 address")
 	nodeAddCmd.Flags().StringVar(&nodeExternalIP, "external-ip", "", "External/DN42 IPv4 address")
+	nodeAddCmd.Flags().StringVar(&nodeExternalIP6, "external-ip6", "", "External/DN42 IPv6 address")
 	nodeAddCmd.Flags().StringVar(&nodeIface, "iface", "lo", "Main IP interface name")
 	nodeAddCmd.Flags().Uint64VarP(&nodeASN, "asn", "a", 4224420001, "AS number")
 	_ = nodeAddCmd.MarkFlagRequired("name")
@@ -159,5 +182,6 @@ func init() {
 	nodeCmd.AddCommand(nodeProbeCmd)
 	nodeCmd.AddCommand(nodeRemoveCmd)
 	nodeCmd.AddCommand(nodeBirdCmd)
+	nodeCmd.AddCommand(nodeNftCmd)
 	RootCmd.AddCommand(nodeCmd)
 }

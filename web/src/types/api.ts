@@ -29,6 +29,7 @@ export interface Node {
   description?: string;
   ip?: string;
   external_ip?: string;
+  external_ip6?: string;
   interface?: string;
   asn: number;
   entrypoints?: Entrypoint[];
@@ -166,6 +167,8 @@ export interface StateNode {
   last_seen?: string;
   bird_config_hash?: string;
   bird_applied_at?: string;
+  nftables_config_hash?: string;
+  nftables_applied_at?: string;
   interfaces: Record<string, StateInterface>;
 }
 

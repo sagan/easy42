@@ -10,14 +10,15 @@ func TestGetTasks(t *testing.T) {
 		t.Fatalf("GetTasks failed: %v", err)
 	}
 
-	if len(taskList) < 5 {
-		t.Fatalf("expected at least 5 tasks, got %d", len(taskList))
+	if len(taskList) < 6 {
+		t.Fatalf("expected at least 6 tasks, got %d", len(taskList))
 	}
 
 	expectedIDs := []string{
 		"install_wireguard",
 		"install_bird",
 		"config_bird",
+		"config_nftables",
 		"sysctl_params",
 		"autostart_interfaces",
 	}

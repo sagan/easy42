@@ -60,6 +60,9 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
   const [viewingBird, setViewingBird] = useState(false);
   const [birdConfig, setBirdConfig] = useState<string | null>(null);
   const [loadingBird, setLoadingBird] = useState(false);
+  const [viewingNftables, setViewingNftables] = useState(false);
+  const [nftablesConfig, setNftablesConfig] = useState<string | null>(null);
+  const [loadingNftables, setLoadingNftables] = useState(false);
 
   if (!node) return null;
 
@@ -74,6 +77,20 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
       setBirdConfig(`# Failed to load BIRD config: ${e.message}`);
     } finally {
       setLoadingBird(false);
+    }
+  };
+
+  const handleOpenNftablesConfig = async () => {
+    setViewingNftables(true);
+    setLoadingNftables(true);
+    try {
+      const res = await api.getNodeNftablesConfig(node.name);
+      setNftablesConfig(res.config);
+    } catch (err: unknown) {
+      const e = err as Error;
+      setNftablesConfig(`# Failed to load nftables config: ${e.message}`);
+    } finally {
+      setLoadingNftables(false);
     }
   };
 
@@ -200,6 +217,17 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
             </Typography>
             <Typography variant="body2" className="mono-font" sx={{ fontWeight: 600, color: "#7C3AED", mt: 0.5 }}>
               {node.external_ip}
+            </Typography>
+          </Box>
+        ) : null}
+
+        {node.external_ip6 ? (
+          <Box sx={{ p: 1.5, borderRadius: 2, backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
+            <Typography variant="caption" sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}>
+              <Globe size={12} /> External IPv6 (DN42)
+            </Typography>
+            <Typography variant="body2" className="mono-font" sx={{ fontWeight: 600, color: "#7C3AED", mt: 0.5 }}>
+              {node.external_ip6}
             </Typography>
           </Box>
         ) : null}
@@ -443,6 +471,68 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
           </Box>
         </Box>
 
+        {/* Nftables Firewall & NAT */}
+        {!node.is_external && (
+          <Box sx={{ mt: 2 }}>
+            <Box
+              sx={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                mb: 1,
+              }}
+            >
+              <Typography
+                variant="caption"
+                sx={{
+                  color: "#64748B",
+                  fontWeight: 700,
+                  letterSpacing: "0.05em",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 0.8,
+                }}
+              >
+                <Shield size={14} color="#E11D48" /> FIREWALL & NAT (NFTABLES)
+              </Typography>
+              <Button
+                size="small"
+                variant="text"
+                startIcon={<FileCode size={13} />}
+                onClick={handleOpenNftablesConfig}
+                sx={{ fontSize: "0.7rem", py: 0.2, px: 1, color: "#E11D48", fontWeight: 600 }}
+              >
+                View Rules
+              </Button>
+            </Box>
+
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+              <Box
+                sx={{
+                  p: 1.2,
+                  borderRadius: 1.5,
+                  backgroundColor: "#F8FAFC",
+                  border: "1px solid #E2E8F0",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                }}
+              >
+                <Typography variant="body2" sx={{ color: "#475569", fontSize: "0.78rem" }}>
+                  Destination File
+                </Typography>
+                <Typography
+                  variant="body2"
+                  className="mono-font"
+                  sx={{ fontWeight: 600, color: "#0F172A", fontSize: "0.78rem" }}
+                >
+                  /etc/easy42.nft
+                </Typography>
+              </Box>
+            </Box>
+          </Box>
+        )}
+
         {/* Runtime Status */}
 
         {status && (
@@ -653,6 +743,101 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
             Copy Config
           </Button>
           <Button size="small" variant="contained" onClick={() => setViewingBird(false)}>
+            Close
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Nftables Config Dialog */}
+      <Dialog open={viewingNftables} onClose={() => setViewingNftables(false)} maxWidth="md" fullWidth>
+        <DialogTitle
+          sx={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            borderBottom: "1px solid #E2E8F0",
+            pb: 1.5,
+          }}
+        >
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+            <Shield size={20} color="#E11D48" />
+            <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#0F172A" }}>
+              Nftables Firewall Rules — {node.name}
+            </Typography>
+          </Box>
+          <IconButton size="small" onClick={() => setViewingNftables(false)}>
+            <X size={18} />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent sx={{ pt: 2, pb: 1 }}>
+          <Alert severity="info" sx={{ mb: 2, fontSize: "0.8rem", borderRadius: 2 }}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.5 }}>
+              Standard Device Path: <code>/etc/easy42.nft</code>
+            </Typography>
+            <Typography variant="body2" sx={{ fontSize: "0.78rem", color: "#334155", mb: 0.5 }}>
+              easy42 automatically generates and synchronizes this file to <code>/etc/easy42.nft</code> on the node
+              and executes it to apply the firewall and NAT rules.
+            </Typography>
+            <Typography variant="body2" sx={{ fontSize: "0.78rem", color: "#334155" }}>
+              To ensure persistent autostart across reboots, use the <strong>Configure Nftables Autostart</strong> task in Device Config Helper, or add to <code>/etc/nftables.conf</code>:
+            </Typography>
+            <Box
+              component="code"
+              sx={{
+                display: "block",
+                mt: 0.5,
+                p: 0.8,
+                bgcolor: "#FFF1F2",
+                borderRadius: 1,
+                fontFamily: "monospace",
+                color: "#BE123C",
+                fontSize: "0.75rem",
+                fontWeight: 600,
+              }}
+            >
+              include "/etc/easy42.nft"
+            </Box>
+          </Alert>
+
+          {loadingNftables ? (
+            <Box sx={{ display: "flex", justifyContent: "center", py: 6 }}>
+              <CircularProgress size={32} />
+            </Box>
+          ) : (
+            <Box
+              component="pre"
+              className="mono-font"
+              sx={{
+                m: 0,
+                p: 2,
+                borderRadius: 2,
+                backgroundColor: "#0F172A",
+                color: "#38BDF8",
+                fontSize: "0.78rem",
+                lineHeight: 1.5,
+                maxHeight: "60vh",
+                overflow: "auto",
+                border: "1px solid #334155",
+              }}
+            >
+              {nftablesConfig || "# No config generated"}
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ px: 3, py: 1.5, borderTop: "1px solid #E2E8F0", backgroundColor: "#F8FAFC" }}>
+          <Button
+            size="small"
+            variant="outlined"
+            onClick={() => {
+              if (nftablesConfig) {
+                navigator.clipboard.writeText(nftablesConfig);
+              }
+            }}
+            disabled={!nftablesConfig || loadingNftables}
+          >
+            Copy Rules
+          </Button>
+          <Button size="small" variant="contained" onClick={() => setViewingNftables(false)}>
             Close
           </Button>
         </DialogActions>

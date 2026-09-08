@@ -27,6 +27,7 @@ import {
   Radio,
   CheckCheck,
   Network,
+  Shield,
 } from "lucide-react";
 import { api } from "../../api/client";
 import { SyncAction, SyncResult } from "../../types/api";
@@ -341,6 +342,8 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
                             <Trash2 size={16} color="#DC2626" />
                           ) : act.type === "sync_bird" ? (
                             <Network size={16} color="#0284C7" />
+                          ) : act.type === "sync_nftables" ? (
+                            <Shield size={16} color="#E11D48" />
                           ) : (
                             <FileCode size={16} color="#4F46E5" />
                           )}
