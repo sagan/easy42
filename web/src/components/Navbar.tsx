@@ -332,10 +332,10 @@ export const Navbar: React.FC<NavbarProps> = ({
                 secondary={
                   <Typography variant="caption" sx={{ color: "#64748B" }}>
                     {displayedNodeCount < 2
-                      ? "Need at least 2 displayed nodes"
+                      ? "Need at least 2 displayed internal nodes"
                       : missingMeshLinksCount === 0
-                        ? "All displayed nodes already meshed"
-                        : `Add ${missingMeshLinksCount} missing link(s) between ${displayedNodeCount} nodes`}
+                        ? "All displayed internal nodes already meshed"
+                        : `Add ${missingMeshLinksCount} missing link(s) between ${displayedNodeCount} internal nodes`}
                   </Typography>
                 }
               />

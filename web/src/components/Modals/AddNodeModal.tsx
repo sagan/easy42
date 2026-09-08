@@ -57,6 +57,8 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
   const [description, setDescription] = useState("");
   // BIRD / BGP state
   const [table, setTable] = useState<number>(254);
+  const [externalTable, setExternalTable] = useState<number | "">("");
+  const [externalIp, setExternalIp] = useState("");
   const [staticRoutesStr, setStaticRoutesStr] = useState("");
   interface EditableKernelRoute {
     id: string;
@@ -84,6 +86,8 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
       setDescription(nodeToEdit.description || "");
       setNodeTags(nodeToEdit.tags?.join(", ") || "");
       setTable(nodeToEdit.table ?? 254);
+      setExternalTable(nodeToEdit.external_table ?? "");
+      setExternalIp(nodeToEdit.external_ip || "");
       setStaticRoutesStr(nodeToEdit.static_routes?.join(", ") || "");
       if (nodeToEdit.routes && nodeToEdit.routes.length > 0) {
         setKernelRoutes(
@@ -141,6 +145,8 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
       setDescription("");
       setNodeTags("");
       setTable(254);
+      setExternalTable("");
+      setExternalIp("");
       setStaticRoutesStr("");
       setKernelRoutes([]);
       setEntrypoints([{ id: "nat-fallback", ip: "", portStr: "", tagStr: "nat", mtuStr: "", isNone: true }]);
@@ -356,6 +362,11 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
         entrypoints: finalEntrypoints,
         tags: parsedTags.length > 0 ? parsedTags : undefined,
         table: Number(table) || 254,
+        external_table:
+          externalTable !== "" && !isNaN(Number(externalTable)) && Number(externalTable) > 0
+            ? Number(externalTable)
+            : undefined,
+        external_ip: externalIp.trim() ? externalIp.trim() : undefined,
         static_routes: parsedStaticRoutes.length > 0 ? parsedStaticRoutes : undefined,
         routes: parsedRoutes.length > 0 ? parsedRoutes : undefined,
         x: nodeToEdit?.x,
@@ -443,7 +454,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
 
               <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
                 <TextField
-                  label="Peer Name (Max 11 chars)"
+                  label="Peer Name (Max 10 chars)"
                   size="small"
                   value={name}
                   onChange={(e) =>
@@ -451,7 +462,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                       e.target.value
                         .toLowerCase()
                         .replace(/[^a-z0-9-]/g, "")
-                        .slice(0, 11),
+                        .slice(0, 10),
                     )
                   }
                   helperText="Unique identifier, e.g. dn42-peer1"
@@ -832,14 +843,35 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                   </Typography>
                 </Box>
 
-                <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
+                <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr 1fr" }, gap: 2 }}>
                   <TextField
                     label="Kernel Routing Table ID"
                     type="number"
                     size="small"
                     value={table}
                     onChange={(e) => setTable(Number(e.target.value))}
-                    helperText="Kernel table bird exports BGP routes to (default 254)"
+                    helperText="Default export table (default 254)"
+                    disabled={saving}
+                  />
+
+                  <TextField
+                    label="External Routing Table ID"
+                    type="number"
+                    size="small"
+                    value={externalTable}
+                    onChange={(e) => setExternalTable(e.target.value === "" ? "" : Number(e.target.value))}
+                    placeholder="e.g. 100"
+                    helperText="Export external BGP routes here (optional)"
+                    disabled={saving}
+                  />
+
+                  <TextField
+                    label="External IPv4 Address (DN42)"
+                    size="small"
+                    value={externalIp}
+                    onChange={(e) => setExternalIp(e.target.value)}
+                    placeholder="e.g. 172.20.100.1"
+                    helperText="Source IP for external routes in external table (optional)"
                     disabled={saving}
                   />
 

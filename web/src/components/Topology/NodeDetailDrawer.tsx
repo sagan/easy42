@@ -193,6 +193,17 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
           </Box>
         </Box>
 
+        {node.external_ip ? (
+          <Box sx={{ p: 1.5, borderRadius: 2, backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
+            <Typography variant="caption" sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}>
+              <Globe size={12} /> External IPv4 (DN42)
+            </Typography>
+            <Typography variant="body2" className="mono-font" sx={{ fontWeight: 600, color: "#7C3AED", mt: 0.5 }}>
+              {node.external_ip}
+            </Typography>
+          </Box>
+        ) : null}
+
         <Box sx={{ p: 1.5, borderRadius: 2, backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
           <Typography variant="caption" sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}>
             <Shield size={12} /> AS Number
@@ -335,6 +346,35 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
                 }}
               />
             </Box>
+
+            {node.external_table && node.external_table !== (node.table ?? 254) ? (
+              <Box
+                sx={{
+                  p: 1.2,
+                  borderRadius: 1.5,
+                  backgroundColor: "#F8FAFC",
+                  border: "1px solid #E2E8F0",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                }}
+              >
+                <Typography variant="caption" sx={{ color: "#64748B" }}>
+                  External Export Table:
+                </Typography>
+                <Chip
+                  label={`Table ${node.external_table}`}
+                  size="small"
+                  sx={{
+                    height: 20,
+                    fontSize: "0.7rem",
+                    fontWeight: 600,
+                    backgroundColor: "rgba(139, 92, 246, 0.1)",
+                    color: "#7C3AED",
+                  }}
+                />
+              </Box>
+            ) : null}
 
             {/* Static Routes */}
             <Box sx={{ p: 1.2, borderRadius: 1.5, backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0" }}>

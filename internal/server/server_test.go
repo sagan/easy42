@@ -571,10 +571,8 @@ func TestNetworkSettingsAndExternalPeeringAPI(t *testing.T) {
 
 	// 2. PUT /api/settings/network
 	settingsUpdate := config.NetworkSettings{
-		PublicASN:      4242421234,
-		ConfedMembers:  "4224420000..4224429999",
-		ExportPrefixes: []string{"172.20.10.0/24"},
-		ImportPrefixes: []string{"172.20.0.0/14{21,29}"},
+		PublicASN: 4242421234,
+		Prefixes:  []string{"172.20.10.0/24", "172.20.0.0/14{21,29}"},
 	}
 	bodyPutSettings, _ := json.Marshal(settingsUpdate)
 	reqPutSettings := httptest.NewRequest("PUT", "/api/settings/network", bytes.NewReader(bodyPutSettings))
@@ -661,4 +659,3 @@ func TestNetworkSettingsAndExternalPeeringAPI(t *testing.T) {
 		t.Errorf("Expected confederation CONFED_AS in bird config: %s", wBird.Body.String())
 	}
 }
-

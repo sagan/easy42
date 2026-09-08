@@ -1,11 +1,25 @@
 define SELF_IP = {{ .ip }};
+{{if .external_ip}}
+define EXTERNAL_IP = {{ .external_ip }};
+{{end}}
 define SELF_AS = {{ .asn }};
 define TABLE = {{ .table }};
+{{if .use_external_table}}
+define EXTERNAL_TABLE = {{ .external_table }};
+
+ipv4 table ext_table4;
+ipv6 table ext_table6;
+{{end}}
 
 define INTERNET = [ 0.0.0.0/0, 0.0.0.0/1, 128.0.0.0/1 ];
 
 {{if .confed_as}}
 define CONFED_AS = {{ .confed_as }};
+define COMM_EXTERNAL = (CONFED_AS, 1, 1);
+{{else if .comm_external}}
+define COMM_EXTERNAL = {{ .comm_external }};
+{{else}}
+define COMM_EXTERNAL = (4224420000, 1, 1);
 {{end}}
 
 router id SELF_IP;
@@ -19,6 +33,9 @@ protocol kernel kernel_v4 {
         export filter {
             # Force Linux to use this source IP
             krt_prefsrc = SELF_IP;
+            {{if .use_external_table}}
+            if (COMM_EXTERNAL ~ bgp_large_community) then reject;
+            {{end}}
             if source ~ [ RTS_BGP ] then accept;
             reject;
         };
@@ -26,6 +43,30 @@ protocol kernel kernel_v4 {
     };
     kernel table TABLE;
 }
+
+{{if .use_external_table}}
+protocol pipe pipe_ext_v4 {
+    table master4;
+    peer table ext_table4;
+    import none;
+    export filter {
+        if (source ~ [ RTS_BGP ]) && (COMM_EXTERNAL ~ bgp_large_community) then accept;
+        reject;
+    };
+}
+
+protocol kernel kernel_ext_v4 {
+    ipv4 {
+        table ext_table4;
+        export filter {
+            krt_prefsrc = {{ if .external_ip }}EXTERNAL_IP{{ else }}SELF_IP{{ end }};
+            accept;
+        };
+        import none;
+    };
+    kernel table EXTERNAL_TABLE;
+}
+{{end}}
 
 {{range .routes}}
 protocol kernel kernel_{{ .table}} {
@@ -50,6 +91,9 @@ protocol kernel kernel_{{ .table}} {
 protocol kernel kernel_v6 {
     ipv6 {
         export filter {
+            {{if .use_external_table}}
+            if (COMM_EXTERNAL ~ bgp_large_community) then reject;
+            {{end}}
             if source ~ [ RTS_BGP ] then accept;
             reject;
         };
@@ -58,15 +102,48 @@ protocol kernel kernel_v6 {
     kernel table TABLE;
 }
 
+{{if .use_external_table}}
+protocol pipe pipe_ext_v6 {
+    table master6;
+    peer table ext_table6;
+    import none;
+    export filter {
+        if (source ~ [ RTS_BGP ]) && (COMM_EXTERNAL ~ bgp_large_community) then accept;
+        reject;
+    };
+}
+
+protocol kernel kernel_ext_v6 {
+    ipv6 {
+        table ext_table6;
+        export filter {
+            accept;
+        };
+        import none;
+    };
+    kernel table EXTERNAL_TABLE;
+}
+{{end}}
+
 protocol static static_self {
     ipv4;
     route {{ .ip }}/32 reject;
 }
 
-{{if .static_routes}}
+{{if .static_routes_v4}}
 protocol static static_v4 {
     ipv4;
-    {{range .static_routes}}
+    {{range .static_routes_v4}}
+    # reject is strictly local (kernel) only. It generates "unreachable" kernel routing table
+    route {{.}} reject;
+    {{end}}
+}
+{{end}}
+
+{{if .static_routes_v6}}
+protocol static static_v6 {
+    ipv6;
+    {{range .static_routes_v6}}
     # reject is strictly local (kernel) only. It generates "unreachable" kernel routing table
     route {{.}} reject;
     {{end}}
@@ -101,35 +178,51 @@ template bgp easy42_peer {
 }
 
 {{if .has_external_links}}
-define EXT_IMPORT_V4 = {{ .ext_import_v4 }};
-define EXT_IMPORT_V6 = {{ .ext_import_v6 }};
-define EXT_EXPORT_V4 = {{ .ext_export_v4 }};
-define EXT_EXPORT_V6 = {{ .ext_export_v6 }};
+define EXT_PREFIXES_V4 = {{ .ext_prefixes_v4 }};
+define EXT_PREFIXES_V6 = {{ .ext_prefixes_v6 }};
 
 template bgp external_peer {
     direct;
+
+    {{if .confed_as}}
+    confederation CONFED_AS;
+    confederation member no;
+    {{end}}
+
     ipv4 {
         extended next hop on;
         next hop self;
         import filter {
             if net ~ INTERNET then reject;
-            if net ~ EXT_IMPORT_V4 then accept;
+            if net ~ EXT_PREFIXES_V4 then {
+              bgp_large_community.add(COMM_EXTERNAL);
+              accept;
+            }
             reject;
         };
         export filter {
             if net ~ INTERNET then reject;
-            if (source ~ [ RTS_STATIC, RTS_BGP ]) && (net ~ EXT_EXPORT_V4) then accept;
+            if (source ~ [ RTS_STATIC, RTS_BGP ]) && (net ~ EXT_PREFIXES_V4) then {
+              bgp_large_community.delete(COMM_EXTERNAL);
+              accept;
+            }
             reject;
         };
     };
     ipv6 {
         next hop self;
         import filter {
-            if net ~ EXT_IMPORT_V6 then accept;
+            if net ~ EXT_PREFIXES_V6 then {
+              bgp_large_community.add(COMM_EXTERNAL);
+              accept;
+            }
             reject;
         };
         export filter {
-            if (source ~ [ RTS_STATIC, RTS_BGP ]) && (net ~ EXT_EXPORT_V6) then accept;
+            if (source ~ [ RTS_STATIC, RTS_BGP ]) && (net ~ EXT_PREFIXES_V6) then {
+              bgp_large_community.delete(COMM_EXTERNAL);
+              accept;
+            }
             reject;
         };
     };
@@ -139,6 +232,7 @@ template bgp external_peer {
 {{range .links}}
 {{if .is_external}}
 protocol bgp 'ext_peer_{{.remote.name}}' from external_peer {
+    {{if .local.interface}}interface "{{ .local.interface }}";{{end}}
     local {{ .local.address }} as {{ if $.confed_as }}CONFED_AS{{ else }}SELF_AS{{ end }};
     {{if .remote.is_link_local}}
     neighbor {{ .remote.address }} % '{{ .local.interface }}' as {{ .remote_node.asn }};
@@ -148,6 +242,7 @@ protocol bgp 'ext_peer_{{.remote.name}}' from external_peer {
 }
 {{else}}
 protocol bgp 'easy42_peer_{{.remote.name}}' from easy42_peer {
+    {{if .local.interface}}interface "{{ .local.interface }}";{{end}}
     local {{ .local.address }} as SELF_AS;
     neighbor {{ .remote.address }} % '{{ .local.interface }}' as {{ .remote_node.asn }};
 }

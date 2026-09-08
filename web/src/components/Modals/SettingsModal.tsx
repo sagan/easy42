@@ -29,6 +29,38 @@ import {
 import { api } from "../../api/client";
 import { NetworkSettings } from "../../types/api";
 
+export const parsePrefixList = (input: string): string[] => {
+  const result: string[] = [];
+  let current = "";
+  let inBraces = false;
+
+  for (let i = 0; i < input.length; i++) {
+    const char = input[i];
+    if (char === "{") {
+      inBraces = true;
+      current += char;
+    } else if (char === "}") {
+      inBraces = false;
+      current += char;
+    } else if (inBraces && (char === " " || char === "\t")) {
+      continue;
+    } else if ((char === "," || char === "\n" || char === "\r") && !inBraces) {
+      const trimmed = current.trim();
+      if (trimmed) {
+        result.push(trimmed);
+      }
+      current = "";
+    } else {
+      current += char;
+    }
+  }
+  const trimmed = current.trim();
+  if (trimmed) {
+    result.push(trimmed);
+  }
+  return result;
+};
+
 interface SettingsModalProps {
   open: boolean;
   onClose: () => void;
@@ -51,9 +83,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
 
   // Network / Peering state
   const [publicAsn, setPublicAsn] = useState<number | "">("");
-  const [confedMembers, setConfedMembers] = useState("");
-  const [exportPrefixes, setExportPrefixes] = useState("");
-  const [importPrefixes, setImportPrefixes] = useState("");
+  const [prefixes, setPrefixes] = useState("");
   const [networkLoading, setNetworkLoading] = useState(false);
   const [networkSaving, setNetworkSaving] = useState(false);
   const [networkError, setNetworkError] = useState<string | null>(null);
@@ -77,9 +107,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
     try {
       const settings = await api.getNetworkSettings();
       setPublicAsn(settings.public_asn || "");
-      setConfedMembers(settings.confed_members || "");
-      setExportPrefixes(settings.export_prefixes?.join(", ") || "");
-      setImportPrefixes(settings.import_prefixes?.join(", ") || "");
+      const prefList = settings.prefixes || [];
+      setPrefixes(prefList.join("\n"));
     } catch (err: unknown) {
       const e = err as Error;
       setNetworkError(e.message || "Failed to load network settings.");
@@ -94,21 +123,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
     setNetworkError(null);
     setNetworkSuccess(null);
 
-    const exportList = exportPrefixes
-      .split(/[\n,]+/)
-      .map((s) => s.trim())
-      .filter(Boolean);
-
-    const importList = importPrefixes
-      .split(/[\n,]+/)
-      .map((s) => s.trim())
-      .filter(Boolean);
+    const prefixList = parsePrefixList(prefixes);
 
     const payload: NetworkSettings = {
       public_asn: publicAsn === "" ? 0 : Number(publicAsn),
-      confed_members: confedMembers.trim(),
-      export_prefixes: exportList,
-      import_prefixes: importList,
+      prefixes: prefixList,
     };
 
     try {
@@ -150,9 +169,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
 10.0.0.0/8{15,24}
 10.127.0.0/16+
 fd00::/8{44,64}`;
-    setConfedMembers("4224420000..4224429999");
-    setExportPrefixes(prefixes);
-    setImportPrefixes(prefixes);
+    setPrefixes(prefixes);
   };
 
   const handleChangePassword = async (e: React.FormEvent) => {
@@ -558,37 +575,13 @@ fd00::/8{44,64}`;
                 <TextField
                   fullWidth
                   size="small"
-                  label="Confederation Member ASNs"
-                  placeholder="e.g. 4224420000..4224429999"
-                  value={confedMembers}
-                  onChange={(e) => setConfedMembers(e.target.value)}
-                  helperText="BIRD confederation member specification for internal mesh ASNs (e.g. range 4224420000..4224429999)."
-                  disabled={networkSaving}
-                />
-
-                <TextField
-                  fullWidth
-                  size="small"
-                  label="Export Prefixes (comma or newline separated)"
-                  placeholder="e.g. 172.20.0.0/16+, fd00::/8+"
+                  label="Peering Prefixes (newline or comma separated)"
+                  placeholder="e.g. 172.20.0.0/14{21,29}, 172.31.0.0/16+, fd00::/8{44,64}"
                   multiline
-                  rows={2}
-                  value={exportPrefixes}
-                  onChange={(e) => setExportPrefixes(e.target.value)}
-                  helperText="Subnets exported to external peers. Format with BIRD prefix syntax (e.g. 172.20.0.0/16+, fd00::/8+)."
-                  disabled={networkSaving}
-                />
-
-                <TextField
-                  fullWidth
-                  size="small"
-                  label="Import Filter Prefixes (comma or newline separated)"
-                  placeholder="e.g. 172.20.0.0/14{21,29}, 172.31.0.0/16{21,29}, fd00::/8{44,64}"
-                  multiline
-                  rows={2}
-                  value={importPrefixes}
-                  onChange={(e) => setImportPrefixes(e.target.value)}
-                  helperText="Valid subnet ranges accepted from external peers. Defaults to DN42 standard ranges if left empty."
+                  rows={8}
+                  value={prefixes}
+                  onChange={(e) => setPrefixes(e.target.value)}
+                  helperText="Valid subnets permitted for peering (both accepted from and exported to external peers). Format with BIRD prefix syntax, one per line or comma-separated."
                   disabled={networkSaving}
                 />
               </>

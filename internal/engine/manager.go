@@ -226,8 +226,14 @@ func (m *Manager) AddNode(node config.Node) error {
 	defer m.mu.Unlock()
 
 	node.Name = strings.TrimSpace(node.Name)
-	if len(node.Name) == 0 || len(node.Name) > 11 {
-		return errors.New("node name must be between 1 and 11 characters")
+	if node.IsExternal {
+		if len(node.Name) == 0 || len(node.Name) > 10 {
+			return errors.New("external peer name must be between 1 and 10 characters")
+		}
+	} else {
+		if len(node.Name) == 0 || len(node.Name) > 11 {
+			return errors.New("node name must be between 1 and 11 characters")
+		}
 	}
 	if !node.IsExternal && (node.Host == "" || node.IP == "") {
 		return errors.New("host and IP are required for managed nodes")
@@ -286,6 +292,17 @@ func (m *Manager) UpdateNode(name string, updated config.Node) error {
 		return ErrNodeNotFound
 	}
 
+	updated.Name = strings.TrimSpace(updated.Name)
+	if updated.IsExternal {
+		if len(updated.Name) == 0 || len(updated.Name) > 10 {
+			return errors.New("external peer name must be between 1 and 10 characters")
+		}
+	} else {
+		if len(updated.Name) == 0 || len(updated.Name) > 11 {
+			return errors.New("node name must be between 1 and 11 characters")
+		}
+	}
+
 	// Check name uniqueness if changed
 	if updated.Name != name {
 		for _, n := range cfg.Nodes {
@@ -325,12 +342,12 @@ func (m *Manager) UpdateNode(name string, updated config.Node) error {
 		for i := range cfg.Links {
 			if cfg.Links[i].From.Name == name {
 				cfg.Links[i].From.Name = updated.Name
-				cfg.Links[i].To.Interface = compiler.GetInterfaceName(updated.Name)
+				cfg.Links[i].To.Interface = compiler.GetInterfaceName(updated.Name, updated.IsExternal)
 				cfg.Links[i].ModifiedAt = now
 			}
 			if cfg.Links[i].To.Name == name {
 				cfg.Links[i].To.Name = updated.Name
-				cfg.Links[i].From.Interface = compiler.GetInterfaceName(updated.Name)
+				cfg.Links[i].From.Interface = compiler.GetInterfaceName(updated.Name, updated.IsExternal)
 				cfg.Links[i].ModifiedAt = now
 			}
 		}
@@ -691,10 +708,19 @@ func (m *Manager) buildLink(cfg *config.Config, n1, n2 *config.Node, listenPort1
 		toUseIP = customToEnd.UseIp
 	}
 
+	fromIface := compiler.GetInterfaceName(toNode.Name, toNode.IsExternal)
+	if customFromEnd != nil && customFromEnd.Interface != "" {
+		fromIface = customFromEnd.Interface
+	}
+	toIface := compiler.GetInterfaceName(fromNode.Name, fromNode.IsExternal)
+	if customToEnd != nil && customToEnd.Interface != "" {
+		toIface = customToEnd.Interface
+	}
+
 	link := &config.Link{
 		From: config.LinkEnd{
 			Name:                fromNode.Name,
-			Interface:           compiler.GetInterfaceName(toNode.Name),
+			Interface:           fromIface,
 			Address:             fromAddr,
 			ListenPort:          fromPort,
 			Endpoint:            fromEP,
@@ -706,7 +732,7 @@ func (m *Manager) buildLink(cfg *config.Config, n1, n2 *config.Node, listenPort1
 		},
 		To: config.LinkEnd{
 			Name:                toNode.Name,
-			Interface:           compiler.GetInterfaceName(fromNode.Name),
+			Interface:           toIface,
 			Address:             toAddr,
 			ListenPort:          toPort,
 			Endpoint:            toEP,
@@ -1725,6 +1751,18 @@ func (m *Manager) UpdateState() (*config.NetworkState, []string, error) {
 
 	for _, n := range nodes {
 		node := n
+		if node.IsExternal {
+			m.mu.Lock()
+			m.statuses[node.Name] = &config.NodeStatus{
+				Name:      node.Name,
+				Host:      "external",
+				LastSeen:  time.Now(),
+				Connected: true,
+				Hostname:  node.Name,
+			}
+			m.mu.Unlock()
+			continue
+		}
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -1733,6 +1771,15 @@ func (m *Manager) UpdateState() (*config.NetworkState, []string, error) {
 				mu.Lock()
 				warnings = append(warnings, fmt.Sprintf("%s: failed to connect: %v", node.Name, err))
 				mu.Unlock()
+				m.mu.Lock()
+				m.statuses[node.Name] = &config.NodeStatus{
+					Name:      node.Name,
+					Host:      node.Host,
+					LastSeen:  time.Now(),
+					Connected: false,
+					Error:     err.Error(),
+				}
+				m.mu.Unlock()
 				return
 			}
 
@@ -1839,6 +1886,18 @@ func (m *Manager) UpdateState() (*config.NetworkState, []string, error) {
 				}
 			}
 
+			hostname, _ := ssh.RunCommand(sshClient, "hostname")
+			m.mu.Lock()
+			m.statuses[node.Name] = &config.NodeStatus{
+				Name:         node.Name,
+				Host:         node.Host,
+				LastSeen:     time.Now(),
+				Connected:    true,
+				Hostname:     strings.TrimSpace(hostname),
+				WgInterfaces: wgStatus,
+			}
+			m.mu.Unlock()
+
 			mu.Lock()
 			results = append(results, nodeIfaceResult{
 				nodeName: node.Name,
@@ -1854,10 +1913,12 @@ func (m *Manager) UpdateState() (*config.NetworkState, []string, error) {
 	currentState := m.stateStore.Get()
 	activeNodeNames := make(map[string]bool)
 	for _, n := range nodes {
-		activeNodeNames[n.Name] = true
+		if !n.IsExternal {
+			activeNodeNames[n.Name] = true
+		}
 	}
 
-	// Remove deleted nodes from state
+	// Remove deleted or external nodes from state
 	for stName := range currentState.Nodes {
 		if !activeNodeNames[stName] {
 			delete(currentState.Nodes, stName)
@@ -1943,7 +2004,9 @@ func (m *Manager) GetNetworkSettings() config.NetworkSettings {
 	if cfg == nil {
 		return config.NetworkSettings{}
 	}
-	return cfg.NetworkSettings
+	ns := cfg.NetworkSettings
+	ns.Prefixes = config.CleanPrefixes(ns.Prefixes)
+	return ns
 }
 
 // UpdateNetworkSettings updates the global network settings in config.json
@@ -1955,6 +2018,7 @@ func (m *Manager) UpdateNetworkSettings(settings config.NetworkSettings) error {
 	if cfg == nil {
 		return config.ErrConfigNotFound
 	}
+	settings.Prefixes = config.CleanPrefixes(settings.Prefixes)
 	cfg.NetworkSettings = settings
 	return m.store.Save(cfg)
 }

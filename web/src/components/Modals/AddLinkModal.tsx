@@ -403,7 +403,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                   Local Interface: {managedNode.name}
                 </Typography>
                 <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5, mb: 1.5 }}>
-                  <TextField label="Interface Name" size="small" value={`wg42${externalNode.name}`} disabled />
+                  <TextField label="Interface Name" size="small" value={`wg42-${externalNode.name}`} disabled />
                   <TextField
                     label="Local Listen Port"
                     type="number"

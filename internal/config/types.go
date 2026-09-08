@@ -10,10 +10,8 @@ import (
 
 // NetworkSettings represents global network-wide peering and routing configurations
 type NetworkSettings struct {
-	PublicASN      uint64   `json:"public_asn,omitempty"`      // Public / DN42 ASN (e.g. 4242421234)
-	ConfedMembers  string   `json:"confed_members,omitempty"`  // Confederation member range/set, e.g. "4224420000..4224429999"
-	ExportPrefixes []string `json:"export_prefixes,omitempty"` // Prefixes permitted to export to external peers
-	ImportPrefixes []string `json:"import_prefixes,omitempty"` // Prefixes accepted from external peers
+	PublicASN uint64   `json:"public_asn,omitempty"` // Public / DN42 ASN (e.g. 4242421234)
+	Prefixes  []string `json:"prefixes,omitempty"`   // Prefixes permitted for peering (export and import)
 }
 
 // Config represents the top-level configuration stored in config.json
@@ -117,27 +115,40 @@ type KernelRouteRule struct {
 
 // Node represents a device/node in the network
 type Node struct {
-	Name         string            `json:"name"`                  // Max 11 chars hostname
-	Host         string            `json:"host,omitempty"`        // SSH host / alias / IP (omitted for external peers)
-	IsExternal   bool              `json:"is_external,omitempty"` // True if external unmanaged peer (e.g. DN42)
-	Description  string            `json:"description,omitempty"` // Optional description / contact info
-	IP           string            `json:"ip,omitempty"`          // Main IPv4 (e.g. 192.168.100.1)
-	Interface    string            `json:"interface,omitempty"`   // Main IP interface name (e.g. lo, dn42, eth0)
-	ASN          uint64            `json:"asn"`                   // AS Number (default in 4224420000..4224429999 or external ASN)
-	Entrypoints  []Entrypoint      `json:"entrypoints,omitempty"` // External entrypoints
-	Tags         []string          `json:"tags,omitempty"`
-	Table        int               `json:"table,omitempty"`         // Main routing table bird used to export BGP learned routing to (defaults to 254)
-	StaticRoutes []string          `json:"static_routes,omitempty"` // CIDR prefix list unconditionally broadcast via BGP
-	Routes       []KernelRouteRule `json:"routes,omitempty"`        // Kernel routes imported from kernel tables and broadcast via BGP
-	X            *float64          `json:"x,omitempty"`             // Graph X coordinate
-	Y            *float64          `json:"y,omitempty"`             // Graph Y coordinate
-	ModifiedAt   time.Time         `json:"modified_at,omitempty"`   // Last updated timestamp
+	Name          string            `json:"name"`                  // Max 11 chars hostname (max 10 chars for external peers)
+	Host          string            `json:"host,omitempty"`        // SSH host / alias / IP (omitted for external peers)
+	IsExternal    bool              `json:"is_external,omitempty"` // True if external unmanaged peer (e.g. DN42)
+	Description   string            `json:"description,omitempty"` // Optional description / contact info
+	IP            string            `json:"ip,omitempty"`          // Main IPv4 (e.g. 192.168.100.1)
+	ExternalIP    string            `json:"external_ip,omitempty"` // External / DN42 IPv4 (e.g. 172.20.x.x)
+	Interface     string            `json:"interface,omitempty"`   // Main IP interface name (e.g. lo, dn42, eth0)
+	ASN           uint64            `json:"asn"`                   // AS Number (default in 4224420000..4224429999 or external ASN)
+	Entrypoints   []Entrypoint      `json:"entrypoints,omitempty"` // External entrypoints
+	Tags          []string          `json:"tags,omitempty"`
+	Table         int               `json:"table,omitempty"`          // Main routing table bird used to export BGP learned routing to (defaults to 254)
+	ExternalTable int               `json:"external_table,omitempty"` // Routing table for routes learned from external BGP peers (if set and != Table)
+	StaticRoutes  []string          `json:"static_routes,omitempty"`  // CIDR prefix list unconditionally broadcast via BGP
+	Routes        []KernelRouteRule `json:"routes,omitempty"`         // Kernel routes imported from kernel tables and broadcast via BGP
+	X             *float64          `json:"x,omitempty"`              // Graph X coordinate
+	Y             *float64          `json:"y,omitempty"`              // Graph Y coordinate
+	ModifiedAt    time.Time         `json:"modified_at,omitempty"`    // Last updated timestamp
+}
+
+// ExternalIp returns ExternalIP if set, or IP if not set
+func (n *Node) ExternalIp() string {
+	if n == nil {
+		return ""
+	}
+	if strings.TrimSpace(n.ExternalIP) != "" {
+		return strings.TrimSpace(n.ExternalIP)
+	}
+	return strings.TrimSpace(n.IP)
 }
 
 // LinkEnd represents one endpoint of a WireGuard link
 type LinkEnd struct {
 	Name                string `json:"name"`
-	Interface           string `json:"interface"`             // e.g. wg42<peer>
+	Interface           string `json:"interface"`             // e.g. wg42<peer> or wg42-<peer>
 	Address             string `json:"address"`               // e.g. fe80::192:168:100:10/64
 	ListenPort          int    `json:"listen_port"`           // Local device wg listening port
 	Endpoint            string `json:"endpoint,omitempty"`    // External access endpoint (optional)
@@ -145,8 +156,8 @@ type LinkEnd struct {
 	PublicKey           string `json:"public_key"`            // Wireguard public key
 	PersistentKeepalive int    `json:"persistent_keepalive"`  // Keepalive interval (25 or 0)
 	MTU                 int    `json:"mtu,omitempty"`
-	UseIp               bool   `json:"use_ip,omitempty"`           // Resolve peer's endpoint domain to IP in easy42 server
-	ResolvedEndpoint    string `json:"resolved_endpoint,omitempty"`// Automatically resolved / actually used endpoint
+	UseIp               bool   `json:"use_ip,omitempty"`            // Resolve peer's endpoint domain to IP in easy42 server
+	ResolvedEndpoint    string `json:"resolved_endpoint,omitempty"` // Automatically resolved / actually used endpoint
 }
 
 // UseIP returns whether UseIp is enabled on the LinkEnd

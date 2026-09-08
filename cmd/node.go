@@ -12,11 +12,12 @@ import (
 )
 
 var (
-	nodeName  string
-	nodeHost  string
-	nodeIP    string
-	nodeIface string
-	nodeASN   uint64
+	nodeName       string
+	nodeHost       string
+	nodeIP         string
+	nodeExternalIP string
+	nodeIface      string
+	nodeASN        uint64
 )
 
 var nodeCmd = &cobra.Command{
@@ -59,6 +60,7 @@ var nodeAddCmd = &cobra.Command{
 			Name:        nodeName,
 			Host:        nodeHost,
 			IP:          nodeIP,
+			ExternalIP:  nodeExternalIP,
 			Interface:   nodeIface,
 			ASN:         nodeASN,
 			Entrypoints: make([]config.Entrypoint, 0),
@@ -145,6 +147,7 @@ func init() {
 	nodeAddCmd.Flags().StringVarP(&nodeName, "name", "n", "", "Node name (max 11 chars)")
 	nodeAddCmd.Flags().StringVarP(&nodeHost, "host", "H", "", "SSH host or alias")
 	nodeAddCmd.Flags().StringVarP(&nodeIP, "ip", "i", "", "Main IPv4 address")
+	nodeAddCmd.Flags().StringVar(&nodeExternalIP, "external-ip", "", "External/DN42 IPv4 address")
 	nodeAddCmd.Flags().StringVar(&nodeIface, "iface", "lo", "Main IP interface name")
 	nodeAddCmd.Flags().Uint64VarP(&nodeASN, "asn", "a", 4224420001, "AS number")
 	_ = nodeAddCmd.MarkFlagRequired("name")

@@ -258,3 +258,35 @@ func TestResolveEndpointToIP(t *testing.T) {
 		t.Errorf("Expected empty string, got %s", res6)
 	}
 }
+
+func TestGetInterfaceName(t *testing.T) {
+	// Internal peer (default or isExternal=false)
+	// Max length 11 chars, prefix "wg42"
+	if iface := GetInterfaceName("router1"); iface != "wg42router1" {
+		t.Errorf("Expected wg42router1, got %s", iface)
+	}
+	if iface := GetInterfaceName("abcdefghijk"); iface != "wg42abcdefghijk" {
+		t.Errorf("Expected wg42abcdefghijk, got %s", iface)
+	}
+	if iface := GetInterfaceName("abcdefghijklmno"); iface != "wg42abcdefghijk" {
+		t.Errorf("Expected wg42abcdefghijk (truncated to 11 chars), got %s", iface)
+	}
+	if iface := GetInterfaceName("router1", false); iface != "wg42router1" {
+		t.Errorf("Expected wg42router1, got %s", iface)
+	}
+
+	// External peer (isExternal=true)
+	// Max length 10 chars, prefix "wg42-"
+	if iface := GetInterfaceName("dn42peer", true); iface != "wg42-dn42peer" {
+		t.Errorf("Expected wg42-dn42peer, got %s", iface)
+	}
+	if iface := GetInterfaceName("abcdefghij", true); iface != "wg42-abcdefghij" {
+		t.Errorf("Expected wg42-abcdefghij, got %s", iface)
+	}
+	if iface := GetInterfaceName("abcdefghijklmno", true); iface != "wg42-abcdefghij" {
+		t.Errorf("Expected wg42-abcdefghij (truncated to 10 chars), got %s", iface)
+	}
+	if iface := GetExternalInterfaceName("dn42peer"); iface != "wg42-dn42peer" {
+		t.Errorf("Expected wg42-dn42peer, got %s", iface)
+	}
+}

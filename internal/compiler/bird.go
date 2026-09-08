@@ -35,6 +35,8 @@ func GetDefaultBirdTemplate() (string, error) {
 //	  "asn": 4224420001,
 //	  "table": 254,
 //	  "static_routes": [...],
+//	  "static_routes_v4": [...],
+//	  "static_routes_v6": [...],
 //	  "routes": [...],
 //	  "links": [
 //	    {
@@ -44,6 +46,7 @@ func GetDefaultBirdTemplate() (string, error) {
 //	      "remote_node": { "name": ..., "asn": ..., "ip": ... }
 //	    }
 //	  ]
+//
 // BuildNodeContext converts a Node and its connected links into a context map suitable for template execution.
 func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.Link, netSettings ...*config.NetworkSettings) (map[string]any, error) {
 	if node == nil {
@@ -72,37 +75,38 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 		table = 254
 	}
 	ctx["table"] = table
-	ctx["Table"] = table
 	ctx["routing_table"] = table
-	ctx["RoutingTable"] = table
 	ctx["asn"] = node.ASN
-	ctx["ASN"] = node.ASN
+	extTable := node.ExternalTable
+	useExtTable := extTable > 0 && extTable != table
+	ctx["external_table"] = extTable
+	ctx["use_external_table"] = useExtTable
 
-	// NetworkSettings / BGP Confederation support
+	extIP := strings.TrimSpace(node.ExternalIP)
+	if extIP != "" {
+		ctx["external_ip"] = extIP
+	} else {
+		delete(ctx, "external_ip")
+	}
+
+	// NetworkSettings / BGP Confederation / Community support
+	var commExternal string
 	if settings != nil && settings.PublicASN > 0 {
 		ctx["confed_as"] = settings.PublicASN
-		ctx["ConfedAS"] = settings.PublicASN
-
-		confedMembers := strings.TrimSpace(settings.ConfedMembers)
-		if confedMembers == "" {
-			confedMembers = "4224420000..4224429999"
-		}
-		if !strings.HasPrefix(confedMembers, "[") {
-			confedMembers = "[ " + confedMembers + " ]"
-		}
-		ctx["confed_members"] = confedMembers
-		ctx["ConfedMembers"] = confedMembers
+		commExternal = fmt.Sprintf("(%d, 1, 1)", settings.PublicASN)
+	} else {
+		commExternal = "(4224420000, 1, 1)"
 	}
+	ctx["comm_external"] = commExternal
 
-	var exportPrefixes, importPrefixes []string
+	var prefixes []string
 	if settings != nil {
-		exportPrefixes = settings.ExportPrefixes
-		importPrefixes = settings.ImportPrefixes
+		prefixes = settings.Prefixes
 	}
-	ctx["ext_import_v4"] = formatPrefixList(importPrefixes, []string{"172.20.0.0/14{21,29}"}, false)
-	ctx["ext_import_v6"] = formatPrefixList(importPrefixes, []string{"fd00::/8{44,64}"}, true)
-	ctx["ext_export_v4"] = formatPrefixList(exportPrefixes, []string{"172.20.0.0/14+"}, false)
-	ctx["ext_export_v6"] = formatPrefixList(exportPrefixes, []string{"fd00::/8+"}, true)
+	extV4 := formatPrefixList(prefixes, []string{"172.20.0.0/14{21,29}"}, false)
+	extV6 := formatPrefixList(prefixes, []string{"fd00::/8{44,64}"}, true)
+	ctx["ext_prefixes_v4"] = extV4
+	ctx["ext_prefixes_v6"] = extV6
 
 	// 3. Normalize routes and static routes
 	routes := node.Routes
@@ -110,19 +114,39 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 	for _, r := range routes {
 		routeMaps = append(routeMaps, map[string]any{
 			"table":    r.Table,
-			"Table":    r.Table,
 			"prefixes": r.Prefixes,
-			"Prefixes": r.Prefixes,
 		})
 	}
 	ctx["routes"] = routeMaps
 	ctx["kernel_routes"] = routeMaps
+
+	var staticV4 []string
+	var staticV6 []string
+	for _, sr := range node.StaticRoutes {
+		trimmed := strings.TrimSpace(sr)
+		if trimmed == "" {
+			continue
+		}
+		if strings.Contains(trimmed, ":") {
+			staticV6 = append(staticV6, trimmed)
+		} else {
+			staticV4 = append(staticV4, trimmed)
+		}
+	}
+	if staticV4 == nil {
+		staticV4 = []string{}
+	}
+	if staticV6 == nil {
+		staticV6 = []string{}
+	}
 
 	if node.StaticRoutes == nil {
 		ctx["static_routes"] = []string{}
 	} else {
 		ctx["static_routes"] = node.StaticRoutes
 	}
+	ctx["static_routes_v4"] = staticV4
+	ctx["static_routes_v6"] = staticV6
 
 	// 4. Index allNodes by name for fast lookup
 	nodeByName := make(map[string]*config.Node)
@@ -155,8 +179,8 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 			hasExternalLinks = true
 		}
 
-		localMap := linkEndToContextMap(localEnd, node, remoteEnd.Name)
-		remoteMap := linkEndToContextMap(remoteEnd, remoteNode, localEnd.Name)
+		localMap := linkEndToContextMap(localEnd, node, remoteEnd.Name, remoteNode != nil && remoteNode.IsExternal)
+		remoteMap := linkEndToContextMap(remoteEnd, remoteNode, localEnd.Name, node.IsExternal)
 
 		var remoteNodeMap map[string]any
 		if remoteNode != nil {
@@ -169,22 +193,19 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 			}
 			remoteNodeMap["table"] = rTable
 			remoteNodeMap["routing_table"] = rTable
-			remoteNodeMap["Table"] = rTable
+			remoteNodeMap["external_table"] = remoteNode.ExternalTable
+			remoteNodeMap["use_external_table"] = remoteNode.ExternalTable > 0 && remoteNode.ExternalTable != rTable
 			remoteNodeMap["asn"] = remoteNode.ASN
-			remoteNodeMap["ASN"] = remoteNode.ASN
-			remoteNodeMap["Name"] = remoteNode.Name
-			remoteNodeMap["IP"] = remoteNode.IP
-			remoteNodeMap["Interface"] = remoteNode.Interface
+			remoteNodeMap["name"] = remoteNode.Name
+			remoteNodeMap["ip"] = remoteNode.IP
+			remoteNodeMap["external_ip"] = remoteNode.ExternalIP
+			remoteNodeMap["interface"] = remoteNode.Interface
 			remoteNodeMap["is_external"] = remoteNode.IsExternal
-			remoteNodeMap["IsExternal"] = remoteNode.IsExternal
 		} else {
 			remoteNodeMap = map[string]any{
 				"name":        remoteEnd.Name,
-				"Name":        remoteEnd.Name,
 				"asn":         uint64(0),
-				"ASN":         uint64(0),
 				"is_external": false,
-				"IsExternal":  false,
 			}
 		}
 
@@ -195,36 +216,30 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 
 		nodeLinks = append(nodeLinks, map[string]any{
 			"tags":        tags,
-			"Tags":        tags,
 			"local":       localMap,
-			"Local":       localMap,
 			"remote":      remoteMap,
-			"Remote":      remoteMap,
 			"remote_node": remoteNodeMap,
-			"RemoteNode":  remoteNodeMap,
 			"is_external": isExternal,
-			"IsExternal":  isExternal,
 		})
 	}
 
 	ctx["links"] = nodeLinks
-	ctx["Links"] = nodeLinks
 	ctx["has_external_links"] = hasExternalLinks
-	ctx["HasExternalLinks"] = hasExternalLinks
 	return ctx, nil
 }
 
 // formatPrefixList formats a list of IP prefixes into a BIRD set string like "[ 172.20.0.0/14{21,29} ]"
 func formatPrefixList(prefixes []string, defaultList []string, isV6 bool) string {
+	cleaned := config.CleanPrefixes(prefixes)
 	var list []string
-	for _, p := range prefixes {
+	for _, p := range cleaned {
 		p = strings.TrimSpace(p)
 		if p == "" {
 			continue
 		}
 		if isV6 && strings.Contains(p, ":") {
 			list = append(list, p)
-		} else if !isV6 && !strings.Contains(p, ":") {
+		} else if !isV6 && strings.Contains(p, ".") && !strings.Contains(p, ":") {
 			list = append(list, p)
 		}
 	}
@@ -237,7 +252,7 @@ func formatPrefixList(prefixes []string, defaultList []string, isV6 bool) string
 // linkEndToContextMap transforms a LinkEnd into a map for BIRD template use.
 // It ensures address is a pure IPv6 address without CIDR suffix (required by BIRD neighbor syntax)
 // and ensures interface name is populated.
-func linkEndToContextMap(end *config.LinkEnd, node *config.Node, peerName string) map[string]any {
+func linkEndToContextMap(end *config.LinkEnd, node *config.Node, peerName string, isExternal ...bool) map[string]any {
 	addr := ""
 	if end != nil && end.Address != "" {
 		addr = strings.TrimSpace(end.Address)
@@ -256,7 +271,8 @@ func linkEndToContextMap(end *config.LinkEnd, node *config.Node, peerName string
 	if end != nil && end.Interface != "" {
 		iface = end.Interface
 	} else if peerName != "" {
-		iface = GetInterfaceName(peerName)
+		ext := len(isExternal) > 0 && isExternal[0]
+		iface = GetInterfaceName(peerName, ext)
 	}
 
 	name := ""
@@ -279,23 +295,14 @@ func linkEndToContextMap(end *config.LinkEnd, node *config.Node, peerName string
 
 	return map[string]any{
 		"name":                 name,
-		"Name":                 name,
 		"interface":            iface,
-		"Interface":            iface,
 		"address":              addr,
-		"Address":              addr,
 		"is_link_local":        isLinkLocal,
-		"IsLinkLocal":          isLinkLocal,
 		"listen_port":          listenPort,
-		"ListenPort":           listenPort,
 		"endpoint":             endpoint,
-		"Endpoint":             endpoint,
 		"public_key":           pubKey,
-		"PublicKey":            pubKey,
 		"persistent_keepalive": keepalive,
-		"PersistentKeepalive":  keepalive,
 		"mtu":                  mtu,
-		"MTU":                  mtu,
 	}
 }
 
@@ -315,8 +322,8 @@ func GenerateBirdConfigWithTemplate(
 	funcMap := template.FuncMap{
 		"join": strings.Join,
 		"stripPrefix": func(s string) string {
-			if idx := strings.Index(s, "/"); idx != -1 {
-				return s[:idx]
+			if before, _, ok := strings.Cut(s, "/"); ok {
+				return before
 			}
 			return s
 		},

@@ -82,14 +82,19 @@ export const App: React.FC = () => {
     return links.filter((l) => displayedNames.has(l.from.name) && displayedNames.has(l.to.name));
   }, [links, displayedNodes]);
 
-  // Missing links between displayed nodes
+  // Displayed internal nodes (excluding external unmanaged nodes)
+  const displayedInternalNodes = useMemo(() => {
+    return displayedNodes.filter((n) => !n.is_external);
+  }, [displayedNodes]);
+
+  // Missing links between displayed internal nodes
   const missingMeshLinksCount = useMemo(() => {
-    if (displayedNodes.length < 2) return 0;
+    if (displayedInternalNodes.length < 2) return 0;
     let count = 0;
-    for (let i = 0; i < displayedNodes.length; i++) {
-      for (let j = i + 1; j < displayedNodes.length; j++) {
-        const n1 = displayedNodes[i].name;
-        const n2 = displayedNodes[j].name;
+    for (let i = 0; i < displayedInternalNodes.length; i++) {
+      for (let j = i + 1; j < displayedInternalNodes.length; j++) {
+        const n1 = displayedInternalNodes[i].name;
+        const n2 = displayedInternalNodes[j].name;
         const exists = links.some(
           (l) => (l.from.name === n1 && l.to.name === n2) || (l.from.name === n2 && l.to.name === n1),
         );
@@ -97,13 +102,13 @@ export const App: React.FC = () => {
       }
     }
     return count;
-  }, [displayedNodes, links]);
+  }, [displayedInternalNodes, links]);
 
   // Create full mesh handler
   const handleCreateFullMesh = async () => {
-    if (displayedNodes.length < 2) {
+    if (displayedInternalNodes.length < 2) {
       setStateToast({
-        message: "At least 2 displayed nodes are required to create a full mesh.",
+        message: "At least 2 displayed internal nodes are required to create a full mesh.",
         severity: "warning",
       });
       return;
@@ -111,7 +116,7 @@ export const App: React.FC = () => {
 
     if (missingMeshLinksCount === 0) {
       setStateToast({
-        message: "All displayed nodes are already fully connected in a mesh.",
+        message: "All displayed internal nodes are already fully connected in a mesh.",
         severity: "info",
       });
       return;
@@ -122,17 +127,17 @@ export const App: React.FC = () => {
       return;
     }
 
-    const confirmMsg = `Create full mesh network between ${displayedNodes.length} displayed nodes? This will automatically add ${missingMeshLinksCount} missing link(s).`;
+    const confirmMsg = `Create full mesh network between ${displayedInternalNodes.length} displayed internal nodes? This will automatically add ${missingMeshLinksCount} missing link(s).`;
     if (!window.confirm(confirmMsg)) {
       return;
     }
 
     try {
-      const nodeNames = displayedNodes.map((n) => n.name);
+      const nodeNames = displayedInternalNodes.map((n) => n.name);
       const added = await api.createFullMesh(nodeNames);
       await loadData();
       setStateToast({
-        message: `Full mesh established: added ${added.length} new link(s) between displayed nodes.`,
+        message: `Full mesh established: added ${added.length} new link(s) between displayed internal nodes.`,
         severity: "success",
       });
     } catch (err: unknown) {
@@ -392,7 +397,7 @@ export const App: React.FC = () => {
           }}
           onCreateFullMesh={handleCreateFullMesh}
           missingMeshLinksCount={missingMeshLinksCount}
-          displayedNodeCount={displayedNodes.length}
+          displayedNodeCount={displayedInternalNodes.length}
           onSync={() => setSyncOpen(true)}
           onUpdateState={handleUpdateState}
           updatingState={updatingState}

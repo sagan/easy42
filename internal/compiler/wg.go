@@ -95,11 +95,23 @@ func GenerateWgConfigContent(
 	return buf.String(), nil
 }
 
-// GetInterfaceName returns the standard wg42<peer_name> interface name
-func GetInterfaceName(peerName string) string {
+// GetInterfaceName returns the standard wg42<peer_name> interface name for internal peers,
+// or wg42-<peer_name> for external peers.
+func GetInterfaceName(peerName string, isExternal ...bool) string {
 	cleanName := strings.TrimSpace(peerName)
+	if len(isExternal) > 0 && isExternal[0] {
+		if len(cleanName) > 10 {
+			cleanName = cleanName[:10]
+		}
+		return fmt.Sprintf("wg42-%s", cleanName)
+	}
 	if len(cleanName) > 11 {
 		cleanName = cleanName[:11]
 	}
 	return fmt.Sprintf("wg42%s", cleanName)
+}
+
+// GetExternalInterfaceName returns the external wg42-<peer_name> interface name (max 10 chars peer name)
+func GetExternalInterfaceName(peerName string) string {
+	return GetInterfaceName(peerName, true)
 }

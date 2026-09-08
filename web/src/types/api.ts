@@ -19,8 +19,7 @@ export interface KernelRouteRule {
 export interface NetworkSettings {
   public_asn?: number;
   confed_members?: string;
-  export_prefixes?: string[];
-  import_prefixes?: string[];
+  prefixes?: string[];
 }
 
 export interface Node {
@@ -29,11 +28,13 @@ export interface Node {
   is_external?: boolean;
   description?: string;
   ip?: string;
+  external_ip?: string;
   interface?: string;
   asn: number;
   entrypoints?: Entrypoint[];
   tags?: string[];
   table?: number;
+  external_table?: number;
   static_routes?: string[];
   routes?: KernelRouteRule[];
   x?: number;

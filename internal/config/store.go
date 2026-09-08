@@ -105,10 +105,8 @@ func (s *Store) Initialize() (string, error) {
 		EncryptedDEK:  encryptedDEK,
 		SessionSecret: sessionSecret,
 		NetworkSettings: NetworkSettings{
-			PublicASN:      4242420001,
-			ConfedMembers:  "4224420000..4224429999",
-			ExportPrefixes: prefixes,
-			ImportPrefixes: prefixes,
+			PublicASN: 4242420001,
+			Prefixes:  prefixes,
 		},
 		Nodes: make([]Node, 0),
 		Links: make([]Link, 0),
@@ -152,6 +150,8 @@ func (s *Store) Load() (*Config, error) {
 		cfg.Links = make([]Link, 0)
 	}
 
+	cfg.NetworkSettings.Prefixes = CleanPrefixes(cfg.NetworkSettings.Prefixes)
+
 	s.config = &cfg
 	return &cfg, nil
 }
@@ -171,6 +171,8 @@ func (s *Store) Save(cfg *Config) error {
 	if err := os.MkdirAll(s.dataDir, 0700); err != nil {
 		return fmt.Errorf("failed to create data dir: %w", err)
 	}
+
+	cfg.NetworkSettings.Prefixes = CleanPrefixes(cfg.NetworkSettings.Prefixes)
 
 	data, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {

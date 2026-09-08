@@ -34,7 +34,9 @@ func (m *Manager) CheckTaskStatus(ctx context.Context, taskID string, nodeNames 
 	targetMap := make(map[string]config.Node)
 	if len(nodeNames) == 0 {
 		for _, n := range cfg.Nodes {
-			targetMap[n.Name] = n
+			if !n.IsExternal {
+				targetMap[n.Name] = n
+			}
 		}
 	} else {
 		allowed := make(map[string]bool)
@@ -42,7 +44,7 @@ func (m *Manager) CheckTaskStatus(ctx context.Context, taskID string, nodeNames 
 			allowed[name] = true
 		}
 		for _, n := range cfg.Nodes {
-			if allowed[n.Name] {
+			if allowed[n.Name] && !n.IsExternal {
 				targetMap[n.Name] = n
 			}
 		}
@@ -105,7 +107,7 @@ func (m *Manager) RunTask(ctx context.Context, taskID string, nodeNames []string
 		allowed[name] = true
 	}
 	for _, n := range cfg.Nodes {
-		if allowed[n.Name] {
+		if allowed[n.Name] && !n.IsExternal {
 			targetMap[n.Name] = n
 		}
 	}

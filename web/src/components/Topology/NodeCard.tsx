@@ -159,18 +159,36 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
 
         {/* ASN & Entrypoints */}
         <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mt: 0.5 }}>
-          <Chip
-            label={`AS${node.asn}`}
-            size="small"
-            sx={{
-              height: 22,
-              fontSize: "0.7rem",
-              fontWeight: 700,
-              backgroundColor: isExternal ? "rgba(139, 92, 246, 0.1)" : "rgba(79, 70, 229, 0.08)",
-              color: isExternal ? "#7C3AED" : "#4338CA",
-              border: isExternal ? "1px solid rgba(139, 92, 246, 0.3)" : "1px solid rgba(79, 70, 229, 0.2)",
-            }}
-          />
+          <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+            <Chip
+              label={`AS${node.asn}`}
+              size="small"
+              sx={{
+                height: 22,
+                fontSize: "0.7rem",
+                fontWeight: 700,
+                backgroundColor: isExternal ? "rgba(139, 92, 246, 0.1)" : "rgba(79, 70, 229, 0.08)",
+                color: isExternal ? "#7C3AED" : "#4338CA",
+                border: isExternal ? "1px solid rgba(139, 92, 246, 0.3)" : "1px solid rgba(79, 70, 229, 0.2)",
+              }}
+            />
+            {node.external_table && node.external_table !== (node.table ?? 254) ? (
+              <Tooltip title={`External Table: ${node.external_table}`}>
+                <Chip
+                  label={`Ext T${node.external_table}`}
+                  size="small"
+                  sx={{
+                    height: 22,
+                    fontSize: "0.65rem",
+                    fontWeight: 700,
+                    backgroundColor: "rgba(139, 92, 246, 0.1)",
+                    color: "#7C3AED",
+                    border: "1px solid rgba(139, 92, 246, 0.3)",
+                  }}
+                />
+              </Tooltip>
+            ) : null}
+          </Box>
 
           <Typography variant="caption" sx={{ color: "#64748B", fontSize: "0.7rem" }}>
             {isExternal ? "BGP Peer" : `${node.entrypoints?.filter((e) => e.ip && e.ip !== "").length || 0} Endpoints`}

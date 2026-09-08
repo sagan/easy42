@@ -734,10 +734,8 @@ func TestExternalNodeAndPeering(t *testing.T) {
 
 	// 1. Test NetworkSettings
 	netSettings := config.NetworkSettings{
-		PublicASN:      4242421234,
-		ConfedMembers:  "4224420000..4224429999",
-		ExportPrefixes: []string{"172.20.1.0/24"},
-		ImportPrefixes: []string{"172.20.0.0/14{21,29}"},
+		PublicASN: 4242421234,
+		Prefixes:  []string{"172.20.1.0/24", "172.20.0.0/14{21,29}"},
 	}
 	if err := mgr.UpdateNetworkSettings(netSettings); err != nil {
 		t.Fatalf("UpdateNetworkSettings failed: %v", err)
@@ -789,20 +787,23 @@ func TestExternalNodeAndPeering(t *testing.T) {
 		Address:    "fe80::1001/64",
 	}
 	toEnd := config.LinkEnd{
-		Name:       "peer-dn42",
-		Endpoint:   "remote.dn42.org:51820",
-		Address:    "fe80::9876/64",
-		PublicKey:  "dGhpcy1pcy1hLXRlc3QtcHVibGljLWtleS0xMjM0NQ==",
+		Name:      "peer-dn42",
+		Endpoint:  "remote.dn42.org:51820",
+		Address:   "fe80::9876/64",
+		PublicKey: "dGhpcy1pcy1hLXRlc3QtcHVibGljLWtleS0xMjM0NQ==",
 	}
 	extLink, err := mgr.AddLinkAdvanced("gw1", "peer-dn42", &fromEnd, &toEnd, []string{"dn42"})
 	if err != nil {
 		t.Fatalf("AddLinkAdvanced failed: %v", err)
 	}
 
-	// Verify only gw1 has private key
+	// Verify only gw1 has private key and interface uses wg42- prefix
 	if extLink.From.Name == "gw1" {
 		if extLink.From.PrivateKey == "" {
 			t.Errorf("Expected gw1 to have private key")
+		}
+		if extLink.From.Interface != "wg42-peer-dn42" {
+			t.Errorf("Expected external link interface wg42-peer-dn42, got %s", extLink.From.Interface)
 		}
 		if extLink.To.PrivateKey != "" {
 			t.Errorf("Expected external peer to have no private key")
@@ -814,9 +815,31 @@ func TestExternalNodeAndPeering(t *testing.T) {
 		if extLink.To.PrivateKey == "" {
 			t.Errorf("Expected gw1 to have private key")
 		}
+		if extLink.To.Interface != "wg42-peer-dn42" {
+			t.Errorf("Expected external link interface wg42-peer-dn42, got %s", extLink.To.Interface)
+		}
 		if extLink.From.PrivateKey != "" {
 			t.Errorf("Expected external peer to have no private key")
 		}
+	}
+
+	// Test external node name max length validation (max 10 chars)
+	tooLongExt := config.Node{
+		Name:       "12345678901", // 11 chars
+		IsExternal: true,
+		ASN:        4242421111,
+	}
+	if err := mgr.AddNode(tooLongExt); err == nil {
+		t.Errorf("Expected error adding external peer with 11 chars, got nil")
+	}
+
+	exactExt := config.Node{
+		Name:       "1234567890", // 10 chars
+		IsExternal: true,
+		ASN:        4242421111,
+	}
+	if err := mgr.AddNode(exactExt); err != nil {
+		t.Errorf("Expected success adding external peer with 10 chars, got: %v", err)
 	}
 
 	// 6. Test RefreshNodeStatus for external node returns connected/synthetic without SSH
@@ -839,5 +862,19 @@ func TestExternalNodeAndPeering(t *testing.T) {
 	if !strings.Contains(birdConf, "template bgp external_peer") {
 		t.Errorf("Expected template bgp external_peer in bird config:\n%s", birdConf)
 	}
-}
 
+	// 8. Test UpdateState excludes external nodes from SSH connection attempts
+	_, warnings, err := mgr.UpdateState()
+	if err != nil {
+		t.Fatalf("UpdateState failed: %v", err)
+	}
+	for _, w := range warnings {
+		if strings.Contains(w, "peer-dn42") || strings.Contains(w, "1234567890") {
+			t.Errorf("UpdateState should not attempt to connect to external nodes, got warning: %s", w)
+		}
+	}
+	statuses := mgr.GetNodeStatuses()
+	if st, ok := statuses["peer-dn42"]; !ok || !st.Connected {
+		t.Errorf("Expected synthetic status for external node peer-dn42, got %+v", st)
+	}
+}
