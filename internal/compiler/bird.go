@@ -1,14 +1,13 @@
 package compiler
 
 import (
-	"bytes"
 	"embed"
 	"encoding/json"
 	"fmt"
 	"strings"
-	"text/template"
 
 	"easy42/internal/config"
+	"easy42/util/tplutil"
 )
 
 // DefaultBirdConfigPath is the standard destination path for generated BIRD config on managed devices
@@ -326,28 +325,7 @@ func GenerateBirdConfigWithTemplate(
 	if err != nil {
 		return "", err
 	}
-
-	funcMap := template.FuncMap{
-		"join": strings.Join,
-		"stripPrefix": func(s string) string {
-			if before, _, ok := strings.Cut(s, "/"); ok {
-				return before
-			}
-			return s
-		},
-	}
-
-	tmpl, err := template.New("bird_config").Funcs(funcMap).Parse(tmplContent)
-	if err != nil {
-		return "", fmt.Errorf("failed to parse bird config template: %w", err)
-	}
-
-	var buf bytes.Buffer
-	if err := tmpl.Execute(&buf, ctx); err != nil {
-		return "", fmt.Errorf("failed to execute bird config template: %w", err)
-	}
-
-	return buf.String(), nil
+	return tplutil.RenderTemplate(tmplContent, ctx)
 }
 
 // GenerateBirdConfig compiles the BIRD configuration for a node using the default embedded template

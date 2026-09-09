@@ -52,7 +52,9 @@ table inet easy42 {
     type filter hook forward priority filter; policy accept;
 
     ct state established,related accept
+    iifname @external_ifname ip saddr != @external_prefix drop
     iifname @external_ifname ip daddr != @external_prefix drop
+    iifname @external_ifname ip6 saddr != @external_prefix6 drop
     iifname @external_ifname ip6 daddr != @external_prefix6 drop
   }
   chain filter_input {

@@ -71,7 +71,8 @@ func ResolveEndpointToIP(endpoint string) string {
 	return selectedIP
 }
 
-// ResolveLinkEndpoint determines the actually used endpoint for selfNode's connection to peerNode.
+// ResolveLinkEndpoint determines the remote peer endpoint for selfNode's connection to peerNode.
+// If selfNode is external, the remote endpoint is always derived from the managed peerNode's entrypoint and listen port.
 // If selfEnd.UseIp is true, any hostname in the endpoint will be resolved to an IP in easy42 server.
 func ResolveLinkEndpoint(
 	selfNode *config.Node,
@@ -83,17 +84,34 @@ func ResolveLinkEndpoint(
 		return ""
 	}
 
-	endpoint := selfEnd.Endpoint
-	if endpoint == "" && peerEnd != nil && peerEnd.Endpoint != "" {
-		endpoint = peerEnd.Endpoint
-	}
+	endpoint := ""
 
-	if endpoint == "" && peerNode != nil && !peerNode.IsExternal {
+	// 1. If selfNode is an external peer, its remote endpoint is ALWAYS the managed peerNode's endpoint
+	if selfNode != nil && selfNode.IsExternal && peerNode != nil && !peerNode.IsExternal {
 		peerListenPort := 0
 		if peerEnd != nil && peerEnd.ListenPort > 0 {
 			peerListenPort = peerEnd.ListenPort
-		} else if selfNode != nil {
+		} else if peerNode.IP != "" {
+			peerListenPort = DerivePortFromIP(peerNode.IP)
+		}
+		derivedEP, _ := ResolvePeerEndpoint(selfNode, peerNode, nil, peerListenPort)
+		endpoint = derivedEP
+	}
+
+	// 2. Otherwise, check if selfEnd.Endpoint is explicitly set
+	if endpoint == "" && selfEnd.Endpoint != "" {
+		endpoint = selfEnd.Endpoint
+	}
+
+	// 3. If empty, derive from peerNode's entrypoint and peerEnd's ListenPort
+	if endpoint == "" && peerNode != nil {
+		peerListenPort := 0
+		if peerEnd != nil && peerEnd.ListenPort > 0 {
+			peerListenPort = peerEnd.ListenPort
+		} else if selfNode != nil && selfNode.IP != "" {
 			peerListenPort = DerivePortFromIP(selfNode.IP)
+		} else if peerNode.IP != "" {
+			peerListenPort = DerivePortFromIP(peerNode.IP)
 		}
 		derivedEP, _ := ResolvePeerEndpoint(selfNode, peerNode, nil, peerListenPort)
 		endpoint = derivedEP
@@ -119,18 +137,24 @@ func ResolvePeerEndpointWithEntrypoint(nodeFrom *config.Node, nodeTo *config.Nod
 		return "", 0, nil
 	}
 
-	// 1. Try to find matching tags between entrypoints
 	var selectedEP *config.Entrypoint
-	for _, epFrom := range nodeFrom.Entrypoints {
-		for _, tagFrom := range epFrom.Tags {
-			if strings.TrimSpace(tagFrom) == "" {
-				continue
-			}
-			for i := range nodeTo.Entrypoints {
-				epTo := &nodeTo.Entrypoints[i]
-				for _, tagTo := range epTo.Tags {
-					if strings.EqualFold(tagFrom, tagTo) && !epTo.IsNone() {
-						selectedEP = epTo
+
+	// 1. Try to find matching tags between entrypoints
+	if nodeFrom != nil {
+		for _, epFrom := range nodeFrom.Entrypoints {
+			for _, tagFrom := range epFrom.Tags {
+				if strings.TrimSpace(tagFrom) == "" {
+					continue
+				}
+				for i := range nodeTo.Entrypoints {
+					epTo := &nodeTo.Entrypoints[i]
+					for _, tagTo := range epTo.Tags {
+						if strings.EqualFold(tagFrom, tagTo) && !epTo.IsNone() {
+							selectedEP = epTo
+							break
+						}
+					}
+					if selectedEP != nil {
 						break
 					}
 				}
@@ -142,8 +166,29 @@ func ResolvePeerEndpointWithEntrypoint(nodeFrom *config.Node, nodeTo *config.Nod
 				break
 			}
 		}
-		if selectedEP != nil {
-			break
+
+		// 1b. Check node-level tags if no tag matched from entrypoints
+		if selectedEP == nil {
+			for _, tagFrom := range nodeFrom.Tags {
+				if strings.TrimSpace(tagFrom) == "" {
+					continue
+				}
+				for i := range nodeTo.Entrypoints {
+					epTo := &nodeTo.Entrypoints[i]
+					for _, tagTo := range epTo.Tags {
+						if strings.EqualFold(tagFrom, tagTo) && !epTo.IsNone() {
+							selectedEP = epTo
+							break
+						}
+					}
+					if selectedEP != nil {
+						break
+					}
+				}
+				if selectedEP != nil {
+					break
+				}
+			}
 		}
 	}
 
@@ -158,14 +203,20 @@ func ResolvePeerEndpointWithEntrypoint(nodeFrom *config.Node, nodeTo *config.Nod
 		}
 	}
 
-	// If no valid endpoint found (e.g. nodeTo is strictly behind NAT/none)
-	if selectedEP == nil || selectedEP.IsNone() {
+	targetHost := ""
+	if selectedEP != nil && !selectedEP.IsNone() {
+		targetHost = selectedEP.IP
+	} else if nodeTo.Host != "" {
+		targetHost = nodeTo.Host
+	}
+
+	if targetHost == "" {
 		return "", 0, nil
 	}
 
 	// 3. Resolve port
 	port := 0
-	if len(selectedEP.Ports) > 0 {
+	if selectedEP != nil && len(selectedEP.Ports) > 0 {
 		for _, ps := range selectedEP.Ports {
 			if ps.Range != "" {
 				start, end, err := ParsePortRange(ps.Range)
@@ -198,14 +249,16 @@ func ResolvePeerEndpointWithEntrypoint(nodeFrom *config.Node, nodeTo *config.Nod
 	if port == 0 {
 		if len(targetListenPort) > 0 && targetListenPort[0] > 0 {
 			port = targetListenPort[0]
-		} else if nodeFrom != nil {
+		} else if nodeFrom != nil && nodeFrom.IP != "" {
 			// By default, nodeTo listens on port derived from nodeFrom.IP
 			port = DerivePortFromIP(nodeFrom.IP)
-		} else {
+		} else if nodeTo.IP != "" {
 			port = DerivePortFromIP(nodeTo.IP)
+		} else {
+			port = 51820
 		}
 	}
 
-	endpointStr := FormatHostPort(selectedEP.IP, port)
+	endpointStr := FormatHostPort(targetHost, port)
 	return endpointStr, port, selectedEP
 }

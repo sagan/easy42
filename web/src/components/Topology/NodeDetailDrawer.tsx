@@ -283,39 +283,53 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
             ENTRYPOINTS ({node.entrypoints?.length || 0})
           </Typography>
           <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
-            {node.entrypoints?.map((ep, i) => (
-              <Box
-                key={i}
-                sx={{
-                  p: 1.2,
-                  borderRadius: 1.5,
-                  backgroundColor: "#F8FAFC",
-                  border: "1px solid #E2E8F0",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                }}
-              >
-                <Typography
-                  variant="caption"
-                  className="mono-font"
-                  sx={{ color: ep.ip ? "#0891B2" : "#D97706", fontWeight: 600 }}
+            {node.entrypoints && node.entrypoints.length > 0 ? (
+              node.entrypoints.map((ep, i) => (
+                <Box
+                  key={i}
+                  sx={{
+                    p: 1.2,
+                    borderRadius: 1.5,
+                    backgroundColor: "#F8FAFC",
+                    border: "1px solid #E2E8F0",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                  }}
                 >
-                  {ep.ip || "Strictly NAT (Outbound only)"}
-                </Typography>
-                <Box sx={{ display: "flex", gap: 0.5, alignItems: "center" }}>
-                  {ep.mtu && (
-                    <Chip
-                      label={`MTU ${ep.mtu}`}
-                      size="small"
-                      variant="outlined"
-                      sx={{ fontSize: "0.65rem", height: 20 }}
-                    />
-                  )}
-                  <Chip label={ep.tags?.join(", ") || "default"} size="small" sx={{ fontSize: "0.65rem" }} />
+                  <Typography
+                    variant="caption"
+                    className="mono-font"
+                    sx={{ color: ep.ip ? "#0891B2" : "#D97706", fontWeight: 600 }}
+                  >
+                    {ep.ip || "Strictly NAT (Outbound only)"}
+                  </Typography>
+                  <Box sx={{ display: "flex", gap: 0.5, alignItems: "center" }}>
+                    {ep.ports && ep.ports.length > 0 && (
+                      <Chip
+                        label={`Port ${ep.ports[0].range || ep.ports[0].external_port || ep.ports[0].port}`}
+                        size="small"
+                        variant="outlined"
+                        sx={{ fontSize: "0.65rem", height: 20 }}
+                      />
+                    )}
+                    {ep.mtu && (
+                      <Chip
+                        label={`MTU ${ep.mtu}`}
+                        size="small"
+                        variant="outlined"
+                        sx={{ fontSize: "0.65rem", height: 20 }}
+                      />
+                    )}
+                    <Chip label={ep.tags?.join(", ") || "default"} size="small" sx={{ fontSize: "0.65rem" }} />
+                  </Box>
                 </Box>
-              </Box>
-            ))}
+              ))
+            ) : (
+              <Typography variant="caption" sx={{ color: "#94A3B8", fontStyle: "italic" }}>
+                No entrypoints configured
+              </Typography>
+            )}
           </Box>
         </Box>
 

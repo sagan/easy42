@@ -55,6 +55,7 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [copiedEndpoint, setCopiedEndpoint] = useState<string | null>(null);
 
   if (!link) return null;
 
@@ -63,6 +64,13 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
     navigator.clipboard.writeText(text);
     setCopiedKey(id);
     setTimeout(() => setCopiedKey(null), 2000);
+  };
+
+  const copyEndpointToClipboard = (text: string, id: string) => {
+    if (!text) return;
+    navigator.clipboard.writeText(text);
+    setCopiedEndpoint(id);
+    setTimeout(() => setCopiedEndpoint(null), 2000);
   };
 
   const handleDelete = async () => {
@@ -288,22 +296,13 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
               </Typography>
             </Box>
 
-            <Box sx={{ display: "flex", justifyContent: "space-between" }}>
+            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <Typography variant="caption" sx={{ color: "#64748B" }}>
                 Peer Endpoint:
               </Typography>
-              <Typography variant="caption" className="mono-font" sx={{ color: "#D97706", fontWeight: 600 }}>
-                {link.from.endpoint || "Dynamic / Automatic"}
-              </Typography>
-            </Box>
-
-            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <Typography variant="caption" sx={{ color: "#64748B" }}>
-                Actually Used Endpoint:
-              </Typography>
               <Box sx={{ display: "flex", alignItems: "center", gap: 0.8 }}>
-                <Typography variant="caption" className="mono-font" sx={{ color: "#059669", fontWeight: 700 }}>
-                  {link.from.resolved_endpoint || link.from.endpoint || "Dynamic / None"}
+                <Typography variant="caption" className="mono-font" sx={{ color: "#0F172A", fontWeight: 700 }}>
+                  {link.from.resolved_endpoint || link.from.endpoint || "Dynamic / Automatic"}
                 </Typography>
                 {link.from.use_ip && (
                   <Chip
@@ -319,6 +318,23 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
                     }}
                   />
                 )}
+                {(link.from.resolved_endpoint || link.from.endpoint) &&
+                  (link.from.resolved_endpoint || link.from.endpoint) !== "Dynamic / Automatic" && (
+                    <Tooltip title={copiedEndpoint === "from" ? "Copied!" : "Copy Peer Endpoint"}>
+                      <IconButton
+                        size="small"
+                        onClick={() =>
+                          copyEndpointToClipboard(
+                            link.from.resolved_endpoint || link.from.endpoint || "",
+                            "from",
+                          )
+                        }
+                        sx={{ p: 0.3, color: copiedEndpoint === "from" ? "#10B981" : "#64748B" }}
+                      >
+                        {copiedEndpoint === "from" ? <Check size={13} /> : <Copy size={13} />}
+                      </IconButton>
+                    </Tooltip>
+                  )}
               </Box>
             </Box>
 
@@ -447,22 +463,13 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
               </Typography>
             </Box>
 
-            <Box sx={{ display: "flex", justifyContent: "space-between" }}>
+            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <Typography variant="caption" sx={{ color: "#64748B" }}>
                 Peer Endpoint:
               </Typography>
-              <Typography variant="caption" className="mono-font" sx={{ color: "#D97706", fontWeight: 600 }}>
-                {link.to.endpoint || "Dynamic / Automatic"}
-              </Typography>
-            </Box>
-
-            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <Typography variant="caption" sx={{ color: "#64748B" }}>
-                Actually Used Endpoint:
-              </Typography>
               <Box sx={{ display: "flex", alignItems: "center", gap: 0.8 }}>
-                <Typography variant="caption" className="mono-font" sx={{ color: "#059669", fontWeight: 700 }}>
-                  {link.to.resolved_endpoint || link.to.endpoint || "Dynamic / None"}
+                <Typography variant="caption" className="mono-font" sx={{ color: "#0F172A", fontWeight: 700 }}>
+                  {link.to.resolved_endpoint || link.to.endpoint || "Dynamic / Automatic"}
                 </Typography>
                 {link.to.use_ip && (
                   <Chip
@@ -478,6 +485,23 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
                     }}
                   />
                 )}
+                {(link.to.resolved_endpoint || link.to.endpoint) &&
+                  (link.to.resolved_endpoint || link.to.endpoint) !== "Dynamic / Automatic" && (
+                    <Tooltip title={copiedEndpoint === "to" ? "Copied!" : "Copy Peer Endpoint"}>
+                      <IconButton
+                        size="small"
+                        onClick={() =>
+                          copyEndpointToClipboard(
+                            link.to.resolved_endpoint || link.to.endpoint || "",
+                            "to",
+                          )
+                        }
+                        sx={{ p: 0.3, color: copiedEndpoint === "to" ? "#10B981" : "#64748B" }}
+                      >
+                        {copiedEndpoint === "to" ? <Check size={13} /> : <Copy size={13} />}
+                      </IconButton>
+                    </Tooltip>
+                  )}
               </Box>
             </Box>
 

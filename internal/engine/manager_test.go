@@ -811,6 +811,12 @@ func TestExternalNodeAndPeering(t *testing.T) {
 		if extLink.To.PublicKey != toEnd.PublicKey {
 			t.Errorf("Expected external peer public key preserved")
 		}
+		if extLink.From.ResolvedEndpoint != "remote.dn42.org:51820" {
+			t.Errorf("Expected gw1 ResolvedEndpoint remote.dn42.org:51820, got %s", extLink.From.ResolvedEndpoint)
+		}
+		if extLink.To.ResolvedEndpoint != "10.0.0.1:51820" {
+			t.Errorf("Expected peer-dn42 ResolvedEndpoint 10.0.0.1:51820, got %s", extLink.To.ResolvedEndpoint)
+		}
 	} else {
 		if extLink.To.PrivateKey == "" {
 			t.Errorf("Expected gw1 to have private key")

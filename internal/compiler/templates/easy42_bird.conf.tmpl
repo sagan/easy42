@@ -1,9 +1,9 @@
 define SELF_IP = {{ .ip }};
+define SELF_AS = {{ .asn }};
+define TABLE = {{ .table }};
 {{if .external_ip}}
 define EXTERNAL_IP = {{ .external_ip }};
 {{end}}
-define SELF_AS = {{ .asn }};
-define TABLE = {{ .table }};
 {{if .use_external_table}}
 define EXTERNAL_TABLE = {{ .external_table }};
 
@@ -59,7 +59,7 @@ protocol kernel kernel_ext_v4 {
     ipv4 {
         table ext_table4;
         export filter {
-            krt_prefsrc = {{ if .external_ip }}EXTERNAL_IP{{ else }}SELF_IP{{ end }};
+            krt_prefsrc = {{if .external_ip}}EXTERNAL_IP;{{else}}SELF_IP;{{end}}
             accept;
         };
         import none;
@@ -117,6 +117,9 @@ protocol kernel kernel_ext_v6 {
     ipv6 {
         table ext_table6;
         export filter {
+            {{if .external_ip6}}
+            krt_prefsrc = {{ .external_ip6 }};
+            {{end}}
             accept;
         };
         import none;
@@ -128,7 +131,17 @@ protocol kernel kernel_ext_v6 {
 protocol static static_self {
     ipv4;
     route {{ .ip }}/32 reject;
+    {{if .external_ip}}
+    route {{ .external_ip }}/32 reject;
+    {{end}}
 }
+
+{{if .external_ip6}}
+protocol static static_self_v6 {
+    ipv6;
+    route {{ .external_ip6 }}/128 reject;
+}
+{{end}}
 
 {{if .static_routes_v4}}
 protocol static static_v4 {

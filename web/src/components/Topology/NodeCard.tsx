@@ -190,8 +190,8 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
             ) : null}
           </Box>
 
-          <Typography variant="caption" sx={{ color: "#64748B", fontSize: "0.7rem" }}>
-            {isExternal ? "BGP Peer" : `${node.entrypoints?.filter((e) => e.ip && e.ip !== "").length || 0} Endpoints`}
+          <Typography variant="caption" sx={{ color: isExternal ? "#7C3AED" : "#64748B", fontSize: "0.7rem", fontWeight: isExternal ? 600 : 400 }}>
+            {`${node.entrypoints?.filter((e) => e.ip && e.ip !== "").length || 0} Endpoints`}
           </Typography>
         </Box>
 

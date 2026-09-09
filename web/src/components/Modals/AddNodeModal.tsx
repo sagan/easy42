@@ -125,17 +125,21 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
             id: `ep-${idx}-${Date.now()}`,
             ip: ep.ip || "",
             portStr,
-            tagStr: ep.tags?.join(", ") || (isNone ? "nat" : "direct"),
+            tagStr: ep.tags?.join(", ") || (isNone ? "nat" : nodeToEdit.is_external ? "external" : "direct"),
             mtuStr: ep.mtu ? String(ep.mtu) : isNone ? "" : "1500",
             isNone,
           };
         });
-        if (!hasNone) {
+        if (!hasNone && !nodeToEdit.is_external) {
           mapped.push({ id: "nat-fallback", ip: "", portStr: "", tagStr: "nat", mtuStr: "", isNone: true });
         }
         setEntrypoints(mapped);
       } else {
-        setEntrypoints([{ id: "nat-fallback", ip: "", portStr: "", tagStr: "nat", mtuStr: "", isNone: true }]);
+        if (nodeToEdit.is_external) {
+          setEntrypoints([{ id: `ep-0-${Date.now()}`, ip: "", portStr: "", tagStr: "external", mtuStr: "", isNone: false }]);
+        } else {
+          setEntrypoints([{ id: "nat-fallback", ip: "", portStr: "", tagStr: "nat", mtuStr: "", isNone: true }]);
+        }
       }
     } else {
       setName("");
@@ -219,11 +223,11 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
       id: `ep-${Date.now()}`,
       ip: "",
       portStr: "",
-      tagStr: "direct",
-      mtuStr: "1500",
+      tagStr: isExternal ? "external" : "direct",
+      mtuStr: isExternal ? "" : "1500",
       isNone: false,
     };
-    // Insert before the fixed NAT endpoint at the end
+    // Insert before the fixed NAT endpoint at the end if present
     const lastIsNone = entrypoints.length > 0 && entrypoints[entrypoints.length - 1].isNone;
     if (lastIsNone) {
       setEntrypoints([...entrypoints.slice(0, -1), newEp, entrypoints[entrypoints.length - 1]]);
@@ -283,12 +287,67 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
 
     let newNode: Node;
 
+    const buildFinalEntrypoints = (eps: EditableEntrypoint[], forExternal: boolean): Entrypoint[] => {
+      return eps
+        .filter((ep) => {
+          if (forExternal) {
+            return !ep.isNone && ep.ip.trim() !== "";
+          }
+          return true;
+        })
+        .map((ep) => {
+          const tags = ep.tagStr
+            .split(",")
+            .map((t) => t.trim())
+            .filter(Boolean);
+
+          if (ep.isNone) {
+            return {
+              ip: "",
+              tags: tags.length > 0 ? tags : ["nat"],
+            };
+          }
+
+          const entry: Entrypoint = {
+            ip: ep.ip.trim(),
+            tags: tags.length > 0 ? tags : forExternal ? ["external"] : ["direct"],
+          };
+
+          if (ep.mtuStr && !isNaN(parseInt(ep.mtuStr, 10)) && parseInt(ep.mtuStr, 10) > 0) {
+            entry.mtu = parseInt(ep.mtuStr, 10);
+          }
+
+          if (ep.portStr.trim()) {
+            const pStr = ep.portStr.trim();
+            if (pStr.includes("-")) {
+              entry.ports = [{ range: pStr }];
+            } else if (pStr.includes(":")) {
+              const parts = pStr.split(":");
+              const p = parseInt(parts[0], 10);
+              const ext = parseInt(parts[1], 10);
+              if (!isNaN(p)) {
+                entry.ports = [{ port: p, external_port: isNaN(ext) ? p : ext }];
+              }
+            } else {
+              const num = parseInt(pStr, 10);
+              if (!isNaN(num)) {
+                entry.ports = [{ port: num, external_port: num }];
+              }
+            }
+          }
+
+          return entry;
+        });
+    };
+
     if (isExternal) {
+      const finalEntrypoints = buildFinalEntrypoints(entrypoints, true);
       newNode = {
         name: name.trim(),
         asn: Number(asn),
         ip: ip.trim() || undefined,
         is_external: true,
+        entrypoints: finalEntrypoints.length > 0 ? finalEntrypoints : undefined,
         description: description.trim() || undefined,
         tags: parsedTags.length > 0 ? parsedTags : undefined,
         x: nodeToEdit?.x,
@@ -296,49 +355,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
       };
     } else {
       // Convert editable entrypoints to API format
-      const finalEntrypoints: Entrypoint[] = entrypoints.map((ep) => {
-        const tags = ep.tagStr
-          .split(",")
-          .map((t) => t.trim())
-          .filter(Boolean);
-
-        if (ep.isNone) {
-          return {
-            ip: "",
-            tags: tags.length > 0 ? tags : ["nat"],
-          };
-        }
-
-        const entry: Entrypoint = {
-          ip: ep.ip.trim(),
-          tags: tags.length > 0 ? tags : ["direct"],
-        };
-
-        if (ep.mtuStr && !isNaN(parseInt(ep.mtuStr, 10)) && parseInt(ep.mtuStr, 10) > 0) {
-          entry.mtu = parseInt(ep.mtuStr, 10);
-        }
-
-        if (ep.portStr.trim()) {
-          const pStr = ep.portStr.trim();
-          if (pStr.includes("-")) {
-            entry.ports = [{ range: pStr }];
-          } else if (pStr.includes(":")) {
-            const parts = pStr.split(":");
-            const p = parseInt(parts[0], 10);
-            const ext = parseInt(parts[1], 10);
-            if (!isNaN(p)) {
-              entry.ports = [{ port: p, external_port: isNaN(ext) ? p : ext }];
-            }
-          } else {
-            const num = parseInt(pStr, 10);
-            if (!isNaN(num)) {
-              entry.ports = [{ port: num, external_port: num }];
-            }
-          }
-        }
-
-        return entry;
-      });
+      const finalEntrypoints = buildFinalEntrypoints(entrypoints, false);
 
       const parsedStaticRoutes = staticRoutesStr
         .split(/[\n,]+/)
@@ -431,7 +448,12 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
               <Button
                 variant={!isExternal ? "contained" : "outlined"}
                 size="small"
-                onClick={() => setIsExternal(false)}
+                onClick={() => {
+                  setIsExternal(false);
+                  if (entrypoints.length === 1 && !entrypoints[0].isNone && !entrypoints[0].ip) {
+                    setEntrypoints([{ id: "nat-fallback", ip: "", portStr: "", tagStr: "nat", mtuStr: "", isNone: true }]);
+                  }
+                }}
                 startIcon={<Server size={16} />}
                 sx={{ flex: 1, textTransform: "none", fontWeight: 600 }}
               >
@@ -440,7 +462,12 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
               <Button
                 variant={isExternal ? "contained" : "outlined"}
                 size="small"
-                onClick={() => setIsExternal(true)}
+                onClick={() => {
+                  setIsExternal(true);
+                  if (entrypoints.length === 1 && entrypoints[0].isNone) {
+                    setEntrypoints([{ id: `ep-0-${Date.now()}`, ip: "", portStr: "", tagStr: "external", mtuStr: "", isNone: false }]);
+                  }
+                }}
                 startIcon={<Globe size={16} />}
                 sx={{ flex: 1, textTransform: "none", fontWeight: 600 }}
               >
@@ -516,6 +543,103 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                   helperText="Tags for filtering & visualization"
                   disabled={saving}
                 />
+              </Box>
+
+              {/* External Peer Entrypoints */}
+              <Box sx={{ mt: 0.5 }}>
+                <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1.2 }}>
+                  <Typography variant="caption" sx={{ color: "#475569", fontWeight: 700, letterSpacing: "0.5px" }}>
+                    ENTRYPOINTS
+                  </Typography>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    startIcon={<Plus size={14} />}
+                    onClick={handleAddEntrypoint}
+                    sx={{ fontSize: "0.75rem", py: 0.3 }}
+                  >
+                    Add Endpoint
+                  </Button>
+                </Box>
+
+                <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+                  {entrypoints.map((ep, idx) => (
+                    <Box
+                      key={ep.id}
+                      sx={{
+                        p: 1.5,
+                        borderRadius: 2,
+                        backgroundColor: "#FAF5FF",
+                        border: "1px solid #DDD6FE",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 1.5,
+                      }}
+                    >
+                      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <Typography
+                          variant="caption"
+                          sx={{ color: "#6D28D9", fontWeight: 700, textTransform: "uppercase" }}
+                        >
+                          Endpoint {entrypoints.length > 1 ? `#${idx + 1}` : ""}
+                        </Typography>
+                        {entrypoints.length > 1 && (
+                          <Tooltip title="Remove endpoint">
+                            <IconButton
+                              size="small"
+                              onClick={() => handleRemoveEntrypoint(ep.id)}
+                              sx={{ color: "#94A3B8", p: 0.5 }}
+                            >
+                              <Trash2 size={14} />
+                            </IconButton>
+                          </Tooltip>
+                        )}
+                      </Box>
+
+                      <Box sx={{ display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: 1.5 }}>
+                        <TextField
+                          label="Endpoint Host / IP"
+                          size="small"
+                          placeholder="e.g. peer.example.com or 198.51.100.1"
+                          value={ep.ip}
+                          onChange={(e) => handleUpdateEntrypoint(ep.id, "ip", e.target.value)}
+                          helperText="Public IP or DDNS hostname"
+                          disabled={saving}
+                        />
+                        <TextField
+                          label="Listen Port (Optional)"
+                          size="small"
+                          placeholder="e.g. 51820"
+                          value={ep.portStr}
+                          onChange={(e) => handleUpdateEntrypoint(ep.id, "portStr", e.target.value)}
+                          helperText="WireGuard listen port"
+                          disabled={saving}
+                        />
+                      </Box>
+
+                      <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}>
+                        <TextField
+                          label="Tags"
+                          size="small"
+                          placeholder="external"
+                          value={ep.tagStr}
+                          onChange={(e) => handleUpdateEntrypoint(ep.id, "tagStr", e.target.value)}
+                          helperText="Default: external (used to match internal endpoints)"
+                          disabled={saving}
+                        />
+                        <TextField
+                          label="MTU (Optional)"
+                          size="small"
+                          placeholder="1420"
+                          value={ep.mtuStr}
+                          onChange={(e) => handleUpdateEntrypoint(ep.id, "mtuStr", e.target.value)}
+                          helperText="Leave empty to use link default"
+                          disabled={saving}
+                        />
+                      </Box>
+                    </Box>
+                  ))}
+                </Box>
               </Box>
             </Box>
           ) : (

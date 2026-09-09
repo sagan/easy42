@@ -497,6 +497,12 @@ func (m *Manager) GetLinks() []config.Link {
 		toNode := nodeMap[res[i].To.Name]
 		res[i].From.ResolvedEndpoint = compiler.ResolveLinkEndpoint(fromNode, toNode, &res[i].From, &res[i].To)
 		res[i].To.ResolvedEndpoint = compiler.ResolveLinkEndpoint(toNode, fromNode, &res[i].To, &res[i].From)
+		if toNode != nil && toNode.IsExternal {
+			res[i].To.Endpoint = res[i].To.ResolvedEndpoint
+		}
+		if fromNode != nil && fromNode.IsExternal {
+			res[i].From.Endpoint = res[i].From.ResolvedEndpoint
+		}
 	}
 	return res
 }
@@ -619,20 +625,24 @@ func (m *Manager) buildLink(cfg *config.Config, n1, n2 *config.Node, listenPort1
 		toEP = customToEnd.Endpoint
 	}
 
-	if !fromNode.IsExternal && !toNode.IsExternal {
+	if fromNode.IsExternal {
+		// fromNode is external, connecting to toNode (managed internal)
+		fromEP, _, epTo = compiler.ResolvePeerEndpointWithEntrypoint(fromNode, toNode, nil, toPort)
+		if toEP == "" && customFromEnd != nil && customFromEnd.Endpoint != "" {
+			toEP = customFromEnd.Endpoint
+		}
+	} else if toNode.IsExternal {
+		// toNode is external, connecting to fromNode (managed internal)
+		toEP, _, epFrom = compiler.ResolvePeerEndpointWithEntrypoint(toNode, fromNode, nil, fromPort)
+		if fromEP == "" && customToEnd != nil && customToEnd.Endpoint != "" {
+			fromEP = customToEnd.Endpoint
+		}
+	} else {
 		if fromEP == "" {
 			fromEP, _, epTo = compiler.ResolvePeerEndpointWithEntrypoint(fromNode, toNode, nil, toPort)
 		}
 		if toEP == "" {
 			toEP, _, epFrom = compiler.ResolvePeerEndpointWithEntrypoint(toNode, fromNode, nil, fromPort)
-		}
-	} else if toNode.IsExternal {
-		if fromEP == "" && toEP != "" {
-			fromEP = toEP
-		}
-	} else if fromNode.IsExternal {
-		if toEP == "" && fromEP != "" {
-			toEP = fromEP
 		}
 	}
 
@@ -1006,6 +1016,16 @@ func (m *Manager) UpdateLink(node1Name, node2Name string, listenPort1, listenPor
 		} else {
 			link.To.PersistentKeepalive = 0
 		}
+	} else if toNode.IsExternal {
+		toEP, _, _ := compiler.ResolvePeerEndpointWithEntrypoint(toNode, fromNode, nil, link.From.ListenPort)
+		if toEP != "" {
+			link.To.Endpoint = toEP
+		}
+	} else if fromNode.IsExternal {
+		fromEP, _, _ := compiler.ResolvePeerEndpointWithEntrypoint(fromNode, toNode, nil, link.To.ListenPort)
+		if fromEP != "" {
+			link.From.Endpoint = fromEP
+		}
 	}
 	link.ModifiedAt = time.Now().UTC()
 	link.From.ResolvedEndpoint = compiler.ResolveLinkEndpoint(fromNode, toNode, &link.From, &link.To)
@@ -1130,12 +1150,20 @@ func (m *Manager) UpdateLinkAdvanced(node1Name, node2Name string, customFrom, cu
 		if link.From.Endpoint != "" && link.From.PersistentKeepalive == 0 {
 			link.From.PersistentKeepalive = 25
 		}
+		toEP, _, _ := compiler.ResolvePeerEndpointWithEntrypoint(toNode, fromNode, nil, link.From.ListenPort)
+		if toEP != "" {
+			link.To.Endpoint = toEP
+		}
 	} else if fromNode.IsExternal {
 		if link.To.Endpoint == "" && fromEnd != nil && fromEnd.Endpoint != "" {
 			link.To.Endpoint = fromEnd.Endpoint
 		}
 		if link.To.Endpoint != "" && link.To.PersistentKeepalive == 0 {
 			link.To.PersistentKeepalive = 25
+		}
+		fromEP, _, _ := compiler.ResolvePeerEndpointWithEntrypoint(fromNode, toNode, nil, link.To.ListenPort)
+		if fromEP != "" {
+			link.From.Endpoint = fromEP
 		}
 	}
 

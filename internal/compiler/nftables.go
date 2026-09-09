@@ -1,14 +1,13 @@
 package compiler
 
 import (
-	"bytes"
 	"fmt"
 	"net/netip"
 	"sort"
 	"strings"
-	"text/template"
 
 	"easy42/internal/config"
+	"easy42/util/tplutil"
 )
 
 // DefaultNftablesConfigPath is the standard destination path for generated nftables rules on managed devices
@@ -140,17 +139,7 @@ func GenerateNftablesConfigWithTemplate(
 		return "", err
 	}
 
-	tmpl, err := template.New("easy42_nft").Parse(tmplContent)
-	if err != nil {
-		return "", fmt.Errorf("failed to parse nftables template: %w", err)
-	}
-
-	var buf bytes.Buffer
-	if err := tmpl.Execute(&buf, ctx); err != nil {
-		return "", fmt.Errorf("failed to execute nftables template: %w", err)
-	}
-
-	return buf.String(), nil
+	return tplutil.RenderTemplate(tmplContent, ctx)
 }
 
 // GenerateNftablesConfig compiles the nftables configuration for a node using the default embedded template

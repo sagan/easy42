@@ -290,3 +290,67 @@ func TestGetInterfaceName(t *testing.T) {
 		t.Errorf("Expected wg42-dn42peer, got %s", iface)
 	}
 }
+
+func TestResolveLinkEndpointExternalNode(t *testing.T) {
+	managedNode := &config.Node{
+		Name: "dedirock",
+		IP:   "192.168.110.203",
+		Entrypoints: []config.Entrypoint{
+			{
+				IP:   "dedirock.s.sagan.me",
+				Tags: []string{"default"},
+				MTU:  1500,
+			},
+			{
+				IP:   "us0.dn42.sagan.me",
+				Tags: []string{"external"},
+				MTU:  1500,
+			},
+		},
+	}
+	externalNode := &config.Node{
+		Name:       "iedon-uk",
+		IsExternal: true,
+		Tags:       []string{"external"},
+		Entrypoints: []config.Entrypoint{
+			{
+				IP:   "uk-lon.dn42.iedon.net",
+				Tags: []string{"external"},
+			},
+		},
+	}
+
+	fromEnd := &config.LinkEnd{
+		Name:       "dedirock",
+		ListenPort: 22189,
+		Endpoint:   "uk-lon.dn42.iedon.net:42569",
+	}
+	toEnd := &config.LinkEnd{
+		Name:       "iedon-uk",
+		ListenPort: 0,
+		Endpoint:   "",
+	}
+
+	// 1. Managed node connects to external peer:
+	epFrom := ResolveLinkEndpoint(managedNode, externalNode, fromEnd, toEnd)
+	if epFrom != "uk-lon.dn42.iedon.net:42569" {
+		t.Errorf("Expected dedirock's peer endpoint to be uk-lon.dn42.iedon.net:42569, got %s", epFrom)
+	}
+
+	// 2. External node connects to managed peer:
+	epTo := ResolveLinkEndpoint(externalNode, managedNode, toEnd, fromEnd)
+	if epTo != "us0.dn42.sagan.me:22189" {
+		t.Errorf("Expected iedon-uk's peer endpoint to be us0.dn42.sagan.me:22189, got %s", epTo)
+	}
+
+	// 3. Even if toEnd.Endpoint was mistakenly set to the external peer's own endpoint:
+	toEndCorrupted := &config.LinkEnd{
+		Name:       "iedon-uk",
+		ListenPort: 0,
+		Endpoint:   "uk-lon.dn42.iedon.net:42569",
+	}
+	epToFixed := ResolveLinkEndpoint(externalNode, managedNode, toEndCorrupted, fromEnd)
+	if epToFixed != "us0.dn42.sagan.me:22189" {
+		t.Errorf("Expected iedon-uk's peer endpoint to be derived as us0.dn42.sagan.me:22189, got %s", epToFixed)
+	}
+}

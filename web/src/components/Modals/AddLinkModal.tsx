@@ -15,11 +15,14 @@ import {
   FormControlLabel,
   Switch,
   Chip,
+  Tooltip,
+  IconButton,
 } from "@mui/material";
-import { Link as LinkIcon, ArrowRightLeft, Edit2, Globe } from "lucide-react";
+import { Link as LinkIcon, ArrowRightLeft, Edit2, Globe, Copy, Check } from "lucide-react";
 import { api } from "../../api/client";
 import { Node, Link } from "../../types/api";
 import { derivePortFromIP } from "../../utils/port";
+import { resolvePeerEntrypoint, extractPort, formatEndpoint } from "../../utils/endpoint";
 
 interface AddLinkModalProps {
   open: boolean;
@@ -56,8 +59,16 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
   // External peering custom fields
   const [localAddress, setLocalAddress] = useState("");
   const [remoteAddress, setRemoteAddress] = useState("");
-  const [remoteEndpoint, setRemoteEndpoint] = useState("");
+  const [remotePort, setRemotePort] = useState<number | "">("");
   const [remotePublicKey, setRemotePublicKey] = useState("");
+  const [copiedEndpoint, setCopiedEndpoint] = useState(false);
+
+  const copyEndpointToClipboard = (text: string) => {
+    if (!text) return;
+    navigator.clipboard.writeText(text);
+    setCopiedEndpoint(true);
+    setTimeout(() => setCopiedEndpoint(false), 2000);
+  };
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -67,6 +78,22 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
   const isExternalLink = Boolean(fromNode?.is_external || toNode?.is_external);
   const managedNode = fromNode?.is_external ? toNode : fromNode;
   const externalNode = fromNode?.is_external ? fromNode : toNode;
+
+  // Resolve external peer's entrypoint using matching tags with managed node
+  const { entrypoint: resolvedExtEP, matchedTag } = resolvePeerEntrypoint(managedNode, externalNode);
+  const resolvedExtIp = resolvedExtEP?.ip || "";
+
+  const fullRemoteEndpoint = formatEndpoint(
+    resolvedExtIp,
+    typeof remotePort === "number" ? remotePort : Number(remotePort),
+  );
+
+  const managedListenPort = (managedNode === fromNode ? fromPort : toPort) || 51820;
+  const { entrypoint: managedEP } = resolvePeerEntrypoint(externalNode, managedNode);
+  const managedPeerEndpoint = formatEndpoint(
+    managedEP?.ip || managedNode?.host,
+    managedListenPort,
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -84,17 +111,19 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
       if (fNode?.is_external) {
         setLocalAddress(linkToEdit.to.address || "fe80::1/64");
         setRemoteAddress(linkToEdit.from.address || "fe80::2/64");
-        setRemoteEndpoint(linkToEdit.to.endpoint || linkToEdit.from.endpoint || "");
+        const ep = linkToEdit.to.endpoint || linkToEdit.from.endpoint || "";
+        setRemotePort(extractPort(ep) ?? "");
         setRemotePublicKey(linkToEdit.from.public_key || "");
       } else if (tNode?.is_external) {
         setLocalAddress(linkToEdit.from.address || "fe80::1/64");
         setRemoteAddress(linkToEdit.to.address || "fe80::2/64");
-        setRemoteEndpoint(linkToEdit.from.endpoint || linkToEdit.to.endpoint || "");
+        const ep = linkToEdit.from.endpoint || linkToEdit.to.endpoint || "";
+        setRemotePort(extractPort(ep) ?? "");
         setRemotePublicKey(linkToEdit.to.public_key || "");
       } else {
         setLocalAddress("fe80::1/64");
         setRemoteAddress("fe80::2/64");
-        setRemoteEndpoint("");
+        setRemotePort("");
         setRemotePublicKey("");
       }
       setFromUseIp(Boolean(linkToEdit.from.use_ip));
@@ -109,7 +138,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
       setToMtu(1420);
       setLocalAddress("fe80::1/64");
       setRemoteAddress("fe80::2/64");
-      setRemoteEndpoint("");
+      setRemotePort("");
       setRemotePublicKey("");
       setFromUseIp(false);
       setToUseIp(false);
@@ -128,6 +157,20 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
       if (managedNode === toNode && toPort === 0) {
         setToPort(51820);
       }
+
+      // Auto prefill remotePort from external node's resolved entrypoint if available
+      const { entrypoint: extEP } = resolvePeerEntrypoint(managedNode, externalNode);
+      if (extEP?.ports && extEP.ports.length > 0) {
+        const p = extEP.ports[0].external_port || extEP.ports[0].port;
+        if (p) {
+          setRemotePort(p);
+        }
+      }
+
+      if (extEP?.mtu && extEP.mtu > 0) {
+        if (managedNode === fromNode) setFromMtu(extEP.mtu - 80);
+        else setToMtu(extEP.mtu - 80);
+      }
       return;
     }
 
@@ -140,6 +183,10 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
 
     const getUsedEpMTU = (targetNode?: Node, sourceNode?: Node) => {
       let foundMTU = 1500;
+      const { entrypoint: matchedEP } = resolvePeerEntrypoint(sourceNode, targetNode);
+      if (matchedEP?.mtu && matchedEP.mtu > 0) {
+        return matchedEP.mtu - 80;
+      }
       if (targetNode?.entrypoints) {
         for (const ep of targetNode.entrypoints) {
           if (ep.ip && ep.mtu && ep.mtu > 0) {
@@ -163,7 +210,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
       setFromMtu(getUsedEpMTU(toNode, fromNode));
       setToMtu(getUsedEpMTU(fromNode, toNode));
     }
-  }, [fromNode, toNode, linkToEdit, isExternalLink, managedNode, fromPort, toPort]);
+  }, [fromNode, toNode, linkToEdit, isExternalLink, managedNode, externalNode, fromPort, toPort]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -182,22 +229,24 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
 
     try {
       if (isExternalLink && managedNode && externalNode) {
-        const managedListenPort = (managedNode === fromNode ? fromPort : toPort) || 51820;
         const managedMtuVal = (managedNode === fromNode ? fromMtu : toMtu) || 1420;
+        const extEndpoint = fullRemoteEndpoint || undefined;
+        const parsedRemotePort = typeof remotePort === "number" ? remotePort : (Number(remotePort) || 0);
 
         const managedEnd = {
           name: managedNode.name,
           listen_port: managedListenPort,
           address: localAddress.trim() || "fe80::1/64",
-          endpoint: remoteEndpoint.trim() || undefined,
+          endpoint: extEndpoint,
           mtu: managedMtuVal,
           use_ip: managedNode === fromNode ? fromUseIp : toUseIp,
         };
 
         const externalEnd = {
           name: externalNode.name,
+          listen_port: parsedRemotePort,
           address: remoteAddress.trim() || "fe80::2/64",
-          endpoint: remoteEndpoint.trim() || undefined,
+          endpoint: managedPeerEndpoint || undefined,
           public_key: remotePublicKey.trim() || undefined,
           mtu: 1420,
         };
@@ -476,18 +525,59 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                   border: "1px solid #DDD6FE",
                 }}
               >
-                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#6D28D9", mb: 1.2 }}>
-                  Remote Peer: {externalNode.name} (AS{externalNode.asn})
-                </Typography>
-                <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5, mb: 1.5 }}>
+                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1.2 }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#6D28D9" }}>
+                    Remote Peer: {externalNode.name} (AS{externalNode.asn})
+                  </Typography>
+                  {matchedTag && (
+                    <Chip
+                      label={`Tag: #${matchedTag}`}
+                      size="small"
+                      sx={{
+                        height: 20,
+                        fontSize: "0.65rem",
+                        fontWeight: 700,
+                        backgroundColor: "rgba(109, 40, 217, 0.1)",
+                        color: "#6D28D9",
+                        border: "1px solid rgba(109, 40, 217, 0.3)",
+                      }}
+                    />
+                  )}
+                </Box>
+
+                <Box sx={{ display: "grid", gridTemplateColumns: "1.2fr 0.8fr", gap: 1.5, mb: 1.5 }}>
                   <TextField
-                    label="Remote Endpoint (host:port)"
+                    label="Resolved Entrypoint (IP / Host)"
                     size="small"
-                    value={remoteEndpoint}
-                    onChange={(e) => setRemoteEndpoint(e.target.value)}
-                    placeholder="e.g. peer.example.com:51820"
-                    helperText="Leave empty if peer connects to you dynamically"
+                    value={resolvedExtIp || (externalNode ? "No Entrypoint Configured" : "")}
+                    disabled
+                    helperText={
+                      matchedTag
+                        ? `Matched tag: #${matchedTag} with ${managedNode?.name}`
+                        : resolvedExtIp
+                          ? "Resolved from external peer's entrypoints"
+                          : "Configure an entrypoint on the external peer"
+                    }
+                    InputProps={{
+                      sx: {
+                        backgroundColor: "#FFFFFF",
+                        fontWeight: 600,
+                        color: resolvedExtIp ? "#6D28D9" : "#94A3B8",
+                      },
+                    }}
                   />
+                  <TextField
+                    label="Remote Port"
+                    type="number"
+                    size="small"
+                    value={remotePort}
+                    onChange={(e) => setRemotePort(e.target.value === "" ? "" : Number(e.target.value))}
+                    placeholder="e.g. 51820"
+                    helperText="WireGuard listen port (or leave empty)"
+                  />
+                </Box>
+
+                <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5, mb: 1.5 }}>
                   <TextField
                     label="Remote WG Address"
                     size="small"
@@ -497,22 +587,22 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                     helperText="Peer's WireGuard IP address"
                     required
                   />
+                  <TextField
+                    size="small"
+                    label="Remote WireGuard Public Key"
+                    value={remotePublicKey}
+                    onChange={(e) => setRemotePublicKey(e.target.value)}
+                    placeholder="Base64 44-character key"
+                    helperText="WireGuard public key of peer"
+                    required
+                  />
                 </Box>
-                <TextField
-                  fullWidth
-                  size="small"
-                  label="Remote WireGuard Public Key"
-                  value={remotePublicKey}
-                  onChange={(e) => setRemotePublicKey(e.target.value)}
-                  placeholder="Base64 44-character public key from peer"
-                  helperText="WireGuard public key of the external node"
-                  required
-                />
-                {remoteEndpoint && (
+
+                {managedPeerEndpoint && (
                   <Box
                     sx={{
                       mt: 1.5,
-                      p: 1.2,
+                      p: 1.5,
                       borderRadius: 1.5,
                       bgcolor: "#FFFFFF",
                       border: "1px solid #DDD6FE",
@@ -521,32 +611,23 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                       alignItems: "center",
                     }}
                   >
-                    <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600 }}>
-                      Actually Used Endpoint:
-                    </Typography>
-                    <Box sx={{ display: "flex", alignItems: "center", gap: 0.8 }}>
-                      <Typography variant="caption" className="mono-font" sx={{ color: "#059669", fontWeight: 700 }}>
-                        {(managedNode === fromNode ? fromUseIp : toUseIp)
-                          ? linkToEdit?.from.resolved_endpoint ||
-                            linkToEdit?.to.resolved_endpoint ||
-                            "(Resolves domain to IP on server)"
-                          : remoteEndpoint}
+                    <Box>
+                      <Typography variant="caption" sx={{ color: "#6D28D9", fontWeight: 700, display: "block" }}>
+                        Peer Endpoint (Provide to External Peer):
                       </Typography>
-                      {(managedNode === fromNode ? fromUseIp : toUseIp) && (
-                        <Chip
-                          label="IP"
-                          size="small"
-                          sx={{
-                            height: 16,
-                            fontSize: "0.6rem",
-                            fontWeight: 800,
-                            bgcolor: "rgba(16, 185, 129, 0.15)",
-                            color: "#059669",
-                            borderRadius: "4px",
-                          }}
-                        />
-                      )}
+                      <Typography variant="caption" className="mono-font" sx={{ color: "#0F172A", fontWeight: 700 }}>
+                        {managedPeerEndpoint}
+                      </Typography>
                     </Box>
+                    <Tooltip title={copiedEndpoint ? "Copied!" : "Copy Endpoint"}>
+                      <IconButton
+                        size="small"
+                        onClick={() => copyEndpointToClipboard(managedPeerEndpoint)}
+                        sx={{ p: 0.5, color: copiedEndpoint ? "#10B981" : "#6D28D9" }}
+                      >
+                        {copiedEndpoint ? <Check size={15} /> : <Copy size={15} />}
+                      </IconButton>
+                    </Tooltip>
                   </Box>
                 )}
               </Box>
@@ -608,27 +689,14 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                       <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600 }}>
                         Peer Endpoint:
                       </Typography>
-                      <Typography variant="caption" className="mono-font" sx={{ color: "#D97706", fontWeight: 600 }}>
-                        {linkToEdit?.from.endpoint ||
-                          (toNode?.entrypoints?.[0]?.ip
-                            ? `${toNode.entrypoints[0].ip}:${toPort || (fromNode?.ip ? derivePortFromIP(fromNode.ip) : 20000)}`
-                            : "Dynamic / Automatic")}
-                      </Typography>
-                    </Box>
-
-                    <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600 }}>
-                        Actually Used Endpoint:
-                      </Typography>
                       <Box sx={{ display: "flex", alignItems: "center", gap: 0.8 }}>
-                        <Typography variant="caption" className="mono-font" sx={{ color: "#059669", fontWeight: 700 }}>
-                          {linkToEdit?.from.resolved_endpoint ||
-                            (fromUseIp
-                              ? "(Resolves domain to IP on server)"
-                              : linkToEdit?.from.endpoint ||
-                                (toNode?.entrypoints?.[0]?.ip
-                                  ? `${toNode.entrypoints[0].ip}:${toPort || (fromNode?.ip ? derivePortFromIP(fromNode.ip) : 20000)}`
-                                  : "Dynamic / None"))}
+                        <Typography variant="caption" className="mono-font" sx={{ color: "#0F172A", fontWeight: 700 }}>
+                          {fromUseIp
+                            ? linkToEdit?.from.resolved_endpoint || "(Resolves domain to IP on server)"
+                            : linkToEdit?.from.endpoint ||
+                              (resolvePeerEntrypoint(fromNode, toNode).entrypoint?.ip
+                                ? `${resolvePeerEntrypoint(fromNode, toNode).entrypoint!.ip}:${toPort || (fromNode?.ip ? derivePortFromIP(fromNode.ip) : 20000)}`
+                                : "Dynamic / Automatic")}
                         </Typography>
                         {fromUseIp && (
                           <Chip
@@ -719,27 +787,14 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                       <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600 }}>
                         Peer Endpoint:
                       </Typography>
-                      <Typography variant="caption" className="mono-font" sx={{ color: "#D97706", fontWeight: 600 }}>
-                        {linkToEdit?.to.endpoint ||
-                          (fromNode?.entrypoints?.[0]?.ip
-                            ? `${fromNode.entrypoints[0].ip}:${fromPort || (toNode?.ip ? derivePortFromIP(toNode.ip) : 20000)}`
-                            : "Dynamic / Automatic")}
-                      </Typography>
-                    </Box>
-
-                    <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600 }}>
-                        Actually Used Endpoint:
-                      </Typography>
                       <Box sx={{ display: "flex", alignItems: "center", gap: 0.8 }}>
-                        <Typography variant="caption" className="mono-font" sx={{ color: "#059669", fontWeight: 700 }}>
-                          {linkToEdit?.to.resolved_endpoint ||
-                            (toUseIp
-                              ? "(Resolves domain to IP on server)"
-                              : linkToEdit?.to.endpoint ||
-                                (fromNode?.entrypoints?.[0]?.ip
-                                  ? `${fromNode.entrypoints[0].ip}:${fromPort || (toNode?.ip ? derivePortFromIP(toNode.ip) : 20000)}`
-                                  : "Dynamic / None"))}
+                        <Typography variant="caption" className="mono-font" sx={{ color: "#0F172A", fontWeight: 700 }}>
+                          {toUseIp
+                            ? linkToEdit?.to.resolved_endpoint || "(Resolves domain to IP on server)"
+                            : linkToEdit?.to.endpoint ||
+                              (resolvePeerEntrypoint(toNode, fromNode).entrypoint?.ip
+                                ? `${resolvePeerEntrypoint(toNode, fromNode).entrypoint!.ip}:${fromPort || (toNode?.ip ? derivePortFromIP(toNode.ip) : 20000)}`
+                                : "Dynamic / Automatic")}
                         </Typography>
                         {toUseIp && (
                           <Chip
