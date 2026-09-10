@@ -43,23 +43,28 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ open, onCl
   // Tag filter state
   const [selectedTag, setSelectedTag] = useState<string>("All");
 
-  // Unique tags across all nodes
+  // Exclude external unmanaged nodes
+  const managedNodes = useMemo(() => {
+    return nodes.filter((n) => !n.is_external);
+  }, [nodes]);
+
+  // Unique tags across all managed nodes
   const uniqueTags = useMemo(() => {
     const set = new Set<string>();
-    nodes.forEach((n) => {
+    managedNodes.forEach((n) => {
       n.tags?.forEach((t) => {
         const trimmed = t.trim();
         if (trimmed) set.add(trimmed);
       });
     });
     return Array.from(set).sort();
-  }, [nodes]);
+  }, [managedNodes]);
 
   // Nodes filtered by tag
   const filteredNodes = useMemo(() => {
-    if (selectedTag === "All") return nodes;
-    return nodes.filter((n) => n.tags && n.tags.includes(selectedTag));
-  }, [nodes, selectedTag]);
+    if (selectedTag === "All") return managedNodes;
+    return managedNodes.filter((n) => n.tags && n.tags.includes(selectedTag));
+  }, [managedNodes, selectedTag]);
 
   // Selected node names for check / run
   const [selectedNodes, setSelectedNodes] = useState<string[]>([]);
@@ -89,16 +94,16 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ open, onCl
       setActiveLogNode(null);
       setSelectedTag("All");
 
-      // Default selected nodes: initialNode if provided, otherwise all nodes
-      if (initialNode && nodes.some((n) => n.name === initialNode)) {
+      // Default selected nodes: initialNode if provided and managed, otherwise all managed nodes
+      if (initialNode && managedNodes.some((n) => n.name === initialNode)) {
         setSelectedNodes([initialNode]);
       } else {
-        setSelectedNodes(nodes.map((n) => n.name));
+        setSelectedNodes(managedNodes.map((n) => n.name));
       }
 
       loadTasks();
     }
-  }, [open, initialNode, nodes]);
+  }, [open, initialNode, managedNodes]);
 
   const loadTasks = async () => {
     setLoadingTasks(true);
@@ -454,7 +459,7 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ open, onCl
               <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1.5 }}>
                 <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
                   <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-                    Target Devices ({selectedNodes.length} / {nodes.length} selected)
+                    Target Devices ({selectedNodes.length} / {managedNodes.length} selected)
                   </Typography>
 
                   {/* Tag Filter Selector */}
@@ -493,10 +498,10 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ open, onCl
                         }}
                       >
                         <MenuItem value="All" sx={{ fontSize: "0.8rem", fontWeight: 600 }}>
-                          Tag: All ({nodes.length})
+                          Tag: All ({managedNodes.length})
                         </MenuItem>
                         {uniqueTags.map((tag) => {
-                          const count = nodes.filter((n) => n.tags && n.tags.includes(tag)).length;
+                          const count = managedNodes.filter((n) => n.tags && n.tags.includes(tag)).length;
                           return (
                             <MenuItem key={tag} value={tag} sx={{ fontSize: "0.8rem", fontWeight: 600 }}>
                               #{tag} ({count})

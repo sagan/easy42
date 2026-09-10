@@ -39,6 +39,7 @@ interface NodeDetailDrawerProps {
   open: boolean;
   onClose: () => void;
   onEditNode: (node: Node) => void;
+  onRenameNode?: (node: Node) => void;
   onNodeDeleted: (name: string) => void;
   onStatusRefreshed: (status: NodeStatus) => void;
   onOpenHelper?: (nodeName: string) => void;
@@ -50,6 +51,7 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
   open,
   onClose,
   onEditNode,
+  onRenameNode,
   onNodeDeleted,
   onStatusRefreshed,
   onOpenHelper,
@@ -167,6 +169,18 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
         </Box>
 
         <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+          {onRenameNode && (
+            <Tooltip title="Rename Node">
+              <IconButton
+                id="rename-node-header-btn"
+                size="small"
+                onClick={() => onRenameNode(node)}
+                sx={{ color: "#4F46E5", "&:hover": { backgroundColor: "rgba(79, 70, 229, 0.08)" } }}
+              >
+                <Tag size={18} />
+              </IconButton>
+            </Tooltip>
+          )}
           <Tooltip title="Edit Node">
             <IconButton
               size="small"
@@ -613,7 +627,7 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
 
       {/* Footer Actions */}
       <Box sx={{ mt: "auto", pt: 3, display: "flex", flexDirection: "column", gap: 1.5 }}>
-        {onOpenHelper && (
+        {onOpenHelper && !node.is_external && (
           <Button
             fullWidth
             variant="outlined"
@@ -633,16 +647,39 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
             Device Config Helper
           </Button>
         )}
-        <Button
-          fullWidth
-          variant="contained"
-          color="primary"
-          startIcon={<Edit2 size={16} />}
-          onClick={() => onEditNode(node)}
-          disabled={refreshing || deleting}
-        >
-          Edit Node
-        </Button>
+        <Box sx={{ display: "grid", gridTemplateColumns: onRenameNode ? "1fr 1fr" : "1fr", gap: 1.5 }}>
+          {onRenameNode && (
+            <Button
+              id="rename-node-footer-btn"
+              fullWidth
+              variant="outlined"
+              startIcon={<Tag size={16} />}
+              onClick={() => onRenameNode(node)}
+              disabled={refreshing || deleting}
+              sx={{
+                borderColor: "#4F46E5",
+                color: "#4F46E5",
+                fontWeight: 600,
+                "&:hover": {
+                  borderColor: "#3730A3",
+                  backgroundColor: "rgba(79, 70, 229, 0.06)",
+                },
+              }}
+            >
+              Rename
+            </Button>
+          )}
+          <Button
+            fullWidth
+            variant="contained"
+            color="primary"
+            startIcon={<Edit2 size={16} />}
+            onClick={() => onEditNode(node)}
+            disabled={refreshing || deleting}
+          >
+            Edit Node
+          </Button>
+        </Box>
         <Box sx={{ display: "flex", gap: 1.5 }}>
           <Button
             fullWidth

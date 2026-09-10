@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 )
@@ -299,6 +300,56 @@ func (s *StateStore) RemoveNode(nodeName string) error {
 	}
 
 	delete(s.state.Nodes, nodeName)
+	return s.saveLocked()
+}
+
+// RenameNode renames a node and updates interface references in state
+func (s *StateStore) RenameNode(oldName, newName string, oldIfaces []string, newIface string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.state == nil || s.state.Nodes == nil {
+		return nil
+	}
+
+	// Rename node entry if it exists
+	if node, exists := s.state.Nodes[oldName]; exists {
+		node.Name = newName
+		s.state.Nodes[newName] = node
+		delete(s.state.Nodes, oldName)
+	}
+
+	// Update interface peer references and interface names across all nodes
+	for nName, nVal := range s.state.Nodes {
+		if nVal.Interfaces == nil {
+			continue
+		}
+		newIfacesMap := make(map[string]StateInterface)
+		for ifKey, ifVal := range nVal.Interfaces {
+			if ifVal.PeerNode == oldName {
+				ifVal.PeerNode = newName
+			}
+			matchedOld := false
+			for _, oldIf := range oldIfaces {
+				if oldIf != "" && (ifKey == oldIf || ifVal.Name == oldIf) {
+					matchedOld = true
+					break
+				}
+			}
+			if matchedOld {
+				ifVal.Name = newIface
+				if strings.HasPrefix(ifVal.TargetFile, "/etc/wireguard/") {
+					ifVal.TargetFile = "/etc/wireguard/" + newIface + ".conf"
+				}
+				newIfacesMap[newIface] = ifVal
+			} else {
+				newIfacesMap[ifKey] = ifVal
+			}
+		}
+		nVal.Interfaces = newIfacesMap
+		s.state.Nodes[nName] = nVal
+	}
+
 	return s.saveLocked()
 }
 

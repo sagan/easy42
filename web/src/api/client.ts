@@ -87,6 +87,11 @@ export const api = {
       method: "PUT",
       body: JSON.stringify(node),
     }),
+  renameNode: (name: string, newName: string) =>
+    request<Node>(`/nodes/${encodeURIComponent(name)}/rename`, {
+      method: "POST",
+      body: JSON.stringify({ new_name: newName }),
+    }),
   updateNodePosition: (name: string, x: number, y: number) =>
     request<{ success: boolean; name: string; x: number; y: number }>(`/nodes/${encodeURIComponent(name)}/position`, {
       method: "PUT",

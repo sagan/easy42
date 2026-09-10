@@ -125,6 +125,30 @@ var nodeRemoveCmd = &cobra.Command{
 	},
 }
 
+var nodeRenameCmd = &cobra.Command{
+	Use:     "rename [old_name] [new_name]",
+	Aliases: []string{"mv"},
+	Short:   "Rename a node across configuration, links, and interfaces",
+	Args:    cobra.ExactArgs(2),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		oldName := args[0]
+		newName := args[1]
+		store := config.NewStore(GetDataDir())
+		if _, err := store.Load(); err != nil {
+			return err
+		}
+		mgr := engine.NewManager(store)
+
+		node, err := mgr.RenameNode(oldName, newName)
+		if err != nil {
+			return err
+		}
+
+		fmt.Printf("Node %s successfully renamed to %s\n", oldName, node.Name)
+		return nil
+	},
+}
+
 var nodeBirdCmd = &cobra.Command{
 	Use:   "bird [name]",
 	Short: "Generate BIRD BGP routing configuration for a node",
@@ -179,6 +203,7 @@ func init() {
 
 	nodeCmd.AddCommand(nodeListCmd)
 	nodeCmd.AddCommand(nodeAddCmd)
+	nodeCmd.AddCommand(nodeRenameCmd)
 	nodeCmd.AddCommand(nodeProbeCmd)
 	nodeCmd.AddCommand(nodeRemoveCmd)
 	nodeCmd.AddCommand(nodeBirdCmd)

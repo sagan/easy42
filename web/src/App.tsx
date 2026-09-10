@@ -8,6 +8,7 @@ import { TopologyGraph } from "./components/Topology/TopologyGraph";
 import { NodeDetailDrawer } from "./components/Topology/NodeDetailDrawer";
 import { LinkDetailDrawer } from "./components/Topology/LinkDetailDrawer";
 import { AddNodeModal } from "./components/Modals/AddNodeModal";
+import { RenameNodeModal } from "./components/Modals/RenameNodeModal";
 import { AddLinkModal } from "./components/Modals/AddLinkModal";
 import { UnlockModal } from "./components/Modals/UnlockModal";
 import { SyncProgressModal } from "./components/Modals/SyncProgressModal";
@@ -34,6 +35,8 @@ export const App: React.FC = () => {
   // Modals
   const [addNodeOpen, setAddNodeOpen] = useState(false);
   const [nodeToEdit, setNodeToEdit] = useState<Node | null>(null);
+  const [renameModalOpen, setRenameModalOpen] = useState(false);
+  const [nodeToRename, setNodeToRename] = useState<Node | null>(null);
   const [addLinkOpen, setAddLinkOpen] = useState(false);
   const [linkToEdit, setLinkToEdit] = useState<Link | null>(null);
   const [connectFrom, setConnectFrom] = useState<string>("");
@@ -247,6 +250,23 @@ export const App: React.FC = () => {
     setAddNodeOpen(true);
   };
 
+  const handleOpenRenameNode = (node: Node) => {
+    setNodeToRename(node);
+    setRenameModalOpen(true);
+  };
+
+  const handleNodeRenamed = (oldName: string, updatedNode: Node) => {
+    setNodes((prev) => prev.map((n) => (n.name === oldName ? updatedNode : n)));
+    if (selectedNode?.name === oldName) {
+      setSelectedNode(updatedNode);
+    }
+    setStateToast({
+      message: `Node "${oldName}" successfully renamed to "${updatedNode.name}"`,
+      severity: "success",
+    });
+    loadData();
+  };
+
   const handleEditLink = (link: Link) => {
     setLinkToEdit(link);
     setAddLinkOpen(true);
@@ -432,6 +452,7 @@ export const App: React.FC = () => {
           open={Boolean(selectedNode)}
           onClose={() => setSelectedNode(null)}
           onEditNode={handleEditNode}
+          onRenameNode={handleOpenRenameNode}
           onNodeDeleted={handleNodeDeleted}
           onStatusRefreshed={handleStatusRefreshed}
           onOpenHelper={(nodeName) => {
@@ -459,6 +480,17 @@ export const App: React.FC = () => {
           }}
           onNodeAdded={handleNodeAdded}
           onNodeUpdated={handleNodeUpdated}
+        />
+
+        <RenameNodeModal
+          open={renameModalOpen}
+          node={nodeToRename}
+          existingNodes={nodes}
+          onClose={() => {
+            setRenameModalOpen(false);
+            setNodeToRename(null);
+          }}
+          onNodeRenamed={handleNodeRenamed}
         />
 
         <AddLinkModal

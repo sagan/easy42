@@ -78,6 +78,8 @@ func New(cfg Config) *Server {
 			r.Get("/nodes", s.handleGetNodes)
 			r.Post("/nodes", s.handleAddNode)
 			r.Put("/nodes/{name}", s.handleUpdateNode)
+			r.Post("/nodes/{name}/rename", s.handleRenameNode)
+			r.Put("/nodes/{name}/rename", s.handleRenameNode)
 			r.Put("/nodes/{name}/position", s.handleUpdateNodePosition)
 			r.Patch("/nodes/{name}/position", s.handleUpdateNodePosition)
 			r.Delete("/nodes/{name}", s.handleDeleteNode)

@@ -11,7 +11,10 @@ ipv4 table ext_table4;
 ipv6 table ext_table6;
 {{end}}
 
+define PRIVATE = [ 192.168.0.0/16+, 10.0.0.0/8+, 172.16.0.0/12+, 198.18.0.0/15+ ];
+define PRIVATE6 = [ fd00::/8+ ];
 define INTERNET = [ 0.0.0.0/0, 0.0.0.0/1, 128.0.0.0/1 ];
+define INTERNET6 = [ ::/0, ::/1, 8000::/1 ];
 
 {{if .confed_as}}
 define CONFED_AS = {{ .confed_as }};
@@ -91,6 +94,7 @@ protocol kernel kernel_{{ .table}} {
 protocol kernel kernel_v6 {
     ipv6 {
         export filter {
+            if net ~ INTERNET6 then reject;
             {{if .use_external_table}}
             if (COMM_EXTERNAL ~ bgp_large_community) then reject;
             {{end}}
@@ -186,7 +190,10 @@ template bgp easy42_peer {
     ipv6 {
         next hop self;
         import all;
-        export all;
+        export filter {
+            if net ~ INTERNET6 then reject;
+            accept;
+        };
     };
 }
 
@@ -225,6 +232,7 @@ template bgp external_peer {
     ipv6 {
         next hop self;
         import filter {
+            if net ~ INTERNET6 then reject;
             if net ~ EXT_PREFIXES_V6 then {
               bgp_large_community.add(COMM_EXTERNAL);
               accept;
@@ -232,6 +240,7 @@ template bgp external_peer {
             reject;
         };
         export filter {
+            if net ~ INTERNET6 then reject;
             if (source ~ [ RTS_STATIC, RTS_BGP ]) && (net ~ EXT_PREFIXES_V6) then {
               bgp_large_community.delete(COMM_EXTERNAL);
               accept;

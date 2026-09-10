@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
@@ -9,6 +10,7 @@ import (
 
 	"easy42/internal/config"
 	"easy42/internal/crypto"
+	"easy42/internal/engine"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -258,6 +260,41 @@ func (s *Server) handleUpdateNode(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, saved)
 		return
 	}
+	writeJSON(w, http.StatusOK, node)
+}
+
+type renameNodeRequest struct {
+	NewName string `json:"new_name"`
+	Name    string `json:"name"`
+}
+
+func (s *Server) handleRenameNode(w http.ResponseWriter, r *http.Request) {
+	name := chi.URLParam(r, "name")
+	var req renameNodeRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid rename payload")
+		return
+	}
+
+	newName := strings.TrimSpace(req.NewName)
+	if newName == "" {
+		newName = strings.TrimSpace(req.Name)
+	}
+	if newName == "" {
+		writeError(w, http.StatusBadRequest, "New node name is required")
+		return
+	}
+
+	node, err := s.mgr.RenameNode(name, newName)
+	if err != nil {
+		if errors.Is(err, engine.ErrNodeNotFound) {
+			writeError(w, http.StatusNotFound, err.Error())
+			return
+		}
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
 	writeJSON(w, http.StatusOK, node)
 }
 

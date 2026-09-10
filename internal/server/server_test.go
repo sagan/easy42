@@ -659,3 +659,122 @@ func TestNetworkSettingsAndExternalPeeringAPI(t *testing.T) {
 		t.Errorf("Expected confederation CONFED_AS in bird config: %s", wBird.Body.String())
 	}
 }
+
+func TestRenameNodeAPI(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "easy42-srv-rename-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	store := config.NewStore(tempDir)
+	pass, err := store.Initialize()
+	if err != nil {
+		t.Fatalf("Failed to initialize store: %v", err)
+	}
+
+	mgr := engine.NewManager(store)
+	srv := New(Config{
+		ListenAddr: "127.0.0.1:0",
+		Manager:    mgr,
+	})
+
+	// Login
+	loginBody, _ := json.Marshal(map[string]string{"password": pass})
+	reqLogin := httptest.NewRequest("POST", "/api/auth/login", bytes.NewReader(loginBody))
+	wLogin := httptest.NewRecorder()
+	srv.router.ServeHTTP(wLogin, reqLogin)
+	cookie := wLogin.Result().Cookies()[0]
+
+	// Add node1 and node2
+	node1 := config.Node{
+		Name:      "test-orig",
+		Host:      "192.168.1.100",
+		IP:        "192.168.100.100",
+		Interface: "lo",
+		ASN:       4224420100,
+	}
+	b1, _ := json.Marshal(node1)
+	req1 := httptest.NewRequest("POST", "/api/nodes", bytes.NewReader(b1))
+	req1.AddCookie(cookie)
+	w1 := httptest.NewRecorder()
+	srv.router.ServeHTTP(w1, req1)
+	if w1.Code != http.StatusCreated {
+		t.Fatalf("AddNode 1 failed: %d %s", w1.Code, w1.Body.String())
+	}
+
+	node2 := config.Node{
+		Name:      "other-node",
+		Host:      "192.168.1.101",
+		IP:        "192.168.100.101",
+		Interface: "lo",
+		ASN:       4224420101,
+	}
+	b2, _ := json.Marshal(node2)
+	req2 := httptest.NewRequest("POST", "/api/nodes", bytes.NewReader(b2))
+	req2.AddCookie(cookie)
+	w2 := httptest.NewRecorder()
+	srv.router.ServeHTTP(w2, req2)
+	if w2.Code != http.StatusCreated {
+		t.Fatalf("AddNode 2 failed: %d %s", w2.Code, w2.Body.String())
+	}
+
+	// 1. Rename nonexistent node -> 404
+	renameBody, _ := json.Marshal(map[string]string{"new_name": "any-name"})
+	reqNonExistent := httptest.NewRequest("POST", "/api/nodes/doesnotexist/rename", bytes.NewReader(renameBody))
+	reqNonExistent.AddCookie(cookie)
+	wNonExistent := httptest.NewRecorder()
+	srv.router.ServeHTTP(wNonExistent, reqNonExistent)
+	if wNonExistent.Code != http.StatusNotFound {
+		t.Errorf("Expected 404 for nonexistent node, got %d", wNonExistent.Code)
+	}
+
+	// 2. Rename to already existing name -> 400
+	dupBody, _ := json.Marshal(map[string]string{"new_name": "other-node"})
+	reqDup := httptest.NewRequest("POST", "/api/nodes/test-orig/rename", bytes.NewReader(dupBody))
+	reqDup.AddCookie(cookie)
+	wDup := httptest.NewRecorder()
+	srv.router.ServeHTTP(wDup, reqDup)
+	if wDup.Code != http.StatusBadRequest {
+		t.Errorf("Expected 400 for duplicate name, got %d: %s", wDup.Code, wDup.Body.String())
+	}
+
+	// 3. Rename with empty name -> 400
+	emptyBody, _ := json.Marshal(map[string]string{"new_name": ""})
+	reqEmpty := httptest.NewRequest("POST", "/api/nodes/test-orig/rename", bytes.NewReader(emptyBody))
+	reqEmpty.AddCookie(cookie)
+	wEmpty := httptest.NewRecorder()
+	srv.router.ServeHTTP(wEmpty, reqEmpty)
+	if wEmpty.Code != http.StatusBadRequest {
+		t.Errorf("Expected 400 for empty name, got %d", wEmpty.Code)
+	}
+
+	// 4. Successful rename via POST -> 200
+	goodBody, _ := json.Marshal(map[string]string{"new_name": "test-ren"})
+	reqGood := httptest.NewRequest("POST", "/api/nodes/test-orig/rename", bytes.NewReader(goodBody))
+	reqGood.AddCookie(cookie)
+	wGood := httptest.NewRecorder()
+	srv.router.ServeHTTP(wGood, reqGood)
+	if wGood.Code != http.StatusOK {
+		t.Fatalf("Rename POST failed: %d %s", wGood.Code, wGood.Body.String())
+	}
+
+	var renNode config.Node
+	if err := json.Unmarshal(wGood.Body.Bytes(), &renNode); err != nil {
+		t.Fatalf("Failed to parse response: %v", err)
+	}
+	if renNode.Name != "test-ren" {
+		t.Errorf("Expected node name 'test-ren', got %q", renNode.Name)
+	}
+
+	// 5. Successful rename via PUT
+	putBody, _ := json.Marshal(map[string]string{"new_name": "test-final"})
+	reqPut := httptest.NewRequest("PUT", "/api/nodes/test-ren/rename", bytes.NewReader(putBody))
+	reqPut.AddCookie(cookie)
+	wPut := httptest.NewRecorder()
+	srv.router.ServeHTTP(wPut, reqPut)
+	if wPut.Code != http.StatusOK {
+		t.Fatalf("Rename PUT failed: %d %s", wPut.Code, wPut.Body.String())
+	}
+}
+

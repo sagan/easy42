@@ -336,21 +336,10 @@ func (m *Manager) UpdateNode(name string, updated config.Node) error {
 	now := time.Now().UTC()
 	updated.ModifiedAt = now
 
-	// Update links connected to this node if name or IP changed
+	// Update links and nodes if name changed
 	oldNode := cfg.Nodes[idx]
 	if updated.Name != name {
-		for i := range cfg.Links {
-			if cfg.Links[i].From.Name == name {
-				cfg.Links[i].From.Name = updated.Name
-				cfg.Links[i].To.Interface = compiler.GetInterfaceName(updated.Name, updated.IsExternal)
-				cfg.Links[i].ModifiedAt = now
-			}
-			if cfg.Links[i].To.Name == name {
-				cfg.Links[i].To.Name = updated.Name
-				cfg.Links[i].From.Interface = compiler.GetInterfaceName(updated.Name, updated.IsExternal)
-				cfg.Links[i].ModifiedAt = now
-			}
-		}
+		m.applyNodeRenameLocked(cfg, name, updated.Name, updated.IsExternal, now)
 	}
 
 	if updated.IP != oldNode.IP {
@@ -420,6 +409,229 @@ func (m *Manager) UpdateNode(name string, updated config.Node) error {
 	}
 
 	return m.store.Save(cfg)
+}
+
+// applyNodeRenameLocked updates all references to a node name across config, links, interface names, and state.
+// Caller must hold m.mu Lock.
+func (m *Manager) applyNodeRenameLocked(cfg *config.Config, oldName, newName string, isExternal bool, now time.Time) {
+	oldIfaceInternal := compiler.GetInterfaceName(oldName, false)
+	oldIfaceExternal := compiler.GetInterfaceName(oldName, true)
+	newIface := compiler.GetInterfaceName(newName, isExternal)
+	newIfaceInternal := compiler.GetInterfaceName(newName, false)
+	newIfaceExternal := compiler.GetInterfaceName(newName, true)
+
+	replaceIface := func(iface string) string {
+		if iface == oldIfaceInternal || iface == "wg42"+oldName {
+			return newIfaceInternal
+		}
+		if iface == oldIfaceExternal || iface == "wg42-"+oldName {
+			return newIfaceExternal
+		}
+		if strings.HasPrefix(iface, "wg42-") && strings.TrimPrefix(iface, "wg42-") == oldName {
+			return newIfaceExternal
+		}
+		if strings.HasPrefix(iface, "wg42") && strings.TrimPrefix(iface, "wg42") == oldName {
+			return newIfaceInternal
+		}
+		if strings.Contains(iface, oldName) {
+			return strings.ReplaceAll(iface, oldName, newName)
+		}
+		return iface
+	}
+
+	// Update node name and interface in Nodes list
+	for i := range cfg.Nodes {
+		if cfg.Nodes[i].Name == oldName {
+			cfg.Nodes[i].Name = newName
+			cfg.Nodes[i].ModifiedAt = now
+		}
+		if cfg.Nodes[i].Interface != "" {
+			replaced := replaceIface(cfg.Nodes[i].Interface)
+			if replaced != cfg.Nodes[i].Interface {
+				cfg.Nodes[i].Interface = replaced
+				cfg.Nodes[i].ModifiedAt = now
+			}
+		}
+		for tIdx := range cfg.Nodes[i].Tags {
+			if cfg.Nodes[i].Tags[tIdx] == oldName {
+				cfg.Nodes[i].Tags[tIdx] = newName
+				cfg.Nodes[i].ModifiedAt = now
+			}
+		}
+	}
+
+	// Update all links: From.Name, To.Name, From.Interface, To.Interface, and Tags
+	for i := range cfg.Links {
+		// Update endpoint names
+		if cfg.Links[i].From.Name == oldName {
+			cfg.Links[i].From.Name = newName
+			cfg.Links[i].ModifiedAt = now
+		}
+		if cfg.Links[i].To.Name == oldName {
+			cfg.Links[i].To.Name = newName
+			cfg.Links[i].ModifiedAt = now
+		}
+
+		// Update From.Interface: if To is the renamed node, use new peer interface name
+		if cfg.Links[i].To.Name == newName {
+			cfg.Links[i].From.Interface = newIface
+			cfg.Links[i].ModifiedAt = now
+		} else {
+			newFromIface := replaceIface(cfg.Links[i].From.Interface)
+			if newFromIface != cfg.Links[i].From.Interface {
+				cfg.Links[i].From.Interface = newFromIface
+				cfg.Links[i].ModifiedAt = now
+			}
+		}
+
+		// Update To.Interface: if From is the renamed node, use new peer interface name
+		if cfg.Links[i].From.Name == newName {
+			cfg.Links[i].To.Interface = newIface
+			cfg.Links[i].ModifiedAt = now
+		} else {
+			newToIface := replaceIface(cfg.Links[i].To.Interface)
+			if newToIface != cfg.Links[i].To.Interface {
+				cfg.Links[i].To.Interface = newToIface
+				cfg.Links[i].ModifiedAt = now
+			}
+		}
+
+		// Update link tags if matching oldName
+		for tIdx := range cfg.Links[i].Tags {
+			if cfg.Links[i].Tags[tIdx] == oldName {
+				cfg.Links[i].Tags[tIdx] = newName
+				cfg.Links[i].ModifiedAt = now
+			}
+		}
+	}
+
+	// Update runtime statuses map
+	if st, ok := m.statuses[oldName]; ok {
+		st.Name = newName
+		m.statuses[newName] = st
+		delete(m.statuses, oldName)
+	}
+
+	// Update state store if present
+	if m.stateStore != nil {
+		oldIfaces := []string{
+			oldIfaceInternal,
+			oldIfaceExternal,
+			"wg42" + oldName,
+			"wg42-" + oldName,
+		}
+		_ = m.stateStore.RenameNode(oldName, newName, oldIfaces, newIface)
+	}
+}
+
+// RenameNode renames an existing node across configuration, links, interfaces, and state
+func (m *Manager) RenameNode(oldName, newName string) (*config.Node, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	oldName = strings.TrimSpace(oldName)
+	newName = strings.TrimSpace(newName)
+
+	if oldName == "" {
+		return nil, errors.New("current node name cannot be empty")
+	}
+	if newName == "" {
+		return nil, errors.New("new node name cannot be empty")
+	}
+
+	cfg := m.store.Get()
+	if cfg == nil {
+		return nil, ErrNodeNotFound
+	}
+
+	idx := -1
+	for i, n := range cfg.Nodes {
+		if n.Name == oldName {
+			idx = i
+			break
+		}
+	}
+	if idx == -1 {
+		return nil, ErrNodeNotFound
+	}
+
+	targetNode := cfg.Nodes[idx]
+
+	if newName == oldName {
+		cp := targetNode
+		return &cp, nil
+	}
+
+	if targetNode.IsExternal {
+		if len(newName) == 0 || len(newName) > 10 {
+			return nil, errors.New("external peer name must be between 1 and 10 characters")
+		}
+	} else {
+		if len(newName) == 0 || len(newName) > 11 {
+			return nil, errors.New("node name must be between 1 and 11 characters")
+		}
+	}
+
+	// Validate allowed characters (letters, digits, hyphen, underscore)
+	for _, ch := range newName {
+		if !((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '-' || ch == '_') {
+			return nil, errors.New("node name may only contain alphanumeric characters, hyphens, and underscores")
+		}
+	}
+
+	// Check if new name already exists
+	for _, n := range cfg.Nodes {
+		if strings.EqualFold(n.Name, newName) {
+			return nil, fmt.Errorf("node with name %s already exists", newName)
+		}
+	}
+
+	now := time.Now().UTC()
+	m.applyNodeRenameLocked(cfg, oldName, newName, targetNode.IsExternal, now)
+
+	// Re-resolve endpoints for connected links
+	for i := range cfg.Links {
+		if cfg.Links[i].From.Name == newName || cfg.Links[i].To.Name == newName {
+			var fromN, toN *config.Node
+			for j := range cfg.Nodes {
+				if cfg.Nodes[j].Name == cfg.Links[i].From.Name {
+					fromN = &cfg.Nodes[j]
+				}
+				if cfg.Nodes[j].Name == cfg.Links[i].To.Name {
+					toN = &cfg.Nodes[j]
+				}
+			}
+			if fromN != nil && toN != nil {
+				fromEP, _, _ := compiler.ResolvePeerEndpointWithEntrypoint(fromN, toN, nil, cfg.Links[i].To.ListenPort)
+				toEP, _, _ := compiler.ResolvePeerEndpointWithEntrypoint(toN, fromN, nil, cfg.Links[i].From.ListenPort)
+				cfg.Links[i].From.Endpoint = fromEP
+				cfg.Links[i].To.Endpoint = toEP
+				if toEP != "" {
+					cfg.Links[i].From.PersistentKeepalive = 25
+				} else {
+					cfg.Links[i].From.PersistentKeepalive = 0
+				}
+				if fromEP != "" {
+					cfg.Links[i].To.PersistentKeepalive = 25
+				} else {
+					cfg.Links[i].To.PersistentKeepalive = 0
+				}
+				cfg.Links[i].ModifiedAt = now
+			}
+		}
+	}
+
+	if err := m.store.Save(cfg); err != nil {
+		return nil, err
+	}
+
+	for _, n := range cfg.Nodes {
+		if n.Name == newName {
+			cp := n
+			return &cp, nil
+		}
+	}
+	return &cfg.Nodes[idx], nil
 }
 
 // UpdateNodePosition updates the graph coordinates (x, y) of a node
