@@ -45,6 +45,8 @@ type StateNode struct {
 	BirdAppliedAt      *time.Time                `json:"bird_applied_at,omitempty"`
 	NftablesConfigHash string                    `json:"nftables_config_hash,omitempty"`
 	NftablesAppliedAt  *time.Time                `json:"nftables_applied_at,omitempty"`
+	RoaConfigHashes    map[string]string         `json:"roa_config_hashes,omitempty"` // key: targetFile, val: sha256 hash
+	RoaAppliedAt       map[string]time.Time      `json:"roa_applied_at,omitempty"`
 	Interfaces         map[string]StateInterface `json:"interfaces"` // key: interface name e.g. "wg42node2"
 }
 
@@ -119,8 +121,14 @@ func (s *StateStore) Load() (*NetworkState, error) {
 	for k, n := range st.Nodes {
 		if n.Interfaces == nil {
 			n.Interfaces = make(map[string]StateInterface)
-			st.Nodes[k] = n
 		}
+		if n.RoaConfigHashes == nil {
+			n.RoaConfigHashes = make(map[string]string)
+		}
+		if n.RoaAppliedAt == nil {
+			n.RoaAppliedAt = make(map[string]time.Time)
+		}
+		st.Nodes[k] = n
 	}
 	s.state = &st
 	return s.state, nil
@@ -264,6 +272,48 @@ func (s *StateStore) UpdateNftablesState(nodeName, host, configHash string, appl
 	node.LastSeen = time.Now()
 	node.NftablesConfigHash = configHash
 	node.NftablesAppliedAt = &appliedAt
+	s.state.Nodes[nodeName] = node
+
+	return s.saveLocked()
+}
+
+// UpdateRoaState records or updates the applied ROA config hash for a specific target file on a node
+func (s *StateStore) UpdateRoaState(nodeName, host, targetFile, configHash string, appliedAt time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.state == nil {
+		s.state = &NetworkState{
+			Version:   1,
+			UpdatedAt: time.Now(),
+			Nodes:     make(map[string]StateNode),
+		}
+	}
+
+	node, exists := s.state.Nodes[nodeName]
+	if !exists {
+		node = StateNode{
+			Name:            nodeName,
+			Host:            host,
+			LastSeen:        time.Now(),
+			Interfaces:      make(map[string]StateInterface),
+			RoaConfigHashes: make(map[string]string),
+			RoaAppliedAt:    make(map[string]time.Time),
+		}
+	}
+	if node.Interfaces == nil {
+		node.Interfaces = make(map[string]StateInterface)
+	}
+	if node.RoaConfigHashes == nil {
+		node.RoaConfigHashes = make(map[string]string)
+	}
+	if node.RoaAppliedAt == nil {
+		node.RoaAppliedAt = make(map[string]time.Time)
+	}
+	node.Host = host
+	node.LastSeen = time.Now()
+	node.RoaConfigHashes[targetFile] = configHash
+	node.RoaAppliedAt[targetFile] = appliedAt
 	s.state.Nodes[nodeName] = node
 
 	return s.saveLocked()

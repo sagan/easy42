@@ -31,6 +31,9 @@ type NetworkPolicy struct {
 	FilterForward      bool        `json:"filter_forward"`
 	FilterInput        bool        `json:"filter_input"`
 	SNAT               *SNATConfig `json:"snat,omitempty"`
+	ROA4               string      `json:"roa4,omitempty"`
+	ROA6               string      `json:"roa6,omitempty"`
+	ROAStrict          bool        `json:"roa_strict,omitempty"`
 }
 
 // EffectiveCost returns the configured cost or default 100 if unset/non-positive
@@ -79,6 +82,8 @@ func GetBuiltinPolicies(netSettings *NetworkSettings) []NetworkPolicy {
 				Condition: "not_dst",
 				Target:    "external_ip",
 			},
+			ROA4: "https://dn42.burble.com/roa/dn42_roa_bird2_4.conf",
+			ROA6: "https://dn42.burble.com/roa/dn42_roa_bird2_6.conf",
 		},
 		{
 			ID:             PolicyNone,

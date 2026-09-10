@@ -29,6 +29,58 @@ define DEFAULT_LOCAL_PREF = 10000;
 
 router id SELF_IP;
 
+{{if .roa_policies}}
+# ==============================================================================
+# Route Origination Authorization (ROA) Tables & Protocol Static
+# ==============================================================================
+{{range .roa_policies}}
+# ROA definitions for policy {{.name}} ({{.id}})
+{{if .has_roa4}}roa4 table {{.table4}};{{end}}
+{{if .has_roa6}}roa6 table {{.table6}};{{end}}
+
+{{if .has_roa4}}
+protocol static {{.proto4}} {
+    roa4 { table {{.table4}}; };
+    include "{{.file4}}";
+}
+{{end}}
+
+{{if .has_roa6}}
+protocol static {{.proto6}} {
+    roa6 { table {{.table6}}; };
+    include "{{.file6}}";
+}
+{{end}}
+
+function {{.check_fn}}() {
+    # Check IPv4 routes
+    if net.type = NET_IP4 then {
+        {{if .has_roa4}}
+        if roa_check({{.table4}}, net, bgp_path.last) = ROA_VALID then return true;
+        {{if not .roa_strict}}
+        if roa_check({{.table4}}, net, bgp_path.last) = ROA_UNKNOWN then return true;
+        {{end}}
+        return false;
+        {{else}}
+        return true;
+        {{end}}
+    }
+    # Check IPv6 routes
+    else {
+        {{if .has_roa6}}
+        if roa_check({{.table6}}, net, bgp_path.last) = ROA_VALID then return true;
+        {{if not .roa_strict}}
+        if roa_check({{.table6}}, net, bgp_path.last) = ROA_UNKNOWN then return true;
+        {{end}}
+        return false;
+        {{else}}
+        return true;
+        {{end}}
+    }
+}
+{{end}}
+{{end}}
+
 protocol device {
     scan time 10;
 }
@@ -184,6 +236,7 @@ template bgp easy42_peer {
         next hop self;
         
         import filter {
+            {{if $.has_default_roa}}if ! default_roa_check() then reject;{{end}}
             if net ~ INTERNET then reject;
             {{if .confed_as}}
             # Prefer routes with fewer confederation hops / lower policy cost
@@ -200,6 +253,7 @@ template bgp easy42_peer {
     ipv6 {
         next hop self;
         import filter {
+            {{if $.has_default_roa}}if ! default_roa_check() then reject;{{end}}
             if net ~ INTERNET6 then reject;
             {{if .confed_as}}
             # Prefer routes with fewer confederation hops / lower policy cost
@@ -268,6 +322,7 @@ template bgp external_peer {
         extended next hop on;
         next hop self;
         import filter {
+            {{if $.has_dn42_roa}}if ! dn42_roa_check() then reject;{{end}}
             if net ~ INTERNET then reject;
             if net ~ EXT_PREFIXES_V4 then {
               bgp_large_community.add(COMM_EXTERNAL);
@@ -288,6 +343,7 @@ template bgp external_peer {
     ipv6 {
         next hop self;
         import filter {
+            {{if $.has_dn42_roa}}if ! dn42_roa_check() then reject;{{end}}
             if net ~ INTERNET6 then reject;
             if net ~ EXT_PREFIXES_V6 then {
               bgp_large_community.add(COMM_EXTERNAL);
@@ -326,6 +382,7 @@ template bgp {{.template_name}} {
         extended next hop on;
         next hop self;
         import filter {
+            {{if .has_roa}}if ! {{.roa_fn}}() then reject;{{end}}
             {{if .reject_internet}}if net ~ INTERNET then reject;{{end}}
             {{if .has_import_v4}}
             if net ~ POL_{{.id}}_IMPORT_V4 then {
@@ -359,6 +416,7 @@ template bgp {{.template_name}} {
     ipv6 {
         next hop self;
         import filter {
+            {{if .has_roa}}if ! {{.roa_fn}}() then reject;{{end}}
             {{if .reject_internet}}if net ~ INTERNET6 then reject;{{end}}
             {{if .has_import_v6}}
             if net ~ POL_{{.id}}_IMPORT_V6 then {

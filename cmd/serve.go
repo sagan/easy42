@@ -1,10 +1,12 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"easy42/internal/config"
 	"easy42/internal/engine"
@@ -42,6 +44,7 @@ var serveCmd = &cobra.Command{
 		}
 
 		mgr := engine.NewManager(store)
+		mgr.StartROABackgroundRefresher(context.Background(), 1*time.Hour)
 		distFS, err := web.DistFS()
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: unable to load embedded frontend: %v\n", err)

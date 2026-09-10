@@ -41,6 +41,9 @@ export interface NetworkPolicy {
   filter_forward?: boolean;
   filter_input?: boolean;
   snat?: SNATConfig;
+  roa4?: string;
+  roa6?: string;
+  roa_strict?: boolean;
 }
 
 export interface Node {

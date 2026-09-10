@@ -760,6 +760,31 @@ func (s *Server) handleDeleteNetworkPolicy(w http.ResponseWriter, r *http.Reques
 	writeJSON(w, http.StatusOK, map[string]string{"message": "Policy deleted successfully"})
 }
 
+func (s *Server) handleRefreshPolicyROA(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if err := s.mgr.RefreshPolicyROA(r.Context(), id); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"message": "Policy ROA refreshed successfully"})
+}
+
+func (s *Server) handleRefreshAllROA(w http.ResponseWriter, r *http.Request) {
+	if err := s.mgr.RefreshAllROA(r.Context(), true); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"message": "All ROA tables refreshed successfully"})
+}
+
+func (s *Server) handleClearROACache(w http.ResponseWriter, r *http.Request) {
+	if err := s.mgr.ROAManager().ClearCache(); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"message": "ROA cache cleared successfully"})
+}
+
 func (s *Server) handleDeleteLink(w http.ResponseWriter, r *http.Request) {
 	from := r.URL.Query().Get("from")
 	to := r.URL.Query().Get("to")

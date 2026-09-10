@@ -3,6 +3,7 @@ package compiler
 import (
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -16,6 +17,44 @@ func TestGetDefaultBirdTemplate(t *testing.T) {
 	}
 	if !strings.Contains(tmpl, "protocol bgp 'easy42_peer_{{.remote.name}}'") {
 		t.Fatalf("Expected peer template in default bird template, got:\n%s", tmpl)
+	}
+}
+
+func validateBirdSyntax(t *testing.T, conf string) {
+	birdPath, err := exec.LookPath("bird")
+	if err != nil || birdPath == "" {
+		return
+	}
+	testConf := conf
+	lines := strings.Split(testConf, "\n")
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "include \"/etc/easy42_") {
+			start := strings.Index(trimmed, "\"/etc/") + len("\"/etc/")
+			end := strings.LastIndex(trimmed, "\"")
+			if start > 0 && end > start {
+				fileName := trimmed[start:end]
+				stubPath := filepath.Join(os.TempDir(), fileName)
+				_ = os.WriteFile(stubPath, []byte("# dummy\n"), 0644)
+				defer os.Remove(stubPath)
+				testConf = strings.ReplaceAll(testConf, "/etc/"+fileName, stubPath)
+			}
+		}
+	}
+	tmpFile, err := os.CreateTemp("", "bird_test_*.conf")
+	if err != nil {
+		t.Fatalf("Failed to create temp file for bird check: %v", err)
+	}
+	defer os.Remove(tmpFile.Name())
+	if _, err := tmpFile.WriteString(testConf); err != nil {
+		t.Fatalf("Failed to write temp file for bird check: %v", err)
+	}
+	_ = tmpFile.Close()
+
+	cmd := exec.Command(birdPath, "-p", "-c", tmpFile.Name())
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("BIRD syntax validation failed: %v\nOutput:\n%s\nConfig:\n%s", err, string(out), testConf)
 	}
 }
 
@@ -341,23 +380,7 @@ func TestExternalTableRouting(t *testing.T) {
 	}
 
 	// Validate configuration syntax using BIRD if installed
-	if birdPath, err := exec.LookPath("bird"); err == nil && birdPath != "" {
-		tmpFile, err := os.CreateTemp("", "bird_test_*.conf")
-		if err != nil {
-			t.Fatalf("Failed to create temp file for bird check: %v", err)
-		}
-		defer os.Remove(tmpFile.Name())
-		if _, err := tmpFile.WriteString(conf); err != nil {
-			t.Fatalf("Failed to write temp file for bird check: %v", err)
-		}
-		_ = tmpFile.Close()
-
-		cmd := exec.Command(birdPath, "-p", "-c", tmpFile.Name())
-		out, err := cmd.CombinedOutput()
-		if err != nil {
-			t.Fatalf("bird -p validation failed: %v\nOutput:\n%s\nConfig:\n%s", err, string(out), conf)
-		}
-	}
+	validateBirdSyntax(t, conf)
 
 	// 2. When ExternalTable == Table (254), it should NOT generate separated external kernel tables
 	nodeManagedSameTable := nodeManaged
@@ -409,18 +432,7 @@ func TestExternalTableRouting(t *testing.T) {
 		t.Errorf("Expected krt_prefsrc = EXTERNAL_IP; in kernel_ext_v4 when ExternalIP is set\nGenerated:\n%s", confExtIP)
 	}
 	// Validate syntax with bird -p
-	if birdPath, err := exec.LookPath("bird"); err == nil && birdPath != "" {
-		tmpFile, err := os.CreateTemp("", "bird_extip_test_*.conf")
-		if err == nil {
-			defer os.Remove(tmpFile.Name())
-			_, _ = tmpFile.WriteString(confExtIP)
-			_ = tmpFile.Close()
-			cmd := exec.Command(birdPath, "-p", "-c", tmpFile.Name())
-			if out, err := cmd.CombinedOutput(); err != nil {
-				t.Fatalf("bird -p validation failed on ExternalIP config: %v\nOutput:\n%s", err, string(out))
-			}
-		}
-	}
+	validateBirdSyntax(t, confExtIP)
 
 	// 5. Internal node without direct external links, but with ExternalTable configured
 	// It receives external routes transitively over easy42_peer tagged with COMM_EXTERNAL
@@ -467,18 +479,7 @@ func TestExternalTableRouting(t *testing.T) {
 	if strings.Contains(confInternal, "template bgp external_peer") {
 		t.Errorf("Internal node without external links should not have template bgp external_peer:\n%s", confInternal)
 	}
-	if birdPath, err := exec.LookPath("bird"); err == nil && birdPath != "" {
-		tmpFile, err := os.CreateTemp("", "bird_internal_test_*.conf")
-		if err == nil {
-			defer os.Remove(tmpFile.Name())
-			_, _ = tmpFile.WriteString(confInternal)
-			_ = tmpFile.Close()
-			cmd := exec.Command(birdPath, "-p", "-c", tmpFile.Name())
-			if out, err := cmd.CombinedOutput(); err != nil {
-				t.Fatalf("bird -p validation failed on internal node config: %v\nOutput:\n%s", err, string(out))
-			}
-		}
-	}
+	validateBirdSyntax(t, confInternal)
 }
 
 func TestStaticRoutesV4AndV6(t *testing.T) {
@@ -660,23 +661,7 @@ func TestBIRDConfigWithCorruptedSplitPrefixes(t *testing.T) {
 	}
 
 	// If BIRD binary is installed on the host, run real syntax validation
-	if birdPath, err := exec.LookPath("bird"); err == nil {
-		tmpFile, err := os.CreateTemp("", "bird_test_*.conf")
-		if err != nil {
-			t.Fatalf("Failed to create temp bird file: %v", err)
-		}
-		defer os.Remove(tmpFile.Name())
-		if _, err := tmpFile.WriteString(conf); err != nil {
-			t.Fatalf("Failed to write temp bird file: %v", err)
-		}
-		tmpFile.Close()
-
-		cmd := exec.Command(birdPath, "-p", "-c", tmpFile.Name())
-		out, err := cmd.CombinedOutput()
-		if err != nil {
-			t.Fatalf("BIRD syntax validation failed with error: %v\nOutput:\n%s\nGenerated config:\n%s", err, string(out), conf)
-		}
-	}
+	validateBirdSyntax(t, conf)
 }
 
 func TestNetworkPolicyBIRD(t *testing.T) {
@@ -769,23 +754,79 @@ func TestNetworkPolicyBIRD(t *testing.T) {
 		t.Errorf("Expected peer_node-guest protocol from pol_peer_guest_pol")
 	}
 
-	// 5. Test bird binary validation if available
-	if birdPath, err := exec.LookPath("bird"); err == nil {
-		tmpFile, err := os.CreateTemp("", "bird_policy_test_*.conf")
-		if err != nil {
-			t.Fatalf("Failed to create temp bird file: %v", err)
-		}
-		defer os.Remove(tmpFile.Name())
-		if _, err := tmpFile.WriteString(conf); err != nil {
-			t.Fatalf("Failed to write temp bird file: %v", err)
-		}
-		tmpFile.Close()
+	// 5. Verify DN42 ROA tables and functions
+	if !strings.Contains(conf, "roa4 table dn42_roa4;") {
+		t.Errorf("Expected roa4 table dn42_roa4")
+	}
+	if !strings.Contains(conf, "roa6 table dn42_roa6;") {
+		t.Errorf("Expected roa6 table dn42_roa6")
+	}
+	if !strings.Contains(conf, "function dn42_roa_check()") {
+		t.Errorf("Expected function dn42_roa_check")
+	}
+	if !strings.Contains(conf, "if ! dn42_roa_check() then reject;") {
+		t.Errorf("Expected dn42_roa_check reject in import filter")
+	}
 
-		cmd := exec.Command(birdPath, "-p", "-c", tmpFile.Name())
-		out, err := cmd.CombinedOutput()
-		if err != nil {
-			t.Fatalf("BIRD syntax validation failed: %v\nOutput:\n%s\nConf:\n%s", err, string(out), conf)
-		}
+	// 6. Test bird binary validation if available
+	validateBirdSyntax(t, conf)
+}
+
+func TestROAPoliciesBIRD(t *testing.T) {
+	nodeLocal := config.Node{
+		Name: "router1",
+		IP:   "192.168.10.1",
+		ASN:  4224420001,
+	}
+	nodePeer := config.Node{
+		Name: "router2",
+		IP:   "192.168.10.2",
+		ASN:  4224420002,
+	}
+
+	links := []config.Link{
+		{
+			From: config.LinkEnd{Name: "router1", Interface: "wg42custom", Policy: "custom-net"},
+			To:   config.LinkEnd{Name: "router2", Interface: "wg42gw"},
+		},
+	}
+
+	customPolicies := []config.NetworkPolicy{
+		{
+			ID:        "custom-net",
+			Name:      "Custom Net with Strict ROA",
+			ROA4:      "https://example.com/roa4.conf",
+			ROA6:      "/var/data/roa6.conf",
+			ROAStrict: true,
+		},
+	}
+
+	conf, err := GenerateBirdConfig(&nodeLocal, []config.Node{nodeLocal, nodePeer}, links, customPolicies)
+	if err != nil {
+		t.Fatalf("GenerateBirdConfig failed: %v", err)
+	}
+
+	if !strings.Contains(conf, "roa4 table custom_net_roa4;") {
+		t.Errorf("Expected custom_net_roa4 table definition")
+	}
+	if !strings.Contains(conf, "roa6 table custom_net_roa6;") {
+		t.Errorf("Expected custom_net_roa6 table definition")
+	}
+	if !strings.Contains(conf, "include \"/etc/easy42_custom_net_roa4.conf\";") {
+		t.Errorf("Expected include for custom_net_roa4")
+	}
+	if !strings.Contains(conf, "include \"/etc/easy42_custom_net_roa6.conf\";") {
+		t.Errorf("Expected include for custom_net_roa6")
+	}
+	if !strings.Contains(conf, "function custom_net_roa_check()") {
+		t.Errorf("Expected function custom_net_roa_check()")
+	}
+	if !strings.Contains(conf, "if ! custom_net_roa_check() then reject;") {
+		t.Errorf("Expected custom_net_roa_check reject in template")
+	}
+	// Under strict mode, ROA_UNKNOWN should not return true
+	if strings.Contains(conf, "if roa_check(custom_net_roa4, net, bgp_path.last) = ROA_UNKNOWN then return true;") {
+		t.Errorf("Did not expect ROA_UNKNOWN acceptance when ROAStrict is true")
 	}
 }
 

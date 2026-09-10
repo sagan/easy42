@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"path/filepath"
@@ -12,6 +13,7 @@ import (
 	"easy42/internal/compiler"
 	"easy42/internal/config"
 	"easy42/internal/crypto"
+	"easy42/internal/roa"
 	"easy42/internal/ssh"
 )
 
@@ -29,6 +31,7 @@ type Manager struct {
 	stateStore  *config.StateStore
 	vault       *crypto.KeyVault
 	pool        *ssh.ClientPool
+	roaManager  *roa.Manager
 	statuses    map[string]*config.NodeStatus
 	lastSync    time.Time
 	lastResults []config.SyncResult
@@ -38,14 +41,21 @@ type Manager struct {
 func NewManager(store *config.Store) *Manager {
 	stateStore := config.NewStateStore(store.DataDir())
 	_, _ = stateStore.Load()
+	roaManager := roa.NewManager(filepath.Join(store.DataDir(), "cache", "roa"))
 	return &Manager{
 		store:       store,
 		stateStore:  stateStore,
 		vault:       crypto.NewKeyVault(),
 		pool:        ssh.NewClientPool(),
+		roaManager:  roaManager,
 		statuses:    make(map[string]*config.NodeStatus),
 		lastResults: make([]config.SyncResult, 0),
 	}
+}
+
+// ROAManager returns the underlying ROA cache manager
+func (m *Manager) ROAManager() *roa.Manager {
+	return m.roaManager
 }
 
 // Store returns the underlying store
@@ -1749,12 +1759,140 @@ func (m *Manager) PlanSync() ([]config.SyncAction, error) {
 		}
 	}
 
-	// 3. Node BIRD configurations
+	// Build map of all policies and nodes for policy/ROA planning
+	allPolicies := cfg.GetAllPolicies()
+	policyMap := make(map[string]config.NetworkPolicy)
+	for _, p := range allPolicies {
+		policyMap[p.ID] = p
+	}
+
+	nodeByName := make(map[string]*config.Node)
+	for i := range nodes {
+		nodeByName[nodes[i].Name] = &nodes[i]
+	}
+
+	// 3. Node ROA & BIRD configurations
 	for _, n := range nodes {
 		if n.IsExternal {
 			continue
 		}
 		node := n
+
+		// Determine policies used by links on this node
+		usedPolicies := make(map[string]config.NetworkPolicy)
+		for _, l := range links {
+			var localEnd *config.LinkEnd
+			var remoteNode *config.Node
+			if l.From.Name == node.Name {
+				localEnd = &l.From
+				remoteNode = nodeByName[l.To.Name]
+			} else if l.To.Name == node.Name {
+				localEnd = &l.To
+				remoteNode = nodeByName[l.From.Name]
+			} else {
+				continue
+			}
+			isRemoteExternal := remoteNode != nil && remoteNode.IsExternal
+			pID := localEnd.EffectivePolicy(isRemoteExternal)
+			if pol, ok := policyMap[pID]; ok {
+				usedPolicies[pID] = pol
+			} else if isRemoteExternal {
+				usedPolicies[config.PolicyDN42] = policyMap[config.PolicyDN42]
+			} else {
+				usedPolicies[config.PolicyDefault] = policyMap[config.PolicyDefault]
+			}
+		}
+
+		var usedPolicyIDs []string
+		for pID := range usedPolicies {
+			usedPolicyIDs = append(usedPolicyIDs, pID)
+		}
+		sort.Strings(usedPolicyIDs)
+
+		nodeHasRoaUpdates := false
+		for _, pID := range usedPolicyIDs {
+			pol := usedPolicies[pID]
+			cleanID := compiler.SanitizeIdentifier(pol.ID)
+
+			if strings.TrimSpace(pol.ROA4) != "" {
+				targetFile := fmt.Sprintf("/etc/easy42_%s_roa4.conf", cleanID)
+				content, _ := m.roaManager.GetROAContent(context.Background(), pol.ROA4, false)
+				desiredHash := config.HashConfig(compiler.NormalizeConfig(content))
+
+				needsApply := true
+				status := "pending"
+				diffStatus := "create"
+
+				if stNode, ok := currentState.Nodes[node.Name]; ok && stNode.RoaConfigHashes != nil {
+					if h, exists := stNode.RoaConfigHashes[targetFile]; exists && h != "" {
+						if h == desiredHash {
+							needsApply = false
+							status = "synced"
+							diffStatus = "synced"
+						} else {
+							diffStatus = "update"
+						}
+					}
+				}
+
+				if needsApply {
+					nodeHasRoaUpdates = true
+				}
+
+				actions = append(actions, config.SyncAction{
+					NodeName:    node.Name,
+					Host:        node.Host,
+					Type:        config.ActionSyncRoaConfig,
+					Interface:   cleanID + "_roa4",
+					TargetFile:  targetFile,
+					FileContent: content,
+					Description: fmt.Sprintf("Deploy ROA4 table (%s) for policy '%s' on %s", targetFile, pol.Name, node.Name),
+					NeedsApply:  needsApply,
+					Status:      status,
+					DiffStatus:  diffStatus,
+				})
+			}
+
+			if strings.TrimSpace(pol.ROA6) != "" {
+				targetFile := fmt.Sprintf("/etc/easy42_%s_roa6.conf", cleanID)
+				content, _ := m.roaManager.GetROAContent(context.Background(), pol.ROA6, false)
+				desiredHash := config.HashConfig(compiler.NormalizeConfig(content))
+
+				needsApply := true
+				status := "pending"
+				diffStatus := "create"
+
+				if stNode, ok := currentState.Nodes[node.Name]; ok && stNode.RoaConfigHashes != nil {
+					if h, exists := stNode.RoaConfigHashes[targetFile]; exists && h != "" {
+						if h == desiredHash {
+							needsApply = false
+							status = "synced"
+							diffStatus = "synced"
+						} else {
+							diffStatus = "update"
+						}
+					}
+				}
+
+				if needsApply {
+					nodeHasRoaUpdates = true
+				}
+
+				actions = append(actions, config.SyncAction{
+					NodeName:    node.Name,
+					Host:        node.Host,
+					Type:        config.ActionSyncRoaConfig,
+					Interface:   cleanID + "_roa6",
+					TargetFile:  targetFile,
+					FileContent: content,
+					Description: fmt.Sprintf("Deploy ROA6 table (%s) for policy '%s' on %s", targetFile, pol.Name, node.Name),
+					NeedsApply:  needsApply,
+					Status:      status,
+					DiffStatus:  diffStatus,
+				})
+			}
+		}
+
 		birdConf, err := compiler.GenerateBirdConfig(&node, nodes, links, &cfg.NetworkSettings, cfg.NetworkPolicies)
 		if err != nil {
 			continue
@@ -1776,6 +1914,14 @@ func (m *Manager) PlanSync() ([]config.SyncAction, error) {
 				} else {
 					diffStatus = "update"
 				}
+			}
+		}
+
+		if nodeHasRoaUpdates {
+			needsApply = true
+			if diffStatus == "synced" {
+				diffStatus = "update"
+				status = "pending"
 			}
 		}
 
@@ -1915,6 +2061,28 @@ func (m *Manager) ExecuteSync(force ...bool) ([]config.SyncResult, error) {
 		// Check current remote file
 		currentContent, _ := ssh.ReadRemoteFile(sftpClient, act.TargetFile)
 		needsUpdate := isForce || compiler.NeedsUpdate(currentContent, act.FileContent)
+
+		// Handle ROA configuration update
+		if act.Type == config.ActionSyncRoaConfig {
+			if needsUpdate {
+				if err := ssh.AtomicWriteFile(sftpClient, act.TargetFile, []byte(act.FileContent), 0644); err != nil {
+					res.Success = false
+					res.Error = fmt.Sprintf("Failed to write ROA config (%s): %v", act.TargetFile, err)
+					res.Duration = float64(time.Since(start).Milliseconds())
+					results = append(results, res)
+					continue
+				}
+			}
+
+			res.Success = true
+			res.Duration = float64(time.Since(start).Milliseconds())
+			results = append(results, res)
+
+			// Record successful application in stateStore
+			hash := config.HashConfig(compiler.NormalizeConfig(act.FileContent))
+			_ = m.stateStore.UpdateRoaState(act.NodeName, act.Host, act.TargetFile, hash, time.Now())
+			continue
+		}
 
 		// Handle BIRD configuration update
 		if act.Type == config.ActionSyncBirdConfig {
@@ -2645,17 +2813,87 @@ func (m *Manager) UpdateNetworkSettings(settings config.NetworkSettings) error {
 	return m.store.Save(cfg)
 }
 
+// RefreshAllROA forces a refresh of all ROA URLs configured across all policies
+func (m *Manager) RefreshAllROA(ctx context.Context, force bool) error {
+	cfg := m.store.Get()
+	if cfg == nil {
+		var err error
+		cfg, err = m.store.Load()
+		if err != nil {
+			return err
+		}
+	}
+	allPolicies := cfg.GetAllPolicies()
+	for _, p := range allPolicies {
+		if strings.TrimSpace(p.ROA4) != "" {
+			_, _ = m.roaManager.GetROAContent(ctx, p.ROA4, force)
+		}
+		if strings.TrimSpace(p.ROA6) != "" {
+			_, _ = m.roaManager.GetROAContent(ctx, p.ROA6, force)
+		}
+	}
+	return nil
+}
+
+// RefreshPolicyROA refreshes the ROA cache for a specific policy ID
+func (m *Manager) RefreshPolicyROA(ctx context.Context, policyID string) error {
+	cfg := m.store.Get()
+	if cfg == nil {
+		var err error
+		cfg, err = m.store.Load()
+		if err != nil {
+			return err
+		}
+	}
+	p := cfg.FindPolicy(policyID)
+	if p == nil {
+		return fmt.Errorf("policy '%s' not found", policyID)
+	}
+	if strings.TrimSpace(p.ROA4) != "" {
+		if _, err := m.roaManager.GetROAContent(ctx, p.ROA4, true); err != nil {
+			return err
+		}
+	}
+	if strings.TrimSpace(p.ROA6) != "" {
+		if _, err := m.roaManager.GetROAContent(ctx, p.ROA6, true); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// StartROABackgroundRefresher runs a periodic background task to refresh ROA URL caches
+func (m *Manager) StartROABackgroundRefresher(ctx context.Context, interval time.Duration) {
+	if interval <= 0 {
+		interval = 1 * time.Hour
+	}
+	go func() {
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				_ = m.RefreshAllROA(ctx, true)
+			}
+		}
+	}()
+}
+
 func actionPriority(t config.ActionType) int {
 	switch t {
 	case config.ActionDeleteConfig, config.ActionDownInterface:
 		return 1
 	case config.ActionCreateConfig, config.ActionUpdateConfig, config.ActionSyncConfig, config.ActionUpInterface:
 		return 2
-	case config.ActionSyncBirdConfig:
+	case config.ActionSyncRoaConfig:
 		return 3
-	case config.ActionSyncNftablesConfig:
+	case config.ActionSyncBirdConfig:
 		return 4
-	default:
+	case config.ActionSyncNftablesConfig:
 		return 5
+	default:
+		return 6
 	}
 }

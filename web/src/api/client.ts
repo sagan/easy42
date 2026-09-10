@@ -194,6 +194,18 @@ export const api = {
     request<{ message: string }>(`/network-policies/${encodeURIComponent(id)}`, {
       method: "DELETE",
     }),
+  refreshPolicyROA: (id: string) =>
+    request<{ message: string }>(`/network-policies/${encodeURIComponent(id)}/refresh-roa`, {
+      method: "POST",
+    }),
+  refreshAllROA: () =>
+    request<{ message: string }>("/roa/refresh", {
+      method: "POST",
+    }),
+  clearROACache: () =>
+    request<{ message: string }>("/roa/clear-cache", {
+      method: "POST",
+    }),
 
   // Sync & State
   getSyncPreview: () => request<SyncAction[]>("/sync/preview").then((res) => res || []),

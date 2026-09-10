@@ -124,6 +124,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
   const [policySnatEnabled, setPolicySnatEnabled] = useState(false);
   const [policySnatCondition, setPolicySnatCondition] = useState<string>("not_dst");
   const [policySnatTarget, setPolicySnatTarget] = useState<string>("masquerade");
+  const [policyRoa4, setPolicyRoa4] = useState("");
+  const [policyRoa6, setPolicyRoa6] = useState("");
+  const [policyRoaStrict, setPolicyRoaStrict] = useState(false);
 
   // Logout all state
   const [logoutAllConfirming, setLogoutAllConfirming] = useState(false);
@@ -208,6 +211,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
     setPolicySnatEnabled(false);
     setPolicySnatCondition("not_dst");
     setPolicySnatTarget("masquerade");
+    setPolicyRoa4("");
+    setPolicyRoa6("");
+    setPolicyRoaStrict(false);
     setPolicyDialogError(null);
     setPolicyDialogOpen(true);
   };
@@ -227,6 +233,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
     setPolicySnatEnabled(Boolean(p.snat?.enabled));
     setPolicySnatCondition(p.snat?.condition || "not_dst");
     setPolicySnatTarget(p.snat?.target || "masquerade");
+    setPolicyRoa4(p.roa4 || "");
+    setPolicyRoa6(p.roa6 || "");
+    setPolicyRoaStrict(Boolean(p.roa_strict));
     setPolicyDialogError(null);
     setPolicyDialogOpen(true);
   };
@@ -246,6 +255,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
     setPolicySnatEnabled(Boolean(p.snat?.enabled));
     setPolicySnatCondition(p.snat?.condition || "not_dst");
     setPolicySnatTarget(p.snat?.target || "masquerade");
+    setPolicyRoa4(p.roa4 || "");
+    setPolicyRoa6(p.roa6 || "");
+    setPolicyRoaStrict(Boolean(p.roa_strict));
     setPolicyDialogError(null);
     setPolicyDialogOpen(true);
   };
@@ -310,6 +322,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
               target: policySnatTarget.trim() || undefined,
             }
           : undefined,
+        roa4: policyRoa4.trim() || undefined,
+        roa6: policyRoa6.trim() || undefined,
+        roa_strict: policyRoaStrict,
       };
 
       if (policyDialogMode === "create") {
@@ -362,6 +377,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
     setPolicySnatEnabled(Boolean(p.snat?.enabled));
     setPolicySnatCondition(p.snat?.condition || "not_dst");
     setPolicySnatTarget(p.snat?.target || "masquerade");
+    setPolicyRoa4(p.roa4 || "");
+    setPolicyRoa6(p.roa6 || "");
+    setPolicyRoaStrict(Boolean(p.roa_strict));
     setPolicyDialogError(null);
     setPolicyDialogOpen(true);
   };
@@ -875,8 +893,39 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
                               color: isBuiltin ? "#4F46E5" : "#059669",
                             }}
                           />
+                          {(p.roa4 || p.roa6) && (
+                            <Chip
+                              label={p.roa_strict ? "ROA (Strict)" : "ROA"}
+                              size="small"
+                              sx={{
+                                height: 20,
+                                fontSize: "0.68rem",
+                                fontWeight: 700,
+                                bgcolor: "rgba(14, 165, 233, 0.12)",
+                                color: "#0284C7",
+                              }}
+                            />
+                          )}
                         </Box>
                         <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                          {(p.roa4 || p.roa6) && (
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              onClick={async () => {
+                                try {
+                                  await api.refreshPolicyROA(p.id);
+                                  setPoliciesSuccess(`ROA cache for "${p.name}" refreshed.`);
+                                } catch (err: unknown) {
+                                  const e = err as Error;
+                                  setPoliciesError(e.message || "Failed to refresh ROA.");
+                                }
+                              }}
+                              sx={{ py: 0.3, px: 1, minWidth: 0, fontSize: "0.75rem", color: "#0284C7", borderColor: "#BAE6FD" }}
+                            >
+                              Sync ROA
+                            </Button>
+                          )}
                           <Button
                             size="small"
                             variant="outlined"
@@ -1131,6 +1180,57 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
                     </Typography>
                     <Typography variant="caption" sx={{ color: "#64748B" }}>
                       Prevents importing and exporting default / Internet routes (0.0.0.0/0, 128.0.0.0/1, ::/0).
+                    </Typography>
+                  </Box>
+                }
+              />
+            </Box>
+
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, p: 2, borderRadius: 2, bgcolor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#1E293B", display: "flex", alignItems: "center", gap: 0.8 }}>
+                <Shield size={16} /> Route Origination Authorization (ROA)
+              </Typography>
+              <Typography variant="caption" sx={{ color: "#64748B" }}>
+                Validates route origin ASNs in BGP import filters using BIRD ROA tables. Accepts a URL or local server file path.
+              </Typography>
+
+              <TextField
+                fullWidth
+                size="small"
+                label="IPv4 ROA File / URL"
+                placeholder="https://dn42.burble.com/roa/dn42_roa_bird2_4.conf"
+                value={policyRoa4}
+                onChange={(e) => setPolicyRoa4(e.target.value)}
+                disabled={policyDialogMode === "view" || policyDialogSaving}
+                helperText="URL or local path to IPv4 BIRD ROA definitions."
+              />
+
+              <TextField
+                fullWidth
+                size="small"
+                label="IPv6 ROA File / URL"
+                placeholder="https://dn42.burble.com/roa/dn42_roa_bird2_6.conf"
+                value={policyRoa6}
+                onChange={(e) => setPolicyRoa6(e.target.value)}
+                disabled={policyDialogMode === "view" || policyDialogSaving}
+                helperText="URL or local path to IPv6 BIRD ROA definitions."
+              />
+
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={policyRoaStrict}
+                    onChange={(e) => setPolicyRoaStrict(e.target.checked)}
+                    disabled={policyDialogMode === "view" || policyDialogSaving}
+                  />
+                }
+                label={
+                  <Box>
+                    <Typography variant="body2" sx={{ fontWeight: 600, color: "#0F172A" }}>
+                      Strict ROA Validation
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: "#64748B" }}>
+                      When enabled, routes with ROA_UNKNOWN status are rejected. (Default: disabled, permits VALID and UNKNOWN, rejects INVALID).
                     </Typography>
                   </Box>
                 }

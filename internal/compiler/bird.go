@@ -311,6 +311,9 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 		exportV4 := formatPrefixList(pol.AllowedDstCIDRs, nil, false)
 		exportV6 := formatPrefixList(pol.AllowedDstCIDRs, nil, true)
 
+		hasRoa := strings.TrimSpace(pol.ROA4) != "" || strings.TrimSpace(pol.ROA6) != ""
+		roaFn := cleanID + "_roa_check"
+
 		customBirdPolicies = append(customBirdPolicies, map[string]any{
 			"id":                 cleanID,
 			"name":               pol.Name,
@@ -325,11 +328,53 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 			"has_export_v6":      exportV6 != "",
 			"export_prefixes_v4": exportV4,
 			"export_prefixes_v6": exportV6,
+			"has_roa":            hasRoa,
+			"roa_fn":             roaFn,
 		})
 	}
 	sort.Slice(customBirdPolicies, func(i, j int) bool {
 		return customBirdPolicies[i]["id"].(string) < customBirdPolicies[j]["id"].(string)
 	})
+
+	var roaPolicies []map[string]any
+	hasDN42Roa := false
+	hasDefaultRoa := false
+
+	var usedPolicyIDs []string
+	for id := range usedPolicyMap {
+		usedPolicyIDs = append(usedPolicyIDs, id)
+	}
+	sort.Strings(usedPolicyIDs)
+
+	for _, id := range usedPolicyIDs {
+		pol := usedPolicyMap[id]
+		hasROA4 := strings.TrimSpace(pol.ROA4) != ""
+		hasROA6 := strings.TrimSpace(pol.ROA6) != ""
+		if !hasROA4 && !hasROA6 {
+			continue
+		}
+		cleanID := SanitizeIdentifier(id)
+		roaPolicies = append(roaPolicies, map[string]any{
+			"id":         cleanID,
+			"name":       pol.Name,
+			"has_roa4":   hasROA4,
+			"has_roa6":   hasROA6,
+			"table4":     cleanID + "_roa4",
+			"table6":     cleanID + "_roa6",
+			"proto4":     cleanID + "_roa4_static",
+			"proto6":     cleanID + "_roa6_static",
+			"file4":      fmt.Sprintf("/etc/easy42_%s_roa4.conf", cleanID),
+			"file6":      fmt.Sprintf("/etc/easy42_%s_roa6.conf", cleanID),
+			"check_fn":   cleanID + "_roa_check",
+			"roa_strict": pol.ROAStrict,
+		})
+		if id == config.PolicyDN42 {
+			hasDN42Roa = true
+		}
+		if id == config.PolicyDefault {
+			hasDefaultRoa = true
+		}
+	}
 
 	defaultCost := 100
 	if p, ok := policyMap[config.PolicyDefault]; ok {
@@ -346,6 +391,9 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 	ctx["has_external_links"] = hasExternalLinks
 	ctx["has_none_policy"] = hasNonePolicy
 	ctx["custom_bird_policies"] = customBirdPolicies
+	ctx["roa_policies"] = roaPolicies
+	ctx["has_dn42_roa"] = hasDN42Roa
+	ctx["has_default_roa"] = hasDefaultRoa
 	return ctx, nil
 }
 

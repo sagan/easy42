@@ -2,6 +2,8 @@ package engine
 
 import (
 	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -439,5 +441,188 @@ func TestInterfaceWorkingStateDerivation(t *testing.T) {
 	}
 	if st.Nodes["node-a"].Interfaces["wg42noded"].WorkingState != config.WorkingStateUnknown {
 		t.Errorf("Persisted state mismatch for wg42noded")
+	}
+}
+
+func TestRoaConfigStateSync(t *testing.T) {
+	tmpDir := t.TempDir()
+	store := config.NewStore(tmpDir)
+	password, err := store.Initialize()
+	if err != nil {
+		t.Fatalf("Initialize failed: %v", err)
+	}
+
+	mgr := NewManager(store)
+	if err := mgr.Unlock(password); err != nil {
+		t.Fatalf("Unlock failed: %v", err)
+	}
+
+	// Create local mock ROA files
+	roa4Path := filepath.Join(tmpDir, "dn42_test_roa4.conf")
+	roa6Path := filepath.Join(tmpDir, "dn42_test_roa6.conf")
+	roa4Content := "roa 172.20.0.0/16 max 28 as 4242420000;\n"
+	roa6Content := "roa fd00::/8 max 64 as 4242420000;\n"
+	if err := os.WriteFile(roa4Path, []byte(roa4Content), 0644); err != nil {
+		t.Fatalf("WriteFile roa4 failed: %v", err)
+	}
+	if err := os.WriteFile(roa6Path, []byte(roa6Content), 0644); err != nil {
+		t.Fatalf("WriteFile roa6 failed: %v", err)
+	}
+
+	// Create custom policy with local ROA files
+	customPolicy, err := mgr.CreateNetworkPolicy(config.NetworkPolicy{
+		ID:        "roa-net",
+		Name:      "ROA Test Network",
+		ROA4:      roa4Path,
+		ROA6:      roa6Path,
+		ROAStrict: true,
+	})
+	if err != nil {
+		t.Fatalf("CreateNetworkPolicy failed: %v", err)
+	}
+
+	// Create local node and remote peer node
+	node := config.Node{
+		Name:      "roa-router",
+		Host:      "127.0.0.1",
+		IP:        "192.168.100.10",
+		Interface: "lo",
+		ASN:       4224420010,
+	}
+	peer := config.Node{
+		Name:       "peer-r1",
+		Host:       "127.0.0.2",
+		IP:         "192.168.100.11",
+		Interface:  "lo",
+		ASN:        4242421234,
+		IsExternal: true,
+	}
+	if err := mgr.AddNode(node); err != nil {
+		t.Fatalf("AddNode failed: %v", err)
+	}
+	if err := mgr.AddNode(peer); err != nil {
+		t.Fatalf("AddNode peer failed: %v", err)
+	}
+
+	// Link using the ROA policy
+	link, err := mgr.AddLink("roa-router", "peer-r1", 51820, 51821, nil)
+	if err != nil {
+		t.Fatalf("AddLink failed: %v", err)
+	}
+
+	fromEnd := link.From
+	fromEnd.Policy = customPolicy.ID
+	toEnd := link.To
+	if _, err := mgr.UpdateLinkAdvanced("roa-router", "peer-r1", &fromEnd, &toEnd, nil); err != nil {
+		t.Fatalf("UpdateLinkAdvanced failed: %v", err)
+	}
+
+	// 1. Initial PlanSync
+	actions, err := mgr.PlanSync()
+	if err != nil {
+		t.Fatalf("PlanSync failed: %v", err)
+	}
+
+	var roa4Action, roa6Action, birdAction *config.SyncAction
+	for i := range actions {
+		act := &actions[i]
+		if act.NodeName != "roa-router" {
+			continue
+		}
+		if act.Type == config.ActionSyncRoaConfig {
+			if strings.HasSuffix(act.TargetFile, "roa4.conf") {
+				roa4Action = act
+			} else if strings.HasSuffix(act.TargetFile, "roa6.conf") {
+				roa6Action = act
+			}
+		} else if act.Type == config.ActionSyncBirdConfig {
+			birdAction = act
+		}
+	}
+
+	if roa4Action == nil {
+		t.Fatalf("Expected ROA4 action for roa-router")
+	}
+	if roa6Action == nil {
+		t.Fatalf("Expected ROA6 action for roa-router")
+	}
+	if birdAction == nil {
+		t.Fatalf("Expected BIRD action for roa-router")
+	}
+
+	if roa4Action.TargetFile != "/etc/easy42_roa_net_roa4.conf" {
+		t.Errorf("Expected target /etc/easy42_roa_net_roa4.conf, got %s", roa4Action.TargetFile)
+	}
+	if roa6Action.TargetFile != "/etc/easy42_roa_net_roa6.conf" {
+		t.Errorf("Expected target /etc/easy42_roa_net_roa6.conf, got %s", roa6Action.TargetFile)
+	}
+	if !roa4Action.NeedsApply || !roa6Action.NeedsApply || !birdAction.NeedsApply {
+		t.Errorf("Expected all initial actions to require apply")
+	}
+
+	// Verify action execution ordering: ROA actions should have lower priority value (run earlier) than BIRD
+	pROA := actionPriority(config.ActionSyncRoaConfig)
+	pBIRD := actionPriority(config.ActionSyncBirdConfig)
+	if pROA >= pBIRD {
+		t.Errorf("Expected ROA priority (%d) to precede BIRD priority (%d)", pROA, pBIRD)
+	}
+
+	// 2. Record synced state for ROA files and BIRD
+	h4 := config.HashConfig(compiler.NormalizeConfig(roa4Action.FileContent))
+	h6 := config.HashConfig(compiler.NormalizeConfig(roa6Action.FileContent))
+	hBird := config.HashConfig(compiler.NormalizeConfig(birdAction.FileContent))
+
+	_ = mgr.StateStore().UpdateRoaState("roa-router", "127.0.0.1", roa4Action.TargetFile, h4, time.Now())
+	_ = mgr.StateStore().UpdateRoaState("roa-router", "127.0.0.1", roa6Action.TargetFile, h6, time.Now())
+	_ = mgr.StateStore().UpdateBirdState("roa-router", "127.0.0.1", hBird, time.Now())
+
+	actionsSynced, err := mgr.PlanSync()
+	if err != nil {
+		t.Fatalf("PlanSync after state sync failed: %v", err)
+	}
+
+	for _, act := range actionsSynced {
+		if act.NodeName == "roa-router" && (act.Type == config.ActionSyncRoaConfig || act.Type == config.ActionSyncBirdConfig) {
+			if act.NeedsApply {
+				t.Errorf("Expected action %s (%s) to be synced, but NeedsApply is true", act.Type, act.TargetFile)
+			}
+			if act.DiffStatus != "synced" {
+				t.Errorf("Expected diffStatus 'synced' for %s, got %s", act.TargetFile, act.DiffStatus)
+			}
+		}
+	}
+
+	// 3. Update ROA file content (simulate upstream update)
+	updatedROA4 := "roa 172.20.0.0/16 max 28 as 4242420000;\nroa 172.21.0.0/16 max 28 as 4242420001;\n"
+	if err := os.WriteFile(roa4Path, []byte(updatedROA4), 0644); err != nil {
+		t.Fatalf("WriteFile updated roa4 failed: %v", err)
+	}
+
+	actionsAfterUpdate, err := mgr.PlanSync()
+	if err != nil {
+		t.Fatalf("PlanSync after ROA update failed: %v", err)
+	}
+
+	var updatedROA4Action, updatedBirdAction *config.SyncAction
+	for i := range actionsAfterUpdate {
+		act := &actionsAfterUpdate[i]
+		if act.NodeName == "roa-router" {
+			if act.Type == config.ActionSyncRoaConfig && strings.HasSuffix(act.TargetFile, "roa4.conf") {
+				updatedROA4Action = act
+			} else if act.Type == config.ActionSyncBirdConfig {
+				updatedBirdAction = act
+			}
+		}
+	}
+
+	if updatedROA4Action == nil || !updatedROA4Action.NeedsApply {
+		t.Errorf("Expected updated ROA4 action to require apply")
+	}
+	if updatedROA4Action.DiffStatus != "update" {
+		t.Errorf("Expected diffStatus 'update', got %s", updatedROA4Action.DiffStatus)
+	}
+	// Crucial: BIRD must also be marked for reload when ROA content updates!
+	if updatedBirdAction == nil || !updatedBirdAction.NeedsApply {
+		t.Errorf("Expected BIRD action to require apply when ROA content changes")
 	}
 }

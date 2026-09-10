@@ -107,6 +107,11 @@ func New(cfg Config) *Server {
 			r.Get("/network-policies/{id}", s.handleGetNetworkPolicy)
 			r.Put("/network-policies/{id}", s.handleUpdateNetworkPolicy)
 			r.Delete("/network-policies/{id}", s.handleDeleteNetworkPolicy)
+			r.Post("/network-policies/{id}/refresh-roa", s.handleRefreshPolicyROA)
+
+			// ROA Cache
+			r.Post("/roa/refresh", s.handleRefreshAllROA)
+			r.Post("/roa/clear-cache", s.handleClearROACache)
 
 			// Sync & State
 			r.Get("/sync/preview", s.handleSyncPreview)

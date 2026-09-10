@@ -239,6 +239,7 @@ const (
 	ActionDownInterface  ActionType = "down_interface"
 	ActionSyncBirdConfig     ActionType = "sync_bird"
 	ActionSyncNftablesConfig ActionType = "sync_nftables"
+	ActionSyncRoaConfig      ActionType = "sync_roa"
 )
 
 // SyncAction represents a planned action on a target node
