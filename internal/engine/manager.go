@@ -1489,7 +1489,7 @@ func (m *Manager) RefreshNodeStatus(nodeName string) (*config.NodeStatus, error)
 		Connected: false,
 	}
 
-	sshClient, _, err := m.pool.GetClient(node.Host)
+	sshClient, _, err := m.pool.GetClientWithTimeout(node.Host, 4*time.Second)
 	if err != nil {
 		status.Error = err.Error()
 		m.mu.Lock()
@@ -1571,17 +1571,26 @@ func (m *Manager) PlanSync() ([]config.SyncAction, error) {
 		}
 		node := n
 		wg.Add(1)
-		go func() {
+		go func(targetNode config.Node) {
 			defer wg.Done()
-			sshClient, _, err := m.pool.GetClient(node.Host)
+			sshClient, _, err := m.pool.GetClientWithTimeout(targetNode.Host, 3*time.Second)
 			if err != nil {
+				m.mu.Lock()
+				m.statuses[targetNode.Name] = &config.NodeStatus{
+					Name:      targetNode.Name,
+					Host:      targetNode.Host,
+					LastSeen:  time.Now(),
+					Connected: false,
+					Error:     err.Error(),
+				}
+				m.mu.Unlock()
 				return
 			}
 			runningIfaces, err := ssh.GetRunningWgInterfaces(sshClient)
 			if err != nil {
 				return
 			}
-			expected := expectedIfacesPerNode[node.Name]
+			expected := expectedIfacesPerNode[targetNode.Name]
 			for _, iface := range runningIfaces {
 				// We only manage wg42* prefix wireguard interfaces
 				if strings.HasPrefix(iface, "wg42") {
@@ -1589,13 +1598,13 @@ func (m *Manager) PlanSync() ([]config.SyncAction, error) {
 						targetFile := fmt.Sprintf("/etc/wireguard/%s.conf", iface)
 						cleanActionsMu.Lock()
 						cleanActions = append(cleanActions, config.SyncAction{
-							NodeName:    node.Name,
-							Host:        node.Host,
+							NodeName:    targetNode.Name,
+							Host:        targetNode.Host,
 							Type:        config.ActionDeleteConfig,
 							Interface:   iface,
 							TargetFile:  targetFile,
 							Command:     fmt.Sprintf("wg-quick down %s && rm -f %s", iface, targetFile),
-							Description: fmt.Sprintf("Remove deleted interface %s on %s", iface, node.Name),
+							Description: fmt.Sprintf("Remove deleted interface %s on %s", iface, targetNode.Name),
 							FileContent: fmt.Sprintf("# Deleted interface %s is no longer in graph.\n# Action: wg-quick down %s && rm -f %s\n", iface, iface, targetFile),
 							NeedsApply:  true,
 							Status:      "pending",
@@ -1605,7 +1614,7 @@ func (m *Manager) PlanSync() ([]config.SyncAction, error) {
 					}
 				}
 			}
-		}()
+		}(node)
 	}
 	wg.Wait()
 
@@ -2050,8 +2059,9 @@ func (m *Manager) ExecuteSync(force ...bool) ([]config.SyncResult, error) {
 	return results, nil
 }
 
-// UpdateState connects to all devices via SSH/SFTP to fetch their live state and update state.json
-func (m *Manager) UpdateState() (*config.NetworkState, []string, error) {
+// UpdateState connects to devices via SSH/SFTP to fetch their live state and update state.json.
+// If nodeNames are provided, only those specific nodes are refreshed and their links/interfaces updated.
+func (m *Manager) UpdateState(nodeNames ...string) (*config.NetworkState, []string, error) {
 	m.mu.RLock()
 	cfg := m.store.Get()
 	nodes := make([]config.Node, len(cfg.Nodes))
@@ -2059,6 +2069,15 @@ func (m *Manager) UpdateState() (*config.NetworkState, []string, error) {
 	links := make([]config.Link, len(cfg.Links))
 	copy(links, cfg.Links)
 	m.mu.RUnlock()
+
+	targetMap := make(map[string]bool)
+	for _, name := range nodeNames {
+		trimmed := strings.TrimSpace(name)
+		if trimmed != "" {
+			targetMap[trimmed] = true
+		}
+	}
+	isPartialUpdate := len(targetMap) > 0
 
 	type linkMetaInfo struct {
 		peerNode            string
@@ -2105,6 +2124,10 @@ func (m *Manager) UpdateState() (*config.NetworkState, []string, error) {
 
 	for _, n := range nodes {
 		node := n
+		if isPartialUpdate && !targetMap[node.Name] {
+			continue
+		}
+
 		if node.IsExternal {
 			m.mu.Lock()
 			m.statuses[node.Name] = &config.NodeStatus{
@@ -2117,99 +2140,106 @@ func (m *Manager) UpdateState() (*config.NetworkState, []string, error) {
 			m.mu.Unlock()
 			continue
 		}
+
 		wg.Add(1)
-		go func() {
+		go func(targetNode config.Node) {
 			defer wg.Done()
-			sshClient, sftpClient, err := m.pool.GetClient(node.Host)
-			if err != nil {
-				mu.Lock()
-				warnings = append(warnings, fmt.Sprintf("%s: failed to connect: %v", node.Name, err))
-				mu.Unlock()
-				m.mu.Lock()
-				m.statuses[node.Name] = &config.NodeStatus{
-					Name:      node.Name,
-					Host:      node.Host,
-					LastSeen:  time.Now(),
-					Connected: false,
-					Error:     err.Error(),
-				}
-				m.mu.Unlock()
-				return
+
+			type probeOutput struct {
+				ifaces   map[string]config.StateInterface
+				hostname string
+				wgStatus []config.WgInterfaceStatus
+				err      error
 			}
+			outChan := make(chan probeOutput, 1)
 
-			// Query WireGuard interface and peer statuses
-			wgStatus, _ := ssh.QueryWireGuardStatus(sshClient)
-			wgMap := make(map[string]*config.WgInterfaceStatus)
-			for i := range wgStatus {
-				wgMap[wgStatus[i].Name] = &wgStatus[i]
-			}
-
-			// 1. Find all wg42*.conf files in /etc/wireguard
-			filesOut, _ := ssh.RunCommand(sshClient, "ls -1 /etc/wireguard/wg42*.conf 2>/dev/null")
-			lines := strings.Split(strings.TrimSpace(filesOut), "\n")
-
-			nodeIfaces := make(map[string]config.StateInterface)
-			for _, line := range lines {
-				filePath := strings.TrimSpace(line)
-				if filePath == "" {
-					continue
-				}
-				base := filepath.Base(filePath)
-				ifaceName := strings.TrimSuffix(base, ".conf")
-				if !strings.HasPrefix(ifaceName, "wg42") {
-					continue
+			go func() {
+				sshClient, sftpClient, err := m.pool.GetClientWithTimeout(targetNode.Host, 4*time.Second)
+				if err != nil {
+					outChan <- probeOutput{err: err}
+					return
 				}
 
-				// Read file content
-				content, readErr := ssh.ReadRemoteFile(sftpClient, filePath)
-				if readErr != nil {
-					catOut, catErr := ssh.RunCommand(sshClient, fmt.Sprintf("cat %s", filePath))
-					if catErr == nil {
-						content = catOut
+				// Query WireGuard interface and peer statuses
+				wgStatus, _ := ssh.QueryWireGuardStatus(sshClient)
+				wgMap := make(map[string]*config.WgInterfaceStatus)
+				for i := range wgStatus {
+					wgMap[wgStatus[i].Name] = &wgStatus[i]
+				}
+
+				// 1. Find all wg42*.conf files in /etc/wireguard
+				filesOut, _ := ssh.RunCommand(sshClient, "ls -1 /etc/wireguard/wg42*.conf 2>/dev/null")
+				lines := strings.Split(strings.TrimSpace(filesOut), "\n")
+
+				nodeIfaces := make(map[string]config.StateInterface)
+				for _, line := range lines {
+					filePath := strings.TrimSpace(line)
+					if filePath == "" {
+						continue
 					}
-				}
+					base := filepath.Base(filePath)
+					ifaceName := strings.TrimSuffix(base, ".conf")
+					if !strings.HasPrefix(ifaceName, "wg42") {
+						continue
+					}
 
-				hash := config.HashConfig(compiler.NormalizeConfig(content))
-				status := "down"
-				isStarted := ssh.IsInterfaceStarted(sshClient, ifaceName)
-				if isStarted {
-					status = "active"
-				}
-
-				meta := linkMeta[node.Name][ifaceName]
-				var latestHandshake time.Time
-				var rxBytes, txBytes int64
-				keepalive := meta.persistentKeepalive
-
-				if wgInfo, ok := wgMap[ifaceName]; ok && len(wgInfo.Peers) > 0 {
-					var matchedPeer *config.WgPeerStatus
-					for pIdx := range wgInfo.Peers {
-						if meta.peerPubKey != "" && wgInfo.Peers[pIdx].PublicKey == meta.peerPubKey {
-							matchedPeer = &wgInfo.Peers[pIdx]
-							break
+					// Read file content
+					content, readErr := ssh.ReadRemoteFile(sftpClient, filePath)
+					if readErr != nil {
+						catOut, catErr := ssh.RunCommand(sshClient, fmt.Sprintf("cat %s", filePath))
+						if catErr == nil {
+							content = catOut
 						}
 					}
-					if matchedPeer == nil {
-						matchedPeer = &wgInfo.Peers[0]
-					}
-					latestHandshake = matchedPeer.LatestHandshake
-					rxBytes = matchedPeer.TransferRxBytes
-					txBytes = matchedPeer.TransferTxBytes
-					if matchedPeer.PersistentKeepalive > 0 {
-						keepalive = matchedPeer.PersistentKeepalive
-					}
-				}
 
-				now := time.Now()
-				var handshakePtr *time.Time
-				workingState := config.WorkingStateUnknown
+					hash := config.HashConfig(compiler.NormalizeConfig(content))
+					status := "down"
+					isStarted := ssh.IsInterfaceStarted(sshClient, ifaceName)
+					if isStarted {
+						status = "active"
+					}
 
-				if !isStarted {
-					workingState = config.WorkingStateNotWorking
-				} else if !latestHandshake.IsZero() {
-					handshakePtr = &latestHandshake
-					if now.Sub(latestHandshake) <= 3*time.Minute {
-						workingState = config.WorkingStateWorking
+					meta := linkMeta[targetNode.Name][ifaceName]
+					var latestHandshake time.Time
+					var rxBytes, txBytes int64
+					keepalive := meta.persistentKeepalive
+
+					if wgInfo, ok := wgMap[ifaceName]; ok && len(wgInfo.Peers) > 0 {
+						var matchedPeer *config.WgPeerStatus
+						for pIdx := range wgInfo.Peers {
+							if meta.peerPubKey != "" && wgInfo.Peers[pIdx].PublicKey == meta.peerPubKey {
+								matchedPeer = &wgInfo.Peers[pIdx]
+								break
+							}
+						}
+						if matchedPeer == nil {
+							matchedPeer = &wgInfo.Peers[0]
+						}
+						latestHandshake = matchedPeer.LatestHandshake
+						rxBytes = matchedPeer.TransferRxBytes
+						txBytes = matchedPeer.TransferTxBytes
+						if matchedPeer.PersistentKeepalive > 0 {
+							keepalive = matchedPeer.PersistentKeepalive
+						}
+					}
+
+					now := time.Now()
+					var handshakePtr *time.Time
+					workingState := config.WorkingStateUnknown
+
+					if !isStarted {
+						workingState = config.WorkingStateNotWorking
+					} else if !latestHandshake.IsZero() {
+						handshakePtr = &latestHandshake
+						if now.Sub(latestHandshake) <= 3*time.Minute {
+							workingState = config.WorkingStateWorking
+						} else {
+							if keepalive > 0 {
+								workingState = config.WorkingStateNotWorking
+							} else {
+								workingState = config.WorkingStateUnknown
+							}
+						}
 					} else {
 						if keepalive > 0 {
 							workingState = config.WorkingStateNotWorking
@@ -2217,65 +2247,102 @@ func (m *Manager) UpdateState() (*config.NetworkState, []string, error) {
 							workingState = config.WorkingStateUnknown
 						}
 					}
-				} else {
-					if keepalive > 0 {
-						workingState = config.WorkingStateNotWorking
-					} else {
-						workingState = config.WorkingStateUnknown
+
+					nodeIfaces[ifaceName] = config.StateInterface{
+						Name:            ifaceName,
+						TargetFile:      filePath,
+						ConfigHash:      hash,
+						PeerNode:        meta.peerNode,
+						PeerPubKey:      meta.peerPubKey,
+						Status:          status,
+						LatestHandshake: handshakePtr,
+						WorkingState:    workingState,
+						TransferRxBytes: rxBytes,
+						TransferTxBytes: txBytes,
+						AppliedAt:       time.Now(),
 					}
 				}
 
-				nodeIfaces[ifaceName] = config.StateInterface{
-					Name:            ifaceName,
-					TargetFile:      filePath,
-					ConfigHash:      hash,
-					PeerNode:        meta.peerNode,
-					PeerPubKey:      meta.peerPubKey,
-					Status:          status,
-					LatestHandshake: handshakePtr,
-					WorkingState:    workingState,
-					TransferRxBytes: rxBytes,
-					TransferTxBytes: txBytes,
-					AppliedAt:       time.Now(),
+				hostname, _ := ssh.RunCommand(sshClient, "hostname")
+				outChan <- probeOutput{
+					ifaces:   nodeIfaces,
+					hostname: strings.TrimSpace(hostname),
+					wgStatus: wgStatus,
 				}
-			}
+			}()
 
-			hostname, _ := ssh.RunCommand(sshClient, "hostname")
-			m.mu.Lock()
-			m.statuses[node.Name] = &config.NodeStatus{
-				Name:         node.Name,
-				Host:         node.Host,
-				LastSeen:     time.Now(),
-				Connected:    true,
-				Hostname:     strings.TrimSpace(hostname),
-				WgInterfaces: wgStatus,
-			}
-			m.mu.Unlock()
+			select {
+			case out := <-outChan:
+				if out.err != nil {
+					mu.Lock()
+					warnings = append(warnings, fmt.Sprintf("%s: failed to connect: %v", targetNode.Name, out.err))
+					mu.Unlock()
+					m.mu.Lock()
+					m.statuses[targetNode.Name] = &config.NodeStatus{
+						Name:      targetNode.Name,
+						Host:      targetNode.Host,
+						LastSeen:  time.Now(),
+						Connected: false,
+						Error:     out.err.Error(),
+					}
+					m.mu.Unlock()
+					return
+				}
 
-			mu.Lock()
-			results = append(results, nodeIfaceResult{
-				nodeName: node.Name,
-				host:     node.Host,
-				ifaces:   nodeIfaces,
-			})
-			mu.Unlock()
-		}()
+				m.mu.Lock()
+				m.statuses[targetNode.Name] = &config.NodeStatus{
+					Name:         targetNode.Name,
+					Host:         targetNode.Host,
+					LastSeen:     time.Now(),
+					Connected:    true,
+					Hostname:     out.hostname,
+					WgInterfaces: out.wgStatus,
+				}
+				m.mu.Unlock()
+
+				mu.Lock()
+				results = append(results, nodeIfaceResult{
+					nodeName: targetNode.Name,
+					host:     targetNode.Host,
+					ifaces:   out.ifaces,
+				})
+				mu.Unlock()
+
+			case <-time.After(15 * time.Second):
+				mu.Lock()
+				warnings = append(warnings, fmt.Sprintf("%s: probe timed out", targetNode.Name))
+				mu.Unlock()
+				m.mu.Lock()
+				m.statuses[targetNode.Name] = &config.NodeStatus{
+					Name:      targetNode.Name,
+					Host:      targetNode.Host,
+					LastSeen:  time.Now(),
+					Connected: false,
+					Error:     "probe timed out after 7s",
+				}
+				m.mu.Unlock()
+				return
+			}
+		}(node)
 	}
 	wg.Wait()
 
 	// Update state store
 	currentState := m.stateStore.Get()
-	activeNodeNames := make(map[string]bool)
-	for _, n := range nodes {
-		if !n.IsExternal {
-			activeNodeNames[n.Name] = true
-		}
-	}
 
-	// Remove deleted or external nodes from state
-	for stName := range currentState.Nodes {
-		if !activeNodeNames[stName] {
-			delete(currentState.Nodes, stName)
+	// Remove deleted or external nodes from state ONLY on full cluster updates
+	if !isPartialUpdate {
+		activeNodeNames := make(map[string]bool)
+		for _, n := range nodes {
+			if !n.IsExternal {
+				activeNodeNames[n.Name] = true
+			}
+		}
+
+		for stName := range currentState.Nodes {
+			if !activeNodeNames[stName] {
+				delete(currentState.Nodes, stName)
+			}
 		}
 	}
 
@@ -2592,4 +2659,3 @@ func actionPriority(t config.ActionType) int {
 		return 5
 	}
 }
-

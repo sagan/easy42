@@ -47,10 +47,16 @@ export const App: React.FC = () => {
   const [helperOpen, setHelperOpen] = useState(false);
   const [helperInitialNode, setHelperInitialNode] = useState<string | undefined>(undefined);
   const [updatingState, setUpdatingState] = useState(false);
+  const [refreshingNodeName, setRefreshingNodeName] = useState<string | null>(null);
   const [stateToast, setStateToast] = useState<{
     message: string;
     severity: "success" | "warning" | "error" | "info";
   } | null>(null);
+
+  // Unreachable nodes
+  const unreachableNodes = useMemo(() => {
+    return nodes.filter((n) => !n.is_external && nodeStatuses[n.name] && !nodeStatuses[n.name].connected);
+  }, [nodes, nodeStatuses]);
 
   // Tag filter
   const [selectedTag, setSelectedTag] = useState<string>("All");
@@ -326,19 +332,38 @@ export const App: React.FC = () => {
     setNodeStatuses((prev) => ({ ...prev, [status.name]: status }));
   };
 
-  const handleUpdateState = async () => {
-    setUpdatingState(true);
+  const handleUpdateState = async (targetNode?: string) => {
+    if (targetNode) {
+      setRefreshingNodeName(targetNode);
+    } else {
+      setUpdatingState(true);
+    }
     try {
-      const res = await api.updateState();
+      const res = await api.updateState(targetNode);
       await loadData();
-      if (res.warnings && res.warnings.length > 0) {
+      if (res.failed_nodes && Object.keys(res.failed_nodes).length > 0) {
+        if (targetNode && res.failed_nodes[targetNode]) {
+          setStateToast({
+            message: `Failed to refresh "${targetNode}": ${res.failed_nodes[targetNode]}`,
+            severity: "error",
+          });
+        } else {
+          const failedNames = Object.keys(res.failed_nodes).join(", ");
+          setStateToast({
+            message: `Network state updated. ${Object.keys(res.failed_nodes).length} device(s) unreachable: ${failedNames}`,
+            severity: "warning",
+          });
+        }
+      } else if (res.warnings && res.warnings.length > 0) {
         setStateToast({
           message: `Network state reconciled with warnings: ${res.warnings.join("; ")}`,
           severity: "warning",
         });
       } else {
         setStateToast({
-          message: "Network state successfully fetched from all devices and state.json reconciled.",
+          message: targetNode
+            ? `State and links for "${targetNode}" successfully refreshed.`
+            : "Network state successfully fetched from all devices and state.json reconciled.",
           severity: "success",
         });
       }
@@ -350,7 +375,12 @@ export const App: React.FC = () => {
       });
     } finally {
       setUpdatingState(false);
+      setRefreshingNodeName(null);
     }
+  };
+
+  const handleRefreshLink = async (link: Link) => {
+    await handleUpdateState(`${link.from.name},${link.to.name}`);
   };
 
   if (checkingAuth) {
@@ -419,7 +449,7 @@ export const App: React.FC = () => {
           missingMeshLinksCount={missingMeshLinksCount}
           displayedNodeCount={displayedInternalNodes.length}
           onSync={() => setSyncOpen(true)}
-          onUpdateState={handleUpdateState}
+          onUpdateState={() => handleUpdateState()}
           updatingState={updatingState}
           onOpenHelper={() => {
             setHelperInitialNode(undefined);
@@ -428,6 +458,10 @@ export const App: React.FC = () => {
           onUnlockToggle={handleUnlockToggle}
           onOpenSettings={() => setSettingsOpen(true)}
           onLogout={handleLogout}
+          unreachableNodes={unreachableNodes}
+          nodeStatuses={nodeStatuses}
+          nodes={nodes}
+          onUpdateNodeState={(nodeName) => handleUpdateState(nodeName)}
         />
 
         {/* Visual Topology Editor */}
@@ -442,6 +476,8 @@ export const App: React.FC = () => {
             onSelectLink={handleSelectLink}
             onConnectNodes={handleConnectNodes}
             onNodePositionChange={handleNodePositionChange}
+            onRefreshNode={(nodeName) => handleUpdateState(nodeName)}
+            refreshingNodeName={refreshingNodeName}
           />
         </Box>
 
@@ -459,6 +495,7 @@ export const App: React.FC = () => {
             setHelperInitialNode(nodeName);
             setHelperOpen(true);
           }}
+          onUpdateNodeState={(nodeName) => handleUpdateState(nodeName)}
         />
 
         <LinkDetailDrawer
@@ -468,6 +505,7 @@ export const App: React.FC = () => {
           onClose={() => setSelectedLink(null)}
           onEditLink={handleEditLink}
           onLinkDeleted={handleLinkDeleted}
+          onRefreshLink={handleRefreshLink}
         />
 
         {/* Modals */}
@@ -522,6 +560,7 @@ export const App: React.FC = () => {
           onClose={() => setSyncOpen(false)}
           onSyncComplete={() => loadData()}
           onNeedUnlock={() => setUnlockOpen(true)}
+          unreachableNodes={unreachableNodes}
         />
 
         <SettingsModal

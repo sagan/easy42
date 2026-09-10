@@ -19,8 +19,10 @@ import (
 
 // ClientPool manages SSH and SFTP connections to remote hosts
 type ClientPool struct {
-	mu      sync.Mutex
-	clients map[string]*PooledClient
+	mu        sync.RWMutex
+	hostMu    sync.Mutex
+	hostLocks map[string]*sync.Mutex
+	clients   map[string]*PooledClient
 }
 
 // PooledClient wraps an active SSH client and SFTP client
@@ -33,8 +35,23 @@ type PooledClient struct {
 // NewClientPool creates a new SSH connection pool
 func NewClientPool() *ClientPool {
 	return &ClientPool{
-		clients: make(map[string]*PooledClient),
+		hostLocks: make(map[string]*sync.Mutex),
+		clients:   make(map[string]*PooledClient),
 	}
+}
+
+func (p *ClientPool) getHostLock(host string) *sync.Mutex {
+	p.hostMu.Lock()
+	defer p.hostMu.Unlock()
+	if p.hostLocks == nil {
+		p.hostLocks = make(map[string]*sync.Mutex)
+	}
+	l, exists := p.hostLocks[host]
+	if !exists {
+		l = &sync.Mutex{}
+		p.hostLocks[host] = l
+	}
+	return l
 }
 
 // CloseAll closes all cached SSH and SFTP connections
@@ -52,13 +69,24 @@ func (p *ClientPool) CloseAll() {
 	p.clients = make(map[string]*PooledClient)
 }
 
-// GetClient returns an active SSH and SFTP client for a host
+// GetClient returns an active SSH and SFTP client for a host.
+// It uses host-level locking so dials to different hosts execute concurrently.
 func (p *ClientPool) GetClient(hostAliasOrIP string) (*ssh.Client, *sftp.Client, error) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
+	return p.GetClientWithTimeout(hostAliasOrIP, 5*time.Second)
+}
 
-	if pc, exists := p.clients[hostAliasOrIP]; exists {
-		// Test connection health
+// GetClientWithTimeout returns an active SSH and SFTP client with a custom dial timeout.
+func (p *ClientPool) GetClientWithTimeout(hostAliasOrIP string, dialTimeout time.Duration) (*ssh.Client, *sftp.Client, error) {
+	hostLock := p.getHostLock(hostAliasOrIP)
+	hostLock.Lock()
+	defer hostLock.Unlock()
+
+	p.mu.RLock()
+	pc, exists := p.clients[hostAliasOrIP]
+	p.mu.RUnlock()
+
+	if exists {
+		// Test connection health without holding the global pool lock
 		if _, _, err := pc.SSHClient.SendRequest("keepalive@easy42", true, nil); err == nil {
 			pc.LastUsed = time.Now()
 			return pc.SSHClient, pc.SFTPClient, nil
@@ -70,10 +98,12 @@ func (p *ClientPool) GetClient(hostAliasOrIP string) (*ssh.Client, *sftp.Client,
 		if pc.SSHClient != nil {
 			_ = pc.SSHClient.Close()
 		}
+		p.mu.Lock()
 		delete(p.clients, hostAliasOrIP)
+		p.mu.Unlock()
 	}
 
-	sshClient, err := DialSSH(hostAliasOrIP)
+	sshClient, err := DialSSHWithTimeout(hostAliasOrIP, dialTimeout)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to dial ssh for %s: %w", hostAliasOrIP, err)
 	}
@@ -84,18 +114,29 @@ func (p *ClientPool) GetClient(hostAliasOrIP string) (*ssh.Client, *sftp.Client,
 		return nil, nil, fmt.Errorf("failed to create sftp client for %s: %w", hostAliasOrIP, err)
 	}
 
-	pc := &PooledClient{
+	pc = &PooledClient{
 		SSHClient:  sshClient,
 		SFTPClient: sftpClient,
 		LastUsed:   time.Now(),
 	}
+
+	p.mu.Lock()
 	p.clients[hostAliasOrIP] = pc
+	p.mu.Unlock()
 
 	return sshClient, sftpClient, nil
 }
 
-// DialSSH connects to a host using OpenSSH config, agent, and standard keys
+// DialSSH connects to a host using OpenSSH config, agent, and standard keys with default 5s timeout
 func DialSSH(hostAliasOrIP string) (*ssh.Client, error) {
+	return DialSSHWithTimeout(hostAliasOrIP, 5*time.Second)
+}
+
+// DialSSHWithTimeout connects to a host with a specified connection timeout
+func DialSSHWithTimeout(hostAliasOrIP string, timeout time.Duration) (*ssh.Client, error) {
+	if timeout <= 0 {
+		timeout = 5 * time.Second
+	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get home directory: %w", err)
@@ -192,7 +233,7 @@ func DialSSH(hostAliasOrIP string) (*ssh.Client, error) {
 		User:            user,
 		Auth:            authMethods,
 		HostKeyCallback: hostKeyCallback,
-		Timeout:         10 * time.Second,
+		Timeout:         timeout,
 	}
 
 	targetAddr := net.JoinHostPort(realHost, strconv.Itoa(port))

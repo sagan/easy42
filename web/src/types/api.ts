@@ -204,6 +204,7 @@ export interface UpdateStateResponse {
   success: boolean;
   state: NetworkState;
   warnings?: string[];
+  failed_nodes?: Record<string, string>;
 }
 
 export interface TaskMeta {

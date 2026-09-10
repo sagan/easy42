@@ -11,7 +11,7 @@ import {
   Tooltip,
   Chip,
 } from "@mui/material";
-import { X, Trash2, Link as LinkIcon, Key, ArrowRightLeft, Edit2, Activity, Copy, Check, Shield } from "lucide-react";
+import { X, Trash2, Link as LinkIcon, Key, ArrowRightLeft, Edit2, Activity, Copy, Check, Shield, RefreshCw } from "lucide-react";
 import { api } from "../../api/client";
 import { Link, NetworkState } from "../../types/api";
 
@@ -22,6 +22,7 @@ interface LinkDetailDrawerProps {
   onClose: () => void;
   onEditLink: (link: Link) => void;
   onLinkDeleted: (from: string, to: string) => void;
+  onRefreshLink?: (link: Link) => Promise<void>;
 }
 
 function formatBytes(bytes: number): string {
@@ -51,8 +52,10 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
   onClose,
   onEditLink,
   onLinkDeleted,
+  onRefreshLink,
 }) => {
   const [deleting, setDeleting] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [copiedEndpoint, setCopiedEndpoint] = useState<string | null>(null);
@@ -91,6 +94,20 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
       setError(e.message || "Failed to delete link");
     } finally {
       setDeleting(false);
+    }
+  };
+
+  const handleRefreshLink = async () => {
+    if (!onRefreshLink) return;
+    setRefreshing(true);
+    setError(null);
+    try {
+      await onRefreshLink(link);
+    } catch (err: unknown) {
+      const e = err as Error;
+      setError(e.message || "Failed to refresh link state");
+    } finally {
+      setRefreshing(false);
     }
   };
 
@@ -612,13 +629,35 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
 
       {/* Actions */}
       <Box sx={{ mt: "auto", pt: 3, display: "flex", flexDirection: "column", gap: 1.5 }}>
+        {onRefreshLink && (
+          <Button
+            fullWidth
+            variant="outlined"
+            startIcon={refreshing ? <CircularProgress size={16} color="inherit" /> : <RefreshCw size={16} />}
+            onClick={handleRefreshLink}
+            disabled={refreshing || deleting}
+            sx={{
+              borderColor: "#CBD5E1",
+              color: "#334155",
+              fontWeight: 600,
+              textTransform: "none",
+              "&:hover": {
+                borderColor: "#0284C7",
+                backgroundColor: "rgba(2, 132, 199, 0.05)",
+                color: "#0284C7",
+              },
+            }}
+          >
+            {refreshing ? "Refreshing Link State..." : "Refresh Link State"}
+          </Button>
+        )}
         <Button
           fullWidth
           variant="contained"
           color="primary"
           startIcon={<Edit2 size={16} />}
           onClick={() => onEditLink(link)}
-          disabled={deleting}
+          disabled={refreshing || deleting}
         >
           Edit Link
         </Button>

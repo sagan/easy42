@@ -884,3 +884,87 @@ func TestExternalNodeAndPeering(t *testing.T) {
 		t.Errorf("Expected synthetic status for external node peer-dn42, got %+v", st)
 	}
 }
+
+func TestUpdateStatePartialNodeFilter(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "easy42-update-state-partial-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	store := config.NewStore(tempDir)
+	pass, err := store.Initialize()
+	if err != nil {
+		t.Fatalf("Failed to init store: %v", err)
+	}
+
+	mgr := NewManager(store)
+	if err := mgr.Unlock(pass); err != nil {
+		t.Fatalf("Failed to unlock manager: %v", err)
+	}
+
+	node1 := config.Node{
+		Name:      "node-a",
+		Host:      "none",
+		IP:        "172.20.1.1",
+		Interface: "eth0",
+		ASN:       4224420001,
+		IsExternal: true,
+	}
+	node2 := config.Node{
+		Name:      "node-b",
+		Host:      "none",
+		IP:        "172.20.1.2",
+		Interface: "eth0",
+		ASN:       4224420002,
+		IsExternal: true,
+	}
+
+	if err := mgr.AddNode(node1); err != nil {
+		t.Fatalf("AddNode node-a failed: %v", err)
+	}
+	if err := mgr.AddNode(node2); err != nil {
+		t.Fatalf("AddNode node-b failed: %v", err)
+	}
+
+	// First run full update
+	st1, _, err := mgr.UpdateState()
+	if err != nil {
+		t.Fatalf("Full UpdateState failed: %v", err)
+	}
+	if len(st1.Nodes) < 2 {
+		// External nodes are handled synthetically
+	}
+
+	// Manually inject a recorded state node for node-a and node-b
+	currentState := mgr.GetNetworkState()
+	if currentState.Nodes == nil {
+		currentState.Nodes = make(map[string]config.StateNode)
+	}
+	currentState.Nodes["node-a"] = config.StateNode{
+		Name: "node-a",
+		Host: "none",
+		Interfaces: map[string]config.StateInterface{
+			"wg42nodeb": {Name: "wg42nodeb", Status: "active"},
+		},
+	}
+	currentState.Nodes["node-b"] = config.StateNode{
+		Name: "node-b",
+		Host: "none",
+		Interfaces: map[string]config.StateInterface{
+			"wg42nodea": {Name: "wg42nodea", Status: "active"},
+		},
+	}
+	_ = mgr.stateStore.Save(currentState)
+
+	// Now run partial UpdateState only targeting node-a
+	stPartial, _, err := mgr.UpdateState("node-a")
+	if err != nil {
+		t.Fatalf("Partial UpdateState failed: %v", err)
+	}
+
+	// Ensure node-b was NOT deleted from recorded state during partial update
+	if _, exists := stPartial.Nodes["node-b"]; !exists {
+		t.Errorf("Partial update for node-a should have preserved node-b in state store")
+	}
+}

@@ -68,6 +68,8 @@ interface TopologyGraphProps {
   onSelectLink: (link: Link) => void;
   onConnectNodes: (sourceName: string, targetName: string) => void;
   onNodePositionChange?: (name: string, x: number, y: number) => void;
+  onRefreshNode?: (nodeName: string) => void;
+  refreshingNodeName?: string | null;
 }
 
 const nodeTypes = {
@@ -88,6 +90,8 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
   onSelectLink,
   onConnectNodes,
   onNodePositionChange,
+  onRefreshNode,
+  refreshingNodeName,
 }) => {
   // Convert easy42 nodes to React Flow nodes with circular/grid layout or saved coordinates
   const initialNodes: FlowNode[] = useMemo(() => {
@@ -112,10 +116,12 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
           node,
           status: nodeStatuses[node.name],
           onSelect: onSelectNode,
+          onRefreshNode,
+          refreshingNodeName,
         } as unknown as Record<string, unknown>,
       };
     });
-  }, [nodes, nodeStatuses, onSelectNode]);
+  }, [nodes, nodeStatuses, onSelectNode, onRefreshNode, refreshingNodeName]);
 
   // Convert easy42 links to React Flow edges with derived working state
   const initialEdges: Edge[] = useMemo(() => {

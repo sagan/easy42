@@ -71,6 +71,8 @@ func GenerateWgConfigContent(
 		mtu = 1420
 	}
 	buf.WriteString(fmt.Sprintf("MTU = %d\n", mtu))
+	// Some OS (debian) wg-quick seems to force set wg rp_filter to 2 on start
+	buf.WriteString("PostUp = sysctl -w net.ipv4.conf.%i.rp_filter=0\n")
 	buf.WriteString("Table = off\n\n")
 
 	buf.WriteString("[Peer]\n")

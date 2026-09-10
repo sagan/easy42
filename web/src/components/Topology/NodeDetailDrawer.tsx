@@ -29,6 +29,7 @@ import {
   Network,
   FileCode,
   Wrench,
+  Radio,
 } from "lucide-react";
 import { api } from "../../api/client";
 import { Node, NodeStatus } from "../../types/api";
@@ -43,6 +44,7 @@ interface NodeDetailDrawerProps {
   onNodeDeleted: (name: string) => void;
   onStatusRefreshed: (status: NodeStatus) => void;
   onOpenHelper?: (nodeName: string) => void;
+  onUpdateNodeState?: (nodeName: string) => Promise<void>;
 }
 
 export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
@@ -55,8 +57,10 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
   onNodeDeleted,
   onStatusRefreshed,
   onOpenHelper,
+  onUpdateNodeState,
 }) => {
   const [refreshing, setRefreshing] = useState(false);
+  const [updatingState, setUpdatingState] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [viewingBird, setViewingBird] = useState(false);
@@ -107,6 +111,20 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
       setError(e.message || "Failed to refresh status");
     } finally {
       setRefreshing(false);
+    }
+  };
+
+  const handleUpdateNodeState = async () => {
+    if (!onUpdateNodeState) return;
+    setUpdatingState(true);
+    setError(null);
+    try {
+      await onUpdateNodeState(node.name);
+    } catch (err: unknown) {
+      const e = err as Error;
+      setError(e.message || "Failed to update node state");
+    } finally {
+      setUpdatingState(false);
     }
   };
 
@@ -575,15 +593,16 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
               sx={{
                 p: 1.5,
                 borderRadius: 2,
-                backgroundColor: "#F8FAFC",
-                border: "1px solid #E2E8F0",
+                backgroundColor: !status.connected ? "#FEF2F2" : "#F8FAFC",
+                border: "1px solid",
+                borderColor: !status.connected ? "#FECDD3" : "#E2E8F0",
                 display: "flex",
                 flexDirection: "column",
                 gap: 1,
               }}
             >
               <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <Typography variant="caption" sx={{ color: "#64748B" }}>
+                <Typography variant="caption" sx={{ color: !status.connected ? "#991B1B" : "#64748B", fontWeight: 600 }}>
                   Connectivity:
                 </Typography>
                 <Chip
@@ -591,9 +610,21 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
                   label={status.connected ? "Online" : "Unreachable"}
                   size="small"
                   color={status.connected ? "success" : "error"}
-                  sx={{ height: 20, fontSize: "0.7rem" }}
+                  sx={{ height: 20, fontSize: "0.7rem", fontWeight: 700 }}
                 />
               </Box>
+
+              {!status.connected && status.error && (
+                <Box sx={{ mt: 0.5, p: 1, backgroundColor: "#FFFFFF", borderRadius: 1.5, border: "1px solid #FECDD3" }}>
+                  <Typography variant="caption" sx={{ color: "#991B1B", fontWeight: 700, display: "block", mb: 0.25 }}>
+                    SSH Connection Error:
+                  </Typography>
+                  <Typography variant="caption" className="mono-font" sx={{ color: "#DC2626", display: "block", wordBreak: "break-all", fontSize: "0.68rem" }}>
+                    {status.error}
+                  </Typography>
+                </Box>
+              )}
+
               {status.hostname && (
                 <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                   <Typography variant="caption" sx={{ color: "#64748B" }}>
@@ -627,20 +658,43 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
 
       {/* Footer Actions */}
       <Box sx={{ mt: "auto", pt: 3, display: "flex", flexDirection: "column", gap: 1.5 }}>
+        {!node.is_external && onUpdateNodeState && (
+          <Button
+            fullWidth
+            variant="contained"
+            startIcon={updatingState ? <CircularProgress size={16} color="inherit" /> : <Radio size={16} />}
+            onClick={handleUpdateNodeState}
+            disabled={updatingState || refreshing || deleting}
+            sx={{
+              backgroundColor: "#0284C7",
+              color: "#FFFFFF",
+              fontWeight: 700,
+              textTransform: "none",
+              py: 1,
+              "&:hover": {
+                backgroundColor: "#0369A1",
+              },
+            }}
+          >
+            {updatingState ? "Updating State & Links..." : "Update State & Links"}
+          </Button>
+        )}
+
         {onOpenHelper && !node.is_external && (
           <Button
             fullWidth
             variant="outlined"
             startIcon={<Wrench size={16} />}
             onClick={() => onOpenHelper(node.name)}
-            disabled={refreshing || deleting}
+            disabled={updatingState || refreshing || deleting}
             sx={{
-              borderColor: "#4F46E5",
-              color: "#4F46E5",
+              borderColor: "#CBD5E1",
+              color: "#334155",
               fontWeight: 600,
               "&:hover": {
-                borderColor: "#3730A3",
-                backgroundColor: "rgba(79, 70, 229, 0.06)",
+                borderColor: "#0284C7",
+                backgroundColor: "rgba(2, 132, 199, 0.05)",
+                color: "#0284C7",
               },
             }}
           >

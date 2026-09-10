@@ -890,4 +890,82 @@ func TestNetworkPoliciesAPI(t *testing.T) {
 	}
 }
 
+func TestUpdateStateSpecifiedNodeAndObservability(t *testing.T) {
+	srv, tempDir, initPass := setupTestServer(t)
+	defer os.RemoveAll(tempDir)
+
+	// Login
+	loginBody, _ := json.Marshal(map[string]string{"password": initPass})
+	reqLogin := httptest.NewRequest("POST", "/api/auth/login", bytes.NewReader(loginBody))
+	wLogin := httptest.NewRecorder()
+	srv.router.ServeHTTP(wLogin, reqLogin)
+	cookie := wLogin.Result().Cookies()[0]
+
+	// Add 2 nodes: node1 (offline host) and extNode (external)
+	n1 := config.Node{Name: "offnode", Host: "127.0.0.1:59999", IP: "172.20.1.1", Interface: "eth0", ASN: 4224420001}
+	b1, _ := json.Marshal(n1)
+	req1 := httptest.NewRequest("POST", "/api/nodes", bytes.NewReader(b1))
+	req1.AddCookie(cookie)
+	w1 := httptest.NewRecorder()
+	srv.router.ServeHTTP(w1, req1)
+	if w1.Code != http.StatusCreated {
+		t.Fatalf("AddNode 1 failed: %d %s", w1.Code, w1.Body.String())
+	}
+
+	n2 := config.Node{Name: "extnode", Host: "none", IP: "172.20.1.2", IsExternal: true, ASN: 4224420002}
+	b2, _ := json.Marshal(n2)
+	req2 := httptest.NewRequest("POST", "/api/nodes", bytes.NewReader(b2))
+	req2.AddCookie(cookie)
+	w2 := httptest.NewRecorder()
+	srv.router.ServeHTTP(w2, req2)
+	if w2.Code != http.StatusCreated {
+		t.Fatalf("AddNode 2 failed: %d %s", w2.Code, w2.Body.String())
+	}
+
+	// 1. Test POST /api/nodes/extnode/state (specific external node state update)
+	reqExtState := httptest.NewRequest("POST", "/api/nodes/extnode/state", nil)
+	reqExtState.AddCookie(cookie)
+	wExtState := httptest.NewRecorder()
+	srv.router.ServeHTTP(wExtState, reqExtState)
+	if wExtState.Code != http.StatusOK {
+		t.Fatalf("Update specific node state failed: %d %s", wExtState.Code, wExtState.Body.String())
+	}
+
+	var extResp map[string]any
+	if err := json.Unmarshal(wExtState.Body.Bytes(), &extResp); err != nil {
+		t.Fatalf("Failed to parse json: %v", err)
+	}
+	if extResp["success"] != true {
+		t.Errorf("Expected success true, got %v", extResp["success"])
+	}
+
+	// 2. Test POST /api/state/update?node=offnode (specific offline node state update)
+	// It should complete quickly and report offnode in failed_nodes and warnings
+	reqOfflineState := httptest.NewRequest("POST", "/api/state/update?node=offnode", nil)
+	reqOfflineState.AddCookie(cookie)
+	wOfflineState := httptest.NewRecorder()
+	srv.router.ServeHTTP(wOfflineState, reqOfflineState)
+	if wOfflineState.Code != http.StatusOK {
+		t.Fatalf("Update offline node state failed: %d %s", wOfflineState.Code, wOfflineState.Body.String())
+	}
+
+	var offlineResp struct {
+		Success     bool              `json:"success"`
+		FailedNodes map[string]string `json:"failed_nodes"`
+		Warnings    []string          `json:"warnings"`
+	}
+	if err := json.Unmarshal(wOfflineState.Body.Bytes(), &offlineResp); err != nil {
+		t.Fatalf("Failed to parse json: %v", err)
+	}
+	if !offlineResp.Success {
+		t.Errorf("Expected success true even with failed node warning")
+	}
+	if offlineResp.FailedNodes["offnode"] == "" {
+		t.Errorf("Expected offnode to be listed in failed_nodes, got %+v", offlineResp.FailedNodes)
+	}
+	if len(offlineResp.Warnings) == 0 {
+		t.Errorf("Expected warning for offnode connection failure")
+	}
+}
+
 

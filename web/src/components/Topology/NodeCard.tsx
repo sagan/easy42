@@ -1,42 +1,49 @@
 import React, { memo } from "react";
 import { Handle, Position, NodeProps } from "@xyflow/react";
-import { Box, Typography, Chip, IconButton, Tooltip } from "@mui/material";
-import { Server, MoreVertical, Globe, HardDrive, Tag } from "lucide-react";
+import { Box, Typography, Chip, IconButton, Tooltip, CircularProgress } from "@mui/material";
+import { Server, MoreVertical, Globe, HardDrive, Tag, AlertTriangle, RefreshCw } from "lucide-react";
 import { Node, NodeStatus } from "../../types/api";
 
 export interface NodeData {
   node: Node;
   status?: NodeStatus;
   onSelect: (node: Node) => void;
+  onRefreshNode?: (nodeName: string) => void;
+  refreshingNodeName?: string | null;
   [key: string]: unknown;
 }
 
 export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
   const nodeData = data as unknown as NodeData;
-  const { node, status, onSelect } = nodeData;
+  const { node, status, onSelect, onRefreshNode, refreshingNodeName } = nodeData;
   const isOnline = status ? status.connected : true;
   const isExternal = Boolean(node.is_external);
+  const isRefreshing = refreshingNodeName === node.name;
 
   return (
     <Box
       onClick={() => onSelect(node)}
       sx={{
         width: 260,
-        backgroundColor: "#FFFFFF",
-        border: isExternal ? "2px dashed #8B5CF6" : "1px solid",
-        borderColor: isExternal ? "#8B5CF6" : isOnline ? "#E2E8F0" : "rgba(225, 29, 72, 0.4)",
+        backgroundColor: !isOnline && !isExternal ? "#FFFDFD" : "#FFFFFF",
+        border: isExternal ? "2px dashed #8B5CF6" : "1.5px solid",
+        borderColor: isExternal ? "#8B5CF6" : isOnline ? "#E2E8F0" : "#EF4444",
         borderRadius: 2.5,
         boxShadow: isExternal
           ? "0 4px 6px -1px rgba(139, 92, 246, 0.08), 0 2px 4px -2px rgba(139, 92, 246, 0.05)"
+          : !isOnline
+          ? "0 4px 10px rgba(239, 68, 68, 0.15), 0 2px 4px rgba(239, 68, 68, 0.1)"
           : "0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05)",
         overflow: "hidden",
         cursor: "pointer",
         transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
         "&:hover": {
           transform: "translateY(-2px)",
-          borderColor: isExternal ? "#7C3AED" : "#4F46E5",
+          borderColor: isExternal ? "#7C3AED" : !isOnline ? "#DC2626" : "#4F46E5",
           boxShadow: isExternal
             ? "0 10px 15px -3px rgba(139, 92, 246, 0.2), 0 4px 6px -4px rgba(139, 92, 246, 0.15)"
+            : !isOnline
+            ? "0 10px 15px -3px rgba(239, 68, 68, 0.25)"
             : "0 10px 15px -3px rgba(79, 70, 229, 0.12), 0 4px 6px -4px rgba(79, 70, 229, 0.12)",
         },
       }}
@@ -49,7 +56,7 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
         style={{
           width: 10,
           height: 10,
-          backgroundColor: isExternal ? "#8B5CF6" : "#4F46E5",
+          backgroundColor: isExternal ? "#8B5CF6" : !isOnline ? "#EF4444" : "#4F46E5",
           border: "2px solid #FFFFFF",
         }}
       />
@@ -60,7 +67,7 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
         style={{
           width: 10,
           height: 10,
-          backgroundColor: isExternal ? "#8B5CF6" : "#0891B2",
+          backgroundColor: isExternal ? "#8B5CF6" : !isOnline ? "#EF4444" : "#0891B2",
           border: "2px solid #FFFFFF",
         }}
       />
@@ -69,9 +76,9 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
       <Box
         sx={{
           p: 1.5,
-          backgroundColor: isExternal ? "#FAF5FF" : "#F8FAFC",
+          backgroundColor: isExternal ? "#FAF5FF" : !isOnline ? "#FEF2F2" : "#F8FAFC",
           borderBottom: "1px solid",
-          borderColor: isExternal ? "rgba(139, 92, 246, 0.2)" : "#E2E8F0",
+          borderColor: isExternal ? "rgba(139, 92, 246, 0.2)" : !isOnline ? "#FECDD3" : "#E2E8F0",
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
@@ -83,8 +90,12 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
               width: 28,
               height: 28,
               borderRadius: 1.5,
-              backgroundColor: isExternal ? "rgba(139, 92, 246, 0.15)" : "rgba(79, 70, 229, 0.1)",
-              color: isExternal ? "#7C3AED" : "#4F46E5",
+              backgroundColor: isExternal
+                ? "rgba(139, 92, 246, 0.15)"
+                : !isOnline
+                ? "rgba(239, 68, 68, 0.15)"
+                : "rgba(79, 70, 229, 0.1)",
+              color: isExternal ? "#7C3AED" : !isOnline ? "#DC2626" : "#4F46E5",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -113,18 +124,58 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
                   }}
                 />
               )}
+              {!isExternal && !isOnline && (
+                <Tooltip title={status?.error || "Device is offline or unreachable via SSH"}>
+                  <Chip
+                    icon={<AlertTriangle size={10} color="#DC2626" />}
+                    label="OFFLINE"
+                    size="small"
+                    sx={{
+                      height: 16,
+                      fontSize: "0.55rem",
+                      fontWeight: 800,
+                      backgroundColor: "#FEE2E2",
+                      color: "#DC2626",
+                      border: "1px solid #FECDD3",
+                      letterSpacing: "0.5px",
+                      px: 0,
+                    }}
+                  />
+                </Tooltip>
+              )}
             </Box>
-            <Typography variant="caption" sx={{ color: isExternal ? "#7C3AED" : "#64748B", fontSize: "0.7rem" }}>
+            <Typography variant="caption" sx={{ color: isExternal ? "#7C3AED" : !isOnline ? "#DC2626" : "#64748B", fontSize: "0.7rem" }}>
               {isExternal ? node.description || "Unmanaged Peer" : node.host || "No SSH Host"}
             </Typography>
           </Box>
         </Box>
 
-        <Tooltip title="Node Details">
-          <IconButton size="small" sx={{ color: "#94A3B8" }}>
-            <MoreVertical size={16} />
-          </IconButton>
-        </Tooltip>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 0.25 }}>
+          {onRefreshNode && !isExternal && (
+            <Tooltip title={`Refresh state & links for ${node.name}`}>
+              <IconButton
+                size="small"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onRefreshNode(node.name);
+                }}
+                disabled={isRefreshing}
+                sx={{
+                  color: isRefreshing ? "#4F46E5" : "#94A3B8",
+                  p: 0.5,
+                  "&:hover": { color: "#0284C7", backgroundColor: "rgba(2, 132, 199, 0.08)" },
+                }}
+              >
+                {isRefreshing ? <CircularProgress size={13} color="inherit" /> : <RefreshCw size={14} />}
+              </IconButton>
+            </Tooltip>
+          )}
+          <Tooltip title="Node Details">
+            <IconButton size="small" sx={{ color: "#94A3B8", p: 0.5 }}>
+              <MoreVertical size={15} />
+            </IconButton>
+          </Tooltip>
+        </Box>
       </Box>
 
       {/* Body */}
@@ -219,6 +270,38 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
           </Box>
         )}
       </Box>
+
+      {/* Offline Alert Strip */}
+      {!isExternal && !isOnline && (
+        <Box
+          sx={{
+            px: 1.5,
+            py: 0.75,
+            backgroundColor: "#FEF2F2",
+            borderTop: "1px solid #FECDD3",
+            display: "flex",
+            alignItems: "center",
+            gap: 0.75,
+          }}
+        >
+          <AlertTriangle size={12} color="#DC2626" style={{ flexShrink: 0 }} />
+          <Tooltip title={status?.error || "Device unreachable via SSH"}>
+            <Typography
+              variant="caption"
+              sx={{
+                color: "#B91C1C",
+                fontSize: "0.68rem",
+                fontWeight: 600,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {status?.error ? `Unreachable: ${status.error}` : "Unreachable via SSH"}
+            </Typography>
+          </Tooltip>
+        </Box>
+      )}
     </Box>
   );
 });

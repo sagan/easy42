@@ -28,15 +28,17 @@ import {
   CheckCheck,
   Network,
   Shield,
+  AlertTriangle,
 } from "lucide-react";
 import { api } from "../../api/client";
-import { SyncAction, SyncResult } from "../../types/api";
+import { SyncAction, SyncResult, Node } from "../../types/api";
 
 interface SyncProgressModalProps {
   open: boolean;
   onClose: () => void;
   onSyncComplete: () => void;
   onNeedUnlock?: () => void;
+  unreachableNodes?: Node[];
 }
 
 export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
@@ -44,6 +46,7 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
   onClose,
   onSyncComplete,
   onNeedUnlock,
+  unreachableNodes,
 }) => {
   const [loadingPreview, setLoadingPreview] = useState(false);
   const [actions, setActions] = useState<SyncAction[]>([]);
@@ -89,7 +92,10 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
     setStateMessage(null);
     try {
       const res = await api.updateState();
-      if (res.warnings && res.warnings.length > 0) {
+      if (res.failed_nodes && Object.keys(res.failed_nodes).length > 0) {
+        const names = Object.keys(res.failed_nodes).join(", ");
+        setStateMessage(`Device states reconciled. Note: ${Object.keys(res.failed_nodes).length} node(s) unreachable (${names})`);
+      } else if (res.warnings && res.warnings.length > 0) {
         setStateMessage(`State updated with warnings: ${res.warnings.join(", ")}`);
       } else {
         setStateMessage("Device states successfully fetched and reconciled.");
@@ -264,6 +270,21 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
         ) : (
           /* Action Plan Preview */
           <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+            {unreachableNodes && unreachableNodes.length > 0 && (
+              <Alert
+                severity="warning"
+                icon={<AlertTriangle size={18} color="#D97706" />}
+                sx={{ borderRadius: 2, backgroundColor: "#FFFBEB", border: "1px solid #FDE68A" }}
+              >
+                <Typography variant="body2" sx={{ fontWeight: 700, color: "#92400E" }}>
+                  {unreachableNodes.length} node(s) currently unreachable via SSH: {unreachableNodes.map((n) => n.name).join(", ")}
+                </Typography>
+                <Typography variant="caption" sx={{ color: "#B45309", display: "block", mt: 0.25 }}>
+                  Preview diffs for unreachable devices are computed from recorded state.json. Live interfaces could not be queried directly.
+                </Typography>
+              </Alert>
+            )}
+
             {/* Status Summary */}
             <Box
               sx={{

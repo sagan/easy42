@@ -202,10 +202,13 @@ export const api = {
       method: "POST",
     }).then((res) => res || []),
   getSyncStatus: () => request<SyncStatus>("/sync/status"),
-  updateState: () =>
-    request<UpdateStateResponse>("/state/update", {
-      method: "POST",
-    }),
+  updateState: (nodeName?: string) =>
+    request<UpdateStateResponse>(
+      nodeName ? `/state/update?node=${encodeURIComponent(nodeName)}` : "/state/update",
+      {
+        method: "POST",
+      }
+    ),
   getState: () => request<NetworkState>("/state"),
 
   // Helper Tasks

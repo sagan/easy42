@@ -822,7 +822,33 @@ func (s *Server) handleExecuteSync(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleUpdateState(w http.ResponseWriter, r *http.Request) {
-	state, warnings, err := s.mgr.UpdateState()
+	var targetNodes []string
+	if nodeParam := r.URL.Query().Get("node"); nodeParam != "" {
+		for _, part := range strings.Split(nodeParam, ",") {
+			trimmed := strings.TrimSpace(part)
+			if trimmed != "" {
+				targetNodes = append(targetNodes, trimmed)
+			}
+		}
+	} else if r.Body != nil {
+		var req struct {
+			Node  string   `json:"node"`
+			Nodes []string `json:"nodes"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err == nil {
+			if req.Node != "" {
+				targetNodes = append(targetNodes, strings.TrimSpace(req.Node))
+			}
+			for _, n := range req.Nodes {
+				trimmed := strings.TrimSpace(n)
+				if trimmed != "" {
+					targetNodes = append(targetNodes, trimmed)
+				}
+			}
+		}
+	}
+
+	state, warnings, err := s.mgr.UpdateState(targetNodes...)
 	if err != nil {
 		if err == crypto.ErrVaultLocked {
 			writeError(w, http.StatusLocked, "Vault is locked. Unlock with password first.")
@@ -832,10 +858,58 @@ func (s *Server) handleUpdateState(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	failedNodes := make(map[string]string)
+	statuses := s.mgr.GetNodeStatuses()
+	if len(targetNodes) > 0 {
+		for _, name := range targetNodes {
+			if st, ok := statuses[name]; ok && !st.Connected && st.Error != "" {
+				failedNodes[name] = st.Error
+			}
+		}
+	} else {
+		for name, st := range statuses {
+			if !st.Connected && st.Error != "" {
+				failedNodes[name] = st.Error
+			}
+		}
+	}
+
 	writeJSON(w, http.StatusOK, map[string]any{
-		"success":  true,
-		"state":    state,
-		"warnings": warnings,
+		"success":      true,
+		"state":        state,
+		"warnings":     warnings,
+		"failed_nodes": failedNodes,
+	})
+}
+
+func (s *Server) handleUpdateNodeState(w http.ResponseWriter, r *http.Request) {
+	name := chi.URLParam(r, "name")
+	if name == "" {
+		writeError(w, http.StatusBadRequest, "node name is required")
+		return
+	}
+
+	state, warnings, err := s.mgr.UpdateState(name)
+	if err != nil {
+		if err == crypto.ErrVaultLocked {
+			writeError(w, http.StatusLocked, "Vault is locked. Unlock with password first.")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	failedNodes := make(map[string]string)
+	statuses := s.mgr.GetNodeStatuses()
+	if st, ok := statuses[name]; ok && !st.Connected && st.Error != "" {
+		failedNodes[name] = st.Error
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"success":      true,
+		"state":        state,
+		"warnings":     warnings,
+		"failed_nodes": failedNodes,
 	})
 }
 

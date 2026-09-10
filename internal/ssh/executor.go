@@ -14,8 +14,13 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-// RunCommand executes a command on the remote host and returns stdout/stderr
+// RunCommand executes a command on the remote host and returns stdout/stderr with a default 15s timeout
 func RunCommand(client *ssh.Client, command string) (string, error) {
+	return RunCommandWithTimeout(client, command, 15*time.Second)
+}
+
+// RunCommandWithTimeout executes a command on the remote host bounded by a timeout
+func RunCommandWithTimeout(client *ssh.Client, command string, timeout time.Duration) (string, error) {
 	session, err := client.NewSession()
 	if err != nil {
 		return "", fmt.Errorf("failed to create ssh session: %w", err)
@@ -26,15 +31,30 @@ func RunCommand(client *ssh.Client, command string) (string, error) {
 	session.Stdout = &stdout
 	session.Stderr = &stderr
 
-	if err := session.Run(command); err != nil {
-		errOutput := strings.TrimSpace(stderr.String())
-		if errOutput == "" {
-			errOutput = strings.TrimSpace(stdout.String())
-		}
-		return stdout.String(), fmt.Errorf("command failed (%s): %w - %s", command, err, errOutput)
+	if timeout <= 0 {
+		timeout = 15 * time.Second
 	}
 
-	return stdout.String(), nil
+	done := make(chan error, 1)
+	go func() {
+		done <- session.Run(command)
+	}()
+
+	select {
+	case <-time.After(timeout):
+		_ = session.Signal(ssh.SIGKILL)
+		_ = session.Close()
+		return "", fmt.Errorf("command timed out after %v: %s", timeout, command)
+	case err := <-done:
+		if err != nil {
+			errOutput := strings.TrimSpace(stderr.String())
+			if errOutput == "" {
+				errOutput = strings.TrimSpace(stdout.String())
+			}
+			return stdout.String(), fmt.Errorf("command failed (%s): %w - %s", command, err, errOutput)
+		}
+		return stdout.String(), nil
+	}
 }
 
 // RunCommandWithExitCode executes a command and returns stdout, stderr, exit code, and execution error
