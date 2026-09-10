@@ -100,6 +100,59 @@ func TestResolvePeerEndpoint(t *testing.T) {
 	}
 }
 
+func TestGetDefaultWgTemplate(t *testing.T) {
+	tmpl, err := GetDefaultWgTemplate()
+	if err != nil {
+		t.Fatalf("GetDefaultWgTemplate failed: %v", err)
+	}
+	if !strings.Contains(tmpl, "[Interface]") || !strings.Contains(tmpl, "[Peer]") {
+		t.Fatalf("Expected Interface and Peer sections in default wg template, got:\n%s", tmpl)
+	}
+}
+
+func TestGenerateWgConfigContentWithTemplate(t *testing.T) {
+	nodeA := &config.Node{
+		Name: "node-a",
+		IP:   "192.168.100.1",
+	}
+	nodeB := &config.Node{
+		Name: "node-b",
+		IP:   "192.168.100.2",
+	}
+	endA := &config.LinkEnd{
+		Name:       "node-a",
+		ListenPort: 51820,
+	}
+	endB := &config.LinkEnd{
+		Name:      "node-b",
+		PublicKey: "peer-pub-key-123",
+	}
+
+	customTmpl := `# Custom WG config for {{ .self_node.Name }} -> {{ .peer_node.Name }}
+[Interface]
+ListenPort = {{ .listen_port }}
+# Custom note: MTU is {{ .mtu }}
+
+[Peer]
+PublicKey = {{ .peer_public_key }}
+AllowedIPs = {{ .allowed_ips }}
+`
+	rendered, err := GenerateWgConfigContentWithTemplate(customTmpl, nodeA, nodeB, endA, endB, nil)
+	if err != nil {
+		t.Fatalf("GenerateWgConfigContentWithTemplate failed: %v", err)
+	}
+	expectedHeader := "# Custom WG config for node-a -> node-b"
+	if !strings.Contains(rendered, expectedHeader) {
+		t.Fatalf("Expected %q, got:\n%s", expectedHeader, rendered)
+	}
+	if !strings.Contains(rendered, "ListenPort = 51820") {
+		t.Fatalf("Expected ListenPort = 51820, got:\n%s", rendered)
+	}
+	if !strings.Contains(rendered, "PublicKey = peer-pub-key-123") {
+		t.Fatalf("Expected PublicKey = peer-pub-key-123, got:\n%s", rendered)
+	}
+}
+
 func TestGenerateWgConfigContent(t *testing.T) {
 	nodeA := &config.Node{
 		Name: "node-a",
