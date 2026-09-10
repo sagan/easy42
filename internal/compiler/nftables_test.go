@@ -160,3 +160,99 @@ func TestGenerateNftablesConfigWithoutExternalIP(t *testing.T) {
 		}
 	}
 }
+
+func TestNetworkPolicyNftables(t *testing.T) {
+	node := config.Node{
+		Name:        "local-fw",
+		IP:          "192.168.100.1",
+		ExternalIP:  "172.20.229.13",
+		ExternalIP6: "fd42:a159:f9f0::d",
+		ASN:         4224420001,
+	}
+	allNodes := []config.Node{
+		node,
+		{Name: "peer-int", IP: "192.168.100.2"},
+		{Name: "peer-cust", IP: "192.168.100.3"},
+	}
+	links := []config.Link{
+		{
+			From: config.LinkEnd{Name: "local-fw", Interface: "wg42intdn42", Policy: config.PolicyDN42},
+			To:   config.LinkEnd{Name: "peer-int", Interface: "wg42gw"},
+		},
+		{
+			From: config.LinkEnd{Name: "local-fw", Interface: "wg42custom", Policy: "restricted"},
+			To:   config.LinkEnd{Name: "peer-cust", Interface: "wg42gw"},
+		},
+	}
+	netSettings := &config.NetworkSettings{
+		Prefixes: []string{"172.20.0.0/14", "fd00::/8"},
+	}
+	customPolicies := []config.NetworkPolicy{
+		{
+			ID:              "restricted",
+			Name:            "Restricted Partner",
+			AllowedDstCIDRs: []string{"172.20.10.0/24"},
+			AllowedSrcCIDRs: []string{"172.20.20.0/24"},
+			FilterForward:   true,
+			FilterInput:     true,
+			SNAT: &config.SNATConfig{
+				Enabled:   true,
+				Condition: "not_dst",
+				Target:    "external_ip",
+			},
+		},
+	}
+
+	conf, err := GenerateNftablesConfig(&node, allNodes, links, netSettings, customPolicies)
+	if err != nil {
+		t.Fatalf("GenerateNftablesConfig failed: %v", err)
+	}
+
+	// 1. Verify dn42 interface list includes wg42intdn42
+	if !strings.Contains(conf, `"wg42intdn42"`) {
+		t.Errorf("Expected wg42intdn42 in external_ifname set, got:\n%s", conf)
+	}
+
+	// 2. Verify custom policy sets
+	if !strings.Contains(conf, `define pol_restricted_ifname = { "wg42custom" }`) {
+		t.Errorf("Expected define pol_restricted_ifname, got:\n%s", conf)
+	}
+	if !strings.Contains(conf, `define pol_restricted_dst_v4 = { 172.20.10.0/24 }`) {
+		t.Errorf("Expected define pol_restricted_dst_v4, got:\n%s", conf)
+	}
+	if !strings.Contains(conf, `define pol_restricted_src_v4 = { 172.20.20.0/24 }`) {
+		t.Errorf("Expected define pol_restricted_src_v4, got:\n%s", conf)
+	}
+
+	// 3. Verify forward drops
+	if !strings.Contains(conf, `iifname @pol_restricted_ifname ip saddr != @pol_restricted_src_v4 drop`) {
+		t.Errorf("Expected saddr drop rule, got:\n%s", conf)
+	}
+	if !strings.Contains(conf, `iifname @pol_restricted_ifname ip daddr != @pol_restricted_dst_v4 drop`) {
+		t.Errorf("Expected daddr drop rule, got:\n%s", conf)
+	}
+
+	// 4. Verify input drop
+	if !strings.Contains(conf, `iifname @pol_restricted_ifname counter drop`) {
+		t.Errorf("Expected input drop rule, got:\n%s", conf)
+	}
+
+	// 5. Verify SNAT rule
+	if !strings.Contains(conf, `ip saddr != @pol_restricted_dst_v4 oifname @pol_restricted_ifname meta nfproto ipv4 snat to $external_ip`) {
+		t.Errorf("Expected custom SNAT rule, got:\n%s", conf)
+	}
+
+	// 6. Validate with real nft binary
+	if nftPath, err := exec.LookPath("nft"); err == nil {
+		tmpFile := filepath.Join(t.TempDir(), "easy42.nft")
+		if err := os.WriteFile(tmpFile, []byte(conf), 0644); err != nil {
+			t.Fatalf("WriteFile failed: %v", err)
+		}
+		cmd := exec.Command(nftPath, "-c", "-f", tmpFile)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("nft -c -f validation failed: %v\nOutput:\n%s\nConfig:\n%s", err, string(out), conf)
+		}
+	}
+}
+

@@ -22,6 +22,26 @@ export interface NetworkSettings {
   prefixes?: string[];
 }
 
+export interface SNATConfig {
+  enabled: boolean;
+  condition?: string;
+  target?: string;
+}
+
+export interface NetworkPolicy {
+  id: string;
+  name: string;
+  description?: string;
+  is_internal?: boolean;
+  allowed_dst_cidrs?: string[];
+  allowed_src_cidrs?: string[];
+  allowed_import_cidrs?: string[];
+  reject_internet?: boolean;
+  filter_forward?: boolean;
+  filter_input?: boolean;
+  snat?: SNATConfig;
+}
+
 export interface Node {
   name: string;
   host?: string;
@@ -55,6 +75,7 @@ export interface LinkEnd {
   mtu?: number;
   use_ip?: boolean;
   resolved_endpoint?: string;
+  policy?: string;
 }
 
 export interface Link {

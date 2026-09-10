@@ -939,6 +939,24 @@ func (m *Manager) buildLink(cfg *config.Config, n1, n2 *config.Node, listenPort1
 		toIface = customToEnd.Interface
 	}
 
+	fromPolicy := ""
+	if customFromEnd != nil && customFromEnd.Policy != "" {
+		fromPolicy = customFromEnd.Policy
+	} else if toNode.IsExternal {
+		fromPolicy = config.PolicyDN42
+	} else {
+		fromPolicy = config.PolicyDefault
+	}
+
+	toPolicy := ""
+	if customToEnd != nil && customToEnd.Policy != "" {
+		toPolicy = customToEnd.Policy
+	} else if fromNode.IsExternal {
+		toPolicy = config.PolicyDN42
+	} else {
+		toPolicy = config.PolicyDefault
+	}
+
 	link := &config.Link{
 		From: config.LinkEnd{
 			Name:                fromNode.Name,
@@ -951,6 +969,7 @@ func (m *Manager) buildLink(cfg *config.Config, n1, n2 *config.Node, listenPort1
 			PersistentKeepalive: fromKeepalive,
 			MTU:                 fromMTU,
 			UseIp:               fromUseIP,
+			Policy:              fromPolicy,
 		},
 		To: config.LinkEnd{
 			Name:                toNode.Name,
@@ -963,6 +982,7 @@ func (m *Manager) buildLink(cfg *config.Config, n1, n2 *config.Node, listenPort1
 			PersistentKeepalive: toKeepalive,
 			MTU:                 toMTU,
 			UseIp:               toUseIP,
+			Policy:              toPolicy,
 		},
 		Tags:       tags,
 		ModifiedAt: time.Now().UTC(),
@@ -1030,9 +1050,15 @@ func (m *Manager) AddLinkAdvanced(node1Name, node2Name string, fromEnd, toEnd *c
 		lp = &config.Link{}
 		if fromEnd != nil {
 			lp.From = *fromEnd
+			if lp.From.Name == "" {
+				lp.From.Name = node1Name
+			}
 		}
 		if toEnd != nil {
 			lp.To = *toEnd
+			if lp.To.Name == "" {
+				lp.To.Name = node2Name
+			}
 		}
 	}
 
@@ -1309,6 +1335,9 @@ func (m *Manager) UpdateLinkAdvanced(node1Name, node2Name string, customFrom, cu
 			link.From.PublicKey = fromEnd.PublicKey
 		}
 		link.From.UseIp = fromEnd.UseIp
+		if fromEnd.Policy != "" {
+			link.From.Policy = fromEnd.Policy
+		}
 	}
 
 	if toEnd != nil {
@@ -1331,6 +1360,9 @@ func (m *Manager) UpdateLinkAdvanced(node1Name, node2Name string, customFrom, cu
 			link.To.PublicKey = toEnd.PublicKey
 		}
 		link.To.UseIp = toEnd.UseIp
+		if toEnd.Policy != "" {
+			link.To.Policy = toEnd.Policy
+		}
 	}
 
 	if tags != nil {
@@ -1714,7 +1746,7 @@ func (m *Manager) PlanSync() ([]config.SyncAction, error) {
 			continue
 		}
 		node := n
-		birdConf, err := compiler.GenerateBirdConfig(&node, nodes, links, &cfg.NetworkSettings)
+		birdConf, err := compiler.GenerateBirdConfig(&node, nodes, links, &cfg.NetworkSettings, cfg.NetworkPolicies)
 		if err != nil {
 			continue
 		}
@@ -1759,7 +1791,7 @@ func (m *Manager) PlanSync() ([]config.SyncAction, error) {
 			continue
 		}
 		node := n
-		nftConf, err := compiler.GenerateNftablesConfig(&node, nodes, links, &cfg.NetworkSettings)
+		nftConf, err := compiler.GenerateNftablesConfig(&node, nodes, links, &cfg.NetworkSettings, cfg.NetworkPolicies)
 		if err != nil {
 			continue
 		}
@@ -2297,7 +2329,7 @@ func (m *Manager) GenerateBirdConfig(nodeName string) (string, error) {
 		return "", fmt.Errorf("node %s not found", nodeName)
 	}
 
-	return compiler.GenerateBirdConfig(targetNode, cfg.Nodes, cfg.Links, &cfg.NetworkSettings)
+	return compiler.GenerateBirdConfig(targetNode, cfg.Nodes, cfg.Links, &cfg.NetworkSettings, cfg.NetworkPolicies)
 }
 
 // GenerateBirdConfigWithTemplate generates BIRD config using a custom template
@@ -2317,7 +2349,7 @@ func (m *Manager) GenerateBirdConfigWithTemplate(nodeName string, tmplContent st
 		return "", fmt.Errorf("node %s not found", nodeName)
 	}
 
-	return compiler.GenerateBirdConfigWithTemplate(tmplContent, targetNode, cfg.Nodes, cfg.Links, &cfg.NetworkSettings)
+	return compiler.GenerateBirdConfigWithTemplate(tmplContent, targetNode, cfg.Nodes, cfg.Links, &cfg.NetworkSettings, cfg.NetworkPolicies)
 }
 
 // GenerateNftablesConfig generates the nftables configuration for a given node
@@ -2337,7 +2369,7 @@ func (m *Manager) GenerateNftablesConfig(nodeName string) (string, error) {
 		return "", fmt.Errorf("node %s not found", nodeName)
 	}
 
-	return compiler.GenerateNftablesConfig(targetNode, cfg.Nodes, cfg.Links, &cfg.NetworkSettings)
+	return compiler.GenerateNftablesConfig(targetNode, cfg.Nodes, cfg.Links, &cfg.NetworkSettings, cfg.NetworkPolicies)
 }
 
 // GenerateNftablesConfigWithTemplate generates nftables config using a custom template
@@ -2357,7 +2389,158 @@ func (m *Manager) GenerateNftablesConfigWithTemplate(nodeName string, tmplConten
 		return "", fmt.Errorf("node %s not found", nodeName)
 	}
 
-	return compiler.GenerateNftablesConfigWithTemplate(tmplContent, targetNode, cfg.Nodes, cfg.Links, &cfg.NetworkSettings)
+	return compiler.GenerateNftablesConfigWithTemplate(tmplContent, targetNode, cfg.Nodes, cfg.Links, &cfg.NetworkSettings, cfg.NetworkPolicies)
+}
+
+// GetNetworkPolicies returns all policies (built-in virtual policies + custom policies)
+func (m *Manager) GetNetworkPolicies() []config.NetworkPolicy {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	cfg := m.store.Get()
+	if cfg == nil {
+		return config.GetBuiltinPolicies(nil)
+	}
+	return cfg.GetAllPolicies()
+}
+
+// GetNetworkPolicy finds a policy by its ID
+func (m *Manager) GetNetworkPolicy(id string) (*config.NetworkPolicy, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	cfg := m.store.Get()
+	if cfg == nil {
+		return nil, errors.New("config not found")
+	}
+	p := cfg.FindPolicy(id)
+	if p == nil {
+		return nil, errors.New("network policy not found")
+	}
+	return p, nil
+}
+
+// CreateNetworkPolicy adds a new custom network policy
+func (m *Manager) CreateNetworkPolicy(p config.NetworkPolicy) (*config.NetworkPolicy, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if !m.vault.IsUnlocked() {
+		return nil, crypto.ErrVaultLocked
+	}
+
+	id := strings.TrimSpace(p.ID)
+	name := strings.TrimSpace(p.Name)
+	if id == "" {
+		return nil, errors.New("policy id is required")
+	}
+	if name == "" {
+		return nil, errors.New("policy name is required")
+	}
+	if id == config.PolicyDefault || id == config.PolicyDN42 || id == config.PolicyNone {
+		return nil, fmt.Errorf("cannot create policy with reserved ID %q", id)
+	}
+
+	cfg := m.store.Get()
+	for _, existing := range cfg.NetworkPolicies {
+		if existing.ID == id {
+			return nil, fmt.Errorf("network policy with ID %q already exists", id)
+		}
+	}
+
+	p.ID = id
+	p.Name = name
+	p.IsInternal = false
+	p.AllowedDstCIDRs = config.CleanPrefixes(p.AllowedDstCIDRs)
+	p.AllowedSrcCIDRs = config.CleanPrefixes(p.AllowedSrcCIDRs)
+	p.AllowedImportCIDRs = config.CleanPrefixes(p.AllowedImportCIDRs)
+
+	cfg.NetworkPolicies = append(cfg.NetworkPolicies, p)
+	if err := m.store.Save(cfg); err != nil {
+		return nil, err
+	}
+	return &p, nil
+}
+
+// UpdateNetworkPolicy updates an existing custom network policy
+func (m *Manager) UpdateNetworkPolicy(id string, p config.NetworkPolicy) (*config.NetworkPolicy, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if !m.vault.IsUnlocked() {
+		return nil, crypto.ErrVaultLocked
+	}
+
+	if id == config.PolicyDefault || id == config.PolicyDN42 || id == config.PolicyNone {
+		return nil, fmt.Errorf("cannot modify built-in policy %q", id)
+	}
+
+	name := strings.TrimSpace(p.Name)
+	if name == "" {
+		return nil, errors.New("policy name is required")
+	}
+
+	cfg := m.store.Get()
+	idx := -1
+	for i, existing := range cfg.NetworkPolicies {
+		if existing.ID == id {
+			idx = i
+			break
+		}
+	}
+	if idx == -1 {
+		return nil, fmt.Errorf("network policy %q not found", id)
+	}
+
+	cfg.NetworkPolicies[idx].Name = name
+	cfg.NetworkPolicies[idx].Description = strings.TrimSpace(p.Description)
+	cfg.NetworkPolicies[idx].AllowedDstCIDRs = config.CleanPrefixes(p.AllowedDstCIDRs)
+	cfg.NetworkPolicies[idx].AllowedSrcCIDRs = config.CleanPrefixes(p.AllowedSrcCIDRs)
+	cfg.NetworkPolicies[idx].AllowedImportCIDRs = config.CleanPrefixes(p.AllowedImportCIDRs)
+	cfg.NetworkPolicies[idx].RejectInternet = p.RejectInternet
+	cfg.NetworkPolicies[idx].FilterForward = p.FilterForward
+	cfg.NetworkPolicies[idx].FilterInput = p.FilterInput
+	cfg.NetworkPolicies[idx].SNAT = p.SNAT
+
+	if err := m.store.Save(cfg); err != nil {
+		return nil, err
+	}
+	res := cfg.NetworkPolicies[idx]
+	return &res, nil
+}
+
+// DeleteNetworkPolicy deletes a custom network policy if it's not currently used by any link
+func (m *Manager) DeleteNetworkPolicy(id string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if !m.vault.IsUnlocked() {
+		return crypto.ErrVaultLocked
+	}
+
+	if id == config.PolicyDefault || id == config.PolicyDN42 || id == config.PolicyNone {
+		return fmt.Errorf("cannot delete built-in policy %q", id)
+	}
+
+	cfg := m.store.Get()
+	// Check if any link uses this policy
+	for _, l := range cfg.Links {
+		if l.From.Policy == id || l.To.Policy == id {
+			return fmt.Errorf("policy %q is currently in use by link %s <-> %s", id, l.From.Name, l.To.Name)
+		}
+	}
+
+	idx := -1
+	for i, existing := range cfg.NetworkPolicies {
+		if existing.ID == id {
+			idx = i
+			break
+		}
+	}
+	if idx == -1 {
+		return fmt.Errorf("network policy %q not found", id)
+	}
+
+	cfg.NetworkPolicies = append(cfg.NetworkPolicies[:idx], cfg.NetworkPolicies[idx+1:]...)
+	return m.store.Save(cfg)
 }
 
 // GetNetworkSettings returns current network settings from config

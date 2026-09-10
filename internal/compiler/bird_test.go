@@ -679,5 +679,116 @@ func TestBIRDConfigWithCorruptedSplitPrefixes(t *testing.T) {
 	}
 }
 
+func TestNetworkPolicyBIRD(t *testing.T) {
+	nodeLocal := config.Node{
+		Name: "local-gw",
+		IP:   "192.168.100.1",
+		ASN:  4224420001,
+	}
+	nodeDefault := config.Node{Name: "node-def", IP: "192.168.100.2", ASN: 4224420002}
+	nodeNone := config.Node{Name: "node-none", IP: "192.168.100.3", ASN: 4224420003}
+	nodeDN42 := config.Node{Name: "node-dn42", IP: "192.168.100.4", ASN: 4242421234, IsExternal: true}
+	nodeGuest := config.Node{Name: "node-guest", IP: "192.168.100.5", ASN: 4224420005}
+
+	allNodes := []config.Node{nodeLocal, nodeDefault, nodeNone, nodeDN42, nodeGuest}
+
+	links := []config.Link{
+		{
+			From: config.LinkEnd{Name: "local-gw", Interface: "wg42def", Policy: config.PolicyDefault},
+			To:   config.LinkEnd{Name: "node-def", Interface: "wg42gw"},
+		},
+		{
+			From: config.LinkEnd{Name: "local-gw", Interface: "wg42none", Policy: config.PolicyNone},
+			To:   config.LinkEnd{Name: "node-none", Interface: "wg42gw"},
+		},
+		{
+			From: config.LinkEnd{Name: "local-gw", Interface: "wg42-dn42", Policy: config.PolicyDN42},
+			To:   config.LinkEnd{Name: "node-dn42", Interface: "wg42gw"},
+		},
+		{
+			From: config.LinkEnd{Name: "local-gw", Interface: "wg42guest", Policy: "guest-pol"},
+			To:   config.LinkEnd{Name: "node-guest", Interface: "wg42gw"},
+		},
+	}
+
+	netSettings := &config.NetworkSettings{
+		PublicASN: 4242420000,
+		Prefixes:  []string{"172.20.0.0/14"},
+	}
+
+	customPolicies := []config.NetworkPolicy{
+		{
+			ID:                 "guest-pol",
+			Name:               "Guest Partner",
+			RejectInternet:     true,
+			AllowedImportCIDRs: []string{"172.20.50.0/24"},
+			AllowedDstCIDRs:    []string{"172.20.10.0/24"},
+		},
+	}
+
+	conf, err := GenerateBirdConfig(&nodeLocal, allNodes, links, netSettings, customPolicies)
+	if err != nil {
+		t.Fatalf("GenerateBirdConfig failed: %v", err)
+	}
+
+	// 1. Verify default peer template rejects internet on both import and export
+	if !strings.Contains(conf, "template bgp easy42_peer") {
+		t.Errorf("Expected template easy42_peer")
+	}
+	if !strings.Contains(conf, "protocol bgp 'easy42_peer_node-def' from easy42_peer") {
+		t.Errorf("Expected easy42_peer_node-def protocol")
+	}
+
+	// 2. Verify none_peer template and protocol
+	if !strings.Contains(conf, "template bgp none_peer") {
+		t.Errorf("Expected template none_peer")
+	}
+	if !strings.Contains(conf, "protocol bgp 'peer_node-none' from none_peer") {
+		t.Errorf("Expected peer_node-none protocol from none_peer")
+	}
+
+	// 3. Verify dn42 external_peer template and protocol
+	if !strings.Contains(conf, "template bgp external_peer") {
+		t.Errorf("Expected template external_peer")
+	}
+	if !strings.Contains(conf, "protocol bgp 'ext_peer_node-dn42' from external_peer") {
+		t.Errorf("Expected ext_peer_node-dn42 protocol from external_peer")
+	}
+
+	// 4. Verify custom policy template and protocol
+	if !strings.Contains(conf, "define POL_guest_pol_IMPORT_V4 = [ 172.20.50.0/24 ];") {
+		t.Errorf("Expected POL_guest_pol_IMPORT_V4 define")
+	}
+	if !strings.Contains(conf, "define POL_guest_pol_EXPORT_V4 = [ 172.20.10.0/24 ];") {
+		t.Errorf("Expected POL_guest_pol_EXPORT_V4 define")
+	}
+	if !strings.Contains(conf, "template bgp pol_peer_guest_pol") {
+		t.Errorf("Expected template bgp pol_peer_guest_pol")
+	}
+	if !strings.Contains(conf, "protocol bgp 'peer_node-guest' from pol_peer_guest_pol") {
+		t.Errorf("Expected peer_node-guest protocol from pol_peer_guest_pol")
+	}
+
+	// 5. Test bird binary validation if available
+	if birdPath, err := exec.LookPath("bird"); err == nil {
+		tmpFile, err := os.CreateTemp("", "bird_policy_test_*.conf")
+		if err != nil {
+			t.Fatalf("Failed to create temp bird file: %v", err)
+		}
+		defer os.Remove(tmpFile.Name())
+		if _, err := tmpFile.WriteString(conf); err != nil {
+			t.Fatalf("Failed to write temp bird file: %v", err)
+		}
+		tmpFile.Close()
+
+		cmd := exec.Command(birdPath, "-p", "-c", tmpFile.Name())
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("BIRD syntax validation failed: %v\nOutput:\n%s\nConf:\n%s", err, string(out), conf)
+		}
+	}
+}
+
+
 
 

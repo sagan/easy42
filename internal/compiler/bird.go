@@ -4,6 +4,7 @@ import (
 	"embed"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 
 	"easy42/internal/config"
@@ -47,14 +48,39 @@ func GetDefaultBirdTemplate() (string, error) {
 //	  ]
 //
 // BuildNodeContext converts a Node and its connected links into a context map suitable for template execution.
-func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.Link, netSettings ...*config.NetworkSettings) (map[string]any, error) {
+func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.Link, args ...any) (map[string]any, error) {
 	if node == nil {
 		return nil, fmt.Errorf("node cannot be nil")
 	}
 
 	var settings *config.NetworkSettings
-	if len(netSettings) > 0 && netSettings[0] != nil {
-		settings = netSettings[0]
+	var customPolicies []config.NetworkPolicy
+	for _, arg := range args {
+		switch v := arg.(type) {
+		case *config.NetworkSettings:
+			settings = v
+		case config.NetworkSettings:
+			settings = &v
+		case []config.NetworkPolicy:
+			customPolicies = v
+		case *config.Config:
+			if v != nil {
+				settings = &v.NetworkSettings
+				customPolicies = v.NetworkPolicies
+			}
+		}
+	}
+
+	cfgPolicies := &config.Config{
+		NetworkPolicies: customPolicies,
+	}
+	if settings != nil {
+		cfgPolicies.NetworkSettings = *settings
+	}
+	allPolicies := cfgPolicies.GetAllPolicies()
+	policyMap := make(map[string]config.NetworkPolicy)
+	for _, p := range allPolicies {
+		policyMap[p.ID] = p
 	}
 
 	// 1. Convert node struct to map[string]any via JSON serialization to preserve json tag naming
@@ -163,6 +189,9 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 	// 5. Build links for this node
 	var nodeLinks []map[string]any
 	hasExternalLinks := false
+	hasNonePolicy := false
+	usedPolicyMap := make(map[string]config.NetworkPolicy)
+
 	for _, l := range links {
 		var localEnd, remoteEnd *config.LinkEnd
 		var remoteNode *config.Node
@@ -179,13 +208,48 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 			continue
 		}
 
+		isRemoteExternal := remoteNode != nil && remoteNode.IsExternal
+		policyID := localEnd.EffectivePolicy(isRemoteExternal)
+		pol, ok := policyMap[policyID]
+		if !ok {
+			if isRemoteExternal {
+				policyID = config.PolicyDN42
+				pol = policyMap[config.PolicyDN42]
+			} else {
+				policyID = config.PolicyDefault
+				pol = policyMap[config.PolicyDefault]
+			}
+		}
+		usedPolicyMap[policyID] = pol
+
 		isExternal := false
-		if (remoteNode != nil && remoteNode.IsExternal) || node.IsExternal {
+		if isRemoteExternal || node.IsExternal || policyID == config.PolicyDN42 {
 			isExternal = true
 			hasExternalLinks = true
 		}
 
-		localMap := linkEndToContextMap(localEnd, node, remoteEnd.Name, remoteNode != nil && remoteNode.IsExternal)
+		bgpTemplate := "easy42_peer"
+		isDN42 := false
+		localAS := "SELF_AS"
+
+		switch policyID {
+		case config.PolicyDefault:
+			bgpTemplate = "easy42_peer"
+		case config.PolicyDN42:
+			bgpTemplate = "external_peer"
+			isDN42 = true
+			if settings != nil && settings.PublicASN > 0 {
+				localAS = "CONFED_AS"
+			}
+		case config.PolicyNone:
+			bgpTemplate = "none_peer"
+			hasNonePolicy = true
+		default:
+			bgpTemplate = "pol_peer_" + SanitizeIdentifier(policyID)
+		}
+
+		localMap := linkEndToContextMap(localEnd, node, remoteEnd.Name, isRemoteExternal)
+		localMap["policy"] = policyID
 		remoteMap := linkEndToContextMap(remoteEnd, remoteNode, localEnd.Name, node.IsExternal)
 
 		var remoteNodeMap map[string]any
@@ -222,17 +286,72 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 		}
 
 		nodeLinks = append(nodeLinks, map[string]any{
-			"tags":        tags,
-			"local":       localMap,
-			"remote":      remoteMap,
-			"remote_node": remoteNodeMap,
-			"is_external": isExternal,
+			"tags":         tags,
+			"local":        localMap,
+			"remote":       remoteMap,
+			"remote_node":  remoteNodeMap,
+			"is_external":  isExternal,
+			"is_dn42":      isDN42,
+			"policy_id":    policyID,
+			"bgp_template": bgpTemplate,
+			"local_as":     localAS,
 		})
 	}
 
+	var customBirdPolicies []map[string]any
+	for id, pol := range usedPolicyMap {
+		if id == config.PolicyDefault || id == config.PolicyDN42 || id == config.PolicyNone {
+			continue
+		}
+		cleanID := SanitizeIdentifier(id)
+		tmplName := "pol_peer_" + cleanID
+
+		importV4 := formatPrefixList(pol.AllowedImportCIDRs, nil, false)
+		importV6 := formatPrefixList(pol.AllowedImportCIDRs, nil, true)
+		exportV4 := formatPrefixList(pol.AllowedDstCIDRs, nil, false)
+		exportV6 := formatPrefixList(pol.AllowedDstCIDRs, nil, true)
+
+		customBirdPolicies = append(customBirdPolicies, map[string]any{
+			"id":                 cleanID,
+			"name":               pol.Name,
+			"template_name":      tmplName,
+			"reject_internet":    pol.RejectInternet,
+			"has_import_v4":      importV4 != "",
+			"has_import_v6":      importV6 != "",
+			"import_prefixes_v4": importV4,
+			"import_prefixes_v6": importV6,
+			"has_export_v4":      exportV4 != "",
+			"has_export_v6":      exportV6 != "",
+			"export_prefixes_v4": exportV4,
+			"export_prefixes_v6": exportV6,
+		})
+	}
+	sort.Slice(customBirdPolicies, func(i, j int) bool {
+		return customBirdPolicies[i]["id"].(string) < customBirdPolicies[j]["id"].(string)
+	})
+
 	ctx["links"] = nodeLinks
 	ctx["has_external_links"] = hasExternalLinks
+	ctx["has_none_policy"] = hasNonePolicy
+	ctx["custom_bird_policies"] = customBirdPolicies
 	return ctx, nil
+}
+
+// SanitizeIdentifier turns an arbitrary string into a safe alphanumeric+underscore identifier
+func SanitizeIdentifier(s string) string {
+	var sb strings.Builder
+	for _, r := range s {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_' {
+			sb.WriteRune(r)
+		} else {
+			sb.WriteRune('_')
+		}
+	}
+	res := strings.Trim(sb.String(), "_")
+	if res == "" {
+		return "item"
+	}
+	return res
 }
 
 // formatPrefixList formats a list of IP prefixes into a BIRD set string like "[ 172.20.0.0/14{21,29} ]"
@@ -252,6 +371,9 @@ func formatPrefixList(prefixes []string, defaultList []string, isV6 bool) string
 	}
 	if len(list) == 0 {
 		list = defaultList
+	}
+	if len(list) == 0 {
+		return ""
 	}
 	return "[ " + strings.Join(list, ", ") + " ]"
 }
@@ -319,9 +441,9 @@ func GenerateBirdConfigWithTemplate(
 	node *config.Node,
 	allNodes []config.Node,
 	links []config.Link,
-	netSettings ...*config.NetworkSettings,
+	args ...any,
 ) (string, error) {
-	ctx, err := BuildNodeContext(node, allNodes, links, netSettings...)
+	ctx, err := BuildNodeContext(node, allNodes, links, args...)
 	if err != nil {
 		return "", err
 	}
@@ -333,11 +455,11 @@ func GenerateBirdConfig(
 	node *config.Node,
 	allNodes []config.Node,
 	links []config.Link,
-	netSettings ...*config.NetworkSettings,
+	args ...any,
 ) (string, error) {
 	tmplContent, err := GetDefaultBirdTemplate()
 	if err != nil {
 		return "", err
 	}
-	return GenerateBirdConfigWithTemplate(tmplContent, node, allNodes, links, netSettings...)
+	return GenerateBirdConfigWithTemplate(tmplContent, node, allNodes, links, args...)
 }

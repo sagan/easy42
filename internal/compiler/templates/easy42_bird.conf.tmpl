@@ -181,7 +181,10 @@ template bgp easy42_peer {
         extended next hop on;
         next hop self;
         
-        import all; 
+        import filter {
+            if net ~ INTERNET then reject;
+            accept;
+        }; 
         export filter {
             if net ~ INTERNET then reject;
             accept;
@@ -189,13 +192,39 @@ template bgp easy42_peer {
     };
     ipv6 {
         next hop self;
-        import all;
+        import filter {
+            if net ~ INTERNET6 then reject;
+            accept;
+        };
         export filter {
             if net ~ INTERNET6 then reject;
             accept;
         };
     };
 }
+
+{{if .has_none_policy}}
+template bgp none_peer {
+    direct;
+
+    {{if .confed_as}}
+    confederation CONFED_AS;
+    confederation member yes;
+    {{end}}
+
+    ipv4 {
+        extended next hop on;
+        next hop self;
+        import all;
+        export all;
+    };
+    ipv6 {
+        next hop self;
+        import all;
+        export all;
+    };
+}
+{{end}}
 
 {{if .has_external_links}}
 define EXT_PREFIXES_V4 = {{ .ext_prefixes_v4 }};
@@ -251,8 +280,68 @@ template bgp external_peer {
 }
 {{end}}
 
+{{range .custom_bird_policies}}
+{{if .has_import_v4}}define POL_{{.id}}_IMPORT_V4 = {{.import_prefixes_v4}};{{end}}
+{{if .has_import_v6}}define POL_{{.id}}_IMPORT_V6 = {{.import_prefixes_v6}};{{end}}
+{{if .has_export_v4}}define POL_{{.id}}_EXPORT_V4 = {{.export_prefixes_v4}};{{end}}
+{{if .has_export_v6}}define POL_{{.id}}_EXPORT_V6 = {{.export_prefixes_v6}};{{end}}
+
+template bgp {{.template_name}} {
+    direct;
+
+    {{if $.confed_as}}
+    confederation CONFED_AS;
+    confederation member yes;
+    {{end}}
+
+    ipv4 {
+        extended next hop on;
+        next hop self;
+        import filter {
+            {{if .reject_internet}}if net ~ INTERNET then reject;{{end}}
+            {{if .has_import_v4}}
+            if net ~ POL_{{.id}}_IMPORT_V4 then accept;
+            reject;
+            {{else}}
+            accept;
+            {{end}}
+        };
+        export filter {
+            {{if .reject_internet}}if net ~ INTERNET then reject;{{end}}
+            {{if .has_export_v4}}
+            if (source ~ [ RTS_STATIC, RTS_BGP ]) && (net ~ POL_{{.id}}_EXPORT_V4) then accept;
+            reject;
+            {{else}}
+            accept;
+            {{end}}
+        };
+    };
+    ipv6 {
+        next hop self;
+        import filter {
+            {{if .reject_internet}}if net ~ INTERNET6 then reject;{{end}}
+            {{if .has_import_v6}}
+            if net ~ POL_{{.id}}_IMPORT_V6 then accept;
+            reject;
+            {{else}}
+            accept;
+            {{end}}
+        };
+        export filter {
+            {{if .reject_internet}}if net ~ INTERNET6 then reject;{{end}}
+            {{if .has_export_v6}}
+            if (source ~ [ RTS_STATIC, RTS_BGP ]) && (net ~ POL_{{.id}}_EXPORT_V6) then accept;
+            reject;
+            {{else}}
+            accept;
+            {{end}}
+        };
+    };
+}
+{{end}}
+
 {{range .links}}
-{{if .is_external}}
+{{if .is_dn42}}
 protocol bgp 'ext_peer_{{.remote.name}}' from external_peer {
     {{if .local.interface}}interface "{{ .local.interface }}";{{end}}
     local {{ .local.address }} as {{ if $.confed_as }}CONFED_AS{{ else }}SELF_AS{{ end }};
@@ -262,11 +351,22 @@ protocol bgp 'ext_peer_{{.remote.name}}' from external_peer {
     neighbor {{ .remote.address }} as {{ .remote_node.asn }};
     {{end}}
 }
-{{else}}
+{{else if eq .policy_id "default"}}
 protocol bgp 'easy42_peer_{{.remote.name}}' from easy42_peer {
     {{if .local.interface}}interface "{{ .local.interface }}";{{end}}
     local {{ .local.address }} as SELF_AS;
     neighbor {{ .remote.address }} % '{{ .local.interface }}' as {{ .remote_node.asn }};
 }
+{{else}}
+protocol bgp 'peer_{{.remote.name}}' from {{.bgp_template}} {
+    {{if .local.interface}}interface "{{ .local.interface }}";{{end}}
+    local {{ .local.address }} as {{ .local_as }};
+    {{if .remote.is_link_local}}
+    neighbor {{ .remote.address }} % '{{ .local.interface }}' as {{ .remote_node.asn }};
+    {{else}}
+    neighbor {{ .remote.address }} as {{ .remote_node.asn }};
+    {{end}}
+}
 {{end}}
 {{end}}
+

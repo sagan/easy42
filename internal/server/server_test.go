@@ -778,3 +778,116 @@ func TestRenameNodeAPI(t *testing.T) {
 	}
 }
 
+func TestNetworkPoliciesAPI(t *testing.T) {
+	srv, tempDir, initPass := setupTestServer(t)
+	defer os.RemoveAll(tempDir)
+
+	// Login
+	loginBody, _ := json.Marshal(map[string]string{"password": initPass})
+	req := httptest.NewRequest("POST", "/api/auth/login", bytes.NewReader(loginBody))
+	w := httptest.NewRecorder()
+	srv.router.ServeHTTP(w, req)
+	cookie := w.Result().Cookies()[0]
+
+	// 1. GET /api/network-policies (initially 3 built-in policies)
+	reqGet := httptest.NewRequest("GET", "/api/network-policies", nil)
+	reqGet.AddCookie(cookie)
+	wGet := httptest.NewRecorder()
+	srv.router.ServeHTTP(wGet, reqGet)
+	if wGet.Code != http.StatusOK {
+		t.Fatalf("Get policies failed: %d %s", wGet.Code, wGet.Body.String())
+	}
+	var policies []config.NetworkPolicy
+	_ = json.Unmarshal(wGet.Body.Bytes(), &policies)
+	if len(policies) != 3 {
+		t.Fatalf("Expected 3 initial policies, got %d", len(policies))
+	}
+
+	// 2. POST /api/network-policies with reserved ID -> 400
+	reservedBody, _ := json.Marshal(config.NetworkPolicy{ID: "default", Name: "Hacked Default"})
+	reqReserved := httptest.NewRequest("POST", "/api/network-policies", bytes.NewReader(reservedBody))
+	reqReserved.AddCookie(cookie)
+	wReserved := httptest.NewRecorder()
+	srv.router.ServeHTTP(wReserved, reqReserved)
+	if wReserved.Code != http.StatusBadRequest {
+		t.Errorf("Expected 400 for reserved ID, got %d", wReserved.Code)
+	}
+
+	// 3. POST /api/network-policies with custom policy -> 201
+	customPol := config.NetworkPolicy{
+		ID:              "guest-net",
+		Name:            "Guest Network",
+		Description:     "Guest DMZ",
+		AllowedDstCIDRs: []string{"172.20.10.0/24"},
+		FilterForward:   true,
+	}
+	customBody, _ := json.Marshal(customPol)
+	reqCustom := httptest.NewRequest("POST", "/api/network-policies", bytes.NewReader(customBody))
+	reqCustom.AddCookie(cookie)
+	wCustom := httptest.NewRecorder()
+	srv.router.ServeHTTP(wCustom, reqCustom)
+	if wCustom.Code != http.StatusCreated {
+		t.Fatalf("Create policy failed: %d %s", wCustom.Code, wCustom.Body.String())
+	}
+
+	// 4. GET /api/network-policies/guest-net -> 200
+	reqGetSingle := httptest.NewRequest("GET", "/api/network-policies/guest-net", nil)
+	reqGetSingle.AddCookie(cookie)
+	wGetSingle := httptest.NewRecorder()
+	srv.router.ServeHTTP(wGetSingle, reqGetSingle)
+	if wGetSingle.Code != http.StatusOK {
+		t.Fatalf("Get policy failed: %d %s", wGetSingle.Code, wGetSingle.Body.String())
+	}
+
+	// 5. PUT /api/network-policies/guest-net -> 200
+	updatePol := config.NetworkPolicy{
+		Name:            "Updated Guest Network",
+		AllowedDstCIDRs: []string{"172.20.15.0/24"},
+	}
+	updateBody, _ := json.Marshal(updatePol)
+	reqUpdate := httptest.NewRequest("PUT", "/api/network-policies/guest-net", bytes.NewReader(updateBody))
+	reqUpdate.AddCookie(cookie)
+	wUpdate := httptest.NewRecorder()
+	srv.router.ServeHTTP(wUpdate, reqUpdate)
+	if wUpdate.Code != http.StatusOK {
+		t.Fatalf("Update policy failed: %d %s", wUpdate.Code, wUpdate.Body.String())
+	}
+
+	// 6. PUT /api/network-policies/default -> 400 (cannot edit built-in)
+	reqUpdateDef := httptest.NewRequest("PUT", "/api/network-policies/default", bytes.NewReader(updateBody))
+	reqUpdateDef.AddCookie(cookie)
+	wUpdateDef := httptest.NewRecorder()
+	srv.router.ServeHTTP(wUpdateDef, reqUpdateDef)
+	if wUpdateDef.Code != http.StatusBadRequest {
+		t.Errorf("Expected 400 when updating built-in policy, got %d", wUpdateDef.Code)
+	}
+
+	// 7. DELETE /api/network-policies/dn42 -> 400 (cannot delete built-in)
+	reqDelBuiltin := httptest.NewRequest("DELETE", "/api/network-policies/dn42", nil)
+	reqDelBuiltin.AddCookie(cookie)
+	wDelBuiltin := httptest.NewRecorder()
+	srv.router.ServeHTTP(wDelBuiltin, reqDelBuiltin)
+	if wDelBuiltin.Code != http.StatusBadRequest {
+		t.Errorf("Expected 400 when deleting built-in policy, got %d", wDelBuiltin.Code)
+	}
+
+	// 8. DELETE /api/network-policies/guest-net -> 200
+	reqDel := httptest.NewRequest("DELETE", "/api/network-policies/guest-net", nil)
+	reqDel.AddCookie(cookie)
+	wDel := httptest.NewRecorder()
+	srv.router.ServeHTTP(wDel, reqDel)
+	if wDel.Code != http.StatusOK {
+		t.Fatalf("Delete policy failed: %d %s", wDel.Code, wDel.Body.String())
+	}
+
+	// 9. GET /api/network-policies/guest-net -> 404
+	reqGetDeleted := httptest.NewRequest("GET", "/api/network-policies/guest-net", nil)
+	reqGetDeleted.AddCookie(cookie)
+	wGetDeleted := httptest.NewRecorder()
+	srv.router.ServeHTTP(wGetDeleted, reqGetDeleted)
+	if wGetDeleted.Code != http.StatusNotFound {
+		t.Errorf("Expected 404 for deleted policy, got %d", wGetDeleted.Code)
+	}
+}
+
+

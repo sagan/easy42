@@ -127,6 +127,8 @@ export const api = {
     to_mtu?: number;
     from_use_ip?: boolean;
     to_use_ip?: boolean;
+    from_policy?: string;
+    to_policy?: string;
     mtu?: number;
     tags?: string[];
     from?: Partial<Link["from"]>;
@@ -150,6 +152,8 @@ export const api = {
     to_mtu?: number;
     from_use_ip?: boolean;
     to_use_ip?: boolean;
+    from_policy?: string;
+    to_policy?: string;
     mtu?: number;
     tags?: string[];
     from?: Partial<Link["from"]>;
@@ -170,6 +174,25 @@ export const api = {
     request<import("../types/api").NetworkSettings>("/settings/network", {
       method: "PUT",
       body: JSON.stringify(settings),
+    }),
+
+  // Network Policies
+  getNetworkPolicies: () => request<import("../types/api").NetworkPolicy[]>("/network-policies"),
+  getNetworkPolicy: (id: string) =>
+    request<import("../types/api").NetworkPolicy>(`/network-policies/${encodeURIComponent(id)}`),
+  createNetworkPolicy: (data: Partial<import("../types/api").NetworkPolicy>) =>
+    request<import("../types/api").NetworkPolicy>("/network-policies", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  updateNetworkPolicy: (id: string, data: Partial<import("../types/api").NetworkPolicy>) =>
+    request<import("../types/api").NetworkPolicy>(`/network-policies/${encodeURIComponent(id)}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+  deleteNetworkPolicy: (id: string) =>
+    request<{ message: string }>(`/network-policies/${encodeURIComponent(id)}`, {
+      method: "DELETE",
     }),
 
   // Sync & State

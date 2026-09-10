@@ -11,7 +11,7 @@ import {
   Tooltip,
   Chip,
 } from "@mui/material";
-import { X, Trash2, Link as LinkIcon, Key, ArrowRightLeft, Edit2, Activity, Copy, Check } from "lucide-react";
+import { X, Trash2, Link as LinkIcon, Key, ArrowRightLeft, Edit2, Activity, Copy, Check, Shield } from "lucide-react";
 import { api } from "../../api/client";
 import { Link, NetworkState } from "../../types/api";
 
@@ -357,6 +357,25 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
               />
             </Box>
 
+            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <Typography variant="caption" sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}>
+                <Shield size={12} /> Network Policy:
+              </Typography>
+              <Chip
+                label={link.from.policy || "default"}
+                size="small"
+                sx={{
+                  height: 20,
+                  fontSize: "0.65rem",
+                  fontWeight: 700,
+                  bgcolor: (link.from.policy === "none") ? "rgba(148, 163, 184, 0.15)" : (link.from.policy === "dn42") ? "rgba(109, 40, 217, 0.12)" : "rgba(79, 70, 229, 0.12)",
+                  color: (link.from.policy === "none") ? "#64748B" : (link.from.policy === "dn42") ? "#6D28D9" : "#4F46E5",
+                  border: "1px solid",
+                  borderColor: (link.from.policy === "none") ? "rgba(148, 163, 184, 0.2)" : (link.from.policy === "dn42") ? "rgba(109, 40, 217, 0.25)" : "rgba(79, 70, 229, 0.25)",
+                }}
+              />
+            </Box>
+
             <Box sx={{ mt: 0.5 }}>
               <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <Typography
@@ -520,6 +539,25 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
                   color: link.to.use_ip ? "#059669" : "#64748B",
                   border: "1px solid",
                   borderColor: link.to.use_ip ? "rgba(16, 185, 129, 0.3)" : "rgba(148, 163, 184, 0.2)",
+                }}
+              />
+            </Box>
+
+            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <Typography variant="caption" sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}>
+                <Shield size={12} /> Network Policy:
+              </Typography>
+              <Chip
+                label={link.to.policy || "default"}
+                size="small"
+                sx={{
+                  height: 20,
+                  fontSize: "0.65rem",
+                  fontWeight: 700,
+                  bgcolor: (link.to.policy === "none") ? "rgba(148, 163, 184, 0.15)" : (link.to.policy === "dn42") ? "rgba(109, 40, 217, 0.12)" : "rgba(79, 70, 229, 0.12)",
+                  color: (link.to.policy === "none") ? "#64748B" : (link.to.policy === "dn42") ? "#6D28D9" : "#4F46E5",
+                  border: "1px solid",
+                  borderColor: (link.to.policy === "none") ? "rgba(148, 163, 184, 0.2)" : (link.to.policy === "dn42") ? "rgba(109, 40, 217, 0.25)" : "rgba(79, 70, 229, 0.25)",
                 }}
               />
             </Box>

@@ -20,7 +20,7 @@ import {
 } from "@mui/material";
 import { Link as LinkIcon, ArrowRightLeft, Edit2, Globe, Copy, Check } from "lucide-react";
 import { api } from "../../api/client";
-import { Node, Link } from "../../types/api";
+import { Node, Link, NetworkPolicy } from "../../types/api";
 import { derivePortFromIP } from "../../utils/port";
 import { resolvePeerEntrypoint, extractPort, formatEndpoint } from "../../utils/endpoint";
 
@@ -55,6 +55,9 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
   const [toMtu, setToMtu] = useState<number>(1420);
   const [fromUseIp, setFromUseIp] = useState<boolean>(false);
   const [toUseIp, setToUseIp] = useState<boolean>(false);
+  const [networkPolicies, setNetworkPolicies] = useState<NetworkPolicy[]>([]);
+  const [fromPolicy, setFromPolicy] = useState<string>("default");
+  const [toPolicy, setToPolicy] = useState<string>("default");
 
   // External peering custom fields
   const [localAddress, setLocalAddress] = useState("");
@@ -97,6 +100,11 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
 
   useEffect(() => {
     if (!open) return;
+    api.getNetworkPolicies().then(setNetworkPolicies).catch(console.error);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
     if (linkToEdit) {
       setFromNodeName(linkToEdit.from.name);
       setToNodeName(linkToEdit.to.name);
@@ -107,6 +115,10 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
 
       const fNode = nodes.find((n) => n.name === linkToEdit.from.name);
       const tNode = nodes.find((n) => n.name === linkToEdit.to.name);
+      const isExt = Boolean(fNode?.is_external || tNode?.is_external);
+
+      setFromPolicy(linkToEdit.from.policy || (isExt ? "dn42" : "default"));
+      setToPolicy(linkToEdit.to.policy || (isExt ? "dn42" : "default"));
 
       if (fNode?.is_external) {
         setLocalAddress(linkToEdit.to.address || "fe80::1/64");
@@ -136,6 +148,9 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
       setToPort(0);
       setFromMtu(1420);
       setToMtu(1420);
+      const isExt = Boolean(nodes.find((n) => n.name === initialFrom)?.is_external || nodes.find((n) => n.name === initialTo)?.is_external);
+      setFromPolicy(isExt ? "dn42" : "default");
+      setToPolicy(isExt ? "dn42" : "default");
       setLocalAddress("fe80::1/64");
       setRemoteAddress("fe80::2/64");
       setRemotePort("");
@@ -145,6 +160,18 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
       setError(null);
     }
   }, [open, linkToEdit, initialFrom, initialTo, nodes]);
+
+  // Update default policies when external status changes for new link
+  useEffect(() => {
+    if (linkToEdit) return;
+    if (isExternalLink) {
+      setFromPolicy("dn42");
+      setToPolicy("dn42");
+    } else {
+      setFromPolicy("default");
+      setToPolicy("default");
+    }
+  }, [isExternalLink, linkToEdit]);
 
   // Auto calculate default ports and MTUs only when creating new link
   useEffect(() => {
@@ -232,6 +259,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
         const managedMtuVal = (managedNode === fromNode ? fromMtu : toMtu) || 1420;
         const extEndpoint = fullRemoteEndpoint || undefined;
         const parsedRemotePort = typeof remotePort === "number" ? remotePort : (Number(remotePort) || 0);
+        const managedPolicy = managedNode === fromNode ? fromPolicy : toPolicy;
 
         const managedEnd = {
           name: managedNode.name,
@@ -240,6 +268,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
           endpoint: extEndpoint,
           mtu: managedMtuVal,
           use_ip: managedNode === fromNode ? fromUseIp : toUseIp,
+          policy: managedPolicy,
         };
 
         const externalEnd = {
@@ -249,6 +278,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
           endpoint: managedPeerEndpoint || undefined,
           public_key: remotePublicKey.trim() || undefined,
           mtu: 1420,
+          policy: "none",
         };
 
         const reqFrom = fromNode === managedNode ? managedEnd : externalEnd;
@@ -262,6 +292,8 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
             to: reqTo,
             from_use_ip: fromUseIp,
             to_use_ip: toUseIp,
+            from_policy: reqFrom.policy,
+            to_policy: reqTo.policy,
           });
           onLinkUpdated?.(updated);
         } else {
@@ -272,6 +304,8 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
             to: reqTo,
             from_use_ip: fromUseIp,
             to_use_ip: toUseIp,
+            from_policy: reqFrom.policy,
+            to_policy: reqTo.policy,
           });
           onLinkAdded?.(link);
         }
@@ -286,17 +320,21 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
             to_mtu: toMtu || undefined,
             from_use_ip: fromUseIp,
             to_use_ip: toUseIp,
+            from_policy: fromPolicy,
+            to_policy: toPolicy,
             from: {
               ...linkToEdit.from,
               listen_port: fromPort || undefined,
               mtu: fromMtu || undefined,
               use_ip: fromUseIp,
+              policy: fromPolicy,
             },
             to: {
               ...linkToEdit.to,
               listen_port: toPort || undefined,
               mtu: toMtu || undefined,
               use_ip: toUseIp,
+              policy: toPolicy,
             },
           });
           onLinkUpdated?.(updated);
@@ -310,11 +348,15 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
             to_mtu: toMtu || undefined,
             from_use_ip: fromUseIp,
             to_use_ip: toUseIp,
+            from_policy: fromPolicy,
+            to_policy: toPolicy,
             from: {
               use_ip: fromUseIp,
+              policy: fromPolicy,
             },
             to: {
               use_ip: toUseIp,
+              policy: toPolicy,
             },
           });
           onLinkAdded?.(link);
@@ -514,6 +556,27 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                   }
                   sx={{ alignItems: "flex-start", ml: 0, mt: 1.5 }}
                 />
+
+                <Box sx={{ mt: 1.5 }}>
+                  <TextField
+                    select
+                    fullWidth
+                    size="small"
+                    label="Network Policy"
+                    value={managedNode === fromNode ? fromPolicy : toPolicy}
+                    onChange={(e) => {
+                      if (managedNode === fromNode) setFromPolicy(e.target.value);
+                      else setToPolicy(e.target.value);
+                    }}
+                    helperText="Firewall & BGP routing policy applied on this peering link (defaults to dn42)"
+                  >
+                    {networkPolicies.map((p) => (
+                      <MenuItem key={p.id} value={p.id}>
+                        {p.name} ({p.id}){p.is_internal ? " — Built-in" : ""}
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                </Box>
               </Box>
 
               {/* External Peer Configuration */}
@@ -737,6 +800,24 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                       sx={{ alignItems: "flex-start", ml: 0, mt: 0.5 }}
                     />
                   </Box>
+
+                  <Box sx={{ mt: 1.5 }}>
+                    <TextField
+                      select
+                      fullWidth
+                      size="small"
+                      label="Network Policy"
+                      value={fromPolicy}
+                      onChange={(e) => setFromPolicy(e.target.value)}
+                      helperText="Firewall & BGP routing policy applied on this endpoint"
+                    >
+                      {networkPolicies.map((p) => (
+                        <MenuItem key={p.id} value={p.id}>
+                          {p.name} ({p.id}){p.is_internal ? " — Built-in" : ""}
+                        </MenuItem>
+                      ))}
+                    </TextField>
+                  </Box>
                 </Box>
 
                 {/* To Node End */}
@@ -834,6 +915,24 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                       }
                       sx={{ alignItems: "flex-start", ml: 0, mt: 0.5 }}
                     />
+                  </Box>
+
+                  <Box sx={{ mt: 1.5 }}>
+                    <TextField
+                      select
+                      fullWidth
+                      size="small"
+                      label="Network Policy"
+                      value={toPolicy}
+                      onChange={(e) => setToPolicy(e.target.value)}
+                      helperText="Firewall & BGP routing policy applied on this endpoint"
+                    >
+                      {networkPolicies.map((p) => (
+                        <MenuItem key={p.id} value={p.id}>
+                          {p.name} ({p.id}){p.is_internal ? " — Built-in" : ""}
+                        </MenuItem>
+                      ))}
+                    </TextField>
                   </Box>
                 </Box>
               </Box>

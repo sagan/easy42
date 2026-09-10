@@ -100,6 +100,13 @@ func New(cfg Config) *Server {
 			r.Get("/settings/network", s.handleGetNetworkSettings)
 			r.Put("/settings/network", s.handleUpdateNetworkSettings)
 
+			// Network Policies
+			r.Get("/network-policies", s.handleGetNetworkPolicies)
+			r.Post("/network-policies", s.handleCreateNetworkPolicy)
+			r.Get("/network-policies/{id}", s.handleGetNetworkPolicy)
+			r.Put("/network-policies/{id}", s.handleUpdateNetworkPolicy)
+			r.Delete("/network-policies/{id}", s.handleDeleteNetworkPolicy)
+
 			// Sync & State
 			r.Get("/sync/preview", s.handleSyncPreview)
 			r.Post("/sync", s.handleExecuteSync)

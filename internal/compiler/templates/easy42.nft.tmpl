@@ -1,7 +1,7 @@
 #!/usr/sbin/nft -f
 
 define easy42_ifname = { "wg42*" }
-define external_ifname = { "wg42-*" }
+define external_ifname = {{ if .nft_external_ifname }}{{ .nft_external_ifname }}{{ else }}{ "wg42-*" }{{ end }}
 
 define private_ip = { 192.168.0.0/16, 10.0.0.0/8, 172.16.0.0/12 }
 define private_ip6 = { fc00::/8, fd00::/8 }
@@ -13,6 +13,21 @@ define external_ip6 = {{ .external_ip6 }} # local node external ipv6
 {{- end }}
 define external_prefix = {{ .nft_prefixes_v4 }}
 define external_prefix6 = {{ .nft_prefixes_v6 }}
+{{- range .custom_nft_policies }}
+define pol_{{ .id }}_ifname = {{ .ifnames }}
+{{- if .allowed_dst_v4 }}
+define pol_{{ .id }}_dst_v4 = {{ .allowed_dst_v4 }}
+{{- end }}
+{{- if .allowed_dst_v6 }}
+define pol_{{ .id }}_dst_v6 = {{ .allowed_dst_v6 }}
+{{- end }}
+{{- if .allowed_src_v4 }}
+define pol_{{ .id }}_src_v4 = {{ .allowed_src_v4 }}
+{{- end }}
+{{- if .allowed_src_v6 }}
+define pol_{{ .id }}_src_v6 = {{ .allowed_src_v6 }}
+{{- end }}
+{{- end }}
 
 destroy table inet easy42
 
@@ -48,6 +63,41 @@ table inet easy42 {
     flags interval
     elements = $external_prefix6
   }
+{{- range .custom_nft_policies }}
+  set pol_{{ .id }}_ifname {
+    type ifname
+    flags interval
+    elements = $pol_{{ .id }}_ifname
+  }
+  {{- if .allowed_dst_v4 }}
+  set pol_{{ .id }}_dst_v4 {
+    type ipv4_addr
+    flags interval
+    elements = $pol_{{ .id }}_dst_v4
+  }
+  {{- end }}
+  {{- if .allowed_dst_v6 }}
+  set pol_{{ .id }}_dst_v6 {
+    type ipv6_addr
+    flags interval
+    elements = $pol_{{ .id }}_dst_v6
+  }
+  {{- end }}
+  {{- if .allowed_src_v4 }}
+  set pol_{{ .id }}_src_v4 {
+    type ipv4_addr
+    flags interval
+    elements = $pol_{{ .id }}_src_v4
+  }
+  {{- end }}
+  {{- if .allowed_src_v6 }}
+  set pol_{{ .id }}_src_v6 {
+    type ipv6_addr
+    flags interval
+    elements = $pol_{{ .id }}_src_v6
+  }
+  {{- end }}
+{{- end }}
   chain filter_forward {
     type filter hook forward priority filter; policy accept;
 
@@ -56,6 +106,22 @@ table inet easy42 {
     iifname @external_ifname ip daddr != @external_prefix drop
     iifname @external_ifname ip6 saddr != @external_prefix6 drop
     iifname @external_ifname ip6 daddr != @external_prefix6 drop
+{{- range .custom_nft_policies }}
+  {{- if .filter_forward }}
+    {{- if .allowed_src_v4 }}
+    iifname @pol_{{ .id }}_ifname ip saddr != @pol_{{ .id }}_src_v4 drop
+    {{- end }}
+    {{- if .allowed_dst_v4 }}
+    iifname @pol_{{ .id }}_ifname ip daddr != @pol_{{ .id }}_dst_v4 drop
+    {{- end }}
+    {{- if .allowed_src_v6 }}
+    iifname @pol_{{ .id }}_ifname ip6 saddr != @pol_{{ .id }}_src_v6 drop
+    {{- end }}
+    {{- if .allowed_dst_v6 }}
+    iifname @pol_{{ .id }}_ifname ip6 daddr != @pol_{{ .id }}_dst_v6 drop
+    {{- end }}
+  {{- end }}
+{{- end }}
   }
   chain filter_input {
     type filter hook input priority filter; policy accept;
@@ -71,6 +137,14 @@ table inet easy42 {
     iifname @external_ifname meta l4proto { icmp, ipv6-icmp } accept
     # Drop all other traffic targeting the host itself from DN42 (e.g., SSH)
     iifname @external_ifname counter drop
+{{- range .custom_nft_policies }}
+  {{- if .filter_input }}
+    iifname @pol_{{ .id }}_ifname meta l4proto tcp th dport { 179 } accept
+    iifname @pol_{{ .id }}_ifname meta l4proto udp th dport { 53 } accept
+    iifname @pol_{{ .id }}_ifname meta l4proto { icmp, ipv6-icmp } accept
+    iifname @pol_{{ .id }}_ifname counter drop
+  {{- end }}
+{{- end }}
   }
   chain mangle_postrouting {
     type filter hook postrouting priority mangle; policy accept;
@@ -83,6 +157,24 @@ table inet easy42 {
 {{- end }}
 {{- if .external_ip6 }}
     ip6 saddr != @external_prefix6 oifname @external_ifname meta nfproto ipv6 snat to $external_ip6
+{{- end }}
+{{- range .custom_nft_policies }}
+  {{- if .snat }}
+    {{- if .snat_target_v4 }}
+      {{- if .allowed_dst_v4 }}
+    ip saddr != @pol_{{ .id }}_dst_v4 oifname @pol_{{ .id }}_ifname meta nfproto ipv4 snat to {{ .snat_target_v4 }}
+      {{- else }}
+    oifname @pol_{{ .id }}_ifname meta nfproto ipv4 snat to {{ .snat_target_v4 }}
+      {{- end }}
+    {{- end }}
+    {{- if .snat_target_v6 }}
+      {{- if .allowed_dst_v6 }}
+    ip6 saddr != @pol_{{ .id }}_dst_v6 oifname @pol_{{ .id }}_ifname meta nfproto ipv6 snat to {{ .snat_target_v6 }}
+      {{- else }}
+    oifname @pol_{{ .id }}_ifname meta nfproto ipv6 snat to {{ .snat_target_v6 }}
+      {{- end }}
+    {{- end }}
+  {{- end }}
 {{- end }}
     ip daddr @private_ip oifname @easy42_ifname accept
     ip6 daddr @private_ip6 oifname @easy42_ifname accept

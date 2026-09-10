@@ -20,6 +20,7 @@ type Config struct {
 	EncryptedDEK    string          `json:"encrypted_dek"`
 	SessionSecret   string          `json:"session_secret"`
 	NetworkSettings NetworkSettings `json:"network_settings,omitempty"`
+	NetworkPolicies []NetworkPolicy `json:"network_policies,omitempty"`
 	Nodes           []Node          `json:"nodes"`
 	Links           []Link          `json:"links"`
 }
@@ -167,6 +168,7 @@ type LinkEnd struct {
 	MTU                 int    `json:"mtu,omitempty"`
 	UseIp               bool   `json:"use_ip,omitempty"`            // Resolve peer's endpoint domain to IP in easy42 server
 	ResolvedEndpoint    string `json:"resolved_endpoint,omitempty"` // Automatically resolved / actually used endpoint
+	Policy              string `json:"policy,omitempty"`            // Network policy ID (e.g. default, dn42, none, or custom)
 }
 
 // UseIP returns whether UseIp is enabled on the LinkEnd

@@ -422,18 +422,20 @@ func (s *Server) handleGetLinks(w http.ResponseWriter, r *http.Request) {
 
 
 type addLinkRequest struct {
-	FromNode  string          `json:"from_node"`
-	ToNode    string          `json:"to_node"`
-	FromPort  int             `json:"from_port,omitempty"`
-	ToPort    int             `json:"to_port,omitempty"`
-	FromMTU   int             `json:"from_mtu,omitempty"`
-	ToMTU     int             `json:"to_mtu,omitempty"`
-	FromUseIP *bool           `json:"from_use_ip,omitempty"`
-	ToUseIP   *bool           `json:"to_use_ip,omitempty"`
-	MTU       int             `json:"mtu,omitempty"`
-	Tags      []string        `json:"tags,omitempty"`
-	From      *config.LinkEnd `json:"from,omitempty"`
-	To        *config.LinkEnd `json:"to,omitempty"`
+	FromNode   string          `json:"from_node"`
+	ToNode     string          `json:"to_node"`
+	FromPort   int             `json:"from_port,omitempty"`
+	ToPort     int             `json:"to_port,omitempty"`
+	FromMTU    int             `json:"from_mtu,omitempty"`
+	ToMTU      int             `json:"to_mtu,omitempty"`
+	FromUseIP  *bool           `json:"from_use_ip,omitempty"`
+	ToUseIP    *bool           `json:"to_use_ip,omitempty"`
+	FromPolicy string          `json:"from_policy,omitempty"`
+	ToPolicy   string          `json:"to_policy,omitempty"`
+	MTU        int             `json:"mtu,omitempty"`
+	Tags       []string        `json:"tags,omitempty"`
+	From       *config.LinkEnd `json:"from,omitempty"`
+	To         *config.LinkEnd `json:"to,omitempty"`
 }
 
 func (s *Server) handleAddLink(w http.ResponseWriter, r *http.Request) {
@@ -474,6 +476,18 @@ func (s *Server) handleAddLink(w http.ResponseWriter, r *http.Request) {
 			req.To = &config.LinkEnd{}
 		}
 		req.To.UseIp = *req.ToUseIP
+	}
+	if req.FromPolicy != "" {
+		if req.From == nil {
+			req.From = &config.LinkEnd{}
+		}
+		req.From.Policy = req.FromPolicy
+	}
+	if req.ToPolicy != "" {
+		if req.To == nil {
+			req.To = &config.LinkEnd{}
+		}
+		req.To.Policy = req.ToPolicy
 	}
 
 	var link *config.Link
@@ -525,18 +539,20 @@ func (s *Server) handleCreateMeshLinks(w http.ResponseWriter, r *http.Request) {
 }
 
 type updateLinkRequest struct {
-	FromNode  string          `json:"from_node"`
-	ToNode    string          `json:"to_node"`
-	FromPort  int             `json:"from_port,omitempty"`
-	ToPort    int             `json:"to_port,omitempty"`
-	FromMTU   int             `json:"from_mtu,omitempty"`
-	ToMTU     int             `json:"to_mtu,omitempty"`
-	FromUseIP *bool           `json:"from_use_ip,omitempty"`
-	ToUseIP   *bool           `json:"to_use_ip,omitempty"`
-	MTU       int             `json:"mtu,omitempty"`
-	Tags      []string        `json:"tags,omitempty"`
-	From      *config.LinkEnd `json:"from,omitempty"`
-	To        *config.LinkEnd `json:"to,omitempty"`
+	FromNode   string          `json:"from_node"`
+	ToNode     string          `json:"to_node"`
+	FromPort   int             `json:"from_port,omitempty"`
+	ToPort     int             `json:"to_port,omitempty"`
+	FromMTU    int             `json:"from_mtu,omitempty"`
+	ToMTU      int             `json:"to_mtu,omitempty"`
+	FromUseIP  *bool           `json:"from_use_ip,omitempty"`
+	ToUseIP    *bool           `json:"to_use_ip,omitempty"`
+	FromPolicy string          `json:"from_policy,omitempty"`
+	ToPolicy   string          `json:"to_policy,omitempty"`
+	MTU        int             `json:"mtu,omitempty"`
+	Tags       []string        `json:"tags,omitempty"`
+	From       *config.LinkEnd `json:"from,omitempty"`
+	To         *config.LinkEnd `json:"to,omitempty"`
 }
 
 func (s *Server) handleUpdateLink(w http.ResponseWriter, r *http.Request) {
@@ -604,6 +620,18 @@ func (s *Server) handleUpdateLink(w http.ResponseWriter, r *http.Request) {
 		}
 		req.To.UseIp = *req.ToUseIP
 	}
+	if req.FromPolicy != "" {
+		if req.From == nil {
+			req.From = &config.LinkEnd{}
+		}
+		req.From.Policy = req.FromPolicy
+	}
+	if req.ToPolicy != "" {
+		if req.To == nil {
+			req.To = &config.LinkEnd{}
+		}
+		req.To.Policy = req.ToPolicy
+	}
 
 	var link *config.Link
 	var err error
@@ -657,6 +685,79 @@ func (s *Server) handleUpdateNetworkSettings(w http.ResponseWriter, r *http.Requ
 	}
 
 	writeJSON(w, http.StatusOK, settings)
+}
+
+// Network Policy Handlers
+
+func (s *Server) handleGetNetworkPolicies(w http.ResponseWriter, r *http.Request) {
+	policies := s.mgr.GetNetworkPolicies()
+	writeJSON(w, http.StatusOK, policies)
+}
+
+func (s *Server) handleGetNetworkPolicy(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	policy, err := s.mgr.GetNetworkPolicy(id)
+	if err != nil {
+		writeError(w, http.StatusNotFound, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, policy)
+}
+
+func (s *Server) handleCreateNetworkPolicy(w http.ResponseWriter, r *http.Request) {
+	var p config.NetworkPolicy
+	if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid network policy payload")
+		return
+	}
+
+	created, err := s.mgr.CreateNetworkPolicy(p)
+	if err != nil {
+		if err == crypto.ErrVaultLocked {
+			writeError(w, http.StatusLocked, "Vault is locked. Unlock with password first.")
+			return
+		}
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusCreated, created)
+}
+
+func (s *Server) handleUpdateNetworkPolicy(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	var p config.NetworkPolicy
+	if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid network policy payload")
+		return
+	}
+
+	updated, err := s.mgr.UpdateNetworkPolicy(id, p)
+	if err != nil {
+		if err == crypto.ErrVaultLocked {
+			writeError(w, http.StatusLocked, "Vault is locked. Unlock with password first.")
+			return
+		}
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, updated)
+}
+
+func (s *Server) handleDeleteNetworkPolicy(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	err := s.mgr.DeleteNetworkPolicy(id)
+	if err != nil {
+		if err == crypto.ErrVaultLocked {
+			writeError(w, http.StatusLocked, "Vault is locked. Unlock with password first.")
+			return
+		}
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"message": "Policy deleted successfully"})
 }
 
 func (s *Server) handleDeleteLink(w http.ResponseWriter, r *http.Request) {

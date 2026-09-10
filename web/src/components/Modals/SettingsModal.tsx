@@ -14,6 +14,10 @@ import {
   Tabs,
   Tab,
   InputAdornment,
+  Chip,
+  Switch,
+  FormControlLabel,
+  MenuItem,
 } from "@mui/material";
 import {
   Settings as SettingsIcon,
@@ -25,9 +29,16 @@ import {
   CheckCircle2,
   X,
   Globe,
+  Shield,
+  Plus,
+  Edit2,
+  Trash2,
+  Sliders,
+  Lock,
+  Copy,
 } from "lucide-react";
 import { api } from "../../api/client";
-import { NetworkSettings } from "../../types/api";
+import { NetworkSettings, NetworkPolicy } from "../../types/api";
 
 export const parsePrefixList = (input: string): string[] => {
   const result: string[] = [];
@@ -68,7 +79,7 @@ interface SettingsModalProps {
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onLogoutAll }) => {
-  const [activeTab, setActiveTab] = useState<"password" | "sessions" | "network">("password");
+  const [activeTab, setActiveTab] = useState<"password" | "sessions" | "network" | "policies">("password");
 
   // Password change state
   const [currentPassword, setCurrentPassword] = useState("");
@@ -83,11 +94,35 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
 
   // Network / Peering state
   const [publicAsn, setPublicAsn] = useState<number | "">("");
-  const [prefixes, setPrefixes] = useState("");
   const [networkLoading, setNetworkLoading] = useState(false);
   const [networkSaving, setNetworkSaving] = useState(false);
   const [networkError, setNetworkError] = useState<string | null>(null);
   const [networkSuccess, setNetworkSuccess] = useState<string | null>(null);
+
+  // Network Policies state
+  const [policies, setPolicies] = useState<NetworkPolicy[]>([]);
+  const [policiesLoading, setPoliciesLoading] = useState(false);
+  const [policiesError, setPoliciesError] = useState<string | null>(null);
+  const [policiesSuccess, setPoliciesSuccess] = useState<string | null>(null);
+
+  // Policy editor / viewer dialog state
+  const [policyDialogOpen, setPolicyDialogOpen] = useState(false);
+  const [policyDialogMode, setPolicyDialogMode] = useState<"view" | "edit" | "create">("view");
+  const [policyDialogError, setPolicyDialogError] = useState<string | null>(null);
+  const [policyDialogSaving, setPolicyDialogSaving] = useState(false);
+
+  const [policyId, setPolicyId] = useState("");
+  const [policyName, setPolicyName] = useState("");
+  const [policyDesc, setPolicyDesc] = useState("");
+  const [policyAllowedDst, setPolicyAllowedDst] = useState("");
+  const [policyAllowedSrc, setPolicyAllowedSrc] = useState("");
+  const [policyAllowedImport, setPolicyAllowedImport] = useState("");
+  const [policyRejectInternet, setPolicyRejectInternet] = useState(true);
+  const [policyFilterForward, setPolicyFilterForward] = useState(true);
+  const [policyFilterInput, setPolicyFilterInput] = useState(false);
+  const [policySnatEnabled, setPolicySnatEnabled] = useState(false);
+  const [policySnatCondition, setPolicySnatCondition] = useState<string>("not_dst");
+  const [policySnatTarget, setPolicySnatTarget] = useState<string>("masquerade");
 
   // Logout all state
   const [logoutAllConfirming, setLogoutAllConfirming] = useState(false);
@@ -101,14 +136,33 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
     }
   }, [open, activeTab]);
 
+  // Load policies when policies tab is opened
+  React.useEffect(() => {
+    if (open && activeTab === "policies") {
+      loadPolicies();
+    }
+  }, [open, activeTab]);
+
+  const loadPolicies = async () => {
+    setPoliciesLoading(true);
+    setPoliciesError(null);
+    try {
+      const list = await api.getNetworkPolicies();
+      setPolicies(list);
+    } catch (err: unknown) {
+      const e = err as Error;
+      setPoliciesError(e.message || "Failed to load network policies.");
+    } finally {
+      setPoliciesLoading(false);
+    }
+  };
+
   const loadNetworkSettings = async () => {
     setNetworkLoading(true);
     setNetworkError(null);
     try {
       const settings = await api.getNetworkSettings();
       setPublicAsn(settings.public_asn || "");
-      const prefList = settings.prefixes || [];
-      setPrefixes(prefList.join("\n"));
     } catch (err: unknown) {
       const e = err as Error;
       setNetworkError(e.message || "Failed to load network settings.");
@@ -123,21 +177,150 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
     setNetworkError(null);
     setNetworkSuccess(null);
 
-    const prefixList = parsePrefixList(prefixes);
-
     const payload: NetworkSettings = {
       public_asn: publicAsn === "" ? 0 : Number(publicAsn),
-      prefixes: prefixList,
     };
 
     try {
       await api.updateNetworkSettings(payload);
-      setNetworkSuccess("Network and BGP confederation settings updated successfully.");
+      setNetworkSuccess("BGP confederation settings updated successfully.");
     } catch (err: unknown) {
       const e = err as Error;
       setNetworkError(e.message || "Failed to update network settings.");
     } finally {
       setNetworkSaving(false);
+    }
+  };
+
+  const handleOpenCreatePolicy = () => {
+    setPolicyDialogMode("create");
+    setPolicyId("");
+    setPolicyName("");
+    setPolicyDesc("");
+    setPolicyAllowedDst("");
+    setPolicyAllowedSrc("");
+    setPolicyAllowedImport("");
+    setPolicyRejectInternet(true);
+    setPolicyFilterForward(true);
+    setPolicyFilterInput(false);
+    setPolicySnatEnabled(false);
+    setPolicySnatCondition("not_dst");
+    setPolicySnatTarget("masquerade");
+    setPolicyDialogError(null);
+    setPolicyDialogOpen(true);
+  };
+
+  const handleOpenViewPolicy = (p: NetworkPolicy) => {
+    setPolicyDialogMode("view");
+    setPolicyId(p.id);
+    setPolicyName(p.name);
+    setPolicyDesc(p.description || "");
+    setPolicyAllowedDst((p.allowed_dst_cidrs || []).join("\n"));
+    setPolicyAllowedSrc((p.allowed_src_cidrs || []).join("\n"));
+    setPolicyAllowedImport((p.allowed_import_cidrs || []).join("\n"));
+    setPolicyRejectInternet(Boolean(p.reject_internet));
+    setPolicyFilterForward(Boolean(p.filter_forward));
+    setPolicyFilterInput(Boolean(p.filter_input));
+    setPolicySnatEnabled(Boolean(p.snat?.enabled));
+    setPolicySnatCondition(p.snat?.condition || "not_dst");
+    setPolicySnatTarget(p.snat?.target || "masquerade");
+    setPolicyDialogError(null);
+    setPolicyDialogOpen(true);
+  };
+
+  const handleOpenEditPolicy = (p: NetworkPolicy) => {
+    setPolicyDialogMode("edit");
+    setPolicyId(p.id);
+    setPolicyName(p.name);
+    setPolicyDesc(p.description || "");
+    setPolicyAllowedDst((p.allowed_dst_cidrs || []).join("\n"));
+    setPolicyAllowedSrc((p.allowed_src_cidrs || []).join("\n"));
+    setPolicyAllowedImport((p.allowed_import_cidrs || []).join("\n"));
+    setPolicyRejectInternet(Boolean(p.reject_internet));
+    setPolicyFilterForward(Boolean(p.filter_forward));
+    setPolicyFilterInput(Boolean(p.filter_input));
+    setPolicySnatEnabled(Boolean(p.snat?.enabled));
+    setPolicySnatCondition(p.snat?.condition || "not_dst");
+    setPolicySnatTarget(p.snat?.target || "masquerade");
+    setPolicyDialogError(null);
+    setPolicyDialogOpen(true);
+  };
+
+  const handleDeletePolicy = async (p: NetworkPolicy) => {
+    if (
+      !window.confirm(
+        `Are you sure you want to delete custom network policy "${p.name}" (${p.id})? Links assigned to this policy will revert to the default policy.`,
+      )
+    ) {
+      return;
+    }
+    setPoliciesError(null);
+    try {
+      await api.deleteNetworkPolicy(p.id);
+      setPoliciesSuccess(`Policy "${p.name}" deleted successfully.`);
+      await loadPolicies();
+    } catch (err: unknown) {
+      const e = err as Error;
+      setPoliciesError(e.message || "Failed to delete network policy.");
+    }
+  };
+
+  const handleSavePolicy = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (policyDialogMode === "view") {
+      setPolicyDialogOpen(false);
+      return;
+    }
+    const cleanId = policyId.trim().toLowerCase();
+    if (!cleanId) {
+      setPolicyDialogError("Policy ID is required.");
+      return;
+    }
+    if (!/^[a-z0-9_-]+$/.test(cleanId)) {
+      setPolicyDialogError("Policy ID must contain only lowercase letters, numbers, hyphens, and underscores.");
+      return;
+    }
+    if (!policyName.trim()) {
+      setPolicyDialogError("Policy Name is required.");
+      return;
+    }
+
+    setPolicyDialogSaving(true);
+    setPolicyDialogError(null);
+    try {
+      const policyPayload: Partial<NetworkPolicy> = {
+        id: cleanId,
+        name: policyName.trim(),
+        description: policyDesc.trim() || undefined,
+        allowed_dst_cidrs: parsePrefixList(policyAllowedDst),
+        allowed_src_cidrs: parsePrefixList(policyAllowedSrc),
+        allowed_import_cidrs: parsePrefixList(policyAllowedImport),
+        reject_internet: policyRejectInternet,
+        filter_forward: policyFilterForward,
+        filter_input: policyFilterInput,
+        snat: policySnatEnabled
+          ? {
+              enabled: true,
+              condition: policySnatCondition,
+              target: policySnatTarget.trim() || undefined,
+            }
+          : undefined,
+      };
+
+      if (policyDialogMode === "create") {
+        await api.createNetworkPolicy(policyPayload);
+        setPoliciesSuccess(`Policy "${policyName.trim()}" created successfully.`);
+      } else {
+        await api.updateNetworkPolicy(cleanId, policyPayload);
+        setPoliciesSuccess(`Policy "${policyName.trim()}" updated successfully.`);
+      }
+      setPolicyDialogOpen(false);
+      await loadPolicies();
+    } catch (err: unknown) {
+      const e = err as Error;
+      setPolicyDialogError(e.message || "Failed to save network policy.");
+    } finally {
+      setPolicyDialogSaving(false);
     }
   };
 
@@ -151,25 +334,30 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
     setLogoutAllError(null);
     setNetworkError(null);
     setNetworkSuccess(null);
+    setPoliciesError(null);
+    setPoliciesSuccess(null);
   };
 
   const handleClose = () => {
     resetForm();
     onClose();
   };
-  const handleReset = () => {
-    setPublicAsn(4242420001);
-    const prefixes = `172.20.0.0/14{21,29}
-172.20.0.0/24{28,32}
-172.21.0.0/24{28,32}
-172.22.0.0/24{28,32}
-172.23.0.0/24{28,32}
-172.31.0.0/16+
-10.100.0.0/14+
-10.0.0.0/8{15,24}
-10.127.0.0/16+
-fd00::/8{44,64}`;
-    setPrefixes(prefixes);
+  const handleOpenClonePolicy = (p: NetworkPolicy) => {
+    setPolicyDialogMode("create");
+    setPolicyId(`${p.id}-copy`);
+    setPolicyName(`${p.name} (Copy)`);
+    setPolicyDesc(p.description || "");
+    setPolicyAllowedDst((p.allowed_dst_cidrs || []).join("\n"));
+    setPolicyAllowedSrc((p.allowed_src_cidrs || []).join("\n"));
+    setPolicyAllowedImport((p.allowed_import_cidrs || []).join("\n"));
+    setPolicyRejectInternet(Boolean(p.reject_internet));
+    setPolicyFilterForward(Boolean(p.filter_forward));
+    setPolicyFilterInput(Boolean(p.filter_input));
+    setPolicySnatEnabled(Boolean(p.snat?.enabled));
+    setPolicySnatCondition(p.snat?.condition || "not_dst");
+    setPolicySnatTarget(p.snat?.target || "masquerade");
+    setPolicyDialogError(null);
+    setPolicyDialogOpen(true);
   };
 
   const handleChangePassword = async (e: React.FormEvent) => {
@@ -229,7 +417,7 @@ fd00::/8{44,64}`;
   };
 
   return (
-    <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
+    <Dialog open={open} onClose={handleClose} maxWidth={activeTab === "policies" ? "md" : "sm"} fullWidth>
       <DialogTitle
         sx={{
           display: "flex",
@@ -292,6 +480,7 @@ fd00::/8{44,64}`;
           <Tab value="password" icon={<KeyRound size={16} />} iconPosition="start" label="Change Password" />
           <Tab value="sessions" icon={<ShieldAlert size={16} />} iconPosition="start" label="Sessions" />
           <Tab value="network" icon={<Globe size={16} />} iconPosition="start" label="Peering & BGP" />
+          <Tab value="policies" icon={<Shield size={16} />} iconPosition="start" label="Network Policies" />
         </Tabs>
       </Box>
 
@@ -538,8 +727,8 @@ fd00::/8{44,64}`;
         <form onSubmit={handleSaveNetworkSettings}>
           <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2.5, py: 3, px: 3 }}>
             <Typography variant="body2" sx={{ color: "#64748B" }}>
-              Configure global network parameters for external peering (such as DN42 or private networks). BGP
-              confederation replaces your internal mesh ASNs with your public ASN in external BGP sessions.
+              Configure global BGP confederation parameters for external peering (such as DN42 or private networks). BGP
+              confederation replaces your internal mesh ASNs with your public ASN in external BGP sessions. Subnet filtering and firewall policies are configured per-link under Network Policies.
             </Typography>
 
             {networkLoading ? (
@@ -571,19 +760,6 @@ fd00::/8{44,64}`;
                   helperText="Your network's public ASN (e.g. DN42 ASN). When set, BIRD confederation exposes this ASN to external peers."
                   disabled={networkSaving}
                 />
-
-                <TextField
-                  fullWidth
-                  size="small"
-                  label="Peering Prefixes (newline or comma separated)"
-                  placeholder="e.g. 172.20.0.0/14{21,29}, 172.31.0.0/16+, fd00::/8{44,64}"
-                  multiline
-                  rows={8}
-                  value={prefixes}
-                  onChange={(e) => setPrefixes(e.target.value)}
-                  helperText="Valid subnets permitted for peering (both accepted from and exported to external peers). Format with BIRD prefix syntax, one per line or comma-separated."
-                  disabled={networkSaving}
-                />
               </>
             )}
           </DialogContent>
@@ -591,9 +767,6 @@ fd00::/8{44,64}`;
           <DialogActions sx={{ px: 3, py: 2, borderTop: "1px solid #E2E8F0", backgroundColor: "#F8FAFC" }}>
             <Button onClick={handleClose} sx={{ color: "#64748B" }}>
               Close
-            </Button>
-            <Button onClick={handleReset} color="secondary" variant="outlined">
-              Reset to Default (DN42)
             </Button>
             <Button
               type="submit"
@@ -607,6 +780,407 @@ fd00::/8{44,64}`;
           </DialogActions>
         </form>
       )}
+
+      {/* Tab 4: Network Policies */}
+      {activeTab === "policies" && (
+        <Box sx={{ display: "flex", flexDirection: "column", height: "100%" }}>
+          <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2.5, py: 3, px: 3 }}>
+            <Box sx={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 2 }}>
+              <Box>
+                <Typography variant="body2" sx={{ color: "#475569", lineHeight: 1.5 }}>
+                  Define link-level firewall and routing policies. Network policies restrict allowed destination & source IPs (dropping unauthorized packets in nftables while preserving established return flows), filter BGP route imports, and configure outbound SNAT / masquerade.
+                </Typography>
+              </Box>
+              <Button
+                variant="contained"
+                size="small"
+                startIcon={<Plus size={16} />}
+                onClick={handleOpenCreatePolicy}
+                sx={{
+                  whiteSpace: "nowrap",
+                  fontWeight: 600,
+                  bgcolor: "#4F46E5",
+                  "&:hover": { bgcolor: "#4338CA" },
+                }}
+              >
+                Create Policy
+              </Button>
+            </Box>
+
+            {policiesSuccess && (
+              <Alert icon={<CheckCircle2 size={18} />} severity="success" sx={{ borderRadius: 2 }}>
+                {policiesSuccess}
+              </Alert>
+            )}
+
+            {policiesError && (
+              <Alert severity="error" sx={{ borderRadius: 2 }}>
+                {policiesError}
+              </Alert>
+            )}
+
+            {policiesLoading ? (
+              <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
+                <CircularProgress size={24} />
+              </Box>
+            ) : (
+              <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, mt: 1 }}>
+                {policies.map((p) => {
+                  const isBuiltin = Boolean(p.is_internal);
+                  return (
+                    <Box
+                      key={p.id}
+                      sx={{
+                        p: 2,
+                        borderRadius: 2,
+                        border: "1px solid",
+                        borderColor: isBuiltin ? "#E0E7FF" : "#E2E8F0",
+                        bgcolor: isBuiltin ? "#F8FAFC" : "#FFFFFF",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 1.2,
+                        transition: "all 0.15s ease",
+                        "&:hover": {
+                          borderColor: isBuiltin ? "#C7D2FE" : "#CBD5E1",
+                          boxShadow: "0 2px 4px rgba(0,0,0,0.03)",
+                        },
+                      }}
+                    >
+                      <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                          <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0F172A" }}>
+                            {p.name}
+                          </Typography>
+                          <Typography
+                            variant="caption"
+                            className="mono-font"
+                            sx={{ color: "#64748B", bgcolor: "#F1F5F9", px: 0.8, py: 0.2, borderRadius: 1 }}
+                          >
+                            {p.id}
+                          </Typography>
+                          <Chip
+                            label={isBuiltin ? "Built-in" : "Custom"}
+                            size="small"
+                            sx={{
+                              height: 20,
+                              fontSize: "0.68rem",
+                              fontWeight: 700,
+                              bgcolor: isBuiltin ? "rgba(79, 70, 229, 0.1)" : "rgba(16, 185, 129, 0.12)",
+                              color: isBuiltin ? "#4F46E5" : "#059669",
+                            }}
+                          />
+                        </Box>
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            onClick={() => handleOpenViewPolicy(p)}
+                            sx={{ py: 0.3, px: 1, minWidth: 0, fontSize: "0.75rem", color: "#475569", borderColor: "#CBD5E1" }}
+                          >
+                            View
+                          </Button>
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            startIcon={<Copy size={12} />}
+                            onClick={() => handleOpenClonePolicy(p)}
+                            sx={{ py: 0.3, px: 1, minWidth: 0, fontSize: "0.75rem", color: "#4F46E5", borderColor: "#C7D2FE" }}
+                          >
+                            Clone
+                          </Button>
+                          {!isBuiltin && (
+                            <>
+                              <IconButton
+                                size="small"
+                                onClick={() => handleOpenEditPolicy(p)}
+                                sx={{ color: "#4F46E5", p: 0.5 }}
+                                title="Edit Policy"
+                              >
+                                <Edit2 size={15} />
+                              </IconButton>
+                              <IconButton
+                                size="small"
+                                onClick={() => handleDeletePolicy(p)}
+                                sx={{ color: "#EF4444", p: 0.5 }}
+                                title="Delete Policy"
+                              >
+                                <Trash2 size={15} />
+                              </IconButton>
+                            </>
+                          )}
+                        </Box>
+                      </Box>
+
+                      {p.description && (
+                        <Typography variant="caption" sx={{ color: "#64748B" }}>
+                          {p.description}
+                        </Typography>
+                      )}
+
+                      <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, pt: 0.5 }}>
+                        <Chip
+                          size="small"
+                          label={`Allowed Dst: ${p.allowed_dst_cidrs && p.allowed_dst_cidrs.length > 0 ? `${p.allowed_dst_cidrs.length} prefix(es)` : "All"}`}
+                          variant="outlined"
+                          sx={{ fontSize: "0.7rem", height: 22 }}
+                        />
+                        <Chip
+                          size="small"
+                          label={`Allowed Src: ${p.allowed_src_cidrs && p.allowed_src_cidrs.length > 0 ? `${p.allowed_src_cidrs.length} prefix(es)` : "All"}`}
+                          variant="outlined"
+                          sx={{ fontSize: "0.7rem", height: 22 }}
+                        />
+                        <Chip
+                          size="small"
+                          label={`BGP Import: ${p.allowed_import_cidrs && p.allowed_import_cidrs.length > 0 ? `${p.allowed_import_cidrs.length} prefix(es)` : "All"}`}
+                          variant="outlined"
+                          sx={{ fontSize: "0.7rem", height: 22 }}
+                        />
+                        <Chip
+                          size="small"
+                          label={`Leak Protect: ${p.reject_internet ? "Internet Rejection" : "None"}`}
+                          variant="outlined"
+                          sx={{ fontSize: "0.7rem", height: 22 }}
+                        />
+                        <Chip
+                          size="small"
+                          label={`SNAT: ${p.snat?.enabled ? (p.snat.condition === "not_dst" ? "SNAT (src != dst)" : "SNAT (all)") : "Disabled"}`}
+                          variant="outlined"
+                          sx={{
+                            fontSize: "0.7rem",
+                            height: 22,
+                            borderColor: p.snat?.enabled ? "#A5F3FC" : undefined,
+                            bgcolor: p.snat?.enabled ? "#F0FDFA" : undefined,
+                            color: p.snat?.enabled ? "#0F766E" : undefined,
+                          }}
+                        />
+                      </Box>
+                    </Box>
+                  );
+                })}
+              </Box>
+            )}
+          </DialogContent>
+
+          <DialogActions sx={{ px: 3, py: 2, borderTop: "1px solid #E2E8F0", backgroundColor: "#F8FAFC" }}>
+            <Button onClick={handleClose} sx={{ color: "#64748B" }}>
+              Close
+            </Button>
+          </DialogActions>
+        </Box>
+      )}
+
+      {/* Sub-dialog: Policy Editor & Viewer */}
+      <Dialog
+        open={policyDialogOpen}
+        onClose={() => setPolicyDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <form onSubmit={handleSavePolicy}>
+          <DialogTitle
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              pb: 1,
+              borderBottom: "1px solid #E2E8F0",
+            }}
+          >
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <Shield size={20} color="#4F46E5" />
+              <Typography variant="h6" sx={{ fontWeight: 700, fontSize: "1.1rem", color: "#0F172A" }}>
+                {policyDialogMode === "view"
+                  ? "View Network Policy"
+                  : policyDialogMode === "edit"
+                  ? "Edit Network Policy"
+                  : "Create Network Policy"}
+              </Typography>
+            </Box>
+            <IconButton size="small" onClick={() => setPolicyDialogOpen(false)} sx={{ color: "#94A3B8" }}>
+              <X size={18} />
+            </IconButton>
+          </DialogTitle>
+
+          <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2, py: 2.5, px: 3 }}>
+            {policyDialogMode === "view" && (
+              <Alert icon={<Lock size={16} />} severity="info" sx={{ py: 0.5, borderRadius: 2 }}>
+                Built-in policies are managed by easy42 and are read-only.
+              </Alert>
+            )}
+
+            {policyDialogError && (
+              <Alert severity="error" sx={{ borderRadius: 2 }}>
+                {policyDialogError}
+              </Alert>
+            )}
+
+            <Box sx={{ display: "flex", gap: 2 }}>
+              <TextField
+                fullWidth
+                size="small"
+                label="Policy ID"
+                placeholder="e.g. partner-lan"
+                value={policyId}
+                onChange={(e) => setPolicyId(e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, ""))}
+                disabled={policyDialogMode !== "create" || policyDialogSaving}
+                helperText="Unique identifier (letters, numbers, hyphens)"
+                required
+              />
+              <TextField
+                fullWidth
+                size="small"
+                label="Policy Name"
+                placeholder="e.g. Partner LAN Policy"
+                value={policyName}
+                onChange={(e) => setPolicyName(e.target.value)}
+                disabled={policyDialogMode === "view" || policyDialogSaving}
+                required
+              />
+            </Box>
+
+            <TextField
+              fullWidth
+              size="small"
+              label="Description (optional)"
+              placeholder="e.g. Limits access to specific subnets and enables anti-spoofing"
+              value={policyDesc}
+              onChange={(e) => setPolicyDesc(e.target.value)}
+              disabled={policyDialogMode === "view" || policyDialogSaving}
+            />
+
+            <TextField
+              fullWidth
+              size="small"
+              label="Allowed Destination Subnets (CIDRs)"
+              placeholder={"e.g. 172.20.0.0/14{21,29}\nfd00::/8{44,64}"}
+              multiline
+              rows={3}
+              value={policyAllowedDst}
+              onChange={(e) => setPolicyAllowedDst(e.target.value)}
+              disabled={policyDialogMode === "view" || policyDialogSaving}
+              helperText="Restricts traffic dst IP via nftables (return traffic allowed) & filters BGP export routes. Leave empty for unrestricted."
+            />
+
+            <TextField
+              fullWidth
+              size="small"
+              label="Allowed Source Subnets (CIDRs)"
+              placeholder={"e.g. 172.20.10.0/24\nfd00:1::/48"}
+              multiline
+              rows={3}
+              value={policyAllowedSrc}
+              onChange={(e) => setPolicyAllowedSrc(e.target.value)}
+              disabled={policyDialogMode === "view" || policyDialogSaving}
+              helperText="Anti-spoofing: inbound traffic on this link with source IP not matching will be dropped. Leave empty for unrestricted."
+            />
+
+            <TextField
+              fullWidth
+              size="small"
+              label="Allowed BGP Import Subnets (CIDRs)"
+              placeholder={"e.g. 172.20.0.0/16+\nfd00::/48+"}
+              multiline
+              rows={3}
+              value={policyAllowedImport}
+              onChange={(e) => setPolicyAllowedImport(e.target.value)}
+              disabled={policyDialogMode === "view" || policyDialogSaving}
+              helperText="BGP route import filter: only permits routes matching these subnets. Leave empty for unrestricted."
+            />
+
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 1, p: 2, borderRadius: 2, bgcolor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#1E293B", display: "flex", alignItems: "center", gap: 0.8 }}>
+                <Sliders size={16} /> Route Leak Protection
+              </Typography>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={policyRejectInternet}
+                    onChange={(e) => setPolicyRejectInternet(e.target.checked)}
+                    disabled={policyDialogMode === "view" || policyDialogSaving}
+                  />
+                }
+                label={
+                  <Box>
+                    <Typography variant="body2" sx={{ fontWeight: 600, color: "#0F172A" }}>
+                      Reject Internet Routes
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: "#64748B" }}>
+                      Prevents importing and exporting default / Internet routes (0.0.0.0/0, 128.0.0.0/1, ::/0).
+                    </Typography>
+                  </Box>
+                }
+              />
+            </Box>
+
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, p: 2, borderRadius: 2, bgcolor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
+              <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#1E293B" }}>
+                  Outbound SNAT / Masquerade
+                </Typography>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={policySnatEnabled}
+                      onChange={(e) => setPolicySnatEnabled(e.target.checked)}
+                      disabled={policyDialogMode === "view" || policyDialogSaving}
+                    />
+                  }
+                  label={policySnatEnabled ? "Enabled" : "Disabled"}
+                  sx={{ m: 0 }}
+                />
+              </Box>
+
+              {policySnatEnabled && (
+                <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, pt: 1 }}>
+                  <TextField
+                    select
+                    fullWidth
+                    size="small"
+                    label="SNAT Condition"
+                    value={policySnatCondition}
+                    onChange={(e) => setPolicySnatCondition(e.target.value)}
+                    disabled={policyDialogMode === "view" || policyDialogSaving}
+                  >
+                    <MenuItem value="not_dst">Traffic whose source IP is NOT in allowed destination CIDRs</MenuItem>
+                    <MenuItem value="all">All egress traffic on this link</MenuItem>
+                  </TextField>
+
+                  <TextField
+                    select
+                    fullWidth
+                    size="small"
+                    label="SNAT Target IP"
+                    value={policySnatTarget}
+                    onChange={(e) => setPolicySnatTarget(e.target.value)}
+                    disabled={policyDialogMode === "view" || policyDialogSaving}
+                  >
+                    <MenuItem value="masquerade">Interface IP (Masquerade)</MenuItem>
+                    <MenuItem value="external_ip">External / Peering IP</MenuItem>
+                  </TextField>
+                </Box>
+              )}
+            </Box>
+          </DialogContent>
+
+          <DialogActions sx={{ px: 3, py: 2, borderTop: "1px solid #E2E8F0", backgroundColor: "#F8FAFC" }}>
+            <Button onClick={() => setPolicyDialogOpen(false)} sx={{ color: "#64748B" }}>
+              {policyDialogMode === "view" ? "Close" : "Cancel"}
+            </Button>
+            {policyDialogMode !== "view" && (
+              <Button
+                type="submit"
+                variant="contained"
+                disabled={policyDialogSaving}
+                startIcon={policyDialogSaving && <CircularProgress size={16} color="inherit" />}
+                sx={{ fontWeight: 600, bgcolor: "#4F46E5", "&:hover": { bgcolor: "#4338CA" } }}
+              >
+                {policyDialogSaving ? "Saving..." : policyDialogMode === "create" ? "Create Policy" : "Save Changes"}
+              </Button>
+            )}
+          </DialogActions>
+        </form>
+      </Dialog>
     </Dialog>
   );
 };
