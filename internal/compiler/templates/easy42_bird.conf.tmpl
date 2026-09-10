@@ -183,6 +183,11 @@ template bgp easy42_peer {
         
         import filter {
             if net ~ INTERNET then reject;
+            {{if .confed_as}}
+            # Prefer routes with fewer confederation hops
+            if !defined(bgp_local_pref) then bgp_local_pref = 100;
+            if bgp_local_pref > 1 then bgp_local_pref = bgp_local_pref - 1;
+            {{end}}
             accept;
         }; 
         export filter {
@@ -194,6 +199,11 @@ template bgp easy42_peer {
         next hop self;
         import filter {
             if net ~ INTERNET6 then reject;
+            {{if .confed_as}}
+            # Prefer routes with fewer confederation hops
+            if !defined(bgp_local_pref) then bgp_local_pref = 100;
+            if bgp_local_pref > 1 then bgp_local_pref = bgp_local_pref - 1;
+            {{end}}
             accept;
         };
         export filter {
@@ -215,12 +225,26 @@ template bgp none_peer {
     ipv4 {
         extended next hop on;
         next hop self;
-        import all;
+        import filter {
+            {{if .confed_as}}
+            # Prefer routes with fewer confederation hops
+            if !defined(bgp_local_pref) then bgp_local_pref = 100;
+            if bgp_local_pref > 1 then bgp_local_pref = bgp_local_pref - 1;
+            {{end}}
+            accept;
+        };
         export all;
     };
     ipv6 {
         next hop self;
-        import all;
+        import filter {
+            {{if .confed_as}}
+            # Prefer routes with fewer confederation hops
+            if !defined(bgp_local_pref) then bgp_local_pref = 100;
+            if bgp_local_pref > 1 then bgp_local_pref = bgp_local_pref - 1;
+            {{end}}
+            accept;
+        };
         export all;
     };
 }
@@ -300,9 +324,21 @@ template bgp {{.template_name}} {
         import filter {
             {{if .reject_internet}}if net ~ INTERNET then reject;{{end}}
             {{if .has_import_v4}}
-            if net ~ POL_{{.id}}_IMPORT_V4 then accept;
+            if net ~ POL_{{.id}}_IMPORT_V4 then {
+                {{if $.confed_as}}
+                # Prefer routes with fewer confederation hops
+                if !defined(bgp_local_pref) then bgp_local_pref = 100;
+                if bgp_local_pref > 1 then bgp_local_pref = bgp_local_pref - 1;
+                {{end}}
+                accept;
+            }
             reject;
             {{else}}
+            {{if $.confed_as}}
+            # Prefer routes with fewer confederation hops
+            if !defined(bgp_local_pref) then bgp_local_pref = 100;
+            if bgp_local_pref > 1 then bgp_local_pref = bgp_local_pref - 1;
+            {{end}}
             accept;
             {{end}}
         };
@@ -321,9 +357,21 @@ template bgp {{.template_name}} {
         import filter {
             {{if .reject_internet}}if net ~ INTERNET6 then reject;{{end}}
             {{if .has_import_v6}}
-            if net ~ POL_{{.id}}_IMPORT_V6 then accept;
+            if net ~ POL_{{.id}}_IMPORT_V6 then {
+                {{if $.confed_as}}
+                # Prefer routes with fewer confederation hops
+                if !defined(bgp_local_pref) then bgp_local_pref = 100;
+                if bgp_local_pref > 1 then bgp_local_pref = bgp_local_pref - 1;
+                {{end}}
+                accept;
+            }
             reject;
             {{else}}
+            {{if $.confed_as}}
+            # Prefer routes with fewer confederation hops
+            if !defined(bgp_local_pref) then bgp_local_pref = 100;
+            if bgp_local_pref > 1 then bgp_local_pref = bgp_local_pref - 1;
+            {{end}}
             accept;
             {{end}}
         };

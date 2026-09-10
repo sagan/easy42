@@ -789,6 +789,80 @@ func TestNetworkPolicyBIRD(t *testing.T) {
 	}
 }
 
+func TestBGPConfederationHopPreference(t *testing.T) {
+	node1 := config.Node{
+		Name:      "alihk",
+		IP:        "192.168.110.210",
+		Interface: "wg0",
+		ASN:       4224420210,
+	}
+	node2 := config.Node{
+		Name:      "dedirock",
+		IP:        "192.168.110.203",
+		Interface: "wg0",
+		ASN:       4224420203,
+	}
 
+	netSettings := &config.NetworkSettings{
+		PublicASN: 4242421120,
+		Prefixes:  []string{"172.20.0.0/14{21,29}"},
+	}
 
+	link := config.Link{
+		From: config.LinkEnd{
+			Name:      "alihk",
+			Interface: "wg42dedirock",
+			Address:   "fe80::c0a8:6ed2/64",
+		},
+		To: config.LinkEnd{
+			Name:      "dedirock",
+			Interface: "wg42alihk",
+			Address:   "fe80::c0a8:6ecb/64",
+		},
+	}
 
+	// 1. With Confederation (PublicASN set)
+	confWithConfed, err := GenerateBirdConfig(&node1, []config.Node{node1, node2}, []config.Link{link}, netSettings)
+	if err != nil {
+		t.Fatalf("GenerateBirdConfig failed: %v", err)
+	}
+
+	expectedSnippets := []string{
+		"# Prefer routes with fewer confederation hops",
+		"if !defined(bgp_local_pref) then bgp_local_pref = 100;",
+		"if bgp_local_pref > 1 then bgp_local_pref = bgp_local_pref - 1;",
+	}
+	for _, s := range expectedSnippets {
+		if !strings.Contains(confWithConfed, s) {
+			t.Errorf("Expected snippet %q in generated confederation config:\n%s", s, confWithConfed)
+		}
+	}
+
+	// Syntax validation with BIRD
+	if birdPath, err := exec.LookPath("bird"); err == nil {
+		tmpFile, err := os.CreateTemp("", "bird_confed_test_*.conf")
+		if err != nil {
+			t.Fatalf("Failed to create temp bird file: %v", err)
+		}
+		defer os.Remove(tmpFile.Name())
+		if _, err := tmpFile.WriteString(confWithConfed); err != nil {
+			t.Fatalf("Failed to write temp bird file: %v", err)
+		}
+		tmpFile.Close()
+
+		cmd := exec.Command(birdPath, "-p", "-c", tmpFile.Name())
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("BIRD syntax validation failed: %v\nOutput:\n%s\nConf:\n%s", err, string(out), confWithConfed)
+		}
+	}
+
+	// 2. Without Confederation (no PublicASN)
+	confWithoutConfed, err := GenerateBirdConfig(&node1, []config.Node{node1, node2}, []config.Link{link})
+	if err != nil {
+		t.Fatalf("GenerateBirdConfig without confederation failed: %v", err)
+	}
+	if strings.Contains(confWithoutConfed, "Prefer routes with fewer confederation hops") {
+		t.Errorf("Did not expect confederation hop snippet when no confederation configured")
+	}
+}
