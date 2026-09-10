@@ -34,7 +34,7 @@ func TestNetworkPolicyManagerCRUD(t *testing.T) {
 		t.Fatalf("expected error creating policy with reserved ID 'default'")
 	}
 
-	// 3. Create custom policy
+	// 3. Create custom policy (unset Cost should default to 100)
 	custom, err := mgr.CreateNetworkPolicy(config.NetworkPolicy{
 		ID:                 "pol-office",
 		Name:               "Branch Office",
@@ -49,7 +49,7 @@ func TestNetworkPolicyManagerCRUD(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateNetworkPolicy failed: %v", err)
 	}
-	if custom.ID != "pol-office" || custom.IsInternal {
+	if custom.ID != "pol-office" || custom.IsInternal || custom.Cost != 100 {
 		t.Errorf("unexpected custom policy: %+v", custom)
 	}
 
@@ -62,9 +62,10 @@ func TestNetworkPolicyManagerCRUD(t *testing.T) {
 		t.Fatalf("expected error creating duplicate policy ID")
 	}
 
-	// 5. Update custom policy
+	// 5. Update custom policy with custom Cost
 	updated, err := mgr.UpdateNetworkPolicy("pol-office", config.NetworkPolicy{
 		Name:               "Branch Office Updated",
+		Cost:               250,
 		AllowedDstCIDRs:    []string{"172.20.101.0/24"},
 		AllowedSrcCIDRs:    []string{"172.20.201.0/24"},
 		AllowedImportCIDRs: []string{"172.20.201.0/24"},
@@ -72,8 +73,8 @@ func TestNetworkPolicyManagerCRUD(t *testing.T) {
 	if err != nil {
 		t.Fatalf("UpdateNetworkPolicy failed: %v", err)
 	}
-	if updated.Name != "Branch Office Updated" {
-		t.Errorf("expected updated name, got %s", updated.Name)
+	if updated.Name != "Branch Office Updated" || updated.Cost != 250 {
+		t.Errorf("expected updated name and cost 250, got name=%s cost=%d", updated.Name, updated.Cost)
 	}
 
 	// 6. Reject updating built-in policy

@@ -114,6 +114,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
   const [policyId, setPolicyId] = useState("");
   const [policyName, setPolicyName] = useState("");
   const [policyDesc, setPolicyDesc] = useState("");
+  const [policyCost, setPolicyCost] = useState<number | string>(100);
   const [policyAllowedDst, setPolicyAllowedDst] = useState("");
   const [policyAllowedSrc, setPolicyAllowedSrc] = useState("");
   const [policyAllowedImport, setPolicyAllowedImport] = useState("");
@@ -197,6 +198,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
     setPolicyId("");
     setPolicyName("");
     setPolicyDesc("");
+    setPolicyCost(100);
     setPolicyAllowedDst("");
     setPolicyAllowedSrc("");
     setPolicyAllowedImport("");
@@ -215,6 +217,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
     setPolicyId(p.id);
     setPolicyName(p.name);
     setPolicyDesc(p.description || "");
+    setPolicyCost(p.cost ?? 100);
     setPolicyAllowedDst((p.allowed_dst_cidrs || []).join("\n"));
     setPolicyAllowedSrc((p.allowed_src_cidrs || []).join("\n"));
     setPolicyAllowedImport((p.allowed_import_cidrs || []).join("\n"));
@@ -233,6 +236,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
     setPolicyId(p.id);
     setPolicyName(p.name);
     setPolicyDesc(p.description || "");
+    setPolicyCost(p.cost ?? 100);
     setPolicyAllowedDst((p.allowed_dst_cidrs || []).join("\n"));
     setPolicyAllowedSrc((p.allowed_src_cidrs || []).join("\n"));
     setPolicyAllowedImport((p.allowed_import_cidrs || []).join("\n"));
@@ -292,6 +296,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
         id: cleanId,
         name: policyName.trim(),
         description: policyDesc.trim() || undefined,
+        cost: Number(policyCost) > 0 ? Number(policyCost) : 100,
         allowed_dst_cidrs: parsePrefixList(policyAllowedDst),
         allowed_src_cidrs: parsePrefixList(policyAllowedSrc),
         allowed_import_cidrs: parsePrefixList(policyAllowedImport),
@@ -347,6 +352,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
     setPolicyId(`${p.id}-copy`);
     setPolicyName(`${p.name} (Copy)`);
     setPolicyDesc(p.description || "");
+    setPolicyCost(p.cost ?? 100);
     setPolicyAllowedDst((p.allowed_dst_cidrs || []).join("\n"));
     setPolicyAllowedSrc((p.allowed_src_cidrs || []).join("\n"));
     setPolicyAllowedImport((p.allowed_import_cidrs || []).join("\n"));
@@ -920,6 +926,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
                       <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, pt: 0.5 }}>
                         <Chip
                           size="small"
+                          label={`Cost: ${p.cost ?? 100}`}
+                          variant="outlined"
+                          sx={{ fontSize: "0.7rem", height: 22, borderColor: "#C7D2FE", bgcolor: "#EEF2FF", color: "#4338CA" }}
+                        />
+                        <Chip
+                          size="small"
                           label={`Allowed Dst: ${p.allowed_dst_cidrs && p.allowed_dst_cidrs.length > 0 ? `${p.allowed_dst_cidrs.length} prefix(es)` : "All"}`}
                           variant="outlined"
                           sx={{ fontSize: "0.7rem", height: 22 }}
@@ -1047,6 +1059,18 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
               value={policyDesc}
               onChange={(e) => setPolicyDesc(e.target.value)}
               disabled={policyDialogMode === "view" || policyDialogSaving}
+            />
+
+            <TextField
+              fullWidth
+              size="small"
+              type="number"
+              label="Internal BGP Cost"
+              placeholder="100"
+              value={policyCost}
+              onChange={(e) => setPolicyCost(e.target.value)}
+              disabled={policyDialogMode === "view" || policyDialogSaving}
+              helperText="Cost deducted from local preference on each internal hop (default 100). Lower cost = preferred route."
             />
 
             <TextField

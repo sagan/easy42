@@ -828,9 +828,10 @@ func TestBGPConfederationHopPreference(t *testing.T) {
 	}
 
 	expectedSnippets := []string{
-		"# Prefer routes with fewer confederation hops",
-		"if !defined(bgp_local_pref) then bgp_local_pref = 100;",
-		"if bgp_local_pref > 1 then bgp_local_pref = bgp_local_pref - 1;",
+		"define DEFAULT_LOCAL_PREF = 10000;",
+		"# Prefer routes with fewer confederation hops / lower policy cost",
+		"if !defined(bgp_local_pref) then bgp_local_pref = DEFAULT_LOCAL_PREF;",
+		"if bgp_local_pref > 100 then bgp_local_pref = bgp_local_pref - 100; else bgp_local_pref = 1;",
 	}
 	for _, s := range expectedSnippets {
 		if !strings.Contains(confWithConfed, s) {
@@ -857,7 +858,52 @@ func TestBGPConfederationHopPreference(t *testing.T) {
 		}
 	}
 
-	// 2. Without Confederation (no PublicASN)
+	// 2. Custom policy with custom cost (e.g. 50)
+	customPol := config.NetworkPolicy{
+		ID:   "fast-track",
+		Name: "Fast Track",
+		Cost: 50,
+	}
+	linkCustom := config.Link{
+		From: config.LinkEnd{
+			Name:      "alihk",
+			Interface: "wg42dedirock",
+			Address:   "fe80::c0a8:6ed2/64",
+			Policy:    "fast-track",
+		},
+		To: config.LinkEnd{
+			Name:      "dedirock",
+			Interface: "wg42alihk",
+			Address:   "fe80::c0a8:6ecb/64",
+		},
+	}
+	confWithCustomCost, err := GenerateBirdConfig(&node1, []config.Node{node1, node2}, []config.Link{linkCustom}, netSettings, []config.NetworkPolicy{customPol})
+	if err != nil {
+		t.Fatalf("GenerateBirdConfig with custom policy failed: %v", err)
+	}
+	expectedCustomSnippets := []string{
+		"template bgp pol_peer_fast_track",
+		"if bgp_local_pref > 50 then bgp_local_pref = bgp_local_pref - 50; else bgp_local_pref = 1;",
+	}
+	for _, s := range expectedCustomSnippets {
+		if !strings.Contains(confWithCustomCost, s) {
+			t.Errorf("Expected custom snippet %q in config:\n%s", s, confWithCustomCost)
+		}
+	}
+	if birdPath, err := exec.LookPath("bird"); err == nil {
+		tmpFile, err := os.CreateTemp("", "bird_confed_custom_test_*.conf")
+		if err == nil {
+			defer os.Remove(tmpFile.Name())
+			_, _ = tmpFile.WriteString(confWithCustomCost)
+			_ = tmpFile.Close()
+			cmd := exec.Command(birdPath, "-p", "-c", tmpFile.Name())
+			if out, err := cmd.CombinedOutput(); err != nil {
+				t.Fatalf("BIRD validation failed on custom cost config: %v\nOutput:\n%s", err, string(out))
+			}
+		}
+	}
+
+	// 3. Without Confederation (no PublicASN)
 	confWithoutConfed, err := GenerateBirdConfig(&node1, []config.Node{node1, node2}, []config.Link{link})
 	if err != nil {
 		t.Fatalf("GenerateBirdConfig without confederation failed: %v", err)

@@ -25,6 +25,8 @@ define COMM_EXTERNAL = {{ .comm_external }};
 define COMM_EXTERNAL = (4224420000, 1, 1);
 {{end}}
 
+define DEFAULT_LOCAL_PREF = 10000;
+
 router id SELF_IP;
 
 protocol device {
@@ -184,9 +186,9 @@ template bgp easy42_peer {
         import filter {
             if net ~ INTERNET then reject;
             {{if .confed_as}}
-            # Prefer routes with fewer confederation hops
-            if !defined(bgp_local_pref) then bgp_local_pref = 100;
-            if bgp_local_pref > 1 then bgp_local_pref = bgp_local_pref - 1;
+            # Prefer routes with fewer confederation hops / lower policy cost
+            if !defined(bgp_local_pref) then bgp_local_pref = DEFAULT_LOCAL_PREF;
+            if bgp_local_pref > {{if .default_cost}}{{.default_cost}}{{else}}100{{end}} then bgp_local_pref = bgp_local_pref - {{if .default_cost}}{{.default_cost}}{{else}}100{{end}}; else bgp_local_pref = 1;
             {{end}}
             accept;
         }; 
@@ -200,9 +202,9 @@ template bgp easy42_peer {
         import filter {
             if net ~ INTERNET6 then reject;
             {{if .confed_as}}
-            # Prefer routes with fewer confederation hops
-            if !defined(bgp_local_pref) then bgp_local_pref = 100;
-            if bgp_local_pref > 1 then bgp_local_pref = bgp_local_pref - 1;
+            # Prefer routes with fewer confederation hops / lower policy cost
+            if !defined(bgp_local_pref) then bgp_local_pref = DEFAULT_LOCAL_PREF;
+            if bgp_local_pref > {{if .default_cost}}{{.default_cost}}{{else}}100{{end}} then bgp_local_pref = bgp_local_pref - {{if .default_cost}}{{.default_cost}}{{else}}100{{end}}; else bgp_local_pref = 1;
             {{end}}
             accept;
         };
@@ -227,9 +229,9 @@ template bgp none_peer {
         next hop self;
         import filter {
             {{if .confed_as}}
-            # Prefer routes with fewer confederation hops
-            if !defined(bgp_local_pref) then bgp_local_pref = 100;
-            if bgp_local_pref > 1 then bgp_local_pref = bgp_local_pref - 1;
+            # Prefer routes with fewer confederation hops / lower policy cost
+            if !defined(bgp_local_pref) then bgp_local_pref = DEFAULT_LOCAL_PREF;
+            if bgp_local_pref > {{if .none_cost}}{{.none_cost}}{{else}}100{{end}} then bgp_local_pref = bgp_local_pref - {{if .none_cost}}{{.none_cost}}{{else}}100{{end}}; else bgp_local_pref = 1;
             {{end}}
             accept;
         };
@@ -239,9 +241,9 @@ template bgp none_peer {
         next hop self;
         import filter {
             {{if .confed_as}}
-            # Prefer routes with fewer confederation hops
-            if !defined(bgp_local_pref) then bgp_local_pref = 100;
-            if bgp_local_pref > 1 then bgp_local_pref = bgp_local_pref - 1;
+            # Prefer routes with fewer confederation hops / lower policy cost
+            if !defined(bgp_local_pref) then bgp_local_pref = DEFAULT_LOCAL_PREF;
+            if bgp_local_pref > {{if .none_cost}}{{.none_cost}}{{else}}100{{end}} then bgp_local_pref = bgp_local_pref - {{if .none_cost}}{{.none_cost}}{{else}}100{{end}}; else bgp_local_pref = 1;
             {{end}}
             accept;
         };
@@ -269,6 +271,7 @@ template bgp external_peer {
             if net ~ INTERNET then reject;
             if net ~ EXT_PREFIXES_V4 then {
               bgp_large_community.add(COMM_EXTERNAL);
+              bgp_local_pref = DEFAULT_LOCAL_PREF;
               accept;
             }
             reject;
@@ -288,6 +291,7 @@ template bgp external_peer {
             if net ~ INTERNET6 then reject;
             if net ~ EXT_PREFIXES_V6 then {
               bgp_large_community.add(COMM_EXTERNAL);
+              bgp_local_pref = DEFAULT_LOCAL_PREF;
               accept;
             }
             reject;
@@ -326,18 +330,18 @@ template bgp {{.template_name}} {
             {{if .has_import_v4}}
             if net ~ POL_{{.id}}_IMPORT_V4 then {
                 {{if $.confed_as}}
-                # Prefer routes with fewer confederation hops
-                if !defined(bgp_local_pref) then bgp_local_pref = 100;
-                if bgp_local_pref > 1 then bgp_local_pref = bgp_local_pref - 1;
+                # Prefer routes with fewer confederation hops / lower policy cost
+                if !defined(bgp_local_pref) then bgp_local_pref = DEFAULT_LOCAL_PREF;
+                if bgp_local_pref > {{.cost}} then bgp_local_pref = bgp_local_pref - {{.cost}}; else bgp_local_pref = 1;
                 {{end}}
                 accept;
             }
             reject;
             {{else}}
             {{if $.confed_as}}
-            # Prefer routes with fewer confederation hops
-            if !defined(bgp_local_pref) then bgp_local_pref = 100;
-            if bgp_local_pref > 1 then bgp_local_pref = bgp_local_pref - 1;
+            # Prefer routes with fewer confederation hops / lower policy cost
+            if !defined(bgp_local_pref) then bgp_local_pref = DEFAULT_LOCAL_PREF;
+            if bgp_local_pref > {{.cost}} then bgp_local_pref = bgp_local_pref - {{.cost}}; else bgp_local_pref = 1;
             {{end}}
             accept;
             {{end}}
@@ -359,18 +363,18 @@ template bgp {{.template_name}} {
             {{if .has_import_v6}}
             if net ~ POL_{{.id}}_IMPORT_V6 then {
                 {{if $.confed_as}}
-                # Prefer routes with fewer confederation hops
-                if !defined(bgp_local_pref) then bgp_local_pref = 100;
-                if bgp_local_pref > 1 then bgp_local_pref = bgp_local_pref - 1;
+                # Prefer routes with fewer confederation hops / lower policy cost
+                if !defined(bgp_local_pref) then bgp_local_pref = DEFAULT_LOCAL_PREF;
+                if bgp_local_pref > {{.cost}} then bgp_local_pref = bgp_local_pref - {{.cost}}; else bgp_local_pref = 1;
                 {{end}}
                 accept;
             }
             reject;
             {{else}}
             {{if $.confed_as}}
-            # Prefer routes with fewer confederation hops
-            if !defined(bgp_local_pref) then bgp_local_pref = 100;
-            if bgp_local_pref > 1 then bgp_local_pref = bgp_local_pref - 1;
+            # Prefer routes with fewer confederation hops / lower policy cost
+            if !defined(bgp_local_pref) then bgp_local_pref = DEFAULT_LOCAL_PREF;
+            if bgp_local_pref > {{.cost}} then bgp_local_pref = bgp_local_pref - {{.cost}}; else bgp_local_pref = 1;
             {{end}}
             accept;
             {{end}}

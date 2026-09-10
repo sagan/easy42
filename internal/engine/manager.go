@@ -2449,6 +2449,9 @@ func (m *Manager) CreateNetworkPolicy(p config.NetworkPolicy) (*config.NetworkPo
 	p.ID = id
 	p.Name = name
 	p.IsInternal = false
+	if p.Cost <= 0 {
+		p.Cost = 100
+	}
 	p.AllowedDstCIDRs = config.CleanPrefixes(p.AllowedDstCIDRs)
 	p.AllowedSrcCIDRs = config.CleanPrefixes(p.AllowedSrcCIDRs)
 	p.AllowedImportCIDRs = config.CleanPrefixes(p.AllowedImportCIDRs)
@@ -2490,8 +2493,13 @@ func (m *Manager) UpdateNetworkPolicy(id string, p config.NetworkPolicy) (*confi
 		return nil, fmt.Errorf("network policy %q not found", id)
 	}
 
+	if p.Cost <= 0 {
+		p.Cost = 100
+	}
+
 	cfg.NetworkPolicies[idx].Name = name
 	cfg.NetworkPolicies[idx].Description = strings.TrimSpace(p.Description)
+	cfg.NetworkPolicies[idx].Cost = p.Cost
 	cfg.NetworkPolicies[idx].AllowedDstCIDRs = config.CleanPrefixes(p.AllowedDstCIDRs)
 	cfg.NetworkPolicies[idx].AllowedSrcCIDRs = config.CleanPrefixes(p.AllowedSrcCIDRs)
 	cfg.NetworkPolicies[idx].AllowedImportCIDRs = config.CleanPrefixes(p.AllowedImportCIDRs)

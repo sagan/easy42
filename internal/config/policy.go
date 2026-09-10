@@ -23,6 +23,7 @@ type NetworkPolicy struct {
 	Name               string      `json:"name"`
 	Description        string      `json:"description,omitempty"`
 	IsInternal         bool        `json:"is_internal,omitempty"` // true for built-in virtual policies (read-only)
+	Cost               int         `json:"cost,omitempty"`        // Cost deducted from bgp_local_pref on internal hops (default 100)
 	AllowedDstCIDRs    []string    `json:"allowed_dst_cidrs,omitempty"`
 	AllowedSrcCIDRs    []string    `json:"allowed_src_cidrs,omitempty"`
 	AllowedImportCIDRs []string    `json:"allowed_import_cidrs,omitempty"`
@@ -30,6 +31,14 @@ type NetworkPolicy struct {
 	FilterForward      bool        `json:"filter_forward"`
 	FilterInput        bool        `json:"filter_input"`
 	SNAT               *SNATConfig `json:"snat,omitempty"`
+}
+
+// EffectiveCost returns the configured cost or default 100 if unset/non-positive
+func (p *NetworkPolicy) EffectiveCost() int {
+	if p != nil && p.Cost > 0 {
+		return p.Cost
+	}
+	return 100
 }
 
 // GetBuiltinPolicies returns the three standard built-in virtual policies: default, dn42, none.
@@ -48,6 +57,7 @@ func GetBuiltinPolicies(netSettings *NetworkSettings) []NetworkPolicy {
 			Name:           "Default (Internal)",
 			Description:    "Standard internal mesh policy with Internet route leak protection",
 			IsInternal:     true,
+			Cost:           100,
 			RejectInternet: true,
 			FilterForward:  false,
 			FilterInput:    false,
@@ -57,6 +67,7 @@ func GetBuiltinPolicies(netSettings *NetworkSettings) []NetworkPolicy {
 			Name:               "DN42 / External Peering",
 			Description:        "Peering policy for external/DN42 networks with BGP route filtering, ingress/egress firewall, and SNAT",
 			IsInternal:         true,
+			Cost:               100,
 			AllowedDstCIDRs:    dn42Prefixes,
 			AllowedSrcCIDRs:    dn42Prefixes,
 			AllowedImportCIDRs: dn42Prefixes,
@@ -74,6 +85,7 @@ func GetBuiltinPolicies(netSettings *NetworkSettings) []NetworkPolicy {
 			Name:           "None (Unrestricted)",
 			Description:    "Fully unrestricted routing and traffic forwarding without filters",
 			IsInternal:     true,
+			Cost:           100,
 			RejectInternet: false,
 			FilterForward:  false,
 			FilterInput:    false,

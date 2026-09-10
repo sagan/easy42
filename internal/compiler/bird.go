@@ -315,6 +315,7 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 			"id":                 cleanID,
 			"name":               pol.Name,
 			"template_name":      tmplName,
+			"cost":               pol.EffectiveCost(),
 			"reject_internet":    pol.RejectInternet,
 			"has_import_v4":      importV4 != "",
 			"has_import_v6":      importV6 != "",
@@ -330,7 +331,18 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 		return customBirdPolicies[i]["id"].(string) < customBirdPolicies[j]["id"].(string)
 	})
 
+	defaultCost := 100
+	if p, ok := policyMap[config.PolicyDefault]; ok {
+		defaultCost = p.EffectiveCost()
+	}
+	noneCost := 100
+	if p, ok := policyMap[config.PolicyNone]; ok {
+		noneCost = p.EffectiveCost()
+	}
+
 	ctx["links"] = nodeLinks
+	ctx["default_cost"] = defaultCost
+	ctx["none_cost"] = noneCost
 	ctx["has_external_links"] = hasExternalLinks
 	ctx["has_none_policy"] = hasNonePolicy
 	ctx["custom_bird_policies"] = customBirdPolicies

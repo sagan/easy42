@@ -33,6 +33,7 @@ export interface NetworkPolicy {
   name: string;
   description?: string;
   is_internal?: boolean;
+  cost?: number;
   allowed_dst_cidrs?: string[];
   allowed_src_cidrs?: string[];
   allowed_import_cidrs?: string[];
