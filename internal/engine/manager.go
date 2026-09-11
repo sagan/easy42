@@ -249,6 +249,12 @@ func (m *Manager) AddNode(node config.Node) error {
 		return errors.New("host and IP are required for managed nodes")
 	}
 
+	node.IP = strings.TrimSpace(node.IP)
+	node.IP6 = strings.TrimSpace(node.IP6)
+	if idx := strings.Index(node.IP6, "/"); idx != -1 {
+		node.IP6 = strings.TrimSpace(node.IP6[:idx])
+	}
+
 	cfg := m.store.Get()
 	for _, existing := range cfg.Nodes {
 		if strings.EqualFold(existing.Name, node.Name) {
@@ -256,6 +262,9 @@ func (m *Manager) AddNode(node config.Node) error {
 		}
 		if node.IP != "" && !node.IsExternal && !existing.IsExternal && existing.IP == node.IP {
 			return fmt.Errorf("node with IP %s already exists (%s)", node.IP, existing.Name)
+		}
+		if node.IP6 != "" && !node.IsExternal && !existing.IsExternal && existing.IP6 != "" && existing.IP6 == node.IP6 {
+			return fmt.Errorf("node with IPv6 %s already exists (%s)", node.IP6, existing.Name)
 		}
 	}
 
@@ -318,6 +327,19 @@ func (m *Manager) UpdateNode(name string, updated config.Node) error {
 		for _, n := range cfg.Nodes {
 			if n.Name == updated.Name {
 				return ErrNodeAlreadyExist
+			}
+		}
+	}
+
+	updated.IP = strings.TrimSpace(updated.IP)
+	updated.IP6 = strings.TrimSpace(updated.IP6)
+	if idx := strings.Index(updated.IP6, "/"); idx != -1 {
+		updated.IP6 = strings.TrimSpace(updated.IP6[:idx])
+	}
+	if updated.IP6 != "" && !updated.IsExternal {
+		for _, existing := range cfg.Nodes {
+			if existing.Name != name && !existing.IsExternal && existing.IP6 != "" && existing.IP6 == updated.IP6 {
+				return fmt.Errorf("node with IPv6 %s already exists (%s)", updated.IP6, existing.Name)
 			}
 		}
 	}

@@ -1,8 +1,14 @@
 define SELF_IP = {{ .ip }};
+{{if .ip6}}
+define SELF_IP6 = {{ .ip6 }};
+{{end}}
 define SELF_AS = {{ .asn }};
 define TABLE = {{ .table }};
 {{if .external_ip}}
 define EXTERNAL_IP = {{ .external_ip }};
+{{end}}
+{{if .external_ip6}}
+define EXTERNAL_IP6 = {{ .external_ip6 }};
 {{end}}
 {{if .use_external_table}}
 define EXTERNAL_TABLE = {{ .external_table }};
@@ -148,6 +154,9 @@ protocol kernel kernel_{{ .table}} {
 protocol kernel kernel_v6 {
     ipv6 {
         export filter {
+            {{if .ip6}}
+            krt_prefsrc = {{ .ip6 }};
+            {{end}}
             if net ~ INTERNET6 then reject;
             {{if .use_external_table}}
             if (COMM_EXTERNAL ~ bgp_large_community) then reject;
@@ -177,6 +186,8 @@ protocol kernel kernel_ext_v6 {
         export filter {
             {{if .external_ip6}}
             krt_prefsrc = {{ .external_ip6 }};
+            {{else if .ip6}}
+            krt_prefsrc = {{ .ip6 }};
             {{end}}
             accept;
         };
@@ -194,10 +205,15 @@ protocol static static_self {
     {{end}}
 }
 
-{{if .external_ip6}}
+{{if or .ip6 .external_ip6}}
 protocol static static_self_v6 {
     ipv6;
+    {{if .ip6}}
+    route {{ .ip6 }}/128 reject;
+    {{end}}
+    {{if and .external_ip6 (ne .external_ip6 .ip6)}}
     route {{ .external_ip6 }}/128 reject;
+    {{end}}
 }
 {{end}}
 

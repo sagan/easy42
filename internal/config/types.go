@@ -122,6 +122,7 @@ type Node struct {
 	IsExternal    bool              `json:"is_external,omitempty"` // True if external unmanaged peer (e.g. DN42)
 	Description   string            `json:"description,omitempty"` // Optional description / contact info
 	IP            string            `json:"ip,omitempty"`          // Main IPv4 (e.g. 192.168.100.1)
+	IP6           string            `json:"ip6,omitempty"`         // Main IPv6 (e.g. fd42:a159:f9f0::1)
 	ExternalIP    string            `json:"external_ip,omitempty"`  // External / DN42 IPv4 (e.g. 172.20.x.x)
 	ExternalIP6   string            `json:"external_ip6,omitempty"` // External / DN42 IPv6 (e.g. fd42:a159:f9f0::d)
 	Interface     string            `json:"interface,omitempty"`   // Main IP interface name (e.g. lo, dn42, eth0)
@@ -148,12 +149,15 @@ func (n *Node) ExternalIp() string {
 	return strings.TrimSpace(n.IP)
 }
 
-// ExternalIp6 returns ExternalIP6 if set
+// ExternalIp6 returns ExternalIP6 if set, or IP6 if not set
 func (n *Node) ExternalIp6() string {
 	if n == nil {
 		return ""
 	}
-	return strings.TrimSpace(n.ExternalIP6)
+	if strings.TrimSpace(n.ExternalIP6) != "" {
+		return strings.TrimSpace(n.ExternalIP6)
+	}
+	return strings.TrimSpace(n.IP6)
 }
 
 // LinkEnd represents one endpoint of a WireGuard link

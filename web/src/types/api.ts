@@ -56,6 +56,7 @@ export interface Node {
   is_external?: boolean;
   description?: string;
   ip?: string;
+  ip6?: string;
   external_ip?: string;
   external_ip6?: string;
   interface?: string;

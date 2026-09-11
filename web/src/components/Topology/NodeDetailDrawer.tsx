@@ -239,7 +239,7 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
           NODE CONFIGURATION
         </Typography>
 
-        <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}>
+        <Box sx={{ display: "grid", gridTemplateColumns: node.ip6 ? "1fr 1fr" : "1fr 1fr", gap: 1.5 }}>
           <Box sx={{ p: 1.5, borderRadius: 2, backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
             <Typography variant="caption" sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}>
               <Globe size={12} /> Main IPv4
@@ -258,6 +258,17 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
             </Typography>
           </Box>
         </Box>
+
+        {node.ip6 ? (
+          <Box sx={{ p: 1.5, borderRadius: 2, backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
+            <Typography variant="caption" sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}>
+              <Globe size={12} /> Main IPv6
+            </Typography>
+            <Typography variant="body2" className="mono-font" sx={{ fontWeight: 600, color: "#0891B2", mt: 0.5 }}>
+              {node.ip6}
+            </Typography>
+          </Box>
+        ) : null}
 
         {node.external_ip ? (
           <Box sx={{ p: 1.5, borderRadius: 2, backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0" }}>

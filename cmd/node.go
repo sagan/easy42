@@ -15,6 +15,7 @@ var (
 	nodeName        string
 	nodeHost        string
 	nodeIP          string
+	nodeIP6         string
 	nodeExternalIP  string
 	nodeExternalIP6 string
 	nodeIface       string
@@ -61,6 +62,7 @@ var nodeAddCmd = &cobra.Command{
 			Name:        nodeName,
 			Host:        nodeHost,
 			IP:          nodeIP,
+			IP6:         nodeIP6,
 			ExternalIP:  nodeExternalIP,
 			ExternalIP6: nodeExternalIP6,
 			Interface:   nodeIface,
@@ -76,7 +78,11 @@ var nodeAddCmd = &cobra.Command{
 			return err
 		}
 
-		fmt.Printf("Successfully added node %s (%s, IP: %s)\n", node.Name, node.Host, node.IP)
+		if node.IP6 != "" {
+			fmt.Printf("Successfully added node %s (%s, IP: %s, IP6: %s)\n", node.Name, node.Host, node.IP, node.IP6)
+		} else {
+			fmt.Printf("Successfully added node %s (%s, IP: %s)\n", node.Name, node.Host, node.IP)
+		}
 		return nil
 	},
 }
@@ -193,6 +199,7 @@ func init() {
 	nodeAddCmd.Flags().StringVarP(&nodeName, "name", "n", "", "Node name (max 11 chars)")
 	nodeAddCmd.Flags().StringVarP(&nodeHost, "host", "H", "", "SSH host or alias")
 	nodeAddCmd.Flags().StringVarP(&nodeIP, "ip", "i", "", "Main IPv4 address")
+	nodeAddCmd.Flags().StringVar(&nodeIP6, "ip6", "", "Main IPv6 address")
 	nodeAddCmd.Flags().StringVar(&nodeExternalIP, "external-ip", "", "External/DN42 IPv4 address")
 	nodeAddCmd.Flags().StringVar(&nodeExternalIP6, "external-ip6", "", "External/DN42 IPv6 address")
 	nodeAddCmd.Flags().StringVar(&nodeIface, "iface", "lo", "Main IP interface name")

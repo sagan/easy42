@@ -182,11 +182,12 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
       <Box sx={{ p: 1.5, display: "flex", flexDirection: "column", gap: 1 }}>
         {/* Main IP & Iface */}
         <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, minWidth: 0 }}>
             <Globe size={13} color="#64748B" />
             <Typography
               variant="body2"
               className="mono-font"
+              noWrap
               sx={{ fontWeight: 600, fontSize: "0.8rem", color: isExternal ? "#7C3AED" : "#0891B2" }}
             >
               {node.ip || (isExternal ? "Unspecified IP" : "No IP")}
@@ -207,6 +208,21 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
             />
           )}
         </Box>
+
+        {node.ip6 && (
+          <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, mt: -0.5 }}>
+            <Globe size={11} color="#94A3B8" />
+            <Typography
+              variant="caption"
+              className="mono-font"
+              noWrap
+              sx={{ fontWeight: 500, fontSize: "0.72rem", color: "#64748B" }}
+              title={`Main IPv6: ${node.ip6}`}
+            >
+              {node.ip6}
+            </Typography>
+          </Box>
+        )}
 
         {/* ASN & Entrypoints */}
         <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mt: 0.5 }}>

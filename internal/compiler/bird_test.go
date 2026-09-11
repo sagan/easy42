@@ -1076,3 +1076,96 @@ func TestLinkEndCostOverrideBIRD(t *testing.T) {
 	}
 }
 
+func TestGenerateBirdConfigWithIP6(t *testing.T) {
+	nodeManaged := config.Node{
+		Name:      "router1",
+		Host:      "10.0.0.1",
+		IP:        "192.168.100.1",
+		IP6:       "fd42:a159:f9f0::1",
+		ASN:       4224420001,
+		Table:     254,
+		Interface: "lo",
+	}
+	nodePeer := config.Node{
+		Name:      "router2",
+		Host:      "10.0.0.2",
+		IP:        "192.168.100.2",
+		IP6:       "fd42:a159:f9f0::2",
+		ASN:       4224420002,
+		Table:     254,
+		Interface: "lo",
+	}
+	link := config.Link{
+		From: config.LinkEnd{
+			Name:      "router1",
+			Interface: "wg42router2",
+			Address:   "fe80::1/64",
+		},
+		To: config.LinkEnd{
+			Name:      "router2",
+			Interface: "wg42router1",
+			Address:   "fe80::2/64",
+		},
+	}
+
+	// 1. Node with IP6
+	conf, err := GenerateBirdConfig(&nodeManaged, []config.Node{nodeManaged, nodePeer}, []config.Link{link})
+	if err != nil {
+		t.Fatalf("GenerateBirdConfig failed: %v", err)
+	}
+
+	if !strings.Contains(conf, "define SELF_IP6 = fd42:a159:f9f0::1;") {
+		t.Errorf("Expected define SELF_IP6 = fd42:a159:f9f0::1;, got:\n%s", conf)
+	}
+	if !strings.Contains(conf, "protocol static static_self_v6 {") {
+		t.Errorf("Expected protocol static static_self_v6 {, got:\n%s", conf)
+	}
+	if !strings.Contains(conf, "route fd42:a159:f9f0::1/128 reject;") {
+		t.Errorf("Expected route fd42:a159:f9f0::1/128 reject;, got:\n%s", conf)
+	}
+	if !strings.Contains(conf, "krt_prefsrc = fd42:a159:f9f0::1;") {
+		t.Errorf("Expected krt_prefsrc in kernel_v6, got:\n%s", conf)
+	}
+	validateBirdSyntax(t, conf)
+
+	// 2. Node with both IP6 and ExternalIP6
+	nodeManagedWithBoth := nodeManaged
+	nodeManagedWithBoth.ExternalIP6 = "fd42:a159:f9f0::d"
+	confBoth, err := GenerateBirdConfig(&nodeManagedWithBoth, []config.Node{nodeManagedWithBoth, nodePeer}, []config.Link{link})
+	if err != nil {
+		t.Fatalf("GenerateBirdConfig failed: %v", err)
+	}
+	if !strings.Contains(confBoth, "route fd42:a159:f9f0::1/128 reject;") {
+		t.Errorf("Expected route fd42:a159:f9f0::1/128 reject;, got:\n%s", confBoth)
+	}
+	if !strings.Contains(confBoth, "route fd42:a159:f9f0::d/128 reject;") {
+		t.Errorf("Expected route fd42:a159:f9f0::d/128 reject;, got:\n%s", confBoth)
+	}
+	validateBirdSyntax(t, confBoth)
+
+	// 3. Node with neither IP6 nor ExternalIP6
+	nodeNoIP6 := nodeManaged
+	nodeNoIP6.IP6 = ""
+	confNoIP6, err := GenerateBirdConfig(&nodeNoIP6, []config.Node{nodeNoIP6, nodePeer}, []config.Link{link})
+	if err != nil {
+		t.Fatalf("GenerateBirdConfig failed: %v", err)
+	}
+	if strings.Contains(confNoIP6, "protocol static static_self_v6") {
+		t.Errorf("Did not expect protocol static static_self_v6 when neither IP6 nor ExternalIP6 is set:\n%s", confNoIP6)
+	}
+	validateBirdSyntax(t, confNoIP6)
+
+	// 4. Node with IP6 having CIDR mask /128
+	nodeWithMask := nodeManaged
+	nodeWithMask.IP6 = "fd42:a159:f9f0::1/128"
+	confMask, err := GenerateBirdConfig(&nodeWithMask, []config.Node{nodeWithMask, nodePeer}, []config.Link{link})
+	if err != nil {
+		t.Fatalf("GenerateBirdConfig failed: %v", err)
+	}
+	if !strings.Contains(confMask, "route fd42:a159:f9f0::1/128 reject;") {
+		t.Errorf("Expected cleaned route fd42:a159:f9f0::1/128 reject;, got:\n%s", confMask)
+	}
+	validateBirdSyntax(t, confMask)
+}
+
+

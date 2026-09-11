@@ -1,9 +1,14 @@
 #!/usr/sbin/nft -f
 
 define easy42_ifname = { "wg42*" }
+define tunnel_ifname = {"tun*", "wg*", "zt*", "tailscale*"}
 
 define private_ip = { 192.168.0.0/16, 10.0.0.0/8, 172.16.0.0/12 }
 define private_ip6 = { fc00::/8, fd00::/8 }
+define self_ip = {{ .ip }}
+{{- if .ip6 }}
+define self_ip6 = {{ .ip6 }}
+{{- end }}
 {{- if .external_ip }}
 define external_ip = {{ .external_ip }} # local node external ip
 {{- end }}
@@ -44,6 +49,11 @@ table inet easy42 {
     type ifname
     flags interval
     elements = $easy42_ifname
+  }
+  set tunnel_ifname {
+    type ifname
+    flags interval
+    elements = $tunnel_ifname
   }
 {{- range .nft_policies }}
   set pol_{{ .id }}_ifname {
@@ -162,6 +172,11 @@ table inet easy42 {
       {{- end }}
     {{- end }}
   {{- end }}
+{{- end }}
+    # Source ip come from other tunnels may not be routable in the network and return traffic may have problem
+    iifname @tunnel_ifname iifname != @easy42_ifname oifname @easy42_ifname meta nfproto ipv4 snat to $self_ip
+{{- if .ip6 }}
+    iifname @tunnel_ifname iifname != @easy42_ifname oifname @easy42_ifname meta nfproto ipv6 snat to $self_ip6
 {{- end }}
     ip daddr @private_ip oifname @easy42_ifname accept
     ip6 daddr @private_ip6 oifname @easy42_ifname accept

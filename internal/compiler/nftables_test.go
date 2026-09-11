@@ -416,3 +416,37 @@ func TestInputFilterAllProtocols(t *testing.T) {
 		}
 	}
 }
+
+func TestGenerateNftablesConfigWithIP6(t *testing.T) {
+	node := config.Node{
+		Name: "node-ip6",
+		IP:   "192.168.100.1",
+		IP6:  "fd42:a159:f9f0::1",
+		ASN:  4224420001,
+	}
+
+	conf, err := GenerateNftablesConfig(&node, []config.Node{node}, nil)
+	if err != nil {
+		t.Fatalf("GenerateNftablesConfig failed: %v", err)
+	}
+
+	if !strings.Contains(conf, "define self_ip6 = fd42:a159:f9f0::1") {
+		t.Errorf("Expected define self_ip6 = fd42:a159:f9f0::1, got:\n%s", conf)
+	}
+	if !strings.Contains(conf, "meta nfproto ipv6 snat to $self_ip6") {
+		t.Errorf("Expected ipv6 snat rule to self_ip6, got:\n%s", conf)
+	}
+
+	if nftPath, err := exec.LookPath("nft"); err == nil {
+		tmpFile := filepath.Join(t.TempDir(), "easy42.nft")
+		if err := os.WriteFile(tmpFile, []byte(conf), 0644); err != nil {
+			t.Fatalf("WriteFile failed: %v", err)
+		}
+		cmd := exec.Command(nftPath, "-c", "-f", tmpFile)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("nft -c -f validation failed: %v\nOutput:\n%s\nConfig:\n%s", err, string(out), conf)
+		}
+	}
+}
+

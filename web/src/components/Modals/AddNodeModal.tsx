@@ -50,6 +50,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
   // Form state
   const [name, setName] = useState("");
   const [ip, setIp] = useState("");
+  const [ip6, setIp6] = useState("");
   const [iface, setIface] = useState("lo");
   const [asn, setAsn] = useState<number>(4224420001);
   const [nodeTags, setNodeTags] = useState("");
@@ -81,6 +82,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
       setName(nodeToEdit.name);
       setSshHost(nodeToEdit.host || "");
       setIp(nodeToEdit.ip || "");
+      setIp6(nodeToEdit.ip6 || "");
       setIface(nodeToEdit.interface || "lo");
       setAsn(nodeToEdit.asn);
       setIsExternal(Boolean(nodeToEdit.is_external));
@@ -145,6 +147,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
       setName("");
       setSshHost("");
       setIp("");
+      setIp6("");
       setIface("lo");
       setAsn(4224420001);
       setIsExternal(false);
@@ -346,6 +349,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
         name: name.trim(),
         asn: Number(asn),
         ip: ip.trim() || undefined,
+        ip6: ip6.trim() || undefined,
         is_external: true,
         entrypoints: finalEntrypoints.length > 0 ? finalEntrypoints : undefined,
         description: description.trim() || undefined,
@@ -377,6 +381,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
         name: name.trim(),
         host: sshHost.trim(),
         ip: ip.trim(),
+        ip6: ip6.trim() ? ip6.trim() : undefined,
         interface: iface.trim(),
         asn: Number(asn),
         entrypoints: finalEntrypoints,
@@ -525,16 +530,29 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
 
               <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
                 <TextField
-                  label="Router IP (Optional)"
+                  label="Router IPv4 (Optional)"
                   size="small"
                   value={ip}
                   onChange={(e) => setIp(e.target.value)}
-                  placeholder="e.g. 172.20.0.1 or fe80::1"
-                  helperText="Remote peer router or loopback IP"
+                  placeholder="e.g. 172.20.0.1"
+                  helperText="Remote peer router or loopback IPv4"
                   disabled={saving}
                 />
 
                 <TextField
+                  label="Router IPv6 (Optional)"
+                  size="small"
+                  value={ip6}
+                  onChange={(e) => setIp6(e.target.value)}
+                  placeholder="e.g. fd42:1::1"
+                  helperText="Remote peer router or loopback IPv6"
+                  disabled={saving}
+                />
+              </Box>
+
+              <Box>
+                <TextField
+                  fullWidth
                   label="Tags (comma-separated)"
                   size="small"
                   value={nodeTags}
@@ -719,7 +737,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                   />
                 </Box>
 
-                <Box sx={{ display: "grid", gridTemplateColumns: "1.2fr 0.8fr", gap: 2 }}>
+                <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
                   {discoveredIps.length > 0 ? (
                     <TextField
                       select
@@ -753,6 +771,18 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                   )}
 
                   <TextField
+                    label="Main IPv6 Address (Optional)"
+                    size="small"
+                    value={ip6}
+                    onChange={(e) => setIp6(e.target.value)}
+                    placeholder="e.g. fd42:1::1"
+                    helperText="Advertised as /128 via BGP"
+                    disabled={saving}
+                  />
+                </Box>
+
+                <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
+                  <TextField
                     label="Interface Name"
                     size="small"
                     value={iface}
@@ -761,19 +791,17 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                     required
                     disabled={saving}
                   />
-                </Box>
 
-                <Box>
                   <TextField
-                    fullWidth
                     label="Node Tags (comma-separated)"
                     size="small"
                     value={nodeTags}
                     onChange={(e) => setNodeTags(e.target.value)}
                     placeholder="e.g. core, eu, gateway"
-                    helperText="Categorize this node (e.g. core, eu, gateway) for grouping and filtering"
+                    helperText="Categorize this node for grouping and filtering"
                     disabled={saving}
                   />
+                </Box>
                   {nodeTags
                     .split(",")
                     .map((t) => t.trim())
@@ -801,7 +829,6 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                         ))}
                     </Box>
                   )}
-                </Box>
               </Box>
 
               {/* Step 3: Entrypoints */}

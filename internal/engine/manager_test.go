@@ -968,3 +968,75 @@ func TestUpdateStatePartialNodeFilter(t *testing.T) {
 		t.Errorf("Partial update for node-a should have preserved node-b in state store")
 	}
 }
+
+func TestNodeIP6(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "easy42-engine-ip6-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	store := config.NewStore(tempDir)
+	pass, err := store.Initialize()
+	if err != nil {
+		t.Fatalf("Failed to init store: %v", err)
+	}
+
+	mgr := NewManager(store)
+	if err := mgr.Unlock(pass); err != nil {
+		t.Fatalf("Failed to unlock manager: %v", err)
+	}
+
+	node1 := config.Node{
+		Name:      "node-1",
+		Host:      "192.168.1.1",
+		IP:        "192.168.100.1",
+		IP6:       "fd42:a159:f9f0::1",
+		Interface: "lo",
+		ASN:       4224420001,
+	}
+	if err := mgr.AddNode(node1); err != nil {
+		t.Fatalf("Failed to add node1: %v", err)
+	}
+
+	saved := mgr.GetNode("node-1")
+	if saved == nil || saved.IP6 != "fd42:a159:f9f0::1" {
+		t.Fatalf("Expected saved node1 to have IP6 fd42:a159:f9f0::1, got %+v", saved)
+	}
+
+	// Adding another node with duplicate IP6 should fail
+	node2 := config.Node{
+		Name:      "node-2",
+		Host:      "192.168.1.2",
+		IP:        "192.168.100.2",
+		IP6:       "fd42:a159:f9f0::1",
+		Interface: "lo",
+		ASN:       4224420002,
+	}
+	if err := mgr.AddNode(node2); err == nil {
+		t.Fatalf("Expected error when adding duplicate IP6, got nil")
+	}
+
+	// Adding node with unique IP6 should succeed
+	node2.IP6 = "fd42:a159:f9f0::2"
+	if err := mgr.AddNode(node2); err != nil {
+		t.Fatalf("Failed to add node2 with unique IP6: %v", err)
+	}
+
+	// Updating node2 to collide with node1's IP6 should fail
+	node2Update := *mgr.GetNode("node-2")
+	node2Update.IP6 = "fd42:a159:f9f0::1"
+	if err := mgr.UpdateNode("node-2", node2Update); err == nil {
+		t.Fatalf("Expected error when updating to duplicate IP6, got nil")
+	}
+
+	// Updating node2 with non-colliding IP6 should succeed
+	node2Update.IP6 = "fd42:a159:f9f0::22"
+	if err := mgr.UpdateNode("node-2", node2Update); err != nil {
+		t.Fatalf("Failed to update node2 IP6: %v", err)
+	}
+	if mgr.GetNode("node-2").IP6 != "fd42:a159:f9f0::22" {
+		t.Fatalf("Expected updated IP6 to be fd42:a159:f9f0::22, got %s", mgr.GetNode("node-2").IP6)
+	}
+}
+

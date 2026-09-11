@@ -106,6 +106,17 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 	useExtTable := extTable > 0 && extTable != table
 	ctx["external_table"] = extTable
 	ctx["use_external_table"] = useExtTable
+	ctx["ip"] = node.IP
+
+	ip6 := strings.TrimSpace(node.IP6)
+	if idx := strings.Index(ip6, "/"); idx != -1 {
+		ip6 = strings.TrimSpace(ip6[:idx])
+	}
+	if ip6 != "" {
+		ctx["ip6"] = ip6
+	} else {
+		delete(ctx, "ip6")
+	}
 
 	extIP := strings.TrimSpace(node.ExternalIP)
 	if extIP != "" {
@@ -352,6 +363,7 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 			remoteNodeMap["asn"] = rl.remoteNode.ASN
 			remoteNodeMap["name"] = rl.remoteNode.Name
 			remoteNodeMap["ip"] = rl.remoteNode.IP
+			remoteNodeMap["ip6"] = rl.remoteNode.IP6
 			remoteNodeMap["external_ip"] = rl.remoteNode.ExternalIP
 			remoteNodeMap["external_ip6"] = rl.remoteNode.ExternalIP6
 			remoteNodeMap["interface"] = rl.remoteNode.Interface
