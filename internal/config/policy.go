@@ -26,6 +26,7 @@ type NetworkPolicy struct {
 	Description        string      `json:"description,omitempty"`
 	IsInternal         bool        `json:"is_internal,omitempty"` // true for built-in virtual policies (read-only)
 	Cost               int         `json:"cost,omitempty"`        // Cost deducted from bgp_local_pref on internal hops (default 100)
+	LocalNetworks      []string    `json:"local_networks,omitempty"`
 	AllowedDstCIDRs    []string    `json:"allowed_dst_cidrs,omitempty"`
 	AllowedSrcCIDRs    []string    `json:"allowed_src_cidrs,omitempty"`
 	AllowedImportCIDRs []string    `json:"allowed_import_cidrs,omitempty"`
@@ -59,55 +60,48 @@ func CleanPortList(ports []string) []string {
 		return nil
 	}
 
-	var rawTokens []string
-	for _, p := range ports {
-		fields := strings.FieldsFunc(p, func(r rune) bool {
-			return r == ',' || r == '\n' || r == '\r' || r == '\t' || r == ' '
-		})
-		rawTokens = append(rawTokens, fields...)
-	}
-
-	var result []string
 	seen := make(map[string]bool)
+	var result []string
 
-	for _, tok := range rawTokens {
-		tok = strings.TrimSpace(tok)
-		if tok == "" {
-			continue
-		}
-
-		if tok == "*" || strings.EqualFold(tok, "all") {
-			if !seen["all"] {
-				seen["all"] = true
-				result = append(result, "all")
+	for _, entry := range ports {
+		for _, raw := range strings.FieldsFunc(entry, func(r rune) bool {
+			return r == ',' || r == '\n' || r == '\r' || r == '\t' || r == ' '
+		}) {
+			p := strings.TrimSpace(raw)
+			if p == "" {
+				continue
 			}
-			continue
-		}
 
-		// Check if it's a range "start-end"
-		if strings.Contains(tok, "-") {
-			parts := strings.Split(tok, "-")
-			if len(parts) == 2 {
-				p1, err1 := strconv.Atoi(strings.TrimSpace(parts[0]))
-				p2, err2 := strconv.Atoi(strings.TrimSpace(parts[1]))
-				if err1 == nil && err2 == nil && p1 > 0 && p1 <= 65535 && p2 > 0 && p2 <= 65535 && p1 <= p2 {
-					norm := fmt.Sprintf("%d-%d", p1, p2)
-					if !seen[norm] {
-						seen[norm] = true
-						result = append(result, norm)
+			// Wildcards
+			if strings.EqualFold(p, "all") || p == "*" {
+				if !seen["all"] {
+					seen["all"] = true
+					result = append(result, "all")
+				}
+				continue
+			}
+
+			// Check if port range: low-high
+			if parts := strings.Split(p, "-"); len(parts) == 2 {
+				low, err1 := strconv.Atoi(strings.TrimSpace(parts[0]))
+				high, err2 := strconv.Atoi(strings.TrimSpace(parts[1]))
+				if err1 == nil && err2 == nil && low > 0 && high <= 65535 && low <= high {
+					normalized := fmt.Sprintf("%d-%d", low, high)
+					if !seen[normalized] {
+						seen[normalized] = true
+						result = append(result, normalized)
 					}
 				}
+				continue
 			}
-			continue
-		}
 
-		// Single port
-		p, err := strconv.Atoi(tok)
-		if err == nil && p > 0 && p <= 65535 {
-			norm := strconv.Itoa(p)
-			if !seen[norm] {
-				seen[norm] = true
-				result = append(result, norm)
+			// Single port
+			if num, err := strconv.Atoi(p); err == nil && num > 0 && num <= 65535 {
+				normalized := strconv.Itoa(num)
+				if !seen[normalized] {
+					seen[normalized] = true
+					result = append(result, normalized)
+				}
 			}
 		}
 	}
@@ -115,7 +109,7 @@ func CleanPortList(ports []string) []string {
 	return result
 }
 
-// GetBuiltinPolicies returns the three standard built-in virtual policies: default, dn42, none.
+// GetBuiltinPolicies returns the immutable baseline policies always present in easy42.
 // For dn42, default CIDRs are populated from global NetworkSettings if provided.
 func GetBuiltinPolicies(netSettings *NetworkSettings) []NetworkPolicy {
 	var dn42Prefixes []string
@@ -123,6 +117,11 @@ func GetBuiltinPolicies(netSettings *NetworkSettings) []NetworkPolicy {
 		dn42Prefixes = CleanPrefixes(netSettings.Prefixes)
 	} else {
 		dn42Prefixes = []string{"172.20.0.0/14{21,29}", "fd00::/8{44,64}"}
+	}
+
+	var localDN42 []string
+	if netSettings != nil && len(netSettings.LocalDN42Networks) > 0 {
+		localDN42 = CleanPrefixes(netSettings.LocalDN42Networks)
 	}
 
 	return []NetworkPolicy{
@@ -142,6 +141,7 @@ func GetBuiltinPolicies(netSettings *NetworkSettings) []NetworkPolicy {
 			Description:        "Peering policy for external/DN42 networks with BGP route filtering, ingress/egress firewall, and SNAT",
 			IsInternal:         true,
 			Cost:               100,
+			LocalNetworks:      localDN42,
 			AllowedDstCIDRs:    dn42Prefixes,
 			AllowedSrcCIDRs:    dn42Prefixes,
 			AllowedImportCIDRs: dn42Prefixes,

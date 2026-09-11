@@ -213,6 +213,13 @@ func BuildNftablesNodeContext(
 			srcV6 = FormatNftPrefixList(pol.AllowedSrcCIDRs, nil, true)
 		}
 
+		localV4 := ""
+		localV6 := ""
+		if len(pol.LocalNetworks) > 0 {
+			localV4 = FormatNftPrefixList(pol.LocalNetworks, nil, false)
+			localV6 = FormatNftPrefixList(pol.LocalNetworks, nil, true)
+		}
+
 		// Input traffic filtering
 		var inputAllTCP, inputAllUDP bool
 		var inputTCPPortsStr, inputUDPPortsStr string
@@ -285,6 +292,8 @@ func BuildNftablesNodeContext(
 			"allowed_dst_v6":    dstV6,
 			"allowed_src_v4":    srcV4,
 			"allowed_src_v6":    srcV6,
+			"local_v4":          localV4,
+			"local_v6":          localV6,
 			"filter_forward":    pol.FilterForward,
 			"filter_input":      pol.FilterInput,
 			"input_allow_icmp":  pol.InputAllowICMP,

@@ -10,8 +10,9 @@ import (
 
 // NetworkSettings represents global network-wide peering and routing configurations
 type NetworkSettings struct {
-	PublicASN uint64   `json:"public_asn,omitempty"` // Public / DN42 ASN (e.g. 4242421234)
-	Prefixes  []string `json:"prefixes,omitempty"`   // Prefixes permitted for peering (export and import)
+	PublicASN         uint64   `json:"public_asn,omitempty"`          // Public / DN42 ASN (e.g. 4242421234)
+	Prefixes          []string `json:"prefixes,omitempty"`            // Prefixes permitted for peering (export and import)
+	LocalDN42Networks []string `json:"local_dn42_networks,omitempty"` // Local DN42 networks protected by filter_input
 }
 
 // Config represents the top-level configuration stored in config.json

@@ -151,6 +151,7 @@ func (s *Store) Load() (*Config, error) {
 	}
 
 	cfg.NetworkSettings.Prefixes = CleanPrefixes(cfg.NetworkSettings.Prefixes)
+	cfg.NetworkSettings.LocalDN42Networks = CleanPrefixes(cfg.NetworkSettings.LocalDN42Networks)
 
 	s.config = &cfg
 	return &cfg, nil
@@ -173,6 +174,7 @@ func (s *Store) Save(cfg *Config) error {
 	}
 
 	cfg.NetworkSettings.Prefixes = CleanPrefixes(cfg.NetworkSettings.Prefixes)
+	cfg.NetworkSettings.LocalDN42Networks = CleanPrefixes(cfg.NetworkSettings.LocalDN42Networks)
 
 	data, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {

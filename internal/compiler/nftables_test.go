@@ -450,3 +450,92 @@ func TestGenerateNftablesConfigWithIP6(t *testing.T) {
 	}
 }
 
+func TestLocalNetworksForwardFilter(t *testing.T) {
+	nodeBar := config.Node{
+		Name:        "bar",
+		IP:          "172.20.229.2",
+		ExternalIP:  "172.20.229.2",
+		ExternalIP6: "fd42:a159:f9f0::2",
+		ASN:         4242420002,
+	}
+	nodeFoo := config.Node{
+		Name: "foo",
+		IP:   "172.20.229.1",
+		ASN:  4242420001,
+	}
+	nodeExt := config.Node{
+		Name:       "external-peer",
+		IsExternal: true,
+		ASN:        4242429999,
+	}
+	allNodes := []config.Node{nodeBar, nodeFoo, nodeExt}
+
+	links := []config.Link{
+		{
+			From: config.LinkEnd{Name: "bar", Interface: "wg42-ext", Policy: config.PolicyDN42},
+			To:   config.LinkEnd{Name: "external-peer", Interface: "wg42"},
+		},
+		{
+			From: config.LinkEnd{Name: "bar", Interface: "wg42-foo", Policy: config.PolicyDefault},
+			To:   config.LinkEnd{Name: "foo", Interface: "wg42-bar"},
+		},
+	}
+
+	netSettings := &config.NetworkSettings{
+		PublicASN:         4242420000,
+		LocalDN42Networks: []string{"172.20.229.0/27", "fd42:a159:f9f0::/48"},
+	}
+
+	conf, err := GenerateNftablesConfig(&nodeBar, allNodes, links, netSettings)
+	if err != nil {
+		t.Fatalf("GenerateNftablesConfig failed: %v", err)
+	}
+
+	// Verify local definitions
+	if !strings.Contains(conf, "define pol_dn42_local_v4 = { 172.20.229.0/27 }") {
+		t.Errorf("Expected define pol_dn42_local_v4 in conf, got:\n%s", conf)
+	}
+	if !strings.Contains(conf, "define pol_dn42_local_v6 = { fd42:a159:f9f0::/48 }") {
+		t.Errorf("Expected define pol_dn42_local_v6 in conf, got:\n%s", conf)
+	}
+
+	// Verify local sets
+	if !strings.Contains(conf, "elements = $pol_dn42_local_v4") {
+		t.Errorf("Expected set pol_dn42_local_v4 in conf, got:\n%s", conf)
+	}
+	if !strings.Contains(conf, "elements = $pol_dn42_local_v6") {
+		t.Errorf("Expected set pol_dn42_local_v6 in conf, got:\n%s", conf)
+	}
+
+	// Verify filter_forward rules for local networks
+	expectedRules := []string{
+		"iifname @pol_dn42_ifname ip daddr @pol_dn42_local_v4 meta l4proto tcp th dport { 179 } accept",
+		"iifname @pol_dn42_ifname ip daddr @pol_dn42_local_v4 meta l4proto udp th dport { 53 } accept",
+		"iifname @pol_dn42_ifname ip daddr @pol_dn42_local_v4 meta l4proto icmp accept",
+		"iifname @pol_dn42_ifname ip daddr @pol_dn42_local_v4 counter drop",
+		"iifname @pol_dn42_ifname ip6 daddr @pol_dn42_local_v6 meta l4proto tcp th dport { 179 } accept",
+		"iifname @pol_dn42_ifname ip6 daddr @pol_dn42_local_v6 meta l4proto udp th dport { 53 } accept",
+		"iifname @pol_dn42_ifname ip6 daddr @pol_dn42_local_v6 meta l4proto ipv6-icmp accept",
+		"iifname @pol_dn42_ifname ip6 daddr @pol_dn42_local_v6 counter drop",
+	}
+	for _, rule := range expectedRules {
+		if !strings.Contains(conf, rule) {
+			t.Errorf("Expected rule %q in conf, got:\n%s", rule, conf)
+		}
+	}
+
+	// Verify nft -c -f validation passes
+	if nftPath, err := exec.LookPath("nft"); err == nil {
+		tmpFile := filepath.Join(t.TempDir(), "easy42.nft")
+		if err := os.WriteFile(tmpFile, []byte(conf), 0644); err != nil {
+			t.Fatalf("WriteFile failed: %v", err)
+		}
+		cmd := exec.Command(nftPath, "-c", "-f", tmpFile)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("nft -c -f validation failed: %v\nOutput:\n%s\nConfig:\n%s", err, string(out), conf)
+		}
+	}
+}
+
+

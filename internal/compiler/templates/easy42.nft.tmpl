@@ -29,6 +29,12 @@ define pol_{{ .id }}_src_v4 = {{ .allowed_src_v4 }}
 {{- if .allowed_src_v6 }}
 define pol_{{ .id }}_src_v6 = {{ .allowed_src_v6 }}
 {{- end }}
+{{- if .local_v4 }}
+define pol_{{ .id }}_local_v4 = {{ .local_v4 }}
+{{- end }}
+{{- if .local_v6 }}
+define pol_{{ .id }}_local_v6 = {{ .local_v6 }}
+{{- end }}
 {{- end }}
 
 destroy table inet easy42
@@ -89,6 +95,20 @@ table inet easy42 {
     elements = $pol_{{ .id }}_src_v6
   }
   {{- end }}
+  {{- if .local_v4 }}
+  set pol_{{ .id }}_local_v4 {
+    type ipv4_addr
+    flags interval
+    elements = $pol_{{ .id }}_local_v4
+  }
+  {{- end }}
+  {{- if .local_v6 }}
+  set pol_{{ .id }}_local_v6 {
+    type ipv6_addr
+    flags interval
+    elements = $pol_{{ .id }}_local_v6
+  }
+  {{- end }}
 {{- end }}
   chain filter_forward {
     type filter hook forward priority filter; policy accept;
@@ -108,6 +128,38 @@ table inet easy42 {
     {{- if .allowed_dst_v6 }}
     iifname @pol_{{ .id }}_ifname ip6 daddr != @pol_{{ .id }}_dst_v6 drop
     {{- end }}
+  {{- end }}
+  {{- if and .filter_input .local_v4 }}
+    {{- if .input_all_tcp }}
+    iifname @pol_{{ .id }}_ifname ip daddr @pol_{{ .id }}_local_v4 meta l4proto tcp accept
+    {{- else if .input_tcp_ports }}
+    iifname @pol_{{ .id }}_ifname ip daddr @pol_{{ .id }}_local_v4 meta l4proto tcp th dport {{ .input_tcp_ports }} accept
+    {{- end }}
+    {{- if .input_all_udp }}
+    iifname @pol_{{ .id }}_ifname ip daddr @pol_{{ .id }}_local_v4 meta l4proto udp accept
+    {{- else if .input_udp_ports }}
+    iifname @pol_{{ .id }}_ifname ip daddr @pol_{{ .id }}_local_v4 meta l4proto udp th dport {{ .input_udp_ports }} accept
+    {{- end }}
+    {{- if .input_allow_icmp }}
+    iifname @pol_{{ .id }}_ifname ip daddr @pol_{{ .id }}_local_v4 meta l4proto icmp accept
+    {{- end }}
+    iifname @pol_{{ .id }}_ifname ip daddr @pol_{{ .id }}_local_v4 counter drop
+  {{- end }}
+  {{- if and .filter_input .local_v6 }}
+    {{- if .input_all_tcp }}
+    iifname @pol_{{ .id }}_ifname ip6 daddr @pol_{{ .id }}_local_v6 meta l4proto tcp accept
+    {{- else if .input_tcp_ports }}
+    iifname @pol_{{ .id }}_ifname ip6 daddr @pol_{{ .id }}_local_v6 meta l4proto tcp th dport {{ .input_tcp_ports }} accept
+    {{- end }}
+    {{- if .input_all_udp }}
+    iifname @pol_{{ .id }}_ifname ip6 daddr @pol_{{ .id }}_local_v6 meta l4proto udp accept
+    {{- else if .input_udp_ports }}
+    iifname @pol_{{ .id }}_ifname ip6 daddr @pol_{{ .id }}_local_v6 meta l4proto udp th dport {{ .input_udp_ports }} accept
+    {{- end }}
+    {{- if .input_allow_icmp6 }}
+    iifname @pol_{{ .id }}_ifname ip6 daddr @pol_{{ .id }}_local_v6 meta l4proto ipv6-icmp accept
+    {{- end }}
+    iifname @pol_{{ .id }}_ifname ip6 daddr @pol_{{ .id }}_local_v6 counter drop
   {{- end }}
 {{- end }}
   }

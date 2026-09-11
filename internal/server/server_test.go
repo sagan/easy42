@@ -603,8 +603,9 @@ func TestNetworkSettingsAndExternalPeeringAPI(t *testing.T) {
 
 	// 2. PUT /api/settings/network
 	settingsUpdate := config.NetworkSettings{
-		PublicASN: 4242421234,
-		Prefixes:  []string{"172.20.10.0/24", "172.20.0.0/14{21,29}"},
+		PublicASN:         4242421234,
+		Prefixes:          []string{"172.20.10.0/24", "172.20.0.0/14{21,29}"},
+		LocalDN42Networks: []string{"172.20.229.0/27"},
 	}
 	bodyPutSettings, _ := json.Marshal(settingsUpdate)
 	reqPutSettings := httptest.NewRequest("PUT", "/api/settings/network", bytes.NewReader(bodyPutSettings))
@@ -619,6 +620,9 @@ func TestNetworkSettingsAndExternalPeeringAPI(t *testing.T) {
 	_ = json.Unmarshal(wPutSettings.Body.Bytes(), &savedSettings)
 	if savedSettings.PublicASN != 4242421234 {
 		t.Errorf("Expected PublicASN 4242421234, got %d", savedSettings.PublicASN)
+	}
+	if len(savedSettings.LocalDN42Networks) != 1 || savedSettings.LocalDN42Networks[0] != "172.20.229.0/27" {
+		t.Errorf("Expected LocalDN42Networks [172.20.229.0/27], got %v", savedSettings.LocalDN42Networks)
 	}
 
 	// 3. Add Managed Node via POST /api/nodes

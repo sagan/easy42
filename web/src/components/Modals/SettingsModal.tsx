@@ -103,6 +103,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
 
   // Network / Peering state
   const [publicAsn, setPublicAsn] = useState<number | "">("");
+  const [localDn42Networks, setLocalDn42Networks] = useState("");
+  const [networkPrefixes, setNetworkPrefixes] = useState<string[]>([]);
   const [networkLoading, setNetworkLoading] = useState(false);
   const [networkSaving, setNetworkSaving] = useState(false);
   const [networkError, setNetworkError] = useState<string | null>(null);
@@ -127,6 +129,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
   const [policyAllowedDst, setPolicyAllowedDst] = useState("");
   const [policyAllowedSrc, setPolicyAllowedSrc] = useState("");
   const [policyAllowedImport, setPolicyAllowedImport] = useState("");
+  const [policyLocalNetworks, setPolicyLocalNetworks] = useState("");
   const [policyRejectInternet, setPolicyRejectInternet] = useState(true);
   const [policyFilterForward, setPolicyFilterForward] = useState(true);
   const [policyFilterInput, setPolicyFilterInput] = useState(false);
@@ -180,6 +183,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
     try {
       const settings = await api.getNetworkSettings();
       setPublicAsn(settings.public_asn || "");
+      setLocalDn42Networks((settings.local_dn42_networks || []).join("\n"));
+      setNetworkPrefixes(settings.prefixes || []);
     } catch (err: unknown) {
       const e = err as Error;
       setNetworkError(e.message || "Failed to load network settings.");
@@ -196,11 +201,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
 
     const payload: NetworkSettings = {
       public_asn: publicAsn === "" ? 0 : Number(publicAsn),
+      prefixes: networkPrefixes,
+      local_dn42_networks: parsePrefixList(localDn42Networks),
     };
 
     try {
       await api.updateNetworkSettings(payload);
-      setNetworkSuccess("BGP confederation settings updated successfully.");
+      setNetworkSuccess("BGP confederation and network settings updated successfully.");
     } catch (err: unknown) {
       const e = err as Error;
       setNetworkError(e.message || "Failed to update network settings.");
@@ -218,6 +225,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
     setPolicyAllowedDst("");
     setPolicyAllowedSrc("");
     setPolicyAllowedImport("");
+    setPolicyLocalNetworks("");
     setPolicyRejectInternet(true);
     setPolicyFilterForward(true);
     setPolicyFilterInput(false);
@@ -244,6 +252,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
     setPolicyAllowedDst((p.allowed_dst_cidrs || []).join("\n"));
     setPolicyAllowedSrc((p.allowed_src_cidrs || []).join("\n"));
     setPolicyAllowedImport((p.allowed_import_cidrs || []).join("\n"));
+    setPolicyLocalNetworks((p.local_networks || []).join("\n"));
     setPolicyRejectInternet(Boolean(p.reject_internet));
     setPolicyFilterForward(Boolean(p.filter_forward));
     setPolicyFilterInput(Boolean(p.filter_input));
@@ -270,6 +279,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
     setPolicyAllowedDst((p.allowed_dst_cidrs || []).join("\n"));
     setPolicyAllowedSrc((p.allowed_src_cidrs || []).join("\n"));
     setPolicyAllowedImport((p.allowed_import_cidrs || []).join("\n"));
+    setPolicyLocalNetworks((p.local_networks || []).join("\n"));
     setPolicyRejectInternet(Boolean(p.reject_internet));
     setPolicyFilterForward(Boolean(p.filter_forward));
     setPolicyFilterInput(Boolean(p.filter_input));
@@ -334,6 +344,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
         name: policyName.trim(),
         description: policyDesc.trim() || undefined,
         cost: Number(policyCost) > 0 ? Number(policyCost) : 100,
+        local_networks: parsePrefixList(policyLocalNetworks),
         allowed_dst_cidrs: parsePrefixList(policyAllowedDst),
         allowed_src_cidrs: parsePrefixList(policyAllowedSrc),
         allowed_import_cidrs: parsePrefixList(policyAllowedImport),
@@ -400,6 +411,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
     setPolicyAllowedDst((p.allowed_dst_cidrs || []).join("\n"));
     setPolicyAllowedSrc((p.allowed_src_cidrs || []).join("\n"));
     setPolicyAllowedImport((p.allowed_import_cidrs || []).join("\n"));
+    setPolicyLocalNetworks((p.local_networks || []).join("\n"));
     setPolicyRejectInternet(Boolean(p.reject_internet));
     setPolicyFilterForward(Boolean(p.filter_forward));
     setPolicyFilterInput(Boolean(p.filter_input));
@@ -817,6 +829,19 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
                   helperText="Your network's public ASN (e.g. DN42 ASN). When set, BIRD confederation exposes this ASN to external peers."
                   disabled={networkSaving}
                 />
+
+                <TextField
+                  fullWidth
+                  size="small"
+                  multiline
+                  rows={2}
+                  label="Local DN42 Networks"
+                  placeholder="e.g. 172.20.229.0/27, fd00:dead:beef::/48"
+                  value={localDn42Networks}
+                  onChange={(e) => setLocalDn42Networks(e.target.value)}
+                  helperText="Internal DN42 CIDRs (IPv4 and/or IPv6). When external DN42 traffic is forwarded to these networks, the built-in DN42 filter input port rules are enforced."
+                  disabled={networkSaving}
+                />
               </>
             )}
           </DialogContent>
@@ -1072,6 +1097,20 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
                             color: p.snat?.enabled ? "#0F766E" : undefined,
                           }}
                         />
+                        {p.local_networks && p.local_networks.length > 0 && (
+                          <Chip
+                            size="small"
+                            label={`Local Nets: ${p.local_networks.length}`}
+                            variant="outlined"
+                            sx={{
+                              fontSize: "0.7rem",
+                              height: 22,
+                              borderColor: "#E2E8F0",
+                              bgcolor: "#F8FAFC",
+                              color: "#475569",
+                            }}
+                          />
+                        )}
                       </Box>
                     </Box>
                   );
@@ -1397,6 +1436,19 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
                     onChange={(e) => setPolicyInputUdpPorts(e.target.value)}
                     disabled={policyDialogMode === "view" || policyDialogSaving}
                     helperText="Comma or newline separated list of ports (1-65535) or ranges. Defaults to 53 for DN42 DNS."
+                  />
+
+                  <TextField
+                    fullWidth
+                    size="small"
+                    multiline
+                    rows={2}
+                    label="Protected Local Networks"
+                    placeholder="e.g. 172.20.229.0/27, fd00:dead:beef::/48"
+                    value={policyLocalNetworks}
+                    onChange={(e) => setPolicyLocalNetworks(e.target.value)}
+                    disabled={policyDialogMode === "view" || policyDialogSaving}
+                    helperText="Subnets treated as local. Forwarded traffic entering from this link destined to these subnets will be subjected to the input filter port rules."
                   />
                 </Box>
               )}

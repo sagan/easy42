@@ -2753,6 +2753,7 @@ func (m *Manager) CreateNetworkPolicy(p config.NetworkPolicy) (*config.NetworkPo
 	if p.Cost <= 0 {
 		p.Cost = 100
 	}
+	p.LocalNetworks = config.CleanPrefixes(p.LocalNetworks)
 	p.AllowedDstCIDRs = config.CleanPrefixes(p.AllowedDstCIDRs)
 	p.AllowedSrcCIDRs = config.CleanPrefixes(p.AllowedSrcCIDRs)
 	p.AllowedImportCIDRs = config.CleanPrefixes(p.AllowedImportCIDRs)
@@ -2803,6 +2804,7 @@ func (m *Manager) UpdateNetworkPolicy(id string, p config.NetworkPolicy) (*confi
 	cfg.NetworkPolicies[idx].Name = name
 	cfg.NetworkPolicies[idx].Description = strings.TrimSpace(p.Description)
 	cfg.NetworkPolicies[idx].Cost = p.Cost
+	cfg.NetworkPolicies[idx].LocalNetworks = config.CleanPrefixes(p.LocalNetworks)
 	cfg.NetworkPolicies[idx].AllowedDstCIDRs = config.CleanPrefixes(p.AllowedDstCIDRs)
 	cfg.NetworkPolicies[idx].AllowedSrcCIDRs = config.CleanPrefixes(p.AllowedSrcCIDRs)
 	cfg.NetworkPolicies[idx].AllowedImportCIDRs = config.CleanPrefixes(p.AllowedImportCIDRs)
@@ -2868,6 +2870,7 @@ func (m *Manager) GetNetworkSettings() config.NetworkSettings {
 	}
 	ns := cfg.NetworkSettings
 	ns.Prefixes = config.CleanPrefixes(ns.Prefixes)
+	ns.LocalDN42Networks = config.CleanPrefixes(ns.LocalDN42Networks)
 	return ns
 }
 
@@ -2881,6 +2884,7 @@ func (m *Manager) UpdateNetworkSettings(settings config.NetworkSettings) error {
 		return config.ErrConfigNotFound
 	}
 	settings.Prefixes = config.CleanPrefixes(settings.Prefixes)
+	settings.LocalDN42Networks = config.CleanPrefixes(settings.LocalDN42Networks)
 	cfg.NetworkSettings = settings
 	return m.store.Save(cfg)
 }

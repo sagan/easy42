@@ -45,6 +45,25 @@ func TestGetBuiltinPolicies(t *testing.T) {
 	}
 }
 
+func TestGetBuiltinPolicies_LocalDN42Networks(t *testing.T) {
+	netSettings := &NetworkSettings{
+		LocalDN42Networks: []string{"172.20.229.0/27", "fd00:dead:beef::/48"},
+	}
+	policies := GetBuiltinPolicies(netSettings)
+	for _, p := range policies {
+		if p.ID == PolicyDN42 {
+			if len(p.LocalNetworks) != 2 {
+				t.Fatalf("expected 2 LocalNetworks in PolicyDN42, got %v", p.LocalNetworks)
+			}
+			if p.LocalNetworks[0] != "172.20.229.0/27" || p.LocalNetworks[1] != "fd00:dead:beef::/48" {
+				t.Errorf("unexpected LocalNetworks: %v", p.LocalNetworks)
+			}
+			return
+		}
+	}
+	t.Fatalf("PolicyDN42 not found")
+}
+
 func TestEffectivePolicy(t *testing.T) {
 	var end *LinkEnd
 	if p := end.EffectivePolicy(false); p != PolicyDefault {
