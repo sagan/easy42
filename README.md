@@ -1,169 +1,703 @@
-# Easy42
+## Easy42
 
-It's a new project `easy42`. We're going to create a overlay software networking tool that's a little similar to zerotier, tailscale, EasyTier, netbird, netmaker, or the mix / combination or lightweight alternative of these tools.
+**Easy42** is an agent-less WireGuard overlay network orchestrator and dynamic routing automation engine. It is designed to interconnect private Linux servers, edge routers, and homelabs into high-performance, self-healing mesh networks, while providing seamless, automated BGP peering with external networks such as [DN42](https://dn42.eu/), NeoNetwork, or private Autonomous Systems. Easy42 provides an Web UI and CLI interface.
 
-The primary design goal is to be used in DN42 networks to help create & manage the wg mesh network of one AS's internal servers. But it can also be used in the one's personal private networks without DN42 involved.
+![screenshot](docs/screenshot-main.png)
 
-The software provide both CLI and Web UI interface for managing networks.
+- [Easy42](#easy42)
+- [Overview](#overview)
+- [Key Features](#key-features)
+- [Target Use Cases](#target-use-cases)
+  - [1. Private Server Mesh \& Homelab Overlay](#1-private-server-mesh--homelab-overlay)
+  - [2. DN42 \& Overlay Autonomous System Peering](#2-dn42--overlay-autonomous-system-peering)
+  - [3. Asymmetric \& Multi-Homed Routing](#3-asymmetric--multi-homed-routing)
+- [System Architecture](#system-architecture)
+- [How It Works Under the Hood](#how-it-works-under-the-hood)
+  - [1. Data Plane \& Link-Local IPv6 Addressing](#1-data-plane--link-local-ipv6-addressing)
+    - [Deterministic Link-Local IPv6 (`fe80::/64`)](#deterministic-link-local-ipv6-fe8064)
+    - [Multiprotocol BGP over IPv6 Link-Local (RFC 8950 / RFC 5549)](#multiprotocol-bgp-over-ipv6-link-local-rfc-8950--rfc-5549)
+  - [2. WireGuard Configuration Breakdown](#2-wireguard-configuration-breakdown)
+    - [Why These Parameters?](#why-these-parameters)
+  - [3. Dynamic Routing with BIRD 2](#3-dynamic-routing-with-bird-2)
+    - [BGP Confederations \& Autonomous Systems](#bgp-confederations--autonomous-systems)
+    - [Route Origination \& Loopback Announcement](#route-origination--loopback-announcement)
+    - [Kernel FIB Synchronization \& Preferred Source IP](#kernel-fib-synchronization--preferred-source-ip)
+    - [Split Routing Tables for External Traffic](#split-routing-tables-for-external-traffic)
+    - [Route Leak Protection](#route-leak-protection)
+  - [4. nftables Firewall, NAT \& MSS Clamping](#4-nftables-firewall-nat--mss-clamping)
+    - [Detailed Rule Explanations](#detailed-rule-explanations)
+  - [5. Route Origin Authorization (ROA)](#5-route-origin-authorization-roa)
+- [Network Policies](#network-policies)
+  - [Link Costs \& Latency Routing](#link-costs--latency-routing)
+- [Installation \& Quick Start](#installation--quick-start)
+  - [Prerequisites](#prerequisites)
+  - [Building from Source](#building-from-source)
+  - [Starting the Service](#starting-the-service)
+  - [Device Config Helper (Bootstrap Tasks)](#device-config-helper-bootstrap-tasks)
+- [CLI Reference](#cli-reference)
+  - [Global Flags](#global-flags)
+  - [1. Server Daemon](#1-server-daemon)
+  - [2. Node Management](#2-node-management)
+  - [3. WireGuard Link Management](#3-wireguard-link-management)
+  - [4. Status Inspection \& Connectivity Probes](#4-status-inspection--connectivity-probes)
+  - [5. Topology Synchronization](#5-topology-synchronization)
+- [Configuration Specification](#configuration-specification)
+  - [Entrypoint Selection Algorithm](#entrypoint-selection-algorithm)
+- [Security \& Encryption Architecture](#security--encryption-architecture)
+- [Operational \& Troubleshooting Guide](#operational--troubleshooting-guide)
+  - [Verifying WireGuard Interfaces](#verifying-wireguard-interfaces)
+  - [Inspecting BIRD 2 Dynamic Routing](#inspecting-bird-2-dynamic-routing)
+  - [Debugging nftables Rules](#debugging-nftables-rules)
+  - [Common Gotchas \& Fixes](#common-gotchas--fixes)
+- [License](#license)
 
-## Design Principles
+## Overview
 
-- Linux and WireGuard only. The data plane uses Linux kernel wireguard exclusively.
-- It generates standard /etc/wireguard/wg*.conf files and use standard `wg` & `wg-quick` tools to manage wireguard interfaces. ipv6 link only addresses are used on wg interfaces by default.
-- NAT traversal (like STUN server) is not supported at this time (we may implement this feature in the future).
-- It supports flexible topology, like hub-and-spoke, full mesh, or a custom topology.
-- It also provides Bird configuration auto generation for the connected peers so you can run BGP (or other IGP protocols like OSPF) over WireGuard easily.
-- In the first phrase we will use an agent-less approach. The server uses standard SSH / SFTP to manage the peers' configurations. In the next phase we may consider to deploy agents on nodes to handle more complex tasks like NAT traversal.
+Unlike userspace overlay tools (such as Tailscale or ZeroTier) that route packets through userspace TUN adapters, Easy42 relies exclusively on the **Linux kernel WireGuard data plane**, paired with **BIRD 2** for dynamic routing (MP-BGP over IPv6 link-local) and **nftables** for stateful firewalling, MSS clamping, and policy-based SNAT.
+
+Easy42 manages remote nodes **agent-lessly** over standard SSH/SFTP, offering both an interactive visual Web UI (topology graph editor) and a scriptable CLI.
+
+## Key Features
+
+- **Pure Linux Kernel Performance**: Zero userspace encapsulation overhead. Point-to-point WireGuard kernel interfaces (`wg42*`) handle all tunnel traffic at wire speed.
+- **Multiprotocol BGP over IPv6 Link-Local (RFC 8950 / RFC 5549)**: Uses single-session BGP peering over deterministic IPv6 link-local addresses (`fe80::/64`) with Extended Next Hop to exchange both IPv4 and IPv6 routes, eliminating tunnel IP management (IPAM).
+- **Agent-Less Node Management**: No background daemons required on target nodes. The controller connects via SSH/SFTP with public key authentication and atomic file replacement.
+- **Automated BGP Confederations & iBGP/eBGP**: Supports single ASN topologies or private BGP confederations (AS 4224420000–4224429999) presenting a unified public ASN (e.g., DN42 ASN) to external peers.
+- **Stateful Security & nftables Generation**: Automated compilation of `/etc/easy42.nft` featuring state tracking, path-MTU MSS clamping, cross-tunnel SNAT, and granular port ingress filtering.
+- **Automated ROA Validation**: Built-in ROA caching engine that fetches remote table definitions (e.g., Burble DN42 ROA) and filters illegitimate route announcements.
+- **Visual Topology & Looking Glass**: Interactive React/Vite topology canvas with drag-and-drop link creation, real-time node connectivity probes, and built-in looking glass diagnostics (`ping`, `traceroute`, `birdc show route`).
+- **Cryptographic Security**: Node private keys and sensitive credentials are encrypted with XAES-256-GCM using an Argon2id-derived key and protected in volatile memory with `memguard`.
+
+---
+
+## Target Use Cases
+
+### 1. Private Server Mesh & Homelab Overlay
+
+Connect cloud VPS instances, on-premise virtualization hosts, bare-metal servers, and edge gateways into a flat, routable overlay network without port-forwarding headaches or proprietary centralized coordinators.
+
+### 2. DN42 & Overlay Autonomous System Peering
+
+Manage an entire DN42 Autonomous System from a single dashboard:
+
+- Create internal iBGP/confederation meshes between your globally distributed points of presence (PoPs).
+- Provision WireGuard links to external peer ASNs.
+- Apply strict route-leak prevention (`reject` for default and global internet routes) and automated ROA validation.
+- Route external traffic to designated egress gateways or source-NAT across transit links.
+
+### 3. Asymmetric & Multi-Homed Routing
+
+Use BGP path attributes (e.g., `bgp_local_pref` manipulation based on link costs) to build multi-homed topologies with deterministic failover and optimal path selection.
+
+---
+
+## System Architecture
 
 ```
-Topology / Peer Spec (YAML/JSON)
-        │
-        ▼
-┌───────────────────────────────┐
-│     easy42 Core Compiler      │
-│  - Computes wg peer configs   │
-│  - Computes bird peer configs │
-│  - Generates diffs / actions  │
-└───────────────┬───────────────┘
-                │
-        ┌───────┴───────┐
-        ▼               ▼
- ┌─────────────┐ ┌─────────────┐
- │ SSH Applier │ │ Local Agent │ (Future / Optional)
- │ (Phase 1)   │ │ (Phase 2)   │
- └─────────────┘ └─────────────┘
+ ┌─────────────────────────────────────────────────────────────┐
+ │                      easy42 Controller                      │
+ │                                                             │
+ │   ┌──────────────────────┐      ┌───────────────────────┐   │
+ │   │  Web UI (React/Vite) │      │      CLI (Cobra)      │   │
+ │   └──────────┬───────────┘      └───────────┬───────────┘   │
+ │              │                              │               │
+ │              ▼                              ▼               │
+ │   ┌─────────────────────────────────────────────────────┐   │
+ │   │                   Engine & State                    │   │
+ │   │      - Node & Link Topology Graph                   │   │
+ │   │      - Network Policies & Costs                     │   │
+ │   │      - ROA Fetcher & Cache Manager                  │   │
+ │   │      - Encrypted State Store (config.json)          │   │
+ │   └──────────────────────────┬──────────────────────────┘   │
+ │                              │                              │
+ │                              ▼                              │
+ │   ┌─────────────────────────────────────────────────────┐   │
+ │   │                   Core Compiler                     │   │
+ │   │      - WireGuard Interface Configs (wg42*.conf)     │   │
+ │   │      - BIRD 2 Dynamic Routing (/etc/bird_easy42.conf)│  │
+ │   │      - nftables Ruleset (/etc/easy42.nft)           │   │
+ │   └──────────────────────────┬──────────────────────────┘   │
+ └──────────────────────────────┼──────────────────────────────┘
+                                │ SSH / SFTP (Agent-less)
+         ┌──────────────────────┼──────────────────────┐
+         ▼                                             ▼
+ ┌─────────────────────────────┐               ┌─────────────────────────────┐
+ │        Remote Node A        │               │        Remote Node B        │
+ │  ┌───────────────────────┐  │               │  ┌───────────────────────┐  │
+ │  │ Linux Kernel WireGuard│  │ ◄─── P2P ────►│  │ Linux Kernel WireGuard│  │
+ │  │ /etc/wireguard/wg42B  │  │   WireGuard   │  │ /etc/wireguard/wg42A  │  │
+ │  └───────────────────────┘  │    Tunnel     └───────────────────────┘  │
+ │  ┌───────────────────────┐  │ (IPv6 Link-   ┌───────────────────────┐  │
+ │  │ BIRD 2 (MP-iBGP/eBGP) │  │    Local)     │ │ BIRD 2 (MP-iBGP/eBGP) │  │
+ │  └───────────────────────┘  │               └───────────────────────┘  │
+ │  ┌───────────────────────┐  │               ┌───────────────────────┐  │
+ │  │ nftables (easy42 tbl) │  │               │ │ nftables (easy42 tbl) │  │
+ │  └───────────────────────┘  │               └───────────────────────┘  │
+ └─────────────────────────────┘               └─────────────────────────────┘
 ```
 
+---
 
-## Software Design
+## How It Works Under the Hood
 
-The `easy42` is running as a Go web app. The frontend project uses TypeScript, Vite, React and Material UI and the dist files are embedded in the binary.
+Easy42 turns complex Linux routing and firewall primitives into a coherent, declarative mesh. Below is a deep dive into the configurations deployed on every managed node.
 
-The frontend core UI is a visual Topology editor. User can add new node, edit node info, and create relations (wg links) between nodes.
+---
 
-All configurations are stored in server as plain text json file. The json file stored all nodes & wg links info but some sensitive info (like wg interface private keys) are encrypted by an automatically generated encryption key which is encrypted by user provided password.
+### 1. Data Plane & Link-Local IPv6 Addressing
 
-As a supplement, the software also provides a CLI interface to do some common actions like applying topology configs to devices, checking wireguard interface status on devices, etc. We use https://github.com/spf13/cobra for CLI. A standalone sub-command is used to start backend as web app.
+Every link created between two nodes is a dedicated **point-to-point WireGuard interface** named `wg42<peer_name>` (where peer name is up to 11 characters to comply with the Linux `IFNAMSIZ` limit of 15 characters).
 
-## Topology / Peer Spec
+#### Deterministic Link-Local IPv6 (`fe80::/64`)
 
-The `node` object represents a device / node:
+Instead of carving up subnets for tunnel interconnects, Easy42 assigns an RFC 4291 compliant IPv6 link-local address to the tunnel interface, derived deterministically from the node's main IPv4 address:
 
-- `name`: the global unique name of the node, e.g. "router-gw1", "server-main-1". The name must be a valid hostname of at most 11 chars. By default it uses the device hostname as name, if device hostname is too long or duplicate with other devices, trim it and / or add numeric suffix.
-  - We create wg links using `wg42<name>` as interface name where `<name>` is the peer's name. Since in Linux the interface name max length is 15 chars, the peer name should be at most 11 chars.
-- `host`: the device ssh host. Can be an alias in `~/.ssh/config` or an direct ip address / hostname.
-- `ip`: the "main" IPv4 address of the device / node. It must be a existing static & stable ipv4 address on any interface of the device. The address should be globally unique. If the device is a lan device / router it's recommended to use it's primary lan ip (such as `192.168.100.1` ); If the device is a VPS / Internet server it's recommanded to config a private ipv4 as main IP on the loopback or a dummy interface. The main ip MUST NOT be configured on easy42 managed `wg42*` interface, but it should be OK to use a ip on other `wg*` or other type tunnel interface as long as the interface & ip is stable. It's the user's responsibility to have this ip configured on the device for now. Though not recommended, it's able to use the device's public ipv4 as main ip (if the device has it's public ipv4 configured on it's main nic). The generated bird config will broadcast this ip (as /32) to other nodes so it will be globally routable in the user's network.
-- `interface`: the main IP interface name, e.g. "lo", "dn42", "eth0".
-- `asn`: AS Number of this node (must be a valid private AS number). By default we assign a unique private ASN in 4224420000-4224429999 range automatically to each device. User can also choose to use a same ASN (like their DN42 ASN) for all or some of their devices.
-- `entrypoints`: The external entrypoints of the device. A device can has multiple entrypoints. A entrypoint is usually the public ipv4/ipv6 address or domain name that can reach the device from the Internet. e.g. `{ip: "1.2.3.4"}`. We support device which is behind NAT but some port forwardings (DNAT) are configured on the device's gateways so it's able to reach those devices from specific port numbers. In this case, the port number should also be provided, e.g. `{ip: "[IP_ADDRESS]", ports: [{external_port: 51820, port: 51820}]}`. All possible fields of the entrypoint object:
-  - `ip` : the ip (v4 or v6), or a domain.
-  - `ports` : (optional) The available ports array for wg listening or peering. Each element could be a port number, or a string represents port range (e.g. `2000-2999`) or a object `{port: Port, external_port:? Port}`. The `external_port` is optional which is used to specify different external port for devices behind NAT.
-  - `tags` : The string[] tag array.
-  - One specific "none" endpoint is automatically inserted as the last element of `endpoints` array when the node is created. This element only has `tags` field but no other fields. This endpoint means the device is strictly behind NAT / firewall so it can't be accessed from other nodes actively. The user can edit this "none" entrypoint's tags but can't delete it in UI.
+$$\text{IPv4: } 192.168.100.10 \implies \text{IPv6 Link-Local: } \texttt{fe80::c0a8:640a/64}$$
 
-The required and global unique fields: `name`, `ip`.
-The required fields: `host`.
+Both ends of the link use their respective link-local addresses. Because link-local traffic is scoped strictly to the physical or virtual interface, the same link-local subnet can exist across multiple interfaces without collision.
 
-The `link` object represent a wg link between two devices:
+#### Multiprotocol BGP over IPv6 Link-Local (RFC 8950 / RFC 5549)
 
-- `from`: the one end node object: `{name, ...}`
-  - `name` : the node name.
-  - `interface` : the self node wg interface name. Automatically generated by default.
-  - `address` : the node's wg interface `Address`. By default we use ipv6 link-local address that's derived from the self node main ip. E.g. if the node `ip` is `192.168.100.10`, the ipv6 link-local address is `fe80::192:168:100:10/64`.
-  - `listen_port` : The local device wg listening port. By default we use `20000 + hash(other_end_peer_ip) % 10000` (`2XXXX`) as port.
-  - `endpoint` : the self node wg port external access endpoint. optional. By default it's derived automatically (see below).
-  - `private_key` : the encrypted self wg private key. Generated automatically when the link is created.
-  - `public_key` : the self wg public key.
-  - `persistent_keepalive` : The wg `[Peer]` section's `PersistentKeepalive` interval in seconds. By default it's set to `25` if the other node `endpoint` exists, else `0` (mean disabled).
-- `to`: the other end node object: `{name, ...}`
-  - The orders or `from` and `to` is arbitrary but in program UI we follow a determined order: the node with smaller name (alphabetic order) comes first (as `from`) when creating links.
-- `tags`: string[], the link's tags.
+BIRD establishes a single BGP peering session over the IPv6 link-local address bound to the interface (`neighbor fe80::... % 'wg42peer'`). By enabling **Extended Next Hop**, BIRD transmits both IPv4 and IPv6 routing tables over this single session:
 
-When creating wg.conf on devices, the `[Peer]` section is derived automatically since we only support peer-2-peer wg links that each wg interface has only one peer:
-
-- `AllowedIPs` : Set to `<peer_ipv6>/128,0.0.0.0/0,::/0`. Note we set `Table = off` in wg.conf for all interfaces.
-- `Endpoint` : By default the endpoint is derived automatically from the the two peering node's `endpoints` field in a deterministic way. The logic:
-  1. First check the `endpoints` of thw two nodes and check if we can find a pair of endpoints which share as a same `tag`. If we find one, we use it, otherwise use the first endpoint in each node's `endpoints`.
-  2. The node's found `endpoint` is used as the other node's wg peer `Endpoint`, with some caveats:
-    - If the endpoint `ports` is not set, it means we can use all ports. We use the peer node's WireGuard listening port (which defaults to the self node's ASN last 5 digits `2XXXX`) as the self wg conf `[Peer]` section `Endpoint` port, joined with the peer node's `ip` field.
-    - If the endpoint `ports` is defined, we select a (unused in other links from this node) port for the peer randomly. If 'external_port' is set, we use that, else use 'port'.
-    - If the endpoint is "none" endpoint, we don't configure the other node's wg peer `Endpoint`.
-
-## Node Configuration Push
-
-When the user changes the network topology in UI and "Save", the backend will connect to involved nodes and update / create wg or bird configurations. This process uses standard SSH (for executing command on devices) / SFTP (for update device config file content or query it's current content) protocol with public key authentication. We automatically use default OpenSSH files `~/.ssh/config`, `~/.ssh/id_ed25519` and `~/.ssh/known_hosts` for server ssh addressing, host verification and authentication. It's the user's responsibility to ensure the backend's public key is authorized on all nodes and host keys exist in backend known_hosts file.
-
-The backend should cache the nodes' current status info and persist them to a separate node status file.
-
-We use standard on-device config file pathes and CLI tool pathes.
-
-- `/etc/bird` for bird configuration
-- `/etc/wireguard/wg*.conf` for wg configuration
-- `wg / wg-quick` for managing wg interfaces
-- `birdc` for managing bird.
-
-It's the user's responsibility to have wireguard / bird installed on devices for now.
-
-All device config updations or command executions must follow a idempotent & atomic way. For example, when updating a device config file, it must first fetch the current on-device file, compare with the new desired file content (ignoring comments), only if the contents are different it updates the file and executes the corresponding command to reload the configuration. We try best to keep the on-device config file existing comments and file structure if possible. When updating device file through SFTP, we first upload the file to a temporary name in the same directory and then rename it to the final target name to ensure atomicity.
-
-## Data persistence
-
-All data are stored in `Data Dir` which defaults to `~/.config/easy42` and can be customized by cmdline flag. For now we store all info in `config.json` file inside `Data Dir` as:
-
-```json
-{
-  "password_hash": "", // the Argon2id hash of user password      
-  "encrypted_dek": "", // the encrypted-by-password data encryption key
-  "session_secret": "",// the random secret used in frontend authenticated session token signing / verification
-  "nodes": [],
-  "links": []  
+```bird
+protocol bgp 'easy42_peer_nodeB' from easy42_peer {
+    interface "wg42nodeB";
+    local fe80::c0a8:640a as SELF_AS;
+    neighbor fe80::c0a8:640b % 'wg42nodeB' as 4224420002;
 }
 ```
 
-Some fields are stored as encrypted base64 string (with salt embedded): the `nodes` element `private_key`. The encryption key is derived from user password and stored as `encrypted_dek`. The encryption altorighm is xaes-256-gcm ( filippo.io/xaes256gcm ). The xaes-256-gcm nonce is 24 bytes long and is embedded in the encrypted string so the final encrypted field is: `base64(nonce + ciphertext)`.
+This eliminates dual-stack tunnel configuration and separate IPv4 BGP sessions.
 
-When the server starts the first time (config.json doesn't exist), generate a cryptographically random strong password of `[a-zA-Z0-9]{22}` format, initialize the config.json file with auto-generated password_hash, session_secret, and encrylted_dek fields, print the initial password to stderr.
+---
 
-The frontend session is authorized by a stateless http-only cookie which is derived from password_hash and session_secret. After the server started or restarted all authed browser sessions remain valid, but user will need to provide the password in the browser when it does any action that need the plaintext of encrypted fields (like wg private key). The inputed app password plaintext remains in backend memory until the server restarts or user manually "lock" it. We use github.com/awnumar/memguard to protect the in-memory app password and other credentials.
+### 2. WireGuard Configuration Breakdown
 
-In frontend login page it only needs to input the password (no username).
+For each link, Easy42 compiles `/etc/wireguard/wg42<peer>.conf`:
 
-## Frontend Topology editor
+```ini
+# Auto-generated by easy42. Do not edit manually.
+[Interface]
+Address = fe80::c0a8:640a/64
+ListenPort = 24192
+PrivateKey = <unencrypted_node_private_key>
+MTU = 1420
+PostUp = sysctl -w net.ipv4.conf.%i.rp_filter=0
+Table = off
 
-### Add New Node procedures
+[Peer]
+PublicKey = 0Yx+7eQ6gIqXy...=
+AllowedIPs = fe80::c0a8:640b/128, 0.0.0.0/0, ::/0
+Endpoint = 198.51.100.2:25831
+PersistentKeepalive = 25
+```
 
-1. Enter new node ssh host.
-2. The backend uses ssh to connect to the node, fetch is current status (ip(s) on all interfaces, hostname, etc) and present them to user in a form.
-3. User checks and adjusts the fields, e.g. select the main ip & interface, provide asn, name etc, then submit the form.
-4. The backend will create a new `node` object and store it to the config file, and update the frontend state.
+#### Why These Parameters?
 
-### Add New wg link procedure
+- `Table = off`: **Crucial.** Prevents `wg-quick` from inserting default routes (`0.0.0.0/0`) into the kernel routing table and hijacking internet connectivity. Routing decisions are handled strictly by BIRD.
+- `AllowedIPs = <peer_link_local>/128, 0.0.0.0/0, ::/0`: In WireGuard, `AllowedIPs` acts as a cryptokey-routing filter. To allow the interface to forward transit packets for any network prefix advertised by BGP, `AllowedIPs` must accept wildcard traffic (`0.0.0.0/0` and `::/0`).
+- `ListenPort = 2XXXX`: Calculated deterministically using a 32-bit FNV-1a hash of the peer's IP (`20000 + hash(peer_ip) % 10000`). This avoids port collisions while maintaining stable port assignments.
+- `PostUp = sysctl -w net.ipv4.conf.%i.rp_filter=0`: Overcomes strict Reverse Path Filtering in Linux. In multi-path mesh networks, return packets frequently enter via a different interface than outbound traffic (asymmetric routing). Without `rp_filter=0`, the Linux kernel silently drops valid transit packets.
+- `PersistentKeepalive = 25`: Keeps stateful firewall entries and NAT mappings alive on intermediate routers. Automatically enabled if the peer specifies an endpoint.
 
-The user drag-and-drop from one node to the other to create a new link. The UI will show a dialog to let user select the `endpoint` settings (if the node has multiple endpoints), confirm `interface` name (auto generated, editable), `listen_port` (auto generated, editable), etc. After confirm, the backend will create a new `link` object and store it to the config file, and update the frontend state.
+---
 
-### Sync Button
+### 3. Dynamic Routing with BIRD 2
 
-In topology UI, clicking "Sync" button will trigger the backend to sync settings (wg link configs) to devices as described in "Node Configuration Push" chapter.
+Easy42 compiles `/etc/bird_easy42.conf` and includes it in `/etc/bird/bird.conf` via `include "/etc/bird_easy42.conf";`.
 
-The UI displays "unsynced" links in graph as different style.
+#### BGP Confederations & Autonomous Systems
 
-## Device Config Helper
+Easy42 supports two BGP architectures:
 
-The **Device Config Helper** enables running one-time, idempotent configuration and bootstrapping tasks on managed devices over SSH/SFTP.
+1. **Flat Private ASN / iBGP Mesh**: All nodes share the same ASN or use private AS numbers.
+2. **BGP Confederation (RFC 5065)**: Each internal node is assigned a unique private ASN within `4224420000`–`4224429999`, grouped under a single parent Confederation AS (e.g. your public DN42 ASN `424242xxxx`):
+   ```bird
+   confederation CONFED_AS;
+   confederation member yes;  # Internal peers
+   ```
+   To external peers (e.g., outside DN42 peerings):
+   ```bird
+   confederation CONFED_AS;
+   confederation member no;   # External eBGP peers
+   ```
+   External peers see your entire network originating from your public ASN, hiding internal topology while eliminating iBGP full-mesh requirements.
 
-Tasks are structured as embedded scripts in the `tasks/` directory:
-- `status.sh`: Determines if a task is applicable, already applied (`exit 10`), ready to execute (`exit 0`), or incompatible (`exit 20`).
-- `run.sh`: Idempotently executes the task, ensuring atomicity, backups, and validation.
-- `task.json`: Task metadata (id, title, description, category, weight).
+#### Route Origination & Loopback Announcement
 
-### Available Built-in Tasks:
-- `install_wireguard`: Installs WireGuard and wireguard-tools across Debian, Ubuntu, CentOS/RHEL/Rocky, Alpine, and Arch.
-- `install_bird`: Installs BIRD 2 / BIRD Internet Routing Daemon and enables the system service.
-- `config_bird`: Adds `include "/etc/bird_easy42.conf";` to the main `/etc/bird/bird.conf` (with backup and syntax validation).
-- `sysctl_params`: Configures IP forwarding and loose reverse path filtering (`rp_filter=0`) in `/etc/sysctl.d/99-easy42.conf`.
-- `autostart_interfaces`: Installs `/etc/systemd/system/easy42-wg-autostart.service` to automatically bring up all `wg42*` interfaces on boot.
+Each node has a primary stable IP (e.g., `192.168.100.1` on `lo`). To originate this route into BGP without creating a routing loop on the local host:
 
-## Development Phrases
+```bird
+protocol static static_self {
+    ipv4;
+    route 192.168.100.1/32 reject;
+}
+```
 
-- Phrase 1 (current phrase): backend, frontend, topology editing UI (nodes, links), wg management functions. In this phrase it only update device `/etc/wireguard/wg*.conf` files and run `wg / wg-quick` to spawn interfaces or udpate / sync wg conf.
-- Phrase 2: node service persistence (use systemd to auto-start wg interface on startup). bird / BGP related functions. Device Config Helper.
+In BIRD, a `reject` route is purely local to the routing daemon; it injects the `/32` prefix into BIRD's routing table (`master4`) for export to peers, while the local kernel routes packets destined for `192.168.100.1` to the local loopback interface.
+
+#### Kernel FIB Synchronization & Preferred Source IP
+
+Learned BGP routes are exported to the Linux kernel FIB (`table 254` by default, or a custom routing table):
+
+```bird
+protocol kernel kernel_v4 {
+    ipv4 {
+        export filter {
+            # Force Linux kernel to use the node's main IP as source
+            krt_prefsrc = SELF_IP;
+            if source ~ [ RTS_BGP ] then accept;
+            reject;
+        };
+        import none;
+    };
+    kernel table TABLE;
+}
+```
+
+Setting `krt_prefsrc = SELF_IP` ensures that when local applications originate traffic to mesh destinations, the kernel selects the node's overlay IP rather than a public or physical LAN IP.
+
+#### Split Routing Tables for External Traffic
+
+When `external_table` is configured on a node, routes learned from external BGP peers (marked with BGP Large Community `(CONFED_AS, 1, 1)`) are directed via BIRD pipes into an isolated kernel routing table:
+
+```bird
+protocol pipe pipe_ext_v4 {
+    table master4;
+    peer table ext_table4;
+    import none;
+    export filter {
+        if (source ~ [ RTS_BGP ]) && (COMM_EXTERNAL ~ bgp_large_community) then accept;
+        reject;
+    };
+}
+```
+
+This enables policy routing (PBR) using `ip rule` to isolate external network traffic from internal services.
+
+#### Route Leak Protection
+
+To prevent accidental leaks of default routes or public internet subnets into private overlays or DN42:
+
+```bird
+define INTERNET = [ 0.0.0.0/0, 0.0.0.0/1, 128.0.0.0/1 ];
+define INTERNET6 = [ ::/0, ::/1, 8000::/1 ];
+
+import filter {
+    if net ~ INTERNET then reject;
+    # ...
+};
+```
+
+---
+
+### 4. nftables Firewall, NAT & MSS Clamping
+
+Easy42 generates an atomic ruleset in `/etc/easy42.nft` under the dedicated table `table inet easy42`.
+
+```nft
+#!/usr/sbin/nft -f
+
+define easy42_ifname = { "wg42*" }
+define tunnel_ifname = { "tun*", "wg*", "zt*", "tailscale*" }
+define private_ip    = { 192.168.0.0/16, 10.0.0.0/8, 172.16.0.0/12 }
+define private_ip6   = { fc00::/8, fd00::/8 }
+define self_ip       = 192.168.100.10
+
+destroy table inet easy42
+
+table inet easy42 {
+  set easy42_ifname {
+    type ifname
+    flags interval
+    elements = $easy42_ifname
+  }
+
+  chain filter_forward {
+    type filter hook forward priority filter; policy accept;
+
+    # Stateful connection tracking
+    ct state established,related accept
+
+    # Policy enforcement: drop packets violating source/destination CIDR constraints
+    iifname @pol_dn42_ifname ip saddr != @pol_dn42_src_v4 drop
+    iifname @pol_dn42_ifname ip daddr != @pol_dn42_dst_v4 drop
+  }
+
+  chain filter_input {
+    type filter hook input priority filter; policy accept;
+
+    ct state established,related accept
+
+    # Policy: allow BGP (TCP 179) and authorized service ports (e.g. DNS UDP 53)
+    iifname @pol_dn42_ifname meta l4proto tcp th dport { 179 } accept
+    iifname @pol_dn42_ifname meta l4proto udp th dport { 53 } accept
+    iifname @pol_dn42_ifname meta l4proto { icmp, ipv6-icmp } accept
+
+    # Drop unauthorized ingress traffic arriving from external interfaces
+    iifname @pol_dn42_ifname counter drop
+  }
+
+  chain mangle_postrouting {
+    type filter hook postrouting priority mangle; policy accept;
+
+    # Path MTU / TCP MSS Clamping
+    tcp flags syn tcp option maxseg size set rt mtu
+  }
+
+  chain nat_postrouting {
+    type nat hook postrouting priority srcnat; policy accept;
+
+    # SNAT egress traffic to the node's external overlay IP
+    ip saddr != @pol_dn42_dst_v4 oifname @pol_dn42_ifname meta nfproto ipv4 snat to $external_ip
+
+    # Transit SNAT: source traffic arriving from third-party tunnels (e.g., Tailscale)
+    iifname @tunnel_ifname iifname != @easy42_ifname oifname @easy42_ifname meta nfproto ipv4 snat to $self_ip
+  }
+}
+```
+
+#### Detailed Rule Explanations
+
+1. **Path-MTU MSS Clamping (`tcp option maxseg size set rt mtu`)**:
+   WireGuard introduces 60 bytes of encapsulation overhead for IPv4 and 80 bytes for IPv6. If TCP packets attempt to send at the standard 1500-byte MTU, fragmentation or silent drops occur (MTU blackhole). This mangle rule intercepts TCP SYN packets and clamps the Maximum Segment Size (MSS) to match the route MTU dynamically.
+2. **Transit SNAT for Third-Party Tunnels**:
+   If a packet enters the host from another overlay (such as Tailscale or OpenVPN) and is routed into `easy42`, its source address may not be routable in the destination network. Easy42 translates the source address to the local node's overlay IP (`meta nfproto ipv4 snat to $self_ip`), ensuring return traffic routes back cleanly.
+3. **Selective Ingress Lockdown**:
+   For external peerings (DN42), only explicitly declared ports (BGP 179, DNS 53, ICMP) are accepted; arbitrary port probing is dropped.
+
+---
+
+### 5. Route Origin Authorization (ROA)
+
+Route Origin Authorization verifies that the announcing AS is authorized to originate a given IP prefix. Easy42 includes an automatic ROA caching engine.
+
+- When configured with a ROA URL (e.g., `https://dn42.burble.com/roa/dn42_roa_bird2_4.conf`), the controller downloads and caches the ROA file locally in the data directory.
+- During node sync, the cached ROA tables are deployed to `/etc/bird_roa_<policy>_4.conf`.
+- BIRD checks incoming routes using native static ROA tables:
+
+  ```bird
+  roa4 table roa_table_dn42_4;
+  protocol static roa_proto_dn42_4 {
+      roa4 { table roa_table_dn42_4; };
+      include "/etc/bird_roa_dn42_4.conf";
+  }
+
+  function roa_check_dn42() {
+      if roa_check(roa_table_dn42_4, net, bgp_path.last) = ROA_VALID then return true;
+      if roa_check(roa_table_dn42_4, net, bgp_path.last) = ROA_UNKNOWN then return true; # Non-strict mode
+      return false; # ROA_INVALID
+  }
+  ```
+
+---
+
+## Network Policies
+
+Every link endpoint in Easy42 is assigned a **Network Policy**, governing routing, firewall filters, and NAT.
+
+| Policy        | Target Usage             | Internet Leak Protection |      Forward Filter       |     Input Filter     | Default SNAT  | ROA Enabled  |
+| :------------ | :----------------------- | :----------------------: | :-----------------------: | :------------------: | :------------ | :----------: |
+| **`default`** | Internal mesh nodes      |           Yes            |            No             |          No          | Disabled      |   Optional   |
+| **`dn42`**    | External DN42 peers      |           Yes            | Yes (172.20/14, fd00::/8) | Yes (BGP, DNS, ICMP) | `external_ip` | Yes (Burble) |
+| **`none`**    | Unrestricted tunnels     |            No            |            No             |          No          | Disabled      |      No      |
+| _Custom_      | Custom peering / transit |       Configurable       |    Configurable CIDRs     |  Configurable Ports  | Configurable  |  Custom URL  |
+
+### Link Costs & Latency Routing
+
+Each policy defines a base `cost` (default: 100), which can be overridden on individual links. During BGP import, BIRD subtracts the link cost from the default `bgp_local_pref` (10000):
+
+```
+bgp_local_pref = DEFAULT_LOCAL_PREF − cost
+```
+
+Higher link costs result in lower local preference, causing traffic to naturally favor low-latency or preferred paths while preserving automated failover.
+
+---
+
+## Installation & Quick Start
+
+### Prerequisites
+
+1. **Controller Host**: Linux, macOS, or Windows with Go 1.22+ and Node.js 18+ (for building the Web UI).
+2. **Managed Nodes**: Any modern Linux distribution (Debian, Ubuntu, CentOS/RHEL/Rocky, Alpine, Arch) with:
+   - SSH access with public key authentication (e.g. entries configured in `~/.ssh/config`).
+   - Root or `sudo` privileges.
+
+---
+
+### Building from Source
+
+```bash
+# Clone the repository
+git clone https://github.com/your-org/easy42.git
+cd easy42
+
+# Build the Web UI frontend
+cd web
+npm install
+npm run build
+cd ..
+
+# Build the backend Go binary (embeds frontend dist)
+go build -o easy42 .
+```
+
+---
+
+### Starting the Service
+
+Launch the Web UI and backend server:
+
+```bash
+./easy42 serve --listen 127.0.0.1:4242 --data-dir ~/.config/easy42
+```
+
+On first startup, Easy42 generates a random 22-character admin password and prints it to stderr:
+
+```
+=== easy42 First-Time Setup ===
+Config not found at ~/.config/easy42. Initializing...
+=======================================================
+Generated Web UI Admin Password:  aB3dE5gH7jK9mN1pQ3rS5t
+Save this password! You will need it to login to the Web UI.
+=======================================================
+```
+
+Open `http://127.0.0.1:4242` in your browser and authenticate with the password.
+
+---
+
+### Device Config Helper (Bootstrap Tasks)
+
+Easy42 includes an embedded task execution engine to bootstrap prerequisites on remote nodes over SSH without requiring Ansible or custom bash scripts:
+
+| Task ID                | Description                                                                                                                       |
+| :--------------------- | :-------------------------------------------------------------------------------------------------------------------------------- |
+| `install_wireguard`    | Installs `wireguard` and `wireguard-tools` across all supported Linux distributions.                                              |
+| `install_bird`         | Installs BIRD 2 and enables the system service.                                                                                   |
+| `config_bird`          | Backs up `/etc/bird/bird.conf`, inserts `include "/etc/bird_easy42.conf";`, validates syntax with `bird -p`, and reloads `birdc`. |
+| `config_nftables`      | Configures `/etc/nftables.conf` to include `/etc/easy42.nft` and enables the `nftables` service.                                  |
+| `sysctl_params`        | Deploys `/etc/sysctl.d/99-easy42.conf` enabling IP forwarding and setting `rp_filter=0`.                                          |
+| `autostart_interfaces` | Installs `easy42-wg-autostart.service` to bring up `wg42*` interfaces on boot.                                                    |
+
+You can inspect and execute these tasks directly from the **Device Settings** tab in the Web UI.
+
+---
+
+## CLI Reference
+
+Easy42 provides a complete CLI interface via [Cobra](https://github.com/spf13/cobra).
+
+### Global Flags
+
+- `-d, --data-dir <path>`: Path to easy42 data directory (default: `~/.config/easy42`).
+
+### 1. Server Daemon
+
+```bash
+# Start the web UI server and API
+easy42 serve --listen 0.0.0.0:4242
+```
+
+### 2. Node Management
+
+```bash
+# List all configured nodes
+easy42 node list
+
+# Probe a remote server over SSH to discover interfaces and IP addresses
+easy42 node probe my-server-vps
+
+# Add a node manually
+easy42 node add \
+  --name "node-fra" \
+  --host "vps-fra.example.com" \
+  --ip "192.168.100.1" \
+  --ip6 "fd42:a159:f9f0::1" \
+  --interface "lo" \
+  --asn 4224420001
+```
+
+### 3. WireGuard Link Management
+
+```bash
+# List all mesh links
+easy42 link list
+
+# Add a link between two nodes (prompts for admin password to encrypt private keys)
+easy42 link add node-fra node-lon
+
+# Remove a link
+easy42 link remove node-fra node-lon
+```
+
+### 4. Status Inspection & Connectivity Probes
+
+```bash
+# Show local configuration status
+easy42 status
+
+# Perform live SSH probes to report interface status, handshakes, and transfer bytes
+easy42 status --live
+```
+
+### 5. Topology Synchronization
+
+```bash
+# Preview configuration changes across all nodes (dry run)
+easy42 sync --dry-run
+
+# Apply configuration changes to all nodes
+easy42 sync
+
+# Apply changes to a single target node
+easy42 sync --node node-fra
+```
+
+---
+
+## Configuration Specification
+
+All topology state is persisted in `config.json` inside the data directory:
+
+```json
+{
+  "network_settings": {
+    "public_asn": 4242421234,
+    "prefixes": ["172.20.150.0/24", "fd42:a159:f9f0::/48"]
+  },
+  "nodes": [
+    {
+      "name": "fra-gw",
+      "host": "vps-fra.example.com",
+      "ip": "192.168.100.1",
+      "ip6": "fd42:a159:f9f0::1",
+      "external_ip": "172.20.150.1",
+      "interface": "lo",
+      "asn": 4224420001,
+      "entrypoints": [
+        {
+          "ip": "198.51.100.1",
+          "ports": [51820, "20000-29999"],
+          "tags": ["public", "fra"]
+        },
+        {
+          "tags": ["none"]
+        }
+      ],
+      "table": 254
+    }
+  ],
+  "links": [
+    {
+      "from": {
+        "name": "fra-gw",
+        "interface": "wg42lon",
+        "address": "fe80::c0a8:6401/64",
+        "listen_port": 21820,
+        "public_key": "vS5Vz...",
+        "policy": "default",
+        "cost": 50
+      },
+      "to": {
+        "name": "lon-gw",
+        "interface": "wg42fra",
+        "address": "fe80::c0a8:6402/64",
+        "listen_port": 21821,
+        "public_key": "k9L1p...",
+        "policy": "default",
+        "cost": 50
+      }
+    }
+  ]
+}
+```
+
+### Entrypoint Selection Algorithm
+
+When generating links between Node A and Node B:
+
+1. Easy42 scans the `entrypoints` list on both nodes for matching `tags` (e.g. `lan`, `cloud`, `ipv6`).
+2. If a tag match is found, that endpoint is selected; otherwise, it defaults to the first available public endpoint.
+3. If an endpoint is marked with `none` (strictly behind a NAT/firewall without port forwarding), Easy42 configures the link unidirectionally: only the peer with a reachable endpoint has `Endpoint = ...` configured, while the NATed peer initiates the connection and maintains it via `PersistentKeepalive = 25`.
+
+---
+
+## Security & Encryption Architecture
+
+1. **Zero Plaintext Private Keys on Disk**:
+   WireGuard private keys stored in `config.json` are encrypted using **XAES-256-GCM** (24-byte nonce with Poly1305 MAC).
+2. **Key Derivation**:
+   The Data Encryption Key (DEK) is encrypted with a Key Encryption Key (KEK) derived from the administrator password using **Argon2id** (memory: 64 MB, time: 3 iterations, parallelism: 4 threads).
+3. **In-Memory Protection**:
+   In-flight plaintext private keys and the decrypted DEK are held in volatile memory protected by [`awnumar/memguard`](https://github.com/awnumar/memguard). Memory pages are locked against swapping to disk, surrounded by guard pages, and wiped on exit.
+4. **Stateless Session Cookies**:
+   Frontend Web UI authentication uses an encrypted, HTTP-only, `SameSite=Strict` session cookie signed with a cryptographically random session secret generated on first boot.
+
+---
+
+## Operational & Troubleshooting Guide
+
+### Verifying WireGuard Interfaces
+
+```bash
+# Check interface status, handshake timestamp, and transfer counters
+wg show
+
+# Verify that Table = off kept the kernel routing clean
+ip route show dev wg42nodeB
+
+# Verify IPv6 link-local address assignment
+ip -6 addr show dev wg42nodeB
+```
+
+### Inspecting BIRD 2 Dynamic Routing
+
+```bash
+# Check status of BGP peering sessions
+birdc show protocols
+
+# View all learned BGP routes and active preferences
+birdc show route all
+
+# Check routes exported to the Linux kernel FIB
+birdc show route export kernel_v4
+```
+
+### Debugging nftables Rules
+
+```bash
+# View active ruleset in the easy42 table
+nft list table inet easy42
+
+# Check packet counters on the forward and input chains
+nft list chain inet easy42 filter_input
+```
+
+### Common Gotchas & Fixes
+
+1. **Asymmetric Routing Packet Drops**:
+   - _Symptom_: WireGuard handshakes succeed, but TCP connections stall or `ping` fails in one direction.
+   - _Fix_: Ensure Reverse Path Filtering is set to loose or disabled:
+     ```bash
+     sysctl -w net.ipv4.conf.all.rp_filter=0
+     sysctl -w net.ipv4.conf.default.rp_filter=0
+     sysctl -w net.ipv4.conf.wg42*.rp_filter=0
+     ```
+2. **Missing IPv6 Packet Forwarding**:
+   - _Symptom_: IPv4 traffic routes correctly across nodes, but IPv6 fails.
+   - _Fix_: Enable IPv6 forwarding in the kernel:
+     ```bash
+     sysctl -w net.ipv6.conf.all.forwarding=1
+     ```
+3. **SSH Host Key Verification**:
+   - _Symptom_: Controller reports `ssh: handshake failed: known_hosts mismatch`.
+   - _Fix_: Ensure the controller user can SSH into the target host non-interactively (`ssh <host>` without warnings) or add the remote host key to `~/.ssh/known_hosts`.
+
+---
+
+## License
+
+Easy42 is open-source software licensed under the **MIT License**. See `LICENSE` for details.
