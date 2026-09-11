@@ -74,13 +74,22 @@ func TestGenerateNftablesConfig(t *testing.T) {
 		ExternalIP6: "fd42:a159:f9f0::d",
 		ASN:         4224420001,
 	}
-	allNodes := []config.Node{node}
+	allNodes := []config.Node{
+		node,
+		{Name: "dn42-peer", IsExternal: true},
+	}
+	links := []config.Link{
+		{
+			From: config.LinkEnd{Name: "test-node", Interface: "wg42-dn42", Policy: config.PolicyDN42},
+			To:   config.LinkEnd{Name: "dn42-peer", Interface: "wg42"},
+		},
+	}
 	netSettings := &config.NetworkSettings{
 		PublicASN: 4242421234,
 		Prefixes:  []string{"172.20.0.0/14{21,29}", "10.0.0.0/8", "fd00::/8{44,64}"},
 	}
 
-	conf, err := GenerateNftablesConfig(&node, allNodes, nil, netSettings)
+	conf, err := GenerateNftablesConfig(&node, allNodes, links, netSettings)
 	if err != nil {
 		t.Fatalf("GenerateNftablesConfig failed: %v", err)
 	}
@@ -92,23 +101,48 @@ func TestGenerateNftablesConfig(t *testing.T) {
 	if !strings.Contains(conf, "define external_ip6 = fd42:a159:f9f0::d") {
 		t.Errorf("Expected define external_ip6 in conf, got:\n%s", conf)
 	}
-	if !strings.Contains(conf, "define external_prefix = { 10.0.0.0/8, 172.20.0.0/14 }") {
-		t.Errorf("Expected external_prefix set in conf, got:\n%s", conf)
-	}
-	if !strings.Contains(conf, "define external_prefix6 = { fd00::/8 }") {
-		t.Errorf("Expected external_prefix6 set in conf, got:\n%s", conf)
-	}
 	if !strings.Contains(conf, "destroy table inet easy42") {
 		t.Errorf("Expected destroy table inet easy42 in conf, got:\n%s", conf)
 	}
 	if !strings.Contains(conf, "table inet easy42 {") {
 		t.Errorf("Expected table inet easy42 in conf, got:\n%s", conf)
 	}
-	if !strings.Contains(conf, "ip saddr != @external_prefix oifname @external_ifname meta nfproto ipv4 snat to $external_ip") {
+
+	// Verify dn42 policy rules
+	if !strings.Contains(conf, `define pol_dn42_ifname = { "wg42-dn42" }`) {
+		t.Errorf("Expected define pol_dn42_ifname in conf, got:\n%s", conf)
+	}
+	if !strings.Contains(conf, `define pol_dn42_dst_v4 = { 10.0.0.0/8, 172.20.0.0/14 }`) {
+		t.Errorf("Expected define pol_dn42_dst_v4 in conf, got:\n%s", conf)
+	}
+	if !strings.Contains(conf, `define pol_dn42_dst_v6 = { fd00::/8 }`) {
+		t.Errorf("Expected define pol_dn42_dst_v6 in conf, got:\n%s", conf)
+	}
+	if !strings.Contains(conf, "iifname @pol_dn42_ifname ip saddr != @pol_dn42_src_v4 drop") {
+		t.Errorf("Expected forward saddr drop rule in conf, got:\n%s", conf)
+	}
+	if !strings.Contains(conf, "iifname @pol_dn42_ifname meta l4proto tcp th dport { 179 } accept") {
+		t.Errorf("Expected BGP port 179 rule in conf, got:\n%s", conf)
+	}
+	if !strings.Contains(conf, "iifname @pol_dn42_ifname meta l4proto udp th dport { 53 } accept") {
+		t.Errorf("Expected DNS port 53 rule in conf, got:\n%s", conf)
+	}
+	if !strings.Contains(conf, "iifname @pol_dn42_ifname meta l4proto { icmp, ipv6-icmp } accept") {
+		t.Errorf("Expected ICMP/ICMP6 rule in conf, got:\n%s", conf)
+	}
+	if !strings.Contains(conf, "iifname @pol_dn42_ifname counter drop") {
+		t.Errorf("Expected input counter drop in conf, got:\n%s", conf)
+	}
+	if !strings.Contains(conf, "ip saddr != @pol_dn42_dst_v4 oifname @pol_dn42_ifname meta nfproto ipv4 snat to $external_ip") {
 		t.Errorf("Expected IPv4 snat rule in conf, got:\n%s", conf)
 	}
-	if !strings.Contains(conf, "ip6 saddr != @external_prefix6 oifname @external_ifname meta nfproto ipv6 snat to $external_ip6") {
+	if !strings.Contains(conf, "ip6 saddr != @pol_dn42_dst_v6 oifname @pol_dn42_ifname meta nfproto ipv6 snat to $external_ip6") {
 		t.Errorf("Expected IPv6 snat rule in conf, got:\n%s", conf)
+	}
+
+	// Ensure no hardcoded external_ifname remains
+	if strings.Contains(conf, "@external_ifname") {
+		t.Errorf("Hardcoded @external_ifname should not be present in conf, got:\n%s", conf)
 	}
 
 	// Validate syntax with nft binary if installed
@@ -208,9 +242,9 @@ func TestNetworkPolicyNftables(t *testing.T) {
 		t.Fatalf("GenerateNftablesConfig failed: %v", err)
 	}
 
-	// 1. Verify dn42 interface list includes wg42intdn42
-	if !strings.Contains(conf, `"wg42intdn42"`) {
-		t.Errorf("Expected wg42intdn42 in external_ifname set, got:\n%s", conf)
+	// 1. Verify dn42 interface set
+	if !strings.Contains(conf, `define pol_dn42_ifname = { "wg42intdn42" }`) {
+		t.Errorf("Expected pol_dn42_ifname set, got:\n%s", conf)
 	}
 
 	// 2. Verify custom policy sets
@@ -256,3 +290,129 @@ func TestNetworkPolicyNftables(t *testing.T) {
 	}
 }
 
+func TestInputFilterProtocolsAndPorts(t *testing.T) {
+	node := config.Node{
+		Name: "router1",
+		IP:   "192.168.100.1",
+		ASN:  4224420001,
+	}
+	allNodes := []config.Node{
+		node,
+		{Name: "peer-lan", IP: "192.168.100.2"},
+	}
+	links := []config.Link{
+		{
+			From: config.LinkEnd{Name: "router1", Interface: "wg42custom", Policy: "lan-policy"},
+			To:   config.LinkEnd{Name: "peer-lan", Interface: "wg42"},
+		},
+	}
+	customPolicies := []config.NetworkPolicy{
+		{
+			ID:              "lan-policy",
+			Name:            "LAN Policy with Custom Services",
+			FilterInput:     true,
+			InputAllowICMP:  true,
+			InputAllowICMP6: false,
+			InputTCPPorts:   []string{"80", "443", "8000-8080"},
+			InputUDPPorts:   []string{"53", "5000-5010"},
+		},
+	}
+
+	conf, err := GenerateNftablesConfig(&node, allNodes, links, nil, customPolicies)
+	if err != nil {
+		t.Fatalf("GenerateNftablesConfig failed: %v", err)
+	}
+
+	// Verify TCP port rule includes 179 + custom ports
+	if !strings.Contains(conf, "iifname @pol_lan_policy_ifname meta l4proto tcp th dport { 179, 80, 443, 8000-8080 } accept") {
+		t.Errorf("Expected TCP port rule with 179 and custom ports, got:\n%s", conf)
+	}
+
+	// Verify UDP port rule
+	if !strings.Contains(conf, "iifname @pol_lan_policy_ifname meta l4proto udp th dport { 53, 5000-5010 } accept") {
+		t.Errorf("Expected UDP port rule, got:\n%s", conf)
+	}
+
+	// Verify ICMP rule (only IPv4 ICMP, not ICMPv6)
+	if !strings.Contains(conf, "iifname @pol_lan_policy_ifname meta l4proto icmp accept") {
+		t.Errorf("Expected ICMP rule, got:\n%s", conf)
+	}
+	if strings.Contains(conf, "ipv6-icmp") {
+		t.Errorf("Did not expect ipv6-icmp rule, got:\n%s", conf)
+	}
+
+	// Verify counter drop
+	if !strings.Contains(conf, "iifname @pol_lan_policy_ifname counter drop") {
+		t.Errorf("Expected counter drop, got:\n%s", conf)
+	}
+
+	// Validate syntax with nft binary if installed
+	if nftPath, err := exec.LookPath("nft"); err == nil {
+		tmpFile := filepath.Join(t.TempDir(), "easy42.nft")
+		if err := os.WriteFile(tmpFile, []byte(conf), 0644); err != nil {
+			t.Fatalf("WriteFile failed: %v", err)
+		}
+		cmd := exec.Command(nftPath, "-c", "-f", tmpFile)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("nft -c -f validation failed: %v\nOutput:\n%s\nConfig:\n%s", err, string(out), conf)
+		}
+	}
+}
+
+func TestInputFilterAllProtocols(t *testing.T) {
+	node := config.Node{
+		Name: "router1",
+		IP:   "192.168.100.1",
+		ASN:  4224420001,
+	}
+	allNodes := []config.Node{
+		node,
+		{Name: "peer-lan", IP: "192.168.100.2"},
+	}
+	links := []config.Link{
+		{
+			From: config.LinkEnd{Name: "router1", Interface: "wg42all", Policy: "all-proto"},
+			To:   config.LinkEnd{Name: "peer-lan", Interface: "wg42"},
+		},
+	}
+	customPolicies := []config.NetworkPolicy{
+		{
+			ID:              "all-proto",
+			Name:            "All TCP and UDP Allowed",
+			FilterInput:     true,
+			InputAllowICMP:  true,
+			InputAllowICMP6: true,
+			InputTCPPorts:   []string{"all"},
+			InputUDPPorts:   []string{"*"},
+		},
+	}
+
+	conf, err := GenerateNftablesConfig(&node, allNodes, links, nil, customPolicies)
+	if err != nil {
+		t.Fatalf("GenerateNftablesConfig failed: %v", err)
+	}
+
+	if !strings.Contains(conf, "iifname @pol_all_proto_ifname meta l4proto tcp accept") {
+		t.Errorf("Expected meta l4proto tcp accept, got:\n%s", conf)
+	}
+	if !strings.Contains(conf, "iifname @pol_all_proto_ifname meta l4proto udp accept") {
+		t.Errorf("Expected meta l4proto udp accept, got:\n%s", conf)
+	}
+	if !strings.Contains(conf, "iifname @pol_all_proto_ifname meta l4proto { icmp, ipv6-icmp } accept") {
+		t.Errorf("Expected meta l4proto { icmp, ipv6-icmp } accept, got:\n%s", conf)
+	}
+
+	// Validate syntax with nft binary if installed
+	if nftPath, err := exec.LookPath("nft"); err == nil {
+		tmpFile := filepath.Join(t.TempDir(), "easy42.nft")
+		if err := os.WriteFile(tmpFile, []byte(conf), 0644); err != nil {
+			t.Fatalf("WriteFile failed: %v", err)
+		}
+		cmd := exec.Command(nftPath, "-c", "-f", tmpFile)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("nft -c -f validation failed: %v\nOutput:\n%s\nConfig:\n%s", err, string(out), conf)
+		}
+	}
+}

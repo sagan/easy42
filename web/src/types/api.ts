@@ -40,6 +40,10 @@ export interface NetworkPolicy {
   reject_internet?: boolean;
   filter_forward?: boolean;
   filter_input?: boolean;
+  input_allow_icmp?: boolean;
+  input_allow_icmp6?: boolean;
+  input_tcp_ports?: string[];
+  input_udp_ports?: string[];
   snat?: SNATConfig;
   roa4?: string;
   roa6?: string;

@@ -1,6 +1,8 @@
 package config
 
 import (
+	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -30,6 +32,10 @@ type NetworkPolicy struct {
 	RejectInternet     bool        `json:"reject_internet"`
 	FilterForward      bool        `json:"filter_forward"`
 	FilterInput        bool        `json:"filter_input"`
+	InputAllowICMP     bool        `json:"input_allow_icmp"`
+	InputAllowICMP6    bool        `json:"input_allow_icmp6"`
+	InputTCPPorts      []string    `json:"input_tcp_ports,omitempty"`
+	InputUDPPorts      []string    `json:"input_udp_ports,omitempty"`
 	SNAT               *SNATConfig `json:"snat,omitempty"`
 	ROA4               string      `json:"roa4,omitempty"`
 	ROA6               string      `json:"roa6,omitempty"`
@@ -42,6 +48,71 @@ func (p *NetworkPolicy) EffectiveCost() int {
 		return p.Cost
 	}
 	return 100
+}
+
+// CleanPortList normalizes and validates a list of ports and port ranges.
+// It accepts single ports (e.g. "53"), port ranges (e.g. "8000-8080"),
+// or wildcard "all" / "*". It splits by commas, whitespace, and newlines,
+// validates numeric ranges (1-65535), and deduplicates entries.
+func CleanPortList(ports []string) []string {
+	if len(ports) == 0 {
+		return nil
+	}
+
+	var rawTokens []string
+	for _, p := range ports {
+		fields := strings.FieldsFunc(p, func(r rune) bool {
+			return r == ',' || r == '\n' || r == '\r' || r == '\t' || r == ' '
+		})
+		rawTokens = append(rawTokens, fields...)
+	}
+
+	var result []string
+	seen := make(map[string]bool)
+
+	for _, tok := range rawTokens {
+		tok = strings.TrimSpace(tok)
+		if tok == "" {
+			continue
+		}
+
+		if tok == "*" || strings.EqualFold(tok, "all") {
+			if !seen["all"] {
+				seen["all"] = true
+				result = append(result, "all")
+			}
+			continue
+		}
+
+		// Check if it's a range "start-end"
+		if strings.Contains(tok, "-") {
+			parts := strings.Split(tok, "-")
+			if len(parts) == 2 {
+				p1, err1 := strconv.Atoi(strings.TrimSpace(parts[0]))
+				p2, err2 := strconv.Atoi(strings.TrimSpace(parts[1]))
+				if err1 == nil && err2 == nil && p1 > 0 && p1 <= 65535 && p2 > 0 && p2 <= 65535 && p1 <= p2 {
+					norm := fmt.Sprintf("%d-%d", p1, p2)
+					if !seen[norm] {
+						seen[norm] = true
+						result = append(result, norm)
+					}
+				}
+			}
+			continue
+		}
+
+		// Single port
+		p, err := strconv.Atoi(tok)
+		if err == nil && p > 0 && p <= 65535 {
+			norm := strconv.Itoa(p)
+			if !seen[norm] {
+				seen[norm] = true
+				result = append(result, norm)
+			}
+		}
+	}
+
+	return result
 }
 
 // GetBuiltinPolicies returns the three standard built-in virtual policies: default, dn42, none.
@@ -77,6 +148,9 @@ func GetBuiltinPolicies(netSettings *NetworkSettings) []NetworkPolicy {
 			RejectInternet:     true,
 			FilterForward:      true,
 			FilterInput:        true,
+			InputAllowICMP:     true,
+			InputAllowICMP6:    true,
+			InputUDPPorts:      []string{"53"},
 			SNAT: &SNATConfig{
 				Enabled:   true,
 				Condition: "not_dst",

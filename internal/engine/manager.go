@@ -2734,6 +2734,8 @@ func (m *Manager) CreateNetworkPolicy(p config.NetworkPolicy) (*config.NetworkPo
 	p.AllowedDstCIDRs = config.CleanPrefixes(p.AllowedDstCIDRs)
 	p.AllowedSrcCIDRs = config.CleanPrefixes(p.AllowedSrcCIDRs)
 	p.AllowedImportCIDRs = config.CleanPrefixes(p.AllowedImportCIDRs)
+	p.InputTCPPorts = config.CleanPortList(p.InputTCPPorts)
+	p.InputUDPPorts = config.CleanPortList(p.InputUDPPorts)
 
 	cfg.NetworkPolicies = append(cfg.NetworkPolicies, p)
 	if err := m.store.Save(cfg); err != nil {
@@ -2785,6 +2787,10 @@ func (m *Manager) UpdateNetworkPolicy(id string, p config.NetworkPolicy) (*confi
 	cfg.NetworkPolicies[idx].RejectInternet = p.RejectInternet
 	cfg.NetworkPolicies[idx].FilterForward = p.FilterForward
 	cfg.NetworkPolicies[idx].FilterInput = p.FilterInput
+	cfg.NetworkPolicies[idx].InputAllowICMP = p.InputAllowICMP
+	cfg.NetworkPolicies[idx].InputAllowICMP6 = p.InputAllowICMP6
+	cfg.NetworkPolicies[idx].InputTCPPorts = config.CleanPortList(p.InputTCPPorts)
+	cfg.NetworkPolicies[idx].InputUDPPorts = config.CleanPortList(p.InputUDPPorts)
 	cfg.NetworkPolicies[idx].SNAT = p.SNAT
 
 	if err := m.store.Save(cfg); err != nil {

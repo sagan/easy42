@@ -146,7 +146,6 @@ func BuildNftablesNodeContext(
 	ctx["nft_prefixes_v6"] = FormatNftPrefixList(prefixes, []string{"fd00::/8"}, true)
 
 	// Collect interfaces per policy
-	var dn42Ifnames []string
 	policyIfnames := make(map[string][]string)
 
 	linksCtx, _ := ctx["links"].([]map[string]any)
@@ -157,23 +156,24 @@ func BuildNftablesNodeContext(
 		if iface == "" {
 			continue
 		}
-		if polID == config.PolicyDN42 || l["is_dn42"] == true {
-			dn42Ifnames = append(dn42Ifnames, `"`+iface+`"`)
-		} else if polID != config.PolicyDefault && polID != config.PolicyNone {
-			policyIfnames[polID] = append(policyIfnames[polID], `"`+iface+`"`)
+		if (polID == "" || polID == config.PolicyDefault) && l["is_dn42"] == true {
+			polID = config.PolicyDN42
+		} else if polID == "" {
+			polID = config.PolicyDefault
+		}
+		quoted := `"` + iface + `"`
+		if !slices.Contains(policyIfnames[polID], quoted) {
+			policyIfnames[polID] = append(policyIfnames[polID], quoted)
 		}
 	}
 
-	extIfElements := []string{}
-	for _, ifn := range dn42Ifnames {
-		found := slices.Contains(extIfElements, ifn)
-		if !found {
-			extIfElements = append(extIfElements, ifn)
-		}
+	if dn42Ifs, ok := policyIfnames[config.PolicyDN42]; ok && len(dn42Ifs) > 0 {
+		ctx["nft_external_ifname"] = "{ " + strings.Join(dn42Ifs, ", ") + " }"
+	} else {
+		ctx["nft_external_ifname"] = ""
 	}
-	ctx["nft_external_ifname"] = "{ " + strings.Join(extIfElements, ", ") + " }"
 
-	// For custom policies
+	// Resolve all policies (built-in and custom)
 	cfgPolicies := &config.Config{
 		NetworkPolicies: customPolicies,
 	}
@@ -186,12 +186,17 @@ func BuildNftablesNodeContext(
 		policyMap[p.ID] = p
 	}
 
-	var customNftPolicies []map[string]any
+	var nftPolicies []map[string]any
 	for polID, ifnames := range policyIfnames {
 		pol, ok := policyMap[polID]
 		if !ok {
 			continue
 		}
+		hasSNAT := pol.SNAT != nil && pol.SNAT.Enabled
+		if !pol.FilterForward && !pol.FilterInput && !hasSNAT {
+			continue
+		}
+
 		cleanID := SanitizeIdentifier(polID)
 
 		dstV4 := ""
@@ -208,45 +213,98 @@ func BuildNftablesNodeContext(
 			srcV6 = FormatNftPrefixList(pol.AllowedSrcCIDRs, nil, true)
 		}
 
+		// Input traffic filtering
+		var inputAllTCP, inputAllUDP bool
+		var inputTCPPortsStr, inputUDPPortsStr string
+
+		if pol.FilterInput {
+			// TCP ports: BGP (179) is always allowed.
+			tcpList := config.CleanPortList(pol.InputTCPPorts)
+			for _, p := range tcpList {
+				if p == "all" || p == "*" {
+					inputAllTCP = true
+					break
+				}
+			}
+			if !inputAllTCP {
+				ports := []string{"179"}
+				for _, p := range tcpList {
+					if p != "179" && !slices.Contains(ports, p) {
+						ports = append(ports, p)
+					}
+				}
+				inputTCPPortsStr = "{ " + strings.Join(ports, ", ") + " }"
+			}
+
+			// UDP ports
+			udpList := config.CleanPortList(pol.InputUDPPorts)
+			for _, p := range udpList {
+				if p == "all" || p == "*" {
+					inputAllUDP = true
+					break
+				}
+			}
+			if !inputAllUDP && len(udpList) > 0 {
+				inputUDPPortsStr = "{ " + strings.Join(udpList, ", ") + " }"
+			}
+		}
+
 		var snatTargetV4, snatTargetV6 string
-		hasSNAT := pol.SNAT != nil && pol.SNAT.Enabled
+		snatAction := "snat"
+		snatCondition := "not_dst"
 		if hasSNAT {
-			switch pol.SNAT.Target {
-			case "external_ip", "":
-				if strings.TrimSpace(node.ExternalIP) != "" {
-					snatTargetV4 = "$external_ip"
-				}
-				if strings.TrimSpace(node.ExternalIP6) != "" {
-					snatTargetV6 = "$external_ip6"
-				}
-			default:
-				if strings.Contains(pol.SNAT.Target, ":") {
-					snatTargetV6 = pol.SNAT.Target
-				} else {
-					snatTargetV4 = pol.SNAT.Target
+			if pol.SNAT.Condition != "" {
+				snatCondition = pol.SNAT.Condition
+			}
+			if pol.SNAT.Target == "masquerade" {
+				snatAction = "masquerade"
+			} else {
+				switch pol.SNAT.Target {
+				case "external_ip", "":
+					if strings.TrimSpace(node.ExternalIP) != "" {
+						snatTargetV4 = "$external_ip"
+					}
+					if strings.TrimSpace(node.ExternalIP6) != "" {
+						snatTargetV6 = "$external_ip6"
+					}
+				default:
+					if strings.Contains(pol.SNAT.Target, ":") {
+						snatTargetV6 = pol.SNAT.Target
+					} else {
+						snatTargetV4 = pol.SNAT.Target
+					}
 				}
 			}
 		}
 
-		customNftPolicies = append(customNftPolicies, map[string]any{
-			"id":             cleanID,
-			"name":           pol.Name,
-			"ifnames":        "{ " + strings.Join(ifnames, ", ") + " }",
-			"allowed_dst_v4": dstV4,
-			"allowed_dst_v6": dstV6,
-			"allowed_src_v4": srcV4,
-			"allowed_src_v6": srcV6,
-			"filter_forward": pol.FilterForward,
-			"filter_input":   pol.FilterInput,
-			"snat":           hasSNAT,
-			"snat_target_v4": snatTargetV4,
-			"snat_target_v6": snatTargetV6,
+		nftPolicies = append(nftPolicies, map[string]any{
+			"id":                cleanID,
+			"name":              pol.Name,
+			"ifnames":           "{ " + strings.Join(ifnames, ", ") + " }",
+			"allowed_dst_v4":    dstV4,
+			"allowed_dst_v6":    dstV6,
+			"allowed_src_v4":    srcV4,
+			"allowed_src_v6":    srcV6,
+			"filter_forward":    pol.FilterForward,
+			"filter_input":      pol.FilterInput,
+			"input_allow_icmp":  pol.InputAllowICMP,
+			"input_allow_icmp6": pol.InputAllowICMP6,
+			"input_all_tcp":     inputAllTCP,
+			"input_tcp_ports":   inputTCPPortsStr,
+			"input_all_udp":     inputAllUDP,
+			"input_udp_ports":   inputUDPPortsStr,
+			"snat":              hasSNAT,
+			"snat_action":       snatAction,
+			"snat_condition":    snatCondition,
+			"snat_target_v4":    snatTargetV4,
+			"snat_target_v6":    snatTargetV6,
 		})
 	}
-	sort.Slice(customNftPolicies, func(i, j int) bool {
-		return customNftPolicies[i]["id"].(string) < customNftPolicies[j]["id"].(string)
+	sort.Slice(nftPolicies, func(i, j int) bool {
+		return nftPolicies[i]["id"].(string) < nftPolicies[j]["id"].(string)
 	})
-	ctx["custom_nft_policies"] = customNftPolicies
+	ctx["nft_policies"] = nftPolicies
+	ctx["custom_nft_policies"] = nftPolicies
 
 	return ctx, nil
 }

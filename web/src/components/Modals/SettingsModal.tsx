@@ -18,6 +18,8 @@ import {
   Switch,
   FormControlLabel,
   MenuItem,
+  Checkbox,
+  Divider,
 } from "@mui/material";
 import {
   Settings as SettingsIcon,
@@ -72,6 +74,13 @@ export const parsePrefixList = (input: string): string[] => {
   return result;
 };
 
+export const parsePortList = (input: string): string[] => {
+  return input
+    .split(/[\n,\s]+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+};
+
 interface SettingsModalProps {
   open: boolean;
   onClose: () => void;
@@ -121,6 +130,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
   const [policyRejectInternet, setPolicyRejectInternet] = useState(true);
   const [policyFilterForward, setPolicyFilterForward] = useState(true);
   const [policyFilterInput, setPolicyFilterInput] = useState(false);
+  const [policyInputAllowIcmp, setPolicyInputAllowIcmp] = useState(true);
+  const [policyInputAllowIcmp6, setPolicyInputAllowIcmp6] = useState(true);
+  const [policyInputTcpPorts, setPolicyInputTcpPorts] = useState("");
+  const [policyInputUdpPorts, setPolicyInputUdpPorts] = useState("");
   const [policySnatEnabled, setPolicySnatEnabled] = useState(false);
   const [policySnatCondition, setPolicySnatCondition] = useState<string>("not_dst");
   const [policySnatTarget, setPolicySnatTarget] = useState<string>("masquerade");
@@ -208,6 +221,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
     setPolicyRejectInternet(true);
     setPolicyFilterForward(true);
     setPolicyFilterInput(false);
+    setPolicyInputAllowIcmp(true);
+    setPolicyInputAllowIcmp6(true);
+    setPolicyInputTcpPorts("");
+    setPolicyInputUdpPorts("");
     setPolicySnatEnabled(false);
     setPolicySnatCondition("not_dst");
     setPolicySnatTarget("masquerade");
@@ -230,6 +247,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
     setPolicyRejectInternet(Boolean(p.reject_internet));
     setPolicyFilterForward(Boolean(p.filter_forward));
     setPolicyFilterInput(Boolean(p.filter_input));
+    setPolicyInputAllowIcmp(p.input_allow_icmp !== false);
+    setPolicyInputAllowIcmp6(p.input_allow_icmp6 !== false);
+    setPolicyInputTcpPorts((p.input_tcp_ports || []).join(", "));
+    setPolicyInputUdpPorts((p.input_udp_ports || []).join(", "));
     setPolicySnatEnabled(Boolean(p.snat?.enabled));
     setPolicySnatCondition(p.snat?.condition || "not_dst");
     setPolicySnatTarget(p.snat?.target || "masquerade");
@@ -252,6 +273,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
     setPolicyRejectInternet(Boolean(p.reject_internet));
     setPolicyFilterForward(Boolean(p.filter_forward));
     setPolicyFilterInput(Boolean(p.filter_input));
+    setPolicyInputAllowIcmp(p.input_allow_icmp !== false);
+    setPolicyInputAllowIcmp6(p.input_allow_icmp6 !== false);
+    setPolicyInputTcpPorts((p.input_tcp_ports || []).join(", "));
+    setPolicyInputUdpPorts((p.input_udp_ports || []).join(", "));
     setPolicySnatEnabled(Boolean(p.snat?.enabled));
     setPolicySnatCondition(p.snat?.condition || "not_dst");
     setPolicySnatTarget(p.snat?.target || "masquerade");
@@ -315,6 +340,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
         reject_internet: policyRejectInternet,
         filter_forward: policyFilterForward,
         filter_input: policyFilterInput,
+        input_allow_icmp: policyInputAllowIcmp,
+        input_allow_icmp6: policyInputAllowIcmp6,
+        input_tcp_ports: parsePortList(policyInputTcpPorts),
+        input_udp_ports: parsePortList(policyInputUdpPorts),
         snat: policySnatEnabled
           ? {
               enabled: true,
@@ -374,6 +403,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
     setPolicyRejectInternet(Boolean(p.reject_internet));
     setPolicyFilterForward(Boolean(p.filter_forward));
     setPolicyFilterInput(Boolean(p.filter_input));
+    setPolicyInputAllowIcmp(p.input_allow_icmp !== false);
+    setPolicyInputAllowIcmp6(p.input_allow_icmp6 !== false);
+    setPolicyInputTcpPorts((p.input_tcp_ports || []).join(", "));
+    setPolicyInputUdpPorts((p.input_udp_ports || []).join(", "));
     setPolicySnatEnabled(Boolean(p.snat?.enabled));
     setPolicySnatCondition(p.snat?.condition || "not_dst");
     setPolicySnatTarget(p.snat?.target || "masquerade");
@@ -999,6 +1032,30 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
                         />
                         <Chip
                           size="small"
+                          label={`Forward Filter: ${p.filter_forward ? "Enabled" : "Disabled"}`}
+                          variant="outlined"
+                          sx={{
+                            fontSize: "0.7rem",
+                            height: 22,
+                            borderColor: p.filter_forward ? "#C7D2FE" : undefined,
+                            bgcolor: p.filter_forward ? "#EEF2FF" : undefined,
+                            color: p.filter_forward ? "#4338CA" : undefined,
+                          }}
+                        />
+                        <Chip
+                          size="small"
+                          label={`Input Filter: ${p.filter_input ? "Enabled" : "Disabled"}`}
+                          variant="outlined"
+                          sx={{
+                            fontSize: "0.7rem",
+                            height: 22,
+                            borderColor: p.filter_input ? "#FED7AA" : undefined,
+                            bgcolor: p.filter_input ? "#FFF7ED" : undefined,
+                            color: p.filter_input ? "#C2410C" : undefined,
+                          }}
+                        />
+                        <Chip
+                          size="small"
                           label={`Leak Protect: ${p.reject_internet ? "Internet Rejection" : "None"}`}
                           variant="outlined"
                           sx={{ fontSize: "0.7rem", height: 22 }}
@@ -1235,6 +1292,114 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
                   </Box>
                 }
               />
+            </Box>
+
+            {/* Traffic Filtering & Host Firewall */}
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, p: 2, borderRadius: 2, bgcolor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#1E293B", display: "flex", alignItems: "center", gap: 0.8 }}>
+                <Shield size={16} /> Traffic Filtering & Host Firewall
+              </Typography>
+
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={policyFilterForward}
+                    onChange={(e) => setPolicyFilterForward(e.target.checked)}
+                    disabled={policyDialogMode === "view" || policyDialogSaving}
+                  />
+                }
+                label={
+                  <Box>
+                    <Typography variant="body2" sx={{ fontWeight: 600, color: "#0F172A" }}>
+                      Filter Transit / Forwarded Traffic
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: "#64748B" }}>
+                      Drops forwarded packets whose source or destination IP does not match the configured allowed CIDRs.
+                    </Typography>
+                  </Box>
+                }
+              />
+
+              <Divider sx={{ my: 0.5 }} />
+
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={policyFilterInput}
+                    onChange={(e) => setPolicyFilterInput(e.target.checked)}
+                    disabled={policyDialogMode === "view" || policyDialogSaving}
+                  />
+                }
+                label={
+                  <Box>
+                    <Typography variant="body2" sx={{ fontWeight: 600, color: "#0F172A" }}>
+                      Filter Input Traffic (Host Firewall)
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: "#64748B" }}>
+                      Restricts incoming traffic targeting the host itself from this link. BGP (TCP port 179) and established return traffic are always permitted.
+                    </Typography>
+                  </Box>
+                }
+              />
+
+              {policyFilterInput && (
+                <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, pl: 4, pt: 0.5 }}>
+                  <Box sx={{ display: "flex", gap: 3 }}>
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          size="small"
+                          checked={policyInputAllowIcmp}
+                          onChange={(e) => setPolicyInputAllowIcmp(e.target.checked)}
+                          disabled={policyDialogMode === "view" || policyDialogSaving}
+                        />
+                      }
+                      label={
+                        <Typography variant="body2" sx={{ fontSize: "0.85rem", color: "#334155" }}>
+                          Allow ICMP (IPv4 Ping)
+                        </Typography>
+                      }
+                    />
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          size="small"
+                          checked={policyInputAllowIcmp6}
+                          onChange={(e) => setPolicyInputAllowIcmp6(e.target.checked)}
+                          disabled={policyDialogMode === "view" || policyDialogSaving}
+                        />
+                      }
+                      label={
+                        <Typography variant="body2" sx={{ fontSize: "0.85rem", color: "#334155" }}>
+                          Allow ICMPv6 (IPv6 Ping & NDP)
+                        </Typography>
+                      }
+                    />
+                  </Box>
+
+                  <TextField
+                    fullWidth
+                    size="small"
+                    label="Allowed TCP Ports"
+                    placeholder="e.g. 80, 443, 8000-8080 (or all)"
+                    value={policyInputTcpPorts}
+                    onChange={(e) => setPolicyInputTcpPorts(e.target.value)}
+                    disabled={policyDialogMode === "view" || policyDialogSaving}
+                    helperText="Comma or newline separated list of ports (1-65535) or ranges (e.g. 8000-8080). BGP 179 is always permitted."
+                  />
+
+                  <TextField
+                    fullWidth
+                    size="small"
+                    label="Allowed UDP Ports"
+                    placeholder="e.g. 53, 5000-5010 (or all)"
+                    value={policyInputUdpPorts}
+                    onChange={(e) => setPolicyInputUdpPorts(e.target.value)}
+                    disabled={policyDialogMode === "view" || policyDialogSaving}
+                    helperText="Comma or newline separated list of ports (1-65535) or ranges. Defaults to 53 for DN42 DNS."
+                  />
+                </Box>
+              )}
             </Box>
 
             <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, p: 2, borderRadius: 2, bgcolor: "#F8FAFC", border: "1px solid #E2E8F0" }}>

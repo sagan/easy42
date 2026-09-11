@@ -102,3 +102,56 @@ func TestEffectiveCost(t *testing.T) {
 	}
 }
 
+func TestCleanPortList(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    []string
+		expected []string
+	}{
+		{
+			name:     "nil or empty input",
+			input:    nil,
+			expected: nil,
+		},
+		{
+			name:     "single ports comma separated",
+			input:    []string{"80, 443, 53"},
+			expected: []string{"80", "443", "53"},
+		},
+		{
+			name:     "port ranges and single ports with spaces and duplicates",
+			input:    []string{"80", "8000-8080", " 80 ", "443", "8000-8080"},
+			expected: []string{"80", "8000-8080", "443"},
+		},
+		{
+			name:     "wildcard all",
+			input:    []string{"ALL"},
+			expected: []string{"all"},
+		},
+		{
+			name:     "wildcard star",
+			input:    []string{"*"},
+			expected: []string{"all"},
+		},
+		{
+			name:     "filters invalid ports",
+			input:    []string{"0", "65536", "-1", "abc", "80", "90-80", "100-200"},
+			expected: []string{"80", "100-200"},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := CleanPortList(tc.input)
+			if len(got) != len(tc.expected) {
+				t.Fatalf("expected len %d, got %d: %v", len(tc.expected), len(got), got)
+			}
+			for i := range got {
+				if got[i] != tc.expected[i] {
+					t.Errorf("at index %d: expected %s, got %s", i, tc.expected[i], got[i])
+				}
+			}
+		})
+	}
+}
+
