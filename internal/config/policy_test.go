@@ -72,3 +72,33 @@ func TestEffectivePolicy(t *testing.T) {
 		t.Errorf("explicit custom end: expected custom-dmz, got %s", p)
 	}
 }
+
+func TestEffectiveCost(t *testing.T) {
+	var end *LinkEnd
+	if c := end.EffectiveCost(50); c != 50 {
+		t.Errorf("nil end with policy cost 50: expected 50, got %d", c)
+	}
+	if c := end.EffectiveCost(0); c != 100 {
+		t.Errorf("nil end with policy cost 0: expected 100, got %d", c)
+	}
+
+	end = &LinkEnd{}
+	if c := end.EffectiveCost(50); c != 50 {
+		t.Errorf("empty end with policy cost 50: expected 50, got %d", c)
+	}
+
+	pol := &NetworkPolicy{Cost: 75}
+	if c := end.EffectiveCostWithPolicy(pol); c != 75 {
+		t.Errorf("empty end with policy struct cost 75: expected 75, got %d", c)
+	}
+
+	// Cost set (not zero) overrides policy cost
+	end.Cost = 30
+	if c := end.EffectiveCost(50); c != 30 {
+		t.Errorf("explicit cost 30 with policy cost 50: expected 30, got %d", c)
+	}
+	if c := end.EffectiveCostWithPolicy(pol); c != 30 {
+		t.Errorf("explicit cost 30 with policy struct cost 75: expected 30, got %d", c)
+	}
+}
+

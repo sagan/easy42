@@ -967,6 +967,15 @@ func (m *Manager) buildLink(cfg *config.Config, n1, n2 *config.Node, listenPort1
 		toPolicy = config.PolicyDefault
 	}
 
+	fromCost := 0
+	if customFromEnd != nil && customFromEnd.Cost != 0 {
+		fromCost = customFromEnd.Cost
+	}
+	toCost := 0
+	if customToEnd != nil && customToEnd.Cost != 0 {
+		toCost = customToEnd.Cost
+	}
+
 	link := &config.Link{
 		From: config.LinkEnd{
 			Name:                fromNode.Name,
@@ -980,6 +989,7 @@ func (m *Manager) buildLink(cfg *config.Config, n1, n2 *config.Node, listenPort1
 			MTU:                 fromMTU,
 			UseIp:               fromUseIP,
 			Policy:              fromPolicy,
+			Cost:                fromCost,
 		},
 		To: config.LinkEnd{
 			Name:                toNode.Name,
@@ -993,6 +1003,7 @@ func (m *Manager) buildLink(cfg *config.Config, n1, n2 *config.Node, listenPort1
 			MTU:                 toMTU,
 			UseIp:               toUseIP,
 			Policy:              toPolicy,
+			Cost:                toCost,
 		},
 		Tags:       tags,
 		ModifiedAt: time.Now().UTC(),
@@ -1348,6 +1359,9 @@ func (m *Manager) UpdateLinkAdvanced(node1Name, node2Name string, customFrom, cu
 		if fromEnd.Policy != "" {
 			link.From.Policy = fromEnd.Policy
 		}
+		if fromEnd.Cost != 0 {
+			link.From.Cost = fromEnd.Cost
+		}
 	}
 
 	if toEnd != nil {
@@ -1372,6 +1386,9 @@ func (m *Manager) UpdateLinkAdvanced(node1Name, node2Name string, customFrom, cu
 		link.To.UseIp = toEnd.UseIp
 		if toEnd.Policy != "" {
 			link.To.Policy = toEnd.Policy
+		}
+		if toEnd.Cost != 0 {
+			link.To.Cost = toEnd.Cost
 		}
 	}
 

@@ -187,10 +187,24 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 	}
 
 	// 5. Build links for this node
-	var nodeLinks []map[string]any
+	type rawLinkInfo struct {
+		link             config.Link
+		localEnd         *config.LinkEnd
+		remoteEnd        *config.LinkEnd
+		remoteNode       *config.Node
+		policyID         string
+		pol              config.NetworkPolicy
+		isRemoteExternal bool
+		isExternal       bool
+		isDN42           bool
+		linkCost         int
+	}
+
+	var rawLinks []rawLinkInfo
 	hasExternalLinks := false
 	hasNonePolicy := false
 	usedPolicyMap := make(map[string]config.NetworkPolicy)
+	policyCostsMap := make(map[string]map[int]bool)
 
 	for _, l := range links {
 		var localEnd, remoteEnd *config.LinkEnd
@@ -228,59 +242,129 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 			hasExternalLinks = true
 		}
 
+		isDN42 := (policyID == config.PolicyDN42)
+		if policyID == config.PolicyNone {
+			hasNonePolicy = true
+		}
+
+		linkCost := localEnd.EffectiveCostWithPolicy(&pol)
+		if policyCostsMap[policyID] == nil {
+			policyCostsMap[policyID] = make(map[int]bool)
+		}
+		policyCostsMap[policyID][linkCost] = true
+
+		rawLinks = append(rawLinks, rawLinkInfo{
+			link:             l,
+			localEnd:         localEnd,
+			remoteEnd:        remoteEnd,
+			remoteNode:       remoteNode,
+			policyID:         policyID,
+			pol:              pol,
+			isRemoteExternal: isRemoteExternal,
+			isExternal:       isExternal,
+			isDN42:           isDN42,
+			linkCost:         linkCost,
+		})
+	}
+
+	defaultCost := 100
+	if p, ok := policyMap[config.PolicyDefault]; ok {
+		defaultCost = p.EffectiveCost()
+	}
+	if costs, ok := policyCostsMap[config.PolicyDefault]; ok && len(costs) == 1 {
+		for c := range costs {
+			defaultCost = c
+		}
+	}
+
+	noneCost := 100
+	if p, ok := policyMap[config.PolicyNone]; ok {
+		noneCost = p.EffectiveCost()
+	}
+	if costs, ok := policyCostsMap[config.PolicyNone]; ok && len(costs) == 1 {
+		for c := range costs {
+			noneCost = c
+		}
+	}
+
+	customBaseCosts := make(map[string]int)
+	for id, pol := range usedPolicyMap {
+		base := pol.EffectiveCost()
+		if costs, ok := policyCostsMap[id]; ok && len(costs) == 1 {
+			for c := range costs {
+				base = c
+			}
+		}
+		customBaseCosts[id] = base
+	}
+
+	var nodeLinks []map[string]any
+	for _, rl := range rawLinks {
 		bgpTemplate := "easy42_peer"
-		isDN42 := false
 		localAS := "SELF_AS"
 
-		switch policyID {
+		switch rl.policyID {
 		case config.PolicyDefault:
-			bgpTemplate = "easy42_peer"
+			if rl.linkCost == defaultCost {
+				bgpTemplate = "easy42_peer"
+			} else {
+				bgpTemplate = fmt.Sprintf("easy42_peer_cost_%d", rl.linkCost)
+			}
 		case config.PolicyDN42:
 			bgpTemplate = "external_peer"
-			isDN42 = true
 			if settings != nil && settings.PublicASN > 0 {
 				localAS = "CONFED_AS"
 			}
 		case config.PolicyNone:
-			bgpTemplate = "none_peer"
-			hasNonePolicy = true
+			if rl.linkCost == noneCost {
+				bgpTemplate = "none_peer"
+			} else {
+				bgpTemplate = fmt.Sprintf("none_peer_cost_%d", rl.linkCost)
+			}
 		default:
-			bgpTemplate = "pol_peer_" + SanitizeIdentifier(policyID)
+			cleanID := SanitizeIdentifier(rl.policyID)
+			baseCost := customBaseCosts[rl.policyID]
+			if rl.linkCost == baseCost {
+				bgpTemplate = "pol_peer_" + cleanID
+			} else {
+				bgpTemplate = fmt.Sprintf("pol_peer_%s_cost_%d", cleanID, rl.linkCost)
+			}
 		}
 
-		localMap := linkEndToContextMap(localEnd, node, remoteEnd.Name, isRemoteExternal)
-		localMap["policy"] = policyID
-		remoteMap := linkEndToContextMap(remoteEnd, remoteNode, localEnd.Name, node.IsExternal)
+		localMap := linkEndToContextMap(rl.localEnd, node, rl.remoteEnd.Name, rl.isRemoteExternal)
+		localMap["policy"] = rl.policyID
+		localMap["cost"] = rl.linkCost
+		remoteMap := linkEndToContextMap(rl.remoteEnd, rl.remoteNode, rl.localEnd.Name, node.IsExternal)
 
 		var remoteNodeMap map[string]any
-		if remoteNode != nil {
-			nodeData, _ := json.Marshal(remoteNode)
+		if rl.remoteNode != nil {
+			nodeData, _ := json.Marshal(rl.remoteNode)
 			_ = json.Unmarshal(nodeData, &remoteNodeMap)
 			// Ensure table defaults for remote_node as well
-			rTable := remoteNode.Table
+			rTable := rl.remoteNode.Table
 			if rTable <= 0 {
 				rTable = 254
 			}
 			remoteNodeMap["table"] = rTable
 			remoteNodeMap["routing_table"] = rTable
-			remoteNodeMap["external_table"] = remoteNode.ExternalTable
-			remoteNodeMap["use_external_table"] = remoteNode.ExternalTable > 0 && remoteNode.ExternalTable != rTable
-			remoteNodeMap["asn"] = remoteNode.ASN
-			remoteNodeMap["name"] = remoteNode.Name
-			remoteNodeMap["ip"] = remoteNode.IP
-			remoteNodeMap["external_ip"] = remoteNode.ExternalIP
-			remoteNodeMap["external_ip6"] = remoteNode.ExternalIP6
-			remoteNodeMap["interface"] = remoteNode.Interface
-			remoteNodeMap["is_external"] = remoteNode.IsExternal
+			remoteNodeMap["external_table"] = rl.remoteNode.ExternalTable
+			remoteNodeMap["use_external_table"] = rl.remoteNode.ExternalTable > 0 && rl.remoteNode.ExternalTable != rTable
+			remoteNodeMap["asn"] = rl.remoteNode.ASN
+			remoteNodeMap["name"] = rl.remoteNode.Name
+			remoteNodeMap["ip"] = rl.remoteNode.IP
+			remoteNodeMap["external_ip"] = rl.remoteNode.ExternalIP
+			remoteNodeMap["external_ip6"] = rl.remoteNode.ExternalIP6
+			remoteNodeMap["interface"] = rl.remoteNode.Interface
+			remoteNodeMap["is_external"] = rl.remoteNode.IsExternal
 		} else {
 			remoteNodeMap = map[string]any{
-				"name":        remoteEnd.Name,
+				"name":        rl.remoteEnd.Name,
 				"asn":         uint64(0),
 				"is_external": false,
 			}
 		}
 
-		tags := l.Tags
+		tags := rl.link.Tags
 		if tags == nil {
 			tags = []string{}
 		}
@@ -290,21 +374,64 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 			"local":        localMap,
 			"remote":       remoteMap,
 			"remote_node":  remoteNodeMap,
-			"is_external":  isExternal,
-			"is_dn42":      isDN42,
-			"policy_id":    policyID,
+			"is_external":  rl.isExternal,
+			"is_dn42":      rl.isDN42,
+			"policy_id":    rl.policyID,
 			"bgp_template": bgpTemplate,
 			"local_as":     localAS,
+			"cost":         rl.linkCost,
 		})
 	}
 
+	var customDefaultTemplates []map[string]any
+	if defaultCosts, ok := policyCostsMap[config.PolicyDefault]; ok {
+		var extraCosts []int
+		for c := range defaultCosts {
+			if c != defaultCost {
+				extraCosts = append(extraCosts, c)
+			}
+		}
+		sort.Ints(extraCosts)
+		for _, c := range extraCosts {
+			customDefaultTemplates = append(customDefaultTemplates, map[string]any{
+				"template_name": fmt.Sprintf("easy42_peer_cost_%d", c),
+				"cost":          c,
+			})
+		}
+	}
+
+	var customNoneTemplates []map[string]any
+	if noneCosts, ok := policyCostsMap[config.PolicyNone]; ok {
+		var extraCosts []int
+		for c := range noneCosts {
+			if c != noneCost {
+				extraCosts = append(extraCosts, c)
+			}
+		}
+		sort.Ints(extraCosts)
+		for _, c := range extraCosts {
+			customNoneTemplates = append(customNoneTemplates, map[string]any{
+				"template_name": fmt.Sprintf("none_peer_cost_%d", c),
+				"cost":          c,
+			})
+		}
+	}
+
+	var customPolicyPrefixes []map[string]any
 	var customBirdPolicies []map[string]any
-	for id, pol := range usedPolicyMap {
+
+	var customPolicyIDs []string
+	for id := range usedPolicyMap {
 		if id == config.PolicyDefault || id == config.PolicyDN42 || id == config.PolicyNone {
 			continue
 		}
+		customPolicyIDs = append(customPolicyIDs, id)
+	}
+	sort.Strings(customPolicyIDs)
+
+	for _, id := range customPolicyIDs {
+		pol := usedPolicyMap[id]
 		cleanID := SanitizeIdentifier(id)
-		tmplName := "pol_peer_" + cleanID
 
 		importV4 := formatPrefixList(pol.AllowedImportCIDRs, nil, false)
 		importV6 := formatPrefixList(pol.AllowedImportCIDRs, nil, true)
@@ -314,11 +441,26 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 		hasRoa := strings.TrimSpace(pol.ROA4) != "" || strings.TrimSpace(pol.ROA6) != ""
 		roaFn := cleanID + "_roa_check"
 
+		customPolicyPrefixes = append(customPolicyPrefixes, map[string]any{
+			"id":                 cleanID,
+			"has_import_v4":      importV4 != "",
+			"has_import_v6":      importV6 != "",
+			"import_prefixes_v4": importV4,
+			"import_prefixes_v6": importV6,
+			"has_export_v4":      exportV4 != "",
+			"has_export_v6":      exportV6 != "",
+			"export_prefixes_v4": exportV4,
+			"export_prefixes_v6": exportV6,
+		})
+
+		baseCost := customBaseCosts[id]
+		baseTmplName := "pol_peer_" + cleanID
+
 		customBirdPolicies = append(customBirdPolicies, map[string]any{
 			"id":                 cleanID,
 			"name":               pol.Name,
-			"template_name":      tmplName,
-			"cost":               pol.EffectiveCost(),
+			"template_name":      baseTmplName,
+			"cost":               baseCost,
 			"reject_internet":    pol.RejectInternet,
 			"has_import_v4":      importV4 != "",
 			"has_import_v6":      importV6 != "",
@@ -331,10 +473,36 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 			"has_roa":            hasRoa,
 			"roa_fn":             roaFn,
 		})
+
+		if costs, ok := policyCostsMap[id]; ok {
+			var extraCosts []int
+			for c := range costs {
+				if c != baseCost {
+					extraCosts = append(extraCosts, c)
+				}
+			}
+			sort.Ints(extraCosts)
+			for _, c := range extraCosts {
+				customBirdPolicies = append(customBirdPolicies, map[string]any{
+					"id":                 cleanID,
+					"name":               pol.Name,
+					"template_name":      fmt.Sprintf("pol_peer_%s_cost_%d", cleanID, c),
+					"cost":               c,
+					"reject_internet":    pol.RejectInternet,
+					"has_import_v4":      importV4 != "",
+					"has_import_v6":      importV6 != "",
+					"import_prefixes_v4": importV4,
+					"import_prefixes_v6": importV6,
+					"has_export_v4":      exportV4 != "",
+					"has_export_v6":      exportV6 != "",
+					"export_prefixes_v4": exportV4,
+					"export_prefixes_v6": exportV6,
+					"has_roa":            hasRoa,
+					"roa_fn":             roaFn,
+				})
+			}
+		}
 	}
-	sort.Slice(customBirdPolicies, func(i, j int) bool {
-		return customBirdPolicies[i]["id"].(string) < customBirdPolicies[j]["id"].(string)
-	})
 
 	var roaPolicies []map[string]any
 	hasDN42Roa := false
@@ -376,20 +544,14 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 		}
 	}
 
-	defaultCost := 100
-	if p, ok := policyMap[config.PolicyDefault]; ok {
-		defaultCost = p.EffectiveCost()
-	}
-	noneCost := 100
-	if p, ok := policyMap[config.PolicyNone]; ok {
-		noneCost = p.EffectiveCost()
-	}
-
 	ctx["links"] = nodeLinks
 	ctx["default_cost"] = defaultCost
 	ctx["none_cost"] = noneCost
 	ctx["has_external_links"] = hasExternalLinks
 	ctx["has_none_policy"] = hasNonePolicy
+	ctx["custom_default_templates"] = customDefaultTemplates
+	ctx["custom_none_templates"] = customNoneTemplates
+	ctx["custom_policy_prefixes"] = customPolicyPrefixes
 	ctx["custom_bird_policies"] = customBirdPolicies
 	ctx["roa_policies"] = roaPolicies
 	ctx["has_dn42_roa"] = hasDN42Roa
@@ -470,6 +632,7 @@ func linkEndToContextMap(end *config.LinkEnd, node *config.Node, peerName string
 	pubKey := ""
 	keepalive := 0
 	mtu := 0
+	cost := 0
 
 	if end != nil {
 		name = end.Name
@@ -478,6 +641,7 @@ func linkEndToContextMap(end *config.LinkEnd, node *config.Node, peerName string
 		pubKey = end.PublicKey
 		keepalive = end.PersistentKeepalive
 		mtu = end.MTU
+		cost = end.Cost
 	}
 
 	isLinkLocal := strings.HasPrefix(strings.ToLower(addr), "fe80:")
@@ -492,6 +656,7 @@ func linkEndToContextMap(end *config.LinkEnd, node *config.Node, peerName string
 		"public_key":           pubKey,
 		"persistent_keepalive": keepalive,
 		"mtu":                  mtu,
+		"cost":                 cost,
 	}
 }
 

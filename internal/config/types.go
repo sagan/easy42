@@ -169,6 +169,7 @@ type LinkEnd struct {
 	UseIp               bool   `json:"use_ip,omitempty"`            // Resolve peer's endpoint domain to IP in easy42 server
 	ResolvedEndpoint    string `json:"resolved_endpoint,omitempty"` // Automatically resolved / actually used endpoint
 	Policy              string `json:"policy,omitempty"`            // Network policy ID (e.g. default, dn42, none, or custom)
+	Cost                int    `json:"cost,omitempty"`              // Link cost override (if non-zero, overrides policy cost)
 }
 
 // UseIP returns whether UseIp is enabled on the LinkEnd

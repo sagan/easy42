@@ -58,6 +58,8 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
   const [networkPolicies, setNetworkPolicies] = useState<NetworkPolicy[]>([]);
   const [fromPolicy, setFromPolicy] = useState<string>("default");
   const [toPolicy, setToPolicy] = useState<string>("default");
+  const [fromCost, setFromCost] = useState<number | string>("");
+  const [toCost, setToCost] = useState<number | string>("");
 
   // External peering custom fields
   const [localAddress, setLocalAddress] = useState("");
@@ -140,6 +142,8 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
       }
       setFromUseIp(Boolean(linkToEdit.from.use_ip));
       setToUseIp(Boolean(linkToEdit.to.use_ip));
+      setFromCost(linkToEdit.from.cost !== undefined && linkToEdit.from.cost !== 0 ? linkToEdit.from.cost : "");
+      setToCost(linkToEdit.to.cost !== undefined && linkToEdit.to.cost !== 0 ? linkToEdit.to.cost : "");
       setError(null);
     } else {
       setFromNodeName(initialFrom || "");
@@ -151,6 +155,8 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
       const isExt = Boolean(nodes.find((n) => n.name === initialFrom)?.is_external || nodes.find((n) => n.name === initialTo)?.is_external);
       setFromPolicy(isExt ? "dn42" : "default");
       setToPolicy(isExt ? "dn42" : "default");
+      setFromCost("");
+      setToCost("");
       setLocalAddress("fe80::1/64");
       setRemoteAddress("fe80::2/64");
       setRemotePort("");
@@ -254,6 +260,9 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
     setSubmitting(true);
     setError(null);
 
+    const parsedFromCost = fromCost === "" ? 0 : Number(fromCost);
+    const parsedToCost = toCost === "" ? 0 : Number(toCost);
+
     try {
       if (isExternalLink && managedNode && externalNode) {
         const managedMtuVal = (managedNode === fromNode ? fromMtu : toMtu) || 1420;
@@ -269,6 +278,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
           mtu: managedMtuVal,
           use_ip: managedNode === fromNode ? fromUseIp : toUseIp,
           policy: managedPolicy,
+          cost: managedNode === fromNode ? parsedFromCost : parsedToCost,
         };
 
         const externalEnd = {
@@ -279,6 +289,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
           public_key: remotePublicKey.trim() || undefined,
           mtu: 1420,
           policy: "none",
+          cost: externalNode === fromNode ? parsedFromCost : parsedToCost,
         };
 
         const reqFrom = fromNode === managedNode ? managedEnd : externalEnd;
@@ -294,6 +305,8 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
             to_use_ip: toUseIp,
             from_policy: reqFrom.policy,
             to_policy: reqTo.policy,
+            from_cost: reqFrom.cost,
+            to_cost: reqTo.cost,
           });
           onLinkUpdated?.(updated);
         } else {
@@ -306,6 +319,8 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
             to_use_ip: toUseIp,
             from_policy: reqFrom.policy,
             to_policy: reqTo.policy,
+            from_cost: reqFrom.cost,
+            to_cost: reqTo.cost,
           });
           onLinkAdded?.(link);
         }
@@ -322,12 +337,15 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
             to_use_ip: toUseIp,
             from_policy: fromPolicy,
             to_policy: toPolicy,
+            from_cost: parsedFromCost,
+            to_cost: parsedToCost,
             from: {
               ...linkToEdit.from,
               listen_port: fromPort || undefined,
               mtu: fromMtu || undefined,
               use_ip: fromUseIp,
               policy: fromPolicy,
+              cost: parsedFromCost,
             },
             to: {
               ...linkToEdit.to,
@@ -335,6 +353,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
               mtu: toMtu || undefined,
               use_ip: toUseIp,
               policy: toPolicy,
+              cost: parsedToCost,
             },
           });
           onLinkUpdated?.(updated);
@@ -350,13 +369,17 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
             to_use_ip: toUseIp,
             from_policy: fromPolicy,
             to_policy: toPolicy,
+            from_cost: parsedFromCost,
+            to_cost: parsedToCost,
             from: {
               use_ip: fromUseIp,
               policy: fromPolicy,
+              cost: parsedFromCost,
             },
             to: {
               use_ip: toUseIp,
               policy: toPolicy,
+              cost: parsedToCost,
             },
           });
           onLinkAdded?.(link);
@@ -557,7 +580,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                   sx={{ alignItems: "flex-start", ml: 0, mt: 1.5 }}
                 />
 
-                <Box sx={{ mt: 1.5 }}>
+                <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}>
                   <TextField
                     select
                     fullWidth
@@ -576,6 +599,20 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                       </MenuItem>
                     ))}
                   </TextField>
+                  <TextField
+                    fullWidth
+                    size="small"
+                    label="Link Cost (Optional)"
+                    type="number"
+                    value={managedNode === fromNode ? fromCost : toCost}
+                    onChange={(e) => {
+                      const val = e.target.value === "" ? "" : Number(e.target.value);
+                      if (managedNode === fromNode) setFromCost(val);
+                      else setToCost(val);
+                    }}
+                    placeholder="Policy default"
+                    helperText="Overrides policy cost if set (non-zero)"
+                  />
                 </Box>
               </Box>
 
@@ -801,7 +838,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                     />
                   </Box>
 
-                  <Box sx={{ mt: 1.5 }}>
+                  <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}>
                     <TextField
                       select
                       fullWidth
@@ -817,6 +854,16 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                         </MenuItem>
                       ))}
                     </TextField>
+                    <TextField
+                      fullWidth
+                      size="small"
+                      label="Link Cost (Optional)"
+                      type="number"
+                      value={fromCost}
+                      onChange={(e) => setFromCost(e.target.value === "" ? "" : Number(e.target.value))}
+                      placeholder="Policy default"
+                      helperText="Overrides policy cost if set (non-zero)"
+                    />
                   </Box>
                 </Box>
 
@@ -917,7 +964,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                     />
                   </Box>
 
-                  <Box sx={{ mt: 1.5 }}>
+                  <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}>
                     <TextField
                       select
                       fullWidth
@@ -933,6 +980,16 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                         </MenuItem>
                       ))}
                     </TextField>
+                    <TextField
+                      fullWidth
+                      size="small"
+                      label="Link Cost (Optional)"
+                      type="number"
+                      value={toCost}
+                      onChange={(e) => setToCost(e.target.value === "" ? "" : Number(e.target.value))}
+                      placeholder="Policy default"
+                      helperText="Overrides policy cost if set (non-zero)"
+                    />
                   </Box>
                 </Box>
               </Box>

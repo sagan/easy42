@@ -50,11 +50,7 @@ func BuildWgLinkContext(
 	if address == "" && selfNode != nil && selfNode.IP != "" {
 		derived, err := DeriveIPv6LinkLocal(selfNode.IP)
 		if err != nil {
-			nodeName := ""
-			if selfNode != nil {
-				nodeName = selfNode.Name
-			}
-			return nil, fmt.Errorf("failed to derive link-local address for node %s: %w", nodeName, err)
+			return nil, fmt.Errorf("failed to derive link-local address for node %s: %w", selfNode.Name, err)
 		}
 		address = derived
 	}

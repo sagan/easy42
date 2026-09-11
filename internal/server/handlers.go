@@ -432,6 +432,8 @@ type addLinkRequest struct {
 	ToUseIP    *bool           `json:"to_use_ip,omitempty"`
 	FromPolicy string          `json:"from_policy,omitempty"`
 	ToPolicy   string          `json:"to_policy,omitempty"`
+	FromCost   *int            `json:"from_cost,omitempty"`
+	ToCost     *int            `json:"to_cost,omitempty"`
 	MTU        int             `json:"mtu,omitempty"`
 	Tags       []string        `json:"tags,omitempty"`
 	From       *config.LinkEnd `json:"from,omitempty"`
@@ -488,6 +490,18 @@ func (s *Server) handleAddLink(w http.ResponseWriter, r *http.Request) {
 			req.To = &config.LinkEnd{}
 		}
 		req.To.Policy = req.ToPolicy
+	}
+	if req.FromCost != nil {
+		if req.From == nil {
+			req.From = &config.LinkEnd{}
+		}
+		req.From.Cost = *req.FromCost
+	}
+	if req.ToCost != nil {
+		if req.To == nil {
+			req.To = &config.LinkEnd{}
+		}
+		req.To.Cost = *req.ToCost
 	}
 
 	var link *config.Link
@@ -549,6 +563,8 @@ type updateLinkRequest struct {
 	ToUseIP    *bool           `json:"to_use_ip,omitempty"`
 	FromPolicy string          `json:"from_policy,omitempty"`
 	ToPolicy   string          `json:"to_policy,omitempty"`
+	FromCost   *int            `json:"from_cost,omitempty"`
+	ToCost     *int            `json:"to_cost,omitempty"`
 	MTU        int             `json:"mtu,omitempty"`
 	Tags       []string        `json:"tags,omitempty"`
 	From       *config.LinkEnd `json:"from,omitempty"`
@@ -632,10 +648,28 @@ func (s *Server) handleUpdateLink(w http.ResponseWriter, r *http.Request) {
 		}
 		req.To.Policy = req.ToPolicy
 	}
+	if req.FromCost != nil {
+		if req.From == nil {
+			req.From = &config.LinkEnd{}
+		}
+		req.From.Cost = *req.FromCost
+	}
+	if req.ToCost != nil {
+		if req.To == nil {
+			req.To = &config.LinkEnd{}
+		}
+		req.To.Cost = *req.ToCost
+	}
 
 	var link *config.Link
 	var err error
 	if req.From != nil || req.To != nil {
+		if req.From == nil && (fromPort > 0 || fromMTU > 0) {
+			req.From = &config.LinkEnd{ListenPort: fromPort, MTU: fromMTU}
+		}
+		if req.To == nil && (toPort > 0 || toMTU > 0) {
+			req.To = &config.LinkEnd{ListenPort: toPort, MTU: toMTU}
+		}
 		if req.From != nil && req.From.ListenPort == 0 && fromPort > 0 {
 			req.From.ListenPort = fromPort
 		}
@@ -660,6 +694,13 @@ func (s *Server) handleUpdateLink(w http.ResponseWriter, r *http.Request) {
 		}
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
+	}
+
+	if req.FromCost != nil && link != nil {
+		link.From.Cost = *req.FromCost
+	}
+	if req.ToCost != nil && link != nil {
+		link.To.Cost = *req.ToCost
 	}
 
 	writeJSON(w, http.StatusOK, link)

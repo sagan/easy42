@@ -80,6 +80,7 @@ export interface LinkEnd {
   use_ip?: boolean;
   resolved_endpoint?: string;
   policy?: string;
+  cost?: number;
 }
 
 export interface Link {

@@ -129,6 +129,8 @@ export const api = {
     to_use_ip?: boolean;
     from_policy?: string;
     to_policy?: string;
+    from_cost?: number;
+    to_cost?: number;
     mtu?: number;
     tags?: string[];
     from?: Partial<Link["from"]>;
@@ -154,6 +156,8 @@ export const api = {
     to_use_ip?: boolean;
     from_policy?: string;
     to_policy?: string;
+    from_cost?: number;
+    to_cost?: number;
     mtu?: number;
     tags?: string[];
     from?: Partial<Link["from"]>;

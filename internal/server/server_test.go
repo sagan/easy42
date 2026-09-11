@@ -181,6 +181,8 @@ func TestUpdateLinkAPI(t *testing.T) {
 		"to_port":   50002,
 		"from_mtu":  1400,
 		"to_mtu":    1400,
+		"from_cost": 35,
+		"to_cost":   45,
 	}
 	bodyLink, _ := json.Marshal(linkReq)
 	reqLink := httptest.NewRequest("POST", "/api/links", bytes.NewReader(bodyLink))
@@ -191,6 +193,14 @@ func TestUpdateLinkAPI(t *testing.T) {
 		t.Fatalf("AddLink failed: %d %s", wLink.Code, wLink.Body.String())
 	}
 
+	var added config.Link
+	if err := json.Unmarshal(wLink.Body.Bytes(), &added); err != nil {
+		t.Fatalf("Failed to decode added link response: %v", err)
+	}
+	if added.From.Cost != 35 || added.To.Cost != 45 {
+		t.Errorf("Unexpected added link costs: from=%d, to=%d", added.From.Cost, added.To.Cost)
+	}
+
 	// Update link
 	updateReq := map[string]any{
 		"from_node": "n1",
@@ -199,6 +209,7 @@ func TestUpdateLinkAPI(t *testing.T) {
 		"to_port":   52000,
 		"from_mtu":  1360,
 		"to_mtu":    1360,
+		"from_cost": 80,
 	}
 	bodyUpdate, _ := json.Marshal(updateReq)
 	reqUpdate := httptest.NewRequest("PUT", "/api/links", bytes.NewReader(bodyUpdate))
@@ -220,6 +231,9 @@ func TestUpdateLinkAPI(t *testing.T) {
 	}
 	if updated.From.MTU != 1360 || updated.To.MTU != 1360 {
 		t.Errorf("Unexpected MTUs: %d, %d", updated.From.MTU, updated.To.MTU)
+	}
+	if updated.From.Cost != 80 {
+		t.Errorf("Unexpected updated From.Cost: %d (expected 80)", updated.From.Cost)
 	}
 }
 

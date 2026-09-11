@@ -871,8 +871,10 @@ func TestBGPConfederationHopPreference(t *testing.T) {
 	expectedSnippets := []string{
 		"define DEFAULT_LOCAL_PREF = 10000;",
 		"# Prefer routes with fewer confederation hops / lower policy cost",
-		"if !defined(bgp_local_pref) then bgp_local_pref = DEFAULT_LOCAL_PREF;",
+		"default bgp_local_pref DEFAULT_LOCAL_PREF;",
+		"if !defined(bgp_local_pref) || (bgp_local_pref = 100) then bgp_local_pref = DEFAULT_LOCAL_PREF;",
 		"if bgp_local_pref > 100 then bgp_local_pref = bgp_local_pref - 100; else bgp_local_pref = 1;",
+		"if !defined(bgp_local_pref) then bgp_local_pref = DEFAULT_LOCAL_PREF;",
 	}
 	for _, s := range expectedSnippets {
 		if !strings.Contains(confWithConfed, s) {
@@ -953,3 +955,124 @@ func TestBGPConfederationHopPreference(t *testing.T) {
 		t.Errorf("Did not expect confederation hop snippet when no confederation configured")
 	}
 }
+
+func TestLinkEndCostOverrideBIRD(t *testing.T) {
+	node1 := config.Node{
+		Name:      "r1",
+		IP:        "192.168.1.1",
+		ASN:       4242421001,
+		Interface: "eth0",
+	}
+	node2 := config.Node{
+		Name:      "r2",
+		IP:        "192.168.1.2",
+		ASN:       4242421002,
+		Interface: "eth0",
+	}
+	node3 := config.Node{
+		Name:      "r3",
+		IP:        "192.168.1.3",
+		ASN:       4242421003,
+		Interface: "eth0",
+	}
+
+	netSettings := &config.NetworkSettings{
+		PublicASN: 4242420000,
+	}
+
+	customPol := config.NetworkPolicy{
+		ID:   "fast-path",
+		Name: "Fast Path",
+		Cost: 100, // policy cost is 100
+	}
+
+	// 1. Single link with Cost override 30 (overriding policy cost 100)
+	linkWithCost := config.Link{
+		From: config.LinkEnd{
+			Name:      "r1",
+			Interface: "wg42r2",
+			Address:   "fe80::1/64",
+			Policy:    "fast-path",
+			Cost:      30, // overrides policy cost
+		},
+		To: config.LinkEnd{
+			Name:      "r2",
+			Interface: "wg42r1",
+			Address:   "fe80::2/64",
+		},
+	}
+
+	conf, err := GenerateBirdConfig(&node1, []config.Node{node1, node2}, []config.Link{linkWithCost}, netSettings, []config.NetworkPolicy{customPol})
+	if err != nil {
+		t.Fatalf("GenerateBirdConfig failed: %v", err)
+	}
+
+	expected := "if bgp_local_pref > 30 then bgp_local_pref = bgp_local_pref - 30; else bgp_local_pref = 1;"
+	if !strings.Contains(conf, expected) {
+		t.Errorf("Expected cost 30 in config:\n%s", conf)
+	}
+	if !strings.Contains(conf, "protocol bgp 'peer_r2' from pol_peer_fast_path {") {
+		t.Errorf("Expected peer_r2 to inherit from pol_peer_fast_path:\n%s", conf)
+	}
+
+	// 2. Multiple links with default policy, one having custom cost 45, the other keeping default 100
+	linkDefault1 := config.Link{
+		From: config.LinkEnd{
+			Name:      "r1",
+			Interface: "wg42r2",
+			Address:   "fe80::1/64",
+			Cost:      45, // overrides default cost
+		},
+		To: config.LinkEnd{
+			Name:      "r2",
+			Interface: "wg42r1",
+			Address:   "fe80::2/64",
+		},
+	}
+	linkDefault2 := config.Link{
+		From: config.LinkEnd{
+			Name:      "r1",
+			Interface: "wg42r3",
+			Address:   "fe80::3/64",
+			Cost:      0, // uses default policy cost (100)
+		},
+		To: config.LinkEnd{
+			Name:      "r3",
+			Interface: "wg42r1",
+			Address:   "fe80::4/64",
+		},
+	}
+
+	confMulti, err := GenerateBirdConfig(&node1, []config.Node{node1, node2, node3}, []config.Link{linkDefault1, linkDefault2}, netSettings)
+	if err != nil {
+		t.Fatalf("GenerateBirdConfig multi failed: %v", err)
+	}
+
+	expectedSnippets := []string{
+		"template bgp easy42_peer",
+		"template bgp easy42_peer_cost_45",
+		"protocol bgp 'easy42_peer_r2' from easy42_peer_cost_45 {",
+		"protocol bgp 'easy42_peer_r3' from easy42_peer {",
+		"if bgp_local_pref > 45 then bgp_local_pref = bgp_local_pref - 45; else bgp_local_pref = 1;",
+		"if bgp_local_pref > 100 then bgp_local_pref = bgp_local_pref - 100; else bgp_local_pref = 1;",
+	}
+	for _, s := range expectedSnippets {
+		if !strings.Contains(confMulti, s) {
+			t.Errorf("Expected snippet %q in multi-cost config:\n%s", s, confMulti)
+		}
+	}
+
+	if birdPath, err := exec.LookPath("bird"); err == nil {
+		tmpFile, err := os.CreateTemp("", "bird_link_cost_test_*.conf")
+		if err == nil {
+			defer os.Remove(tmpFile.Name())
+			_, _ = tmpFile.WriteString(confMulti)
+			_ = tmpFile.Close()
+			cmd := exec.Command(birdPath, "-p", "-c", tmpFile.Name())
+			if out, err := cmd.CombinedOutput(); err != nil {
+				t.Fatalf("BIRD validation failed on multi-cost config: %v\nOutput:\n%s", err, string(out))
+			}
+		}
+	}
+}
+
