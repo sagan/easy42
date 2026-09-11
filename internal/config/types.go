@@ -20,9 +20,10 @@ type Config struct {
 	EncryptedDEK    string          `json:"encrypted_dek"`
 	SessionSecret   string          `json:"session_secret"`
 	NetworkSettings NetworkSettings `json:"network_settings,omitempty"`
-	NetworkPolicies []NetworkPolicy `json:"network_policies,omitempty"`
-	Nodes           []Node          `json:"nodes"`
-	Links           []Link          `json:"links"`
+	NetworkPolicies   []NetworkPolicy    `json:"network_policies,omitempty"`
+	Nodes             []Node             `json:"nodes"`
+	Links             []Link             `json:"links"`
+	LookingGlassTasks []LookingGlassTask `json:"looking_glass_tasks,omitempty"`
 }
 
 // PortSpec handles single ports (51820), port ranges ("2000-2999"), or object ({port, external_port})

@@ -30,6 +30,7 @@ import {
   FileCode,
   Wrench,
   Radio,
+  Compass,
 } from "lucide-react";
 import { api } from "../../api/client";
 import { Node, NodeStatus } from "../../types/api";
@@ -44,6 +45,7 @@ interface NodeDetailDrawerProps {
   onNodeDeleted: (name: string) => void;
   onStatusRefreshed: (status: NodeStatus) => void;
   onOpenHelper?: (nodeName: string) => void;
+  onOpenLookingGlass?: (nodeName: string) => void;
   onUpdateNodeState?: (nodeName: string) => Promise<void>;
   onSyncNode?: (nodeName: string) => void;
 }
@@ -58,6 +60,7 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
   onNodeDeleted,
   onStatusRefreshed,
   onOpenHelper,
+  onOpenLookingGlass,
   onUpdateNodeState,
   onSyncNode,
 }) => {
@@ -738,6 +741,28 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
             }}
           >
             Device Config Helper
+          </Button>
+        )}
+
+        {onOpenLookingGlass && !node.is_external && (
+          <Button
+            fullWidth
+            variant="outlined"
+            startIcon={<Compass size={16} />}
+            onClick={() => onOpenLookingGlass(node.name)}
+            disabled={updatingState || refreshing || deleting}
+            sx={{
+              borderColor: "#CBD5E1",
+              color: "#334155",
+              fontWeight: 600,
+              "&:hover": {
+                borderColor: "#4F46E5",
+                backgroundColor: "rgba(79, 70, 229, 0.05)",
+                color: "#4F46E5",
+              },
+            }}
+          >
+            Looking Glass
           </Button>
         )}
         <Box sx={{ display: "grid", gridTemplateColumns: onRenameNode ? "1fr 1fr" : "1fr", gap: 1.5 }}>

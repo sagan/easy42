@@ -34,6 +34,7 @@ import {
   Tag,
   Wrench,
   AlertTriangle,
+  Compass,
 } from "lucide-react";
 import { Node, NodeStatus } from "../types/api";
 
@@ -55,6 +56,7 @@ interface NavbarProps {
   onUpdateState?: () => void;
   updatingState?: boolean;
   onOpenHelper?: () => void;
+  onOpenLookingGlass?: () => void;
   onUnlockToggle: () => void;
   onOpenSettings: () => void;
   onLogout: () => void;
@@ -82,6 +84,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onUpdateState,
   updatingState,
   onOpenHelper,
+  onOpenLookingGlass,
   onUnlockToggle,
   onOpenSettings,
   onLogout,
@@ -593,6 +596,31 @@ export const Navbar: React.FC<NavbarProps> = ({
                 }}
               >
                 Device Helper
+              </Button>
+            </Tooltip>
+          )}
+
+          {onOpenLookingGlass && (
+            <Tooltip title="Looking Glass (BGP Routing, Ping, Traceroute)">
+              <Button
+                variant="outlined"
+                size="small"
+                startIcon={<Compass size={16} />}
+                onClick={onOpenLookingGlass}
+                sx={{
+                  borderColor: "#CBD5E1",
+                  color: "#334155",
+                  fontWeight: 600,
+                  fontSize: "0.8rem",
+                  textTransform: "none",
+                  "&:hover": {
+                    borderColor: "#4F46E5",
+                    backgroundColor: "rgba(79, 70, 229, 0.05)",
+                    color: "#4F46E5",
+                  },
+                }}
+              >
+                Looking Glass
               </Button>
             </Tooltip>
           )}

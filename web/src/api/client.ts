@@ -12,6 +12,10 @@ import {
   TaskMeta,
   TaskStatusResult,
   TaskRunResult,
+  TasksResponse,
+  LookingGlassTask,
+  LGRunRequest,
+  LGRunResponse,
 } from "../types/api";
 
 const API_BASE = "/api";
@@ -248,5 +252,22 @@ export const api = {
     request<Record<string, TaskRunResult>>(`/tasks/${encodeURIComponent(taskId)}/run`, {
       method: "POST",
       body: JSON.stringify({ nodes }),
+    }),
+
+  // Looking Glass
+  getLookingGlassTasks: () => request<TasksResponse>("/looking-glass/tasks"),
+  saveLookingGlassTask: (task: LookingGlassTask) =>
+    request<LookingGlassTask>(task.id ? `/looking-glass/tasks/${encodeURIComponent(task.id)}` : "/looking-glass/tasks", {
+      method: task.id ? "PUT" : "POST",
+      body: JSON.stringify(task),
+    }),
+  deleteLookingGlassTask: (taskId: string) =>
+    request<{ deleted: boolean }>(`/looking-glass/tasks/${encodeURIComponent(taskId)}`, {
+      method: "DELETE",
+    }),
+  runLookingGlass: (req: LGRunRequest) =>
+    request<LGRunResponse>("/looking-glass/run", {
+      method: "POST",
+      body: JSON.stringify(req),
     }),
 };

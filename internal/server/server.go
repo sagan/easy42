@@ -124,6 +124,13 @@ func New(cfg Config) *Server {
 			r.Get("/tasks", s.handleGetTasks)
 			r.Post("/tasks/{id}/status", s.handleTaskStatus)
 			r.Post("/tasks/{id}/run", s.handleTaskRun)
+
+			// Looking Glass
+			r.Get("/looking-glass/tasks", s.handleGetLookingGlassTasks)
+			r.Post("/looking-glass/tasks", s.handleSaveLookingGlassTask)
+			r.Put("/looking-glass/tasks/{id}", s.handleSaveLookingGlassTask)
+			r.Delete("/looking-glass/tasks/{id}", s.handleDeleteLookingGlassTask)
+			r.Post("/looking-glass/run", s.handleRunLookingGlass)
 		})
 	})
 

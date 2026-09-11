@@ -14,6 +14,7 @@ import { UnlockModal } from "./components/Modals/UnlockModal";
 import { SyncProgressModal } from "./components/Modals/SyncProgressModal";
 import { SettingsModal } from "./components/Modals/SettingsModal";
 import { DeviceHelperModal } from "./components/Modals/DeviceHelperModal";
+import { LookingGlassModal } from "./components/Modals/LookingGlassModal";
 import { LoginPage } from "./components/Login/LoginPage";
 
 export const App: React.FC = () => {
@@ -47,6 +48,9 @@ export const App: React.FC = () => {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [helperOpen, setHelperOpen] = useState(false);
   const [helperInitialNode, setHelperInitialNode] = useState<string | undefined>(undefined);
+  const [lookingGlassOpen, setLookingGlassOpen] = useState(false);
+  const [lookingGlassInitialNode, setLookingGlassInitialNode] = useState<string | undefined>(undefined);
+  const [lookingGlassInitialTask] = useState<string | undefined>(undefined);
   const [updatingState, setUpdatingState] = useState(false);
   const [refreshingNodeName, setRefreshingNodeName] = useState<string | null>(null);
   const [stateToast, setStateToast] = useState<{
@@ -459,6 +463,10 @@ export const App: React.FC = () => {
             setHelperInitialNode(undefined);
             setHelperOpen(true);
           }}
+          onOpenLookingGlass={() => {
+            setLookingGlassInitialNode(undefined);
+            setLookingGlassOpen(true);
+          }}
           onUnlockToggle={handleUnlockToggle}
           onOpenSettings={() => setSettingsOpen(true)}
           onLogout={handleLogout}
@@ -498,6 +506,10 @@ export const App: React.FC = () => {
           onOpenHelper={(nodeName) => {
             setHelperInitialNode(nodeName);
             setHelperOpen(true);
+          }}
+          onOpenLookingGlass={(nodeName) => {
+            setLookingGlassInitialNode(nodeName);
+            setLookingGlassOpen(true);
           }}
           onUpdateNodeState={(nodeName) => handleUpdateState(nodeName)}
           onSyncNode={(nodeName) => {
@@ -593,6 +605,14 @@ export const App: React.FC = () => {
           onClose={() => setHelperOpen(false)}
           nodes={nodes}
           initialNode={helperInitialNode}
+        />
+
+        <LookingGlassModal
+          open={lookingGlassOpen}
+          onClose={() => setLookingGlassOpen(false)}
+          nodes={nodes}
+          initialNode={lookingGlassInitialNode}
+          initialTask={lookingGlassInitialTask}
         />
 
         <Snackbar

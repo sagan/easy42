@@ -242,3 +242,145 @@ export interface TaskRunResult {
   exit_code: number;
   duration_ms: number;
 }
+
+// Looking Glass Types
+export type ParameterType = "string" | "ip_or_cidr" | "number" | "select" | "boolean";
+
+export interface TaskParam {
+  key: string;
+  label: string;
+  type: ParameterType;
+  description?: string;
+  default_value?: string;
+  required: boolean;
+  options?: string[];
+  regex?: string;
+}
+
+export interface LookingGlassTask {
+  id: string;
+  name: string;
+  description?: string;
+  category: string;
+  command_tmpl: string;
+  parser: string;
+  params: TaskParam[];
+  is_builtin?: boolean;
+  timeout_sec?: number;
+}
+
+export interface TasksResponse {
+  builtin: LookingGlassTask[];
+  custom: LookingGlassTask[];
+}
+
+export interface LGRunRequest {
+  nodes: string[];
+  task_id?: string;
+  ad_hoc?: boolean;
+  custom_command?: string;
+  custom_parser?: string;
+  params?: Record<string, string>;
+  timeout_sec?: number;
+}
+
+export interface BirdProtocolEntry {
+  name: string;
+  proto: string;
+  table: string;
+  state: string;
+  since: string;
+  info: string;
+  connected: boolean;
+}
+
+export interface BirdRouteEntry {
+  network: string;
+  best: boolean;
+  from_proto: string;
+  since: string;
+  metric?: string;
+  via?: string;
+  interface?: string;
+  next_hop?: string;
+  as_path?: string[];
+  communities?: string[];
+  local_pref?: string;
+  origin?: string;
+}
+
+export interface BirdRouteResult {
+  target?: string;
+  routes: BirdRouteEntry[];
+}
+
+export interface PingPacket {
+  seq: number;
+  ttl: number;
+  time_ms: number;
+  host?: string;
+}
+
+export interface PingResult {
+  host: string;
+  ip?: string;
+  packets_sent: number;
+  packets_received: number;
+  packet_loss_pct: number;
+  min_rtt_ms: number;
+  avg_rtt_ms: number;
+  max_rtt_ms: number;
+  mdev_rtt_ms: number;
+  packets?: PingPacket[];
+}
+
+export interface TracerouteHop {
+  hop: number;
+  host: string;
+  ip?: string;
+  asn?: string;
+  times_ms: number[];
+  loss_pct?: number;
+  timed_out: boolean;
+}
+
+export interface TracerouteResult {
+  target: string;
+  hops: TracerouteHop[];
+}
+
+export interface MTRHop {
+  hop: number;
+  host: string;
+  loss_pct: number;
+  sent: number;
+  last_ms: number;
+  avg_ms: number;
+  best_ms: number;
+  worst_ms: number;
+  stdev_ms: number;
+}
+
+export interface MTRResult {
+  target: string;
+  hops: MTRHop[];
+}
+
+export interface LGNodeResult {
+  node_name: string;
+  task_id?: string;
+  command: string;
+  raw_output: string;
+  exit_code: number;
+  duration_ms: number;
+  error?: string;
+  parser: string;
+  parsed?: any;
+}
+
+export interface LGRunResponse {
+  task_id?: string;
+  command: string;
+  results: Record<string, LGNodeResult>;
+}
+
