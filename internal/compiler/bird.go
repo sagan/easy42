@@ -106,6 +106,11 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 	useExtTable := extTable > 0 && extTable != table
 	ctx["external_table"] = extTable
 	ctx["use_external_table"] = useExtTable
+
+	inetTable := node.InternetTable
+	useInetTable := inetTable > 0 && inetTable != table
+	ctx["internet_table"] = inetTable
+	ctx["use_internet_table"] = useInetTable
 	ctx["ip"] = node.IP
 
 	ip6 := strings.TrimSpace(node.IP6)
@@ -360,6 +365,8 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 			remoteNodeMap["routing_table"] = rTable
 			remoteNodeMap["external_table"] = rl.remoteNode.ExternalTable
 			remoteNodeMap["use_external_table"] = rl.remoteNode.ExternalTable > 0 && rl.remoteNode.ExternalTable != rTable
+			remoteNodeMap["internet_table"] = rl.remoteNode.InternetTable
+			remoteNodeMap["use_internet_table"] = rl.remoteNode.InternetTable > 0 && rl.remoteNode.InternetTable != rTable
 			remoteNodeMap["asn"] = rl.remoteNode.ASN
 			remoteNodeMap["name"] = rl.remoteNode.Name
 			remoteNodeMap["ip"] = rl.remoteNode.IP

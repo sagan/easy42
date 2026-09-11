@@ -67,6 +67,7 @@ export interface Node {
   tags?: string[];
   table?: number;
   external_table?: number;
+  internet_table?: number;
   static_routes?: string[];
   routes?: KernelRouteRule[];
   x?: number;

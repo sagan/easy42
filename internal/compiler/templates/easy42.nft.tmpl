@@ -1,7 +1,8 @@
 #!/usr/sbin/nft -f
 
 define easy42_ifname = { "wg42*" }
-define tunnel_ifname = {"tun*", "wg*", "zt*", "tailscale*"}
+# tun, WireGuard, ZeroTier, Tailscale, netbird
+define tunnel_ifname = {"tun*", "wg*", "zt*", "tailscale*", "wt*"}
 
 define private_ip = { 192.168.0.0/16, 10.0.0.0/8, 172.16.0.0/12 }
 define private_ip6 = { fc00::/8, fd00::/8 }

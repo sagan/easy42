@@ -132,6 +132,7 @@ type Node struct {
 	Tags          []string          `json:"tags,omitempty"`
 	Table         int               `json:"table,omitempty"`          // Main routing table bird used to export BGP learned routing to (defaults to 254)
 	ExternalTable int               `json:"external_table,omitempty"` // Routing table for routes learned from external BGP peers (if set and != Table)
+	InternetTable int               `json:"internet_table,omitempty"` // Routing table for Internet routes learned from peers (if set and != Table)
 	StaticRoutes  []string          `json:"static_routes,omitempty"`  // CIDR prefix list unconditionally broadcast via BGP
 	Routes        []KernelRouteRule `json:"routes,omitempty"`         // Kernel routes imported from kernel tables and broadcast via BGP
 	X             *float64          `json:"x,omitempty"`              // Graph X coordinate

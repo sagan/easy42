@@ -255,6 +255,22 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
                 />
               </Tooltip>
             ) : null}
+            {node.internet_table && node.internet_table !== (node.table ?? 254) ? (
+              <Tooltip title={`Internet Table: ${node.internet_table}`}>
+                <Chip
+                  label={`Inet T${node.internet_table}`}
+                  size="small"
+                  sx={{
+                    height: 22,
+                    fontSize: "0.65rem",
+                    fontWeight: 700,
+                    backgroundColor: "rgba(16, 185, 129, 0.1)",
+                    color: "#059669",
+                    border: "1px solid rgba(16, 185, 129, 0.3)",
+                  }}
+                />
+              </Tooltip>
+            ) : null}
           </Box>
 
           <Typography variant="caption" sx={{ color: isExternal ? "#7C3AED" : "#64748B", fontSize: "0.7rem", fontWeight: isExternal ? 600 : 400 }}>

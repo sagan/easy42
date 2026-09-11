@@ -158,7 +158,7 @@ func TestBuildNodeContextAndGenerateBirdConfig(t *testing.T) {
 		"define TABLE = 254;",
 		"router id SELF_IP;",
 		"protocol kernel kernel_v4",
-		"if source ~ [ RTS_BGP ] then accept;",
+		"if source ~ [ RTS_BGP, RTS_STATIC ] then accept;",
 		"protocol kernel kernel_100 {",
 		"kernel table 100;",
 		"if net ~ 10.0.0.0/8+ then accept;",
@@ -354,7 +354,7 @@ func TestExternalTableRouting(t *testing.T) {
 		"define COMM_EXTERNAL = (CONFED_AS, 1, 1);",
 		"protocol kernel kernel_v4 {",
 		"if (COMM_EXTERNAL ~ bgp_large_community) then reject;",
-		"if source ~ [ RTS_BGP ] then accept;",
+		"if source ~ [ RTS_BGP, RTS_STATIC ] then accept;",
 		"kernel table TABLE;",
 		"protocol pipe pipe_ext_v4 {",
 		"table master4;",
@@ -481,6 +481,178 @@ func TestExternalTableRouting(t *testing.T) {
 	}
 	validateBirdSyntax(t, confInternal)
 }
+
+func TestInternetTableRouting(t *testing.T) {
+	nodeBase := config.Node{
+		Name:          "router1",
+		Host:          "10.0.0.1",
+		IP:            "192.168.100.1",
+		IP6:           "fd42:a159:f9f0::1",
+		ASN:           4224420001,
+		Table:         254,
+		InternetTable: 102,
+	}
+	peerNode := config.Node{
+		Name: "router2",
+		Host: "10.0.0.2",
+		IP:   "192.168.100.2",
+		IP6:  "fd42:a159:f9f0::2",
+		ASN:  4224420002,
+	}
+	link := config.Link{
+		From: config.LinkEnd{Name: "router1", Interface: "wg42router2", Address: "fe80::1"},
+		To:   config.LinkEnd{Name: "router2", Interface: "wg42router1", Address: "fe80::2"},
+	}
+	netSettings := &config.NetworkSettings{}
+
+	// 1. When InternetTable is set (102) and different from Table (254), without ExternalTable
+	conf, err := GenerateBirdConfig(&nodeBase, []config.Node{nodeBase, peerNode}, []config.Link{link}, netSettings)
+	if err != nil {
+		t.Fatalf("GenerateBirdConfig failed: %v", err)
+	}
+
+	expectedSnippets := []string{
+		"define TABLE = 254;",
+		"define INTERNET_TABLE = 102;",
+		"ipv4 table inet_table4;",
+		"ipv6 table inet_table6;",
+		"protocol kernel kernel_v4 {",
+		"if (source ~ [ RTS_BGP ]) && (net ~ INTERNET) then reject;",
+		"if source ~ [ RTS_BGP, RTS_STATIC ] then accept;",
+		"protocol pipe pipe_inet_v4 {",
+		"table master4;",
+		"peer table inet_table4;",
+		"if (source ~ [ RTS_BGP ]) && (net ~ INTERNET) then accept;",
+		"protocol kernel kernel_inet_v4 {",
+		"table inet_table4;",
+		"krt_prefsrc = SELF_IP;",
+		"kernel table INTERNET_TABLE;",
+		"protocol kernel kernel_v6 {",
+		"if net ~ INTERNET6 then reject;",
+		"protocol pipe pipe_inet_v6 {",
+		"table master6;",
+		"peer table inet_table6;",
+		"if (source ~ [ RTS_BGP ]) && (net ~ INTERNET6) then accept;",
+		"protocol kernel kernel_inet_v6 {",
+		"table inet_table6;",
+		"kernel table INTERNET_TABLE;",
+	}
+
+	for _, s := range expectedSnippets {
+		if !strings.Contains(conf, s) {
+			t.Errorf("Missing expected snippet in config with InternetTable=102:\nSnippet: %s\nGenerated:\n%s", s, conf)
+		}
+	}
+	validateBirdSyntax(t, conf)
+
+	// 2. When Table (254), ExternalTable (100), and InternetTable (102) all exist:
+	// Verify matching order: ExternalTable, InternetTable, Table
+	nodeAllTables := nodeBase
+	nodeAllTables.ExternalTable = 100
+	externalPeer := config.Node{
+		Name:        "dn42peer",
+		ASN:         4242421234,
+		IsExternal:  true,
+		ExternalIP:  "172.20.10.1",
+		ExternalIP6: "fd00::1",
+	}
+	extLink := config.Link{
+		From: config.LinkEnd{Name: "router1", Interface: "wg42-dn42", Address: "fe80::1"},
+		To:   config.LinkEnd{Name: "dn42peer", Interface: "wg42-router1", Address: "fe80::2"},
+	}
+	confAll, err := GenerateBirdConfig(&nodeAllTables, []config.Node{nodeAllTables, peerNode, externalPeer}, []config.Link{link, extLink}, netSettings)
+	if err != nil {
+		t.Fatalf("GenerateBirdConfig with all tables failed: %v", err)
+	}
+
+	// Verify Table has both ExternalTable and InternetTable rejections in order
+	extReject := "if (COMM_EXTERNAL ~ bgp_large_community) then reject;"
+	inetReject := "if (source ~ [ RTS_BGP ]) && (net ~ INTERNET) then reject;"
+	idxExt := strings.Index(confAll, extReject)
+	idxInet := strings.Index(confAll, inetReject)
+	if idxExt == -1 || idxInet == -1 {
+		t.Fatalf("Expected both COMM_EXTERNAL reject and INTERNET reject in kernel_v4")
+	}
+	if idxExt >= idxInet {
+		t.Errorf("Expected COMM_EXTERNAL reject to appear before INTERNET reject in kernel_v4: ext=%d inet=%d", idxExt, idxInet)
+	}
+
+	// In pipe_inet_v4: COMM_EXTERNAL is rejected first (ExternalTable priority)
+	pipeInetV4Start := strings.Index(confAll, "protocol pipe pipe_inet_v4 {")
+	if pipeInetV4Start == -1 {
+		t.Fatalf("Missing pipe_inet_v4 in all tables config")
+	}
+	pipeInetV4End := strings.Index(confAll[pipeInetV4Start:], "}")
+	pipeInetV4Block := confAll[pipeInetV4Start : pipeInetV4Start+pipeInetV4End]
+	if !strings.Contains(pipeInetV4Block, "if (COMM_EXTERNAL ~ bgp_large_community) then reject;") {
+		t.Errorf("Expected pipe_inet_v4 to reject COMM_EXTERNAL:\n%s", pipeInetV4Block)
+	}
+
+	// In pipe_inet_v6: COMM_EXTERNAL is rejected first
+	pipeInetV6Start := strings.Index(confAll, "protocol pipe pipe_inet_v6 {")
+	if pipeInetV6Start == -1 {
+		t.Fatalf("Missing pipe_inet_v6 in all tables config")
+	}
+	pipeInetV6End := strings.Index(confAll[pipeInetV6Start:], "}")
+	pipeInetV6Block := confAll[pipeInetV6Start : pipeInetV6Start+pipeInetV6End]
+	if !strings.Contains(pipeInetV6Block, "if (COMM_EXTERNAL ~ bgp_large_community) then reject;") {
+		t.Errorf("Expected pipe_inet_v6 to reject COMM_EXTERNAL:\n%s", pipeInetV6Block)
+	}
+
+	validateBirdSyntax(t, confAll)
+
+	// 3. When InternetTable == Table (254), should NOT generate separate internet kernel tables
+	nodeSameTable := nodeBase
+	nodeSameTable.InternetTable = 254
+	confSame, err := GenerateBirdConfig(&nodeSameTable, []config.Node{nodeSameTable, peerNode}, []config.Link{link}, netSettings)
+	if err != nil {
+		t.Fatalf("GenerateBirdConfig failed: %v", err)
+	}
+	if strings.Contains(confSame, "define INTERNET_TABLE") {
+		t.Errorf("Did not expect define INTERNET_TABLE when InternetTable == Table")
+	}
+	if strings.Contains(confSame, "protocol kernel kernel_inet_v4") {
+		t.Errorf("Did not expect protocol kernel kernel_inet_v4 when InternetTable == Table")
+	}
+	if strings.Contains(confSame, "protocol pipe pipe_inet_v4") {
+		t.Errorf("Did not expect protocol pipe pipe_inet_v4 when InternetTable == Table")
+	}
+
+	// 4. When InternetTable == 0, should NOT generate separate internet kernel tables
+	nodeNoInet := nodeBase
+	nodeNoInet.InternetTable = 0
+	confNoInet, err := GenerateBirdConfig(&nodeNoInet, []config.Node{nodeNoInet, peerNode}, []config.Link{link}, netSettings)
+	if err != nil {
+		t.Fatalf("GenerateBirdConfig failed: %v", err)
+	}
+	if strings.Contains(confNoInet, "define INTERNET_TABLE") {
+		t.Errorf("Did not expect define INTERNET_TABLE when InternetTable == 0")
+	}
+	if strings.Contains(confNoInet, "protocol kernel kernel_inet_v4") {
+		t.Errorf("Did not expect protocol kernel kernel_inet_v4 when InternetTable == 0")
+	}
+
+	// 5. When ExternalTable == InternetTable != Table (both 100)
+	nodeSameExtInet := nodeBase
+	nodeSameExtInet.ExternalTable = 100
+	nodeSameExtInet.InternetTable = 100
+	confExtInetSame, err := GenerateBirdConfig(&nodeSameExtInet, []config.Node{nodeSameExtInet, peerNode, externalPeer}, []config.Link{link, extLink}, netSettings)
+	if err != nil {
+		t.Fatalf("GenerateBirdConfig failed: %v", err)
+	}
+	// Should not generate separate INTERNET_TABLE or duplicate kernel table 100
+	if strings.Contains(confExtInetSame, "define INTERNET_TABLE") {
+		t.Errorf("Did not expect define INTERNET_TABLE when InternetTable == ExternalTable")
+	}
+	if strings.Contains(confExtInetSame, "protocol kernel kernel_inet_v4") {
+		t.Errorf("Did not expect duplicate kernel_inet_v4 when InternetTable == ExternalTable")
+	}
+	if !strings.Contains(confExtInetSame, "if (source ~ [ RTS_BGP ]) && (net ~ INTERNET) then accept;") {
+		t.Errorf("Expected pipe_ext_v4 to also accept INTERNET routes when InternetTable == ExternalTable")
+	}
+	validateBirdSyntax(t, confExtInetSame)
+}
+
 
 func TestStaticRoutesV4AndV6(t *testing.T) {
 	node := config.Node{

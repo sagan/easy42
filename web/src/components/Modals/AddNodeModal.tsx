@@ -59,6 +59,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
   // BIRD / BGP state
   const [table, setTable] = useState<number>(254);
   const [externalTable, setExternalTable] = useState<number | "">("");
+  const [internetTable, setInternetTable] = useState<number | "">("");
   const [externalIp, setExternalIp] = useState("");
   const [externalIp6, setExternalIp6] = useState("");
   const [staticRoutesStr, setStaticRoutesStr] = useState("");
@@ -90,6 +91,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
       setNodeTags(nodeToEdit.tags?.join(", ") || "");
       setTable(nodeToEdit.table ?? 254);
       setExternalTable(nodeToEdit.external_table ?? "");
+      setInternetTable(nodeToEdit.internet_table ?? "");
       setExternalIp(nodeToEdit.external_ip || "");
       setExternalIp6(nodeToEdit.external_ip6 || "");
       setStaticRoutesStr(nodeToEdit.static_routes?.join(", ") || "");
@@ -155,6 +157,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
       setNodeTags("");
       setTable(254);
       setExternalTable("");
+      setInternetTable("");
       setExternalIp("");
       setExternalIp6("");
       setStaticRoutesStr("");
@@ -390,6 +393,10 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
         external_table:
           externalTable !== "" && !isNaN(Number(externalTable)) && Number(externalTable) > 0
             ? Number(externalTable)
+            : undefined,
+        internet_table:
+          internetTable !== "" && !isNaN(Number(internetTable)) && Number(internetTable) > 0
+            ? Number(internetTable)
             : undefined,
         external_ip: externalIp.trim() ? externalIp.trim() : undefined,
         external_ip6: externalIp6.trim() ? externalIp6.trim() : undefined,
@@ -1017,6 +1024,17 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                     onChange={(e) => setExternalTable(e.target.value === "" ? "" : Number(e.target.value))}
                     placeholder="e.g. 100"
                     helperText="Export external BGP routes here (optional)"
+                    disabled={saving}
+                  />
+
+                  <TextField
+                    label="Internet Routing Table ID"
+                    type="number"
+                    size="small"
+                    value={internetTable}
+                    onChange={(e) => setInternetTable(e.target.value === "" ? "" : Number(e.target.value))}
+                    placeholder="e.g. 102"
+                    helperText="Export Internet routes learned from peers here (optional)"
                     disabled={saving}
                   />
 

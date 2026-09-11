@@ -16,6 +16,12 @@ define EXTERNAL_TABLE = {{ .external_table }};
 ipv4 table ext_table4;
 ipv6 table ext_table6;
 {{end}}
+{{if and .use_internet_table (ne .internet_table .external_table)}}
+define INTERNET_TABLE = {{ .internet_table }};
+
+ipv4 table inet_table4;
+ipv6 table inet_table6;
+{{end}}
 
 define PRIVATE = [ 192.168.0.0/16+, 10.0.0.0/8+, 172.16.0.0/12+, 198.18.0.0/15+ ];
 define PRIVATE6 = [ fd00::/8+ ];
@@ -99,7 +105,10 @@ protocol kernel kernel_v4 {
             {{if .use_external_table}}
             if (COMM_EXTERNAL ~ bgp_large_community) then reject;
             {{end}}
-            if source ~ [ RTS_BGP ] then accept;
+            {{if .use_internet_table}}
+            if (source ~ [ RTS_BGP ]) && (net ~ INTERNET) then reject;
+            {{end}}
+            if source ~ [ RTS_BGP, RTS_STATIC ] then accept;
             reject;
         };
         import none;
@@ -113,7 +122,11 @@ protocol pipe pipe_ext_v4 {
     peer table ext_table4;
     import none;
     export filter {
+        if net ~ INTERNET then reject;
         if (source ~ [ RTS_BGP ]) && (COMM_EXTERNAL ~ bgp_large_community) then accept;
+        {{if and .use_internet_table (eq .internet_table .external_table)}}
+        if (source ~ [ RTS_BGP ]) then accept;
+        {{end}}
         reject;
     };
 }
@@ -128,6 +141,33 @@ protocol kernel kernel_ext_v4 {
         import none;
     };
     kernel table EXTERNAL_TABLE;
+}
+{{end}}
+
+{{if and .use_internet_table (ne .internet_table .external_table)}}
+protocol pipe pipe_inet_v4 {
+    table master4;
+    peer table inet_table4;
+    import none;
+    export filter {
+        {{if .use_external_table}}
+        if (COMM_EXTERNAL ~ bgp_large_community) then reject;
+        {{end}}
+        if (source ~ [ RTS_BGP ]) && (net ~ INTERNET) then accept;
+        reject;
+    };
+}
+
+protocol kernel kernel_inet_v4 {
+    ipv4 {
+        table inet_table4;
+        export filter {
+            krt_prefsrc = SELF_IP;
+            accept;
+        };
+        import none;
+    };
+    kernel table INTERNET_TABLE;
 }
 {{end}}
 
@@ -161,7 +201,7 @@ protocol kernel kernel_v6 {
             {{if .use_external_table}}
             if (COMM_EXTERNAL ~ bgp_large_community) then reject;
             {{end}}
-            if source ~ [ RTS_BGP ] then accept;
+            if source ~ [ RTS_BGP, RTS_STATIC ] then accept;
             reject;
         };
         import none;
@@ -175,7 +215,11 @@ protocol pipe pipe_ext_v6 {
     peer table ext_table6;
     import none;
     export filter {
+        if net ~ INTERNET6 then reject;
         if (source ~ [ RTS_BGP ]) && (COMM_EXTERNAL ~ bgp_large_community) then accept;
+        {{if and .use_internet_table (eq .internet_table .external_table)}}
+        if (source ~ [ RTS_BGP ]) then accept;
+        {{end}}
         reject;
     };
 }
@@ -194,6 +238,35 @@ protocol kernel kernel_ext_v6 {
         import none;
     };
     kernel table EXTERNAL_TABLE;
+}
+{{end}}
+
+{{if and .use_internet_table (ne .internet_table .external_table)}}
+protocol pipe pipe_inet_v6 {
+    table master6;
+    peer table inet_table6;
+    import none;
+    export filter {
+        {{if .use_external_table}}
+        if (COMM_EXTERNAL ~ bgp_large_community) then reject;
+        {{end}}
+        if (source ~ [ RTS_BGP ]) && (net ~ INTERNET6) then accept;
+        reject;
+    };
+}
+
+protocol kernel kernel_inet_v6 {
+    ipv6 {
+        table inet_table6;
+        export filter {
+            {{if .ip6}}
+            krt_prefsrc = {{ .ip6 }};
+            {{end}}
+            accept;
+        };
+        import none;
+    };
+    kernel table INTERNET_TABLE;
 }
 {{end}}
 
