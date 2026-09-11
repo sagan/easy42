@@ -16,6 +16,7 @@ import (
 var (
 	syncPassword string
 	dryRun       bool
+	syncNode     string
 )
 
 var syncCmd = &cobra.Command{
@@ -57,8 +58,13 @@ var syncCmd = &cobra.Command{
 			return fmt.Errorf("authentication failed: %w", err)
 		}
 
+		var targetNodes []string
+		if syncNode != "" {
+			targetNodes = append(targetNodes, syncNode)
+		}
+
 		if dryRun {
-			actions, err := mgr.PlanSync()
+			actions, err := mgr.PlanSync(targetNodes...)
 			if err != nil {
 				return err
 			}
@@ -70,8 +76,12 @@ var syncCmd = &cobra.Command{
 			return nil
 		}
 
-		fmt.Println("Applying configuration across mesh nodes...")
-		results, err := mgr.ExecuteSync()
+		if syncNode != "" {
+			fmt.Printf("Applying configuration to node %s...\n", syncNode)
+		} else {
+			fmt.Println("Applying configuration across mesh nodes...")
+		}
+		results, err := mgr.ExecuteSyncNodes(false, targetNodes...)
 		if err != nil {
 			return fmt.Errorf("sync execution failed: %w", err)
 		}
@@ -92,5 +102,6 @@ var syncCmd = &cobra.Command{
 func init() {
 	syncCmd.Flags().StringVarP(&syncPassword, "password", "p", "", "easy42 password (or use EASY42_PASSWORD env)")
 	syncCmd.Flags().BoolVarP(&dryRun, "dry-run", "n", false, "Preview actions without applying changes")
+	syncCmd.Flags().StringVar(&syncNode, "node", "", "Target node name to sync (optional, default syncs all nodes)")
 	RootCmd.AddCommand(syncCmd)
 }

@@ -39,6 +39,7 @@ interface SyncProgressModalProps {
   onSyncComplete: () => void;
   onNeedUnlock?: () => void;
   unreachableNodes?: Node[];
+  targetNode?: string | null;
 }
 
 export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
@@ -47,6 +48,7 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
   onSyncComplete,
   onNeedUnlock,
   unreachableNodes,
+  targetNode,
 }) => {
   const [loadingPreview, setLoadingPreview] = useState(false);
   const [actions, setActions] = useState<SyncAction[]>([]);
@@ -65,14 +67,14 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
       setStateMessage(null);
       loadPreview();
     }
-  }, [open]);
+  }, [open, targetNode]);
 
   const loadPreview = async () => {
     setLoadingPreview(true);
     setPreviewError(null);
 
     try {
-      const data = await api.getSyncPreview();
+      const data = await api.getSyncPreview(targetNode || undefined);
       setActions(data || []);
     } catch (err: unknown) {
       const e = err as Error & { status?: number };
@@ -91,14 +93,22 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
     setUpdatingState(true);
     setStateMessage(null);
     try {
-      const res = await api.updateState();
+      const res = await api.updateState(targetNode || undefined);
       if (res.failed_nodes && Object.keys(res.failed_nodes).length > 0) {
         const names = Object.keys(res.failed_nodes).join(", ");
-        setStateMessage(`Device states reconciled. Note: ${Object.keys(res.failed_nodes).length} node(s) unreachable (${names})`);
+        setStateMessage(
+          targetNode
+            ? `Device state reconciliation failed for ${targetNode}. Error: ${res.failed_nodes[targetNode] || names}`
+            : `Device states reconciled. Note: ${Object.keys(res.failed_nodes).length} node(s) unreachable (${names})`
+        );
       } else if (res.warnings && res.warnings.length > 0) {
         setStateMessage(`State updated with warnings: ${res.warnings.join(", ")}`);
       } else {
-        setStateMessage("Device states successfully fetched and reconciled.");
+        setStateMessage(
+          targetNode
+            ? `Device state for ${targetNode} successfully fetched and reconciled.`
+            : "Device states successfully fetched and reconciled."
+        );
       }
       await loadPreview();
     } catch (err: unknown) {
@@ -114,7 +124,7 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
     setSyncError(null);
 
     try {
-      const res = await api.executeSync(force);
+      const res = await api.executeSync(force, targetNode || undefined);
       setResults(res || []);
       onSyncComplete();
     } catch (err: unknown) {
@@ -162,13 +172,26 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
           >
             <RefreshCw size={18} />
           </Box>
-          <Typography variant="h6" sx={{ fontWeight: 700, color: "#0F172A" }}>
-            Synchronize Mesh Topology
-          </Typography>
+          <Box>
+            <Typography variant="h6" sx={{ fontWeight: 700, color: "#0F172A", lineHeight: 1.2 }}>
+              {targetNode ? `Synchronize Node: ${targetNode}` : "Synchronize Mesh Topology"}
+            </Typography>
+            {targetNode && (
+              <Typography variant="caption" sx={{ color: "#64748B" }}>
+                Calculating and applying configurations exclusively for <strong>{targetNode}</strong>
+              </Typography>
+            )}
+          </Box>
         </Box>
 
         {!safeResults && !loadingPreview && (
-          <Tooltip title="Connect to all devices via SSH to probe live state and update state.json">
+          <Tooltip
+            title={
+              targetNode
+                ? `Connect to ${targetNode} via SSH to probe live state and update state.json`
+                : "Connect to all devices via SSH to probe live state and update state.json"
+            }
+          >
             <Button
               size="small"
               variant="outlined"
@@ -188,7 +211,13 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
                 },
               }}
             >
-              {updatingState ? "Probing Devices..." : "Update State from Devices"}
+              {updatingState
+                ? targetNode
+                  ? `Probing ${targetNode}...`
+                  : "Probing Devices..."
+                : targetNode
+                  ? `Update State for ${targetNode}`
+                  : "Update State from Devices"}
             </Button>
           </Tooltip>
         )}
@@ -217,7 +246,9 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
           <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
             <Alert severity={safeResults.every((r) => r.success) ? "success" : "warning"} sx={{ borderRadius: 2 }}>
               {safeResults.every((r) => r.success)
-                ? "All node configurations synchronized successfully!"
+                ? targetNode
+                  ? `Configurations for ${targetNode} synchronized successfully!`
+                  : "All node configurations synchronized successfully!"
                 : "Some actions encountered errors. Review details below."}
             </Alert>
 
@@ -270,20 +301,31 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
         ) : (
           /* Action Plan Preview */
           <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-            {unreachableNodes && unreachableNodes.length > 0 && (
-              <Alert
-                severity="warning"
-                icon={<AlertTriangle size={18} color="#D97706" />}
-                sx={{ borderRadius: 2, backgroundColor: "#FFFBEB", border: "1px solid #FDE68A" }}
-              >
-                <Typography variant="body2" sx={{ fontWeight: 700, color: "#92400E" }}>
-                  {unreachableNodes.length} node(s) currently unreachable via SSH: {unreachableNodes.map((n) => n.name).join(", ")}
-                </Typography>
-                <Typography variant="caption" sx={{ color: "#B45309", display: "block", mt: 0.25 }}>
-                  Preview diffs for unreachable devices are computed from recorded state.json. Live interfaces could not be queried directly.
-                </Typography>
-              </Alert>
-            )}
+            {/* Unreachable Nodes Warning */}
+            {(() => {
+              const relevantUnreachable = targetNode
+                ? (unreachableNodes || []).filter((n) => n.name === targetNode)
+                : unreachableNodes || [];
+              if (relevantUnreachable.length === 0) return null;
+              return (
+                <Alert
+                  severity="warning"
+                  icon={<AlertTriangle size={18} color="#D97706" />}
+                  sx={{ borderRadius: 2, backgroundColor: "#FFFBEB", border: "1px solid #FDE68A" }}
+                >
+                  <Typography variant="body2" sx={{ fontWeight: 700, color: "#92400E" }}>
+                    {targetNode
+                      ? `Node ${targetNode} is currently unreachable via SSH`
+                      : `${relevantUnreachable.length} node(s) currently unreachable via SSH: ${relevantUnreachable.map((n) => n.name).join(", ")}`}
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: "#B45309", display: "block", mt: 0.25 }}>
+                    {targetNode
+                      ? "Preview diffs for this device are computed from recorded state.json. Live interfaces could not be queried directly."
+                      : "Preview diffs for unreachable devices are computed from recorded state.json. Live interfaces could not be queried directly."}
+                  </Typography>
+                </Alert>
+              );
+            })()}
 
             {/* Status Summary */}
             <Box
@@ -299,10 +341,12 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
             >
               <Box>
                 <Typography variant="body2" sx={{ fontWeight: 600, color: "#1E293B" }}>
-                  Configuration Reconciliation Plan
+                  {targetNode ? `Node Reconciliation Plan (${targetNode})` : "Configuration Reconciliation Plan"}
                 </Typography>
                 <Typography variant="caption" sx={{ color: "#64748B" }}>
-                  Diff calculated against recorded state and live device interfaces
+                  {targetNode
+                    ? `Diff calculated against recorded state and live interfaces on ${targetNode}`
+                    : "Diff calculated against recorded state and live device interfaces"}
                 </Typography>
               </Box>
               <Box sx={{ display: "flex", gap: 1 }}>
@@ -322,15 +366,25 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
 
             {pendingActions.length === 0 && safeActions.length > 0 && (
               <Alert severity="success" sx={{ borderRadius: 2 }}>
-                All WireGuard interfaces and BIRD routing configurations are currently in sync with recorded device
-                states. You can use <strong>Force Apply All</strong> to re-push configs from scratch, or{" "}
-                <strong>Update State</strong> to refresh from remote hosts.
+                {targetNode ? (
+                  <>
+                    All WireGuard interfaces, routing, and firewall configurations on <strong>{targetNode}</strong> are currently in sync with recorded device state. You can use <strong>Force Apply</strong> to re-push configs from scratch, or <strong>Update State</strong> to refresh from the remote host.
+                  </>
+                ) : (
+                  <>
+                    All WireGuard interfaces and BIRD routing configurations are currently in sync with recorded device
+                    states. You can use <strong>Force Apply All</strong> to re-push configs from scratch, or{" "}
+                    <strong>Update State</strong> to refresh from remote hosts.
+                  </>
+                )}
               </Alert>
             )}
 
             {safeActions.length === 0 && (
               <Alert severity="info" sx={{ borderRadius: 2 }}>
-                No mesh nodes or links configured yet.
+                {targetNode
+                  ? `No configuration changes or links found for node ${targetNode}.`
+                  : "No mesh nodes or links configured yet."}
               </Alert>
             )}
 
@@ -565,9 +619,15 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
 
         {!safeResults && (
           <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
-            {/* Force Apply All Button */}
+            {/* Force Apply Button */}
             {safeActions.length > 0 && (
-              <Tooltip title="Force push all configurations to remote nodes, re-writing files and restarting interfaces even if recorded as synced.">
+              <Tooltip
+                title={
+                  targetNode
+                    ? `Force push all configurations to ${targetNode}, re-writing files and restarting interfaces even if recorded as synced.`
+                    : "Force push all configurations to remote nodes, re-writing files and restarting interfaces even if recorded as synced."
+                }
+              >
                 <Button
                   variant="outlined"
                   color="warning"
@@ -586,7 +646,7 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
                     },
                   }}
                 >
-                  Force Apply All ({safeActions.length})
+                  {targetNode ? `Force Apply (${safeActions.length})` : `Force Apply All (${safeActions.length})`}
                 </Button>
               </Tooltip>
             )}
@@ -607,7 +667,9 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
               }}
             >
               {syncing
-                ? "Applying to Nodes..."
+                ? targetNode
+                  ? `Applying to ${targetNode}...`
+                  : "Applying to Nodes..."
                 : pendingActions.length > 0
                   ? `Apply Changes (${pendingActions.length})`
                   : "No Pending Changes"}

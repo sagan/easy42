@@ -366,6 +366,24 @@ func TestSyncMeshEmptyGraph(t *testing.T) {
 		t.Fatalf("Sync force failed: %d %s", wSyncForce.Code, wSyncForce.Body.String())
 	}
 
+	// 3b. Test GET /api/sync/preview?node=node-1
+	reqPreviewNode := httptest.NewRequest("GET", "/api/sync/preview?node=node-1", nil)
+	reqPreviewNode.AddCookie(cookie)
+	wPreviewNode := httptest.NewRecorder()
+	srv.router.ServeHTTP(wPreviewNode, reqPreviewNode)
+	if wPreviewNode.Code != http.StatusOK {
+		t.Fatalf("Sync preview with node failed: %d %s", wPreviewNode.Code, wPreviewNode.Body.String())
+	}
+
+	// 3c. Test POST /api/sync?node=node-1
+	reqSyncNode := httptest.NewRequest("POST", "/api/sync?node=node-1", nil)
+	reqSyncNode.AddCookie(cookie)
+	wSyncNode := httptest.NewRecorder()
+	srv.router.ServeHTTP(wSyncNode, reqSyncNode)
+	if wSyncNode.Code != http.StatusOK {
+		t.Fatalf("Sync execute with node failed: %d %s", wSyncNode.Code, wSyncNode.Body.String())
+	}
+
 	// 4. Test GET /api/state
 	reqState := httptest.NewRequest("GET", "/api/state", nil)
 	reqState.AddCookie(cookie)

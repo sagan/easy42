@@ -845,7 +845,17 @@ func (s *Server) handleDeleteLink(w http.ResponseWriter, r *http.Request) {
 // Sync Handlers
 
 func (s *Server) handleSyncPreview(w http.ResponseWriter, r *http.Request) {
-	actions, err := s.mgr.PlanSync()
+	var targetNodes []string
+	if nodeParam := r.URL.Query().Get("node"); nodeParam != "" {
+		for _, part := range strings.Split(nodeParam, ",") {
+			trimmed := strings.TrimSpace(part)
+			if trimmed != "" {
+				targetNodes = append(targetNodes, trimmed)
+			}
+		}
+	}
+
+	actions, err := s.mgr.PlanSync(targetNodes...)
 	if err != nil {
 		if err == crypto.ErrVaultLocked {
 			writeError(w, http.StatusLocked, "Vault is locked. Unlock with password first.")
@@ -863,15 +873,39 @@ func (s *Server) handleSyncPreview(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleExecuteSync(w http.ResponseWriter, r *http.Request) {
 	force := r.URL.Query().Get("force") == "true"
-	if !force && r.Body != nil {
-		var req struct {
-			Force bool `json:"force"`
+	var targetNodes []string
+	if nodeParam := r.URL.Query().Get("node"); nodeParam != "" {
+		for _, part := range strings.Split(nodeParam, ",") {
+			trimmed := strings.TrimSpace(part)
+			if trimmed != "" {
+				targetNodes = append(targetNodes, trimmed)
+			}
 		}
-		_ = json.NewDecoder(r.Body).Decode(&req)
-		force = req.Force
 	}
 
-	results, err := s.mgr.ExecuteSync(force)
+	if r.Body != nil {
+		var req struct {
+			Force bool     `json:"force"`
+			Node  string   `json:"node"`
+			Nodes []string `json:"nodes"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err == nil {
+			if !force && req.Force {
+				force = true
+			}
+			if req.Node != "" {
+				targetNodes = append(targetNodes, strings.TrimSpace(req.Node))
+			}
+			for _, n := range req.Nodes {
+				trimmed := strings.TrimSpace(n)
+				if trimmed != "" {
+					targetNodes = append(targetNodes, trimmed)
+				}
+			}
+		}
+	}
+
+	results, err := s.mgr.ExecuteSyncNodes(force, targetNodes...)
 	if err != nil {
 		if err == crypto.ErrVaultLocked {
 			writeError(w, http.StatusLocked, "Vault is locked. Unlock with password first.")

@@ -212,11 +212,21 @@ export const api = {
     }),
 
   // Sync & State
-  getSyncPreview: () => request<SyncAction[]>("/sync/preview").then((res) => res || []),
-  executeSync: (force?: boolean) =>
-    request<SyncResult[]>(`/sync${force ? "?force=true" : ""}`, {
+  getSyncPreview: (nodeName?: string) => {
+    const params = new URLSearchParams();
+    if (nodeName) params.append("node", nodeName);
+    const qs = params.toString();
+    return request<SyncAction[]>(`/sync/preview${qs ? `?${qs}` : ""}`).then((res) => res || []);
+  },
+  executeSync: (force?: boolean, nodeName?: string) => {
+    const params = new URLSearchParams();
+    if (force) params.append("force", "true");
+    if (nodeName) params.append("node", nodeName);
+    const qs = params.toString();
+    return request<SyncResult[]>(`/sync${qs ? `?${qs}` : ""}`, {
       method: "POST",
-    }).then((res) => res || []),
+    }).then((res) => res || []);
+  },
   getSyncStatus: () => request<SyncStatus>("/sync/status"),
   updateState: (nodeName?: string) =>
     request<UpdateStateResponse>(

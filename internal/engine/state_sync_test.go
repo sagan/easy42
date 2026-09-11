@@ -626,3 +626,87 @@ func TestRoaConfigStateSync(t *testing.T) {
 		t.Errorf("Expected BIRD action to require apply when ROA content changes")
 	}
 }
+
+func TestPlanSyncTargetNode(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "easy42-target-sync-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	store := config.NewStore(tempDir)
+	pass, err := store.Initialize()
+	if err != nil {
+		t.Fatalf("Failed to init store: %v", err)
+	}
+
+	mgr := NewManager(store)
+	if err := mgr.Unlock(pass); err != nil {
+		t.Fatalf("Unlock failed: %v", err)
+	}
+
+	nodeA := config.Node{
+		Name:      "node-1",
+		Host:      "10.0.0.1",
+		Interface: "eth0",
+		IP:        "10.0.0.1/24",
+		ASN:       4242420001,
+	}
+	nodeB := config.Node{
+		Name:      "node-2",
+		Host:      "10.0.0.2",
+		Interface: "eth0",
+		IP:        "10.0.0.2/24",
+		ASN:       4242420002,
+	}
+
+	if err := mgr.AddNode(nodeA); err != nil {
+		t.Fatalf("AddNode A failed: %v", err)
+	}
+	if err := mgr.AddNode(nodeB); err != nil {
+		t.Fatalf("AddNode B failed: %v", err)
+	}
+
+	_, err = mgr.AddLink("node-1", "node-2", 51820, 51821, nil)
+	if err != nil {
+		t.Fatalf("AddLink failed: %v", err)
+	}
+
+	// 1. All nodes: 6 actions
+	allActions, err := mgr.PlanSync()
+	if err != nil {
+		t.Fatalf("PlanSync failed: %v", err)
+	}
+	if len(allActions) != 6 {
+		t.Fatalf("Expected 6 actions for full mesh, got %d", len(allActions))
+	}
+
+	// 2. Specific node "node-1": exactly 3 actions, all for "node-1"
+	node1Actions, err := mgr.PlanSync("node-1")
+	if err != nil {
+		t.Fatalf("PlanSync node-1 failed: %v", err)
+	}
+	if len(node1Actions) != 3 {
+		t.Fatalf("Expected 3 actions for node-1, got %d", len(node1Actions))
+	}
+	for _, act := range node1Actions {
+		if act.NodeName != "node-1" {
+			t.Errorf("Expected action for node-1, got %s", act.NodeName)
+		}
+	}
+
+	// 3. Specific node "node-2": exactly 3 actions, all for "node-2"
+	node2Actions, err := mgr.PlanSync("node-2")
+	if err != nil {
+		t.Fatalf("PlanSync node-2 failed: %v", err)
+	}
+	if len(node2Actions) != 3 {
+		t.Fatalf("Expected 3 actions for node-2, got %d", len(node2Actions))
+	}
+	for _, act := range node2Actions {
+		if act.NodeName != "node-2" {
+			t.Errorf("Expected action for node-2, got %s", act.NodeName)
+		}
+	}
+}
+

@@ -45,6 +45,7 @@ interface NodeDetailDrawerProps {
   onStatusRefreshed: (status: NodeStatus) => void;
   onOpenHelper?: (nodeName: string) => void;
   onUpdateNodeState?: (nodeName: string) => Promise<void>;
+  onSyncNode?: (nodeName: string) => void;
 }
 
 export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
@@ -58,6 +59,7 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
   onStatusRefreshed,
   onOpenHelper,
   onUpdateNodeState,
+  onSyncNode,
 }) => {
   const [refreshing, setRefreshing] = useState(false);
   const [updatingState, setUpdatingState] = useState(false);
@@ -187,6 +189,18 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
         </Box>
 
         <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+          {!node.is_external && onSyncNode && (
+            <Tooltip title="Sync Node">
+              <IconButton
+                id="sync-node-header-btn"
+                size="small"
+                onClick={() => onSyncNode(node.name)}
+                sx={{ color: "#4F46E5", "&:hover": { backgroundColor: "rgba(79, 70, 229, 0.08)" } }}
+              >
+                <RefreshCw size={18} />
+              </IconButton>
+            </Tooltip>
+          )}
           {onRenameNode && (
             <Tooltip title="Rename Node">
               <IconButton
@@ -658,6 +672,31 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
 
       {/* Footer Actions */}
       <Box sx={{ mt: "auto", pt: 3, display: "flex", flexDirection: "column", gap: 1.5 }}>
+        {!node.is_external && onSyncNode && (
+          <Button
+            id="sync-node-btn"
+            fullWidth
+            variant="contained"
+            startIcon={<RefreshCw size={16} />}
+            onClick={() => onSyncNode(node.name)}
+            disabled={updatingState || refreshing || deleting}
+            sx={{
+              background: "linear-gradient(135deg, #4F46E5 0%, #3730A3 100%)",
+              color: "#FFFFFF",
+              fontWeight: 700,
+              textTransform: "none",
+              py: 1,
+              boxShadow: "0 2px 6px rgba(79, 70, 229, 0.25)",
+              "&:hover": {
+                background: "linear-gradient(135deg, #4338CA 0%, #312E81 100%)",
+                boxShadow: "0 4px 10px rgba(79, 70, 229, 0.35)",
+              },
+            }}
+          >
+            Sync Node
+          </Button>
+        )}
+
         {!node.is_external && onUpdateNodeState && (
           <Button
             fullWidth

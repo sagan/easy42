@@ -43,6 +43,7 @@ export const App: React.FC = () => {
   const [connectTo, setConnectTo] = useState<string>("");
   const [unlockOpen, setUnlockOpen] = useState(false);
   const [syncOpen, setSyncOpen] = useState(false);
+  const [syncTargetNode, setSyncTargetNode] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [helperOpen, setHelperOpen] = useState(false);
   const [helperInitialNode, setHelperInitialNode] = useState<string | undefined>(undefined);
@@ -448,7 +449,10 @@ export const App: React.FC = () => {
           onCreateFullMesh={handleCreateFullMesh}
           missingMeshLinksCount={missingMeshLinksCount}
           displayedNodeCount={displayedInternalNodes.length}
-          onSync={() => setSyncOpen(true)}
+          onSync={() => {
+            setSyncTargetNode(null);
+            setSyncOpen(true);
+          }}
           onUpdateState={() => handleUpdateState()}
           updatingState={updatingState}
           onOpenHelper={() => {
@@ -496,6 +500,10 @@ export const App: React.FC = () => {
             setHelperOpen(true);
           }}
           onUpdateNodeState={(nodeName) => handleUpdateState(nodeName)}
+          onSyncNode={(nodeName) => {
+            setSyncTargetNode(nodeName);
+            setSyncOpen(true);
+          }}
         />
 
         <LinkDetailDrawer
@@ -557,7 +565,11 @@ export const App: React.FC = () => {
 
         <SyncProgressModal
           open={syncOpen}
-          onClose={() => setSyncOpen(false)}
+          targetNode={syncTargetNode}
+          onClose={() => {
+            setSyncOpen(false);
+            setSyncTargetNode(null);
+          }}
           onSyncComplete={() => loadData()}
           onNeedUnlock={() => setUnlockOpen(true)}
           unreachableNodes={unreachableNodes}

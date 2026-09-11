@@ -1552,8 +1552,9 @@ func (m *Manager) GetNodeStatuses() map[string]config.NodeStatus {
 	return res
 }
 
-// PlanSync computes the sync actions required to bring remote devices up to date
-func (m *Manager) PlanSync() ([]config.SyncAction, error) {
+// PlanSync computes the sync actions required to bring remote devices up to date.
+// If nodeNames are provided, only changes for those target nodes are computed.
+func (m *Manager) PlanSync(nodeNames ...string) ([]config.SyncAction, error) {
 	m.mu.RLock()
 	if !m.vault.IsUnlocked() {
 		m.mu.RUnlock()
@@ -1570,6 +1571,15 @@ func (m *Manager) PlanSync() ([]config.SyncAction, error) {
 	links := make([]config.Link, len(cfg.Links))
 	copy(links, cfg.Links)
 	m.mu.RUnlock()
+
+	targetMap := make(map[string]bool)
+	for _, name := range nodeNames {
+		trimmed := strings.TrimSpace(name)
+		if trimmed != "" {
+			targetMap[trimmed] = true
+		}
+	}
+	isPartial := len(targetMap) > 0
 
 	currentState := m.stateStore.Get()
 	actions := make([]config.SyncAction, 0)
@@ -1594,6 +1604,9 @@ func (m *Manager) PlanSync() ([]config.SyncAction, error) {
 
 	for _, n := range nodes {
 		if n.IsExternal {
+			continue
+		}
+		if isPartial && !targetMap[n.Name] {
 			continue
 		}
 		node := n
@@ -1650,6 +1663,9 @@ func (m *Manager) PlanSync() ([]config.SyncAction, error) {
 		if n.IsExternal {
 			continue
 		}
+		if isPartial && !targetMap[n.Name] {
+			continue
+		}
 		expected := expectedIfacesPerNode[n.Name]
 		if stNode, ok := currentState.Nodes[n.Name]; ok {
 			for ifaceName := range stNode.Interfaces {
@@ -1700,7 +1716,7 @@ func (m *Manager) PlanSync() ([]config.SyncAction, error) {
 		}
 
 		// 1. From node end (only if fromNode is managed)
-		if !fromNode.IsExternal {
+		if !fromNode.IsExternal && (!isPartial || targetMap[fromNode.Name]) {
 			fromConf, err := compiler.GenerateWgConfigContent(fromNode, toNode, &link.From, &link.To, m.vault)
 			if err == nil {
 				targetFile := fmt.Sprintf("/etc/wireguard/%s.conf", link.From.Interface)
@@ -1738,7 +1754,7 @@ func (m *Manager) PlanSync() ([]config.SyncAction, error) {
 		}
 
 		// 2. To node end (only if toNode is managed)
-		if !toNode.IsExternal {
+		if !toNode.IsExternal && (!isPartial || targetMap[toNode.Name]) {
 			toConf, err := compiler.GenerateWgConfigContent(toNode, fromNode, &link.To, &link.From, m.vault)
 			if err == nil {
 				targetFile := fmt.Sprintf("/etc/wireguard/%s.conf", link.To.Interface)
@@ -1791,6 +1807,9 @@ func (m *Manager) PlanSync() ([]config.SyncAction, error) {
 	// 3. Node ROA & BIRD configurations
 	for _, n := range nodes {
 		if n.IsExternal {
+			continue
+		}
+		if isPartial && !targetMap[n.Name] {
 			continue
 		}
 		node := n
@@ -1962,6 +1981,9 @@ func (m *Manager) PlanSync() ([]config.SyncAction, error) {
 		if n.IsExternal {
 			continue
 		}
+		if isPartial && !targetMap[n.Name] {
+			continue
+		}
 		node := n
 		nftConf, err := compiler.GenerateNftablesConfig(&node, nodes, links, &cfg.NetworkSettings, cfg.NetworkPolicies)
 		if err != nil {
@@ -2028,7 +2050,12 @@ func (m *Manager) PlanSync() ([]config.SyncAction, error) {
 // ExecuteSync executes planned actions across nodes
 func (m *Manager) ExecuteSync(force ...bool) ([]config.SyncResult, error) {
 	isForce := len(force) > 0 && force[0]
-	actions, err := m.PlanSync()
+	return m.ExecuteSyncNodes(isForce)
+}
+
+// ExecuteSyncNodes executes planned actions across specified nodes (or all nodes if none specified)
+func (m *Manager) ExecuteSyncNodes(isForce bool, nodeNames ...string) ([]config.SyncResult, error) {
+	actions, err := m.PlanSync(nodeNames...)
 	if err != nil {
 		return nil, err
 	}
