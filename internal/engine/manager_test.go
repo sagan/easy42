@@ -1220,3 +1220,113 @@ func TestSharedTagEmptyEntrypointLink(t *testing.T) {
 	}
 }
 
+func TestUpdateLinkListenPortUpdatesPeerEndpoint(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "easy42-engine-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	store := config.NewStore(tempDir)
+	pass, err := store.Initialize()
+	if err != nil {
+		t.Fatalf("Failed to init store: %v", err)
+	}
+
+	mgr := NewManager(store)
+	if err := mgr.Unlock(pass); err != nil {
+		t.Fatalf("Failed to unlock manager: %v", err)
+	}
+
+	nbNode := config.Node{
+		Name: "nb",
+		Host: "nb.s.sagan.me",
+		IP:   "192.168.110.11",
+		Entrypoints: []config.Entrypoint{
+			{
+				IP:   "nb.s.sagan.me",
+				Tags: []string{"default"},
+				MTU:  1500,
+			},
+			{
+				IP:   "nbix.s.sagan.me",
+				Tags: []string{"ix"},
+				MTU:  1500,
+			},
+			{
+				Tags: []string{"nat"},
+			},
+		},
+	}
+	tcnjNode := config.Node{
+		Name: "tcnj",
+		Host: "tcnj.s.sagan.me",
+		IP:   "192.168.110.22",
+		Entrypoints: []config.Entrypoint{
+			{
+				IP:   "tcnj.s.sagan.me",
+				Tags: []string{"cn"},
+				MTU:  1500,
+			},
+			{
+				Tags: []string{"nat", "ix"},
+			},
+		},
+	}
+
+	if err := mgr.AddNode(nbNode); err != nil {
+		t.Fatalf("AddNode nb failed: %v", err)
+	}
+	if err := mgr.AddNode(tcnjNode); err != nil {
+		t.Fatalf("AddNode tcnj failed: %v", err)
+	}
+
+	link, err := mgr.AddLink("nb", "tcnj", 21562, 21658, nil)
+	if err != nil {
+		t.Fatalf("AddLink failed: %v", err)
+	}
+
+	var nbEnd, tcnjEnd *config.LinkEnd
+	if link.From.Name == "nb" {
+		nbEnd = &link.From
+		tcnjEnd = &link.To
+	} else {
+		nbEnd = &link.To
+		tcnjEnd = &link.From
+	}
+
+	if tcnjEnd.Endpoint != "nbix.s.sagan.me:21562" {
+		t.Fatalf("Expected initial tcnj endpoint nbix.s.sagan.me:21562, got %s", tcnjEnd.Endpoint)
+	}
+
+	// Update nb's listen port from 21562 to 6584 via UpdateLinkAdvanced, passing existing endpoint strings
+	customNb := *nbEnd
+	customNb.ListenPort = 6584
+	customTcnj := *tcnjEnd
+
+	updated, err := mgr.UpdateLinkAdvanced("nb", "tcnj", &customNb, &customTcnj, nil)
+	if err != nil {
+		t.Fatalf("UpdateLinkAdvanced failed: %v", err)
+	}
+
+	var updatedNbEnd, updatedTcnjEnd *config.LinkEnd
+	if updated.From.Name == "nb" {
+		updatedNbEnd = &updated.From
+		updatedTcnjEnd = &updated.To
+	} else {
+		updatedNbEnd = &updated.To
+		updatedTcnjEnd = &updated.From
+	}
+
+	if updatedNbEnd.ListenPort != 6584 {
+		t.Errorf("Expected nb listen port 6584, got %d", updatedNbEnd.ListenPort)
+	}
+	if updatedTcnjEnd.Endpoint != "nbix.s.sagan.me:6584" {
+		t.Errorf("Expected tcnj peer endpoint nbix.s.sagan.me:6584, got %s", updatedTcnjEnd.Endpoint)
+	}
+	if updatedTcnjEnd.ResolvedEndpoint != "nbix.s.sagan.me:6584" {
+		t.Errorf("Expected tcnj resolved endpoint nbix.s.sagan.me:6584, got %s", updatedTcnjEnd.ResolvedEndpoint)
+	}
+}
+
+

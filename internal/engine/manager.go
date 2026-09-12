@@ -882,12 +882,8 @@ func (m *Manager) buildLink(cfg *config.Config, n1, n2 *config.Node, listenPort1
 			fromEP = customToEnd.Endpoint
 		}
 	} else {
-		if fromEP == "" {
-			fromEP, _, epTo = compiler.ResolvePeerEndpointWithEntrypoint(fromNode, toNode, nil, toPort)
-		}
-		if toEP == "" {
-			toEP, _, epFrom = compiler.ResolvePeerEndpointWithEntrypoint(toNode, fromNode, nil, fromPort)
-		}
+		fromEP, _, epTo = compiler.ResolvePeerEndpointWithEntrypoint(fromNode, toNode, nil, toPort)
+		toEP, _, epFrom = compiler.ResolvePeerEndpointWithEntrypoint(toNode, fromNode, nil, fromPort)
 	}
 
 	fromKeepalive := 0
@@ -1040,7 +1036,14 @@ func (m *Manager) buildLink(cfg *config.Config, n1, n2 *config.Node, listenPort1
 // AddLink adds a new WireGuard link between two nodes.
 // Optional customMTU can specify [fromMTU, toMTU] (relative to node1Name, node2Name).
 func (m *Manager) AddLink(node1Name, node2Name string, listenPort1, listenPort2 int, tags []string, customMTU ...int) (*config.Link, error) {
-	return m.AddLinkAdvanced(node1Name, node2Name, nil, nil, tags, customMTU...)
+	var fromEnd, toEnd *config.LinkEnd
+	if listenPort1 > 0 {
+		fromEnd = &config.LinkEnd{Name: node1Name, ListenPort: listenPort1}
+	}
+	if listenPort2 > 0 {
+		toEnd = &config.LinkEnd{Name: node2Name, ListenPort: listenPort2}
+	}
+	return m.AddLinkAdvanced(node1Name, node2Name, fromEnd, toEnd, tags, customMTU...)
 }
 
 // AddLinkAdvanced creates a link with full custom LinkEnd properties (useful for external peering)
@@ -1420,21 +1423,27 @@ func (m *Manager) UpdateLinkAdvanced(node1Name, node2Name string, customFrom, cu
 
 	isExternalLink := fromNode.IsExternal || toNode.IsExternal
 	if !isExternalLink {
-		if (fromEnd == nil || fromEnd.Endpoint == "") && (toEnd == nil || toEnd.Endpoint == "") {
-			fromEP, _, _ := compiler.ResolvePeerEndpointWithEntrypoint(fromNode, toNode, nil, link.To.ListenPort)
-			toEP, _, _ := compiler.ResolvePeerEndpointWithEntrypoint(toNode, fromNode, nil, link.From.ListenPort)
-			link.From.Endpoint = fromEP
-			link.To.Endpoint = toEP
-			if fromEP != "" {
+		fromEP, _, _ := compiler.ResolvePeerEndpointWithEntrypoint(fromNode, toNode, nil, link.To.ListenPort)
+		toEP, _, _ := compiler.ResolvePeerEndpointWithEntrypoint(toNode, fromNode, nil, link.From.ListenPort)
+		link.From.Endpoint = fromEP
+		link.To.Endpoint = toEP
+		if fromEP != "" {
+			if fromEnd != nil && fromEnd.PersistentKeepalive > 0 {
+				link.From.PersistentKeepalive = fromEnd.PersistentKeepalive
+			} else {
 				link.From.PersistentKeepalive = 25
-			} else {
-				link.From.PersistentKeepalive = 0
 			}
-			if toEP != "" {
+		} else {
+			link.From.PersistentKeepalive = 0
+		}
+		if toEP != "" {
+			if toEnd != nil && toEnd.PersistentKeepalive > 0 {
+				link.To.PersistentKeepalive = toEnd.PersistentKeepalive
+			} else {
 				link.To.PersistentKeepalive = 25
-			} else {
-				link.To.PersistentKeepalive = 0
 			}
+		} else {
+			link.To.PersistentKeepalive = 0
 		}
 	} else if toNode.IsExternal {
 		if link.From.Endpoint == "" && toEnd != nil && toEnd.Endpoint != "" {

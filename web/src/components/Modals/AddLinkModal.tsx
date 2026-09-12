@@ -346,6 +346,8 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
               use_ip: fromUseIp,
               policy: fromPolicy,
               cost: parsedFromCost,
+              endpoint: undefined,
+              resolved_endpoint: undefined,
             },
             to: {
               ...linkToEdit.to,
@@ -354,6 +356,8 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
               use_ip: toUseIp,
               policy: toPolicy,
               cost: parsedToCost,
+              endpoint: undefined,
+              resolved_endpoint: undefined,
             },
           });
           onLinkUpdated?.(updated);
@@ -793,10 +797,21 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                         <Typography variant="caption" className="mono-font" sx={{ color: "#0F172A", fontWeight: 700 }}>
                           {fromUseIp
                             ? linkToEdit?.from.resolved_endpoint || "(Resolves domain to IP on server)"
-                            : linkToEdit?.from.endpoint ||
-                              (resolvePeerEntrypoint(fromNode, toNode).entrypoint?.ip
-                                ? `${resolvePeerEntrypoint(fromNode, toNode).entrypoint!.ip}:${toPort || (fromNode?.ip ? derivePortFromIP(fromNode.ip) : 20000)}`
-                                : "Dynamic / Automatic")}
+                            : (() => {
+                                const resolved = resolvePeerEntrypoint(fromNode, toNode);
+                                const port = toPort || (fromNode?.ip ? derivePortFromIP(fromNode.ip) : 20000);
+                                if (resolved.entrypoint?.ip) {
+                                  return `${resolved.entrypoint.ip}:${port}`;
+                                }
+                                if (linkToEdit?.from.endpoint) {
+                                  const parts = linkToEdit.from.endpoint.split(":");
+                                  if (parts.length === 2 && port) {
+                                    return `${parts[0]}:${port}`;
+                                  }
+                                  return linkToEdit.from.endpoint;
+                                }
+                                return "Dynamic / Automatic";
+                              })()}
                         </Typography>
                         {fromUseIp && (
                           <Chip
@@ -919,10 +934,21 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                         <Typography variant="caption" className="mono-font" sx={{ color: "#0F172A", fontWeight: 700 }}>
                           {toUseIp
                             ? linkToEdit?.to.resolved_endpoint || "(Resolves domain to IP on server)"
-                            : linkToEdit?.to.endpoint ||
-                              (resolvePeerEntrypoint(toNode, fromNode).entrypoint?.ip
-                                ? `${resolvePeerEntrypoint(toNode, fromNode).entrypoint!.ip}:${fromPort || (toNode?.ip ? derivePortFromIP(toNode.ip) : 20000)}`
-                                : "Dynamic / Automatic")}
+                            : (() => {
+                                const resolved = resolvePeerEntrypoint(toNode, fromNode);
+                                const port = fromPort || (toNode?.ip ? derivePortFromIP(toNode.ip) : 20000);
+                                if (resolved.entrypoint?.ip) {
+                                  return `${resolved.entrypoint.ip}:${port}`;
+                                }
+                                if (linkToEdit?.to.endpoint) {
+                                  const parts = linkToEdit.to.endpoint.split(":");
+                                  if (parts.length === 2 && port) {
+                                    return `${parts[0]}:${port}`;
+                                  }
+                                  return linkToEdit.to.endpoint;
+                                }
+                                return "Dynamic / Automatic";
+                              })()}
                         </Typography>
                         {toUseIp && (
                           <Chip
