@@ -122,11 +122,12 @@ protocol pipe pipe_ext_v4 {
     peer table ext_table4;
     import none;
     export filter {
-        if net ~ INTERNET then reject;
-        if (source ~ [ RTS_BGP ]) && (COMM_EXTERNAL ~ bgp_large_community) then accept;
         {{if and .use_internet_table (eq .internet_table .external_table)}}
-        if (source ~ [ RTS_BGP ]) then accept;
+        if (source ~ [ RTS_BGP ]) && (net ~ INTERNET) then accept;
+        {{else}}
+        if net ~ INTERNET then reject;
         {{end}}
+        if (source ~ [ RTS_BGP ]) && (COMM_EXTERNAL ~ bgp_large_community) then accept;
         reject;
     };
 }
@@ -215,11 +216,12 @@ protocol pipe pipe_ext_v6 {
     peer table ext_table6;
     import none;
     export filter {
-        if net ~ INTERNET6 then reject;
-        if (source ~ [ RTS_BGP ]) && (COMM_EXTERNAL ~ bgp_large_community) then accept;
         {{if and .use_internet_table (eq .internet_table .external_table)}}
-        if (source ~ [ RTS_BGP ]) then accept;
+        if (source ~ [ RTS_BGP ]) && (net ~ INTERNET6) then accept;
+        {{else}}
+        if net ~ INTERNET6 then reject;
         {{end}}
+        if (source ~ [ RTS_BGP ]) && (COMM_EXTERNAL ~ bgp_large_community) then accept;
         reject;
     };
 }

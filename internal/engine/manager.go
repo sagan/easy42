@@ -425,12 +425,12 @@ func (m *Manager) UpdateNode(name string, updated config.Node) error {
 				toEP, _, _ := compiler.ResolvePeerEndpointWithEntrypoint(toN, fromN, nil, cfg.Links[i].From.ListenPort)
 				cfg.Links[i].From.Endpoint = fromEP
 				cfg.Links[i].To.Endpoint = toEP
-				if toEP != "" {
+				if fromEP != "" && !fromN.IsExternal {
 					cfg.Links[i].From.PersistentKeepalive = 25
 				} else {
 					cfg.Links[i].From.PersistentKeepalive = 0
 				}
-				if fromEP != "" {
+				if toEP != "" && !toN.IsExternal {
 					cfg.Links[i].To.PersistentKeepalive = 25
 				} else {
 					cfg.Links[i].To.PersistentKeepalive = 0
@@ -638,12 +638,12 @@ func (m *Manager) RenameNode(oldName, newName string) (*config.Node, error) {
 				toEP, _, _ := compiler.ResolvePeerEndpointWithEntrypoint(toN, fromN, nil, cfg.Links[i].From.ListenPort)
 				cfg.Links[i].From.Endpoint = fromEP
 				cfg.Links[i].To.Endpoint = toEP
-				if toEP != "" {
+				if fromEP != "" && !fromN.IsExternal {
 					cfg.Links[i].From.PersistentKeepalive = 25
 				} else {
 					cfg.Links[i].From.PersistentKeepalive = 0
 				}
-				if fromEP != "" {
+				if toEP != "" && !toN.IsExternal {
 					cfg.Links[i].To.PersistentKeepalive = 25
 				} else {
 					cfg.Links[i].To.PersistentKeepalive = 0
@@ -891,11 +891,11 @@ func (m *Manager) buildLink(cfg *config.Config, n1, n2 *config.Node, listenPort1
 	}
 
 	fromKeepalive := 0
-	if toEP != "" || (toNode.IsExternal && fromEP != "") {
+	if fromEP != "" && !fromNode.IsExternal {
 		fromKeepalive = 25
 	}
 	toKeepalive := 0
-	if fromEP != "" || (fromNode.IsExternal && toEP != "") {
+	if toEP != "" && !toNode.IsExternal {
 		toKeepalive = 25
 	}
 	if customFromEnd != nil && customFromEnd.PersistentKeepalive > 0 {
@@ -1287,12 +1287,12 @@ func (m *Manager) UpdateLink(node1Name, node2Name string, listenPort1, listenPor
 		toEP, _, _ := compiler.ResolvePeerEndpointWithEntrypoint(toNode, fromNode, nil, link.From.ListenPort)
 		link.From.Endpoint = fromEP
 		link.To.Endpoint = toEP
-		if toEP != "" {
+		if fromEP != "" {
 			link.From.PersistentKeepalive = 25
 		} else {
 			link.From.PersistentKeepalive = 0
 		}
-		if fromEP != "" {
+		if toEP != "" {
 			link.To.PersistentKeepalive = 25
 		} else {
 			link.To.PersistentKeepalive = 0
@@ -1425,12 +1425,12 @@ func (m *Manager) UpdateLinkAdvanced(node1Name, node2Name string, customFrom, cu
 			toEP, _, _ := compiler.ResolvePeerEndpointWithEntrypoint(toNode, fromNode, nil, link.From.ListenPort)
 			link.From.Endpoint = fromEP
 			link.To.Endpoint = toEP
-			if toEP != "" {
+			if fromEP != "" {
 				link.From.PersistentKeepalive = 25
 			} else {
 				link.From.PersistentKeepalive = 0
 			}
-			if fromEP != "" {
+			if toEP != "" {
 				link.To.PersistentKeepalive = 25
 			} else {
 				link.To.PersistentKeepalive = 0

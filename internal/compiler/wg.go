@@ -98,6 +98,9 @@ func BuildWgLinkContext(
 	if keepalive == 0 && endpoint != "" {
 		keepalive = 25
 	}
+	if endpoint == "" {
+		keepalive = 0
+	}
 
 	allowedIPs := fmt.Sprintf("%s/128, 0.0.0.0/0, ::/0", peerAddrOnly)
 

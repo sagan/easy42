@@ -98,6 +98,77 @@ func TestResolvePeerEndpoint(t *testing.T) {
 	if epCustom != "2.2.2.2:33333" || portCustom != 33333 {
 		t.Fatalf("Expected 2.2.2.2:33333 / 33333, got %s / %d", epCustom, portCustom)
 	}
+
+	// Test connecting to a node strictly under NAT (empty IP fallback NAT entrypoint)
+	nodeNAT := &config.Node{
+		Name: "node-nat",
+		Host: "nat.example.com",
+		ASN:  4224420003,
+		IP:   "192.168.100.3",
+		Entrypoints: []config.Entrypoint{
+			{
+				Tags: []string{"nat"},
+			},
+		},
+	}
+
+	epNAT, portNAT := ResolvePeerEndpoint(nodeA, nodeNAT, nil)
+	if epNAT != "" || portNAT != 0 {
+		t.Fatalf("Expected empty endpoint for NAT node, got %s / %d", epNAT, portNAT)
+	}
+
+	// Test from NAT node connecting to public node
+	epFromNAT, portFromNAT := ResolvePeerEndpoint(nodeNAT, nodeA, nil)
+	if epFromNAT != "1.1.1.1:20770" || portFromNAT != 20770 {
+		t.Fatalf("Expected 1.1.1.1:20770 / 20770, got %s / %d", epFromNAT, portFromNAT)
+	}
+
+	// Test connecting to a node that has multiple entrypoints (e.g. ix with IP, direct without IP)
+	// when nodeFrom has tag "direct" with IP. It must match tag "direct" and NOT fallback to "ix"
+	nodeMulti := &config.Node{
+		Name: "ggyix",
+		Host: "ggyix.s.sagan.me",
+		ASN:  4224420202,
+		IP:   "192.168.110.202",
+		Entrypoints: []config.Entrypoint{
+			{
+				IP:   "ggyix.s.sagan.me",
+				Tags: []string{"ix"},
+				MTU:  1500,
+			},
+			{
+				Tags: []string{"direct"},
+			},
+		},
+	}
+	nodeDirect := &config.Node{
+		Name: "linode",
+		Host: "linode.s.sagan.me",
+		ASN:  4224420001,
+		IP:   "192.168.110.1",
+		Entrypoints: []config.Entrypoint{
+			{
+				IP:   "linode.s.sagan.me",
+				Tags: []string{"direct"},
+				MTU:  1520,
+			},
+			{
+				Tags: []string{"nat"},
+			},
+		},
+	}
+
+	// linode connects to ggyix: matched on "direct" where ggyix has no IP -> empty endpoint!
+	epLinodeToGgyix, portLtoG := ResolvePeerEndpoint(nodeDirect, nodeMulti, nil)
+	if epLinodeToGgyix != "" || portLtoG != 0 {
+		t.Fatalf("Expected empty endpoint for linode -> ggyix on direct tag, got %s / %d", epLinodeToGgyix, portLtoG)
+	}
+
+	// ggyix connects to linode: matched on "direct" where linode has IP -> linode endpoint!
+	epGgyixToLinode, _ := ResolvePeerEndpoint(nodeMulti, nodeDirect, nil, 21182)
+	if epGgyixToLinode != "linode.s.sagan.me:21182" {
+		t.Fatalf("Expected linode.s.sagan.me:21182 for ggyix -> linode, got %s", epGgyixToLinode)
+	}
 }
 
 func TestGetDefaultWgTemplate(t *testing.T) {

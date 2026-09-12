@@ -95,6 +95,9 @@ func ResolveLinkEndpoint(
 			peerListenPort = DerivePortFromIP(peerNode.IP)
 		}
 		derivedEP, _ := ResolvePeerEndpoint(selfNode, peerNode, nil, peerListenPort)
+		if derivedEP == "" && peerNode.Host != "" {
+			derivedEP = FormatHostPort(peerNode.Host, peerListenPort)
+		}
 		endpoint = derivedEP
 	}
 
@@ -148,8 +151,11 @@ func ResolvePeerEndpointWithEntrypoint(nodeFrom *config.Node, nodeTo *config.Nod
 				}
 				for i := range nodeTo.Entrypoints {
 					epTo := &nodeTo.Entrypoints[i]
+					if epFrom.IsNone() && epTo.IsNone() {
+						continue
+					}
 					for _, tagTo := range epTo.Tags {
-						if strings.EqualFold(tagFrom, tagTo) && !epTo.IsNone() {
+						if strings.EqualFold(tagFrom, tagTo) {
 							selectedEP = epTo
 							break
 						}
@@ -169,14 +175,24 @@ func ResolvePeerEndpointWithEntrypoint(nodeFrom *config.Node, nodeTo *config.Nod
 
 		// 1b. Check node-level tags if no tag matched from entrypoints
 		if selectedEP == nil {
+			hasFromIP := false
+			for _, ep := range nodeFrom.Entrypoints {
+				if !ep.IsNone() {
+					hasFromIP = true
+					break
+				}
+			}
 			for _, tagFrom := range nodeFrom.Tags {
 				if strings.TrimSpace(tagFrom) == "" {
 					continue
 				}
 				for i := range nodeTo.Entrypoints {
 					epTo := &nodeTo.Entrypoints[i]
+					if !hasFromIP && epTo.IsNone() {
+						continue
+					}
 					for _, tagTo := range epTo.Tags {
-						if strings.EqualFold(tagFrom, tagTo) && !epTo.IsNone() {
+						if strings.EqualFold(tagFrom, tagTo) {
 							selectedEP = epTo
 							break
 						}
@@ -203,20 +219,18 @@ func ResolvePeerEndpointWithEntrypoint(nodeFrom *config.Node, nodeTo *config.Nod
 		}
 	}
 
-	targetHost := ""
-	if selectedEP != nil && !selectedEP.IsNone() {
-		targetHost = selectedEP.IP
-	} else if nodeTo.Host != "" {
-		targetHost = nodeTo.Host
+	if selectedEP == nil || selectedEP.IsNone() {
+		return "", 0, selectedEP
 	}
 
+	targetHost := selectedEP.IP
 	if targetHost == "" {
 		return "", 0, nil
 	}
 
 	// 3. Resolve port
 	port := 0
-	if selectedEP != nil && len(selectedEP.Ports) > 0 {
+	if len(selectedEP.Ports) > 0 {
 		for _, ps := range selectedEP.Ports {
 			if ps.Range != "" {
 				start, end, err := ParsePortRange(ps.Range)

@@ -23,11 +23,15 @@ export function resolvePeerEntrypoint(
   if (nodeFrom && nodeFrom.entrypoints) {
     for (const epFrom of nodeFrom.entrypoints) {
       if (!epFrom.tags) continue;
+      const hasFromIP = Boolean(epFrom.ip && epFrom.ip.trim() !== "");
       for (const tagFrom of epFrom.tags) {
         const trimmedFrom = tagFrom.trim().toLowerCase();
         if (!trimmedFrom) continue;
         for (const epTo of nodeTo.entrypoints) {
-          if (!epTo.ip || epTo.ip.trim() === "" || !epTo.tags) continue;
+          if (!epTo.tags) continue;
+          const hasToIP = Boolean(epTo.ip && epTo.ip.trim() !== "");
+          if (!hasFromIP && !hasToIP) continue;
+
           for (const tagTo of epTo.tags) {
             if (trimmedFrom === tagTo.trim().toLowerCase()) {
               return { entrypoint: epTo, matchedTag: tagFrom.trim() };
@@ -40,11 +44,15 @@ export function resolvePeerEntrypoint(
 
   // 1b. Try matching node-level tags of nodeFrom
   if (nodeFrom && nodeFrom.tags) {
+    const hasFromIP = Boolean(nodeFrom.entrypoints?.some((e) => e.ip && e.ip.trim() !== ""));
     for (const tagFrom of nodeFrom.tags) {
       const trimmedFrom = tagFrom.trim().toLowerCase();
       if (!trimmedFrom) continue;
       for (const epTo of nodeTo.entrypoints) {
-        if (!epTo.ip || epTo.ip.trim() === "" || !epTo.tags) continue;
+        if (!epTo.tags) continue;
+        const hasToIP = Boolean(epTo.ip && epTo.ip.trim() !== "");
+        if (!hasFromIP && !hasToIP) continue;
+
         for (const tagTo of epTo.tags) {
           if (trimmedFrom === tagTo.trim().toLowerCase()) {
             return { entrypoint: epTo, matchedTag: tagFrom.trim() };

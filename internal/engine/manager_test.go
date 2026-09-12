@@ -1040,3 +1040,183 @@ func TestNodeIP6(t *testing.T) {
 	}
 }
 
+func TestNATNodePeerEndpointAndKeepalive(t *testing.T) {
+	tmpDir := t.TempDir()
+	store := config.NewStore(tmpDir)
+	rawPass, err := store.Initialize()
+	if err != nil {
+		t.Fatalf("Failed to init store: %v", err)
+	}
+
+	mgr := NewManager(store)
+	if err := mgr.Unlock(rawPass); err != nil {
+		t.Fatalf("Failed to unlock manager: %v", err)
+	}
+
+	publicNode := config.Node{
+		Name:      "public-node",
+		Host:      "pub.sagan.me",
+		IP:        "192.168.110.210",
+		Interface: "wg0",
+		ASN:       4224420210,
+		Entrypoints: []config.Entrypoint{
+			{
+				IP:   "pub.sagan.me",
+				Tags: []string{"default"},
+				MTU:  1420,
+			},
+			{
+				Tags: []string{"nat"},
+			},
+		},
+	}
+	if err := mgr.AddNode(publicNode); err != nil {
+		t.Fatalf("AddNode publicNode failed: %v", err)
+	}
+
+	natNode := config.Node{
+		Name:      "nat-node",
+		Host:      "nat.sagan.me",
+		IP:        "192.168.110.202",
+		Interface: "wg0",
+		ASN:       4224420202,
+		Entrypoints: []config.Entrypoint{
+			{
+				Tags: []string{"nat"},
+			},
+		},
+	}
+	if err := mgr.AddNode(natNode); err != nil {
+		t.Fatalf("AddNode natNode failed: %v", err)
+	}
+
+	link, err := mgr.AddLink("public-node", "nat-node", 21182, 28753, nil)
+	if err != nil {
+		t.Fatalf("AddLink failed: %v", err)
+	}
+
+	var natEnd, pubEnd *config.LinkEnd
+	if link.From.Name == "nat-node" {
+		natEnd = &link.From
+		pubEnd = &link.To
+	} else {
+		natEnd = &link.To
+		pubEnd = &link.From
+	}
+
+	// public-node connects to nat-node: since nat-node is behind NAT, endpoint must be empty
+	if pubEnd.Endpoint != "" {
+		t.Errorf("Expected public-node peer endpoint to be empty for NAT peer, got %s", pubEnd.Endpoint)
+	}
+	if pubEnd.ResolvedEndpoint != "" {
+		t.Errorf("Expected public-node resolved endpoint to be empty, got %s", pubEnd.ResolvedEndpoint)
+	}
+	if pubEnd.PersistentKeepalive != 0 {
+		t.Errorf("Expected public-node keepalive to be 0 (no endpoint), got %d", pubEnd.PersistentKeepalive)
+	}
+
+	// nat-node connects to public-node: endpoint must be public-node's entrypoint, with keepalive 25
+	if natEnd.Endpoint != "pub.sagan.me:21182" {
+		t.Errorf("Expected nat-node peer endpoint to be pub.sagan.me:21182, got %s", natEnd.Endpoint)
+	}
+	if natEnd.ResolvedEndpoint != "pub.sagan.me:21182" {
+		t.Errorf("Expected nat-node resolved endpoint to be pub.sagan.me:21182, got %s", natEnd.ResolvedEndpoint)
+	}
+	if natEnd.PersistentKeepalive != 25 {
+		t.Errorf("Expected nat-node keepalive to be 25, got %d", natEnd.PersistentKeepalive)
+	}
+}
+
+func TestSharedTagEmptyEntrypointLink(t *testing.T) {
+	tmpDir := t.TempDir()
+	store := config.NewStore(tmpDir)
+	rawPass, err := store.Initialize()
+	if err != nil {
+		t.Fatalf("Failed to init store: %v", err)
+	}
+
+	mgr := NewManager(store)
+	if err := mgr.Unlock(rawPass); err != nil {
+		t.Fatalf("Failed to unlock manager: %v", err)
+	}
+
+	ggyix := config.Node{
+		Name:      "ggyix",
+		Host:      "ggyix.s.sagan.me",
+		IP:        "192.168.110.202",
+		Interface: "wg0",
+		ASN:       4224420202,
+		Entrypoints: []config.Entrypoint{
+			{
+				IP:   "ggyix.s.sagan.me",
+				Tags: []string{"ix"},
+				MTU:  1500,
+			},
+			{
+				Tags: []string{"direct"},
+			},
+		},
+	}
+	if err := mgr.AddNode(ggyix); err != nil {
+		t.Fatalf("AddNode ggyix failed: %v", err)
+	}
+
+	linode := config.Node{
+		Name:      "linode",
+		Host:      "linode.s.sagan.me",
+		IP:        "192.168.110.1",
+		Interface: "wg0",
+		ASN:       4224420001,
+		Entrypoints: []config.Entrypoint{
+			{
+				IP:   "linode.s.sagan.me",
+				Tags: []string{"direct"},
+				MTU:  1520,
+			},
+			{
+				Tags: []string{"nat"},
+			},
+		},
+	}
+	if err := mgr.AddNode(linode); err != nil {
+		t.Fatalf("AddNode linode failed: %v", err)
+	}
+
+	link, err := mgr.AddLink("ggyix", "linode", 26945, 21182, nil)
+	if err != nil {
+		t.Fatalf("AddLink failed: %v", err)
+	}
+
+	var ggyixEnd, linodeEnd *config.LinkEnd
+	if link.From.Name == "ggyix" {
+		ggyixEnd = &link.From
+		linodeEnd = &link.To
+	} else {
+		ggyixEnd = &link.To
+		linodeEnd = &link.From
+	}
+
+	// linode connects to ggyix: since they share "direct" tag and ggyix has no IP for "direct",
+	// linode must NOT have an endpoint (must NOT fall back to ggyix's "ix" endpoint!)
+	if linodeEnd.Endpoint != "" {
+		t.Errorf("Expected linode peer endpoint to be empty, got %s", linodeEnd.Endpoint)
+	}
+	if linodeEnd.ResolvedEndpoint != "" {
+		t.Errorf("Expected linode resolved endpoint to be empty, got %s", linodeEnd.ResolvedEndpoint)
+	}
+	if linodeEnd.PersistentKeepalive != 0 {
+		t.Errorf("Expected linode keepalive to be 0, got %d", linodeEnd.PersistentKeepalive)
+	}
+
+	// ggyix connects to linode: linode has IP on "direct" tag
+	if ggyixEnd.Endpoint != "linode.s.sagan.me:21182" {
+		t.Errorf("Expected ggyix peer endpoint to be linode.s.sagan.me:21182, got %s", ggyixEnd.Endpoint)
+	}
+	if ggyixEnd.ResolvedEndpoint != "linode.s.sagan.me:21182" {
+		t.Errorf("Expected ggyix resolved endpoint to be linode.s.sagan.me:21182, got %s", ggyixEnd.ResolvedEndpoint)
+	}
+	if ggyixEnd.PersistentKeepalive != 25 {
+		t.Errorf("Expected ggyix keepalive to be 25, got %d", ggyixEnd.PersistentKeepalive)
+	}
+}
+
