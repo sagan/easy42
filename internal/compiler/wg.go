@@ -134,7 +134,68 @@ func BuildWgLinkContext(
 		"PersistentKeepalive": keepalive,
 	}
 
+	ifaceName := ""
+	if selfEnd != nil && selfEnd.Interface != "" {
+		ifaceName = selfEnd.Interface
+	} else if peerNode != nil {
+		ifaceName = GetInterfaceName(peerNode.Name, peerNode.IsExternal)
+	}
+	peerName := ""
+	if peerNode != nil {
+		peerName = peerNode.Name
+	}
+
+	var wgHooksInterface []string
+	var wgHooksPeer []string
+	var wgHooksPost []string
+	if selfNode != nil {
+		for _, h := range selfNode.ConfigHooks {
+			content := strings.TrimSpace(h.Content)
+			if content == "" {
+				continue
+			}
+			if !MatchWgHookTarget(h.Target, ifaceName, peerName) {
+				continue
+			}
+			switch strings.ToLower(strings.TrimSpace(h.Type)) {
+			case "wg.interface":
+				wgHooksInterface = append(wgHooksInterface, content)
+			case "wg.peer":
+				wgHooksPeer = append(wgHooksPeer, content)
+			case "wg.post", "wg":
+				wgHooksPost = append(wgHooksPost, content)
+			}
+		}
+	}
+	if len(wgHooksInterface) > 0 {
+		ctx["wg_hooks_interface"] = wgHooksInterface
+	}
+	if len(wgHooksPeer) > 0 {
+		ctx["wg_hooks_peer"] = wgHooksPeer
+	}
+	if len(wgHooksPost) > 0 {
+		ctx["wg_hooks_post"] = wgHooksPost
+	}
+
 	return ctx, nil
+}
+
+// MatchWgHookTarget checks if a hook's target matches the given interface or peer name.
+// An empty target or "*" matches all WireGuard interfaces.
+func MatchWgHookTarget(target, ifaceName, peerName string) bool {
+	t := strings.TrimSpace(strings.ToLower(target))
+	if t == "" || t == "*" {
+		return true
+	}
+	iLower := strings.ToLower(strings.TrimSpace(ifaceName))
+	pLower := strings.ToLower(strings.TrimSpace(peerName))
+	if iLower != "" && (iLower == t || (strings.HasSuffix(t, "*") && strings.HasPrefix(iLower, strings.TrimSuffix(t, "*")))) {
+		return true
+	}
+	if pLower != "" && (pLower == t || (strings.HasSuffix(t, "*") && strings.HasPrefix(pLower, strings.TrimSuffix(t, "*")))) {
+		return true
+	}
+	return false
 }
 
 // GenerateWgConfigContentWithTemplate generates WireGuard config using a custom template

@@ -11,6 +11,11 @@ MTU = {{ .mtu }}
 # Some OS (debian) wg-quick seems to force set wg rp_filter to 2 on start
 PostUp = sysctl -w net.ipv4.conf.%i.rp_filter=0
 Table = off
+{{ if .wg_hooks_interface -}}
+{{ range .wg_hooks_interface }}
+{{ . }}
+{{ end -}}
+{{ end -}}
 
 [Peer]
 PublicKey = {{ .peer_public_key }}
@@ -21,3 +26,14 @@ Endpoint = {{ .endpoint }}
 {{ if .persistent_keepalive -}}
 PersistentKeepalive = {{ .persistent_keepalive }}
 {{ end -}}
+{{ if .wg_hooks_peer -}}
+{{ range .wg_hooks_peer }}
+{{ . }}
+{{ end -}}
+{{ end -}}
+{{ if .wg_hooks_post -}}
+{{ range .wg_hooks_post }}
+{{ . }}
+{{ end -}}
+{{ end -}}
+

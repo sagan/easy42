@@ -328,6 +328,33 @@ func BuildNftablesNodeContext(
 	ctx["nft_policies"] = nftPolicies
 	ctx["custom_nft_policies"] = nftPolicies
 
+	var nftHooksPre []string
+	var nftHooksTable []string
+	var nftHooksPost []string
+	for _, h := range node.ConfigHooks {
+		content := strings.TrimSpace(h.Content)
+		if content == "" {
+			continue
+		}
+		switch strings.ToLower(strings.TrimSpace(h.Type)) {
+		case "nft.pre":
+			nftHooksPre = append(nftHooksPre, content)
+		case "nft.table":
+			nftHooksTable = append(nftHooksTable, content)
+		case "nft", "nft.post", "nft.global":
+			nftHooksPost = append(nftHooksPost, content)
+		}
+	}
+	if len(nftHooksPre) > 0 {
+		ctx["nft_hooks_pre"] = nftHooksPre
+	}
+	if len(nftHooksTable) > 0 {
+		ctx["nft_hooks_table"] = nftHooksTable
+	}
+	if len(nftHooksPost) > 0 {
+		ctx["nft_hooks"] = nftHooksPost
+	}
+
 	return ctx, nil
 }
 

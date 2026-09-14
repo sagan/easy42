@@ -671,6 +671,28 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 	ctx["roa_policies"] = roaPolicies
 	ctx["has_dn42_roa"] = hasDN42Roa
 	ctx["has_default_roa"] = hasDefaultRoa
+
+	var birdHooksPre []string
+	var birdHooksPost []string
+	for _, h := range node.ConfigHooks {
+		content := strings.TrimSpace(h.Content)
+		if content == "" {
+			continue
+		}
+		switch strings.ToLower(strings.TrimSpace(h.Type)) {
+		case "bird.pre":
+			birdHooksPre = append(birdHooksPre, content)
+		case "bird", "bird.post", "bird.global":
+			birdHooksPost = append(birdHooksPost, content)
+		}
+	}
+	if len(birdHooksPre) > 0 {
+		ctx["bird_hooks_pre"] = birdHooksPre
+	}
+	if len(birdHooksPost) > 0 {
+		ctx["bird_hooks"] = birdHooksPost
+	}
+
 	return ctx, nil
 }
 

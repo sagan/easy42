@@ -478,3 +478,61 @@ func TestResolveLinkEndpointExternalNode(t *testing.T) {
 		t.Errorf("Expected iedon-uk's peer endpoint to be derived as us0.dn42.sagan.me:22189, got %s", epToFixed)
 	}
 }
+
+func TestWgConfigHooks(t *testing.T) {
+	nodeA := &config.Node{
+		Name: "node-a",
+		IP:   "192.168.100.1",
+		ConfigHooks: []config.ConfigHook{
+			{
+				Type:    "wg.interface",
+				Content: "DNS = 1.1.1.1\nFwMark = 51820",
+			},
+			{
+				Type:    "wg.peer",
+				Target:  "node-b",
+				Content: "# Node B specific peer hook\nPersistentKeepalive = 15",
+			},
+			{
+				Type:    "wg.peer",
+				Target:  "other-node",
+				Content: "# Should not match node-b",
+			},
+			{
+				Type:    "wg.post",
+				Content: "# Post script or external peer\n[Peer]\nPublicKey = extra-peer-pubkey\nAllowedIPs = 10.99.0.1/32",
+			},
+		},
+	}
+	nodeB := &config.Node{
+		Name: "node-b",
+		IP:   "192.168.100.2",
+	}
+	endA := &config.LinkEnd{
+		Name:       "node-a",
+		ListenPort: 51820,
+	}
+	endB := &config.LinkEnd{
+		Name:      "node-b",
+		PublicKey: "peer-b-pubkey",
+	}
+
+	conf, err := GenerateWgConfigContent(nodeA, nodeB, endA, endB, nil)
+	if err != nil {
+		t.Fatalf("GenerateWgConfigContent failed: %v", err)
+	}
+
+	if !strings.Contains(conf, "DNS = 1.1.1.1") || !strings.Contains(conf, "FwMark = 51820") {
+		t.Errorf("Expected wg.interface hook in config, got:\n%s", conf)
+	}
+	if !strings.Contains(conf, "# Node B specific peer hook") {
+		t.Errorf("Expected matching wg.peer hook in config, got:\n%s", conf)
+	}
+	if strings.Contains(conf, "Should not match node-b") {
+		t.Errorf("Did not expect unmatched wg.peer hook in config, got:\n%s", conf)
+	}
+	if !strings.Contains(conf, "PublicKey = extra-peer-pubkey") {
+		t.Errorf("Expected wg.post hook in config, got:\n%s", conf)
+	}
+}
+

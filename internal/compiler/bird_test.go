@@ -1562,3 +1562,45 @@ func TestMainTableKernelRoutesAndOtherTableRouting(t *testing.T) {
 
 	validateBirdSyntax(t, confOther)
 }
+
+func TestBirdConfigHooks(t *testing.T) {
+	node := config.Node{
+		Name: "testnode",
+		IP:   "192.168.100.1",
+		ASN:  4224420001,
+		ConfigHooks: []config.ConfigHook{
+			{
+				Type:    "bird.pre",
+				Content: "define CUSTOM_PRE_CONST = 42;",
+			},
+			{
+				Type: "bird",
+				Content: `protocol direct {
+    ipv4;
+    interface "br-lan", "dummy0";
+}`,
+			},
+		},
+	}
+
+	conf, err := GenerateBirdConfig(&node, []config.Node{node}, nil)
+	if err != nil {
+		t.Fatalf("GenerateBirdConfig failed: %v", err)
+	}
+
+	if !strings.Contains(conf, "define CUSTOM_PRE_CONST = 42;") {
+		t.Errorf("Expected bird.pre hook in:\n%s", conf)
+	}
+	if !strings.Contains(conf, "protocol direct {") || !strings.Contains(conf, `interface "br-lan", "dummy0";`) {
+		t.Errorf("Expected bird hook (protocol direct) in:\n%s", conf)
+	}
+
+	idxPre := strings.Index(conf, "define CUSTOM_PRE_CONST = 42;")
+	idxDirect := strings.Index(conf, "protocol direct {")
+	if idxPre >= idxDirect {
+		t.Errorf("Expected bird.pre to appear before bird post hook")
+	}
+
+	validateBirdSyntax(t, conf)
+}
+

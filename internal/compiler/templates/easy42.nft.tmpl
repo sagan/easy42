@@ -38,6 +38,13 @@ define pol_{{ .id }}_local_v6 = {{ .local_v6 }}
 {{- end }}
 {{- end }}
 
+{{- if .nft_hooks_pre }}
+# Custom nftables pre hooks
+{{- range .nft_hooks_pre }}
+{{ . }}
+{{- end }}
+{{- end }}
+
 destroy table inet easy42
 
 # rules
@@ -262,4 +269,18 @@ table inet easy42 {
   {{- end }}
   }
 {{- end }}
+{{- if .nft_hooks_table }}
+
+  # Custom nftables table hooks
+{{- range .nft_hooks_table }}
+{{ . }}
+{{- end }}
+{{- end }}
 }
+{{- if .nft_hooks }}
+
+# Custom nftables global hooks
+{{- range .nft_hooks }}
+{{ . }}
+{{- end }}
+{{- end }}

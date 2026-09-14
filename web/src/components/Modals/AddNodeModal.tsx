@@ -15,9 +15,20 @@ import {
   Tooltip,
   Chip,
 } from "@mui/material";
-import { Search, Plus, Trash2, Server, Globe, Shield, Edit2, Tag, Network } from "lucide-react";
+import { Search, Plus, Trash2, Server, Globe, Shield, Edit2, Tag, Network, Code } from "lucide-react";
 import { api } from "../../api/client";
-import { Node, Entrypoint, KernelRouteRule } from "../../types/api";
+import { Node, Entrypoint, KernelRouteRule, ConfigHook } from "../../types/api";
+
+const HOOK_TYPES = [
+  { value: "bird", label: "BIRD: Global / Post (e.g. protocol direct)" },
+  { value: "bird.pre", label: "BIRD: Pre / Defines (constants, includes)" },
+  { value: "wg.interface", label: "WireGuard: [Interface] (PostUp, DNS, FwMark)" },
+  { value: "wg.peer", label: "WireGuard: [Peer] (AllowedIPs, Keepalive)" },
+  { value: "wg.post", label: "WireGuard: Post (extra [Peer] blocks)" },
+  { value: "nft.table", label: "nftables: Table inet easy42 (custom chains/sets)" },
+  { value: "nft.pre", label: "nftables: Pre (top of file defines)" },
+  { value: "nft.post", label: "nftables: Global (post table)" },
+];
 
 interface AddNodeModalProps {
   open: boolean;
@@ -34,6 +45,13 @@ interface EditableEntrypoint {
   tagStr: string;
   mtuStr: string;
   isNone: boolean;
+}
+
+interface EditableConfigHook {
+  id: string;
+  type: string;
+  target: string;
+  content: string;
 }
 
 export const AddNodeModal: React.FC<AddNodeModalProps> = ({
@@ -69,6 +87,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
     prefixesStr: string;
   }
   const [kernelRoutes, setKernelRoutes] = useState<EditableKernelRoute[]>([]);
+  const [configHooks, setConfigHooks] = useState<EditableConfigHook[]>([]);
 
   const [entrypoints, setEntrypoints] = useState<EditableEntrypoint[]>([
     { id: "nat-fallback", ip: "", portStr: "", tagStr: "nat", mtuStr: "", isNone: true },
@@ -105,6 +124,18 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
         );
       } else {
         setKernelRoutes([]);
+      }
+      if (nodeToEdit.config_hooks && nodeToEdit.config_hooks.length > 0) {
+        setConfigHooks(
+          nodeToEdit.config_hooks.map((h, idx) => ({
+            id: `hook-${idx}-${Date.now()}`,
+            type: h.type || "bird",
+            target: h.target || "",
+            content: h.content || "",
+          })),
+        );
+      } else {
+        setConfigHooks([]);
       }
       setDiscoveredIps([]);
       setProbeError(null);
@@ -162,6 +193,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
       setExternalIp6("");
       setStaticRoutesStr("");
       setKernelRoutes([]);
+      setConfigHooks([]);
       setEntrypoints([{ id: "nat-fallback", ip: "", portStr: "", tagStr: "nat", mtuStr: "", isNone: true }]);
       setDiscoveredIps([]);
       setProbeError(null);
@@ -198,11 +230,17 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
             id: `ep-${idx}-${Date.now()}`,
             ip: ep.ip || "",
             portStr,
-            tagStr: ep.tags?.join(", ") || (isNone ? "nat" : "direct"),
-            mtuStr: ep.mtu ? String(ep.mtu) : isNone ? "" : "1500",
+            tagStr: ep.tags?.join(", ") || "",
+            mtuStr: ep.mtu ? String(ep.mtu) : "",
             isNone,
           };
         });
+
+        // Ensure "none" fallback exists
+        const hasNone = mapped.some((e) => e.isNone);
+        if (!hasNone) {
+          mapped.push({ id: `ep-none-${Date.now()}`, ip: "", portStr: "", tagStr: "nat", mtuStr: "", isNone: true });
+        }
         setEntrypoints(mapped);
       }
 
@@ -218,32 +256,31 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
       setDiscoveredIps(ips);
     } catch (err: unknown) {
       const e = err as Error;
-      setProbeError(e.message || "SSH probe failed");
+      setProbeError(e.message || "Failed to probe host. Make sure SSH access is configured.");
     } finally {
       setProb(false);
     }
   };
 
   const handleAddEntrypoint = () => {
-    const newEp: EditableEntrypoint = {
-      id: `ep-${Date.now()}`,
-      ip: "",
-      portStr: "",
-      tagStr: isExternal ? "external" : "direct",
-      mtuStr: isExternal ? "" : "1500",
-      isNone: false,
-    };
-    // Insert before the fixed NAT endpoint at the end if present
-    const lastIsNone = entrypoints.length > 0 && entrypoints[entrypoints.length - 1].isNone;
-    if (lastIsNone) {
-      setEntrypoints([...entrypoints.slice(0, -1), newEp, entrypoints[entrypoints.length - 1]]);
-    } else {
-      setEntrypoints([...entrypoints, newEp]);
-    }
+    setEntrypoints((prev) => [
+      ...prev,
+      {
+        id: `ep-${Date.now()}`,
+        ip: "",
+        portStr: "",
+        tagStr: "",
+        mtuStr: "",
+        isNone: false,
+      },
+    ]);
   };
 
   const handleRemoveEntrypoint = (id: string) => {
-    setEntrypoints(entrypoints.filter((e) => e.id !== id));
+    setEntrypoints((prev) => {
+      if (prev.length <= 1) return prev;
+      return prev.filter((e) => e.id !== id);
+    });
   };
 
   const handleUpdateEntrypoint = (id: string, field: keyof EditableEntrypoint, value: string) => {
@@ -267,6 +304,26 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
 
   const handleUpdateKernelRoute = (id: string, field: "table" | "prefixesStr", value: any) => {
     setKernelRoutes(kernelRoutes.map((r) => (r.id === id ? { ...r, [field]: value } : r)));
+  };
+
+  const handleAddConfigHook = () => {
+    setConfigHooks([
+      ...configHooks,
+      {
+        id: `hook-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+        type: "bird",
+        target: "",
+        content: "",
+      },
+    ]);
+  };
+
+  const handleRemoveConfigHook = (id: string) => {
+    setConfigHooks(configHooks.filter((h) => h.id !== id));
+  };
+
+  const handleUpdateConfigHook = (id: string, field: "type" | "target" | "content", value: string) => {
+    setConfigHooks(configHooks.map((h) => (h.id === id ? { ...h, [field]: value } : h)));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -346,6 +403,14 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
         });
     };
 
+    const parsedHooks: ConfigHook[] = configHooks
+      .filter((h) => h.content.trim() !== "")
+      .map((h) => ({
+        type: h.type.trim() || "bird",
+        target: h.target.trim() || undefined,
+        content: h.content.trim(),
+      }));
+
     if (isExternal) {
       const finalEntrypoints = buildFinalEntrypoints(entrypoints, true);
       newNode = {
@@ -357,6 +422,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
         entrypoints: finalEntrypoints.length > 0 ? finalEntrypoints : undefined,
         description: description.trim() || undefined,
         tags: parsedTags.length > 0 ? parsedTags : undefined,
+        config_hooks: parsedHooks.length > 0 ? parsedHooks : undefined,
         x: nodeToEdit?.x,
         y: nodeToEdit?.y,
       };
@@ -402,6 +468,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
         external_ip6: externalIp6.trim() ? externalIp6.trim() : undefined,
         static_routes: parsedStaticRoutes.length > 0 ? parsedStaticRoutes : undefined,
         routes: parsedRoutes.length > 0 ? parsedRoutes : undefined,
+        config_hooks: parsedHooks.length > 0 ? parsedHooks : undefined,
         x: nodeToEdit?.x,
         y: nodeToEdit?.y,
       };
@@ -1187,6 +1254,133 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                           </IconButton>
                         </Box>
                       ))}
+                    </Box>
+                  )}
+                </Box>
+
+                {/* Custom Config Hooks */}
+                <Box sx={{ mt: 2 }}>
+                  <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1.2 }}>
+                    <Box>
+                      <Typography variant="caption" sx={{ color: "#475569", fontWeight: 700, display: "flex", alignItems: "center", gap: 0.8 }}>
+                        <Code size={14} /> CUSTOM CONFIG HOOKS ({configHooks.length})
+                      </Typography>
+                      <Typography variant="caption" sx={{ color: "#94A3B8", fontSize: "0.7rem" }}>
+                        Inject custom configuration snippets into generated BIRD, WireGuard, or nftables config files.
+                      </Typography>
+                    </Box>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      startIcon={<Plus size={14} />}
+                      onClick={handleAddConfigHook}
+                      sx={{ fontSize: "0.75rem", py: 0.3 }}
+                    >
+                      Add Hook
+                    </Button>
+                  </Box>
+
+                  {configHooks.length === 0 ? (
+                    <Box
+                      sx={{
+                        p: 1.5,
+                        borderRadius: 2,
+                        backgroundColor: "#F8FAFC",
+                        border: "1px dashed #CBD5E1",
+                        textAlign: "center",
+                      }}
+                    >
+                      <Typography variant="caption" sx={{ color: "#94A3B8", fontStyle: "italic" }}>
+                        No custom config hooks defined. Click &quot;Add Hook&quot; to inject custom BIRD, WireGuard, or nftables directives.
+                      </Typography>
+                    </Box>
+                  ) : (
+                    <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+                      {configHooks.map((hook) => {
+                        const isWg = hook.type.startsWith("wg.");
+                        return (
+                          <Box
+                            key={hook.id}
+                            sx={{
+                              p: 1.5,
+                              borderRadius: 2,
+                              backgroundColor: "#F8FAFC",
+                              border: "1px solid #E2E8F0",
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: 1.2,
+                            }}
+                          >
+                            <Box
+                              sx={{
+                                display: "flex",
+                                flexDirection: { xs: "column", sm: "row" },
+                                alignItems: { xs: "stretch", sm: "center" },
+                                gap: 1.5,
+                              }}
+                            >
+                              <Box sx={{ width: { xs: "100%", sm: 260 }, flexShrink: 0 }}>
+                                <TextField
+                                  select
+                                  label="Hook Type"
+                                  size="small"
+                                  value={hook.type}
+                                  onChange={(e) => handleUpdateConfigHook(hook.id, "type", e.target.value)}
+                                  fullWidth
+                                >
+                                  {HOOK_TYPES.map((opt) => (
+                                    <MenuItem key={opt.value} value={opt.value} sx={{ fontSize: "0.8rem" }}>
+                                      {opt.label}
+                                    </MenuItem>
+                                  ))}
+                                </TextField>
+                              </Box>
+                              {isWg && (
+                                <Box sx={{ flex: 1 }}>
+                                  <TextField
+                                    label="Target (optional)"
+                                    size="small"
+                                    placeholder="e.g. wg42* or peer name (empty for all)"
+                                    value={hook.target}
+                                    onChange={(e) => handleUpdateConfigHook(hook.id, "target", e.target.value)}
+                                    fullWidth
+                                    helperText="Target link or peer"
+                                  />
+                                </Box>
+                              )}
+                              <Box sx={{ ml: "auto" }}>
+                                <IconButton
+                                  size="small"
+                                  color="error"
+                                  onClick={() => handleRemoveConfigHook(hook.id)}
+                                >
+                                  <Trash2 size={16} />
+                                </IconButton>
+                              </Box>
+                            </Box>
+                            <TextField
+                              label="Config Content"
+                              size="small"
+                              multiline
+                              minRows={2}
+                              maxRows={8}
+                              placeholder={
+                                hook.type.startsWith("bird")
+                                  ? 'protocol direct {\n    ipv4;\n    interface "br-lan", "wan";\n}'
+                                  : hook.type.startsWith("wg")
+                                  ? "PostUp = sysctl -w net.ipv4.ip_forward=1"
+                                  : "chain custom_chain {\n    tcp dport 8080 accept\n}"
+                              }
+                              value={hook.content}
+                              onChange={(e) => handleUpdateConfigHook(hook.id, "content", e.target.value)}
+                              fullWidth
+                              inputProps={{
+                                style: { fontFamily: "monospace", fontSize: "0.78rem" },
+                              }}
+                            />
+                          </Box>
+                        );
+                      })}
                     </Box>
                   )}
                 </Box>

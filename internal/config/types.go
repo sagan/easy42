@@ -116,6 +116,16 @@ type KernelRouteRule struct {
 	Prefixes []string `json:"prefixes"`
 }
 
+// ConfigHook represents a custom configuration snippet to be injected into generated configs (BIRD, WireGuard, nftables)
+type ConfigHook struct {
+	Type    string `json:"type" yaml:"type"`                         // Hook type, e.g. "bird", "bird.pre", "wg.interface", "wg.peer", "wg.post", "nft.table", "nft.pre", "nft"
+	Target  string `json:"target,omitempty" yaml:"target,omitempty"` // Optional target filter (e.g. interface or peer name for WG)
+	Content string `json:"content" yaml:"content"`                   // Custom config snippet
+}
+
+// Hook is an alias for ConfigHook
+type Hook = ConfigHook
+
 // Node represents a device/node in the network
 type Node struct {
 	Name          string            `json:"name"`                  // Max 11 chars hostname (max 10 chars for external peers)
@@ -135,6 +145,7 @@ type Node struct {
 	InternetTable int               `json:"internet_table,omitempty"` // Routing table for Internet routes learned from peers (if set and != Table)
 	StaticRoutes  []string          `json:"static_routes,omitempty"`  // CIDR prefix list unconditionally broadcast via BGP
 	Routes        []KernelRouteRule `json:"routes,omitempty"`         // Kernel routes imported from kernel tables and broadcast via BGP
+	ConfigHooks   []ConfigHook      `json:"config_hooks,omitempty"`   // Custom configuration injection hooks
 	X             *float64          `json:"x,omitempty"`              // Graph X coordinate
 	Y             *float64          `json:"y,omitempty"`              // Graph Y coordinate
 	ModifiedAt    time.Time         `json:"modified_at,omitempty"`    // Last updated timestamp

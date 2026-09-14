@@ -16,6 +16,12 @@ export interface KernelRouteRule {
   prefixes: string[];
 }
 
+export interface ConfigHook {
+  type: string;
+  target?: string;
+  content: string;
+}
+
 export interface NetworkSettings {
   public_asn?: number;
   confed_members?: string;
@@ -72,6 +78,7 @@ export interface Node {
   internet_table?: number;
   static_routes?: string[];
   routes?: KernelRouteRule[];
+  config_hooks?: ConfigHook[];
   x?: number;
   y?: number;
   modified_at?: string;

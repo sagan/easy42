@@ -675,3 +675,57 @@ func TestDSCPIngressOnly(t *testing.T) {
 		}
 	}
 }
+
+func TestNftablesConfigHooks(t *testing.T) {
+	node := config.Node{
+		Name: "hook-node",
+		IP:   "192.168.100.1",
+		ASN:  4224420001,
+		ConfigHooks: []config.ConfigHook{
+			{
+				Type:    "nft.pre",
+				Content: "define custom_pre_def = 10.99.0.0/16",
+			},
+			{
+				Type: "nft.table",
+				Content: `  chain custom_input_hook {
+    type filter hook input priority -10; policy accept;
+    tcp dport 8080 accept
+  }`,
+			},
+			{
+				Type:    "nft.post",
+				Content: "# Custom post table hook\ntable inet custom_table {\n  chain custom_chain { type filter hook output priority 0; policy accept; }\n}",
+			},
+		},
+	}
+
+	conf, err := GenerateNftablesConfig(&node, []config.Node{node}, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("GenerateNftablesConfig failed: %v", err)
+	}
+
+	if !strings.Contains(conf, "define custom_pre_def = 10.99.0.0/16") {
+		t.Errorf("Expected nft.pre hook in:\n%s", conf)
+	}
+	if !strings.Contains(conf, "chain custom_input_hook {") || !strings.Contains(conf, "tcp dport 8080 accept") {
+		t.Errorf("Expected nft.table hook in:\n%s", conf)
+	}
+	if !strings.Contains(conf, "table inet custom_table {") {
+		t.Errorf("Expected nft.post hook in:\n%s", conf)
+	}
+
+	// Validate syntax with nft binary if installed
+	if nftPath, err := exec.LookPath("nft"); err == nil {
+		tmpFile := filepath.Join(t.TempDir(), "easy42.nft")
+		if err := os.WriteFile(tmpFile, []byte(conf), 0644); err != nil {
+			t.Fatalf("WriteFile failed: %v", err)
+		}
+		cmd := exec.Command(nftPath, "-c", "-f", tmpFile)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("nft -c -f validation failed: %v\nOutput:\n%s\nConfig:\n%s", err, string(out), conf)
+		}
+	}
+}
+

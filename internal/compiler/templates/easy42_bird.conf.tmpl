@@ -41,6 +41,16 @@ define DEFAULT_LOCAL_PREF = 10000;
 
 router id SELF_IP;
 
+{{if .bird_hooks_pre}}
+# ==============================================================================
+# Custom BIRD Pre Hooks
+# ==============================================================================
+{{range .bird_hooks_pre}}
+{{.}}
+
+{{end}}
+{{end}}
+
 {{if .roa_policies}}
 # ==============================================================================
 # Route Origination Authorization (ROA) Tables & Protocol Static
@@ -807,3 +817,12 @@ protocol bgp 'peer_{{.remote.name}}' from {{.bgp_template}} {
 {{end}}
 {{end}}
 
+{{if .bird_hooks}}
+# ==============================================================================
+# Custom BIRD Hooks
+# ==============================================================================
+{{range .bird_hooks}}
+{{.}}
+
+{{end}}
+{{end}}
