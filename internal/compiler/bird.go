@@ -147,14 +147,35 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 	}
 	ctx["comm_external"] = commExternal
 
-	var prefixes []string
-	if settings != nil {
-		prefixes = settings.Prefixes
+	dn42Pol, hasDN42 := policyMap[config.PolicyDN42]
+	var dn42ImportV4, dn42ImportV6, dn42ExportV4, dn42ExportV6 string
+	var dn42RejectInternet bool
+	if hasDN42 {
+		dn42ImportV4 = formatPrefixList(dn42Pol.AllowedImportCIDRs, nil, false)
+		dn42ImportV6 = formatPrefixList(dn42Pol.AllowedImportCIDRs, nil, true)
+		dn42ExportV4 = formatPrefixList(dn42Pol.AllowedDstCIDRs, nil, false)
+		dn42ExportV6 = formatPrefixList(dn42Pol.AllowedDstCIDRs, nil, true)
+		dn42RejectInternet = dn42Pol.RejectInternet
+	} else {
+		var prefixes []string
+		if settings != nil {
+			prefixes = settings.Prefixes
+		}
+		dn42ImportV4 = formatPrefixList(prefixes, []string{"172.20.0.0/14{21,29}"}, false)
+		dn42ImportV6 = formatPrefixList(prefixes, []string{"fd00::/8{44,64}"}, true)
+		dn42ExportV4 = dn42ImportV4
+		dn42ExportV6 = dn42ImportV6
+		dn42RejectInternet = true
 	}
-	extV4 := formatPrefixList(prefixes, []string{"172.20.0.0/14{21,29}"}, false)
-	extV6 := formatPrefixList(prefixes, []string{"fd00::/8{44,64}"}, true)
-	ctx["ext_prefixes_v4"] = extV4
-	ctx["ext_prefixes_v6"] = extV6
+	ctx["ext_prefixes_v4"] = dn42ImportV4
+	ctx["ext_prefixes_v6"] = dn42ImportV6
+	ctx["ext_export_prefixes_v4"] = dn42ExportV4
+	ctx["ext_export_prefixes_v6"] = dn42ExportV6
+	ctx["has_ext_import_v4"] = dn42ImportV4 != ""
+	ctx["has_ext_import_v6"] = dn42ImportV6 != ""
+	ctx["has_ext_export_v4"] = dn42ExportV4 != ""
+	ctx["has_ext_export_v6"] = dn42ExportV6 != ""
+	ctx["ext_reject_internet"] = dn42RejectInternet
 
 	// 3. Normalize routes and static routes
 	routes := node.Routes
@@ -252,9 +273,8 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 		}
 		usedPolicyMap[policyID] = pol
 
-		isExternal := false
-		if isRemoteExternal || node.IsExternal || policyID == config.PolicyDN42 {
-			isExternal = true
+		isExternal := isRemoteExternal || node.IsExternal
+		if isExternal {
 			hasExternalLinks = true
 		}
 
@@ -327,9 +347,16 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 				bgpTemplate = fmt.Sprintf("easy42_peer_cost_%d", rl.linkCost)
 			}
 		case config.PolicyDN42:
-			bgpTemplate = "external_peer"
-			if settings != nil && settings.PublicASN > 0 {
-				localAS = "CONFED_AS"
+			if rl.isRemoteExternal {
+				bgpTemplate = "external_peer"
+			} else {
+				cleanID := SanitizeIdentifier(rl.policyID)
+				baseCost := customBaseCosts[rl.policyID]
+				if rl.linkCost == baseCost {
+					bgpTemplate = "pol_peer_" + cleanID
+				} else {
+					bgpTemplate = fmt.Sprintf("pol_peer_%s_cost_%d", cleanID, rl.linkCost)
+				}
 			}
 		case config.PolicyNone:
 			if rl.linkCost == noneCost {
@@ -345,6 +372,10 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 			} else {
 				bgpTemplate = fmt.Sprintf("pol_peer_%s_cost_%d", cleanID, rl.linkCost)
 			}
+		}
+
+		if rl.isRemoteExternal && settings != nil && settings.PublicASN > 0 {
+			localAS = "CONFED_AS"
 		}
 
 		localMap := linkEndToContextMap(rl.localEnd, node, rl.remoteEnd.Name, rl.isRemoteExternal)
@@ -439,9 +470,20 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 	var customPolicyPrefixes []map[string]any
 	var customBirdPolicies []map[string]any
 
+	hasInternalDN42 := false
+	for _, rl := range rawLinks {
+		if !rl.isRemoteExternal && rl.policyID == config.PolicyDN42 {
+			hasInternalDN42 = true
+			break
+		}
+	}
+
 	var customPolicyIDs []string
 	for id := range usedPolicyMap {
-		if id == config.PolicyDefault || id == config.PolicyDN42 || id == config.PolicyNone {
+		if id == config.PolicyDefault || id == config.PolicyNone {
+			continue
+		}
+		if id == config.PolicyDN42 && !hasInternalDN42 {
 			continue
 		}
 		customPolicyIDs = append(customPolicyIDs, id)

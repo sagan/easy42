@@ -116,7 +116,18 @@ func GetBuiltinPolicies(netSettings *NetworkSettings) []NetworkPolicy {
 	if netSettings != nil && len(netSettings.Prefixes) > 0 {
 		dn42Prefixes = CleanPrefixes(netSettings.Prefixes)
 	} else {
-		dn42Prefixes = []string{"172.20.0.0/14{21,29}", "fd00::/8{44,64}"}
+		dn42Prefixes = []string{
+			"172.20.0.0/14{21,29}", // dn42
+			"172.20.0.0/24{28,32}", // dn42 Anycast
+			"172.21.0.0/24{28,32}", // dn42 Anycast
+			"172.22.0.0/24{28,32}", // dn42 Anycast
+			"172.23.0.0/24{28,32}", // dn42 Anycast
+			"172.31.0.0/16+",       // ChaosVPN
+			"10.100.0.0/14+",       // ChaosVPN
+			"10.0.0.0/8{15,24}",    // Freifunk.net
+			"10.127.0.0/16+",       // NeoNetwork
+			"fd00::/8{44,64}",      // DN42 ipv6
+		}
 	}
 
 	var localDN42 []string
@@ -237,4 +248,3 @@ func (l *LinkEnd) EffectiveCostWithPolicy(p *NetworkPolicy) int {
 	}
 	return 100
 }
-

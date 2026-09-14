@@ -521,8 +521,10 @@ template bgp {{.template_name}} {
 {{end}}
 
 {{if .has_external_links}}
-define EXT_PREFIXES_V4 = {{ .ext_prefixes_v4 }};
-define EXT_PREFIXES_V6 = {{ .ext_prefixes_v6 }};
+{{if .has_ext_import_v4}}define EXT_PREFIXES_V4 = {{ .ext_prefixes_v4 }};{{end}}
+{{if .has_ext_import_v6}}define EXT_PREFIXES_V6 = {{ .ext_prefixes_v6 }};{{end}}
+{{if .has_ext_export_v4}}define EXT_EXPORT_PREFIXES_V4 = {{ .ext_export_prefixes_v4 }};{{end}}
+{{if .has_ext_export_v6}}define EXT_EXPORT_PREFIXES_V6 = {{ .ext_export_prefixes_v6 }};{{end}}
 
 template bgp external_peer {
     direct;
@@ -537,42 +539,62 @@ template bgp external_peer {
         next hop self;
         import filter {
             {{if $.has_dn42_roa}}if ! dn42_roa_check() then reject;{{end}}
-            if net ~ INTERNET then reject;
+            {{if .ext_reject_internet}}if net ~ INTERNET then reject;{{end}}
+            {{if .has_ext_import_v4}}
             if net ~ EXT_PREFIXES_V4 then {
               bgp_large_community.add(COMM_EXTERNAL);
               bgp_local_pref = DEFAULT_LOCAL_PREF;
               accept;
             }
             reject;
+            {{else}}
+            bgp_large_community.add(COMM_EXTERNAL);
+            bgp_local_pref = DEFAULT_LOCAL_PREF;
+            accept;
+            {{end}}
         };
         export filter {
-            if net ~ INTERNET then reject;
-            if (source ~ [ RTS_STATIC, RTS_BGP ]) && (net ~ EXT_PREFIXES_V4) then {
+            {{if .ext_reject_internet}}if net ~ INTERNET then reject;{{end}}
+            {{if .has_ext_export_v4}}
+            if (source ~ [ RTS_STATIC, RTS_BGP ]) && (net ~ EXT_EXPORT_PREFIXES_V4) then {
               bgp_large_community.delete(COMM_EXTERNAL);
               accept;
             }
             reject;
+            {{else}}
+            accept;
+            {{end}}
         };
     };
     ipv6 {
         next hop self;
         import filter {
             {{if $.has_dn42_roa}}if ! dn42_roa_check() then reject;{{end}}
-            if net ~ INTERNET6 then reject;
+            {{if .ext_reject_internet}}if net ~ INTERNET6 then reject;{{end}}
+            {{if .has_ext_import_v6}}
             if net ~ EXT_PREFIXES_V6 then {
               bgp_large_community.add(COMM_EXTERNAL);
               bgp_local_pref = DEFAULT_LOCAL_PREF;
               accept;
             }
             reject;
+            {{else}}
+            bgp_large_community.add(COMM_EXTERNAL);
+            bgp_local_pref = DEFAULT_LOCAL_PREF;
+            accept;
+            {{end}}
         };
         export filter {
-            if net ~ INTERNET6 then reject;
-            if (source ~ [ RTS_STATIC, RTS_BGP ]) && (net ~ EXT_PREFIXES_V6) then {
+            {{if .ext_reject_internet}}if net ~ INTERNET6 then reject;{{end}}
+            {{if .has_ext_export_v6}}
+            if (source ~ [ RTS_STATIC, RTS_BGP ]) && (net ~ EXT_EXPORT_PREFIXES_V6) then {
               bgp_large_community.delete(COMM_EXTERNAL);
               accept;
             }
             reject;
+            {{else}}
+            accept;
+            {{end}}
         };
     };
 }
@@ -684,10 +706,16 @@ template bgp {{.template_name}} {
 {{end}}
 
 {{range .links}}
-{{if .is_dn42}}
-protocol bgp 'ext_peer_{{.remote.name}}' from external_peer {
+{{if .is_external}}
+protocol bgp 'ext_peer_{{.remote.name}}' from {{.bgp_template}} {
     {{if .local.interface}}interface "{{ .local.interface }}";{{end}}
-    local {{ .local.address }} as {{ if $.confed_as }}CONFED_AS{{ else }}SELF_AS{{ end }};
+    local {{ .local.address }} as {{ .local_as }};
+    {{if ne .bgp_template "external_peer"}}
+    {{if $.confed_as}}
+    confederation CONFED_AS;
+    confederation member no;
+    {{end}}
+    {{end}}
     {{if .remote.is_link_local}}
     neighbor {{ .remote.address }} % '{{ .local.interface }}' as {{ .remote_node.asn }};
     {{else}}

@@ -1340,4 +1340,144 @@ func TestGenerateBirdConfigWithIP6(t *testing.T) {
 	validateBirdSyntax(t, confMask)
 }
 
+func TestExternalAndInternalPeerFilteringByPolicy(t *testing.T) {
+	nodeLocal := config.Node{
+		Name: "router1",
+		IP:   "192.168.100.1",
+		IP6:  "fd42:a159:f9f0::1",
+		ASN:  4224420001,
+	}
+	nodeExtCustom := config.Node{
+		Name:       "ext-partner",
+		IP:         "10.100.0.2",
+		IP6:        "fd00:100::2",
+		ASN:        65001,
+		IsExternal: true,
+	}
+	nodeInternalDN42 := config.Node{
+		Name:       "internal-peer",
+		IP:         "192.168.100.2",
+		IP6:        "fd42:a159:f9f0::2",
+		ASN:        4224420002,
+		IsExternal: false,
+	}
+	nodeExtDN42 := config.Node{
+		Name:       "ext-dn42",
+		IP:         "172.20.1.1",
+		IP6:        "fd00::1",
+		ASN:        4242421234,
+		IsExternal: true,
+	}
+
+	links := []config.Link{
+		{
+			From: config.LinkEnd{Name: "router1", Interface: "wg42custom", Address: "fe80::1/64", Policy: "partner-pol"},
+			To:   config.LinkEnd{Name: "ext-partner", Interface: "wg42r1", Address: "fe80::2/64"},
+		},
+		{
+			From: config.LinkEnd{Name: "router1", Interface: "wg42intdn42", Address: "fe80::3/64", Policy: config.PolicyDN42},
+			To:   config.LinkEnd{Name: "internal-peer", Interface: "wg42r1", Address: "fe80::4/64"},
+		},
+		{
+			From: config.LinkEnd{Name: "router1", Interface: "wg42extdn42", Address: "fe80::5/64", Policy: config.PolicyDN42},
+			To:   config.LinkEnd{Name: "ext-dn42", Interface: "wg42r1", Address: "fe80::6/64"},
+		},
+	}
+
+	netSettings := &config.NetworkSettings{
+		PublicASN: 4242420000,
+	}
+
+	customPolicies := []config.NetworkPolicy{
+		{
+			ID:                 "partner-pol",
+			Name:               "Partner Policy",
+			RejectInternet:     true,
+			AllowedImportCIDRs: []string{"10.100.0.0/16", "fd00:100::/48"},
+			AllowedDstCIDRs:    []string{"10.200.0.0/16", "fd00:200::/48"},
+		},
+		{
+			ID:                 config.PolicyDN42,
+			Name:               "Custom DN42",
+			RejectInternet:     true,
+			AllowedImportCIDRs: []string{"172.20.0.0/14{21,29}", "fd00::/8{44,64}"},
+			AllowedDstCIDRs:    []string{"172.20.0.0/16", "fd00::/48"},
+		},
+	}
+
+	conf, err := GenerateBirdConfig(&nodeLocal, []config.Node{nodeLocal, nodeExtCustom, nodeInternalDN42, nodeExtDN42}, links, netSettings, customPolicies)
+	if err != nil {
+		t.Fatalf("GenerateBirdConfig failed: %v", err)
+	}
+
+	// 1. External peer with custom policy should use pol_peer_partner_pol, CONFED_AS, and confederation member no
+	extCustomBlock := extractBlock(conf, "protocol bgp 'ext_peer_ext-partner' from pol_peer_partner_pol {", "}")
+	if extCustomBlock == "" {
+		t.Fatalf("Expected protocol bgp 'ext_peer_ext-partner' from pol_peer_partner_pol block in:\n%s", conf)
+	}
+	if !strings.Contains(extCustomBlock, "local fe80::1 as CONFED_AS;") {
+		t.Errorf("Expected external peer with confederation to use CONFED_AS, got:\n%s", extCustomBlock)
+	}
+	if !strings.Contains(extCustomBlock, "confederation member no;") {
+		t.Errorf("Expected external peer to have 'confederation member no;', got:\n%s", extCustomBlock)
+	}
+
+	// 2. Internal peer with DN42 policy should use pol_peer_dn42, SELF_AS, and NOT confederation member no
+	intDN42Block := extractBlock(conf, "protocol bgp 'peer_internal-peer' from pol_peer_dn42 {", "}")
+	if intDN42Block == "" {
+		t.Fatalf("Expected protocol bgp 'peer_internal-peer' from pol_peer_dn42 block in:\n%s", conf)
+	}
+	if !strings.Contains(intDN42Block, "local fe80::3 as SELF_AS;") {
+		t.Errorf("Expected internal peer to use SELF_AS, got:\n%s", intDN42Block)
+	}
+	if strings.Contains(intDN42Block, "confederation member no;") {
+		t.Errorf("Internal peer must NOT have 'confederation member no;', got:\n%s", intDN42Block)
+	}
+
+	// 3. External peer with DN42 policy should use external_peer, CONFED_AS, and confederation member no
+	extDN42Block := extractBlock(conf, "protocol bgp 'ext_peer_ext-dn42' from external_peer {", "}")
+	if extDN42Block == "" {
+		t.Fatalf("Expected protocol bgp 'ext_peer_ext-dn42' from external_peer block in:\n%s", conf)
+	}
+	if !strings.Contains(extDN42Block, "local fe80::5 as CONFED_AS;") {
+		t.Errorf("Expected external peer with confederation to use CONFED_AS, got:\n%s", extDN42Block)
+	}
+
+	// 4. External peer filters should derive from custom DN42 policy's AllowedImportCIDRs and AllowedDstCIDRs
+	if !strings.Contains(conf, "define EXT_PREFIXES_V4 = [ 172.20.0.0/14{21,29} ];") {
+		t.Errorf("Expected EXT_PREFIXES_V4 from DN42 policy import CIDRs, got:\n%s", conf)
+	}
+	if !strings.Contains(conf, "define EXT_EXPORT_PREFIXES_V4 = [ 172.20.0.0/16 ];") {
+		t.Errorf("Expected EXT_EXPORT_PREFIXES_V4 from DN42 policy export CIDRs, got:\n%s", conf)
+	}
+	if !strings.Contains(conf, "define EXT_PREFIXES_V6 = [ fd00::/8{44,64} ];") {
+		t.Errorf("Expected EXT_PREFIXES_V6 from DN42 policy import CIDRs, got:\n%s", conf)
+	}
+	if !strings.Contains(conf, "define EXT_EXPORT_PREFIXES_V6 = [ fd00::/48 ];") {
+		t.Errorf("Expected EXT_EXPORT_PREFIXES_V6 from DN42 policy export CIDRs, got:\n%s", conf)
+	}
+
+	// 5. Template pol_peer_dn42 must be generated when an internal node uses PolicyDN42
+	if !strings.Contains(conf, "template bgp pol_peer_dn42 {") {
+		t.Errorf("Expected template bgp pol_peer_dn42 to be defined when internal node uses PolicyDN42, got:\n%s", conf)
+	}
+
+	// 6. Verify BIRD syntax with real BIRD parser
+	validateBirdSyntax(t, conf)
+}
+
+func extractBlock(content, startMarker, endMarker string) string {
+	idx := strings.Index(content, startMarker)
+	if idx == -1 {
+		return ""
+	}
+	sub := content[idx:]
+	endIdx := strings.Index(sub, endMarker)
+	if endIdx == -1 {
+		return sub
+	}
+	return sub[:endIdx+len(endMarker)]
+}
+
+
 
