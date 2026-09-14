@@ -1604,3 +1604,81 @@ func TestBirdConfigHooks(t *testing.T) {
 	validateBirdSyntax(t, conf)
 }
 
+func TestDisallowedExportPrefixesBird(t *testing.T) {
+	node := config.Node{
+		Name:        "hub1",
+		IP:          "192.168.1.1",
+		ExternalIP:  "172.20.1.1",
+		ExternalIP6: "fd42:1::1",
+		ASN:         4224420001,
+	}
+	allNodes := []config.Node{
+		node,
+		{Name: "peer-ext", IsExternal: true, ASN: 4224420002},
+		{Name: "peer-cust", IP: "192.168.1.2", ASN: 4224420003},
+	}
+	links := []config.Link{
+		{
+			From: config.LinkEnd{Name: "hub1", Interface: "wg42ext", Policy: config.PolicyDN42},
+			To:   config.LinkEnd{Name: "peer-ext", Interface: "wg42", Address: "fe80::2/64"},
+		},
+		{
+			From: config.LinkEnd{Name: "hub1", Interface: "wg42cust", Policy: "custom-peer"},
+			To:   config.LinkEnd{Name: "peer-cust", Interface: "wg42"},
+		},
+	}
+	customPolicies := []config.NetworkPolicy{
+		{
+			ID:                 config.PolicyDN42,
+			Name:               "DN42 External",
+			AllowedDstCIDRs:    []string{"172.20.0.0/14", "fd00::/8"},
+			DisallowedDstCIDRs: []string{"172.20.99.0/24", "fd42:1234:5678::/48"},
+			AllowedImportCIDRs: []string{"172.20.0.0/14", "fd00::/8"},
+		},
+		{
+			ID:                 "custom-peer",
+			Name:               "Custom Peer",
+			AllowedDstCIDRs:    []string{"10.0.0.0/8", "fd00:10::/32"},
+			DisallowedDstCIDRs: []string{"10.99.0.0/16", "fd00:10:99::/48"},
+			AllowedImportCIDRs: []string{"10.0.0.0/8"},
+		},
+	}
+
+	conf, err := GenerateBirdConfig(&node, allNodes, links, nil, customPolicies)
+	if err != nil {
+		t.Fatalf("GenerateBirdConfig failed: %v", err)
+	}
+
+	// 1. External peer defines & rejects
+	if !strings.Contains(conf, "define EXT_DISALLOWED_EXPORT_PREFIXES_V4 = [ 172.20.99.0/24 ];") {
+		t.Errorf("Expected define EXT_DISALLOWED_EXPORT_PREFIXES_V4 in:\n%s", conf)
+	}
+	if !strings.Contains(conf, "define EXT_DISALLOWED_EXPORT_PREFIXES_V6 = [ fd42:1234:5678::/48 ];") {
+		t.Errorf("Expected define EXT_DISALLOWED_EXPORT_PREFIXES_V6 in:\n%s", conf)
+	}
+	if !strings.Contains(conf, "if net ~ EXT_DISALLOWED_EXPORT_PREFIXES_V4 then reject;") {
+		t.Errorf("Expected EXT_DISALLOWED_EXPORT_PREFIXES_V4 check in:\n%s", conf)
+	}
+	if !strings.Contains(conf, "if net ~ EXT_DISALLOWED_EXPORT_PREFIXES_V6 then reject;") {
+		t.Errorf("Expected EXT_DISALLOWED_EXPORT_PREFIXES_V6 check in:\n%s", conf)
+	}
+
+	// 2. Custom peer defines & rejects
+	if !strings.Contains(conf, "define POL_custom_peer_DISALLOWED_EXPORT_V4 = [ 10.99.0.0/16 ];") {
+		t.Errorf("Expected define POL_custom_peer_DISALLOWED_EXPORT_V4 in:\n%s", conf)
+	}
+	if !strings.Contains(conf, "define POL_custom_peer_DISALLOWED_EXPORT_V6 = [ fd00:10:99::/48 ];") {
+		t.Errorf("Expected define POL_custom_peer_DISALLOWED_EXPORT_V6 in:\n%s", conf)
+	}
+	if !strings.Contains(conf, "if net ~ POL_custom_peer_DISALLOWED_EXPORT_V4 then reject;") {
+		t.Errorf("Expected POL_custom_peer_DISALLOWED_EXPORT_V4 check in:\n%s", conf)
+	}
+	if !strings.Contains(conf, "if net ~ POL_custom_peer_DISALLOWED_EXPORT_V6 then reject;") {
+		t.Errorf("Expected POL_custom_peer_DISALLOWED_EXPORT_V6 check in:\n%s", conf)
+	}
+
+	// 3. Syntax validation with real BIRD parser
+	validateBirdSyntax(t, conf)
+}
+
+

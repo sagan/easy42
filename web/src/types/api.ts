@@ -27,6 +27,8 @@ export interface NetworkSettings {
   confed_members?: string;
   prefixes?: string[];
   local_dn42_networks?: string[];
+  disallowed_dn42_networks?: string[];
+  disallowed_dn42_cidrs?: string[];
 }
 
 export interface SNATConfig {
@@ -44,6 +46,8 @@ export interface NetworkPolicy {
   local_networks?: string[];
   allowed_dst_cidrs?: string[];
   allowed_src_cidrs?: string[];
+  disallowed_dst_cidrs?: string[];
+  disallowed_src_cidrs?: string[];
   allowed_import_cidrs?: string[];
   reject_internet?: boolean;
   filter_forward?: boolean;

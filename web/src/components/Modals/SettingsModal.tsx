@@ -104,6 +104,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
   // Network / Peering state
   const [publicAsn, setPublicAsn] = useState<number | "">("");
   const [localDn42Networks, setLocalDn42Networks] = useState("");
+  const [disallowedDn42Networks, setDisallowedDn42Networks] = useState("");
   const [networkPrefixes, setNetworkPrefixes] = useState<string[]>([]);
   const [networkLoading, setNetworkLoading] = useState(false);
   const [networkSaving, setNetworkSaving] = useState(false);
@@ -128,6 +129,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
   const [policyCost, setPolicyCost] = useState<number | string>(100);
   const [policyAllowedDst, setPolicyAllowedDst] = useState("");
   const [policyAllowedSrc, setPolicyAllowedSrc] = useState("");
+  const [policyDisallowedDst, setPolicyDisallowedDst] = useState("");
+  const [policyDisallowedSrc, setPolicyDisallowedSrc] = useState("");
   const [policyAllowedImport, setPolicyAllowedImport] = useState("");
   const [policyLocalNetworks, setPolicyLocalNetworks] = useState("");
   const [policyRejectInternet, setPolicyRejectInternet] = useState(true);
@@ -186,6 +189,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
       const settings = await api.getNetworkSettings();
       setPublicAsn(settings.public_asn || "");
       setLocalDn42Networks((settings.local_dn42_networks || []).join("\n"));
+      setDisallowedDn42Networks(
+        (settings.disallowed_dn42_networks || settings.disallowed_dn42_cidrs || []).join("\n"),
+      );
       setNetworkPrefixes(settings.prefixes || []);
     } catch (err: unknown) {
       const e = err as Error;
@@ -205,6 +211,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
       public_asn: publicAsn === "" ? 0 : Number(publicAsn),
       prefixes: networkPrefixes,
       local_dn42_networks: parsePrefixList(localDn42Networks),
+      disallowed_dn42_networks: parsePrefixList(disallowedDn42Networks),
+      disallowed_dn42_cidrs: parsePrefixList(disallowedDn42Networks),
     };
 
     try {
@@ -226,6 +234,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
     setPolicyCost(100);
     setPolicyAllowedDst("");
     setPolicyAllowedSrc("");
+    setPolicyDisallowedDst("");
+    setPolicyDisallowedSrc("");
     setPolicyAllowedImport("");
     setPolicyLocalNetworks("");
     setPolicyRejectInternet(true);
@@ -255,6 +265,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
     setPolicyCost(p.cost ?? 100);
     setPolicyAllowedDst((p.allowed_dst_cidrs || []).join("\n"));
     setPolicyAllowedSrc((p.allowed_src_cidrs || []).join("\n"));
+    setPolicyDisallowedDst((p.disallowed_dst_cidrs || []).join("\n"));
+    setPolicyDisallowedSrc((p.disallowed_src_cidrs || []).join("\n"));
     setPolicyAllowedImport((p.allowed_import_cidrs || []).join("\n"));
     setPolicyLocalNetworks((p.local_networks || []).join("\n"));
     setPolicyRejectInternet(Boolean(p.reject_internet));
@@ -284,6 +296,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
     setPolicyCost(p.cost ?? 100);
     setPolicyAllowedDst((p.allowed_dst_cidrs || []).join("\n"));
     setPolicyAllowedSrc((p.allowed_src_cidrs || []).join("\n"));
+    setPolicyDisallowedDst((p.disallowed_dst_cidrs || []).join("\n"));
+    setPolicyDisallowedSrc((p.disallowed_src_cidrs || []).join("\n"));
     setPolicyAllowedImport((p.allowed_import_cidrs || []).join("\n"));
     setPolicyLocalNetworks((p.local_networks || []).join("\n"));
     setPolicyRejectInternet(Boolean(p.reject_internet));
@@ -355,6 +369,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
         local_networks: parsePrefixList(policyLocalNetworks),
         allowed_dst_cidrs: parsePrefixList(policyAllowedDst),
         allowed_src_cidrs: parsePrefixList(policyAllowedSrc),
+        disallowed_dst_cidrs: parsePrefixList(policyDisallowedDst),
+        disallowed_src_cidrs: parsePrefixList(policyDisallowedSrc),
         allowed_import_cidrs: parsePrefixList(policyAllowedImport),
         reject_internet: policyRejectInternet,
         filter_forward: policyFilterForward,
@@ -420,6 +436,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
     setPolicyCost(p.cost ?? 100);
     setPolicyAllowedDst((p.allowed_dst_cidrs || []).join("\n"));
     setPolicyAllowedSrc((p.allowed_src_cidrs || []).join("\n"));
+    setPolicyDisallowedDst((p.disallowed_dst_cidrs || []).join("\n"));
+    setPolicyDisallowedSrc((p.disallowed_src_cidrs || []).join("\n"));
     setPolicyAllowedImport((p.allowed_import_cidrs || []).join("\n"));
     setPolicyLocalNetworks((p.local_networks || []).join("\n"));
     setPolicyRejectInternet(Boolean(p.reject_internet));
@@ -854,6 +872,19 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
                   helperText="Internal DN42 CIDRs (IPv4 and/or IPv6). When external DN42 traffic is forwarded to these networks, the built-in DN42 filter input port rules are enforced."
                   disabled={networkSaving}
                 />
+
+                <TextField
+                  fullWidth
+                  size="small"
+                  multiline
+                  rows={2}
+                  label="Disallowed CIDRs for dn42"
+                  placeholder="e.g. fd42:1234:5678::/48, 172.20.99.0/24"
+                  value={disallowedDn42Networks}
+                  onChange={(e) => setDisallowedDn42Networks(e.target.value)}
+                  helperText="Excluded subnets for built-in dn42 policy (used as DisallowedDstCIDRs & DisallowedSrcCIDRs). Rejects BGP export, drops inbound traffic, and triggers SNAT for internal egress traffic."
+                  disabled={networkSaving}
+                />
               </>
             )}
           </DialogContent>
@@ -1061,6 +1092,22 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
                           variant="outlined"
                           sx={{ fontSize: "0.7rem", height: 22 }}
                         />
+                        {p.disallowed_dst_cidrs && p.disallowed_dst_cidrs.length > 0 && (
+                          <Chip
+                            size="small"
+                            label={`Disallowed Dst: ${p.disallowed_dst_cidrs.length} prefix(es)`}
+                            variant="outlined"
+                            sx={{ fontSize: "0.7rem", height: 22, borderColor: "#FECACA", bgcolor: "#FEF2F2", color: "#DC2626" }}
+                          />
+                        )}
+                        {p.disallowed_src_cidrs && p.disallowed_src_cidrs.length > 0 && (
+                          <Chip
+                            size="small"
+                            label={`Disallowed Src: ${p.disallowed_src_cidrs.length} prefix(es)`}
+                            variant="outlined"
+                            sx={{ fontSize: "0.7rem", height: 22, borderColor: "#FECACA", bgcolor: "#FEF2F2", color: "#DC2626" }}
+                          />
+                        )}
                         <Chip
                           size="small"
                           label={`BGP Import: ${p.allowed_import_cidrs && p.allowed_import_cidrs.length > 0 ? `${p.allowed_import_cidrs.length} prefix(es)` : "All"}`}
@@ -1282,6 +1329,32 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
               onChange={(e) => setPolicyAllowedSrc(e.target.value)}
               disabled={policyDialogMode === "view" || policyDialogSaving}
               helperText="Anti-spoofing: inbound traffic on this link with source IP not matching will be dropped. Leave empty for unrestricted."
+            />
+
+            <TextField
+              fullWidth
+              size="small"
+              label="Disallowed Destination Subnets (CIDRs)"
+              placeholder={"e.g. fd42:1234:5678::/48\n172.20.99.0/24"}
+              multiline
+              rows={3}
+              value={policyDisallowedDst}
+              onChange={(e) => setPolicyDisallowedDst(e.target.value)}
+              disabled={policyDialogMode === "view" || policyDialogSaving}
+              helperText="Reverse of Allowed Dst: drops inbound traffic to these subnets, blocks BGP export, and triggers SNAT (under not_dst) for egress traffic originating from these subnets (e.g. private LAN subnets carved out of DN42 ULA fd00::/8)."
+            />
+
+            <TextField
+              fullWidth
+              size="small"
+              label="Disallowed Source Subnets (CIDRs)"
+              placeholder={"e.g. 172.20.99.0/24\nfd42:1234:5678::/48"}
+              multiline
+              rows={3}
+              value={policyDisallowedSrc}
+              onChange={(e) => setPolicyDisallowedSrc(e.target.value)}
+              disabled={policyDialogMode === "view" || policyDialogSaving}
+              helperText="Reverse of Allowed Src: inbound traffic on this link matching these source subnets will be dropped. Leave empty for unrestricted."
             />
 
             <TextField

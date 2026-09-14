@@ -29,6 +29,8 @@ type NetworkPolicy struct {
 	LocalNetworks      []string    `json:"local_networks,omitempty"`
 	AllowedDstCIDRs    []string    `json:"allowed_dst_cidrs,omitempty"`
 	AllowedSrcCIDRs    []string    `json:"allowed_src_cidrs,omitempty"`
+	DisallowedDstCIDRs []string    `json:"disallowed_dst_cidrs,omitempty"`
+	DisallowedSrcCIDRs []string    `json:"disallowed_src_cidrs,omitempty"`
 	AllowedImportCIDRs []string    `json:"allowed_import_cidrs,omitempty"`
 	RejectInternet     bool        `json:"reject_internet"`
 	FilterForward      bool        `json:"filter_forward"`
@@ -152,6 +154,15 @@ func GetBuiltinPolicies(netSettings *NetworkSettings) []NetworkPolicy {
 		localDN42 = CleanPrefixes(netSettings.LocalDN42Networks)
 	}
 
+	var disallowedDN42 []string
+	if netSettings != nil {
+		if len(netSettings.DisallowedDN42Networks) > 0 {
+			disallowedDN42 = CleanPrefixes(netSettings.DisallowedDN42Networks)
+		} else if len(netSettings.DisallowedDN42CIDRs) > 0 {
+			disallowedDN42 = CleanPrefixes(netSettings.DisallowedDN42CIDRs)
+		}
+	}
+
 	return []NetworkPolicy{
 		{
 			ID:             PolicyDefault,
@@ -172,6 +183,8 @@ func GetBuiltinPolicies(netSettings *NetworkSettings) []NetworkPolicy {
 			LocalNetworks:      localDN42,
 			AllowedDstCIDRs:    dn42Prefixes,
 			AllowedSrcCIDRs:    dn42Prefixes,
+			DisallowedDstCIDRs: disallowedDN42,
+			DisallowedSrcCIDRs: disallowedDN42,
 			AllowedImportCIDRs: dn42Prefixes,
 			RejectInternet:     true,
 			FilterForward:      true,
@@ -218,9 +231,10 @@ func (c *Config) GetAllPolicies() []NetworkPolicy {
 }
 
 // FindPolicy looks up a policy by ID in built-in and user-defined policies.
+// Custom policies take precedence over built-in policies with the same ID.
 func (c *Config) FindPolicy(id string) *NetworkPolicy {
 	all := c.GetAllPolicies()
-	for i := range all {
+	for i := len(all) - 1; i >= 0; i-- {
 		if all[i].ID == id {
 			return &all[i]
 		}

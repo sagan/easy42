@@ -43,6 +43,8 @@ func TestNetworkPolicyManagerCRUD(t *testing.T) {
 		Description:        "Office subnet policy",
 		AllowedDstCIDRs:    []string{"172.20.100.0/24"},
 		AllowedSrcCIDRs:    []string{"172.20.200.0/24"},
+		DisallowedDstCIDRs: []string{"172.20.100.128/25"},
+		DisallowedSrcCIDRs: []string{"172.20.200.128/25"},
 		AllowedImportCIDRs: []string{"172.20.200.0/24"},
 		RejectInternet:     true,
 		FilterForward:      true,
@@ -55,6 +57,12 @@ func TestNetworkPolicyManagerCRUD(t *testing.T) {
 	}
 	if custom.ID != "pol-office" || custom.IsInternal || custom.Cost != 100 {
 		t.Errorf("unexpected custom policy: %+v", custom)
+	}
+	if len(custom.DisallowedDstCIDRs) != 1 || custom.DisallowedDstCIDRs[0] != "172.20.100.128/25" {
+		t.Errorf("expected DisallowedDstCIDRs [172.20.100.128/25], got %v", custom.DisallowedDstCIDRs)
+	}
+	if len(custom.DisallowedSrcCIDRs) != 1 || custom.DisallowedSrcCIDRs[0] != "172.20.200.128/25" {
+		t.Errorf("expected DisallowedSrcCIDRs [172.20.200.128/25], got %v", custom.DisallowedSrcCIDRs)
 	}
 	if custom.DSCPIngress == nil || *custom.DSCPIngress != 46 {
 		t.Errorf("expected DSCPIngress 46, got %v", custom.DSCPIngress)
@@ -79,6 +87,8 @@ func TestNetworkPolicyManagerCRUD(t *testing.T) {
 		Cost:               250,
 		AllowedDstCIDRs:    []string{"172.20.101.0/24"},
 		AllowedSrcCIDRs:    []string{"172.20.201.0/24"},
+		DisallowedDstCIDRs: []string{"172.20.101.128/25"},
+		DisallowedSrcCIDRs: []string{"172.20.201.128/25"},
 		AllowedImportCIDRs: []string{"172.20.201.0/24"},
 		DSCPIngress:        &dscpInUpdated,
 	})
@@ -87,6 +97,12 @@ func TestNetworkPolicyManagerCRUD(t *testing.T) {
 	}
 	if updated.Name != "Branch Office Updated" || updated.Cost != 250 {
 		t.Errorf("expected updated name and cost 250, got name=%s cost=%d", updated.Name, updated.Cost)
+	}
+	if len(updated.DisallowedDstCIDRs) != 1 || updated.DisallowedDstCIDRs[0] != "172.20.101.128/25" {
+		t.Errorf("expected updated DisallowedDstCIDRs [172.20.101.128/25], got %v", updated.DisallowedDstCIDRs)
+	}
+	if len(updated.DisallowedSrcCIDRs) != 1 || updated.DisallowedSrcCIDRs[0] != "172.20.201.128/25" {
+		t.Errorf("expected updated DisallowedSrcCIDRs [172.20.201.128/25], got %v", updated.DisallowedSrcCIDRs)
 	}
 	if updated.DSCPIngress == nil || *updated.DSCPIngress != 0 {
 		t.Errorf("expected updated DSCPIngress 0, got %v", updated.DSCPIngress)

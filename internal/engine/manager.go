@@ -2765,6 +2765,8 @@ func (m *Manager) CreateNetworkPolicy(p config.NetworkPolicy) (*config.NetworkPo
 	p.LocalNetworks = config.CleanPrefixes(p.LocalNetworks)
 	p.AllowedDstCIDRs = config.CleanPrefixes(p.AllowedDstCIDRs)
 	p.AllowedSrcCIDRs = config.CleanPrefixes(p.AllowedSrcCIDRs)
+	p.DisallowedDstCIDRs = config.CleanPrefixes(p.DisallowedDstCIDRs)
+	p.DisallowedSrcCIDRs = config.CleanPrefixes(p.DisallowedSrcCIDRs)
 	p.AllowedImportCIDRs = config.CleanPrefixes(p.AllowedImportCIDRs)
 	p.InputTCPPorts = config.CleanPortList(p.InputTCPPorts)
 	p.InputUDPPorts = config.CleanPortList(p.InputUDPPorts)
@@ -2818,6 +2820,8 @@ func (m *Manager) UpdateNetworkPolicy(id string, p config.NetworkPolicy) (*confi
 	cfg.NetworkPolicies[idx].LocalNetworks = config.CleanPrefixes(p.LocalNetworks)
 	cfg.NetworkPolicies[idx].AllowedDstCIDRs = config.CleanPrefixes(p.AllowedDstCIDRs)
 	cfg.NetworkPolicies[idx].AllowedSrcCIDRs = config.CleanPrefixes(p.AllowedSrcCIDRs)
+	cfg.NetworkPolicies[idx].DisallowedDstCIDRs = config.CleanPrefixes(p.DisallowedDstCIDRs)
+	cfg.NetworkPolicies[idx].DisallowedSrcCIDRs = config.CleanPrefixes(p.DisallowedSrcCIDRs)
 	cfg.NetworkPolicies[idx].AllowedImportCIDRs = config.CleanPrefixes(p.AllowedImportCIDRs)
 	cfg.NetworkPolicies[idx].RejectInternet = p.RejectInternet
 	cfg.NetworkPolicies[idx].FilterForward = p.FilterForward
@@ -2829,6 +2833,9 @@ func (m *Manager) UpdateNetworkPolicy(id string, p config.NetworkPolicy) (*confi
 	cfg.NetworkPolicies[idx].SNAT = p.SNAT
 	cfg.NetworkPolicies[idx].DSCPIngress = config.ValidateDSCP(p.DSCPIngress)
 	cfg.NetworkPolicies[idx].DSCPEgress = config.ValidateDSCP(p.DSCPEgress)
+	cfg.NetworkPolicies[idx].ROA4 = strings.TrimSpace(p.ROA4)
+	cfg.NetworkPolicies[idx].ROA6 = strings.TrimSpace(p.ROA6)
+	cfg.NetworkPolicies[idx].ROAStrict = p.ROAStrict
 
 	if err := m.store.Save(cfg); err != nil {
 		return nil, err
@@ -2884,6 +2891,12 @@ func (m *Manager) GetNetworkSettings() config.NetworkSettings {
 	ns := cfg.NetworkSettings
 	ns.Prefixes = config.CleanPrefixes(ns.Prefixes)
 	ns.LocalDN42Networks = config.CleanPrefixes(ns.LocalDN42Networks)
+	if len(ns.DisallowedDN42Networks) == 0 && len(ns.DisallowedDN42CIDRs) > 0 {
+		ns.DisallowedDN42Networks = config.CleanPrefixes(ns.DisallowedDN42CIDRs)
+	} else {
+		ns.DisallowedDN42Networks = config.CleanPrefixes(ns.DisallowedDN42Networks)
+	}
+	ns.DisallowedDN42CIDRs = ns.DisallowedDN42Networks
 	return ns
 }
 
@@ -2898,6 +2911,12 @@ func (m *Manager) UpdateNetworkSettings(settings config.NetworkSettings) error {
 	}
 	settings.Prefixes = config.CleanPrefixes(settings.Prefixes)
 	settings.LocalDN42Networks = config.CleanPrefixes(settings.LocalDN42Networks)
+	if len(settings.DisallowedDN42Networks) == 0 && len(settings.DisallowedDN42CIDRs) > 0 {
+		settings.DisallowedDN42Networks = config.CleanPrefixes(settings.DisallowedDN42CIDRs)
+	} else {
+		settings.DisallowedDN42Networks = config.CleanPrefixes(settings.DisallowedDN42Networks)
+	}
+	settings.DisallowedDN42CIDRs = settings.DisallowedDN42Networks
 	cfg.NetworkSettings = settings
 	return m.store.Save(cfg)
 }

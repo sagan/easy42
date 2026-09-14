@@ -24,11 +24,23 @@ define pol_{{ .id }}_dst_v4 = {{ .allowed_dst_v4 }}
 {{- if .allowed_dst_v6 }}
 define pol_{{ .id }}_dst_v6 = {{ .allowed_dst_v6 }}
 {{- end }}
+{{- if .disallowed_dst_v4 }}
+define pol_{{ .id }}_disallowed_dst_v4 = {{ .disallowed_dst_v4 }}
+{{- end }}
+{{- if .disallowed_dst_v6 }}
+define pol_{{ .id }}_disallowed_dst_v6 = {{ .disallowed_dst_v6 }}
+{{- end }}
 {{- if .allowed_src_v4 }}
 define pol_{{ .id }}_src_v4 = {{ .allowed_src_v4 }}
 {{- end }}
 {{- if .allowed_src_v6 }}
 define pol_{{ .id }}_src_v6 = {{ .allowed_src_v6 }}
+{{- end }}
+{{- if .disallowed_src_v4 }}
+define pol_{{ .id }}_disallowed_src_v4 = {{ .disallowed_src_v4 }}
+{{- end }}
+{{- if .disallowed_src_v6 }}
+define pol_{{ .id }}_disallowed_src_v6 = {{ .disallowed_src_v6 }}
 {{- end }}
 {{- if .local_v4 }}
 define pol_{{ .id }}_local_v4 = {{ .local_v4 }}
@@ -89,6 +101,20 @@ table inet easy42 {
     elements = $pol_{{ .id }}_dst_v6
   }
   {{- end }}
+  {{- if .disallowed_dst_v4 }}
+  set pol_{{ .id }}_disallowed_dst_v4 {
+    type ipv4_addr
+    flags interval
+    elements = $pol_{{ .id }}_disallowed_dst_v4
+  }
+  {{- end }}
+  {{- if .disallowed_dst_v6 }}
+  set pol_{{ .id }}_disallowed_dst_v6 {
+    type ipv6_addr
+    flags interval
+    elements = $pol_{{ .id }}_disallowed_dst_v6
+  }
+  {{- end }}
   {{- if .allowed_src_v4 }}
   set pol_{{ .id }}_src_v4 {
     type ipv4_addr
@@ -101,6 +127,20 @@ table inet easy42 {
     type ipv6_addr
     flags interval
     elements = $pol_{{ .id }}_src_v6
+  }
+  {{- end }}
+  {{- if .disallowed_src_v4 }}
+  set pol_{{ .id }}_disallowed_src_v4 {
+    type ipv4_addr
+    flags interval
+    elements = $pol_{{ .id }}_disallowed_src_v4
+  }
+  {{- end }}
+  {{- if .disallowed_src_v6 }}
+  set pol_{{ .id }}_disallowed_src_v6 {
+    type ipv6_addr
+    flags interval
+    elements = $pol_{{ .id }}_disallowed_src_v6
   }
   {{- end }}
   {{- if .local_v4 }}
@@ -124,14 +164,26 @@ table inet easy42 {
     ct state established,related accept
 {{- range .nft_policies }}
   {{- if .filter_forward }}
+    {{- if .disallowed_src_v4 }}
+    iifname @pol_{{ .id }}_ifname ip saddr @pol_{{ .id }}_disallowed_src_v4 drop
+    {{- end }}
     {{- if .allowed_src_v4 }}
     iifname @pol_{{ .id }}_ifname ip saddr != @pol_{{ .id }}_src_v4 drop
+    {{- end }}
+    {{- if .disallowed_dst_v4 }}
+    iifname @pol_{{ .id }}_ifname ip daddr @pol_{{ .id }}_disallowed_dst_v4 drop
     {{- end }}
     {{- if .allowed_dst_v4 }}
     iifname @pol_{{ .id }}_ifname ip daddr != @pol_{{ .id }}_dst_v4 drop
     {{- end }}
+    {{- if .disallowed_src_v6 }}
+    iifname @pol_{{ .id }}_ifname ip6 saddr @pol_{{ .id }}_disallowed_src_v6 drop
+    {{- end }}
     {{- if .allowed_src_v6 }}
     iifname @pol_{{ .id }}_ifname ip6 saddr != @pol_{{ .id }}_src_v6 drop
+    {{- end }}
+    {{- if .disallowed_dst_v6 }}
+    iifname @pol_{{ .id }}_ifname ip6 daddr @pol_{{ .id }}_disallowed_dst_v6 drop
     {{- end }}
     {{- if .allowed_dst_v6 }}
     iifname @pol_{{ .id }}_ifname ip6 daddr != @pol_{{ .id }}_dst_v6 drop
@@ -210,22 +262,52 @@ table inet easy42 {
 {{- range .nft_policies }}
   {{- if .snat }}
     {{- if eq .snat_action "masquerade" }}
-      {{- if and (eq .snat_condition "not_dst") .allowed_dst_v4 }}
+      {{- if eq .snat_condition "not_dst" }}
+        {{- if .disallowed_dst_v4 }}
+    ip saddr @pol_{{ .id }}_disallowed_dst_v4 oifname @pol_{{ .id }}_ifname masquerade
+        {{- end }}
+        {{- if .allowed_dst_v4 }}
     ip saddr != @pol_{{ .id }}_dst_v4 oifname @pol_{{ .id }}_ifname masquerade
+        {{- end }}
+        {{- if .disallowed_dst_v6 }}
+    ip6 saddr @pol_{{ .id }}_disallowed_dst_v6 oifname @pol_{{ .id }}_ifname masquerade
+        {{- end }}
+        {{- if .allowed_dst_v6 }}
+    ip6 saddr != @pol_{{ .id }}_dst_v6 oifname @pol_{{ .id }}_ifname masquerade
+        {{- end }}
+        {{- if and (not .allowed_dst_v4) (not .disallowed_dst_v4) (not .allowed_dst_v6) (not .disallowed_dst_v6) }}
+    oifname @pol_{{ .id }}_ifname masquerade
+        {{- end }}
       {{- else }}
     oifname @pol_{{ .id }}_ifname masquerade
       {{- end }}
     {{- else }}
       {{- if .snat_target_v4 }}
-        {{- if and (eq .snat_condition "not_dst") .allowed_dst_v4 }}
+        {{- if eq .snat_condition "not_dst" }}
+          {{- if .disallowed_dst_v4 }}
+    ip saddr @pol_{{ .id }}_disallowed_dst_v4 oifname @pol_{{ .id }}_ifname meta nfproto ipv4 snat to {{ .snat_target_v4 }}
+          {{- end }}
+          {{- if .allowed_dst_v4 }}
     ip saddr != @pol_{{ .id }}_dst_v4 oifname @pol_{{ .id }}_ifname meta nfproto ipv4 snat to {{ .snat_target_v4 }}
+          {{- end }}
+          {{- if and (not .allowed_dst_v4) (not .disallowed_dst_v4) }}
+    oifname @pol_{{ .id }}_ifname meta nfproto ipv4 snat to {{ .snat_target_v4 }}
+          {{- end }}
         {{- else }}
     oifname @pol_{{ .id }}_ifname meta nfproto ipv4 snat to {{ .snat_target_v4 }}
         {{- end }}
       {{- end }}
       {{- if .snat_target_v6 }}
-        {{- if and (eq .snat_condition "not_dst") .allowed_dst_v6 }}
+        {{- if eq .snat_condition "not_dst" }}
+          {{- if .disallowed_dst_v6 }}
+    ip6 saddr @pol_{{ .id }}_disallowed_dst_v6 oifname @pol_{{ .id }}_ifname meta nfproto ipv6 snat to {{ .snat_target_v6 }}
+          {{- end }}
+          {{- if .allowed_dst_v6 }}
     ip6 saddr != @pol_{{ .id }}_dst_v6 oifname @pol_{{ .id }}_ifname meta nfproto ipv6 snat to {{ .snat_target_v6 }}
+          {{- end }}
+          {{- if and (not .allowed_dst_v6) (not .disallowed_dst_v6) }}
+    oifname @pol_{{ .id }}_ifname meta nfproto ipv6 snat to {{ .snat_target_v6 }}
+          {{- end }}
         {{- else }}
     oifname @pol_{{ .id }}_ifname meta nfproto ipv6 snat to {{ .snat_target_v6 }}
         {{- end }}

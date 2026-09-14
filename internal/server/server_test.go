@@ -603,9 +603,10 @@ func TestNetworkSettingsAndExternalPeeringAPI(t *testing.T) {
 
 	// 2. PUT /api/settings/network
 	settingsUpdate := config.NetworkSettings{
-		PublicASN:         4242421234,
-		Prefixes:          []string{"172.20.10.0/24", "172.20.0.0/14{21,29}"},
-		LocalDN42Networks: []string{"172.20.229.0/27"},
+		PublicASN:              4242421234,
+		Prefixes:               []string{"172.20.10.0/24", "172.20.0.0/14{21,29}"},
+		LocalDN42Networks:      []string{"172.20.229.0/27"},
+		DisallowedDN42Networks: []string{"fd42:1234:5678::/48", "172.20.99.0/24"},
 	}
 	bodyPutSettings, _ := json.Marshal(settingsUpdate)
 	reqPutSettings := httptest.NewRequest("PUT", "/api/settings/network", bytes.NewReader(bodyPutSettings))
@@ -623,6 +624,28 @@ func TestNetworkSettingsAndExternalPeeringAPI(t *testing.T) {
 	}
 	if len(savedSettings.LocalDN42Networks) != 1 || savedSettings.LocalDN42Networks[0] != "172.20.229.0/27" {
 		t.Errorf("Expected LocalDN42Networks [172.20.229.0/27], got %v", savedSettings.LocalDN42Networks)
+	}
+	if len(savedSettings.DisallowedDN42Networks) != 2 || savedSettings.DisallowedDN42Networks[0] != "fd42:1234:5678::/48" {
+		t.Errorf("Expected DisallowedDN42Networks [fd42:1234:5678::/48, 172.20.99.0/24], got %v", savedSettings.DisallowedDN42Networks)
+	}
+
+	// Verify that built-in dn42 policy automatically inherits DisallowedDstCIDRs & DisallowedSrcCIDRs
+	policies := srv.mgr.GetNetworkPolicies()
+	var dn42Policy *config.NetworkPolicy
+	for i := range policies {
+		if policies[i].ID == config.PolicyDN42 {
+			dn42Policy = &policies[i]
+			break
+		}
+	}
+	if dn42Policy == nil {
+		t.Fatalf("built-in dn42 policy not found")
+	}
+	if len(dn42Policy.DisallowedDstCIDRs) != 2 || dn42Policy.DisallowedDstCIDRs[0] != "fd42:1234:5678::/48" {
+		t.Errorf("Expected dn42 policy DisallowedDstCIDRs to inherit global setting, got %v", dn42Policy.DisallowedDstCIDRs)
+	}
+	if len(dn42Policy.DisallowedSrcCIDRs) != 2 || dn42Policy.DisallowedSrcCIDRs[0] != "fd42:1234:5678::/48" {
+		t.Errorf("Expected dn42 policy DisallowedSrcCIDRs to inherit global setting, got %v", dn42Policy.DisallowedSrcCIDRs)
 	}
 
 	// 3. Add Managed Node via POST /api/nodes

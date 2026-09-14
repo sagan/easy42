@@ -64,6 +64,31 @@ func TestGetBuiltinPolicies_LocalDN42Networks(t *testing.T) {
 	t.Fatalf("PolicyDN42 not found")
 }
 
+func TestGetBuiltinPolicies_DisallowedDN42Networks(t *testing.T) {
+	netSettings := &NetworkSettings{
+		DisallowedDN42Networks: []string{"fd42:1234:5678::/48", "172.20.99.0/24"},
+	}
+	policies := GetBuiltinPolicies(netSettings)
+	for _, p := range policies {
+		if p.ID == PolicyDN42 {
+			if len(p.DisallowedDstCIDRs) != 2 {
+				t.Fatalf("expected 2 DisallowedDstCIDRs in PolicyDN42, got %v", p.DisallowedDstCIDRs)
+			}
+			if p.DisallowedDstCIDRs[0] != "fd42:1234:5678::/48" || p.DisallowedDstCIDRs[1] != "172.20.99.0/24" {
+				t.Errorf("unexpected DisallowedDstCIDRs: %v", p.DisallowedDstCIDRs)
+			}
+			if len(p.DisallowedSrcCIDRs) != 2 {
+				t.Fatalf("expected 2 DisallowedSrcCIDRs in PolicyDN42, got %v", p.DisallowedSrcCIDRs)
+			}
+			if p.DisallowedSrcCIDRs[0] != "fd42:1234:5678::/48" || p.DisallowedSrcCIDRs[1] != "172.20.99.0/24" {
+				t.Errorf("unexpected DisallowedSrcCIDRs: %v", p.DisallowedSrcCIDRs)
+			}
+			return
+		}
+	}
+	t.Fatalf("PolicyDN42 not found")
+}
+
 func TestEffectivePolicy(t *testing.T) {
 	var end *LinkEnd
 	if p := end.EffectivePolicy(false); p != PolicyDefault {

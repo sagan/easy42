@@ -152,6 +152,12 @@ func (s *Store) Load() (*Config, error) {
 
 	cfg.NetworkSettings.Prefixes = CleanPrefixes(cfg.NetworkSettings.Prefixes)
 	cfg.NetworkSettings.LocalDN42Networks = CleanPrefixes(cfg.NetworkSettings.LocalDN42Networks)
+	if len(cfg.NetworkSettings.DisallowedDN42Networks) == 0 && len(cfg.NetworkSettings.DisallowedDN42CIDRs) > 0 {
+		cfg.NetworkSettings.DisallowedDN42Networks = CleanPrefixes(cfg.NetworkSettings.DisallowedDN42CIDRs)
+	} else {
+		cfg.NetworkSettings.DisallowedDN42Networks = CleanPrefixes(cfg.NetworkSettings.DisallowedDN42Networks)
+	}
+	cfg.NetworkSettings.DisallowedDN42CIDRs = cfg.NetworkSettings.DisallowedDN42Networks
 
 	s.config = &cfg
 	return &cfg, nil
@@ -175,6 +181,12 @@ func (s *Store) Save(cfg *Config) error {
 
 	cfg.NetworkSettings.Prefixes = CleanPrefixes(cfg.NetworkSettings.Prefixes)
 	cfg.NetworkSettings.LocalDN42Networks = CleanPrefixes(cfg.NetworkSettings.LocalDN42Networks)
+	if len(cfg.NetworkSettings.DisallowedDN42Networks) == 0 && len(cfg.NetworkSettings.DisallowedDN42CIDRs) > 0 {
+		cfg.NetworkSettings.DisallowedDN42Networks = CleanPrefixes(cfg.NetworkSettings.DisallowedDN42CIDRs)
+	} else {
+		cfg.NetworkSettings.DisallowedDN42Networks = CleanPrefixes(cfg.NetworkSettings.DisallowedDN42Networks)
+	}
+	cfg.NetworkSettings.DisallowedDN42CIDRs = cfg.NetworkSettings.DisallowedDN42Networks
 
 	data, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {

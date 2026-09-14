@@ -207,11 +207,25 @@ func BuildNftablesNodeContext(
 			dstV6 = FormatNftPrefixList(pol.AllowedDstCIDRs, nil, true)
 		}
 
+		disallowedDstV4 := ""
+		disallowedDstV6 := ""
+		if len(pol.DisallowedDstCIDRs) > 0 {
+			disallowedDstV4 = FormatNftPrefixList(pol.DisallowedDstCIDRs, nil, false)
+			disallowedDstV6 = FormatNftPrefixList(pol.DisallowedDstCIDRs, nil, true)
+		}
+
 		srcV4 := ""
 		srcV6 := ""
 		if len(pol.AllowedSrcCIDRs) > 0 {
 			srcV4 = FormatNftPrefixList(pol.AllowedSrcCIDRs, nil, false)
 			srcV6 = FormatNftPrefixList(pol.AllowedSrcCIDRs, nil, true)
+		}
+
+		disallowedSrcV4 := ""
+		disallowedSrcV6 := ""
+		if len(pol.DisallowedSrcCIDRs) > 0 {
+			disallowedSrcV4 = FormatNftPrefixList(pol.DisallowedSrcCIDRs, nil, false)
+			disallowedSrcV6 = FormatNftPrefixList(pol.DisallowedSrcCIDRs, nil, true)
 		}
 
 		localV4 := ""
@@ -301,8 +315,12 @@ func BuildNftablesNodeContext(
 			"ifnames":           "{ " + strings.Join(ifnames, ", ") + " }",
 			"allowed_dst_v4":    dstV4,
 			"allowed_dst_v6":    dstV6,
+			"disallowed_dst_v4": disallowedDstV4,
+			"disallowed_dst_v6": disallowedDstV6,
 			"allowed_src_v4":    srcV4,
 			"allowed_src_v6":    srcV6,
+			"disallowed_src_v4": disallowedSrcV4,
+			"disallowed_src_v6": disallowedSrcV6,
 			"local_v4":          localV4,
 			"local_v6":          localV6,
 			"filter_forward":    pol.FilterForward,

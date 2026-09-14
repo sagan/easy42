@@ -729,3 +729,138 @@ func TestNftablesConfigHooks(t *testing.T) {
 	}
 }
 
+func TestDisallowedCIDRsNftables(t *testing.T) {
+	node := config.Node{
+		Name:        "gw1",
+		IP:          "192.168.10.1",
+		ExternalIP:  "172.20.10.1",
+		ExternalIP6: "fd42:10::1",
+		ASN:         4224420001,
+	}
+	allNodes := []config.Node{
+		node,
+		{Name: "peer-dn42", IP: "192.168.10.2"},
+		{Name: "peer-masq", IP: "192.168.10.3"},
+	}
+	links := []config.Link{
+		{
+			From: config.LinkEnd{Name: "gw1", Interface: "wg42custom", Policy: "dn42-custom"},
+			To:   config.LinkEnd{Name: "peer-dn42", Interface: "wg42"},
+		},
+		{
+			From: config.LinkEnd{Name: "gw1", Interface: "wg42masq", Policy: "masq-custom"},
+			To:   config.LinkEnd{Name: "peer-masq", Interface: "wg42"},
+		},
+	}
+	customPolicies := []config.NetworkPolicy{
+		{
+			ID:                 "dn42-custom",
+			Name:               "DN42 Custom with Disallowed Subnets",
+			AllowedDstCIDRs:    []string{"172.20.0.0/14", "fd00::/8"},
+			DisallowedDstCIDRs: []string{"172.20.99.0/24", "fd42:1234:5678::/48"},
+			AllowedSrcCIDRs:    []string{"172.20.0.0/14", "fd00::/8"},
+			DisallowedSrcCIDRs: []string{"172.20.88.0/24", "fd42:9999:8888::/48"},
+			FilterForward:      true,
+			SNAT: &config.SNATConfig{
+				Enabled:   true,
+				Condition: "not_dst",
+				Target:    "external_ip",
+			},
+		},
+		{
+			ID:                 "masq-custom",
+			Name:               "Masquerade Custom with Disallowed Dst",
+			AllowedDstCIDRs:    []string{"10.0.0.0/8"},
+			DisallowedDstCIDRs: []string{"10.99.0.0/16", "fd00:99::/48"},
+			FilterForward:      false,
+			SNAT: &config.SNATConfig{
+				Enabled:   true,
+				Condition: "not_dst",
+				Target:    "masquerade",
+			},
+		},
+	}
+
+	conf, err := GenerateNftablesConfig(&node, allNodes, links, nil, customPolicies)
+	if err != nil {
+		t.Fatalf("GenerateNftablesConfig failed: %v", err)
+	}
+
+	// 1. Check defines
+	expectedDefines := []string{
+		`define pol_dn42_custom_disallowed_dst_v4 = { 172.20.99.0/24 }`,
+		`define pol_dn42_custom_disallowed_dst_v6 = { fd42:1234:5678::/48 }`,
+		`define pol_dn42_custom_disallowed_src_v4 = { 172.20.88.0/24 }`,
+		`define pol_dn42_custom_disallowed_src_v6 = { fd42:9999:8888::/48 }`,
+		`define pol_masq_custom_disallowed_dst_v4 = { 10.99.0.0/16 }`,
+		`define pol_masq_custom_disallowed_dst_v6 = { fd00:99::/48 }`,
+	}
+	for _, def := range expectedDefines {
+		if !strings.Contains(conf, def) {
+			t.Errorf("Expected define %q in config:\n%s", def, conf)
+		}
+	}
+
+	// 2. Check sets
+	expectedSets := []string{
+		"set pol_dn42_custom_disallowed_dst_v4",
+		"set pol_dn42_custom_disallowed_dst_v6",
+		"set pol_dn42_custom_disallowed_src_v4",
+		"set pol_dn42_custom_disallowed_src_v6",
+		"set pol_masq_custom_disallowed_dst_v4",
+		"set pol_masq_custom_disallowed_dst_v6",
+	}
+	for _, s := range expectedSets {
+		if !strings.Contains(conf, s) {
+			t.Errorf("Expected set %q in config:\n%s", s, conf)
+		}
+	}
+
+	// 3. Check filter_forward drop rules
+	expectedForwardRules := []string{
+		`iifname @pol_dn42_custom_ifname ip saddr @pol_dn42_custom_disallowed_src_v4 drop`,
+		`iifname @pol_dn42_custom_ifname ip saddr != @pol_dn42_custom_src_v4 drop`,
+		`iifname @pol_dn42_custom_ifname ip daddr @pol_dn42_custom_disallowed_dst_v4 drop`,
+		`iifname @pol_dn42_custom_ifname ip daddr != @pol_dn42_custom_dst_v4 drop`,
+		`iifname @pol_dn42_custom_ifname ip6 saddr @pol_dn42_custom_disallowed_src_v6 drop`,
+		`iifname @pol_dn42_custom_ifname ip6 saddr != @pol_dn42_custom_src_v6 drop`,
+		`iifname @pol_dn42_custom_ifname ip6 daddr @pol_dn42_custom_disallowed_dst_v6 drop`,
+		`iifname @pol_dn42_custom_ifname ip6 daddr != @pol_dn42_custom_dst_v6 drop`,
+	}
+	for _, r := range expectedForwardRules {
+		if !strings.Contains(conf, r) {
+			t.Errorf("Expected forward rule %q in config:\n%s", r, conf)
+		}
+	}
+
+	// 4. Check SNAT rules
+	expectedSNATRules := []string{
+		`ip saddr @pol_dn42_custom_disallowed_dst_v4 oifname @pol_dn42_custom_ifname meta nfproto ipv4 snat to $external_ip`,
+		`ip saddr != @pol_dn42_custom_dst_v4 oifname @pol_dn42_custom_ifname meta nfproto ipv4 snat to $external_ip`,
+		`ip6 saddr @pol_dn42_custom_disallowed_dst_v6 oifname @pol_dn42_custom_ifname meta nfproto ipv6 snat to $external_ip6`,
+		`ip6 saddr != @pol_dn42_custom_dst_v6 oifname @pol_dn42_custom_ifname meta nfproto ipv6 snat to $external_ip6`,
+		`ip saddr @pol_masq_custom_disallowed_dst_v4 oifname @pol_masq_custom_ifname masquerade`,
+		`ip saddr != @pol_masq_custom_dst_v4 oifname @pol_masq_custom_ifname masquerade`,
+		`ip6 saddr @pol_masq_custom_disallowed_dst_v6 oifname @pol_masq_custom_ifname masquerade`,
+	}
+	for _, r := range expectedSNATRules {
+		if !strings.Contains(conf, r) {
+			t.Errorf("Expected SNAT rule %q in config:\n%s", r, conf)
+		}
+	}
+
+	// 5. Validate with real nft binary
+	if nftPath, err := exec.LookPath("nft"); err == nil {
+		tmpFile := filepath.Join(t.TempDir(), "easy42.nft")
+		if err := os.WriteFile(tmpFile, []byte(conf), 0644); err != nil {
+			t.Fatalf("WriteFile failed: %v", err)
+		}
+		cmd := exec.Command(nftPath, "-c", "-f", tmpFile)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("nft -c -f validation failed: %v\nOutput:\n%s\nConfig:\n%s", err, string(out), conf)
+		}
+	}
+}
+
+

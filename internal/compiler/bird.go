@@ -149,12 +149,15 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 
 	dn42Pol, hasDN42 := policyMap[config.PolicyDN42]
 	var dn42ImportV4, dn42ImportV6, dn42ExportV4, dn42ExportV6 string
+	var dn42DisallowedExportV4, dn42DisallowedExportV6 string
 	var dn42RejectInternet bool
 	if hasDN42 {
 		dn42ImportV4 = formatPrefixList(dn42Pol.AllowedImportCIDRs, nil, false)
 		dn42ImportV6 = formatPrefixList(dn42Pol.AllowedImportCIDRs, nil, true)
 		dn42ExportV4 = formatPrefixList(dn42Pol.AllowedDstCIDRs, nil, false)
 		dn42ExportV6 = formatPrefixList(dn42Pol.AllowedDstCIDRs, nil, true)
+		dn42DisallowedExportV4 = formatPrefixList(dn42Pol.DisallowedDstCIDRs, nil, false)
+		dn42DisallowedExportV6 = formatPrefixList(dn42Pol.DisallowedDstCIDRs, nil, true)
 		dn42RejectInternet = dn42Pol.RejectInternet
 	} else {
 		var prefixes []string
@@ -171,10 +174,14 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 	ctx["ext_prefixes_v6"] = dn42ImportV6
 	ctx["ext_export_prefixes_v4"] = dn42ExportV4
 	ctx["ext_export_prefixes_v6"] = dn42ExportV6
+	ctx["ext_disallowed_export_prefixes_v4"] = dn42DisallowedExportV4
+	ctx["ext_disallowed_export_prefixes_v6"] = dn42DisallowedExportV6
 	ctx["has_ext_import_v4"] = dn42ImportV4 != ""
 	ctx["has_ext_import_v6"] = dn42ImportV6 != ""
 	ctx["has_ext_export_v4"] = dn42ExportV4 != ""
 	ctx["has_ext_export_v6"] = dn42ExportV6 != ""
+	ctx["has_ext_disallowed_export_v4"] = dn42DisallowedExportV4 != ""
+	ctx["has_ext_disallowed_export_v6"] = dn42DisallowedExportV6 != ""
 	ctx["ext_reject_internet"] = dn42RejectInternet
 
 	// 3. Normalize routes and static routes
@@ -552,41 +559,51 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 		importV6 := formatPrefixList(pol.AllowedImportCIDRs, nil, true)
 		exportV4 := formatPrefixList(pol.AllowedDstCIDRs, nil, false)
 		exportV6 := formatPrefixList(pol.AllowedDstCIDRs, nil, true)
+		disallowedExportV4 := formatPrefixList(pol.DisallowedDstCIDRs, nil, false)
+		disallowedExportV6 := formatPrefixList(pol.DisallowedDstCIDRs, nil, true)
 
 		hasRoa := strings.TrimSpace(pol.ROA4) != "" || strings.TrimSpace(pol.ROA6) != ""
 		roaFn := cleanID + "_roa_check"
 
 		customPolicyPrefixes = append(customPolicyPrefixes, map[string]any{
-			"id":                 cleanID,
-			"has_import_v4":      importV4 != "",
-			"has_import_v6":      importV6 != "",
-			"import_prefixes_v4": importV4,
-			"import_prefixes_v6": importV6,
-			"has_export_v4":      exportV4 != "",
-			"has_export_v6":      exportV6 != "",
-			"export_prefixes_v4": exportV4,
-			"export_prefixes_v6": exportV6,
+			"id":                            cleanID,
+			"has_import_v4":                 importV4 != "",
+			"has_import_v6":                 importV6 != "",
+			"import_prefixes_v4":            importV4,
+			"import_prefixes_v6":            importV6,
+			"has_export_v4":                 exportV4 != "",
+			"has_export_v6":                 exportV6 != "",
+			"export_prefixes_v4":            exportV4,
+			"export_prefixes_v6":            exportV6,
+			"has_disallowed_export_v4":      disallowedExportV4 != "",
+			"has_disallowed_export_v6":      disallowedExportV6 != "",
+			"disallowed_export_prefixes_v4": disallowedExportV4,
+			"disallowed_export_prefixes_v6": disallowedExportV6,
 		})
 
 		baseCost := customBaseCosts[id]
 		baseTmplName := "pol_peer_" + cleanID
 
 		customBirdPolicies = append(customBirdPolicies, map[string]any{
-			"id":                 cleanID,
-			"name":               pol.Name,
-			"template_name":      baseTmplName,
-			"cost":               baseCost,
-			"reject_internet":    pol.RejectInternet,
-			"has_import_v4":      importV4 != "",
-			"has_import_v6":      importV6 != "",
-			"import_prefixes_v4": importV4,
-			"import_prefixes_v6": importV6,
-			"has_export_v4":      exportV4 != "",
-			"has_export_v6":      exportV6 != "",
-			"export_prefixes_v4": exportV4,
-			"export_prefixes_v6": exportV6,
-			"has_roa":            hasRoa,
-			"roa_fn":             roaFn,
+			"id":                            cleanID,
+			"name":                          pol.Name,
+			"template_name":                 baseTmplName,
+			"cost":                          baseCost,
+			"reject_internet":               pol.RejectInternet,
+			"has_import_v4":                 importV4 != "",
+			"has_import_v6":                 importV6 != "",
+			"import_prefixes_v4":            importV4,
+			"import_prefixes_v6":            importV6,
+			"has_export_v4":                 exportV4 != "",
+			"has_export_v6":                 exportV6 != "",
+			"export_prefixes_v4":            exportV4,
+			"export_prefixes_v6":            exportV6,
+			"has_disallowed_export_v4":      disallowedExportV4 != "",
+			"has_disallowed_export_v6":      disallowedExportV6 != "",
+			"disallowed_export_prefixes_v4": disallowedExportV4,
+			"disallowed_export_prefixes_v6": disallowedExportV6,
+			"has_roa":                       hasRoa,
+			"roa_fn":                        roaFn,
 		})
 
 		if costs, ok := policyCostsMap[id]; ok {
@@ -599,21 +616,25 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 			sort.Ints(extraCosts)
 			for _, c := range extraCosts {
 				customBirdPolicies = append(customBirdPolicies, map[string]any{
-					"id":                 cleanID,
-					"name":               pol.Name,
-					"template_name":      fmt.Sprintf("pol_peer_%s_cost_%d", cleanID, c),
-					"cost":               c,
-					"reject_internet":    pol.RejectInternet,
-					"has_import_v4":      importV4 != "",
-					"has_import_v6":      importV6 != "",
-					"import_prefixes_v4": importV4,
-					"import_prefixes_v6": importV6,
-					"has_export_v4":      exportV4 != "",
-					"has_export_v6":      exportV6 != "",
-					"export_prefixes_v4": exportV4,
-					"export_prefixes_v6": exportV6,
-					"has_roa":            hasRoa,
-					"roa_fn":             roaFn,
+					"id":                            cleanID,
+					"name":                          pol.Name,
+					"template_name":                 fmt.Sprintf("pol_peer_%s_cost_%d", cleanID, c),
+					"cost":                          c,
+					"reject_internet":               pol.RejectInternet,
+					"has_import_v4":                 importV4 != "",
+					"has_import_v6":                 importV6 != "",
+					"import_prefixes_v4":            importV4,
+					"import_prefixes_v6":            importV6,
+					"has_export_v4":                 exportV4 != "",
+					"has_export_v6":                 exportV6 != "",
+					"export_prefixes_v4":            exportV4,
+					"export_prefixes_v6":            exportV6,
+					"has_disallowed_export_v4":      disallowedExportV4 != "",
+					"has_disallowed_export_v6":      disallowedExportV6 != "",
+					"disallowed_export_prefixes_v4": disallowedExportV4,
+					"disallowed_export_prefixes_v6": disallowedExportV6,
+					"has_roa":                       hasRoa,
+					"roa_fn":                        roaFn,
 				})
 			}
 		}
