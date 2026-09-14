@@ -180,7 +180,42 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 	// 3. Normalize routes and static routes
 	routes := node.Routes
 	var routeMaps []map[string]any
+	var mainKernelPrefixesV4 []string
+	var mainKernelPrefixesV6 []string
+	otherRoutesV4 := make(map[int][]string)
+	otherRoutesV6 := make(map[int][]string)
+	var otherTableOrder []int
+
 	for _, r := range routes {
+		tbl := r.Table
+		if tbl <= 0 {
+			tbl = table
+		}
+		var cleanedV4 []string
+		var cleanedV6 []string
+		for _, p := range r.Prefixes {
+			trimmed := strings.TrimSpace(p)
+			if trimmed == "" {
+				continue
+			}
+			if strings.Contains(trimmed, ":") {
+				cleanedV6 = append(cleanedV6, trimmed)
+			} else {
+				cleanedV4 = append(cleanedV4, trimmed)
+			}
+		}
+
+		if tbl == table {
+			mainKernelPrefixesV4 = append(mainKernelPrefixesV4, cleanedV4...)
+			mainKernelPrefixesV6 = append(mainKernelPrefixesV6, cleanedV6...)
+		} else {
+			if _, exists := otherRoutesV4[tbl]; !exists {
+				otherTableOrder = append(otherTableOrder, tbl)
+			}
+			otherRoutesV4[tbl] = append(otherRoutesV4[tbl], cleanedV4...)
+			otherRoutesV6[tbl] = append(otherRoutesV6[tbl], cleanedV6...)
+		}
+
 		routeMaps = append(routeMaps, map[string]any{
 			"table":    r.Table,
 			"prefixes": r.Prefixes,
@@ -188,6 +223,25 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 	}
 	ctx["routes"] = routeMaps
 	ctx["kernel_routes"] = routeMaps
+
+	var otherKernelRoutes []map[string]any
+	for _, tbl := range otherTableOrder {
+		v4List := otherRoutesV4[tbl]
+		v6List := otherRoutesV6[tbl]
+		otherKernelRoutes = append(otherKernelRoutes, map[string]any{
+			"table":       tbl,
+			"prefixes":    v4List,
+			"prefixes_v4": v4List,
+			"prefixes_v6": v6List,
+			"has_v4":      len(v4List) > 0,
+			"has_v6":      len(v6List) > 0,
+		})
+	}
+	ctx["other_kernel_routes"] = otherKernelRoutes
+	ctx["has_main_kernel_routes"] = len(mainKernelPrefixesV4) > 0
+	ctx["main_kernel_prefixes"] = mainKernelPrefixesV4
+	ctx["has_main_kernel_routes_v6"] = len(mainKernelPrefixesV6) > 0
+	ctx["main_kernel_prefixes_v6"] = mainKernelPrefixesV6
 
 	var staticV4 []string
 	var staticV6 []string

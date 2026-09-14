@@ -1479,5 +1479,86 @@ func extractBlock(content, startMarker, endMarker string) string {
 	return sub[:endIdx+len(endMarker)]
 }
 
+func TestMainTableKernelRoutesAndOtherTableRouting(t *testing.T) {
+	// 1. Test node with routes in main table (Table 254) as reported by user
+	pandaNode := config.Node{
+		Name:          "pandarouter",
+		Host:          "192.168.110.3",
+		IP:            "192.168.110.3",
+		IP6:           "fdf4:8e3e:dd38:6e::3",
+		Interface:     "wg-linode",
+		ASN:           4224420003,
+		Table:         254,
+		ExternalTable: 42,
+		InternetTable: 100,
+		Routes: []config.KernelRouteRule{
+			{
+				Table: 254,
+				Prefixes: []string{
+					"172.24.2.0/24",
+					"172.24.3.0/24",
+				},
+			},
+		},
+	}
 
+	conf, err := GenerateBirdConfig(&pandaNode, []config.Node{pandaNode}, nil)
+	if err != nil {
+		t.Fatalf("GenerateBirdConfig failed: %v", err)
+	}
 
+	if strings.Contains(conf, "protocol kernel kernel_254") {
+		t.Errorf("Should not declare duplicate protocol kernel kernel_254 for main table:\n%s", conf)
+	}
+
+	kv4Block := extractBlock(conf, "protocol kernel kernel_v4 {", "kernel table TABLE;")
+	if kv4Block == "" {
+		t.Fatalf("Could not find protocol kernel kernel_v4 block in:\n%s", conf)
+	}
+	if !strings.Contains(kv4Block, "learn;") {
+		t.Errorf("Expected learn; in kernel_v4 when main table routes are defined, got:\n%s", kv4Block)
+	}
+	if !strings.Contains(kv4Block, "if net ~ 172.24.2.0/24 then accept;") {
+		t.Errorf("Expected prefix 172.24.2.0/24 in kernel_v4 import filter, got:\n%s", kv4Block)
+	}
+	if !strings.Contains(kv4Block, "if net ~ 172.24.3.0/24 then accept;") {
+		t.Errorf("Expected prefix 172.24.3.0/24 in kernel_v4 import filter, got:\n%s", kv4Block)
+	}
+
+	validateBirdSyntax(t, conf)
+
+	// 2. Test node with routes in another table (e.g. Table 105)
+	nodeOtherTable := config.Node{
+		Name:      "router105",
+		Host:      "10.0.0.1",
+		IP:        "192.168.1.1",
+		Interface: "eth0",
+		ASN:       4224420001,
+		Table:     254,
+		Routes: []config.KernelRouteRule{
+			{
+				Table: 105,
+				Prefixes: []string{
+					"10.5.0.0/16",
+				},
+			},
+		},
+	}
+
+	confOther, err := GenerateBirdConfig(&nodeOtherTable, []config.Node{nodeOtherTable}, nil)
+	if err != nil {
+		t.Fatalf("GenerateBirdConfig failed for nodeOtherTable: %v", err)
+	}
+
+	if !strings.Contains(confOther, "ipv4 table ktable_105;") {
+		t.Errorf("Expected ipv4 table ktable_105; in:\n%s", confOther)
+	}
+	if !strings.Contains(confOther, "protocol kernel kernel_105 {") {
+		t.Errorf("Expected protocol kernel kernel_105 in:\n%s", confOther)
+	}
+	if !strings.Contains(confOther, "protocol pipe pipe_k_105 {") {
+		t.Errorf("Expected protocol pipe pipe_k_105 in:\n%s", confOther)
+	}
+
+	validateBirdSyntax(t, confOther)
+}

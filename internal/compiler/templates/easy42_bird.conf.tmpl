@@ -98,6 +98,9 @@ protocol device {
 }
 
 protocol kernel kernel_v4 {
+    {{if .has_main_kernel_routes}}
+    learn;
+    {{end}}
     ipv4 {
         export filter {
             # Force Linux to use this source IP
@@ -111,7 +114,18 @@ protocol kernel kernel_v4 {
             if source ~ [ RTS_BGP, RTS_STATIC ] then accept;
             reject;
         };
+        {{if .has_main_kernel_routes}}
+        import filter {
+            # sanity check: reject internet routes
+            if net ~ INTERNET then reject;
+            {{range .main_kernel_prefixes}}
+            if net ~ {{.}} then accept;
+            {{end}}
+            reject;
+        };
+        {{else}}
         import none;
+        {{end}}
     };
     kernel table TABLE;
 }
@@ -172,16 +186,19 @@ protocol kernel kernel_inet_v4 {
 }
 {{end}}
 
-{{range .routes}}
-protocol kernel kernel_{{ .table}} {
+{{range .other_kernel_routes}}
+{{if .has_v4}}
+ipv4 table ktable_{{.table}};
+
+protocol kernel kernel_{{.table}} {
     learn;
     kernel table {{.table}};
     ipv4 {
-        # implicitly uses table master4
+        table ktable_{{.table}};
         import filter {
             # sanity check: reject internet routes
             if net ~ INTERNET then reject;
-            {{range .prefixes}}
+            {{range .prefixes_v4}}
             if net ~ {{.}} then accept;
             {{end}}
             reject;
@@ -189,10 +206,48 @@ protocol kernel kernel_{{ .table}} {
         export none;
     };
 }
+
+protocol pipe pipe_k_{{.table}} {
+    table master4;
+    peer table ktable_{{.table}};
+    import all;
+    export none;
+}
+{{end}}
+{{if .has_v6}}
+ipv6 table ktable6_{{.table}};
+
+protocol kernel kernel6_{{.table}} {
+    learn;
+    kernel table {{.table}};
+    ipv6 {
+        table ktable6_{{.table}};
+        import filter {
+            # sanity check: reject internet routes
+            if net ~ INTERNET6 then reject;
+            {{range .prefixes_v6}}
+            if net ~ {{.}} then accept;
+            {{end}}
+            reject;
+        };
+        export none;
+    };
+}
+
+protocol pipe pipe_k6_{{.table}} {
+    table master6;
+    peer table ktable6_{{.table}};
+    import all;
+    export none;
+}
+{{end}}
 {{end}}
 
 # easy42 network use ipv4 only but DN42 or other networks may export ipv6
 protocol kernel kernel_v6 {
+    {{if .has_main_kernel_routes_v6}}
+    learn;
+    {{end}}
     ipv6 {
         export filter {
             {{if .ip6}}
@@ -205,7 +260,18 @@ protocol kernel kernel_v6 {
             if source ~ [ RTS_BGP, RTS_STATIC ] then accept;
             reject;
         };
+        {{if .has_main_kernel_routes_v6}}
+        import filter {
+            # sanity check: reject internet routes
+            if net ~ INTERNET6 then reject;
+            {{range .main_kernel_prefixes_v6}}
+            if net ~ {{.}} then accept;
+            {{end}}
+            reject;
+        };
+        {{else}}
         import none;
+        {{end}}
     };
     kernel table TABLE;
 }
