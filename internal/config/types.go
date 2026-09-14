@@ -190,6 +190,8 @@ type LinkEnd struct {
 	ResolvedEndpoint    string `json:"resolved_endpoint,omitempty"` // Automatically resolved / actually used endpoint
 	Policy              string `json:"policy,omitempty"`            // Network policy ID (e.g. default, dn42, none, or custom)
 	Cost                int    `json:"cost,omitempty"`              // Link cost override (if non-zero, overrides policy cost)
+	Fwmark              string `json:"fwmark,omitempty"`            // Local WireGuard [Interface] FwMark (overrides policy fwmark)
+	Preference          *int   `json:"preference,omitempty"`        // BIRD peer BGP protocol preference (overrides policy preference)
 }
 
 // UseIP returns whether UseIp is enabled on the LinkEnd

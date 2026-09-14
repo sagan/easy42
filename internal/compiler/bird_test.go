@@ -1681,4 +1681,115 @@ func TestDisallowedExportPrefixesBird(t *testing.T) {
 	validateBirdSyntax(t, conf)
 }
 
+func TestBirdPeerPreference(t *testing.T) {
+	node := config.Node{
+		Name: "node1",
+		IP:   "192.168.1.1",
+		ASN:  4224420001,
+	}
+	allNodes := []config.Node{
+		node,
+		{Name: "peer-none", IP: "192.168.1.2", ASN: 4224420002},
+		{Name: "peer-pol", IP: "192.168.1.3", ASN: 4224420003},
+		{Name: "peer-override", IP: "192.168.1.4", ASN: 4224420004},
+		{Name: "peer-ext", IsExternal: true, ASN: 4224420005},
+	}
+
+	overridePref := 250
+	extPref := 300
+	links := []config.Link{
+		// 1. Unset preference (default policy without preference)
+		{
+			From: config.LinkEnd{Name: "node1", Interface: "wg42none", Policy: "default"},
+			To:   config.LinkEnd{Name: "peer-none", Interface: "wg42node1"},
+		},
+		// 2. Policy defined preference (pol-pref has preference 150)
+		{
+			From: config.LinkEnd{Name: "node1", Interface: "wg42pol", Policy: "pol-pref"},
+			To:   config.LinkEnd{Name: "peer-pol", Interface: "wg42node1"},
+		},
+		// 3. LinkEnd override preference (pol-pref has 150, but localEnd has 250)
+		{
+			From: config.LinkEnd{Name: "node1", Interface: "wg42ovr", Policy: "pol-pref", Preference: &overridePref},
+			To:   config.LinkEnd{Name: "peer-override", Interface: "wg42node1"},
+		},
+		// 4. External peer with LinkEnd override preference
+		{
+			From: config.LinkEnd{Name: "node1", Interface: "wg42ext", Policy: config.PolicyDN42, Preference: &extPref},
+			To:   config.LinkEnd{Name: "peer-ext", Interface: "wg42node1", Address: "fe80::5/64"},
+		},
+	}
+
+	polPrefVal := 150
+	customPolicies := []config.NetworkPolicy{
+		{
+			ID:         "pol-pref",
+			Name:       "Policy with Preference",
+			Preference: &polPrefVal,
+		},
+	}
+
+	conf, err := GenerateBirdConfig(&node, allNodes, links, nil, customPolicies)
+	if err != nil {
+		t.Fatalf("GenerateBirdConfig failed: %v", err)
+	}
+
+	// 1. peer-none should NOT have preference line
+	peerNoneBlock := extractBirdProtocolBlock(conf, "easy42_peer_peer-none")
+	if strings.Contains(peerNoneBlock, "preference") {
+		t.Errorf("Did not expect preference in peer-none protocol block:\n%s", peerNoneBlock)
+	}
+
+	// 2. peer-pol should have preference 150 from policy
+	peerPolBlock := extractBirdProtocolBlock(conf, "peer_peer-pol")
+	if !strings.Contains(peerPolBlock, "ipv4 { preference 150; };") || !strings.Contains(peerPolBlock, "ipv6 { preference 150; };") {
+		t.Errorf("Expected 'ipv4 { preference 150; };' and 'ipv6 { preference 150; };' in peer-pol protocol block:\n%s", peerPolBlock)
+	}
+
+	// 3. peer-override should have preference 250 from LinkEnd
+	peerOvrBlock := extractBirdProtocolBlock(conf, "peer_peer-override")
+	if !strings.Contains(peerOvrBlock, "ipv4 { preference 250; };") || !strings.Contains(peerOvrBlock, "ipv6 { preference 250; };") {
+		t.Errorf("Expected 'ipv4 { preference 250; };' and 'ipv6 { preference 250; };' in peer-override protocol block:\n%s", peerOvrBlock)
+	}
+	if strings.Contains(peerOvrBlock, "preference 150;") {
+		t.Errorf("Did not expect policy preference 150 in overridden peer-override block:\n%s", peerOvrBlock)
+	}
+
+	// 4. peer-ext should have preference 300 from LinkEnd
+	peerExtBlock := extractBirdProtocolBlock(conf, "ext_peer_peer-ext")
+	if !strings.Contains(peerExtBlock, "ipv4 { preference 300; };") || !strings.Contains(peerExtBlock, "ipv6 { preference 300; };") {
+		t.Errorf("Expected 'ipv4 { preference 300; };' and 'ipv6 { preference 300; };' in ext_peer_peer-ext protocol block:\n%s", peerExtBlock)
+	}
+
+	validateBirdSyntax(t, conf)
+}
+
+func extractBirdProtocolBlock(conf, protoName string) string {
+	target := "protocol bgp '" + protoName + "'"
+	idx := strings.Index(conf, target)
+	if idx == -1 {
+		return ""
+	}
+	sub := conf[idx:]
+	braceCount := 0
+	foundOpen := false
+	endIdx := -1
+	for i := 0; i < len(sub); i++ {
+		if sub[i] == '{' {
+			braceCount++
+			foundOpen = true
+		} else if sub[i] == '}' {
+			braceCount--
+			if foundOpen && braceCount == 0 {
+				endIdx = i
+				break
+			}
+		}
+	}
+	if endIdx == -1 {
+		return sub
+	}
+	return sub[:endIdx+1]
+}
+
 

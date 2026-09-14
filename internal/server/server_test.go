@@ -181,8 +181,12 @@ func TestUpdateLinkAPI(t *testing.T) {
 		"to_port":   50002,
 		"from_mtu":  1400,
 		"to_mtu":    1400,
-		"from_cost": 35,
-		"to_cost":   45,
+		"from_cost":       35,
+		"to_cost":         45,
+		"from_fwmark":     "51820",
+		"to_fwmark":       "0xca64",
+		"from_preference": 120,
+		"to_preference":   180,
 	}
 	bodyLink, _ := json.Marshal(linkReq)
 	reqLink := httptest.NewRequest("POST", "/api/links", bytes.NewReader(bodyLink))
@@ -200,6 +204,12 @@ func TestUpdateLinkAPI(t *testing.T) {
 	if added.From.Cost != 35 || added.To.Cost != 45 {
 		t.Errorf("Unexpected added link costs: from=%d, to=%d", added.From.Cost, added.To.Cost)
 	}
+	if added.From.Fwmark != "51820" || added.To.Fwmark != "0xca64" {
+		t.Errorf("Unexpected added link fwmark: from=%q, to=%q", added.From.Fwmark, added.To.Fwmark)
+	}
+	if added.From.Preference == nil || *added.From.Preference != 120 || added.To.Preference == nil || *added.To.Preference != 180 {
+		t.Errorf("Unexpected added link preference: from=%v, to=%v", added.From.Preference, added.To.Preference)
+	}
 
 	// Update link
 	updateReq := map[string]any{
@@ -209,7 +219,9 @@ func TestUpdateLinkAPI(t *testing.T) {
 		"to_port":   52000,
 		"from_mtu":  1360,
 		"to_mtu":    1360,
-		"from_cost": 80,
+		"from_cost":       80,
+		"from_fwmark":     "0x1234",
+		"from_preference": 220,
 	}
 	bodyUpdate, _ := json.Marshal(updateReq)
 	reqUpdate := httptest.NewRequest("PUT", "/api/links", bytes.NewReader(bodyUpdate))
@@ -234,6 +246,12 @@ func TestUpdateLinkAPI(t *testing.T) {
 	}
 	if updated.From.Cost != 80 {
 		t.Errorf("Unexpected updated From.Cost: %d (expected 80)", updated.From.Cost)
+	}
+	if updated.From.Fwmark != "0x1234" {
+		t.Errorf("Unexpected updated From.Fwmark: %q (expected 0x1234)", updated.From.Fwmark)
+	}
+	if updated.From.Preference == nil || *updated.From.Preference != 220 {
+		t.Errorf("Unexpected updated From.Preference: %v (expected 220)", updated.From.Preference)
 	}
 }
 
@@ -873,12 +891,15 @@ func TestNetworkPoliciesAPI(t *testing.T) {
 	}
 
 	// 3. POST /api/network-policies with custom policy -> 201
+	custPref := 140
 	customPol := config.NetworkPolicy{
 		ID:              "guest-net",
 		Name:            "Guest Network",
 		Description:     "Guest DMZ",
 		AllowedDstCIDRs: []string{"172.20.10.0/24"},
 		FilterForward:   true,
+		Fwmark:          "51820",
+		Preference:      &custPref,
 	}
 	customBody, _ := json.Marshal(customPol)
 	reqCustom := httptest.NewRequest("POST", "/api/network-policies", bytes.NewReader(customBody))
@@ -897,11 +918,19 @@ func TestNetworkPoliciesAPI(t *testing.T) {
 	if wGetSingle.Code != http.StatusOK {
 		t.Fatalf("Get policy failed: %d %s", wGetSingle.Code, wGetSingle.Body.String())
 	}
+	var fetchedPol config.NetworkPolicy
+	_ = json.Unmarshal(wGetSingle.Body.Bytes(), &fetchedPol)
+	if fetchedPol.Fwmark != "51820" || fetchedPol.Preference == nil || *fetchedPol.Preference != 140 {
+		t.Errorf("Unexpected fetched policy: fwmark=%q, preference=%v", fetchedPol.Fwmark, fetchedPol.Preference)
+	}
 
 	// 5. PUT /api/network-policies/guest-net -> 200
+	updPref := 160
 	updatePol := config.NetworkPolicy{
 		Name:            "Updated Guest Network",
 		AllowedDstCIDRs: []string{"172.20.15.0/24"},
+		Fwmark:          "0xca64",
+		Preference:      &updPref,
 	}
 	updateBody, _ := json.Marshal(updatePol)
 	reqUpdate := httptest.NewRequest("PUT", "/api/network-policies/guest-net", bytes.NewReader(updateBody))

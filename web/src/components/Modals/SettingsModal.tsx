@@ -148,6 +148,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
   const [policyRoaStrict, setPolicyRoaStrict] = useState(false);
   const [policyDscpIngress, setPolicyDscpIngress] = useState<number | string>("");
   const [policyDscpEgress, setPolicyDscpEgress] = useState<number | string>("");
+  const [policyFwmark, setPolicyFwmark] = useState("");
+  const [policyPreference, setPolicyPreference] = useState<number | string>("");
 
   // Logout all state
   const [logoutAllConfirming, setLogoutAllConfirming] = useState(false);
@@ -253,6 +255,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
     setPolicyRoaStrict(false);
     setPolicyDscpIngress("");
     setPolicyDscpEgress("");
+    setPolicyFwmark("");
+    setPolicyPreference("");
     setPolicyDialogError(null);
     setPolicyDialogOpen(true);
   };
@@ -284,6 +288,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
     setPolicyRoaStrict(Boolean(p.roa_strict));
     setPolicyDscpIngress(p.dscp_ingress ?? "");
     setPolicyDscpEgress(p.dscp_egress ?? "");
+    setPolicyFwmark(p.fwmark || "");
+    setPolicyPreference(p.preference !== undefined ? p.preference : "");
     setPolicyDialogError(null);
     setPolicyDialogOpen(true);
   };
@@ -315,6 +321,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
     setPolicyRoaStrict(Boolean(p.roa_strict));
     setPolicyDscpIngress(p.dscp_ingress ?? "");
     setPolicyDscpEgress(p.dscp_egress ?? "");
+    setPolicyFwmark(p.fwmark || "");
+    setPolicyPreference(p.preference !== undefined ? p.preference : "");
     setPolicyDialogError(null);
     setPolicyDialogOpen(true);
   };
@@ -391,6 +399,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
         roa_strict: policyRoaStrict,
         dscp_ingress: policyDscpIngress !== "" ? Number(policyDscpIngress) : undefined,
         dscp_egress: policyDscpEgress !== "" ? Number(policyDscpEgress) : undefined,
+        fwmark: policyFwmark.trim() || undefined,
+        preference: policyPreference !== "" ? Number(policyPreference) : undefined,
       };
 
       if (policyDialogMode === "create") {
@@ -455,6 +465,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
     setPolicyRoaStrict(Boolean(p.roa_strict));
     setPolicyDscpIngress(p.dscp_ingress ?? "");
     setPolicyDscpEgress(p.dscp_egress ?? "");
+    setPolicyFwmark(p.fwmark || "");
+    setPolicyPreference(p.preference !== undefined ? p.preference : "");
     setPolicyDialogError(null);
     setPolicyDialogOpen(true);
   };
@@ -1080,6 +1092,22 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
                           variant="outlined"
                           sx={{ fontSize: "0.7rem", height: 22, borderColor: "#C7D2FE", bgcolor: "#EEF2FF", color: "#4338CA" }}
                         />
+                        {p.fwmark && (
+                          <Chip
+                            size="small"
+                            label={`FwMark: ${p.fwmark}`}
+                            variant="outlined"
+                            sx={{ fontSize: "0.7rem", height: 22, borderColor: "#DDD6FE", bgcolor: "#FAF5FF", color: "#6D28D9" }}
+                          />
+                        )}
+                        {p.preference !== undefined && (
+                          <Chip
+                            size="small"
+                            label={`Preference: ${p.preference}`}
+                            variant="outlined"
+                            sx={{ fontSize: "0.7rem", height: 22, borderColor: "#BBF7D0", bgcolor: "#F0FDF4", color: "#15803D" }}
+                          />
+                        )}
                         <Chip
                           size="small"
                           label={`Allowed Dst: ${p.allowed_dst_cidrs && p.allowed_dst_cidrs.length > 0 ? `${p.allowed_dst_cidrs.length} prefix(es)` : "All"}`}
@@ -1304,6 +1332,30 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
               disabled={policyDialogMode === "view" || policyDialogSaving}
               helperText="Cost deducted from local preference on each internal hop (default 100). Lower cost = preferred route."
             />
+
+            <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
+              <TextField
+                fullWidth
+                size="small"
+                label="WireGuard FwMark (optional)"
+                placeholder="e.g. 51820 or 0xca64"
+                value={policyFwmark}
+                onChange={(e) => setPolicyFwmark(e.target.value)}
+                disabled={policyDialogMode === "view" || policyDialogSaving}
+                helperText="FwMark set in the local WireGuard [Interface] section."
+              />
+              <TextField
+                fullWidth
+                size="small"
+                type="number"
+                label="BGP Preference (optional)"
+                placeholder="e.g. 100"
+                value={policyPreference}
+                onChange={(e) => setPolicyPreference(e.target.value)}
+                disabled={policyDialogMode === "view" || policyDialogSaving}
+                helperText="BGP protocol preference in bird.conf (higher = preferred)."
+              />
+            </Box>
 
             <TextField
               fullWidth

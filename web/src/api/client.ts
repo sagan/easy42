@@ -135,6 +135,10 @@ export const api = {
     to_policy?: string;
     from_cost?: number;
     to_cost?: number;
+    from_fwmark?: string;
+    to_fwmark?: string;
+    from_preference?: number;
+    to_preference?: number;
     mtu?: number;
     tags?: string[];
     from?: Partial<Link["from"]>;
@@ -162,6 +166,10 @@ export const api = {
     to_policy?: string;
     from_cost?: number;
     to_cost?: number;
+    from_fwmark?: string;
+    to_fwmark?: string;
+    from_preference?: number;
+    to_preference?: number;
     mtu?: number;
     tags?: string[];
     from?: Partial<Link["from"]>;

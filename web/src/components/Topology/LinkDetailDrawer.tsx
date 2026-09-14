@@ -11,7 +11,7 @@ import {
   Tooltip,
   Chip,
 } from "@mui/material";
-import { X, Trash2, Link as LinkIcon, Key, ArrowRightLeft, Edit2, Activity, Copy, Check, Shield, RefreshCw, Gauge } from "lucide-react";
+import { X, Trash2, Link as LinkIcon, Key, ArrowRightLeft, Edit2, Activity, Copy, Check, Shield, RefreshCw, Gauge, Zap } from "lucide-react";
 import { api } from "../../api/client";
 import { Link, NetworkState } from "../../types/api";
 
@@ -412,6 +412,44 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
               />
             </Box>
 
+            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <Typography variant="caption" sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}>
+                <Shield size={12} /> FwMark:
+              </Typography>
+              <Chip
+                label={link.from.fwmark ? `${link.from.fwmark} (Override)` : "Policy default"}
+                size="small"
+                sx={{
+                  height: 20,
+                  fontSize: "0.65rem",
+                  fontWeight: 700,
+                  bgcolor: link.from.fwmark ? "rgba(109, 40, 217, 0.12)" : "rgba(148, 163, 184, 0.15)",
+                  color: link.from.fwmark ? "#6D28D9" : "#64748B",
+                  border: "1px solid",
+                  borderColor: link.from.fwmark ? "rgba(109, 40, 217, 0.3)" : "rgba(148, 163, 184, 0.2)",
+                }}
+              />
+            </Box>
+
+            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <Typography variant="caption" sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}>
+                <Zap size={12} /> BGP Preference:
+              </Typography>
+              <Chip
+                label={link.from.preference !== undefined ? `${link.from.preference} (Override)` : "Policy default"}
+                size="small"
+                sx={{
+                  height: 20,
+                  fontSize: "0.65rem",
+                  fontWeight: 700,
+                  bgcolor: link.from.preference !== undefined ? "rgba(16, 185, 129, 0.12)" : "rgba(148, 163, 184, 0.15)",
+                  color: link.from.preference !== undefined ? "#059669" : "#64748B",
+                  border: "1px solid",
+                  borderColor: link.from.preference !== undefined ? "rgba(16, 185, 129, 0.3)" : "rgba(148, 163, 184, 0.2)",
+                }}
+              />
+            </Box>
+
             <Box sx={{ mt: 0.5 }}>
               <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <Typography
@@ -613,6 +651,44 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
                   color: link.to.cost && link.to.cost !== 0 ? "#D97706" : "#64748B",
                   border: "1px solid",
                   borderColor: link.to.cost && link.to.cost !== 0 ? "rgba(245, 158, 11, 0.3)" : "rgba(148, 163, 184, 0.2)",
+                }}
+              />
+            </Box>
+
+            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <Typography variant="caption" sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}>
+                <Shield size={12} /> FwMark:
+              </Typography>
+              <Chip
+                label={link.to.fwmark ? `${link.to.fwmark} (Override)` : "Policy default"}
+                size="small"
+                sx={{
+                  height: 20,
+                  fontSize: "0.65rem",
+                  fontWeight: 700,
+                  bgcolor: link.to.fwmark ? "rgba(109, 40, 217, 0.12)" : "rgba(148, 163, 184, 0.15)",
+                  color: link.to.fwmark ? "#6D28D9" : "#64748B",
+                  border: "1px solid",
+                  borderColor: link.to.fwmark ? "rgba(109, 40, 217, 0.3)" : "rgba(148, 163, 184, 0.2)",
+                }}
+              />
+            </Box>
+
+            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <Typography variant="caption" sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}>
+                <Zap size={12} /> BGP Preference:
+              </Typography>
+              <Chip
+                label={link.to.preference !== undefined ? `${link.to.preference} (Override)` : "Policy default"}
+                size="small"
+                sx={{
+                  height: 20,
+                  fontSize: "0.65rem",
+                  fontWeight: 700,
+                  bgcolor: link.to.preference !== undefined ? "rgba(16, 185, 129, 0.12)" : "rgba(148, 163, 184, 0.15)",
+                  color: link.to.preference !== undefined ? "#059669" : "#64748B",
+                  border: "1px solid",
+                  borderColor: link.to.preference !== undefined ? "rgba(16, 185, 129, 0.3)" : "rgba(148, 163, 184, 0.2)",
                 }}
               />
             </Box>

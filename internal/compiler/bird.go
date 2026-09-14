@@ -480,18 +480,26 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 			tags = []string{}
 		}
 
-		nodeLinks = append(nodeLinks, map[string]any{
-			"tags":         tags,
-			"local":        localMap,
-			"remote":       remoteMap,
-			"remote_node":  remoteNodeMap,
-			"is_external":  rl.isExternal,
-			"is_dn42":      rl.isDN42,
-			"policy_id":    rl.policyID,
-			"bgp_template": bgpTemplate,
-			"local_as":     localAS,
-			"cost":         rl.linkCost,
-		})
+		pref := rl.localEnd.EffectivePreference(&rl.pol)
+		nodeLink := map[string]any{
+			"tags":           tags,
+			"local":          localMap,
+			"remote":         remoteMap,
+			"remote_node":    remoteNodeMap,
+			"is_external":    rl.isExternal,
+			"is_dn42":        rl.isDN42,
+			"policy_id":      rl.policyID,
+			"bgp_template":   bgpTemplate,
+			"local_as":       localAS,
+			"cost":           rl.linkCost,
+			"has_preference": pref != nil,
+		}
+		if pref != nil {
+			nodeLink["preference"] = *pref
+			localMap["preference"] = *pref
+			localMap["has_preference"] = true
+		}
+		nodeLinks = append(nodeLinks, nodeLink)
 	}
 
 	var customDefaultTemplates []map[string]any
@@ -791,6 +799,8 @@ func linkEndToContextMap(end *config.LinkEnd, node *config.Node, peerName string
 	keepalive := 0
 	mtu := 0
 	cost := 0
+	fwmark := ""
+	var preference *int
 
 	if end != nil {
 		name = end.Name
@@ -800,11 +810,13 @@ func linkEndToContextMap(end *config.LinkEnd, node *config.Node, peerName string
 		keepalive = end.PersistentKeepalive
 		mtu = end.MTU
 		cost = end.Cost
+		fwmark = end.Fwmark
+		preference = end.Preference
 	}
 
 	isLinkLocal := strings.HasPrefix(strings.ToLower(addr), "fe80:")
 
-	return map[string]any{
+	res := map[string]any{
 		"name":                 name,
 		"interface":            iface,
 		"address":              addr,
@@ -815,7 +827,13 @@ func linkEndToContextMap(end *config.LinkEnd, node *config.Node, peerName string
 		"persistent_keepalive": keepalive,
 		"mtu":                  mtu,
 		"cost":                 cost,
+		"fwmark":               fwmark,
 	}
+	if preference != nil {
+		res["preference"] = *preference
+		res["has_preference"] = true
+	}
+	return res
 }
 
 // GenerateBirdConfigWithTemplate executes a custom template with the node context

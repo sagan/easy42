@@ -792,6 +792,10 @@ template bgp {{.template_name}} {
 {{range .links}}
 {{if .is_external}}
 protocol bgp 'ext_peer_{{.remote.name}}' from {{.bgp_template}} {
+{{if .has_preference -}}
+    ipv4 { preference {{ .preference }}; };
+    ipv6 { preference {{ .preference }}; };
+{{end -}}
     {{if .local.interface}}interface "{{ .local.interface }}";{{end}}
     local {{ .local.address }} as {{ .local_as }};
     {{if ne .bgp_template "external_peer"}}
@@ -808,12 +812,20 @@ protocol bgp 'ext_peer_{{.remote.name}}' from {{.bgp_template}} {
 }
 {{else if eq .policy_id "default"}}
 protocol bgp 'easy42_peer_{{.remote.name}}' from {{.bgp_template}} {
+{{if .has_preference -}}
+    ipv4 { preference {{ .preference }}; };
+    ipv6 { preference {{ .preference }}; };
+{{end -}}
     {{if .local.interface}}interface "{{ .local.interface }}";{{end}}
     local {{ .local.address }} as SELF_AS;
     neighbor {{ .remote.address }} % '{{ .local.interface }}' as {{ .remote_node.asn }};
 }
 {{else}}
 protocol bgp 'peer_{{.remote.name}}' from {{.bgp_template}} {
+{{if .has_preference -}}
+    ipv4 { preference {{ .preference }}; };
+    ipv6 { preference {{ .preference }}; };
+{{end -}}
     {{if .local.interface}}interface "{{ .local.interface }}";{{end}}
     local {{ .local.address }} as {{ .local_as }};
     {{if .remote.is_link_local}}

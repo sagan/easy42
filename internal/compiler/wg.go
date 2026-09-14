@@ -25,6 +25,7 @@ func BuildWgLinkContext(
 	selfEnd *config.LinkEnd,
 	peerEnd *config.LinkEnd,
 	vault *crypto.KeyVault,
+	args ...any,
 ) (map[string]any, error) {
 	var privateKey string
 	if selfEnd != nil && selfEnd.PrivateKey != "" {
@@ -104,6 +105,62 @@ func BuildWgLinkContext(
 
 	allowedIPs := fmt.Sprintf("%s/128, 0.0.0.0/0, ::/0", peerAddrOnly)
 
+	var policyMap map[string]config.NetworkPolicy
+	for _, arg := range args {
+		switch v := arg.(type) {
+		case *config.Config:
+			if v != nil {
+				allPolicies := v.GetAllPolicies()
+				policyMap = make(map[string]config.NetworkPolicy, len(allPolicies))
+				for _, p := range allPolicies {
+					policyMap[p.ID] = p
+				}
+			}
+		case config.Config:
+			allPolicies := v.GetAllPolicies()
+			policyMap = make(map[string]config.NetworkPolicy, len(allPolicies))
+			for _, p := range allPolicies {
+				policyMap[p.ID] = p
+			}
+		case []config.NetworkPolicy:
+			cfgPolicies := &config.Config{NetworkPolicies: v}
+			allPolicies := cfgPolicies.GetAllPolicies()
+			policyMap = make(map[string]config.NetworkPolicy, len(allPolicies))
+			for _, p := range allPolicies {
+				policyMap[p.ID] = p
+			}
+		case *config.NetworkPolicy:
+			if v != nil {
+				if policyMap == nil {
+					policyMap = make(map[string]config.NetworkPolicy)
+				}
+				policyMap[v.ID] = *v
+			}
+		case config.NetworkPolicy:
+			if policyMap == nil {
+				policyMap = make(map[string]config.NetworkPolicy)
+			}
+			policyMap[v.ID] = v
+		case map[string]config.NetworkPolicy:
+			policyMap = v
+		}
+	}
+	if policyMap == nil {
+		allPolicies := (&config.Config{}).GetAllPolicies()
+		policyMap = make(map[string]config.NetworkPolicy, len(allPolicies))
+		for _, p := range allPolicies {
+			policyMap[p.ID] = p
+		}
+	}
+
+	isRemoteExternal := peerNode != nil && peerNode.IsExternal
+	policyID := selfEnd.EffectivePolicy(isRemoteExternal)
+	var activePolicy *config.NetworkPolicy
+	if pol, ok := policyMap[policyID]; ok {
+		activePolicy = &pol
+	}
+	fwmark := selfEnd.EffectiveFwmark(activePolicy)
+
 	ctx := map[string]any{
 		"self_node":            selfNode,
 		"peer_node":            peerNode,
@@ -132,6 +189,11 @@ func BuildWgLinkContext(
 		"PeerAddressOnly":     peerAddrOnly,
 		"Endpoint":            endpoint,
 		"PersistentKeepalive": keepalive,
+	}
+
+	if fwmark != "" {
+		ctx["fwmark"] = fwmark
+		ctx["FwMark"] = fwmark
 	}
 
 	ifaceName := ""
@@ -206,8 +268,9 @@ func GenerateWgConfigContentWithTemplate(
 	selfEnd *config.LinkEnd,
 	peerEnd *config.LinkEnd,
 	vault *crypto.KeyVault,
+	args ...any,
 ) (string, error) {
-	ctx, err := BuildWgLinkContext(selfNode, peerNode, selfEnd, peerEnd, vault)
+	ctx, err := BuildWgLinkContext(selfNode, peerNode, selfEnd, peerEnd, vault, args...)
 	if err != nil {
 		return "", err
 	}
@@ -222,12 +285,13 @@ func GenerateWgConfigContent(
 	selfEnd *config.LinkEnd,
 	peerEnd *config.LinkEnd,
 	vault *crypto.KeyVault,
+	args ...any,
 ) (string, error) {
 	tmplContent, err := GetDefaultWgTemplate()
 	if err != nil {
 		return "", err
 	}
-	return GenerateWgConfigContentWithTemplate(tmplContent, selfNode, peerNode, selfEnd, peerEnd, vault)
+	return GenerateWgConfigContentWithTemplate(tmplContent, selfNode, peerNode, selfEnd, peerEnd, vault, args...)
 }
 
 // GetInterfaceName returns the standard wg42<peer_name> interface name for internal peers,

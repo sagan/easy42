@@ -994,6 +994,23 @@ func (m *Manager) buildLink(cfg *config.Config, n1, n2 *config.Node, listenPort1
 		toCost = customToEnd.Cost
 	}
 
+	fromFwmark := ""
+	if customFromEnd != nil && strings.TrimSpace(customFromEnd.Fwmark) != "" {
+		fromFwmark = strings.TrimSpace(customFromEnd.Fwmark)
+	}
+	toFwmark := ""
+	if customToEnd != nil && strings.TrimSpace(customToEnd.Fwmark) != "" {
+		toFwmark = strings.TrimSpace(customToEnd.Fwmark)
+	}
+
+	var fromPref, toPref *int
+	if customFromEnd != nil && customFromEnd.Preference != nil {
+		fromPref = customFromEnd.Preference
+	}
+	if customToEnd != nil && customToEnd.Preference != nil {
+		toPref = customToEnd.Preference
+	}
+
 	link := &config.Link{
 		From: config.LinkEnd{
 			Name:                fromNode.Name,
@@ -1008,6 +1025,8 @@ func (m *Manager) buildLink(cfg *config.Config, n1, n2 *config.Node, listenPort1
 			UseIp:               fromUseIP,
 			Policy:              fromPolicy,
 			Cost:                fromCost,
+			Fwmark:              fromFwmark,
+			Preference:          fromPref,
 		},
 		To: config.LinkEnd{
 			Name:                toNode.Name,
@@ -1022,6 +1041,8 @@ func (m *Manager) buildLink(cfg *config.Config, n1, n2 *config.Node, listenPort1
 			UseIp:               toUseIP,
 			Policy:              toPolicy,
 			Cost:                toCost,
+			Fwmark:              toFwmark,
+			Preference:          toPref,
 		},
 		Tags:       tags,
 		ModifiedAt: time.Now().UTC(),
@@ -1387,6 +1408,12 @@ func (m *Manager) UpdateLinkAdvanced(node1Name, node2Name string, customFrom, cu
 		if fromEnd.Cost != 0 {
 			link.From.Cost = fromEnd.Cost
 		}
+		if fromEnd.Fwmark != "" {
+			link.From.Fwmark = strings.TrimSpace(fromEnd.Fwmark)
+		}
+		if fromEnd.Preference != nil {
+			link.From.Preference = fromEnd.Preference
+		}
 	}
 
 	if toEnd != nil {
@@ -1414,6 +1441,12 @@ func (m *Manager) UpdateLinkAdvanced(node1Name, node2Name string, customFrom, cu
 		}
 		if toEnd.Cost != 0 {
 			link.To.Cost = toEnd.Cost
+		}
+		if toEnd.Fwmark != "" {
+			link.To.Fwmark = strings.TrimSpace(toEnd.Fwmark)
+		}
+		if toEnd.Preference != nil {
+			link.To.Preference = toEnd.Preference
 		}
 	}
 
@@ -1748,7 +1781,7 @@ func (m *Manager) PlanSync(nodeNames ...string) ([]config.SyncAction, error) {
 
 		// 1. From node end (only if fromNode is managed)
 		if !fromNode.IsExternal && (!isPartial || targetMap[fromNode.Name]) {
-			fromConf, err := compiler.GenerateWgConfigContent(fromNode, toNode, &link.From, &link.To, m.vault)
+			fromConf, err := compiler.GenerateWgConfigContent(fromNode, toNode, &link.From, &link.To, m.vault, cfg)
 			if err == nil {
 				targetFile := fmt.Sprintf("/etc/wireguard/%s.conf", link.From.Interface)
 				desiredHash := config.HashConfig(compiler.NormalizeConfig(fromConf))
@@ -1786,7 +1819,7 @@ func (m *Manager) PlanSync(nodeNames ...string) ([]config.SyncAction, error) {
 
 		// 2. To node end (only if toNode is managed)
 		if !toNode.IsExternal && (!isPartial || targetMap[toNode.Name]) {
-			toConf, err := compiler.GenerateWgConfigContent(toNode, fromNode, &link.To, &link.From, m.vault)
+			toConf, err := compiler.GenerateWgConfigContent(toNode, fromNode, &link.To, &link.From, m.vault, cfg)
 			if err == nil {
 				targetFile := fmt.Sprintf("/etc/wireguard/%s.conf", link.To.Interface)
 				desiredHash := config.HashConfig(compiler.NormalizeConfig(toConf))
@@ -2772,6 +2805,7 @@ func (m *Manager) CreateNetworkPolicy(p config.NetworkPolicy) (*config.NetworkPo
 	p.InputUDPPorts = config.CleanPortList(p.InputUDPPorts)
 	p.DSCPIngress = config.ValidateDSCP(p.DSCPIngress)
 	p.DSCPEgress = config.ValidateDSCP(p.DSCPEgress)
+	p.Fwmark = strings.TrimSpace(p.Fwmark)
 
 	cfg.NetworkPolicies = append(cfg.NetworkPolicies, p)
 	if err := m.store.Save(cfg); err != nil {
@@ -2836,6 +2870,8 @@ func (m *Manager) UpdateNetworkPolicy(id string, p config.NetworkPolicy) (*confi
 	cfg.NetworkPolicies[idx].ROA4 = strings.TrimSpace(p.ROA4)
 	cfg.NetworkPolicies[idx].ROA6 = strings.TrimSpace(p.ROA6)
 	cfg.NetworkPolicies[idx].ROAStrict = p.ROAStrict
+	cfg.NetworkPolicies[idx].Fwmark = strings.TrimSpace(p.Fwmark)
+	cfg.NetworkPolicies[idx].Preference = p.Preference
 
 	if err := m.store.Save(cfg); err != nil {
 		return nil, err

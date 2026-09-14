@@ -45,6 +45,24 @@ type NetworkPolicy struct {
 	ROA4               string      `json:"roa4,omitempty"`
 	ROA6               string      `json:"roa6,omitempty"`
 	ROAStrict          bool        `json:"roa_strict,omitempty"`
+	Fwmark             string      `json:"fwmark,omitempty"`     // Local WireGuard [Interface] FwMark
+	Preference         *int        `json:"preference,omitempty"` // BIRD peer BGP protocol preference
+}
+
+// EffectiveFwmark returns the configured fwmark or empty string if unset
+func (p *NetworkPolicy) EffectiveFwmark() string {
+	if p != nil {
+		return strings.TrimSpace(p.Fwmark)
+	}
+	return ""
+}
+
+// EffectivePreference returns the configured preference or nil if unset
+func (p *NetworkPolicy) EffectivePreference() *int {
+	if p != nil {
+		return p.Preference
+	}
+	return nil
 }
 
 // EffectiveCost returns the configured cost or default 100 if unset/non-positive
@@ -278,4 +296,30 @@ func (l *LinkEnd) EffectiveCostWithPolicy(p *NetworkPolicy) int {
 		return p.EffectiveCost()
 	}
 	return 100
+}
+
+// EffectiveFwmark returns the active fwmark for this LinkEnd using the provided policy.
+// If LinkEnd's Fwmark is defined, it overrides the policy's fwmark.
+// Otherwise, it falls back to the policy's fwmark.
+func (l *LinkEnd) EffectiveFwmark(p *NetworkPolicy) string {
+	if l != nil && strings.TrimSpace(l.Fwmark) != "" {
+		return strings.TrimSpace(l.Fwmark)
+	}
+	if p != nil {
+		return strings.TrimSpace(p.Fwmark)
+	}
+	return ""
+}
+
+// EffectivePreference returns the active preference for this LinkEnd using the provided policy.
+// If LinkEnd's Preference is defined, it overrides the policy's preference.
+// Otherwise, it falls back to the policy's preference.
+func (l *LinkEnd) EffectivePreference(p *NetworkPolicy) *int {
+	if l != nil && l.Preference != nil {
+		return l.Preference
+	}
+	if p != nil && p.Preference != nil {
+		return p.Preference
+	}
+	return nil
 }

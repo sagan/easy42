@@ -536,3 +536,48 @@ func TestWgConfigHooks(t *testing.T) {
 	}
 }
 
+func TestGenerateWgConfigContent_Fwmark(t *testing.T) {
+	nodeA := &config.Node{Name: "node-a", IP: "192.168.100.1"}
+	nodeB := &config.Node{Name: "node-b", IP: "192.168.100.2"}
+
+	// 1. Unset fwmark -> no FwMark in config
+	endA := &config.LinkEnd{Name: "node-a", ListenPort: 51820}
+	endB := &config.LinkEnd{Name: "node-b", PublicKey: "peer-b-pubkey"}
+	conf, err := GenerateWgConfigContent(nodeA, nodeB, endA, endB, nil)
+	if err != nil {
+		t.Fatalf("GenerateWgConfigContent failed: %v", err)
+	}
+	if strings.Contains(conf, "FwMark =") {
+		t.Errorf("Did not expect FwMark when unset, got:\n%s", conf)
+	}
+
+	// 2. Fwmark from NetworkPolicy
+	customPolicy := config.NetworkPolicy{
+		ID:     "pol-fw",
+		Name:   "Policy with FwMark",
+		Fwmark: "51820",
+	}
+	endA.Policy = "pol-fw"
+	confWithPolicy, err := GenerateWgConfigContent(nodeA, nodeB, endA, endB, nil, []config.NetworkPolicy{customPolicy})
+	if err != nil {
+		t.Fatalf("GenerateWgConfigContent with policy failed: %v", err)
+	}
+	if !strings.Contains(confWithPolicy, "FwMark = 51820") {
+		t.Errorf("Expected FwMark = 51820 from policy, got:\n%s", confWithPolicy)
+	}
+
+	// 3. LinkEnd defined Fwmark overwrites NetworkPolicy
+	endA.Fwmark = "0xca64"
+	confOverride, err := GenerateWgConfigContent(nodeA, nodeB, endA, endB, nil, []config.NetworkPolicy{customPolicy})
+	if err != nil {
+		t.Fatalf("GenerateWgConfigContent with override failed: %v", err)
+	}
+	if !strings.Contains(confOverride, "FwMark = 0xca64") {
+		t.Errorf("Expected FwMark = 0xca64 from linkEnd override, got:\n%s", confOverride)
+	}
+	if strings.Contains(confOverride, "FwMark = 51820") {
+		t.Errorf("Did not expect policy FwMark 51820 when overridden, got:\n%s", confOverride)
+	}
+}
+
+

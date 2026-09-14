@@ -432,9 +432,13 @@ type addLinkRequest struct {
 	ToUseIP    *bool           `json:"to_use_ip,omitempty"`
 	FromPolicy string          `json:"from_policy,omitempty"`
 	ToPolicy   string          `json:"to_policy,omitempty"`
-	FromCost   *int            `json:"from_cost,omitempty"`
-	ToCost     *int            `json:"to_cost,omitempty"`
-	MTU        int             `json:"mtu,omitempty"`
+	FromCost       *int            `json:"from_cost,omitempty"`
+	ToCost         *int            `json:"to_cost,omitempty"`
+	FromFwmark     *string         `json:"from_fwmark,omitempty"`
+	ToFwmark       *string         `json:"to_fwmark,omitempty"`
+	FromPreference *int            `json:"from_preference,omitempty"`
+	ToPreference   *int            `json:"to_preference,omitempty"`
+	MTU            int             `json:"mtu,omitempty"`
 	Tags       []string        `json:"tags,omitempty"`
 	From       *config.LinkEnd `json:"from,omitempty"`
 	To         *config.LinkEnd `json:"to,omitempty"`
@@ -503,6 +507,30 @@ func (s *Server) handleAddLink(w http.ResponseWriter, r *http.Request) {
 		}
 		req.To.Cost = *req.ToCost
 	}
+	if req.FromFwmark != nil {
+		if req.From == nil {
+			req.From = &config.LinkEnd{}
+		}
+		req.From.Fwmark = strings.TrimSpace(*req.FromFwmark)
+	}
+	if req.ToFwmark != nil {
+		if req.To == nil {
+			req.To = &config.LinkEnd{}
+		}
+		req.To.Fwmark = strings.TrimSpace(*req.ToFwmark)
+	}
+	if req.FromPreference != nil {
+		if req.From == nil {
+			req.From = &config.LinkEnd{}
+		}
+		req.From.Preference = req.FromPreference
+	}
+	if req.ToPreference != nil {
+		if req.To == nil {
+			req.To = &config.LinkEnd{}
+		}
+		req.To.Preference = req.ToPreference
+	}
 
 	var link *config.Link
 	var err error
@@ -563,9 +591,13 @@ type updateLinkRequest struct {
 	ToUseIP    *bool           `json:"to_use_ip,omitempty"`
 	FromPolicy string          `json:"from_policy,omitempty"`
 	ToPolicy   string          `json:"to_policy,omitempty"`
-	FromCost   *int            `json:"from_cost,omitempty"`
-	ToCost     *int            `json:"to_cost,omitempty"`
-	MTU        int             `json:"mtu,omitempty"`
+	FromCost       *int            `json:"from_cost,omitempty"`
+	ToCost         *int            `json:"to_cost,omitempty"`
+	FromFwmark     *string         `json:"from_fwmark,omitempty"`
+	ToFwmark       *string         `json:"to_fwmark,omitempty"`
+	FromPreference *int            `json:"from_preference,omitempty"`
+	ToPreference   *int            `json:"to_preference,omitempty"`
+	MTU            int             `json:"mtu,omitempty"`
 	Tags       []string        `json:"tags,omitempty"`
 	From       *config.LinkEnd `json:"from,omitempty"`
 	To         *config.LinkEnd `json:"to,omitempty"`
@@ -660,6 +692,30 @@ func (s *Server) handleUpdateLink(w http.ResponseWriter, r *http.Request) {
 		}
 		req.To.Cost = *req.ToCost
 	}
+	if req.FromFwmark != nil {
+		if req.From == nil {
+			req.From = &config.LinkEnd{}
+		}
+		req.From.Fwmark = strings.TrimSpace(*req.FromFwmark)
+	}
+	if req.ToFwmark != nil {
+		if req.To == nil {
+			req.To = &config.LinkEnd{}
+		}
+		req.To.Fwmark = strings.TrimSpace(*req.ToFwmark)
+	}
+	if req.FromPreference != nil {
+		if req.From == nil {
+			req.From = &config.LinkEnd{}
+		}
+		req.From.Preference = req.FromPreference
+	}
+	if req.ToPreference != nil {
+		if req.To == nil {
+			req.To = &config.LinkEnd{}
+		}
+		req.To.Preference = req.ToPreference
+	}
 
 	var link *config.Link
 	var err error
@@ -701,6 +757,18 @@ func (s *Server) handleUpdateLink(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.ToCost != nil && link != nil {
 		link.To.Cost = *req.ToCost
+	}
+	if req.FromFwmark != nil && link != nil {
+		link.From.Fwmark = strings.TrimSpace(*req.FromFwmark)
+	}
+	if req.ToFwmark != nil && link != nil {
+		link.To.Fwmark = strings.TrimSpace(*req.ToFwmark)
+	}
+	if req.FromPreference != nil && link != nil {
+		link.From.Preference = req.FromPreference
+	}
+	if req.ToPreference != nil && link != nil {
+		link.To.Preference = req.ToPreference
 	}
 
 	writeJSON(w, http.StatusOK, link)

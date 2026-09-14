@@ -62,6 +62,8 @@ export interface NetworkPolicy {
   roa4?: string;
   roa6?: string;
   roa_strict?: boolean;
+  fwmark?: string;
+  preference?: number;
 }
 
 export interface Node {
@@ -102,6 +104,8 @@ export interface LinkEnd {
   resolved_endpoint?: string;
   policy?: string;
   cost?: number;
+  fwmark?: string;
+  preference?: number;
 }
 
 export interface Link {

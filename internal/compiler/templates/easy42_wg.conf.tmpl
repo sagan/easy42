@@ -8,6 +8,9 @@ ListenPort = {{ .listen_port }}
 PrivateKey = {{ .private_key }}
 {{ end -}}
 MTU = {{ .mtu }}
+{{ if .fwmark -}}
+FwMark = {{ .fwmark }}
+{{ end -}}
 # Some OS (debian) wg-quick seems to force set wg rp_filter to 2 on start
 PostUp = sysctl -w net.ipv4.conf.%i.rp_filter=0
 Table = off

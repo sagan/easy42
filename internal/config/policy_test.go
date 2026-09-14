@@ -146,6 +146,61 @@ func TestEffectiveCost(t *testing.T) {
 	}
 }
 
+func TestEffectiveFwmarkAndPreference(t *testing.T) {
+	var end *LinkEnd
+	var pol *NetworkPolicy
+
+	// 1. Both nil
+	if fw := end.EffectiveFwmark(pol); fw != "" {
+		t.Errorf("expected empty fwmark for nil end and pol, got %q", fw)
+	}
+	if pref := end.EffectivePreference(pol); pref != nil {
+		t.Errorf("expected nil preference for nil end and pol, got %v", pref)
+	}
+
+	// 2. Policy defined, LinkEnd unset -> Policy value used
+	polPref := 120
+	pol = &NetworkPolicy{
+		Fwmark:     "51820",
+		Preference: &polPref,
+	}
+	end = &LinkEnd{}
+
+	if fw := end.EffectiveFwmark(pol); fw != "51820" {
+		t.Errorf("expected policy fwmark '51820', got %q", fw)
+	}
+	if pref := end.EffectivePreference(pol); pref == nil || *pref != 120 {
+		t.Errorf("expected policy preference 120, got %v", pref)
+	}
+
+	// 3. LinkEnd defined -> LinkEnd overwrites NetworkPolicy
+	endPref := 200
+	end.Fwmark = "0xca64"
+	end.Preference = &endPref
+
+	if fw := end.EffectiveFwmark(pol); fw != "0xca64" {
+		t.Errorf("expected linkEnd fwmark '0xca64' overriding policy, got %q", fw)
+	}
+	if pref := end.EffectivePreference(pol); pref == nil || *pref != 200 {
+		t.Errorf("expected linkEnd preference 200 overriding policy, got %v", pref)
+	}
+
+	// 4. LinkEnd with preference 0 overrides policy preference
+	zeroPref := 0
+	end.Preference = &zeroPref
+	if pref := end.EffectivePreference(pol); pref == nil || *pref != 0 {
+		t.Errorf("expected linkEnd preference 0 overriding policy, got %v", pref)
+	}
+
+	// 5. LinkEnd without policy
+	if fw := end.EffectiveFwmark(nil); fw != "0xca64" {
+		t.Errorf("expected linkEnd fwmark '0xca64' with nil policy, got %q", fw)
+	}
+	if pref := end.EffectivePreference(nil); pref == nil || *pref != 0 {
+		t.Errorf("expected linkEnd preference 0 with nil policy, got %v", pref)
+	}
+}
+
 func TestCleanPortList(t *testing.T) {
 	tests := []struct {
 		name     string
