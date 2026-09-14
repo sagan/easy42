@@ -143,6 +143,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
   const [policyRoa4, setPolicyRoa4] = useState("");
   const [policyRoa6, setPolicyRoa6] = useState("");
   const [policyRoaStrict, setPolicyRoaStrict] = useState(false);
+  const [policyDscpIngress, setPolicyDscpIngress] = useState<number | string>("");
+  const [policyDscpEgress, setPolicyDscpEgress] = useState<number | string>("");
 
   // Logout all state
   const [logoutAllConfirming, setLogoutAllConfirming] = useState(false);
@@ -239,6 +241,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
     setPolicyRoa4("");
     setPolicyRoa6("");
     setPolicyRoaStrict(false);
+    setPolicyDscpIngress("");
+    setPolicyDscpEgress("");
     setPolicyDialogError(null);
     setPolicyDialogOpen(true);
   };
@@ -266,6 +270,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
     setPolicyRoa4(p.roa4 || "");
     setPolicyRoa6(p.roa6 || "");
     setPolicyRoaStrict(Boolean(p.roa_strict));
+    setPolicyDscpIngress(p.dscp_ingress ?? "");
+    setPolicyDscpEgress(p.dscp_egress ?? "");
     setPolicyDialogError(null);
     setPolicyDialogOpen(true);
   };
@@ -293,6 +299,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
     setPolicyRoa4(p.roa4 || "");
     setPolicyRoa6(p.roa6 || "");
     setPolicyRoaStrict(Boolean(p.roa_strict));
+    setPolicyDscpIngress(p.dscp_ingress ?? "");
+    setPolicyDscpEgress(p.dscp_egress ?? "");
     setPolicyDialogError(null);
     setPolicyDialogOpen(true);
   };
@@ -365,6 +373,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
         roa4: policyRoa4.trim() || undefined,
         roa6: policyRoa6.trim() || undefined,
         roa_strict: policyRoaStrict,
+        dscp_ingress: policyDscpIngress !== "" ? Number(policyDscpIngress) : undefined,
+        dscp_egress: policyDscpEgress !== "" ? Number(policyDscpEgress) : undefined,
       };
 
       if (policyDialogMode === "create") {
@@ -425,6 +435,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
     setPolicyRoa4(p.roa4 || "");
     setPolicyRoa6(p.roa6 || "");
     setPolicyRoaStrict(Boolean(p.roa_strict));
+    setPolicyDscpIngress(p.dscp_ingress ?? "");
+    setPolicyDscpEgress(p.dscp_egress ?? "");
     setPolicyDialogError(null);
     setPolicyDialogOpen(true);
   };
@@ -1111,6 +1123,34 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
                             }}
                           />
                         )}
+                        {p.dscp_ingress !== undefined && p.dscp_ingress !== null && (
+                          <Chip
+                            size="small"
+                            label={`DSCP In: ${p.dscp_ingress}`}
+                            variant="outlined"
+                            sx={{
+                              fontSize: "0.7rem",
+                              height: 22,
+                              borderColor: "#DDD6FE",
+                              bgcolor: "#F5F3FF",
+                              color: "#6D28D9",
+                            }}
+                          />
+                        )}
+                        {p.dscp_egress !== undefined && p.dscp_egress !== null && (
+                          <Chip
+                            size="small"
+                            label={`DSCP Out: ${p.dscp_egress}`}
+                            variant="outlined"
+                            sx={{
+                              fontSize: "0.7rem",
+                              height: 22,
+                              borderColor: "#DDD6FE",
+                              bgcolor: "#F5F3FF",
+                              color: "#6D28D9",
+                            }}
+                          />
+                        )}
                       </Box>
                     </Box>
                   );
@@ -1501,6 +1541,42 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
                   </TextField>
                 </Box>
               )}
+            </Box>
+
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, p: 2, borderRadius: 2, bgcolor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#1E293B", display: "flex", alignItems: "center", gap: 0.8 }}>
+                <Shield size={16} /> DSCP Marking
+              </Typography>
+              <Typography variant="caption" sx={{ color: "#64748B" }}>
+                Set / rewrite the Differentiated Services Code Point (DSCP) on packets traversing this link. Valid values: 0–63. Leave empty to disable.
+              </Typography>
+
+              <Box sx={{ display: "flex", gap: 2 }}>
+                <TextField
+                  fullWidth
+                  size="small"
+                  type="number"
+                  label="Ingress DSCP"
+                  placeholder="e.g. 46 (EF)"
+                  value={policyDscpIngress}
+                  onChange={(e) => setPolicyDscpIngress(e.target.value === "" ? "" : Math.max(0, Math.min(63, Number(e.target.value))))}
+                  disabled={policyDialogMode === "view" || policyDialogSaving}
+                  helperText="Rewrite DSCP on packets received from the link peer."
+                  inputProps={{ min: 0, max: 63 }}
+                />
+                <TextField
+                  fullWidth
+                  size="small"
+                  type="number"
+                  label="Egress DSCP"
+                  placeholder="e.g. 46 (EF)"
+                  value={policyDscpEgress}
+                  onChange={(e) => setPolicyDscpEgress(e.target.value === "" ? "" : Math.max(0, Math.min(63, Number(e.target.value))))}
+                  disabled={policyDialogMode === "view" || policyDialogSaving}
+                  helperText="Rewrite DSCP on packets sent to the link peer."
+                  inputProps={{ min: 0, max: 63 }}
+                />
+              </Box>
             </Box>
           </DialogContent>
 

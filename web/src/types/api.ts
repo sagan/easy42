@@ -47,6 +47,8 @@ export interface NetworkPolicy {
   input_tcp_ports?: string[];
   input_udp_ports?: string[];
   snat?: SNATConfig;
+  dscp_ingress?: number;
+  dscp_egress?: number;
   roa4?: string;
   roa6?: string;
   roa_strict?: boolean;

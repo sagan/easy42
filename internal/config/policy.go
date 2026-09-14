@@ -38,6 +38,8 @@ type NetworkPolicy struct {
 	InputTCPPorts      []string    `json:"input_tcp_ports,omitempty"`
 	InputUDPPorts      []string    `json:"input_udp_ports,omitempty"`
 	SNAT               *SNATConfig `json:"snat,omitempty"`
+	DSCPIngress        *int        `json:"dscp_ingress,omitempty"` // Rewrite DSCP on packets received from the link peer (0-63)
+	DSCPEgress         *int        `json:"dscp_egress,omitempty"`  // Rewrite DSCP on packets sent to the link peer (0-63)
 	ROA4               string      `json:"roa4,omitempty"`
 	ROA6               string      `json:"roa6,omitempty"`
 	ROAStrict          bool        `json:"roa_strict,omitempty"`
@@ -49,6 +51,21 @@ func (p *NetworkPolicy) EffectiveCost() int {
 		return p.Cost
 	}
 	return 100
+}
+
+// ValidateDSCP returns a sanitized DSCP pointer: nil if the input is nil,
+// otherwise clamped to the valid range 0-63.
+func ValidateDSCP(v *int) *int {
+	if v == nil {
+		return nil
+	}
+	d := *v
+	if d < 0 {
+		d = 0
+	} else if d > 63 {
+		d = 63
+	}
+	return &d
 }
 
 // CleanPortList normalizes and validates a list of ports and port ranges.

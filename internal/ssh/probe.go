@@ -40,11 +40,17 @@ type ipJSONInterface struct {
 // ProbeHost connects to a remote host and discovers its network configuration
 func ProbeHost(client *ssh.Client, host string, existingNodes []config.Node) (*ProbeResult, error) {
 	// 1. Get Hostname
+	var hostname string
 	hostnameOut, err := RunCommand(client, "hostname")
 	if err != nil {
-		return nil, fmt.Errorf("failed to get hostname: %w", err)
+		if strings.Contains(err.Error(), " not found") {
+			hostname = "unknown"
+		} else {
+			return nil, fmt.Errorf("failed to get hostname: %w", err)
+		}
+	} else {
+		hostname = strings.TrimSpace(hostnameOut)
 	}
-	hostname := strings.TrimSpace(hostnameOut)
 
 	// 2. Discover Interfaces using ip -j addr or ip addr
 	var ifaces []config.InterfaceInfo

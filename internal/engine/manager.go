@@ -2768,6 +2768,8 @@ func (m *Manager) CreateNetworkPolicy(p config.NetworkPolicy) (*config.NetworkPo
 	p.AllowedImportCIDRs = config.CleanPrefixes(p.AllowedImportCIDRs)
 	p.InputTCPPorts = config.CleanPortList(p.InputTCPPorts)
 	p.InputUDPPorts = config.CleanPortList(p.InputUDPPorts)
+	p.DSCPIngress = config.ValidateDSCP(p.DSCPIngress)
+	p.DSCPEgress = config.ValidateDSCP(p.DSCPEgress)
 
 	cfg.NetworkPolicies = append(cfg.NetworkPolicies, p)
 	if err := m.store.Save(cfg); err != nil {
@@ -2825,6 +2827,8 @@ func (m *Manager) UpdateNetworkPolicy(id string, p config.NetworkPolicy) (*confi
 	cfg.NetworkPolicies[idx].InputTCPPorts = config.CleanPortList(p.InputTCPPorts)
 	cfg.NetworkPolicies[idx].InputUDPPorts = config.CleanPortList(p.InputUDPPorts)
 	cfg.NetworkPolicies[idx].SNAT = p.SNAT
+	cfg.NetworkPolicies[idx].DSCPIngress = config.ValidateDSCP(p.DSCPIngress)
+	cfg.NetworkPolicies[idx].DSCPEgress = config.ValidateDSCP(p.DSCPEgress)
 
 	if err := m.store.Save(cfg); err != nil {
 		return nil, err

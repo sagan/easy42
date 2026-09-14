@@ -35,6 +35,8 @@ func TestNetworkPolicyManagerCRUD(t *testing.T) {
 	}
 
 	// 3. Create custom policy (unset Cost should default to 100)
+	dscpIn := 46
+	dscpOut := 10
 	custom, err := mgr.CreateNetworkPolicy(config.NetworkPolicy{
 		ID:                 "pol-office",
 		Name:               "Branch Office",
@@ -45,12 +47,20 @@ func TestNetworkPolicyManagerCRUD(t *testing.T) {
 		RejectInternet:     true,
 		FilterForward:      true,
 		FilterInput:        true,
+		DSCPIngress:        &dscpIn,
+		DSCPEgress:         &dscpOut,
 	})
 	if err != nil {
 		t.Fatalf("CreateNetworkPolicy failed: %v", err)
 	}
 	if custom.ID != "pol-office" || custom.IsInternal || custom.Cost != 100 {
 		t.Errorf("unexpected custom policy: %+v", custom)
+	}
+	if custom.DSCPIngress == nil || *custom.DSCPIngress != 46 {
+		t.Errorf("expected DSCPIngress 46, got %v", custom.DSCPIngress)
+	}
+	if custom.DSCPEgress == nil || *custom.DSCPEgress != 10 {
+		t.Errorf("expected DSCPEgress 10, got %v", custom.DSCPEgress)
 	}
 
 	// 4. Reject duplicate ID
@@ -62,19 +72,27 @@ func TestNetworkPolicyManagerCRUD(t *testing.T) {
 		t.Fatalf("expected error creating duplicate policy ID")
 	}
 
-	// 5. Update custom policy with custom Cost
+	// 5. Update custom policy with custom Cost and updated DSCP
+	dscpInUpdated := 0
 	updated, err := mgr.UpdateNetworkPolicy("pol-office", config.NetworkPolicy{
 		Name:               "Branch Office Updated",
 		Cost:               250,
 		AllowedDstCIDRs:    []string{"172.20.101.0/24"},
 		AllowedSrcCIDRs:    []string{"172.20.201.0/24"},
 		AllowedImportCIDRs: []string{"172.20.201.0/24"},
+		DSCPIngress:        &dscpInUpdated,
 	})
 	if err != nil {
 		t.Fatalf("UpdateNetworkPolicy failed: %v", err)
 	}
 	if updated.Name != "Branch Office Updated" || updated.Cost != 250 {
 		t.Errorf("expected updated name and cost 250, got name=%s cost=%d", updated.Name, updated.Cost)
+	}
+	if updated.DSCPIngress == nil || *updated.DSCPIngress != 0 {
+		t.Errorf("expected updated DSCPIngress 0, got %v", updated.DSCPIngress)
+	}
+	if updated.DSCPEgress != nil {
+		t.Errorf("expected updated DSCPEgress nil, got %v", updated.DSCPEgress)
 	}
 
 	// 6. Reject updating built-in policy

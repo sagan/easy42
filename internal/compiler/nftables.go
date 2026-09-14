@@ -193,7 +193,8 @@ func BuildNftablesNodeContext(
 			continue
 		}
 		hasSNAT := pol.SNAT != nil && pol.SNAT.Enabled
-		if !pol.FilterForward && !pol.FilterInput && !hasSNAT {
+		hasDSCP := pol.DSCPIngress != nil || pol.DSCPEgress != nil
+		if !pol.FilterForward && !pol.FilterInput && !hasSNAT && !hasDSCP {
 			continue
 		}
 
@@ -284,6 +285,16 @@ func BuildNftablesNodeContext(
 			}
 		}
 
+		// DSCP values: -1 means not set
+		dscpIngress := -1
+		dscpEgress := -1
+		if pol.DSCPIngress != nil {
+			dscpIngress = *pol.DSCPIngress
+		}
+		if pol.DSCPEgress != nil {
+			dscpEgress = *pol.DSCPEgress
+		}
+
 		nftPolicies = append(nftPolicies, map[string]any{
 			"id":                cleanID,
 			"name":              pol.Name,
@@ -307,6 +318,8 @@ func BuildNftablesNodeContext(
 			"snat_condition":    snatCondition,
 			"snat_target_v4":    snatTargetV4,
 			"snat_target_v6":    snatTargetV6,
+			"dscp_ingress":      dscpIngress,
+			"dscp_egress":       dscpEgress,
 		})
 	}
 	sort.Slice(nftPolicies, func(i, j int) bool {

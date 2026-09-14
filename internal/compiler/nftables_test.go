@@ -539,3 +539,139 @@ func TestLocalNetworksForwardFilter(t *testing.T) {
 }
 
 
+func TestDSCPNftables(t *testing.T) {
+	dscpIngress := 46  // EF
+	dscpEgress := 10   // AF11
+	node := config.Node{
+		Name:        "dscp-node",
+		IP:          "192.168.100.1",
+		ExternalIP:  "172.20.229.13",
+		ExternalIP6: "fd42:a159:f9f0::d",
+		ASN:         4224420001,
+	}
+	allNodes := []config.Node{
+		node,
+		{Name: "peer-a", IP: "192.168.100.2"},
+		{Name: "peer-b", IP: "192.168.100.3"},
+	}
+	links := []config.Link{
+		{
+			From: config.LinkEnd{Name: "dscp-node", Interface: "wg42dscp", Policy: "dscp-policy"},
+			To:   config.LinkEnd{Name: "peer-a", Interface: "wg42"},
+		},
+		{
+			From: config.LinkEnd{Name: "dscp-node", Interface: "wg42nodsc", Policy: "no-dscp"},
+			To:   config.LinkEnd{Name: "peer-b", Interface: "wg42"},
+		},
+	}
+	customPolicies := []config.NetworkPolicy{
+		{
+			ID:          "dscp-policy",
+			Name:        "DSCP Both",
+			DSCPIngress: &dscpIngress,
+			DSCPEgress:  &dscpEgress,
+		},
+		{
+			ID:            "no-dscp",
+			Name:          "No DSCP",
+			FilterForward: true,
+		},
+	}
+
+	conf, err := GenerateNftablesConfig(&node, allNodes, links, nil, customPolicies)
+	if err != nil {
+		t.Fatalf("GenerateNftablesConfig failed: %v", err)
+	}
+
+	// Verify DSCP ingress rules (prerouting mangle)
+	if !strings.Contains(conf, "chain mangle_prerouting_dscp {") {
+		t.Errorf("Expected mangle_prerouting_dscp chain in conf, got:\n%s", conf)
+	}
+	if !strings.Contains(conf, "iifname @pol_dscp_policy_ifname ip dscp set 46") {
+		t.Errorf("Expected ip dscp set 46 ingress rule, got:\n%s", conf)
+	}
+	if !strings.Contains(conf, "iifname @pol_dscp_policy_ifname ip6 dscp set 46") {
+		t.Errorf("Expected ip6 dscp set 46 ingress rule, got:\n%s", conf)
+	}
+
+	// Verify DSCP egress rules (postrouting mangle)
+	if !strings.Contains(conf, "chain mangle_postrouting_dscp {") {
+		t.Errorf("Expected mangle_postrouting_dscp chain in conf, got:\n%s", conf)
+	}
+	if !strings.Contains(conf, "oifname @pol_dscp_policy_ifname ip dscp set 10") {
+		t.Errorf("Expected ip dscp set 10 egress rule, got:\n%s", conf)
+	}
+	if !strings.Contains(conf, "oifname @pol_dscp_policy_ifname ip6 dscp set 10") {
+		t.Errorf("Expected ip6 dscp set 10 egress rule, got:\n%s", conf)
+	}
+
+	// Verify no DSCP rules for the no-dscp policy
+	if strings.Contains(conf, "pol_no_dscp_ifname ip dscp set") {
+		t.Errorf("Did not expect DSCP rules for no-dscp policy, got:\n%s", conf)
+	}
+
+	// Validate syntax with nft binary if installed
+	if nftPath, err := exec.LookPath("nft"); err == nil {
+		tmpFile := filepath.Join(t.TempDir(), "easy42.nft")
+		if err := os.WriteFile(tmpFile, []byte(conf), 0644); err != nil {
+			t.Fatalf("WriteFile failed: %v", err)
+		}
+		cmd := exec.Command(nftPath, "-c", "-f", tmpFile)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("nft -c -f validation failed: %v\nOutput:\n%s\nConfig:\n%s", err, string(out), conf)
+		}
+	}
+}
+
+func TestDSCPIngressOnly(t *testing.T) {
+	dscpVal := 0  // CS0
+	node := config.Node{
+		Name: "dscp-in",
+		IP:   "192.168.100.1",
+		ASN:  4224420001,
+	}
+	allNodes := []config.Node{node, {Name: "peer", IP: "192.168.100.2"}}
+	links := []config.Link{
+		{
+			From: config.LinkEnd{Name: "dscp-in", Interface: "wg42dsci", Policy: "in-only"},
+			To:   config.LinkEnd{Name: "peer", Interface: "wg42"},
+		},
+	}
+	customPolicies := []config.NetworkPolicy{
+		{
+			ID:          "in-only",
+			Name:        "Ingress Only",
+			DSCPIngress: &dscpVal,
+		},
+	}
+
+	conf, err := GenerateNftablesConfig(&node, allNodes, links, nil, customPolicies)
+	if err != nil {
+		t.Fatalf("GenerateNftablesConfig failed: %v", err)
+	}
+
+	// Should have prerouting chain but NOT postrouting dscp chain
+	if !strings.Contains(conf, "chain mangle_prerouting_dscp {") {
+		t.Errorf("Expected mangle_prerouting_dscp chain, got:\n%s", conf)
+	}
+	if !strings.Contains(conf, "iifname @pol_in_only_ifname ip dscp set 0") {
+		t.Errorf("Expected ip dscp set 0 rule, got:\n%s", conf)
+	}
+	if strings.Contains(conf, "chain mangle_postrouting_dscp {") {
+		t.Errorf("Did not expect mangle_postrouting_dscp chain, got:\n%s", conf)
+	}
+
+	// Validate syntax with nft binary if installed
+	if nftPath, err := exec.LookPath("nft"); err == nil {
+		tmpFile := filepath.Join(t.TempDir(), "easy42.nft")
+		if err := os.WriteFile(tmpFile, []byte(conf), 0644); err != nil {
+			t.Fatalf("WriteFile failed: %v", err)
+		}
+		cmd := exec.Command(nftPath, "-c", "-f", tmpFile)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("nft -c -f validation failed: %v\nOutput:\n%s\nConfig:\n%s", err, string(out), conf)
+		}
+	}
+}

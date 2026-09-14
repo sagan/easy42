@@ -174,3 +174,24 @@ func TestCleanPortList(t *testing.T) {
 	}
 }
 
+func TestValidateDSCP(t *testing.T) {
+	if got := ValidateDSCP(nil); got != nil {
+		t.Errorf("expected nil for nil input, got %v", got)
+	}
+
+	val := -5
+	if got := ValidateDSCP(&val); got == nil || *got != 0 {
+		t.Errorf("expected 0 for negative input, got %v", got)
+	}
+
+	val = 70
+	if got := ValidateDSCP(&val); got == nil || *got != 63 {
+		t.Errorf("expected 63 for input > 63, got %v", got)
+	}
+
+	val = 46
+	if got := ValidateDSCP(&val); got == nil || *got != 46 {
+		t.Errorf("expected 46 for valid input, got %v", got)
+	}
+}
+
