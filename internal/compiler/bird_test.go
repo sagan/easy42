@@ -1792,4 +1792,76 @@ func extractBirdProtocolBlock(conf, protoName string) string {
 	return sub[:endIdx+1]
 }
 
+func TestMultipleLinksBirdBGP(t *testing.T) {
+	nodeFoo := config.Node{
+		Name:       "foo",
+		IP:         "192.168.100.1",
+		IP6:        "fd42:a159:f9f0::1",
+		ASN:        4224420001,
+		IsExternal: false,
+	}
+	nodeBar := config.Node{
+		Name:       "bar",
+		IP:         "192.168.100.2",
+		IP6:        "fd42:a159:f9f0::2",
+		ASN:        4224420002,
+		IsExternal: false,
+	}
+
+	links := []config.Link{
+		{
+			From: config.LinkEnd{Name: "bar", Interface: "wg42foo", Address: "fe80::2/64"},
+			To:   config.LinkEnd{Name: "foo", Interface: "wg42bar", Address: "fe80::1/64"},
+		},
+		{
+			From: config.LinkEnd{Name: "bar", Interface: "wg42foo1", Address: "fe80::2/64"},
+			To:   config.LinkEnd{Name: "foo", Interface: "wg42bar1", Address: "fe80::1/64"},
+		},
+		{
+			From: config.LinkEnd{Name: "bar", Interface: "wg42foo2", Address: "fe80::2/64"},
+			To:   config.LinkEnd{Name: "foo", Interface: "wg42bar2", Address: "fe80::1/64"},
+		},
+	}
+
+	conf, err := GenerateBirdConfig(&nodeFoo, []config.Node{nodeFoo, nodeBar}, links, nil, nil)
+	if err != nil {
+		t.Fatalf("GenerateBirdConfig failed: %v", err)
+	}
+
+	block1 := extractBirdProtocolBlock(conf, "easy42_peer_bar")
+	if block1 == "" {
+		t.Fatalf("Expected protocol 'easy42_peer_bar' in config:\n%s", conf)
+	}
+	if !strings.Contains(block1, `interface "wg42bar";`) {
+		t.Errorf("Expected interface wg42bar in block1:\n%s", block1)
+	}
+	if !strings.Contains(block1, `neighbor fe80::2 % 'wg42bar' as 4224420002;`) {
+		t.Errorf("Expected neighbor on wg42bar in block1:\n%s", block1)
+	}
+
+	block2 := extractBirdProtocolBlock(conf, "easy42_peer_bar1")
+	if block2 == "" {
+		t.Fatalf("Expected protocol 'easy42_peer_bar1' in config:\n%s", conf)
+	}
+	if !strings.Contains(block2, `interface "wg42bar1";`) {
+		t.Errorf("Expected interface wg42bar1 in block2:\n%s", block2)
+	}
+	if !strings.Contains(block2, `neighbor fe80::2 % 'wg42bar1' as 4224420002;`) {
+		t.Errorf("Expected neighbor on wg42bar1 in block2:\n%s", block2)
+	}
+
+	block3 := extractBirdProtocolBlock(conf, "easy42_peer_bar2")
+	if block3 == "" {
+		t.Fatalf("Expected protocol 'easy42_peer_bar2' in config:\n%s", conf)
+	}
+	if !strings.Contains(block3, `interface "wg42bar2";`) {
+		t.Errorf("Expected interface wg42bar2 in block3:\n%s", block3)
+	}
+	if !strings.Contains(block3, `neighbor fe80::2 % 'wg42bar2' as 4224420002;`) {
+		t.Errorf("Expected neighbor on wg42bar2 in block3:\n%s", block3)
+	}
+
+	validateBirdSyntax(t, conf)
+}
+
 

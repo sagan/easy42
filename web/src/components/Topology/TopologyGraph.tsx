@@ -125,8 +125,20 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
 
   // Convert easy42 links to React Flow edges with derived working state
   const initialEdges: Edge[] = useMemo(() => {
+    const pairGroups: Record<string, Link[]> = {};
+    links.forEach((l) => {
+      const key = [l.from.name, l.to.name].sort().join("---");
+      if (!pairGroups[key]) pairGroups[key] = [];
+      pairGroups[key].push(l);
+    });
+
     return links.map((link) => {
-      const edgeId = `link-${link.from.name}-${link.to.name}`;
+      const pairKey = [link.from.name, link.to.name].sort().join("---");
+      const group = pairGroups[pairKey] || [link];
+      const linkIndexInPair = group.indexOf(link);
+      const totalLinksInPair = group.length;
+
+      const edgeId = `link-${link.from.name}-${link.from.interface}-${link.to.name}-${link.to.interface}`;
 
       const fromIface = networkState?.nodes?.[link.from.name]?.interfaces?.[link.from.interface];
       const toIface = networkState?.nodes?.[link.to.name]?.interfaces?.[link.to.interface];
@@ -169,6 +181,8 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
           transferRxBytes: rxBytes,
           transferTxBytes: txBytes,
           isExternal,
+          linkIndexInPair,
+          totalLinksInPair,
           onSelect: onSelectLink,
         } as unknown as Record<string, unknown>,
       };

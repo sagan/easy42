@@ -294,23 +294,53 @@ func GenerateWgConfigContent(
 	return GenerateWgConfigContentWithTemplate(tmplContent, selfNode, peerNode, selfEnd, peerEnd, vault, args...)
 }
 
+// GetInterfaceNameWithSuffix returns the standard wg42<peer_name><suffix> interface name for internal peers,
+// or wg42-<peer_name><suffix> for external peers, truncating peerName if necessary to adhere to Linux's 15-char limit.
+func GetInterfaceNameWithSuffix(peerName string, suffix string, isExternal ...bool) string {
+	cleanName := strings.TrimSpace(peerName)
+	ext := len(isExternal) > 0 && isExternal[0]
+	prefix := "wg42"
+	maxPeerLen := 11
+	if ext {
+		prefix = "wg42-"
+		maxPeerLen = 10
+	}
+	if suffix != "" {
+		maxPeerLen -= len(suffix)
+		if maxPeerLen < 0 {
+			maxPeerLen = 0
+		}
+	}
+	if len(cleanName) > maxPeerLen {
+		cleanName = cleanName[:maxPeerLen]
+	}
+	return fmt.Sprintf("%s%s%s", prefix, cleanName, suffix)
+}
+
 // GetInterfaceName returns the standard wg42<peer_name> interface name for internal peers,
 // or wg42-<peer_name> for external peers.
 func GetInterfaceName(peerName string, isExternal ...bool) string {
-	cleanName := strings.TrimSpace(peerName)
-	if len(isExternal) > 0 && isExternal[0] {
-		if len(cleanName) > 10 {
-			cleanName = cleanName[:10]
-		}
-		return fmt.Sprintf("wg42-%s", cleanName)
-	}
-	if len(cleanName) > 11 {
-		cleanName = cleanName[:11]
-	}
-	return fmt.Sprintf("wg42%s", cleanName)
+	return GetInterfaceNameWithSuffix(peerName, "", isExternal...)
 }
 
 // GetExternalInterfaceName returns the external wg42-<peer_name> interface name (max 10 chars peer name)
 func GetExternalInterfaceName(peerName string) string {
 	return GetInterfaceName(peerName, true)
 }
+
+// ExtractInterfaceSuffix extracts the deterministic suffix (e.g. "1", "2") from an interface name given a peer name.
+// Returns "" if it is the primary interface without suffix or does not follow the deterministic naming scheme.
+func ExtractInterfaceSuffix(iface, peerName string, isExternal ...bool) string {
+	ext := len(isExternal) > 0 && isExternal[0]
+	if iface == GetInterfaceName(peerName, ext) {
+		return ""
+	}
+	for i := 1; i <= 99; i++ {
+		s := fmt.Sprintf("%d", i)
+		if iface == GetInterfaceNameWithSuffix(peerName, s, ext) {
+			return s
+		}
+	}
+	return ""
+}
+

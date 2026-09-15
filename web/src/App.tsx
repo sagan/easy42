@@ -312,23 +312,43 @@ export const App: React.FC = () => {
     setLinks((prev) =>
       prev.map((l) => {
         const matches =
-          (l.from.name === updatedLink.from.name && l.to.name === updatedLink.to.name) ||
-          (l.from.name === updatedLink.to.name && l.to.name === updatedLink.from.name);
+          (l.from.name === updatedLink.from.name &&
+            l.to.name === updatedLink.to.name &&
+            l.from.interface === updatedLink.from.interface &&
+            l.to.interface === updatedLink.to.interface) ||
+          (l.from.name === updatedLink.to.name &&
+            l.to.name === updatedLink.from.name &&
+            l.from.interface === updatedLink.to.interface &&
+            l.to.interface === updatedLink.from.interface);
         return matches ? updatedLink : l;
       }),
     );
     if (
       selectedLink &&
-      ((selectedLink.from.name === updatedLink.from.name && selectedLink.to.name === updatedLink.to.name) ||
-        (selectedLink.from.name === updatedLink.to.name && selectedLink.to.name === updatedLink.from.name))
+      ((selectedLink.from.name === updatedLink.from.name &&
+        selectedLink.to.name === updatedLink.to.name &&
+        selectedLink.from.interface === updatedLink.from.interface &&
+        selectedLink.to.interface === updatedLink.to.interface) ||
+        (selectedLink.from.name === updatedLink.to.name &&
+          selectedLink.to.name === updatedLink.from.name &&
+          selectedLink.from.interface === updatedLink.to.interface &&
+          selectedLink.to.interface === updatedLink.from.interface))
     ) {
       setSelectedLink(updatedLink);
     }
   };
 
-  const handleLinkDeleted = (from: string, to: string) => {
+  const handleLinkDeleted = (from: string, to: string, iface?: string) => {
     setLinks((prev) =>
-      prev.filter((l) => !((l.from.name === from && l.to.name === to) || (l.from.name === to && l.to.name === from))),
+      prev.filter((l) => {
+        const matchesNodes =
+          (l.from.name === from && l.to.name === to) || (l.from.name === to && l.to.name === from);
+        if (!matchesNodes) return true;
+        if (iface) {
+          return l.from.interface !== iface && l.to.interface !== iface;
+        }
+        return false;
+      }),
     );
     setSelectedLink(null);
   };
@@ -554,6 +574,7 @@ export const App: React.FC = () => {
         <AddLinkModal
           open={addLinkOpen}
           nodes={nodes}
+          links={links}
           initialFrom={connectFrom}
           initialTo={connectTo}
           linkToEdit={linkToEdit}

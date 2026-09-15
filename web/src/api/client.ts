@@ -179,10 +179,13 @@ export const api = {
       method: "PUT",
       body: JSON.stringify(data),
     }),
-  deleteLink: (fromNode: string, toNode: string) =>
-    request<{ deleted: boolean }>(`/links?from=${encodeURIComponent(fromNode)}&to=${encodeURIComponent(toNode)}`, {
-      method: "DELETE",
-    }),
+  deleteLink: (fromNode: string, toNode: string, iface?: string) =>
+    request<{ deleted: boolean }>(
+      `/links?from=${encodeURIComponent(fromNode)}&to=${encodeURIComponent(toNode)}${iface ? `&interface=${encodeURIComponent(iface)}` : ""}`,
+      {
+        method: "DELETE",
+      },
+    ),
 
   // Network Settings
   getNetworkSettings: () => request<import("../types/api").NetworkSettings>("/settings/network"),

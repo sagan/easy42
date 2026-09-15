@@ -18,6 +18,7 @@ var (
 	linkPassword string
 	fromPort     int
 	toPort       int
+	linkIface    string
 )
 
 var linkCmd = &cobra.Command{
@@ -106,11 +107,15 @@ var linkRemoveCmd = &cobra.Command{
 		}
 		mgr := engine.NewManager(store)
 
-		if err := mgr.DeleteLink(node1, node2); err != nil {
+		if err := mgr.DeleteLink(node1, node2, linkIface); err != nil {
 			return err
 		}
 
-		fmt.Printf("Link between %s and %s removed successfully\n", node1, node2)
+		if linkIface != "" {
+			fmt.Printf("Link (%s) between %s and %s removed successfully\n", linkIface, node1, node2)
+		} else {
+			fmt.Printf("Link between %s and %s removed successfully\n", node1, node2)
+		}
 		return nil
 	},
 }
@@ -119,6 +124,7 @@ func init() {
 	linkAddCmd.Flags().StringVarP(&linkPassword, "password", "p", "", "easy42 password")
 	linkAddCmd.Flags().IntVar(&fromPort, "from-port", 0, "Custom listen port for node1")
 	linkAddCmd.Flags().IntVar(&toPort, "to-port", 0, "Custom listen port for node2")
+	linkRemoveCmd.Flags().StringVarP(&linkIface, "interface", "i", "", "Specific interface name of the link to remove")
 
 	linkCmd.AddCommand(linkListCmd)
 	linkCmd.AddCommand(linkAddCmd)

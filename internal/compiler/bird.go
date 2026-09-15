@@ -396,6 +396,7 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 	}
 
 	var nodeLinks []map[string]any
+	usedBgpProtoNames := make(map[string]int)
 	for _, rl := range rawLinks {
 		bgpTemplate := "easy42_peer"
 		localAS := "SELF_AS"
@@ -443,6 +444,18 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 		localMap["policy"] = rl.policyID
 		localMap["cost"] = rl.linkCost
 		remoteMap := linkEndToContextMap(rl.remoteEnd, rl.remoteNode, rl.localEnd.Name, node.IsExternal)
+
+		// Determine BIRD peer protocol name suffix (e.g. "", "1", "2") so each link has a unique BGP protocol name
+		suffix := ExtractInterfaceSuffix(rl.localEnd.Interface, rl.remoteEnd.Name, rl.isRemoteExternal)
+		protoPeerName := rl.remoteEnd.Name
+		if suffix != "" {
+			protoPeerName = fmt.Sprintf("%s%s", rl.remoteEnd.Name, suffix)
+		}
+		if count := usedBgpProtoNames[protoPeerName]; count > 0 {
+			protoPeerName = fmt.Sprintf("%s_%d", protoPeerName, count+1)
+		}
+		usedBgpProtoNames[protoPeerName]++
+		remoteMap["name"] = protoPeerName
 
 		var remoteNodeMap map[string]any
 		if rl.remoteNode != nil {

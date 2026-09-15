@@ -902,7 +902,15 @@ func (s *Server) handleDeleteLink(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.mgr.DeleteLink(from, to); err != nil {
+	iface := r.URL.Query().Get("interface")
+	if iface == "" {
+		iface = r.URL.Query().Get("from_iface")
+	}
+	if iface == "" {
+		iface = r.URL.Query().Get("to_iface")
+	}
+
+	if err := s.mgr.DeleteLink(from, to, iface); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}

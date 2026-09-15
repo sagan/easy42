@@ -506,7 +506,8 @@ func (m *Manager) applyNodeRenameLocked(cfg *config.Config, oldName, newName str
 
 		// Update From.Interface: if To is the renamed node, use new peer interface name
 		if cfg.Links[i].To.Name == newName {
-			cfg.Links[i].From.Interface = newIface
+			s := compiler.ExtractInterfaceSuffix(cfg.Links[i].From.Interface, oldName, isExternal)
+			cfg.Links[i].From.Interface = compiler.GetInterfaceNameWithSuffix(newName, s, isExternal)
 			cfg.Links[i].ModifiedAt = now
 		} else {
 			newFromIface := replaceIface(cfg.Links[i].From.Interface)
@@ -518,7 +519,8 @@ func (m *Manager) applyNodeRenameLocked(cfg *config.Config, oldName, newName str
 
 		// Update To.Interface: if From is the renamed node, use new peer interface name
 		if cfg.Links[i].From.Name == newName {
-			cfg.Links[i].To.Interface = newIface
+			s := compiler.ExtractInterfaceSuffix(cfg.Links[i].To.Interface, oldName, isExternal)
+			cfg.Links[i].To.Interface = compiler.GetInterfaceNameWithSuffix(newName, s, isExternal)
 			cfg.Links[i].ModifiedAt = now
 		} else {
 			newToIface := replaceIface(cfg.Links[i].To.Interface)
@@ -838,6 +840,70 @@ func (m *Manager) buildLink(cfg *config.Config, n1, n2 *config.Node, listenPort1
 		toAddr = "fe80::2/64"
 	}
 
+	usedIfacesFrom := make(map[string]bool)
+	usedIfacesTo := make(map[string]bool)
+	for _, l := range cfg.Links {
+		if l.From.Name == fromNode.Name {
+			usedIfacesFrom[l.From.Interface] = true
+		}
+		if l.To.Name == fromNode.Name {
+			usedIfacesFrom[l.To.Interface] = true
+		}
+		if l.From.Name == toNode.Name {
+			usedIfacesTo[l.From.Interface] = true
+		}
+		if l.To.Name == toNode.Name {
+			usedIfacesTo[l.To.Interface] = true
+		}
+	}
+
+	// Find the lowest deterministic index k (0, 1, 2...) such that default interface names don't collide
+	var candFromIface, candToIface string
+	var linkIndex int
+	for k := 0; ; k++ {
+		s := ""
+		if k > 0 {
+			s = fmt.Sprintf("%d", k)
+		}
+		candFrom := compiler.GetInterfaceNameWithSuffix(toNode.Name, s, toNode.IsExternal)
+		candTo := compiler.GetInterfaceNameWithSuffix(fromNode.Name, s, fromNode.IsExternal)
+		if !usedIfacesFrom[candFrom] && !usedIfacesTo[candTo] {
+			candFromIface = candFrom
+			candToIface = candTo
+			linkIndex = k
+			break
+		}
+	}
+
+	fromIface := candFromIface
+	if customFromEnd != nil && customFromEnd.Interface != "" {
+		fromIface = customFromEnd.Interface
+	}
+	toIface := candToIface
+	if customToEnd != nil && customToEnd.Interface != "" {
+		toIface = customToEnd.Interface
+	}
+
+	if usedIfacesFrom[fromIface] {
+		return nil, fmt.Errorf("interface %s already exists on node %s", fromIface, fromNode.Name)
+	}
+	if usedIfacesTo[toIface] {
+		return nil, fmt.Errorf("interface %s already exists on node %s", toIface, toNode.Name)
+	}
+
+	baseFromPort := 0
+	if toNode.IP != "" {
+		baseFromPort = compiler.DerivePortFromIP(toNode.IP)
+	} else {
+		baseFromPort = 51820
+	}
+	baseToPort := 0
+	if fromNode.IP != "" {
+		baseToPort = compiler.DerivePortFromIP(fromNode.IP)
+	} else {
+		baseToPort = 51820
+	}
+
 	if customFromEnd != nil && customFromEnd.ListenPort > 0 {
 		fromPort = customFromEnd.ListenPort
 	}
@@ -845,18 +911,10 @@ func (m *Manager) buildLink(cfg *config.Config, n1, n2 *config.Node, listenPort1
 		toPort = customToEnd.ListenPort
 	}
 	if fromPort == 0 && !fromNode.IsExternal {
-		if toNode.IP != "" {
-			fromPort = compiler.DerivePortFromIP(toNode.IP)
-		} else {
-			fromPort = 51820
-		}
+		fromPort = baseFromPort + linkIndex
 	}
 	if toPort == 0 && !toNode.IsExternal {
-		if fromNode.IP != "" {
-			toPort = compiler.DerivePortFromIP(fromNode.IP)
-		} else {
-			toPort = 51820
-		}
+		toPort = baseToPort + linkIndex
 	}
 
 	fromEP := ""
@@ -958,14 +1016,7 @@ func (m *Manager) buildLink(cfg *config.Config, n1, n2 *config.Node, listenPort1
 		toUseIP = customToEnd.UseIp
 	}
 
-	fromIface := compiler.GetInterfaceName(toNode.Name, toNode.IsExternal)
-	if customFromEnd != nil && customFromEnd.Interface != "" {
-		fromIface = customFromEnd.Interface
-	}
-	toIface := compiler.GetInterfaceName(fromNode.Name, fromNode.IsExternal)
-	if customToEnd != nil && customToEnd.Interface != "" {
-		toIface = customToEnd.Interface
-	}
+
 
 	fromPolicy := ""
 	if customFromEnd != nil && customFromEnd.Policy != "" {
@@ -1105,12 +1156,7 @@ func (m *Manager) AddLinkAdvanced(node1Name, node2Name string, fromEnd, toEnd *c
 		fromName, toName = toName, fromName
 	}
 
-	// Check duplicate link
-	for _, l := range cfg.Links {
-		if l.From.Name == fromName && l.To.Name == toName {
-			return nil, ErrLinkAlreadyExist
-		}
-	}
+
 
 	var lp *config.Link
 	if fromEnd != nil || toEnd != nil {
@@ -1369,9 +1415,25 @@ func (m *Manager) UpdateLinkAdvanced(node1Name, node2Name string, customFrom, cu
 		fromEnd, toEnd = toEnd, fromEnd
 	}
 
+	target1 := ""
+	target2 := ""
+	if customFrom != nil && customFrom.Interface != "" {
+		target1 = customFrom.Interface
+	}
+	if customTo != nil && customTo.Interface != "" {
+		target2 = customTo.Interface
+	}
+
 	linkIdx := -1
 	for i, l := range cfg.Links {
 		if l.From.Name == fromNode.Name && l.To.Name == toNode.Name {
+			if target1 != "" || target2 != "" {
+				match := (target1 == "" || l.From.Interface == target1 || l.To.Interface == target1) &&
+					(target2 == "" || l.From.Interface == target2 || l.To.Interface == target2)
+				if !match {
+					continue
+				}
+			}
 			linkIdx = i
 			break
 		}
@@ -1512,8 +1574,8 @@ func (m *Manager) UpdateLinkAdvanced(node1Name, node2Name string, customFrom, cu
 	return link, nil
 }
 
-// DeleteLink removes a link between two nodes
-func (m *Manager) DeleteLink(node1Name, node2Name string) error {
+// DeleteLink removes a link between two nodes, optionally matching a specific interface
+func (m *Manager) DeleteLink(node1Name, node2Name string, ifaces ...string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -1522,13 +1584,25 @@ func (m *Manager) DeleteLink(node1Name, node2Name string) error {
 		from, to = to, from
 	}
 
+	matchIface := ""
+	if len(ifaces) > 0 && ifaces[0] != "" {
+		matchIface = strings.TrimSpace(ifaces[0])
+	}
+
 	cfg := m.store.Get()
 	newLinks := make([]config.Link, 0)
 	found := false
 	for _, l := range cfg.Links {
 		if l.From.Name == from && l.To.Name == to {
-			found = true
-			continue
+			if matchIface != "" {
+				if l.From.Interface == matchIface || l.To.Interface == matchIface {
+					found = true
+					continue
+				}
+			} else {
+				found = true
+				continue
+			}
 		}
 		newLinks = append(newLinks, l)
 	}

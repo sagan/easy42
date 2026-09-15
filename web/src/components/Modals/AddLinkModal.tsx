@@ -24,9 +24,22 @@ import { Node, Link, NetworkPolicy } from "../../types/api";
 import { derivePortFromIP } from "../../utils/port";
 import { resolvePeerEntrypoint, extractPort, formatEndpoint } from "../../utils/endpoint";
 
+export function getInterfaceNameWithSuffix(peerName: string, suffix: string, isExternal?: boolean): string {
+  const cleanName = (peerName || "").trim();
+  const prefix = isExternal ? "wg42-" : "wg42";
+  let maxPeerLen = isExternal ? 10 : 11;
+  if (suffix) {
+    maxPeerLen -= suffix.length;
+    if (maxPeerLen < 0) maxPeerLen = 0;
+  }
+  const truncated = cleanName.slice(0, maxPeerLen);
+  return `${prefix}${truncated}${suffix}`;
+}
+
 interface AddLinkModalProps {
   open: boolean;
   nodes: Node[];
+  links?: Link[];
   initialFrom?: string;
   initialTo?: string;
   linkToEdit?: Link | null;
@@ -39,6 +52,7 @@ interface AddLinkModalProps {
 export const AddLinkModal: React.FC<AddLinkModalProps> = ({
   open,
   nodes,
+  links = [],
   initialFrom = "",
   initialTo = "",
   linkToEdit,
@@ -97,7 +111,16 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
     typeof remotePort === "number" ? remotePort : Number(remotePort),
   );
 
-  const managedListenPort = (managedNode === fromNode ? fromPort : toPort) || 51820;
+  // Derive interface suffix and port offset for new link
+  const existingLinksBetween = (links || []).filter(
+    (l) =>
+      (l.from.name === fromNodeName && l.to.name === toNodeName) ||
+      (l.from.name === toNodeName && l.to.name === fromNodeName),
+  );
+  const linkSuffix = linkToEdit ? "" : existingLinksBetween.length > 0 ? `${existingLinksBetween.length}` : "";
+  const linkPortOffset = linkToEdit ? 0 : existingLinksBetween.length;
+
+  const managedListenPort = (managedNode === fromNode ? fromPort : toPort) || (51820 + linkPortOffset);
   const { entrypoint: managedEP } = resolvePeerEntrypoint(externalNode, managedNode);
   const managedPeerEndpoint = formatEndpoint(
     managedEP?.ip || managedNode?.host,
@@ -197,10 +220,10 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
 
     if (isExternalLink) {
       if (managedNode === fromNode && fromPort === 0) {
-        setFromPort(51820);
+        setFromPort(51820 + linkPortOffset);
       }
       if (managedNode === toNode && toPort === 0) {
-        setToPort(51820);
+        setToPort(51820 + linkPortOffset);
       }
 
       // Auto prefill remotePort from external node's resolved entrypoint if available
@@ -220,10 +243,10 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
     }
 
     if (toNode && toNode.ip) {
-      setFromPort(derivePortFromIP(toNode.ip));
+      setFromPort(derivePortFromIP(toNode.ip) + linkPortOffset);
     }
     if (fromNode && fromNode.ip) {
-      setToPort(derivePortFromIP(fromNode.ip));
+      setToPort(derivePortFromIP(fromNode.ip) + linkPortOffset);
     }
 
     const getUsedEpMTU = (targetNode?: Node, sourceNode?: Node) => {
@@ -569,7 +592,16 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                   Local Interface: {managedNode.name}
                 </Typography>
                 <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5, mb: 1.5 }}>
-                  <TextField label="Interface Name" size="small" value={`wg42-${externalNode.name}`} disabled />
+                  <TextField
+                    label="Interface Name"
+                    size="small"
+                    value={
+                      linkToEdit
+                        ? (managedNode === fromNode ? linkToEdit.from.interface : linkToEdit.to.interface)
+                        : getInterfaceNameWithSuffix(externalNode.name, linkSuffix, true)
+                    }
+                    disabled
+                  />
                   <TextField
                     label="Local Listen Port"
                     type="number"
@@ -835,7 +867,16 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                     End 1: {fromNode.name}
                   </Typography>
                   <Box sx={{ display: "grid", gridTemplateColumns: "1.2fr 1fr 1fr", gap: 1.5 }}>
-                    <TextField label="Interface" size="small" value={`wg42${toNode.name}`} disabled />
+                    <TextField
+                      label="Interface"
+                      size="small"
+                      value={
+                        linkToEdit
+                          ? linkToEdit.from.interface
+                          : (toNode ? getInterfaceNameWithSuffix(toNode.name, linkSuffix, toNode.is_external) : "")
+                      }
+                      disabled
+                    />
                     <TextField
                       label="Listen Port"
                       type="number"
@@ -993,7 +1034,16 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                     End 2: {toNode.name}
                   </Typography>
                   <Box sx={{ display: "grid", gridTemplateColumns: "1.2fr 1fr 1fr", gap: 1.5 }}>
-                    <TextField label="Interface" size="small" value={`wg42${fromNode.name}`} disabled />
+                    <TextField
+                      label="Interface"
+                      size="small"
+                      value={
+                        linkToEdit
+                          ? linkToEdit.to.interface
+                          : (fromNode ? getInterfaceNameWithSuffix(fromNode.name, linkSuffix, fromNode.is_external) : "")
+                      }
+                      disabled
+                    />
                     <TextField
                       label="Listen Port"
                       type="number"

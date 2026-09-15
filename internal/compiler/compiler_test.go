@@ -413,6 +413,56 @@ func TestGetInterfaceName(t *testing.T) {
 	if iface := GetExternalInterfaceName("dn42peer"); iface != "wg42-dn42peer" {
 		t.Errorf("Expected wg42-dn42peer, got %s", iface)
 	}
+
+	// Multiple link interface names with suffix
+	if iface := GetInterfaceNameWithSuffix("bar", "1"); iface != "wg42bar1" {
+		t.Errorf("Expected wg42bar1, got %s", iface)
+	}
+	if iface := GetInterfaceNameWithSuffix("bar", "2"); iface != "wg42bar2" {
+		t.Errorf("Expected wg42bar2, got %s", iface)
+	}
+	// 11 chars peer name: truncated to 10 chars when suffix is 1 digit so total is <= 15 chars
+	iface11 := GetInterfaceNameWithSuffix("abcdefghijk", "1")
+	if iface11 != "wg42abcdefghij1" {
+		t.Errorf("Expected wg42abcdefghij1, got %s", iface11)
+	}
+	if len(iface11) > 15 {
+		t.Errorf("Interface name %s exceeds Linux 15 char limit: %d", iface11, len(iface11))
+	}
+	if iface := GetInterfaceNameWithSuffix("abcdefghijk", "2"); iface != "wg42abcdefghij2" {
+		t.Errorf("Expected wg42abcdefghij2, got %s", iface)
+	}
+	// External peer with suffix
+	if iface := GetInterfaceNameWithSuffix("peer", "1", true); iface != "wg42-peer1" {
+		t.Errorf("Expected wg42-peer1, got %s", iface)
+	}
+	ifaceExt := GetInterfaceNameWithSuffix("abcdefghij", "1", true)
+	if ifaceExt != "wg42-abcdefghi1" {
+		t.Errorf("Expected wg42-abcdefghi1, got %s", ifaceExt)
+	}
+	if len(ifaceExt) > 15 {
+		t.Errorf("External interface name %s exceeds Linux 15 char limit: %d", ifaceExt, len(ifaceExt))
+	}
+
+	// Suffix extraction
+	if s := ExtractInterfaceSuffix("wg42bar", "bar"); s != "" {
+		t.Errorf("Expected empty suffix for wg42bar, got %s", s)
+	}
+	if s := ExtractInterfaceSuffix("wg42bar1", "bar"); s != "1" {
+		t.Errorf("Expected suffix '1' for wg42bar1, got %s", s)
+	}
+	if s := ExtractInterfaceSuffix("wg42bar2", "bar"); s != "2" {
+		t.Errorf("Expected suffix '2' for wg42bar2, got %s", s)
+	}
+	if s := ExtractInterfaceSuffix("wg42abcdefghijk", "abcdefghijk"); s != "" {
+		t.Errorf("Expected empty suffix for wg42abcdefghijk, got %s", s)
+	}
+	if s := ExtractInterfaceSuffix("wg42abcdefghij1", "abcdefghijk"); s != "1" {
+		t.Errorf("Expected suffix '1' for wg42abcdefghij1, got %s", s)
+	}
+	if s := ExtractInterfaceSuffix("wg42-peer1", "peer", true); s != "1" {
+		t.Errorf("Expected suffix '1' for wg42-peer1, got %s", s)
+	}
 }
 
 func TestResolveLinkEndpointExternalNode(t *testing.T) {

@@ -1329,4 +1329,158 @@ func TestUpdateLinkListenPortUpdatesPeerEndpoint(t *testing.T) {
 	}
 }
 
+func TestMultipleLinksBetweenNodes(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "easy42-engine-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	store := config.NewStore(tempDir)
+	pass, err := store.Initialize()
+	if err != nil {
+		t.Fatalf("Failed to init store: %v", err)
+	}
+
+	mgr := NewManager(store)
+	if err := mgr.Unlock(pass); err != nil {
+		t.Fatalf("Unlock failed: %v", err)
+	}
+
+	nodeA := config.Node{
+		Name: "node-a",
+		Host: "1.1.1.1",
+		IP:   "192.168.100.1",
+		ASN:  4224420001,
+		Entrypoints: []config.Entrypoint{
+			{IP: "1.1.1.1", Tags: []string{"default"}},
+		},
+	}
+	nodeB := config.Node{
+		Name: "node-b",
+		Host: "2.2.2.2",
+		IP:   "192.168.100.2",
+		ASN:  4224420002,
+		Entrypoints: []config.Entrypoint{
+			{IP: "2.2.2.2", Tags: []string{"default"}},
+		},
+	}
+	// 11 chars node name
+	nodeLong := config.Node{
+		Name: "abcdefghijk",
+		Host: "3.3.3.3",
+		IP:   "192.168.100.3",
+		ASN:  4224420003,
+		Entrypoints: []config.Entrypoint{
+			{IP: "3.3.3.3", Tags: []string{"default"}},
+		},
+	}
+
+	if err := mgr.AddNode(nodeA); err != nil {
+		t.Fatalf("AddNode A failed: %v", err)
+	}
+	if err := mgr.AddNode(nodeB); err != nil {
+		t.Fatalf("AddNode B failed: %v", err)
+	}
+	if err := mgr.AddNode(nodeLong); err != nil {
+		t.Fatalf("AddNode Long failed: %v", err)
+	}
+
+	basePortA := compiler.DerivePortFromIP(nodeA.IP)
+	basePortB := compiler.DerivePortFromIP(nodeB.IP)
+
+	// Link 1 between node-a and node-b
+	link1, err := mgr.AddLink("node-a", "node-b", 0, 0, nil)
+	if err != nil {
+		t.Fatalf("AddLink 1 failed: %v", err)
+	}
+	if link1.From.Interface != "wg42node-b" || link1.To.Interface != "wg42node-a" {
+		t.Errorf("Link 1 unexpected interfaces: from=%s, to=%s", link1.From.Interface, link1.To.Interface)
+	}
+	if link1.From.ListenPort != basePortB || link1.To.ListenPort != basePortA {
+		t.Errorf("Link 1 unexpected ports: from=%d (expected %d), to=%d (expected %d)",
+			link1.From.ListenPort, basePortB, link1.To.ListenPort, basePortA)
+	}
+
+	// Link 2 between node-a and node-b: should have suffix "1" and port + 1
+	link2, err := mgr.AddLink("node-a", "node-b", 0, 0, nil)
+	if err != nil {
+		t.Fatalf("AddLink 2 failed: %v", err)
+	}
+	if link2.From.Interface != "wg42node-b1" || link2.To.Interface != "wg42node-a1" {
+		t.Errorf("Link 2 unexpected interfaces: from=%s, to=%s", link2.From.Interface, link2.To.Interface)
+	}
+	if link2.From.ListenPort != basePortB+1 || link2.To.ListenPort != basePortA+1 {
+		t.Errorf("Link 2 unexpected ports: from=%d (expected %d), to=%d (expected %d)",
+			link2.From.ListenPort, basePortB+1, link2.To.ListenPort, basePortA+1)
+	}
+
+	// Link 3 between node-a and node-b: should have suffix "2" and port + 2
+	link3, err := mgr.AddLink("node-a", "node-b", 0, 0, nil)
+	if err != nil {
+		t.Fatalf("AddLink 3 failed: %v", err)
+	}
+	if link3.From.Interface != "wg42node-b2" || link3.To.Interface != "wg42node-a2" {
+		t.Errorf("Link 3 unexpected interfaces: from=%s, to=%s", link3.From.Interface, link3.To.Interface)
+	}
+	if link3.From.ListenPort != basePortB+2 || link3.To.ListenPort != basePortA+2 {
+		t.Errorf("Link 3 unexpected ports: from=%d (expected %d), to=%d (expected %d)",
+			link3.From.ListenPort, basePortB+2, link3.To.ListenPort, basePortA+2)
+	}
+
+	// Links with 11-char node name (abcdefghijk):
+	// Note: "abcdefghijk" < "node-a", so From is abcdefghijk and To is node-a
+	// Link 1: interface on node-a connecting to abcdefghijk is To.Interface -> wg42abcdefghijk (15 chars)
+	linkL1, err := mgr.AddLink("node-a", "abcdefghijk", 0, 0, nil)
+	if err != nil {
+		t.Fatalf("AddLink Long 1 failed: %v", err)
+	}
+	if linkL1.To.Interface != "wg42abcdefghijk" {
+		t.Errorf("Expected linkL1 to interface wg42abcdefghijk, got %s", linkL1.To.Interface)
+	}
+	// Link 2: node name truncated to 10 chars + 1 -> wg42abcdefghij1 (15 chars)
+	linkL2, err := mgr.AddLink("node-a", "abcdefghijk", 0, 0, nil)
+	if err != nil {
+		t.Fatalf("AddLink Long 2 failed: %v", err)
+	}
+	if linkL2.To.Interface != "wg42abcdefghij1" {
+		t.Errorf("Expected linkL2 to interface wg42abcdefghij1, got %s", linkL2.To.Interface)
+	}
+	if len(linkL2.To.Interface) > 15 {
+		t.Errorf("Interface exceeds 15 chars: %s", linkL2.To.Interface)
+	}
+
+	// Delete specific link (link 2) by interface
+	if err := mgr.DeleteLink("node-a", "node-b", "wg42node-b1"); err != nil {
+		t.Fatalf("DeleteLink link 2 failed: %v", err)
+	}
+	links := mgr.GetLinks()
+	var remainingAB []config.Link
+	for _, l := range links {
+		if l.From.Name == "node-a" && l.To.Name == "node-b" {
+			remainingAB = append(remainingAB, l)
+		}
+	}
+	if len(remainingAB) != 2 {
+		t.Fatalf("Expected 2 remaining links between node-a and node-b, got %d", len(remainingAB))
+	}
+	if remainingAB[0].From.Interface != "wg42node-b" || remainingAB[1].From.Interface != "wg42node-b2" {
+		t.Errorf("Unexpected remaining interfaces: %s, %s", remainingAB[0].From.Interface, remainingAB[1].From.Interface)
+	}
+
+	// Add link again: should re-use slot 1 (wg42node-b1, port + 1)
+	reAdded, err := mgr.AddLink("node-a", "node-b", 0, 0, nil)
+	if err != nil {
+		t.Fatalf("Re-adding link failed: %v", err)
+	}
+	if reAdded.From.Interface != "wg42node-b1" || reAdded.To.Interface != "wg42node-a1" {
+		t.Errorf("Expected re-added link to use wg42node-b1/wg42node-a1, got %s/%s",
+			reAdded.From.Interface, reAdded.To.Interface)
+	}
+	if reAdded.From.ListenPort != basePortB+1 {
+		t.Errorf("Expected re-added link port %d, got %d", basePortB+1, reAdded.From.ListenPort)
+	}
+}
+
+
 

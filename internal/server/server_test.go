@@ -3,6 +3,7 @@ package server
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -1055,5 +1056,130 @@ func TestUpdateStateSpecifiedNodeAndObservability(t *testing.T) {
 		t.Errorf("Expected warning for offnode connection failure")
 	}
 }
+
+func TestMultipleLinksAPI(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "easy42-srv-multilinks-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	store := config.NewStore(tempDir)
+	pass, err := store.Initialize()
+	if err != nil {
+		t.Fatalf("Failed to initialize store: %v", err)
+	}
+
+	mgr := engine.NewManager(store)
+	srv := New(Config{
+		ListenAddr: "127.0.0.1:0",
+		Manager:    mgr,
+	})
+
+	// Login
+	loginBody, _ := json.Marshal(map[string]string{"password": pass})
+	reqLogin := httptest.NewRequest("POST", "/api/auth/login", bytes.NewReader(loginBody))
+	wLogin := httptest.NewRecorder()
+	srv.router.ServeHTTP(wLogin, reqLogin)
+	cookie := wLogin.Result().Cookies()[0]
+
+	// Add node1 and node2
+	node1 := config.Node{
+		Name:      "test-n1",
+		Host:      "192.168.1.10",
+		IP:        "192.168.100.10",
+		Interface: "lo",
+		ASN:       4224420010,
+	}
+	node2 := config.Node{
+		Name:      "test-n2",
+		Host:      "192.168.1.20",
+		IP:        "192.168.100.20",
+		Interface: "lo",
+		ASN:       4224420020,
+	}
+	bodyN1, _ := json.Marshal(node1)
+	reqN1 := httptest.NewRequest("POST", "/api/nodes", bytes.NewReader(bodyN1))
+	reqN1.AddCookie(cookie)
+	wN1 := httptest.NewRecorder()
+	srv.router.ServeHTTP(wN1, reqN1)
+	if wN1.Code != http.StatusCreated {
+		t.Fatalf("Add node1 failed: %d %s", wN1.Code, wN1.Body.String())
+	}
+
+	bodyN2, _ := json.Marshal(node2)
+	reqN2 := httptest.NewRequest("POST", "/api/nodes", bytes.NewReader(bodyN2))
+	reqN2.AddCookie(cookie)
+	wN2 := httptest.NewRecorder()
+	srv.router.ServeHTTP(wN2, reqN2)
+	if wN2.Code != http.StatusCreated {
+		t.Fatalf("Add node2 failed: %d %s", wN2.Code, wN2.Body.String())
+	}
+
+	// Create Link 1
+	linkReq1, _ := json.Marshal(map[string]string{
+		"from_node": "test-n1",
+		"to_node":   "test-n2",
+	})
+	reqL1 := httptest.NewRequest("POST", "/api/links", bytes.NewReader(linkReq1))
+	reqL1.AddCookie(cookie)
+	wL1 := httptest.NewRecorder()
+	srv.router.ServeHTTP(wL1, reqL1)
+	if wL1.Code != http.StatusCreated {
+		t.Fatalf("Create link 1 failed: %d %s", wL1.Code, wL1.Body.String())
+	}
+	var l1 config.Link
+	_ = json.Unmarshal(wL1.Body.Bytes(), &l1)
+	if l1.From.Interface != "wg42test-n2" || l1.To.Interface != "wg42test-n1" {
+		t.Errorf("Link 1 interfaces unexpected: %s / %s", l1.From.Interface, l1.To.Interface)
+	}
+
+	// Create Link 2 between same nodes
+	linkReq2, _ := json.Marshal(map[string]string{
+		"from_node": "test-n1",
+		"to_node":   "test-n2",
+	})
+	reqL2 := httptest.NewRequest("POST", "/api/links", bytes.NewReader(linkReq2))
+	reqL2.AddCookie(cookie)
+	wL2 := httptest.NewRecorder()
+	srv.router.ServeHTTP(wL2, reqL2)
+	if wL2.Code != http.StatusCreated {
+		t.Fatalf("Create link 2 failed: %d %s", wL2.Code, wL2.Body.String())
+	}
+	var l2 config.Link
+	_ = json.Unmarshal(wL2.Body.Bytes(), &l2)
+	if l2.From.Interface != "wg42test-n21" || l2.To.Interface != "wg42test-n11" {
+		t.Errorf("Link 2 interfaces unexpected: %s / %s", l2.From.Interface, l2.To.Interface)
+	}
+	if l2.From.ListenPort != l1.From.ListenPort+1 || l2.To.ListenPort != l1.To.ListenPort+1 {
+		t.Errorf("Link 2 ports not incremented: l1=%d/%d, l2=%d/%d",
+			l1.From.ListenPort, l1.To.ListenPort, l2.From.ListenPort, l2.To.ListenPort)
+	}
+
+	// Delete Link 2 specifically by interface
+	delURL := fmt.Sprintf("/api/links?from=test-n1&to=test-n2&interface=%s", l2.From.Interface)
+	reqDel := httptest.NewRequest("DELETE", delURL, nil)
+	reqDel.AddCookie(cookie)
+	wDel := httptest.NewRecorder()
+	srv.router.ServeHTTP(wDel, reqDel)
+	if wDel.Code != http.StatusOK {
+		t.Fatalf("Delete link 2 failed: %d %s", wDel.Code, wDel.Body.String())
+	}
+
+	// Verify remaining links count is 1 and it is link 1
+	reqLinks := httptest.NewRequest("GET", "/api/links", nil)
+	reqLinks.AddCookie(cookie)
+	wLinks := httptest.NewRecorder()
+	srv.router.ServeHTTP(wLinks, reqLinks)
+	var links []config.Link
+	_ = json.Unmarshal(wLinks.Body.Bytes(), &links)
+	if len(links) != 1 {
+		t.Fatalf("Expected 1 remaining link, got %d", len(links))
+	}
+	if links[0].From.Interface != "wg42test-n2" {
+		t.Errorf("Expected remaining link to be link 1, got interface %s", links[0].From.Interface)
+	}
+}
+
 
 

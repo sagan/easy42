@@ -40,20 +40,47 @@ export const CustomEdge: React.FC<EdgeProps> = ({
   markerEnd,
   data,
 }) => {
-  const [edgePath, labelX, labelY] = getBezierPath({
-    sourceX,
-    sourceY,
-    sourcePosition,
-    targetPosition,
-    targetX,
-    targetY,
-  });
-
   const edgeData = data as unknown as CustomEdgeData;
   const link = edgeData?.link;
   const workingState: LinkWorkingState = edgeData?.workingState || "unknown";
   const latestHandshake = edgeData?.latestHandshake;
   const isExternal = Boolean(edgeData?.isExternal);
+  const totalLinksInPair = (edgeData?.totalLinksInPair as number) || 1;
+  const linkIndexInPair = (edgeData?.linkIndexInPair as number) || 0;
+
+  let edgePath: string;
+  let labelX: number;
+  let labelY: number;
+
+  if (totalLinksInPair > 1) {
+    const midX = (sourceX + targetX) / 2;
+    const midY = (sourceY + targetY) / 2;
+    const dx = targetX - sourceX;
+    const dy = targetY - sourceY;
+    const len = Math.hypot(dx, dy) || 1;
+    const nx = -dy / len;
+    const ny = dx / len;
+    const step = 38;
+    const offset = (linkIndexInPair - (totalLinksInPair - 1) / 2) * step;
+    const cx = midX + nx * offset;
+    const cy = midY + ny * offset;
+
+    edgePath = `M ${sourceX} ${sourceY} Q ${cx} ${cy} ${targetX} ${targetY}`;
+    labelX = (sourceX + 2 * cx + targetX) / 4;
+    labelY = (sourceY + 2 * cy + targetY) / 4;
+  } else {
+    const [bezierPath, bLabelX, bLabelY] = getBezierPath({
+      sourceX,
+      sourceY,
+      sourcePosition,
+      targetPosition,
+      targetX,
+      targetY,
+    });
+    edgePath = bezierPath;
+    labelX = bLabelX;
+    labelY = bLabelY;
+  }
 
   // Determine styles according to derived working state and external link type
   let strokeColor = "#94A3B8";

@@ -21,7 +21,7 @@ interface LinkDetailDrawerProps {
   open: boolean;
   onClose: () => void;
   onEditLink: (link: Link) => void;
-  onLinkDeleted: (from: string, to: string) => void;
+  onLinkDeleted: (from: string, to: string, iface?: string) => void;
   onRefreshLink?: (link: Link) => Promise<void>;
 }
 
@@ -86,8 +86,8 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
     }
     setDeleting(true);
     try {
-      await api.deleteLink(link.from.name, link.to.name);
-      onLinkDeleted(link.from.name, link.to.name);
+      await api.deleteLink(link.from.name, link.to.name, link.from.interface);
+      onLinkDeleted(link.from.name, link.to.name, link.from.interface);
       onClose();
     } catch (err: unknown) {
       const e = err as Error;
