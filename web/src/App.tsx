@@ -53,6 +53,7 @@ export const App: React.FC = () => {
   const [lookingGlassInitialTask] = useState<string | undefined>(undefined);
   const [updatingState, setUpdatingState] = useState(false);
   const [refreshingNodeName, setRefreshingNodeName] = useState<string | null>(null);
+  const [addBlockTrigger, setAddBlockTrigger] = useState(0);
   const [stateToast, setStateToast] = useState<{
     message: string;
     severity: "success" | "warning" | "error" | "info";
@@ -470,6 +471,7 @@ export const App: React.FC = () => {
             setLinkToEdit(null);
             setAddLinkOpen(true);
           }}
+          onAddBlock={() => setAddBlockTrigger((prev) => prev + 1)}
           onCreateFullMesh={handleCreateFullMesh}
           missingMeshLinksCount={missingMeshLinksCount}
           displayedNodeCount={displayedInternalNodes.length}
@@ -510,6 +512,7 @@ export const App: React.FC = () => {
             onNodePositionChange={handleNodePositionChange}
             onRefreshNode={(nodeName) => handleUpdateState(nodeName)}
             refreshingNodeName={refreshingNodeName}
+            addBlockTrigger={addBlockTrigger}
           />
         </Box>
 

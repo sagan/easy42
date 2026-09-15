@@ -120,3 +120,26 @@ pre,
   border: 1px solid #e2e8f0;
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
 }
+
+/* Ensure edges and edge labels are layered properly above background blocks */
+.react-flow__edges {
+  z-index: 2 !important;
+}
+
+.react-flow__edgelabel-renderer {
+  z-index: 15 !important;
+  pointer-events: none !important;
+}
+
+.react-flow__edgelabel-renderer > * {
+  pointer-events: all !important;
+}
+
+.react-flow__node-blockGroup {
+  z-index: 0 !important;
+}
+
+.react-flow__node-customNode {
+  z-index: 10 !important;
+}
+

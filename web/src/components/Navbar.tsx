@@ -49,6 +49,7 @@ interface NavbarProps {
   onSelectTag: (tag: string) => void;
   onAddNode: () => void;
   onAddLink: () => void;
+  onAddBlock?: () => void;
   onCreateFullMesh: () => void;
   missingMeshLinksCount: number;
   displayedNodeCount: number;
@@ -77,6 +78,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onSelectTag,
   onAddNode,
   onAddLink,
+  onAddBlock,
   onCreateFullMesh,
   missingMeshLinksCount,
   displayedNodeCount,
@@ -329,6 +331,32 @@ export const Navbar: React.FC<NavbarProps> = ({
                 }
               />
             </MenuItem>
+
+            {onAddBlock && (
+              <MenuItem
+                onClick={() => {
+                  setAddMenuAnchor(null);
+                  onAddBlock();
+                }}
+                sx={{ borderRadius: 1.5, py: 1 }}
+              >
+                <ListItemIcon sx={{ minWidth: 32, color: "#6366F1" }}>
+                  <Layers size={18} />
+                </ListItemIcon>
+                <ListItemText
+                  primary={
+                    <Typography variant="body2" sx={{ fontWeight: 600, color: "#0F172A" }}>
+                      Add Block
+                    </Typography>
+                  }
+                  secondary={
+                    <Typography variant="caption" sx={{ color: "#64748B" }}>
+                      Group nodes to declutter mesh links
+                    </Typography>
+                  }
+                />
+              </MenuItem>
+            )}
 
             <Divider sx={{ my: 0.5, borderColor: "#F1F5F9" }} />
 

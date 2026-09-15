@@ -1,11 +1,13 @@
-import React, { useMemo, useCallback } from "react";
+import React, { useMemo, useCallback, useState, useEffect, useRef } from "react";
 import {
   ReactFlow,
   Background,
   Controls,
   MiniMap,
+  Panel,
   useNodesState,
   useEdgesState,
+  useReactFlow,
   addEdge,
   Connection,
   Edge,
@@ -14,15 +16,20 @@ import {
   OnNodeDrag,
   Viewport,
   OnMoveEnd,
+  NodeChange,
 } from "@xyflow/react";
-import { Box, Typography } from "@mui/material";
-import { Network } from "lucide-react";
+import { Box, Typography, Button, Chip, Tooltip } from "@mui/material";
+import { Network, Layers, EyeOff, X, Eye, Maximize2 } from "lucide-react";
 import { NodeCard } from "./NodeCard";
 import { CustomEdge } from "./CustomEdge";
-import { Node, Link, NodeStatus, NetworkState } from "../../types/api";
+import { BlockNode, BLOCK_PALETTE } from "./BlockNode";
+import { Node, Link, NodeStatus, NetworkState, GraphBlock } from "../../types/api";
+import { api } from "../../api/client";
 
 const STORAGE_KEY_VIEWPORT = "easy42_graph_viewport";
 const STORAGE_KEY_ZOOM = "easy42_graph_zoom";
+const STORAGE_KEY_BLOCKS = "easy42_graph_blocks_v1";
+const STORAGE_KEY_NODE_BLOCKS = "easy42_node_blocks_v1";
 
 const getStoredViewport = (): Viewport | undefined => {
   try {
@@ -45,18 +52,102 @@ const getStoredViewport = (): Viewport | undefined => {
         };
       }
     }
-    const rawZoom = localStorage.getItem(STORAGE_KEY_ZOOM);
-    if (rawZoom) {
-      const zoom = parseFloat(rawZoom);
-      if (!isNaN(zoom)) {
-        return { x: 0, y: 0, zoom };
-      }
-    }
   } catch (e) {
     console.error("Failed to load graph viewport from localStorage", e);
   }
   return undefined;
 };
+
+const getStoredBlocks = (): GraphBlock[] => {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_BLOCKS);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        return parsed;
+      }
+    }
+  } catch (e) {
+    console.error("Failed to load blocks from localStorage", e);
+  }
+  return [];
+};
+
+const getStoredNodeBlocks = (): Record<string, string> => {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_NODE_BLOCKS);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === "object") {
+        return parsed;
+      }
+    }
+  } catch (e) {
+    console.error("Failed to load node blocks from localStorage", e);
+  }
+  return {};
+};
+
+/**
+ * Computes the set of node names that belong to the maximum full-mesh clique(s)
+ * in an intra-block undirected graph.
+ * If the maximum clique has size < 2, returns an empty set.
+ */
+export function getMaximumCliqueNodes(
+  nodeNames: string[],
+  links: { from: { name: string }; to: { name: string } }[],
+): Set<string> {
+  if (nodeNames.length < 2) return new Set();
+
+  const nodeSet = new Set(nodeNames);
+  const adj = new Map<string, Set<string>>();
+  nodeNames.forEach((n) => adj.set(n, new Set()));
+
+  links.forEach((l) => {
+    if (nodeSet.has(l.from.name) && nodeSet.has(l.to.name) && l.from.name !== l.to.name) {
+      adj.get(l.from.name)!.add(l.to.name);
+      adj.get(l.to.name)!.add(l.from.name);
+    }
+  });
+
+  let maxSize = 0;
+  const maxCliques: Set<string>[] = [];
+
+  function bronKerbosch(R: Set<string>, P: Set<string>, X: Set<string>) {
+    if (P.size === 0 && X.size === 0) {
+      if (R.size >= 2) {
+        if (R.size > maxSize) {
+          maxSize = R.size;
+          maxCliques.length = 0;
+          maxCliques.push(new Set(R));
+        } else if (R.size === maxSize) {
+          maxCliques.push(new Set(R));
+        }
+      }
+      return;
+    }
+
+    const pivot = Array.from(P)[0] || Array.from(X)[0];
+    const pivotNeighbors = adj.get(pivot) || new Set();
+    const candidates = Array.from(P).filter((v) => !pivotNeighbors.has(v));
+
+    for (const v of candidates) {
+      const vNeighbors = adj.get(v) || new Set();
+      const nextR = new Set(R).add(v);
+      const nextP = new Set(Array.from(P).filter((p) => vNeighbors.has(p)));
+      const nextX = new Set(Array.from(X).filter((x) => vNeighbors.has(x)));
+      bronKerbosch(nextR, nextP, nextX);
+      P.delete(v);
+      X.add(v);
+    }
+  }
+
+  bronKerbosch(new Set(), new Set(nodeNames), new Set());
+
+  const result = new Set<string>();
+  maxCliques.forEach((clique) => clique.forEach((n) => result.add(n)));
+  return result;
+}
 
 interface TopologyGraphProps {
   nodes: Node[];
@@ -70,14 +161,157 @@ interface TopologyGraphProps {
   onNodePositionChange?: (name: string, x: number, y: number) => void;
   onRefreshNode?: (nodeName: string) => void;
   refreshingNodeName?: string | null;
+  addBlockTrigger?: number;
 }
 
 const nodeTypes = {
   customNode: NodeCard,
+  blockGroup: BlockNode,
 };
 
 const edgeTypes = {
   customEdge: CustomEdge,
+};
+
+interface FloatingToolbarProps {
+  onAddBlock: () => void;
+  focusedNodeName: string | null;
+  onClearFocus: () => void;
+  blocksCount: number;
+  hiddenLinksCount: number;
+}
+
+const FloatingToolbar: React.FC<FloatingToolbarProps> = ({
+  onAddBlock,
+  focusedNodeName,
+  onClearFocus,
+  blocksCount,
+  hiddenLinksCount,
+}) => {
+  const { fitView } = useReactFlow();
+
+  return (
+    <Panel position="top-right" style={{ margin: 16 }}>
+      <Box
+        sx={{
+          display: "flex",
+          alignItems: "center",
+          gap: 1,
+          backgroundColor: "rgba(255, 255, 255, 0.95)",
+          backdropFilter: "blur(8px)",
+          border: "1px solid #E2E8F0",
+          borderRadius: 2.5,
+          p: 0.75,
+          boxShadow: "0 4px 12px rgba(0, 0, 0, 0.05)",
+        }}
+      >
+        {/* Add Block Button */}
+        <Button
+          variant="contained"
+          size="small"
+          startIcon={<Layers size={15} />}
+          onClick={onAddBlock}
+          sx={{
+            backgroundColor: "#4F46E5",
+            color: "#FFFFFF",
+            fontWeight: 600,
+            fontSize: "0.8rem",
+            textTransform: "none",
+            borderRadius: 1.75,
+            px: 1.5,
+            py: 0.6,
+            boxShadow: "0 2px 4px rgba(79, 70, 229, 0.2)",
+            "&:hover": {
+              backgroundColor: "#4338CA",
+            },
+          }}
+        >
+          Add Block
+        </Button>
+
+        {/* Fit View Button */}
+        <Tooltip title="Center and fit all nodes in view">
+          <Button
+            variant="outlined"
+            size="small"
+            startIcon={<Maximize2 size={15} />}
+            onClick={() => fitView({ padding: 0.2, duration: 400 })}
+            sx={{
+              borderColor: "#CBD5E1",
+              color: "#334155",
+              fontWeight: 600,
+              fontSize: "0.8rem",
+              textTransform: "none",
+              borderRadius: 1.75,
+              px: 1.25,
+              py: 0.6,
+              "&:hover": {
+                borderColor: "#94A3B8",
+                backgroundColor: "#F8FAFC",
+              },
+            }}
+          >
+            Fit View
+          </Button>
+        </Tooltip>
+
+        {/* Focused Node Banner */}
+        {focusedNodeName && (
+          <Box
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              gap: 1,
+              backgroundColor: "#EEF2FF",
+              border: "1px solid #C7D2FE",
+              borderRadius: 1.75,
+              px: 1.25,
+              py: 0.4,
+            }}
+          >
+            <Eye size={14} color="#4F46E5" />
+            <Typography variant="caption" sx={{ fontWeight: 700, color: "#3730A3" }}>
+              Focus: {focusedNodeName} (all links shown)
+            </Typography>
+            <Tooltip title="Clear node focus (or press Escape)">
+              <Box
+                onClick={onClearFocus}
+                sx={{
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  color: "#6366F1",
+                  "&:hover": { color: "#312E81" },
+                }}
+              >
+                <X size={14} />
+              </Box>
+            </Tooltip>
+          </Box>
+        )}
+
+        {/* Stats Indicator */}
+        {blocksCount > 0 && (
+          <Tooltip title={`${blocksCount} block(s) configured. Intra-block links hidden by default to prevent visual clutter; click any node to view its links.`}>
+            <Chip
+              icon={<EyeOff size={13} color="#64748B" style={{ marginLeft: 6 }} />}
+              label={`${hiddenLinksCount} mesh links hidden`}
+              size="small"
+              sx={{
+                height: 26,
+                fontSize: "0.72rem",
+                fontWeight: 600,
+                backgroundColor: "#F1F5F9",
+                color: "#475569",
+                borderRadius: 1.5,
+                border: "1px solid #E2E8F0",
+              }}
+            />
+          </Tooltip>
+        )}
+      </Box>
+    </Panel>
+  );
 };
 
 export const TopologyGraph: React.FC<TopologyGraphProps> = ({
@@ -92,15 +326,284 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
   onNodePositionChange,
   onRefreshNode,
   refreshingNodeName,
+  addBlockTrigger,
 }) => {
-  // Convert easy42 nodes to React Flow nodes with circular/grid layout or saved coordinates
+  // Block state
+  const [blocks, setBlocks] = useState<GraphBlock[]>(getStoredBlocks);
+  const [nodeBlockMap, setNodeBlockMap] = useState<Record<string, string>>(getStoredNodeBlocks);
+  const [focusedNodeName, setFocusedNodeName] = useState<string | null>(null);
+
+  // Drag tracking ref for moving member nodes alongside a block
+  const blockDragState = useRef<{
+    blockId: string;
+    startBlockPos: { x: number; y: number };
+    memberStartPositions: Map<string, { x: number; y: number }>;
+  } | null>(null);
+
+  // Ref to track whether initial fetch from server has completed
+  const serverSyncInitialized = useRef(false);
+
+  // 1. Fetch blocks from easy42 server on page load (holds cache immediately, syncs from server)
+  useEffect(() => {
+    let isMounted = true;
+    api
+      .getBlocks()
+      .then((serverBlocks) => {
+        if (!isMounted) return;
+        if (serverBlocks && serverBlocks.length > 0) {
+          setBlocks(serverBlocks);
+          const newMap: Record<string, string> = {};
+          serverBlocks.forEach((b) => {
+            if (Array.isArray(b.nodes)) {
+              b.nodes.forEach((nodeName) => {
+                newMap[nodeName] = b.id;
+              });
+            }
+          });
+          setNodeBlockMap(newMap);
+          try {
+            localStorage.setItem(STORAGE_KEY_BLOCKS, JSON.stringify(serverBlocks));
+            localStorage.setItem(STORAGE_KEY_NODE_BLOCKS, JSON.stringify(newMap));
+          } catch (err) {
+            console.warn("Failed to update localStorage blocks cache", err);
+          }
+        } else {
+          // If server currently has 0 blocks, check if there are cached local blocks to migrate
+          const localBlocks = getStoredBlocks();
+          if (localBlocks.length > 0) {
+            const localMap = getStoredNodeBlocks();
+            const payload: GraphBlock[] = localBlocks.map((b) => ({
+              ...b,
+              nodes: Object.entries(localMap)
+                .filter(([_, bId]) => bId === b.id)
+                .map(([nodeName]) => nodeName),
+            }));
+            api.updateBlocks(payload).catch((err) => {
+              console.warn("Failed to initialize server blocks from local cache", err);
+            });
+          }
+        }
+        serverSyncInitialized.current = true;
+      })
+      .catch((err) => {
+        console.warn("Could not load blocks from server, using local cache", err);
+        serverSyncInitialized.current = true;
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // 2. Persist changes to server in background with debounce, and update local cache
+  useEffect(() => {
+    // Always update local cache immediately
+    try {
+      localStorage.setItem(STORAGE_KEY_BLOCKS, JSON.stringify(blocks));
+      localStorage.setItem(STORAGE_KEY_NODE_BLOCKS, JSON.stringify(nodeBlockMap));
+    } catch (e) {
+      console.error("Failed to save blocks cache", e);
+    }
+
+    if (!serverSyncInitialized.current) {
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      const payload: GraphBlock[] = blocks.map((b) => ({
+        ...b,
+        nodes: Object.entries(nodeBlockMap)
+          .filter(([_, bId]) => bId === b.id)
+          .map(([nodeName]) => nodeName),
+      }));
+
+      api.updateBlocks(payload).catch((err) => {
+        console.error("Background persistence of blocks to server failed", err);
+      });
+    }, 400);
+
+    return () => clearTimeout(timer);
+  }, [blocks, nodeBlockMap]);
+
+  // Escape key to reset focus
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setFocusedNodeName(null);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
+  // Block management actions
+  const handleAddBlock = useCallback(() => {
+    setBlocks((prev) => {
+      const nextIndex = prev.length + 1;
+      const paletteItem = BLOCK_PALETTE[(nextIndex - 1) % BLOCK_PALETTE.length];
+      const offset = (prev.length % 5) * 40;
+      const newBlock: GraphBlock = {
+        id: `block-${Date.now()}`,
+        name: `Block ${nextIndex}`,
+        color: paletteItem.color,
+        x: 180 + offset,
+        y: 120 + offset,
+        width: 440,
+        height: 320,
+      };
+      return [...prev, newBlock];
+    });
+  }, []);
+
+  // Listen for trigger from parent (e.g. Navbar menu)
+  const prevTriggerRef = useRef(addBlockTrigger);
+  useEffect(() => {
+    if (addBlockTrigger && addBlockTrigger !== prevTriggerRef.current) {
+      handleAddBlock();
+    }
+    prevTriggerRef.current = addBlockTrigger;
+  }, [addBlockTrigger, handleAddBlock]);
+
+  const handleRenameBlock = useCallback((id: string, name: string) => {
+    setBlocks((prev) => prev.map((b) => (b.id === id ? { ...b, name } : b)));
+  }, []);
+
+  const handleDeleteBlock = useCallback((id: string) => {
+    setBlocks((prev) => prev.filter((b) => b.id !== id));
+    setNodeBlockMap((prev) => {
+      const next = { ...prev };
+      for (const [nodeName, bId] of Object.entries(next)) {
+        if (bId === id) {
+          delete next[nodeName];
+        }
+      }
+      return next;
+    });
+  }, []);
+
+  const handleChangeBlockColor = useCallback((id: string, color: string) => {
+    setBlocks((prev) => prev.map((b) => (b.id === id ? { ...b, color } : b)));
+  }, []);
+
+  // Initial nodes: combine background Block nodes and NodeCard custom nodes
   const initialNodes: FlowNode[] = useMemo(() => {
+    // 0. Compute health for all nodes
+    const nodeHealthMap: Record<
+      string,
+      {
+        isHealthy: boolean;
+        upLinks: number;
+        downLinks: number;
+        totalLinks: number;
+        reason?: string;
+      }
+    > = {};
+
+    nodes.forEach((node) => {
+      const isOnline = nodeStatuses[node.name] ? nodeStatuses[node.name].connected : true;
+      const nodeLinks = links.filter((l) => l.from.name === node.name || l.to.name === node.name);
+
+      let upLinks = 0;
+      let downLinks = 0;
+      let unknownLinks = 0;
+
+      nodeLinks.forEach((l) => {
+        const fromIface = networkState?.nodes?.[l.from.name]?.interfaces?.[l.from.interface];
+        const toIface = networkState?.nodes?.[l.to.name]?.interfaces?.[l.to.interface];
+        if (fromIface?.working_state === "working" || toIface?.working_state === "working") {
+          upLinks++;
+        } else if (fromIface?.working_state === "not_working" || toIface?.working_state === "not_working") {
+          downLinks++;
+        } else {
+          unknownLinks++;
+        }
+      });
+
+      let isHealthy = isOnline && nodeLinks.length > 0 && downLinks === 0 && upLinks === nodeLinks.length;
+      let reason = "All links active & normal";
+      if (!isOnline) {
+        isHealthy = false;
+        reason = "Node is offline";
+      } else if (downLinks > 0) {
+        isHealthy = false;
+        reason = `${downLinks} of ${nodeLinks.length} link(s) down`;
+      } else if (nodeLinks.length === 0) {
+        isHealthy = false;
+        reason = "No links configured";
+      } else if (unknownLinks > 0) {
+        isHealthy = false;
+        reason = `${unknownLinks} link(s) pending/unknown`;
+      }
+
+      nodeHealthMap[node.name] = {
+        isHealthy,
+        upLinks,
+        downLinks,
+        totalLinks: nodeLinks.length,
+        reason,
+      };
+    });
+
+    // 1. Compute full-mesh maximum clique for each block
+    const blockFullMeshMap = new Map<string, Set<string>>();
+    blocks.forEach((block) => {
+      const memberNames = nodes.filter((n) => nodeBlockMap[n.name] === block.id).map((n) => n.name);
+      const intraLinks = links.filter(
+        (l) => nodeBlockMap[l.from.name] === block.id && nodeBlockMap[l.to.name] === block.id,
+      );
+      const maxCliqueNodes = getMaximumCliqueNodes(memberNames, intraLinks);
+      blockFullMeshMap.set(block.id, maxCliqueNodes);
+    });
+
+    // 2. Block nodes (zIndex: 0 with pointer-events handling so they render beneath node cards)
+    const blockFlowNodes: FlowNode[] = blocks.map((block) => {
+      const memberNodes = nodes.filter((n) => nodeBlockMap[n.name] === block.id);
+      const intraLinks = links.filter(
+        (l) => nodeBlockMap[l.from.name] === block.id && nodeBlockMap[l.to.name] === block.id,
+      );
+      const brokenLinks = intraLinks.filter((l) => {
+        const fromIface = networkState?.nodes?.[l.from.name]?.interfaces?.[l.from.interface];
+        const toIface = networkState?.nodes?.[l.to.name]?.interfaces?.[l.to.interface];
+        return fromIface?.working_state === "not_working" || toIface?.working_state === "not_working";
+      });
+
+      const maxClique = blockFullMeshMap.get(block.id) || new Set<string>();
+      const fullMeshCount = memberNodes.filter((n) => maxClique.has(n.name)).length;
+      const healthyCount = memberNodes.filter((n) => nodeHealthMap[n.name]?.isHealthy).length;
+
+      return {
+        id: block.id,
+        type: "blockGroup",
+        position: { x: block.x, y: block.y },
+        style: { width: block.width, height: block.height, zIndex: 0 },
+        initialWidth: block.width,
+        initialHeight: block.height,
+        width: block.width,
+        height: block.height,
+        selectable: true,
+        draggable: true,
+        dragHandle: ".block-header",
+        data: {
+          block,
+          memberCount: memberNodes.length,
+          hiddenLinkCount: intraLinks.length,
+          brokenLinkCount: brokenLinks.length,
+          fullMeshCount,
+          healthyCount,
+          onRenameBlock: handleRenameBlock,
+          onDeleteBlock: handleDeleteBlock,
+          onChangeColor: handleChangeBlockColor,
+        } as unknown as Record<string, unknown>,
+      };
+    });
+
+    // 3. Custom Node cards
     const total = nodes.length;
     const radius = Math.max(220, total * 60);
     const centerX = 500;
     const centerY = 350;
 
-    return nodes.map((node, i) => {
+    const customFlowNodes: FlowNode[] = nodes.map((node, i) => {
       const angle = (i / (total || 1)) * 2 * Math.PI - Math.PI / 2;
       const defaultX = total === 1 ? centerX : centerX + radius * Math.cos(angle);
       const defaultY = total === 1 ? centerY : centerY + radius * Math.sin(angle);
@@ -108,22 +611,58 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
       const x = typeof node.x === "number" ? node.x : defaultX;
       const y = typeof node.y === "number" ? node.y : defaultY;
 
+      const assignedBlockId = nodeBlockMap[node.name];
+      const assignedBlock = blocks.find((b) => b.id === assignedBlockId);
+      const inBlock = Boolean(assignedBlock);
+      const isBlockFullMesh = inBlock && Boolean(blockFullMeshMap.get(assignedBlockId!)?.has(node.name));
+      const health = nodeHealthMap[node.name];
+
       return {
         id: node.name,
         type: "customNode",
         position: { x, y },
+        style: { zIndex: 10, width: 260 },
+        initialWidth: 260,
+        initialHeight: 180,
+        width: 260,
+        height: 180,
         data: {
           node,
           status: nodeStatuses[node.name],
+          blockName: assignedBlock?.name,
+          blockColor: assignedBlock?.color,
+          inBlock,
+          isBlockFullMesh,
+          isHealthy: health?.isHealthy ?? false,
+          healthDetails: health,
+          isFocused: focusedNodeName === node.name,
           onSelect: onSelectNode,
           onRefreshNode,
           refreshingNodeName,
         } as unknown as Record<string, unknown>,
       };
     });
-  }, [nodes, nodeStatuses, onSelectNode, onRefreshNode, refreshingNodeName]);
 
-  // Convert easy42 links to React Flow edges with derived working state
+    return [...blockFlowNodes, ...customFlowNodes];
+  }, [
+    blocks,
+    nodes,
+    links,
+    nodeBlockMap,
+    nodeStatuses,
+    networkState,
+    focusedNodeName,
+    onSelectNode,
+    onRefreshNode,
+    refreshingNodeName,
+    handleRenameBlock,
+    handleDeleteBlock,
+    handleChangeBlockColor,
+  ]);
+
+  // Convert links to React Flow edges with filtering rules:
+  // 1. Same block: hidden by default, unless user clicks a node to focus it (revealing all its links)
+  // 2. Inter-block or global: ALWAYS displayed!
   const initialEdges: Edge[] = useMemo(() => {
     const pairGroups: Record<string, Link[]> = {};
     links.forEach((l) => {
@@ -132,7 +671,28 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
       pairGroups[key].push(l);
     });
 
-    return links.map((link) => {
+    // Filter according to block rules
+    const visibleLinks = links.filter((link) => {
+      const fromBlock = nodeBlockMap[link.from.name];
+      const toBlock = nodeBlockMap[link.to.name];
+
+      const isIntraBlock = Boolean(fromBlock && toBlock && fromBlock === toBlock);
+      if (!isIntraBlock) {
+        // Inter-block or global: ALWAYS displayed
+        return true;
+      }
+
+      // Intra-block: hidden by default, unless focused node connects to this link
+      if (focusedNodeName) {
+        if (link.from.name === focusedNodeName || link.to.name === focusedNodeName) {
+          return true;
+        }
+      }
+
+      return false;
+    });
+
+    return visibleLinks.map((link) => {
       const pairKey = [link.from.name, link.to.name].sort().join("---");
       const group = pairGroups[pairKey] || [link];
       const linkIndexInPair = group.indexOf(link);
@@ -187,25 +747,32 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
         } as unknown as Record<string, unknown>,
       };
     });
-  }, [nodes, links, networkState, onSelectLink]);
+  }, [nodes, links, networkState, onSelectLink, nodeBlockMap, focusedNodeName]);
 
   const [flowNodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [flowEdges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
 
-  // Sync state when props change while preserving current node positions
+  // Sync state when props change while preserving current node positions and dimensions
   React.useEffect(() => {
     setNodes((currentNodes) => {
-      const currentPosMap = new Map(currentNodes.map((n) => [n.id, n.position]));
+      const currentMap = new Map(currentNodes.map((n) => [n.id, n]));
       return initialNodes.map((n) => {
+        const existing = currentMap.get(n.id);
         const nodeData = (n.data as { node?: Node })?.node;
+        let pos = n.position;
         if (typeof nodeData?.x === "number" && typeof nodeData?.y === "number") {
-          return { ...n, position: { x: nodeData.x, y: nodeData.y } };
+          pos = { x: nodeData.x, y: nodeData.y };
+        } else if (existing?.position) {
+          pos = existing.position;
         }
-        const existingPos = currentPosMap.get(n.id);
-        if (existingPos) {
-          return { ...n, position: existingPos };
-        }
-        return n;
+
+        return {
+          ...n,
+          position: pos,
+          measured: (existing as any)?.measured || (n as any).measured,
+          width: (existing as any)?.width ?? n.width,
+          height: (existing as any)?.height ?? n.height,
+        };
       });
     });
   }, [initialNodes, setNodes]);
@@ -214,16 +781,140 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
     setEdges(initialEdges);
   }, [initialEdges, setEdges]);
 
+  // Handle dimensions change when resizing blocks
+  const handleNodesChange = useCallback(
+    (changes: NodeChange[]) => {
+      onNodesChange(changes);
+
+      for (const c of changes) {
+        if (c.type === "dimensions" && c.dimensions) {
+          const dim = c.dimensions;
+          setBlocks((prev) =>
+            prev.map((b) =>
+              b.id === c.id
+                ? {
+                    ...b,
+                    width: Math.max(260, Math.round(dim.width)),
+                    height: Math.max(180, Math.round(dim.height)),
+                  }
+                : b,
+            ),
+          );
+        }
+      }
+    },
+    [onNodesChange],
+  );
+
+  // Drag start: record initial positions of block and its member nodes
+  const handleNodeDragStart: OnNodeDrag = useCallback(
+    (_event, node) => {
+      if (node.type === "blockGroup") {
+        const memberPositions = new Map<string, { x: number; y: number }>();
+        for (const fn of flowNodes) {
+          if (nodeBlockMap[fn.id] === node.id) {
+            memberPositions.set(fn.id, { x: fn.position.x, y: fn.position.y });
+          }
+        }
+        blockDragState.current = {
+          blockId: node.id,
+          startBlockPos: { x: node.position.x, y: node.position.y },
+          memberStartPositions: memberPositions,
+        };
+      }
+    },
+    [flowNodes, nodeBlockMap],
+  );
+
+  // Live drag: move member nodes together with their parent block
+  const handleNodeDrag: OnNodeDrag = useCallback(
+    (_event, node) => {
+      if (node.type === "blockGroup" && blockDragState.current && blockDragState.current.blockId === node.id) {
+        const dx = node.position.x - blockDragState.current.startBlockPos.x;
+        const dy = node.position.y - blockDragState.current.startBlockPos.y;
+        const startMembers = blockDragState.current.memberStartPositions;
+
+        if (startMembers.size > 0) {
+          setNodes((currentNodes) =>
+            currentNodes.map((n) => {
+              const startPos = startMembers.get(n.id);
+              if (startPos) {
+                return {
+                  ...n,
+                  position: {
+                    x: Math.round(startPos.x + dx),
+                    y: Math.round(startPos.y + dy),
+                  },
+                };
+              }
+              return n;
+            }),
+          );
+        }
+      }
+    },
+    [setNodes],
+  );
+
+  // Drag stop: assign dropped nodes to blocks, or save block positions and member coordinates
   const handleNodeDragStop: OnNodeDrag = useCallback(
     (_event, node, draggedNodes) => {
+      if (node.type === "blockGroup") {
+        const finalX = Math.round(node.position.x);
+        const finalY = Math.round(node.position.y);
+
+        setBlocks((prev) =>
+          prev.map((b) => (b.id === node.id ? { ...b, x: finalX, y: finalY } : b)),
+        );
+
+        if (blockDragState.current && blockDragState.current.blockId === node.id) {
+          const dx = finalX - blockDragState.current.startBlockPos.x;
+          const dy = finalY - blockDragState.current.startBlockPos.y;
+          const startMembers = blockDragState.current.memberStartPositions;
+
+          startMembers.forEach((startPos, memberId) => {
+            const newX = Math.round(startPos.x + dx);
+            const newY = Math.round(startPos.y + dy);
+            onNodePositionChange?.(memberId, newX, newY);
+          });
+        }
+        blockDragState.current = null;
+        return;
+      }
+
+      // Regular device node dropped
       const list = draggedNodes && draggedNodes.length > 0 ? draggedNodes : [node];
       for (const n of list) {
         const x = Math.round(n.position.x);
         const y = Math.round(n.position.y);
         onNodePositionChange?.(n.id, x, y);
+
+        // Check if node center falls within any block bounding box
+        const nodeCenterX = x + 130;
+        const nodeCenterY = y + 100;
+        const targetBlock = blocks.find(
+          (b) =>
+            nodeCenterX >= b.x &&
+            nodeCenterX <= b.x + b.width &&
+            nodeCenterY >= b.y &&
+            nodeCenterY <= b.y + b.height,
+        );
+
+        setNodeBlockMap((prev) => {
+          const currentBlockId = prev[n.id];
+          if (targetBlock) {
+            if (currentBlockId === targetBlock.id) return prev;
+            return { ...prev, [n.id]: targetBlock.id };
+          } else {
+            if (!currentBlockId) return prev;
+            const next = { ...prev };
+            delete next[n.id];
+            return next;
+          }
+        });
       }
     },
-    [onNodePositionChange],
+    [blocks, onNodePositionChange],
   );
 
   const initialViewport = useMemo(() => getStoredViewport(), []);
@@ -246,6 +937,26 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
     },
     [onConnectNodes, setEdges],
   );
+
+  // Hidden intra-block link count for statistics display
+  const totalIntraBlockLinks = useMemo(() => {
+    return links.filter((link) => {
+      const fromBlock = nodeBlockMap[link.from.name];
+      const toBlock = nodeBlockMap[link.to.name];
+      return Boolean(fromBlock && toBlock && fromBlock === toBlock);
+    }).length;
+  }, [links, nodeBlockMap]);
+
+  const hiddenLinksCount = useMemo(() => {
+    if (!focusedNodeName) return totalIntraBlockLinks;
+    return links.filter((link) => {
+      const fromBlock = nodeBlockMap[link.from.name];
+      const toBlock = nodeBlockMap[link.to.name];
+      const isIntra = Boolean(fromBlock && toBlock && fromBlock === toBlock);
+      if (!isIntra) return false;
+      return link.from.name !== focusedNodeName && link.to.name !== focusedNodeName;
+    }).length;
+  }, [links, nodeBlockMap, focusedNodeName, totalIntraBlockLinks]);
 
   return (
     <Box sx={{ width: "100%", height: "calc(100vh - 64px)", position: "relative", backgroundColor: "#F8FAFC" }}>
@@ -291,9 +1002,27 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
       <ReactFlow
         nodes={flowNodes}
         edges={flowEdges}
-        onNodesChange={onNodesChange}
+        onNodesChange={handleNodesChange}
         onEdgesChange={onEdgesChange}
+        onNodeDragStart={handleNodeDragStart}
+        onNodeDrag={handleNodeDrag}
         onNodeDragStop={handleNodeDragStop}
+        onPaneClick={() => setFocusedNodeName(null)}
+        onNodeClick={(_event, flowNode) => {
+          if (flowNode.type === "customNode") {
+            setFocusedNodeName((prev) => (prev === flowNode.id ? null : flowNode.id));
+            const n = (flowNode.data as any)?.node;
+            if (n) {
+              onSelectNode(n);
+            }
+          }
+        }}
+        onEdgeClick={(_event, edge) => {
+          const edgeData = edge.data as unknown as { link?: Link };
+          if (edgeData?.link) {
+            onSelectLink(edgeData.link);
+          }
+        }}
         onConnect={onConnect}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
@@ -302,6 +1031,15 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
         onMoveEnd={handleMoveEnd}
         attributionPosition="bottom-left"
       >
+        {/* Floating Top-Right Block & Focus Toolbar */}
+        <FloatingToolbar
+          onAddBlock={handleAddBlock}
+          focusedNodeName={focusedNodeName}
+          onClearFocus={() => setFocusedNodeName(null)}
+          blocksCount={blocks.length}
+          hiddenLinksCount={hiddenLinksCount}
+        />
+
         <Background variant={BackgroundVariant.Dots} gap={20} size={1.2} color="#CBD5E1" />
         <Controls />
         <MiniMap

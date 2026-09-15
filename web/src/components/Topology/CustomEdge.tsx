@@ -141,6 +141,8 @@ export const CustomEdge: React.FC<EdgeProps> = ({
           strokeWidth,
           stroke: strokeColor,
           strokeDasharray,
+          cursor: "pointer",
+          pointerEvents: "all",
           transition: "stroke 0.2s ease, stroke-width 0.2s ease",
         }}
       />
@@ -156,6 +158,7 @@ export const CustomEdge: React.FC<EdgeProps> = ({
             position: "absolute",
             transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
             pointerEvents: "all",
+            zIndex: 1000,
           }}
           sx={{
             cursor: "pointer",

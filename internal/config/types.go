@@ -17,16 +17,29 @@ type NetworkSettings struct {
 	DisallowedDN42CIDRs    []string `json:"disallowed_dn42_cidrs,omitempty"`    // Alias for disallowed_dn42_networks
 }
 
+// Block represents a visual block grouping of nodes on the topology graph
+type Block struct {
+	ID     string   `json:"id"`
+	Name   string   `json:"name"`
+	Color  string   `json:"color,omitempty"`
+	X      float64  `json:"x"`
+	Y      float64  `json:"y"`
+	Width  float64  `json:"width,omitempty"`
+	Height float64  `json:"height,omitempty"`
+	Nodes  []string `json:"nodes,omitempty"`
+}
+
 // Config represents the top-level configuration stored in config.json
 type Config struct {
-	PasswordHash    string          `json:"password_hash"`
-	EncryptedDEK    string          `json:"encrypted_dek"`
-	SessionSecret   string          `json:"session_secret"`
-	NetworkSettings NetworkSettings `json:"network_settings,omitempty"`
+	PasswordHash      string             `json:"password_hash"`
+	EncryptedDEK      string             `json:"encrypted_dek"`
+	SessionSecret     string             `json:"session_secret"`
+	NetworkSettings   NetworkSettings    `json:"network_settings,omitempty"`
 	NetworkPolicies   []NetworkPolicy    `json:"network_policies,omitempty"`
 	Nodes             []Node             `json:"nodes"`
 	Links             []Link             `json:"links"`
 	LookingGlassTasks []LookingGlassTask `json:"looking_glass_tasks,omitempty"`
+	Blocks            []Block            `json:"blocks,omitempty"`
 }
 
 // PortSpec handles single ports (51820), port ranges ("2000-2999"), or object ({port, external_port})

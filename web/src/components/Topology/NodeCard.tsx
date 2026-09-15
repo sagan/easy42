@@ -1,13 +1,36 @@
 import React, { memo } from "react";
 import { Handle, Position, NodeProps } from "@xyflow/react";
 import { Box, Typography, Chip, IconButton, Tooltip, CircularProgress } from "@mui/material";
-import { Server, MoreVertical, Globe, HardDrive, Tag, AlertTriangle, RefreshCw } from "lucide-react";
+import {
+  Server,
+  MoreVertical,
+  Globe,
+  HardDrive,
+  Tag,
+  AlertTriangle,
+  RefreshCw,
+  Share2,
+  CheckCircle2,
+  Network,
+} from "lucide-react";
 import { Node, NodeStatus } from "../../types/api";
 
 export interface NodeData {
   node: Node;
   status?: NodeStatus;
-  onSelect: (node: Node) => void;
+  blockName?: string;
+  blockColor?: string;
+  inBlock?: boolean;
+  isBlockFullMesh?: boolean;
+  isHealthy?: boolean;
+  healthDetails?: {
+    upLinks: number;
+    totalLinks: number;
+    downLinks: number;
+    reason?: string;
+  };
+  isFocused?: boolean;
+  onSelect?: (node: Node) => void;
   onRefreshNode?: (nodeName: string) => void;
   refreshingNodeName?: string | null;
   [key: string]: unknown;
@@ -15,21 +38,60 @@ export interface NodeData {
 
 export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
   const nodeData = data as unknown as NodeData;
-  const { node, status, onSelect, onRefreshNode, refreshingNodeName } = nodeData;
+  const {
+    node,
+    status,
+    blockName,
+    blockColor,
+    inBlock,
+    isBlockFullMesh,
+    isHealthy = true,
+    healthDetails,
+    isFocused,
+    onRefreshNode,
+    refreshingNodeName,
+  } = nodeData;
   const isOnline = status ? status.connected : true;
   const isExternal = Boolean(node.is_external);
   const isRefreshing = refreshingNodeName === node.name;
 
   return (
     <Box
-      onClick={() => onSelect(node)}
       sx={{
         width: 260,
-        backgroundColor: !isOnline && !isExternal ? "#FFFDFD" : "#FFFFFF",
-        border: isExternal ? "2px dashed #8B5CF6" : "1.5px solid",
-        borderColor: isExternal ? "#8B5CF6" : isOnline ? "#E2E8F0" : "#EF4444",
+        backgroundColor: !isOnline && !isExternal
+          ? "#FFFDFD"
+          : inBlock && !isHealthy
+          ? "#FFFDFD"
+          : inBlock && !isBlockFullMesh
+          ? "#FAFBFD"
+          : "#FFFFFF",
+        border: isFocused
+          ? "2px solid #4F46E5"
+          : isExternal
+          ? "2px dashed #8B5CF6"
+          : inBlock
+          ? isBlockFullMesh
+            ? isHealthy
+              ? `2px solid ${blockColor || "#6366F1"}`
+              : "2px solid #EF4444"
+            : isHealthy
+            ? "2px dashed #94A3B8"
+            : "2px dashed #EF4444"
+          : !isOnline
+          ? "1.5px solid #EF4444"
+          : "1.5px solid #E2E8F0",
+        borderTop: inBlock && isBlockFullMesh
+          ? `4px solid ${isFocused ? "#4F46E5" : !isHealthy ? "#EF4444" : (blockColor || "#6366F1")}`
+          : undefined,
         borderRadius: 2.5,
-        boxShadow: isExternal
+        boxShadow: isFocused
+          ? "0 0 0 3px rgba(79, 70, 229, 0.25), 0 12px 28px rgba(79, 70, 229, 0.2)"
+          : inBlock && isBlockFullMesh && isHealthy
+          ? `0 4px 14px ${blockColor || "#6366F1"}25, 0 1px 3px rgba(0, 0, 0, 0.05)`
+          : inBlock && !isHealthy
+          ? "0 4px 14px rgba(239, 68, 68, 0.15), 0 1px 3px rgba(239, 68, 68, 0.08)"
+          : isExternal
           ? "0 4px 6px -1px rgba(139, 92, 246, 0.08), 0 2px 4px -2px rgba(139, 92, 246, 0.05)"
           : !isOnline
           ? "0 4px 10px rgba(239, 68, 68, 0.15), 0 2px 4px rgba(239, 68, 68, 0.1)"
@@ -39,11 +101,19 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
         transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
         "&:hover": {
           transform: "translateY(-2px)",
-          borderColor: isExternal ? "#7C3AED" : !isOnline ? "#DC2626" : "#4F46E5",
-          boxShadow: isExternal
-            ? "0 10px 15px -3px rgba(139, 92, 246, 0.2), 0 4px 6px -4px rgba(139, 92, 246, 0.15)"
+          borderColor: isFocused
+            ? "#4F46E5"
+            : inBlock && isBlockFullMesh
+            ? (blockColor || "#4F46E5")
+            : isExternal
+            ? "#7C3AED"
             : !isOnline
-            ? "0 10px 15px -3px rgba(239, 68, 68, 0.25)"
+            ? "#DC2626"
+            : "#4F46E5",
+          boxShadow: isFocused
+            ? "0 0 0 3px rgba(79, 70, 229, 0.35), 0 16px 32px rgba(79, 70, 229, 0.25)"
+            : inBlock && isBlockFullMesh
+            ? `0 8px 20px ${blockColor || "#6366F1"}30`
             : "0 10px 15px -3px rgba(79, 70, 229, 0.12), 0 4px 6px -4px rgba(79, 70, 229, 0.12)",
         },
       }}
@@ -92,22 +162,64 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
               borderRadius: 1.5,
               backgroundColor: isExternal
                 ? "rgba(139, 92, 246, 0.15)"
-                : !isOnline
+                : !isOnline || (inBlock && !isHealthy)
                 ? "rgba(239, 68, 68, 0.15)"
+                : inBlock && isHealthy
+                ? "rgba(16, 185, 129, 0.12)"
                 : "rgba(79, 70, 229, 0.1)",
-              color: isExternal ? "#7C3AED" : !isOnline ? "#DC2626" : "#4F46E5",
+              color: isExternal
+                ? "#7C3AED"
+                : !isOnline || (inBlock && !isHealthy)
+                ? "#DC2626"
+                : inBlock && isHealthy
+                ? "#059669"
+                : "#4F46E5",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
+              position: "relative",
             }}
           >
             {isExternal ? <Globe size={16} /> : <Server size={16} />}
+            {inBlock && (
+              <Box
+                sx={{
+                  position: "absolute",
+                  bottom: -2,
+                  right: -2,
+                  width: 8,
+                  height: 8,
+                  borderRadius: "50%",
+                  backgroundColor: isHealthy ? "#10B981" : "#EF4444",
+                  border: "1.5px solid #FFFFFF",
+                  boxShadow: isHealthy ? "0 0 4px #10B981" : "0 0 4px #EF4444",
+                }}
+              />
+            )}
           </Box>
-          <Box>
+          <Box sx={{ minWidth: 0 }}>
             <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
               <Typography variant="subtitle2" sx={{ fontWeight: 700, lineHeight: 1.2, color: "#0F172A" }}>
                 {node.name}
               </Typography>
+              {blockName && (
+                <Chip
+                  label={blockName}
+                  size="small"
+                  sx={{
+                    height: 16,
+                    fontSize: "0.55rem",
+                    fontWeight: 700,
+                    backgroundColor: `${blockColor || "#6366F1"}18`,
+                    color: blockColor || "#6366F1",
+                    border: `1px solid ${blockColor || "#6366F1"}40`,
+                    letterSpacing: "0.3px",
+                    px: 0.25,
+                    maxWidth: 80,
+                    "& .MuiChip-label": { px: 0.5, overflow: "hidden", textOverflow: "ellipsis" },
+                  }}
+                />
+              )}
               {isExternal && (
                 <Chip
                   label="EXTERNAL"
@@ -147,6 +259,89 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
             <Typography variant="caption" sx={{ color: isExternal ? "#7C3AED" : !isOnline ? "#DC2626" : "#64748B", fontSize: "0.7rem" }}>
               {isExternal ? node.description || "Unmanaged Peer" : node.host || "No SSH Host"}
             </Typography>
+
+            {/* In-Block State Badges: Full-Mesh vs Non-Full-Mesh & Healthy vs Unhealthy */}
+            {inBlock && (
+              <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, mt: 0.5, flexWrap: "wrap" }}>
+                {/* Full-Mesh / Non-Full-Mesh */}
+                {isBlockFullMesh ? (
+                  <Tooltip title="Full-Mesh Node: Directly connected to all peers in the block's maximum mesh core.">
+                    <Chip
+                      icon={<Share2 size={10} style={{ color: blockColor || "#6366F1", marginLeft: 4 }} />}
+                      label="Full-Mesh"
+                      size="small"
+                      sx={{
+                        height: 18,
+                        fontSize: "0.62rem",
+                        fontWeight: 800,
+                        backgroundColor: `${blockColor || "#6366F1"}18`,
+                        color: blockColor || "#6366F1",
+                        border: `1px solid ${blockColor || "#6366F1"}50`,
+                        letterSpacing: "0.2px",
+                        "& .MuiChip-label": { px: 0.5 },
+                      }}
+                    />
+                  </Tooltip>
+                ) : (
+                  <Tooltip title="Non-Full-Mesh Node: Incomplete mesh; lacks direct links to some nodes in this block.">
+                    <Chip
+                      icon={<Network size={10} style={{ color: "#64748B", marginLeft: 4 }} />}
+                      label="Non-Mesh"
+                      size="small"
+                      sx={{
+                        height: 18,
+                        fontSize: "0.62rem",
+                        fontWeight: 700,
+                        backgroundColor: "#F1F5F9",
+                        color: "#64748B",
+                        border: "1px dashed #CBD5E1",
+                        letterSpacing: "0.2px",
+                        "& .MuiChip-label": { px: 0.5 },
+                      }}
+                    />
+                  </Tooltip>
+                )}
+
+                {/* Healthy / Unhealthy */}
+                {isHealthy ? (
+                  <Tooltip title={`Healthy: All ${healthDetails?.totalLinks ?? 0} link(s) are active and normal.`}>
+                    <Chip
+                      icon={<CheckCircle2 size={10} style={{ color: "#059669", marginLeft: 4 }} />}
+                      label="Healthy"
+                      size="small"
+                      sx={{
+                        height: 18,
+                        fontSize: "0.62rem",
+                        fontWeight: 800,
+                        backgroundColor: "#ECFDF5",
+                        color: "#059669",
+                        border: "1px solid #A7F3D0",
+                        letterSpacing: "0.2px",
+                        "& .MuiChip-label": { px: 0.5 },
+                      }}
+                    />
+                  </Tooltip>
+                ) : (
+                  <Tooltip title={healthDetails?.reason || "Unhealthy: One or more links down or node offline."}>
+                    <Chip
+                      icon={<AlertTriangle size={10} style={{ color: "#DC2626", marginLeft: 4 }} />}
+                      label={healthDetails?.downLinks ? `${healthDetails.downLinks} Down` : "Unhealthy"}
+                      size="small"
+                      sx={{
+                        height: 18,
+                        fontSize: "0.62rem",
+                        fontWeight: 800,
+                        backgroundColor: "#FEF2F2",
+                        color: "#DC2626",
+                        border: "1px solid #FECDD3",
+                        letterSpacing: "0.2px",
+                        "& .MuiChip-label": { px: 0.5 },
+                      }}
+                    />
+                  </Tooltip>
+                )}
+              </Box>
+            )}
           </Box>
         </Box>
 

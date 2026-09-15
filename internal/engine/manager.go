@@ -539,6 +539,15 @@ func (m *Manager) applyNodeRenameLocked(cfg *config.Config, oldName, newName str
 		}
 	}
 
+	// Update block nodes if matching oldName
+	for bIdx := range cfg.Blocks {
+		for nIdx := range cfg.Blocks[bIdx].Nodes {
+			if cfg.Blocks[bIdx].Nodes[nIdx] == oldName {
+				cfg.Blocks[bIdx].Nodes[nIdx] = newName
+			}
+		}
+	}
+
 	// Update runtime statuses map
 	if st, ok := m.statuses[oldName]; ok {
 		st.Name = newName
@@ -717,6 +726,17 @@ func (m *Manager) DeleteNode(name string) error {
 		}
 	}
 	cfg.Links = newLinks
+
+	// Remove deleted node from any blocks
+	for bIdx := range cfg.Blocks {
+		var updatedBlockNodes []string
+		for _, nodeName := range cfg.Blocks[bIdx].Nodes {
+			if nodeName != name {
+				updatedBlockNodes = append(updatedBlockNodes, nodeName)
+			}
+		}
+		cfg.Blocks[bIdx].Nodes = updatedBlockNodes
+	}
 
 	_ = m.stateStore.RemoveNode(name)
 
@@ -1016,8 +1036,6 @@ func (m *Manager) buildLink(cfg *config.Config, n1, n2 *config.Node, listenPort1
 		toUseIP = customToEnd.UseIp
 	}
 
-
-
 	fromPolicy := ""
 	if customFromEnd != nil && customFromEnd.Policy != "" {
 		fromPolicy = customFromEnd.Policy
@@ -1155,8 +1173,6 @@ func (m *Manager) AddLinkAdvanced(node1Name, node2Name string, fromEnd, toEnd *c
 	if strings.Compare(fromName, toName) > 0 {
 		fromName, toName = toName, fromName
 	}
-
-
 
 	var lp *config.Link
 	if fromEnd != nil || toEnd != nil {
@@ -2658,7 +2674,7 @@ func (m *Manager) UpdateState(nodeNames ...string) (*config.NetworkState, []stri
 				})
 				mu.Unlock()
 
-			case <-time.After(15 * time.Second):
+			case <-time.After(30 * time.Second):
 				mu.Lock()
 				warnings = append(warnings, fmt.Sprintf("%s: probe timed out", targetNode.Name))
 				mu.Unlock()
@@ -2668,7 +2684,7 @@ func (m *Manager) UpdateState(nodeNames ...string) (*config.NetworkState, []stri
 					Host:      targetNode.Host,
 					LastSeen:  time.Now(),
 					Connected: false,
-					Error:     "probe timed out after 7s",
+					Error:     "probe timed out",
 				}
 				m.mu.Unlock()
 				return
@@ -3026,6 +3042,35 @@ func (m *Manager) UpdateNetworkSettings(settings config.NetworkSettings) error {
 	}
 	settings.DisallowedDN42CIDRs = settings.DisallowedDN42Networks
 	cfg.NetworkSettings = settings
+	return m.store.Save(cfg)
+}
+
+// GetBlocks returns current blocks from config
+func (m *Manager) GetBlocks() []config.Block {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	cfg := m.store.Get()
+	if cfg == nil || cfg.Blocks == nil {
+		return []config.Block{}
+	}
+	res := make([]config.Block, len(cfg.Blocks))
+	copy(res, cfg.Blocks)
+	return res
+}
+
+// UpdateBlocks updates the blocks list in config.json
+func (m *Manager) UpdateBlocks(blocks []config.Block) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	cfg := m.store.Get()
+	if cfg == nil {
+		return config.ErrConfigNotFound
+	}
+	if blocks == nil {
+		blocks = []config.Block{}
+	}
+	cfg.Blocks = blocks
 	return m.store.Save(cfg)
 }
 

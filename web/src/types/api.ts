@@ -404,3 +404,14 @@ export interface LGRunResponse {
   results: Record<string, LGNodeResult>;
 }
 
+export interface GraphBlock {
+  id: string;
+  name: string;
+  color: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  nodes?: string[];
+}
+

@@ -1181,5 +1181,165 @@ func TestMultipleLinksAPI(t *testing.T) {
 	}
 }
 
+func TestBlocksPersistence(t *testing.T) {
+	srv, tempDir, initPass := setupTestServer(t)
+	defer os.RemoveAll(tempDir)
+
+	// 1. Unauthenticated request to /api/blocks should fail
+	reqUnauth := httptest.NewRequest("GET", "/api/blocks", nil)
+	wUnauth := httptest.NewRecorder()
+	srv.router.ServeHTTP(wUnauth, reqUnauth)
+	if wUnauth.Code != http.StatusUnauthorized {
+		t.Fatalf("Expected 401 for unauthenticated GET /api/blocks, got %d", wUnauth.Code)
+	}
+
+	// 2. Login
+	loginBody, _ := json.Marshal(map[string]string{"password": initPass})
+	reqLogin := httptest.NewRequest("POST", "/api/auth/login", bytes.NewReader(loginBody))
+	wLogin := httptest.NewRecorder()
+	srv.router.ServeHTTP(wLogin, reqLogin)
+	if wLogin.Code != http.StatusOK {
+		t.Fatalf("Login failed: %d %s", wLogin.Code, wLogin.Body.String())
+	}
+	cookie := wLogin.Result().Cookies()[0]
+
+	// 3. Authenticated GET /api/blocks should return empty list initially
+	reqGet := httptest.NewRequest("GET", "/api/blocks", nil)
+	reqGet.AddCookie(cookie)
+	wGet := httptest.NewRecorder()
+	srv.router.ServeHTTP(wGet, reqGet)
+	if wGet.Code != http.StatusOK {
+		t.Fatalf("Expected 200 for GET /api/blocks, got %d: %s", wGet.Code, wGet.Body.String())
+	}
+	var blocks []config.Block
+	if err := json.Unmarshal(wGet.Body.Bytes(), &blocks); err != nil {
+		t.Fatalf("Failed to unmarshal blocks: %v", err)
+	}
+	if len(blocks) != 0 {
+		t.Fatalf("Expected 0 blocks initially, got %d", len(blocks))
+	}
+
+	// 4. Add two nodes: nodeA and nodeB
+	for i, name := range []string{"nodeA", "nodeB"} {
+		nodeObj := config.Node{Name: name, Host: "10.0.0.1", IP: fmt.Sprintf("192.168.1.%d", i+1)}
+		b, _ := json.Marshal(nodeObj)
+		reqNode := httptest.NewRequest("POST", "/api/nodes", bytes.NewReader(b))
+		reqNode.AddCookie(cookie)
+		wNode := httptest.NewRecorder()
+		srv.router.ServeHTTP(wNode, reqNode)
+		if wNode.Code != http.StatusCreated {
+			t.Fatalf("Failed to create node %s: %d %s", name, wNode.Code, wNode.Body.String())
+		}
+	}
+
+	// 5. Update blocks via PUT /api/blocks
+	testBlocks := []config.Block{
+		{
+			ID:     "block-core",
+			Name:   "Core Mesh",
+			Color:  "#6366F1",
+			X:      100,
+			Y:      150,
+			Width:  500,
+			Height: 300,
+			Nodes:  []string{"nodeA", "nodeB"},
+		},
+		{
+			ID:     "block-edge",
+			Name:   "Edge Block",
+			Color:  "#10B981",
+			X:      700,
+			Y:      150,
+			Width:  400,
+			Height: 250,
+			Nodes:  []string{},
+		},
+	}
+	putPayload, _ := json.Marshal(testBlocks)
+	reqPut := httptest.NewRequest("PUT", "/api/blocks", bytes.NewReader(putPayload))
+	reqPut.AddCookie(cookie)
+	wPut := httptest.NewRecorder()
+	srv.router.ServeHTTP(wPut, reqPut)
+	if wPut.Code != http.StatusOK {
+		t.Fatalf("Expected 200 for PUT /api/blocks, got %d: %s", wPut.Code, wPut.Body.String())
+	}
+
+	// 6. Verify GET returns updated blocks
+	reqGet2 := httptest.NewRequest("GET", "/api/blocks", nil)
+	reqGet2.AddCookie(cookie)
+	wGet2 := httptest.NewRecorder()
+	srv.router.ServeHTTP(wGet2, reqGet2)
+	var gotBlocks []config.Block
+	_ = json.Unmarshal(wGet2.Body.Bytes(), &gotBlocks)
+	if len(gotBlocks) != 2 {
+		t.Fatalf("Expected 2 blocks, got %d", len(gotBlocks))
+	}
+	if gotBlocks[0].ID != "block-core" || len(gotBlocks[0].Nodes) != 2 {
+		t.Errorf("Unexpected block-core: %+v", gotBlocks[0])
+	}
+
+	// 7. Rename nodeA -> nodeA-renamed, verify block-core nodes updated
+	renamePayload, _ := json.Marshal(map[string]string{"new_name": "nodeA-new"})
+	reqRename := httptest.NewRequest("POST", "/api/nodes/nodeA/rename", bytes.NewReader(renamePayload))
+	reqRename.AddCookie(cookie)
+	wRename := httptest.NewRecorder()
+	srv.router.ServeHTTP(wRename, reqRename)
+	if wRename.Code != http.StatusOK {
+		t.Fatalf("Rename failed: %d %s", wRename.Code, wRename.Body.String())
+	}
+
+	reqGet3 := httptest.NewRequest("GET", "/api/blocks", nil)
+	reqGet3.AddCookie(cookie)
+	wGet3 := httptest.NewRecorder()
+	srv.router.ServeHTTP(wGet3, reqGet3)
+	var gotBlocksRename []config.Block
+	_ = json.Unmarshal(wGet3.Body.Bytes(), &gotBlocksRename)
+	if len(gotBlocksRename[0].Nodes) != 2 || gotBlocksRename[0].Nodes[0] != "nodeA-new" {
+		t.Errorf("Expected nodeA-new in block-core, got: %v", gotBlocksRename[0].Nodes)
+	}
+
+	// 8. Delete nodeB, verify block-core nodes updated
+	reqDel := httptest.NewRequest("DELETE", "/api/nodes/nodeB", nil)
+	reqDel.AddCookie(cookie)
+	wDel := httptest.NewRecorder()
+	srv.router.ServeHTTP(wDel, reqDel)
+	if wDel.Code != http.StatusOK {
+		t.Fatalf("Delete failed: %d %s", wDel.Code, wDel.Body.String())
+	}
+
+	reqGet4 := httptest.NewRequest("GET", "/api/blocks", nil)
+	reqGet4.AddCookie(cookie)
+	wGet4 := httptest.NewRecorder()
+	srv.router.ServeHTTP(wGet4, reqGet4)
+	var gotBlocksDel []config.Block
+	_ = json.Unmarshal(wGet4.Body.Bytes(), &gotBlocksDel)
+	if len(gotBlocksDel[0].Nodes) != 1 || gotBlocksDel[0].Nodes[0] != "nodeA-new" {
+		t.Errorf("Expected only nodeA-new in block-core after deleting nodeB, got: %v", gotBlocksDel[0].Nodes)
+	}
+
+	// 9. Recreate server instance from same tempDir to verify config.json persistence on disk
+	storeReload := config.NewStore(tempDir)
+	mgrReload := engine.NewManager(storeReload)
+	srvReload := New(Config{
+		ListenAddr: "127.0.0.1:0",
+		Manager:    mgrReload,
+	})
+	reqReload := httptest.NewRequest("GET", "/api/blocks", nil)
+	reqReload.AddCookie(cookie)
+	wReload := httptest.NewRecorder()
+	srvReload.router.ServeHTTP(wReload, reqReload)
+	if wReload.Code != http.StatusOK {
+		t.Fatalf("Expected 200 on reloaded server, got %d", wReload.Code)
+	}
+	var gotBlocksReload []config.Block
+	_ = json.Unmarshal(wReload.Body.Bytes(), &gotBlocksReload)
+	if len(gotBlocksReload) != 2 {
+		t.Fatalf("Expected 2 blocks on disk reload, got %d", len(gotBlocksReload))
+	}
+	if gotBlocksReload[0].ID != "block-core" || gotBlocksReload[0].Name != "Core Mesh" {
+		t.Errorf("Unexpected reloaded block data: %+v", gotBlocksReload[0])
+	}
+}
+
 
 

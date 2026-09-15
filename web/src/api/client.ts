@@ -16,6 +16,7 @@ import {
   LookingGlassTask,
   LGRunRequest,
   LGRunResponse,
+  GraphBlock,
 } from "../types/api";
 
 const API_BASE = "/api";
@@ -280,5 +281,13 @@ export const api = {
     request<LGRunResponse>("/looking-glass/run", {
       method: "POST",
       body: JSON.stringify(req),
+    }),
+
+  // Blocks
+  getBlocks: () => request<GraphBlock[]>("/blocks"),
+  updateBlocks: (blocks: GraphBlock[]) =>
+    request<GraphBlock[]>("/blocks", {
+      method: "PUT",
+      body: JSON.stringify(blocks),
     }),
 };

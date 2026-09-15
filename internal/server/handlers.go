@@ -774,6 +774,28 @@ func (s *Server) handleUpdateLink(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, link)
 }
 
+// Blocks Handlers
+
+func (s *Server) handleGetBlocks(w http.ResponseWriter, r *http.Request) {
+	blocks := s.mgr.GetBlocks()
+	writeJSON(w, http.StatusOK, blocks)
+}
+
+func (s *Server) handleUpdateBlocks(w http.ResponseWriter, r *http.Request) {
+	var blocks []config.Block
+	if err := json.NewDecoder(r.Body).Decode(&blocks); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid blocks payload")
+		return
+	}
+
+	if err := s.mgr.UpdateBlocks(blocks); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, blocks)
+}
+
 // Network Settings Handlers
 
 func (s *Server) handleGetNetworkSettings(w http.ResponseWriter, r *http.Request) {
