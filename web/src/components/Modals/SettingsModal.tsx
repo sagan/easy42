@@ -131,7 +131,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
   const [policyAllowedSrc, setPolicyAllowedSrc] = useState("");
   const [policyDisallowedDst, setPolicyDisallowedDst] = useState("");
   const [policyDisallowedSrc, setPolicyDisallowedSrc] = useState("");
-  const [policyAllowedImport, setPolicyAllowedImport] = useState("");
   const [policyLocalNetworks, setPolicyLocalNetworks] = useState("");
   const [policyRejectInternet, setPolicyRejectInternet] = useState(true);
   const [policyFilterForward, setPolicyFilterForward] = useState(true);
@@ -238,7 +237,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
     setPolicyAllowedSrc("");
     setPolicyDisallowedDst("");
     setPolicyDisallowedSrc("");
-    setPolicyAllowedImport("");
     setPolicyLocalNetworks("");
     setPolicyRejectInternet(true);
     setPolicyFilterForward(true);
@@ -271,7 +269,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
     setPolicyAllowedSrc((p.allowed_src_cidrs || []).join("\n"));
     setPolicyDisallowedDst((p.disallowed_dst_cidrs || []).join("\n"));
     setPolicyDisallowedSrc((p.disallowed_src_cidrs || []).join("\n"));
-    setPolicyAllowedImport((p.allowed_import_cidrs || []).join("\n"));
     setPolicyLocalNetworks((p.local_networks || []).join("\n"));
     setPolicyRejectInternet(Boolean(p.reject_internet));
     setPolicyFilterForward(Boolean(p.filter_forward));
@@ -304,7 +301,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
     setPolicyAllowedSrc((p.allowed_src_cidrs || []).join("\n"));
     setPolicyDisallowedDst((p.disallowed_dst_cidrs || []).join("\n"));
     setPolicyDisallowedSrc((p.disallowed_src_cidrs || []).join("\n"));
-    setPolicyAllowedImport((p.allowed_import_cidrs || []).join("\n"));
     setPolicyLocalNetworks((p.local_networks || []).join("\n"));
     setPolicyRejectInternet(Boolean(p.reject_internet));
     setPolicyFilterForward(Boolean(p.filter_forward));
@@ -379,7 +375,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
         allowed_src_cidrs: parsePrefixList(policyAllowedSrc),
         disallowed_dst_cidrs: parsePrefixList(policyDisallowedDst),
         disallowed_src_cidrs: parsePrefixList(policyDisallowedSrc),
-        allowed_import_cidrs: parsePrefixList(policyAllowedImport),
         reject_internet: policyRejectInternet,
         filter_forward: policyFilterForward,
         filter_input: policyFilterInput,
@@ -448,7 +443,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
     setPolicyAllowedSrc((p.allowed_src_cidrs || []).join("\n"));
     setPolicyDisallowedDst((p.disallowed_dst_cidrs || []).join("\n"));
     setPolicyDisallowedSrc((p.disallowed_src_cidrs || []).join("\n"));
-    setPolicyAllowedImport((p.allowed_import_cidrs || []).join("\n"));
     setPolicyLocalNetworks((p.local_networks || []).join("\n"));
     setPolicyRejectInternet(Boolean(p.reject_internet));
     setPolicyFilterForward(Boolean(p.filter_forward));
@@ -1138,12 +1132,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
                         )}
                         <Chip
                           size="small"
-                          label={`BGP Import: ${p.allowed_import_cidrs && p.allowed_import_cidrs.length > 0 ? `${p.allowed_import_cidrs.length} prefix(es)` : "All"}`}
-                          variant="outlined"
-                          sx={{ fontSize: "0.7rem", height: 22 }}
-                        />
-                        <Chip
-                          size="small"
                           label={`Forward Filter: ${p.filter_forward ? "Enabled" : "Disabled"}`}
                           variant="outlined"
                           sx={{
@@ -1380,7 +1368,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
               value={policyAllowedSrc}
               onChange={(e) => setPolicyAllowedSrc(e.target.value)}
               disabled={policyDialogMode === "view" || policyDialogSaving}
-              helperText="Anti-spoofing: inbound traffic on this link with source IP not matching will be dropped. Leave empty for unrestricted."
+              helperText="Anti-spoofing & BGP route import filter: drops inbound traffic with source IP not matching, and BGP import only permits routes matching these subnets. Leave empty for unrestricted."
             />
 
             <TextField
@@ -1406,20 +1394,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
               value={policyDisallowedSrc}
               onChange={(e) => setPolicyDisallowedSrc(e.target.value)}
               disabled={policyDialogMode === "view" || policyDialogSaving}
-              helperText="Reverse of Allowed Src: inbound traffic on this link matching these source subnets will be dropped. Leave empty for unrestricted."
-            />
-
-            <TextField
-              fullWidth
-              size="small"
-              label="Allowed BGP Import Subnets (CIDRs)"
-              placeholder={"e.g. 172.20.0.0/16+\nfd00::/48+"}
-              multiline
-              rows={3}
-              value={policyAllowedImport}
-              onChange={(e) => setPolicyAllowedImport(e.target.value)}
-              disabled={policyDialogMode === "view" || policyDialogSaving}
-              helperText="BGP route import filter: only permits routes matching these subnets. Leave empty for unrestricted."
+              helperText="Reverse of Allowed Src: inbound traffic on this link matching these source subnets will be dropped, and blocks matching BGP import routes. Leave empty for unrestricted."
             />
 
             <Box sx={{ display: "flex", flexDirection: "column", gap: 1, p: 2, borderRadius: 2, bgcolor: "#F8FAFC", border: "1px solid #E2E8F0" }}>

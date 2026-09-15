@@ -2874,7 +2874,6 @@ func (m *Manager) CreateNetworkPolicy(p config.NetworkPolicy) (*config.NetworkPo
 	p.AllowedSrcCIDRs = config.CleanPrefixes(p.AllowedSrcCIDRs)
 	p.DisallowedDstCIDRs = config.CleanPrefixes(p.DisallowedDstCIDRs)
 	p.DisallowedSrcCIDRs = config.CleanPrefixes(p.DisallowedSrcCIDRs)
-	p.AllowedImportCIDRs = config.CleanPrefixes(p.AllowedImportCIDRs)
 	p.InputTCPPorts = config.CleanPortList(p.InputTCPPorts)
 	p.InputUDPPorts = config.CleanPortList(p.InputUDPPorts)
 	p.DSCPIngress = config.ValidateDSCP(p.DSCPIngress)
@@ -2930,7 +2929,6 @@ func (m *Manager) UpdateNetworkPolicy(id string, p config.NetworkPolicy) (*confi
 	cfg.NetworkPolicies[idx].AllowedSrcCIDRs = config.CleanPrefixes(p.AllowedSrcCIDRs)
 	cfg.NetworkPolicies[idx].DisallowedDstCIDRs = config.CleanPrefixes(p.DisallowedDstCIDRs)
 	cfg.NetworkPolicies[idx].DisallowedSrcCIDRs = config.CleanPrefixes(p.DisallowedSrcCIDRs)
-	cfg.NetworkPolicies[idx].AllowedImportCIDRs = config.CleanPrefixes(p.AllowedImportCIDRs)
 	cfg.NetworkPolicies[idx].RejectInternet = p.RejectInternet
 	cfg.NetworkPolicies[idx].FilterForward = p.FilterForward
 	cfg.NetworkPolicies[idx].FilterInput = p.FilterInput

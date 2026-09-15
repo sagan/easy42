@@ -45,7 +45,6 @@ func TestNetworkPolicyManagerCRUD(t *testing.T) {
 		AllowedSrcCIDRs:    []string{"172.20.200.0/24"},
 		DisallowedDstCIDRs: []string{"172.20.100.128/25"},
 		DisallowedSrcCIDRs: []string{"172.20.200.128/25"},
-		AllowedImportCIDRs: []string{"172.20.200.0/24"},
 		RejectInternet:     true,
 		FilterForward:      true,
 		FilterInput:        true,
@@ -89,7 +88,6 @@ func TestNetworkPolicyManagerCRUD(t *testing.T) {
 		AllowedSrcCIDRs:    []string{"172.20.201.0/24"},
 		DisallowedDstCIDRs: []string{"172.20.101.128/25"},
 		DisallowedSrcCIDRs: []string{"172.20.201.128/25"},
-		AllowedImportCIDRs: []string{"172.20.201.0/24"},
 		DSCPIngress:        &dscpInUpdated,
 	})
 	if err != nil {

@@ -48,7 +48,6 @@ export interface NetworkPolicy {
   allowed_src_cidrs?: string[];
   disallowed_dst_cidrs?: string[];
   disallowed_src_cidrs?: string[];
-  allowed_import_cidrs?: string[];
   reject_internet?: boolean;
   filter_forward?: boolean;
   filter_input?: boolean;

@@ -875,11 +875,11 @@ func TestNetworkPolicyBIRD(t *testing.T) {
 
 	customPolicies := []config.NetworkPolicy{
 		{
-			ID:                 "guest-pol",
-			Name:               "Guest Partner",
-			RejectInternet:     true,
-			AllowedImportCIDRs: []string{"172.20.50.0/24"},
-			AllowedDstCIDRs:    []string{"172.20.10.0/24"},
+			ID:              "guest-pol",
+			Name:            "Guest Partner",
+			RejectInternet:  true,
+			AllowedSrcCIDRs: []string{"172.20.50.0/24"},
+			AllowedDstCIDRs: []string{"172.20.10.0/24"},
 		},
 	}
 
@@ -1390,18 +1390,18 @@ func TestExternalAndInternalPeerFilteringByPolicy(t *testing.T) {
 
 	customPolicies := []config.NetworkPolicy{
 		{
-			ID:                 "partner-pol",
-			Name:               "Partner Policy",
-			RejectInternet:     true,
-			AllowedImportCIDRs: []string{"10.100.0.0/16", "fd00:100::/48"},
-			AllowedDstCIDRs:    []string{"10.200.0.0/16", "fd00:200::/48"},
+			ID:              "partner-pol",
+			Name:            "Partner Policy",
+			RejectInternet:  true,
+			AllowedSrcCIDRs: []string{"10.100.0.0/16", "fd00:100::/48"},
+			AllowedDstCIDRs: []string{"10.200.0.0/16", "fd00:200::/48"},
 		},
 		{
-			ID:                 config.PolicyDN42,
-			Name:               "Custom DN42",
-			RejectInternet:     true,
-			AllowedImportCIDRs: []string{"172.20.0.0/14{21,29}", "fd00::/8{44,64}"},
-			AllowedDstCIDRs:    []string{"172.20.0.0/16", "fd00::/48"},
+			ID:              config.PolicyDN42,
+			Name:            "Custom DN42",
+			RejectInternet:  true,
+			AllowedSrcCIDRs: []string{"172.20.0.0/14{21,29}", "fd00::/8{44,64}"},
+			AllowedDstCIDRs: []string{"172.20.0.0/16", "fd00::/48"},
 		},
 	}
 
@@ -1443,15 +1443,15 @@ func TestExternalAndInternalPeerFilteringByPolicy(t *testing.T) {
 		t.Errorf("Expected external peer with confederation to use CONFED_AS, got:\n%s", extDN42Block)
 	}
 
-	// 4. External peer filters should derive from custom DN42 policy's AllowedImportCIDRs and AllowedDstCIDRs
+	// 4. External peer filters should derive from custom DN42 policy's AllowedSrcCIDRs and AllowedDstCIDRs
 	if !strings.Contains(conf, "define EXT_PREFIXES_V4 = [ 172.20.0.0/14{21,29} ];") {
-		t.Errorf("Expected EXT_PREFIXES_V4 from DN42 policy import CIDRs, got:\n%s", conf)
+		t.Errorf("Expected EXT_PREFIXES_V4 from DN42 policy source (import) CIDRs, got:\n%s", conf)
 	}
 	if !strings.Contains(conf, "define EXT_EXPORT_PREFIXES_V4 = [ 172.20.0.0/16 ];") {
 		t.Errorf("Expected EXT_EXPORT_PREFIXES_V4 from DN42 policy export CIDRs, got:\n%s", conf)
 	}
 	if !strings.Contains(conf, "define EXT_PREFIXES_V6 = [ fd00::/8{44,64} ];") {
-		t.Errorf("Expected EXT_PREFIXES_V6 from DN42 policy import CIDRs, got:\n%s", conf)
+		t.Errorf("Expected EXT_PREFIXES_V6 from DN42 policy source (import) CIDRs, got:\n%s", conf)
 	}
 	if !strings.Contains(conf, "define EXT_EXPORT_PREFIXES_V6 = [ fd00::/48 ];") {
 		t.Errorf("Expected EXT_EXPORT_PREFIXES_V6 from DN42 policy export CIDRs, got:\n%s", conf)
@@ -1633,14 +1633,14 @@ func TestDisallowedExportPrefixesBird(t *testing.T) {
 			Name:               "DN42 External",
 			AllowedDstCIDRs:    []string{"172.20.0.0/14", "fd00::/8"},
 			DisallowedDstCIDRs: []string{"172.20.99.0/24", "fd42:1234:5678::/48"},
-			AllowedImportCIDRs: []string{"172.20.0.0/14", "fd00::/8"},
+			AllowedSrcCIDRs:    []string{"172.20.0.0/14", "fd00::/8"},
 		},
 		{
 			ID:                 "custom-peer",
 			Name:               "Custom Peer",
 			AllowedDstCIDRs:    []string{"10.0.0.0/8", "fd00:10::/32"},
 			DisallowedDstCIDRs: []string{"10.99.0.0/16", "fd00:10:99::/48"},
-			AllowedImportCIDRs: []string{"10.0.0.0/8"},
+			AllowedSrcCIDRs:    []string{"10.0.0.0/8"},
 		},
 	}
 
@@ -1675,6 +1675,79 @@ func TestDisallowedExportPrefixesBird(t *testing.T) {
 	}
 	if !strings.Contains(conf, "if net ~ POL_custom_peer_DISALLOWED_EXPORT_V6 then reject;") {
 		t.Errorf("Expected POL_custom_peer_DISALLOWED_EXPORT_V6 check in:\n%s", conf)
+	}
+
+	// 3. Syntax validation with real BIRD parser
+	validateBirdSyntax(t, conf)
+}
+
+func TestDisallowedSrcCIDRsImportFilter(t *testing.T) {
+	node := config.Node{
+		Name: "hub1",
+		IP:   "192.168.1.1",
+		ASN:  4224420001,
+	}
+	allNodes := []config.Node{
+		node,
+		{Name: "peer-ext", IsExternal: true, ASN: 4224420002},
+		{Name: "peer-cust", IP: "192.168.1.3", ASN: 4224420003},
+	}
+	links := []config.Link{
+		{
+			From: config.LinkEnd{Name: "hub1", Interface: "wg42ext", Policy: config.PolicyDN42},
+			To:   config.LinkEnd{Name: "peer-ext", Interface: "wg42", Address: "fe80::2/64"},
+		},
+		{
+			From: config.LinkEnd{Name: "hub1", Interface: "wg42cust", Policy: "custom-peer"},
+			To:   config.LinkEnd{Name: "peer-cust", Interface: "wg42"},
+		},
+	}
+	customPolicies := []config.NetworkPolicy{
+		{
+			ID:                 config.PolicyDN42,
+			Name:               "DN42 External",
+			AllowedSrcCIDRs:    []string{"172.20.0.0/14", "fd00::/8"},
+			DisallowedSrcCIDRs: []string{"172.20.88.0/24", "fd42:8888:9999::/48"},
+		},
+		{
+			ID:                 "custom-peer",
+			Name:               "Custom Peer",
+			AllowedSrcCIDRs:    []string{"10.0.0.0/8", "fd00:10::/32"},
+			DisallowedSrcCIDRs: []string{"10.88.0.0/16", "fd00:10:88::/48"},
+		},
+	}
+
+	conf, err := GenerateBirdConfig(&node, allNodes, links, nil, customPolicies)
+	if err != nil {
+		t.Fatalf("GenerateBirdConfig failed: %v", err)
+	}
+
+	// 1. External peer defines & rejects
+	if !strings.Contains(conf, "define EXT_DISALLOWED_IMPORT_PREFIXES_V4 = [ 172.20.88.0/24 ];") {
+		t.Errorf("Expected define EXT_DISALLOWED_IMPORT_PREFIXES_V4 in:\n%s", conf)
+	}
+	if !strings.Contains(conf, "define EXT_DISALLOWED_IMPORT_PREFIXES_V6 = [ fd42:8888:9999::/48 ];") {
+		t.Errorf("Expected define EXT_DISALLOWED_IMPORT_PREFIXES_V6 in:\n%s", conf)
+	}
+	if !strings.Contains(conf, "if net ~ EXT_DISALLOWED_IMPORT_PREFIXES_V4 then reject;") {
+		t.Errorf("Expected EXT_DISALLOWED_IMPORT_PREFIXES_V4 check in:\n%s", conf)
+	}
+	if !strings.Contains(conf, "if net ~ EXT_DISALLOWED_IMPORT_PREFIXES_V6 then reject;") {
+		t.Errorf("Expected EXT_DISALLOWED_IMPORT_PREFIXES_V6 check in:\n%s", conf)
+	}
+
+	// 2. Custom peer defines & rejects
+	if !strings.Contains(conf, "define POL_custom_peer_DISALLOWED_IMPORT_V4 = [ 10.88.0.0/16 ];") {
+		t.Errorf("Expected define POL_custom_peer_DISALLOWED_IMPORT_V4 in:\n%s", conf)
+	}
+	if !strings.Contains(conf, "define POL_custom_peer_DISALLOWED_IMPORT_V6 = [ fd00:10:88::/48 ];") {
+		t.Errorf("Expected define POL_custom_peer_DISALLOWED_IMPORT_V6 in:\n%s", conf)
+	}
+	if !strings.Contains(conf, "if net ~ POL_custom_peer_DISALLOWED_IMPORT_V4 then reject;") {
+		t.Errorf("Expected POL_custom_peer_DISALLOWED_IMPORT_V4 check in:\n%s", conf)
+	}
+	if !strings.Contains(conf, "if net ~ POL_custom_peer_DISALLOWED_IMPORT_V6 then reject;") {
+		t.Errorf("Expected POL_custom_peer_DISALLOWED_IMPORT_V6 check in:\n%s", conf)
 	}
 
 	// 3. Syntax validation with real BIRD parser

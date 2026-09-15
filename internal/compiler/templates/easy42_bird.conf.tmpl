@@ -599,6 +599,8 @@ template bgp {{.template_name}} {
 {{if .has_external_links}}
 {{if .has_ext_import_v4}}define EXT_PREFIXES_V4 = {{ .ext_prefixes_v4 }};{{end}}
 {{if .has_ext_import_v6}}define EXT_PREFIXES_V6 = {{ .ext_prefixes_v6 }};{{end}}
+{{if .has_ext_disallowed_import_v4}}define EXT_DISALLOWED_IMPORT_PREFIXES_V4 = {{ .ext_disallowed_import_prefixes_v4 }};{{end}}
+{{if .has_ext_disallowed_import_v6}}define EXT_DISALLOWED_IMPORT_PREFIXES_V6 = {{ .ext_disallowed_import_prefixes_v6 }};{{end}}
 {{if .has_ext_export_v4}}define EXT_EXPORT_PREFIXES_V4 = {{ .ext_export_prefixes_v4 }};{{end}}
 {{if .has_ext_export_v6}}define EXT_EXPORT_PREFIXES_V6 = {{ .ext_export_prefixes_v6 }};{{end}}
 {{if .has_ext_disallowed_export_v4}}define EXT_DISALLOWED_EXPORT_PREFIXES_V4 = {{ .ext_disallowed_export_prefixes_v4 }};{{end}}
@@ -618,6 +620,7 @@ template bgp external_peer {
         import filter {
             {{if $.has_dn42_roa}}if ! dn42_roa_check() then reject;{{end}}
             {{if .ext_reject_internet}}if net ~ INTERNET then reject;{{end}}
+            {{if .has_ext_disallowed_import_v4}}if net ~ EXT_DISALLOWED_IMPORT_PREFIXES_V4 then reject;{{end}}
             {{if .has_ext_import_v4}}
             if net ~ EXT_PREFIXES_V4 then {
               bgp_large_community.add(COMM_EXTERNAL);
@@ -650,6 +653,7 @@ template bgp external_peer {
         import filter {
             {{if $.has_dn42_roa}}if ! dn42_roa_check() then reject;{{end}}
             {{if .ext_reject_internet}}if net ~ INTERNET6 then reject;{{end}}
+            {{if .has_ext_disallowed_import_v6}}if net ~ EXT_DISALLOWED_IMPORT_PREFIXES_V6 then reject;{{end}}
             {{if .has_ext_import_v6}}
             if net ~ EXT_PREFIXES_V6 then {
               bgp_large_community.add(COMM_EXTERNAL);
@@ -683,6 +687,8 @@ template bgp external_peer {
 {{range .custom_policy_prefixes}}
 {{if .has_import_v4}}define POL_{{.id}}_IMPORT_V4 = {{.import_prefixes_v4}};{{end}}
 {{if .has_import_v6}}define POL_{{.id}}_IMPORT_V6 = {{.import_prefixes_v6}};{{end}}
+{{if .has_disallowed_import_v4}}define POL_{{.id}}_DISALLOWED_IMPORT_V4 = {{.disallowed_import_prefixes_v4}};{{end}}
+{{if .has_disallowed_import_v6}}define POL_{{.id}}_DISALLOWED_IMPORT_V6 = {{.disallowed_import_prefixes_v6}};{{end}}
 {{if .has_export_v4}}define POL_{{.id}}_EXPORT_V4 = {{.export_prefixes_v4}};{{end}}
 {{if .has_export_v6}}define POL_{{.id}}_EXPORT_V6 = {{.export_prefixes_v6}};{{end}}
 {{if .has_disallowed_export_v4}}define POL_{{.id}}_DISALLOWED_EXPORT_V4 = {{.disallowed_export_prefixes_v4}};{{end}}
@@ -705,6 +711,7 @@ template bgp {{.template_name}} {
         import filter {
             {{if .has_roa}}if ! {{.roa_fn}}() then reject;{{end}}
             {{if .reject_internet}}if net ~ INTERNET then reject;{{end}}
+            {{if .has_disallowed_import_v4}}if net ~ POL_{{.id}}_DISALLOWED_IMPORT_V4 then reject;{{end}}
             {{if .has_import_v4}}
             if net ~ POL_{{.id}}_IMPORT_V4 then {
                 {{if $.confed_as}}
@@ -748,6 +755,7 @@ template bgp {{.template_name}} {
         import filter {
             {{if .has_roa}}if ! {{.roa_fn}}() then reject;{{end}}
             {{if .reject_internet}}if net ~ INTERNET6 then reject;{{end}}
+            {{if .has_disallowed_import_v6}}if net ~ POL_{{.id}}_DISALLOWED_IMPORT_V6 then reject;{{end}}
             {{if .has_import_v6}}
             if net ~ POL_{{.id}}_IMPORT_V6 then {
                 {{if $.confed_as}}

@@ -31,7 +31,6 @@ type NetworkPolicy struct {
 	AllowedSrcCIDRs    []string    `json:"allowed_src_cidrs,omitempty"`
 	DisallowedDstCIDRs []string    `json:"disallowed_dst_cidrs,omitempty"`
 	DisallowedSrcCIDRs []string    `json:"disallowed_src_cidrs,omitempty"`
-	AllowedImportCIDRs []string    `json:"allowed_import_cidrs,omitempty"`
 	RejectInternet     bool        `json:"reject_internet"`
 	FilterForward      bool        `json:"filter_forward"`
 	FilterInput        bool        `json:"filter_input"`
@@ -203,7 +202,6 @@ func GetBuiltinPolicies(netSettings *NetworkSettings) []NetworkPolicy {
 			AllowedSrcCIDRs:    dn42Prefixes,
 			DisallowedDstCIDRs: disallowedDN42,
 			DisallowedSrcCIDRs: disallowedDN42,
-			AllowedImportCIDRs: dn42Prefixes,
 			RejectInternet:     true,
 			FilterForward:      true,
 			FilterInput:        true,

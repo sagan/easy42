@@ -149,11 +149,14 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 
 	dn42Pol, hasDN42 := policyMap[config.PolicyDN42]
 	var dn42ImportV4, dn42ImportV6, dn42ExportV4, dn42ExportV6 string
+	var dn42DisallowedImportV4, dn42DisallowedImportV6 string
 	var dn42DisallowedExportV4, dn42DisallowedExportV6 string
 	var dn42RejectInternet bool
 	if hasDN42 {
-		dn42ImportV4 = formatPrefixList(dn42Pol.AllowedImportCIDRs, nil, false)
-		dn42ImportV6 = formatPrefixList(dn42Pol.AllowedImportCIDRs, nil, true)
+		dn42ImportV4 = formatPrefixList(dn42Pol.AllowedSrcCIDRs, nil, false)
+		dn42ImportV6 = formatPrefixList(dn42Pol.AllowedSrcCIDRs, nil, true)
+		dn42DisallowedImportV4 = formatPrefixList(dn42Pol.DisallowedSrcCIDRs, nil, false)
+		dn42DisallowedImportV6 = formatPrefixList(dn42Pol.DisallowedSrcCIDRs, nil, true)
 		dn42ExportV4 = formatPrefixList(dn42Pol.AllowedDstCIDRs, nil, false)
 		dn42ExportV6 = formatPrefixList(dn42Pol.AllowedDstCIDRs, nil, true)
 		dn42DisallowedExportV4 = formatPrefixList(dn42Pol.DisallowedDstCIDRs, nil, false)
@@ -172,12 +175,16 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 	}
 	ctx["ext_prefixes_v4"] = dn42ImportV4
 	ctx["ext_prefixes_v6"] = dn42ImportV6
+	ctx["ext_disallowed_import_prefixes_v4"] = dn42DisallowedImportV4
+	ctx["ext_disallowed_import_prefixes_v6"] = dn42DisallowedImportV6
 	ctx["ext_export_prefixes_v4"] = dn42ExportV4
 	ctx["ext_export_prefixes_v6"] = dn42ExportV6
 	ctx["ext_disallowed_export_prefixes_v4"] = dn42DisallowedExportV4
 	ctx["ext_disallowed_export_prefixes_v6"] = dn42DisallowedExportV6
 	ctx["has_ext_import_v4"] = dn42ImportV4 != ""
 	ctx["has_ext_import_v6"] = dn42ImportV6 != ""
+	ctx["has_ext_disallowed_import_v4"] = dn42DisallowedImportV4 != ""
+	ctx["has_ext_disallowed_import_v6"] = dn42DisallowedImportV6 != ""
 	ctx["has_ext_export_v4"] = dn42ExportV4 != ""
 	ctx["has_ext_export_v6"] = dn42ExportV6 != ""
 	ctx["has_ext_disallowed_export_v4"] = dn42DisallowedExportV4 != ""
@@ -576,8 +583,10 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 		pol := usedPolicyMap[id]
 		cleanID := SanitizeIdentifier(id)
 
-		importV4 := formatPrefixList(pol.AllowedImportCIDRs, nil, false)
-		importV6 := formatPrefixList(pol.AllowedImportCIDRs, nil, true)
+		importV4 := formatPrefixList(pol.AllowedSrcCIDRs, nil, false)
+		importV6 := formatPrefixList(pol.AllowedSrcCIDRs, nil, true)
+		disallowedImportV4 := formatPrefixList(pol.DisallowedSrcCIDRs, nil, false)
+		disallowedImportV6 := formatPrefixList(pol.DisallowedSrcCIDRs, nil, true)
 		exportV4 := formatPrefixList(pol.AllowedDstCIDRs, nil, false)
 		exportV6 := formatPrefixList(pol.AllowedDstCIDRs, nil, true)
 		disallowedExportV4 := formatPrefixList(pol.DisallowedDstCIDRs, nil, false)
@@ -592,6 +601,10 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 			"has_import_v6":                 importV6 != "",
 			"import_prefixes_v4":            importV4,
 			"import_prefixes_v6":            importV6,
+			"has_disallowed_import_v4":      disallowedImportV4 != "",
+			"has_disallowed_import_v6":      disallowedImportV6 != "",
+			"disallowed_import_prefixes_v4": disallowedImportV4,
+			"disallowed_import_prefixes_v6": disallowedImportV6,
 			"has_export_v4":                 exportV4 != "",
 			"has_export_v6":                 exportV6 != "",
 			"export_prefixes_v4":            exportV4,
@@ -615,6 +628,10 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 			"has_import_v6":                 importV6 != "",
 			"import_prefixes_v4":            importV4,
 			"import_prefixes_v6":            importV6,
+			"has_disallowed_import_v4":      disallowedImportV4 != "",
+			"has_disallowed_import_v6":      disallowedImportV6 != "",
+			"disallowed_import_prefixes_v4": disallowedImportV4,
+			"disallowed_import_prefixes_v6": disallowedImportV6,
 			"has_export_v4":                 exportV4 != "",
 			"has_export_v6":                 exportV6 != "",
 			"export_prefixes_v4":            exportV4,
@@ -646,6 +663,10 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 					"has_import_v6":                 importV6 != "",
 					"import_prefixes_v4":            importV4,
 					"import_prefixes_v6":            importV6,
+					"has_disallowed_import_v4":      disallowedImportV4 != "",
+					"has_disallowed_import_v6":      disallowedImportV6 != "",
+					"disallowed_import_prefixes_v4": disallowedImportV4,
+					"disallowed_import_prefixes_v6": disallowedImportV6,
 					"has_export_v4":                 exportV4 != "",
 					"has_export_v6":                 exportV6 != "",
 					"export_prefixes_v4":            exportV4,
