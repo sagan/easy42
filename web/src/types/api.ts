@@ -154,6 +154,7 @@ export interface ProbeResult {
   hostname: string;
   suggested_name: string;
   suggested_ip: string;
+  suggested_ip6?: string;
   suggested_interface: string;
   suggested_asn: number;
   interfaces: InterfaceInfo[];

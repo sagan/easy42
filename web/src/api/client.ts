@@ -106,10 +106,10 @@ export const api = {
     request<{ deleted: boolean }>(`/nodes/${encodeURIComponent(name)}`, {
       method: "DELETE",
     }),
-  probeNode: (host: string) =>
+  probeNode: (host: string, nodeName?: string) =>
     request<ProbeResult>("/nodes/probe", {
       method: "POST",
-      body: JSON.stringify({ host }),
+      body: JSON.stringify({ host, node_name: nodeName }),
     }),
   getNodeStatuses: () => request<Record<string, NodeStatus>>("/nodes/status"),
   refreshNodeStatus: (name: string) =>

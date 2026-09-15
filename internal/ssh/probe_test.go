@@ -116,3 +116,48 @@ func TestDetermineSuggestedASN(t *testing.T) {
 		t.Errorf("Expected last legacy node ASN 4224420002, got %d", got)
 	}
 }
+
+func TestIsNonLinkLocalIPv6(t *testing.T) {
+	tests := []struct {
+		addr     string
+		expected bool
+	}{
+		// Valid non link-local IPv6 (ULA / DN42)
+		{"fd42:4242:2601::1/128", true},
+		{"fd42:4242:2601::1", true},
+		{"fc00::1/64", true},
+
+		// Valid non link-local IPv6 (GUA)
+		{"2001:db8::1/64", true},
+		{"2400:8902::1/64", true},
+
+		// Link-local unicast (fe80::/10) - MUST be false
+		{"fe80::1ff:fe00:3a60/64", false},
+		{"fe80::1", false},
+		{"FE80::1%eth0/64", false},
+		{"feb0::1", false},
+
+		// Loopback and unspecified - MUST be false
+		{"::1/128", false},
+		{"::1", false},
+		{"::", false},
+
+		// Multicast - MUST be false
+		{"ff02::1", false},
+
+		// IPv4 - MUST be false
+		{"192.168.1.1/24", false},
+		{"10.0.0.1", false},
+
+		// Invalid strings
+		{"not-an-ip", false},
+		{"", false},
+	}
+
+	for _, tt := range tests {
+		got := IsNonLinkLocalIPv6(tt.addr)
+		if got != tt.expected {
+			t.Errorf("IsNonLinkLocalIPv6(%q) = %v; want %v", tt.addr, got, tt.expected)
+		}
+	}
+}

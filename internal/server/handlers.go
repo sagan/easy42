@@ -339,7 +339,8 @@ func (s *Server) handleDeleteNode(w http.ResponseWriter, r *http.Request) {
 }
 
 type probeRequest struct {
-	Host string `json:"host"`
+	Host     string `json:"host"`
+	NodeName string `json:"node_name,omitempty"`
 }
 
 func (s *Server) handleProbeNode(w http.ResponseWriter, r *http.Request) {
@@ -349,7 +350,7 @@ func (s *Server) handleProbeNode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	res, err := s.mgr.ProbeHost(req.Host)
+	res, err := s.mgr.ProbeHost(req.Host, req.NodeName)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return

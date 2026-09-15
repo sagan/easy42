@@ -1632,13 +1632,35 @@ func (m *Manager) DeleteLink(node1Name, node2Name string, ifaces ...string) erro
 }
 
 // ProbeHost probes a remote node via SSH
-func (m *Manager) ProbeHost(host string) (*ssh.ProbeResult, error) {
+func (m *Manager) ProbeHost(host string, excludeNode ...string) (*ssh.ProbeResult, error) {
 	sshClient, _, err := m.pool.GetClient(host)
 	if err != nil {
 		return nil, err
 	}
 
+	exclude := ""
+	if len(excludeNode) > 0 && excludeNode[0] != "" {
+		exclude = excludeNode[0]
+	} else {
+		for _, n := range m.GetNodes() {
+			if strings.EqualFold(n.Host, host) {
+				exclude = n.Name
+				break
+			}
+		}
+	}
+
 	nodes := m.GetNodes()
+	if exclude != "" {
+		var filtered []config.Node
+		for _, n := range nodes {
+			if n.Name != exclude {
+				filtered = append(filtered, n)
+			}
+		}
+		nodes = filtered
+	}
+
 	return ssh.ProbeHost(sshClient, host, nodes)
 }
 

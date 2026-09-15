@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/rand"
+	"net"
 	"regexp"
 	"strings"
 	"time"
@@ -18,6 +19,7 @@ type ProbeResult struct {
 	Hostname            string                 `json:"hostname"`
 	SuggestedName       string                 `json:"suggested_name"`
 	SuggestedIP         string                 `json:"suggested_ip"`
+	SuggestedIP6        string                 `json:"suggested_ip6,omitempty"`
 	SuggestedInterface  string                 `json:"suggested_interface"`
 	SuggestedASN        uint64                 `json:"suggested_asn"`
 	Interfaces          []config.InterfaceInfo `json:"interfaces"`
@@ -128,8 +130,8 @@ func ProbeHost(client *ssh.Client, host string, existingNodes []config.Node) (*P
 	suggestedName := sanitizeNodeName(hostname)
 	suggestedName = makeUniqueNodeName(suggestedName, existingNodes)
 
-	// 4. Determine Suggested Main IPv4 and Interface
-	var suggestedIP, suggestedIface string
+	// 4. Determine Suggested Main IPv4, IPv6, and Interface
+	var suggestedIP, suggestedIP6, suggestedIface string
 	for _, iface := range ifaces {
 		// Prefer lo or dummy or private interfaces
 		for _, addr := range iface.Addresses {
@@ -139,6 +141,53 @@ func ProbeHost(client *ssh.Client, host string, existingNodes []config.Node) (*P
 					suggestedIP = ipOnly
 					suggestedIface = iface.Name
 				}
+			}
+		}
+	}
+
+	// If interface wasn't determined by IPv4, check if an interface has a non link-local IPv6
+	if suggestedIface == "" {
+		for _, iface := range ifaces {
+			for _, addr := range iface.Addresses {
+				if IsNonLinkLocalIPv6(addr) {
+					ipOnly := strings.Split(strings.TrimSpace(addr), "/")[0]
+					if atIdx := strings.Index(ipOnly, "%"); atIdx != -1 {
+						ipOnly = ipOnly[:atIdx]
+					}
+					if suggestedIP6 == "" || iface.Name == "lo" || strings.HasPrefix(iface.Name, "dummy") || strings.HasPrefix(iface.Name, "dn42") {
+						suggestedIP6 = ipOnly
+						suggestedIface = iface.Name
+					}
+				}
+			}
+		}
+	}
+
+	// If suggested interface was determined, detect non link-local IPv6 on that interface
+	if suggestedIface != "" {
+		for _, iface := range ifaces {
+			if iface.Name == suggestedIface {
+				var ulaIP6 string
+				for _, addr := range iface.Addresses {
+					if IsNonLinkLocalIPv6(addr) {
+						ipOnly := strings.Split(strings.TrimSpace(addr), "/")[0]
+						if atIdx := strings.Index(ipOnly, "%"); atIdx != -1 {
+							ipOnly = ipOnly[:atIdx]
+						}
+						// Prefer DN42/ULA (fd00::/8, fc00::/7)
+						if strings.HasPrefix(strings.ToLower(ipOnly), "fd") || strings.HasPrefix(strings.ToLower(ipOnly), "fc") {
+							ulaIP6 = ipOnly
+							break
+						}
+						if suggestedIP6 == "" {
+							suggestedIP6 = ipOnly
+						}
+					}
+				}
+				if ulaIP6 != "" {
+					suggestedIP6 = ulaIP6
+				}
+				break
 			}
 		}
 	}
@@ -169,6 +218,7 @@ func ProbeHost(client *ssh.Client, host string, existingNodes []config.Node) (*P
 		Hostname:            hostname,
 		SuggestedName:       suggestedName,
 		SuggestedIP:         suggestedIP,
+		SuggestedIP6:        suggestedIP6,
 		SuggestedInterface:  suggestedIface,
 		SuggestedASN:        suggestedASN,
 		Interfaces:          ifaces,
@@ -351,4 +401,28 @@ func DetermineSuggestedASN(existingNodes []config.Node) uint64 {
 	// Fallback when network has no existing nodes with valid ASN
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	return uint64(4224420000 + r.Intn(9999) + 1)
+}
+
+// IsNonLinkLocalIPv6 checks if an address string is a valid non link-local, non-loopback IPv6 address.
+func IsNonLinkLocalIPv6(addr string) bool {
+	ipStr := strings.TrimSpace(addr)
+	if slashIdx := strings.Index(ipStr, "/"); slashIdx != -1 {
+		ipStr = ipStr[:slashIdx]
+	}
+	if atIdx := strings.Index(ipStr, "%"); atIdx != -1 {
+		ipStr = ipStr[:atIdx]
+	}
+	ip := net.ParseIP(ipStr)
+	if ip == nil {
+		return false
+	}
+	// Must be IPv6
+	if ip.To4() != nil {
+		return false
+	}
+	// Exclude loopback (::1), unspecified (::), link-local unicast (fe80::/10), link-local multicast, or multicast
+	if ip.IsLoopback() || ip.IsUnspecified() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsMulticast() {
+		return false
+	}
+	return true
 }

@@ -54,6 +54,20 @@ interface EditableConfigHook {
   content: string;
 }
 
+export const isNonLinkLocalIPv6 = (addrStr: string): boolean => {
+  if (!addrStr) return false;
+  const ip = addrStr.split("/")[0].split("%")[0].trim().toLowerCase();
+  // Must contain ':' to be IPv6
+  if (!ip.includes(":")) return false;
+  // Exclude loopback (::1) and unspecified (::)
+  if (ip === "::" || ip === "::1" || ip.startsWith("::ffff:")) return false;
+  // Exclude link-local unicast: fe80::/10 (fe8x, fe9x, feax, febx)
+  if (/^fe[89ab][0-9a-f]:/i.test(ip)) return false;
+  // Exclude multicast: ff00::/8
+  if (/^ff[0-9a-f]{2}:/i.test(ip)) return false;
+  return true;
+};
+
 export const AddNodeModal: React.FC<AddNodeModalProps> = ({
   open,
   nodeToEdit,
@@ -207,11 +221,34 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
     setProbeError(null);
 
     try {
-      const res = await api.probeNode(sshHost.trim());
-      setName(res.suggested_name);
+      const res = await api.probeNode(sshHost.trim(), nodeToEdit?.name);
+      if (!nodeToEdit) {
+        setName(res.suggested_name);
+        setAsn(res.suggested_asn);
+      }
       setIp(res.suggested_ip || "");
-      setIface(res.suggested_interface || "lo");
-      setAsn(res.suggested_asn);
+      const detectedIface = res.suggested_interface || "lo";
+      setIface(detectedIface);
+
+      // If the automatically detected node interface has a non link-local ipv6 address, fill it as Main IPV6 address field
+      let detectedIp6 = res.suggested_ip6 || "";
+      if (!detectedIp6 && res.interfaces) {
+        const targetIface = res.interfaces.find(
+          (inf) => inf.name === (res.suggested_interface || detectedIface)
+        );
+        if (targetIface && targetIface.addresses) {
+          const validV6 = targetIface.addresses
+            .map((addr) => addr.split("/")[0].split("%")[0].trim())
+            .filter((clean) => isNonLinkLocalIPv6(clean));
+          if (validV6.length > 0) {
+            const ula = validV6.find((a) => /^f[cd][0-9a-f]{2}:/i.test(a));
+            detectedIp6 = ula || validV6[0];
+          }
+        }
+      }
+      if (detectedIp6) {
+        setIp6(detectedIp6);
+      }
 
       if (res.detected_entrypoints && res.detected_entrypoints.length > 0) {
         const mapped: EditableEntrypoint[] = res.detected_entrypoints.map((ep, idx) => {
