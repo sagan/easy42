@@ -450,6 +450,25 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
               />
             </Box>
 
+            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <Typography variant="caption" sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}>
+                <Shield size={12} /> Netfilter Mark:
+              </Typography>
+              <Chip
+                label={link.from.mark ? `${link.from.mark} (Override)` : "Policy default"}
+                size="small"
+                sx={{
+                  height: 20,
+                  fontSize: "0.65rem",
+                  fontWeight: 700,
+                  bgcolor: link.from.mark ? "rgba(109, 40, 217, 0.12)" : "rgba(148, 163, 184, 0.15)",
+                  color: link.from.mark ? "#6D28D9" : "#64748B",
+                  border: "1px solid",
+                  borderColor: link.from.mark ? "rgba(109, 40, 217, 0.3)" : "rgba(148, 163, 184, 0.2)",
+                }}
+              />
+            </Box>
+
             <Box sx={{ mt: 0.5 }}>
               <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <Typography
@@ -689,6 +708,25 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
                   color: link.to.preference !== undefined ? "#059669" : "#64748B",
                   border: "1px solid",
                   borderColor: link.to.preference !== undefined ? "rgba(16, 185, 129, 0.3)" : "rgba(148, 163, 184, 0.2)",
+                }}
+              />
+            </Box>
+
+            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <Typography variant="caption" sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}>
+                <Shield size={12} /> Netfilter Mark:
+              </Typography>
+              <Chip
+                label={link.to.mark ? `${link.to.mark} (Override)` : "Policy default"}
+                size="small"
+                sx={{
+                  height: 20,
+                  fontSize: "0.65rem",
+                  fontWeight: 700,
+                  bgcolor: link.to.mark ? "rgba(109, 40, 217, 0.12)" : "rgba(148, 163, 184, 0.15)",
+                  color: link.to.mark ? "#6D28D9" : "#64748B",
+                  border: "1px solid",
+                  borderColor: link.to.mark ? "rgba(109, 40, 217, 0.3)" : "rgba(148, 163, 184, 0.2)",
                 }}
               />
             </Box>

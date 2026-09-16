@@ -863,4 +863,102 @@ func TestDisallowedCIDRsNftables(t *testing.T) {
 	}
 }
 
+func TestGenerateNftablesConfig_NetfilterMark(t *testing.T) {
+	node := config.Node{
+		Name: "router1",
+		IP:   "192.168.100.1",
+		ASN:  4224420001,
+	}
+	allNodes := []config.Node{
+		node,
+		{Name: "peer1"},
+		{Name: "peer2"},
+		{Name: "peer3"},
+		{Name: "peer4"},
+		{Name: "peer5"},
+	}
+
+	customPolicies := []config.NetworkPolicy{
+		{
+			ID:   "pol-marked",
+			Name: "Policy with default mark",
+			Mark: "0x1234",
+		},
+	}
+
+	links := []config.Link{
+		// Link 1: uses pol-marked, no override -> mark 0x1234
+		{
+			From: config.LinkEnd{Name: "router1", Interface: "wg42-p1", Policy: "pol-marked"},
+			To:   config.LinkEnd{Name: "peer1", Interface: "wg42"},
+		},
+		// Link 2: uses pol-marked, overrides mark -> 42
+		{
+			From: config.LinkEnd{Name: "router1", Interface: "wg42-p2", Policy: "pol-marked", Mark: "42"},
+			To:   config.LinkEnd{Name: "peer2", Interface: "wg42"},
+		},
+		// Link 3: uses pol-marked, no override -> also mark 0x1234 (grouped with Link 1)
+		{
+			From: config.LinkEnd{Name: "router1", Interface: "wg42-p3", Policy: "pol-marked"},
+			To:   config.LinkEnd{Name: "peer3", Interface: "wg42"},
+		},
+		// Link 4: default policy, no mark -> no rule
+		{
+			From: config.LinkEnd{Name: "router1", Interface: "wg42-p4", Policy: config.PolicyDefault},
+			To:   config.LinkEnd{Name: "peer4", Interface: "wg42"},
+		},
+		// Link 5: default policy, overrides mark -> 0xcafe
+		{
+			From: config.LinkEnd{Name: "router1", Interface: "wg42-p5", Policy: config.PolicyDefault, Mark: "0xcafe"},
+			To:   config.LinkEnd{Name: "peer5", Interface: "wg42"},
+		},
+	}
+
+	conf, err := GenerateNftablesConfig(&node, allNodes, links, nil, customPolicies)
+	if err != nil {
+		t.Fatalf("GenerateNftablesConfig failed: %v", err)
+	}
+
+	// 1. Check chain exists
+	if !strings.Contains(conf, "chain mangle_prerouting_mark {") {
+		t.Errorf("Expected mangle_prerouting_mark chain in conf, got:\n%s", conf)
+	}
+
+	// 2. Check grouped rule for 0x1234 (p1 and p3)
+	expectedGrouped := `iifname { "wg42-p1", "wg42-p3" } meta mark set 0x1234`
+	if !strings.Contains(conf, expectedGrouped) {
+		t.Errorf("Expected grouped rule %q in conf, got:\n%s", expectedGrouped, conf)
+	}
+
+	// 3. Check individual rule for 42 (p2)
+	expectedP2 := `iifname "wg42-p2" meta mark set 42`
+	if !strings.Contains(conf, expectedP2) {
+		t.Errorf("Expected rule %q in conf, got:\n%s", expectedP2, conf)
+	}
+
+	// 4. Check individual rule for 0xcafe (p5)
+	expectedP5 := `iifname "wg42-p5" meta mark set 0xcafe`
+	if !strings.Contains(conf, expectedP5) {
+		t.Errorf("Expected rule %q in conf, got:\n%s", expectedP5, conf)
+	}
+
+	// 5. Ensure p4 is not marked
+	if strings.Contains(conf, "wg42-p4") {
+		t.Errorf("Did not expect wg42-p4 in mark rules, got:\n%s", conf)
+	}
+
+	// 6. Validate with real nft binary
+	if nftPath, err := exec.LookPath("nft"); err == nil {
+		tmpFile := filepath.Join(t.TempDir(), "easy42.nft")
+		if err := os.WriteFile(tmpFile, []byte(conf), 0644); err != nil {
+			t.Fatalf("WriteFile failed: %v", err)
+		}
+		cmd := exec.Command(nftPath, "-c", "-f", tmpFile)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("nft -c -f validation failed: %v\nOutput:\n%s\nConfig:\n%s", err, string(out), conf)
+		}
+	}
+}
+
 

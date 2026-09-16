@@ -439,6 +439,8 @@ type addLinkRequest struct {
 	ToFwmark       *string         `json:"to_fwmark,omitempty"`
 	FromPreference *int            `json:"from_preference,omitempty"`
 	ToPreference   *int            `json:"to_preference,omitempty"`
+	FromMark       *string         `json:"from_mark,omitempty"`
+	ToMark         *string         `json:"to_mark,omitempty"`
 	MTU            int             `json:"mtu,omitempty"`
 	Tags       []string        `json:"tags,omitempty"`
 	From       *config.LinkEnd `json:"from,omitempty"`
@@ -532,6 +534,18 @@ func (s *Server) handleAddLink(w http.ResponseWriter, r *http.Request) {
 		}
 		req.To.Preference = req.ToPreference
 	}
+	if req.FromMark != nil {
+		if req.From == nil {
+			req.From = &config.LinkEnd{}
+		}
+		req.From.Mark = strings.TrimSpace(*req.FromMark)
+	}
+	if req.ToMark != nil {
+		if req.To == nil {
+			req.To = &config.LinkEnd{}
+		}
+		req.To.Mark = strings.TrimSpace(*req.ToMark)
+	}
 
 	var link *config.Link
 	var err error
@@ -598,6 +612,8 @@ type updateLinkRequest struct {
 	ToFwmark       *string         `json:"to_fwmark,omitempty"`
 	FromPreference *int            `json:"from_preference,omitempty"`
 	ToPreference   *int            `json:"to_preference,omitempty"`
+	FromMark       *string         `json:"from_mark,omitempty"`
+	ToMark         *string         `json:"to_mark,omitempty"`
 	MTU            int             `json:"mtu,omitempty"`
 	Tags       []string        `json:"tags,omitempty"`
 	From       *config.LinkEnd `json:"from,omitempty"`
@@ -717,6 +733,18 @@ func (s *Server) handleUpdateLink(w http.ResponseWriter, r *http.Request) {
 		}
 		req.To.Preference = req.ToPreference
 	}
+	if req.FromMark != nil {
+		if req.From == nil {
+			req.From = &config.LinkEnd{}
+		}
+		req.From.Mark = strings.TrimSpace(*req.FromMark)
+	}
+	if req.ToMark != nil {
+		if req.To == nil {
+			req.To = &config.LinkEnd{}
+		}
+		req.To.Mark = strings.TrimSpace(*req.ToMark)
+	}
 
 	var link *config.Link
 	var err error
@@ -770,6 +798,12 @@ func (s *Server) handleUpdateLink(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.ToPreference != nil && link != nil {
 		link.To.Preference = req.ToPreference
+	}
+	if req.FromMark != nil && link != nil {
+		link.From.Mark = strings.TrimSpace(*req.FromMark)
+	}
+	if req.ToMark != nil && link != nil {
+		link.To.Mark = strings.TrimSpace(*req.ToMark)
 	}
 
 	writeJSON(w, http.StatusOK, link)

@@ -78,6 +78,8 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
   const [toFwmark, setToFwmark] = useState<string>("");
   const [fromPreference, setFromPreference] = useState<number | string>("");
   const [toPreference, setToPreference] = useState<number | string>("");
+  const [fromMark, setFromMark] = useState<string>("");
+  const [toMark, setToMark] = useState<string>("");
 
   // External peering custom fields
   const [localAddress, setLocalAddress] = useState("");
@@ -175,6 +177,8 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
       setToFwmark(linkToEdit.to.fwmark || "");
       setFromPreference(linkToEdit.from.preference !== undefined ? linkToEdit.from.preference : "");
       setToPreference(linkToEdit.to.preference !== undefined ? linkToEdit.to.preference : "");
+      setFromMark(linkToEdit.from.mark || "");
+      setToMark(linkToEdit.to.mark || "");
       setError(null);
     } else {
       setFromNodeName(initialFrom || "");
@@ -192,6 +196,8 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
       setToFwmark("");
       setFromPreference("");
       setToPreference("");
+      setFromMark("");
+      setToMark("");
       setLocalAddress("fe80::1/64");
       setRemoteAddress("fe80::2/64");
       setRemotePort("");
@@ -301,6 +307,8 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
     const parsedToFwmark = toFwmark.trim() || undefined;
     const parsedFromPreference = fromPreference === "" ? undefined : Number(fromPreference);
     const parsedToPreference = toPreference === "" ? undefined : Number(toPreference);
+    const parsedFromMark = fromMark.trim() || undefined;
+    const parsedToMark = toMark.trim() || undefined;
 
     try {
       if (isExternalLink && managedNode && externalNode) {
@@ -310,8 +318,10 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
         const managedPolicy = managedNode === fromNode ? fromPolicy : toPolicy;
         const managedFwmark = managedNode === fromNode ? parsedFromFwmark : parsedToFwmark;
         const managedPreference = managedNode === fromNode ? parsedFromPreference : parsedToPreference;
+        const managedMark = managedNode === fromNode ? parsedFromMark : parsedToMark;
         const externalFwmark = externalNode === fromNode ? parsedFromFwmark : parsedToFwmark;
         const externalPreference = externalNode === fromNode ? parsedFromPreference : parsedToPreference;
+        const externalMark = externalNode === fromNode ? parsedFromMark : parsedToMark;
 
         const managedEnd = {
           name: managedNode.name,
@@ -324,6 +334,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
           cost: managedNode === fromNode ? parsedFromCost : parsedToCost,
           fwmark: managedFwmark,
           preference: managedPreference,
+          mark: managedMark,
         };
 
         const externalEnd = {
@@ -337,6 +348,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
           cost: externalNode === fromNode ? parsedFromCost : parsedToCost,
           fwmark: externalFwmark,
           preference: externalPreference,
+          mark: externalMark,
         };
 
         const reqFrom = fromNode === managedNode ? managedEnd : externalEnd;
@@ -358,6 +370,8 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
             to_fwmark: reqTo.fwmark,
             from_preference: reqFrom.preference,
             to_preference: reqTo.preference,
+            from_mark: reqFrom.mark,
+            to_mark: reqTo.mark,
           });
           onLinkUpdated?.(updated);
         } else {
@@ -376,6 +390,8 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
             to_fwmark: reqTo.fwmark,
             from_preference: reqFrom.preference,
             to_preference: reqTo.preference,
+            from_mark: reqFrom.mark,
+            to_mark: reqTo.mark,
           });
           onLinkAdded?.(link);
         }
@@ -398,6 +414,8 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
             to_fwmark: parsedToFwmark,
             from_preference: parsedFromPreference,
             to_preference: parsedToPreference,
+            from_mark: parsedFromMark,
+            to_mark: parsedToMark,
             from: {
               ...linkToEdit.from,
               listen_port: fromPort || undefined,
@@ -407,6 +425,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
               cost: parsedFromCost,
               fwmark: parsedFromFwmark,
               preference: parsedFromPreference,
+              mark: parsedFromMark,
               endpoint: undefined,
               resolved_endpoint: undefined,
             },
@@ -419,6 +438,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
               cost: parsedToCost,
               fwmark: parsedToFwmark,
               preference: parsedToPreference,
+              mark: parsedToMark,
               endpoint: undefined,
               resolved_endpoint: undefined,
             },
@@ -442,12 +462,15 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
             to_fwmark: parsedToFwmark,
             from_preference: parsedFromPreference,
             to_preference: parsedToPreference,
+            from_mark: parsedFromMark,
+            to_mark: parsedToMark,
             from: {
               use_ip: fromUseIp,
               policy: fromPolicy,
               cost: parsedFromCost,
               fwmark: parsedFromFwmark,
               preference: parsedFromPreference,
+              mark: parsedFromMark,
             },
             to: {
               use_ip: toUseIp,
@@ -455,6 +478,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
               cost: parsedToCost,
               fwmark: parsedToFwmark,
               preference: parsedToPreference,
+              mark: parsedToMark,
             },
           });
           onLinkAdded?.(link);
@@ -698,7 +722,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                     helperText="Overrides policy cost if set (non-zero)"
                   />
                 </Box>
-                <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}>
+                <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 1.5 }}>
                   <TextField
                     fullWidth
                     size="small"
@@ -710,7 +734,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                       else setToFwmark(val);
                     }}
                     placeholder="Policy default"
-                    helperText="Overrides policy WireGuard FwMark if set"
+                    helperText="Overrides policy WireGuard FwMark"
                   />
                   <TextField
                     fullWidth
@@ -724,7 +748,20 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                       else setToPreference(val);
                     }}
                     placeholder="Policy default"
-                    helperText="Overrides policy BGP preference if set"
+                    helperText="Overrides policy BGP preference"
+                  />
+                  <TextField
+                    fullWidth
+                    size="small"
+                    label="Netfilter Mark (Optional)"
+                    value={managedNode === fromNode ? fromMark : toMark}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (managedNode === fromNode) setFromMark(val);
+                      else setToMark(val);
+                    }}
+                    placeholder="Policy default"
+                    helperText="Overrides policy netfilter mark"
                   />
                 </Box>
               </Box>
@@ -998,7 +1035,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                       helperText="Overrides policy cost if set (non-zero)"
                     />
                   </Box>
-                  <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}>
+                  <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 1.5 }}>
                     <TextField
                       fullWidth
                       size="small"
@@ -1006,7 +1043,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                       value={fromFwmark}
                       onChange={(e) => setFromFwmark(e.target.value)}
                       placeholder="Policy default"
-                      helperText="Overrides policy WireGuard FwMark if set"
+                      helperText="Overrides policy WireGuard FwMark"
                     />
                     <TextField
                       fullWidth
@@ -1016,7 +1053,16 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                       value={fromPreference}
                       onChange={(e) => setFromPreference(e.target.value === "" ? "" : Number(e.target.value))}
                       placeholder="Policy default"
-                      helperText="Overrides policy BGP preference if set"
+                      helperText="Overrides policy BGP preference"
+                    />
+                    <TextField
+                      fullWidth
+                      size="small"
+                      label="Netfilter Mark (Optional)"
+                      value={fromMark}
+                      onChange={(e) => setFromMark(e.target.value)}
+                      placeholder="Policy default"
+                      helperText="Overrides policy netfilter mark"
                     />
                   </Box>
                 </Box>
@@ -1165,7 +1211,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                       helperText="Overrides policy cost if set (non-zero)"
                     />
                   </Box>
-                  <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}>
+                  <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 1.5 }}>
                     <TextField
                       fullWidth
                       size="small"
@@ -1173,7 +1219,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                       value={toFwmark}
                       onChange={(e) => setToFwmark(e.target.value)}
                       placeholder="Policy default"
-                      helperText="Overrides policy WireGuard FwMark if set"
+                      helperText="Overrides policy WireGuard FwMark"
                     />
                     <TextField
                       fullWidth
@@ -1183,7 +1229,16 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                       value={toPreference}
                       onChange={(e) => setToPreference(e.target.value === "" ? "" : Number(e.target.value))}
                       placeholder="Policy default"
-                      helperText="Overrides policy BGP preference if set"
+                      helperText="Overrides policy BGP preference"
+                    />
+                    <TextField
+                      fullWidth
+                      size="small"
+                      label="Netfilter Mark (Optional)"
+                      value={toMark}
+                      onChange={(e) => setToMark(e.target.value)}
+                      placeholder="Policy default"
+                      helperText="Overrides policy netfilter mark"
                     />
                   </Box>
                 </Box>

@@ -351,6 +351,14 @@ table inet easy42 {
   {{- end }}
   }
 {{- end }}
+{{- if .nft_marks }}
+  chain mangle_prerouting_mark {
+    type filter hook prerouting priority mangle; policy accept;
+  {{- range .nft_marks }}
+    iifname {{ .ifnames }} meta mark set {{ .mark }}
+  {{- end }}
+  }
+{{- end }}
 {{- if .nft_hooks_table }}
 
   # Custom nftables table hooks

@@ -270,19 +270,22 @@ func (m *Manager) AddNode(node config.Node) error {
 
 	if !node.IsExternal {
 		// Ensure "none" entrypoint exists at the end
-		hasNone := false
+		var nones []config.Entrypoint
+		var normals []config.Entrypoint
 		for _, ep := range node.Entrypoints {
 			if ep.IsNone() {
-				hasNone = true
-				break
+				nones = append(nones, ep)
+			} else {
+				normals = append(normals, ep)
 			}
 		}
-		if !hasNone {
-			node.Entrypoints = append(node.Entrypoints, config.Entrypoint{
+		if len(nones) == 0 {
+			nones = append(nones, config.Entrypoint{
 				IP:   "",
 				Tags: []string{"nat"},
 			})
 		}
+		node.Entrypoints = append(normals, nones...)
 	}
 
 	if node.Table <= 0 {
@@ -345,20 +348,23 @@ func (m *Manager) UpdateNode(name string, updated config.Node) error {
 	}
 
 	if !updated.IsExternal {
-		// Ensure "none" endpoint exists
-		hasNone := false
+		// Ensure "none" endpoint exists at the end
+		var nones []config.Entrypoint
+		var normals []config.Entrypoint
 		for _, ep := range updated.Entrypoints {
 			if ep.IsNone() {
-				hasNone = true
-				break
+				nones = append(nones, ep)
+			} else {
+				normals = append(normals, ep)
 			}
 		}
-		if !hasNone {
-			updated.Entrypoints = append(updated.Entrypoints, config.Entrypoint{
+		if len(nones) == 0 {
+			nones = append(nones, config.Entrypoint{
 				IP:   "",
 				Tags: []string{"nat"},
 			})
 		}
+		updated.Entrypoints = append(normals, nones...)
 	}
 
 	if updated.Table <= 0 {
@@ -710,10 +716,13 @@ func (m *Manager) DeleteNode(name string) error {
 	defer m.mu.Unlock()
 
 	cfg := m.store.Get()
+	var deletedHost string
 	newNodes := make([]config.Node, 0)
 	for _, n := range cfg.Nodes {
 		if n.Name != name {
 			newNodes = append(newNodes, n)
+		} else {
+			deletedHost = n.Host
 		}
 	}
 	cfg.Nodes = newNodes
@@ -736,6 +745,31 @@ func (m *Manager) DeleteNode(name string) error {
 			}
 		}
 		cfg.Blocks[bIdx].Nodes = updatedBlockNodes
+	}
+
+	// Purge in-memory statuses and sync results
+	delete(m.statuses, name)
+
+	newResults := make([]config.SyncResult, 0, len(m.lastResults))
+	for _, res := range m.lastResults {
+		if res.NodeName != name {
+			newResults = append(newResults, res)
+		}
+	}
+	m.lastResults = newResults
+
+	// Close SSH connections if host is no longer used by any other node
+	if deletedHost != "" {
+		hostStillUsed := false
+		for _, n := range newNodes {
+			if n.Host == deletedHost {
+				hostStillUsed = true
+				break
+			}
+		}
+		if !hostStillUsed && m.pool != nil {
+			m.pool.CloseHost(deletedHost)
+		}
 	}
 
 	_ = m.stateStore.RemoveNode(name)
@@ -1072,6 +1106,15 @@ func (m *Manager) buildLink(cfg *config.Config, n1, n2 *config.Node, listenPort1
 		toFwmark = strings.TrimSpace(customToEnd.Fwmark)
 	}
 
+	fromMark := ""
+	if customFromEnd != nil && strings.TrimSpace(customFromEnd.Mark) != "" {
+		fromMark = strings.TrimSpace(customFromEnd.Mark)
+	}
+	toMark := ""
+	if customToEnd != nil && strings.TrimSpace(customToEnd.Mark) != "" {
+		toMark = strings.TrimSpace(customToEnd.Mark)
+	}
+
 	var fromPref, toPref *int
 	if customFromEnd != nil && customFromEnd.Preference != nil {
 		fromPref = customFromEnd.Preference
@@ -1096,6 +1139,7 @@ func (m *Manager) buildLink(cfg *config.Config, n1, n2 *config.Node, listenPort1
 			Cost:                fromCost,
 			Fwmark:              fromFwmark,
 			Preference:          fromPref,
+			Mark:                fromMark,
 		},
 		To: config.LinkEnd{
 			Name:                toNode.Name,
@@ -1112,6 +1156,7 @@ func (m *Manager) buildLink(cfg *config.Config, n1, n2 *config.Node, listenPort1
 			Cost:                toCost,
 			Fwmark:              toFwmark,
 			Preference:          toPref,
+			Mark:                toMark,
 		},
 		Tags:       tags,
 		ModifiedAt: time.Now().UTC(),
@@ -1492,6 +1537,9 @@ func (m *Manager) UpdateLinkAdvanced(node1Name, node2Name string, customFrom, cu
 		if fromEnd.Preference != nil {
 			link.From.Preference = fromEnd.Preference
 		}
+		if fromEnd.Mark != "" {
+			link.From.Mark = strings.TrimSpace(fromEnd.Mark)
+		}
 	}
 
 	if toEnd != nil {
@@ -1525,6 +1573,9 @@ func (m *Manager) UpdateLinkAdvanced(node1Name, node2Name string, customFrom, cu
 		}
 		if toEnd.Preference != nil {
 			link.To.Preference = toEnd.Preference
+		}
+		if toEnd.Mark != "" {
+			link.To.Mark = strings.TrimSpace(toEnd.Mark)
 		}
 	}
 
@@ -1717,10 +1768,25 @@ func (m *Manager) RefreshNodeStatus(nodeName string) (*config.NodeStatus, error)
 	return status, nil
 }
 
-// GetNodeStatuses returns cached node statuses
+// GetNodeStatuses returns cached node statuses, purging any stale entries for deleted nodes
 func (m *Manager) GetNodeStatuses() map[string]config.NodeStatus {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	cfg := m.store.Get()
+	activeNodes := make(map[string]bool)
+	if cfg != nil {
+		for _, n := range cfg.Nodes {
+			activeNodes[n.Name] = true
+		}
+	}
+
+	for k := range m.statuses {
+		if !activeNodes[k] {
+			delete(m.statuses, k)
+		}
+	}
+
 	res := make(map[string]config.NodeStatus)
 	for k, v := range m.statuses {
 		res[k] = *v
@@ -2720,18 +2786,28 @@ func (m *Manager) UpdateState(nodeNames ...string) (*config.NetworkState, []stri
 
 	// Remove deleted or external nodes from state ONLY on full cluster updates
 	if !isPartialUpdate {
-		activeNodeNames := make(map[string]bool)
+		activeInternalNodes := make(map[string]bool)
+		allActiveNodes := make(map[string]bool)
 		for _, n := range nodes {
+			allActiveNodes[n.Name] = true
 			if !n.IsExternal {
-				activeNodeNames[n.Name] = true
+				activeInternalNodes[n.Name] = true
 			}
 		}
 
 		for stName := range currentState.Nodes {
-			if !activeNodeNames[stName] {
+			if !activeInternalNodes[stName] {
 				delete(currentState.Nodes, stName)
 			}
 		}
+
+		m.mu.Lock()
+		for stName := range m.statuses {
+			if !allActiveNodes[stName] {
+				delete(m.statuses, stName)
+			}
+		}
+		m.mu.Unlock()
 	}
 
 	// Merge probed node interfaces
@@ -2917,6 +2993,7 @@ func (m *Manager) CreateNetworkPolicy(p config.NetworkPolicy) (*config.NetworkPo
 	p.DSCPIngress = config.ValidateDSCP(p.DSCPIngress)
 	p.DSCPEgress = config.ValidateDSCP(p.DSCPEgress)
 	p.Fwmark = strings.TrimSpace(p.Fwmark)
+	p.Mark = strings.TrimSpace(p.Mark)
 
 	cfg.NetworkPolicies = append(cfg.NetworkPolicies, p)
 	if err := m.store.Save(cfg); err != nil {
@@ -2982,6 +3059,7 @@ func (m *Manager) UpdateNetworkPolicy(id string, p config.NetworkPolicy) (*confi
 	cfg.NetworkPolicies[idx].ROAStrict = p.ROAStrict
 	cfg.NetworkPolicies[idx].Fwmark = strings.TrimSpace(p.Fwmark)
 	cfg.NetworkPolicies[idx].Preference = p.Preference
+	cfg.NetworkPolicies[idx].Mark = strings.TrimSpace(p.Mark)
 
 	if err := m.store.Save(cfg); err != nil {
 		return nil, err

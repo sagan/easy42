@@ -300,9 +300,15 @@ export const App: React.FC = () => {
   const handleNodeDeleted = (name: string) => {
     setNodes((prev) => prev.filter((n) => n.name !== name));
     setLinks((prev) => prev.filter((l) => l.from.name !== name && l.to.name !== name));
+    setNodeStatuses((prev) => {
+      const next = { ...prev };
+      delete next[name];
+      return next;
+    });
     if (selectedNode?.name === name) {
       setSelectedNode(null);
     }
+    loadData();
   };
 
   const handleLinkAdded = (newLink: Link) => {

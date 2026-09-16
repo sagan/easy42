@@ -201,6 +201,51 @@ func TestEffectiveFwmarkAndPreference(t *testing.T) {
 	}
 }
 
+func TestEffectiveMark(t *testing.T) {
+	// 1. Unset policy and unset linkEnd
+	var pol *NetworkPolicy
+	var end *LinkEnd
+
+	if m := pol.EffectiveMark(); m != "" {
+		t.Errorf("expected empty mark for nil policy, got %q", m)
+	}
+	if m := end.EffectiveMark(pol); m != "" {
+		t.Errorf("expected empty mark for nil linkEnd with nil policy, got %q", m)
+	}
+
+	pol = &NetworkPolicy{}
+	end = &LinkEnd{}
+	if m := pol.EffectiveMark(); m != "" {
+		t.Errorf("expected empty mark for empty policy, got %q", m)
+	}
+	if m := end.EffectiveMark(pol); m != "" {
+		t.Errorf("expected empty mark for empty linkEnd with empty policy, got %q", m)
+	}
+
+	// 2. Policy defined, LinkEnd unset -> Policy value used
+	pol = &NetworkPolicy{
+		Mark: "0x1234",
+	}
+	end = &LinkEnd{}
+	if m := pol.EffectiveMark(); m != "0x1234" {
+		t.Errorf("expected policy mark '0x1234', got %q", m)
+	}
+	if m := end.EffectiveMark(pol); m != "0x1234" {
+		t.Errorf("expected policy mark '0x1234' on linkEnd, got %q", m)
+	}
+
+	// 3. LinkEnd defined -> LinkEnd overrides NetworkPolicy
+	end.Mark = "42"
+	if m := end.EffectiveMark(pol); m != "42" {
+		t.Errorf("expected linkEnd mark '42' overriding policy, got %q", m)
+	}
+
+	// 4. LinkEnd without policy
+	if m := end.EffectiveMark(nil); m != "42" {
+		t.Errorf("expected linkEnd mark '42' with nil policy, got %q", m)
+	}
+}
+
 func TestCleanPortList(t *testing.T) {
 	tests := []struct {
 		name     string

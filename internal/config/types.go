@@ -205,6 +205,7 @@ type LinkEnd struct {
 	Cost                int    `json:"cost,omitempty"`              // Link cost override (if non-zero, overrides policy cost)
 	Fwmark              string `json:"fwmark,omitempty"`            // Local WireGuard [Interface] FwMark (overrides policy fwmark)
 	Preference          *int   `json:"preference,omitempty"`        // BIRD peer BGP protocol preference (overrides policy preference)
+	Mark                string `json:"mark,omitempty"`              // Netfilter mark for received packets from the link peer (overrides policy mark)
 }
 
 // UseIP returns whether UseIp is enabled on the LinkEnd

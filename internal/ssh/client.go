@@ -54,6 +54,29 @@ func (p *ClientPool) getHostLock(host string) *sync.Mutex {
 	return l
 }
 
+// CloseHost closes and removes the cached SSH and SFTP connections for a specific host
+func (p *ClientPool) CloseHost(hostAliasOrIP string) {
+	hostLock := p.getHostLock(hostAliasOrIP)
+	hostLock.Lock()
+	defer hostLock.Unlock()
+
+	p.mu.Lock()
+	pc, exists := p.clients[hostAliasOrIP]
+	if exists {
+		delete(p.clients, hostAliasOrIP)
+	}
+	p.mu.Unlock()
+
+	if exists && pc != nil {
+		if pc.SFTPClient != nil {
+			_ = pc.SFTPClient.Close()
+		}
+		if pc.SSHClient != nil {
+			_ = pc.SSHClient.Close()
+		}
+	}
+}
+
 // CloseAll closes all cached SSH and SFTP connections
 func (p *ClientPool) CloseAll() {
 	p.mu.Lock()

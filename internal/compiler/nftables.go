@@ -194,7 +194,8 @@ func BuildNftablesNodeContext(
 		}
 		hasSNAT := pol.SNAT != nil && pol.SNAT.Enabled
 		hasDSCP := pol.DSCPIngress != nil || pol.DSCPEgress != nil
-		if !pol.FilterForward && !pol.FilterInput && !hasSNAT && !hasDSCP {
+		hasMark := strings.TrimSpace(pol.Mark) != ""
+		if !pol.FilterForward && !pol.FilterInput && !hasSNAT && !hasDSCP && !hasMark {
 			continue
 		}
 
@@ -338,6 +339,7 @@ func BuildNftablesNodeContext(
 			"snat_target_v6":    snatTargetV6,
 			"dscp_ingress":      dscpIngress,
 			"dscp_egress":       dscpEgress,
+			"mark":              strings.TrimSpace(pol.Mark),
 		})
 	}
 	sort.Slice(nftPolicies, func(i, j int) bool {
@@ -345,6 +347,45 @@ func BuildNftablesNodeContext(
 	})
 	ctx["nft_policies"] = nftPolicies
 	ctx["custom_nft_policies"] = nftPolicies
+
+	// Collect interfaces per mark (from effective marks on local link ends)
+	markIfnames := make(map[string][]string)
+	for _, l := range linksCtx {
+		local, _ := l["local"].(map[string]any)
+		iface, _ := local["interface"].(string)
+		mark, _ := local["mark"].(string)
+		mark = strings.TrimSpace(mark)
+		if iface == "" || mark == "" {
+			continue
+		}
+		quoted := `"` + iface + `"`
+		if !slices.Contains(markIfnames[mark], quoted) {
+			markIfnames[mark] = append(markIfnames[mark], quoted)
+		}
+	}
+
+	var nftMarks []map[string]any
+	var markKeys []string
+	for k := range markIfnames {
+		markKeys = append(markKeys, k)
+	}
+	sort.Strings(markKeys)
+
+	for _, m := range markKeys {
+		ifs := markIfnames[m]
+		sort.Strings(ifs)
+		var ifnamesStr string
+		if len(ifs) == 1 {
+			ifnamesStr = ifs[0]
+		} else {
+			ifnamesStr = "{ " + strings.Join(ifs, ", ") + " }"
+		}
+		nftMarks = append(nftMarks, map[string]any{
+			"mark":    m,
+			"ifnames": ifnamesStr,
+		})
+	}
+	ctx["nft_marks"] = nftMarks
 
 	var nftHooksPre []string
 	var nftHooksTable []string

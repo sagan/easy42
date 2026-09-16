@@ -47,6 +47,12 @@ interface EditableEntrypoint {
   isNone: boolean;
 }
 
+export const ensureFallbackLast = (eps: EditableEntrypoint[]): EditableEntrypoint[] => {
+  const nonFallback = eps.filter((e) => !e.isNone);
+  const fallback = eps.filter((e) => e.isNone);
+  return [...nonFallback, ...fallback];
+};
+
 interface EditableConfigHook {
   id: string;
   type: string;
@@ -182,7 +188,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
         if (!hasNone && !nodeToEdit.is_external) {
           mapped.push({ id: "nat-fallback", ip: "", portStr: "", tagStr: "nat", mtuStr: "", isNone: true });
         }
-        setEntrypoints(mapped);
+        setEntrypoints(ensureFallbackLast(mapped));
       } else {
         if (nodeToEdit.is_external) {
           setEntrypoints([{ id: `ep-0-${Date.now()}`, ip: "", portStr: "", tagStr: "external", mtuStr: "", isNone: false }]);
@@ -278,7 +284,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
         if (!hasNone) {
           mapped.push({ id: `ep-none-${Date.now()}`, ip: "", portStr: "", tagStr: "nat", mtuStr: "", isNone: true });
         }
-        setEntrypoints(mapped);
+        setEntrypoints(ensureFallbackLast(mapped));
       }
 
       // Collect all discovered interface IPs
@@ -300,23 +306,21 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
   };
 
   const handleAddEntrypoint = () => {
-    setEntrypoints((prev) => [
-      ...prev,
-      {
-        id: `ep-${Date.now()}`,
-        ip: "",
-        portStr: "",
-        tagStr: "",
-        mtuStr: "",
-        isNone: false,
-      },
-    ]);
+    const newEp: EditableEntrypoint = {
+      id: `ep-${Date.now()}`,
+      ip: "",
+      portStr: "",
+      tagStr: "",
+      mtuStr: "",
+      isNone: false,
+    };
+    setEntrypoints((prev) => ensureFallbackLast([...prev, newEp]));
   };
 
   const handleRemoveEntrypoint = (id: string) => {
     setEntrypoints((prev) => {
       if (prev.length <= 1) return prev;
-      return prev.filter((e) => e.id !== id);
+      return ensureFallbackLast(prev.filter((e) => e.id !== id));
     });
   };
 
@@ -388,7 +392,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
     let newNode: Node;
 
     const buildFinalEntrypoints = (eps: EditableEntrypoint[], forExternal: boolean): Entrypoint[] => {
-      return eps
+      return ensureFallbackLast(eps)
         .filter((ep) => {
           if (forExternal) {
             return !ep.isNone && ep.ip.trim() !== "";
@@ -566,9 +570,16 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                 size="small"
                 onClick={() => {
                   setIsExternal(false);
-                  if (entrypoints.length === 1 && !entrypoints[0].isNone && !entrypoints[0].ip) {
-                    setEntrypoints([{ id: "nat-fallback", ip: "", portStr: "", tagStr: "nat", mtuStr: "", isNone: true }]);
-                  }
+                  setEntrypoints((prev) => {
+                    const hasNone = prev.some((e) => e.isNone);
+                    if (!hasNone) {
+                      return ensureFallbackLast([
+                        ...prev,
+                        { id: "nat-fallback", ip: "", portStr: "", tagStr: "nat", mtuStr: "", isNone: true },
+                      ]);
+                    }
+                    return ensureFallbackLast(prev);
+                  });
                 }}
                 startIcon={<Server size={16} />}
                 sx={{ flex: 1, textTransform: "none", fontWeight: 600 }}
@@ -687,7 +698,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                     onClick={handleAddEntrypoint}
                     sx={{ fontSize: "0.75rem", py: 0.3 }}
                   >
-                    Add Endpoint
+                    Add Entrypoint
                   </Button>
                 </Box>
 
@@ -955,7 +966,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                     onClick={handleAddEntrypoint}
                     sx={{ fontSize: "0.75rem", py: 0.3 }}
                   >
-                    Add Endpoint
+                    Add Entrypoint
                   </Button>
                 </Box>
 

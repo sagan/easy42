@@ -46,12 +46,21 @@ type NetworkPolicy struct {
 	ROAStrict          bool        `json:"roa_strict,omitempty"`
 	Fwmark             string      `json:"fwmark,omitempty"`     // Local WireGuard [Interface] FwMark
 	Preference         *int        `json:"preference,omitempty"` // BIRD peer BGP protocol preference
+	Mark               string      `json:"mark,omitempty"`       // Netfilter mark for received packets from the link peer
 }
 
 // EffectiveFwmark returns the configured fwmark or empty string if unset
 func (p *NetworkPolicy) EffectiveFwmark() string {
 	if p != nil {
 		return strings.TrimSpace(p.Fwmark)
+	}
+	return ""
+}
+
+// EffectiveMark returns the configured mark or empty string if unset
+func (p *NetworkPolicy) EffectiveMark() string {
+	if p != nil {
+		return strings.TrimSpace(p.Mark)
 	}
 	return ""
 }
@@ -320,4 +329,17 @@ func (l *LinkEnd) EffectivePreference(p *NetworkPolicy) *int {
 		return p.Preference
 	}
 	return nil
+}
+
+// EffectiveMark returns the active mark for this LinkEnd using the provided policy.
+// If LinkEnd's Mark is defined, it overrides the policy's mark.
+// Otherwise, it falls back to the policy's mark.
+func (l *LinkEnd) EffectiveMark(p *NetworkPolicy) string {
+	if l != nil && strings.TrimSpace(l.Mark) != "" {
+		return strings.TrimSpace(l.Mark)
+	}
+	if p != nil {
+		return strings.TrimSpace(p.Mark)
+	}
+	return ""
 }

@@ -501,6 +501,7 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 		}
 
 		pref := rl.localEnd.EffectivePreference(&rl.pol)
+		mark := rl.localEnd.EffectiveMark(&rl.pol)
 		nodeLink := map[string]any{
 			"tags":           tags,
 			"local":          localMap,
@@ -513,11 +514,17 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 			"local_as":       localAS,
 			"cost":           rl.linkCost,
 			"has_preference": pref != nil,
+			"has_mark":       mark != "",
 		}
 		if pref != nil {
 			nodeLink["preference"] = *pref
 			localMap["preference"] = *pref
 			localMap["has_preference"] = true
+		}
+		if mark != "" {
+			nodeLink["mark"] = mark
+			localMap["mark"] = mark
+			localMap["has_mark"] = true
 		}
 		nodeLinks = append(nodeLinks, nodeLink)
 	}
@@ -835,6 +842,7 @@ func linkEndToContextMap(end *config.LinkEnd, node *config.Node, peerName string
 	cost := 0
 	fwmark := ""
 	var preference *int
+	mark := ""
 
 	if end != nil {
 		name = end.Name
@@ -846,6 +854,7 @@ func linkEndToContextMap(end *config.LinkEnd, node *config.Node, peerName string
 		cost = end.Cost
 		fwmark = end.Fwmark
 		preference = end.Preference
+		mark = end.Mark
 	}
 
 	isLinkLocal := strings.HasPrefix(strings.ToLower(addr), "fe80:")
@@ -862,6 +871,7 @@ func linkEndToContextMap(end *config.LinkEnd, node *config.Node, peerName string
 		"mtu":                  mtu,
 		"cost":                 cost,
 		"fwmark":               fwmark,
+		"mark":                 mark,
 	}
 	if preference != nil {
 		res["preference"] = *preference

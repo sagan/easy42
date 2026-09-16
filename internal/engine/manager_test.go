@@ -969,6 +969,85 @@ func TestUpdateStatePartialNodeFilter(t *testing.T) {
 	}
 }
 
+func TestDeleteNodeCleansUpMemoryAndState(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "easy42-engine-del-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	store := config.NewStore(tempDir)
+	pass, err := store.Initialize()
+	if err != nil {
+		t.Fatalf("Failed to init store: %v", err)
+	}
+
+	mgr := NewManager(store)
+	if err := mgr.Unlock(pass); err != nil {
+		t.Fatalf("Failed to unlock manager: %v", err)
+	}
+
+	node1 := config.Node{Name: "node-1", Host: "10.0.0.1", IP: "172.20.1.1", Interface: "eth0", ASN: 4224420001}
+	node2 := config.Node{Name: "node-2", Host: "10.0.0.2", IP: "172.20.1.2", Interface: "eth0", ASN: 4224420002}
+	_ = mgr.AddNode(node1)
+	_ = mgr.AddNode(node2)
+
+	// Simulate in-memory status and sync results for node-1
+	mgr.mu.Lock()
+	mgr.statuses["node-1"] = &config.NodeStatus{
+		Name:      "node-1",
+		Host:      "10.0.0.1",
+		Connected: false,
+		Error:     "probe timed out",
+	}
+	mgr.statuses["node-2"] = &config.NodeStatus{
+		Name:      "node-2",
+		Host:      "10.0.0.2",
+		Connected: true,
+	}
+	mgr.lastResults = []config.SyncResult{
+		{NodeName: "node-1", Action: "test", Success: false},
+		{NodeName: "node-2", Action: "test", Success: true},
+	}
+	mgr.mu.Unlock()
+
+	// Delete node-1
+	if err := mgr.DeleteNode("node-1"); err != nil {
+		t.Fatalf("DeleteNode failed: %v", err)
+	}
+
+	// 1. Check in-memory statuses map
+	mgr.mu.RLock()
+	if _, ok := mgr.statuses["node-1"]; ok {
+		t.Errorf("node-1 still exists in mgr.statuses map")
+	}
+	for _, res := range mgr.lastResults {
+		if res.NodeName == "node-1" {
+			t.Errorf("node-1 still exists in mgr.lastResults")
+		}
+	}
+	mgr.mu.RUnlock()
+
+	// 2. Check GetNodeStatuses()
+	stMap := mgr.GetNodeStatuses()
+	if _, ok := stMap["node-1"]; ok {
+		t.Errorf("node-1 still exists in GetNodeStatuses()")
+	}
+	if _, ok := stMap["node-2"]; !ok {
+		t.Errorf("node-2 missing from GetNodeStatuses()")
+	}
+
+	// 3. Test that GetNodeStatuses() cleans up any ghost/stale nodes not in config
+	mgr.mu.Lock()
+	mgr.statuses["ghost"] = &config.NodeStatus{Name: "ghost", Connected: false, Error: "timeout"}
+	mgr.mu.Unlock()
+
+	stMapAfterGhost := mgr.GetNodeStatuses()
+	if _, ok := stMapAfterGhost["ghost"]; ok {
+		t.Errorf("ghost node should have been purged by GetNodeStatuses()")
+	}
+}
+
 func TestNodeIP6(t *testing.T) {
 	tempDir, err := os.MkdirTemp("", "easy42-engine-ip6-*")
 	if err != nil {

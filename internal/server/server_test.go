@@ -188,6 +188,8 @@ func TestUpdateLinkAPI(t *testing.T) {
 		"to_fwmark":       "0xca64",
 		"from_preference": 120,
 		"to_preference":   180,
+		"from_mark":       "0x1234",
+		"to_mark":         "42",
 	}
 	bodyLink, _ := json.Marshal(linkReq)
 	reqLink := httptest.NewRequest("POST", "/api/links", bytes.NewReader(bodyLink))
@@ -211,6 +213,9 @@ func TestUpdateLinkAPI(t *testing.T) {
 	if added.From.Preference == nil || *added.From.Preference != 120 || added.To.Preference == nil || *added.To.Preference != 180 {
 		t.Errorf("Unexpected added link preference: from=%v, to=%v", added.From.Preference, added.To.Preference)
 	}
+	if added.From.Mark != "0x1234" || added.To.Mark != "42" {
+		t.Errorf("Unexpected added link mark: from=%q, to=%q", added.From.Mark, added.To.Mark)
+	}
 
 	// Update link
 	updateReq := map[string]any{
@@ -223,6 +228,7 @@ func TestUpdateLinkAPI(t *testing.T) {
 		"from_cost":       80,
 		"from_fwmark":     "0x1234",
 		"from_preference": 220,
+		"from_mark":       "0x9999",
 	}
 	bodyUpdate, _ := json.Marshal(updateReq)
 	reqUpdate := httptest.NewRequest("PUT", "/api/links", bytes.NewReader(bodyUpdate))
@@ -253,6 +259,9 @@ func TestUpdateLinkAPI(t *testing.T) {
 	}
 	if updated.From.Preference == nil || *updated.From.Preference != 220 {
 		t.Errorf("Unexpected updated From.Preference: %v (expected 220)", updated.From.Preference)
+	}
+	if updated.From.Mark != "0x9999" {
+		t.Errorf("Unexpected updated From.Mark: %q (expected 0x9999)", updated.From.Mark)
 	}
 }
 
@@ -901,6 +910,7 @@ func TestNetworkPoliciesAPI(t *testing.T) {
 		FilterForward:   true,
 		Fwmark:          "51820",
 		Preference:      &custPref,
+		Mark:            "0x1234",
 	}
 	customBody, _ := json.Marshal(customPol)
 	reqCustom := httptest.NewRequest("POST", "/api/network-policies", bytes.NewReader(customBody))
@@ -921,8 +931,8 @@ func TestNetworkPoliciesAPI(t *testing.T) {
 	}
 	var fetchedPol config.NetworkPolicy
 	_ = json.Unmarshal(wGetSingle.Body.Bytes(), &fetchedPol)
-	if fetchedPol.Fwmark != "51820" || fetchedPol.Preference == nil || *fetchedPol.Preference != 140 {
-		t.Errorf("Unexpected fetched policy: fwmark=%q, preference=%v", fetchedPol.Fwmark, fetchedPol.Preference)
+	if fetchedPol.Fwmark != "51820" || fetchedPol.Preference == nil || *fetchedPol.Preference != 140 || fetchedPol.Mark != "0x1234" {
+		t.Errorf("Unexpected fetched policy: fwmark=%q, preference=%v, mark=%q", fetchedPol.Fwmark, fetchedPol.Preference, fetchedPol.Mark)
 	}
 
 	// 5. PUT /api/network-policies/guest-net -> 200
@@ -932,6 +942,7 @@ func TestNetworkPoliciesAPI(t *testing.T) {
 		AllowedDstCIDRs: []string{"172.20.15.0/24"},
 		Fwmark:          "0xca64",
 		Preference:      &updPref,
+		Mark:            "0x5678",
 	}
 	updateBody, _ := json.Marshal(updatePol)
 	reqUpdate := httptest.NewRequest("PUT", "/api/network-policies/guest-net", bytes.NewReader(updateBody))
@@ -940,6 +951,11 @@ func TestNetworkPoliciesAPI(t *testing.T) {
 	srv.router.ServeHTTP(wUpdate, reqUpdate)
 	if wUpdate.Code != http.StatusOK {
 		t.Fatalf("Update policy failed: %d %s", wUpdate.Code, wUpdate.Body.String())
+	}
+	var updatedPol config.NetworkPolicy
+	_ = json.Unmarshal(wUpdate.Body.Bytes(), &updatedPol)
+	if updatedPol.Mark != "0x5678" {
+		t.Errorf("Unexpected updated policy mark: %q", updatedPol.Mark)
 	}
 
 	// 6. PUT /api/network-policies/default -> 400 (cannot edit built-in)
@@ -1054,6 +1070,48 @@ func TestUpdateStateSpecifiedNodeAndObservability(t *testing.T) {
 	}
 	if len(offlineResp.Warnings) == 0 {
 		t.Errorf("Expected warning for offnode connection failure")
+	}
+
+	// 3. Delete offnode
+	reqDel := httptest.NewRequest("DELETE", "/api/nodes/offnode", nil)
+	reqDel.AddCookie(cookie)
+	wDel := httptest.NewRecorder()
+	srv.router.ServeHTTP(wDel, reqDel)
+	if wDel.Code != http.StatusOK {
+		t.Fatalf("DeleteNode failed: %d %s", wDel.Code, wDel.Body.String())
+	}
+
+	// 4. Verify GET /api/nodes/status does not contain deleted node
+	reqStatus := httptest.NewRequest("GET", "/api/nodes/status", nil)
+	reqStatus.AddCookie(cookie)
+	wStatus := httptest.NewRecorder()
+	srv.router.ServeHTTP(wStatus, reqStatus)
+	var statuses map[string]config.NodeStatus
+	if err := json.Unmarshal(wStatus.Body.Bytes(), &statuses); err != nil {
+		t.Fatalf("Failed to decode statuses: %v", err)
+	}
+	if _, exists := statuses["offnode"]; exists {
+		t.Errorf("Deleted offnode still exists in /api/nodes/status")
+	}
+
+	// 5. Run full POST /api/state/update (like clicking Update State in UI)
+	reqFullUpdate := httptest.NewRequest("POST", "/api/state/update", nil)
+	reqFullUpdate.AddCookie(cookie)
+	wFullUpdate := httptest.NewRecorder()
+	srv.router.ServeHTTP(wFullUpdate, reqFullUpdate)
+	if wFullUpdate.Code != http.StatusOK {
+		t.Fatalf("Full UpdateState failed: %d %s", wFullUpdate.Code, wFullUpdate.Body.String())
+	}
+
+	var fullResp struct {
+		Success     bool              `json:"success"`
+		FailedNodes map[string]string `json:"failed_nodes"`
+	}
+	if err := json.Unmarshal(wFullUpdate.Body.Bytes(), &fullResp); err != nil {
+		t.Fatalf("Failed to parse json: %v", err)
+	}
+	if len(fullResp.FailedNodes) != 0 {
+		t.Errorf("Expected no failed nodes after deleting offnode, got %+v", fullResp.FailedNodes)
 	}
 }
 

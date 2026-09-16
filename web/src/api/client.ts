@@ -140,6 +140,8 @@ export const api = {
     to_fwmark?: string;
     from_preference?: number;
     to_preference?: number;
+    from_mark?: string;
+    to_mark?: string;
     mtu?: number;
     tags?: string[];
     from?: Partial<Link["from"]>;
@@ -171,6 +173,8 @@ export const api = {
     to_fwmark?: string;
     from_preference?: number;
     to_preference?: number;
+    from_mark?: string;
+    to_mark?: string;
     mtu?: number;
     tags?: string[];
     from?: Partial<Link["from"]>;
