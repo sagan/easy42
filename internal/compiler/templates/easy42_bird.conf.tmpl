@@ -121,7 +121,9 @@ protocol kernel kernel_v4 {
             {{if .use_internet_table}}
             if (source ~ [ RTS_BGP ]) && (net ~ INTERNET) then reject;
             {{end}}
-            if source ~ [ RTS_BGP, RTS_STATIC ] then accept;
+            if source ~ [ RTS_BGP ] then accept;
+            # we define static routes in bird as "reject". So only install to kernel for private ip
+            if source ~ [ RTS_STATIC ] && (net ~ PRIVATE) then accept;
             reject;
         };
         {{if .has_main_kernel_routes}}
@@ -267,7 +269,9 @@ protocol kernel kernel_v6 {
             {{if .use_external_table}}
             if (COMM_EXTERNAL ~ bgp_large_community) then reject;
             {{end}}
-            if source ~ [ RTS_BGP, RTS_STATIC ] then accept;
+            if source ~ [ RTS_BGP ] then accept;
+            # we define static routes in bird as "reject". So only install to kernel for private ip
+            if source ~ [ RTS_STATIC ] && (net ~ PRIVATE6) then accept;
             reject;
         };
         {{if .has_main_kernel_routes_v6}}
@@ -373,7 +377,7 @@ protocol static static_v4 {
     ipv4;
     {{range .static_routes_v4}}
     # reject is strictly local (kernel) only. It generates "unreachable" kernel routing table
-    route {{.}} reject;
+    route {{.}}{{ if not (contains "/" .) }}/32{{ end }} reject;
     {{end}}
 }
 {{end}}
@@ -383,7 +387,7 @@ protocol static static_v6 {
     ipv6;
     {{range .static_routes_v6}}
     # reject is strictly local (kernel) only. It generates "unreachable" kernel routing table
-    route {{.}} reject;
+    route {{.}}{{ if not (contains "/" .) }}/128{{ end }} reject;
     {{end}}
 }
 {{end}}
@@ -397,6 +401,9 @@ template bgp easy42_peer {
     confederation member yes;
     default bgp_local_pref DEFAULT_LOCAL_PREF;
     {{end}}
+
+    hold time 90;          # Set hold time to 90 seconds
+    keepalive time 30;     # Set keepalive interval to 30 seconds
 
     ipv4 {
         # This tells Bird to send IPv4 routes over the IPv6 session
@@ -452,6 +459,9 @@ template bgp {{.template_name}} {
     confederation member yes;
     default bgp_local_pref DEFAULT_LOCAL_PREF;
     {{end}}
+
+    hold time 90;          # Set hold time to 90 seconds
+    keepalive time 30;     # Set keepalive interval to 30 seconds
 
     ipv4 {
         # This tells Bird to send IPv4 routes over the IPv6 session
@@ -510,6 +520,9 @@ template bgp none_peer {
     default bgp_local_pref DEFAULT_LOCAL_PREF;
     {{end}}
 
+    hold time 90;          # Set hold time to 90 seconds
+    keepalive time 30;     # Set keepalive interval to 30 seconds
+
     ipv4 {
         extended next hop on;
         next hop self;
@@ -557,6 +570,9 @@ template bgp {{.template_name}} {
     confederation member yes;
     default bgp_local_pref DEFAULT_LOCAL_PREF;
     {{end}}
+
+    hold time 90;          # Set hold time to 90 seconds
+    keepalive time 30;     # Set keepalive interval to 30 seconds
 
     ipv4 {
         extended next hop on;
@@ -613,6 +629,9 @@ template bgp external_peer {
     confederation CONFED_AS;
     confederation member no;
     {{end}}
+
+    hold time 90;          # Set hold time to 90 seconds
+    keepalive time 30;     # Set keepalive interval to 30 seconds
 
     ipv4 {
         extended next hop on;
@@ -704,6 +723,9 @@ template bgp {{.template_name}} {
     confederation member yes;
     default bgp_local_pref DEFAULT_LOCAL_PREF;
     {{end}}
+
+    hold time 90;          # Set hold time to 90 seconds
+    keepalive time 30;     # Set keepalive interval to 30 seconds
 
     ipv4 {
         extended next hop on;
