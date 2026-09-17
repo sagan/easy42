@@ -1399,5 +1399,114 @@ func TestBlocksPersistence(t *testing.T) {
 	}
 }
 
+func TestRoutingPolicyServerAPI(t *testing.T) {
+	srv, tempDir, initPass := setupTestServer(t)
+	defer os.RemoveAll(tempDir)
+
+	// Login to get session cookie
+	loginBody, _ := json.Marshal(map[string]string{"password": initPass})
+	reqLogin := httptest.NewRequest("POST", "/api/auth/login", bytes.NewReader(loginBody))
+	wLogin := httptest.NewRecorder()
+	srv.router.ServeHTTP(wLogin, reqLogin)
+	if wLogin.Code != http.StatusOK {
+		t.Fatalf("Login failed: %d", wLogin.Code)
+	}
+	cookie := wLogin.Result().Cookies()[0]
+
+	// 1. Create custom NetworkPolicy with routing_policy
+	polPayload := map[string]interface{}{
+		"id":             "pol-custom-stub",
+		"name":           "Custom Stub Policy",
+		"routing_policy": "stub",
+	}
+	polBody, _ := json.Marshal(polPayload)
+	reqPol := httptest.NewRequest("POST", "/api/network-policies", bytes.NewReader(polBody))
+	reqPol.AddCookie(cookie)
+	wPol := httptest.NewRecorder()
+	srv.router.ServeHTTP(wPol, reqPol)
+	if wPol.Code != http.StatusCreated {
+		t.Fatalf("Create policy failed: %d %s", wPol.Code, wPol.Body.String())
+	}
+
+	var createdPol config.NetworkPolicy
+	_ = json.Unmarshal(wPol.Body.Bytes(), &createdPol)
+	if createdPol.RoutingPolicy != "stub" {
+		t.Errorf("Expected policy RoutingPolicy 'stub', got %q", createdPol.RoutingPolicy)
+	}
+
+	// 2. Add two nodes
+	n1Body, _ := json.Marshal(config.Node{Name: "n-rt1", Host: "h1", IP: "192.168.1.1", Interface: "eth0", ASN: 4224420001})
+	reqN1 := httptest.NewRequest("POST", "/api/nodes", bytes.NewReader(n1Body))
+	reqN1.AddCookie(cookie)
+	wN1 := httptest.NewRecorder()
+	srv.router.ServeHTTP(wN1, reqN1)
+	if wN1.Code != http.StatusCreated {
+		t.Fatalf("AddNode 1 failed: %d", wN1.Code)
+	}
+
+	n2Body, _ := json.Marshal(config.Node{Name: "n-rt2", Host: "h2", IP: "192.168.1.2", Interface: "eth0", ASN: 4224420002})
+	reqN2 := httptest.NewRequest("POST", "/api/nodes", bytes.NewReader(n2Body))
+	reqN2.AddCookie(cookie)
+	wN2 := httptest.NewRecorder()
+	srv.router.ServeHTTP(wN2, reqN2)
+	if wN2.Code != http.StatusCreated {
+		t.Fatalf("AddNode 2 failed: %d", wN2.Code)
+	}
+
+	// 3. Add link with from_routing_policy
+	linkPayload := map[string]interface{}{
+		"from_node":           "n-rt1",
+		"to_node":             "n-rt2",
+		"from_routing_policy": "stub",
+	}
+	linkBody, _ := json.Marshal(linkPayload)
+	reqLink := httptest.NewRequest("POST", "/api/links", bytes.NewReader(linkBody))
+	reqLink.AddCookie(cookie)
+	wLink := httptest.NewRecorder()
+	srv.router.ServeHTTP(wLink, reqLink)
+	if wLink.Code != http.StatusCreated {
+		t.Fatalf("AddLink failed: %d %s", wLink.Code, wLink.Body.String())
+	}
+
+	var createdLink config.Link
+	_ = json.Unmarshal(wLink.Body.Bytes(), &createdLink)
+	var end1 *config.LinkEnd
+	if createdLink.From.Name == "n-rt1" {
+		end1 = &createdLink.From
+	} else {
+		end1 = &createdLink.To
+	}
+	if end1.RoutingPolicy != "stub" {
+		t.Errorf("Expected link end routing_policy 'stub', got %q", end1.RoutingPolicy)
+	}
+
+	// 4. Update link with from_routing_policy: receive_only
+	updatePayload := map[string]interface{}{
+		"from_node":           "n-rt1",
+		"to_node":             "n-rt2",
+		"from_routing_policy": "receive_only",
+	}
+	updateBody, _ := json.Marshal(updatePayload)
+	reqUpdate := httptest.NewRequest("PUT", "/api/links", bytes.NewReader(updateBody))
+	reqUpdate.AddCookie(cookie)
+	wUpdate := httptest.NewRecorder()
+	srv.router.ServeHTTP(wUpdate, reqUpdate)
+	if wUpdate.Code != http.StatusOK {
+		t.Fatalf("UpdateLink failed: %d %s", wUpdate.Code, wUpdate.Body.String())
+	}
+
+	var updatedLink config.Link
+	_ = json.Unmarshal(wUpdate.Body.Bytes(), &updatedLink)
+	if updatedLink.From.Name == "n-rt1" {
+		end1 = &updatedLink.From
+	} else {
+		end1 = &updatedLink.To
+	}
+	if end1.RoutingPolicy != "receive_only" {
+		t.Errorf("Expected updated link end routing_policy 'receive_only', got %q", end1.RoutingPolicy)
+	}
+}
+
+
 
 

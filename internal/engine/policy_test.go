@@ -162,3 +162,102 @@ func TestNetworkPolicyManagerCRUD(t *testing.T) {
 		t.Fatalf("expected 3 policies after deletion, got %d", len(policies))
 	}
 }
+
+func TestRoutingPolicyEngineCRUD(t *testing.T) {
+	tempDir := t.TempDir()
+	store := config.NewStore(tempDir)
+	pass, err := store.Initialize()
+	if err != nil {
+		t.Fatalf("Failed to init store: %v", err)
+	}
+
+	mgr := NewManager(store)
+	if err := mgr.Unlock(pass); err != nil {
+		t.Fatalf("Failed to unlock manager: %v", err)
+	}
+
+	// 1. Create policy with routing policy alias
+	p1, err := mgr.CreateNetworkPolicy(config.NetworkPolicy{
+		ID:            "pol-stub",
+		Name:          "Stub Network Policy",
+		RoutingPolicy: "originate_only",
+	})
+	if err != nil {
+		t.Fatalf("CreateNetworkPolicy failed: %v", err)
+	}
+	if p1.RoutingPolicy != config.RoutingPolicyStub {
+		t.Errorf("expected normalized RoutingPolicy 'stub', got %q", p1.RoutingPolicy)
+	}
+	if p1.EffectiveRoutingPolicy() != config.RoutingPolicyStub {
+		t.Errorf("expected EffectiveRoutingPolicy 'stub', got %q", p1.EffectiveRoutingPolicy())
+	}
+
+	// 2. Update policy routing policy
+	p1Updated, err := mgr.UpdateNetworkPolicy("pol-stub", config.NetworkPolicy{
+		Name:          "Stub Network Policy",
+		RoutingPolicy: "import_only",
+	})
+	if err != nil {
+		t.Fatalf("UpdateNetworkPolicy failed: %v", err)
+	}
+	if p1Updated.RoutingPolicy != config.RoutingPolicyReceiveOnly {
+		t.Errorf("expected normalized RoutingPolicy 'receive_only', got %q", p1Updated.RoutingPolicy)
+	}
+
+	// 3. Add link with routing policy override
+	n1 := config.Node{Name: "node-1", Host: "h1", IP: "192.168.1.1", Interface: "eth0", ASN: 4224420001}
+	n2 := config.Node{Name: "node-2", Host: "h2", IP: "192.168.1.2", Interface: "eth0", ASN: 4224420002}
+	if err := mgr.AddNode(n1); err != nil {
+		t.Fatalf("AddNode node-1 failed: %v", err)
+	}
+	if err := mgr.AddNode(n2); err != nil {
+		t.Fatalf("AddNode node-2 failed: %v", err)
+	}
+
+	link, err := mgr.AddLinkAdvanced(n1.Name, n2.Name,
+		&config.LinkEnd{Policy: "pol-stub", RoutingPolicy: "stub"},
+		&config.LinkEnd{Policy: "pol-stub"},
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("AddLinkAdvanced failed: %v", err)
+	}
+
+	var fromEnd, toEnd *config.LinkEnd
+	if link.From.Name == n1.Name {
+		fromEnd = &link.From
+		toEnd = &link.To
+	} else {
+		fromEnd = &link.To
+		toEnd = &link.From
+	}
+
+	if fromEnd.RoutingPolicy != config.RoutingPolicyStub {
+		t.Errorf("expected fromEnd.RoutingPolicy == 'stub', got %q", fromEnd.RoutingPolicy)
+	}
+	if toEnd.RoutingPolicy != "" {
+		t.Errorf("expected toEnd.RoutingPolicy == '', got %q", toEnd.RoutingPolicy)
+	}
+	if toEnd.EffectiveRoutingPolicy(p1Updated) != config.RoutingPolicyReceiveOnly {
+		t.Errorf("expected toEnd.EffectiveRoutingPolicy to inherit 'receive_only', got %q", toEnd.EffectiveRoutingPolicy(p1Updated))
+	}
+
+	// 4. Update link to reset RoutingPolicy via 'inherit'
+	updatedLink, err := mgr.UpdateLinkAdvanced(n1.Name, n2.Name,
+		&config.LinkEnd{RoutingPolicy: "inherit"},
+		nil,
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("UpdateLinkAdvanced failed: %v", err)
+	}
+	if updatedLink.From.Name == n1.Name {
+		fromEnd = &updatedLink.From
+	} else {
+		fromEnd = &updatedLink.To
+	}
+	if fromEnd.RoutingPolicy != "" {
+		t.Errorf("expected fromEnd.RoutingPolicy to be cleared to '', got %q", fromEnd.RoutingPolicy)
+	}
+}
+

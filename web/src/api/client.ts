@@ -134,6 +134,8 @@ export const api = {
     to_use_ip?: boolean;
     from_policy?: string;
     to_policy?: string;
+    from_routing_policy?: string;
+    to_routing_policy?: string;
     from_cost?: number;
     to_cost?: number;
     from_fwmark?: string;
@@ -167,6 +169,8 @@ export const api = {
     to_use_ip?: boolean;
     from_policy?: string;
     to_policy?: string;
+    from_routing_policy?: string;
+    to_routing_policy?: string;
     from_cost?: number;
     to_cost?: number;
     from_fwmark?: string;

@@ -441,6 +441,8 @@ type addLinkRequest struct {
 	ToPreference   *int            `json:"to_preference,omitempty"`
 	FromMark       *string         `json:"from_mark,omitempty"`
 	ToMark         *string         `json:"to_mark,omitempty"`
+	FromRoutingPolicy string      `json:"from_routing_policy,omitempty"`
+	ToRoutingPolicy   string      `json:"to_routing_policy,omitempty"`
 	MTU            int             `json:"mtu,omitempty"`
 	Tags       []string        `json:"tags,omitempty"`
 	From       *config.LinkEnd `json:"from,omitempty"`
@@ -546,6 +548,18 @@ func (s *Server) handleAddLink(w http.ResponseWriter, r *http.Request) {
 		}
 		req.To.Mark = strings.TrimSpace(*req.ToMark)
 	}
+	if req.FromRoutingPolicy != "" {
+		if req.From == nil {
+			req.From = &config.LinkEnd{}
+		}
+		req.From.RoutingPolicy = req.FromRoutingPolicy
+	}
+	if req.ToRoutingPolicy != "" {
+		if req.To == nil {
+			req.To = &config.LinkEnd{}
+		}
+		req.To.RoutingPolicy = req.ToRoutingPolicy
+	}
 
 	var link *config.Link
 	var err error
@@ -614,6 +628,8 @@ type updateLinkRequest struct {
 	ToPreference   *int            `json:"to_preference,omitempty"`
 	FromMark       *string         `json:"from_mark,omitempty"`
 	ToMark         *string         `json:"to_mark,omitempty"`
+	FromRoutingPolicy string      `json:"from_routing_policy,omitempty"`
+	ToRoutingPolicy   string      `json:"to_routing_policy,omitempty"`
 	MTU            int             `json:"mtu,omitempty"`
 	Tags       []string        `json:"tags,omitempty"`
 	From       *config.LinkEnd `json:"from,omitempty"`
@@ -744,6 +760,18 @@ func (s *Server) handleUpdateLink(w http.ResponseWriter, r *http.Request) {
 			req.To = &config.LinkEnd{}
 		}
 		req.To.Mark = strings.TrimSpace(*req.ToMark)
+	}
+	if req.FromRoutingPolicy != "" {
+		if req.From == nil {
+			req.From = &config.LinkEnd{}
+		}
+		req.From.RoutingPolicy = req.FromRoutingPolicy
+	}
+	if req.ToRoutingPolicy != "" {
+		if req.To == nil {
+			req.To = &config.LinkEnd{}
+		}
+		req.To.RoutingPolicy = req.ToRoutingPolicy
 	}
 
 	var link *config.Link

@@ -80,6 +80,8 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
   const [toPreference, setToPreference] = useState<number | string>("");
   const [fromMark, setFromMark] = useState<string>("");
   const [toMark, setToMark] = useState<string>("");
+  const [fromRoutingPolicy, setFromRoutingPolicy] = useState<string>("");
+  const [toRoutingPolicy, setToRoutingPolicy] = useState<string>("");
 
   // External peering custom fields
   const [localAddress, setLocalAddress] = useState("");
@@ -179,6 +181,8 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
       setToPreference(linkToEdit.to.preference !== undefined ? linkToEdit.to.preference : "");
       setFromMark(linkToEdit.from.mark || "");
       setToMark(linkToEdit.to.mark || "");
+      setFromRoutingPolicy(linkToEdit.from.routing_policy || "");
+      setToRoutingPolicy(linkToEdit.to.routing_policy || "");
       setError(null);
     } else {
       setFromNodeName(initialFrom || "");
@@ -198,6 +202,8 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
       setToPreference("");
       setFromMark("");
       setToMark("");
+      setFromRoutingPolicy("");
+      setToRoutingPolicy("");
       setLocalAddress("fe80::1/64");
       setRemoteAddress("fe80::2/64");
       setRemotePort("");
@@ -319,9 +325,11 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
         const managedFwmark = managedNode === fromNode ? parsedFromFwmark : parsedToFwmark;
         const managedPreference = managedNode === fromNode ? parsedFromPreference : parsedToPreference;
         const managedMark = managedNode === fromNode ? parsedFromMark : parsedToMark;
+        const managedRoutingPolicy = managedNode === fromNode ? fromRoutingPolicy : toRoutingPolicy;
         const externalFwmark = externalNode === fromNode ? parsedFromFwmark : parsedToFwmark;
         const externalPreference = externalNode === fromNode ? parsedFromPreference : parsedToPreference;
         const externalMark = externalNode === fromNode ? parsedFromMark : parsedToMark;
+        const externalRoutingPolicy = externalNode === fromNode ? fromRoutingPolicy : toRoutingPolicy;
 
         const managedEnd = {
           name: managedNode.name,
@@ -331,6 +339,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
           mtu: managedMtuVal,
           use_ip: managedNode === fromNode ? fromUseIp : toUseIp,
           policy: managedPolicy,
+          routing_policy: managedRoutingPolicy || undefined,
           cost: managedNode === fromNode ? parsedFromCost : parsedToCost,
           fwmark: managedFwmark,
           preference: managedPreference,
@@ -345,6 +354,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
           public_key: remotePublicKey.trim() || undefined,
           mtu: 1420,
           policy: "none",
+          routing_policy: externalRoutingPolicy || undefined,
           cost: externalNode === fromNode ? parsedFromCost : parsedToCost,
           fwmark: externalFwmark,
           preference: externalPreference,
@@ -364,6 +374,8 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
             to_use_ip: toUseIp,
             from_policy: reqFrom.policy,
             to_policy: reqTo.policy,
+            from_routing_policy: reqFrom.routing_policy || (linkToEdit ? "inherit" : undefined),
+            to_routing_policy: reqTo.routing_policy || (linkToEdit ? "inherit" : undefined),
             from_cost: reqFrom.cost,
             to_cost: reqTo.cost,
             from_fwmark: reqFrom.fwmark,
@@ -384,6 +396,8 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
             to_use_ip: toUseIp,
             from_policy: reqFrom.policy,
             to_policy: reqTo.policy,
+            from_routing_policy: reqFrom.routing_policy,
+            to_routing_policy: reqTo.routing_policy,
             from_cost: reqFrom.cost,
             to_cost: reqTo.cost,
             from_fwmark: reqFrom.fwmark,
@@ -408,6 +422,8 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
             to_use_ip: toUseIp,
             from_policy: fromPolicy,
             to_policy: toPolicy,
+            from_routing_policy: fromRoutingPolicy ? fromRoutingPolicy : (linkToEdit ? "inherit" : undefined),
+            to_routing_policy: toRoutingPolicy ? toRoutingPolicy : (linkToEdit ? "inherit" : undefined),
             from_cost: parsedFromCost,
             to_cost: parsedToCost,
             from_fwmark: parsedFromFwmark,
@@ -422,6 +438,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
               mtu: fromMtu || undefined,
               use_ip: fromUseIp,
               policy: fromPolicy,
+              routing_policy: fromRoutingPolicy ? fromRoutingPolicy : "inherit",
               cost: parsedFromCost,
               fwmark: parsedFromFwmark,
               preference: parsedFromPreference,
@@ -435,6 +452,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
               mtu: toMtu || undefined,
               use_ip: toUseIp,
               policy: toPolicy,
+              routing_policy: toRoutingPolicy ? toRoutingPolicy : "inherit",
               cost: parsedToCost,
               fwmark: parsedToFwmark,
               preference: parsedToPreference,
@@ -456,6 +474,8 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
             to_use_ip: toUseIp,
             from_policy: fromPolicy,
             to_policy: toPolicy,
+            from_routing_policy: fromRoutingPolicy || undefined,
+            to_routing_policy: toRoutingPolicy || undefined,
             from_cost: parsedFromCost,
             to_cost: parsedToCost,
             from_fwmark: parsedFromFwmark,
@@ -467,6 +487,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
             from: {
               use_ip: fromUseIp,
               policy: fromPolicy,
+              routing_policy: fromRoutingPolicy || undefined,
               cost: parsedFromCost,
               fwmark: parsedFromFwmark,
               preference: parsedFromPreference,
@@ -475,6 +496,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
             to: {
               use_ip: toUseIp,
               policy: toPolicy,
+              routing_policy: toRoutingPolicy || undefined,
               cost: parsedToCost,
               fwmark: parsedToFwmark,
               preference: parsedToPreference,
@@ -688,7 +710,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                   sx={{ alignItems: "flex-start", ml: 0, mt: 1.5 }}
                 />
 
-                <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}>
+                <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 1.5 }}>
                   <TextField
                     select
                     fullWidth
@@ -699,13 +721,31 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                       if (managedNode === fromNode) setFromPolicy(e.target.value);
                       else setToPolicy(e.target.value);
                     }}
-                    helperText="Firewall & BGP routing policy applied on this peering link (defaults to dn42)"
+                    helperText="Firewall & BGP routing policy applied on this peering link"
                   >
                     {networkPolicies.map((p) => (
                       <MenuItem key={p.id} value={p.id}>
                         {p.name} ({p.id}){p.is_internal ? " — Built-in" : ""}
                       </MenuItem>
                     ))}
+                  </TextField>
+                  <TextField
+                    select
+                    fullWidth
+                    size="small"
+                    label="Routing Policy (Optional)"
+                    value={managedNode === fromNode ? fromRoutingPolicy : toRoutingPolicy}
+                    onChange={(e) => {
+                      if (managedNode === fromNode) setFromRoutingPolicy(e.target.value);
+                      else setToRoutingPolicy(e.target.value);
+                    }}
+                    helperText="Overrides policy routing policy"
+                  >
+                    <MenuItem value="">Policy default</MenuItem>
+                    <MenuItem value="full">Full (Default) — All valid routes</MenuItem>
+                    <MenuItem value="stub">Stub — Receive all, only send local</MenuItem>
+                    <MenuItem value="receive_only">Receive Only — Import only</MenuItem>
+                    <MenuItem value="advertise_only">Advertise Only — Export only</MenuItem>
                   </TextField>
                   <TextField
                     fullWidth
@@ -1008,7 +1048,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                     />
                   </Box>
 
-                  <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}>
+                  <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 1.5 }}>
                     <TextField
                       select
                       fullWidth
@@ -1023,6 +1063,21 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                           {p.name} ({p.id}){p.is_internal ? " — Built-in" : ""}
                         </MenuItem>
                       ))}
+                    </TextField>
+                    <TextField
+                      select
+                      fullWidth
+                      size="small"
+                      label="Routing Policy (Optional)"
+                      value={fromRoutingPolicy}
+                      onChange={(e) => setFromRoutingPolicy(e.target.value)}
+                      helperText="Overrides policy routing policy"
+                    >
+                      <MenuItem value="">Policy default</MenuItem>
+                      <MenuItem value="full">Full (Default) — All valid routes</MenuItem>
+                      <MenuItem value="stub">Stub — Receive all, only send local</MenuItem>
+                      <MenuItem value="receive_only">Receive Only — Import only</MenuItem>
+                      <MenuItem value="advertise_only">Advertise Only — Export only</MenuItem>
                     </TextField>
                     <TextField
                       fullWidth
@@ -1184,7 +1239,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                     />
                   </Box>
 
-                  <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}>
+                  <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 1.5 }}>
                     <TextField
                       select
                       fullWidth
@@ -1199,6 +1254,21 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                           {p.name} ({p.id}){p.is_internal ? " — Built-in" : ""}
                         </MenuItem>
                       ))}
+                    </TextField>
+                    <TextField
+                      select
+                      fullWidth
+                      size="small"
+                      label="Routing Policy (Optional)"
+                      value={toRoutingPolicy}
+                      onChange={(e) => setToRoutingPolicy(e.target.value)}
+                      helperText="Overrides policy routing policy"
+                    >
+                      <MenuItem value="">Policy default</MenuItem>
+                      <MenuItem value="full">Full (Default) — All valid routes</MenuItem>
+                      <MenuItem value="stub">Stub — Receive all, only send local</MenuItem>
+                      <MenuItem value="receive_only">Receive Only — Import only</MenuItem>
+                      <MenuItem value="advertise_only">Advertise Only — Export only</MenuItem>
                     </TextField>
                     <TextField
                       fullWidth

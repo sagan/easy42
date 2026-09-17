@@ -150,6 +150,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
   const [policyFwmark, setPolicyFwmark] = useState("");
   const [policyPreference, setPolicyPreference] = useState<number | string>("");
   const [policyMark, setPolicyMark] = useState("");
+  const [policyRoutingPolicy, setPolicyRoutingPolicy] = useState<string>("full");
 
   // Logout all state
   const [logoutAllConfirming, setLogoutAllConfirming] = useState(false);
@@ -257,6 +258,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
     setPolicyFwmark("");
     setPolicyPreference("");
     setPolicyMark("");
+    setPolicyRoutingPolicy("full");
     setPolicyDialogError(null);
     setPolicyDialogOpen(true);
   };
@@ -290,6 +292,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
     setPolicyFwmark(p.fwmark || "");
     setPolicyPreference(p.preference !== undefined ? p.preference : "");
     setPolicyMark(p.mark || "");
+    setPolicyRoutingPolicy(p.routing_policy || "full");
     setPolicyDialogError(null);
     setPolicyDialogOpen(true);
   };
@@ -323,6 +326,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
     setPolicyFwmark(p.fwmark || "");
     setPolicyPreference(p.preference !== undefined ? p.preference : "");
     setPolicyMark(p.mark || "");
+    setPolicyRoutingPolicy(p.routing_policy || "full");
     setPolicyDialogError(null);
     setPolicyDialogOpen(true);
   };
@@ -401,6 +405,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
         fwmark: policyFwmark.trim() || undefined,
         preference: policyPreference !== "" ? Number(policyPreference) : undefined,
         mark: policyMark.trim() || undefined,
+        routing_policy: policyRoutingPolicy || "full",
       };
 
       if (policyDialogMode === "create") {
@@ -466,6 +471,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
     setPolicyDscpEgress(p.dscp_egress ?? "");
     setPolicyFwmark(p.fwmark || "");
     setPolicyPreference(p.preference !== undefined ? p.preference : "");
+    setPolicyMark(p.mark || "");
+    setPolicyRoutingPolicy(p.routing_policy || "full");
     setPolicyDialogError(null);
     setPolicyDialogOpen(true);
   };
@@ -1018,6 +1025,27 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
                               }}
                             />
                           )}
+                          {p.routing_policy && p.routing_policy !== "full" && (
+                            <Chip
+                              label={
+                                p.routing_policy === "stub"
+                                  ? "Stub"
+                                  : p.routing_policy === "receive_only"
+                                  ? "Receive Only"
+                                  : p.routing_policy === "advertise_only"
+                                  ? "Advertise Only"
+                                  : p.routing_policy
+                              }
+                              size="small"
+                              sx={{
+                                height: 20,
+                                fontSize: "0.68rem",
+                                fontWeight: 700,
+                                bgcolor: "rgba(245, 158, 11, 0.12)",
+                                color: "#D97706",
+                              }}
+                            />
+                          )}
                         </Box>
                         <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
                           {(p.roa4 || p.roa6) && (
@@ -1322,17 +1350,34 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
               disabled={policyDialogMode === "view" || policyDialogSaving}
             />
 
-            <TextField
-              fullWidth
-              size="small"
-              type="number"
-              label="Internal BGP Cost"
-              placeholder="100"
-              value={policyCost}
-              onChange={(e) => setPolicyCost(e.target.value)}
-              disabled={policyDialogMode === "view" || policyDialogSaving}
-              helperText="Cost deducted from local preference on each internal hop (default 100). Lower cost = preferred route."
-            />
+            <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
+              <TextField
+                fullWidth
+                size="small"
+                type="number"
+                label="Internal BGP Cost"
+                placeholder="100"
+                value={policyCost}
+                onChange={(e) => setPolicyCost(e.target.value)}
+                disabled={policyDialogMode === "view" || policyDialogSaving}
+                helperText="Cost deducted from local preference on each internal hop (default 100)."
+              />
+              <TextField
+                select
+                fullWidth
+                size="small"
+                label="Routing Policy"
+                value={policyRoutingPolicy}
+                onChange={(e) => setPolicyRoutingPolicy(e.target.value)}
+                disabled={policyDialogMode === "view" || policyDialogSaving}
+                helperText="BGP route advertising & receiving behavior."
+              >
+                <MenuItem value="full">Full (Default) — Advertise & receive all valid routes</MenuItem>
+                <MenuItem value="stub">Stub — Receive all, only send local routes (no transit)</MenuItem>
+                <MenuItem value="receive_only">Receive Only — Import routes only, advertise none</MenuItem>
+                <MenuItem value="advertise_only">Advertise Only — Export local routes only, import none</MenuItem>
+              </TextField>
+            </Box>
 
             <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 2 }}>
               <TextField

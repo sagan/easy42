@@ -11,7 +11,7 @@ import {
   Tooltip,
   Chip,
 } from "@mui/material";
-import { X, Trash2, Link as LinkIcon, Key, ArrowRightLeft, Edit2, Activity, Copy, Check, Shield, RefreshCw, Gauge, Zap } from "lucide-react";
+import { X, Trash2, Link as LinkIcon, Key, ArrowRightLeft, Edit2, Activity, Copy, Check, Shield, RefreshCw, Gauge, Zap, Route } from "lucide-react";
 import { api } from "../../api/client";
 import { Link, NetworkState } from "../../types/api";
 
@@ -395,6 +395,35 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
 
             <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <Typography variant="caption" sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}>
+                <Route size={12} /> Routing Policy:
+              </Typography>
+              <Chip
+                label={
+                  link.from.routing_policy
+                    ? (link.from.routing_policy === "stub"
+                        ? "Stub (Override)"
+                        : link.from.routing_policy === "receive_only"
+                        ? "Receive Only (Override)"
+                        : link.from.routing_policy === "advertise_only"
+                        ? "Advertise Only (Override)"
+                        : `${link.from.routing_policy} (Override)`)
+                    : "Inherited"
+                }
+                size="small"
+                sx={{
+                  height: 20,
+                  fontSize: "0.65rem",
+                  fontWeight: 700,
+                  bgcolor: link.from.routing_policy ? "rgba(245, 158, 11, 0.12)" : "rgba(148, 163, 184, 0.15)",
+                  color: link.from.routing_policy ? "#D97706" : "#64748B",
+                  border: "1px solid",
+                  borderColor: link.from.routing_policy ? "rgba(245, 158, 11, 0.3)" : "rgba(148, 163, 184, 0.2)",
+                }}
+              />
+            </Box>
+
+            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <Typography variant="caption" sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}>
                 <Gauge size={12} /> Link Cost:
               </Typography>
               <Chip
@@ -651,6 +680,35 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
                   color: (link.to.policy === "none") ? "#64748B" : (link.to.policy === "dn42") ? "#6D28D9" : "#4F46E5",
                   border: "1px solid",
                   borderColor: (link.to.policy === "none") ? "rgba(148, 163, 184, 0.2)" : (link.to.policy === "dn42") ? "rgba(109, 40, 217, 0.25)" : "rgba(79, 70, 229, 0.25)",
+                }}
+              />
+            </Box>
+
+            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <Typography variant="caption" sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}>
+                <Route size={12} /> Routing Policy:
+              </Typography>
+              <Chip
+                label={
+                  link.to.routing_policy
+                    ? (link.to.routing_policy === "stub"
+                        ? "Stub (Override)"
+                        : link.to.routing_policy === "receive_only"
+                        ? "Receive Only (Override)"
+                        : link.to.routing_policy === "advertise_only"
+                        ? "Advertise Only (Override)"
+                        : `${link.to.routing_policy} (Override)`)
+                    : "Inherited"
+                }
+                size="small"
+                sx={{
+                  height: 20,
+                  fontSize: "0.65rem",
+                  fontWeight: 700,
+                  bgcolor: link.to.routing_policy ? "rgba(245, 158, 11, 0.12)" : "rgba(148, 163, 184, 0.15)",
+                  color: link.to.routing_policy ? "#D97706" : "#64748B",
+                  border: "1px solid",
+                  borderColor: link.to.routing_policy ? "rgba(245, 158, 11, 0.3)" : "rgba(148, 163, 184, 0.2)",
                 }}
               />
             </Box>

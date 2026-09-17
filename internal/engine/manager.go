@@ -1123,6 +1123,15 @@ func (m *Manager) buildLink(cfg *config.Config, n1, n2 *config.Node, listenPort1
 		toPref = customToEnd.Preference
 	}
 
+	fromRoutingPolicy := ""
+	if customFromEnd != nil && customFromEnd.RoutingPolicy != "" {
+		fromRoutingPolicy = config.NormalizeRoutingPolicy(customFromEnd.RoutingPolicy)
+	}
+	toRoutingPolicy := ""
+	if customToEnd != nil && customToEnd.RoutingPolicy != "" {
+		toRoutingPolicy = config.NormalizeRoutingPolicy(customToEnd.RoutingPolicy)
+	}
+
 	link := &config.Link{
 		From: config.LinkEnd{
 			Name:                fromNode.Name,
@@ -1136,6 +1145,7 @@ func (m *Manager) buildLink(cfg *config.Config, n1, n2 *config.Node, listenPort1
 			MTU:                 fromMTU,
 			UseIp:               fromUseIP,
 			Policy:              fromPolicy,
+			RoutingPolicy:       fromRoutingPolicy,
 			Cost:                fromCost,
 			Fwmark:              fromFwmark,
 			Preference:          fromPref,
@@ -1153,6 +1163,7 @@ func (m *Manager) buildLink(cfg *config.Config, n1, n2 *config.Node, listenPort1
 			MTU:                 toMTU,
 			UseIp:               toUseIP,
 			Policy:              toPolicy,
+			RoutingPolicy:       toRoutingPolicy,
 			Cost:                toCost,
 			Fwmark:              toFwmark,
 			Preference:          toPref,
@@ -1540,6 +1551,13 @@ func (m *Manager) UpdateLinkAdvanced(node1Name, node2Name string, customFrom, cu
 		if fromEnd.Mark != "" {
 			link.From.Mark = strings.TrimSpace(fromEnd.Mark)
 		}
+		if fromEnd.RoutingPolicy != "" {
+			if strings.EqualFold(fromEnd.RoutingPolicy, "inherit") {
+				link.From.RoutingPolicy = ""
+			} else {
+				link.From.RoutingPolicy = config.NormalizeRoutingPolicy(fromEnd.RoutingPolicy)
+			}
+		}
 	}
 
 	if toEnd != nil {
@@ -1576,6 +1594,13 @@ func (m *Manager) UpdateLinkAdvanced(node1Name, node2Name string, customFrom, cu
 		}
 		if toEnd.Mark != "" {
 			link.To.Mark = strings.TrimSpace(toEnd.Mark)
+		}
+		if toEnd.RoutingPolicy != "" {
+			if strings.EqualFold(toEnd.RoutingPolicy, "inherit") {
+				link.To.RoutingPolicy = ""
+			} else {
+				link.To.RoutingPolicy = config.NormalizeRoutingPolicy(toEnd.RoutingPolicy)
+			}
 		}
 	}
 
@@ -2994,6 +3019,7 @@ func (m *Manager) CreateNetworkPolicy(p config.NetworkPolicy) (*config.NetworkPo
 	p.DSCPEgress = config.ValidateDSCP(p.DSCPEgress)
 	p.Fwmark = strings.TrimSpace(p.Fwmark)
 	p.Mark = strings.TrimSpace(p.Mark)
+	p.RoutingPolicy = config.NormalizeRoutingPolicy(p.RoutingPolicy)
 
 	cfg.NetworkPolicies = append(cfg.NetworkPolicies, p)
 	if err := m.store.Save(cfg); err != nil {
@@ -3060,6 +3086,7 @@ func (m *Manager) UpdateNetworkPolicy(id string, p config.NetworkPolicy) (*confi
 	cfg.NetworkPolicies[idx].Fwmark = strings.TrimSpace(p.Fwmark)
 	cfg.NetworkPolicies[idx].Preference = p.Preference
 	cfg.NetworkPolicies[idx].Mark = strings.TrimSpace(p.Mark)
+	cfg.NetworkPolicies[idx].RoutingPolicy = config.NormalizeRoutingPolicy(p.RoutingPolicy)
 
 	if err := m.store.Save(cfg); err != nil {
 		return nil, err

@@ -20,8 +20,8 @@ if [ -z "$CONF_FILE" ]; then
     fi
     echo "Creating $CONF_FILE..."
     $SUDO mkdir -p "$(dirname "$CONF_FILE")"
-    printf "#!/usr/sbin/nft -f\nflush ruleset\n" | $SUDO tee "$CONF_FILE" >/dev/null
-    $SUDO chmod 644 "$CONF_FILE"
+    printf "#!/usr/sbin/nft -f\n#flush ruleset\n" | $SUDO tee "$CONF_FILE" >/dev/null
+    $SUDO chmod 755 "$CONF_FILE"
 fi
 
 # Ensure /etc/easy42.nft exists as placeholder so syntax check passes

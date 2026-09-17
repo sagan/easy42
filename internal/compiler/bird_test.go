@@ -158,7 +158,7 @@ func TestBuildNodeContextAndGenerateBirdConfig(t *testing.T) {
 		"define TABLE = 254;",
 		"router id SELF_IP;",
 		"protocol kernel kernel_v4",
-		"if source ~ [ RTS_BGP, RTS_STATIC ] then accept;",
+		"if source ~ [ RTS_BGP ] then accept;",
 		"protocol kernel kernel_100 {",
 		"kernel table 100;",
 		"if net ~ 10.0.0.0/8+ then accept;",
@@ -354,7 +354,7 @@ func TestExternalTableRouting(t *testing.T) {
 		"define COMM_EXTERNAL = (CONFED_AS, 1, 1);",
 		"protocol kernel kernel_v4 {",
 		"if (COMM_EXTERNAL ~ bgp_large_community) then reject;",
-		"if source ~ [ RTS_BGP, RTS_STATIC ] then accept;",
+		"if source ~ [ RTS_BGP ] then accept;",
 		"kernel table TABLE;",
 		"protocol pipe pipe_ext_v4 {",
 		"table master4;",
@@ -518,7 +518,7 @@ func TestInternetTableRouting(t *testing.T) {
 		"ipv6 table inet_table6;",
 		"protocol kernel kernel_v4 {",
 		"if (source ~ [ RTS_BGP ]) && (net ~ INTERNET) then reject;",
-		"if source ~ [ RTS_BGP, RTS_STATIC ] then accept;",
+		"if source ~ [ RTS_BGP ] then accept;",
 		"protocol pipe pipe_inet_v4 {",
 		"table master4;",
 		"peer table inet_table4;",
@@ -1936,5 +1936,144 @@ func TestMultipleLinksBirdBGP(t *testing.T) {
 
 	validateBirdSyntax(t, conf)
 }
+
+func TestRoutingPolicyBirdTemplates(t *testing.T) {
+	node1 := config.Node{
+		Name: "router1",
+		IP:   "192.168.100.1",
+		IP6:  "fd42:a159:f9f0::1",
+		ASN:  4224420001,
+	}
+	node2 := config.Node{
+		Name: "router2",
+		IP:   "192.168.100.2",
+		IP6:  "fd42:a159:f9f0::2",
+		ASN:  4224420002,
+	}
+	extPeer := config.Node{
+		Name:       "dn42peer",
+		ASN:        4242421234,
+		IsExternal: true,
+	}
+	allNodes := []config.Node{node1, node2, extPeer}
+
+	// 1. Default policy with RoutingPolicy = "stub"
+	stubDefaultPol := config.NetworkPolicy{
+		ID:             config.PolicyDefault,
+		Name:           "Default Stub",
+		Cost:           100,
+		RoutingPolicy:  config.RoutingPolicyStub,
+		RejectInternet: true,
+	}
+	linksInternal := []config.Link{
+		{
+			From: config.LinkEnd{Name: "router1", Address: "fe80::1/64", Interface: "wg42router2"},
+			To:   config.LinkEnd{Name: "router2", Address: "fe80::2/64", Interface: "wg42router1"},
+		},
+	}
+	confStub, err := GenerateBirdConfig(&node1, allNodes, linksInternal, []config.NetworkPolicy{stubDefaultPol})
+	if err != nil {
+		t.Fatalf("GenerateBirdConfig failed: %v", err)
+	}
+	if !strings.Contains(confStub, "if !(source ~ [ RTS_STATIC, RTS_INHERIT ]) then reject;") {
+		t.Errorf("Expected easy42_peer export filter to reject non-local routes in stub mode:\n%s", confStub)
+	}
+	validateBirdSyntax(t, confStub)
+
+	// 2. External DN42 policy with RoutingPolicy = "stub"
+	stubDN42Pol := config.NetworkPolicy{
+		ID:              config.PolicyDN42,
+		Name:            "DN42 Stub",
+		RoutingPolicy:   config.RoutingPolicyStub,
+		AllowedDstCIDRs: []string{"172.20.0.0/16"},
+		AllowedSrcCIDRs: []string{"172.20.0.0/16"},
+		RejectInternet:  true,
+	}
+	linksExt := []config.Link{
+		{
+			From: config.LinkEnd{Name: "router1", Address: "fe80::1/64", Interface: "wg42-dn42"},
+			To:   config.LinkEnd{Name: "dn42peer", Address: "fe80::2/64", Interface: "wg42-router1"},
+		},
+	}
+	confExtStub, err := GenerateBirdConfig(&node1, allNodes, linksExt, []config.NetworkPolicy{stubDN42Pol})
+	if err != nil {
+		t.Fatalf("GenerateBirdConfig failed: %v", err)
+	}
+	if !strings.Contains(confExtStub, "if (source ~ [ RTS_STATIC, RTS_INHERIT ]) && (net ~ EXT_EXPORT_PREFIXES_V4) then {") {
+		t.Errorf("Expected external_peer export filter to only allow RTS_STATIC and RTS_INHERIT in stub mode:\n%s", confExtStub)
+	}
+	validateBirdSyntax(t, confExtStub)
+
+	// 3. LinkEnd override: policy is full, but LinkEnd overrides to "stub"
+	node3 := config.Node{Name: "router3", IP: "192.168.100.3", IP6: "fd42:a159:f9f0::3", ASN: 4224420003}
+	allNodesPlus := append(allNodes, node3)
+
+	linksWithOverride := []config.Link{
+		{
+			From: config.LinkEnd{Name: "router1", Address: "fe80::1/64", Interface: "wg42router2"},
+			To:   config.LinkEnd{Name: "router2", Address: "fe80::2/64", Interface: "wg42router1"},
+		},
+		{
+			From: config.LinkEnd{
+				Name:          "router1",
+				Address:       "fe80::1/64",
+				Interface:     "wg42router3",
+				RoutingPolicy: config.RoutingPolicyStub, // LinkEnd override
+			},
+			To: config.LinkEnd{Name: "router3", Address: "fe80::3/64", Interface: "wg42router1"},
+		},
+	}
+	confLinkOverride, err := GenerateBirdConfig(&node1, allNodesPlus, linksWithOverride)
+	if err != nil {
+		t.Fatalf("GenerateBirdConfig failed: %v", err)
+	}
+	if !strings.Contains(confLinkOverride, "template bgp easy42_peer_stub {") {
+		t.Errorf("Expected easy42_peer_stub template to be generated for link override:\n%s", confLinkOverride)
+	}
+	if !strings.Contains(confLinkOverride, "protocol bgp 'easy42_peer_router3' from easy42_peer_stub {") {
+		t.Errorf("Expected protocol to inherit from easy42_peer_stub:\n%s", confLinkOverride)
+	}
+	if !strings.Contains(confLinkOverride, "protocol bgp 'easy42_peer_router2' from easy42_peer {") {
+		t.Errorf("Expected standard link to inherit from easy42_peer:\n%s", confLinkOverride)
+	}
+	validateBirdSyntax(t, confLinkOverride)
+
+	// 4. Custom policy with ReceiveOnly and AdvertiseOnly
+	rxOnlyPol := config.NetworkPolicy{
+		ID:             "rx_only",
+		Name:           "Receive Only Policy",
+		RoutingPolicy:  config.RoutingPolicyReceiveOnly,
+		RejectInternet: true,
+	}
+	advOnlyPol := config.NetworkPolicy{
+		ID:             "adv_only",
+		Name:           "Advertise Only Policy",
+		RoutingPolicy:  config.RoutingPolicyAdvertiseOnly,
+		RejectInternet: true,
+	}
+
+	multiLinks := []config.Link{
+		{
+			From: config.LinkEnd{Name: "router1", Address: "fe80::1/64", Interface: "wg42router2", Policy: "rx_only"},
+			To:   config.LinkEnd{Name: "router2", Address: "fe80::2/64", Interface: "wg42router1"},
+		},
+		{
+			From: config.LinkEnd{Name: "router1", Address: "fe80::1/64", Interface: "wg42router3", Policy: "adv_only"},
+			To:   config.LinkEnd{Name: "router3", Address: "fe80::3/64", Interface: "wg42router1"},
+		},
+	}
+	confCustom, err := GenerateBirdConfig(&node1, allNodesPlus, multiLinks, []config.NetworkPolicy{rxOnlyPol, advOnlyPol})
+	if err != nil {
+		t.Fatalf("GenerateBirdConfig failed: %v", err)
+	}
+	if !strings.Contains(confCustom, "template bgp pol_peer_rx_only {") {
+		t.Errorf("Expected pol_peer_rx_only template:\n%s", confCustom)
+	}
+	if !strings.Contains(confCustom, "template bgp pol_peer_adv_only {") {
+		t.Errorf("Expected pol_peer_adv_only template:\n%s", confCustom)
+	}
+	validateBirdSyntax(t, confCustom)
+}
+
 
 

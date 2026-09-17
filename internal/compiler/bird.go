@@ -47,6 +47,21 @@ func GetDefaultBirdTemplate() (string, error) {
 //	    }
 //	  ]
 //
+// formatVariantTemplateName constructs a specialized BGP template name when cost or routing policy differs from base.
+func formatVariantTemplateName(base string, routingPolicy, baseRoutingPolicy string, cost, baseCost int) string {
+	if routingPolicy == baseRoutingPolicy && cost == baseCost {
+		return base
+	}
+	name := base
+	if routingPolicy != baseRoutingPolicy {
+		name += "_" + routingPolicy
+	}
+	if cost != baseCost {
+		name += fmt.Sprintf("_cost_%d", cost)
+	}
+	return name
+}
+
 // BuildNodeContext converts a Node and its connected links into a context map suitable for template execution.
 func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.Link, args ...any) (map[string]any, error) {
 	if node == nil {
@@ -303,13 +318,20 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 		isExternal       bool
 		isDN42           bool
 		linkCost         int
+		routingPolicy    string
+	}
+
+	type policyVariantKey struct {
+		cost          int
+		routingPolicy string
 	}
 
 	var rawLinks []rawLinkInfo
 	hasExternalLinks := false
 	hasNonePolicy := false
 	usedPolicyMap := make(map[string]config.NetworkPolicy)
-	policyCostsMap := make(map[string]map[int]bool)
+	policyVariantsMap := make(map[string]map[policyVariantKey]bool)
+	extVariantsMap := make(map[string]bool)
 
 	for _, l := range links {
 		var localEnd, remoteEnd *config.LinkEnd
@@ -352,10 +374,15 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 		}
 
 		linkCost := localEnd.EffectiveCostWithPolicy(&pol)
-		if policyCostsMap[policyID] == nil {
-			policyCostsMap[policyID] = make(map[int]bool)
+		routingPolicy := localEnd.EffectiveRoutingPolicy(&pol)
+
+		if policyVariantsMap[policyID] == nil {
+			policyVariantsMap[policyID] = make(map[policyVariantKey]bool)
 		}
-		policyCostsMap[policyID][linkCost] = true
+		policyVariantsMap[policyID][policyVariantKey{cost: linkCost, routingPolicy: routingPolicy}] = true
+		if isRemoteExternal {
+			extVariantsMap[routingPolicy] = true
+		}
 
 		rawLinks = append(rawLinks, rawLinkInfo{
 			link:             l,
@@ -368,38 +395,63 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 			isExternal:       isExternal,
 			isDN42:           isDN42,
 			linkCost:         linkCost,
+			routingPolicy:    routingPolicy,
 		})
 	}
 
 	defaultCost := 100
+	defaultRoutingPolicy := config.RoutingPolicyFull
 	if p, ok := policyMap[config.PolicyDefault]; ok {
 		defaultCost = p.EffectiveCost()
+		defaultRoutingPolicy = p.EffectiveRoutingPolicy()
 	}
-	if costs, ok := policyCostsMap[config.PolicyDefault]; ok && len(costs) == 1 {
-		for c := range costs {
-			defaultCost = c
+	if variants, ok := policyVariantsMap[config.PolicyDefault]; ok && len(variants) == 1 {
+		for v := range variants {
+			defaultCost = v.cost
+			defaultRoutingPolicy = v.routingPolicy
 		}
 	}
 
 	noneCost := 100
+	noneRoutingPolicy := config.RoutingPolicyFull
 	if p, ok := policyMap[config.PolicyNone]; ok {
 		noneCost = p.EffectiveCost()
+		noneRoutingPolicy = p.EffectiveRoutingPolicy()
 	}
-	if costs, ok := policyCostsMap[config.PolicyNone]; ok && len(costs) == 1 {
-		for c := range costs {
-			noneCost = c
+	if variants, ok := policyVariantsMap[config.PolicyNone]; ok && len(variants) == 1 {
+		for v := range variants {
+			noneCost = v.cost
+			noneRoutingPolicy = v.routingPolicy
 		}
 	}
 
-	customBaseCosts := make(map[string]int)
+	extRoutingPolicy := config.RoutingPolicyFull
+	if hasDN42 {
+		extRoutingPolicy = dn42Pol.EffectiveRoutingPolicy()
+	}
+	if len(extVariantsMap) == 1 {
+		for rp := range extVariantsMap {
+			extRoutingPolicy = rp
+		}
+	}
+
+	type basePolicyConfig struct {
+		cost          int
+		routingPolicy string
+	}
+	customBaseConfigs := make(map[string]basePolicyConfig)
 	for id, pol := range usedPolicyMap {
-		base := pol.EffectiveCost()
-		if costs, ok := policyCostsMap[id]; ok && len(costs) == 1 {
-			for c := range costs {
-				base = c
+		base := basePolicyConfig{
+			cost:          pol.EffectiveCost(),
+			routingPolicy: pol.EffectiveRoutingPolicy(),
+		}
+		if variants, ok := policyVariantsMap[id]; ok && len(variants) == 1 {
+			for v := range variants {
+				base.cost = v.cost
+				base.routingPolicy = v.routingPolicy
 			}
 		}
-		customBaseCosts[id] = base
+		customBaseConfigs[id] = base
 	}
 
 	var nodeLinks []map[string]any
@@ -410,37 +462,25 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 
 		switch rl.policyID {
 		case config.PolicyDefault:
-			if rl.linkCost == defaultCost {
-				bgpTemplate = "easy42_peer"
-			} else {
-				bgpTemplate = fmt.Sprintf("easy42_peer_cost_%d", rl.linkCost)
-			}
+			bgpTemplate = formatVariantTemplateName("easy42_peer", rl.routingPolicy, defaultRoutingPolicy, rl.linkCost, defaultCost)
 		case config.PolicyDN42:
 			if rl.isRemoteExternal {
-				bgpTemplate = "external_peer"
+				if rl.routingPolicy == extRoutingPolicy {
+					bgpTemplate = "external_peer"
+				} else {
+					bgpTemplate = fmt.Sprintf("external_peer_%s", rl.routingPolicy)
+				}
 			} else {
 				cleanID := SanitizeIdentifier(rl.policyID)
-				baseCost := customBaseCosts[rl.policyID]
-				if rl.linkCost == baseCost {
-					bgpTemplate = "pol_peer_" + cleanID
-				} else {
-					bgpTemplate = fmt.Sprintf("pol_peer_%s_cost_%d", cleanID, rl.linkCost)
-				}
+				baseCfg := customBaseConfigs[rl.policyID]
+				bgpTemplate = formatVariantTemplateName("pol_peer_"+cleanID, rl.routingPolicy, baseCfg.routingPolicy, rl.linkCost, baseCfg.cost)
 			}
 		case config.PolicyNone:
-			if rl.linkCost == noneCost {
-				bgpTemplate = "none_peer"
-			} else {
-				bgpTemplate = fmt.Sprintf("none_peer_cost_%d", rl.linkCost)
-			}
+			bgpTemplate = formatVariantTemplateName("none_peer", rl.routingPolicy, noneRoutingPolicy, rl.linkCost, noneCost)
 		default:
 			cleanID := SanitizeIdentifier(rl.policyID)
-			baseCost := customBaseCosts[rl.policyID]
-			if rl.linkCost == baseCost {
-				bgpTemplate = "pol_peer_" + cleanID
-			} else {
-				bgpTemplate = fmt.Sprintf("pol_peer_%s_cost_%d", cleanID, rl.linkCost)
-			}
+			baseCfg := customBaseConfigs[rl.policyID]
+			bgpTemplate = formatVariantTemplateName("pol_peer_"+cleanID, rl.routingPolicy, baseCfg.routingPolicy, rl.linkCost, baseCfg.cost)
 		}
 
 		if rl.isRemoteExternal && settings != nil && settings.PublicASN > 0 {
@@ -530,37 +570,64 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 	}
 
 	var customDefaultTemplates []map[string]any
-	if defaultCosts, ok := policyCostsMap[config.PolicyDefault]; ok {
-		var extraCosts []int
-		for c := range defaultCosts {
-			if c != defaultCost {
-				extraCosts = append(extraCosts, c)
+	if variants, ok := policyVariantsMap[config.PolicyDefault]; ok {
+		var extraVariants []policyVariantKey
+		for v := range variants {
+			if v.cost != defaultCost || v.routingPolicy != defaultRoutingPolicy {
+				extraVariants = append(extraVariants, v)
 			}
 		}
-		sort.Ints(extraCosts)
-		for _, c := range extraCosts {
+		sort.Slice(extraVariants, func(i, j int) bool {
+			if extraVariants[i].routingPolicy != extraVariants[j].routingPolicy {
+				return extraVariants[i].routingPolicy < extraVariants[j].routingPolicy
+			}
+			return extraVariants[i].cost < extraVariants[j].cost
+		})
+		for _, v := range extraVariants {
 			customDefaultTemplates = append(customDefaultTemplates, map[string]any{
-				"template_name": fmt.Sprintf("easy42_peer_cost_%d", c),
-				"cost":          c,
+				"template_name":  formatVariantTemplateName("easy42_peer", v.routingPolicy, defaultRoutingPolicy, v.cost, defaultCost),
+				"cost":           v.cost,
+				"routing_policy": v.routingPolicy,
 			})
 		}
 	}
 
 	var customNoneTemplates []map[string]any
-	if noneCosts, ok := policyCostsMap[config.PolicyNone]; ok {
-		var extraCosts []int
-		for c := range noneCosts {
-			if c != noneCost {
-				extraCosts = append(extraCosts, c)
+	if variants, ok := policyVariantsMap[config.PolicyNone]; ok {
+		var extraVariants []policyVariantKey
+		for v := range variants {
+			if v.cost != noneCost || v.routingPolicy != noneRoutingPolicy {
+				extraVariants = append(extraVariants, v)
 			}
 		}
-		sort.Ints(extraCosts)
-		for _, c := range extraCosts {
+		sort.Slice(extraVariants, func(i, j int) bool {
+			if extraVariants[i].routingPolicy != extraVariants[j].routingPolicy {
+				return extraVariants[i].routingPolicy < extraVariants[j].routingPolicy
+			}
+			return extraVariants[i].cost < extraVariants[j].cost
+		})
+		for _, v := range extraVariants {
 			customNoneTemplates = append(customNoneTemplates, map[string]any{
-				"template_name": fmt.Sprintf("none_peer_cost_%d", c),
-				"cost":          c,
+				"template_name":  formatVariantTemplateName("none_peer", v.routingPolicy, noneRoutingPolicy, v.cost, noneCost),
+				"cost":           v.cost,
+				"routing_policy": v.routingPolicy,
 			})
 		}
+	}
+
+	var customExternalTemplates []map[string]any
+	var extraExtRPs []string
+	for rp := range extVariantsMap {
+		if rp != extRoutingPolicy {
+			extraExtRPs = append(extraExtRPs, rp)
+		}
+	}
+	sort.Strings(extraExtRPs)
+	for _, rp := range extraExtRPs {
+		customExternalTemplates = append(customExternalTemplates, map[string]any{
+			"template_name":  fmt.Sprintf("external_peer_%s", rp),
+			"routing_policy": rp,
+		})
 	}
 
 	var customPolicyPrefixes []map[string]any
@@ -622,14 +689,15 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 			"disallowed_export_prefixes_v6": disallowedExportV6,
 		})
 
-		baseCost := customBaseCosts[id]
+		baseCfg := customBaseConfigs[id]
 		baseTmplName := "pol_peer_" + cleanID
 
 		customBirdPolicies = append(customBirdPolicies, map[string]any{
 			"id":                            cleanID,
 			"name":                          pol.Name,
 			"template_name":                 baseTmplName,
-			"cost":                          baseCost,
+			"cost":                          baseCfg.cost,
+			"routing_policy":                baseCfg.routingPolicy,
 			"reject_internet":               pol.RejectInternet,
 			"has_import_v4":                 importV4 != "",
 			"has_import_v6":                 importV6 != "",
@@ -651,20 +719,27 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 			"roa_fn":                        roaFn,
 		})
 
-		if costs, ok := policyCostsMap[id]; ok {
-			var extraCosts []int
-			for c := range costs {
-				if c != baseCost {
-					extraCosts = append(extraCosts, c)
+		if variants, ok := policyVariantsMap[id]; ok {
+			var extraVariants []policyVariantKey
+			for v := range variants {
+				if v.cost != baseCfg.cost || v.routingPolicy != baseCfg.routingPolicy {
+					extraVariants = append(extraVariants, v)
 				}
 			}
-			sort.Ints(extraCosts)
-			for _, c := range extraCosts {
+			sort.Slice(extraVariants, func(i, j int) bool {
+				if extraVariants[i].routingPolicy != extraVariants[j].routingPolicy {
+					return extraVariants[i].routingPolicy < extraVariants[j].routingPolicy
+				}
+				return extraVariants[i].cost < extraVariants[j].cost
+			})
+			for _, v := range extraVariants {
+				vTmplName := formatVariantTemplateName("pol_peer_"+cleanID, v.routingPolicy, baseCfg.routingPolicy, v.cost, baseCfg.cost)
 				customBirdPolicies = append(customBirdPolicies, map[string]any{
 					"id":                            cleanID,
 					"name":                          pol.Name,
-					"template_name":                 fmt.Sprintf("pol_peer_%s_cost_%d", cleanID, c),
-					"cost":                          c,
+					"template_name":                 vTmplName,
+					"cost":                          v.cost,
+					"routing_policy":                v.routingPolicy,
 					"reject_internet":               pol.RejectInternet,
 					"has_import_v4":                 importV4 != "",
 					"has_import_v6":                 importV6 != "",
@@ -731,11 +806,15 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 
 	ctx["links"] = nodeLinks
 	ctx["default_cost"] = defaultCost
+	ctx["default_routing_policy"] = defaultRoutingPolicy
 	ctx["none_cost"] = noneCost
+	ctx["none_routing_policy"] = noneRoutingPolicy
+	ctx["ext_routing_policy"] = extRoutingPolicy
 	ctx["has_external_links"] = hasExternalLinks
 	ctx["has_none_policy"] = hasNonePolicy
 	ctx["custom_default_templates"] = customDefaultTemplates
 	ctx["custom_none_templates"] = customNoneTemplates
+	ctx["custom_external_templates"] = customExternalTemplates
 	ctx["custom_policy_prefixes"] = customPolicyPrefixes
 	ctx["custom_bird_policies"] = customBirdPolicies
 	ctx["roa_policies"] = roaPolicies
@@ -843,6 +922,7 @@ func linkEndToContextMap(end *config.LinkEnd, node *config.Node, peerName string
 	fwmark := ""
 	var preference *int
 	mark := ""
+	routingPolicy := ""
 
 	if end != nil {
 		name = end.Name
@@ -855,6 +935,7 @@ func linkEndToContextMap(end *config.LinkEnd, node *config.Node, peerName string
 		fwmark = end.Fwmark
 		preference = end.Preference
 		mark = end.Mark
+		routingPolicy = end.RoutingPolicy
 	}
 
 	isLinkLocal := strings.HasPrefix(strings.ToLower(addr), "fe80:")
@@ -872,6 +953,7 @@ func linkEndToContextMap(end *config.LinkEnd, node *config.Node, peerName string
 		"cost":                 cost,
 		"fwmark":               fwmark,
 		"mark":                 mark,
+		"routing_policy":       routingPolicy,
 	}
 	if preference != nil {
 		res["preference"] = *preference

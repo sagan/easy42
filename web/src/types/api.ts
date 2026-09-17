@@ -64,6 +64,7 @@ export interface NetworkPolicy {
   fwmark?: string;
   preference?: number;
   mark?: string;
+  routing_policy?: string;
 }
 
 export interface Node {
@@ -103,6 +104,7 @@ export interface LinkEnd {
   use_ip?: boolean;
   resolved_endpoint?: string;
   policy?: string;
+  routing_policy?: string;
   cost?: number;
   fwmark?: string;
   preference?: number;

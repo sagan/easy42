@@ -12,6 +12,42 @@ const (
 	PolicyNone    = "none"
 )
 
+const (
+	RoutingPolicyFull          = "full"
+	RoutingPolicyStub          = "stub"
+	RoutingPolicyReceiveOnly   = "receive_only"
+	RoutingPolicyAdvertiseOnly = "advertise_only"
+)
+
+// NormalizeRoutingPolicy sanitizes and normalizes routing policy strings.
+// Defaults to RoutingPolicyFull ("full") if empty or unknown.
+func NormalizeRoutingPolicy(p string) string {
+	switch strings.ToLower(strings.TrimSpace(p)) {
+	case "stub", "originate_only", "originate-only", "local_only", "local-only", "transit_client", "transit-client":
+		return RoutingPolicyStub
+	case "receive_only", "receive-only", "import_only", "import-only":
+		return RoutingPolicyReceiveOnly
+	case "advertise_only", "advertise-only", "export_only", "export-only":
+		return RoutingPolicyAdvertiseOnly
+	case "full", "transit", "mesh", "":
+		return RoutingPolicyFull
+	default:
+		return RoutingPolicyFull
+	}
+}
+
+// IsValidRoutingPolicy returns true if p is a recognized routing policy or alias.
+func IsValidRoutingPolicy(p string) bool {
+	switch strings.ToLower(strings.TrimSpace(p)) {
+	case RoutingPolicyFull, RoutingPolicyStub, RoutingPolicyReceiveOnly, RoutingPolicyAdvertiseOnly,
+		"originate_only", "originate-only", "local_only", "local-only", "transit_client", "transit-client",
+		"import_only", "import-only", "export_only", "export-only", "transit", "mesh":
+		return true
+	default:
+		return false
+	}
+}
+
 // SNATConfig represents source network address translation options for egress traffic
 type SNATConfig struct {
 	Enabled   bool   `json:"enabled"`
@@ -44,9 +80,18 @@ type NetworkPolicy struct {
 	ROA4               string      `json:"roa4,omitempty"`
 	ROA6               string      `json:"roa6,omitempty"`
 	ROAStrict          bool        `json:"roa_strict,omitempty"`
-	Fwmark             string      `json:"fwmark,omitempty"`     // Local WireGuard [Interface] FwMark
-	Preference         *int        `json:"preference,omitempty"` // BIRD peer BGP protocol preference
-	Mark               string      `json:"mark,omitempty"`       // Netfilter mark for received packets from the link peer
+	Fwmark             string      `json:"fwmark,omitempty"`         // Local WireGuard [Interface] FwMark
+	Preference         *int        `json:"preference,omitempty"`     // BIRD peer BGP protocol preference
+	Mark               string      `json:"mark,omitempty"`           // Netfilter mark for received packets from the link peer
+	RoutingPolicy      string      `json:"routing_policy,omitempty"` // BGP meta routing policy ("full", "stub", "receive_only", "advertise_only")
+}
+
+// EffectiveRoutingPolicy returns the active routing policy or "full" if unset
+func (p *NetworkPolicy) EffectiveRoutingPolicy() string {
+	if p != nil && strings.TrimSpace(p.RoutingPolicy) != "" {
+		return NormalizeRoutingPolicy(p.RoutingPolicy)
+	}
+	return RoutingPolicyFull
 }
 
 // EffectiveFwmark returns the configured fwmark or empty string if unset
@@ -196,6 +241,7 @@ func GetBuiltinPolicies(netSettings *NetworkSettings) []NetworkPolicy {
 			Description:    "Standard internal mesh policy with Internet route leak protection",
 			IsInternal:     true,
 			Cost:           100,
+			RoutingPolicy:  RoutingPolicyFull,
 			RejectInternet: true,
 			FilterForward:  false,
 			FilterInput:    false,
@@ -206,6 +252,7 @@ func GetBuiltinPolicies(netSettings *NetworkSettings) []NetworkPolicy {
 			Description:        "Peering policy for external/DN42 networks with BGP route filtering, ingress/egress firewall, and SNAT",
 			IsInternal:         true,
 			Cost:               100,
+			RoutingPolicy:      RoutingPolicyFull,
 			LocalNetworks:      localDN42,
 			AllowedDstCIDRs:    dn42Prefixes,
 			AllowedSrcCIDRs:    dn42Prefixes,
@@ -231,6 +278,7 @@ func GetBuiltinPolicies(netSettings *NetworkSettings) []NetworkPolicy {
 			Description:    "Fully unrestricted routing and traffic forwarding without filters",
 			IsInternal:     true,
 			Cost:           100,
+			RoutingPolicy:  RoutingPolicyFull,
 			RejectInternet: false,
 			FilterForward:  false,
 			FilterInput:    false,
@@ -342,4 +390,17 @@ func (l *LinkEnd) EffectiveMark(p *NetworkPolicy) string {
 		return strings.TrimSpace(p.Mark)
 	}
 	return ""
+}
+
+// EffectiveRoutingPolicy returns the active routing policy for this LinkEnd using the provided policy.
+// If LinkEnd's RoutingPolicy is defined, it overrides the policy's routing policy.
+// Otherwise, it falls back to the policy's routing policy.
+func (l *LinkEnd) EffectiveRoutingPolicy(p *NetworkPolicy) string {
+	if l != nil && strings.TrimSpace(l.RoutingPolicy) != "" {
+		return NormalizeRoutingPolicy(l.RoutingPolicy)
+	}
+	if p != nil {
+		return p.EffectiveRoutingPolicy()
+	}
+	return RoutingPolicyFull
 }

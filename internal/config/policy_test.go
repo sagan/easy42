@@ -246,6 +246,88 @@ func TestEffectiveMark(t *testing.T) {
 	}
 }
 
+func TestEffectiveRoutingPolicy(t *testing.T) {
+	// 1. Unset policy and unset linkEnd -> default "full"
+	var pol *NetworkPolicy
+	var end *LinkEnd
+
+	if rp := pol.EffectiveRoutingPolicy(); rp != RoutingPolicyFull {
+		t.Errorf("expected %q for nil policy, got %q", RoutingPolicyFull, rp)
+	}
+	if rp := end.EffectiveRoutingPolicy(pol); rp != RoutingPolicyFull {
+		t.Errorf("expected %q for nil linkEnd with nil policy, got %q", RoutingPolicyFull, rp)
+	}
+
+	pol = &NetworkPolicy{}
+	end = &LinkEnd{}
+	if rp := pol.EffectiveRoutingPolicy(); rp != RoutingPolicyFull {
+		t.Errorf("expected %q for empty policy, got %q", RoutingPolicyFull, rp)
+	}
+	if rp := end.EffectiveRoutingPolicy(pol); rp != RoutingPolicyFull {
+		t.Errorf("expected %q for empty linkEnd with empty policy, got %q", RoutingPolicyFull, rp)
+	}
+
+	// 2. Policy defined, LinkEnd unset -> Policy value used
+	pol = &NetworkPolicy{RoutingPolicy: RoutingPolicyStub}
+	if rp := pol.EffectiveRoutingPolicy(); rp != RoutingPolicyStub {
+		t.Errorf("expected %q for policy, got %q", RoutingPolicyStub, rp)
+	}
+	if rp := end.EffectiveRoutingPolicy(pol); rp != RoutingPolicyStub {
+		t.Errorf("expected %q on linkEnd from policy, got %q", RoutingPolicyStub, rp)
+	}
+
+	// 3. LinkEnd defined -> overrides NetworkPolicy
+	end.RoutingPolicy = RoutingPolicyReceiveOnly
+	if rp := end.EffectiveRoutingPolicy(pol); rp != RoutingPolicyReceiveOnly {
+		t.Errorf("expected %q overriding policy, got %q", RoutingPolicyReceiveOnly, rp)
+	}
+
+	// 4. LinkEnd without policy
+	if rp := end.EffectiveRoutingPolicy(nil); rp != RoutingPolicyReceiveOnly {
+		t.Errorf("expected %q with nil policy, got %q", RoutingPolicyReceiveOnly, rp)
+	}
+
+	// 5. Aliases resolution
+	polAlias := &NetworkPolicy{RoutingPolicy: "originate_only"}
+	if rp := polAlias.EffectiveRoutingPolicy(); rp != RoutingPolicyStub {
+		t.Errorf("expected alias originate_only to resolve to %q, got %q", RoutingPolicyStub, rp)
+	}
+
+	polAlias2 := &NetworkPolicy{RoutingPolicy: "transit_client"}
+	if rp := polAlias2.EffectiveRoutingPolicy(); rp != RoutingPolicyStub {
+		t.Errorf("expected alias transit_client to resolve to %q, got %q", RoutingPolicyStub, rp)
+	}
+
+	polAlias3 := &NetworkPolicy{RoutingPolicy: "import_only"}
+	if rp := polAlias3.EffectiveRoutingPolicy(); rp != RoutingPolicyReceiveOnly {
+		t.Errorf("expected alias import_only to resolve to %q, got %q", RoutingPolicyReceiveOnly, rp)
+	}
+
+	polAlias4 := &NetworkPolicy{RoutingPolicy: "export_only"}
+	if rp := polAlias4.EffectiveRoutingPolicy(); rp != RoutingPolicyAdvertiseOnly {
+		t.Errorf("expected alias export_only to resolve to %q, got %q", RoutingPolicyAdvertiseOnly, rp)
+	}
+}
+
+func TestRoutingPolicyHelpers(t *testing.T) {
+	if !IsValidRoutingPolicy("full") || !IsValidRoutingPolicy("stub") || !IsValidRoutingPolicy("receive_only") || !IsValidRoutingPolicy("advertise_only") {
+		t.Errorf("expected standard routing policies to be valid")
+	}
+	if !IsValidRoutingPolicy("originate_only") || !IsValidRoutingPolicy("local_only") || !IsValidRoutingPolicy("import_only") || !IsValidRoutingPolicy("export_only") {
+		t.Errorf("expected aliases to be valid")
+	}
+	if IsValidRoutingPolicy("invalid_policy_name_xyz") {
+		t.Errorf("expected invalid policy name to return false")
+	}
+
+	if NormalizeRoutingPolicy("originate_only") != RoutingPolicyStub {
+		t.Errorf("expected originate_only to normalize to stub")
+	}
+	if NormalizeRoutingPolicy("unknown_fallback") != RoutingPolicyFull {
+		t.Errorf("expected unknown to normalize to full")
+	}
+}
+
 func TestCleanPortList(t *testing.T) {
 	tests := []struct {
 		name     string

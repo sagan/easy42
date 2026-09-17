@@ -411,6 +411,9 @@ template bgp easy42_peer {
         next hop self;
         
         import filter {
+            {{if or (eq .default_routing_policy "advertise_only") (eq .default_routing_policy "none")}}
+            reject;
+            {{else}}
             {{if $.has_default_roa}}if ! default_roa_check() then reject;{{end}}
             if net ~ INTERNET then reject;
             {{if .confed_as}}
@@ -419,18 +422,29 @@ template bgp easy42_peer {
             if bgp_local_pref > {{if .default_cost}}{{.default_cost}}{{else}}100{{end}} then bgp_local_pref = bgp_local_pref - {{if .default_cost}}{{.default_cost}}{{else}}100{{end}}; else bgp_local_pref = 1;
             {{end}}
             accept;
+            {{end}}
         }; 
         export filter {
+            {{if or (eq .default_routing_policy "receive_only") (eq .default_routing_policy "none")}}
+            reject;
+            {{else}}
+            {{if or (eq .default_routing_policy "stub") (eq .default_routing_policy "advertise_only")}}
+            if !(source ~ [ RTS_STATIC, RTS_DEVICE, RTS_INHERIT ]) then reject;
+            {{end}}
             if net ~ INTERNET then reject;
             {{if .confed_as}}
             if !defined(bgp_local_pref) then bgp_local_pref = DEFAULT_LOCAL_PREF;
             {{end}}
             accept;
+            {{end}}
         };
     };
     ipv6 {
         next hop self;
         import filter {
+            {{if or (eq .default_routing_policy "advertise_only") (eq .default_routing_policy "none")}}
+            reject;
+            {{else}}
             {{if $.has_default_roa}}if ! default_roa_check() then reject;{{end}}
             if net ~ INTERNET6 then reject;
             {{if .confed_as}}
@@ -439,13 +453,21 @@ template bgp easy42_peer {
             if bgp_local_pref > {{if .default_cost}}{{.default_cost}}{{else}}100{{end}} then bgp_local_pref = bgp_local_pref - {{if .default_cost}}{{.default_cost}}{{else}}100{{end}}; else bgp_local_pref = 1;
             {{end}}
             accept;
+            {{end}}
         };
         export filter {
+            {{if or (eq .default_routing_policy "receive_only") (eq .default_routing_policy "none")}}
+            reject;
+            {{else}}
+            {{if or (eq .default_routing_policy "stub") (eq .default_routing_policy "advertise_only")}}
+            if !(source ~ [ RTS_STATIC, RTS_DEVICE, RTS_INHERIT ]) then reject;
+            {{end}}
             if net ~ INTERNET6 then reject;
             {{if .confed_as}}
             if !defined(bgp_local_pref) then bgp_local_pref = DEFAULT_LOCAL_PREF;
             {{end}}
             accept;
+            {{end}}
         };
     };
 }
@@ -469,6 +491,9 @@ template bgp {{.template_name}} {
         next hop self;
         
         import filter {
+            {{if or (eq .routing_policy "advertise_only") (eq .routing_policy "none")}}
+            reject;
+            {{else}}
             {{if $.has_default_roa}}if ! default_roa_check() then reject;{{end}}
             if net ~ INTERNET then reject;
             {{if $.confed_as}}
@@ -477,18 +502,29 @@ template bgp {{.template_name}} {
             if bgp_local_pref > {{.cost}} then bgp_local_pref = bgp_local_pref - {{.cost}}; else bgp_local_pref = 1;
             {{end}}
             accept;
+            {{end}}
         }; 
         export filter {
+            {{if or (eq .routing_policy "receive_only") (eq .routing_policy "none")}}
+            reject;
+            {{else}}
+            {{if or (eq .routing_policy "stub") (eq .routing_policy "advertise_only")}}
+            if !(source ~ [ RTS_STATIC, RTS_DEVICE, RTS_INHERIT ]) then reject;
+            {{end}}
             if net ~ INTERNET then reject;
             {{if $.confed_as}}
             if !defined(bgp_local_pref) then bgp_local_pref = DEFAULT_LOCAL_PREF;
             {{end}}
             accept;
+            {{end}}
         };
     };
     ipv6 {
         next hop self;
         import filter {
+            {{if or (eq .routing_policy "advertise_only") (eq .routing_policy "none")}}
+            reject;
+            {{else}}
             {{if $.has_default_roa}}if ! default_roa_check() then reject;{{end}}
             if net ~ INTERNET6 then reject;
             {{if $.confed_as}}
@@ -497,13 +533,21 @@ template bgp {{.template_name}} {
             if bgp_local_pref > {{.cost}} then bgp_local_pref = bgp_local_pref - {{.cost}}; else bgp_local_pref = 1;
             {{end}}
             accept;
+            {{end}}
         };
         export filter {
+            {{if or (eq .routing_policy "receive_only") (eq .routing_policy "none")}}
+            reject;
+            {{else}}
+            {{if or (eq .routing_policy "stub") (eq .routing_policy "advertise_only")}}
+            if !(source ~ [ RTS_STATIC, RTS_DEVICE, RTS_INHERIT ]) then reject;
+            {{end}}
             if net ~ INTERNET6 then reject;
             {{if $.confed_as}}
             if !defined(bgp_local_pref) then bgp_local_pref = DEFAULT_LOCAL_PREF;
             {{end}}
             accept;
+            {{end}}
         };
     };
 }
@@ -527,35 +571,57 @@ template bgp none_peer {
         extended next hop on;
         next hop self;
         import filter {
+            {{if or (eq .none_routing_policy "advertise_only") (eq .none_routing_policy "none")}}
+            reject;
+            {{else}}
             {{if .confed_as}}
             # Prefer routes with fewer confederation hops / lower policy cost
             if !defined(bgp_local_pref) || (bgp_local_pref = 100) then bgp_local_pref = DEFAULT_LOCAL_PREF;
             if bgp_local_pref > {{if .none_cost}}{{.none_cost}}{{else}}100{{end}} then bgp_local_pref = bgp_local_pref - {{if .none_cost}}{{.none_cost}}{{else}}100{{end}}; else bgp_local_pref = 1;
             {{end}}
             accept;
+            {{end}}
         };
         export filter {
+            {{if or (eq .none_routing_policy "receive_only") (eq .none_routing_policy "none")}}
+            reject;
+            {{else}}
+            {{if or (eq .none_routing_policy "stub") (eq .none_routing_policy "advertise_only")}}
+            if !(source ~ [ RTS_STATIC, RTS_DEVICE, RTS_INHERIT ]) then reject;
+            {{end}}
             {{if .confed_as}}
             if !defined(bgp_local_pref) then bgp_local_pref = DEFAULT_LOCAL_PREF;
             {{end}}
             accept;
+            {{end}}
         };
     };
     ipv6 {
         next hop self;
         import filter {
+            {{if or (eq .none_routing_policy "advertise_only") (eq .none_routing_policy "none")}}
+            reject;
+            {{else}}
             {{if .confed_as}}
             # Prefer routes with fewer confederation hops / lower policy cost
             if !defined(bgp_local_pref) || (bgp_local_pref = 100) then bgp_local_pref = DEFAULT_LOCAL_PREF;
             if bgp_local_pref > {{if .none_cost}}{{.none_cost}}{{else}}100{{end}} then bgp_local_pref = bgp_local_pref - {{if .none_cost}}{{.none_cost}}{{else}}100{{end}}; else bgp_local_pref = 1;
             {{end}}
             accept;
+            {{end}}
         };
         export filter {
+            {{if or (eq .none_routing_policy "receive_only") (eq .none_routing_policy "none")}}
+            reject;
+            {{else}}
+            {{if or (eq .none_routing_policy "stub") (eq .none_routing_policy "advertise_only")}}
+            if !(source ~ [ RTS_STATIC, RTS_DEVICE, RTS_INHERIT ]) then reject;
+            {{end}}
             {{if .confed_as}}
             if !defined(bgp_local_pref) then bgp_local_pref = DEFAULT_LOCAL_PREF;
             {{end}}
             accept;
+            {{end}}
         };
     };
 }
@@ -578,35 +644,57 @@ template bgp {{.template_name}} {
         extended next hop on;
         next hop self;
         import filter {
+            {{if or (eq .routing_policy "advertise_only") (eq .routing_policy "none")}}
+            reject;
+            {{else}}
             {{if $.confed_as}}
             # Prefer routes with fewer confederation hops / lower policy cost
             if !defined(bgp_local_pref) || (bgp_local_pref = 100) then bgp_local_pref = DEFAULT_LOCAL_PREF;
             if bgp_local_pref > {{.cost}} then bgp_local_pref = bgp_local_pref - {{.cost}}; else bgp_local_pref = 1;
             {{end}}
             accept;
+            {{end}}
         };
         export filter {
+            {{if or (eq .routing_policy "receive_only") (eq .routing_policy "none")}}
+            reject;
+            {{else}}
+            {{if or (eq .routing_policy "stub") (eq .routing_policy "advertise_only")}}
+            if !(source ~ [ RTS_STATIC, RTS_DEVICE, RTS_INHERIT ]) then reject;
+            {{end}}
             {{if $.confed_as}}
             if !defined(bgp_local_pref) then bgp_local_pref = DEFAULT_LOCAL_PREF;
             {{end}}
             accept;
+            {{end}}
         };
     };
     ipv6 {
         next hop self;
         import filter {
+            {{if or (eq .routing_policy "advertise_only") (eq .routing_policy "none")}}
+            reject;
+            {{else}}
             {{if $.confed_as}}
             # Prefer routes with fewer confederation hops / lower policy cost
             if !defined(bgp_local_pref) || (bgp_local_pref = 100) then bgp_local_pref = DEFAULT_LOCAL_PREF;
             if bgp_local_pref > {{.cost}} then bgp_local_pref = bgp_local_pref - {{.cost}}; else bgp_local_pref = 1;
             {{end}}
             accept;
+            {{end}}
         };
         export filter {
+            {{if or (eq .routing_policy "receive_only") (eq .routing_policy "none")}}
+            reject;
+            {{else}}
+            {{if or (eq .routing_policy "stub") (eq .routing_policy "advertise_only")}}
+            if !(source ~ [ RTS_STATIC, RTS_DEVICE, RTS_INHERIT ]) then reject;
+            {{end}}
             {{if $.confed_as}}
             if !defined(bgp_local_pref) then bgp_local_pref = DEFAULT_LOCAL_PREF;
             {{end}}
             accept;
+            {{end}}
         };
     };
 }
@@ -637,6 +725,9 @@ template bgp external_peer {
         extended next hop on;
         next hop self;
         import filter {
+            {{if or (eq .ext_routing_policy "advertise_only") (eq .ext_routing_policy "none")}}
+            reject;
+            {{else}}
             {{if $.has_dn42_roa}}if ! dn42_roa_check() then reject;{{end}}
             {{if .ext_reject_internet}}if net ~ INTERNET then reject;{{end}}
             {{if .has_ext_disallowed_import_v4}}if net ~ EXT_DISALLOWED_IMPORT_PREFIXES_V4 then reject;{{end}}
@@ -652,24 +743,45 @@ template bgp external_peer {
             bgp_local_pref = DEFAULT_LOCAL_PREF;
             accept;
             {{end}}
+            {{end}}
         };
         export filter {
+            {{if or (eq .ext_routing_policy "receive_only") (eq .ext_routing_policy "none")}}
+            reject;
+            {{else}}
             {{if .ext_reject_internet}}if net ~ INTERNET then reject;{{end}}
             {{if .has_ext_disallowed_export_v4}}if net ~ EXT_DISALLOWED_EXPORT_PREFIXES_V4 then reject;{{end}}
             {{if .has_ext_export_v4}}
-            if (source ~ [ RTS_STATIC, RTS_BGP ]) && (net ~ EXT_EXPORT_PREFIXES_V4) then {
+            {{if or (eq .ext_routing_policy "stub") (eq .ext_routing_policy "advertise_only")}}
+            if (source ~ [ RTS_STATIC, RTS_DEVICE, RTS_INHERIT ]) && (net ~ EXT_EXPORT_PREFIXES_V4) then {
               bgp_large_community.delete(COMM_EXTERNAL);
               accept;
             }
             reject;
             {{else}}
+            if (source ~ [ RTS_STATIC, RTS_BGP ]) && (net ~ EXT_EXPORT_PREFIXES_V4) then {
+              bgp_large_community.delete(COMM_EXTERNAL);
+              accept;
+            }
+            reject;
+            {{end}}
+            {{else}}
+            {{if or (eq .ext_routing_policy "stub") (eq .ext_routing_policy "advertise_only")}}
+            if !(source ~ [ RTS_STATIC, RTS_DEVICE, RTS_INHERIT ]) then reject;
             accept;
+            {{else}}
+            accept;
+            {{end}}
+            {{end}}
             {{end}}
         };
     };
     ipv6 {
         next hop self;
         import filter {
+            {{if or (eq .ext_routing_policy "advertise_only") (eq .ext_routing_policy "none")}}
+            reject;
+            {{else}}
             {{if $.has_dn42_roa}}if ! dn42_roa_check() then reject;{{end}}
             {{if .ext_reject_internet}}if net ~ INTERNET6 then reject;{{end}}
             {{if .has_ext_disallowed_import_v6}}if net ~ EXT_DISALLOWED_IMPORT_PREFIXES_V6 then reject;{{end}}
@@ -685,22 +797,164 @@ template bgp external_peer {
             bgp_local_pref = DEFAULT_LOCAL_PREF;
             accept;
             {{end}}
+            {{end}}
         };
         export filter {
+            {{if or (eq .ext_routing_policy "receive_only") (eq .ext_routing_policy "none")}}
+            reject;
+            {{else}}
             {{if .ext_reject_internet}}if net ~ INTERNET6 then reject;{{end}}
             {{if .has_ext_disallowed_export_v6}}if net ~ EXT_DISALLOWED_EXPORT_PREFIXES_V6 then reject;{{end}}
             {{if .has_ext_export_v6}}
-            if (source ~ [ RTS_STATIC, RTS_BGP ]) && (net ~ EXT_EXPORT_PREFIXES_V6) then {
+            {{if or (eq .ext_routing_policy "stub") (eq .ext_routing_policy "advertise_only")}}
+            if (source ~ [ RTS_STATIC, RTS_DEVICE, RTS_INHERIT ]) && (net ~ EXT_EXPORT_PREFIXES_V6) then {
               bgp_large_community.delete(COMM_EXTERNAL);
               accept;
             }
             reject;
             {{else}}
+            if (source ~ [ RTS_STATIC, RTS_BGP ]) && (net ~ EXT_EXPORT_PREFIXES_V6) then {
+              bgp_large_community.delete(COMM_EXTERNAL);
+              accept;
+            }
+            reject;
+            {{end}}
+            {{else}}
+            {{if or (eq .ext_routing_policy "stub") (eq .ext_routing_policy "advertise_only")}}
+            if !(source ~ [ RTS_STATIC, RTS_DEVICE, RTS_INHERIT ]) then reject;
             accept;
+            {{else}}
+            accept;
+            {{end}}
+            {{end}}
             {{end}}
         };
     };
 }
+
+{{range .custom_external_templates}}
+template bgp {{.template_name}} {
+    direct;
+
+    {{if $.confed_as}}
+    confederation CONFED_AS;
+    confederation member no;
+    {{end}}
+
+    hold time 90;          # Set hold time to 90 seconds
+    keepalive time 30;     # Set keepalive interval to 30 seconds
+
+    ipv4 {
+        extended next hop on;
+        next hop self;
+        import filter {
+            {{if or (eq .routing_policy "advertise_only") (eq .routing_policy "none")}}
+            reject;
+            {{else}}
+            {{if $.has_dn42_roa}}if ! dn42_roa_check() then reject;{{end}}
+            {{if $.ext_reject_internet}}if net ~ INTERNET then reject;{{end}}
+            {{if $.has_ext_disallowed_import_v4}}if net ~ EXT_DISALLOWED_IMPORT_PREFIXES_V4 then reject;{{end}}
+            {{if $.has_ext_import_v4}}
+            if net ~ EXT_PREFIXES_V4 then {
+              bgp_large_community.add(COMM_EXTERNAL);
+              bgp_local_pref = DEFAULT_LOCAL_PREF;
+              accept;
+            }
+            reject;
+            {{else}}
+            bgp_large_community.add(COMM_EXTERNAL);
+            bgp_local_pref = DEFAULT_LOCAL_PREF;
+            accept;
+            {{end}}
+            {{end}}
+        };
+        export filter {
+            {{if or (eq .routing_policy "receive_only") (eq .routing_policy "none")}}
+            reject;
+            {{else}}
+            {{if $.ext_reject_internet}}if net ~ INTERNET then reject;{{end}}
+            {{if $.has_ext_disallowed_export_v4}}if net ~ EXT_DISALLOWED_EXPORT_PREFIXES_V4 then reject;{{end}}
+            {{if $.has_ext_export_v4}}
+            {{if or (eq .routing_policy "stub") (eq .routing_policy "advertise_only")}}
+            if (source ~ [ RTS_STATIC, RTS_DEVICE, RTS_INHERIT ]) && (net ~ EXT_EXPORT_PREFIXES_V4) then {
+              bgp_large_community.delete(COMM_EXTERNAL);
+              accept;
+            }
+            reject;
+            {{else}}
+            if (source ~ [ RTS_STATIC, RTS_BGP ]) && (net ~ EXT_EXPORT_PREFIXES_V4) then {
+              bgp_large_community.delete(COMM_EXTERNAL);
+              accept;
+            }
+            reject;
+            {{end}}
+            {{else}}
+            {{if or (eq .routing_policy "stub") (eq .routing_policy "advertise_only")}}
+            if !(source ~ [ RTS_STATIC, RTS_DEVICE, RTS_INHERIT ]) then reject;
+            accept;
+            {{else}}
+            accept;
+            {{end}}
+            {{end}}
+            {{end}}
+        };
+    };
+    ipv6 {
+        next hop self;
+        import filter {
+            {{if or (eq .routing_policy "advertise_only") (eq .routing_policy "none")}}
+            reject;
+            {{else}}
+            {{if $.has_dn42_roa}}if ! dn42_roa_check() then reject;{{end}}
+            {{if $.ext_reject_internet}}if net ~ INTERNET6 then reject;{{end}}
+            {{if $.has_ext_disallowed_import_v6}}if net ~ EXT_DISALLOWED_IMPORT_PREFIXES_V6 then reject;{{end}}
+            {{if $.has_ext_import_v6}}
+            if net ~ EXT_PREFIXES_V6 then {
+              bgp_large_community.add(COMM_EXTERNAL);
+              bgp_local_pref = DEFAULT_LOCAL_PREF;
+              accept;
+            }
+            reject;
+            {{else}}
+            bgp_large_community.add(COMM_EXTERNAL);
+            bgp_local_pref = DEFAULT_LOCAL_PREF;
+            accept;
+            {{end}}
+            {{end}}
+        };
+        export filter {
+            {{if or (eq .routing_policy "receive_only") (eq .routing_policy "none")}}
+            reject;
+            {{else}}
+            {{if $.ext_reject_internet}}if net ~ INTERNET6 then reject;{{end}}
+            {{if $.has_ext_disallowed_export_v6}}if net ~ EXT_DISALLOWED_EXPORT_PREFIXES_V6 then reject;{{end}}
+            {{if $.has_ext_export_v6}}
+            {{if or (eq .routing_policy "stub") (eq .routing_policy "advertise_only")}}
+            if (source ~ [ RTS_STATIC, RTS_DEVICE, RTS_INHERIT ]) && (net ~ EXT_EXPORT_PREFIXES_V6) then {
+              bgp_large_community.delete(COMM_EXTERNAL);
+              accept;
+            }
+            reject;
+            {{else}}
+            if (source ~ [ RTS_STATIC, RTS_BGP ]) && (net ~ EXT_EXPORT_PREFIXES_V6) then {
+              bgp_large_community.delete(COMM_EXTERNAL);
+              accept;
+            }
+            reject;
+            {{end}}
+            {{else}}
+            {{if or (eq .routing_policy "stub") (eq .routing_policy "advertise_only")}}
+            if !(source ~ [ RTS_STATIC, RTS_DEVICE, RTS_INHERIT ]) then reject;
+            accept;
+            {{else}}
+            accept;
+            {{end}}
+            {{end}}
+            {{end}}
+        };
+    };
+}
+{{end}}
 {{end}}
 
 {{range .custom_policy_prefixes}}
@@ -731,6 +985,9 @@ template bgp {{.template_name}} {
         extended next hop on;
         next hop self;
         import filter {
+            {{if or (eq .routing_policy "advertise_only") (eq .routing_policy "none")}}
+            reject;
+            {{else}}
             {{if .has_roa}}if ! {{.roa_fn}}() then reject;{{end}}
             {{if .reject_internet}}if net ~ INTERNET then reject;{{end}}
             {{if .has_disallowed_import_v4}}if net ~ POL_{{.id}}_DISALLOWED_IMPORT_V4 then reject;{{end}}
@@ -752,12 +1009,17 @@ template bgp {{.template_name}} {
             {{end}}
             accept;
             {{end}}
+            {{end}}
         };
         export filter {
+            {{if or (eq .routing_policy "receive_only") (eq .routing_policy "none")}}
+            reject;
+            {{else}}
             {{if .reject_internet}}if net ~ INTERNET then reject;{{end}}
             {{if .has_disallowed_export_v4}}if net ~ POL_{{.id}}_DISALLOWED_EXPORT_V4 then reject;{{end}}
             {{if .has_export_v4}}
-            if (source ~ [ RTS_STATIC, RTS_BGP ]) && (net ~ POL_{{.id}}_EXPORT_V4) then {
+            {{if or (eq .routing_policy "stub") (eq .routing_policy "advertise_only")}}
+            if (source ~ [ RTS_STATIC, RTS_DEVICE, RTS_INHERIT ]) && (net ~ POL_{{.id}}_EXPORT_V4) then {
                 {{if $.confed_as}}
                 if !defined(bgp_local_pref) then bgp_local_pref = DEFAULT_LOCAL_PREF;
                 {{end}}
@@ -765,16 +1027,37 @@ template bgp {{.template_name}} {
             }
             reject;
             {{else}}
+            if (source ~ [ RTS_STATIC, RTS_BGP ]) && (net ~ POL_{{.id}}_EXPORT_V4) then {
+                {{if $.confed_as}}
+                if !defined(bgp_local_pref) then bgp_local_pref = DEFAULT_LOCAL_PREF;
+                {{end}}
+                accept;
+            }
+            reject;
+            {{end}}
+            {{else}}
+            {{if or (eq .routing_policy "stub") (eq .routing_policy "advertise_only")}}
+            if !(source ~ [ RTS_STATIC, RTS_DEVICE, RTS_INHERIT ]) then reject;
             {{if $.confed_as}}
             if !defined(bgp_local_pref) then bgp_local_pref = DEFAULT_LOCAL_PREF;
             {{end}}
             accept;
+            {{else}}
+            {{if $.confed_as}}
+            if !defined(bgp_local_pref) then bgp_local_pref = DEFAULT_LOCAL_PREF;
+            {{end}}
+            accept;
+            {{end}}
+            {{end}}
             {{end}}
         };
     };
     ipv6 {
         next hop self;
         import filter {
+            {{if or (eq .routing_policy "advertise_only") (eq .routing_policy "none")}}
+            reject;
+            {{else}}
             {{if .has_roa}}if ! {{.roa_fn}}() then reject;{{end}}
             {{if .reject_internet}}if net ~ INTERNET6 then reject;{{end}}
             {{if .has_disallowed_import_v6}}if net ~ POL_{{.id}}_DISALLOWED_IMPORT_V6 then reject;{{end}}
@@ -796,12 +1079,17 @@ template bgp {{.template_name}} {
             {{end}}
             accept;
             {{end}}
+            {{end}}
         };
         export filter {
+            {{if or (eq .routing_policy "receive_only") (eq .routing_policy "none")}}
+            reject;
+            {{else}}
             {{if .reject_internet}}if net ~ INTERNET6 then reject;{{end}}
             {{if .has_disallowed_export_v6}}if net ~ POL_{{.id}}_DISALLOWED_EXPORT_V6 then reject;{{end}}
             {{if .has_export_v6}}
-            if (source ~ [ RTS_STATIC, RTS_BGP ]) && (net ~ POL_{{.id}}_EXPORT_V6) then {
+            {{if or (eq .routing_policy "stub") (eq .routing_policy "advertise_only")}}
+            if (source ~ [ RTS_STATIC, RTS_DEVICE, RTS_INHERIT ]) && (net ~ POL_{{.id}}_EXPORT_V6) then {
                 {{if $.confed_as}}
                 if !defined(bgp_local_pref) then bgp_local_pref = DEFAULT_LOCAL_PREF;
                 {{end}}
@@ -809,10 +1097,28 @@ template bgp {{.template_name}} {
             }
             reject;
             {{else}}
+            if (source ~ [ RTS_STATIC, RTS_BGP ]) && (net ~ POL_{{.id}}_EXPORT_V6) then {
+                {{if $.confed_as}}
+                if !defined(bgp_local_pref) then bgp_local_pref = DEFAULT_LOCAL_PREF;
+                {{end}}
+                accept;
+            }
+            reject;
+            {{end}}
+            {{else}}
+            {{if or (eq .routing_policy "stub") (eq .routing_policy "advertise_only")}}
+            if !(source ~ [ RTS_STATIC, RTS_DEVICE, RTS_INHERIT ]) then reject;
             {{if $.confed_as}}
             if !defined(bgp_local_pref) then bgp_local_pref = DEFAULT_LOCAL_PREF;
             {{end}}
             accept;
+            {{else}}
+            {{if $.confed_as}}
+            if !defined(bgp_local_pref) then bgp_local_pref = DEFAULT_LOCAL_PREF;
+            {{end}}
+            accept;
+            {{end}}
+            {{end}}
             {{end}}
         };
     };
