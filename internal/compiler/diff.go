@@ -2,6 +2,8 @@ package compiler
 
 import (
 	"fmt"
+	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -75,4 +77,138 @@ func GenerateDiff(currentContent, desiredContent string) string {
 	}
 
 	return sb.String()
+}
+
+// extractWgRestartDirectives extracts directives from the [Interface] section of a WireGuard config
+// that cannot be dynamically applied via wg syncconf and require an interface restart (wg-quick down/up).
+func extractWgRestartDirectives(content string) map[string][]string {
+	result := make(map[string][]string)
+	restartKeys := map[string]bool{
+		"mtu":        true,
+		"address":    true,
+		"table":      true,
+		"dns":        true,
+		"preup":      true,
+		"postup":     true,
+		"predown":    true,
+		"postdown":   true,
+		"saveconfig": true,
+	}
+
+	lines := strings.Split(content, "\n")
+	currentSection := ""
+
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") || strings.HasPrefix(trimmed, ";") {
+			continue
+		}
+		if strings.HasPrefix(trimmed, "[") && strings.HasSuffix(trimmed, "]") {
+			currentSection = strings.ToLower(strings.TrimSpace(trimmed[1 : len(trimmed)-1]))
+			continue
+		}
+		if currentSection != "interface" {
+			continue
+		}
+
+		parts := strings.SplitN(trimmed, "=", 2)
+		if len(parts) == 2 {
+			k := strings.ToLower(strings.TrimSpace(parts[0]))
+			v := strings.TrimSpace(parts[1])
+			if restartKeys[k] {
+				// Normalize comma-separated addresses or dns
+				if k == "address" || k == "dns" {
+					items := strings.Split(v, ",")
+					for _, item := range items {
+						trimmedItem := strings.TrimSpace(item)
+						if trimmedItem != "" {
+							result[k] = append(result[k], trimmedItem)
+						}
+					}
+				} else {
+					result[k] = append(result[k], v)
+				}
+			}
+		}
+	}
+
+	// Sort address and dns slices for stable comparison
+	for _, k := range []string{"address", "dns"} {
+		if slice, ok := result[k]; ok && len(slice) > 1 {
+			sort.Strings(slice)
+			result[k] = slice
+		}
+	}
+
+	return result
+}
+
+// RequiresWgRestart determines whether changes between the current remote WireGuard config
+// and the desired WireGuard config require restarting the interface (wg-quick down <iface>; wg-quick up <iface>)
+// rather than dynamic reconfiguration via wg syncconf.
+// Attributes like MTU, Address, Table, PreUp, PostUp cannot be applied by wg syncconf.
+func RequiresWgRestart(currentContent, desiredContent string) bool {
+	if strings.TrimSpace(currentContent) == "" {
+		// If current content is empty or unknown, restart to ensure correct initialization
+		return true
+	}
+
+	currDirectives := extractWgRestartDirectives(currentContent)
+	desDirectives := extractWgRestartDirectives(desiredContent)
+
+	allKeys := make(map[string]bool)
+	for k := range currDirectives {
+		allKeys[k] = true
+	}
+	for k := range desDirectives {
+		allKeys[k] = true
+	}
+
+	for k := range allKeys {
+		cVals := currDirectives[k]
+		dVals := desDirectives[k]
+		if len(cVals) != len(dVals) {
+			return true
+		}
+		for i := range cVals {
+			if cVals[i] != dVals[i] {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+// ExtractWgMTU extracts the MTU integer value from the [Interface] section of a WireGuard config.
+// Returns 0 if not specified or invalid.
+func ExtractWgMTU(content string) int {
+	lines := strings.Split(content, "\n")
+	currentSection := ""
+
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") || strings.HasPrefix(trimmed, ";") {
+			continue
+		}
+		if strings.HasPrefix(trimmed, "[") && strings.HasSuffix(trimmed, "]") {
+			currentSection = strings.ToLower(strings.TrimSpace(trimmed[1 : len(trimmed)-1]))
+			continue
+		}
+		if currentSection != "interface" {
+			continue
+		}
+
+		parts := strings.SplitN(trimmed, "=", 2)
+		if len(parts) == 2 {
+			k := strings.ToLower(strings.TrimSpace(parts[0]))
+			if k == "mtu" {
+				val := strings.TrimSpace(parts[1])
+				if mtu, err := strconv.Atoi(val); err == nil {
+					return mtu
+				}
+			}
+		}
+	}
+	return 0
 }

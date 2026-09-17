@@ -1975,7 +1975,7 @@ func TestRoutingPolicyBirdTemplates(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GenerateBirdConfig failed: %v", err)
 	}
-	if !strings.Contains(confStub, "if !(source ~ [ RTS_STATIC, RTS_INHERIT ]) then reject;") {
+	if !strings.Contains(confStub, "if !(source ~ [ RTS_STATIC, RTS_DEVICE, RTS_INHERIT ]) then reject;") {
 		t.Errorf("Expected easy42_peer export filter to reject non-local routes in stub mode:\n%s", confStub)
 	}
 	validateBirdSyntax(t, confStub)
@@ -1999,8 +1999,8 @@ func TestRoutingPolicyBirdTemplates(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GenerateBirdConfig failed: %v", err)
 	}
-	if !strings.Contains(confExtStub, "if (source ~ [ RTS_STATIC, RTS_INHERIT ]) && (net ~ EXT_EXPORT_PREFIXES_V4) then {") {
-		t.Errorf("Expected external_peer export filter to only allow RTS_STATIC and RTS_INHERIT in stub mode:\n%s", confExtStub)
+	if !strings.Contains(confExtStub, "if (source ~ [ RTS_STATIC, RTS_DEVICE, RTS_INHERIT ]) && (net ~ EXT_EXPORT_PREFIXES_V4) then {") {
+		t.Errorf("Expected external_peer export filter to allow RTS_STATIC, RTS_DEVICE, RTS_INHERIT in stub mode:\n%s", confExtStub)
 	}
 	validateBirdSyntax(t, confExtStub)
 

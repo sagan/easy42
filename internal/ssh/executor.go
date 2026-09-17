@@ -108,6 +108,26 @@ func DownWireGuard(client *ssh.Client, iface string) error {
 	return err
 }
 
+// RestartWireGuard restarts a WireGuard interface using wg-quick down and wg-quick up
+func RestartWireGuard(client *ssh.Client, iface string) error {
+	cmd := fmt.Sprintf("sh -l -c 'wg-quick down %s 2>/dev/null || ip link del dev %s 2>/dev/null ; wg-quick up %s'", iface, iface, iface)
+	_, err := RunCommand(client, cmd)
+	return err
+}
+
+// GetInterfaceMTU returns the MTU of a network interface from /sys/class/net/<iface>/mtu
+func GetInterfaceMTU(client *ssh.Client, iface string) (int, error) {
+	out, err := RunCommand(client, fmt.Sprintf("cat /sys/class/net/%s/mtu 2>/dev/null", iface))
+	if err != nil {
+		return 0, err
+	}
+	mtu, err := strconv.Atoi(strings.TrimSpace(out))
+	if err != nil {
+		return 0, err
+	}
+	return mtu, nil
+}
+
 // IsInterfaceStarted checks if a network interface is in started state (exists, is up, and recognized by wireguard)
 func IsInterfaceStarted(client *ssh.Client, iface string) bool {
 	out, err := RunCommand(client, fmt.Sprintf("ip link show %s", iface))
@@ -215,7 +235,7 @@ func SyncWireGuard(client *ssh.Client, iface string, confPath string) error {
 	}
 
 	// Try wg syncconf with stripped config
-	cmd := fmt.Sprintf("bash -c 'wg syncconf %s <(wg-quick strip %s)'", iface, confPath)
+	cmd := fmt.Sprintf("sh -l -c 'wg syncconf %s <(wg-quick strip %s)'", iface, confPath)
 	_, err := RunCommand(client, cmd)
 	if err != nil {
 		// Fallback to restart

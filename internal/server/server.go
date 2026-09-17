@@ -89,6 +89,10 @@ func New(cfg Config) *Server {
 			r.Post("/nodes/{name}/state", s.handleUpdateNodeState)
 			r.Get("/nodes/{name}/bird", s.handleGetNodeBirdConfig)
 			r.Get("/nodes/{name}/nftables", s.handleGetNodeNftablesConfig)
+			r.Post("/nodes/{name}/restart-wg", s.handleRestartNodeWg)
+			r.Post("/nodes/{name}/restart-bird", s.handleRestartNodeBird)
+			r.Post("/nodes/{name}/interfaces/{iface}/restart", s.handleRestartNodeInterface)
+			r.Post("/nodes/{name}/restart-wg/{iface}", s.handleRestartNodeInterface)
 
 			// Links
 			r.Get("/links", s.handleGetLinks)

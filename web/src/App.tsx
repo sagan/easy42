@@ -550,6 +550,7 @@ export const App: React.FC = () => {
         <LinkDetailDrawer
           link={selectedLink}
           networkState={networkState}
+          nodes={nodes}
           open={Boolean(selectedLink)}
           onClose={() => setSelectedLink(null)}
           onEditLink={handleEditLink}

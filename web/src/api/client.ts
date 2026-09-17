@@ -120,6 +120,21 @@ export const api = {
     request<{ node: string; config: string }>(`/nodes/${encodeURIComponent(name)}/bird`),
   getNodeNftablesConfig: (name: string) =>
     request<{ node: string; config: string }>(`/nodes/${encodeURIComponent(name)}/nftables`),
+  restartNodeWg: (name: string) =>
+    request<{ success: boolean; message: string; output?: string }>(`/nodes/${encodeURIComponent(name)}/restart-wg`, {
+      method: "POST",
+    }),
+  restartNodeBird: (name: string) =>
+    request<{ success: boolean; message: string; output?: string }>(`/nodes/${encodeURIComponent(name)}/restart-bird`, {
+      method: "POST",
+    }),
+  restartNodeInterface: (nodeName: string, iface: string) =>
+    request<{ success: boolean; message: string; output?: string }>(
+      `/nodes/${encodeURIComponent(nodeName)}/interfaces/${encodeURIComponent(iface)}/restart`,
+      {
+        method: "POST",
+      },
+    ),
 
   // Links
   getLinks: () => request<Link[]>("/links"),

@@ -29,8 +29,8 @@ Wants=network-online.target
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-ExecStart=/bin/sh -c 'for conf in /etc/wireguard/wg42*.conf; do [ -f "$$conf" ] || continue; iface=$${conf##*/}; iface=$${iface%.conf}; wg-quick up "$$iface" || true; done'
-ExecStop=/bin/sh -c 'for conf in /etc/wireguard/wg42*.conf; do [ -f "$$conf" ] || continue; iface=$${conf##*/}; iface=$${iface%.conf}; wg-quick down "$$iface" || true; done'
+ExecStart=sh -l -c 'for conf in /etc/wireguard/wg42*.conf; do [ -f "$$conf" ] || continue; iface=$${conf##*/}; iface=$${iface%.conf}; wg-quick up "$$iface" || true; done'
+ExecStop=sh -l -c 'for conf in /etc/wireguard/wg42*.conf; do [ -f "$$conf" ] || continue; iface=$${conf##*/}; iface=$${iface%.conf}; wg-quick down "$$iface" || true; done'
 
 [Install]
 WantedBy=multi-user.target

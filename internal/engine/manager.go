@@ -1793,6 +1793,103 @@ func (m *Manager) RefreshNodeStatus(nodeName string) (*config.NodeStatus, error)
 	return status, nil
 }
 
+// RestartNodeWireGuardInterfaces restarts all WireGuard interfaces on a managed node
+func (m *Manager) RestartNodeWireGuardInterfaces(nodeName string) (string, error) {
+	node := m.FindNode(nodeName)
+	if node == nil {
+		return "", ErrNodeNotFound
+	}
+	if node.IsExternal {
+		return "", fmt.Errorf("node %s is external and cannot be managed via SSH", nodeName)
+	}
+	if node.Host == "" {
+		return "", fmt.Errorf("node %s has no host configured", nodeName)
+	}
+
+	sshClient, _, err := m.pool.GetClient(node.Host)
+	if err != nil {
+		return "", fmt.Errorf("failed to connect to host %s: %w", node.Host, err)
+	}
+
+	cmd := `sh -l -c '
+for i in $( { for c in /etc/wireguard/*.conf; do [ -f "$c" ] && basename "$c" .conf; done; wg show interfaces 2>/dev/null | tr " " "\n"; } | sort -u ); do
+  [ -n "$i" ] || continue
+  wg-quick down "$i" 2>/dev/null || ip link del dev "$i" 2>/dev/null
+  [ -f "/etc/wireguard/$i.conf" ] && wg-quick up "$i"
+done
+'`
+	out, err := ssh.RunCommandWithTimeout(sshClient, cmd, 30*time.Second)
+	if err != nil {
+		return out, fmt.Errorf("failed to restart WireGuard interfaces: %w", err)
+	}
+
+	go func() {
+		_, _ = m.RefreshNodeStatus(nodeName)
+	}()
+
+	return out, nil
+}
+
+// RestartNodeBird restarts the BIRD routing service on a managed node
+func (m *Manager) RestartNodeBird(nodeName string) (string, error) {
+	node := m.FindNode(nodeName)
+	if node == nil {
+		return "", ErrNodeNotFound
+	}
+	if node.IsExternal {
+		return "", fmt.Errorf("node %s is external and cannot be managed via SSH", nodeName)
+	}
+	if node.Host == "" {
+		return "", fmt.Errorf("node %s has no host configured", nodeName)
+	}
+
+	sshClient, _, err := m.pool.GetClient(node.Host)
+	if err != nil {
+		return "", fmt.Errorf("failed to connect to host %s: %w", node.Host, err)
+	}
+
+	out, err := ssh.RunCommandWithTimeout(sshClient, "service bird restart", 20*time.Second)
+	if err != nil {
+		return out, fmt.Errorf("failed to restart bird: %w", err)
+	}
+
+	return out, nil
+}
+
+// RestartNodeInterface restarts a specific WireGuard interface on a managed node
+func (m *Manager) RestartNodeInterface(nodeName string, iface string) (string, error) {
+	if iface == "" {
+		return "", fmt.Errorf("interface name is required")
+	}
+	node := m.FindNode(nodeName)
+	if node == nil {
+		return "", ErrNodeNotFound
+	}
+	if node.IsExternal {
+		return "", fmt.Errorf("node %s is external and cannot be managed via SSH", nodeName)
+	}
+	if node.Host == "" {
+		return "", fmt.Errorf("node %s has no host configured", nodeName)
+	}
+
+	sshClient, _, err := m.pool.GetClient(node.Host)
+	if err != nil {
+		return "", fmt.Errorf("failed to connect to host %s: %w", node.Host, err)
+	}
+
+	cmd := fmt.Sprintf("sh -l -c 'wg-quick down %s 2>/dev/null || ip link del dev %s 2>/dev/null ; wg-quick up %s'", iface, iface, iface)
+	out, err := ssh.RunCommandWithTimeout(sshClient, cmd, 20*time.Second)
+	if err != nil {
+		return out, fmt.Errorf("failed to restart WireGuard interface %s: %w", iface, err)
+	}
+
+	go func() {
+		_, _ = m.RefreshNodeStatus(nodeName)
+	}()
+
+	return out, nil
+}
+
 // GetNodeStatuses returns cached node statuses, purging any stale entries for deleted nodes
 func (m *Manager) GetNodeStatuses() map[string]config.NodeStatus {
 	m.mu.Lock()
@@ -2485,13 +2582,35 @@ func (m *Manager) ExecuteSyncNodes(isForce bool, nodeNames ...string) ([]config.
 				continue
 			}
 		} else if needsUpdate {
-			// Interface is already started; sync/reload WireGuard dynamically
-			if err := ssh.SyncWireGuard(sshClient, act.Interface, act.TargetFile); err != nil {
-				res.Success = false
-				res.Error = fmt.Sprintf("Failed to reload WireGuard interface %s: %v", act.Interface, err)
-				res.Duration = float64(time.Since(start).Milliseconds())
-				results = append(results, res)
-				continue
+			// Check if interface requires restart (e.g. MTU or Address changed)
+			needsRestart := compiler.RequiresWgRestart(currentContent, act.FileContent)
+			if !needsRestart {
+				// Also check if live interface MTU differs from desired MTU in config
+				desiredMTU := compiler.ExtractWgMTU(act.FileContent)
+				if desiredMTU > 0 {
+					if liveMTU, err := ssh.GetInterfaceMTU(sshClient, act.Interface); err == nil && liveMTU > 0 && liveMTU != desiredMTU {
+						needsRestart = true
+					}
+				}
+			}
+
+			if needsRestart {
+				if err := ssh.RestartWireGuard(sshClient, act.Interface); err != nil {
+					res.Success = false
+					res.Error = fmt.Sprintf("Failed to restart WireGuard interface %s: %v", act.Interface, err)
+					res.Duration = float64(time.Since(start).Milliseconds())
+					results = append(results, res)
+					continue
+				}
+			} else {
+				// Interface is already started; sync/reload WireGuard dynamically
+				if err := ssh.SyncWireGuard(sshClient, act.Interface, act.TargetFile); err != nil {
+					res.Success = false
+					res.Error = fmt.Sprintf("Failed to reload WireGuard interface %s: %v", act.Interface, err)
+					res.Duration = float64(time.Since(start).Milliseconds())
+					results = append(results, res)
+					continue
+				}
 			}
 		}
 

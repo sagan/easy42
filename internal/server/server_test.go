@@ -1507,6 +1507,77 @@ func TestRoutingPolicyServerAPI(t *testing.T) {
 	}
 }
 
+func TestRestartEndpoints(t *testing.T) {
+	srv, tmpDir, initPass := setupTestServer(t)
+	defer os.RemoveAll(tmpDir)
+
+	loginBody, _ := json.Marshal(map[string]string{"password": initPass})
+	req := httptest.NewRequest("POST", "/api/auth/login", bytes.NewReader(loginBody))
+	w := httptest.NewRecorder()
+	srv.router.ServeHTTP(w, req)
+	cookie := w.Result().Cookies()[0]
+
+	// Add an external node
+	extNode := config.Node{
+		Name:       "ext-node",
+		IsExternal: true,
+		ASN:        4242421000,
+	}
+	bodyNode, _ := json.Marshal(extNode)
+	reqNode := httptest.NewRequest("POST", "/api/nodes", bytes.NewReader(bodyNode))
+	reqNode.AddCookie(cookie)
+	wNode := httptest.NewRecorder()
+	srv.router.ServeHTTP(wNode, reqNode)
+	if wNode.Code != http.StatusCreated {
+		t.Fatalf("AddNode failed: %d %s", wNode.Code, wNode.Body.String())
+	}
+
+	// 1. Test POST /api/nodes/nonexistent/restart-wg -> error
+	reqRestartNonexistent := httptest.NewRequest("POST", "/api/nodes/nonexistent/restart-wg", nil)
+	reqRestartNonexistent.AddCookie(cookie)
+	wRestartNonexistent := httptest.NewRecorder()
+	srv.router.ServeHTTP(wRestartNonexistent, reqRestartNonexistent)
+	if wRestartNonexistent.Code == http.StatusOK {
+		t.Fatalf("Expected error for nonexistent node restart-wg, got 200")
+	}
+
+	// 2. Test POST /api/nodes/ext-node/restart-wg -> error (external node cannot be SSH managed)
+	reqRestartExt := httptest.NewRequest("POST", "/api/nodes/ext-node/restart-wg", nil)
+	reqRestartExt.AddCookie(cookie)
+	wRestartExt := httptest.NewRecorder()
+	srv.router.ServeHTTP(wRestartExt, reqRestartExt)
+	if wRestartExt.Code == http.StatusOK {
+		t.Fatalf("Expected error for external node restart-wg, got 200")
+	}
+
+	// 3. Test POST /api/nodes/ext-node/restart-bird -> error
+	reqRestartBird := httptest.NewRequest("POST", "/api/nodes/ext-node/restart-bird", nil)
+	reqRestartBird.AddCookie(cookie)
+	wRestartBird := httptest.NewRecorder()
+	srv.router.ServeHTTP(wRestartBird, reqRestartBird)
+	if wRestartBird.Code == http.StatusOK {
+		t.Fatalf("Expected error for external node restart-bird, got 200")
+	}
+
+	// 4. Test POST /api/nodes/ext-node/interfaces/wg42001/restart -> error
+	reqRestartIface := httptest.NewRequest("POST", "/api/nodes/ext-node/interfaces/wg42001/restart", nil)
+	reqRestartIface.AddCookie(cookie)
+	wRestartIface := httptest.NewRecorder()
+	srv.router.ServeHTTP(wRestartIface, reqRestartIface)
+	if wRestartIface.Code == http.StatusOK {
+		t.Fatalf("Expected error for external node interface restart, got 200")
+	}
+
+	// 5. Test POST /api/nodes/ext-node/restart-wg/wg42001 -> error (alias)
+	reqRestartIfaceAlias := httptest.NewRequest("POST", "/api/nodes/ext-node/restart-wg/wg42001", nil)
+	reqRestartIfaceAlias.AddCookie(cookie)
+	wRestartIfaceAlias := httptest.NewRecorder()
+	srv.router.ServeHTTP(wRestartIfaceAlias, reqRestartIfaceAlias)
+	if wRestartIfaceAlias.Code == http.StatusOK {
+		t.Fatalf("Expected error for external node interface restart alias, got 200")
+	}
+}
+
 
 
 

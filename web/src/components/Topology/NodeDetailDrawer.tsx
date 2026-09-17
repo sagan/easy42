@@ -31,6 +31,7 @@ import {
   Wrench,
   Radio,
   Compass,
+  RotateCcw,
 } from "lucide-react";
 import { api } from "../../api/client";
 import { Node, NodeStatus } from "../../types/api";
@@ -74,8 +75,59 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
   const [viewingNftables, setViewingNftables] = useState(false);
   const [nftablesConfig, setNftablesConfig] = useState<string | null>(null);
   const [loadingNftables, setLoadingNftables] = useState(false);
+  const [restartingWg, setRestartingWg] = useState(false);
+  const [restartingBird, setRestartingBird] = useState(false);
+  const [actionSuccess, setActionSuccess] = useState<string | null>(null);
 
   if (!node) return null;
+
+  const handleRestartAllWg = async () => {
+    if (
+      !window.confirm(
+        `Are you sure you want to restart all WireGuard interfaces on node "${node.name}"? This may temporarily disrupt traffic.`,
+      )
+    ) {
+      return;
+    }
+    setRestartingWg(true);
+    setError(null);
+    setActionSuccess(null);
+    try {
+      const res = await api.restartNodeWg(node.name);
+      setActionSuccess(res.message || "WireGuard interfaces restarted successfully");
+      const updated = await api.refreshNodeStatus(node.name);
+      onStatusRefreshed(updated);
+      setTimeout(() => setActionSuccess(null), 4000);
+    } catch (err: unknown) {
+      const e = err as Error;
+      setError(e.message || "Failed to restart WireGuard interfaces");
+    } finally {
+      setRestartingWg(false);
+    }
+  };
+
+  const handleRestartBird = async () => {
+    if (
+      !window.confirm(
+        `Are you sure you want to restart the BIRD routing service on node "${node.name}"? This will restart BGP sessions.`,
+      )
+    ) {
+      return;
+    }
+    setRestartingBird(true);
+    setError(null);
+    setActionSuccess(null);
+    try {
+      const res = await api.restartNodeBird(node.name);
+      setActionSuccess(res.message || "BIRD routing service restarted successfully");
+      setTimeout(() => setActionSuccess(null), 4000);
+    } catch (err: unknown) {
+      const e = err as Error;
+      setError(e.message || "Failed to restart BIRD");
+    } finally {
+      setRestartingBird(false);
+    }
+  };
 
   const handleOpenBirdConfig = async () => {
     setViewingBird(true);
@@ -706,6 +758,12 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
           </Box>
         )}
 
+        {actionSuccess && (
+          <Alert severity="success" sx={{ borderRadius: 2 }}>
+            {actionSuccess}
+          </Alert>
+        )}
+
         {error && (
           <Alert severity="error" sx={{ borderRadius: 2 }}>
             {error}
@@ -804,6 +862,61 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
           >
             Looking Glass
           </Button>
+        )}
+
+        {!node.is_external && (
+          <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}>
+            <Tooltip title="Restart all wg interfaces using wg-quick">
+              <Button
+                id="restart-all-wg-btn"
+                fullWidth
+                variant="outlined"
+                startIcon={restartingWg ? <CircularProgress size={15} color="inherit" /> : <RotateCcw size={15} />}
+                onClick={handleRestartAllWg}
+                disabled={restartingWg || restartingBird || updatingState || refreshing || deleting}
+                sx={{
+                  borderColor: "#0284C7",
+                  color: "#0284C7",
+                  fontWeight: 600,
+                  fontSize: "0.75rem",
+                  lineHeight: 1.2,
+                  textTransform: "none",
+                  py: 0.9,
+                  "&:hover": {
+                    borderColor: "#0369A1",
+                    backgroundColor: "rgba(2, 132, 199, 0.06)",
+                  },
+                }}
+              >
+                {restartingWg ? "Restarting..." : "Restart all wg interfaces"}
+              </Button>
+            </Tooltip>
+            <Tooltip title='Restart bird routing service ("service bird restart")'>
+              <Button
+                id="restart-bird-btn"
+                fullWidth
+                variant="outlined"
+                startIcon={restartingBird ? <CircularProgress size={15} color="inherit" /> : <RotateCcw size={15} />}
+                onClick={handleRestartBird}
+                disabled={restartingWg || restartingBird || updatingState || refreshing || deleting}
+                sx={{
+                  borderColor: "#D97706",
+                  color: "#D97706",
+                  fontWeight: 600,
+                  fontSize: "0.75rem",
+                  lineHeight: 1.2,
+                  textTransform: "none",
+                  py: 0.9,
+                  "&:hover": {
+                    borderColor: "#B45309",
+                    backgroundColor: "rgba(217, 119, 6, 0.06)",
+                  },
+                }}
+              >
+                {restartingBird ? "Restarting..." : "Restart bird"}
+              </Button>
+            </Tooltip>
+          </Box>
         )}
         <Box sx={{ display: "grid", gridTemplateColumns: onRenameNode ? "1fr 1fr" : "1fr", gap: 1.5 }}>
           {onRenameNode && (

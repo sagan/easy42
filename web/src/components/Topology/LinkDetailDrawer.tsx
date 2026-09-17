@@ -11,13 +11,14 @@ import {
   Tooltip,
   Chip,
 } from "@mui/material";
-import { X, Trash2, Link as LinkIcon, Key, ArrowRightLeft, Edit2, Activity, Copy, Check, Shield, RefreshCw, Gauge, Zap, Route } from "lucide-react";
+import { X, Trash2, Link as LinkIcon, Key, ArrowRightLeft, Edit2, Activity, Copy, Check, Shield, RefreshCw, Gauge, Zap, Route, RotateCcw } from "lucide-react";
 import { api } from "../../api/client";
-import { Link, NetworkState } from "../../types/api";
+import { Link, NetworkState, Node } from "../../types/api";
 
 interface LinkDetailDrawerProps {
   link: Link | null;
   networkState?: NetworkState | null;
+  nodes?: Node[];
   open: boolean;
   onClose: () => void;
   onEditLink: (link: Link) => void;
@@ -48,6 +49,7 @@ function formatHandshakeAgo(dateStr?: string): string {
 export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
   link,
   networkState,
+  nodes,
   open,
   onClose,
   onEditLink,
@@ -56,11 +58,46 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
 }) => {
   const [deleting, setDeleting] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [restartingFrom, setRestartingFrom] = useState(false);
+  const [restartingTo, setRestartingTo] = useState(false);
+  const [actionSuccess, setActionSuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [copiedEndpoint, setCopiedEndpoint] = useState<string | null>(null);
 
   if (!link) return null;
+
+  const isFromExternal = nodes?.find((n) => n.name === link.from.name)?.is_external;
+  const isToExternal = nodes?.find((n) => n.name === link.to.name)?.is_external;
+
+  const handleRestartEnd = async (end: "from" | "to") => {
+    const endData = end === "from" ? link.from : link.to;
+    if (
+      !window.confirm(
+        `Are you sure you want to restart WireGuard interface "${endData.interface}" on node "${endData.name}"? This will run "wg-quick down ${endData.interface}; wg-quick up ${endData.interface}".`,
+      )
+    ) {
+      return;
+    }
+    if (end === "from") setRestartingFrom(true);
+    else setRestartingTo(true);
+    setError(null);
+    setActionSuccess(null);
+    try {
+      const res = await api.restartNodeInterface(endData.name, endData.interface);
+      setActionSuccess(res.message || `Restarted interface ${endData.interface} on ${endData.name}`);
+      if (onRefreshLink) {
+        await onRefreshLink(link);
+      }
+      setTimeout(() => setActionSuccess(null), 4000);
+    } catch (err: unknown) {
+      const e = err as Error;
+      setError(e.message || `Failed to restart interface ${endData.interface}`);
+    } finally {
+      if (end === "from") setRestartingFrom(false);
+      else setRestartingTo(false);
+    }
+  };
 
   const copyToClipboard = (text: string, id: string) => {
     if (!text) return;
@@ -272,9 +309,39 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
             border: "1px solid #C7D2FE",
           }}
         >
-          <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#3730A3", mb: 1.5 }}>
-            Node 1: {link.from.name}
-          </Typography>
+          <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1.5 }}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#3730A3" }}>
+              Node 1: {link.from.name}
+            </Typography>
+            <Tooltip title={isFromExternal ? "Cannot restart interface on external node" : `Restart ${link.from.interface} on ${link.from.name}`}>
+              <span>
+                <Button
+                  id={`restart-link-end-from-${link.from.name}-${link.from.interface}`}
+                  size="small"
+                  variant="outlined"
+                  startIcon={restartingFrom ? <CircularProgress size={12} color="inherit" /> : <RotateCcw size={12} />}
+                  onClick={() => handleRestartEnd("from")}
+                  disabled={restartingFrom || restartingTo || deleting || Boolean(isFromExternal)}
+                  sx={{
+                    fontSize: "0.72rem",
+                    py: 0.2,
+                    px: 1,
+                    textTransform: "none",
+                    fontWeight: 600,
+                    borderRadius: 1.5,
+                    borderColor: "#A5B4FC",
+                    color: "#4338CA",
+                    "&:hover": {
+                      borderColor: "#6366F1",
+                      backgroundColor: "rgba(99, 102, 241, 0.08)",
+                    },
+                  }}
+                >
+                  {restartingFrom ? "Restarting..." : "Restart"}
+                </Button>
+              </span>
+            </Tooltip>
+          </Box>
 
           <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
             <Box sx={{ display: "flex", justifyContent: "space-between" }}>
@@ -563,9 +630,39 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
             border: "1px solid #A5F3FC",
           }}
         >
-          <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0E7490", mb: 1.5 }}>
-            Node 2: {link.to.name}
-          </Typography>
+          <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1.5 }}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0E7490" }}>
+              Node 2: {link.to.name}
+            </Typography>
+            <Tooltip title={isToExternal ? "Cannot restart interface on external node" : `Restart ${link.to.interface} on ${link.to.name}`}>
+              <span>
+                <Button
+                  id={`restart-link-end-to-${link.to.name}-${link.to.interface}`}
+                  size="small"
+                  variant="outlined"
+                  startIcon={restartingTo ? <CircularProgress size={12} color="inherit" /> : <RotateCcw size={12} />}
+                  onClick={() => handleRestartEnd("to")}
+                  disabled={restartingFrom || restartingTo || deleting || Boolean(isToExternal)}
+                  sx={{
+                    fontSize: "0.72rem",
+                    py: 0.2,
+                    px: 1,
+                    textTransform: "none",
+                    fontWeight: 600,
+                    borderRadius: 1.5,
+                    borderColor: "#A5F3FC",
+                    color: "#0891B2",
+                    "&:hover": {
+                      borderColor: "#06B6D4",
+                      backgroundColor: "rgba(6, 182, 212, 0.08)",
+                    },
+                  }}
+                >
+                  {restartingTo ? "Restarting..." : "Restart"}
+                </Button>
+              </span>
+            </Tooltip>
+          </Box>
 
           <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
             <Box sx={{ display: "flex", justifyContent: "space-between" }}>
@@ -829,6 +926,12 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
             </Box>
           </Box>
         </Box>
+
+        {actionSuccess && (
+          <Alert severity="success" sx={{ borderRadius: 2 }}>
+            {actionSuccess}
+          </Alert>
+        )}
 
         {error && (
           <Alert severity="error" sx={{ borderRadius: 2 }}>

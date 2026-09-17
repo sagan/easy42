@@ -3,6 +3,7 @@ package server
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -411,6 +412,55 @@ func (s *Server) handleGetNodeNftablesConfig(w http.ResponseWriter, r *http.Requ
 	writeJSON(w, http.StatusOK, map[string]any{
 		"node":   name,
 		"config": nftConfig,
+	})
+}
+
+func (s *Server) handleRestartNodeWg(w http.ResponseWriter, r *http.Request) {
+	name := chi.URLParam(r, "name")
+	out, err := s.mgr.RestartNodeWireGuardInterfaces(name)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"success": true,
+		"message": fmt.Sprintf("WireGuard interfaces on node %s restarted successfully", name),
+		"output":  out,
+	})
+}
+
+func (s *Server) handleRestartNodeBird(w http.ResponseWriter, r *http.Request) {
+	name := chi.URLParam(r, "name")
+	out, err := s.mgr.RestartNodeBird(name)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"success": true,
+		"message": fmt.Sprintf("BIRD routing service on node %s restarted successfully", name),
+		"output":  out,
+	})
+}
+
+func (s *Server) handleRestartNodeInterface(w http.ResponseWriter, r *http.Request) {
+	name := chi.URLParam(r, "name")
+	iface := chi.URLParam(r, "iface")
+	if iface == "" {
+		writeError(w, http.StatusBadRequest, "Interface name parameter required")
+		return
+	}
+	out, err := s.mgr.RestartNodeInterface(name, iface)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"success":   true,
+		"node":      name,
+		"interface": iface,
+		"message":   fmt.Sprintf("WireGuard interface %s on node %s restarted successfully", iface, name),
+		"output":    out,
 	})
 }
 
