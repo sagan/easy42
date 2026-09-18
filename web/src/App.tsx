@@ -545,6 +545,7 @@ export const App: React.FC = () => {
             setSyncTargetNode(nodeName);
             setSyncOpen(true);
           }}
+          onNodeUpdated={handleNodeUpdated}
         />
 
         <LinkDetailDrawer
@@ -556,6 +557,7 @@ export const App: React.FC = () => {
           onEditLink={handleEditLink}
           onLinkDeleted={handleLinkDeleted}
           onRefreshLink={handleRefreshLink}
+          onLinkUpdated={handleLinkUpdated}
         />
 
         {/* Modals */}

@@ -493,6 +493,8 @@ type addLinkRequest struct {
 	ToMark         *string         `json:"to_mark,omitempty"`
 	FromRoutingPolicy string      `json:"from_routing_policy,omitempty"`
 	ToRoutingPolicy   string      `json:"to_routing_policy,omitempty"`
+	FromNote       *string         `json:"from_note,omitempty"`
+	ToNote         *string         `json:"to_note,omitempty"`
 	MTU            int             `json:"mtu,omitempty"`
 	Tags       []string        `json:"tags,omitempty"`
 	From       *config.LinkEnd `json:"from,omitempty"`
@@ -610,6 +612,18 @@ func (s *Server) handleAddLink(w http.ResponseWriter, r *http.Request) {
 		}
 		req.To.RoutingPolicy = req.ToRoutingPolicy
 	}
+	if req.FromNote != nil {
+		if req.From == nil {
+			req.From = &config.LinkEnd{}
+		}
+		req.From.Note = *req.FromNote
+	}
+	if req.ToNote != nil {
+		if req.To == nil {
+			req.To = &config.LinkEnd{}
+		}
+		req.To.Note = *req.ToNote
+	}
 
 	var link *config.Link
 	var err error
@@ -680,6 +694,8 @@ type updateLinkRequest struct {
 	ToMark         *string         `json:"to_mark,omitempty"`
 	FromRoutingPolicy string      `json:"from_routing_policy,omitempty"`
 	ToRoutingPolicy   string      `json:"to_routing_policy,omitempty"`
+	FromNote       *string         `json:"from_note,omitempty"`
+	ToNote         *string         `json:"to_note,omitempty"`
 	MTU            int             `json:"mtu,omitempty"`
 	Tags       []string        `json:"tags,omitempty"`
 	From       *config.LinkEnd `json:"from,omitempty"`
@@ -822,6 +838,26 @@ func (s *Server) handleUpdateLink(w http.ResponseWriter, r *http.Request) {
 			req.To = &config.LinkEnd{}
 		}
 		req.To.RoutingPolicy = req.ToRoutingPolicy
+	}
+	if req.FromNote != nil {
+		if req.From == nil {
+			req.From = &config.LinkEnd{}
+		}
+		if *req.FromNote == "" {
+			req.From.Note = "__CLEAR__"
+		} else {
+			req.From.Note = *req.FromNote
+		}
+	}
+	if req.ToNote != nil {
+		if req.To == nil {
+			req.To = &config.LinkEnd{}
+		}
+		if *req.ToNote == "" {
+			req.To.Note = "__CLEAR__"
+		} else {
+			req.To.Note = *req.ToNote
+		}
 	}
 
 	var link *config.Link

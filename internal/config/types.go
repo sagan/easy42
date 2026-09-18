@@ -147,6 +147,7 @@ type Node struct {
 	Host          string            `json:"host,omitempty"`        // SSH host / alias / IP (omitted for external peers)
 	IsExternal    bool              `json:"is_external,omitempty"` // True if external unmanaged peer (e.g. DN42)
 	Description   string            `json:"description,omitempty"` // Optional description / contact info
+	Note          string            `json:"note,omitempty"`        // Markdown format text note
 	IP            string            `json:"ip,omitempty"`          // Main IPv4 (e.g. 192.168.100.1)
 	IP6           string            `json:"ip6,omitempty"`         // Main IPv6 (e.g. fd42:a159:f9f0::1)
 	ExternalIP    string            `json:"external_ip,omitempty"`  // External / DN42 IPv4 (e.g. 172.20.x.x)
@@ -207,6 +208,7 @@ type LinkEnd struct {
 	Preference          *int   `json:"preference,omitempty"`        // BIRD peer BGP protocol preference (overrides policy preference)
 	Mark                string `json:"mark,omitempty"`              // Netfilter mark for received packets from the link peer (overrides policy mark)
 	RoutingPolicy       string `json:"routing_policy,omitempty"`    // BGP meta routing policy override (overrides policy routing policy)
+	Note                string `json:"note,omitempty"`              // Markdown format text note
 }
 
 // UseIP returns whether UseIp is enabled on the LinkEnd

@@ -14,6 +14,7 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  TextField,
 } from "@mui/material";
 import {
   X,
@@ -32,9 +33,12 @@ import {
   Radio,
   Compass,
   RotateCcw,
+  FileText,
+  Check,
 } from "lucide-react";
 import { api } from "../../api/client";
 import { Node, NodeStatus } from "../../types/api";
+import { MarkdownView } from "../Common/MarkdownView";
 
 interface NodeDetailDrawerProps {
   node: Node | null;
@@ -49,6 +53,7 @@ interface NodeDetailDrawerProps {
   onOpenLookingGlass?: (nodeName: string) => void;
   onUpdateNodeState?: (nodeName: string) => Promise<void>;
   onSyncNode?: (nodeName: string) => void;
+  onNodeUpdated?: (node: Node) => void;
 }
 
 export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
@@ -64,6 +69,7 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
   onOpenLookingGlass,
   onUpdateNodeState,
   onSyncNode,
+  onNodeUpdated,
 }) => {
   const [refreshing, setRefreshing] = useState(false);
   const [updatingState, setUpdatingState] = useState(false);
@@ -78,6 +84,19 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
   const [restartingWg, setRestartingWg] = useState(false);
   const [restartingBird, setRestartingBird] = useState(false);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
+
+  const [isEditingNote, setIsEditingNote] = useState(false);
+  const [noteDraft, setNoteDraft] = useState("");
+  const [savingNote, setSavingNote] = useState(false);
+  const [noteTab, setNoteTab] = useState<"write" | "preview">("write");
+
+  React.useEffect(() => {
+    if (node) {
+      setNoteDraft(node.note || "");
+      setIsEditingNote(false);
+      setNoteTab("write");
+    }
+  }, [node?.name, node?.note]);
 
   if (!node) return null;
 
@@ -103,6 +122,27 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
       setError(e.message || "Failed to restart WireGuard interfaces");
     } finally {
       setRestartingWg(false);
+    }
+  };
+
+  const handleSaveNote = async () => {
+    if (!node) return;
+    setSavingNote(true);
+    setError(null);
+    try {
+      const updated = await api.updateNode(node.name, {
+        ...node,
+        note: noteDraft.trim() || undefined,
+      });
+      onNodeUpdated?.(updated);
+      setIsEditingNote(false);
+      setActionSuccess("Note saved successfully");
+      setTimeout(() => setActionSuccess(null), 3000);
+    } catch (err: unknown) {
+      const e = err as Error;
+      setError(e.message || "Failed to save note");
+    } finally {
+      setSavingNote(false);
     }
   };
 
@@ -383,6 +423,149 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
             <Typography variant="caption" sx={{ color: "#94A3B8", fontStyle: "italic", display: "block", mt: 0.5 }}>
               No tags assigned
             </Typography>
+          )}
+        </Box>
+
+        {/* Node Markdown Note Card */}
+        <Box sx={{ p: 2, borderRadius: 2, backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
+          <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1.2 }}>
+            <Typography
+              variant="caption"
+              sx={{
+                color: "#475569",
+                fontWeight: 700,
+                display: "flex",
+                alignItems: "center",
+                gap: 0.8,
+                letterSpacing: "0.5px",
+              }}
+            >
+              <FileText size={14} color="#4F46E5" /> NODE NOTE (MARKDOWN)
+            </Typography>
+
+            {!isEditingNote ? (
+              <Button
+                id="edit-node-note-btn"
+                size="small"
+                variant="outlined"
+                startIcon={<Edit2 size={12} />}
+                onClick={() => {
+                  setNoteDraft(node.note || "");
+                  setIsEditingNote(true);
+                  setNoteTab("write");
+                }}
+                sx={{
+                  fontSize: "0.72rem",
+                  py: 0.2,
+                  px: 1,
+                  textTransform: "none",
+                  fontWeight: 600,
+                  borderRadius: 1.5,
+                  borderColor: "#CBD5E1",
+                  color: "#4F46E5",
+                  "&:hover": { borderColor: "#4F46E5", backgroundColor: "rgba(79, 70, 229, 0.04)" },
+                }}
+              >
+                {node.note ? "Edit Note" : "Add Note"}
+              </Button>
+            ) : (
+              <Box sx={{ display: "flex", gap: 0.5, alignItems: "center" }}>
+                <Button
+                  size="small"
+                  variant={noteTab === "write" ? "contained" : "text"}
+                  onClick={() => setNoteTab("write")}
+                  sx={{ minWidth: "auto", px: 1, py: 0.2, fontSize: "0.7rem", textTransform: "none" }}
+                >
+                  Write
+                </Button>
+                <Button
+                  size="small"
+                  variant={noteTab === "preview" ? "contained" : "text"}
+                  onClick={() => setNoteTab("preview")}
+                  sx={{ minWidth: "auto", px: 1, py: 0.2, fontSize: "0.7rem", textTransform: "none" }}
+                >
+                  Preview
+                </Button>
+              </Box>
+            )}
+          </Box>
+
+          {!isEditingNote ? (
+            <Box
+              sx={{
+                p: 1.5,
+                borderRadius: 1.5,
+                backgroundColor: "#FFFFFF",
+                border: "1px solid #E2E8F0",
+                maxHeight: 280,
+                overflowY: "auto",
+              }}
+            >
+              <MarkdownView
+                content={node.note}
+                emptyText="No note recorded for this node. Click 'Add Note' to add documentation or notes."
+              />
+            </Box>
+          ) : (
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+              {noteTab === "write" ? (
+                <TextField
+                  fullWidth
+                  multiline
+                  minRows={3}
+                  maxRows={10}
+                  size="small"
+                  placeholder="Input arbitrary markdown format text..."
+                  value={noteDraft}
+                  onChange={(e) => setNoteDraft(e.target.value)}
+                  disabled={savingNote}
+                  sx={{
+                    backgroundColor: "#FFFFFF",
+                    borderRadius: 1,
+                    "& .MuiInputBase-root": {
+                      fontSize: "0.825rem",
+                      fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+                    },
+                  }}
+                />
+              ) : (
+                <Box
+                  sx={{
+                    p: 1.5,
+                    borderRadius: 1.5,
+                    backgroundColor: "#FFFFFF",
+                    border: "1px solid #E2E8F0",
+                    minHeight: 80,
+                    maxHeight: 220,
+                    overflowY: "auto",
+                  }}
+                >
+                  <MarkdownView content={noteDraft} emptyText="No markdown content written yet" />
+                </Box>
+              )}
+              <Box sx={{ display: "flex", justifyContent: "flex-end", gap: 1, mt: 0.5 }}>
+                <Button
+                  size="small"
+                  onClick={() => setIsEditingNote(false)}
+                  disabled={savingNote}
+                  sx={{ fontSize: "0.75rem", textTransform: "none", color: "#64748B" }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  id="save-node-note-btn"
+                  size="small"
+                  variant="contained"
+                  color="primary"
+                  onClick={handleSaveNote}
+                  disabled={savingNote}
+                  startIcon={savingNote ? <CircularProgress size={12} color="inherit" /> : <Check size={12} />}
+                  sx={{ fontSize: "0.75rem", textTransform: "none", fontWeight: 600, px: 1.5 }}
+                >
+                  {savingNote ? "Saving..." : "Save Note"}
+                </Button>
+              </Box>
+            </Box>
           )}
         </Box>
 

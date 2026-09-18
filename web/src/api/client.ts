@@ -159,6 +159,8 @@ export const api = {
     to_preference?: number;
     from_mark?: string;
     to_mark?: string;
+    from_note?: string;
+    to_note?: string;
     mtu?: number;
     tags?: string[];
     from?: Partial<Link["from"]>;
@@ -194,6 +196,8 @@ export const api = {
     to_preference?: number;
     from_mark?: string;
     to_mark?: string;
+    from_note?: string;
+    to_note?: string;
     mtu?: number;
     tags?: string[];
     from?: Partial<Link["from"]>;

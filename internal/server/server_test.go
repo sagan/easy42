@@ -1578,6 +1578,139 @@ func TestRestartEndpoints(t *testing.T) {
 	}
 }
 
+func TestNodeAndLinkEndNotes(t *testing.T) {
+	srv, tempDir, initPass := setupTestServer(t)
+	defer os.RemoveAll(tempDir)
 
+	// Login
+	loginBody, _ := json.Marshal(map[string]string{"password": initPass})
+	req := httptest.NewRequest("POST", "/api/auth/login", bytes.NewReader(loginBody))
+	w := httptest.NewRecorder()
+	srv.router.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("Login failed: %d %s", w.Code, w.Body.String())
+	}
+	cookie := w.Result().Cookies()[0]
 
+	// 1. Add node with markdown note
+	nodeA := config.Node{
+		Name: "node-a",
+		Host: "192.168.1.10",
+		IP:   "192.168.100.1",
+		ASN:  4224420001,
+		Note: "# Node A Documentation\n- Primary datacenter router\n- **OS**: Debian 12",
+	}
+	bodyA, _ := json.Marshal(nodeA)
+	reqNodeA := httptest.NewRequest("POST", "/api/nodes", bytes.NewReader(bodyA))
+	reqNodeA.AddCookie(cookie)
+	wNodeA := httptest.NewRecorder()
+	srv.router.ServeHTTP(wNodeA, reqNodeA)
+	if wNodeA.Code != http.StatusCreated {
+		t.Fatalf("Add node A failed: %d %s", wNodeA.Code, wNodeA.Body.String())
+	}
 
+	// 2. Add second node
+	nodeB := config.Node{
+		Name: "node-b",
+		Host: "192.168.1.11",
+		IP:   "192.168.100.2",
+		ASN:  4224420002,
+		Note: "### Secondary edge peer",
+	}
+	bodyB, _ := json.Marshal(nodeB)
+	reqNodeB := httptest.NewRequest("POST", "/api/nodes", bytes.NewReader(bodyB))
+	reqNodeB.AddCookie(cookie)
+	wNodeB := httptest.NewRecorder()
+	srv.router.ServeHTTP(wNodeB, reqNodeB)
+	if wNodeB.Code != http.StatusCreated {
+		t.Fatalf("Add node B failed: %d %s", wNodeB.Code, wNodeB.Body.String())
+	}
+
+	// 3. Verify Node Notes via GET /api/nodes
+	reqGetNodes := httptest.NewRequest("GET", "/api/nodes", nil)
+	reqGetNodes.AddCookie(cookie)
+	wGetNodes := httptest.NewRecorder()
+	srv.router.ServeHTTP(wGetNodes, reqGetNodes)
+	var nodes []config.Node
+	_ = json.Unmarshal(wGetNodes.Body.Bytes(), &nodes)
+	if len(nodes) != 2 {
+		t.Fatalf("Expected 2 nodes, got %d", len(nodes))
+	}
+	for _, n := range nodes {
+		if n.Name == "node-a" && n.Note != nodeA.Note {
+			t.Fatalf("Expected node-a note %q, got %q", nodeA.Note, n.Note)
+		}
+		if n.Name == "node-b" && n.Note != nodeB.Note {
+			t.Fatalf("Expected node-b note %q, got %q", nodeB.Note, n.Note)
+		}
+	}
+
+	// 4. Update Node A note via PUT /api/nodes/node-a
+	nodeA.Note = "Updated note with `code snippet`"
+	bodyUpdateA, _ := json.Marshal(nodeA)
+	reqUpdateNodeA := httptest.NewRequest("PUT", "/api/nodes/node-a", bytes.NewReader(bodyUpdateA))
+	reqUpdateNodeA.AddCookie(cookie)
+	wUpdateNodeA := httptest.NewRecorder()
+	srv.router.ServeHTTP(wUpdateNodeA, reqUpdateNodeA)
+	if wUpdateNodeA.Code != http.StatusOK {
+		t.Fatalf("Update node A failed: %d %s", wUpdateNodeA.Code, wUpdateNodeA.Body.String())
+	}
+
+	// 5. Add Link between node-a and node-b with LinkEnd notes
+	fromNote := "**From node-a side note**"
+	toNote := "**To node-b side note**"
+	linkReq := map[string]interface{}{
+		"from_node": "node-a",
+		"to_node":   "node-b",
+		"from": map[string]interface{}{
+			"note": fromNote,
+		},
+		"to": map[string]interface{}{
+			"note": toNote,
+		},
+	}
+	bodyLink, _ := json.Marshal(linkReq)
+	reqLink := httptest.NewRequest("POST", "/api/links", bytes.NewReader(bodyLink))
+	reqLink.AddCookie(cookie)
+	wLink := httptest.NewRecorder()
+	srv.router.ServeHTTP(wLink, reqLink)
+	if wLink.Code != http.StatusCreated {
+		t.Fatalf("Add link failed: %d %s", wLink.Code, wLink.Body.String())
+	}
+
+	var createdLink config.Link
+	_ = json.Unmarshal(wLink.Body.Bytes(), &createdLink)
+	if createdLink.From.Note != fromNote {
+		t.Fatalf("Expected from.Note %q, got %q", fromNote, createdLink.From.Note)
+	}
+	if createdLink.To.Note != toNote {
+		t.Fatalf("Expected to.Note %q, got %q", toNote, createdLink.To.Note)
+	}
+
+	// 6. Update LinkEnd notes via PUT /api/links using from_note / to_note
+	newFromNote := "New from note"
+	clearToNote := ""
+	updateLinkReq := map[string]interface{}{
+		"from_node": "node-a",
+		"to_node":   "node-b",
+		"from_note": newFromNote,
+		"to_note":   clearToNote,
+	}
+	bodyUpdateLink, _ := json.Marshal(updateLinkReq)
+	reqUpdateLink := httptest.NewRequest("PUT", "/api/links", bytes.NewReader(bodyUpdateLink))
+	reqUpdateLink.AddCookie(cookie)
+	wUpdateLink := httptest.NewRecorder()
+	srv.router.ServeHTTP(wUpdateLink, reqUpdateLink)
+	if wUpdateLink.Code != http.StatusOK {
+		t.Fatalf("Update link failed: %d %s", wUpdateLink.Code, wUpdateLink.Body.String())
+	}
+
+	var updatedLink config.Link
+	_ = json.Unmarshal(wUpdateLink.Body.Bytes(), &updatedLink)
+	if updatedLink.From.Note != newFromNote {
+		t.Fatalf("Expected updated from.Note %q, got %q", newFromNote, updatedLink.From.Note)
+	}
+	if updatedLink.To.Note != "" {
+		t.Fatalf("Expected cleared to.Note, got %q", updatedLink.To.Note)
+	}
+}

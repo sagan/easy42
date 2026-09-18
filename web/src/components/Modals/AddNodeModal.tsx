@@ -15,9 +15,10 @@ import {
   Tooltip,
   Chip,
 } from "@mui/material";
-import { Search, Plus, Trash2, Server, Globe, Shield, Edit2, Tag, Network, Code } from "lucide-react";
+import { Search, Plus, Trash2, Server, Globe, Shield, Edit2, Tag, Network, Code, FileText } from "lucide-react";
 import { api } from "../../api/client";
 import { Node, Entrypoint, KernelRouteRule, ConfigHook } from "../../types/api";
+import { MarkdownView } from "../Common/MarkdownView";
 
 const HOOK_TYPES = [
   { value: "bird", label: "BIRD: Global / Post (e.g. protocol direct)" },
@@ -94,6 +95,8 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
   const [nodeTags, setNodeTags] = useState("");
   const [isExternal, setIsExternal] = useState(false);
   const [description, setDescription] = useState("");
+  const [note, setNote] = useState("");
+  const [noteTab, setNoteTab] = useState<"write" | "preview">("write");
   // BIRD / BGP state
   const [table, setTable] = useState<number>(254);
   const [externalTable, setExternalTable] = useState<number | "">("");
@@ -127,6 +130,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
       setAsn(nodeToEdit.asn);
       setIsExternal(Boolean(nodeToEdit.is_external));
       setDescription(nodeToEdit.description || "");
+      setNote(nodeToEdit.note || "");
       setNodeTags(nodeToEdit.tags?.join(", ") || "");
       setTable(nodeToEdit.table ?? 254);
       setExternalTable(nodeToEdit.external_table ?? "");
@@ -205,6 +209,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
       setAsn(4224420001);
       setIsExternal(false);
       setDescription("");
+      setNote("");
       setNodeTags("");
       setTable(254);
       setExternalTable("");
@@ -462,6 +467,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
         is_external: true,
         entrypoints: finalEntrypoints.length > 0 ? finalEntrypoints : undefined,
         description: description.trim() || undefined,
+        note: note.trim() || undefined,
         tags: parsedTags.length > 0 ? parsedTags : undefined,
         config_hooks: parsedHooks.length > 0 ? parsedHooks : undefined,
         x: nodeToEdit?.x,
@@ -510,6 +516,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
         static_routes: parsedStaticRoutes.length > 0 ? parsedStaticRoutes : undefined,
         routes: parsedRoutes.length > 0 ? parsedRoutes : undefined,
         config_hooks: parsedHooks.length > 0 ? parsedHooks : undefined,
+        note: note.trim() || undefined,
         x: nodeToEdit?.x,
         y: nodeToEdit?.y,
       };
@@ -649,6 +656,56 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                 onChange={(e) => setDescription(e.target.value)}
                 disabled={saving}
               />
+
+              {/* External Peer Markdown Note */}
+              <Box sx={{ p: 1.5, borderRadius: 2, backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
+                <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1 }}>
+                  <Typography variant="caption" sx={{ color: "#475569", fontWeight: 700, display: "flex", alignItems: "center", gap: 0.8 }}>
+                    <FileText size={14} color="#4F46E5" /> NOTE (MARKDOWN)
+                  </Typography>
+                  <Box sx={{ display: "flex", gap: 0.5 }}>
+                    <Button
+                      size="small"
+                      variant={noteTab === "write" ? "contained" : "text"}
+                      onClick={() => setNoteTab("write")}
+                      sx={{ minWidth: "auto", px: 1.2, py: 0.2, fontSize: "0.72rem", textTransform: "none" }}
+                    >
+                      Write
+                    </Button>
+                    <Button
+                      size="small"
+                      variant={noteTab === "preview" ? "contained" : "text"}
+                      onClick={() => setNoteTab("preview")}
+                      sx={{ minWidth: "auto", px: 1.2, py: 0.2, fontSize: "0.72rem", textTransform: "none" }}
+                    >
+                      Preview
+                    </Button>
+                  </Box>
+                </Box>
+                {noteTab === "write" ? (
+                  <TextField
+                    fullWidth
+                    multiline
+                    minRows={3}
+                    maxRows={8}
+                    size="small"
+                    placeholder="Arbitrary markdown text (e.g. peering agreements, contact handles, prefixes)..."
+                    value={note}
+                    onChange={(e) => setNote(e.target.value)}
+                    disabled={saving}
+                    sx={{
+                      "& .MuiInputBase-root": {
+                        fontSize: "0.825rem",
+                        fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+                      },
+                    }}
+                  />
+                ) : (
+                  <Box sx={{ p: 1.5, minHeight: 75, maxHeight: 200, overflowY: "auto", backgroundColor: "#FFFFFF", borderRadius: 1, border: "1px solid #E2E8F0" }}>
+                    <MarkdownView content={note} emptyText="No markdown note written yet" />
+                  </Box>
+                )}
+              </Box>
 
               <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
                 <TextField
@@ -951,6 +1008,56 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                         ))}
                     </Box>
                   )}
+
+                {/* Managed Node Markdown Note */}
+                <Box sx={{ p: 1.5, borderRadius: 2, backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
+                  <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1 }}>
+                    <Typography variant="caption" sx={{ color: "#475569", fontWeight: 700, display: "flex", alignItems: "center", gap: 0.8 }}>
+                      <FileText size={14} color="#4F46E5" /> NOTE (MARKDOWN)
+                    </Typography>
+                    <Box sx={{ display: "flex", gap: 0.5 }}>
+                      <Button
+                        size="small"
+                        variant={noteTab === "write" ? "contained" : "text"}
+                        onClick={() => setNoteTab("write")}
+                        sx={{ minWidth: "auto", px: 1.2, py: 0.2, fontSize: "0.72rem", textTransform: "none" }}
+                      >
+                        Write
+                      </Button>
+                      <Button
+                        size="small"
+                        variant={noteTab === "preview" ? "contained" : "text"}
+                        onClick={() => setNoteTab("preview")}
+                        sx={{ minWidth: "auto", px: 1.2, py: 0.2, fontSize: "0.72rem", textTransform: "none" }}
+                      >
+                        Preview
+                      </Button>
+                    </Box>
+                  </Box>
+                  {noteTab === "write" ? (
+                    <TextField
+                      fullWidth
+                      multiline
+                      minRows={3}
+                      maxRows={8}
+                      size="small"
+                      placeholder="Arbitrary markdown text (e.g. server location, rack ID, maintenance procedures)..."
+                      value={note}
+                      onChange={(e) => setNote(e.target.value)}
+                      disabled={saving}
+                      sx={{
+                        "& .MuiInputBase-root": {
+                          fontSize: "0.825rem",
+                          fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+                        },
+                      }}
+                    />
+                  ) : (
+                    <Box sx={{ p: 1.5, minHeight: 75, maxHeight: 200, overflowY: "auto", backgroundColor: "#FFFFFF", borderRadius: 1, border: "1px solid #E2E8F0" }}>
+                      <MarkdownView content={note} emptyText="No markdown note written yet" />
+                    </Box>
+                  )}
+                </Box>
               </Box>
 
               {/* Step 3: Entrypoints */}

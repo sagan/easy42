@@ -14,11 +14,14 @@
     "@mui/icons-material": "^6.4.5",
     "@mui/material": "^6.4.5",
     "@xyflow/react": "^12.4.2",
+    "dompurify": "^3.4.15",
     "lucide-react": "^0.475.0",
+    "marked": "^18.0.13",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
   "devDependencies": {
+    "@types/dompurify": "^3.0.5",
     "@types/react": "^19.0.8",
     "@types/react-dom": "^19.0.3",
     "@vitejs/plugin-react": "^4.3.4",

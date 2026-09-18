@@ -1132,6 +1132,15 @@ func (m *Manager) buildLink(cfg *config.Config, n1, n2 *config.Node, listenPort1
 		toRoutingPolicy = config.NormalizeRoutingPolicy(customToEnd.RoutingPolicy)
 	}
 
+	fromNote := ""
+	if customFromEnd != nil {
+		fromNote = customFromEnd.Note
+	}
+	toNote := ""
+	if customToEnd != nil {
+		toNote = customToEnd.Note
+	}
+
 	link := &config.Link{
 		From: config.LinkEnd{
 			Name:                fromNode.Name,
@@ -1150,6 +1159,7 @@ func (m *Manager) buildLink(cfg *config.Config, n1, n2 *config.Node, listenPort1
 			Fwmark:              fromFwmark,
 			Preference:          fromPref,
 			Mark:                fromMark,
+			Note:                fromNote,
 		},
 		To: config.LinkEnd{
 			Name:                toNode.Name,
@@ -1168,6 +1178,7 @@ func (m *Manager) buildLink(cfg *config.Config, n1, n2 *config.Node, listenPort1
 			Fwmark:              toFwmark,
 			Preference:          toPref,
 			Mark:                toMark,
+			Note:                toNote,
 		},
 		Tags:       tags,
 		ModifiedAt: time.Now().UTC(),
@@ -1558,6 +1569,13 @@ func (m *Manager) UpdateLinkAdvanced(node1Name, node2Name string, customFrom, cu
 				link.From.RoutingPolicy = config.NormalizeRoutingPolicy(fromEnd.RoutingPolicy)
 			}
 		}
+		if fromEnd.Note != "" {
+			if fromEnd.Note == "__CLEAR__" || fromEnd.Note == "<clear>" {
+				link.From.Note = ""
+			} else {
+				link.From.Note = fromEnd.Note
+			}
+		}
 	}
 
 	if toEnd != nil {
@@ -1600,6 +1618,13 @@ func (m *Manager) UpdateLinkAdvanced(node1Name, node2Name string, customFrom, cu
 				link.To.RoutingPolicy = ""
 			} else {
 				link.To.RoutingPolicy = config.NormalizeRoutingPolicy(toEnd.RoutingPolicy)
+			}
+		}
+		if toEnd.Note != "" {
+			if toEnd.Note == "__CLEAR__" || toEnd.Note == "<clear>" {
+				link.To.Note = ""
+			} else {
+				link.To.Note = toEnd.Note
 			}
 		}
 	}

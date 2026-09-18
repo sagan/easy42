@@ -74,6 +74,7 @@ export interface Node {
   host?: string;
   is_external?: boolean;
   description?: string;
+  note?: string;
   ip?: string;
   ip6?: string;
   external_ip?: string;
@@ -111,6 +112,7 @@ export interface LinkEnd {
   fwmark?: string;
   preference?: number;
   mark?: string;
+  note?: string;
 }
 
 export interface Link {

@@ -194,9 +194,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
       const settings = await api.getNetworkSettings();
       setPublicAsn(settings.public_asn || "");
       setLocalDn42Networks((settings.local_dn42_networks || []).join("\n"));
-      setDisallowedDn42Networks(
-        (settings.disallowed_dn42_networks || settings.disallowed_dn42_cidrs || []).join("\n"),
-      );
+      setDisallowedDn42Networks((settings.disallowed_dn42_networks || settings.disallowed_dn42_cidrs || []).join("\n"));
       setNetworkPrefixes(settings.prefixes || []);
     } catch (err: unknown) {
       const e = err as Error;
@@ -406,7 +404,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
             }
           : undefined,
         forward_snat: policyForwardSnat,
-        forward_snat_target: policyForwardSnat ? (policyForwardSnatTarget.trim() || undefined) : undefined,
+        forward_snat_target: policyForwardSnat ? policyForwardSnatTarget.trim() || undefined : undefined,
         roa4: policyRoa4.trim() || undefined,
         roa6: policyRoa6.trim() || undefined,
         roa_strict: policyRoaStrict,
@@ -857,7 +855,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
           <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2.5, py: 3, px: 3 }}>
             <Typography variant="body2" sx={{ color: "#64748B" }}>
               Configure global BGP confederation parameters for external peering (such as DN42 or private networks). BGP
-              confederation replaces your internal mesh ASNs with your public ASN in external BGP sessions. Subnet filtering and firewall policies are configured per-link under Network Policies.
+              confederation replaces your internal mesh ASNs with your public ASN in external BGP sessions. Subnet
+              filtering and firewall policies are configured per-link under Network Policies.
             </Typography>
 
             {networkLoading ? (
@@ -943,7 +942,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
             <Box sx={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 2 }}>
               <Box>
                 <Typography variant="body2" sx={{ color: "#475569", lineHeight: 1.5 }}>
-                  Define link-level firewall and routing policies. Network policies restrict allowed destination & source IPs (dropping unauthorized packets in nftables while preserving established return flows), filter BGP route imports, and configure outbound SNAT / masquerade.
+                  Define link-level firewall and routing policies. Network policies restrict ingress allowed destination
+                  & source IPs (dropping unauthorized packets in nftables while preserving established return flows),
+                  filter BGP route imports, and configure outbound SNAT / masquerade.
                 </Typography>
               </Box>
               <Button
@@ -1043,10 +1044,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
                                 p.routing_policy === "stub"
                                   ? "Stub"
                                   : p.routing_policy === "receive_only"
-                                  ? "Receive Only"
-                                  : p.routing_policy === "advertise_only"
-                                  ? "Advertise Only"
-                                  : p.routing_policy
+                                    ? "Receive Only"
+                                    : p.routing_policy === "advertise_only"
+                                      ? "Advertise Only"
+                                      : p.routing_policy
                               }
                               size="small"
                               sx={{
@@ -1073,7 +1074,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
                                   setPoliciesError(e.message || "Failed to refresh ROA.");
                                 }
                               }}
-                              sx={{ py: 0.3, px: 1, minWidth: 0, fontSize: "0.75rem", color: "#0284C7", borderColor: "#BAE6FD" }}
+                              sx={{
+                                py: 0.3,
+                                px: 1,
+                                minWidth: 0,
+                                fontSize: "0.75rem",
+                                color: "#0284C7",
+                                borderColor: "#BAE6FD",
+                              }}
                             >
                               Sync ROA
                             </Button>
@@ -1082,7 +1090,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
                             size="small"
                             variant="outlined"
                             onClick={() => handleOpenViewPolicy(p)}
-                            sx={{ py: 0.3, px: 1, minWidth: 0, fontSize: "0.75rem", color: "#475569", borderColor: "#CBD5E1" }}
+                            sx={{
+                              py: 0.3,
+                              px: 1,
+                              minWidth: 0,
+                              fontSize: "0.75rem",
+                              color: "#475569",
+                              borderColor: "#CBD5E1",
+                            }}
                           >
                             View
                           </Button>
@@ -1091,7 +1106,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
                             variant="outlined"
                             startIcon={<Copy size={12} />}
                             onClick={() => handleOpenClonePolicy(p)}
-                            sx={{ py: 0.3, px: 1, minWidth: 0, fontSize: "0.75rem", color: "#4F46E5", borderColor: "#C7D2FE" }}
+                            sx={{
+                              py: 0.3,
+                              px: 1,
+                              minWidth: 0,
+                              fontSize: "0.75rem",
+                              color: "#4F46E5",
+                              borderColor: "#C7D2FE",
+                            }}
                           >
                             Clone
                           </Button>
@@ -1129,14 +1151,26 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
                           size="small"
                           label={`Cost: ${p.cost ?? 100}`}
                           variant="outlined"
-                          sx={{ fontSize: "0.7rem", height: 22, borderColor: "#C7D2FE", bgcolor: "#EEF2FF", color: "#4338CA" }}
+                          sx={{
+                            fontSize: "0.7rem",
+                            height: 22,
+                            borderColor: "#C7D2FE",
+                            bgcolor: "#EEF2FF",
+                            color: "#4338CA",
+                          }}
                         />
                         {p.fwmark && (
                           <Chip
                             size="small"
                             label={`FwMark: ${p.fwmark}`}
                             variant="outlined"
-                            sx={{ fontSize: "0.7rem", height: 22, borderColor: "#DDD6FE", bgcolor: "#FAF5FF", color: "#6D28D9" }}
+                            sx={{
+                              fontSize: "0.7rem",
+                              height: 22,
+                              borderColor: "#DDD6FE",
+                              bgcolor: "#FAF5FF",
+                              color: "#6D28D9",
+                            }}
                           />
                         )}
                         {p.preference !== undefined && (
@@ -1144,7 +1178,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
                             size="small"
                             label={`Preference: ${p.preference}`}
                             variant="outlined"
-                            sx={{ fontSize: "0.7rem", height: 22, borderColor: "#BBF7D0", bgcolor: "#F0FDF4", color: "#15803D" }}
+                            sx={{
+                              fontSize: "0.7rem",
+                              height: 22,
+                              borderColor: "#BBF7D0",
+                              bgcolor: "#F0FDF4",
+                              color: "#15803D",
+                            }}
                           />
                         )}
                         {p.mark && (
@@ -1152,7 +1192,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
                             size="small"
                             label={`Mark: ${p.mark}`}
                             variant="outlined"
-                            sx={{ fontSize: "0.7rem", height: 22, borderColor: "#DDD6FE", bgcolor: "#FAF5FF", color: "#6D28D9" }}
+                            sx={{
+                              fontSize: "0.7rem",
+                              height: 22,
+                              borderColor: "#DDD6FE",
+                              bgcolor: "#FAF5FF",
+                              color: "#6D28D9",
+                            }}
                           />
                         )}
                         <Chip
@@ -1172,7 +1218,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
                             size="small"
                             label={`Disallowed Dst: ${p.disallowed_dst_cidrs.length} prefix(es)`}
                             variant="outlined"
-                            sx={{ fontSize: "0.7rem", height: 22, borderColor: "#FECACA", bgcolor: "#FEF2F2", color: "#DC2626" }}
+                            sx={{
+                              fontSize: "0.7rem",
+                              height: 22,
+                              borderColor: "#FECACA",
+                              bgcolor: "#FEF2F2",
+                              color: "#DC2626",
+                            }}
                           />
                         )}
                         {p.disallowed_src_cidrs && p.disallowed_src_cidrs.length > 0 && (
@@ -1180,7 +1232,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
                             size="small"
                             label={`Disallowed Src: ${p.disallowed_src_cidrs.length} prefix(es)`}
                             variant="outlined"
-                            sx={{ fontSize: "0.7rem", height: 22, borderColor: "#FECACA", bgcolor: "#FEF2F2", color: "#DC2626" }}
+                            sx={{
+                              fontSize: "0.7rem",
+                              height: 22,
+                              borderColor: "#FECACA",
+                              bgcolor: "#FEF2F2",
+                              color: "#DC2626",
+                            }}
                           />
                         )}
                         <Chip
@@ -1298,12 +1356,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
       )}
 
       {/* Sub-dialog: Policy Editor & Viewer */}
-      <Dialog
-        open={policyDialogOpen}
-        onClose={() => setPolicyDialogOpen(false)}
-        maxWidth="sm"
-        fullWidth
-      >
+      <Dialog open={policyDialogOpen} onClose={() => setPolicyDialogOpen(false)} maxWidth="sm" fullWidth>
         <form onSubmit={handleSavePolicy}>
           <DialogTitle
             sx={{
@@ -1320,8 +1373,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
                 {policyDialogMode === "view"
                   ? "View Network Policy"
                   : policyDialogMode === "edit"
-                  ? "Edit Network Policy"
-                  : "Create Network Policy"}
+                    ? "Edit Network Policy"
+                    : "Create Network Policy"}
               </Typography>
             </Box>
             <IconButton size="small" onClick={() => setPolicyDialogOpen(false)} sx={{ color: "#94A3B8" }}>
@@ -1442,7 +1495,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
             <TextField
               fullWidth
               size="small"
-              label="Allowed Destination Subnets (CIDRs)"
+              label="Ingress Allowed Destination Subnets (CIDRs)"
               placeholder={"e.g. 172.20.0.0/14{21,29}\nfd00::/8{44,64}"}
               multiline
               rows={3}
@@ -1455,7 +1508,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
             <TextField
               fullWidth
               size="small"
-              label="Allowed Source Subnets (CIDRs)"
+              label="Ingress Allowed Source Subnets (CIDRs)"
               placeholder={"e.g. 172.20.10.0/24\nfd00:1::/48"}
               multiline
               rows={3}
@@ -1468,7 +1521,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
             <TextField
               fullWidth
               size="small"
-              label="Disallowed Destination Subnets (CIDRs)"
+              label="Ingress Disallowed Destination Subnets (CIDRs)"
               placeholder={"e.g. fd42:1234:5678::/48\n172.20.99.0/24"}
               multiline
               rows={3}
@@ -1481,7 +1534,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
             <TextField
               fullWidth
               size="small"
-              label="Disallowed Source Subnets (CIDRs)"
+              label="Ingress Disallowed Source Subnets (CIDRs)"
               placeholder={"e.g. 172.20.99.0/24\nfd42:1234:5678::/48"}
               multiline
               rows={3}
@@ -1491,8 +1544,21 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
               helperText="Reverse of Allowed Src: inbound traffic on this link matching these source subnets will be dropped, and blocks matching BGP import routes. Leave empty for unrestricted."
             />
 
-            <Box sx={{ display: "flex", flexDirection: "column", gap: 1, p: 2, borderRadius: 2, bgcolor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
-              <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#1E293B", display: "flex", alignItems: "center", gap: 0.8 }}>
+            <Box
+              sx={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 1,
+                p: 2,
+                borderRadius: 2,
+                bgcolor: "#F8FAFC",
+                border: "1px solid #E2E8F0",
+              }}
+            >
+              <Typography
+                variant="subtitle2"
+                sx={{ fontWeight: 700, color: "#1E293B", display: "flex", alignItems: "center", gap: 0.8 }}
+              >
                 <Sliders size={16} /> Route Leak Protection
               </Typography>
               <FormControlLabel
@@ -1516,12 +1582,26 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
               />
             </Box>
 
-            <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, p: 2, borderRadius: 2, bgcolor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
-              <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#1E293B", display: "flex", alignItems: "center", gap: 0.8 }}>
+            <Box
+              sx={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 1.5,
+                p: 2,
+                borderRadius: 2,
+                bgcolor: "#F8FAFC",
+                border: "1px solid #E2E8F0",
+              }}
+            >
+              <Typography
+                variant="subtitle2"
+                sx={{ fontWeight: 700, color: "#1E293B", display: "flex", alignItems: "center", gap: 0.8 }}
+              >
                 <Shield size={16} /> Route Origination Authorization (ROA)
               </Typography>
               <Typography variant="caption" sx={{ color: "#64748B" }}>
-                Validates route origin ASNs in BGP import filters using BIRD ROA tables. Accepts a URL or local server file path.
+                Validates route origin ASNs in BGP import filters using BIRD ROA tables. Accepts a URL or local server
+                file path.
               </Typography>
 
               <TextField
@@ -1560,7 +1640,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
                       Strict ROA Validation
                     </Typography>
                     <Typography variant="caption" sx={{ color: "#64748B" }}>
-                      When enabled, routes with ROA_UNKNOWN status are rejected. (Default: disabled, permits VALID and UNKNOWN, rejects INVALID).
+                      When enabled, routes with ROA_UNKNOWN status are rejected. (Default: disabled, permits VALID and
+                      UNKNOWN, rejects INVALID).
                     </Typography>
                   </Box>
                 }
@@ -1568,8 +1649,21 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
             </Box>
 
             {/* Traffic Filtering & Host Firewall */}
-            <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, p: 2, borderRadius: 2, bgcolor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
-              <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#1E293B", display: "flex", alignItems: "center", gap: 0.8 }}>
+            <Box
+              sx={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 1.5,
+                p: 2,
+                borderRadius: 2,
+                bgcolor: "#F8FAFC",
+                border: "1px solid #E2E8F0",
+              }}
+            >
+              <Typography
+                variant="subtitle2"
+                sx={{ fontWeight: 700, color: "#1E293B", display: "flex", alignItems: "center", gap: 0.8 }}
+              >
                 <Shield size={16} /> Traffic Filtering & Host Firewall
               </Typography>
 
@@ -1587,7 +1681,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
                       Filter Transit / Forwarded Traffic
                     </Typography>
                     <Typography variant="caption" sx={{ color: "#64748B" }}>
-                      Drops forwarded packets whose source or destination IP does not match the configured allowed CIDRs.
+                      Drops forwarded packets whose source or destination IP does not match the configured allowed
+                      CIDRs.
                     </Typography>
                   </Box>
                 }
@@ -1609,7 +1704,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
                       Filter Input Traffic (Host Firewall)
                     </Typography>
                     <Typography variant="caption" sx={{ color: "#64748B" }}>
-                      Restricts incoming traffic targeting the host itself from this link. BGP (TCP port 179) and established return traffic are always permitted.
+                      Restricts incoming traffic targeting the host itself from this link. BGP (TCP port 179) and
+                      established return traffic are always permitted.
                     </Typography>
                   </Box>
                 }
@@ -1688,7 +1784,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
               )}
             </Box>
 
-            <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, p: 2, borderRadius: 2, bgcolor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
+            <Box
+              sx={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 1.5,
+                p: 2,
+                borderRadius: 2,
+                bgcolor: "#F8FAFC",
+                border: "1px solid #E2E8F0",
+              }}
+            >
               <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#1E293B" }}>
                   Outbound SNAT / Masquerade
@@ -1738,7 +1844,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
               )}
             </Box>
 
-            <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, p: 2, borderRadius: 2, bgcolor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
+            <Box
+              sx={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 1.5,
+                p: 2,
+                borderRadius: 2,
+                bgcolor: "#F8FAFC",
+                border: "1px solid #E2E8F0",
+              }}
+            >
               <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <Box>
                   <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#1E293B" }}>
@@ -1780,12 +1896,26 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
               )}
             </Box>
 
-            <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, p: 2, borderRadius: 2, bgcolor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
-              <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#1E293B", display: "flex", alignItems: "center", gap: 0.8 }}>
+            <Box
+              sx={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 1.5,
+                p: 2,
+                borderRadius: 2,
+                bgcolor: "#F8FAFC",
+                border: "1px solid #E2E8F0",
+              }}
+            >
+              <Typography
+                variant="subtitle2"
+                sx={{ fontWeight: 700, color: "#1E293B", display: "flex", alignItems: "center", gap: 0.8 }}
+              >
                 <Shield size={16} /> DSCP Marking
               </Typography>
               <Typography variant="caption" sx={{ color: "#64748B" }}>
-                Set / rewrite the Differentiated Services Code Point (DSCP) on packets traversing this link. Valid values: 0–63. Leave empty to disable.
+                Set / rewrite the Differentiated Services Code Point (DSCP) on packets traversing this link. Valid
+                values: 0–63. Leave empty to disable.
               </Typography>
 
               <Box sx={{ display: "flex", gap: 2 }}>
@@ -1796,7 +1926,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
                   label="Ingress DSCP"
                   placeholder="e.g. 46 (EF)"
                   value={policyDscpIngress}
-                  onChange={(e) => setPolicyDscpIngress(e.target.value === "" ? "" : Math.max(0, Math.min(63, Number(e.target.value))))}
+                  onChange={(e) =>
+                    setPolicyDscpIngress(e.target.value === "" ? "" : Math.max(0, Math.min(63, Number(e.target.value))))
+                  }
                   disabled={policyDialogMode === "view" || policyDialogSaving}
                   helperText="Rewrite DSCP on packets received from the link peer."
                   inputProps={{ min: 0, max: 63 }}
@@ -1808,7 +1940,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
                   label="Egress DSCP"
                   placeholder="e.g. 46 (EF)"
                   value={policyDscpEgress}
-                  onChange={(e) => setPolicyDscpEgress(e.target.value === "" ? "" : Math.max(0, Math.min(63, Number(e.target.value))))}
+                  onChange={(e) =>
+                    setPolicyDscpEgress(e.target.value === "" ? "" : Math.max(0, Math.min(63, Number(e.target.value))))
+                  }
                   disabled={policyDialogMode === "view" || policyDialogSaving}
                   helperText="Rewrite DSCP on packets sent to the link peer."
                   inputProps={{ min: 0, max: 63 }}

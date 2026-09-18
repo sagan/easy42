@@ -18,9 +18,10 @@ import {
   Tooltip,
   IconButton,
 } from "@mui/material";
-import { Link as LinkIcon, ArrowRightLeft, Edit2, Globe, Copy, Check } from "lucide-react";
+import { Link as LinkIcon, ArrowRightLeft, Edit2, Globe, Copy, Check, FileText } from "lucide-react";
 import { api } from "../../api/client";
 import { Node, Link, NetworkPolicy } from "../../types/api";
+import { MarkdownView } from "../Common/MarkdownView";
 import { derivePortFromIP } from "../../utils/port";
 import { resolvePeerEntrypoint, extractPort, formatEndpoint } from "../../utils/endpoint";
 
@@ -82,6 +83,10 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
   const [toMark, setToMark] = useState<string>("");
   const [fromRoutingPolicy, setFromRoutingPolicy] = useState<string>("");
   const [toRoutingPolicy, setToRoutingPolicy] = useState<string>("");
+  const [fromNote, setFromNote] = useState<string>("");
+  const [toNote, setToNote] = useState<string>("");
+  const [fromNoteTab, setFromNoteTab] = useState<"write" | "preview">("write");
+  const [toNoteTab, setToNoteTab] = useState<"write" | "preview">("write");
 
   // External peering custom fields
   const [localAddress, setLocalAddress] = useState("");
@@ -183,6 +188,8 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
       setToMark(linkToEdit.to.mark || "");
       setFromRoutingPolicy(linkToEdit.from.routing_policy || "");
       setToRoutingPolicy(linkToEdit.to.routing_policy || "");
+      setFromNote(linkToEdit.from.note || "");
+      setToNote(linkToEdit.to.note || "");
       setError(null);
     } else {
       setFromNodeName(initialFrom || "");
@@ -204,6 +211,8 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
       setToMark("");
       setFromRoutingPolicy("");
       setToRoutingPolicy("");
+      setFromNote("");
+      setToNote("");
       setLocalAddress("fe80::1/64");
       setRemoteAddress("fe80::2/64");
       setRemotePort("");
@@ -344,6 +353,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
           fwmark: managedFwmark,
           preference: managedPreference,
           mark: managedMark,
+          note: (managedNode === fromNode ? fromNote : toNote).trim() || undefined,
         };
 
         const externalEnd = {
@@ -359,6 +369,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
           fwmark: externalFwmark,
           preference: externalPreference,
           mark: externalMark,
+          note: (externalNode === fromNode ? fromNote : toNote).trim() || undefined,
         };
 
         const reqFrom = fromNode === managedNode ? managedEnd : externalEnd;
@@ -384,6 +395,8 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
             to_preference: reqTo.preference,
             from_mark: reqFrom.mark,
             to_mark: reqTo.mark,
+            from_note: reqFrom.note || "",
+            to_note: reqTo.note || "",
           });
           onLinkUpdated?.(updated);
         } else {
@@ -406,6 +419,8 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
             to_preference: reqTo.preference,
             from_mark: reqFrom.mark,
             to_mark: reqTo.mark,
+            from_note: reqFrom.note,
+            to_note: reqTo.note,
           });
           onLinkAdded?.(link);
         }
@@ -432,6 +447,8 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
             to_preference: parsedToPreference,
             from_mark: parsedFromMark,
             to_mark: parsedToMark,
+            from_note: fromNote.trim(),
+            to_note: toNote.trim(),
             from: {
               ...linkToEdit.from,
               listen_port: fromPort || undefined,
@@ -445,6 +462,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
               mark: parsedFromMark,
               endpoint: undefined,
               resolved_endpoint: undefined,
+              note: fromNote.trim() || undefined,
             },
             to: {
               ...linkToEdit.to,
@@ -459,6 +477,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
               mark: parsedToMark,
               endpoint: undefined,
               resolved_endpoint: undefined,
+              note: toNote.trim() || undefined,
             },
           });
           onLinkUpdated?.(updated);
@@ -484,6 +503,8 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
             to_preference: parsedToPreference,
             from_mark: parsedFromMark,
             to_mark: parsedToMark,
+            from_note: fromNote.trim() || undefined,
+            to_note: toNote.trim() || undefined,
             from: {
               use_ip: fromUseIp,
               policy: fromPolicy,
@@ -492,6 +513,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
               fwmark: parsedFromFwmark,
               preference: parsedFromPreference,
               mark: parsedFromMark,
+              note: fromNote.trim() || undefined,
             },
             to: {
               use_ip: toUseIp,
@@ -501,6 +523,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
               fwmark: parsedToFwmark,
               preference: parsedToPreference,
               mark: parsedToMark,
+              note: toNote.trim() || undefined,
             },
           });
           onLinkAdded?.(link);
@@ -803,6 +826,96 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                     placeholder="Policy default"
                     helperText="Overrides policy netfilter mark"
                   />
+                </Box>
+
+                {/* Managed Node Endpoint Note */}
+                <Box sx={{ mt: 1.5, p: 1.5, borderRadius: 1.5, backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
+                  <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 0.8 }}>
+                    <Typography variant="caption" sx={{ color: "#475569", fontWeight: 700, display: "flex", alignItems: "center", gap: 0.6 }}>
+                      <FileText size={13} color="#4F46E5" /> {managedNode?.name} ENDPOINT NOTE (MARKDOWN)
+                    </Typography>
+                    <Box sx={{ display: "flex", gap: 0.5 }}>
+                      <Button
+                        size="small"
+                        variant={(managedNode === fromNode ? fromNoteTab : toNoteTab) === "write" ? "contained" : "text"}
+                        onClick={() => (managedNode === fromNode ? setFromNoteTab("write") : setToNoteTab("write"))}
+                        sx={{ minWidth: "auto", px: 1, py: 0.2, fontSize: "0.7rem", textTransform: "none" }}
+                      >
+                        Write
+                      </Button>
+                      <Button
+                        size="small"
+                        variant={(managedNode === fromNode ? fromNoteTab : toNoteTab) === "preview" ? "contained" : "text"}
+                        onClick={() => (managedNode === fromNode ? setFromNoteTab("preview") : setToNoteTab("preview"))}
+                        sx={{ minWidth: "auto", px: 1, py: 0.2, fontSize: "0.7rem", textTransform: "none" }}
+                      >
+                        Preview
+                      </Button>
+                    </Box>
+                  </Box>
+                  {(managedNode === fromNode ? fromNoteTab : toNoteTab) === "write" ? (
+                    <TextField
+                      fullWidth
+                      multiline
+                      minRows={2}
+                      maxRows={5}
+                      size="small"
+                      placeholder="Markdown note for this endpoint..."
+                      value={managedNode === fromNode ? fromNote : toNote}
+                      onChange={(e) => (managedNode === fromNode ? setFromNote(e.target.value) : setToNote(e.target.value))}
+                      disabled={submitting}
+                      sx={{ "& .MuiInputBase-root": { fontSize: "0.8rem", fontFamily: "'JetBrains Mono', 'Fira Code', monospace" } }}
+                    />
+                  ) : (
+                    <Box sx={{ p: 1, minHeight: 60, maxHeight: 150, overflowY: "auto", backgroundColor: "#FFFFFF", borderRadius: 1, border: "1px solid #E2E8F0" }}>
+                      <MarkdownView content={managedNode === fromNode ? fromNote : toNote} emptyText="No note written yet" />
+                    </Box>
+                  )}
+                </Box>
+
+                {/* External Peer Endpoint Note */}
+                <Box sx={{ mt: 1.5, p: 1.5, borderRadius: 1.5, backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
+                  <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 0.8 }}>
+                    <Typography variant="caption" sx={{ color: "#475569", fontWeight: 700, display: "flex", alignItems: "center", gap: 0.6 }}>
+                      <FileText size={13} color="#4F46E5" /> {externalNode?.name} ENDPOINT NOTE (MARKDOWN)
+                    </Typography>
+                    <Box sx={{ display: "flex", gap: 0.5 }}>
+                      <Button
+                        size="small"
+                        variant={(externalNode === fromNode ? fromNoteTab : toNoteTab) === "write" ? "contained" : "text"}
+                        onClick={() => (externalNode === fromNode ? setFromNoteTab("write") : setToNoteTab("write"))}
+                        sx={{ minWidth: "auto", px: 1, py: 0.2, fontSize: "0.7rem", textTransform: "none" }}
+                      >
+                        Write
+                      </Button>
+                      <Button
+                        size="small"
+                        variant={(externalNode === fromNode ? fromNoteTab : toNoteTab) === "preview" ? "contained" : "text"}
+                        onClick={() => (externalNode === fromNode ? setFromNoteTab("preview") : setToNoteTab("preview"))}
+                        sx={{ minWidth: "auto", px: 1, py: 0.2, fontSize: "0.7rem", textTransform: "none" }}
+                      >
+                        Preview
+                      </Button>
+                    </Box>
+                  </Box>
+                  {(externalNode === fromNode ? fromNoteTab : toNoteTab) === "write" ? (
+                    <TextField
+                      fullWidth
+                      multiline
+                      minRows={2}
+                      maxRows={5}
+                      size="small"
+                      placeholder="Markdown note for external peer endpoint..."
+                      value={externalNode === fromNode ? fromNote : toNote}
+                      onChange={(e) => (externalNode === fromNode ? setFromNote(e.target.value) : setToNote(e.target.value))}
+                      disabled={submitting}
+                      sx={{ "& .MuiInputBase-root": { fontSize: "0.8rem", fontFamily: "'JetBrains Mono', 'Fira Code', monospace" } }}
+                    />
+                  ) : (
+                    <Box sx={{ p: 1, minHeight: 60, maxHeight: 150, overflowY: "auto", backgroundColor: "#FFFFFF", borderRadius: 1, border: "1px solid #E2E8F0" }}>
+                      <MarkdownView content={externalNode === fromNode ? fromNote : toNote} emptyText="No note written yet" />
+                    </Box>
+                  )}
                 </Box>
               </Box>
 
@@ -1120,6 +1233,51 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                       helperText="Overrides policy netfilter mark"
                     />
                   </Box>
+
+                  {/* Node 1 Endpoint Note */}
+                  <Box sx={{ mt: 1.5, p: 1.5, borderRadius: 1.5, backgroundColor: "#FFFFFF", border: "1px solid #C7D2FE" }}>
+                    <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 0.8 }}>
+                      <Typography variant="caption" sx={{ color: "#4338CA", fontWeight: 700, display: "flex", alignItems: "center", gap: 0.6 }}>
+                        <FileText size={13} color="#4F46E5" /> {fromNode.name} ENDPOINT NOTE (MARKDOWN)
+                      </Typography>
+                      <Box sx={{ display: "flex", gap: 0.5 }}>
+                        <Button
+                          size="small"
+                          variant={fromNoteTab === "write" ? "contained" : "text"}
+                          onClick={() => setFromNoteTab("write")}
+                          sx={{ minWidth: "auto", px: 1, py: 0.2, fontSize: "0.7rem", textTransform: "none" }}
+                        >
+                          Write
+                        </Button>
+                        <Button
+                          size="small"
+                          variant={fromNoteTab === "preview" ? "contained" : "text"}
+                          onClick={() => setFromNoteTab("preview")}
+                          sx={{ minWidth: "auto", px: 1, py: 0.2, fontSize: "0.7rem", textTransform: "none" }}
+                        >
+                          Preview
+                        </Button>
+                      </Box>
+                    </Box>
+                    {fromNoteTab === "write" ? (
+                      <TextField
+                        fullWidth
+                        multiline
+                        minRows={2}
+                        maxRows={5}
+                        size="small"
+                        placeholder="Arbitrary markdown note for this endpoint..."
+                        value={fromNote}
+                        onChange={(e) => setFromNote(e.target.value)}
+                        disabled={submitting}
+                        sx={{ "& .MuiInputBase-root": { fontSize: "0.8rem", fontFamily: "'JetBrains Mono', 'Fira Code', monospace" } }}
+                      />
+                    ) : (
+                      <Box sx={{ p: 1, minHeight: 60, maxHeight: 150, overflowY: "auto", backgroundColor: "#F8FAFC", borderRadius: 1, border: "1px solid #E2E8F0" }}>
+                        <MarkdownView content={fromNote} emptyText="No note written yet" />
+                      </Box>
+                    )}
+                  </Box>
                 </Box>
 
                 {/* To Node End */}
@@ -1310,6 +1468,51 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                       placeholder="Policy default"
                       helperText="Overrides policy netfilter mark"
                     />
+                  </Box>
+
+                  {/* Node 2 Endpoint Note */}
+                  <Box sx={{ mt: 1.5, p: 1.5, borderRadius: 1.5, backgroundColor: "#FFFFFF", border: "1px solid #A5F3FC" }}>
+                    <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 0.8 }}>
+                      <Typography variant="caption" sx={{ color: "#0E7490", fontWeight: 700, display: "flex", alignItems: "center", gap: 0.6 }}>
+                        <FileText size={13} color="#0891B2" /> {toNode.name} ENDPOINT NOTE (MARKDOWN)
+                      </Typography>
+                      <Box sx={{ display: "flex", gap: 0.5 }}>
+                        <Button
+                          size="small"
+                          variant={toNoteTab === "write" ? "contained" : "text"}
+                          onClick={() => setToNoteTab("write")}
+                          sx={{ minWidth: "auto", px: 1, py: 0.2, fontSize: "0.7rem", textTransform: "none" }}
+                        >
+                          Write
+                        </Button>
+                        <Button
+                          size="small"
+                          variant={toNoteTab === "preview" ? "contained" : "text"}
+                          onClick={() => setToNoteTab("preview")}
+                          sx={{ minWidth: "auto", px: 1, py: 0.2, fontSize: "0.7rem", textTransform: "none" }}
+                        >
+                          Preview
+                        </Button>
+                      </Box>
+                    </Box>
+                    {toNoteTab === "write" ? (
+                      <TextField
+                        fullWidth
+                        multiline
+                        minRows={2}
+                        maxRows={5}
+                        size="small"
+                        placeholder="Arbitrary markdown note for this endpoint..."
+                        value={toNote}
+                        onChange={(e) => setToNote(e.target.value)}
+                        disabled={submitting}
+                        sx={{ "& .MuiInputBase-root": { fontSize: "0.8rem", fontFamily: "'JetBrains Mono', 'Fira Code', monospace" } }}
+                      />
+                    ) : (
+                      <Box sx={{ p: 1, minHeight: 60, maxHeight: 150, overflowY: "auto", backgroundColor: "#F8FAFC", borderRadius: 1, border: "1px solid #E2E8F0" }}>
+                        <MarkdownView content={toNote} emptyText="No note written yet" />
+                      </Box>
+                    )}
                   </Box>
                 </Box>
               </Box>

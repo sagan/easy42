@@ -10,10 +10,12 @@ import {
   Alert,
   Tooltip,
   Chip,
+  TextField,
 } from "@mui/material";
-import { X, Trash2, Link as LinkIcon, Key, ArrowRightLeft, Edit2, Activity, Copy, Check, Shield, RefreshCw, Gauge, Zap, Route, RotateCcw } from "lucide-react";
+import { X, Trash2, Link as LinkIcon, Key, ArrowRightLeft, Edit2, Activity, Copy, Check, Shield, RefreshCw, Gauge, Zap, Route, RotateCcw, FileText } from "lucide-react";
 import { api } from "../../api/client";
 import { Link, NetworkState, Node } from "../../types/api";
+import { MarkdownView } from "../Common/MarkdownView";
 
 interface LinkDetailDrawerProps {
   link: Link | null;
@@ -24,6 +26,7 @@ interface LinkDetailDrawerProps {
   onEditLink: (link: Link) => void;
   onLinkDeleted: (from: string, to: string, iface?: string) => void;
   onRefreshLink?: (link: Link) => Promise<void>;
+  onLinkUpdated?: (link: Link) => void;
 }
 
 function formatBytes(bytes: number): string {
@@ -55,6 +58,7 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
   onEditLink,
   onLinkDeleted,
   onRefreshLink,
+  onLinkUpdated,
 }) => {
   const [deleting, setDeleting] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -65,10 +69,83 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [copiedEndpoint, setCopiedEndpoint] = useState<string | null>(null);
 
+  const [isEditingFromNote, setIsEditingFromNote] = useState(false);
+  const [fromNoteDraft, setFromNoteDraft] = useState("");
+  const [savingFromNote, setSavingFromNote] = useState(false);
+  const [fromNoteTab, setFromNoteTab] = useState<"write" | "preview">("write");
+
+  const [isEditingToNote, setIsEditingToNote] = useState(false);
+  const [toNoteDraft, setToNoteDraft] = useState("");
+  const [savingToNote, setSavingToNote] = useState(false);
+  const [toNoteTab, setToNoteTab] = useState<"write" | "preview">("write");
+
+  React.useEffect(() => {
+    if (link) {
+      setFromNoteDraft(link.from.note || "");
+      setToNoteDraft(link.to.note || "");
+      setIsEditingFromNote(false);
+      setIsEditingToNote(false);
+      setFromNoteTab("write");
+      setToNoteTab("write");
+    }
+  }, [link?.from?.name, link?.to?.name, link?.from?.note, link?.to?.note]);
+
   if (!link) return null;
 
   const isFromExternal = nodes?.find((n) => n.name === link.from.name)?.is_external;
   const isToExternal = nodes?.find((n) => n.name === link.to.name)?.is_external;
+
+  const handleSaveFromNote = async () => {
+    if (!link) return;
+    setSavingFromNote(true);
+    setError(null);
+    try {
+      const updated = await api.updateLink({
+        from_node: link.from.name,
+        to_node: link.to.name,
+        from_note: fromNoteDraft.trim(),
+        from: {
+          ...link.from,
+          note: fromNoteDraft.trim() || undefined,
+        },
+      });
+      onLinkUpdated?.(updated);
+      setIsEditingFromNote(false);
+      setActionSuccess("Endpoint note updated");
+      setTimeout(() => setActionSuccess(null), 3000);
+    } catch (err: unknown) {
+      const e = err as Error;
+      setError(e.message || "Failed to save endpoint note");
+    } finally {
+      setSavingFromNote(false);
+    }
+  };
+
+  const handleSaveToNote = async () => {
+    if (!link) return;
+    setSavingToNote(true);
+    setError(null);
+    try {
+      const updated = await api.updateLink({
+        from_node: link.from.name,
+        to_node: link.to.name,
+        to_note: toNoteDraft.trim(),
+        to: {
+          ...link.to,
+          note: toNoteDraft.trim() || undefined,
+        },
+      });
+      onLinkUpdated?.(updated);
+      setIsEditingToNote(false);
+      setActionSuccess("Endpoint note updated");
+      setTimeout(() => setActionSuccess(null), 3000);
+    } catch (err: unknown) {
+      const e = err as Error;
+      setError(e.message || "Failed to save endpoint note");
+    } finally {
+      setSavingToNote(false);
+    }
+  };
 
   const handleRestartEnd = async (end: "from" | "to") => {
     const endData = end === "from" ? link.from : link.to;
@@ -603,6 +680,116 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
                 {link.from.public_key || "(None)"}
               </Typography>
             </Box>
+
+            {/* Node 1 LinkEnd Note */}
+            <Box sx={{ mt: 1.5, p: 1.5, borderRadius: 1.5, backgroundColor: "#FFFFFF", border: "1px solid #C7D2FE" }}>
+              <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1 }}>
+                <Typography variant="caption" sx={{ color: "#4338CA", fontWeight: 700, display: "flex", alignItems: "center", gap: 0.6 }}>
+                  <FileText size={13} color="#4F46E5" /> {link.from.name} NOTE (MARKDOWN)
+                </Typography>
+                {!isEditingFromNote ? (
+                  <Button
+                    id={`edit-from-note-${link.from.name}`}
+                    size="small"
+                    variant="outlined"
+                    startIcon={<Edit2 size={11} />}
+                    onClick={() => {
+                      setFromNoteDraft(link.from.note || "");
+                      setIsEditingFromNote(true);
+                      setFromNoteTab("write");
+                    }}
+                    sx={{
+                      fontSize: "0.68rem",
+                      py: 0.1,
+                      px: 0.8,
+                      textTransform: "none",
+                      fontWeight: 600,
+                      borderRadius: 1,
+                      borderColor: "#C7D2FE",
+                      color: "#4338CA",
+                      "&:hover": { borderColor: "#4F46E5", backgroundColor: "rgba(79, 70, 229, 0.05)" },
+                    }}
+                  >
+                    {link.from.note ? "Edit Note" : "Add Note"}
+                  </Button>
+                ) : (
+                  <Box sx={{ display: "flex", gap: 0.5, alignItems: "center" }}>
+                    <Button
+                      size="small"
+                      variant={fromNoteTab === "write" ? "contained" : "text"}
+                      onClick={() => setFromNoteTab("write")}
+                      sx={{ minWidth: "auto", px: 0.8, py: 0.1, fontSize: "0.68rem", textTransform: "none" }}
+                    >
+                      Write
+                    </Button>
+                    <Button
+                      size="small"
+                      variant={fromNoteTab === "preview" ? "contained" : "text"}
+                      onClick={() => setFromNoteTab("preview")}
+                      sx={{ minWidth: "auto", px: 0.8, py: 0.1, fontSize: "0.68rem", textTransform: "none" }}
+                    >
+                      Preview
+                    </Button>
+                  </Box>
+                )}
+              </Box>
+
+              {!isEditingFromNote ? (
+                <Box sx={{ p: 1, borderRadius: 1, backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0", maxHeight: 180, overflowY: "auto" }}>
+                  <MarkdownView
+                    content={link.from.note}
+                    emptyText="No note recorded for this endpoint. Click 'Add Note' to record markdown notes."
+                  />
+                </Box>
+              ) : (
+                <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                  {fromNoteTab === "write" ? (
+                    <TextField
+                      fullWidth
+                      multiline
+                      minRows={2}
+                      maxRows={8}
+                      size="small"
+                      placeholder="Input arbitrary markdown format text..."
+                      value={fromNoteDraft}
+                      onChange={(e) => setFromNoteDraft(e.target.value)}
+                      disabled={savingFromNote}
+                      sx={{
+                        backgroundColor: "#FFFFFF",
+                        borderRadius: 1,
+                        "& .MuiInputBase-root": { fontSize: "0.8rem", fontFamily: "'JetBrains Mono', 'Fira Code', monospace" },
+                      }}
+                    />
+                  ) : (
+                    <Box sx={{ p: 1, borderRadius: 1, backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0", minHeight: 60, maxHeight: 180, overflowY: "auto" }}>
+                      <MarkdownView content={fromNoteDraft} emptyText="No markdown note content" />
+                    </Box>
+                  )}
+                  <Box sx={{ display: "flex", justifyContent: "flex-end", gap: 0.8, mt: 0.2 }}>
+                    <Button
+                      size="small"
+                      onClick={() => setIsEditingFromNote(false)}
+                      disabled={savingFromNote}
+                      sx={{ fontSize: "0.72rem", textTransform: "none", color: "#64748B" }}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      id={`save-from-note-${link.from.name}`}
+                      size="small"
+                      variant="contained"
+                      color="primary"
+                      onClick={handleSaveFromNote}
+                      disabled={savingFromNote}
+                      startIcon={savingFromNote ? <CircularProgress size={11} color="inherit" /> : <Check size={11} />}
+                      sx={{ fontSize: "0.72rem", textTransform: "none", fontWeight: 600, px: 1.2 }}
+                    >
+                      {savingFromNote ? "Saving..." : "Save Note"}
+                    </Button>
+                  </Box>
+                </Box>
+              )}
+            </Box>
           </Box>
         </Box>
 
@@ -923,6 +1110,116 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
               >
                 {link.to.public_key || "(None)"}
               </Typography>
+            </Box>
+
+            {/* Node 2 LinkEnd Note */}
+            <Box sx={{ mt: 1.5, p: 1.5, borderRadius: 1.5, backgroundColor: "#FFFFFF", border: "1px solid #A5F3FC" }}>
+              <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1 }}>
+                <Typography variant="caption" sx={{ color: "#0E7490", fontWeight: 700, display: "flex", alignItems: "center", gap: 0.6 }}>
+                  <FileText size={13} color="#0891B2" /> {link.to.name} NOTE (MARKDOWN)
+                </Typography>
+                {!isEditingToNote ? (
+                  <Button
+                    id={`edit-to-note-${link.to.name}`}
+                    size="small"
+                    variant="outlined"
+                    startIcon={<Edit2 size={11} />}
+                    onClick={() => {
+                      setToNoteDraft(link.to.note || "");
+                      setIsEditingToNote(true);
+                      setToNoteTab("write");
+                    }}
+                    sx={{
+                      fontSize: "0.68rem",
+                      py: 0.1,
+                      px: 0.8,
+                      textTransform: "none",
+                      fontWeight: 600,
+                      borderRadius: 1,
+                      borderColor: "#A5F3FC",
+                      color: "#0891B2",
+                      "&:hover": { borderColor: "#06B6D4", backgroundColor: "rgba(6, 182, 212, 0.05)" },
+                    }}
+                  >
+                    {link.to.note ? "Edit Note" : "Add Note"}
+                  </Button>
+                ) : (
+                  <Box sx={{ display: "flex", gap: 0.5, alignItems: "center" }}>
+                    <Button
+                      size="small"
+                      variant={toNoteTab === "write" ? "contained" : "text"}
+                      onClick={() => setToNoteTab("write")}
+                      sx={{ minWidth: "auto", px: 0.8, py: 0.1, fontSize: "0.68rem", textTransform: "none" }}
+                    >
+                      Write
+                    </Button>
+                    <Button
+                      size="small"
+                      variant={toNoteTab === "preview" ? "contained" : "text"}
+                      onClick={() => setToNoteTab("preview")}
+                      sx={{ minWidth: "auto", px: 0.8, py: 0.1, fontSize: "0.68rem", textTransform: "none" }}
+                    >
+                      Preview
+                    </Button>
+                  </Box>
+                )}
+              </Box>
+
+              {!isEditingToNote ? (
+                <Box sx={{ p: 1, borderRadius: 1, backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0", maxHeight: 180, overflowY: "auto" }}>
+                  <MarkdownView
+                    content={link.to.note}
+                    emptyText="No note recorded for this endpoint. Click 'Add Note' to record markdown notes."
+                  />
+                </Box>
+              ) : (
+                <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                  {toNoteTab === "write" ? (
+                    <TextField
+                      fullWidth
+                      multiline
+                      minRows={2}
+                      maxRows={8}
+                      size="small"
+                      placeholder="Input arbitrary markdown format text..."
+                      value={toNoteDraft}
+                      onChange={(e) => setToNoteDraft(e.target.value)}
+                      disabled={savingToNote}
+                      sx={{
+                        backgroundColor: "#FFFFFF",
+                        borderRadius: 1,
+                        "& .MuiInputBase-root": { fontSize: "0.8rem", fontFamily: "'JetBrains Mono', 'Fira Code', monospace" },
+                      }}
+                    />
+                  ) : (
+                    <Box sx={{ p: 1, borderRadius: 1, backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0", minHeight: 60, maxHeight: 180, overflowY: "auto" }}>
+                      <MarkdownView content={toNoteDraft} emptyText="No markdown note content" />
+                    </Box>
+                  )}
+                  <Box sx={{ display: "flex", justifyContent: "flex-end", gap: 0.8, mt: 0.2 }}>
+                    <Button
+                      size="small"
+                      onClick={() => setIsEditingToNote(false)}
+                      disabled={savingToNote}
+                      sx={{ fontSize: "0.72rem", textTransform: "none", color: "#64748B" }}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      id={`save-to-note-${link.to.name}`}
+                      size="small"
+                      variant="contained"
+                      color="primary"
+                      onClick={handleSaveToNote}
+                      disabled={savingToNote}
+                      startIcon={savingToNote ? <CircularProgress size={11} color="inherit" /> : <Check size={11} />}
+                      sx={{ fontSize: "0.72rem", textTransform: "none", fontWeight: 600, px: 1.2 }}
+                    >
+                      {savingToNote ? "Saving..." : "Save Note"}
+                    </Button>
+                  </Box>
+                </Box>
+              )}
             </Box>
           </Box>
         </Box>
