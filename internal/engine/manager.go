@@ -3138,6 +3138,7 @@ func (m *Manager) CreateNetworkPolicy(p config.NetworkPolicy) (*config.NetworkPo
 	p.DSCPEgress = config.ValidateDSCP(p.DSCPEgress)
 	p.Fwmark = strings.TrimSpace(p.Fwmark)
 	p.Mark = strings.TrimSpace(p.Mark)
+	p.ForwardSNATTarget = strings.TrimSpace(p.ForwardSNATTarget)
 	p.RoutingPolicy = config.NormalizeRoutingPolicy(p.RoutingPolicy)
 
 	cfg.NetworkPolicies = append(cfg.NetworkPolicies, p)
@@ -3197,6 +3198,8 @@ func (m *Manager) UpdateNetworkPolicy(id string, p config.NetworkPolicy) (*confi
 	cfg.NetworkPolicies[idx].InputTCPPorts = config.CleanPortList(p.InputTCPPorts)
 	cfg.NetworkPolicies[idx].InputUDPPorts = config.CleanPortList(p.InputUDPPorts)
 	cfg.NetworkPolicies[idx].SNAT = p.SNAT
+	cfg.NetworkPolicies[idx].ForwardSNAT = p.ForwardSNAT
+	cfg.NetworkPolicies[idx].ForwardSNATTarget = strings.TrimSpace(p.ForwardSNATTarget)
 	cfg.NetworkPolicies[idx].DSCPIngress = config.ValidateDSCP(p.DSCPIngress)
 	cfg.NetworkPolicies[idx].DSCPEgress = config.ValidateDSCP(p.DSCPEgress)
 	cfg.NetworkPolicies[idx].ROA4 = strings.TrimSpace(p.ROA4)

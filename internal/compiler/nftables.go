@@ -193,9 +193,10 @@ func BuildNftablesNodeContext(
 			continue
 		}
 		hasSNAT := pol.SNAT != nil && pol.SNAT.Enabled
+		hasForwardSNAT := pol.ForwardSNAT
 		hasDSCP := pol.DSCPIngress != nil || pol.DSCPEgress != nil
 		hasMark := strings.TrimSpace(pol.Mark) != ""
-		if !pol.FilterForward && !pol.FilterInput && !hasSNAT && !hasDSCP && !hasMark {
+		if !pol.FilterForward && !pol.FilterInput && !hasSNAT && !hasForwardSNAT && !hasDSCP && !hasMark {
 			continue
 		}
 
@@ -283,6 +284,13 @@ func BuildNftablesNodeContext(
 				snatAction = "masquerade"
 			} else {
 				switch pol.SNAT.Target {
+				case "main_ip":
+					if strings.TrimSpace(node.IP) != "" {
+						snatTargetV4 = "$self_ip"
+					}
+					if strings.TrimSpace(node.IP6) != "" {
+						snatTargetV6 = "$self_ip6"
+					}
 				case "external_ip", "":
 					if strings.TrimSpace(node.ExternalIP) != "" {
 						snatTargetV4 = "$external_ip"
@@ -300,6 +308,39 @@ func BuildNftablesNodeContext(
 			}
 		}
 
+		var fwdSnatTargetV4, fwdSnatTargetV6 string
+		fwdSnatAction := "masquerade"
+		if hasForwardSNAT {
+			target := strings.TrimSpace(pol.ForwardSNATTarget)
+			if target == "" || target == "masquerade" {
+				fwdSnatAction = "masquerade"
+			} else {
+				fwdSnatAction = "snat"
+				switch target {
+				case "main_ip":
+					if strings.TrimSpace(node.IP) != "" {
+						fwdSnatTargetV4 = "$self_ip"
+					}
+					if strings.TrimSpace(node.IP6) != "" {
+						fwdSnatTargetV6 = "$self_ip6"
+					}
+				case "external_ip":
+					if strings.TrimSpace(node.ExternalIP) != "" {
+						fwdSnatTargetV4 = "$external_ip"
+					}
+					if strings.TrimSpace(node.ExternalIP6) != "" {
+						fwdSnatTargetV6 = "$external_ip6"
+					}
+				default:
+					if strings.Contains(target, ":") {
+						fwdSnatTargetV6 = target
+					} else {
+						fwdSnatTargetV4 = target
+					}
+				}
+			}
+		}
+
 		// DSCP values: -1 means not set
 		dscpIngress := -1
 		dscpEgress := -1
@@ -311,35 +352,39 @@ func BuildNftablesNodeContext(
 		}
 
 		nftPolicies = append(nftPolicies, map[string]any{
-			"id":                cleanID,
-			"name":              pol.Name,
-			"ifnames":           "{ " + strings.Join(ifnames, ", ") + " }",
-			"allowed_dst_v4":    dstV4,
-			"allowed_dst_v6":    dstV6,
-			"disallowed_dst_v4": disallowedDstV4,
-			"disallowed_dst_v6": disallowedDstV6,
-			"allowed_src_v4":    srcV4,
-			"allowed_src_v6":    srcV6,
-			"disallowed_src_v4": disallowedSrcV4,
-			"disallowed_src_v6": disallowedSrcV6,
-			"local_v4":          localV4,
-			"local_v6":          localV6,
-			"filter_forward":    pol.FilterForward,
-			"filter_input":      pol.FilterInput,
-			"input_allow_icmp":  pol.InputAllowICMP,
-			"input_allow_icmp6": pol.InputAllowICMP6,
-			"input_all_tcp":     inputAllTCP,
-			"input_tcp_ports":   inputTCPPortsStr,
-			"input_all_udp":     inputAllUDP,
-			"input_udp_ports":   inputUDPPortsStr,
-			"snat":              hasSNAT,
-			"snat_action":       snatAction,
-			"snat_condition":    snatCondition,
-			"snat_target_v4":    snatTargetV4,
-			"snat_target_v6":    snatTargetV6,
-			"dscp_ingress":      dscpIngress,
-			"dscp_egress":       dscpEgress,
-			"mark":              strings.TrimSpace(pol.Mark),
+			"id":                     cleanID,
+			"name":                   pol.Name,
+			"ifnames":                "{ " + strings.Join(ifnames, ", ") + " }",
+			"allowed_dst_v4":         dstV4,
+			"allowed_dst_v6":         dstV6,
+			"disallowed_dst_v4":      disallowedDstV4,
+			"disallowed_dst_v6":      disallowedDstV6,
+			"allowed_src_v4":         srcV4,
+			"allowed_src_v6":         srcV6,
+			"disallowed_src_v4":      disallowedSrcV4,
+			"disallowed_src_v6":      disallowedSrcV6,
+			"local_v4":               localV4,
+			"local_v6":               localV6,
+			"filter_forward":         pol.FilterForward,
+			"filter_input":           pol.FilterInput,
+			"input_allow_icmp":       pol.InputAllowICMP,
+			"input_allow_icmp6":      pol.InputAllowICMP6,
+			"input_all_tcp":          inputAllTCP,
+			"input_tcp_ports":        inputTCPPortsStr,
+			"input_all_udp":          inputAllUDP,
+			"input_udp_ports":        inputUDPPortsStr,
+			"snat":                   hasSNAT,
+			"snat_action":            snatAction,
+			"snat_condition":         snatCondition,
+			"snat_target_v4":         snatTargetV4,
+			"snat_target_v6":         snatTargetV6,
+			"forward_snat":           hasForwardSNAT,
+			"forward_snat_action":    fwdSnatAction,
+			"forward_snat_target_v4": fwdSnatTargetV4,
+			"forward_snat_target_v6": fwdSnatTargetV6,
+			"dscp_ingress":           dscpIngress,
+			"dscp_egress":            dscpEgress,
+			"mark":                   strings.TrimSpace(pol.Mark),
 		})
 	}
 	sort.Slice(nftPolicies, func(i, j int) bool {

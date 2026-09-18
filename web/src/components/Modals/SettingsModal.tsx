@@ -142,6 +142,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
   const [policySnatEnabled, setPolicySnatEnabled] = useState(false);
   const [policySnatCondition, setPolicySnatCondition] = useState<string>("not_dst");
   const [policySnatTarget, setPolicySnatTarget] = useState<string>("masquerade");
+  const [policyForwardSnat, setPolicyForwardSnat] = useState(false);
+  const [policyForwardSnatTarget, setPolicyForwardSnatTarget] = useState<string>("masquerade");
   const [policyRoa4, setPolicyRoa4] = useState("");
   const [policyRoa6, setPolicyRoa6] = useState("");
   const [policyRoaStrict, setPolicyRoaStrict] = useState(false);
@@ -250,6 +252,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
     setPolicySnatEnabled(false);
     setPolicySnatCondition("not_dst");
     setPolicySnatTarget("masquerade");
+    setPolicyForwardSnat(false);
+    setPolicyForwardSnatTarget("masquerade");
     setPolicyRoa4("");
     setPolicyRoa6("");
     setPolicyRoaStrict(false);
@@ -284,6 +288,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
     setPolicySnatEnabled(Boolean(p.snat?.enabled));
     setPolicySnatCondition(p.snat?.condition || "not_dst");
     setPolicySnatTarget(p.snat?.target || "masquerade");
+    setPolicyForwardSnat(Boolean(p.forward_snat));
+    setPolicyForwardSnatTarget(p.forward_snat_target || "masquerade");
     setPolicyRoa4(p.roa4 || "");
     setPolicyRoa6(p.roa6 || "");
     setPolicyRoaStrict(Boolean(p.roa_strict));
@@ -318,6 +324,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
     setPolicySnatEnabled(Boolean(p.snat?.enabled));
     setPolicySnatCondition(p.snat?.condition || "not_dst");
     setPolicySnatTarget(p.snat?.target || "masquerade");
+    setPolicyForwardSnat(Boolean(p.forward_snat));
+    setPolicyForwardSnatTarget(p.forward_snat_target || "masquerade");
     setPolicyRoa4(p.roa4 || "");
     setPolicyRoa6(p.roa6 || "");
     setPolicyRoaStrict(Boolean(p.roa_strict));
@@ -397,6 +405,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
               target: policySnatTarget.trim() || undefined,
             }
           : undefined,
+        forward_snat: policyForwardSnat,
+        forward_snat_target: policyForwardSnat ? (policyForwardSnatTarget.trim() || undefined) : undefined,
         roa4: policyRoa4.trim() || undefined,
         roa6: policyRoa6.trim() || undefined,
         roa_strict: policyRoaStrict,
@@ -464,6 +474,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
     setPolicySnatEnabled(Boolean(p.snat?.enabled));
     setPolicySnatCondition(p.snat?.condition || "not_dst");
     setPolicySnatTarget(p.snat?.target || "masquerade");
+    setPolicyForwardSnat(Boolean(p.forward_snat));
+    setPolicyForwardSnatTarget(p.forward_snat_target || "masquerade");
     setPolicyRoa4(p.roa4 || "");
     setPolicyRoa6(p.roa6 || "");
     setPolicyRoaStrict(Boolean(p.roa_strict));
@@ -1213,6 +1225,20 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
                             color: p.snat?.enabled ? "#0F766E" : undefined,
                           }}
                         />
+                        {p.forward_snat && (
+                          <Chip
+                            size="small"
+                            label={`Forward SNAT: ${p.forward_snat_target === "external_ip" ? "External IP" : p.forward_snat_target === "main_ip" ? "Main IP" : "Masquerade"}`}
+                            variant="outlined"
+                            sx={{
+                              fontSize: "0.7rem",
+                              height: 22,
+                              borderColor: "#BAE6FD",
+                              bgcolor: "#F0F9FF",
+                              color: "#0369A1",
+                            }}
+                          />
+                        )}
                         {p.local_networks && p.local_networks.length > 0 && (
                           <Chip
                             size="small"
@@ -1706,6 +1732,49 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
                   >
                     <MenuItem value="masquerade">Interface IP (Masquerade)</MenuItem>
                     <MenuItem value="external_ip">External / Peering IP</MenuItem>
+                    <MenuItem value="main_ip">Main IP</MenuItem>
+                  </TextField>
+                </Box>
+              )}
+            </Box>
+
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, p: 2, borderRadius: 2, bgcolor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
+              <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <Box>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#1E293B" }}>
+                    Forward SNAT / Masquerade
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: "#64748B" }}>
+                    SNAT / masquerade when forwarding received traffic from link peer to any other interface.
+                  </Typography>
+                </Box>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={policyForwardSnat}
+                      onChange={(e) => setPolicyForwardSnat(e.target.checked)}
+                      disabled={policyDialogMode === "view" || policyDialogSaving}
+                    />
+                  }
+                  label={policyForwardSnat ? "Enabled" : "Disabled"}
+                  sx={{ m: 0 }}
+                />
+              </Box>
+
+              {policyForwardSnat && (
+                <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, pt: 1 }}>
+                  <TextField
+                    select
+                    fullWidth
+                    size="small"
+                    label="SNAT Target IP"
+                    value={policyForwardSnatTarget}
+                    onChange={(e) => setPolicyForwardSnatTarget(e.target.value)}
+                    disabled={policyDialogMode === "view" || policyDialogSaving}
+                  >
+                    <MenuItem value="masquerade">Interface IP (Masquerade)</MenuItem>
+                    <MenuItem value="external_ip">External / Peering IP</MenuItem>
+                    <MenuItem value="main_ip">Main IP</MenuItem>
                   </TextField>
                 </Box>
               )}

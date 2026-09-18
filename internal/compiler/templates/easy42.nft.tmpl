@@ -315,6 +315,20 @@ table inet easy42 {
     {{- end }}
   {{- end }}
 {{- end }}
+{{- range .nft_policies }}
+  {{- if .forward_snat }}
+    {{- if eq .forward_snat_action "masquerade" }}
+    iifname @pol_{{ .id }}_ifname oifname != @pol_{{ .id }}_ifname masquerade
+    {{- else }}
+      {{- if .forward_snat_target_v4 }}
+    iifname @pol_{{ .id }}_ifname oifname != @pol_{{ .id }}_ifname meta nfproto ipv4 snat to {{ .forward_snat_target_v4 }}
+      {{- end }}
+      {{- if .forward_snat_target_v6 }}
+    iifname @pol_{{ .id }}_ifname oifname != @pol_{{ .id }}_ifname meta nfproto ipv6 snat to {{ .forward_snat_target_v6 }}
+      {{- end }}
+    {{- end }}
+  {{- end }}
+{{- end }}
     # Source ip come from other tunnels may not be routable in the network and return traffic may have problem
     iifname @tunnel_ifname iifname != @easy42_ifname oifname @easy42_ifname meta nfproto ipv4 snat to $self_ip
 {{- if .ip6 }}

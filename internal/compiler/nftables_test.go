@@ -961,4 +961,278 @@ func TestGenerateNftablesConfig_NetfilterMark(t *testing.T) {
 	}
 }
 
+func TestNftablesSNAT_MainIP(t *testing.T) {
+	node := config.Node{
+		Name:        "local-node",
+		IP:          "192.168.100.1",
+		IP6:         "fd42:a159:f9f0::1",
+		ExternalIP:  "172.20.229.13",
+		ExternalIP6: "fd42:a159:f9f0::d",
+	}
+	allNodes := []config.Node{
+		node,
+		{Name: "peer-node", IP: "192.168.100.2", IP6: "fd42:a159:f9f0::2"},
+	}
+
+	customPolicies := []config.NetworkPolicy{
+		{
+			ID:              "pol_main",
+			Name:            "Main IP SNAT Policy",
+			AllowedDstCIDRs: []string{"10.0.0.0/8", "fd00::/8"},
+			SNAT: &config.SNATConfig{
+				Enabled:   true,
+				Condition: "not_dst",
+				Target:    "main_ip",
+			},
+		},
+	}
+
+	links := []config.Link{
+		{
+			From: config.LinkEnd{Name: "local-node", Interface: "wg42-main", Policy: "pol_main"},
+			To:   config.LinkEnd{Name: "peer-node", Interface: "wg42"},
+		},
+	}
+
+	conf, err := GenerateNftablesConfig(&node, allNodes, links, nil, customPolicies)
+	if err != nil {
+		t.Fatalf("GenerateNftablesConfig failed: %v", err)
+	}
+
+	// Must SNAT to $self_ip and $self_ip6 even though ExternalIP and ExternalIP6 exist on node
+	expectedV4 := "ip saddr != @pol_pol_main_dst_v4 oifname @pol_pol_main_ifname meta nfproto ipv4 snat to $self_ip"
+	expectedV6 := "ip6 saddr != @pol_pol_main_dst_v6 oifname @pol_pol_main_ifname meta nfproto ipv6 snat to $self_ip6"
+
+	if !strings.Contains(conf, expectedV4) {
+		t.Errorf("Expected Main IP IPv4 SNAT rule in conf:\n%s\nGot conf:\n%s", expectedV4, conf)
+	}
+	if !strings.Contains(conf, expectedV6) {
+		t.Errorf("Expected Main IP IPv6 SNAT rule in conf:\n%s\nGot conf:\n%s", expectedV6, conf)
+	}
+
+	// Must not SNAT to $external_ip for this policy
+	if strings.Contains(conf, "oifname @pol_pol_main_ifname meta nfproto ipv4 snat to $external_ip") {
+		t.Errorf("Did not expect $external_ip SNAT target when main_ip is configured")
+	}
+
+	// Validate with nft binary
+	if nftPath, err := exec.LookPath("nft"); err == nil {
+		tmpFile := filepath.Join(t.TempDir(), "easy42.nft")
+		if err := os.WriteFile(tmpFile, []byte(conf), 0644); err != nil {
+			t.Fatalf("WriteFile failed: %v", err)
+		}
+		cmd := exec.Command(nftPath, "-c", "-f", tmpFile)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("nft -c -f validation failed: %v\nOutput:\n%s\nConfig:\n%s", err, string(out), conf)
+		}
+	}
+}
+
+func TestNftablesForwardSNAT(t *testing.T) {
+	node := config.Node{
+		Name:        "local-node",
+		IP:          "192.168.100.1",
+		IP6:         "fd42:a159:f9f0::1",
+		ExternalIP:  "172.20.229.13",
+		ExternalIP6: "fd42:a159:f9f0::d",
+	}
+	allNodes := []config.Node{
+		node,
+		{Name: "peer-node", IP: "192.168.100.2", IP6: "fd42:a159:f9f0::2"},
+	}
+
+	customPolicies := []config.NetworkPolicy{
+		{
+			ID:          "pol_fwd_masq",
+			Name:        "Forward Masquerade Policy",
+			ForwardSNAT: true,
+			// ForwardSNATTarget empty or "masquerade"
+		},
+		{
+			ID:                "pol_fwd_main",
+			Name:              "Forward Main IP Policy",
+			ForwardSNAT:       true,
+			ForwardSNATTarget: "main_ip",
+		},
+		{
+			ID:                "pol_fwd_ext",
+			Name:              "Forward External IP Policy",
+			ForwardSNAT:       true,
+			ForwardSNATTarget: "external_ip",
+		},
+	}
+
+	links := []config.Link{
+		{
+			From: config.LinkEnd{Name: "local-node", Interface: "wg42-fwd-m", Policy: "pol_fwd_masq"},
+			To:   config.LinkEnd{Name: "peer-node", Interface: "wg42"},
+		},
+		{
+			From: config.LinkEnd{Name: "local-node", Interface: "wg42-fwd-main", Policy: "pol_fwd_main"},
+			To:   config.LinkEnd{Name: "peer-node", Interface: "wg42"},
+		},
+		{
+			From: config.LinkEnd{Name: "local-node", Interface: "wg42-fwd-ext", Policy: "pol_fwd_ext"},
+			To:   config.LinkEnd{Name: "peer-node", Interface: "wg42"},
+		},
+	}
+
+	conf, err := GenerateNftablesConfig(&node, allNodes, links, nil, customPolicies)
+	if err != nil {
+		t.Fatalf("GenerateNftablesConfig failed: %v", err)
+	}
+
+	expectedMasq := `iifname @pol_pol_fwd_masq_ifname oifname != @pol_pol_fwd_masq_ifname masquerade`
+	if !strings.Contains(conf, expectedMasq) {
+		t.Errorf("Expected Forward masquerade rule in conf:\n%s\nGot conf:\n%s", expectedMasq, conf)
+	}
+
+	expectedMainV4 := `iifname @pol_pol_fwd_main_ifname oifname != @pol_pol_fwd_main_ifname meta nfproto ipv4 snat to $self_ip`
+	expectedMainV6 := `iifname @pol_pol_fwd_main_ifname oifname != @pol_pol_fwd_main_ifname meta nfproto ipv6 snat to $self_ip6`
+	if !strings.Contains(conf, expectedMainV4) {
+		t.Errorf("Expected Forward Main IP IPv4 rule in conf:\n%s\nGot conf:\n%s", expectedMainV4, conf)
+	}
+	if !strings.Contains(conf, expectedMainV6) {
+		t.Errorf("Expected Forward Main IP IPv6 rule in conf:\n%s\nGot conf:\n%s", expectedMainV6, conf)
+	}
+
+	expectedExtV4 := `iifname @pol_pol_fwd_ext_ifname oifname != @pol_pol_fwd_ext_ifname meta nfproto ipv4 snat to $external_ip`
+	expectedExtV6 := `iifname @pol_pol_fwd_ext_ifname oifname != @pol_pol_fwd_ext_ifname meta nfproto ipv6 snat to $external_ip6`
+	if !strings.Contains(conf, expectedExtV4) {
+		t.Errorf("Expected Forward External IP IPv4 rule in conf:\n%s\nGot conf:\n%s", expectedExtV4, conf)
+	}
+	if !strings.Contains(conf, expectedExtV6) {
+		t.Errorf("Expected Forward External IP IPv6 rule in conf:\n%s\nGot conf:\n%s", expectedExtV6, conf)
+	}
+
+	// Validate with nft binary
+	if nftPath, err := exec.LookPath("nft"); err == nil {
+		tmpFile := filepath.Join(t.TempDir(), "easy42.nft")
+		if err := os.WriteFile(tmpFile, []byte(conf), 0644); err != nil {
+			t.Fatalf("WriteFile failed: %v", err)
+		}
+		cmd := exec.Command(nftPath, "-c", "-f", tmpFile)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("nft -c -f validation failed: %v\nOutput:\n%s\nConfig:\n%s", err, string(out), conf)
+		}
+	}
+}
+
+func TestNftablesPostroutingOrder_OutboundBeforeForward(t *testing.T) {
+	node := config.Node{
+		Name:        "local-node",
+		IP:          "192.168.100.1",
+		IP6:         "fd42:a159:f9f0::1",
+		ExternalIP:  "172.20.229.13",
+		ExternalIP6: "fd42:a159:f9f0::d",
+	}
+	allNodes := []config.Node{
+		node,
+		{Name: "peer-a", IP: "192.168.100.2"},
+		{Name: "peer-b", IP: "192.168.100.3"},
+	}
+
+	// Policy A: has Forward SNAT only
+	// Policy B: has Outbound SNAT only
+	customPolicies := []config.NetworkPolicy{
+		{
+			ID:          "pol_a",
+			Name:        "Policy A",
+			ForwardSNAT: true,
+		},
+		{
+			ID:              "pol_b",
+			Name:            "Policy B",
+			AllowedDstCIDRs: []string{"10.0.0.0/8"},
+			SNAT: &config.SNATConfig{
+				Enabled:   true,
+				Condition: "not_dst",
+				Target:    "external_ip",
+			},
+		},
+	}
+
+	links := []config.Link{
+		{
+			From: config.LinkEnd{Name: "local-node", Interface: "wg42-a", Policy: "pol_a"},
+			To:   config.LinkEnd{Name: "peer-a", Interface: "wg42"},
+		},
+		{
+			From: config.LinkEnd{Name: "local-node", Interface: "wg42-b", Policy: "pol_b"},
+			To:   config.LinkEnd{Name: "peer-b", Interface: "wg42"},
+		},
+	}
+
+	conf, err := GenerateNftablesConfig(&node, allNodes, links, nil, customPolicies)
+	if err != nil {
+		t.Fatalf("GenerateNftablesConfig failed: %v", err)
+	}
+
+	outboundIndex := strings.Index(conf, "oifname @pol_pol_b_ifname")
+	forwardIndex := strings.Index(conf, "iifname @pol_pol_a_ifname oifname != @pol_pol_a_ifname masquerade")
+
+	if outboundIndex == -1 {
+		t.Fatalf("Outbound SNAT rule for Policy B not found in conf:\n%s", conf)
+	}
+	if forwardIndex == -1 {
+		t.Fatalf("Forward SNAT rule for Policy A not found in conf:\n%s", conf)
+	}
+
+	if outboundIndex > forwardIndex {
+		t.Errorf("Expected Outbound SNAT to precede Forward SNAT in postrouting chain. Outbound pos: %d, Forward pos: %d\nConf:\n%s",
+			outboundIndex, forwardIndex, conf)
+	}
+
+	// Also check when a single policy has both Outbound SNAT and Forward SNAT
+	dualPolicy := config.NetworkPolicy{
+		ID:              "pol_dual",
+		Name:            "Dual SNAT Policy",
+		ForwardSNAT:     true,
+		AllowedDstCIDRs: []string{"10.0.0.0/8"},
+		SNAT: &config.SNATConfig{
+			Enabled:   true,
+			Condition: "all",
+			Target:    "main_ip",
+		},
+	}
+	linksDual := []config.Link{
+		{
+			From: config.LinkEnd{Name: "local-node", Interface: "wg42-dual", Policy: "pol_dual"},
+			To:   config.LinkEnd{Name: "peer-a", Interface: "wg42"},
+		},
+	}
+
+	confDual, err := GenerateNftablesConfig(&node, allNodes, linksDual, nil, []config.NetworkPolicy{dualPolicy})
+	if err != nil {
+		t.Fatalf("GenerateNftablesConfig failed for dual: %v", err)
+	}
+
+	outboundDualIndex := strings.Index(confDual, "oifname @pol_pol_dual_ifname meta nfproto ipv4 snat to $self_ip")
+	forwardDualIndex := strings.Index(confDual, "iifname @pol_pol_dual_ifname oifname != @pol_pol_dual_ifname masquerade")
+
+	if outboundDualIndex == -1 || forwardDualIndex == -1 {
+		t.Fatalf("Could not find dual rules in conf:\n%s", confDual)
+	}
+	if outboundDualIndex > forwardDualIndex {
+		t.Errorf("In dual policy, expected Outbound SNAT (%d) before Forward SNAT (%d)\nConf:\n%s",
+			outboundDualIndex, forwardDualIndex, confDual)
+	}
+
+	// Validate with nft binary
+	if nftPath, err := exec.LookPath("nft"); err == nil {
+		tmpFile := filepath.Join(t.TempDir(), "easy42.nft")
+		if err := os.WriteFile(tmpFile, []byte(confDual), 0644); err != nil {
+			t.Fatalf("WriteFile failed: %v", err)
+		}
+		cmd := exec.Command(nftPath, "-c", "-f", tmpFile)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("nft -c -f validation failed: %v\nOutput:\n%s\nConfig:\n%s", err, string(out), confDual)
+		}
+	}
+}
+
+
 

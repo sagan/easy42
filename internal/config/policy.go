@@ -52,7 +52,7 @@ func IsValidRoutingPolicy(p string) bool {
 type SNATConfig struct {
 	Enabled   bool   `json:"enabled"`
 	Condition string `json:"condition,omitempty"` // "not_dst" (saddr != allowed dst CIDRs) | "all"
-	Target    string `json:"target,omitempty"`    // "external_ip" | "masquerade" | custom IP string
+	Target    string `json:"target,omitempty"`    // "external_ip" | "masquerade" | "main_ip" | custom IP string
 }
 
 // NetworkPolicy defines routing and firewall controls deployed on a link endpoint
@@ -75,7 +75,9 @@ type NetworkPolicy struct {
 	InputTCPPorts      []string    `json:"input_tcp_ports,omitempty"`
 	InputUDPPorts      []string    `json:"input_udp_ports,omitempty"`
 	SNAT               *SNATConfig `json:"snat,omitempty"`
-	DSCPIngress        *int        `json:"dscp_ingress,omitempty"` // Rewrite DSCP on packets received from the link peer (0-63)
+	ForwardSNAT        bool        `json:"forward_snat,omitempty"`
+	ForwardSNATTarget  string      `json:"forward_snat_target,omitempty"` // "masquerade" | "external_ip" | "main_ip" | custom IP string
+	DSCPIngress        *int        `json:"dscp_ingress,omitempty"`        // Rewrite DSCP on packets received from the link peer (0-63)
 	DSCPEgress         *int        `json:"dscp_egress,omitempty"`  // Rewrite DSCP on packets sent to the link peer (0-63)
 	ROA4               string      `json:"roa4,omitempty"`
 	ROA6               string      `json:"roa6,omitempty"`
