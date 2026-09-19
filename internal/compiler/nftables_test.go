@@ -1234,5 +1234,104 @@ func TestNftablesPostroutingOrder_OutboundBeforeForward(t *testing.T) {
 	}
 }
 
+func TestBlockIngressNewNftables(t *testing.T) {
+	node := config.Node{
+		Name: "test-node",
+		IP:   "192.168.100.1",
+	}
+	allNodes := []config.Node{
+		node,
+		{Name: "peer-a", IP: "192.168.100.2"},
+		{Name: "peer-b", IP: "192.168.100.3"},
+		{Name: "peer-c", IP: "192.168.100.4"},
+	}
+
+	// 1. Policy with BlockIngressNew = "all"
+	policyAll := config.NetworkPolicy{
+		ID:              "pol_block_all",
+		Name:            "Block All Ingress New",
+		BlockIngressNew: config.BlockIngressNewAll,
+	}
+
+	// 2. Policy with BlockIngressNew = "forward"
+	policyFwd := config.NetworkPolicy{
+		ID:              "pol_block_fwd",
+		Name:            "Block Forward Ingress New",
+		BlockIngressNew: config.BlockIngressNewForward,
+	}
+
+	// 3. Policy with BlockIngressNew = "" (disabled)
+	policyDisabled := config.NetworkPolicy{
+		ID:              "pol_disabled",
+		Name:            "Disabled Block Ingress",
+		BlockIngressNew: config.BlockIngressNewDisabled,
+	}
+
+	links := []config.Link{
+		{
+			From: config.LinkEnd{Name: "test-node", Interface: "wg42all", Policy: "pol_block_all"},
+			To:   config.LinkEnd{Name: "peer-a", Interface: "wg42"},
+		},
+		{
+			From: config.LinkEnd{Name: "test-node", Interface: "wg42fwd", Policy: "pol_block_fwd"},
+			To:   config.LinkEnd{Name: "peer-b", Interface: "wg42"},
+		},
+	}
+
+	conf, err := GenerateNftablesConfig(&node, allNodes, links, nil, []config.NetworkPolicy{policyAll, policyFwd})
+	if err != nil {
+		t.Fatalf("GenerateNftablesConfig failed: %v", err)
+	}
+
+	// Check filter_prerouting chain exists
+	if !strings.Contains(conf, "chain filter_prerouting {") {
+		t.Fatalf("Expected chain filter_prerouting in conf, got:\n%s", conf)
+	}
+	if !strings.Contains(conf, "type filter hook prerouting priority filter; policy accept;") {
+		t.Fatalf("Expected prerouting hook with filter priority in conf, got:\n%s", conf)
+	}
+
+	// Check rule for "all"
+	expectedAllRule := "iifname @pol_pol_block_all_ifname ct state { new, invalid } drop"
+	if !strings.Contains(conf, expectedAllRule) {
+		t.Errorf("Expected rule %q in conf, got:\n%s", expectedAllRule, conf)
+	}
+
+	// Check rule for "forward"
+	expectedFwdRule := "iifname @pol_pol_block_fwd_ifname ct state { new, invalid } fib daddr type != local drop"
+	if !strings.Contains(conf, expectedFwdRule) {
+		t.Errorf("Expected rule %q in conf, got:\n%s", expectedFwdRule, conf)
+	}
+
+	// Verify syntax using nft -c -f
+	if nftPath, err := exec.LookPath("nft"); err == nil {
+		tmpFile := filepath.Join(t.TempDir(), "easy42.nft")
+		if err := os.WriteFile(tmpFile, []byte(conf), 0644); err != nil {
+			t.Fatalf("WriteFile failed: %v", err)
+		}
+		cmd := exec.Command(nftPath, "-c", "-f", tmpFile)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("nft -c -f validation failed: %v\nOutput:\n%s\nConfig:\n%s", err, string(out), conf)
+		}
+	}
+
+	// Verify that when disabled, filter_prerouting chain is not generated
+	linksDisabled := []config.Link{
+		{
+			From: config.LinkEnd{Name: "test-node", Interface: "wg42dis", Policy: "pol_disabled"},
+			To:   config.LinkEnd{Name: "peer-c", Interface: "wg42"},
+		},
+	}
+	confDisabled, err := GenerateNftablesConfig(&node, allNodes, linksDisabled, nil, []config.NetworkPolicy{policyDisabled})
+	if err != nil {
+		t.Fatalf("GenerateNftablesConfig failed: %v", err)
+	}
+	if strings.Contains(confDisabled, "chain filter_prerouting") {
+		t.Errorf("Did not expect chain filter_prerouting when BlockIngressNew is disabled, got:\n%s", confDisabled)
+	}
+}
+
+
 
 

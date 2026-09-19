@@ -196,7 +196,8 @@ func BuildNftablesNodeContext(
 		hasForwardSNAT := pol.ForwardSNAT
 		hasDSCP := pol.DSCPIngress != nil || pol.DSCPEgress != nil
 		hasMark := strings.TrimSpace(pol.Mark) != ""
-		if !pol.FilterForward && !pol.FilterInput && !hasSNAT && !hasForwardSNAT && !hasDSCP && !hasMark {
+		hasBlockIngressNew := pol.EffectiveBlockIngressNew() != ""
+		if !pol.FilterForward && !pol.FilterInput && !hasSNAT && !hasForwardSNAT && !hasDSCP && !hasMark && !hasBlockIngressNew {
 			continue
 		}
 
@@ -385,6 +386,7 @@ func BuildNftablesNodeContext(
 			"dscp_ingress":           dscpIngress,
 			"dscp_egress":            dscpEgress,
 			"mark":                   strings.TrimSpace(pol.Mark),
+			"block_ingress_new":      pol.EffectiveBlockIngressNew(),
 		})
 	}
 	sort.Slice(nftPolicies, func(i, j int) bool {

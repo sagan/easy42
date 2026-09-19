@@ -60,6 +60,7 @@ export interface NetworkPolicy {
   forward_snat_target?: string;
   dscp_ingress?: number;
   dscp_egress?: number;
+  block_ingress_new?: string;
   roa4?: string;
   roa6?: string;
   roa_strict?: boolean;

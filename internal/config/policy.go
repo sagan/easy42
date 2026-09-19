@@ -19,6 +19,39 @@ const (
 	RoutingPolicyAdvertiseOnly = "advertise_only"
 )
 
+const (
+	BlockIngressNewDisabled = ""
+	BlockIngressNewAll      = "all"
+	BlockIngressNewForward  = "forward"
+)
+
+// NormalizeBlockIngressNew sanitizes and normalizes block ingress new connection options.
+// Defaults to BlockIngressNewDisabled ("") if empty, disabled, or unrecognized.
+func NormalizeBlockIngressNew(p string) string {
+	switch strings.ToLower(strings.TrimSpace(p)) {
+	case "all", "all_ingress", "all-ingress", "ingress":
+		return BlockIngressNewAll
+	case "forward", "forwarding", "forward_only", "forward-only":
+		return BlockIngressNewForward
+	case "", "none", "disabled", "off", "false":
+		return BlockIngressNewDisabled
+	default:
+		return BlockIngressNewDisabled
+	}
+}
+
+// IsValidBlockIngressNew returns true if p is a recognized option or alias.
+func IsValidBlockIngressNew(p string) bool {
+	switch strings.ToLower(strings.TrimSpace(p)) {
+	case "", "disabled", "none", "off", "false",
+		BlockIngressNewAll, "all_ingress", "all-ingress", "ingress",
+		BlockIngressNewForward, "forwarding", "forward_only", "forward-only":
+		return true
+	default:
+		return false
+	}
+}
+
 // NormalizeRoutingPolicy sanitizes and normalizes routing policy strings.
 // Defaults to RoutingPolicyFull ("full") if empty or unknown.
 func NormalizeRoutingPolicy(p string) string {
@@ -78,7 +111,8 @@ type NetworkPolicy struct {
 	ForwardSNAT        bool        `json:"forward_snat,omitempty"`
 	ForwardSNATTarget  string      `json:"forward_snat_target,omitempty"` // "masquerade" | "external_ip" | "main_ip" | custom IP string
 	DSCPIngress        *int        `json:"dscp_ingress,omitempty"`        // Rewrite DSCP on packets received from the link peer (0-63)
-	DSCPEgress         *int        `json:"dscp_egress,omitempty"`  // Rewrite DSCP on packets sent to the link peer (0-63)
+	DSCPEgress         *int        `json:"dscp_egress,omitempty"`         // Rewrite DSCP on packets sent to the link peer (0-63)
+	BlockIngressNew    string      `json:"block_ingress_new,omitempty"`   // Block ingress new/invalid connections: "" (disabled) | "all" | "forward"
 	ROA4               string      `json:"roa4,omitempty"`
 	ROA6               string      `json:"roa6,omitempty"`
 	ROAStrict          bool        `json:"roa_strict,omitempty"`
@@ -86,6 +120,14 @@ type NetworkPolicy struct {
 	Preference         *int        `json:"preference,omitempty"`     // BIRD peer BGP protocol preference
 	Mark               string      `json:"mark,omitempty"`           // Netfilter mark for received packets from the link peer
 	RoutingPolicy      string      `json:"routing_policy,omitempty"` // BGP meta routing policy ("full", "stub", "receive_only", "advertise_only")
+}
+
+// EffectiveBlockIngressNew returns the active block ingress new option or "" if unset/disabled
+func (p *NetworkPolicy) EffectiveBlockIngressNew() string {
+	if p != nil {
+		return NormalizeBlockIngressNew(p.BlockIngressNew)
+	}
+	return BlockIngressNewDisabled
 }
 
 // EffectiveRoutingPolicy returns the active routing policy or "full" if unset

@@ -50,12 +50,16 @@ func TestNetworkPolicyManagerCRUD(t *testing.T) {
 		FilterInput:        true,
 		DSCPIngress:        &dscpIn,
 		DSCPEgress:         &dscpOut,
+		BlockIngressNew:    "forwarding", // test normalization to "forward"
 	})
 	if err != nil {
 		t.Fatalf("CreateNetworkPolicy failed: %v", err)
 	}
 	if custom.ID != "pol-office" || custom.IsInternal || custom.Cost != 100 {
 		t.Errorf("unexpected custom policy: %+v", custom)
+	}
+	if custom.BlockIngressNew != config.BlockIngressNewForward {
+		t.Errorf("expected BlockIngressNew 'forward', got %q", custom.BlockIngressNew)
 	}
 	if len(custom.DisallowedDstCIDRs) != 1 || custom.DisallowedDstCIDRs[0] != "172.20.100.128/25" {
 		t.Errorf("expected DisallowedDstCIDRs [172.20.100.128/25], got %v", custom.DisallowedDstCIDRs)
@@ -79,7 +83,7 @@ func TestNetworkPolicyManagerCRUD(t *testing.T) {
 		t.Fatalf("expected error creating duplicate policy ID")
 	}
 
-	// 5. Update custom policy with custom Cost and updated DSCP
+	// 5. Update custom policy with custom Cost, updated DSCP, and updated BlockIngressNew
 	dscpInUpdated := 0
 	updated, err := mgr.UpdateNetworkPolicy("pol-office", config.NetworkPolicy{
 		Name:               "Branch Office Updated",
@@ -89,12 +93,16 @@ func TestNetworkPolicyManagerCRUD(t *testing.T) {
 		DisallowedDstCIDRs: []string{"172.20.101.128/25"},
 		DisallowedSrcCIDRs: []string{"172.20.201.128/25"},
 		DSCPIngress:        &dscpInUpdated,
+		BlockIngressNew:    "all",
 	})
 	if err != nil {
 		t.Fatalf("UpdateNetworkPolicy failed: %v", err)
 	}
 	if updated.Name != "Branch Office Updated" || updated.Cost != 250 {
 		t.Errorf("expected updated name and cost 250, got name=%s cost=%d", updated.Name, updated.Cost)
+	}
+	if updated.BlockIngressNew != config.BlockIngressNewAll {
+		t.Errorf("expected updated BlockIngressNew 'all', got %q", updated.BlockIngressNew)
 	}
 	if len(updated.DisallowedDstCIDRs) != 1 || updated.DisallowedDstCIDRs[0] != "172.20.101.128/25" {
 		t.Errorf("expected updated DisallowedDstCIDRs [172.20.101.128/25], got %v", updated.DisallowedDstCIDRs)

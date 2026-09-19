@@ -402,3 +402,62 @@ func TestValidateDSCP(t *testing.T) {
 	}
 }
 
+func TestBlockIngressNewHelpers(t *testing.T) {
+	// Standard values
+	if !IsValidBlockIngressNew("") || !IsValidBlockIngressNew("all") || !IsValidBlockIngressNew("forward") {
+		t.Errorf("expected standard block_ingress_new options to be valid")
+	}
+	// Aliases
+	if !IsValidBlockIngressNew("disabled") || !IsValidBlockIngressNew("none") || !IsValidBlockIngressNew("off") ||
+		!IsValidBlockIngressNew("all_ingress") || !IsValidBlockIngressNew("forwarding") || !IsValidBlockIngressNew("forward_only") {
+		t.Errorf("expected aliases to be valid")
+	}
+	if IsValidBlockIngressNew("some_invalid_option") {
+		t.Errorf("expected invalid option to return false")
+	}
+
+	// Normalization
+	if got := NormalizeBlockIngressNew("all"); got != BlockIngressNewAll {
+		t.Errorf("expected 'all' to normalize to %q, got %q", BlockIngressNewAll, got)
+	}
+	if got := NormalizeBlockIngressNew("all_ingress"); got != BlockIngressNewAll {
+		t.Errorf("expected 'all_ingress' to normalize to %q, got %q", BlockIngressNewAll, got)
+	}
+	if got := NormalizeBlockIngressNew("forward"); got != BlockIngressNewForward {
+		t.Errorf("expected 'forward' to normalize to %q, got %q", BlockIngressNewForward, got)
+	}
+	if got := NormalizeBlockIngressNew("forwarding"); got != BlockIngressNewForward {
+		t.Errorf("expected 'forwarding' to normalize to %q, got %q", BlockIngressNewForward, got)
+	}
+	if got := NormalizeBlockIngressNew("disabled"); got != BlockIngressNewDisabled {
+		t.Errorf("expected 'disabled' to normalize to %q, got %q", BlockIngressNewDisabled, got)
+	}
+	if got := NormalizeBlockIngressNew("none"); got != BlockIngressNewDisabled {
+		t.Errorf("expected 'none' to normalize to %q, got %q", BlockIngressNewDisabled, got)
+	}
+	if got := NormalizeBlockIngressNew(""); got != BlockIngressNewDisabled {
+		t.Errorf("expected empty string to normalize to %q, got %q", BlockIngressNewDisabled, got)
+	}
+	if got := NormalizeBlockIngressNew("invalid"); got != BlockIngressNewDisabled {
+		t.Errorf("expected unrecognized string to normalize to default %q, got %q", BlockIngressNewDisabled, got)
+	}
+
+	// Effective on nil policy
+	var nilPol *NetworkPolicy
+	if got := nilPol.EffectiveBlockIngressNew(); got != BlockIngressNewDisabled {
+		t.Errorf("expected nil policy to return disabled, got %q", got)
+	}
+
+	// Effective on policy
+	pol := &NetworkPolicy{BlockIngressNew: "forward"}
+	if got := pol.EffectiveBlockIngressNew(); got != BlockIngressNewForward {
+		t.Errorf("expected 'forward', got %q", got)
+	}
+
+	pol2 := &NetworkPolicy{BlockIngressNew: "all_ingress"}
+	if got := pol2.EffectiveBlockIngressNew(); got != BlockIngressNewAll {
+		t.Errorf("expected 'all', got %q", got)
+	}
+}
+
+

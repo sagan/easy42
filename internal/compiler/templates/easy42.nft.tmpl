@@ -160,6 +160,24 @@ table inet easy42 {
   }
   {{- end }}
 {{- end }}
+{{- $has_block_ingress_new := false }}
+{{- range .nft_policies }}
+  {{- if or (eq .block_ingress_new "all") (eq .block_ingress_new "forward") }}
+    {{- $has_block_ingress_new = true }}
+  {{- end }}
+{{- end }}
+{{- if $has_block_ingress_new }}
+  chain filter_prerouting {
+    type filter hook prerouting priority filter; policy accept;
+{{- range .nft_policies }}
+  {{- if eq .block_ingress_new "all" }}
+    iifname @pol_{{ .id }}_ifname ct state { new, invalid } drop
+  {{- else if eq .block_ingress_new "forward" }}
+    iifname @pol_{{ .id }}_ifname ct state { new, invalid } fib daddr type != local drop
+  {{- end }}
+{{- end }}
+  }
+{{- end }}
   chain filter_forward {
     type filter hook forward priority filter; policy accept;
 

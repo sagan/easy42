@@ -911,6 +911,7 @@ func TestNetworkPoliciesAPI(t *testing.T) {
 		Fwmark:          "51820",
 		Preference:      &custPref,
 		Mark:            "0x1234",
+		BlockIngressNew: "forward",
 	}
 	customBody, _ := json.Marshal(customPol)
 	reqCustom := httptest.NewRequest("POST", "/api/network-policies", bytes.NewReader(customBody))
@@ -931,8 +932,8 @@ func TestNetworkPoliciesAPI(t *testing.T) {
 	}
 	var fetchedPol config.NetworkPolicy
 	_ = json.Unmarshal(wGetSingle.Body.Bytes(), &fetchedPol)
-	if fetchedPol.Fwmark != "51820" || fetchedPol.Preference == nil || *fetchedPol.Preference != 140 || fetchedPol.Mark != "0x1234" {
-		t.Errorf("Unexpected fetched policy: fwmark=%q, preference=%v, mark=%q", fetchedPol.Fwmark, fetchedPol.Preference, fetchedPol.Mark)
+	if fetchedPol.Fwmark != "51820" || fetchedPol.Preference == nil || *fetchedPol.Preference != 140 || fetchedPol.Mark != "0x1234" || fetchedPol.BlockIngressNew != "forward" {
+		t.Errorf("Unexpected fetched policy: fwmark=%q, preference=%v, mark=%q, block_ingress_new=%q", fetchedPol.Fwmark, fetchedPol.Preference, fetchedPol.Mark, fetchedPol.BlockIngressNew)
 	}
 
 	// 5. PUT /api/network-policies/guest-net -> 200
@@ -943,6 +944,7 @@ func TestNetworkPoliciesAPI(t *testing.T) {
 		Fwmark:          "0xca64",
 		Preference:      &updPref,
 		Mark:            "0x5678",
+		BlockIngressNew: "all",
 	}
 	updateBody, _ := json.Marshal(updatePol)
 	reqUpdate := httptest.NewRequest("PUT", "/api/network-policies/guest-net", bytes.NewReader(updateBody))
@@ -954,8 +956,8 @@ func TestNetworkPoliciesAPI(t *testing.T) {
 	}
 	var updatedPol config.NetworkPolicy
 	_ = json.Unmarshal(wUpdate.Body.Bytes(), &updatedPol)
-	if updatedPol.Mark != "0x5678" {
-		t.Errorf("Unexpected updated policy mark: %q", updatedPol.Mark)
+	if updatedPol.Mark != "0x5678" || updatedPol.BlockIngressNew != "all" {
+		t.Errorf("Unexpected updated policy mark=%q, block_ingress_new=%q", updatedPol.Mark, updatedPol.BlockIngressNew)
 	}
 
 	// 6. PUT /api/network-policies/default -> 400 (cannot edit built-in)

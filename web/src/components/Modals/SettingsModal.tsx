@@ -153,6 +153,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
   const [policyPreference, setPolicyPreference] = useState<number | string>("");
   const [policyMark, setPolicyMark] = useState("");
   const [policyRoutingPolicy, setPolicyRoutingPolicy] = useState<string>("full");
+  const [policyBlockIngressNew, setPolicyBlockIngressNew] = useState<string>("");
 
   // Logout all state
   const [logoutAllConfirming, setLogoutAllConfirming] = useState(false);
@@ -261,6 +262,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
     setPolicyPreference("");
     setPolicyMark("");
     setPolicyRoutingPolicy("full");
+    setPolicyBlockIngressNew("");
     setPolicyDialogError(null);
     setPolicyDialogOpen(true);
   };
@@ -297,6 +299,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
     setPolicyPreference(p.preference !== undefined ? p.preference : "");
     setPolicyMark(p.mark || "");
     setPolicyRoutingPolicy(p.routing_policy || "full");
+    setPolicyBlockIngressNew(p.block_ingress_new || "");
     setPolicyDialogError(null);
     setPolicyDialogOpen(true);
   };
@@ -333,6 +336,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
     setPolicyPreference(p.preference !== undefined ? p.preference : "");
     setPolicyMark(p.mark || "");
     setPolicyRoutingPolicy(p.routing_policy || "full");
+    setPolicyBlockIngressNew(p.block_ingress_new || "");
     setPolicyDialogError(null);
     setPolicyDialogOpen(true);
   };
@@ -414,6 +418,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
         preference: policyPreference !== "" ? Number(policyPreference) : undefined,
         mark: policyMark.trim() || undefined,
         routing_policy: policyRoutingPolicy || "full",
+        block_ingress_new: policyBlockIngressNew || undefined,
       };
 
       if (policyDialogMode === "create") {
@@ -483,6 +488,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
     setPolicyPreference(p.preference !== undefined ? p.preference : "");
     setPolicyMark(p.mark || "");
     setPolicyRoutingPolicy(p.routing_policy || "full");
+    setPolicyBlockIngressNew(p.block_ingress_new || "");
     setPolicyDialogError(null);
     setPolicyDialogOpen(true);
   };
@@ -1056,6 +1062,25 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
                                 fontWeight: 700,
                                 bgcolor: "rgba(245, 158, 11, 0.12)",
                                 color: "#D97706",
+                              }}
+                            />
+                          )}
+                          {p.block_ingress_new && (
+                            <Chip
+                              label={
+                                p.block_ingress_new === "all"
+                                  ? "Block Ingress New"
+                                  : p.block_ingress_new === "forward"
+                                    ? "Block Ingress Forward"
+                                    : p.block_ingress_new
+                              }
+                              size="small"
+                              sx={{
+                                height: 20,
+                                fontSize: "0.68rem",
+                                fontWeight: 700,
+                                bgcolor: "rgba(239, 68, 68, 0.12)",
+                                color: "#DC2626",
                               }}
                             />
                           )}
@@ -1782,6 +1807,23 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
                   />
                 </Box>
               )}
+
+              <Divider sx={{ my: 0.5 }} />
+
+              <TextField
+                select
+                fullWidth
+                size="small"
+                label="Block Ingress New Connections"
+                value={policyBlockIngressNew}
+                onChange={(e) => setPolicyBlockIngressNew(e.target.value)}
+                disabled={policyDialogMode === "view" || policyDialogSaving}
+                helperText="Stateful ingress firewall: drop incoming packets from link peer if conntrack state is new or invalid."
+              >
+                <MenuItem value="">Disabled (Default) — Do not block any</MenuItem>
+                <MenuItem value="all">Block Ingress New — Drop incoming new or invalid packets from peer</MenuItem>
+                <MenuItem value="forward">Block Ingress New for Forwarding — Drop incoming new or invalid packets if destination is not local (fib daddr type != local)</MenuItem>
+              </TextField>
             </Box>
 
             <Box
