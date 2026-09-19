@@ -18,7 +18,7 @@ import {
   Tooltip,
   IconButton,
 } from "@mui/material";
-import { Link as LinkIcon, ArrowRightLeft, Edit2, Globe, Copy, Check, FileText } from "lucide-react";
+import { Link as LinkIcon, ArrowRightLeft, Edit2, Globe, Copy, Check, FileText, Network } from "lucide-react";
 import { api } from "../../api/client";
 import { Node, Link, NetworkPolicy } from "../../types/api";
 import { MarkdownView } from "../Common/MarkdownView";
@@ -88,6 +88,15 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
   const [fromNoteTab, setFromNoteTab] = useState<"write" | "preview">("write");
   const [toNoteTab, setToNoteTab] = useState<"write" | "preview">("write");
 
+  // Manual link fields
+  const [linkType, setLinkType] = useState<"wireguard" | "manual">("wireguard");
+  const [fromInterface, setFromInterface] = useState<string>("");
+  const [toInterface, setToInterface] = useState<string>("");
+  const [fromAddress, setFromAddress] = useState<string>("");
+  const [toAddress, setToAddress] = useState<string>("");
+  const [fromNeighborAddress, setFromNeighborAddress] = useState<string>("");
+  const [toNeighborAddress, setToNeighborAddress] = useState<string>("");
+
   // External peering custom fields
   const [localAddress, setLocalAddress] = useState("");
   const [remoteAddress, setRemoteAddress] = useState("");
@@ -144,6 +153,15 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
   useEffect(() => {
     if (!open) return;
     if (linkToEdit) {
+      const isMan = linkToEdit.type === "manual" || linkToEdit.from?.type === "manual" || linkToEdit.to?.type === "manual";
+      setLinkType(isMan ? "manual" : "wireguard");
+      setFromInterface(linkToEdit.from?.interface || "");
+      setToInterface(linkToEdit.to?.interface || "");
+      setFromAddress(linkToEdit.from?.address || "");
+      setToAddress(linkToEdit.to?.address || "");
+      setFromNeighborAddress(linkToEdit.from?.neighbor_address || "");
+      setToNeighborAddress(linkToEdit.to?.neighbor_address || "");
+
       setFromNodeName(linkToEdit.from.name);
       setToNodeName(linkToEdit.to.name);
       setFromPort(linkToEdit.from.listen_port);
@@ -192,6 +210,14 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
       setToNote(linkToEdit.to.note || "");
       setError(null);
     } else {
+      setLinkType("wireguard");
+      setFromInterface("");
+      setToInterface("");
+      setFromAddress("");
+      setToAddress("");
+      setFromNeighborAddress("");
+      setToNeighborAddress("");
+
       setFromNodeName(initialFrom || "");
       setToNodeName(initialTo || "");
       setFromPort(0);
@@ -326,7 +352,98 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
     const parsedToMark = toMark.trim() || undefined;
 
     try {
-      if (isExternalLink && managedNode && externalNode) {
+      if (linkType === "manual") {
+        if (!fromInterface.trim() || !toInterface.trim()) {
+          setError("Both endpoints must specify an interface name for a manual link");
+          setSubmitting(false);
+          return;
+        }
+        if (!fromAddress.trim() || !toAddress.trim()) {
+          setError("Both endpoints must specify a local IP address for a manual link");
+          setSubmitting(false);
+          return;
+        }
+
+        const reqFrom = {
+          name: fromNodeName,
+          type: "manual",
+          interface: fromInterface.trim(),
+          address: fromAddress.trim(),
+          neighbor_address: fromNeighborAddress.trim() || undefined,
+          policy: fromPolicy,
+          routing_policy: fromRoutingPolicy || (linkToEdit ? "inherit" : undefined),
+          cost: parsedFromCost,
+          fwmark: parsedFromFwmark,
+          preference: parsedFromPreference,
+          mark: parsedFromMark,
+          note: fromNote.trim() || undefined,
+        };
+
+        const reqTo = {
+          name: toNodeName,
+          type: "manual",
+          interface: toInterface.trim(),
+          address: toAddress.trim(),
+          neighbor_address: toNeighborAddress.trim() || undefined,
+          policy: toPolicy,
+          routing_policy: toRoutingPolicy || (linkToEdit ? "inherit" : undefined),
+          cost: parsedToCost,
+          fwmark: parsedToFwmark,
+          preference: parsedToPreference,
+          mark: parsedToMark,
+          note: toNote.trim() || undefined,
+        };
+
+        if (linkToEdit) {
+          const updated = await api.updateLink({
+            type: "manual",
+            from_node: fromNodeName,
+            to_node: toNodeName,
+            from: reqFrom,
+            to: reqTo,
+            from_policy: reqFrom.policy,
+            to_policy: reqTo.policy,
+            from_routing_policy: reqFrom.routing_policy,
+            to_routing_policy: reqTo.routing_policy,
+            from_cost: reqFrom.cost,
+            to_cost: reqTo.cost,
+            from_fwmark: reqFrom.fwmark,
+            to_fwmark: reqTo.fwmark,
+            from_preference: reqFrom.preference,
+            to_preference: reqTo.preference,
+            from_mark: reqFrom.mark,
+            to_mark: reqTo.mark,
+            from_note: reqFrom.note || "",
+            to_note: reqTo.note || "",
+          });
+          onLinkUpdated?.(updated);
+        } else {
+          const link = await api.addLink({
+            type: "manual",
+            from_node: fromNodeName,
+            to_node: toNodeName,
+            from: reqFrom,
+            to: reqTo,
+            from_policy: reqFrom.policy,
+            to_policy: reqTo.policy,
+            from_routing_policy: reqFrom.routing_policy,
+            to_routing_policy: reqTo.routing_policy,
+            from_cost: reqFrom.cost,
+            to_cost: reqTo.cost,
+            from_fwmark: reqFrom.fwmark,
+            to_fwmark: reqTo.fwmark,
+            from_preference: reqFrom.preference,
+            to_preference: reqTo.preference,
+            from_mark: reqFrom.mark,
+            to_mark: reqTo.mark,
+            from_note: reqFrom.note,
+            to_note: reqTo.note,
+          });
+          onLinkAdded?.(link);
+        }
+        onClose();
+        return;
+      } else if (isExternalLink && managedNode && externalNode) {
         const managedMtuVal = (managedNode === fromNode ? fromMtu : toMtu) || 1420;
         const extEndpoint = fullRemoteEndpoint || undefined;
         const parsedRemotePort = typeof remotePort === "number" ? remotePort : (Number(remotePort) || 0);
@@ -551,21 +668,27 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
             width: 34,
             height: 34,
             borderRadius: 2,
-            backgroundColor: isExternalLink ? "rgba(139, 92, 246, 0.1)" : "rgba(8, 145, 178, 0.1)",
+            backgroundColor: isExternalLink
+              ? "rgba(139, 92, 246, 0.1)"
+              : linkType === "manual"
+              ? "rgba(124, 58, 237, 0.1)"
+              : "rgba(8, 145, 178, 0.1)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            color: isExternalLink ? "#8B5CF6" : "#0891B2",
+            color: isExternalLink ? "#8B5CF6" : linkType === "manual" ? "#7C3AED" : "#0891B2",
           }}
         >
-          {isExternalLink ? <Globe size={18} /> : linkToEdit ? <Edit2 size={18} /> : <LinkIcon size={18} />}
+          {isExternalLink ? <Globe size={18} /> : linkType === "manual" ? <Network size={18} /> : linkToEdit ? <Edit2 size={18} /> : <LinkIcon size={18} />}
         </Box>
         <Typography variant="h6" sx={{ fontWeight: 700, color: "#0F172A" }}>
           {linkToEdit
-            ? `Edit WireGuard Link: ${linkToEdit.from.name} ↔ ${linkToEdit.to.name}`
+            ? (linkType === "manual" ? `Edit Manual Link: ${linkToEdit.from.name} ↔ ${linkToEdit.to.name}` : `Edit WireGuard Link: ${linkToEdit.from.name} ↔ ${linkToEdit.to.name}`)
             : isExternalLink
               ? "Create External Peering Link"
-              : "Create WireGuard Link"}
+              : linkType === "manual"
+                ? "Create Manual (BGP Only) Link"
+                : "Create WireGuard Link"}
         </Typography>
       </DialogTitle>
 
@@ -624,8 +747,82 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
 
           {linkToEdit && (
             <Typography variant="caption" sx={{ color: "#64748B", fontStyle: "italic", mt: -1.5 }}>
-              Endpoints are fixed for this WireGuard link. You can configure listen ports and MTUs below.
+              {linkType === "manual"
+                ? "Editing manual link interfaces and peering settings."
+                : "Endpoints are fixed for this WireGuard link. You can configure listen ports and MTUs below."}
             </Typography>
+          )}
+
+          {/* Link Type Selector (when not external link) */}
+          {!isExternalLink && (
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+              <Typography variant="caption" sx={{ color: "#475569", fontWeight: 700, letterSpacing: "0.5px" }}>
+                LINK TYPE
+              </Typography>
+              <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}>
+                <Box
+                  id="link-type-wireguard"
+                  onClick={() => !linkToEdit && setLinkType("wireguard")}
+                  sx={{
+                    p: 1.5,
+                    borderRadius: 2,
+                    border: "2px solid",
+                    borderColor: linkType === "wireguard" ? "#0891B2" : "#E2E8F0",
+                    backgroundColor: linkType === "wireguard" ? "rgba(8, 145, 178, 0.05)" : "#F8FAFC",
+                    cursor: linkToEdit ? "default" : "pointer",
+                    transition: "all 0.15s ease",
+                  }}
+                >
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 0.5 }}>
+                    <Box
+                      sx={{
+                        width: 10,
+                        height: 10,
+                        borderRadius: "50%",
+                        backgroundColor: linkType === "wireguard" ? "#0891B2" : "#CBD5E1",
+                      }}
+                    />
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: linkType === "wireguard" ? "#0E7490" : "#475569" }}>
+                      WireGuard (Managed)
+                    </Typography>
+                  </Box>
+                  <Typography variant="caption" sx={{ color: "#64748B", display: "block", lineHeight: 1.3 }}>
+                    Automatically manages WireGuard interface, crypto keys, endpoints & BGP peering.
+                  </Typography>
+                </Box>
+
+                <Box
+                  id="link-type-manual"
+                  onClick={() => !linkToEdit && setLinkType("manual")}
+                  sx={{
+                    p: 1.5,
+                    borderRadius: 2,
+                    border: "2px solid",
+                    borderColor: linkType === "manual" ? "#7C3AED" : "#E2E8F0",
+                    backgroundColor: linkType === "manual" ? "rgba(124, 58, 237, 0.05)" : "#F8FAFC",
+                    cursor: linkToEdit ? "default" : "pointer",
+                    transition: "all 0.15s ease",
+                  }}
+                >
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 0.5 }}>
+                    <Box
+                      sx={{
+                        width: 10,
+                        height: 10,
+                        borderRadius: "50%",
+                        backgroundColor: linkType === "manual" ? "#7C3AED" : "#CBD5E1",
+                      }}
+                    />
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: linkType === "manual" ? "#6D28D9" : "#475569" }}>
+                      Manual Link (BGP Only)
+                    </Typography>
+                  </Box>
+                  <Typography variant="caption" sx={{ color: "#64748B", display: "block", lineHeight: 1.3 }}>
+                    Data plane managed manually (ethernet/tunnel). easy42 manages BGP peering & nftables.
+                  </Typography>
+                </Box>
+              </Box>
+            </Box>
           )}
 
           <Divider sx={{ borderColor: "#E2E8F0" }} />
@@ -1033,6 +1230,341 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                     </Tooltip>
                   </Box>
                 )}
+              </Box>
+            </Box>
+          ) : fromNode && toNode && linkType === "manual" ? (
+            /* Manual Link Form */
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+              <Alert
+                icon={<Network size={18} />}
+                severity="info"
+                sx={{
+                  borderRadius: 2,
+                  backgroundColor: "#FAF5FF",
+                  borderColor: "rgba(124, 58, 237, 0.3)",
+                  color: "#5B21B6",
+                  "& .MuiAlert-icon": { color: "#7C3AED" },
+                }}
+              >
+                <strong>Manual Link Mode:</strong> easy42 will <em>not</em> create or manage WireGuard interfaces for this link.
+                You create and manage the data plane link manually (via physical ethernet, VLAN, or custom tunnel).
+                easy42 will configure BIRD BGP peering and automatically add the specified interfaces to the <code>easy42_ifname</code> nftables set.
+              </Alert>
+
+              <Typography variant="caption" sx={{ color: "#475569", fontWeight: 700, letterSpacing: "0.5px" }}>
+                MANUAL LINK INTERFACE SPECIFICATIONS
+              </Typography>
+
+              {/* End 1: fromNode */}
+              <Box
+                sx={{
+                  p: 2,
+                  borderRadius: 2,
+                  backgroundColor: "#FAF5FF",
+                  border: "1px solid #DDD6FE",
+                }}
+              >
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#6D28D9", mb: 1.2 }}>
+                  End 1: {fromNode.name}
+                </Typography>
+
+                <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 1.5, mb: 1.5 }}>
+                  <TextField
+                    id="manual-from-interface"
+                    label="Interface Name"
+                    size="small"
+                    placeholder="e.g. eth1, tun0"
+                    value={fromInterface}
+                    onChange={(e) => setFromInterface(e.target.value)}
+                    required
+                    helperText="Name of existing link interface"
+                  />
+                  <TextField
+                    id="manual-from-address"
+                    label="Local IP Address"
+                    size="small"
+                    placeholder="e.g. 10.0.0.1/30 or fe80::1/64"
+                    value={fromAddress}
+                    onChange={(e) => setFromAddress(e.target.value)}
+                    required
+                    helperText="Local IP on this interface"
+                  />
+                  <TextField
+                    id="manual-from-neighbor-address"
+                    label="Neighbor IP Address"
+                    size="small"
+                    placeholder="e.g. 10.0.0.2 or fe80::2"
+                    value={fromNeighborAddress}
+                    onChange={(e) => setFromNeighborAddress(e.target.value)}
+                    helperText="Remote BGP peer IP (optional)"
+                  />
+                </Box>
+
+                <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 1.5 }}>
+                  <TextField
+                    select
+                    fullWidth
+                    size="small"
+                    label="Network Policy"
+                    value={fromPolicy}
+                    onChange={(e) => setFromPolicy(e.target.value)}
+                    helperText="Firewall & BGP routing policy applied"
+                  >
+                    {networkPolicies.map((p) => (
+                      <MenuItem key={p.id} value={p.id}>
+                        {p.name} ({p.id}){p.is_internal ? " — Built-in" : ""}
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                  <TextField
+                    select
+                    fullWidth
+                    size="small"
+                    label="Routing Policy (Optional)"
+                    value={fromRoutingPolicy}
+                    onChange={(e) => setFromRoutingPolicy(e.target.value)}
+                    helperText="Overrides policy routing policy"
+                  >
+                    <MenuItem value="">Policy default</MenuItem>
+                    <MenuItem value="full">Full (Default) — All valid routes</MenuItem>
+                    <MenuItem value="stub">Stub — Receive all, only send local</MenuItem>
+                    <MenuItem value="receive_only">Receive Only — Import only</MenuItem>
+                    <MenuItem value="advertise_only">Advertise Only — Export only</MenuItem>
+                  </TextField>
+                  <TextField
+                    fullWidth
+                    size="small"
+                    label="Link Cost (Optional)"
+                    type="number"
+                    value={fromCost}
+                    onChange={(e) => setFromCost(e.target.value === "" ? "" : Number(e.target.value))}
+                    placeholder="Policy default"
+                    helperText="Overrides policy cost if set (non-zero)"
+                  />
+                </Box>
+
+                <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}>
+                  <TextField
+                    fullWidth
+                    size="small"
+                    type="number"
+                    label="BGP Preference (Optional)"
+                    value={fromPreference}
+                    onChange={(e) => setFromPreference(e.target.value === "" ? "" : Number(e.target.value))}
+                    placeholder="Policy default"
+                    helperText="Overrides policy BGP preference"
+                  />
+                  <TextField
+                    fullWidth
+                    size="small"
+                    label="Netfilter Mark (Optional)"
+                    value={fromMark}
+                    onChange={(e) => setFromMark(e.target.value)}
+                    placeholder="Policy default"
+                    helperText="Overrides policy netfilter mark"
+                  />
+                </Box>
+
+                {/* End 1 Note */}
+                <Box sx={{ mt: 1.5, p: 1.5, borderRadius: 1.5, backgroundColor: "#FFFFFF", border: "1px solid #DDD6FE" }}>
+                  <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 0.8 }}>
+                    <Typography variant="caption" sx={{ color: "#6D28D9", fontWeight: 700, display: "flex", alignItems: "center", gap: 0.6 }}>
+                      <FileText size={13} color="#7C3AED" /> {fromNode.name} ENDPOINT NOTE (MARKDOWN)
+                    </Typography>
+                    <Box sx={{ display: "flex", gap: 0.5 }}>
+                      <Button
+                        size="small"
+                        variant={fromNoteTab === "write" ? "contained" : "text"}
+                        onClick={() => setFromNoteTab("write")}
+                        sx={{ minWidth: "auto", px: 1, py: 0.2, fontSize: "0.7rem", textTransform: "none" }}
+                      >
+                        Write
+                      </Button>
+                      <Button
+                        size="small"
+                        variant={fromNoteTab === "preview" ? "contained" : "text"}
+                        onClick={() => setFromNoteTab("preview")}
+                        sx={{ minWidth: "auto", px: 1, py: 0.2, fontSize: "0.7rem", textTransform: "none" }}
+                      >
+                        Preview
+                      </Button>
+                    </Box>
+                  </Box>
+                  {fromNoteTab === "write" ? (
+                    <TextField
+                      fullWidth
+                      multiline
+                      minRows={2}
+                      maxRows={5}
+                      size="small"
+                      placeholder="Markdown note for this endpoint..."
+                      value={fromNote}
+                      onChange={(e) => setFromNote(e.target.value)}
+                      disabled={submitting}
+                      sx={{ "& .MuiInputBase-root": { fontSize: "0.8rem", fontFamily: "'JetBrains Mono', 'Fira Code', monospace" } }}
+                    />
+                  ) : (
+                    <Box sx={{ p: 1, minHeight: 60, maxHeight: 150, overflowY: "auto", backgroundColor: "#F8FAFC", borderRadius: 1, border: "1px solid #E2E8F0" }}>
+                      <MarkdownView content={fromNote} emptyText="No note written yet" />
+                    </Box>
+                  )}
+                </Box>
+              </Box>
+
+              {/* End 2: toNode */}
+              <Box
+                sx={{
+                  p: 2,
+                  borderRadius: 2,
+                  backgroundColor: "#FAF5FF",
+                  border: "1px solid #DDD6FE",
+                }}
+              >
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#6D28D9", mb: 1.2 }}>
+                  End 2: {toNode.name}
+                </Typography>
+
+                <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 1.5, mb: 1.5 }}>
+                  <TextField
+                    id="manual-to-interface"
+                    label="Interface Name"
+                    size="small"
+                    placeholder="e.g. eth2, tun1"
+                    value={toInterface}
+                    onChange={(e) => setToInterface(e.target.value)}
+                    required
+                    helperText="Name of existing link interface"
+                  />
+                  <TextField
+                    id="manual-to-address"
+                    label="Local IP Address"
+                    size="small"
+                    placeholder="e.g. 10.0.0.2/30 or fe80::2/64"
+                    value={toAddress}
+                    onChange={(e) => setToAddress(e.target.value)}
+                    required
+                    helperText="Local IP on this interface"
+                  />
+                  <TextField
+                    id="manual-to-neighbor-address"
+                    label="Neighbor IP Address"
+                    size="small"
+                    placeholder="e.g. 10.0.0.1 or fe80::1"
+                    value={toNeighborAddress}
+                    onChange={(e) => setToNeighborAddress(e.target.value)}
+                    helperText="Remote BGP peer IP (optional)"
+                  />
+                </Box>
+
+                <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 1.5 }}>
+                  <TextField
+                    select
+                    fullWidth
+                    size="small"
+                    label="Network Policy"
+                    value={toPolicy}
+                    onChange={(e) => setToPolicy(e.target.value)}
+                    helperText="Firewall & BGP routing policy applied"
+                  >
+                    {networkPolicies.map((p) => (
+                      <MenuItem key={p.id} value={p.id}>
+                        {p.name} ({p.id}){p.is_internal ? " — Built-in" : ""}
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                  <TextField
+                    select
+                    fullWidth
+                    size="small"
+                    label="Routing Policy (Optional)"
+                    value={toRoutingPolicy}
+                    onChange={(e) => setToRoutingPolicy(e.target.value)}
+                    helperText="Overrides policy routing policy"
+                  >
+                    <MenuItem value="">Policy default</MenuItem>
+                    <MenuItem value="full">Full (Default) — All valid routes</MenuItem>
+                    <MenuItem value="stub">Stub — Receive all, only send local</MenuItem>
+                    <MenuItem value="receive_only">Receive Only — Import only</MenuItem>
+                    <MenuItem value="advertise_only">Advertise Only — Export only</MenuItem>
+                  </TextField>
+                  <TextField
+                    fullWidth
+                    size="small"
+                    label="Link Cost (Optional)"
+                    type="number"
+                    value={toCost}
+                    onChange={(e) => setToCost(e.target.value === "" ? "" : Number(e.target.value))}
+                    placeholder="Policy default"
+                    helperText="Overrides policy cost if set (non-zero)"
+                  />
+                </Box>
+
+                <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}>
+                  <TextField
+                    fullWidth
+                    size="small"
+                    type="number"
+                    label="BGP Preference (Optional)"
+                    value={toPreference}
+                    onChange={(e) => setToPreference(e.target.value === "" ? "" : Number(e.target.value))}
+                    placeholder="Policy default"
+                    helperText="Overrides policy BGP preference"
+                  />
+                  <TextField
+                    fullWidth
+                    size="small"
+                    label="Netfilter Mark (Optional)"
+                    value={toMark}
+                    onChange={(e) => setToMark(e.target.value)}
+                    placeholder="Policy default"
+                    helperText="Overrides policy netfilter mark"
+                  />
+                </Box>
+
+                {/* End 2 Note */}
+                <Box sx={{ mt: 1.5, p: 1.5, borderRadius: 1.5, backgroundColor: "#FFFFFF", border: "1px solid #DDD6FE" }}>
+                  <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 0.8 }}>
+                    <Typography variant="caption" sx={{ color: "#6D28D9", fontWeight: 700, display: "flex", alignItems: "center", gap: 0.6 }}>
+                      <FileText size={13} color="#7C3AED" /> {toNode.name} ENDPOINT NOTE (MARKDOWN)
+                    </Typography>
+                    <Box sx={{ display: "flex", gap: 0.5 }}>
+                      <Button
+                        size="small"
+                        variant={toNoteTab === "write" ? "contained" : "text"}
+                        onClick={() => setToNoteTab("write")}
+                        sx={{ minWidth: "auto", px: 1, py: 0.2, fontSize: "0.7rem", textTransform: "none" }}
+                      >
+                        Write
+                      </Button>
+                      <Button
+                        size="small"
+                        variant={toNoteTab === "preview" ? "contained" : "text"}
+                        onClick={() => setToNoteTab("preview")}
+                        sx={{ minWidth: "auto", px: 1, py: 0.2, fontSize: "0.7rem", textTransform: "none" }}
+                      >
+                        Preview
+                      </Button>
+                    </Box>
+                  </Box>
+                  {toNoteTab === "write" ? (
+                    <TextField
+                      fullWidth
+                      multiline
+                      minRows={2}
+                      maxRows={5}
+                      size="small"
+                      placeholder="Markdown note for this endpoint..."
+                      value={toNote}
+                      onChange={(e) => setToNote(e.target.value)}
+                      disabled={submitting}
+                      sx={{ "& .MuiInputBase-root": { fontSize: "0.8rem", fontFamily: "'JetBrains Mono', 'Fira Code', monospace" } }}
+                    />
+                  ) : (
+                    <Box sx={{ p: 1, minHeight: 60, maxHeight: 150, overflowY: "auto", backgroundColor: "#F8FAFC", borderRadius: 1, border: "1px solid #E2E8F0" }}>
+                      <MarkdownView content={toNote} emptyText="No note written yet" />
+                    </Box>
+                  )}
+                </Box>
               </Box>
             </Box>
           ) : (

@@ -19,11 +19,16 @@ var (
 	fromPort     int
 	toPort       int
 	linkIface    string
+	linkType     string
+	fromIface    string
+	toIface      string
+	fromAddr     string
+	toAddr       string
 )
 
 var linkCmd = &cobra.Command{
 	Use:   "link",
-	Short: "Manage WireGuard mesh links between nodes",
+	Short: "Manage mesh and peering links between nodes",
 }
 
 var linkListCmd = &cobra.Command{
@@ -37,9 +42,10 @@ var linkListCmd = &cobra.Command{
 		}
 
 		w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 0, 3, ' ', 0)
-		fmt.Fprintln(w, "FROM NODE\tINTERFACE\tADDRESS\tPORT\tTO NODE\tINTERFACE\tADDRESS\tPORT")
+		fmt.Fprintln(w, "TYPE\tFROM NODE\tINTERFACE\tADDRESS\tPORT\tTO NODE\tINTERFACE\tADDRESS\tPORT")
 		for _, l := range cfg.Links {
-			fmt.Fprintf(w, "%s\t%s\t%s\t%d\t%s\t%s\t%s\t%d\n",
+			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%d\t%s\t%s\t%s\t%d\n",
+				l.LinkType(),
 				l.From.Name, l.From.Interface, l.From.Address, l.From.ListenPort,
 				l.To.Name, l.To.Interface, l.To.Address, l.To.ListenPort)
 		}
@@ -50,7 +56,7 @@ var linkListCmd = &cobra.Command{
 
 var linkAddCmd = &cobra.Command{
 	Use:   "add [node1] [node2]",
-	Short: "Add a new WireGuard link between two nodes",
+	Short: "Add a new link between two nodes (wireguard or manual)",
 	Args:  cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		node1, node2 := args[0], args[1]
@@ -60,7 +66,35 @@ var linkAddCmd = &cobra.Command{
 		}
 		mgr := engine.NewManager(store)
 
-		// Password needed to encrypt private keys
+		if strings.EqualFold(linkType, config.LinkTypeManual) {
+			if fromIface == "" || toIface == "" || fromAddr == "" || toAddr == "" {
+				return fmt.Errorf("manual link requires --from-iface, --to-iface, --from-addr, and --to-addr")
+			}
+			fromEnd := &config.LinkEnd{
+				Name:            node1,
+				Type:            config.LinkTypeManual,
+				Interface:       fromIface,
+				Address:         fromAddr,
+				NeighborAddress: toAddr,
+			}
+			toEnd := &config.LinkEnd{
+				Name:            node2,
+				Type:            config.LinkTypeManual,
+				Interface:       toIface,
+				Address:         toAddr,
+				NeighborAddress: fromAddr,
+			}
+			link, err := mgr.AddLinkAdvanced(node1, node2, fromEnd, toEnd, nil)
+			if err != nil {
+				return err
+			}
+			fmt.Printf("Successfully created manual link between %s and %s\n", link.From.Name, link.To.Name)
+			fmt.Printf("  %s: iface=%s, addr=%s, neighbor=%s\n", link.From.Name, link.From.Interface, link.From.Address, link.From.NeighborAddress)
+			fmt.Printf("  %s: iface=%s, addr=%s, neighbor=%s\n", link.To.Name, link.To.Interface, link.To.Address, link.To.NeighborAddress)
+			return nil
+		}
+
+		// Password needed to encrypt private keys for wireguard link
 		pass := linkPassword
 		if pass == "" {
 			pass = os.Getenv("EASY42_PASSWORD")
@@ -97,7 +131,7 @@ var linkAddCmd = &cobra.Command{
 var linkRemoveCmd = &cobra.Command{
 	Use:     "remove [node1] [node2]",
 	Aliases: []string{"rm", "delete"},
-	Short:   "Remove a WireGuard link between two nodes",
+	Short:   "Remove a link between two nodes",
 	Args:    cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		node1, node2 := args[0], args[1]
@@ -121,9 +155,14 @@ var linkRemoveCmd = &cobra.Command{
 }
 
 func init() {
-	linkAddCmd.Flags().StringVarP(&linkPassword, "password", "p", "", "easy42 password")
+	linkAddCmd.Flags().StringVarP(&linkType, "type", "t", "wireguard", "Link type ('wireguard' or 'manual')")
+	linkAddCmd.Flags().StringVarP(&linkPassword, "password", "p", "", "easy42 password (for wireguard links)")
 	linkAddCmd.Flags().IntVar(&fromPort, "from-port", 0, "Custom listen port for node1")
 	linkAddCmd.Flags().IntVar(&toPort, "to-port", 0, "Custom listen port for node2")
+	linkAddCmd.Flags().StringVar(&fromIface, "from-iface", "", "Tunnel interface name on node1 (required for manual link)")
+	linkAddCmd.Flags().StringVar(&toIface, "to-iface", "", "Tunnel interface name on node2 (required for manual link)")
+	linkAddCmd.Flags().StringVar(&fromAddr, "from-addr", "", "Local IP on node1 (required for manual link)")
+	linkAddCmd.Flags().StringVar(&toAddr, "to-addr", "", "Local IP on node2 (required for manual link)")
 	linkRemoveCmd.Flags().StringVarP(&linkIface, "interface", "i", "", "Specific interface name of the link to remove")
 
 	linkCmd.AddCommand(linkListCmd)

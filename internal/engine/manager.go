@@ -826,8 +826,12 @@ func (m *Manager) buildLink(cfg *config.Config, n1, n2 *config.Node, listenPort1
 	}
 
 	var customFromEnd, customToEnd *config.LinkEnd
+	linkType := config.LinkTypeWireGuard
 	if len(linkParams) > 0 && linkParams[0] != nil {
 		lp := linkParams[0]
+		if lp.Type != "" {
+			linkType = lp.Type
+		}
 		if lp.From.Name == fromNode.Name {
 			customFromEnd = &lp.From
 			customToEnd = &lp.To
@@ -836,62 +840,110 @@ func (m *Manager) buildLink(cfg *config.Config, n1, n2 *config.Node, listenPort1
 			customToEnd = &lp.From
 		}
 	}
+	if customFromEnd != nil && customFromEnd.Type != "" {
+		linkType = customFromEnd.Type
+	} else if customToEnd != nil && customToEnd.Type != "" {
+		linkType = customToEnd.Type
+	}
+	isManual := (linkType == config.LinkTypeManual)
 
 	var encPrivFrom, pubKeyFrom string
 	var encPrivTo, pubKeyTo string
 
-	if fromNode.IsExternal {
-		if customFromEnd != nil && customFromEnd.PublicKey != "" {
-			pubKeyFrom = customFromEnd.PublicKey
+	if !isManual {
+		if fromNode.IsExternal {
+			if customFromEnd != nil && customFromEnd.PublicKey != "" {
+				pubKeyFrom = customFromEnd.PublicKey
+			}
+		} else {
+			kpFrom, err := crypto.GenerateWgKeyPair()
+			if err != nil {
+				return nil, fmt.Errorf("failed to generate keypair for %s: %w", fromNode.Name, err)
+			}
+			encPriv, err := m.vault.EncryptField(kpFrom.PrivateKey)
+			if err != nil {
+				return nil, err
+			}
+			encPrivFrom = encPriv
+			pubKeyFrom = kpFrom.PublicKey
 		}
-	} else {
-		kpFrom, err := crypto.GenerateWgKeyPair()
-		if err != nil {
-			return nil, fmt.Errorf("failed to generate keypair for %s: %w", fromNode.Name, err)
-		}
-		encPriv, err := m.vault.EncryptField(kpFrom.PrivateKey)
-		if err != nil {
-			return nil, err
-		}
-		encPrivFrom = encPriv
-		pubKeyFrom = kpFrom.PublicKey
-	}
 
-	if toNode.IsExternal {
-		if customToEnd != nil && customToEnd.PublicKey != "" {
-			pubKeyTo = customToEnd.PublicKey
+		if toNode.IsExternal {
+			if customToEnd != nil && customToEnd.PublicKey != "" {
+				pubKeyTo = customToEnd.PublicKey
+			}
+		} else {
+			kpTo, err := crypto.GenerateWgKeyPair()
+			if err != nil {
+				return nil, fmt.Errorf("failed to generate keypair for %s: %w", toNode.Name, err)
+			}
+			encPriv, err := m.vault.EncryptField(kpTo.PrivateKey)
+			if err != nil {
+				return nil, err
+			}
+			encPrivTo = encPriv
+			pubKeyTo = kpTo.PublicKey
 		}
-	} else {
-		kpTo, err := crypto.GenerateWgKeyPair()
-		if err != nil {
-			return nil, fmt.Errorf("failed to generate keypair for %s: %w", toNode.Name, err)
-		}
-		encPriv, err := m.vault.EncryptField(kpTo.PrivateKey)
-		if err != nil {
-			return nil, err
-		}
-		encPrivTo = encPriv
-		pubKeyTo = kpTo.PublicKey
 	}
 
 	fromAddr := ""
-	if customFromEnd != nil && customFromEnd.Address != "" {
-		fromAddr = customFromEnd.Address
-	} else if fromNode.IP != "" {
-		fromAddr, _ = compiler.DeriveIPv6LinkLocal(fromNode.IP)
+	toAddr := ""
+	fromNeighborAddr := ""
+	toNeighborAddr := ""
+	fromIface := ""
+	toIface := ""
+
+	if customFromEnd != nil {
+		fromIface = strings.TrimSpace(customFromEnd.Interface)
+		fromAddr = strings.TrimSpace(customFromEnd.Address)
+		fromNeighborAddr = strings.TrimSpace(customFromEnd.NeighborAddress)
 	}
-	if fromAddr == "" {
-		fromAddr = "fe80::1/64"
+	if customToEnd != nil {
+		toIface = strings.TrimSpace(customToEnd.Interface)
+		toAddr = strings.TrimSpace(customToEnd.Address)
+		toNeighborAddr = strings.TrimSpace(customToEnd.NeighborAddress)
 	}
 
-	toAddr := ""
-	if customToEnd != nil && customToEnd.Address != "" {
-		toAddr = customToEnd.Address
-	} else if toNode.IP != "" {
-		toAddr, _ = compiler.DeriveIPv6LinkLocal(toNode.IP)
-	}
-	if toAddr == "" {
-		toAddr = "fe80::2/64"
+	if isManual {
+		if fromIface == "" {
+			return nil, fmt.Errorf("interface name is required for node %s in manual link", fromNode.Name)
+		}
+		if toIface == "" {
+			return nil, fmt.Errorf("interface name is required for node %s in manual link", toNode.Name)
+		}
+		// Cross-fill local and neighbor IPs if one is supplied
+		if fromAddr == "" && toNeighborAddr != "" {
+			fromAddr = toNeighborAddr
+		}
+		if toAddr == "" && fromNeighborAddr != "" {
+			toAddr = fromNeighborAddr
+		}
+		if fromNeighborAddr == "" && toAddr != "" {
+			fromNeighborAddr = toAddr
+		}
+		if toNeighborAddr == "" && fromAddr != "" {
+			toNeighborAddr = fromAddr
+		}
+		if fromAddr == "" {
+			return nil, fmt.Errorf("local IP address is required for node %s in manual link", fromNode.Name)
+		}
+		if toAddr == "" {
+			return nil, fmt.Errorf("local IP address is required for node %s in manual link", toNode.Name)
+		}
+	} else {
+		if fromAddr == "" && fromNode.IP != "" {
+			fromAddr, _ = compiler.DeriveIPv6LinkLocal(fromNode.IP)
+		}
+		if fromAddr == "" {
+			fromAddr = "fe80::1/64"
+		}
+
+		if toAddr == "" && toNode.IP != "" {
+			toAddr, _ = compiler.DeriveIPv6LinkLocal(toNode.IP)
+		}
+		if toAddr == "" {
+			toAddr = "fe80::2/64"
+		}
 	}
 
 	usedIfacesFrom := make(map[string]bool)
@@ -911,31 +963,31 @@ func (m *Manager) buildLink(cfg *config.Config, n1, n2 *config.Node, listenPort1
 		}
 	}
 
-	// Find the lowest deterministic index k (0, 1, 2...) such that default interface names don't collide
-	var candFromIface, candToIface string
 	var linkIndex int
-	for k := 0; ; k++ {
-		s := ""
-		if k > 0 {
-			s = fmt.Sprintf("%d", k)
+	if !isManual {
+		// Find the lowest deterministic index k (0, 1, 2...) such that default interface names don't collide
+		var candFromIface, candToIface string
+		for k := 0; ; k++ {
+			s := ""
+			if k > 0 {
+				s = fmt.Sprintf("%d", k)
+			}
+			candFrom := compiler.GetInterfaceNameWithSuffix(toNode.Name, s, toNode.IsExternal)
+			candTo := compiler.GetInterfaceNameWithSuffix(fromNode.Name, s, fromNode.IsExternal)
+			if !usedIfacesFrom[candFrom] && !usedIfacesTo[candTo] {
+				candFromIface = candFrom
+				candToIface = candTo
+				linkIndex = k
+				break
+			}
 		}
-		candFrom := compiler.GetInterfaceNameWithSuffix(toNode.Name, s, toNode.IsExternal)
-		candTo := compiler.GetInterfaceNameWithSuffix(fromNode.Name, s, fromNode.IsExternal)
-		if !usedIfacesFrom[candFrom] && !usedIfacesTo[candTo] {
-			candFromIface = candFrom
-			candToIface = candTo
-			linkIndex = k
-			break
-		}
-	}
 
-	fromIface := candFromIface
-	if customFromEnd != nil && customFromEnd.Interface != "" {
-		fromIface = customFromEnd.Interface
-	}
-	toIface := candToIface
-	if customToEnd != nil && customToEnd.Interface != "" {
-		toIface = customToEnd.Interface
+		if fromIface == "" {
+			fromIface = candFromIface
+		}
+		if toIface == "" {
+			toIface = candToIface
+		}
 	}
 
 	if usedIfacesFrom[fromIface] {
@@ -945,72 +997,90 @@ func (m *Manager) buildLink(cfg *config.Config, n1, n2 *config.Node, listenPort1
 		return nil, fmt.Errorf("interface %s already exists on node %s", toIface, toNode.Name)
 	}
 
-	baseFromPort := 0
-	if toNode.IP != "" {
-		baseFromPort = compiler.DerivePortFromIP(toNode.IP)
-	} else {
-		baseFromPort = 51820
-	}
-	baseToPort := 0
-	if fromNode.IP != "" {
-		baseToPort = compiler.DerivePortFromIP(fromNode.IP)
-	} else {
-		baseToPort = 51820
-	}
-
-	if customFromEnd != nil && customFromEnd.ListenPort > 0 {
-		fromPort = customFromEnd.ListenPort
-	}
-	if customToEnd != nil && customToEnd.ListenPort > 0 {
-		toPort = customToEnd.ListenPort
-	}
-	if fromPort == 0 && !fromNode.IsExternal {
-		fromPort = baseFromPort + linkIndex
-	}
-	if toPort == 0 && !toNode.IsExternal {
-		toPort = baseToPort + linkIndex
-	}
-
 	fromEP := ""
 	toEP := ""
+	fromKeepalive := 0
+	toKeepalive := 0
 	var epTo, epFrom *config.Entrypoint
-	if customFromEnd != nil && customFromEnd.Endpoint != "" {
-		fromEP = customFromEnd.Endpoint
-	}
-	if customToEnd != nil && customToEnd.Endpoint != "" {
-		toEP = customToEnd.Endpoint
-	}
 
-	if fromNode.IsExternal {
-		// fromNode is external, connecting to toNode (managed internal)
-		fromEP, _, epTo = compiler.ResolvePeerEndpointWithEntrypoint(fromNode, toNode, nil, toPort)
-		if toEP == "" && customFromEnd != nil && customFromEnd.Endpoint != "" {
-			toEP = customFromEnd.Endpoint
+	if isManual {
+		if customFromEnd != nil {
+			fromPort = customFromEnd.ListenPort
+			fromEP = customFromEnd.Endpoint
+			fromKeepalive = customFromEnd.PersistentKeepalive
+		} else {
+			fromPort = 0
 		}
-	} else if toNode.IsExternal {
-		// toNode is external, connecting to fromNode (managed internal)
-		toEP, _, epFrom = compiler.ResolvePeerEndpointWithEntrypoint(toNode, fromNode, nil, fromPort)
-		if fromEP == "" && customToEnd != nil && customToEnd.Endpoint != "" {
-			fromEP = customToEnd.Endpoint
+		if customToEnd != nil {
+			toPort = customToEnd.ListenPort
+			toEP = customToEnd.Endpoint
+			toKeepalive = customToEnd.PersistentKeepalive
+		} else {
+			toPort = 0
 		}
 	} else {
-		fromEP, _, epTo = compiler.ResolvePeerEndpointWithEntrypoint(fromNode, toNode, nil, toPort)
-		toEP, _, epFrom = compiler.ResolvePeerEndpointWithEntrypoint(toNode, fromNode, nil, fromPort)
-	}
+		baseFromPort := 0
+		if toNode.IP != "" {
+			baseFromPort = compiler.DerivePortFromIP(toNode.IP)
+		} else {
+			baseFromPort = 51820
+		}
+		baseToPort := 0
+		if fromNode.IP != "" {
+			baseToPort = compiler.DerivePortFromIP(fromNode.IP)
+		} else {
+			baseToPort = 51820
+		}
 
-	fromKeepalive := 0
-	if fromEP != "" && !fromNode.IsExternal {
-		fromKeepalive = 25
-	}
-	toKeepalive := 0
-	if toEP != "" && !toNode.IsExternal {
-		toKeepalive = 25
-	}
-	if customFromEnd != nil && customFromEnd.PersistentKeepalive > 0 {
-		fromKeepalive = customFromEnd.PersistentKeepalive
-	}
-	if customToEnd != nil && customToEnd.PersistentKeepalive > 0 {
-		toKeepalive = customToEnd.PersistentKeepalive
+		if customFromEnd != nil && customFromEnd.ListenPort > 0 {
+			fromPort = customFromEnd.ListenPort
+		}
+		if customToEnd != nil && customToEnd.ListenPort > 0 {
+			toPort = customToEnd.ListenPort
+		}
+		if fromPort == 0 && !fromNode.IsExternal {
+			fromPort = baseFromPort + linkIndex
+		}
+		if toPort == 0 && !toNode.IsExternal {
+			toPort = baseToPort + linkIndex
+		}
+
+		if customFromEnd != nil && customFromEnd.Endpoint != "" {
+			fromEP = customFromEnd.Endpoint
+		}
+		if customToEnd != nil && customToEnd.Endpoint != "" {
+			toEP = customToEnd.Endpoint
+		}
+
+		if fromNode.IsExternal {
+			// fromNode is external, connecting to toNode (managed internal)
+			fromEP, _, epTo = compiler.ResolvePeerEndpointWithEntrypoint(fromNode, toNode, nil, toPort)
+			if toEP == "" && customFromEnd != nil && customFromEnd.Endpoint != "" {
+				toEP = customFromEnd.Endpoint
+			}
+		} else if toNode.IsExternal {
+			// toNode is external, connecting to fromNode (managed internal)
+			toEP, _, epFrom = compiler.ResolvePeerEndpointWithEntrypoint(toNode, fromNode, nil, fromPort)
+			if fromEP == "" && customToEnd != nil && customToEnd.Endpoint != "" {
+				fromEP = customToEnd.Endpoint
+			}
+		} else {
+			fromEP, _, epTo = compiler.ResolvePeerEndpointWithEntrypoint(fromNode, toNode, nil, toPort)
+			toEP, _, epFrom = compiler.ResolvePeerEndpointWithEntrypoint(toNode, fromNode, nil, fromPort)
+		}
+
+		if fromEP != "" && !fromNode.IsExternal {
+			fromKeepalive = 25
+		}
+		if toEP != "" && !toNode.IsExternal {
+			toKeepalive = 25
+		}
+		if customFromEnd != nil && customFromEnd.PersistentKeepalive > 0 {
+			fromKeepalive = customFromEnd.PersistentKeepalive
+		}
+		if customToEnd != nil && customToEnd.PersistentKeepalive > 0 {
+			toKeepalive = customToEnd.PersistentKeepalive
+		}
 	}
 
 	// Determine LinkEnd MTU: used entrypoint mtu minus 80 (wg overhead)
@@ -1046,8 +1116,14 @@ func (m *Manager) buildLink(cfg *config.Config, n1, n2 *config.Node, listenPort1
 		return baseMTU - 80
 	}
 
-	fromMTU := resolveUsedMTU(epTo, epFrom, fromNode, toNode)
-	toMTU := resolveUsedMTU(epFrom, epTo, toNode, fromNode)
+	var fromMTU, toMTU int
+	if isManual {
+		fromMTU = 1500
+		toMTU = 1500
+	} else {
+		fromMTU = resolveUsedMTU(epTo, epFrom, fromNode, toNode)
+		toMTU = resolveUsedMTU(epFrom, epTo, toNode, fromNode)
+	}
 	if fromCustomMTU > 0 {
 		fromMTU = fromCustomMTU
 	}
@@ -1142,10 +1218,13 @@ func (m *Manager) buildLink(cfg *config.Config, n1, n2 *config.Node, listenPort1
 	}
 
 	link := &config.Link{
+		Type: linkType,
 		From: config.LinkEnd{
 			Name:                fromNode.Name,
+			Type:                linkType,
 			Interface:           fromIface,
 			Address:             fromAddr,
+			NeighborAddress:     fromNeighborAddr,
 			ListenPort:          fromPort,
 			Endpoint:            fromEP,
 			PrivateKey:          encPrivFrom,
@@ -1163,8 +1242,10 @@ func (m *Manager) buildLink(cfg *config.Config, n1, n2 *config.Node, listenPort1
 		},
 		To: config.LinkEnd{
 			Name:                toNode.Name,
+			Type:                linkType,
 			Interface:           toIface,
 			Address:             toAddr,
+			NeighborAddress:     toNeighborAddr,
 			ListenPort:          toPort,
 			Endpoint:            toEP,
 			PrivateKey:          encPrivTo,
@@ -1184,8 +1265,10 @@ func (m *Manager) buildLink(cfg *config.Config, n1, n2 *config.Node, listenPort1
 		ModifiedAt: time.Now().UTC(),
 	}
 
-	link.From.ResolvedEndpoint = compiler.ResolveLinkEndpoint(fromNode, toNode, &link.From, &link.To)
-	link.To.ResolvedEndpoint = compiler.ResolveLinkEndpoint(toNode, fromNode, &link.To, &link.From)
+	if !isManual {
+		link.From.ResolvedEndpoint = compiler.ResolveLinkEndpoint(fromNode, toNode, &link.From, &link.To)
+		link.To.ResolvedEndpoint = compiler.ResolveLinkEndpoint(toNode, fromNode, &link.To, &link.From)
+	}
 
 	return link, nil
 }
@@ -1208,7 +1291,8 @@ func (m *Manager) AddLinkAdvanced(node1Name, node2Name string, fromEnd, toEnd *c
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if !m.vault.IsUnlocked() {
+	isManual := (fromEnd != nil && fromEnd.IsManual()) || (toEnd != nil && toEnd.IsManual())
+	if !isManual && !m.vault.IsUnlocked() {
 		return nil, crypto.ErrVaultLocked
 	}
 
@@ -1244,16 +1328,25 @@ func (m *Manager) AddLinkAdvanced(node1Name, node2Name string, fromEnd, toEnd *c
 	var lp *config.Link
 	if fromEnd != nil || toEnd != nil {
 		lp = &config.Link{}
+		if isManual {
+			lp.Type = config.LinkTypeManual
+		}
 		if fromEnd != nil {
 			lp.From = *fromEnd
 			if lp.From.Name == "" {
 				lp.From.Name = node1Name
+			}
+			if fromEnd.Type != "" {
+				lp.Type = fromEnd.Type
 			}
 		}
 		if toEnd != nil {
 			lp.To = *toEnd
 			if lp.To.Name == "" {
 				lp.To.Name = node2Name
+			}
+			if toEnd.Type != "" {
+				lp.Type = toEnd.Type
 			}
 		}
 	}
@@ -1528,6 +1621,15 @@ func (m *Manager) UpdateLinkAdvanced(node1Name, node2Name string, customFrom, cu
 	link := &cfg.Links[linkIdx]
 
 	if fromEnd != nil {
+		if fromEnd.Type != "" {
+			link.From.Type = fromEnd.Type
+		}
+		if fromEnd.Interface != "" {
+			link.From.Interface = fromEnd.Interface
+		}
+		if fromEnd.NeighborAddress != "" {
+			link.From.NeighborAddress = fromEnd.NeighborAddress
+		}
 		if fromEnd.ListenPort > 0 {
 			link.From.ListenPort = fromEnd.ListenPort
 		}
@@ -1579,6 +1681,15 @@ func (m *Manager) UpdateLinkAdvanced(node1Name, node2Name string, customFrom, cu
 	}
 
 	if toEnd != nil {
+		if toEnd.Type != "" {
+			link.To.Type = toEnd.Type
+		}
+		if toEnd.Interface != "" {
+			link.To.Interface = toEnd.Interface
+		}
+		if toEnd.NeighborAddress != "" {
+			link.To.NeighborAddress = toEnd.NeighborAddress
+		}
 		if toEnd.ListenPort > 0 {
 			link.To.ListenPort = toEnd.ListenPort
 		}
@@ -1629,12 +1740,45 @@ func (m *Manager) UpdateLinkAdvanced(node1Name, node2Name string, customFrom, cu
 		}
 	}
 
+	if link.From.IsManual() || link.To.IsManual() {
+		link.Type = config.LinkTypeManual
+		link.From.Type = config.LinkTypeManual
+		link.To.Type = config.LinkTypeManual
+
+		// Cross-fill missing local IP with neighbor IP if provided
+		if link.From.Address == "" && link.To.NeighborAddress != "" {
+			link.From.Address = link.To.NeighborAddress
+		}
+		if link.To.Address == "" && link.From.NeighborAddress != "" {
+			link.To.Address = link.From.NeighborAddress
+		}
+		if link.From.NeighborAddress == "" && link.To.Address != "" {
+			link.From.NeighborAddress = link.To.Address
+		}
+		if link.To.NeighborAddress == "" && link.From.Address != "" {
+			link.To.NeighborAddress = link.From.Address
+		}
+
+		if strings.TrimSpace(link.From.Interface) == "" {
+			return nil, fmt.Errorf("interface name is required for node %s in manual link", fromNode.Name)
+		}
+		if strings.TrimSpace(link.To.Interface) == "" {
+			return nil, fmt.Errorf("interface name is required for node %s in manual link", toNode.Name)
+		}
+		if strings.TrimSpace(link.From.Address) == "" {
+			return nil, fmt.Errorf("local IP address is required for node %s in manual link", fromNode.Name)
+		}
+		if strings.TrimSpace(link.To.Address) == "" {
+			return nil, fmt.Errorf("local IP address is required for node %s in manual link", toNode.Name)
+		}
+	}
+
 	if tags != nil {
 		link.Tags = tags
 	}
 
 	isExternalLink := fromNode.IsExternal || toNode.IsExternal
-	if !isExternalLink {
+	if !isExternalLink && !link.IsManual() {
 		fromEP, _, _ := compiler.ResolvePeerEndpointWithEntrypoint(fromNode, toNode, nil, link.To.ListenPort)
 		toEP, _, _ := compiler.ResolvePeerEndpointWithEntrypoint(toNode, fromNode, nil, link.From.ListenPort)
 		link.From.Endpoint = fromEP
@@ -1657,7 +1801,7 @@ func (m *Manager) UpdateLinkAdvanced(node1Name, node2Name string, customFrom, cu
 		} else {
 			link.To.PersistentKeepalive = 0
 		}
-	} else if toNode.IsExternal {
+	} else if toNode.IsExternal && !link.IsManual() {
 		if link.From.Endpoint == "" && toEnd != nil && toEnd.Endpoint != "" {
 			link.From.Endpoint = toEnd.Endpoint
 		}
@@ -1668,7 +1812,7 @@ func (m *Manager) UpdateLinkAdvanced(node1Name, node2Name string, customFrom, cu
 		if toEP != "" {
 			link.To.Endpoint = toEP
 		}
-	} else if fromNode.IsExternal {
+	} else if fromNode.IsExternal && !link.IsManual() {
 		if link.To.Endpoint == "" && fromEnd != nil && fromEnd.Endpoint != "" {
 			link.To.Endpoint = fromEnd.Endpoint
 		}
@@ -1682,8 +1826,10 @@ func (m *Manager) UpdateLinkAdvanced(node1Name, node2Name string, customFrom, cu
 	}
 
 	link.ModifiedAt = time.Now().UTC()
-	link.From.ResolvedEndpoint = compiler.ResolveLinkEndpoint(fromNode, toNode, &link.From, &link.To)
-	link.To.ResolvedEndpoint = compiler.ResolveLinkEndpoint(toNode, fromNode, &link.To, &link.From)
+	if !link.IsManual() {
+		link.From.ResolvedEndpoint = compiler.ResolveLinkEndpoint(fromNode, toNode, &link.From, &link.To)
+		link.To.ResolvedEndpoint = compiler.ResolveLinkEndpoint(toNode, fromNode, &link.To, &link.From)
+	}
 	if err := m.store.Save(cfg); err != nil {
 		return nil, err
 	}
@@ -1975,10 +2121,17 @@ func (m *Manager) PlanSync(nodeNames ...string) ([]config.SyncAction, error) {
 
 	// 1. Detect unused/deleted wg42* interfaces on remote devices by running `wg`
 	expectedIfacesPerNode := make(map[string]map[string]bool)
+	manualIfacesPerNode := make(map[string]map[string]bool)
 	for _, n := range nodes {
 		expectedIfacesPerNode[n.Name] = make(map[string]bool)
+		manualIfacesPerNode[n.Name] = make(map[string]bool)
 	}
 	for _, link := range links {
+		if link.IsManual() {
+			manualIfacesPerNode[link.From.Name][link.From.Interface] = true
+			manualIfacesPerNode[link.To.Name][link.To.Interface] = true
+			continue
+		}
 		if em, ok := expectedIfacesPerNode[link.From.Name]; ok {
 			em[link.From.Interface] = true
 		}
@@ -2020,10 +2173,11 @@ func (m *Manager) PlanSync(nodeNames ...string) ([]config.SyncAction, error) {
 				return
 			}
 			expected := expectedIfacesPerNode[targetNode.Name]
+			manualIfs := manualIfacesPerNode[targetNode.Name]
 			for _, iface := range runningIfaces {
 				// We only manage wg42* prefix wireguard interfaces
 				if strings.HasPrefix(iface, "wg42") {
-					if !expected[iface] {
+					if !expected[iface] && !manualIfs[iface] {
 						targetFile := fmt.Sprintf("/etc/wireguard/%s.conf", iface)
 						cleanActionsMu.Lock()
 						cleanActions = append(cleanActions, config.SyncAction{
@@ -2056,9 +2210,10 @@ func (m *Manager) PlanSync(nodeNames ...string) ([]config.SyncAction, error) {
 			continue
 		}
 		expected := expectedIfacesPerNode[n.Name]
+		manualIfs := manualIfacesPerNode[n.Name]
 		if stNode, ok := currentState.Nodes[n.Name]; ok {
 			for ifaceName := range stNode.Interfaces {
-				if strings.HasPrefix(ifaceName, "wg42") && !expected[ifaceName] {
+				if strings.HasPrefix(ifaceName, "wg42") && !expected[ifaceName] && !manualIfs[ifaceName] {
 					alreadyAdded := false
 					for _, ca := range cleanActions {
 						if ca.NodeName == n.Name && ca.Interface == ifaceName {
@@ -2098,6 +2253,9 @@ func (m *Manager) PlanSync(nodeNames ...string) ([]config.SyncAction, error) {
 
 	// 2. Active links configuration
 	for _, link := range links {
+		if link.IsManual() {
+			continue
+		}
 		fromNode := nodeMap[link.From.Name]
 		toNode := nodeMap[link.To.Name]
 		if fromNode == nil || toNode == nil {

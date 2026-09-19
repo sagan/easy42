@@ -2075,5 +2075,59 @@ func TestRoutingPolicyBirdTemplates(t *testing.T) {
 	validateBirdSyntax(t, confCustom)
 }
 
+func TestGenerateBirdConfig_ManualLink(t *testing.T) {
+	node1 := config.Node{
+		Name: "node1",
+		IP:   "192.168.100.1",
+		ASN:  4224420001,
+	}
+	node2 := config.Node{
+		Name: "node2",
+		IP:   "192.168.100.2",
+		ASN:  4224420002,
+	}
+	allNodes := []config.Node{node1, node2}
+
+	manualLink := config.Link{
+		Type: config.LinkTypeManual,
+		From: config.LinkEnd{
+			Name:            "node1",
+			Type:            config.LinkTypeManual,
+			Interface:       "eth1",
+			Address:         "10.0.0.1/30",
+			NeighborAddress: "10.0.0.2",
+		},
+		To: config.LinkEnd{
+			Name:            "node2",
+			Type:            config.LinkTypeManual,
+			Interface:       "eth2",
+			Address:         "10.0.0.2/30",
+			NeighborAddress: "10.0.0.1",
+		},
+	}
+
+	conf, err := GenerateBirdConfig(&node1, allNodes, []config.Link{manualLink})
+	if err != nil {
+		t.Fatalf("GenerateBirdConfig failed: %v", err)
+	}
+
+	// Verify protocol bgp uses eth1, local 10.0.0.1, neighbor 10.0.0.2 without % for non-link-local
+	if !strings.Contains(conf, `protocol bgp 'easy42_peer_node2' from easy42_peer {`) {
+		t.Errorf("Expected easy42_peer_node2 BGP protocol, got:\n%s", conf)
+	}
+	if !strings.Contains(conf, `interface "eth1";`) {
+		t.Errorf("Expected interface eth1 in BGP protocol, got:\n%s", conf)
+	}
+	if !strings.Contains(conf, `local 10.0.0.1 as SELF_AS;`) {
+		t.Errorf("Expected local 10.0.0.1, got:\n%s", conf)
+	}
+	if !strings.Contains(conf, `neighbor 10.0.0.2 as 4224420002;`) {
+		t.Errorf("Expected neighbor 10.0.0.2 as 4224420002, got:\n%s", conf)
+	}
+
+	validateBirdSyntax(t, conf)
+}
+
+
 
 

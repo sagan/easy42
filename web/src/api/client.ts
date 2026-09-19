@@ -139,6 +139,7 @@ export const api = {
   // Links
   getLinks: () => request<Link[]>("/links"),
   addLink: (data: {
+    type?: string;
     from_node: string;
     to_node: string;
     from_port?: number;
@@ -176,6 +177,7 @@ export const api = {
       body: JSON.stringify({ nodes }),
     }),
   updateLink: (data: {
+    type?: string;
     from_node: string;
     to_node: string;
     from_port?: number;

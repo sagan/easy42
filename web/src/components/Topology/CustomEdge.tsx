@@ -45,6 +45,7 @@ export const CustomEdge: React.FC<EdgeProps> = ({
   const workingState: LinkWorkingState = edgeData?.workingState || "unknown";
   const latestHandshake = edgeData?.latestHandshake;
   const isExternal = Boolean(edgeData?.isExternal);
+  const isManual = link?.type === "manual" || link?.from?.type === "manual" || link?.to?.type === "manual";
   const totalLinksInPair = (edgeData?.totalLinksInPair as number) || 1;
   const linkIndexInPair = (edgeData?.linkIndexInPair as number) || 0;
 
@@ -82,7 +83,7 @@ export const CustomEdge: React.FC<EdgeProps> = ({
     labelY = bLabelY;
   }
 
-  // Determine styles according to derived working state and external link type
+  // Determine styles according to derived working state and link type
   let strokeColor = "#94A3B8";
   let strokeWidth = 2;
   let strokeDasharray: string | undefined = isExternal ? "6 4" : "4 4";
@@ -91,7 +92,15 @@ export const CustomEdge: React.FC<EdgeProps> = ({
   let dotColor = "#94A3B8";
   let statusText = isExternal ? "External" : "Idle";
 
-  if (isExternal) {
+  if (isManual) {
+    strokeColor = "#7C3AED";
+    strokeDasharray = "5 3";
+    strokeWidth = 2.2;
+    pillBorderColor = "#DDD6FE";
+    pillBgColor = "#FAF5FF";
+    dotColor = "#7C3AED";
+    statusText = "Manual";
+  } else if (isExternal) {
     strokeColor = "#8B5CF6";
     strokeDasharray = "6 4";
     if (workingState === "working") {
@@ -227,7 +236,7 @@ export const CustomEdge: React.FC<EdgeProps> = ({
                   gap: 0.3,
                 }}
               >
-                {workingState === "working" && "⚡"}
+                {workingState === "working" && !isManual && "⚡"}
                 {statusText}
               </Box>
             </>

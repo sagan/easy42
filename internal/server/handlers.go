@@ -473,6 +473,7 @@ func (s *Server) handleGetLinks(w http.ResponseWriter, r *http.Request) {
 
 
 type addLinkRequest struct {
+	Type       string          `json:"type,omitempty"`
 	FromNode   string          `json:"from_node"`
 	ToNode     string          `json:"to_node"`
 	FromPort   int             `json:"from_port,omitempty"`
@@ -510,6 +511,16 @@ func (s *Server) handleAddLink(w http.ResponseWriter, r *http.Request) {
 
 	fromNode := req.FromNode
 	toNode := req.ToNode
+	if req.Type != "" {
+		if req.From == nil {
+			req.From = &config.LinkEnd{}
+		}
+		if req.To == nil {
+			req.To = &config.LinkEnd{}
+		}
+		req.From.Type = req.Type
+		req.To.Type = req.Type
+	}
 	if fromNode == "" && req.From != nil {
 		fromNode = req.From.Name
 	}
@@ -674,6 +685,7 @@ func (s *Server) handleCreateMeshLinks(w http.ResponseWriter, r *http.Request) {
 }
 
 type updateLinkRequest struct {
+	Type       string          `json:"type,omitempty"`
 	FromNode   string          `json:"from_node"`
 	ToNode     string          `json:"to_node"`
 	FromPort   int             `json:"from_port,omitempty"`
@@ -711,6 +723,16 @@ func (s *Server) handleUpdateLink(w http.ResponseWriter, r *http.Request) {
 
 	fromNode := req.FromNode
 	toNode := req.ToNode
+	if req.Type != "" {
+		if req.From == nil {
+			req.From = &config.LinkEnd{}
+		}
+		if req.To == nil {
+			req.To = &config.LinkEnd{}
+		}
+		req.From.Type = req.Type
+		req.To.Type = req.Type
+	}
 	if fromNode == "" && req.From != nil {
 		fromNode = req.From.Name
 	}

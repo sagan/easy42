@@ -12,7 +12,7 @@ import {
   Chip,
   TextField,
 } from "@mui/material";
-import { X, Trash2, Link as LinkIcon, Key, ArrowRightLeft, Edit2, Activity, Copy, Check, Shield, RefreshCw, Gauge, Zap, Route, RotateCcw, FileText } from "lucide-react";
+import { X, Trash2, Link as LinkIcon, Key, ArrowRightLeft, Edit2, Activity, Copy, Check, Shield, RefreshCw, Gauge, Zap, Route, RotateCcw, FileText, Network } from "lucide-react";
 import { api } from "../../api/client";
 import { Link, NetworkState, Node } from "../../types/api";
 import { MarkdownView } from "../Common/MarkdownView";
@@ -94,6 +94,7 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
 
   const isFromExternal = nodes?.find((n) => n.name === link.from.name)?.is_external;
   const isToExternal = nodes?.find((n) => n.name === link.to.name)?.is_external;
+  const isManual = link.type === "manual" || link.from.type === "manual" || link.to.type === "manual";
 
   const handleSaveFromNote = async () => {
     if (!link) return;
@@ -193,7 +194,7 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
   const handleDelete = async () => {
     if (
       !window.confirm(
-        `Are you sure you want to delete the WireGuard link between "${link.from.name}" and "${link.to.name}"?`,
+        `Are you sure you want to delete the ${isManual ? "manual" : "WireGuard"} link between "${link.from.name}" and "${link.to.name}"?`,
       )
     ) {
       return;
@@ -247,19 +248,36 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
               width: 38,
               height: 38,
               borderRadius: 2,
-              backgroundColor: "rgba(8, 145, 178, 0.1)",
+              backgroundColor: isManual ? "rgba(124, 58, 237, 0.1)" : "rgba(8, 145, 178, 0.1)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              color: "#0891B2",
+              color: isManual ? "#7C3AED" : "#0891B2",
             }}
           >
-            <LinkIcon size={20} />
+            {isManual ? <Network size={20} /> : <LinkIcon size={20} />}
           </Box>
           <Box>
-            <Typography variant="h6" sx={{ fontWeight: 700, lineHeight: 1.2, color: "#0F172A" }}>
-              WireGuard Link
-            </Typography>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <Typography variant="h6" sx={{ fontWeight: 700, lineHeight: 1.2, color: "#0F172A" }}>
+                {isManual ? "Manual Link" : "WireGuard Link"}
+              </Typography>
+              {isManual && (
+                <Chip
+                  label="MANUAL"
+                  size="small"
+                  sx={{
+                    height: 18,
+                    fontSize: "0.6rem",
+                    fontWeight: 800,
+                    bgcolor: "rgba(124, 58, 237, 0.12)",
+                    color: "#7C3AED",
+                    border: "1px solid rgba(124, 58, 237, 0.25)",
+                    borderRadius: "4px",
+                  }}
+                />
+              )}
+            </Box>
             <Typography variant="caption" className="mono-font" sx={{ color: "#64748B" }}>
               {link.from.name} ↔ {link.to.name}
             </Typography>
@@ -271,7 +289,7 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
             <IconButton
               size="small"
               onClick={() => onEditLink(link)}
-              sx={{ color: "#0891B2", "&:hover": { backgroundColor: "rgba(8, 145, 178, 0.08)" } }}
+              sx={{ color: isManual ? "#7C3AED" : "#0891B2", "&:hover": { backgroundColor: isManual ? "rgba(124, 58, 237, 0.08)" : "rgba(8, 145, 178, 0.08)" } }}
             >
               <Edit2 size={18} />
             </IconButton>
@@ -286,6 +304,42 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
 
       {/* Live Connection Health Card */}
       {(() => {
+        if (isManual) {
+          return (
+            <Box
+              sx={{
+                p: 2,
+                mb: 2.5,
+                borderRadius: 2,
+                backgroundColor: "#FAF5FF",
+                border: "1px solid #DDD6FE",
+              }}
+            >
+              <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1 }}>
+                <Typography
+                  variant="subtitle2"
+                  sx={{ fontWeight: 700, color: "#6D28D9", display: "flex", alignItems: "center", gap: 1 }}
+                >
+                  <Network size={16} color="#7C3AED" />
+                  Manual Data Plane Link
+                </Typography>
+                <Chip
+                  label="BGP ONLY"
+                  size="small"
+                  sx={{
+                    fontWeight: 800,
+                    fontSize: "0.62rem",
+                    bgcolor: "#7C3AED",
+                    color: "#FFFFFF",
+                  }}
+                />
+              </Box>
+              <Typography variant="caption" sx={{ color: "#6B21A8", display: "block", lineHeight: 1.4 }}>
+                Data plane interfaces ({link.from.interface} / {link.to.interface}) are manually created and managed by you. easy42 automatically manages BIRD BGP routing sessions and adds interfaces to the <code>easy42_ifname</code> nftables set.
+              </Typography>
+            </Box>
+          );
+        }
         const fromIface = networkState?.nodes?.[link.from.name]?.interfaces?.[link.from.interface];
         const toIface = networkState?.nodes?.[link.to.name]?.interfaces?.[link.to.interface];
 
@@ -390,34 +444,36 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
             <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#3730A3" }}>
               Node 1: {link.from.name}
             </Typography>
-            <Tooltip title={isFromExternal ? "Cannot restart interface on external node" : `Restart ${link.from.interface} on ${link.from.name}`}>
-              <span>
-                <Button
-                  id={`restart-link-end-from-${link.from.name}-${link.from.interface}`}
-                  size="small"
-                  variant="outlined"
-                  startIcon={restartingFrom ? <CircularProgress size={12} color="inherit" /> : <RotateCcw size={12} />}
-                  onClick={() => handleRestartEnd("from")}
-                  disabled={restartingFrom || restartingTo || deleting || Boolean(isFromExternal)}
-                  sx={{
-                    fontSize: "0.72rem",
-                    py: 0.2,
-                    px: 1,
-                    textTransform: "none",
-                    fontWeight: 600,
-                    borderRadius: 1.5,
-                    borderColor: "#A5B4FC",
-                    color: "#4338CA",
-                    "&:hover": {
-                      borderColor: "#6366F1",
-                      backgroundColor: "rgba(99, 102, 241, 0.08)",
-                    },
-                  }}
-                >
-                  {restartingFrom ? "Restarting..." : "Restart"}
-                </Button>
-              </span>
-            </Tooltip>
+            {!isManual && (
+              <Tooltip title={isFromExternal ? "Cannot restart interface on external node" : `Restart ${link.from.interface} on ${link.from.name}`}>
+                <span>
+                  <Button
+                    id={`restart-link-end-from-${link.from.name}-${link.from.interface}`}
+                    size="small"
+                    variant="outlined"
+                    startIcon={restartingFrom ? <CircularProgress size={12} color="inherit" /> : <RotateCcw size={12} />}
+                    onClick={() => handleRestartEnd("from")}
+                    disabled={restartingFrom || restartingTo || deleting || Boolean(isFromExternal)}
+                    sx={{
+                      fontSize: "0.72rem",
+                      py: 0.2,
+                      px: 1,
+                      textTransform: "none",
+                      fontWeight: 600,
+                      borderRadius: 1.5,
+                      borderColor: "#A5B4FC",
+                      color: "#4338CA",
+                      "&:hover": {
+                        borderColor: "#6366F1",
+                        backgroundColor: "rgba(99, 102, 241, 0.08)",
+                      },
+                    }}
+                  >
+                    {restartingFrom ? "Restarting..." : "Restart"}
+                  </Button>
+                </span>
+              </Tooltip>
+            )}
           </Box>
 
           <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
@@ -432,91 +488,106 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
 
             <Box sx={{ display: "flex", justifyContent: "space-between" }}>
               <Typography variant="caption" sx={{ color: "#64748B" }}>
-                Link-Local IPv6:
+                {isManual ? "Local Address:" : "Link-Local IPv6:"}
               </Typography>
               <Typography variant="caption" className="mono-font" sx={{ color: "#0891B2", fontWeight: 600 }}>
                 {link.from.address}
               </Typography>
             </Box>
 
-            <Box sx={{ display: "flex", justifyContent: "space-between" }}>
-              <Typography variant="caption" sx={{ color: "#64748B" }}>
-                Listen Port:
-              </Typography>
-              <Typography variant="caption" className="mono-font" sx={{ color: "#0F172A", fontWeight: 600 }}>
-                {link.from.listen_port}
-              </Typography>
-            </Box>
-
-            <Box sx={{ display: "flex", justifyContent: "space-between" }}>
-              <Typography variant="caption" sx={{ color: "#64748B" }}>
-                MTU:
-              </Typography>
-              <Typography variant="caption" className="mono-font" sx={{ color: "#0F172A", fontWeight: 600 }}>
-                {link.from.mtu || 1420}
-              </Typography>
-            </Box>
-
-            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <Typography variant="caption" sx={{ color: "#64748B" }}>
-                Peer Endpoint:
-              </Typography>
-              <Box sx={{ display: "flex", alignItems: "center", gap: 0.8 }}>
-                <Typography variant="caption" className="mono-font" sx={{ color: "#0F172A", fontWeight: 700 }}>
-                  {link.from.resolved_endpoint || link.from.endpoint || "Dynamic / Automatic"}
+            {isManual && (
+              <Box sx={{ display: "flex", justifyContent: "space-between" }}>
+                <Typography variant="caption" sx={{ color: "#64748B" }}>
+                  Neighbor Address:
                 </Typography>
-                {link.from.use_ip && (
+                <Typography variant="caption" className="mono-font" sx={{ color: "#7C3AED", fontWeight: 600 }}>
+                  {link.from.neighbor_address || link.to.address || "(Auto from peer)"}
+                </Typography>
+              </Box>
+            )}
+
+            {!isManual && (
+              <>
+                <Box sx={{ display: "flex", justifyContent: "space-between" }}>
+                  <Typography variant="caption" sx={{ color: "#64748B" }}>
+                    Listen Port:
+                  </Typography>
+                  <Typography variant="caption" className="mono-font" sx={{ color: "#0F172A", fontWeight: 600 }}>
+                    {link.from.listen_port}
+                  </Typography>
+                </Box>
+
+                <Box sx={{ display: "flex", justifyContent: "space-between" }}>
+                  <Typography variant="caption" sx={{ color: "#64748B" }}>
+                    MTU:
+                  </Typography>
+                  <Typography variant="caption" className="mono-font" sx={{ color: "#0F172A", fontWeight: 600 }}>
+                    {link.from.mtu || 1420}
+                  </Typography>
+                </Box>
+
+                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <Typography variant="caption" sx={{ color: "#64748B" }}>
+                    Peer Endpoint:
+                  </Typography>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 0.8 }}>
+                    <Typography variant="caption" className="mono-font" sx={{ color: "#0F172A", fontWeight: 700 }}>
+                      {link.from.resolved_endpoint || link.from.endpoint || "Dynamic / Automatic"}
+                    </Typography>
+                    {link.from.use_ip && (
+                      <Chip
+                        label="IP Resolved"
+                        size="small"
+                        sx={{
+                          height: 18,
+                          fontSize: "0.62rem",
+                          fontWeight: 700,
+                          bgcolor: "rgba(16, 185, 129, 0.15)",
+                          color: "#059669",
+                          borderRadius: 1,
+                        }}
+                      />
+                    )}
+                    {(link.from.resolved_endpoint || link.from.endpoint) &&
+                      (link.from.resolved_endpoint || link.from.endpoint) !== "Dynamic / Automatic" && (
+                        <Tooltip title={copiedEndpoint === "from" ? "Copied!" : "Copy Peer Endpoint"}>
+                          <IconButton
+                            size="small"
+                            onClick={() =>
+                              copyEndpointToClipboard(
+                                link.from.resolved_endpoint || link.from.endpoint || "",
+                                "from",
+                              )
+                            }
+                            sx={{ p: 0.3, color: copiedEndpoint === "from" ? "#10B981" : "#64748B" }}
+                          >
+                            {copiedEndpoint === "from" ? <Check size={13} /> : <Copy size={13} />}
+                          </IconButton>
+                        </Tooltip>
+                      )}
+                  </Box>
+                </Box>
+
+                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <Typography variant="caption" sx={{ color: "#64748B" }}>
+                    Use IP (DNS Resolve):
+                  </Typography>
                   <Chip
-                    label="IP Resolved"
+                    label={link.from.use_ip ? "Enabled" : "Disabled"}
                     size="small"
                     sx={{
-                      height: 18,
-                      fontSize: "0.62rem",
+                      height: 20,
+                      fontSize: "0.65rem",
                       fontWeight: 700,
-                      bgcolor: "rgba(16, 185, 129, 0.15)",
-                      color: "#059669",
-                      borderRadius: 1,
+                      bgcolor: link.from.use_ip ? "rgba(16, 185, 129, 0.12)" : "rgba(148, 163, 184, 0.15)",
+                      color: link.from.use_ip ? "#059669" : "#64748B",
+                      border: "1px solid",
+                      borderColor: link.from.use_ip ? "rgba(16, 185, 129, 0.3)" : "rgba(148, 163, 184, 0.2)",
                     }}
                   />
-                )}
-                {(link.from.resolved_endpoint || link.from.endpoint) &&
-                  (link.from.resolved_endpoint || link.from.endpoint) !== "Dynamic / Automatic" && (
-                    <Tooltip title={copiedEndpoint === "from" ? "Copied!" : "Copy Peer Endpoint"}>
-                      <IconButton
-                        size="small"
-                        onClick={() =>
-                          copyEndpointToClipboard(
-                            link.from.resolved_endpoint || link.from.endpoint || "",
-                            "from",
-                          )
-                        }
-                        sx={{ p: 0.3, color: copiedEndpoint === "from" ? "#10B981" : "#64748B" }}
-                      >
-                        {copiedEndpoint === "from" ? <Check size={13} /> : <Copy size={13} />}
-                      </IconButton>
-                    </Tooltip>
-                  )}
-              </Box>
-            </Box>
-
-            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <Typography variant="caption" sx={{ color: "#64748B" }}>
-                Use IP (DNS Resolve):
-              </Typography>
-              <Chip
-                label={link.from.use_ip ? "Enabled" : "Disabled"}
-                size="small"
-                sx={{
-                  height: 20,
-                  fontSize: "0.65rem",
-                  fontWeight: 700,
-                  bgcolor: link.from.use_ip ? "rgba(16, 185, 129, 0.12)" : "rgba(148, 163, 184, 0.15)",
-                  color: link.from.use_ip ? "#059669" : "#64748B",
-                  border: "1px solid",
-                  borderColor: link.from.use_ip ? "rgba(16, 185, 129, 0.3)" : "rgba(148, 163, 184, 0.2)",
-                }}
-              />
-            </Box>
+                </Box>
+              </>
+            )}
 
             <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <Typography variant="caption" sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}>
@@ -642,44 +713,46 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
               />
             </Box>
 
-            <Box sx={{ mt: 0.5 }}>
-              <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            {!isManual && (
+              <Box sx={{ mt: 0.5 }}>
+                <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <Typography
+                    variant="caption"
+                    sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}
+                  >
+                    <Key size={11} /> Public Key:
+                  </Typography>
+                  {link.from.public_key && (
+                    <Tooltip title={copiedKey === "from" ? "Copied!" : "Copy Public Key"}>
+                      <IconButton
+                        size="small"
+                        onClick={() => copyToClipboard(link.from.public_key, "from")}
+                        sx={{ p: 0.3, color: copiedKey === "from" ? "#10B981" : "#64748B" }}
+                      >
+                        {copiedKey === "from" ? <Check size={12} /> : <Copy size={12} />}
+                      </IconButton>
+                    </Tooltip>
+                  )}
+                </Box>
                 <Typography
                   variant="caption"
-                  sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}
+                  className="mono-font"
+                  sx={{
+                    display: "block",
+                    mt: 0.2,
+                    p: 0.8,
+                    backgroundColor: "#FFFFFF",
+                    border: "1px solid #CBD5E1",
+                    borderRadius: 1,
+                    fontSize: "0.68rem",
+                    wordBreak: "break-all",
+                    color: "#475569",
+                  }}
                 >
-                  <Key size={11} /> Public Key:
+                  {link.from.public_key || "(None)"}
                 </Typography>
-                {link.from.public_key && (
-                  <Tooltip title={copiedKey === "from" ? "Copied!" : "Copy Public Key"}>
-                    <IconButton
-                      size="small"
-                      onClick={() => copyToClipboard(link.from.public_key, "from")}
-                      sx={{ p: 0.3, color: copiedKey === "from" ? "#10B981" : "#64748B" }}
-                    >
-                      {copiedKey === "from" ? <Check size={12} /> : <Copy size={12} />}
-                    </IconButton>
-                  </Tooltip>
-                )}
               </Box>
-              <Typography
-                variant="caption"
-                className="mono-font"
-                sx={{
-                  display: "block",
-                  mt: 0.2,
-                  p: 0.8,
-                  backgroundColor: "#FFFFFF",
-                  border: "1px solid #CBD5E1",
-                  borderRadius: 1,
-                  fontSize: "0.68rem",
-                  wordBreak: "break-all",
-                  color: "#475569",
-                }}
-              >
-                {link.from.public_key || "(None)"}
-              </Typography>
-            </Box>
+            )}
 
             {/* Node 1 LinkEnd Note */}
             <Box sx={{ mt: 1.5, p: 1.5, borderRadius: 1.5, backgroundColor: "#FFFFFF", border: "1px solid #C7D2FE" }}>
@@ -821,34 +894,36 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
             <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0E7490" }}>
               Node 2: {link.to.name}
             </Typography>
-            <Tooltip title={isToExternal ? "Cannot restart interface on external node" : `Restart ${link.to.interface} on ${link.to.name}`}>
-              <span>
-                <Button
-                  id={`restart-link-end-to-${link.to.name}-${link.to.interface}`}
-                  size="small"
-                  variant="outlined"
-                  startIcon={restartingTo ? <CircularProgress size={12} color="inherit" /> : <RotateCcw size={12} />}
-                  onClick={() => handleRestartEnd("to")}
-                  disabled={restartingFrom || restartingTo || deleting || Boolean(isToExternal)}
-                  sx={{
-                    fontSize: "0.72rem",
-                    py: 0.2,
-                    px: 1,
-                    textTransform: "none",
-                    fontWeight: 600,
-                    borderRadius: 1.5,
-                    borderColor: "#A5F3FC",
-                    color: "#0891B2",
-                    "&:hover": {
-                      borderColor: "#06B6D4",
-                      backgroundColor: "rgba(6, 182, 212, 0.08)",
-                    },
-                  }}
-                >
-                  {restartingTo ? "Restarting..." : "Restart"}
-                </Button>
-              </span>
-            </Tooltip>
+            {!isManual && (
+              <Tooltip title={isToExternal ? "Cannot restart interface on external node" : `Restart ${link.to.interface} on ${link.to.name}`}>
+                <span>
+                  <Button
+                    id={`restart-link-end-to-${link.to.name}-${link.to.interface}`}
+                    size="small"
+                    variant="outlined"
+                    startIcon={restartingTo ? <CircularProgress size={12} color="inherit" /> : <RotateCcw size={12} />}
+                    onClick={() => handleRestartEnd("to")}
+                    disabled={restartingFrom || restartingTo || deleting || Boolean(isToExternal)}
+                    sx={{
+                      fontSize: "0.72rem",
+                      py: 0.2,
+                      px: 1,
+                      textTransform: "none",
+                      fontWeight: 600,
+                      borderRadius: 1.5,
+                      borderColor: "#A5F3FC",
+                      color: "#0891B2",
+                      "&:hover": {
+                        borderColor: "#06B6D4",
+                        backgroundColor: "rgba(6, 182, 212, 0.08)",
+                      },
+                    }}
+                  >
+                    {restartingTo ? "Restarting..." : "Restart"}
+                  </Button>
+                </span>
+              </Tooltip>
+            )}
           </Box>
 
           <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
@@ -863,91 +938,106 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
 
             <Box sx={{ display: "flex", justifyContent: "space-between" }}>
               <Typography variant="caption" sx={{ color: "#64748B" }}>
-                Link-Local IPv6:
+                {isManual ? "Local Address:" : "Link-Local IPv6:"}
               </Typography>
               <Typography variant="caption" className="mono-font" sx={{ color: "#0891B2", fontWeight: 600 }}>
                 {link.to.address}
               </Typography>
             </Box>
 
-            <Box sx={{ display: "flex", justifyContent: "space-between" }}>
-              <Typography variant="caption" sx={{ color: "#64748B" }}>
-                Listen Port:
-              </Typography>
-              <Typography variant="caption" className="mono-font" sx={{ color: "#0F172A", fontWeight: 600 }}>
-                {link.to.listen_port}
-              </Typography>
-            </Box>
-
-            <Box sx={{ display: "flex", justifyContent: "space-between" }}>
-              <Typography variant="caption" sx={{ color: "#64748B" }}>
-                MTU:
-              </Typography>
-              <Typography variant="caption" className="mono-font" sx={{ color: "#0F172A", fontWeight: 600 }}>
-                {link.to.mtu || 1420}
-              </Typography>
-            </Box>
-
-            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <Typography variant="caption" sx={{ color: "#64748B" }}>
-                Peer Endpoint:
-              </Typography>
-              <Box sx={{ display: "flex", alignItems: "center", gap: 0.8 }}>
-                <Typography variant="caption" className="mono-font" sx={{ color: "#0F172A", fontWeight: 700 }}>
-                  {link.to.resolved_endpoint || link.to.endpoint || "Dynamic / Automatic"}
+            {isManual && (
+              <Box sx={{ display: "flex", justifyContent: "space-between" }}>
+                <Typography variant="caption" sx={{ color: "#64748B" }}>
+                  Neighbor Address:
                 </Typography>
-                {link.to.use_ip && (
+                <Typography variant="caption" className="mono-font" sx={{ color: "#7C3AED", fontWeight: 600 }}>
+                  {link.to.neighbor_address || link.from.address || "(Auto from peer)"}
+                </Typography>
+              </Box>
+            )}
+
+            {!isManual && (
+              <>
+                <Box sx={{ display: "flex", justifyContent: "space-between" }}>
+                  <Typography variant="caption" sx={{ color: "#64748B" }}>
+                    Listen Port:
+                  </Typography>
+                  <Typography variant="caption" className="mono-font" sx={{ color: "#0F172A", fontWeight: 600 }}>
+                    {link.to.listen_port}
+                  </Typography>
+                </Box>
+
+                <Box sx={{ display: "flex", justifyContent: "space-between" }}>
+                  <Typography variant="caption" sx={{ color: "#64748B" }}>
+                    MTU:
+                  </Typography>
+                  <Typography variant="caption" className="mono-font" sx={{ color: "#0F172A", fontWeight: 600 }}>
+                    {link.to.mtu || 1420}
+                  </Typography>
+                </Box>
+
+                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <Typography variant="caption" sx={{ color: "#64748B" }}>
+                    Peer Endpoint:
+                  </Typography>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 0.8 }}>
+                    <Typography variant="caption" className="mono-font" sx={{ color: "#0F172A", fontWeight: 700 }}>
+                      {link.to.resolved_endpoint || link.to.endpoint || "Dynamic / Automatic"}
+                    </Typography>
+                    {link.to.use_ip && (
+                      <Chip
+                        label="IP Resolved"
+                        size="small"
+                        sx={{
+                          height: 18,
+                          fontSize: "0.62rem",
+                          fontWeight: 700,
+                          bgcolor: "rgba(16, 185, 129, 0.15)",
+                          color: "#059669",
+                          borderRadius: 1,
+                        }}
+                      />
+                    )}
+                    {(link.to.resolved_endpoint || link.to.endpoint) &&
+                      (link.to.resolved_endpoint || link.to.endpoint) !== "Dynamic / Automatic" && (
+                        <Tooltip title={copiedEndpoint === "to" ? "Copied!" : "Copy Peer Endpoint"}>
+                          <IconButton
+                            size="small"
+                            onClick={() =>
+                              copyEndpointToClipboard(
+                                link.to.resolved_endpoint || link.to.endpoint || "",
+                                "to",
+                              )
+                            }
+                            sx={{ p: 0.3, color: copiedEndpoint === "to" ? "#10B981" : "#64748B" }}
+                          >
+                            {copiedEndpoint === "to" ? <Check size={13} /> : <Copy size={13} />}
+                          </IconButton>
+                        </Tooltip>
+                      )}
+                  </Box>
+                </Box>
+
+                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <Typography variant="caption" sx={{ color: "#64748B" }}>
+                    Use IP (DNS Resolve):
+                  </Typography>
                   <Chip
-                    label="IP Resolved"
+                    label={link.to.use_ip ? "Enabled" : "Disabled"}
                     size="small"
                     sx={{
-                      height: 18,
-                      fontSize: "0.62rem",
+                      height: 20,
+                      fontSize: "0.65rem",
                       fontWeight: 700,
-                      bgcolor: "rgba(16, 185, 129, 0.15)",
-                      color: "#059669",
-                      borderRadius: 1,
+                      bgcolor: link.to.use_ip ? "rgba(16, 185, 129, 0.12)" : "rgba(148, 163, 184, 0.15)",
+                      color: link.to.use_ip ? "#059669" : "#64748B",
+                      border: "1px solid",
+                      borderColor: link.to.use_ip ? "rgba(16, 185, 129, 0.3)" : "rgba(148, 163, 184, 0.2)",
                     }}
                   />
-                )}
-                {(link.to.resolved_endpoint || link.to.endpoint) &&
-                  (link.to.resolved_endpoint || link.to.endpoint) !== "Dynamic / Automatic" && (
-                    <Tooltip title={copiedEndpoint === "to" ? "Copied!" : "Copy Peer Endpoint"}>
-                      <IconButton
-                        size="small"
-                        onClick={() =>
-                          copyEndpointToClipboard(
-                            link.to.resolved_endpoint || link.to.endpoint || "",
-                            "to",
-                          )
-                        }
-                        sx={{ p: 0.3, color: copiedEndpoint === "to" ? "#10B981" : "#64748B" }}
-                      >
-                        {copiedEndpoint === "to" ? <Check size={13} /> : <Copy size={13} />}
-                      </IconButton>
-                    </Tooltip>
-                  )}
-              </Box>
-            </Box>
-
-            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <Typography variant="caption" sx={{ color: "#64748B" }}>
-                Use IP (DNS Resolve):
-              </Typography>
-              <Chip
-                label={link.to.use_ip ? "Enabled" : "Disabled"}
-                size="small"
-                sx={{
-                  height: 20,
-                  fontSize: "0.65rem",
-                  fontWeight: 700,
-                  bgcolor: link.to.use_ip ? "rgba(16, 185, 129, 0.12)" : "rgba(148, 163, 184, 0.15)",
-                  color: link.to.use_ip ? "#059669" : "#64748B",
-                  border: "1px solid",
-                  borderColor: link.to.use_ip ? "rgba(16, 185, 129, 0.3)" : "rgba(148, 163, 184, 0.2)",
-                }}
-              />
-            </Box>
+                </Box>
+              </>
+            )}
 
             <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <Typography variant="caption" sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}>
@@ -1073,44 +1163,46 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
               />
             </Box>
 
-            <Box sx={{ mt: 0.5 }}>
-              <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            {!isManual && (
+              <Box sx={{ mt: 0.5 }}>
+                <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <Typography
+                    variant="caption"
+                    sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}
+                  >
+                    <Key size={11} /> Public Key:
+                  </Typography>
+                  {link.to.public_key && (
+                    <Tooltip title={copiedKey === "to" ? "Copied!" : "Copy Public Key"}>
+                      <IconButton
+                        size="small"
+                        onClick={() => copyToClipboard(link.to.public_key, "to")}
+                        sx={{ p: 0.3, color: copiedKey === "to" ? "#10B981" : "#64748B" }}
+                      >
+                        {copiedKey === "to" ? <Check size={12} /> : <Copy size={12} />}
+                      </IconButton>
+                    </Tooltip>
+                  )}
+                </Box>
                 <Typography
                   variant="caption"
-                  sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}
+                  className="mono-font"
+                  sx={{
+                    display: "block",
+                    mt: 0.2,
+                    p: 0.8,
+                    backgroundColor: "#FFFFFF",
+                    border: "1px solid #CBD5E1",
+                    borderRadius: 1,
+                    fontSize: "0.68rem",
+                    wordBreak: "break-all",
+                    color: "#475569",
+                  }}
                 >
-                  <Key size={11} /> Public Key:
+                  {link.to.public_key || "(None)"}
                 </Typography>
-                {link.to.public_key && (
-                  <Tooltip title={copiedKey === "to" ? "Copied!" : "Copy Public Key"}>
-                    <IconButton
-                      size="small"
-                      onClick={() => copyToClipboard(link.to.public_key, "to")}
-                      sx={{ p: 0.3, color: copiedKey === "to" ? "#10B981" : "#64748B" }}
-                    >
-                      {copiedKey === "to" ? <Check size={12} /> : <Copy size={12} />}
-                    </IconButton>
-                  </Tooltip>
-                )}
               </Box>
-              <Typography
-                variant="caption"
-                className="mono-font"
-                sx={{
-                  display: "block",
-                  mt: 0.2,
-                  p: 0.8,
-                  backgroundColor: "#FFFFFF",
-                  border: "1px solid #CBD5E1",
-                  borderRadius: 1,
-                  fontSize: "0.68rem",
-                  wordBreak: "break-all",
-                  color: "#475569",
-                }}
-              >
-                {link.to.public_key || "(None)"}
-              </Typography>
-            </Box>
+            )}
 
             {/* Node 2 LinkEnd Note */}
             <Box sx={{ mt: 1.5, p: 1.5, borderRadius: 1.5, backgroundColor: "#FFFFFF", border: "1px solid #A5F3FC" }}>

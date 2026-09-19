@@ -1156,7 +1156,11 @@ protocol bgp 'easy42_peer_{{.remote.name}}' from {{.bgp_template}} {
 {{end -}}
     {{if .local.interface}}interface "{{ .local.interface }}";{{end}}
     local {{ .local.address }} as SELF_AS;
+    {{if .remote.is_link_local}}
     neighbor {{ .remote.address }} % '{{ .local.interface }}' as {{ .remote_node.asn }};
+    {{else}}
+    neighbor {{ .remote.address }} as {{ .remote_node.asn }};
+    {{end}}
 }
 {{else}}
 protocol bgp 'peer_{{.remote.name}}' from {{.bgp_template}} {

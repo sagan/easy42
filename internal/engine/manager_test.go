@@ -1561,5 +1561,136 @@ func TestMultipleLinksBetweenNodes(t *testing.T) {
 	}
 }
 
+func TestManualLinkLifecycle(t *testing.T) {
+	tmpDir := t.TempDir()
+	store := config.NewStore(tmpDir)
+	pass, err := store.Initialize()
+	if err != nil {
+		t.Fatalf("Failed to init store: %v", err)
+	}
+	mgr := NewManager(store)
+
+	// Add nodes without unlocking vault yet
+	nodeA := config.Node{Name: "node-a", Host: "192.168.10.1", IP: "192.168.10.1", Interface: "lo", ASN: 4224420001}
+	nodeB := config.Node{Name: "node-b", Host: "192.168.10.2", IP: "192.168.10.2", Interface: "lo", ASN: 4224420002}
+	if err := mgr.AddNode(nodeA); err != nil {
+		t.Fatalf("AddNode A failed: %v", err)
+	}
+	if err := mgr.AddNode(nodeB); err != nil {
+		t.Fatalf("AddNode B failed: %v", err)
+	}
+
+	// 1. Validation tests
+	// Missing interface
+	_, err = mgr.AddLinkAdvanced("node-a", "node-b", &config.LinkEnd{
+		Type: config.LinkTypeManual,
+	}, &config.LinkEnd{
+		Type: config.LinkTypeManual,
+	}, nil)
+	if err == nil {
+		t.Fatal("Expected error for missing interface, got nil")
+	}
+
+	// Missing address
+	_, err = mgr.AddLinkAdvanced("node-a", "node-b", &config.LinkEnd{
+		Type:      config.LinkTypeManual,
+		Interface: "eth1",
+	}, &config.LinkEnd{
+		Type:      config.LinkTypeManual,
+		Interface: "eth2",
+	}, nil)
+	if err == nil {
+		t.Fatal("Expected error for missing IP address, got nil")
+	}
+
+	// 2. Creation succeeds even with locked vault
+	fromEnd := &config.LinkEnd{
+		Type:            config.LinkTypeManual,
+		Interface:       "eth1",
+		Address:         "10.0.0.1/30",
+		NeighborAddress: "10.0.0.2",
+	}
+	toEnd := &config.LinkEnd{
+		Type:            config.LinkTypeManual,
+		Interface:       "eth2",
+		Address:         "10.0.0.2/30",
+		NeighborAddress: "10.0.0.1",
+	}
+	link, err := mgr.AddLinkAdvanced("node-a", "node-b", fromEnd, toEnd, []string{"manual", "test"})
+	if err != nil {
+		t.Fatalf("AddLinkAdvanced for manual link failed: %v", err)
+	}
+
+	if !link.IsManual() {
+		t.Errorf("Expected link.IsManual() to be true")
+	}
+	if link.Type != config.LinkTypeManual {
+		t.Errorf("Expected link.Type to be manual, got %s", link.Type)
+	}
+	if link.From.Interface != "eth1" || link.To.Interface != "eth2" {
+		t.Errorf("Unexpected interfaces: %s, %s", link.From.Interface, link.To.Interface)
+	}
+	if link.From.Address != "10.0.0.1/30" || link.To.Address != "10.0.0.2/30" {
+		t.Errorf("Unexpected addresses: %s, %s", link.From.Address, link.To.Address)
+	}
+
+	// Unlock vault for PlanSync
+	if err := mgr.Unlock(pass); err != nil {
+		t.Fatalf("Unlock failed: %v", err)
+	}
+
+	// 3. PlanSync verification: no wireguard interface configs created for manual link
+	actions, err := mgr.PlanSync()
+	if err != nil {
+		t.Fatalf("PlanSync failed: %v", err)
+	}
+
+	for _, a := range actions {
+		if a.Type == config.ActionSyncConfig {
+			t.Errorf("Unexpected WireGuard sync action for manual link: %+v", a)
+		}
+		if a.Type == config.ActionDeleteConfig && (a.Interface == "eth1" || a.Interface == "eth2") {
+			t.Errorf("Unexpected delete action for manual interface: %+v", a)
+		}
+	}
+
+	hasBirdAction := false
+	hasNftAction := false
+	for _, a := range actions {
+		if a.Type == config.ActionSyncBirdConfig {
+			hasBirdAction = true
+		}
+		if a.Type == config.ActionSyncNftablesConfig {
+			hasNftAction = true
+			if !strings.Contains(a.FileContent, `define easy42_ifname = { "wg42*", "eth1" }`) &&
+				!strings.Contains(a.FileContent, `define easy42_ifname = { "wg42*", "eth2" }`) {
+				t.Errorf("Expected easy42_ifname in nftables action to contain manual interface, got:\n%s", a.FileContent)
+			}
+		}
+	}
+	if !hasBirdAction {
+		t.Errorf("Expected BIRD sync action")
+	}
+	if !hasNftAction {
+		t.Errorf("Expected nftables sync action")
+	}
+
+	// 4. UpdateLinkAdvanced verification
+	updatedFrom := *fromEnd
+	updatedFrom.Address = "10.0.0.5/30"
+	updatedTo := *toEnd
+	updatedTo.Address = "10.0.0.6/30"
+
+	updated, err := mgr.UpdateLinkAdvanced("node-a", "node-b", &updatedFrom, &updatedTo, nil)
+	if err != nil {
+		t.Fatalf("UpdateLinkAdvanced failed: %v", err)
+	}
+	if updated.From.Address != "10.0.0.5/30" || updated.To.Address != "10.0.0.6/30" {
+		t.Errorf("Expected updated addresses 10.0.0.5/30 and 10.0.0.6/30, got %s, %s",
+			updated.From.Address, updated.To.Address)
+	}
+}
+
+
 
 

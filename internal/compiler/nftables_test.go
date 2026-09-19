@@ -1332,6 +1332,62 @@ func TestBlockIngressNewNftables(t *testing.T) {
 	}
 }
 
+func TestGenerateNftablesConfig_ManualLink(t *testing.T) {
+	node := config.Node{
+		Name:        "test-node",
+		IP:          "192.168.100.1",
+		ExternalIP:  "172.20.229.13",
+		ExternalIP6: "fd42:a159:f9f0::d",
+		ASN:         4224420001,
+	}
+	allNodes := []config.Node{
+		node,
+		{Name: "peer-node", IP: "192.168.100.2", ASN: 4224420002},
+	}
+	links := []config.Link{
+		{
+			Type: config.LinkTypeManual,
+			From: config.LinkEnd{
+				Name:            "test-node",
+				Type:            config.LinkTypeManual,
+				Interface:       "eth1",
+				Address:         "10.0.0.1/30",
+				NeighborAddress: "10.0.0.2",
+			},
+			To: config.LinkEnd{
+				Name:            "peer-node",
+				Type:            config.LinkTypeManual,
+				Interface:       "eth2",
+				Address:         "10.0.0.2/30",
+				NeighborAddress: "10.0.0.1",
+			},
+		},
+	}
+
+	conf, err := GenerateNftablesConfig(&node, allNodes, links)
+	if err != nil {
+		t.Fatalf("GenerateNftablesConfig failed: %v", err)
+	}
+
+	if !strings.Contains(conf, `define easy42_ifname = { "wg42*", "eth1" }`) {
+		t.Errorf("Expected define easy42_ifname to contain eth1, got:\n%s", conf)
+	}
+
+	if nftPath, err := exec.LookPath("nft"); err == nil {
+		tmpDir := t.TempDir()
+		tmpFile := filepath.Join(tmpDir, "easy42.nft")
+		if err := os.WriteFile(tmpFile, []byte(conf), 0644); err != nil {
+			t.Fatalf("WriteFile failed: %v", err)
+		}
+		cmd := exec.Command(nftPath, "-c", "-f", tmpFile)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("nft -c -f validation failed: %v\nOutput:\n%s\nConfig:\n%s", err, string(out), conf)
+		}
+	}
+}
+
+
 
 
 

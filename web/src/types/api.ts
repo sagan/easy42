@@ -97,8 +97,10 @@ export interface Node {
 
 export interface LinkEnd {
   name: string;
+  type?: "wireguard" | "manual" | string;
   interface: string;
   address: string;
+  neighbor_address?: string;
   listen_port: number;
   endpoint?: string;
   private_key?: string;
@@ -117,6 +119,7 @@ export interface LinkEnd {
 }
 
 export interface Link {
+  type?: "wireguard" | "manual" | string;
   from: LinkEnd;
   to: LinkEnd;
   tags?: string[];

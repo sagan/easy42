@@ -145,6 +145,27 @@ func BuildNftablesNodeContext(
 	ctx["nft_prefixes_v4"] = FormatNftPrefixList(prefixes, []string{"172.20.0.0/14"}, false)
 	ctx["nft_prefixes_v6"] = FormatNftPrefixList(prefixes, []string{"fd00::/8"}, true)
 
+	// Collect easy42 interface names: defaults to "wg42*", plus manual link interfaces on this node
+	easy42Ifnames := []string{`"wg42*"`}
+	for _, l := range links {
+		var localEnd *config.LinkEnd
+		if l.From.Name == node.Name {
+			localEnd = &l.From
+		} else if l.To.Name == node.Name {
+			localEnd = &l.To
+		} else {
+			continue
+		}
+		if (l.IsManual() || localEnd.IsManual()) && strings.TrimSpace(localEnd.Interface) != "" {
+			iface := strings.TrimSpace(localEnd.Interface)
+			quoted := `"` + iface + `"`
+			if !slices.Contains(easy42Ifnames, quoted) {
+				easy42Ifnames = append(easy42Ifnames, quoted)
+			}
+		}
+	}
+	ctx["easy42_ifname"] = "{ " + strings.Join(easy42Ifnames, ", ") + " }"
+
 	// Collect interfaces per policy
 	policyIfnames := make(map[string][]string)
 

@@ -491,6 +491,14 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 		localMap["policy"] = rl.policyID
 		localMap["cost"] = rl.linkCost
 		remoteMap := linkEndToContextMap(rl.remoteEnd, rl.remoteNode, rl.localEnd.Name, node.IsExternal)
+		if remoteMap["address"] == "" && rl.localEnd.NeighborAddress != "" {
+			nAddr := strings.TrimSpace(rl.localEnd.NeighborAddress)
+			if idx := strings.Index(nAddr, "/"); idx != -1 {
+				nAddr = nAddr[:idx]
+			}
+			remoteMap["address"] = nAddr
+			remoteMap["is_link_local"] = strings.HasPrefix(strings.ToLower(nAddr), "fe80:")
+		}
 
 		// Determine BIRD peer protocol name suffix (e.g. "", "1", "2") so each link has a unique BGP protocol name
 		suffix := ExtractInterfaceSuffix(rl.localEnd.Interface, rl.remoteEnd.Name, rl.isRemoteExternal)
@@ -543,6 +551,8 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 		pref := rl.localEnd.EffectivePreference(&rl.pol)
 		mark := rl.localEnd.EffectiveMark(&rl.pol)
 		nodeLink := map[string]any{
+			"type":           rl.link.LinkType(),
+			"is_manual":      rl.link.IsManual(),
 			"tags":           tags,
 			"local":          localMap,
 			"remote":         remoteMap,
@@ -924,8 +934,14 @@ func linkEndToContextMap(end *config.LinkEnd, node *config.Node, peerName string
 	mark := ""
 	routingPolicy := ""
 
+	neighborAddr := ""
+	linkType := config.LinkTypeWireGuard
+	isManual := false
 	if end != nil {
 		name = end.Name
+		linkType = end.LinkType()
+		isManual = end.IsManual()
+		neighborAddr = end.NeighborAddress
 		listenPort = end.ListenPort
 		endpoint = end.Endpoint
 		pubKey = end.PublicKey
@@ -942,8 +958,11 @@ func linkEndToContextMap(end *config.LinkEnd, node *config.Node, peerName string
 
 	res := map[string]any{
 		"name":                 name,
+		"type":                 linkType,
+		"is_manual":            isManual,
 		"interface":            iface,
 		"address":              addr,
+		"neighbor_address":     neighborAddr,
 		"is_link_local":        isLinkLocal,
 		"listen_port":          listenPort,
 		"endpoint":             endpoint,

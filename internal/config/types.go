@@ -189,16 +189,24 @@ func (n *Node) ExternalIp6() string {
 	return strings.TrimSpace(n.IP6)
 }
 
-// LinkEnd represents one endpoint of a WireGuard link
+// Link type constants
+const (
+	LinkTypeWireGuard = "wireguard"
+	LinkTypeManual    = "manual"
+)
+
+// LinkEnd represents one endpoint of a link
 type LinkEnd struct {
 	Name                string `json:"name"`
-	Interface           string `json:"interface"`             // e.g. wg42<peer> or wg42-<peer>
-	Address             string `json:"address"`               // e.g. fe80::192:168:100:10/64
-	ListenPort          int    `json:"listen_port"`           // Local device wg listening port
-	Endpoint            string `json:"endpoint,omitempty"`    // External access endpoint (optional)
-	PrivateKey          string `json:"private_key,omitempty"` // Encrypted base64 wireguard private key
-	PublicKey           string `json:"public_key"`            // Wireguard public key
-	PersistentKeepalive int    `json:"persistent_keepalive"`  // Keepalive interval (25 or 0)
+	Type                string `json:"type,omitempty"`             // "wireguard" (default) or "manual"
+	Interface           string `json:"interface"`                  // e.g. wg42<peer>, wg42-<peer>, or manual tunnel iface
+	Address             string `json:"address"`                    // e.g. fe80::192:168:100:10/64 or local ip
+	NeighborAddress     string `json:"neighbor_address,omitempty"` // Neighbor IP for manual link (optional, defaults to peer's address)
+	ListenPort          int    `json:"listen_port"`                // Local device wg listening port
+	Endpoint            string `json:"endpoint,omitempty"`         // External access endpoint (optional)
+	PrivateKey          string `json:"private_key,omitempty"`      // Encrypted base64 wireguard private key
+	PublicKey           string `json:"public_key"`                 // Wireguard public key
+	PersistentKeepalive int    `json:"persistent_keepalive"`       // Keepalive interval (25 or 0)
 	MTU                 int    `json:"mtu,omitempty"`
 	UseIp               bool   `json:"use_ip,omitempty"`            // Resolve peer's endpoint domain to IP in easy42 server
 	ResolvedEndpoint    string `json:"resolved_endpoint,omitempty"` // Automatically resolved / actually used endpoint
@@ -211,6 +219,19 @@ type LinkEnd struct {
 	Note                string `json:"note,omitempty"`              // Markdown format text note
 }
 
+// LinkType returns the link type for LinkEnd ("wireguard" by default, or "manual")
+func (l *LinkEnd) LinkType() string {
+	if l == nil || strings.TrimSpace(l.Type) == "" {
+		return LinkTypeWireGuard
+	}
+	return strings.ToLower(strings.TrimSpace(l.Type))
+}
+
+// IsManual returns whether this LinkEnd is manual
+func (l *LinkEnd) IsManual() bool {
+	return l != nil && l.LinkType() == LinkTypeManual
+}
+
 // UseIP returns whether UseIp is enabled on the LinkEnd
 func (l *LinkEnd) UseIP() bool {
 	if l == nil {
@@ -219,12 +240,32 @@ func (l *LinkEnd) UseIP() bool {
 	return l.UseIp
 }
 
-// Link represents a WireGuard link between two nodes
+// Link represents a link between two nodes
 type Link struct {
+	Type       string    `json:"type,omitempty"` // "wireguard" (default) or "manual"
 	From       LinkEnd   `json:"from"`
 	To         LinkEnd   `json:"to"`
 	Tags       []string  `json:"tags,omitempty"`
 	ModifiedAt time.Time `json:"modified_at,omitempty"` // Last updated timestamp
+}
+
+// LinkType returns the link type for Link ("wireguard" by default, or "manual")
+func (l *Link) LinkType() string {
+	if l == nil {
+		return LinkTypeWireGuard
+	}
+	if strings.TrimSpace(l.Type) != "" {
+		return strings.ToLower(strings.TrimSpace(l.Type))
+	}
+	if l.From.IsManual() || l.To.IsManual() {
+		return LinkTypeManual
+	}
+	return LinkTypeWireGuard
+}
+
+// IsManual returns whether this link is manual
+func (l *Link) IsManual() bool {
+	return l != nil && l.LinkType() == LinkTypeManual
 }
 
 // InterfaceInfo represents an interface on a remote machine
