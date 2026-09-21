@@ -128,6 +128,14 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 	ctx["use_internet_table"] = useInetTable
 	ctx["ip"] = node.IP
 
+	if node.Metric != nil {
+		ctx["metric"] = *node.Metric
+		ctx["has_metric"] = true
+	} else {
+		delete(ctx, "metric")
+		delete(ctx, "has_metric")
+	}
+
 	ip6 := strings.TrimSpace(node.IP6)
 	if idx := strings.Index(ip6, "/"); idx != -1 {
 		ip6 = strings.TrimSpace(ip6[:idx])
@@ -535,6 +543,10 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 			remoteNodeMap["external_ip6"] = rl.remoteNode.ExternalIP6
 			remoteNodeMap["interface"] = rl.remoteNode.Interface
 			remoteNodeMap["is_external"] = rl.remoteNode.IsExternal
+			if rl.remoteNode.Metric != nil {
+				remoteNodeMap["metric"] = *rl.remoteNode.Metric
+				remoteNodeMap["has_metric"] = true
+			}
 		} else {
 			remoteNodeMap = map[string]any{
 				"name":        rl.remoteEnd.Name,

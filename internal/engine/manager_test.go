@@ -1691,6 +1691,67 @@ func TestManualLinkLifecycle(t *testing.T) {
 	}
 }
 
+func TestNodeMetricPersistence(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "easy42-engine-metric-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	store := config.NewStore(tempDir)
+	pass, err := store.Initialize()
+	if err != nil {
+		t.Fatalf("Failed to init store: %v", err)
+	}
+	mgr := NewManager(store)
+	if err := mgr.Unlock(pass); err != nil {
+		t.Fatalf("Failed to unlock manager: %v", err)
+	}
+
+	metricVal := 120
+	node := config.Node{
+		Name:      "node-metric",
+		Host:      "192.168.1.10",
+		IP:        "192.168.1.1",
+		Interface: "eth0",
+		ASN:       4224420001,
+		Metric:    &metricVal,
+	}
+
+	if err := mgr.AddNode(node); err != nil {
+		t.Fatalf("AddNode failed: %v", err)
+	}
+
+	saved := mgr.FindNode("node-metric")
+	if saved == nil || saved.Metric == nil || *saved.Metric != 120 {
+		t.Fatalf("Expected saved metric 120, got %v", saved.Metric)
+	}
+
+	// Update node with new metric
+	metricUpdated := 42
+	node.Metric = &metricUpdated
+	if err := mgr.UpdateNode("node-metric", node); err != nil {
+		t.Fatalf("UpdateNode failed: %v", err)
+	}
+
+	updated := mgr.FindNode("node-metric")
+	if updated == nil || updated.Metric == nil || *updated.Metric != 42 {
+		t.Fatalf("Expected updated metric 42, got %v", updated.Metric)
+	}
+
+	// Update node with metric nil
+	node.Metric = nil
+	if err := mgr.UpdateNode("node-metric", node); err != nil {
+		t.Fatalf("UpdateNode with nil metric failed: %v", err)
+	}
+
+	cleared := mgr.FindNode("node-metric")
+	if cleared == nil || cleared.Metric != nil {
+		t.Fatalf("Expected cleared metric nil, got %v", cleared.Metric)
+	}
+}
+
+
 
 
 

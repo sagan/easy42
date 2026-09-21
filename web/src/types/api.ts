@@ -87,6 +87,7 @@ export interface Node {
   table?: number;
   external_table?: number;
   internet_table?: number;
+  metric?: number;
   static_routes?: string[];
   routes?: KernelRouteRule[];
   config_hooks?: ConfigHook[];

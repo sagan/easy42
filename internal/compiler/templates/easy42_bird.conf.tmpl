@@ -105,6 +105,19 @@ function {{.check_fn}}() {
 {{end}}
 {{end}}
 
+protocol bfd {
+    interface "*" {
+        min rx interval 1000ms;
+        min tx interval 1000ms;
+        multiplier 5;       # Tolerates up to 5 seconds of jitter (or set to 6-8)
+    };
+    multihop {
+        min rx interval 2000ms;
+        min tx interval 2000ms;
+        multiplier 5;
+    };
+}
+
 protocol device {
     scan time 10;
 }
@@ -112,6 +125,9 @@ protocol device {
 protocol kernel kernel_v4 {
     {{if .has_main_kernel_routes}}
     learn;
+    {{end}}
+    {{if .has_metric}}
+    metric {{.metric}};
     {{end}}
     ipv4 {
         export filter {
@@ -161,6 +177,9 @@ protocol pipe pipe_ext_v4 {
 }
 
 protocol kernel kernel_ext_v4 {
+    {{if .has_metric}}
+    metric {{.metric}};
+    {{end}}
     ipv4 {
         table ext_table4;
         export filter {
@@ -188,6 +207,9 @@ protocol pipe pipe_inet_v4 {
 }
 
 protocol kernel kernel_inet_v4 {
+    {{if .has_metric}}
+    metric {{.metric}};
+    {{end}}
     ipv4 {
         table inet_table4;
         export filter {
@@ -262,6 +284,9 @@ protocol kernel kernel_v6 {
     {{if .has_main_kernel_routes_v6}}
     learn;
     {{end}}
+    {{if .has_metric}}
+    metric {{.metric}};
+    {{end}}
     ipv6 {
         export filter {
             {{if .ip6}}
@@ -309,6 +334,9 @@ protocol pipe pipe_ext_v6 {
 }
 
 protocol kernel kernel_ext_v6 {
+    {{if .has_metric}}
+    metric {{.metric}};
+    {{end}}
     ipv6 {
         table ext_table6;
         export filter {
@@ -340,6 +368,9 @@ protocol pipe pipe_inet_v6 {
 }
 
 protocol kernel kernel_inet_v6 {
+    {{if .has_metric}}
+    metric {{.metric}};
+    {{end}}
     ipv6 {
         table inet_table6;
         export filter {
@@ -406,6 +437,7 @@ template bgp easy42_peer {
 
     hold time 90;          # Set hold time to 90 seconds
     keepalive time 30;     # Set keepalive interval to 30 seconds
+    bfd yes;
 
     ipv4 {
         # This tells Bird to send IPv4 routes over the IPv6 session
@@ -486,6 +518,7 @@ template bgp {{.template_name}} {
 
     hold time 90;          # Set hold time to 90 seconds
     keepalive time 30;     # Set keepalive interval to 30 seconds
+    bfd yes;
 
     ipv4 {
         # This tells Bird to send IPv4 routes over the IPv6 session
@@ -568,6 +601,7 @@ template bgp none_peer {
 
     hold time 90;          # Set hold time to 90 seconds
     keepalive time 30;     # Set keepalive interval to 30 seconds
+    bfd yes;
 
     ipv4 {
         extended next hop on;
@@ -641,6 +675,7 @@ template bgp {{.template_name}} {
 
     hold time 90;          # Set hold time to 90 seconds
     keepalive time 30;     # Set keepalive interval to 30 seconds
+    bfd yes;
 
     ipv4 {
         extended next hop on;
@@ -722,6 +757,7 @@ template bgp external_peer {
 
     hold time 90;          # Set hold time to 90 seconds
     keepalive time 30;     # Set keepalive interval to 30 seconds
+    bfd yes;
 
     ipv4 {
         extended next hop on;
@@ -845,6 +881,7 @@ template bgp {{.template_name}} {
 
     hold time 90;          # Set hold time to 90 seconds
     keepalive time 30;     # Set keepalive interval to 30 seconds
+    bfd yes;
 
     ipv4 {
         extended next hop on;
@@ -982,6 +1019,7 @@ template bgp {{.template_name}} {
 
     hold time 90;          # Set hold time to 90 seconds
     keepalive time 30;     # Set keepalive interval to 30 seconds
+    bfd yes;
 
     ipv4 {
         extended next hop on;

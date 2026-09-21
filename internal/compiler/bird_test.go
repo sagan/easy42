@@ -2128,6 +2128,80 @@ func TestGenerateBirdConfig_ManualLink(t *testing.T) {
 	validateBirdSyntax(t, conf)
 }
 
+func TestNodeKernelMetric(t *testing.T) {
+	metric100 := 100
+	metric0 := 0
+
+	nodeBase := config.Node{
+		Name:          "router1",
+		Host:          "10.0.0.1",
+		IP:            "192.168.1.1",
+		IP6:           "fd42:a159:f9f0::1",
+		Interface:     "eth0",
+		ASN:           4224420001,
+		Table:         254,
+		ExternalTable: 100,
+		InternetTable: 102,
+		ExternalIP:    "172.20.1.1",
+		ExternalIP6:   "fd42:a159:f9f0::d",
+	}
+
+	// 1. Without Metric (default: Metric is nil)
+	confNoMetric, err := GenerateBirdConfig(&nodeBase, []config.Node{nodeBase}, nil)
+	if err != nil {
+		t.Fatalf("GenerateBirdConfig without metric failed: %v", err)
+	}
+	if strings.Contains(confNoMetric, "metric ") {
+		t.Errorf("Expected no 'metric ' statement when Metric is nil:\n%s", confNoMetric)
+	}
+	validateBirdSyntax(t, confNoMetric)
+
+	// 2. With Metric = 100
+	nodeWithMetric := nodeBase
+	nodeWithMetric.Metric = &metric100
+	confWithMetric, err := GenerateBirdConfig(&nodeWithMetric, []config.Node{nodeWithMetric}, nil)
+	if err != nil {
+		t.Fatalf("GenerateBirdConfig with metric=100 failed: %v", err)
+	}
+
+	kernelBlocks := []struct {
+		name        string
+		startMarker string
+		endMarker   string
+	}{
+		{"kernel_v4", "protocol kernel kernel_v4 {", "kernel table TABLE;"},
+		{"kernel_ext_v4", "protocol kernel kernel_ext_v4 {", "kernel table EXTERNAL_TABLE;"},
+		{"kernel_inet_v4", "protocol kernel kernel_inet_v4 {", "kernel table INTERNET_TABLE;"},
+		{"kernel_v6", "protocol kernel kernel_v6 {", "kernel table TABLE;"},
+		{"kernel_ext_v6", "protocol kernel kernel_ext_v6 {", "kernel table EXTERNAL_TABLE;"},
+		{"kernel_inet_v6", "protocol kernel kernel_inet_v6 {", "kernel table INTERNET_TABLE;"},
+	}
+
+	for _, kb := range kernelBlocks {
+		block := extractBlock(confWithMetric, kb.startMarker, kb.endMarker)
+		if block == "" {
+			t.Fatalf("Could not extract block for %s", kb.name)
+		}
+		if !strings.Contains(block, "metric 100;") {
+			t.Errorf("Expected 'metric 100;' in %s, got:\n%s", kb.name, block)
+		}
+	}
+	validateBirdSyntax(t, confWithMetric)
+
+	// 3. With Metric = 0
+	nodeWithZeroMetric := nodeBase
+	nodeWithZeroMetric.Metric = &metric0
+	confZeroMetric, err := GenerateBirdConfig(&nodeWithZeroMetric, []config.Node{nodeWithZeroMetric}, nil)
+	if err != nil {
+		t.Fatalf("GenerateBirdConfig with metric=0 failed: %v", err)
+	}
+	v4ZeroBlock := extractBlock(confZeroMetric, "protocol kernel kernel_v4 {", "kernel table TABLE;")
+	if !strings.Contains(v4ZeroBlock, "metric 0;") {
+		t.Errorf("Expected 'metric 0;' in kernel_v4 when Metric=0:\n%s", v4ZeroBlock)
+	}
+	validateBirdSyntax(t, confZeroMetric)
+}
+
 
 
 

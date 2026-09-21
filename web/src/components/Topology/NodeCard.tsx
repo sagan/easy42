@@ -466,6 +466,22 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
                 />
               </Tooltip>
             ) : null}
+            {node.metric !== undefined && node.metric !== null ? (
+              <Tooltip title={`Kernel Route Metric: ${node.metric}`}>
+                <Chip
+                  label={`Metric ${node.metric}`}
+                  size="small"
+                  sx={{
+                    height: 22,
+                    fontSize: "0.65rem",
+                    fontWeight: 700,
+                    backgroundColor: "rgba(59, 130, 246, 0.1)",
+                    color: "#2563EB",
+                    border: "1px solid rgba(59, 130, 246, 0.3)",
+                  }}
+                />
+              </Tooltip>
+            ) : null}
           </Box>
 
           <Typography variant="caption" sx={{ color: isExternal ? "#7C3AED" : "#64748B", fontSize: "0.7rem", fontWeight: isExternal ? 600 : 400 }}>

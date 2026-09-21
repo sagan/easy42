@@ -172,23 +172,9 @@ func BuildWgLinkContext(
 		"mtu":                  mtu,
 		"peer_public_key":      peerPublicKey,
 		"peer_addr_only":       peerAddrOnly,
-		"peer_address_only":    peerAddrOnly,
 		"allowed_ips":          allowedIPs,
 		"endpoint":             endpoint,
 		"persistent_keepalive": keepalive,
-
-		// PascalCase aliases for template convenience
-		"Address":             address,
-		"ListenPort":          listenPort,
-		"PrivateKey":          privateKey,
-		"MTU":                 mtu,
-		"PublicKey":           peerPublicKey,
-		"PeerPublicKey":       peerPublicKey,
-		"AllowedIPs":          allowedIPs,
-		"PeerAddrOnly":        peerAddrOnly,
-		"PeerAddressOnly":     peerAddrOnly,
-		"Endpoint":            endpoint,
-		"PersistentKeepalive": keepalive,
 	}
 
 	if fwmark != "" {
@@ -343,4 +329,3 @@ func ExtractInterfaceSuffix(iface, peerName string, isExternal ...bool) string {
 	}
 	return ""
 }
-

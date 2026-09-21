@@ -101,6 +101,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
   const [table, setTable] = useState<number>(254);
   const [externalTable, setExternalTable] = useState<number | "">("");
   const [internetTable, setInternetTable] = useState<number | "">("");
+  const [metric, setMetric] = useState<number | "">("");
   const [externalIp, setExternalIp] = useState("");
   const [externalIp6, setExternalIp6] = useState("");
   const [staticRoutesStr, setStaticRoutesStr] = useState("");
@@ -135,6 +136,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
       setTable(nodeToEdit.table ?? 254);
       setExternalTable(nodeToEdit.external_table ?? "");
       setInternetTable(nodeToEdit.internet_table ?? "");
+      setMetric(nodeToEdit.metric !== undefined && nodeToEdit.metric !== null ? nodeToEdit.metric : "");
       setExternalIp(nodeToEdit.external_ip || "");
       setExternalIp6(nodeToEdit.external_ip6 || "");
       setStaticRoutesStr(nodeToEdit.static_routes?.join(", ") || "");
@@ -214,6 +216,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
       setTable(254);
       setExternalTable("");
       setInternetTable("");
+      setMetric("");
       setExternalIp("");
       setExternalIp6("");
       setStaticRoutesStr("");
@@ -510,6 +513,10 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
         internet_table:
           internetTable !== "" && !isNaN(Number(internetTable)) && Number(internetTable) > 0
             ? Number(internetTable)
+            : undefined,
+        metric:
+          metric !== "" && !isNaN(Number(metric)) && Number(metric) >= 0
+            ? Number(metric)
             : undefined,
         external_ip: externalIp.trim() ? externalIp.trim() : undefined,
         external_ip6: externalIp6.trim() ? externalIp6.trim() : undefined,
@@ -1257,6 +1264,25 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                     onChange={(e) => setInternetTable(e.target.value === "" ? "" : Number(e.target.value))}
                     placeholder="e.g. 102"
                     helperText="Export Internet routes learned from peers here (optional)"
+                    disabled={saving}
+                  />
+
+                  <TextField
+                    label="Kernel Route Metric"
+                    type="number"
+                    size="small"
+                    value={metric}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val === "") {
+                        setMetric("");
+                      } else {
+                        const num = Number(val);
+                        setMetric(num >= 0 ? num : "");
+                      }
+                    }}
+                    placeholder="e.g. 100"
+                    helperText="Global metric when BIRD exports routes to kernel (optional)"
                     disabled={saving}
                   />
 
