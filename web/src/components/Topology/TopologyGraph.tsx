@@ -23,6 +23,7 @@ import { Network, Layers, EyeOff, X, Eye, Maximize2 } from "lucide-react";
 import { NodeCard } from "./NodeCard";
 import { CustomEdge } from "./CustomEdge";
 import { BlockNode, BLOCK_PALETTE } from "./BlockNode";
+import { BlockVirtualEdge } from "./BlockVirtualEdge";
 import { Node, Link, NodeStatus, NetworkState, GraphBlock } from "../../types/api";
 import { api } from "../../api/client";
 
@@ -171,6 +172,7 @@ const nodeTypes = {
 
 const edgeTypes = {
   customEdge: CustomEdge,
+  blockVirtualEdge: BlockVirtualEdge,
 };
 
 interface FloatingToolbarProps {
@@ -292,10 +294,10 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = ({
 
         {/* Stats Indicator */}
         {blocksCount > 0 && (
-          <Tooltip title={`${blocksCount} block(s) configured. Intra-block links hidden by default to prevent visual clutter; click any node to view its links.`}>
+          <Tooltip title={`${blocksCount} block(s) configured. Intra-block and inter-block links collapsed by default; click any node to view its links.`}>
             <Chip
               icon={<EyeOff size={13} color="#64748B" style={{ marginLeft: 6 }} />}
-              label={`${hiddenLinksCount} mesh links hidden`}
+              label={`${hiddenLinksCount} links collapsed`}
               size="small"
               sx={{
                 height: 26,
@@ -661,38 +663,105 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
   ]);
 
   // Convert links to React Flow edges with filtering rules:
-  // 1. Same block: hidden by default, unless user clicks a node to focus it (revealing all its links)
-  // 2. Inter-block or global: ALWAYS displayed!
+  // 1. By default, don't display links between two nodes of different blocks.
+  //    Display ONLY ONE virtual line between two blocks instead, no matter how many node links exist.
+  // 2. Intra-block links (two nodes of the same block) are hidden by default.
+  // 3. When user clicks a node to focus it, ALWAYS display the node's all links.
+  // 4. The global scope node (doesn't belong to any block) STILL ALWAYS displays all links.
   const initialEdges: Edge[] = useMemo(() => {
-    const pairGroups: Record<string, Link[]> = {};
+    // 1. Group links between distinct block pairs to render one virtual line per pair
+    const blockPairLinksMap = new Map<string, { block1Id: string; block2Id: string; links: Link[] }>();
+
     links.forEach((l) => {
-      const key = [l.from.name, l.to.name].sort().join("---");
-      if (!pairGroups[key]) pairGroups[key] = [];
-      pairGroups[key].push(l);
+      const bFrom = nodeBlockMap[l.from.name];
+      const bTo = nodeBlockMap[l.to.name];
+      if (bFrom && bTo && bFrom !== bTo) {
+        const [b1, b2] = [bFrom, bTo].sort();
+        const pairKey = `${b1}---${b2}`;
+        if (!blockPairLinksMap.has(pairKey)) {
+          blockPairLinksMap.set(pairKey, { block1Id: b1, block2Id: b2, links: [] });
+        }
+        blockPairLinksMap.get(pairKey)!.links.push(l);
+      }
     });
 
-    // Filter according to block rules
+    // Create exactly one virtual edge per pair of blocks with cross-block links
+    const blockVirtualEdges: Edge[] = [];
+    blockPairLinksMap.forEach(({ block1Id, block2Id, links: pairLinks }, pairKey) => {
+      const b1 = blocks.find((b) => b.id === block1Id);
+      const b2 = blocks.find((b) => b.id === block2Id);
+      if (!b1 || !b2) return;
+
+      let workingCount = 0;
+      let downCount = 0;
+      let unknownCount = 0;
+
+      pairLinks.forEach((l) => {
+        const fromIface = networkState?.nodes?.[l.from.name]?.interfaces?.[l.from.interface];
+        const toIface = networkState?.nodes?.[l.to.name]?.interfaces?.[l.to.interface];
+        if (fromIface?.working_state === "working" || toIface?.working_state === "working") {
+          workingCount++;
+        } else if (fromIface?.working_state === "not_working" || toIface?.working_state === "not_working") {
+          downCount++;
+        } else {
+          unknownCount++;
+        }
+      });
+
+      blockVirtualEdges.push({
+        id: `block-edge-${pairKey}`,
+        source: b1.id,
+        target: b2.id,
+        sourceHandle: "block-source",
+        targetHandle: "block-target",
+        type: "blockVirtualEdge",
+        zIndex: 1,
+        data: {
+          sourceBlock: b1,
+          targetBlock: b2,
+          links: pairLinks,
+          workingCount,
+          downCount,
+          unknownCount,
+        } as unknown as Record<string, unknown>,
+      });
+    });
+
+    // 2. Filter node-to-node links according to requirements
     const visibleLinks = links.filter((link) => {
-      const fromBlock = nodeBlockMap[link.from.name];
-      const toBlock = nodeBlockMap[link.to.name];
-
-      const isIntraBlock = Boolean(fromBlock && toBlock && fromBlock === toBlock);
-      if (!isIntraBlock) {
-        // Inter-block or global: ALWAYS displayed
-        return true;
-      }
-
-      // Intra-block: hidden by default, unless focused node connects to this link
+      // Focus rule: when user clicks a node to focus it, always display the node's all links
       if (focusedNodeName) {
         if (link.from.name === focusedNodeName || link.to.name === focusedNodeName) {
           return true;
         }
       }
 
+      const fromBlock = nodeBlockMap[link.from.name];
+      const toBlock = nodeBlockMap[link.to.name];
+
+      // Global scope node (doesn't belong to any block) still always displays all links
+      const isGlobalInvolved = !fromBlock || !toBlock;
+      if (isGlobalInvolved) {
+        return true;
+      }
+
+      // Intra-block links (same block): hidden by default unless focused
+      if (fromBlock === toBlock) {
+        return false;
+      }
+
+      // Inter-block links (different blocks): don't display by default (virtual line displayed instead)
       return false;
     });
 
-    return visibleLinks.map((link) => {
+    const pairGroups: Record<string, Link[]> = {};
+    visibleLinks.forEach((l) => {
+      const key = [l.from.name, l.to.name].sort().join("---");
+      if (!pairGroups[key]) pairGroups[key] = [];
+      pairGroups[key].push(l);
+    });
+
+    const visibleNodeEdges: Edge[] = visibleLinks.map((link) => {
       const pairKey = [link.from.name, link.to.name].sort().join("---");
       const group = pairGroups[pairKey] || [link];
       const linkIndexInPair = group.indexOf(link);
@@ -747,7 +816,9 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
         } as unknown as Record<string, unknown>,
       };
     });
-  }, [nodes, links, networkState, onSelectLink, nodeBlockMap, focusedNodeName]);
+
+    return [...blockVirtualEdges, ...visibleNodeEdges];
+  }, [nodes, links, blocks, networkState, onSelectLink, nodeBlockMap, focusedNodeName]);
 
   const [flowNodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [flowEdges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
@@ -938,25 +1009,27 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
     [onConnectNodes, setEdges],
   );
 
-  // Hidden intra-block link count for statistics display
-  const totalIntraBlockLinks = useMemo(() => {
-    return links.filter((link) => {
-      const fromBlock = nodeBlockMap[link.from.name];
-      const toBlock = nodeBlockMap[link.to.name];
-      return Boolean(fromBlock && toBlock && fromBlock === toBlock);
-    }).length;
-  }, [links, nodeBlockMap]);
-
+  // Hidden links count (both intra-block links and collapsed inter-block links)
   const hiddenLinksCount = useMemo(() => {
-    if (!focusedNodeName) return totalIntraBlockLinks;
     return links.filter((link) => {
+      // If node is focused, all its connected links are visible
+      if (focusedNodeName) {
+        if (link.from.name === focusedNodeName || link.to.name === focusedNodeName) {
+          return false;
+        }
+      }
       const fromBlock = nodeBlockMap[link.from.name];
       const toBlock = nodeBlockMap[link.to.name];
-      const isIntra = Boolean(fromBlock && toBlock && fromBlock === toBlock);
-      if (!isIntra) return false;
-      return link.from.name !== focusedNodeName && link.to.name !== focusedNodeName;
+
+      // Global scope node links are always displayed
+      if (!fromBlock || !toBlock) {
+        return false;
+      }
+
+      // Both belong to blocks (same block or different blocks): collapsed by default
+      return true;
     }).length;
-  }, [links, nodeBlockMap, focusedNodeName, totalIntraBlockLinks]);
+  }, [links, nodeBlockMap, focusedNodeName]);
 
   return (
     <Box sx={{ width: "100%", height: "calc(100vh - 64px)", position: "relative", backgroundColor: "#F8FAFC" }}>

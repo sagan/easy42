@@ -1,5 +1,5 @@
 import React, { memo, useState } from "react";
-import { NodeProps, NodeResizer } from "@xyflow/react";
+import { NodeProps, NodeResizer, Handle, Position } from "@xyflow/react";
 import {
   Box,
   Typography,
@@ -118,6 +118,42 @@ export const BlockNode: React.FC<NodeProps> = memo(({ data, selected }) => {
         minHeight={180}
         handleStyle={{ width: 8, height: 8, borderRadius: 2, pointerEvents: "all" }}
         lineStyle={{ borderColor: blockColor, pointerEvents: "all" }}
+      />
+
+      {/* Invisible Handles for React Flow Edge Attachment */}
+      <Handle
+        type="source"
+        position={Position.Top}
+        id="block-source"
+        isConnectable={false}
+        style={{
+          top: "50%",
+          left: "50%",
+          transform: "translate(-50%, -50%)",
+          opacity: 0,
+          pointerEvents: "none",
+          width: 1,
+          height: 1,
+          minWidth: 1,
+          minHeight: 1,
+        }}
+      />
+      <Handle
+        type="target"
+        position={Position.Top}
+        id="block-target"
+        isConnectable={false}
+        style={{
+          top: "50%",
+          left: "50%",
+          transform: "translate(-50%, -50%)",
+          opacity: 0,
+          pointerEvents: "none",
+          width: 1,
+          height: 1,
+          minWidth: 1,
+          minHeight: 1,
+        }}
       />
 
       {/* Block Header */}

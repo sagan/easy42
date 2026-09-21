@@ -894,8 +894,14 @@ func formatPrefixList(prefixes []string, defaultList []string, isV6 bool) string
 			continue
 		}
 		if isV6 && strings.Contains(p, ":") {
+			if !strings.Contains(p, "/") {
+				p += "/128"
+			}
 			list = append(list, p)
 		} else if !isV6 && strings.Contains(p, ".") && !strings.Contains(p, ":") {
+			if !strings.Contains(p, "/") {
+				p += "/32"
+			}
 			list = append(list, p)
 		}
 	}
