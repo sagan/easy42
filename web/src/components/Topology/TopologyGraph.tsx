@@ -90,21 +90,79 @@ const getStoredNodeBlocks = (): Record<string, string> => {
 };
 
 /**
- * Computes the set of node names that belong to the maximum full-mesh clique(s)
- * in an intra-block undirected graph.
- * If the maximum clique has size < 2, returns an empty set.
+ * Helper to determine whether a link is manual (BGP-only / non-WireGuard data plane).
+ */
+export function isManualLink(
+  link?: {
+    type?: string;
+    from?: { type?: string; interface?: string };
+    to?: { type?: string; interface?: string };
+    tags?: string[];
+  } | null,
+): boolean {
+  if (!link) return false;
+  // 1. Explicit link type
+  if (link.type && link.type.toLowerCase().trim() === "manual") return true;
+  // 2. Explicit endpoint type
+  if (link.from?.type && link.from.type.toLowerCase().trim() === "manual") return true;
+  if (link.to?.type && link.to.type.toLowerCase().trim() === "manual") return true;
+  // 3. Tags containing "manual"
+  if (link.tags && link.tags.some((t) => t.toLowerCase().trim() === "manual")) return true;
+  // 4. In easy42, all WireGuard interfaces start with "wg". If an interface doesn't start with "wg", it's a manual interface.
+  if (link.from?.interface && !link.from.interface.toLowerCase().startsWith("wg")) return true;
+  if (link.to?.interface && !link.to.interface.toLowerCase().startsWith("wg")) return true;
+
+  return false;
+}
+
+/**
+ * Helper to determine whether a link is a WireGuard link (managed data plane).
+ * Manual links and non-WireGuard links are excluded.
+ */
+export function isWireGuardLink(
+  link?: {
+    type?: string;
+    from?: { type?: string; interface?: string };
+    to?: { type?: string; interface?: string };
+    tags?: string[];
+  } | null,
+): boolean {
+  if (!link) return false;
+  if (isManualLink(link)) return false;
+  const lType = link.type?.toLowerCase().trim();
+  if (lType && lType !== "wireguard") return false;
+  const fromType = link.from?.type?.toLowerCase().trim();
+  if (fromType && fromType !== "wireguard") return false;
+  const toType = link.to?.type?.toLowerCase().trim();
+  if (toType && toType !== "wireguard") return false;
+  return true;
+}
+
+export interface MaximumCliqueResult {
+  cliqueNodes: Set<string>;
+  maxSize: number;
+}
+
+/**
+ * Computes the maximum full-mesh clique in an intra-block undirected graph.
+ * Only WireGuard links are counted; manual type links (BGP-only data plane)
+ * are excluded because easy42 does not manage WireGuard mesh data planes for them.
+ * If the maximum clique has size < 2, returns an empty set and maxSize = 0.
  */
 export function getMaximumCliqueNodes(
   nodeNames: string[],
-  links: { from: { name: string }; to: { name: string } }[],
-): Set<string> {
-  if (nodeNames.length < 2) return new Set();
+  links: { from: { name: string; type?: string }; to: { name: string; type?: string }; type?: string }[],
+): MaximumCliqueResult {
+  if (nodeNames.length < 2) return { cliqueNodes: new Set(), maxSize: 0 };
 
   const nodeSet = new Set(nodeNames);
   const adj = new Map<string, Set<string>>();
   nodeNames.forEach((n) => adj.set(n, new Set()));
 
   links.forEach((l) => {
+    // Manual links do not count towards WireGuard full-mesh
+    if (isManualLink(l)) return;
+
     if (nodeSet.has(l.from.name) && nodeSet.has(l.to.name) && l.from.name !== l.to.name) {
       adj.get(l.from.name)!.add(l.to.name);
       adj.get(l.to.name)!.add(l.from.name);
@@ -145,9 +203,48 @@ export function getMaximumCliqueNodes(
 
   bronKerbosch(new Set(), new Set(nodeNames), new Set());
 
-  const result = new Set<string>();
-  maxCliques.forEach((clique) => clique.forEach((n) => result.add(n)));
-  return result;
+  if (maxSize < 2 || maxCliques.length === 0) {
+    return { cliqueNodes: new Set(), maxSize: 0 };
+  }
+
+  // If there is a unique maximum clique (including when the entire block is full-mesh),
+  // return its members. If there are multiple tied cliques with no single dominant core,
+  // do not arbitrarily pick one so nodes are not falsely labeled as the unique mesh core.
+  const cliqueNodes = maxCliques.length === 1 ? maxCliques[0] : new Set<string>();
+
+  return { cliqueNodes, maxSize };
+}
+
+/**
+ * Determines the working state of a link ("working", "not_working", or "unknown").
+ * For WireGuard links, uses the interface's recorded working_state in networkState.
+ * For manual links (BGP-only data plane), easy42 does not manage WireGuard handshakes;
+ * if both participating nodes are online and reachable, the manual link is considered working.
+ */
+export function getLinkWorkingState(
+  link: Link,
+  networkState?: NetworkState | null,
+  nodeStatuses?: Record<string, NodeStatus>,
+): "working" | "not_working" | "unknown" {
+  const isManual = isManualLink(link);
+  const fromIface = networkState?.nodes?.[link.from.name]?.interfaces?.[link.from.interface];
+  const toIface = networkState?.nodes?.[link.to.name]?.interfaces?.[link.to.interface];
+
+  if (fromIface?.working_state === "working" || toIface?.working_state === "working") {
+    return "working";
+  }
+  if (fromIface?.working_state === "not_working" || toIface?.working_state === "not_working") {
+    return "not_working";
+  }
+  if (isManual) {
+    const fromOnline = nodeStatuses?.[link.from.name] ? nodeStatuses[link.from.name].connected : true;
+    const toOnline = nodeStatuses?.[link.to.name] ? nodeStatuses[link.to.name].connected : true;
+    return fromOnline && toOnline ? "working" : "not_working";
+  }
+  if (fromIface?.working_state === "unknown" || toIface?.working_state === "unknown") {
+    return "unknown";
+  }
+  return "unknown";
 }
 
 interface TopologyGraphProps {
@@ -487,6 +584,46 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
     setBlocks((prev) => prev.map((b) => (b.id === id ? { ...b, color } : b)));
   }, []);
 
+  // Compute consistent node positions and block containment map
+  const { nodePosMap, effectiveNodeBlockMap } = useMemo(() => {
+    const total = nodes.length;
+    const radius = Math.max(220, total * 60);
+    const centerX = 500;
+    const centerY = 350;
+
+    const posMap = new Map<string, { x: number; y: number }>();
+    nodes.forEach((node, i) => {
+      const angle = (i / (total || 1)) * 2 * Math.PI - Math.PI / 2;
+      const defaultX = total === 1 ? centerX : centerX + radius * Math.cos(angle);
+      const defaultY = total === 1 ? centerY : centerY + radius * Math.sin(angle);
+      const x = typeof node.x === "number" ? node.x : defaultX;
+      const y = typeof node.y === "number" ? node.y : defaultY;
+      posMap.set(node.name, { x, y });
+    });
+
+    const effMap: Record<string, string> = {};
+    nodes.forEach((node) => {
+      const explicitId = nodeBlockMap[node.name];
+      if (explicitId && blocks.some((b) => b.id === explicitId)) {
+        effMap[node.name] = explicitId;
+        return;
+      }
+      const pos = posMap.get(node.name);
+      if (pos) {
+        const cx = pos.x + 130;
+        const cy = pos.y + 90;
+        const target = blocks.find(
+          (b) => cx >= b.x && cx <= b.x + b.width && cy >= b.y && cy <= b.y + b.height,
+        );
+        if (target) {
+          effMap[node.name] = target.id;
+        }
+      }
+    });
+
+    return { nodePosMap: posMap, effectiveNodeBlockMap: effMap };
+  }, [nodes, blocks, nodeBlockMap]);
+
   // Initial nodes: combine background Block nodes and NodeCard custom nodes
   const initialNodes: FlowNode[] = useMemo(() => {
     // 0. Compute health for all nodes
@@ -510,11 +647,10 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
       let unknownLinks = 0;
 
       nodeLinks.forEach((l) => {
-        const fromIface = networkState?.nodes?.[l.from.name]?.interfaces?.[l.from.interface];
-        const toIface = networkState?.nodes?.[l.to.name]?.interfaces?.[l.to.interface];
-        if (fromIface?.working_state === "working" || toIface?.working_state === "working") {
+        const state = getLinkWorkingState(l, networkState, nodeStatuses);
+        if (state === "working") {
           upLinks++;
-        } else if (fromIface?.working_state === "not_working" || toIface?.working_state === "not_working") {
+        } else if (state === "not_working") {
           downLinks++;
         } else {
           unknownLinks++;
@@ -546,31 +682,50 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
       };
     });
 
-    // 1. Compute full-mesh maximum clique for each block
-    const blockFullMeshMap = new Map<string, Set<string>>();
+    // 1. Compute full-mesh status for each block
+    // A block is full-mesh IF AND ONLY IF:
+    // - It has at least 2 member nodes.
+    // - Every pair of distinct member nodes (u, v) in the block has a direct WireGuard link (non-manual).
+    const blockFullMeshStatusMap = new Map<string, boolean>();
     blocks.forEach((block) => {
-      const memberNames = nodes.filter((n) => nodeBlockMap[n.name] === block.id).map((n) => n.name);
-      const intraLinks = links.filter(
-        (l) => nodeBlockMap[l.from.name] === block.id && nodeBlockMap[l.to.name] === block.id,
+      const memberNames = nodes
+        .filter((n) => effectiveNodeBlockMap[n.name] === block.id)
+        .map((n) => n.name);
+
+      if (memberNames.length < 2) {
+        blockFullMeshStatusMap.set(block.id, false);
+        return;
+      }
+
+      // Check if every pair (u, v) of nodes inside this block has a direct WireGuard link
+      const hasIntraWireGuardLink = (u: string, v: string) => {
+        return links.some(
+          (l) =>
+            isWireGuardLink(l) &&
+            ((l.from.name === u && l.to.name === v) || (l.from.name === v && l.to.name === u)),
+        );
+      };
+
+      const isFullMesh = memberNames.every((u, i) =>
+        memberNames.slice(i + 1).every((v) => hasIntraWireGuardLink(u, v)),
       );
-      const maxCliqueNodes = getMaximumCliqueNodes(memberNames, intraLinks);
-      blockFullMeshMap.set(block.id, maxCliqueNodes);
+
+      blockFullMeshStatusMap.set(block.id, isFullMesh);
     });
 
     // 2. Block nodes (zIndex: 0 with pointer-events handling so they render beneath node cards)
     const blockFlowNodes: FlowNode[] = blocks.map((block) => {
-      const memberNodes = nodes.filter((n) => nodeBlockMap[n.name] === block.id);
+      const memberNodes = nodes.filter((n) => effectiveNodeBlockMap[n.name] === block.id);
+      const memberNamesSet = new Set(memberNodes.map((n) => n.name));
       const intraLinks = links.filter(
-        (l) => nodeBlockMap[l.from.name] === block.id && nodeBlockMap[l.to.name] === block.id,
+        (l) => memberNamesSet.has(l.from.name) && memberNamesSet.has(l.to.name),
       );
       const brokenLinks = intraLinks.filter((l) => {
-        const fromIface = networkState?.nodes?.[l.from.name]?.interfaces?.[l.from.interface];
-        const toIface = networkState?.nodes?.[l.to.name]?.interfaces?.[l.to.interface];
-        return fromIface?.working_state === "not_working" || toIface?.working_state === "not_working";
+        return getLinkWorkingState(l, networkState, nodeStatuses) === "not_working";
       });
 
-      const maxClique = blockFullMeshMap.get(block.id) || new Set<string>();
-      const fullMeshCount = memberNodes.filter((n) => maxClique.has(n.name)).length;
+      const isFullMesh = blockFullMeshStatusMap.get(block.id) ?? false;
+      const fullMeshCount = isFullMesh ? memberNodes.length : 0;
       const healthyCount = memberNodes.filter((n) => nodeHealthMap[n.name]?.isHealthy).length;
 
       return {
@@ -590,6 +745,7 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
           memberCount: memberNodes.length,
           hiddenLinkCount: intraLinks.length,
           brokenLinkCount: brokenLinks.length,
+          isFullMesh,
           fullMeshCount,
           healthyCount,
           onRenameBlock: handleRenameBlock,
@@ -600,29 +756,18 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
     });
 
     // 3. Custom Node cards
-    const total = nodes.length;
-    const radius = Math.max(220, total * 60);
-    const centerX = 500;
-    const centerY = 350;
-
-    const customFlowNodes: FlowNode[] = nodes.map((node, i) => {
-      const angle = (i / (total || 1)) * 2 * Math.PI - Math.PI / 2;
-      const defaultX = total === 1 ? centerX : centerX + radius * Math.cos(angle);
-      const defaultY = total === 1 ? centerY : centerY + radius * Math.sin(angle);
-
-      const x = typeof node.x === "number" ? node.x : defaultX;
-      const y = typeof node.y === "number" ? node.y : defaultY;
-
-      const assignedBlockId = nodeBlockMap[node.name];
+    const customFlowNodes: FlowNode[] = nodes.map((node) => {
+      const pos = nodePosMap.get(node.name) || { x: 500, y: 350 };
+      const assignedBlockId = effectiveNodeBlockMap[node.name];
       const assignedBlock = blocks.find((b) => b.id === assignedBlockId);
       const inBlock = Boolean(assignedBlock);
-      const isBlockFullMesh = inBlock && Boolean(blockFullMeshMap.get(assignedBlockId!)?.has(node.name));
+      const isBlockFullMesh = inBlock && Boolean(blockFullMeshStatusMap.get(assignedBlockId!));
       const health = nodeHealthMap[node.name];
 
       return {
         id: node.name,
         type: "customNode",
-        position: { x, y },
+        position: pos,
         style: { zIndex: 10, width: 260 },
         initialWidth: 260,
         initialHeight: 180,
@@ -650,7 +795,8 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
     blocks,
     nodes,
     links,
-    nodeBlockMap,
+    effectiveNodeBlockMap,
+    nodePosMap,
     nodeStatuses,
     networkState,
     focusedNodeName,
@@ -673,8 +819,8 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
     const blockPairLinksMap = new Map<string, { block1Id: string; block2Id: string; links: Link[] }>();
 
     links.forEach((l) => {
-      const bFrom = nodeBlockMap[l.from.name];
-      const bTo = nodeBlockMap[l.to.name];
+      const bFrom = effectiveNodeBlockMap[l.from.name];
+      const bTo = effectiveNodeBlockMap[l.to.name];
       if (bFrom && bTo && bFrom !== bTo) {
         const [b1, b2] = [bFrom, bTo].sort();
         const pairKey = `${b1}---${b2}`;
@@ -697,11 +843,10 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
       let unknownCount = 0;
 
       pairLinks.forEach((l) => {
-        const fromIface = networkState?.nodes?.[l.from.name]?.interfaces?.[l.from.interface];
-        const toIface = networkState?.nodes?.[l.to.name]?.interfaces?.[l.to.interface];
-        if (fromIface?.working_state === "working" || toIface?.working_state === "working") {
+        const state = getLinkWorkingState(l, networkState, nodeStatuses);
+        if (state === "working") {
           workingCount++;
-        } else if (fromIface?.working_state === "not_working" || toIface?.working_state === "not_working") {
+        } else if (state === "not_working") {
           downCount++;
         } else {
           unknownCount++;
@@ -736,8 +881,8 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
         }
       }
 
-      const fromBlock = nodeBlockMap[link.from.name];
-      const toBlock = nodeBlockMap[link.to.name];
+      const fromBlock = effectiveNodeBlockMap[link.from.name];
+      const toBlock = effectiveNodeBlockMap[link.to.name];
 
       // Global scope node (doesn't belong to any block) still always displays all links
       const isGlobalInvolved = !fromBlock || !toBlock;
@@ -772,18 +917,10 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
       const fromIface = networkState?.nodes?.[link.from.name]?.interfaces?.[link.from.interface];
       const toIface = networkState?.nodes?.[link.to.name]?.interfaces?.[link.to.interface];
 
-      let workingState: "working" | "not_working" | "unknown" = "unknown";
+      const workingState = getLinkWorkingState(link, networkState, nodeStatuses);
       let latestHandshake: string | undefined = undefined;
       let rxBytes = 0;
       let txBytes = 0;
-
-      if (fromIface?.working_state === "working" || toIface?.working_state === "working") {
-        workingState = "working";
-      } else if (fromIface?.working_state === "not_working" || toIface?.working_state === "not_working") {
-        workingState = "not_working";
-      } else if (fromIface?.working_state === "unknown" || toIface?.working_state === "unknown") {
-        workingState = "unknown";
-      }
 
       const hsFrom = fromIface?.latest_handshake ? new Date(fromIface.latest_handshake).getTime() : 0;
       const hsTo = toIface?.latest_handshake ? new Date(toIface.latest_handshake).getTime() : 0;
@@ -818,7 +955,7 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
     });
 
     return [...blockVirtualEdges, ...visibleNodeEdges];
-  }, [nodes, links, blocks, networkState, onSelectLink, nodeBlockMap, focusedNodeName]);
+  }, [nodes, links, blocks, networkState, onSelectLink, effectiveNodeBlockMap, focusedNodeName, nodeStatuses]);
 
   const [flowNodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [flowEdges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
@@ -934,9 +1071,8 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
         const finalX = Math.round(node.position.x);
         const finalY = Math.round(node.position.y);
 
-        setBlocks((prev) =>
-          prev.map((b) => (b.id === node.id ? { ...b, x: finalX, y: finalY } : b)),
-        );
+        const updatedBlocks = blocks.map((b) => (b.id === node.id ? { ...b, x: finalX, y: finalY } : b));
+        setBlocks(updatedBlocks);
 
         if (blockDragState.current && blockDragState.current.blockId === node.id) {
           const dx = finalX - blockDragState.current.startBlockPos.x;
@@ -950,6 +1086,29 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
           });
         }
         blockDragState.current = null;
+
+        // Synchronize nodeBlockMap for all custom nodes with the updated blocks
+        setNodeBlockMap((prev) => {
+          const next = { ...prev };
+          let changed = false;
+          flowNodes.forEach((fn) => {
+            if (fn.type !== "customNode") return;
+            const cx = fn.position.x + 130;
+            const cy = fn.position.y + 90;
+            const target = updatedBlocks.find(
+              (b) => cx >= b.x && cx <= b.x + b.width && cy >= b.y && cy <= b.y + b.height,
+            );
+            const current = next[fn.id];
+            if (target && current !== target.id) {
+              next[fn.id] = target.id;
+              changed = true;
+            } else if (!target && current === node.id) {
+              delete next[fn.id];
+              changed = true;
+            }
+          });
+          return changed ? next : prev;
+        });
         return;
       }
 
@@ -962,7 +1121,7 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
 
         // Check if node center falls within any block bounding box
         const nodeCenterX = x + 130;
-        const nodeCenterY = y + 100;
+        const nodeCenterY = y + 90;
         const targetBlock = blocks.find(
           (b) =>
             nodeCenterX >= b.x &&
@@ -985,7 +1144,7 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
         });
       }
     },
-    [blocks, onNodePositionChange],
+    [blocks, flowNodes, onNodePositionChange],
   );
 
   const initialViewport = useMemo(() => getStoredViewport(), []);
@@ -1018,8 +1177,8 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
           return false;
         }
       }
-      const fromBlock = nodeBlockMap[link.from.name];
-      const toBlock = nodeBlockMap[link.to.name];
+      const fromBlock = effectiveNodeBlockMap[link.from.name];
+      const toBlock = effectiveNodeBlockMap[link.to.name];
 
       // Global scope node links are always displayed
       if (!fromBlock || !toBlock) {
@@ -1029,7 +1188,7 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
       // Both belong to blocks (same block or different blocks): collapsed by default
       return true;
     }).length;
-  }, [links, nodeBlockMap, focusedNodeName]);
+  }, [links, effectiveNodeBlockMap, focusedNodeName]);
 
   return (
     <Box sx={{ width: "100%", height: "calc(100vh - 64px)", position: "relative", backgroundColor: "#F8FAFC" }}>

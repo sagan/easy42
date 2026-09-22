@@ -242,6 +242,8 @@ table inet easy42 {
     iifname @pol_{{ .id }}_ifname ip6 daddr @pol_{{ .id }}_local_v6 counter drop
   {{- end }}
 {{- end }}
+    iifname @easy42_ifname accept
+    oifname @easy42_ifname accept
   }
   chain filter_input {
     type filter hook input priority filter; policy accept;

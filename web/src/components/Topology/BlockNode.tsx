@@ -37,6 +37,7 @@ export interface BlockNodeData {
   memberCount: number;
   hiddenLinkCount: number;
   brokenLinkCount: number;
+  isFullMesh?: boolean;
   fullMeshCount?: number;
   healthyCount?: number;
   onRenameBlock: (id: string, newName: string) => void;
@@ -52,7 +53,7 @@ export const BlockNode: React.FC<NodeProps> = memo(({ data, selected }) => {
     memberCount = 0,
     hiddenLinkCount = 0,
     brokenLinkCount = 0,
-    fullMeshCount = 0,
+    isFullMesh = false,
     healthyCount = 0,
     onRenameBlock,
     onDeleteBlock,
@@ -263,13 +264,13 @@ export const BlockNode: React.FC<NodeProps> = memo(({ data, selected }) => {
           />
 
           {/* Full-Mesh Core Badge */}
-          {memberCount >= 2 && fullMeshCount > 0 && (
+          {memberCount >= 2 && isFullMesh && (
             <Tooltip
-              title={`${fullMeshCount} of ${memberCount} node(s) form the maximum full-mesh interconnected core in this block.`}
+              title={`All ${memberCount} node(s) in this block are fully interconnected via WireGuard.`}
             >
               <Chip
                 icon={<Share2 size={11} color={blockColor} style={{ marginLeft: 4 }} />}
-                label={fullMeshCount === memberCount ? "Full-Mesh" : `${fullMeshCount}/${memberCount} mesh`}
+                label="Full-Mesh"
                 size="small"
                 sx={{
                   height: 20,

@@ -107,8 +107,8 @@ function {{.check_fn}}() {
 
 protocol bfd {
     interface "*" {
-        min rx interval 1000ms;
-        min tx interval 1000ms;
+        min rx interval 2000ms;
+        min tx interval 2000ms;
         multiplier 5;       # Tolerates up to 5 seconds of jitter (or set to 6-8)
     };
     multihop {
