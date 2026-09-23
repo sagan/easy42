@@ -242,6 +242,7 @@ type LinkEnd struct {
 	Type                string `json:"type,omitempty"`             // "wireguard" (default) or "manual"
 	Interface           string `json:"interface"`                  // e.g. wg42<peer>, wg42-<peer>, or manual tunnel iface
 	Address             string `json:"address"`                    // e.g. fe80::192:168:100:10/64 or local ip
+	Address4            string `json:"address4,omitempty"`         // Optional IPv4 link-local address (e.g. 169.254.x.x/32)
 	NeighborAddress     string `json:"neighbor_address,omitempty"` // Neighbor IP for manual link (optional, defaults to peer's address)
 	ListenPort          int    `json:"listen_port"`                // Local device wg listening port
 	Endpoint            string `json:"endpoint,omitempty"`         // External access endpoint (optional)
@@ -287,6 +288,7 @@ type Link struct {
 	From       LinkEnd   `json:"from"`
 	To         LinkEnd   `json:"to"`
 	Tags       []string  `json:"tags,omitempty"`
+	AssignIPv4 bool      `json:"assign_ipv4,omitempty"` // Assign IPv4 link-local address (169.254.X.X/32) to wg interface
 	ModifiedAt time.Time `json:"modified_at,omitempty"` // Last updated timestamp
 }
 

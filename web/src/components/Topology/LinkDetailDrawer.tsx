@@ -277,6 +277,21 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
                   }}
                 />
               )}
+              {link.assign_ipv4 && (
+                <Chip
+                  label="IPv4 169.254.X.X"
+                  size="small"
+                  sx={{
+                    height: 18,
+                    fontSize: "0.6rem",
+                    fontWeight: 800,
+                    bgcolor: "rgba(16, 185, 129, 0.12)",
+                    color: "#059669",
+                    border: "1px solid rgba(16, 185, 129, 0.25)",
+                    borderRadius: "4px",
+                  }}
+                />
+              )}
             </Box>
             <Typography variant="caption" className="mono-font" sx={{ color: "#64748B" }}>
               {link.from.name} ↔ {link.to.name}
@@ -494,6 +509,17 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
                 {link.from.address}
               </Typography>
             </Box>
+
+            {link.assign_ipv4 && (
+              <Box sx={{ display: "flex", justifyContent: "space-between" }}>
+                <Typography variant="caption" sx={{ color: "#64748B" }}>
+                  Link-Local IPv4:
+                </Typography>
+                <Typography variant="caption" className="mono-font" sx={{ color: "#059669", fontWeight: 600 }}>
+                  {link.from.address4 || "169.254.X.X/32 (Auto)"}
+                </Typography>
+              </Box>
+            )}
 
             {isManual && (
               <Box sx={{ display: "flex", justifyContent: "space-between" }}>
@@ -944,6 +970,17 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
                 {link.to.address}
               </Typography>
             </Box>
+
+            {link.assign_ipv4 && (
+              <Box sx={{ display: "flex", justifyContent: "space-between" }}>
+                <Typography variant="caption" sx={{ color: "#64748B" }}>
+                  Link-Local IPv4:
+                </Typography>
+                <Typography variant="caption" className="mono-font" sx={{ color: "#059669", fontWeight: 600 }}>
+                  {link.to.address4 || "169.254.X.X/32 (Auto)"}
+                </Typography>
+              </Box>
+            )}
 
             {isManual && (
               <Box sx={{ display: "flex", justifyContent: "space-between" }}>

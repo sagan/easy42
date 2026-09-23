@@ -2,6 +2,7 @@ package compiler
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"easy42/internal/config"
@@ -103,11 +104,31 @@ func BuildWgLinkContext(
 		keepalive = 0
 	}
 
-	allowedIPs := fmt.Sprintf("%s/128, 0.0.0.0/0, ::/0", peerAddrOnly)
+	var allowedIPs string
+	if peerEnd.Address4 == "" {
+		allowedIPs = fmt.Sprintf("%s/128, 0.0.0.0/0, ::/0", peerAddrOnly)
+ 	} else {
+		allowedIPs = fmt.Sprintf("%s/128, %s, 0.0.0.0/0, ::/0", peerAddrOnly, peerEnd.Address4)
+	}
 
 	var policyMap map[string]config.NetworkPolicy
+	var assignIPv4 bool
+	if selfEnd != nil && selfEnd.Address4 != "" {
+		assignIPv4 = true
+	}
+
 	for _, arg := range args {
 		switch v := arg.(type) {
+		case *config.Link:
+			if v != nil && v.AssignIPv4 {
+				assignIPv4 = true
+			}
+		case config.Link:
+			if v.AssignIPv4 {
+				assignIPv4 = true
+			}
+		case bool:
+			assignIPv4 = v
 		case *config.Config:
 			if v != nil {
 				allPolicies := v.GetAllPolicies()
@@ -115,12 +136,38 @@ func BuildWgLinkContext(
 				for _, p := range allPolicies {
 					policyMap[p.ID] = p
 				}
+				if !assignIPv4 {
+					for _, l := range v.Links {
+						if (selfEnd != nil && (l.From.Interface == selfEnd.Interface || l.To.Interface == selfEnd.Interface)) ||
+							(selfNode != nil && peerNode != nil &&
+								((l.From.Name == selfNode.Name && l.To.Name == peerNode.Name) ||
+									(l.From.Name == peerNode.Name && l.To.Name == selfNode.Name))) {
+							if l.AssignIPv4 {
+								assignIPv4 = true
+							}
+							break
+						}
+					}
+				}
 			}
 		case config.Config:
 			allPolicies := v.GetAllPolicies()
 			policyMap = make(map[string]config.NetworkPolicy, len(allPolicies))
 			for _, p := range allPolicies {
 				policyMap[p.ID] = p
+			}
+			if !assignIPv4 {
+				for _, l := range v.Links {
+					if (selfEnd != nil && (l.From.Interface == selfEnd.Interface || l.To.Interface == selfEnd.Interface)) ||
+						(selfNode != nil && peerNode != nil &&
+							((l.From.Name == selfNode.Name && l.To.Name == peerNode.Name) ||
+								(l.From.Name == peerNode.Name && l.To.Name == selfNode.Name))) {
+						if l.AssignIPv4 {
+							assignIPv4 = true
+						}
+						break
+					}
+				}
 			}
 		case []config.NetworkPolicy:
 			cfgPolicies := &config.Config{NetworkPolicies: v}
@@ -153,6 +200,45 @@ func BuildWgLinkContext(
 		}
 	}
 
+	address4 := ""
+	peerAddr4Only := ""
+	if assignIPv4 {
+		if selfEnd != nil && selfEnd.Address4 != "" {
+			address4 = selfEnd.Address4
+		} else if peerNode != nil {
+			mainIP := getNodeMainIP(peerNode)
+			if mainIP != "" {
+				linkIdx := 0
+				if selfEnd != nil && selfEnd.Interface != "" {
+					s := ExtractInterfaceSuffix(selfEnd.Interface, peerNode.Name, peerNode.IsExternal)
+					linkIdx = LinkIndexFromSuffix(s)
+				}
+				if d, err := DeriveIPv4LinkLocal(mainIP, linkIdx); err == nil {
+					address4 = d
+				}
+			}
+		}
+
+		if peerEnd != nil && peerEnd.Address4 != "" {
+			peerAddr4Only = strings.TrimSpace(peerEnd.Address4)
+			if idx := strings.Index(peerAddr4Only, "/"); idx != -1 {
+				peerAddr4Only = peerAddr4Only[:idx]
+			}
+		} else if selfNode != nil {
+			mainIP := getNodeMainIP(selfNode)
+			if mainIP != "" {
+				linkIdx := 0
+				if peerEnd != nil && peerEnd.Interface != "" && peerNode != nil {
+					s := ExtractInterfaceSuffix(peerEnd.Interface, selfNode.Name, selfNode.IsExternal)
+					linkIdx = LinkIndexFromSuffix(s)
+				}
+				if d, err := DeriveIPv4LinkLocalAddressOnly(mainIP, linkIdx); err == nil {
+					peerAddr4Only = d
+				}
+			}
+		}
+	}
+
 	isRemoteExternal := peerNode != nil && peerNode.IsExternal
 	policyID := selfEnd.EffectivePolicy(isRemoteExternal)
 	var activePolicy *config.NetworkPolicy
@@ -175,6 +261,14 @@ func BuildWgLinkContext(
 		"allowed_ips":          allowedIPs,
 		"endpoint":             endpoint,
 		"persistent_keepalive": keepalive,
+		"assign_ipv4":          assignIPv4,
+	}
+
+	if address4 != "" {
+		ctx["address4"] = address4
+	}
+	if peerAddr4Only != "" {
+		ctx["peer_addr4_only"] = peerAddr4Only
 	}
 
 	if fwmark != "" {
@@ -328,4 +422,32 @@ func ExtractInterfaceSuffix(iface, peerName string, isExternal ...bool) string {
 		}
 	}
 	return ""
+}
+
+// LinkIndexFromSuffix parses an interface suffix string ("" -> 0, "1" -> 1, "2" -> 2) into a link index.
+func LinkIndexFromSuffix(suffix string) int {
+	if suffix == "" {
+		return 0
+	}
+	if idx, err := strconv.Atoi(suffix); err == nil && idx >= 0 {
+		return idx
+	}
+	return 0
+}
+
+// getNodeMainIP extracts the primary IP (v4 or fallback) for a node.
+func getNodeMainIP(n *config.Node) string {
+	if n == nil {
+		return ""
+	}
+	if strings.TrimSpace(n.IP) != "" {
+		return strings.TrimSpace(n.IP)
+	}
+	if strings.TrimSpace(n.ExternalIP) != "" {
+		return strings.TrimSpace(n.ExternalIP)
+	}
+	if strings.TrimSpace(n.IP6) != "" {
+		return strings.TrimSpace(n.IP6)
+	}
+	return strings.TrimSpace(n.ExternalIP6)
 }

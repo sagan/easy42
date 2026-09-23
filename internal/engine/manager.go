@@ -400,6 +400,26 @@ func (m *Manager) UpdateNode(name string, updated config.Node) error {
 				}
 			}
 		}
+		for i := range cfg.Links {
+			if cfg.Links[i].AssignIPv4 {
+				if cfg.Links[i].To.Name == updated.Name {
+					s := compiler.ExtractInterfaceSuffix(cfg.Links[i].From.Interface, updated.Name, updated.IsExternal)
+					idx := compiler.LinkIndexFromSuffix(s)
+					if newAddr4, err := compiler.DeriveIPv4LinkLocal(updated.IP, idx); err == nil {
+						cfg.Links[i].From.Address4 = newAddr4
+						cfg.Links[i].ModifiedAt = now
+					}
+				}
+				if cfg.Links[i].From.Name == updated.Name {
+					s := compiler.ExtractInterfaceSuffix(cfg.Links[i].To.Interface, updated.Name, updated.IsExternal)
+					idx := compiler.LinkIndexFromSuffix(s)
+					if newAddr4, err := compiler.DeriveIPv4LinkLocal(updated.IP, idx); err == nil {
+						cfg.Links[i].To.Address4 = newAddr4
+						cfg.Links[i].ModifiedAt = now
+					}
+				}
+			}
+		}
 	}
 
 	// Preserve coordinates if not specified in updated node
@@ -851,8 +871,10 @@ func (m *Manager) buildLink(cfg *config.Config, n1, n2 *config.Node, listenPort1
 
 	var customFromEnd, customToEnd *config.LinkEnd
 	linkType := config.LinkTypeWireGuard
+	assignIPv4 := false
 	if len(linkParams) > 0 && linkParams[0] != nil {
 		lp := linkParams[0]
+		assignIPv4 = lp.AssignIPv4
 		if lp.Type != "" {
 			linkType = lp.Type
 		}
@@ -1241,13 +1263,43 @@ func (m *Manager) buildLink(cfg *config.Config, n1, n2 *config.Node, listenPort1
 		toNote = customToEnd.Note
 	}
 
+	var fromAddr4, toAddr4 string
+	if assignIPv4 {
+		fromMainIP := fromNode.IP
+		if fromMainIP == "" {
+			fromMainIP = fromNode.ExternalIP
+		}
+		toMainIP := toNode.IP
+		if toMainIP == "" {
+			toMainIP = toNode.ExternalIP
+		}
+		if toMainIP != "" {
+			if a4, err := compiler.DeriveIPv4LinkLocal(toMainIP, linkIndex); err == nil {
+				fromAddr4 = a4
+			}
+		}
+		if fromMainIP != "" {
+			if a4, err := compiler.DeriveIPv4LinkLocal(fromMainIP, linkIndex); err == nil {
+				toAddr4 = a4
+			}
+		}
+	}
+	if customFromEnd != nil && customFromEnd.Address4 != "" {
+		fromAddr4 = customFromEnd.Address4
+	}
+	if customToEnd != nil && customToEnd.Address4 != "" {
+		toAddr4 = customToEnd.Address4
+	}
+
 	link := &config.Link{
-		Type: linkType,
+		Type:       linkType,
+		AssignIPv4: assignIPv4,
 		From: config.LinkEnd{
 			Name:                fromNode.Name,
 			Type:                linkType,
 			Interface:           fromIface,
 			Address:             fromAddr,
+			Address4:            fromAddr4,
 			NeighborAddress:     fromNeighborAddr,
 			ListenPort:          fromPort,
 			Endpoint:            fromEP,
@@ -1269,6 +1321,7 @@ func (m *Manager) buildLink(cfg *config.Config, n1, n2 *config.Node, listenPort1
 			Type:                linkType,
 			Interface:           toIface,
 			Address:             toAddr,
+			Address4:            toAddr4,
 			NeighborAddress:     toNeighborAddr,
 			ListenPort:          toPort,
 			Endpoint:            toEP,
@@ -1312,6 +1365,18 @@ func (m *Manager) AddLink(node1Name, node2Name string, listenPort1, listenPort2 
 
 // AddLinkAdvanced creates a link with full custom LinkEnd properties (useful for external peering)
 func (m *Manager) AddLinkAdvanced(node1Name, node2Name string, fromEnd, toEnd *config.LinkEnd, tags []string, customMTU ...int) (*config.Link, error) {
+	assignIPv4 := false
+	if fromEnd != nil && fromEnd.Address4 != "" {
+		assignIPv4 = true
+	}
+	if toEnd != nil && toEnd.Address4 != "" {
+		assignIPv4 = true
+	}
+	return m.AddLinkWithOptions(node1Name, node2Name, fromEnd, toEnd, tags, assignIPv4, customMTU...)
+}
+
+// AddLinkWithOptions creates a link with full custom LinkEnd properties and link-level options (such as assignIPv4)
+func (m *Manager) AddLinkWithOptions(node1Name, node2Name string, fromEnd, toEnd *config.LinkEnd, tags []string, assignIPv4 bool, customMTU ...int) (*config.Link, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -1350,8 +1415,10 @@ func (m *Manager) AddLinkAdvanced(node1Name, node2Name string, fromEnd, toEnd *c
 	}
 
 	var lp *config.Link
-	if fromEnd != nil || toEnd != nil {
-		lp = &config.Link{}
+	if fromEnd != nil || toEnd != nil || assignIPv4 {
+		lp = &config.Link{
+			AssignIPv4: assignIPv4,
+		}
 		if isManual {
 			lp.Type = config.LinkTypeManual
 		}
@@ -1591,6 +1658,11 @@ func (m *Manager) UpdateLink(node1Name, node2Name string, listenPort1, listenPor
 
 // UpdateLinkAdvanced updates any parameters of an existing link, including addresses, endpoints, and public keys
 func (m *Manager) UpdateLinkAdvanced(node1Name, node2Name string, customFrom, customTo *config.LinkEnd, tags []string) (*config.Link, error) {
+	return m.UpdateLinkWithOptions(node1Name, node2Name, customFrom, customTo, tags, nil)
+}
+
+// UpdateLinkWithOptions updates parameters of an existing link, including assignIPv4 option
+func (m *Manager) UpdateLinkWithOptions(node1Name, node2Name string, customFrom, customTo *config.LinkEnd, tags []string, assignIPv4 *bool) (*config.Link, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -1799,6 +1871,73 @@ func (m *Manager) UpdateLinkAdvanced(node1Name, node2Name string, customFrom, cu
 
 	if tags != nil {
 		link.Tags = tags
+	}
+
+	if fromEnd != nil && fromEnd.Address4 != "" {
+		link.From.Address4 = fromEnd.Address4
+	}
+	if toEnd != nil && toEnd.Address4 != "" {
+		link.To.Address4 = toEnd.Address4
+	}
+
+	if assignIPv4 != nil {
+		link.AssignIPv4 = *assignIPv4
+		if *assignIPv4 {
+			linkIndex := 0
+			s := compiler.ExtractInterfaceSuffix(link.From.Interface, toNode.Name, toNode.IsExternal)
+			if s == "" {
+				s = compiler.ExtractInterfaceSuffix(link.To.Interface, fromNode.Name, fromNode.IsExternal)
+			}
+			linkIndex = compiler.LinkIndexFromSuffix(s)
+
+			fromMainIP := fromNode.IP
+			if fromMainIP == "" {
+				fromMainIP = fromNode.ExternalIP
+			}
+			toMainIP := toNode.IP
+			if toMainIP == "" {
+				toMainIP = toNode.ExternalIP
+			}
+			if toMainIP != "" && (fromEnd == nil || fromEnd.Address4 == "") {
+				if a4, err := compiler.DeriveIPv4LinkLocal(toMainIP, linkIndex); err == nil {
+					link.From.Address4 = a4
+				}
+			}
+			if fromMainIP != "" && (toEnd == nil || toEnd.Address4 == "") {
+				if a4, err := compiler.DeriveIPv4LinkLocal(fromMainIP, linkIndex); err == nil {
+					link.To.Address4 = a4
+				}
+			}
+		} else {
+			link.From.Address4 = ""
+			link.To.Address4 = ""
+		}
+	} else if link.AssignIPv4 && (link.From.Address4 == "" || link.To.Address4 == "") {
+		linkIndex := 0
+		s := compiler.ExtractInterfaceSuffix(link.From.Interface, toNode.Name, toNode.IsExternal)
+		if s == "" {
+			s = compiler.ExtractInterfaceSuffix(link.To.Interface, fromNode.Name, fromNode.IsExternal)
+		}
+		linkIndex = compiler.LinkIndexFromSuffix(s)
+
+		fromMainIP := fromNode.IP
+		if fromMainIP == "" {
+			fromMainIP = fromNode.ExternalIP
+		}
+		toMainIP := toNode.IP
+		if toMainIP == "" {
+			toMainIP = toNode.ExternalIP
+		}
+		if toMainIP != "" && link.From.Address4 == "" {
+			if a4, err := compiler.DeriveIPv4LinkLocal(toMainIP, linkIndex); err == nil {
+				link.From.Address4 = a4
+			}
+		}
+		if fromMainIP != "" && link.To.Address4 == "" {
+			if a4, err := compiler.DeriveIPv4LinkLocal(fromMainIP, linkIndex); err == nil {
+				link.To.Address4 = a4
+			}
+		}
 	}
 
 	isExternalLink := fromNode.IsExternal || toNode.IsExternal
@@ -2288,7 +2427,7 @@ func (m *Manager) PlanSync(nodeNames ...string) ([]config.SyncAction, error) {
 
 		// 1. From node end (only if fromNode is managed)
 		if !fromNode.IsExternal && (!isPartial || targetMap[fromNode.Name]) {
-			fromConf, err := compiler.GenerateWgConfigContent(fromNode, toNode, &link.From, &link.To, m.vault, cfg)
+			fromConf, err := compiler.GenerateWgConfigContent(fromNode, toNode, &link.From, &link.To, m.vault, cfg, &link)
 			if err == nil {
 				targetFile := fmt.Sprintf("/etc/wireguard/%s.conf", link.From.Interface)
 				desiredHash := config.HashConfig(compiler.NormalizeConfig(fromConf))
@@ -2326,7 +2465,7 @@ func (m *Manager) PlanSync(nodeNames ...string) ([]config.SyncAction, error) {
 
 		// 2. To node end (only if toNode is managed)
 		if !toNode.IsExternal && (!isPartial || targetMap[toNode.Name]) {
-			toConf, err := compiler.GenerateWgConfigContent(toNode, fromNode, &link.To, &link.From, m.vault, cfg)
+			toConf, err := compiler.GenerateWgConfigContent(toNode, fromNode, &link.To, &link.From, m.vault, cfg, &link)
 			if err == nil {
 				targetFile := fmt.Sprintf("/etc/wireguard/%s.conf", link.To.Interface)
 				desiredHash := config.HashConfig(compiler.NormalizeConfig(toConf))

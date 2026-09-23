@@ -630,4 +630,190 @@ func TestGenerateWgConfigContent_Fwmark(t *testing.T) {
 	}
 }
 
+func TestDeriveIPv4LinkLocal(t *testing.T) {
+	// Test basic derivation
+	ip1 := "192.168.100.1"
+	cidr1, err := DeriveIPv4LinkLocal(ip1)
+	if err != nil {
+		t.Fatalf("DeriveIPv4LinkLocal failed: %v", err)
+	}
+	if !strings.HasPrefix(cidr1, "169.254.") || !strings.HasSuffix(cidr1, "/32") {
+		t.Fatalf("Expected 169.254.X.X/32 format, got: %s", cidr1)
+	}
+
+	addrOnly1, err := DeriveIPv4LinkLocalAddressOnly(ip1)
+	if err != nil {
+		t.Fatalf("DeriveIPv4LinkLocalAddressOnly failed: %v", err)
+	}
+	if addrOnly1+"/32" != cidr1 {
+		t.Fatalf("Expected addrOnly + /32 == cidr, got %s vs %s", addrOnly1, cidr1)
+	}
+
+	// Test determinism
+	cidr1Repeat, _ := DeriveIPv4LinkLocal(ip1)
+	if cidr1 != cidr1Repeat {
+		t.Fatalf("Expected deterministic output: %s != %s", cidr1, cidr1Repeat)
+	}
+
+	// Test link index variations
+	cidr1Idx0, _ := DeriveIPv4LinkLocal(ip1, 0)
+	if cidr1 != cidr1Idx0 {
+		t.Fatalf("Expected index 0 to match default: %s != %s", cidr1, cidr1Idx0)
+	}
+	cidr1Idx1, _ := DeriveIPv4LinkLocal(ip1, 1)
+	if cidr1 == cidr1Idx1 {
+		t.Fatalf("Expected index 1 to differ from index 0: %s", cidr1)
+	}
+	cidr1Idx2, _ := DeriveIPv4LinkLocal(ip1, 2)
+	if cidr1Idx1 == cidr1Idx2 {
+		t.Fatalf("Expected index 2 to differ from index 1: %s", cidr1Idx1)
+	}
+
+	// Test different IP yields different hash
+	ip2 := "192.168.100.2"
+	cidr2, err := DeriveIPv4LinkLocal(ip2)
+	if err != nil {
+		t.Fatalf("DeriveIPv4LinkLocal failed: %v", err)
+	}
+	if cidr1 == cidr2 {
+		t.Fatalf("Expected different IP to yield different address, got %s", cidr1)
+	}
+
+	// Test CIDR stripping in input
+	cidrWithMask, err := DeriveIPv4LinkLocal("192.168.100.1/24")
+	if err != nil {
+		t.Fatalf("DeriveIPv4LinkLocal with mask failed: %v", err)
+	}
+	if cidrWithMask != cidr1 {
+		t.Fatalf("Expected same output with or without mask: %s != %s", cidrWithMask, cidr1)
+	}
+
+	// Test empty IP errors
+	if _, err := DeriveIPv4LinkLocal(""); err == nil {
+		t.Fatalf("Expected error for empty IP")
+	}
+}
+
+func TestGenerateWgConfigContent_AssignIPv4(t *testing.T) {
+	nodeA := &config.Node{
+		Name: "node-a",
+		IP:   "192.168.100.1",
+	}
+	nodeB := &config.Node{
+		Name: "node-b",
+		IP:   "192.168.100.2",
+	}
+	endA := &config.LinkEnd{
+		Name:      "node-a",
+		Interface: "wg42node-b",
+	}
+	endB := &config.LinkEnd{
+		Name:      "node-b",
+		Interface: "wg42node-a",
+	}
+
+	// 1. Without AssignIPv4
+	confNoIPv4, err := GenerateWgConfigContent(nodeA, nodeB, endA, endB, nil, false)
+	if err != nil {
+		t.Fatalf("GenerateWgConfigContent failed: %v", err)
+	}
+	if strings.Contains(confNoIPv4, "169.254.") {
+		t.Errorf("Did not expect 169.254 address when AssignIPv4 is false, got:\n%s", confNoIPv4)
+	}
+
+	// 2. With AssignIPv4 = true via boolean arg
+	confWithIPv4, err := GenerateWgConfigContent(nodeA, nodeB, endA, endB, nil, true)
+	if err != nil {
+		t.Fatalf("GenerateWgConfigContent with AssignIPv4 failed: %v", err)
+	}
+	// Local address on nodeA is derived from peer nodeB's IP (index 0)
+	expectedLocal, _ := DeriveIPv4LinkLocal(nodeB.IP, 0)
+
+	if !strings.Contains(confWithIPv4, "Address = "+expectedLocal) {
+		t.Errorf("Expected 'Address = %s' in WG conf, got:\n%s", expectedLocal, confWithIPv4)
+	}
+	if !strings.Contains(confWithIPv4, "Address = fe80:") {
+		t.Errorf("Expected IPv6 link-local address still present in WG conf, got:\n%s", confWithIPv4)
+	}
+
+	// 3. With AssignIPv4 via *config.Link
+	link := &config.Link{
+		AssignIPv4: true,
+		From:       *endA,
+		To:         *endB,
+	}
+	confViaLink, err := GenerateWgConfigContent(nodeA, nodeB, endA, endB, nil, link)
+	if err != nil {
+		t.Fatalf("GenerateWgConfigContent via Link failed: %v", err)
+	}
+	if !strings.Contains(confViaLink, "Address = "+expectedLocal) {
+		t.Errorf("Expected 'Address = %s' via Link arg, got:\n%s", expectedLocal, confViaLink)
+	}
+
+	// 4. Multiple links between nodeA and nodeB have distinct IPv4
+	endA2 := &config.LinkEnd{
+		Name:      "node-a",
+		Interface: "wg42node-b1",
+	}
+	endB2 := &config.LinkEnd{
+		Name:      "node-b",
+		Interface: "wg42node-a1",
+	}
+	confLink2, err := GenerateWgConfigContent(nodeA, nodeB, endA2, endB2, nil, true)
+	if err != nil {
+		t.Fatalf("GenerateWgConfigContent link 2 failed: %v", err)
+	}
+	expectedLocalLink2, _ := DeriveIPv4LinkLocal(nodeB.IP, 1)
+	if !strings.Contains(confLink2, "Address = "+expectedLocalLink2) {
+		t.Errorf("Expected 'Address = %s' for second link, got:\n%s", expectedLocalLink2, confLink2)
+	}
+	if expectedLocal == expectedLocalLink2 {
+		t.Errorf("Expected distinct IPv4 addresses for link 0 (%s) and link 1 (%s)", expectedLocal, expectedLocalLink2)
+	}
+}
+
+func TestBirdConfigWithAssignIPv4_UsesIPv6Exclusively(t *testing.T) {
+	nodeA := &config.Node{
+		Name: "node-a",
+		IP:   "192.168.100.1",
+		ASN:  4224420001,
+	}
+	nodeB := &config.Node{
+		Name: "node-b",
+		IP:   "192.168.100.2",
+		ASN:  4224420002,
+	}
+	expectedA6, _ := DeriveIPv6LinkLocalAddressOnly(nodeA.IP)
+	expectedB6, _ := DeriveIPv6LinkLocalAddressOnly(nodeB.IP)
+
+	link := config.Link{
+		AssignIPv4: true,
+		From: config.LinkEnd{
+			Name:      "node-a",
+			Interface: "wg42node-b",
+			Address:   expectedA6 + "/64",
+		},
+		To: config.LinkEnd{
+			Name:      "node-b",
+			Interface: "wg42node-a",
+			Address:   expectedB6 + "/64",
+		},
+	}
+
+	conf, err := GenerateBirdConfig(nodeA, []config.Node{*nodeA, *nodeB}, []config.Link{link})
+	if err != nil {
+		t.Fatalf("GenerateBirdConfig failed: %v", err)
+	}
+
+	// Verify BIRD BGP peering uses IPv6 link-local neighbor exclusively
+	expectedNeighbor := fmt.Sprintf("neighbor %s %% 'wg42node-b' as 4224420002", expectedB6)
+	if !strings.Contains(conf, expectedNeighbor) {
+		t.Errorf("Expected BIRD neighbor to use IPv6 link-local '%s', got:\n%s", expectedNeighbor, conf)
+	}
+	if strings.Contains(conf, "neighbor 169.254.") {
+		t.Errorf("BIRD peering should never use 169.254.X.X, got:\n%s", conf)
+	}
+}
+
+
 

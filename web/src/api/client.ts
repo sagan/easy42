@@ -164,6 +164,7 @@ export const api = {
     to_note?: string;
     mtu?: number;
     tags?: string[];
+    assign_ipv4?: boolean;
     from?: Partial<Link["from"]>;
     to?: Partial<Link["to"]>;
   }) =>
@@ -202,6 +203,7 @@ export const api = {
     to_note?: string;
     mtu?: number;
     tags?: string[];
+    assign_ipv4?: boolean;
     from?: Partial<Link["from"]>;
     to?: Partial<Link["to"]>;
   }) =>

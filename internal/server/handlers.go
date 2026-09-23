@@ -497,9 +497,10 @@ type addLinkRequest struct {
 	FromNote       *string         `json:"from_note,omitempty"`
 	ToNote         *string         `json:"to_note,omitempty"`
 	MTU            int             `json:"mtu,omitempty"`
-	Tags       []string        `json:"tags,omitempty"`
-	From       *config.LinkEnd `json:"from,omitempty"`
-	To         *config.LinkEnd `json:"to,omitempty"`
+	Tags           []string        `json:"tags,omitempty"`
+	AssignIPv4     *bool           `json:"assign_ipv4,omitempty"`
+	From           *config.LinkEnd `json:"from,omitempty"`
+	To             *config.LinkEnd `json:"to,omitempty"`
 }
 
 func (s *Server) handleAddLink(w http.ResponseWriter, r *http.Request) {
@@ -636,10 +637,15 @@ func (s *Server) handleAddLink(w http.ResponseWriter, r *http.Request) {
 		req.To.Note = *req.ToNote
 	}
 
+	assignIPv4 := false
+	if req.AssignIPv4 != nil {
+		assignIPv4 = *req.AssignIPv4
+	}
+
 	var link *config.Link
 	var err error
-	if req.From != nil || req.To != nil {
-		link, err = s.mgr.AddLinkAdvanced(fromNode, toNode, req.From, req.To, req.Tags, fromMTU, toMTU)
+	if req.From != nil || req.To != nil || assignIPv4 {
+		link, err = s.mgr.AddLinkWithOptions(fromNode, toNode, req.From, req.To, req.Tags, assignIPv4, fromMTU, toMTU)
 	} else {
 		link, err = s.mgr.AddLink(fromNode, toNode, req.FromPort, req.ToPort, req.Tags, fromMTU, toMTU)
 	}
@@ -709,9 +715,10 @@ type updateLinkRequest struct {
 	FromNote       *string         `json:"from_note,omitempty"`
 	ToNote         *string         `json:"to_note,omitempty"`
 	MTU            int             `json:"mtu,omitempty"`
-	Tags       []string        `json:"tags,omitempty"`
-	From       *config.LinkEnd `json:"from,omitempty"`
-	To         *config.LinkEnd `json:"to,omitempty"`
+	Tags           []string        `json:"tags,omitempty"`
+	AssignIPv4     *bool           `json:"assign_ipv4,omitempty"`
+	From           *config.LinkEnd `json:"from,omitempty"`
+	To             *config.LinkEnd `json:"to,omitempty"`
 }
 
 func (s *Server) handleUpdateLink(w http.ResponseWriter, r *http.Request) {
@@ -903,7 +910,9 @@ func (s *Server) handleUpdateLink(w http.ResponseWriter, r *http.Request) {
 		if req.To != nil && req.To.MTU == 0 && toMTU > 0 {
 			req.To.MTU = toMTU
 		}
-		link, err = s.mgr.UpdateLinkAdvanced(fromNode, toNode, req.From, req.To, req.Tags)
+		link, err = s.mgr.UpdateLinkWithOptions(fromNode, toNode, req.From, req.To, req.Tags, req.AssignIPv4)
+	} else if req.AssignIPv4 != nil {
+		link, err = s.mgr.UpdateLinkWithOptions(fromNode, toNode, nil, nil, req.Tags, req.AssignIPv4)
 	} else {
 		link, err = s.mgr.UpdateLink(fromNode, toNode, fromPort, toPort, req.Tags, fromMTU, toMTU)
 	}

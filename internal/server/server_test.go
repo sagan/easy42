@@ -1796,3 +1796,89 @@ func TestDNSConfigEndpoints(t *testing.T) {
 	}
 }
 
+func TestLinkAssignIPv4API(t *testing.T) {
+	srv, tempDir, initPass := setupTestServer(t)
+	defer os.RemoveAll(tempDir)
+
+	// Login
+	loginBody, _ := json.Marshal(map[string]string{"password": initPass})
+	req := httptest.NewRequest("POST", "/api/auth/login", bytes.NewReader(loginBody))
+	w := httptest.NewRecorder()
+	srv.router.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("Login failed: code %d, body: %s", w.Code, w.Body.String())
+	}
+	cookie := w.Result().Cookies()[0]
+
+	// Create two nodes
+	n1Body, _ := json.Marshal(config.Node{Name: "srv-n1", Host: "192.168.10.1", IP: "192.168.10.1", ASN: 4224420001})
+	reqN1 := httptest.NewRequest("POST", "/api/nodes", bytes.NewReader(n1Body))
+	reqN1.AddCookie(cookie)
+	wN1 := httptest.NewRecorder()
+	srv.router.ServeHTTP(wN1, reqN1)
+	if wN1.Code != http.StatusCreated {
+		t.Fatalf("Create node 1 failed: %d %s", wN1.Code, wN1.Body.String())
+	}
+
+	n2Body, _ := json.Marshal(config.Node{Name: "srv-n2", Host: "192.168.10.2", IP: "192.168.10.2", ASN: 4224420002})
+	reqN2 := httptest.NewRequest("POST", "/api/nodes", bytes.NewReader(n2Body))
+	reqN2.AddCookie(cookie)
+	wN2 := httptest.NewRecorder()
+	srv.router.ServeHTTP(wN2, reqN2)
+	if wN2.Code != http.StatusCreated {
+		t.Fatalf("Create node 2 failed: %d %s", wN2.Code, wN2.Body.String())
+	}
+
+	// 1. Create link with assign_ipv4 = true
+	assignIPv4 := true
+	linkReqBody, _ := json.Marshal(map[string]any{
+		"from_node":   "srv-n1",
+		"to_node":     "srv-n2",
+		"assign_ipv4": assignIPv4,
+	})
+	reqLink := httptest.NewRequest("POST", "/api/links", bytes.NewReader(linkReqBody))
+	reqLink.AddCookie(cookie)
+	wLink := httptest.NewRecorder()
+	srv.router.ServeHTTP(wLink, reqLink)
+	if wLink.Code != http.StatusCreated {
+		t.Fatalf("Create link failed: %d %s", wLink.Code, wLink.Body.String())
+	}
+
+	var createdLink config.Link
+	_ = json.Unmarshal(wLink.Body.Bytes(), &createdLink)
+	if !createdLink.AssignIPv4 {
+		t.Fatalf("Expected AssignIPv4 == true in created link, got false")
+	}
+	if !strings.HasPrefix(createdLink.From.Address4, "169.254.") || !strings.HasSuffix(createdLink.From.Address4, "/32") {
+		t.Fatalf("Expected From.Address4 to be 169.254.X.X/32, got %q", createdLink.From.Address4)
+	}
+	if !strings.HasPrefix(createdLink.To.Address4, "169.254.") || !strings.HasSuffix(createdLink.To.Address4, "/32") {
+		t.Fatalf("Expected To.Address4 to be 169.254.X.X/32, got %q", createdLink.To.Address4)
+	}
+
+	// 2. Update link with assign_ipv4 = false
+	disableIPv4 := false
+	updateReqBody, _ := json.Marshal(map[string]any{
+		"from_node":   "srv-n1",
+		"to_node":     "srv-n2",
+		"assign_ipv4": disableIPv4,
+	})
+	reqUpdate := httptest.NewRequest("PUT", "/api/links", bytes.NewReader(updateReqBody))
+	reqUpdate.AddCookie(cookie)
+	wUpdate := httptest.NewRecorder()
+	srv.router.ServeHTTP(wUpdate, reqUpdate)
+	if wUpdate.Code != http.StatusOK {
+		t.Fatalf("Update link failed: %d %s", wUpdate.Code, wUpdate.Body.String())
+	}
+
+	var updatedLink config.Link
+	_ = json.Unmarshal(wUpdate.Body.Bytes(), &updatedLink)
+	if updatedLink.AssignIPv4 {
+		t.Fatalf("Expected AssignIPv4 == false after update")
+	}
+	if updatedLink.From.Address4 != "" || updatedLink.To.Address4 != "" {
+		t.Fatalf("Expected cleared Address4, got from=%q to=%q", updatedLink.From.Address4, updatedLink.To.Address4)
+	}
+}
+
+

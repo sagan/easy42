@@ -87,6 +87,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
   const [toNote, setToNote] = useState<string>("");
   const [fromNoteTab, setFromNoteTab] = useState<"write" | "preview">("write");
   const [toNoteTab, setToNoteTab] = useState<"write" | "preview">("write");
+  const [assignIPv4, setAssignIPv4] = useState<boolean>(false);
 
   // Manual link fields
   const [linkType, setLinkType] = useState<"wireguard" | "manual">("wireguard");
@@ -208,9 +209,11 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
       setToRoutingPolicy(linkToEdit.to.routing_policy || "");
       setFromNote(linkToEdit.from.note || "");
       setToNote(linkToEdit.to.note || "");
+      setAssignIPv4(Boolean(linkToEdit.assign_ipv4));
       setError(null);
     } else {
       setLinkType("wireguard");
+      setAssignIPv4(false);
       setFromInterface("");
       setToInterface("");
       setFromAddress("");
@@ -514,6 +517,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
             to_mark: reqTo.mark,
             from_note: reqFrom.note || "",
             to_note: reqTo.note || "",
+            assign_ipv4: assignIPv4,
           });
           onLinkUpdated?.(updated);
         } else {
@@ -538,6 +542,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
             to_mark: reqTo.mark,
             from_note: reqFrom.note,
             to_note: reqTo.note,
+            assign_ipv4: assignIPv4,
           });
           onLinkAdded?.(link);
         }
@@ -596,6 +601,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
               resolved_endpoint: undefined,
               note: toNote.trim() || undefined,
             },
+            assign_ipv4: assignIPv4,
           });
           onLinkUpdated?.(updated);
         } else {
@@ -622,6 +628,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
             to_mark: parsedToMark,
             from_note: fromNote.trim() || undefined,
             to_note: toNote.trim() || undefined,
+            assign_ipv4: assignIPv4,
             from: {
               use_ip: fromUseIp,
               policy: fromPolicy,
@@ -826,6 +833,57 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
           )}
 
           <Divider sx={{ borderColor: "#E2E8F0" }} />
+
+          {/* WireGuard Options: Assign IPv4 Link-Local */}
+          {linkType === "wireguard" && (
+            <Box
+              sx={{
+                p: 1.75,
+                borderRadius: 2,
+                backgroundColor: assignIPv4 ? "rgba(8, 145, 178, 0.05)" : "#F8FAFC",
+                border: "1px solid",
+                borderColor: assignIPv4 ? "rgba(8, 145, 178, 0.35)" : "#E2E8F0",
+                transition: "all 0.2s ease",
+              }}
+            >
+              <FormControlLabel
+                control={
+                  <Switch
+                    id="link-assign-ipv4-switch"
+                    size="small"
+                    checked={assignIPv4}
+                    onChange={(e) => setAssignIPv4(e.target.checked)}
+                    color="primary"
+                  />
+                }
+                label={
+                  <Box>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                      <Typography variant="body2" sx={{ fontSize: "0.85rem", fontWeight: 700, color: "#1E293B" }}>
+                        Assign IPv4
+                      </Typography>
+                      <Chip
+                        label={assignIPv4 ? "169.254.X.X/32 Enabled" : "Optional"}
+                        size="small"
+                        sx={{
+                          height: 18,
+                          fontSize: "0.62rem",
+                          fontWeight: 800,
+                          bgcolor: assignIPv4 ? "rgba(8, 145, 178, 0.15)" : "#E2E8F0",
+                          color: assignIPv4 ? "#0891B2" : "#64748B",
+                          borderRadius: "4px",
+                        }}
+                      />
+                    </Box>
+                    <Typography variant="caption" sx={{ color: "#64748B", display: "block", fontSize: "0.72rem", lineHeight: 1.4, mt: 0.3 }}>
+                      Assigns a pair of IPv4 link-local addresses (169.254.X.X/32 derived automatically from the peer's main IP and link index) to the WireGuard interface of link ends. Intended for nftables IPv4 masquerading; BIRD BGP peering still uses IPv6 link-local addresses exclusively.
+                    </Typography>
+                  </Box>
+                }
+                sx={{ alignItems: "flex-start", ml: 0, m: 0 }}
+              />
+            </Box>
+          )}
 
           {/* External Peering Configuration Form */}
           {isExternalLink && managedNode && externalNode ? (

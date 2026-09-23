@@ -41,6 +41,49 @@ func DeriveIPv6LinkLocalAddressOnly(ipv4Str string) (string, error) {
 	return parts[0], nil
 }
 
+// DeriveIPv4LinkLocal derives a 169.254.X.X/32 link-local address from a peer's main IP and link index using a deterministic hash function.
+// If multiple links exist between the local and remote node, linkIndex (0, 1, 2...) ensures distinct addresses.
+// The X.X octets are safely within RFC 3927 link-local range (169.254.1.1 to 169.254.254.254).
+func DeriveIPv4LinkLocal(peerIP string, linkIndex ...int) (string, error) {
+	clean := strings.TrimSpace(peerIP)
+	if idx := strings.Index(clean, "/"); idx != -1 {
+		clean = clean[:idx]
+	}
+	if clean == "" {
+		return "", fmt.Errorf("empty IP address")
+	}
+
+	idx := 0
+	if len(linkIndex) > 0 && linkIndex[0] > 0 {
+		idx = linkIndex[0]
+	}
+
+	h := fnv.New32a()
+	if idx > 0 {
+		fmt.Fprintf(h, "%s#%d", clean, idx)
+	} else {
+		h.Write([]byte(clean))
+	}
+	sum := h.Sum32()
+
+	// RFC 3927 allocates 169.254.0.0/16, reserving 169.254.0.x and 169.254.255.x.
+	// Host addresses range from 169.254.1.1 to 169.254.254.254.
+	x1 := 1 + int((sum>>8)%254)
+	x2 := 1 + int(sum%254)
+
+	return fmt.Sprintf("169.254.%d.%d/32", x1, x2), nil
+}
+
+// DeriveIPv4LinkLocalAddressOnly returns the IPv4 link-local address without prefix
+func DeriveIPv4LinkLocalAddressOnly(peerIP string, linkIndex ...int) (string, error) {
+	cidr, err := DeriveIPv4LinkLocal(peerIP, linkIndex...)
+	if err != nil {
+		return "", err
+	}
+	parts := strings.Split(cidr, "/")
+	return parts[0], nil
+}
+
 // DerivePortFromIP derives a default WireGuard listen port based on peer IP:
 // 20000 + hash(other_end_peer_ip) % 10000 (range 20000-29999).
 // It uses FNV-1a 32-bit hash for an even, random, and deterministic distribution.

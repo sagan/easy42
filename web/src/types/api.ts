@@ -117,6 +117,7 @@ export interface LinkEnd {
   type?: "wireguard" | "manual" | string;
   interface: string;
   address: string;
+  address4?: string;
   neighbor_address?: string;
   listen_port: number;
   endpoint?: string;
@@ -140,6 +141,7 @@ export interface Link {
   from: LinkEnd;
   to: LinkEnd;
   tags?: string[];
+  assign_ipv4?: boolean;
   modified_at?: string;
 }
 

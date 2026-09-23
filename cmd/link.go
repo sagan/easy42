@@ -24,6 +24,7 @@ var (
 	toIface      string
 	fromAddr     string
 	toAddr       string
+	linkAssignIPv4 bool
 )
 
 var linkCmd = &cobra.Command{
@@ -116,14 +117,32 @@ var linkAddCmd = &cobra.Command{
 			return fmt.Errorf("authentication failed: %w", err)
 		}
 
-		link, err := mgr.AddLink(node1, node2, fromPort, toPort, nil)
+		var link *config.Link
+		var err error
+		if linkAssignIPv4 {
+			var fromEnd, toEnd *config.LinkEnd
+			if fromPort > 0 {
+				fromEnd = &config.LinkEnd{Name: node1, ListenPort: fromPort}
+			}
+			if toPort > 0 {
+				toEnd = &config.LinkEnd{Name: node2, ListenPort: toPort}
+			}
+			link, err = mgr.AddLinkWithOptions(node1, node2, fromEnd, toEnd, nil, true)
+		} else {
+			link, err = mgr.AddLink(node1, node2, fromPort, toPort, nil)
+		}
 		if err != nil {
 			return err
 		}
 
 		fmt.Printf("Successfully created WireGuard link between %s and %s\n", link.From.Name, link.To.Name)
-		fmt.Printf("  %s: iface=%s, addr=%s, port=%d\n", link.From.Name, link.From.Interface, link.From.Address, link.From.ListenPort)
-		fmt.Printf("  %s: iface=%s, addr=%s, port=%d\n", link.To.Name, link.To.Interface, link.To.Address, link.To.ListenPort)
+		if link.AssignIPv4 {
+			fmt.Printf("  %s: iface=%s, addr=%s, addr4=%s, port=%d\n", link.From.Name, link.From.Interface, link.From.Address, link.From.Address4, link.From.ListenPort)
+			fmt.Printf("  %s: iface=%s, addr=%s, addr4=%s, port=%d\n", link.To.Name, link.To.Interface, link.To.Address, link.To.Address4, link.To.ListenPort)
+		} else {
+			fmt.Printf("  %s: iface=%s, addr=%s, port=%d\n", link.From.Name, link.From.Interface, link.From.Address, link.From.ListenPort)
+			fmt.Printf("  %s: iface=%s, addr=%s, port=%d\n", link.To.Name, link.To.Interface, link.To.Address, link.To.ListenPort)
+		}
 		return nil
 	},
 }
@@ -163,6 +182,7 @@ func init() {
 	linkAddCmd.Flags().StringVar(&toIface, "to-iface", "", "Tunnel interface name on node2 (required for manual link)")
 	linkAddCmd.Flags().StringVar(&fromAddr, "from-addr", "", "Local IP on node1 (required for manual link)")
 	linkAddCmd.Flags().StringVar(&toAddr, "to-addr", "", "Local IP on node2 (required for manual link)")
+	linkAddCmd.Flags().BoolVar(&linkAssignIPv4, "assign-ipv4", false, "Assign a pair of IPv4 link-local addresses (169.254.X.X/32) to wg interface")
 	linkRemoveCmd.Flags().StringVarP(&linkIface, "interface", "i", "", "Specific interface name of the link to remove")
 
 	linkCmd.AddCommand(linkListCmd)

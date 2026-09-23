@@ -1751,6 +1751,140 @@ func TestNodeMetricPersistence(t *testing.T) {
 	}
 }
 
+func TestLinkAssignIPv4(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "easy42-engine-assignipv4-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	store := config.NewStore(tempDir)
+	pass, err := store.Initialize()
+	if err != nil {
+		t.Fatalf("Failed to init store: %v", err)
+	}
+	mgr := NewManager(store)
+	if err := mgr.Unlock(pass); err != nil {
+		t.Fatalf("Failed to unlock manager: %v", err)
+	}
+
+	n1 := config.Node{Name: "node-a", Host: "192.168.100.1", IP: "192.168.100.1"}
+	n2 := config.Node{Name: "node-b", Host: "192.168.100.2", IP: "192.168.100.2"}
+	if err := mgr.AddNode(n1); err != nil {
+		t.Fatalf("AddNode n1 failed: %v", err)
+	}
+	if err := mgr.AddNode(n2); err != nil {
+		t.Fatalf("AddNode n2 failed: %v", err)
+	}
+
+	// 1. Add link with assignIPv4 = true
+	link, err := mgr.AddLinkWithOptions("node-a", "node-b", nil, nil, nil, true)
+	if err != nil {
+		t.Fatalf("AddLinkWithOptions failed: %v", err)
+	}
+	if !link.AssignIPv4 {
+		t.Errorf("Expected link.AssignIPv4 == true")
+	}
+	// From (node-a) derives from peer (node-b) IP with linkIndex 0
+	expectedFrom4, _ := compiler.DeriveIPv4LinkLocal(n2.IP, 0)
+	// To (node-b) derives from peer (node-a) IP with linkIndex 0
+	expectedTo4, _ := compiler.DeriveIPv4LinkLocal(n1.IP, 0)
+	if link.From.Address4 != expectedFrom4 {
+		t.Errorf("Expected From.Address4 = %s, got %s", expectedFrom4, link.From.Address4)
+	}
+	if link.To.Address4 != expectedTo4 {
+		t.Errorf("Expected To.Address4 = %s, got %s", expectedTo4, link.To.Address4)
+	}
+
+	// 2. UpdateLinkWithOptions to disable assignIPv4
+	disable := false
+	updated, err := mgr.UpdateLinkWithOptions("node-a", "node-b", nil, nil, nil, &disable)
+	if err != nil {
+		t.Fatalf("UpdateLinkWithOptions failed: %v", err)
+	}
+	if updated.AssignIPv4 {
+		t.Errorf("Expected link.AssignIPv4 == false after disable")
+	}
+	if updated.From.Address4 != "" || updated.To.Address4 != "" {
+		t.Errorf("Expected Address4 cleared after disable, got %s, %s", updated.From.Address4, updated.To.Address4)
+	}
+
+	// 3. UpdateLinkWithOptions to enable assignIPv4 again
+	enable := true
+	reEnabled, err := mgr.UpdateLinkWithOptions("node-a", "node-b", nil, nil, nil, &enable)
+	if err != nil {
+		t.Fatalf("UpdateLinkWithOptions failed: %v", err)
+	}
+	if !reEnabled.AssignIPv4 {
+		t.Errorf("Expected link.AssignIPv4 == true after re-enable")
+	}
+	if reEnabled.From.Address4 != expectedFrom4 || reEnabled.To.Address4 != expectedTo4 {
+		t.Errorf("Expected re-enabled Address4: %s, %s (got %s, %s)", expectedFrom4, expectedTo4, reEnabled.From.Address4, reEnabled.To.Address4)
+	}
+
+	// 4. Update node-a IP: node-b's To.Address4 (derived from peer node-a) updates automatically
+	n1Updated := n1
+	n1Updated.IP = "192.168.200.1"
+	if err := mgr.UpdateNode("node-a", n1Updated); err != nil {
+		t.Fatalf("UpdateNode failed: %v", err)
+	}
+	expectedTo4New, _ := compiler.DeriveIPv4LinkLocal(n1Updated.IP, 0)
+	var foundLink config.Link
+	found := false
+	for _, l := range mgr.GetLinks() {
+		if l.From.Name == "node-a" && l.To.Name == "node-b" {
+			foundLink = l
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("Link node-a <-> node-b not found")
+	}
+	if foundLink.To.Address4 != expectedTo4New {
+		t.Errorf("Expected To.Address4 (peer of node-a) updated to %s, got %s", expectedTo4New, foundLink.To.Address4)
+	}
+	if foundLink.From.Address4 != expectedFrom4 {
+		t.Errorf("Expected From.Address4 to remain %s, got %s", expectedFrom4, foundLink.From.Address4)
+	}
+
+	// 5. Add second link between node-a and node-b -> link index 1 produces distinct IPv4
+	link2, err := mgr.AddLinkWithOptions("node-a", "node-b", nil, nil, nil, true)
+	if err != nil {
+		t.Fatalf("AddLinkWithOptions link 2 failed: %v", err)
+	}
+	expectedFrom4Link2, _ := compiler.DeriveIPv4LinkLocal(n2.IP, 1)
+	expectedTo4Link2, _ := compiler.DeriveIPv4LinkLocal(n1Updated.IP, 1)
+	if link2.From.Address4 != expectedFrom4Link2 {
+		t.Errorf("Expected link2 From.Address4 = %s, got %s", expectedFrom4Link2, link2.From.Address4)
+	}
+	if link2.To.Address4 != expectedTo4Link2 {
+		t.Errorf("Expected link2 To.Address4 = %s, got %s", expectedTo4Link2, link2.To.Address4)
+	}
+	if link2.From.Address4 == foundLink.From.Address4 {
+		t.Errorf("Expected link 1 and link 2 to have different From.Address4, both got %s", link2.From.Address4)
+	}
+
+	// 6. Add node-c and link between node-a and node-c -> distinct peer IP produces distinct IPv4
+	n3 := config.Node{Name: "node-c", Host: "192.168.100.3", IP: "192.168.100.3"}
+	if err := mgr.AddNode(n3); err != nil {
+		t.Fatalf("AddNode n3 failed: %v", err)
+	}
+	link3, err := mgr.AddLinkWithOptions("node-a", "node-c", nil, nil, nil, true)
+	if err != nil {
+		t.Fatalf("AddLinkWithOptions link 3 failed: %v", err)
+	}
+	expectedFrom4Link3, _ := compiler.DeriveIPv4LinkLocal(n3.IP, 0)
+	if link3.From.Address4 != expectedFrom4Link3 {
+		t.Errorf("Expected link3 From.Address4 = %s, got %s", expectedFrom4Link3, link3.From.Address4)
+	}
+	if link3.From.Address4 == foundLink.From.Address4 || link3.From.Address4 == link2.From.Address4 {
+		t.Errorf("Expected link 3 From.Address4 (%s) to differ from links to node-b (%s, %s)",
+			link3.From.Address4, foundLink.From.Address4, link2.From.Address4)
+	}
+}
+
+
 
 
 
