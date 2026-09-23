@@ -989,6 +989,55 @@ func (s *Server) handleUpdateNetworkSettings(w http.ResponseWriter, r *http.Requ
 	writeJSON(w, http.StatusOK, settings)
 }
 
+// DNS Settings Handlers
+
+func (s *Server) handleGetDNSConfig(w http.ResponseWriter, r *http.Request) {
+	dnsCfg := s.mgr.GetDNSConfig()
+	writeJSON(w, http.StatusOK, dnsCfg)
+}
+
+func (s *Server) handleUpdateDNSConfig(w http.ResponseWriter, r *http.Request) {
+	var dnsCfg config.DNSConfig
+	if err := json.NewDecoder(r.Body).Decode(&dnsCfg); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid DNS settings payload")
+		return
+	}
+
+	if err := s.mgr.UpdateDNSConfig(dnsCfg); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, dnsCfg)
+}
+
+type syncDNSRequest struct {
+	Force bool `json:"force"`
+}
+
+func (s *Server) handleSyncDNS(w http.ResponseWriter, r *http.Request) {
+	force := false
+	if r.URL.Query().Get("force") == "true" {
+		force = true
+	}
+	if r.Body != nil && r.ContentLength > 0 {
+		var req syncDNSRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err == nil {
+			if req.Force {
+				force = true
+			}
+		}
+	}
+
+	res, err := s.mgr.SyncDNS(r.Context(), force)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, res)
+}
+
 // Network Policy Handlers
 
 func (s *Server) handleGetNetworkPolicies(w http.ResponseWriter, r *http.Request) {

@@ -109,6 +109,11 @@ func New(cfg Config) *Server {
 			r.Get("/settings/network", s.handleGetNetworkSettings)
 			r.Put("/settings/network", s.handleUpdateNetworkSettings)
 
+			// DNS Settings
+			r.Get("/settings/dns", s.handleGetDNSConfig)
+			r.Put("/settings/dns", s.handleUpdateDNSConfig)
+			r.Post("/settings/dns/sync", s.handleSyncDNS)
+
 			// Network Policies
 			r.Get("/network-policies", s.handleGetNetworkPolicies)
 			r.Post("/network-policies", s.handleCreateNetworkPolicy)

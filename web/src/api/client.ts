@@ -225,6 +225,19 @@ export const api = {
       body: JSON.stringify(settings),
     }),
 
+  // DNS Settings
+  getDNSConfig: () => request<import("../types/api").CloudflareDNSConfig>("/settings/dns"),
+  updateDNSConfig: (config: import("../types/api").CloudflareDNSConfig) =>
+    request<import("../types/api").CloudflareDNSConfig>("/settings/dns", {
+      method: "PUT",
+      body: JSON.stringify(config),
+    }),
+  syncDNS: (force?: boolean) =>
+    request<import("../types/api").DNSSyncResult>("/settings/dns/sync", {
+      method: "POST",
+      body: JSON.stringify({ force: Boolean(force) }),
+    }),
+
   // Network Policies
   getNetworkPolicies: () => request<import("../types/api").NetworkPolicy[]>("/network-policies"),
   getNetworkPolicy: (id: string) =>

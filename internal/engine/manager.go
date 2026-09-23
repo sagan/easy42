@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -13,6 +14,7 @@ import (
 	"easy42/internal/compiler"
 	"easy42/internal/config"
 	"easy42/internal/crypto"
+	"easy42/internal/dns"
 	"easy42/internal/roa"
 	"easy42/internal/ssh"
 )
@@ -294,7 +296,11 @@ func (m *Manager) AddNode(node config.Node) error {
 
 	node.ModifiedAt = time.Now().UTC()
 	cfg.Nodes = append(cfg.Nodes, node)
-	return m.store.Save(cfg)
+	if err := m.store.Save(cfg); err != nil {
+		return err
+	}
+	m.triggerDNSUpdateForNode(cfg.DNS, node, "")
+	return nil
 }
 
 // UpdateNode updates an existing node
@@ -374,8 +380,9 @@ func (m *Manager) UpdateNode(name string, updated config.Node) error {
 	now := time.Now().UTC()
 	updated.ModifiedAt = now
 
-	// Update links and nodes if name changed
 	oldNode := cfg.Nodes[idx]
+	nameChanged := updated.Name != name
+	ipChanged := updated.IP != oldNode.IP || updated.IP6 != oldNode.IP6
 	if updated.Name != name {
 		m.applyNodeRenameLocked(cfg, name, updated.Name, updated.IsExternal, now)
 	}
@@ -446,7 +453,17 @@ func (m *Manager) UpdateNode(name string, updated config.Node) error {
 		}
 	}
 
-	return m.store.Save(cfg)
+	if err := m.store.Save(cfg); err != nil {
+		return err
+	}
+
+	if nameChanged {
+		m.triggerDNSUpdateForNode(cfg.DNS, updated, name)
+	} else if ipChanged {
+		m.triggerDNSUpdateForNode(cfg.DNS, updated, "")
+	}
+
+	return nil
 }
 
 // applyNodeRenameLocked updates all references to a node name across config, links, interface names, and state.
@@ -677,10 +694,13 @@ func (m *Manager) RenameNode(oldName, newName string) (*config.Node, error) {
 	for _, n := range cfg.Nodes {
 		if n.Name == newName {
 			cp := n
+			m.triggerDNSUpdateForNode(cfg.DNS, cp, oldName)
 			return &cp, nil
 		}
 	}
-	return &cfg.Nodes[idx], nil
+	retNode := cfg.Nodes[idx]
+	m.triggerDNSUpdateForNode(cfg.DNS, retNode, oldName)
+	return &retNode, nil
 }
 
 // UpdateNodePosition updates the graph coordinates (x, y) of a node
@@ -774,7 +794,11 @@ func (m *Manager) DeleteNode(name string) error {
 
 	_ = m.stateStore.RemoveNode(name)
 
-	return m.store.Save(cfg)
+	if err := m.store.Save(cfg); err != nil {
+		return err
+	}
+	m.triggerDNSDeleteForNode(cfg.DNS, name)
+	return nil
 }
 
 // GetLinks returns all links with resolved endpoints populated
@@ -3592,3 +3616,82 @@ func actionPriority(t config.ActionType) int {
 		return 6
 	}
 }
+
+// GetDNSConfig returns current DNS integration configuration
+func (m *Manager) GetDNSConfig() config.DNSConfig {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	cfg := m.store.Get()
+	if cfg == nil {
+		return config.DNSConfig{}
+	}
+	return cfg.DNS
+}
+
+// UpdateDNSConfig updates the DNS integration configuration
+func (m *Manager) UpdateDNSConfig(dnsCfg config.DNSConfig) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	cfg := m.store.Get()
+	if cfg == nil {
+		return config.ErrConfigNotFound
+	}
+	dnsCfg.ZoneID = strings.TrimSpace(dnsCfg.ZoneID)
+	dnsCfg.APIToken = strings.TrimSpace(dnsCfg.APIToken)
+	dnsCfg.BaseDomain = strings.TrimSpace(dnsCfg.BaseDomain)
+	cfg.DNS = dnsCfg
+	return m.store.Save(cfg)
+}
+
+// SyncDNS performs manual or force synchronization of all nodes to Cloudflare DNS
+func (m *Manager) SyncDNS(ctx context.Context, force bool) (*dns.SyncResult, error) {
+	m.mu.RLock()
+	cfg := m.store.Get()
+	if cfg == nil {
+		m.mu.RUnlock()
+		return nil, config.ErrConfigNotFound
+	}
+	dnsCfg := cfg.DNS
+	nodes := make([]config.Node, len(cfg.Nodes))
+	copy(nodes, cfg.Nodes)
+	m.mu.RUnlock()
+
+	if !dnsCfg.IsConfigured() {
+		return nil, errors.New("Cloudflare DNS is not configured. Please specify Zone ID, API Token, and Base Domain.")
+	}
+
+	client := dns.NewClient(dnsCfg.ZoneID, dnsCfg.APIToken, dnsCfg.BaseDomain)
+	return dns.Sync(ctx, client, nodes, dnsCfg, force)
+}
+
+func (m *Manager) triggerDNSUpdateForNode(dnsCfg config.DNSConfig, node config.Node, oldName string) {
+	if !dnsCfg.IsConfigured() {
+		return
+	}
+
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cancel()
+		client := dns.NewClient(dnsCfg.ZoneID, dnsCfg.APIToken, dnsCfg.BaseDomain)
+		if err := dns.SyncNode(ctx, client, node, oldName, dnsCfg); err != nil {
+			log.Printf("[CF DNS] Error updating DNS for node %s: %v", node.Name, err)
+		}
+	}()
+}
+
+func (m *Manager) triggerDNSDeleteForNode(dnsCfg config.DNSConfig, nodeName string) {
+	if !dnsCfg.IsConfigured() {
+		return
+	}
+
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cancel()
+		client := dns.NewClient(dnsCfg.ZoneID, dnsCfg.APIToken, dnsCfg.BaseDomain)
+		if err := dns.DeleteNodeRecords(ctx, client, nodeName, dnsCfg); err != nil {
+			log.Printf("[CF DNS] Error deleting DNS for node %s: %v", nodeName, err)
+		}
+	}()
+}
+

@@ -1716,3 +1716,83 @@ func TestNodeAndLinkEndNotes(t *testing.T) {
 		t.Fatalf("Expected cleared to.Note, got %q", updatedLink.To.Note)
 	}
 }
+
+func TestDNSConfigEndpoints(t *testing.T) {
+	srv, tempDir, initPass := setupTestServer(t)
+	defer os.RemoveAll(tempDir)
+
+	// Login
+	loginBody, _ := json.Marshal(map[string]string{"password": initPass})
+	req := httptest.NewRequest("POST", "/api/auth/login", bytes.NewReader(loginBody))
+	w := httptest.NewRecorder()
+	srv.router.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("Login failed: code %d, body: %s", w.Code, w.Body.String())
+	}
+	cookie := w.Result().Cookies()[0]
+
+	// 1. GET /api/settings/dns initial (empty)
+	reqGet := httptest.NewRequest("GET", "/api/settings/dns", nil)
+	reqGet.AddCookie(cookie)
+	wGet := httptest.NewRecorder()
+	srv.router.ServeHTTP(wGet, reqGet)
+	if wGet.Code != http.StatusOK {
+		t.Fatalf("Get DNS config failed: %d %s", wGet.Code, wGet.Body.String())
+	}
+	var dnsCfg config.DNSConfig
+	_ = json.Unmarshal(wGet.Body.Bytes(), &dnsCfg)
+	if dnsCfg.ZoneID != "" {
+		t.Fatalf("Expected empty zone_id initially, got %s", dnsCfg.ZoneID)
+	}
+
+	// 2. PUT /api/settings/dns
+	updateBody, _ := json.Marshal(config.DNSConfig{
+		ZoneID:             "zone-test-123",
+		APIToken:           "token-xyz",
+		BaseDomain:         "easy42.example.com",
+		PublishIPv6OwnName: true,
+	})
+	reqPut := httptest.NewRequest("PUT", "/api/settings/dns", bytes.NewReader(updateBody))
+	reqPut.AddCookie(cookie)
+	wPut := httptest.NewRecorder()
+	srv.router.ServeHTTP(wPut, reqPut)
+	if wPut.Code != http.StatusOK {
+		t.Fatalf("Update DNS config failed: %d %s", wPut.Code, wPut.Body.String())
+	}
+
+	// Verify updated
+	var updatedCfg config.DNSConfig
+	_ = json.Unmarshal(wPut.Body.Bytes(), &updatedCfg)
+	if updatedCfg.ZoneID != "zone-test-123" || updatedCfg.BaseDomain != "easy42.example.com" || !updatedCfg.PublishIPv6OwnName {
+		t.Fatalf("Unexpected updated config: %+v", updatedCfg)
+	}
+
+	// 3. Verify GET returns updated
+	reqGet2 := httptest.NewRequest("GET", "/api/settings/dns", nil)
+	reqGet2.AddCookie(cookie)
+	wGet2 := httptest.NewRecorder()
+	srv.router.ServeHTTP(wGet2, reqGet2)
+	var dnsCfg2 config.DNSConfig
+	_ = json.Unmarshal(wGet2.Body.Bytes(), &dnsCfg2)
+	if dnsCfg2.ZoneID != "zone-test-123" || !dnsCfg2.PublishIPv6OwnName {
+		t.Fatalf("GET /api/settings/dns did not return updated config: %+v", dnsCfg2)
+	}
+
+	// 4. Test Sync on unconfigured server returns error
+	srvUnconf, tempDir2, initPass2 := setupTestServer(t)
+	defer os.RemoveAll(tempDir2)
+	loginBody2, _ := json.Marshal(map[string]string{"password": initPass2})
+	req2 := httptest.NewRequest("POST", "/api/auth/login", bytes.NewReader(loginBody2))
+	w2 := httptest.NewRecorder()
+	srvUnconf.router.ServeHTTP(w2, req2)
+	cookie2 := w2.Result().Cookies()[0]
+
+	reqSync := httptest.NewRequest("POST", "/api/settings/dns/sync", nil)
+	reqSync.AddCookie(cookie2)
+	wSync := httptest.NewRecorder()
+	srvUnconf.router.ServeHTTP(wSync, reqSync)
+	if wSync.Code != http.StatusInternalServerError {
+		t.Fatalf("Expected 500 when DNS unconfigured, got %d %s", wSync.Code, wSync.Body.String())
+	}
+}
+

@@ -31,6 +31,22 @@ export interface NetworkSettings {
   disallowed_dn42_cidrs?: string[];
 }
 
+export interface CloudflareDNSConfig {
+  zone_id?: string;
+  api_token?: string;
+  base_domain?: string;
+  publish_ipv6_own_name?: boolean;
+}
+
+export interface DNSSyncResult {
+  created: number;
+  updated: number;
+  deleted: number;
+  ignored: number;
+  errors?: string[];
+  message?: string;
+}
+
 export interface SNATConfig {
   enabled: boolean;
   condition?: string;

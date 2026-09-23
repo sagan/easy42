@@ -38,9 +38,12 @@ import {
   Sliders,
   Lock,
   Copy,
+  Cloud,
+  RefreshCw,
+  Zap,
 } from "lucide-react";
 import { api } from "../../api/client";
-import { NetworkSettings, NetworkPolicy } from "../../types/api";
+import { NetworkSettings, NetworkPolicy, CloudflareDNSConfig, DNSSyncResult } from "../../types/api";
 
 export const parsePrefixList = (input: string): string[] => {
   const result: string[] = [];
@@ -88,7 +91,21 @@ interface SettingsModalProps {
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onLogoutAll }) => {
-  const [activeTab, setActiveTab] = useState<"password" | "sessions" | "network" | "policies">("password");
+  const [activeTab, setActiveTab] = useState<"password" | "sessions" | "network" | "policies" | "dns">("password");
+
+  // Cloudflare DNS state
+  const [cfZoneId, setCfZoneId] = useState("");
+  const [cfApiToken, setCfApiToken] = useState("");
+  const [cfBaseDomain, setCfBaseDomain] = useState("");
+  const [cfPublishIPv6OwnName, setCfPublishIPv6OwnName] = useState(false);
+  const [showCfToken, setShowCfToken] = useState(false);
+  const [dnsLoading, setDnsLoading] = useState(false);
+  const [dnsSaving, setDnsSaving] = useState(false);
+  const [dnsSyncing, setDnsSyncing] = useState(false);
+  const [dnsForceSyncing, setDnsForceSyncing] = useState(false);
+  const [dnsError, setDnsError] = useState<string | null>(null);
+  const [dnsSuccess, setDnsSuccess] = useState<string | null>(null);
+  const [dnsSyncResult, setDnsSyncResult] = useState<DNSSyncResult | null>(null);
 
   // Password change state
   const [currentPassword, setCurrentPassword] = useState("");
@@ -173,6 +190,86 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
       loadPolicies();
     }
   }, [open, activeTab]);
+
+  // Load DNS settings when DNS tab is opened
+  React.useEffect(() => {
+    if (open && activeTab === "dns") {
+      loadDNSSettings();
+    }
+  }, [open, activeTab]);
+
+  const loadDNSSettings = async () => {
+    setDnsLoading(true);
+    setDnsError(null);
+    try {
+      const cfg = await api.getDNSConfig();
+      setCfZoneId(cfg.zone_id || "");
+      setCfApiToken(cfg.api_token || "");
+      setCfBaseDomain(cfg.base_domain || "");
+      setCfPublishIPv6OwnName(Boolean(cfg.publish_ipv6_own_name));
+    } catch (err: unknown) {
+      const e = err as Error;
+      setDnsError(e.message || "Failed to load Cloudflare DNS settings.");
+    } finally {
+      setDnsLoading(false);
+    }
+  };
+
+  const handleSaveDNSSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setDnsSaving(true);
+    setDnsError(null);
+    setDnsSuccess(null);
+    setDnsSyncResult(null);
+
+    const payload: CloudflareDNSConfig = {
+      zone_id: cfZoneId.trim(),
+      api_token: cfApiToken.trim(),
+      base_domain: cfBaseDomain.trim(),
+      publish_ipv6_own_name: cfPublishIPv6OwnName,
+    };
+
+    try {
+      await api.updateDNSConfig(payload);
+      setDnsSuccess("Cloudflare DNS settings saved successfully.");
+    } catch (err: unknown) {
+      const e = err as Error;
+      setDnsError(e.message || "Failed to save Cloudflare DNS settings.");
+    } finally {
+      setDnsSaving(false);
+    }
+  };
+
+  const handleSyncDNS = async (force: boolean) => {
+    if (force) {
+      setDnsForceSyncing(true);
+    } else {
+      setDnsSyncing(true);
+    }
+    setDnsError(null);
+    setDnsSuccess(null);
+    setDnsSyncResult(null);
+
+    try {
+      const res = await api.syncDNS(force);
+      setDnsSyncResult(res);
+      if (res.errors && res.errors.length > 0) {
+        setDnsError(`Sync completed with ${res.errors.length} issue(s): ${res.errors.join("; ")}`);
+      } else {
+        setDnsSuccess(
+          force
+            ? `Force Sync completed: ${res.created} created, ${res.updated} updated, ${res.deleted} deleted, ${res.ignored} unchanged.`
+            : `Sync completed: ${res.created} created, ${res.updated} updated, ${res.deleted} deleted, ${res.ignored} unchanged.`
+        );
+      }
+    } catch (err: unknown) {
+      const e = err as Error;
+      setDnsError(e.message || "Failed to sync DNS records with Cloudflare.");
+    } finally {
+      setDnsSyncing(false);
+      setDnsForceSyncing(false);
+    }
+  };
 
   const loadPolicies = async () => {
     setPoliciesLoading(true);
@@ -550,7 +647,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
   };
 
   return (
-    <Dialog open={open} onClose={handleClose} maxWidth={activeTab === "policies" ? "md" : "sm"} fullWidth>
+    <Dialog open={open} onClose={handleClose} maxWidth={activeTab === "policies" || activeTab === "dns" ? "md" : "sm"} fullWidth>
       <DialogTitle
         sx={{
           display: "flex",
@@ -614,6 +711,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
           <Tab value="sessions" icon={<ShieldAlert size={16} />} iconPosition="start" label="Sessions" />
           <Tab value="network" icon={<Globe size={16} />} iconPosition="start" label="Peering & BGP" />
           <Tab value="policies" icon={<Shield size={16} />} iconPosition="start" label="Network Policies" />
+          <Tab value="dns" icon={<Cloud size={16} />} iconPosition="start" label="DNS" />
         </Tabs>
       </Box>
 
@@ -1378,6 +1476,253 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
             </Button>
           </DialogActions>
         </Box>
+      )}
+
+      {/* Tab 5: Cloudflare DNS Integration */}
+      {activeTab === "dns" && (
+        <form onSubmit={handleSaveDNSSettings}>
+          <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2.5, py: 3, px: 3 }}>
+            {/* Informative Header / Description */}
+            <Box
+              sx={{
+                p: 2,
+                borderRadius: 2,
+                bgcolor: "#F0F9FF",
+                border: "1px solid #BAE6FD",
+                display: "flex",
+                flexDirection: "column",
+                gap: 0.8,
+              }}
+            >
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                <Cloud size={20} color="#0284C7" />
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0369A1" }}>
+                  Cloudflare DNS Integration
+                </Typography>
+              </Box>
+              <Typography variant="body2" sx={{ color: "#0C4A6E", fontSize: "0.85rem", lineHeight: 1.5 }}>
+                Automatically publish your easy42 nodes' main IPv4 (<b>A</b>) and IPv6 (<b>AAAA</b>) addresses to Cloudflare DNS.
+                Records are automatically updated when adding or renaming nodes, or can be synchronized on-demand.
+              </Typography>
+            </Box>
+
+            {dnsSuccess && (
+              <Alert icon={<CheckCircle2 size={18} />} severity="success" sx={{ borderRadius: 2 }}>
+                {dnsSuccess}
+              </Alert>
+            )}
+
+            {dnsError && (
+              <Alert severity="error" sx={{ borderRadius: 2 }}>
+                {dnsError}
+              </Alert>
+            )}
+
+            {dnsSyncResult && (
+              <Box
+                sx={{
+                  p: 1.8,
+                  borderRadius: 2,
+                  bgcolor: "#F8FAFC",
+                  border: "1px solid #E2E8F0",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 1,
+                }}
+              >
+                <Typography variant="caption" sx={{ fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                  Sync Statistics
+                </Typography>
+                <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+                  <Chip size="small" label={`Created: ${dnsSyncResult.created}`} sx={{ bgcolor: "#DCFCE7", color: "#15803D", fontWeight: 600 }} />
+                  <Chip size="small" label={`Updated: ${dnsSyncResult.updated}`} sx={{ bgcolor: "#E0F2FE", color: "#0369A1", fontWeight: 600 }} />
+                  <Chip size="small" label={`Deleted: ${dnsSyncResult.deleted}`} sx={{ bgcolor: "#FEE2E2", color: "#B91C1C", fontWeight: 600 }} />
+                  <Chip size="small" label={`Unchanged: ${dnsSyncResult.ignored}`} sx={{ bgcolor: "#F1F5F9", color: "#475569", fontWeight: 600 }} />
+                </Box>
+              </Box>
+            )}
+
+            {dnsLoading ? (
+              <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
+                <CircularProgress size={24} />
+              </Box>
+            ) : (
+              <>
+                <TextField
+                  fullWidth
+                  size="small"
+                  label="Cloudflare Zone ID"
+                  placeholder="e.g. 023e105f4ecef8ad9ca31a8372d0c353"
+                  value={cfZoneId}
+                  onChange={(e) => setCfZoneId(e.target.value)}
+                  helperText="Your domain's Zone ID found on the Cloudflare dashboard Overview tab."
+                  disabled={dnsSaving || dnsSyncing || dnsForceSyncing}
+                />
+
+                <TextField
+                  fullWidth
+                  size="small"
+                  label="Cloudflare API Token"
+                  placeholder="e.g. secret_api_token"
+                  type={showCfToken ? "text" : "password"}
+                  value={cfApiToken}
+                  onChange={(e) => setCfApiToken(e.target.value)}
+                  helperText="Create a token with 'Zone.DNS - Edit' permission in Cloudflare User API Tokens."
+                  disabled={dnsSaving || dnsSyncing || dnsForceSyncing}
+                  slotProps={{
+                    input: {
+                      endAdornment: (
+                        <InputAdornment position="end">
+                          <IconButton
+                            size="small"
+                            edge="end"
+                            onClick={() => setShowCfToken(!showCfToken)}
+                            aria-label="toggle API token visibility"
+                          >
+                            {showCfToken ? <EyeOff size={16} /> : <Eye size={16} />}
+                          </IconButton>
+                        </InputAdornment>
+                      ),
+                    },
+                  }}
+                />
+
+                <TextField
+                  fullWidth
+                  size="small"
+                  label="Base Domain"
+                  placeholder="e.g. easy42.example.com"
+                  value={cfBaseDomain}
+                  onChange={(e) => setCfBaseDomain(e.target.value)}
+                  helperText="Node hostnames are published as <name>.<domain> under this base domain."
+                  disabled={dnsSaving || dnsSyncing || dnsForceSyncing}
+                />
+
+                {/* Toggle: Publish main ipv6 to it's own name */}
+                <Box
+                  sx={{
+                    p: 2,
+                    borderRadius: 2,
+                    border: "1px solid #E2E8F0",
+                    bgcolor: "#FFFFFF",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 0.8,
+                  }}
+                >
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={cfPublishIPv6OwnName}
+                        onChange={(e) => setCfPublishIPv6OwnName(e.target.checked)}
+                        disabled={dnsSaving || dnsSyncing || dnsForceSyncing}
+                        color="primary"
+                      />
+                    }
+                    label={
+                      <Typography variant="body2" sx={{ fontWeight: 600, color: "#1E293B" }}>
+                        Publish main ipv6 to it's own name
+                      </Typography>
+                    }
+                  />
+                  <Typography variant="caption" sx={{ color: "#64748B", ml: 3.5, mt: -0.5 }}>
+                    {cfPublishIPv6OwnName
+                      ? "When enabled, main IPv6 is published to <name>6.<domain> (separate AAAA record), while main IPv4 is published to <name>.<domain> (A record)."
+                      : "When disabled, main IPv4 (A) and main IPv6 (AAAA) are both published under the same <name>.<domain> record name."}
+                  </Typography>
+                </Box>
+
+                {/* Live DNS Record Preview */}
+                <Box
+                  sx={{
+                    p: 2,
+                    borderRadius: 2,
+                    border: "1px dashed #CBD5E1",
+                    bgcolor: "#F8FAFC",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 1.2,
+                  }}
+                >
+                  <Typography variant="caption" sx={{ fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                    DNS Records Preview (Example Node: node1)
+                  </Typography>
+                  <Box sx={{ display: "flex", flexDirection: "column", gap: 0.8 }}>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1, fontFamily: "monospace", fontSize: "0.82rem", color: "#1E293B" }}>
+                      <Chip label="A" size="small" sx={{ height: 20, fontSize: "0.7rem", fontWeight: 700, bgcolor: "#E0E7FF", color: "#4338CA" }} />
+                      <span>{`node1.${cfBaseDomain.trim() || "easy42.example.com"}`}</span>
+                      <span style={{ color: "#94A3B8" }}>→</span>
+                      <span style={{ color: "#059669" }}>192.168.100.1</span>
+                    </Box>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1, fontFamily: "monospace", fontSize: "0.82rem", color: "#1E293B" }}>
+                      <Chip label="AAAA" size="small" sx={{ height: 20, fontSize: "0.7rem", fontWeight: 700, bgcolor: "#EDE9FE", color: "#6D28D9" }} />
+                      <span>
+                        {cfPublishIPv6OwnName
+                          ? `node16.${cfBaseDomain.trim() || "easy42.example.com"}`
+                          : `node1.${cfBaseDomain.trim() || "easy42.example.com"}`}
+                      </span>
+                      <span style={{ color: "#94A3B8" }}>→</span>
+                      <span style={{ color: "#059669" }}>fd42:a159:f9f0::1</span>
+                    </Box>
+                  </Box>
+                </Box>
+              </>
+            )}
+          </DialogContent>
+
+          <DialogActions sx={{ px: 3, py: 2, borderTop: "1px solid #E2E8F0", backgroundColor: "#F8FAFC", display: "flex", justifyContent: "space-between" }}>
+            <Box sx={{ display: "flex", gap: 1 }}>
+              <Button
+                variant="outlined"
+                size="small"
+                onClick={() => handleSyncDNS(false)}
+                disabled={dnsLoading || dnsSaving || dnsSyncing || dnsForceSyncing || !cfZoneId || !cfApiToken || !cfBaseDomain}
+                startIcon={dnsSyncing ? <CircularProgress size={14} color="inherit" /> : <RefreshCw size={14} />}
+                sx={{
+                  fontWeight: 600,
+                  textTransform: "none",
+                  borderColor: "#0284C7",
+                  color: "#0284C7",
+                  "&:hover": { borderColor: "#0369A1", bgcolor: "rgba(2, 132, 199, 0.04)" },
+                }}
+              >
+                {dnsSyncing ? "Syncing..." : "Sync DNS"}
+              </Button>
+              <Button
+                variant="outlined"
+                size="small"
+                color="warning"
+                onClick={() => handleSyncDNS(true)}
+                disabled={dnsLoading || dnsSaving || dnsSyncing || dnsForceSyncing || !cfZoneId || !cfApiToken || !cfBaseDomain}
+                startIcon={dnsForceSyncing ? <CircularProgress size={14} color="inherit" /> : <Zap size={14} />}
+                sx={{
+                  fontWeight: 600,
+                  textTransform: "none",
+                  borderColor: "#F59E0B",
+                  color: "#D97706",
+                  "&:hover": { borderColor: "#D97706", bgcolor: "rgba(245, 158, 11, 0.04)" },
+                }}
+              >
+                {dnsForceSyncing ? "Force Syncing..." : "Force Sync"}
+              </Button>
+            </Box>
+
+            <Box sx={{ display: "flex", gap: 1 }}>
+              <Button onClick={handleClose} sx={{ color: "#64748B" }}>
+                Close
+              </Button>
+              <Button
+                type="submit"
+                variant="contained"
+                disabled={dnsLoading || dnsSaving || dnsSyncing || dnsForceSyncing}
+                startIcon={dnsSaving && <CircularProgress size={16} color="inherit" />}
+                sx={{ fontWeight: 600, bgcolor: "#4F46E5", "&:hover": { bgcolor: "#4338CA" } }}
+              >
+                {dnsSaving ? "Saving..." : "Save Settings"}
+              </Button>
+            </Box>
+          </DialogActions>
+        </form>
       )}
 
       {/* Sub-dialog: Policy Editor & Viewer */}

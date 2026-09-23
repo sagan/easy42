@@ -29,6 +29,45 @@ type Block struct {
 	Nodes  []string `json:"nodes,omitempty"`
 }
 
+// DNSConfig represents Cloudflare DNS integration configuration
+type DNSConfig struct {
+	ZoneID             string `json:"zone_id,omitempty"`
+	APIToken           string `json:"api_token,omitempty"`
+	BaseDomain         string `json:"base_domain,omitempty"`
+	PublishIPv6OwnName bool   `json:"publish_ipv6_own_name,omitempty"`
+}
+
+func (d *DNSConfig) UnmarshalJSON(data []byte) error {
+	type Alias DNSConfig
+	aux := struct {
+		*Alias
+		CloudflareZoneID      string `json:"cloudflare_zone_id,omitempty"`
+		CloudflareAPIToken    string `json:"cloudflare_api_token,omitempty"`
+		PublishIPv6OwnNameAlt *bool  `json:"publish_main_ipv6_to_own_name,omitempty"`
+	}{
+		Alias: (*Alias)(d),
+	}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	if d.ZoneID == "" && aux.CloudflareZoneID != "" {
+		d.ZoneID = aux.CloudflareZoneID
+	}
+	if d.APIToken == "" && aux.CloudflareAPIToken != "" {
+		d.APIToken = aux.CloudflareAPIToken
+	}
+	if aux.PublishIPv6OwnNameAlt != nil {
+		d.PublishIPv6OwnName = *aux.PublishIPv6OwnNameAlt
+	}
+	return nil
+}
+
+func (d DNSConfig) IsConfigured() bool {
+	return strings.TrimSpace(d.ZoneID) != "" &&
+		strings.TrimSpace(d.APIToken) != "" &&
+		strings.TrimSpace(d.BaseDomain) != ""
+}
+
 // Config represents the top-level configuration stored in config.json
 type Config struct {
 	PasswordHash      string             `json:"password_hash"`
@@ -40,6 +79,7 @@ type Config struct {
 	Links             []Link             `json:"links"`
 	LookingGlassTasks []LookingGlassTask `json:"looking_glass_tasks,omitempty"`
 	Blocks            []Block            `json:"blocks,omitempty"`
+	DNS               DNSConfig          `json:"dns,omitempty"`
 }
 
 // PortSpec handles single ports (51820), port ranges ("2000-2999"), or object ({port, external_port})
