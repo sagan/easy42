@@ -772,13 +772,21 @@ template bgp external_peer {
             {{if .has_ext_import_v4}}
             if net ~ EXT_PREFIXES_V4 then {
               bgp_large_community.add(COMM_EXTERNAL);
+              {{if and .ext_cost (gt .ext_cost 0)}}
+              if DEFAULT_LOCAL_PREF > {{.ext_cost}} then bgp_local_pref = DEFAULT_LOCAL_PREF - {{.ext_cost}}; else bgp_local_pref = 1;
+              {{else}}
               bgp_local_pref = DEFAULT_LOCAL_PREF;
+              {{end}}
               accept;
             }
             reject;
             {{else}}
             bgp_large_community.add(COMM_EXTERNAL);
+            {{if and .ext_cost (gt .ext_cost 0)}}
+            if DEFAULT_LOCAL_PREF > {{.ext_cost}} then bgp_local_pref = DEFAULT_LOCAL_PREF - {{.ext_cost}}; else bgp_local_pref = 1;
+            {{else}}
             bgp_local_pref = DEFAULT_LOCAL_PREF;
+            {{end}}
             accept;
             {{end}}
             {{end}}
@@ -826,13 +834,21 @@ template bgp external_peer {
             {{if .has_ext_import_v6}}
             if net ~ EXT_PREFIXES_V6 then {
               bgp_large_community.add(COMM_EXTERNAL);
+              {{if and .ext_cost (gt .ext_cost 0)}}
+              if DEFAULT_LOCAL_PREF > {{.ext_cost}} then bgp_local_pref = DEFAULT_LOCAL_PREF - {{.ext_cost}}; else bgp_local_pref = 1;
+              {{else}}
               bgp_local_pref = DEFAULT_LOCAL_PREF;
+              {{end}}
               accept;
             }
             reject;
             {{else}}
             bgp_large_community.add(COMM_EXTERNAL);
+            {{if and .ext_cost (gt .ext_cost 0)}}
+            if DEFAULT_LOCAL_PREF > {{.ext_cost}} then bgp_local_pref = DEFAULT_LOCAL_PREF - {{.ext_cost}}; else bgp_local_pref = 1;
+            {{else}}
             bgp_local_pref = DEFAULT_LOCAL_PREF;
+            {{end}}
             accept;
             {{end}}
             {{end}}
@@ -896,13 +912,21 @@ template bgp {{.template_name}} {
             {{if $.has_ext_import_v4}}
             if net ~ EXT_PREFIXES_V4 then {
               bgp_large_community.add(COMM_EXTERNAL);
+              {{if and .cost (gt .cost 0)}}
+              if DEFAULT_LOCAL_PREF > {{.cost}} then bgp_local_pref = DEFAULT_LOCAL_PREF - {{.cost}}; else bgp_local_pref = 1;
+              {{else}}
               bgp_local_pref = DEFAULT_LOCAL_PREF;
+              {{end}}
               accept;
             }
             reject;
             {{else}}
             bgp_large_community.add(COMM_EXTERNAL);
+            {{if and .cost (gt .cost 0)}}
+            if DEFAULT_LOCAL_PREF > {{.cost}} then bgp_local_pref = DEFAULT_LOCAL_PREF - {{.cost}}; else bgp_local_pref = 1;
+            {{else}}
             bgp_local_pref = DEFAULT_LOCAL_PREF;
+            {{end}}
             accept;
             {{end}}
             {{end}}
@@ -950,13 +974,21 @@ template bgp {{.template_name}} {
             {{if $.has_ext_import_v6}}
             if net ~ EXT_PREFIXES_V6 then {
               bgp_large_community.add(COMM_EXTERNAL);
+              {{if and .cost (gt .cost 0)}}
+              if DEFAULT_LOCAL_PREF > {{.cost}} then bgp_local_pref = DEFAULT_LOCAL_PREF - {{.cost}}; else bgp_local_pref = 1;
+              {{else}}
               bgp_local_pref = DEFAULT_LOCAL_PREF;
+              {{end}}
               accept;
             }
             reject;
             {{else}}
             bgp_large_community.add(COMM_EXTERNAL);
+            {{if and .cost (gt .cost 0)}}
+            if DEFAULT_LOCAL_PREF > {{.cost}} then bgp_local_pref = DEFAULT_LOCAL_PREF - {{.cost}}; else bgp_local_pref = 1;
+            {{else}}
             bgp_local_pref = DEFAULT_LOCAL_PREF;
+            {{end}}
             accept;
             {{end}}
             {{end}}

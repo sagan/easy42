@@ -1248,6 +1248,114 @@ func TestLinkEndCostOverrideBIRD(t *testing.T) {
 	}
 }
 
+func TestExternalLinkCostOverrideBIRD(t *testing.T) {
+	nodeManaged := config.Node{
+		Name:      "tcnj",
+		Host:      "192.168.142.220",
+		IP:        "192.168.142.220",
+		Interface: "dummy0",
+		ASN:       4224420220,
+	}
+	ext1 := config.Node{
+		Name:       "hexpcn",
+		IsExternal: true,
+		ASN:        205008,
+	}
+	ext2 := config.Node{
+		Name:       "nedifnicn5",
+		IsExternal: true,
+		ASN:        4242420454,
+	}
+	allNodes := []config.Node{nodeManaged, ext1, ext2}
+	netSettings := config.NetworkSettings{
+		PublicASN: 4242421120,
+	}
+
+	// 1. Single external link with custom cost (2000)
+	singleExtLink := config.Link{
+		From: config.LinkEnd{
+			Name:       "tcnj",
+			Address:    "fe80::1/64",
+			Interface:  "wg42-nedifnicn5",
+			Policy:     "dn42",
+			Cost:       2000,
+		},
+		To: config.LinkEnd{
+			Name:       "nedifnicn5",
+			Address:    "fe80::454/64",
+			Interface:  "wg42tcnj",
+		},
+	}
+	confSingle, err := GenerateBirdConfig(&nodeManaged, []config.Node{nodeManaged, ext2}, []config.Link{singleExtLink}, netSettings)
+	if err != nil {
+		t.Fatalf("GenerateBirdConfig single ext failed: %v", err)
+	}
+
+	expectedSingle := []string{
+		"template bgp external_peer {",
+		"if DEFAULT_LOCAL_PREF > 2000 then bgp_local_pref = DEFAULT_LOCAL_PREF - 2000; else bgp_local_pref = 1;",
+		"protocol bgp 'ext_peer_nedifnicn5' from external_peer {",
+	}
+	for _, s := range expectedSingle {
+		if !strings.Contains(confSingle, s) {
+			t.Errorf("Expected single ext snippet %q in config:\n%s", s, confSingle)
+		}
+	}
+	validateBirdSyntax(t, confSingle)
+
+	// 2. Multiple external links: one with default cost 0, one with cost 2000
+	multiExtLinks := []config.Link{
+		{
+			From: config.LinkEnd{
+				Name:      "tcnj",
+				Address:   "fe80::1/64",
+				Interface: "wg42-hexpcn",
+				Policy:    "dn42",
+				Cost:      0, // default cost
+			},
+			To: config.LinkEnd{
+				Name:      "hexpcn",
+				Address:   "fe80::298/64",
+				Interface: "wg42tcnj",
+			},
+		},
+		{
+			From: config.LinkEnd{
+				Name:      "tcnj",
+				Address:   "fe80::1/64",
+				Interface: "wg42-nedifnicn5",
+				Policy:    "dn42",
+				Cost:      2000, // custom cost
+			},
+			To: config.LinkEnd{
+				Name:      "nedifnicn5",
+				Address:   "fe80::454/64",
+				Interface: "wg42tcnj",
+			},
+		},
+	}
+
+	confMulti, err := GenerateBirdConfig(&nodeManaged, allNodes, multiExtLinks, netSettings)
+	if err != nil {
+		t.Fatalf("GenerateBirdConfig multi ext failed: %v", err)
+	}
+
+	expectedMulti := []string{
+		"template bgp external_peer {",
+		"bgp_local_pref = DEFAULT_LOCAL_PREF;",
+		"template bgp external_peer_cost_2000 {",
+		"if DEFAULT_LOCAL_PREF > 2000 then bgp_local_pref = DEFAULT_LOCAL_PREF - 2000; else bgp_local_pref = 1;",
+		"protocol bgp 'ext_peer_hexpcn' from external_peer {",
+		"protocol bgp 'ext_peer_nedifnicn5' from external_peer_cost_2000 {",
+	}
+	for _, s := range expectedMulti {
+		if !strings.Contains(confMulti, s) {
+			t.Errorf("Expected multi ext snippet %q in config:\n%s", s, confMulti)
+		}
+	}
+	validateBirdSyntax(t, confMulti)
+}
+
 func TestGenerateBirdConfigWithIP6(t *testing.T) {
 	nodeManaged := config.Node{
 		Name:      "router1",

@@ -339,7 +339,7 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 	hasNonePolicy := false
 	usedPolicyMap := make(map[string]config.NetworkPolicy)
 	policyVariantsMap := make(map[string]map[policyVariantKey]bool)
-	extVariantsMap := make(map[string]bool)
+	extVariantsMap := make(map[policyVariantKey]bool)
 
 	for _, l := range links {
 		var localEnd, remoteEnd *config.LinkEnd
@@ -381,15 +381,25 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 			hasNonePolicy = true
 		}
 
-		linkCost := localEnd.EffectiveCostWithPolicy(&pol)
+		var linkCost int
+		if isRemoteExternal && policyID == config.PolicyDN42 {
+			if localEnd != nil && localEnd.Cost != 0 {
+				linkCost = localEnd.Cost
+			} else {
+				linkCost = 0
+			}
+		} else {
+			linkCost = localEnd.EffectiveCostWithPolicy(&pol)
+		}
 		routingPolicy := localEnd.EffectiveRoutingPolicy(&pol)
 
-		if policyVariantsMap[policyID] == nil {
-			policyVariantsMap[policyID] = make(map[policyVariantKey]bool)
-		}
-		policyVariantsMap[policyID][policyVariantKey{cost: linkCost, routingPolicy: routingPolicy}] = true
-		if isRemoteExternal {
-			extVariantsMap[routingPolicy] = true
+		if isRemoteExternal && policyID == config.PolicyDN42 {
+			extVariantsMap[policyVariantKey{cost: linkCost, routingPolicy: routingPolicy}] = true
+		} else {
+			if policyVariantsMap[policyID] == nil {
+				policyVariantsMap[policyID] = make(map[policyVariantKey]bool)
+			}
+			policyVariantsMap[policyID][policyVariantKey{cost: linkCost, routingPolicy: routingPolicy}] = true
 		}
 
 		rawLinks = append(rawLinks, rawLinkInfo{
@@ -433,13 +443,18 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 		}
 	}
 
+	extCost := 0
+	if hasDN42 && dn42Pol.ID != config.PolicyDN42 && dn42Pol.Cost > 0 {
+		extCost = dn42Pol.Cost
+	}
 	extRoutingPolicy := config.RoutingPolicyFull
 	if hasDN42 {
 		extRoutingPolicy = dn42Pol.EffectiveRoutingPolicy()
 	}
 	if len(extVariantsMap) == 1 {
-		for rp := range extVariantsMap {
-			extRoutingPolicy = rp
+		for v := range extVariantsMap {
+			extCost = v.cost
+			extRoutingPolicy = v.routingPolicy
 		}
 	}
 
@@ -473,11 +488,7 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 			bgpTemplate = formatVariantTemplateName("easy42_peer", rl.routingPolicy, defaultRoutingPolicy, rl.linkCost, defaultCost)
 		case config.PolicyDN42:
 			if rl.isRemoteExternal {
-				if rl.routingPolicy == extRoutingPolicy {
-					bgpTemplate = "external_peer"
-				} else {
-					bgpTemplate = fmt.Sprintf("external_peer_%s", rl.routingPolicy)
-				}
+				bgpTemplate = formatVariantTemplateName("external_peer", rl.routingPolicy, extRoutingPolicy, rl.linkCost, extCost)
 			} else {
 				cleanID := SanitizeIdentifier(rl.policyID)
 				baseCfg := customBaseConfigs[rl.policyID]
@@ -638,17 +649,23 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 	}
 
 	var customExternalTemplates []map[string]any
-	var extraExtRPs []string
-	for rp := range extVariantsMap {
-		if rp != extRoutingPolicy {
-			extraExtRPs = append(extraExtRPs, rp)
+	var extraExtVariants []policyVariantKey
+	for v := range extVariantsMap {
+		if v.cost != extCost || v.routingPolicy != extRoutingPolicy {
+			extraExtVariants = append(extraExtVariants, v)
 		}
 	}
-	sort.Strings(extraExtRPs)
-	for _, rp := range extraExtRPs {
+	sort.Slice(extraExtVariants, func(i, j int) bool {
+		if extraExtVariants[i].routingPolicy != extraExtVariants[j].routingPolicy {
+			return extraExtVariants[i].routingPolicy < extraExtVariants[j].routingPolicy
+		}
+		return extraExtVariants[i].cost < extraExtVariants[j].cost
+	})
+	for _, v := range extraExtVariants {
 		customExternalTemplates = append(customExternalTemplates, map[string]any{
-			"template_name":  fmt.Sprintf("external_peer_%s", rp),
-			"routing_policy": rp,
+			"template_name":  formatVariantTemplateName("external_peer", v.routingPolicy, extRoutingPolicy, v.cost, extCost),
+			"cost":           v.cost,
+			"routing_policy": v.routingPolicy,
 		})
 	}
 
@@ -831,6 +848,7 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 	ctx["default_routing_policy"] = defaultRoutingPolicy
 	ctx["none_cost"] = noneCost
 	ctx["none_routing_policy"] = noneRoutingPolicy
+	ctx["ext_cost"] = extCost
 	ctx["ext_routing_policy"] = extRoutingPolicy
 	ctx["has_external_links"] = hasExternalLinks
 	ctx["has_none_policy"] = hasNonePolicy
