@@ -104,13 +104,6 @@ func BuildWgLinkContext(
 		keepalive = 0
 	}
 
-	var allowedIPs string
-	if peerEnd.Address4 == "" {
-		allowedIPs = fmt.Sprintf("%s/128, 0.0.0.0/0, ::/0", peerAddrOnly)
- 	} else {
-		allowedIPs = fmt.Sprintf("%s/128, %s, 0.0.0.0/0, ::/0", peerAddrOnly, peerEnd.Address4)
-	}
-
 	var policyMap map[string]config.NetworkPolicy
 	var assignIPv4 bool
 	if selfEnd != nil && selfEnd.Address4 != "" {
@@ -202,41 +195,57 @@ func BuildWgLinkContext(
 
 	address4 := ""
 	peerAddr4Only := ""
-	if assignIPv4 {
-		if selfEnd != nil && selfEnd.Address4 != "" {
-			address4 = selfEnd.Address4
-		} else if peerNode != nil {
-			mainIP := getNodeMainIP(peerNode)
-			if mainIP != "" {
-				linkIdx := 0
-				if selfEnd != nil && selfEnd.Interface != "" {
-					s := ExtractInterfaceSuffix(selfEnd.Interface, peerNode.Name, peerNode.IsExternal)
-					linkIdx = LinkIndexFromSuffix(s)
-				}
-				if d, err := DeriveIPv4LinkLocal(mainIP, linkIdx); err == nil {
-					address4 = d
-				}
-			}
+	if selfEnd != nil && selfEnd.Address4 != "" {
+		address4 = selfEnd.Address4
+	}
+	if peerEnd != nil && peerEnd.Address4 != "" {
+		peerAddr4Only = strings.TrimSpace(peerEnd.Address4)
+		if idx := strings.Index(peerAddr4Only, "/"); idx != -1 {
+			peerAddr4Only = peerAddr4Only[:idx]
 		}
+	}
 
-		if peerEnd != nil && peerEnd.Address4 != "" {
-			peerAddr4Only = strings.TrimSpace(peerEnd.Address4)
-			if idx := strings.Index(peerAddr4Only, "/"); idx != -1 {
-				peerAddr4Only = peerAddr4Only[:idx]
+	if assignIPv4 && (address4 == "" || peerAddr4Only == "") && selfNode != nil && peerNode != nil {
+		selfMainIP := getNodeMainIP(selfNode)
+		peerMainIP := getNodeMainIP(peerNode)
+		if selfMainIP != "" && peerMainIP != "" {
+			linkIdx := 0
+			if selfEnd != nil && selfEnd.Interface != "" {
+				s := ExtractInterfaceSuffix(selfEnd.Interface, peerNode.Name, peerNode.IsExternal)
+				linkIdx = LinkIndexFromSuffix(s)
+			} else if peerEnd != nil && peerEnd.Interface != "" {
+				s := ExtractInterfaceSuffix(peerEnd.Interface, selfNode.Name, selfNode.IsExternal)
+				linkIdx = LinkIndexFromSuffix(s)
 			}
-		} else if selfNode != nil {
-			mainIP := getNodeMainIP(selfNode)
-			if mainIP != "" {
-				linkIdx := 0
-				if peerEnd != nil && peerEnd.Interface != "" && peerNode != nil {
-					s := ExtractInterfaceSuffix(peerEnd.Interface, selfNode.Name, selfNode.IsExternal)
-					linkIdx = LinkIndexFromSuffix(s)
+			if a1, a2, err := DeriveIPv4LinkLocal(selfMainIP, peerMainIP, linkIdx); err == nil {
+				if address4 == "" {
+					address4 = a1
 				}
-				if d, err := DeriveIPv4LinkLocalAddressOnly(mainIP, linkIdx); err == nil {
-					peerAddr4Only = d
+				if peerAddr4Only == "" {
+					p := strings.TrimSpace(a2)
+					if idx := strings.Index(p, "/"); idx != -1 {
+						p = p[:idx]
+					}
+					peerAddr4Only = p
 				}
 			}
 		}
+	}
+
+	var allowedIPs string
+	peerV4 := ""
+	if peerAddr4Only != "" {
+		peerV4 = peerAddr4Only + "/32"
+	} else if peerEnd != nil && peerEnd.Address4 != "" {
+		peerV4 = peerEnd.Address4
+		if !strings.Contains(peerV4, "/") {
+			peerV4 = peerV4 + "/32"
+		}
+	}
+	if peerV4 == "" {
+		allowedIPs = fmt.Sprintf("%s/128, 0.0.0.0/0, ::/0", peerAddrOnly)
+	} else {
+		allowedIPs = fmt.Sprintf("%s/128, %s, 0.0.0.0/0, ::/0", peerAddrOnly, peerV4)
 	}
 
 	isRemoteExternal := peerNode != nil && peerNode.IsExternal

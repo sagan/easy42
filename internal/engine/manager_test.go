@@ -1785,10 +1785,8 @@ func TestLinkAssignIPv4(t *testing.T) {
 	if !link.AssignIPv4 {
 		t.Errorf("Expected link.AssignIPv4 == true")
 	}
-	// From (node-a) derives from peer (node-b) IP with linkIndex 0
-	expectedFrom4, _ := compiler.DeriveIPv4LinkLocal(n2.IP, 0)
-	// To (node-b) derives from peer (node-a) IP with linkIndex 0
-	expectedTo4, _ := compiler.DeriveIPv4LinkLocal(n1.IP, 0)
+	// From (node-a) and To (node-b) pair with linkIndex 0
+	expectedFrom4, expectedTo4, _ := compiler.DeriveIPv4LinkLocal(n1.IP, n2.IP, 0)
 	if link.From.Address4 != expectedFrom4 {
 		t.Errorf("Expected From.Address4 = %s, got %s", expectedFrom4, link.From.Address4)
 	}
@@ -1822,13 +1820,13 @@ func TestLinkAssignIPv4(t *testing.T) {
 		t.Errorf("Expected re-enabled Address4: %s, %s (got %s, %s)", expectedFrom4, expectedTo4, reEnabled.From.Address4, reEnabled.To.Address4)
 	}
 
-	// 4. Update node-a IP: node-b's To.Address4 (derived from peer node-a) updates automatically
+	// 4. Update node-a IP: link's pair updates automatically
 	n1Updated := n1
 	n1Updated.IP = "192.168.200.1"
 	if err := mgr.UpdateNode("node-a", n1Updated); err != nil {
 		t.Fatalf("UpdateNode failed: %v", err)
 	}
-	expectedTo4New, _ := compiler.DeriveIPv4LinkLocal(n1Updated.IP, 0)
+	expectedFrom4New, expectedTo4New, _ := compiler.DeriveIPv4LinkLocal(n1Updated.IP, n2.IP, 0)
 	var foundLink config.Link
 	found := false
 	for _, l := range mgr.GetLinks() {
@@ -1841,11 +1839,11 @@ func TestLinkAssignIPv4(t *testing.T) {
 	if !found {
 		t.Fatalf("Link node-a <-> node-b not found")
 	}
-	if foundLink.To.Address4 != expectedTo4New {
-		t.Errorf("Expected To.Address4 (peer of node-a) updated to %s, got %s", expectedTo4New, foundLink.To.Address4)
+	if foundLink.From.Address4 != expectedFrom4New {
+		t.Errorf("Expected From.Address4 updated to %s, got %s", expectedFrom4New, foundLink.From.Address4)
 	}
-	if foundLink.From.Address4 != expectedFrom4 {
-		t.Errorf("Expected From.Address4 to remain %s, got %s", expectedFrom4, foundLink.From.Address4)
+	if foundLink.To.Address4 != expectedTo4New {
+		t.Errorf("Expected To.Address4 updated to %s, got %s", expectedTo4New, foundLink.To.Address4)
 	}
 
 	// 5. Add second link between node-a and node-b -> link index 1 produces distinct IPv4
@@ -1853,8 +1851,7 @@ func TestLinkAssignIPv4(t *testing.T) {
 	if err != nil {
 		t.Fatalf("AddLinkWithOptions link 2 failed: %v", err)
 	}
-	expectedFrom4Link2, _ := compiler.DeriveIPv4LinkLocal(n2.IP, 1)
-	expectedTo4Link2, _ := compiler.DeriveIPv4LinkLocal(n1Updated.IP, 1)
+	expectedFrom4Link2, expectedTo4Link2, _ := compiler.DeriveIPv4LinkLocal(n1Updated.IP, n2.IP, 1)
 	if link2.From.Address4 != expectedFrom4Link2 {
 		t.Errorf("Expected link2 From.Address4 = %s, got %s", expectedFrom4Link2, link2.From.Address4)
 	}
@@ -1874,9 +1871,12 @@ func TestLinkAssignIPv4(t *testing.T) {
 	if err != nil {
 		t.Fatalf("AddLinkWithOptions link 3 failed: %v", err)
 	}
-	expectedFrom4Link3, _ := compiler.DeriveIPv4LinkLocal(n3.IP, 0)
+	expectedFrom4Link3, expectedTo4Link3, _ := compiler.DeriveIPv4LinkLocal(n1Updated.IP, n3.IP, 0)
 	if link3.From.Address4 != expectedFrom4Link3 {
 		t.Errorf("Expected link3 From.Address4 = %s, got %s", expectedFrom4Link3, link3.From.Address4)
+	}
+	if link3.To.Address4 != expectedTo4Link3 {
+		t.Errorf("Expected link3 To.Address4 = %s, got %s", expectedTo4Link3, link3.To.Address4)
 	}
 	if link3.From.Address4 == foundLink.From.Address4 || link3.From.Address4 == link2.From.Address4 {
 		t.Errorf("Expected link 3 From.Address4 (%s) to differ from links to node-b (%s, %s)",

@@ -402,20 +402,47 @@ func (m *Manager) UpdateNode(name string, updated config.Node) error {
 		}
 		for i := range cfg.Links {
 			if cfg.Links[i].AssignIPv4 {
-				if cfg.Links[i].To.Name == updated.Name {
-					s := compiler.ExtractInterfaceSuffix(cfg.Links[i].From.Interface, updated.Name, updated.IsExternal)
-					idx := compiler.LinkIndexFromSuffix(s)
-					if newAddr4, err := compiler.DeriveIPv4LinkLocal(updated.IP, idx); err == nil {
-						cfg.Links[i].From.Address4 = newAddr4
-						cfg.Links[i].ModifiedAt = now
+				isFrom := cfg.Links[i].From.Name == updated.Name
+				isTo := cfg.Links[i].To.Name == updated.Name
+				if isFrom || isTo {
+					otherName := cfg.Links[i].To.Name
+					if isTo {
+						otherName = cfg.Links[i].From.Name
 					}
-				}
-				if cfg.Links[i].From.Name == updated.Name {
-					s := compiler.ExtractInterfaceSuffix(cfg.Links[i].To.Interface, updated.Name, updated.IsExternal)
+					var otherNode *config.Node
+					for _, n := range cfg.Nodes {
+						if n.Name == otherName {
+							otherNode = &n
+							break
+						}
+					}
+					fromMainIP := updated.IP
+					if fromMainIP == "" {
+						fromMainIP = updated.ExternalIP
+					}
+					toMainIP := ""
+					if otherNode != nil {
+						toMainIP = otherNode.IP
+						if toMainIP == "" {
+							toMainIP = otherNode.ExternalIP
+						}
+					}
+					if isTo {
+						fromMainIP, toMainIP = toMainIP, fromMainIP
+					}
+
+					s := compiler.ExtractInterfaceSuffix(cfg.Links[i].From.Interface, cfg.Links[i].To.Name, otherNode != nil && otherNode.IsExternal)
+					if s == "" && otherNode != nil {
+						s = compiler.ExtractInterfaceSuffix(cfg.Links[i].To.Interface, cfg.Links[i].From.Name, updated.IsExternal)
+					}
 					idx := compiler.LinkIndexFromSuffix(s)
-					if newAddr4, err := compiler.DeriveIPv4LinkLocal(updated.IP, idx); err == nil {
-						cfg.Links[i].To.Address4 = newAddr4
-						cfg.Links[i].ModifiedAt = now
+
+					if fromMainIP != "" && toMainIP != "" {
+						if a1, a2, err := compiler.DeriveIPv4LinkLocal(fromMainIP, toMainIP, idx); err == nil {
+							cfg.Links[i].From.Address4 = a1
+							cfg.Links[i].To.Address4 = a2
+							cfg.Links[i].ModifiedAt = now
+						}
 					}
 				}
 			}
@@ -1273,14 +1300,10 @@ func (m *Manager) buildLink(cfg *config.Config, n1, n2 *config.Node, listenPort1
 		if toMainIP == "" {
 			toMainIP = toNode.ExternalIP
 		}
-		if toMainIP != "" {
-			if a4, err := compiler.DeriveIPv4LinkLocal(toMainIP, linkIndex); err == nil {
-				fromAddr4 = a4
-			}
-		}
-		if fromMainIP != "" {
-			if a4, err := compiler.DeriveIPv4LinkLocal(fromMainIP, linkIndex); err == nil {
-				toAddr4 = a4
+		if fromMainIP != "" && toMainIP != "" {
+			if a1, a2, err := compiler.DeriveIPv4LinkLocal(fromMainIP, toMainIP, linkIndex); err == nil {
+				fromAddr4 = a1
+				toAddr4 = a2
 			}
 		}
 	}
@@ -1898,14 +1921,14 @@ func (m *Manager) UpdateLinkWithOptions(node1Name, node2Name string, customFrom,
 			if toMainIP == "" {
 				toMainIP = toNode.ExternalIP
 			}
-			if toMainIP != "" && (fromEnd == nil || fromEnd.Address4 == "") {
-				if a4, err := compiler.DeriveIPv4LinkLocal(toMainIP, linkIndex); err == nil {
-					link.From.Address4 = a4
-				}
-			}
-			if fromMainIP != "" && (toEnd == nil || toEnd.Address4 == "") {
-				if a4, err := compiler.DeriveIPv4LinkLocal(fromMainIP, linkIndex); err == nil {
-					link.To.Address4 = a4
+			if fromMainIP != "" && toMainIP != "" {
+				if a1, a2, err := compiler.DeriveIPv4LinkLocal(fromMainIP, toMainIP, linkIndex); err == nil {
+					if fromEnd == nil || fromEnd.Address4 == "" {
+						link.From.Address4 = a1
+					}
+					if toEnd == nil || toEnd.Address4 == "" {
+						link.To.Address4 = a2
+					}
 				}
 			}
 		} else {
@@ -1928,14 +1951,14 @@ func (m *Manager) UpdateLinkWithOptions(node1Name, node2Name string, customFrom,
 		if toMainIP == "" {
 			toMainIP = toNode.ExternalIP
 		}
-		if toMainIP != "" && link.From.Address4 == "" {
-			if a4, err := compiler.DeriveIPv4LinkLocal(toMainIP, linkIndex); err == nil {
-				link.From.Address4 = a4
-			}
-		}
-		if fromMainIP != "" && link.To.Address4 == "" {
-			if a4, err := compiler.DeriveIPv4LinkLocal(fromMainIP, linkIndex); err == nil {
-				link.To.Address4 = a4
+		if fromMainIP != "" && toMainIP != "" {
+			if a1, a2, err := compiler.DeriveIPv4LinkLocal(fromMainIP, toMainIP, linkIndex); err == nil {
+				if link.From.Address4 == "" {
+					link.From.Address4 = a1
+				}
+				if link.To.Address4 == "" {
+					link.To.Address4 = a2
+				}
 			}
 		}
 	}

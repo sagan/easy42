@@ -1,6 +1,7 @@
 package compiler
 
 import (
+	"bytes"
 	"fmt"
 	"hash/fnv"
 	"net"
@@ -41,16 +42,55 @@ func DeriveIPv6LinkLocalAddressOnly(ipv4Str string) (string, error) {
 	return parts[0], nil
 }
 
-// DeriveIPv4LinkLocal derives a 169.254.X.X/32 link-local address from a peer's main IP and link index using a deterministic hash function.
-// If multiple links exist between the local and remote node, linkIndex (0, 1, 2...) ensures distinct addresses.
-// The X.X octets are safely within RFC 3927 link-local range (169.254.1.1 to 169.254.254.254).
-func DeriveIPv4LinkLocal(peerIP string, linkIndex ...int) (string, error) {
-	clean := strings.TrimSpace(peerIP)
-	if idx := strings.Index(clean, "/"); idx != -1 {
-		clean = clean[:idx]
+// compareIPs orders two IPs deterministically (by IP byte values if parseable, or lexicographically).
+func compareIPs(ip1, ip2 string) int {
+	p1 := net.ParseIP(ip1)
+	p2 := net.ParseIP(ip2)
+	if p1 != nil && p2 != nil {
+		p1v4 := p1.To4()
+		p2v4 := p2.To4()
+		if p1v4 != nil && p2v4 != nil {
+			if c := bytes.Compare(p1v4, p2v4); c != 0 {
+				return c
+			}
+		} else if p1v4 == nil && p2v4 == nil {
+			if c := bytes.Compare(p1.To16(), p2.To16()); c != 0 {
+				return c
+			}
+		}
 	}
-	if clean == "" {
-		return "", fmt.Errorf("empty IP address")
+	return strings.Compare(ip1, ip2)
+}
+
+// DeriveIPv4LinkLocal derives a deterministic pair of 169.254.X.X/32 link-local addresses
+// from both nodes' main IPs and an optional link index.
+// The derivation is deterministic: the two nodes' main IPs are sorted, and the hash material
+// is the sorted two nodes' main IP and link index (e.g. "<ipLow>-<ipHigh>#<linkIndex>").
+// The node corresponding to node1IP receives the first address in the returned pair,
+// and the node corresponding to node2IP receives the second address.
+// The returned addresses form a consecutive /30 pair (4*k + 1 and 4*k + 2) safely within RFC 3927.
+func DeriveIPv4LinkLocal(node1IP, node2IP string, linkIndex ...int) (string, string, error) {
+	clean1 := strings.TrimSpace(node1IP)
+	if idx := strings.Index(clean1, "/"); idx != -1 {
+		clean1 = clean1[:idx]
+	}
+	clean2 := strings.TrimSpace(node2IP)
+	if idx := strings.Index(clean2, "/"); idx != -1 {
+		clean2 = clean2[:idx]
+	}
+	if clean1 == "" || clean2 == "" {
+		return "", "", fmt.Errorf("empty IP address")
+	}
+
+	cmp := compareIPs(clean1, clean2)
+	var sorted1, sorted2 string
+	isFirstLow := true
+	if cmp <= 0 {
+		sorted1, sorted2 = clean1, clean2
+		isFirstLow = true
+	} else {
+		sorted1, sorted2 = clean2, clean1
+		isFirstLow = false
 	}
 
 	idx := 0
@@ -59,29 +99,53 @@ func DeriveIPv4LinkLocal(peerIP string, linkIndex ...int) (string, error) {
 	}
 
 	h := fnv.New32a()
-	if idx > 0 {
-		fmt.Fprintf(h, "%s#%d", clean, idx)
-	} else {
-		h.Write([]byte(clean))
-	}
+	fmt.Fprintf(h, "%s-%s#%d", sorted1, sorted2, idx)
 	sum := h.Sum32()
 
 	// RFC 3927 allocates 169.254.0.0/16, reserving 169.254.0.x and 169.254.255.x.
 	// Host addresses range from 169.254.1.1 to 169.254.254.254.
+	// We allocate a /30 subnet pair (4*k + 1 and 4*k + 2) in 169.254.x1.0/24.
 	x1 := 1 + int((sum>>8)%254)
-	x2 := 1 + int(sum%254)
+	base := int(sum%64) * 4
+	host1 := base + 1
+	host2 := base + 2
 
-	return fmt.Sprintf("169.254.%d.%d/32", x1, x2), nil
+	addrLow := fmt.Sprintf("169.254.%d.%d/32", x1, host1)
+	addrHigh := fmt.Sprintf("169.254.%d.%d/32", x1, host2)
+
+	if isFirstLow {
+		return addrLow, addrHigh, nil
+	}
+	return addrHigh, addrLow, nil
 }
 
-// DeriveIPv4LinkLocalAddressOnly returns the IPv4 link-local address without prefix
-func DeriveIPv4LinkLocalAddressOnly(peerIP string, linkIndex ...int) (string, error) {
-	cidr, err := DeriveIPv4LinkLocal(peerIP, linkIndex...)
+// DeriveIPv4LinkLocalPair is an alias for DeriveIPv4LinkLocal returning the pair of addresses.
+func DeriveIPv4LinkLocalPair(node1IP, node2IP string, linkIndex ...int) (string, string, error) {
+	return DeriveIPv4LinkLocal(node1IP, node2IP, linkIndex...)
+}
+
+// DeriveIPv4LinkLocalAddressOnly returns the pair of IPv4 link-local addresses without CIDR prefix.
+func DeriveIPv4LinkLocalAddressOnly(node1IP, node2IP string, linkIndex ...int) (string, string, error) {
+	c1, c2, err := DeriveIPv4LinkLocal(node1IP, node2IP, linkIndex...)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
-	parts := strings.Split(cidr, "/")
-	return parts[0], nil
+	strip := func(cidr string) string {
+		parts := strings.Split(cidr, "/")
+		return parts[0]
+	}
+	return strip(c1), strip(c2), nil
+}
+
+// DeriveIPv4LinkLocalAddressOnlyPair is an alias for DeriveIPv4LinkLocalAddressOnly.
+func DeriveIPv4LinkLocalAddressOnlyPair(node1IP, node2IP string, linkIndex ...int) (string, string, error) {
+	return DeriveIPv4LinkLocalAddressOnly(node1IP, node2IP, linkIndex...)
+}
+
+// DeriveNodeIPv4LinkLocal derives the 169.254.X.X/32 link-local address for selfIP in the link with peerIP.
+func DeriveNodeIPv4LinkLocal(selfIP, peerIP string, linkIndex ...int) (string, error) {
+	selfAddr, _, err := DeriveIPv4LinkLocal(selfIP, peerIP, linkIndex...)
+	return selfAddr, err
 }
 
 // DerivePortFromIP derives a default WireGuard listen port based on peer IP:

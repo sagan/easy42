@@ -631,65 +631,84 @@ func TestGenerateWgConfigContent_Fwmark(t *testing.T) {
 }
 
 func TestDeriveIPv4LinkLocal(t *testing.T) {
-	// Test basic derivation
+	// Test basic derivation of pair
 	ip1 := "192.168.100.1"
-	cidr1, err := DeriveIPv4LinkLocal(ip1)
+	ip2 := "192.168.100.2"
+	cidr1, cidr2, err := DeriveIPv4LinkLocal(ip1, ip2)
 	if err != nil {
 		t.Fatalf("DeriveIPv4LinkLocal failed: %v", err)
 	}
 	if !strings.HasPrefix(cidr1, "169.254.") || !strings.HasSuffix(cidr1, "/32") {
-		t.Fatalf("Expected 169.254.X.X/32 format, got: %s", cidr1)
+		t.Fatalf("Expected 169.254.X.X/32 format for cidr1, got: %s", cidr1)
+	}
+	if !strings.HasPrefix(cidr2, "169.254.") || !strings.HasSuffix(cidr2, "/32") {
+		t.Fatalf("Expected 169.254.X.X/32 format for cidr2, got: %s", cidr2)
+	}
+	if cidr1 == cidr2 {
+		t.Fatalf("Expected distinct pair addresses, got cidr1 == cidr2 (%s)", cidr1)
 	}
 
-	addrOnly1, err := DeriveIPv4LinkLocalAddressOnly(ip1)
+	addrOnly1, addrOnly2, err := DeriveIPv4LinkLocalAddressOnly(ip1, ip2)
 	if err != nil {
 		t.Fatalf("DeriveIPv4LinkLocalAddressOnly failed: %v", err)
 	}
 	if addrOnly1+"/32" != cidr1 {
-		t.Fatalf("Expected addrOnly + /32 == cidr, got %s vs %s", addrOnly1, cidr1)
+		t.Fatalf("Expected addrOnly1 + /32 == cidr1, got %s vs %s", addrOnly1, cidr1)
+	}
+	if addrOnly2+"/32" != cidr2 {
+		t.Fatalf("Expected addrOnly2 + /32 == cidr2, got %s vs %s", addrOnly2, cidr2)
 	}
 
 	// Test determinism
-	cidr1Repeat, _ := DeriveIPv4LinkLocal(ip1)
-	if cidr1 != cidr1Repeat {
-		t.Fatalf("Expected deterministic output: %s != %s", cidr1, cidr1Repeat)
+	cidr1Repeat, cidr2Repeat, _ := DeriveIPv4LinkLocal(ip1, ip2)
+	if cidr1 != cidr1Repeat || cidr2 != cidr2Repeat {
+		t.Fatalf("Expected deterministic output: (%s, %s) != (%s, %s)", cidr1, cidr2, cidr1Repeat, cidr2Repeat)
+	}
+
+	// Test symmetry: swapping arguments returns the same addresses mapped to respective IPs
+	rev1, rev2, _ := DeriveIPv4LinkLocal(ip2, ip1)
+	if rev1 != cidr2 || rev2 != cidr1 {
+		t.Fatalf("Expected symmetric IP mapping: got (%s, %s), expected (%s, %s)", rev1, rev2, cidr2, cidr1)
 	}
 
 	// Test link index variations
-	cidr1Idx0, _ := DeriveIPv4LinkLocal(ip1, 0)
-	if cidr1 != cidr1Idx0 {
-		t.Fatalf("Expected index 0 to match default: %s != %s", cidr1, cidr1Idx0)
+	cidr1Idx0, cidr2Idx0, _ := DeriveIPv4LinkLocal(ip1, ip2, 0)
+	if cidr1 != cidr1Idx0 || cidr2 != cidr2Idx0 {
+		t.Fatalf("Expected index 0 to match default: (%s, %s) != (%s, %s)", cidr1, cidr2, cidr1Idx0, cidr2Idx0)
 	}
-	cidr1Idx1, _ := DeriveIPv4LinkLocal(ip1, 1)
+	cidr1Idx1, _, _ := DeriveIPv4LinkLocal(ip1, ip2, 1)
 	if cidr1 == cidr1Idx1 {
 		t.Fatalf("Expected index 1 to differ from index 0: %s", cidr1)
 	}
-	cidr1Idx2, _ := DeriveIPv4LinkLocal(ip1, 2)
+	cidr1Idx2, _, _ := DeriveIPv4LinkLocal(ip1, ip2, 2)
 	if cidr1Idx1 == cidr1Idx2 {
 		t.Fatalf("Expected index 2 to differ from index 1: %s", cidr1Idx1)
 	}
 
-	// Test different IP yields different hash
-	ip2 := "192.168.100.2"
-	cidr2, err := DeriveIPv4LinkLocal(ip2)
+	// Test different IP yields different pair
+	ip3 := "192.168.100.3"
+	cidr1_3, _, err := DeriveIPv4LinkLocal(ip1, ip3)
 	if err != nil {
 		t.Fatalf("DeriveIPv4LinkLocal failed: %v", err)
 	}
-	if cidr1 == cidr2 {
-		t.Fatalf("Expected different IP to yield different address, got %s", cidr1)
+	if cidr1 == cidr1_3 {
+		t.Fatalf("Expected different IP pair to yield different address, got %s", cidr1)
 	}
 
 	// Test CIDR stripping in input
-	cidrWithMask, err := DeriveIPv4LinkLocal("192.168.100.1/24")
+	cidrWithMask1, cidrWithMask2, err := DeriveIPv4LinkLocal("192.168.100.1/24", "192.168.100.2/24")
 	if err != nil {
 		t.Fatalf("DeriveIPv4LinkLocal with mask failed: %v", err)
 	}
-	if cidrWithMask != cidr1 {
-		t.Fatalf("Expected same output with or without mask: %s != %s", cidrWithMask, cidr1)
+	if cidrWithMask1 != cidr1 || cidrWithMask2 != cidr2 {
+		t.Fatalf("Expected same output with or without mask: (%s, %s) != (%s, %s)", cidrWithMask1, cidrWithMask2, cidr1, cidr2)
 	}
 
 	// Test empty IP errors
-	if _, err := DeriveIPv4LinkLocal(""); err == nil {
+	if _, _, err := DeriveIPv4LinkLocal("", ip2); err == nil {
+		t.Fatalf("Expected error for empty IP")
+	}
+	if _, _, err := DeriveIPv4LinkLocal(ip1, ""); err == nil {
 		t.Fatalf("Expected error for empty IP")
 	}
 }
@@ -726,11 +745,11 @@ func TestGenerateWgConfigContent_AssignIPv4(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GenerateWgConfigContent with AssignIPv4 failed: %v", err)
 	}
-	// Local address on nodeA is derived from peer nodeB's IP (index 0)
-	expectedLocal, _ := DeriveIPv4LinkLocal(nodeB.IP, 0)
+	// Local address on nodeA is derived from pair of (nodeA.IP, nodeB.IP) (index 0)
+	expectedLocal, expectedRemote, _ := DeriveIPv4LinkLocal(nodeA.IP, nodeB.IP, 0)
 
-	if !strings.Contains(confWithIPv4, "Address = "+expectedLocal) {
-		t.Errorf("Expected 'Address = %s' in WG conf, got:\n%s", expectedLocal, confWithIPv4)
+	if !strings.Contains(confWithIPv4, expectedLocal) {
+		t.Errorf("Expected '%s' in WG conf, got:\n%s", expectedLocal, confWithIPv4)
 	}
 	if !strings.Contains(confWithIPv4, "Address = fe80:") {
 		t.Errorf("Expected IPv6 link-local address still present in WG conf, got:\n%s", confWithIPv4)
@@ -746,8 +765,8 @@ func TestGenerateWgConfigContent_AssignIPv4(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GenerateWgConfigContent via Link failed: %v", err)
 	}
-	if !strings.Contains(confViaLink, "Address = "+expectedLocal) {
-		t.Errorf("Expected 'Address = %s' via Link arg, got:\n%s", expectedLocal, confViaLink)
+	if !strings.Contains(confViaLink, expectedLocal) {
+		t.Errorf("Expected '%s' via Link arg, got:\n%s", expectedLocal, confViaLink)
 	}
 
 	// 4. Multiple links between nodeA and nodeB have distinct IPv4
@@ -763,12 +782,15 @@ func TestGenerateWgConfigContent_AssignIPv4(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GenerateWgConfigContent link 2 failed: %v", err)
 	}
-	expectedLocalLink2, _ := DeriveIPv4LinkLocal(nodeB.IP, 1)
-	if !strings.Contains(confLink2, "Address = "+expectedLocalLink2) {
-		t.Errorf("Expected 'Address = %s' for second link, got:\n%s", expectedLocalLink2, confLink2)
+	expectedLocalLink2, _, _ := DeriveIPv4LinkLocal(nodeA.IP, nodeB.IP, 1)
+	if !strings.Contains(confLink2, expectedLocalLink2) {
+		t.Errorf("Expected '%s' for second link, got:\n%s", expectedLocalLink2, confLink2)
 	}
 	if expectedLocal == expectedLocalLink2 {
 		t.Errorf("Expected distinct IPv4 addresses for link 0 (%s) and link 1 (%s)", expectedLocal, expectedLocalLink2)
+	}
+	if expectedLocal == expectedRemote {
+		t.Errorf("Expected distinct local (%s) and remote (%s) IPv4 addresses", expectedLocal, expectedRemote)
 	}
 }
 

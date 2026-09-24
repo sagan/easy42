@@ -17,7 +17,7 @@ MTU = {{ .mtu }}
 FwMark = {{ .fwmark }}
 {{ end -}}
 # Some OS (debian) wg-quick seems to force set wg rp_filter to 2 on start
-PostUp = sysctl -w net.ipv4.conf.%i.rp_filter=0; {{ if .peer_end.Address4 }}ip route add {{ .peer_end.Address4 }} dev %i;{{ end }} ip -6 route add {{ .peer_addr_only }} dev %i || true
+PostUp = sysctl -w net.ipv4.conf.%i.rp_filter=0; {{ if .peer_end.Address4 }}ip route add {{ .peer_end.Address4 }} dev %i;{{ else if .peer_addr4_only }}ip route add {{ .peer_addr4_only }}/32 dev %i;{{ end }} ip -6 route add {{ .peer_addr_only }} dev %i || true
 Table = off
 {{ if .wg_hooks_interface -}}
 {{ range .wg_hooks_interface }}
