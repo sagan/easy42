@@ -19,12 +19,7 @@ interface TaskParamFormProps {
   disabled?: boolean;
 }
 
-export const TaskParamForm: React.FC<TaskParamFormProps> = ({
-  params,
-  values,
-  onChange,
-  disabled = false,
-}) => {
+export const TaskParamForm: React.FC<TaskParamFormProps> = ({ params, values, onChange, disabled = false }) => {
   if (!params || params.length === 0) {
     return null;
   }

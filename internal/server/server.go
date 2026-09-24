@@ -122,6 +122,13 @@ func New(cfg Config) *Server {
 			r.Delete("/network-policies/{id}", s.handleDeleteNetworkPolicy)
 			r.Post("/network-policies/{id}/refresh-roa", s.handleRefreshPolicyROA)
 
+			// Config Templates
+			r.Get("/templates", s.handleGetTemplates)
+			r.Post("/templates", s.handleCreateTemplate)
+			r.Get("/templates/{id}", s.handleGetTemplate)
+			r.Put("/templates/{id}", s.handleUpdateTemplate)
+			r.Delete("/templates/{id}", s.handleDeleteTemplate)
+
 			// ROA Cache
 			r.Post("/roa/refresh", s.handleRefreshAllROA)
 			r.Post("/roa/clear-cache", s.handleClearROACache)

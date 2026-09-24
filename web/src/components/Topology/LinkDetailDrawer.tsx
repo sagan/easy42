@@ -12,7 +12,25 @@ import {
   Chip,
   TextField,
 } from "@mui/material";
-import { X, Trash2, Link as LinkIcon, Key, ArrowRightLeft, Edit2, Activity, Copy, Check, Shield, RefreshCw, Gauge, Zap, Route, RotateCcw, FileText, Network } from "lucide-react";
+import {
+  X,
+  Trash2,
+  Link as LinkIcon,
+  Key,
+  ArrowRightLeft,
+  Edit2,
+  Activity,
+  Copy,
+  Check,
+  Shield,
+  RefreshCw,
+  Gauge,
+  Zap,
+  Route,
+  RotateCcw,
+  FileText,
+  Network,
+} from "lucide-react";
 import { api } from "../../api/client";
 import { Link, NetworkState, Node } from "../../types/api";
 import { MarkdownView } from "../Common/MarkdownView";
@@ -304,7 +322,10 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
             <IconButton
               size="small"
               onClick={() => onEditLink(link)}
-              sx={{ color: isManual ? "#7C3AED" : "#0891B2", "&:hover": { backgroundColor: isManual ? "rgba(124, 58, 237, 0.08)" : "rgba(8, 145, 178, 0.08)" } }}
+              sx={{
+                color: isManual ? "#7C3AED" : "#0891B2",
+                "&:hover": { backgroundColor: isManual ? "rgba(124, 58, 237, 0.08)" : "rgba(8, 145, 178, 0.08)" },
+              }}
             >
               <Edit2 size={18} />
             </IconButton>
@@ -350,7 +371,9 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
                 />
               </Box>
               <Typography variant="caption" sx={{ color: "#6B21A8", display: "block", lineHeight: 1.4 }}>
-                Data plane interfaces ({link.from.interface} / {link.to.interface}) are manually created and managed by you. easy42 automatically manages BIRD BGP routing sessions and adds interfaces to the <code>easy42_ifname</code> nftables set.
+                Data plane interfaces ({link.from.interface} / {link.to.interface}) are manually created and managed by
+                you. easy42 automatically manages BIRD BGP routing sessions and adds interfaces to the{" "}
+                <code>easy42_ifname</code> nftables set.
               </Typography>
             </Box>
           );
@@ -460,13 +483,21 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
               Node 1: {link.from.name}
             </Typography>
             {!isManual && (
-              <Tooltip title={isFromExternal ? "Cannot restart interface on external node" : `Restart ${link.from.interface} on ${link.from.name}`}>
+              <Tooltip
+                title={
+                  isFromExternal
+                    ? "Cannot restart interface on external node"
+                    : `Restart ${link.from.interface} on ${link.from.name}`
+                }
+              >
                 <span>
                   <Button
                     id={`restart-link-end-from-${link.from.name}-${link.from.interface}`}
                     size="small"
                     variant="outlined"
-                    startIcon={restartingFrom ? <CircularProgress size={12} color="inherit" /> : <RotateCcw size={12} />}
+                    startIcon={
+                      restartingFrom ? <CircularProgress size={12} color="inherit" /> : <RotateCcw size={12} />
+                    }
                     onClick={() => handleRestartEnd("from")}
                     disabled={restartingFrom || restartingTo || deleting || Boolean(isFromExternal)}
                     sx={{
@@ -580,10 +611,7 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
                           <IconButton
                             size="small"
                             onClick={() =>
-                              copyEndpointToClipboard(
-                                link.from.resolved_endpoint || link.from.endpoint || "",
-                                "from",
-                              )
+                              copyEndpointToClipboard(link.from.resolved_endpoint || link.from.endpoint || "", "from")
                             }
                             sx={{ p: 0.3, color: copiedEndpoint === "from" ? "#10B981" : "#64748B" }}
                           >
@@ -626,10 +654,20 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
                   height: 20,
                   fontSize: "0.65rem",
                   fontWeight: 700,
-                  bgcolor: (link.from.policy === "none") ? "rgba(148, 163, 184, 0.15)" : (link.from.policy === "dn42") ? "rgba(109, 40, 217, 0.12)" : "rgba(79, 70, 229, 0.12)",
-                  color: (link.from.policy === "none") ? "#64748B" : (link.from.policy === "dn42") ? "#6D28D9" : "#4F46E5",
+                  bgcolor:
+                    link.from.policy === "none"
+                      ? "rgba(148, 163, 184, 0.15)"
+                      : link.from.policy === "dn42"
+                        ? "rgba(109, 40, 217, 0.12)"
+                        : "rgba(79, 70, 229, 0.12)",
+                  color: link.from.policy === "none" ? "#64748B" : link.from.policy === "dn42" ? "#6D28D9" : "#4F46E5",
                   border: "1px solid",
-                  borderColor: (link.from.policy === "none") ? "rgba(148, 163, 184, 0.2)" : (link.from.policy === "dn42") ? "rgba(109, 40, 217, 0.25)" : "rgba(79, 70, 229, 0.25)",
+                  borderColor:
+                    link.from.policy === "none"
+                      ? "rgba(148, 163, 184, 0.2)"
+                      : link.from.policy === "dn42"
+                        ? "rgba(109, 40, 217, 0.25)"
+                        : "rgba(79, 70, 229, 0.25)",
                 }}
               />
             </Box>
@@ -641,13 +679,13 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
               <Chip
                 label={
                   link.from.routing_policy
-                    ? (link.from.routing_policy === "stub"
-                        ? "Stub (Override)"
-                        : link.from.routing_policy === "receive_only"
+                    ? link.from.routing_policy === "stub"
+                      ? "Stub (Override)"
+                      : link.from.routing_policy === "receive_only"
                         ? "Receive Only (Override)"
                         : link.from.routing_policy === "advertise_only"
-                        ? "Advertise Only (Override)"
-                        : `${link.from.routing_policy} (Override)`)
+                          ? "Advertise Only (Override)"
+                          : `${link.from.routing_policy} (Override)`
                     : "Inherited"
                 }
                 size="small"
@@ -674,10 +712,12 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
                   height: 20,
                   fontSize: "0.65rem",
                   fontWeight: 700,
-                  bgcolor: link.from.cost && link.from.cost !== 0 ? "rgba(245, 158, 11, 0.12)" : "rgba(148, 163, 184, 0.15)",
+                  bgcolor:
+                    link.from.cost && link.from.cost !== 0 ? "rgba(245, 158, 11, 0.12)" : "rgba(148, 163, 184, 0.15)",
                   color: link.from.cost && link.from.cost !== 0 ? "#D97706" : "#64748B",
                   border: "1px solid",
-                  borderColor: link.from.cost && link.from.cost !== 0 ? "rgba(245, 158, 11, 0.3)" : "rgba(148, 163, 184, 0.2)",
+                  borderColor:
+                    link.from.cost && link.from.cost !== 0 ? "rgba(245, 158, 11, 0.3)" : "rgba(148, 163, 184, 0.2)",
                 }}
               />
             </Box>
@@ -712,10 +752,12 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
                   height: 20,
                   fontSize: "0.65rem",
                   fontWeight: 700,
-                  bgcolor: link.from.preference !== undefined ? "rgba(16, 185, 129, 0.12)" : "rgba(148, 163, 184, 0.15)",
+                  bgcolor:
+                    link.from.preference !== undefined ? "rgba(16, 185, 129, 0.12)" : "rgba(148, 163, 184, 0.15)",
                   color: link.from.preference !== undefined ? "#059669" : "#64748B",
                   border: "1px solid",
-                  borderColor: link.from.preference !== undefined ? "rgba(16, 185, 129, 0.3)" : "rgba(148, 163, 184, 0.2)",
+                  borderColor:
+                    link.from.preference !== undefined ? "rgba(16, 185, 129, 0.3)" : "rgba(148, 163, 184, 0.2)",
                 }}
               />
             </Box>
@@ -783,7 +825,10 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
             {/* Node 1 LinkEnd Note */}
             <Box sx={{ mt: 1.5, p: 1.5, borderRadius: 1.5, backgroundColor: "#FFFFFF", border: "1px solid #C7D2FE" }}>
               <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1 }}>
-                <Typography variant="caption" sx={{ color: "#4338CA", fontWeight: 700, display: "flex", alignItems: "center", gap: 0.6 }}>
+                <Typography
+                  variant="caption"
+                  sx={{ color: "#4338CA", fontWeight: 700, display: "flex", alignItems: "center", gap: 0.6 }}
+                >
                   <FileText size={13} color="#4F46E5" /> {link.from.name} NOTE (MARKDOWN)
                 </Typography>
                 {!isEditingFromNote ? (
@@ -834,7 +879,16 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
               </Box>
 
               {!isEditingFromNote ? (
-                <Box sx={{ p: 1, borderRadius: 1, backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0", maxHeight: 180, overflowY: "auto" }}>
+                <Box
+                  sx={{
+                    p: 1,
+                    borderRadius: 1,
+                    backgroundColor: "#F8FAFC",
+                    border: "1px solid #E2E8F0",
+                    maxHeight: 180,
+                    overflowY: "auto",
+                  }}
+                >
                   <MarkdownView
                     content={link.from.note}
                     emptyText="No note recorded for this endpoint. Click 'Add Note' to record markdown notes."
@@ -856,11 +910,24 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
                       sx={{
                         backgroundColor: "#FFFFFF",
                         borderRadius: 1,
-                        "& .MuiInputBase-root": { fontSize: "0.8rem", fontFamily: "'JetBrains Mono', 'Fira Code', monospace" },
+                        "& .MuiInputBase-root": {
+                          fontSize: "0.8rem",
+                          fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+                        },
                       }}
                     />
                   ) : (
-                    <Box sx={{ p: 1, borderRadius: 1, backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0", minHeight: 60, maxHeight: 180, overflowY: "auto" }}>
+                    <Box
+                      sx={{
+                        p: 1,
+                        borderRadius: 1,
+                        backgroundColor: "#F8FAFC",
+                        border: "1px solid #E2E8F0",
+                        minHeight: 60,
+                        maxHeight: 180,
+                        overflowY: "auto",
+                      }}
+                    >
                       <MarkdownView content={fromNoteDraft} emptyText="No markdown note content" />
                     </Box>
                   )}
@@ -921,7 +988,13 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
               Node 2: {link.to.name}
             </Typography>
             {!isManual && (
-              <Tooltip title={isToExternal ? "Cannot restart interface on external node" : `Restart ${link.to.interface} on ${link.to.name}`}>
+              <Tooltip
+                title={
+                  isToExternal
+                    ? "Cannot restart interface on external node"
+                    : `Restart ${link.to.interface} on ${link.to.name}`
+                }
+              >
                 <span>
                   <Button
                     id={`restart-link-end-to-${link.to.name}-${link.to.interface}`}
@@ -1041,10 +1114,7 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
                           <IconButton
                             size="small"
                             onClick={() =>
-                              copyEndpointToClipboard(
-                                link.to.resolved_endpoint || link.to.endpoint || "",
-                                "to",
-                              )
+                              copyEndpointToClipboard(link.to.resolved_endpoint || link.to.endpoint || "", "to")
                             }
                             sx={{ p: 0.3, color: copiedEndpoint === "to" ? "#10B981" : "#64748B" }}
                           >
@@ -1087,10 +1157,20 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
                   height: 20,
                   fontSize: "0.65rem",
                   fontWeight: 700,
-                  bgcolor: (link.to.policy === "none") ? "rgba(148, 163, 184, 0.15)" : (link.to.policy === "dn42") ? "rgba(109, 40, 217, 0.12)" : "rgba(79, 70, 229, 0.12)",
-                  color: (link.to.policy === "none") ? "#64748B" : (link.to.policy === "dn42") ? "#6D28D9" : "#4F46E5",
+                  bgcolor:
+                    link.to.policy === "none"
+                      ? "rgba(148, 163, 184, 0.15)"
+                      : link.to.policy === "dn42"
+                        ? "rgba(109, 40, 217, 0.12)"
+                        : "rgba(79, 70, 229, 0.12)",
+                  color: link.to.policy === "none" ? "#64748B" : link.to.policy === "dn42" ? "#6D28D9" : "#4F46E5",
                   border: "1px solid",
-                  borderColor: (link.to.policy === "none") ? "rgba(148, 163, 184, 0.2)" : (link.to.policy === "dn42") ? "rgba(109, 40, 217, 0.25)" : "rgba(79, 70, 229, 0.25)",
+                  borderColor:
+                    link.to.policy === "none"
+                      ? "rgba(148, 163, 184, 0.2)"
+                      : link.to.policy === "dn42"
+                        ? "rgba(109, 40, 217, 0.25)"
+                        : "rgba(79, 70, 229, 0.25)",
                 }}
               />
             </Box>
@@ -1102,13 +1182,13 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
               <Chip
                 label={
                   link.to.routing_policy
-                    ? (link.to.routing_policy === "stub"
-                        ? "Stub (Override)"
-                        : link.to.routing_policy === "receive_only"
+                    ? link.to.routing_policy === "stub"
+                      ? "Stub (Override)"
+                      : link.to.routing_policy === "receive_only"
                         ? "Receive Only (Override)"
                         : link.to.routing_policy === "advertise_only"
-                        ? "Advertise Only (Override)"
-                        : `${link.to.routing_policy} (Override)`)
+                          ? "Advertise Only (Override)"
+                          : `${link.to.routing_policy} (Override)`
                     : "Inherited"
                 }
                 size="small"
@@ -1135,10 +1215,12 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
                   height: 20,
                   fontSize: "0.65rem",
                   fontWeight: 700,
-                  bgcolor: link.to.cost && link.to.cost !== 0 ? "rgba(245, 158, 11, 0.12)" : "rgba(148, 163, 184, 0.15)",
+                  bgcolor:
+                    link.to.cost && link.to.cost !== 0 ? "rgba(245, 158, 11, 0.12)" : "rgba(148, 163, 184, 0.15)",
                   color: link.to.cost && link.to.cost !== 0 ? "#D97706" : "#64748B",
                   border: "1px solid",
-                  borderColor: link.to.cost && link.to.cost !== 0 ? "rgba(245, 158, 11, 0.3)" : "rgba(148, 163, 184, 0.2)",
+                  borderColor:
+                    link.to.cost && link.to.cost !== 0 ? "rgba(245, 158, 11, 0.3)" : "rgba(148, 163, 184, 0.2)",
                 }}
               />
             </Box>
@@ -1176,7 +1258,8 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
                   bgcolor: link.to.preference !== undefined ? "rgba(16, 185, 129, 0.12)" : "rgba(148, 163, 184, 0.15)",
                   color: link.to.preference !== undefined ? "#059669" : "#64748B",
                   border: "1px solid",
-                  borderColor: link.to.preference !== undefined ? "rgba(16, 185, 129, 0.3)" : "rgba(148, 163, 184, 0.2)",
+                  borderColor:
+                    link.to.preference !== undefined ? "rgba(16, 185, 129, 0.3)" : "rgba(148, 163, 184, 0.2)",
                 }}
               />
             </Box>
@@ -1244,7 +1327,10 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
             {/* Node 2 LinkEnd Note */}
             <Box sx={{ mt: 1.5, p: 1.5, borderRadius: 1.5, backgroundColor: "#FFFFFF", border: "1px solid #A5F3FC" }}>
               <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1 }}>
-                <Typography variant="caption" sx={{ color: "#0E7490", fontWeight: 700, display: "flex", alignItems: "center", gap: 0.6 }}>
+                <Typography
+                  variant="caption"
+                  sx={{ color: "#0E7490", fontWeight: 700, display: "flex", alignItems: "center", gap: 0.6 }}
+                >
                   <FileText size={13} color="#0891B2" /> {link.to.name} NOTE (MARKDOWN)
                 </Typography>
                 {!isEditingToNote ? (
@@ -1295,7 +1381,16 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
               </Box>
 
               {!isEditingToNote ? (
-                <Box sx={{ p: 1, borderRadius: 1, backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0", maxHeight: 180, overflowY: "auto" }}>
+                <Box
+                  sx={{
+                    p: 1,
+                    borderRadius: 1,
+                    backgroundColor: "#F8FAFC",
+                    border: "1px solid #E2E8F0",
+                    maxHeight: 180,
+                    overflowY: "auto",
+                  }}
+                >
                   <MarkdownView
                     content={link.to.note}
                     emptyText="No note recorded for this endpoint. Click 'Add Note' to record markdown notes."
@@ -1317,11 +1412,24 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
                       sx={{
                         backgroundColor: "#FFFFFF",
                         borderRadius: 1,
-                        "& .MuiInputBase-root": { fontSize: "0.8rem", fontFamily: "'JetBrains Mono', 'Fira Code', monospace" },
+                        "& .MuiInputBase-root": {
+                          fontSize: "0.8rem",
+                          fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+                        },
                       }}
                     />
                   ) : (
-                    <Box sx={{ p: 1, borderRadius: 1, backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0", minHeight: 60, maxHeight: 180, overflowY: "auto" }}>
+                    <Box
+                      sx={{
+                        p: 1,
+                        borderRadius: 1,
+                        backgroundColor: "#F8FAFC",
+                        border: "1px solid #E2E8F0",
+                        minHeight: 60,
+                        maxHeight: 180,
+                        overflowY: "auto",
+                      }}
+                    >
                       <MarkdownView content={toNoteDraft} emptyText="No markdown note content" />
                     </Box>
                   )}

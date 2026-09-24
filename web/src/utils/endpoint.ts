@@ -11,10 +11,7 @@ export interface ResolvedPeerEndpoint {
  * 1. Find a pair of entrypoints between nodeFrom and nodeTo that share a tag (case-insensitive).
  * 2. Fallback to the first non-none (non-empty IP) entrypoint of nodeTo.
  */
-export function resolvePeerEntrypoint(
-  nodeFrom?: Node | null,
-  nodeTo?: Node | null,
-): ResolvedPeerEndpoint {
+export function resolvePeerEntrypoint(nodeFrom?: Node | null, nodeTo?: Node | null): ResolvedPeerEndpoint {
   if (!nodeTo || !nodeTo.entrypoints || nodeTo.entrypoints.length === 0) {
     return {};
   }

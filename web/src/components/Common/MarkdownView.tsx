@@ -17,11 +17,7 @@ renderer.link = ({ href, title, text }) => {
   return `<a href="${cleanHref}"${titleAttr} target="_blank" rel="noopener noreferrer">${text}</a>`;
 };
 
-export const MarkdownView: React.FC<MarkdownViewProps> = ({
-  content,
-  emptyText = "No note recorded",
-  sx,
-}) => {
+export const MarkdownView: React.FC<MarkdownViewProps> = ({ content, emptyText = "No note recorded", sx }) => {
   const renderedHtml = useMemo(() => {
     if (!content || !content.trim()) return "";
     try {

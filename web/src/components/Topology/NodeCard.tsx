@@ -59,43 +59,45 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
     <Box
       sx={{
         width: 260,
-        backgroundColor: !isOnline && !isExternal
-          ? "#FFFDFD"
-          : inBlock && !isHealthy
-          ? "#FFFDFD"
-          : inBlock && !isBlockFullMesh
-          ? "#FAFBFD"
-          : "#FFFFFF",
+        backgroundColor:
+          !isOnline && !isExternal
+            ? "#FFFDFD"
+            : inBlock && !isHealthy
+              ? "#FFFDFD"
+              : inBlock && !isBlockFullMesh
+                ? "#FAFBFD"
+                : "#FFFFFF",
         border: isFocused
           ? "2px solid #4F46E5"
           : isExternal
-          ? "2px dashed #8B5CF6"
-          : inBlock
-          ? isBlockFullMesh
-            ? isHealthy
-              ? `2px solid ${blockColor || "#6366F1"}`
-              : "2px solid #EF4444"
-            : isHealthy
-            ? "2px dashed #94A3B8"
-            : "2px dashed #EF4444"
-          : !isOnline
-          ? "1.5px solid #EF4444"
-          : "1.5px solid #E2E8F0",
-        borderTop: inBlock && isBlockFullMesh
-          ? `4px solid ${isFocused ? "#4F46E5" : !isHealthy ? "#EF4444" : (blockColor || "#6366F1")}`
-          : undefined,
+            ? "2px dashed #8B5CF6"
+            : inBlock
+              ? isBlockFullMesh
+                ? isHealthy
+                  ? `2px solid ${blockColor || "#6366F1"}`
+                  : "2px solid #EF4444"
+                : isHealthy
+                  ? "2px dashed #94A3B8"
+                  : "2px dashed #EF4444"
+              : !isOnline
+                ? "1.5px solid #EF4444"
+                : "1.5px solid #E2E8F0",
+        borderTop:
+          inBlock && isBlockFullMesh
+            ? `4px solid ${isFocused ? "#4F46E5" : !isHealthy ? "#EF4444" : blockColor || "#6366F1"}`
+            : undefined,
         borderRadius: 2.5,
         boxShadow: isFocused
           ? "0 0 0 3px rgba(79, 70, 229, 0.25), 0 12px 28px rgba(79, 70, 229, 0.2)"
           : inBlock && isBlockFullMesh && isHealthy
-          ? `0 4px 14px ${blockColor || "#6366F1"}25, 0 1px 3px rgba(0, 0, 0, 0.05)`
-          : inBlock && !isHealthy
-          ? "0 4px 14px rgba(239, 68, 68, 0.15), 0 1px 3px rgba(239, 68, 68, 0.08)"
-          : isExternal
-          ? "0 4px 6px -1px rgba(139, 92, 246, 0.08), 0 2px 4px -2px rgba(139, 92, 246, 0.05)"
-          : !isOnline
-          ? "0 4px 10px rgba(239, 68, 68, 0.15), 0 2px 4px rgba(239, 68, 68, 0.1)"
-          : "0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05)",
+            ? `0 4px 14px ${blockColor || "#6366F1"}25, 0 1px 3px rgba(0, 0, 0, 0.05)`
+            : inBlock && !isHealthy
+              ? "0 4px 14px rgba(239, 68, 68, 0.15), 0 1px 3px rgba(239, 68, 68, 0.08)"
+              : isExternal
+                ? "0 4px 6px -1px rgba(139, 92, 246, 0.08), 0 2px 4px -2px rgba(139, 92, 246, 0.05)"
+                : !isOnline
+                  ? "0 4px 10px rgba(239, 68, 68, 0.15), 0 2px 4px rgba(239, 68, 68, 0.1)"
+                  : "0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05)",
         overflow: "hidden",
         cursor: "pointer",
         transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
@@ -104,17 +106,17 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
           borderColor: isFocused
             ? "#4F46E5"
             : inBlock && isBlockFullMesh
-            ? (blockColor || "#4F46E5")
-            : isExternal
-            ? "#7C3AED"
-            : !isOnline
-            ? "#DC2626"
-            : "#4F46E5",
+              ? blockColor || "#4F46E5"
+              : isExternal
+                ? "#7C3AED"
+                : !isOnline
+                  ? "#DC2626"
+                  : "#4F46E5",
           boxShadow: isFocused
             ? "0 0 0 3px rgba(79, 70, 229, 0.35), 0 16px 32px rgba(79, 70, 229, 0.25)"
             : inBlock && isBlockFullMesh
-            ? `0 8px 20px ${blockColor || "#6366F1"}30`
-            : "0 10px 15px -3px rgba(79, 70, 229, 0.12), 0 4px 6px -4px rgba(79, 70, 229, 0.12)",
+              ? `0 8px 20px ${blockColor || "#6366F1"}30`
+              : "0 10px 15px -3px rgba(79, 70, 229, 0.12), 0 4px 6px -4px rgba(79, 70, 229, 0.12)",
         },
       }}
     >
@@ -163,17 +165,17 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
               backgroundColor: isExternal
                 ? "rgba(139, 92, 246, 0.15)"
                 : !isOnline || (inBlock && !isHealthy)
-                ? "rgba(239, 68, 68, 0.15)"
-                : inBlock && isHealthy
-                ? "rgba(16, 185, 129, 0.12)"
-                : "rgba(79, 70, 229, 0.1)",
+                  ? "rgba(239, 68, 68, 0.15)"
+                  : inBlock && isHealthy
+                    ? "rgba(16, 185, 129, 0.12)"
+                    : "rgba(79, 70, 229, 0.1)",
               color: isExternal
                 ? "#7C3AED"
                 : !isOnline || (inBlock && !isHealthy)
-                ? "#DC2626"
-                : inBlock && isHealthy
-                ? "#059669"
-                : "#4F46E5",
+                  ? "#DC2626"
+                  : inBlock && isHealthy
+                    ? "#059669"
+                    : "#4F46E5",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -256,7 +258,10 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
                 </Tooltip>
               )}
             </Box>
-            <Typography variant="caption" sx={{ color: isExternal ? "#7C3AED" : !isOnline ? "#DC2626" : "#64748B", fontSize: "0.7rem" }}>
+            <Typography
+              variant="caption"
+              sx={{ color: isExternal ? "#7C3AED" : !isOnline ? "#DC2626" : "#64748B", fontSize: "0.7rem" }}
+            >
               {isExternal ? node.description || "Unmanaged Peer" : node.host || "No SSH Host"}
             </Typography>
 
@@ -484,7 +489,10 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
             ) : null}
           </Box>
 
-          <Typography variant="caption" sx={{ color: isExternal ? "#7C3AED" : "#64748B", fontSize: "0.7rem", fontWeight: isExternal ? 600 : 400 }}>
+          <Typography
+            variant="caption"
+            sx={{ color: isExternal ? "#7C3AED" : "#64748B", fontSize: "0.7rem", fontWeight: isExternal ? 600 : 400 }}
+          >
             {`${node.entrypoints?.filter((e) => e.ip && e.ip !== "").length || 0} Endpoints`}
           </Typography>
         </Box>

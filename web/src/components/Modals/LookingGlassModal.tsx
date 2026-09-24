@@ -36,13 +36,7 @@ import {
   Zap,
 } from "lucide-react";
 import { api } from "../../api/client";
-import {
-  Node,
-  LookingGlassTask,
-  LGRunRequest,
-  LGRunResponse,
-  LGNodeResult,
-} from "../../types/api";
+import { Node, LookingGlassTask, LGRunRequest, LGRunResponse, LGNodeResult } from "../../types/api";
 import { TaskParamForm } from "../LookingGlass/TaskParamForm";
 import { TerminalView } from "../LookingGlass/TerminalView";
 import { BirdProtocolsView } from "../LookingGlass/BirdProtocolsView";
@@ -388,7 +382,15 @@ export const LookingGlassModal: React.FC<LookingGlassModalProps> = ({
                 gap: 1.5,
               }}
             >
-              <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 1 }}>
+              <Box
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  flexWrap: "wrap",
+                  gap: 1,
+                }}
+              >
                 <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                   <Server size={16} color="#4F46E5" />
                   <Typography variant="subtitle2" sx={{ fontWeight: 600, color: "#1E293B" }}>
@@ -483,7 +485,14 @@ export const LookingGlassModal: React.FC<LookingGlassModalProps> = ({
                   gap: 2,
                 }}
               >
-                <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1.5fr 2fr" }, gap: 2, alignItems: "center" }}>
+                <Box
+                  sx={{
+                    display: "grid",
+                    gridTemplateColumns: { xs: "1fr", sm: "1.5fr 2fr" },
+                    gap: 2,
+                    alignItems: "center",
+                  }}
+                >
                   {/* Task Selector */}
                   <FormControl size="small" fullWidth>
                     <InputLabel id="preset-task-select">Select Task Template</InputLabel>
@@ -499,7 +508,14 @@ export const LookingGlassModal: React.FC<LookingGlassModalProps> = ({
                       </MenuItem>
                       {builtinTasks.map((t) => (
                         <MenuItem key={t.id} value={t.id}>
-                          <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%" }}>
+                          <Box
+                            sx={{
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "space-between",
+                              width: "100%",
+                            }}
+                          >
                             <span>{t.name}</span>
                             <Chip label={t.category} size="small" sx={{ height: 20, fontSize: "0.68rem" }} />
                           </Box>
@@ -508,14 +524,30 @@ export const LookingGlassModal: React.FC<LookingGlassModalProps> = ({
 
                       {/* Custom Tasks */}
                       {customTasks.length > 0 && [
-                        <MenuItem key="custom_header" disabled sx={{ fontSize: "0.75rem", fontWeight: 700, color: "#94A3B8" }}>
+                        <MenuItem
+                          key="custom_header"
+                          disabled
+                          sx={{ fontSize: "0.75rem", fontWeight: 700, color: "#94A3B8" }}
+                        >
                           CUSTOM TASKS
                         </MenuItem>,
                         ...customTasks.map((t) => (
                           <MenuItem key={t.id} value={t.id}>
-                            <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%" }}>
+                            <Box
+                              sx={{
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "space-between",
+                                width: "100%",
+                              }}
+                            >
                               <span>{t.name}</span>
-                              <Chip label={t.category || "Custom"} size="small" color="secondary" sx={{ height: 20, fontSize: "0.68rem" }} />
+                              <Chip
+                                label={t.category || "Custom"}
+                                size="small"
+                                color="secondary"
+                                sx={{ height: 20, fontSize: "0.68rem" }}
+                              />
                             </Box>
                           </MenuItem>
                         )),
@@ -651,7 +683,15 @@ export const LookingGlassModal: React.FC<LookingGlassModalProps> = ({
                 <Divider />
 
                 {/* Node Result Tabs & View Mode Switch */}
-                <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 1 }}>
+                <Box
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    flexWrap: "wrap",
+                    gap: 1,
+                  }}
+                >
                   {/* Node Result Selectors */}
                   <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
                     {Object.keys(runResponse.results).map((nodeName) => {
@@ -825,7 +865,12 @@ export const LookingGlassModal: React.FC<LookingGlassModalProps> = ({
                         <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0F172A" }}>
                           {t.name}
                         </Typography>
-                        <Chip label={t.category || "Custom"} size="small" color="secondary" sx={{ height: 20, fontSize: "0.68rem" }} />
+                        <Chip
+                          label={t.category || "Custom"}
+                          size="small"
+                          color="secondary"
+                          sx={{ height: 20, fontSize: "0.68rem" }}
+                        />
                       </Box>
                       <Typography variant="caption" sx={{ color: "#64748B", display: "block", mb: 1 }}>
                         {t.description || "No description provided"}
@@ -844,7 +889,15 @@ export const LookingGlassModal: React.FC<LookingGlassModalProps> = ({
                       </Box>
                     </Box>
 
-                    <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", pt: 1, borderTop: "1px solid #F1F5F9" }}>
+                    <Box
+                      sx={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        pt: 1,
+                        borderTop: "1px solid #F1F5F9",
+                      }}
+                    >
                       <Typography variant="caption" sx={{ color: "#94A3B8" }}>
                         Visualizer: {t.parser}
                       </Typography>
@@ -914,7 +967,15 @@ export const LookingGlassModal: React.FC<LookingGlassModalProps> = ({
                       {t.command_tmpl}
                     </Box>
                   </Box>
-                  <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", pt: 1, borderTop: "1px solid #F1F5F9" }}>
+                  <Box
+                    sx={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      pt: 1,
+                      borderTop: "1px solid #F1F5F9",
+                    }}
+                  >
                     <Typography variant="caption" sx={{ color: "#94A3B8" }}>
                       Visualizer: {t.parser}
                     </Typography>

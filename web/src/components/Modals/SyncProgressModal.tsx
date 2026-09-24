@@ -99,7 +99,7 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
         setStateMessage(
           targetNode
             ? `Device state reconciliation failed for ${targetNode}. Error: ${res.failed_nodes[targetNode] || names}`
-            : `Device states reconciled. Note: ${Object.keys(res.failed_nodes).length} node(s) unreachable (${names})`
+            : `Device states reconciled. Note: ${Object.keys(res.failed_nodes).length} node(s) unreachable (${names})`,
         );
       } else if (res.warnings && res.warnings.length > 0) {
         setStateMessage(`State updated with warnings: ${res.warnings.join(", ")}`);
@@ -107,7 +107,7 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
         setStateMessage(
           targetNode
             ? `Device state for ${targetNode} successfully fetched and reconciled.`
-            : "Device states successfully fetched and reconciled."
+            : "Device states successfully fetched and reconciled.",
         );
       }
       await loadPreview();
@@ -368,7 +368,9 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
               <Alert severity="success" sx={{ borderRadius: 2 }}>
                 {targetNode ? (
                   <>
-                    All WireGuard interfaces, routing, and firewall configurations on <strong>{targetNode}</strong> are currently in sync with recorded device state. You can use <strong>Force Apply</strong> to re-push configs from scratch, or <strong>Update State</strong> to refresh from the remote host.
+                    All WireGuard interfaces, routing, and firewall configurations on <strong>{targetNode}</strong> are
+                    currently in sync with recorded device state. You can use <strong>Force Apply</strong> to re-push
+                    configs from scratch, or <strong>Update State</strong> to refresh from the remote host.
                   </>
                 ) : (
                   <>

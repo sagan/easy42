@@ -15,9 +15,22 @@ import {
   Tooltip,
   Chip,
 } from "@mui/material";
-import { Search, Plus, Trash2, Server, Globe, Shield, Edit2, Tag, Network, Code, FileText } from "lucide-react";
+import {
+  Search,
+  Plus,
+  Trash2,
+  Server,
+  Globe,
+  Shield,
+  Edit2,
+  Tag,
+  Network,
+  Code,
+  FileText,
+  FileCode,
+} from "lucide-react";
 import { api } from "../../api/client";
-import { Node, Entrypoint, KernelRouteRule, ConfigHook } from "../../types/api";
+import { Node, Entrypoint, KernelRouteRule, ConfigHook, ConfigTemplate } from "../../types/api";
 import { MarkdownView } from "../Common/MarkdownView";
 
 const HOOK_TYPES = [
@@ -117,11 +130,25 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
     { id: "nat-fallback", ip: "", portStr: "", tagStr: "nat", mtuStr: "", isNone: true },
   ]);
   const [discoveredIps, setDiscoveredIps] = useState<{ ip: string; iface: string }[]>([]);
+  const [availableTemplates, setAvailableTemplates] = useState<ConfigTemplate[]>([]);
+  const [wgTemplate, setWgTemplate] = useState<string>("");
+  const [birdTemplate, setBirdTemplate] = useState<string>("");
+  const [nftTemplate, setNftTemplate] = useState<string>("");
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
   React.useEffect(() => {
     if (!open) return;
+
+    api
+      .getTemplates()
+      .then((tmpls) => {
+        setAvailableTemplates(tmpls || []);
+      })
+      .catch((err) => {
+        console.error("Failed to load templates:", err);
+      });
+
     if (nodeToEdit) {
       setName(nodeToEdit.name);
       setSshHost(nodeToEdit.host || "");
@@ -140,6 +167,9 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
       setExternalIp(nodeToEdit.external_ip || "");
       setExternalIp6(nodeToEdit.external_ip6 || "");
       setStaticRoutesStr(nodeToEdit.static_routes?.join(", ") || "");
+      setWgTemplate(nodeToEdit.wg_template || "");
+      setBirdTemplate(nodeToEdit.bird_template || "");
+      setNftTemplate(nodeToEdit.nft_template || "");
       if (nodeToEdit.routes && nodeToEdit.routes.length > 0) {
         setKernelRoutes(
           nodeToEdit.routes.map((r, idx) => ({
@@ -197,7 +227,9 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
         setEntrypoints(ensureFallbackLast(mapped));
       } else {
         if (nodeToEdit.is_external) {
-          setEntrypoints([{ id: `ep-0-${Date.now()}`, ip: "", portStr: "", tagStr: "external", mtuStr: "", isNone: false }]);
+          setEntrypoints([
+            { id: `ep-0-${Date.now()}`, ip: "", portStr: "", tagStr: "external", mtuStr: "", isNone: false },
+          ]);
         } else {
           setEntrypoints([{ id: "nat-fallback", ip: "", portStr: "", tagStr: "nat", mtuStr: "", isNone: true }]);
         }
@@ -222,6 +254,9 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
       setStaticRoutesStr("");
       setKernelRoutes([]);
       setConfigHooks([]);
+      setWgTemplate("");
+      setBirdTemplate("");
+      setNftTemplate("");
       setEntrypoints([{ id: "nat-fallback", ip: "", portStr: "", tagStr: "nat", mtuStr: "", isNone: true }]);
       setDiscoveredIps([]);
       setProbeError(null);
@@ -247,9 +282,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
       // If the automatically detected node interface has a non link-local ipv6 address, fill it as Main IPV6 address field
       let detectedIp6 = res.suggested_ip6 || "";
       if (!detectedIp6 && res.interfaces) {
-        const targetIface = res.interfaces.find(
-          (inf) => inf.name === (res.suggested_interface || detectedIface)
-        );
+        const targetIface = res.interfaces.find((inf) => inf.name === (res.suggested_interface || detectedIface));
         if (targetIface && targetIface.addresses) {
           const validV6 = targetIface.addresses
             .map((addr) => addr.split("/")[0].split("%")[0].trim())
@@ -514,15 +547,15 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
           internetTable !== "" && !isNaN(Number(internetTable)) && Number(internetTable) > 0
             ? Number(internetTable)
             : undefined,
-        metric:
-          metric !== "" && !isNaN(Number(metric)) && Number(metric) >= 0
-            ? Number(metric)
-            : undefined,
+        metric: metric !== "" && !isNaN(Number(metric)) && Number(metric) >= 0 ? Number(metric) : undefined,
         external_ip: externalIp.trim() ? externalIp.trim() : undefined,
         external_ip6: externalIp6.trim() ? externalIp6.trim() : undefined,
         static_routes: parsedStaticRoutes.length > 0 ? parsedStaticRoutes : undefined,
         routes: parsedRoutes.length > 0 ? parsedRoutes : undefined,
         config_hooks: parsedHooks.length > 0 ? parsedHooks : undefined,
+        wg_template: wgTemplate.trim() || undefined,
+        bird_template: birdTemplate.trim() || undefined,
+        nft_template: nftTemplate.trim() || undefined,
         note: note.trim() || undefined,
         x: nodeToEdit?.x,
         y: nodeToEdit?.y,
@@ -606,7 +639,9 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                 onClick={() => {
                   setIsExternal(true);
                   if (entrypoints.length === 1 && entrypoints[0].isNone) {
-                    setEntrypoints([{ id: `ep-0-${Date.now()}`, ip: "", portStr: "", tagStr: "external", mtuStr: "", isNone: false }]);
+                    setEntrypoints([
+                      { id: `ep-0-${Date.now()}`, ip: "", portStr: "", tagStr: "external", mtuStr: "", isNone: false },
+                    ]);
                   }
                 }}
                 startIcon={<Globe size={16} />}
@@ -667,7 +702,10 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
               {/* External Peer Markdown Note */}
               <Box sx={{ p: 1.5, borderRadius: 2, backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
                 <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1 }}>
-                  <Typography variant="caption" sx={{ color: "#475569", fontWeight: 700, display: "flex", alignItems: "center", gap: 0.8 }}>
+                  <Typography
+                    variant="caption"
+                    sx={{ color: "#475569", fontWeight: 700, display: "flex", alignItems: "center", gap: 0.8 }}
+                  >
                     <FileText size={14} color="#4F46E5" /> NOTE (MARKDOWN)
                   </Typography>
                   <Box sx={{ display: "flex", gap: 0.5 }}>
@@ -708,7 +746,17 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                     }}
                   />
                 ) : (
-                  <Box sx={{ p: 1.5, minHeight: 75, maxHeight: 200, overflowY: "auto", backgroundColor: "#FFFFFF", borderRadius: 1, border: "1px solid #E2E8F0" }}>
+                  <Box
+                    sx={{
+                      p: 1.5,
+                      minHeight: 75,
+                      maxHeight: 200,
+                      overflowY: "auto",
+                      backgroundColor: "#FFFFFF",
+                      borderRadius: 1,
+                      border: "1px solid #E2E8F0",
+                    }}
+                  >
                     <MarkdownView content={note} emptyText="No markdown note written yet" />
                   </Box>
                 )}
@@ -988,38 +1036,41 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                     disabled={saving}
                   />
                 </Box>
-                  {nodeTags
-                    .split(",")
-                    .map((t) => t.trim())
-                    .filter(Boolean).length > 0 && (
-                    <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5, mt: 0.75, alignItems: "center" }}>
-                      <Tag size={13} color="#64748B" />
-                      {nodeTags
-                        .split(",")
-                        .map((t) => t.trim())
-                        .filter(Boolean)
-                        .map((tag) => (
-                          <Chip
-                            key={tag}
-                            label={`#${tag}`}
-                            size="small"
-                            sx={{
-                              height: 20,
-                              fontSize: "0.65rem",
-                              fontWeight: 600,
-                              backgroundColor: "rgba(8, 145, 178, 0.08)",
-                              color: "#0891B2",
-                              border: "1px solid rgba(8, 145, 178, 0.25)",
-                            }}
-                          />
-                        ))}
-                    </Box>
-                  )}
+                {nodeTags
+                  .split(",")
+                  .map((t) => t.trim())
+                  .filter(Boolean).length > 0 && (
+                  <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5, mt: 0.75, alignItems: "center" }}>
+                    <Tag size={13} color="#64748B" />
+                    {nodeTags
+                      .split(",")
+                      .map((t) => t.trim())
+                      .filter(Boolean)
+                      .map((tag) => (
+                        <Chip
+                          key={tag}
+                          label={`#${tag}`}
+                          size="small"
+                          sx={{
+                            height: 20,
+                            fontSize: "0.65rem",
+                            fontWeight: 600,
+                            backgroundColor: "rgba(8, 145, 178, 0.08)",
+                            color: "#0891B2",
+                            border: "1px solid rgba(8, 145, 178, 0.25)",
+                          }}
+                        />
+                      ))}
+                  </Box>
+                )}
 
                 {/* Managed Node Markdown Note */}
                 <Box sx={{ p: 1.5, borderRadius: 2, backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
                   <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1 }}>
-                    <Typography variant="caption" sx={{ color: "#475569", fontWeight: 700, display: "flex", alignItems: "center", gap: 0.8 }}>
+                    <Typography
+                      variant="caption"
+                      sx={{ color: "#475569", fontWeight: 700, display: "flex", alignItems: "center", gap: 0.8 }}
+                    >
                       <FileText size={14} color="#4F46E5" /> NOTE (MARKDOWN)
                     </Typography>
                     <Box sx={{ display: "flex", gap: 0.5 }}>
@@ -1060,7 +1111,17 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                       }}
                     />
                   ) : (
-                    <Box sx={{ p: 1.5, minHeight: 75, maxHeight: 200, overflowY: "auto", backgroundColor: "#FFFFFF", borderRadius: 1, border: "1px solid #E2E8F0" }}>
+                    <Box
+                      sx={{
+                        p: 1.5,
+                        minHeight: 75,
+                        maxHeight: 200,
+                        overflowY: "auto",
+                        backgroundColor: "#FFFFFF",
+                        borderRadius: 1,
+                        border: "1px solid #E2E8F0",
+                      }}
+                    >
                       <MarkdownView content={note} emptyText="No markdown note written yet" />
                     </Box>
                   )}
@@ -1443,7 +1504,10 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                 <Box sx={{ mt: 2 }}>
                   <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1.2 }}>
                     <Box>
-                      <Typography variant="caption" sx={{ color: "#475569", fontWeight: 700, display: "flex", alignItems: "center", gap: 0.8 }}>
+                      <Typography
+                        variant="caption"
+                        sx={{ color: "#475569", fontWeight: 700, display: "flex", alignItems: "center", gap: 0.8 }}
+                      >
                         <Code size={14} /> CUSTOM CONFIG HOOKS ({configHooks.length})
                       </Typography>
                       <Typography variant="caption" sx={{ color: "#94A3B8", fontSize: "0.7rem" }}>
@@ -1472,7 +1536,8 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                       }}
                     >
                       <Typography variant="caption" sx={{ color: "#94A3B8", fontStyle: "italic" }}>
-                        No custom config hooks defined. Click &quot;Add Hook&quot; to inject custom BIRD, WireGuard, or nftables directives.
+                        No custom config hooks defined. Click &quot;Add Hook&quot; to inject custom BIRD, WireGuard, or
+                        nftables directives.
                       </Typography>
                     </Box>
                   ) : (
@@ -1530,11 +1595,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                                 </Box>
                               )}
                               <Box sx={{ ml: "auto" }}>
-                                <IconButton
-                                  size="small"
-                                  color="error"
-                                  onClick={() => handleRemoveConfigHook(hook.id)}
-                                >
+                                <IconButton size="small" color="error" onClick={() => handleRemoveConfigHook(hook.id)}>
                                   <Trash2 size={16} />
                                 </IconButton>
                               </Box>
@@ -1549,8 +1610,8 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                                 hook.type.startsWith("bird")
                                   ? 'protocol direct {\n    ipv4;\n    interface "br-lan", "wan";\n}'
                                   : hook.type.startsWith("wg")
-                                  ? "PostUp = sysctl -w net.ipv4.ip_forward=1"
-                                  : "chain custom_chain {\n    tcp dport 8080 accept\n}"
+                                    ? "PostUp = sysctl -w net.ipv4.ip_forward=1"
+                                    : "chain custom_chain {\n    tcp dport 8080 accept\n}"
                               }
                               value={hook.content}
                               onChange={(e) => handleUpdateConfigHook(hook.id, "content", e.target.value)}
@@ -1564,6 +1625,85 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                       })}
                     </Box>
                   )}
+                </Box>
+              </Box>
+
+              {/* Step 5: Config Templates (Optional) */}
+              <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                  <FileCode size={16} color="#4F46E5" />
+                  <Typography variant="caption" sx={{ color: "#475569", fontWeight: 700, letterSpacing: "0.5px" }}>
+                    STEP 5: CONFIG TEMPLATES (OPTIONAL)
+                  </Typography>
+                </Box>
+                <Typography variant="body2" sx={{ color: "#64748B", fontSize: "0.8rem", mt: -1 }}>
+                  Optionally select custom Go text templates to generate WireGuard, BIRD, or nftables configurations for
+                  this node.
+                </Typography>
+
+                <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr 1fr" }, gap: 2 }}>
+                  <TextField
+                    select
+                    label="WireGuard Template"
+                    size="small"
+                    value={wgTemplate}
+                    onChange={(e) => setWgTemplate(e.target.value)}
+                    helperText="WireGuard interface template"
+                    disabled={saving}
+                  >
+                    <MenuItem value="">
+                      <em>(Default: System Template)</em>
+                    </MenuItem>
+                    {availableTemplates
+                      .filter((t) => t.type === "wg")
+                      .map((t) => (
+                        <MenuItem key={t.id} value={t.id}>
+                          {t.name} {t.is_builtin ? "(Built-in)" : ""}
+                        </MenuItem>
+                      ))}
+                  </TextField>
+
+                  <TextField
+                    select
+                    label="BIRD Template"
+                    size="small"
+                    value={birdTemplate}
+                    onChange={(e) => setBirdTemplate(e.target.value)}
+                    helperText="BIRD 2 routing template"
+                    disabled={saving}
+                  >
+                    <MenuItem value="">
+                      <em>(Default: System Template)</em>
+                    </MenuItem>
+                    {availableTemplates
+                      .filter((t) => t.type === "bird")
+                      .map((t) => (
+                        <MenuItem key={t.id} value={t.id}>
+                          {t.name} {t.is_builtin ? "(Built-in)" : ""}
+                        </MenuItem>
+                      ))}
+                  </TextField>
+
+                  <TextField
+                    select
+                    label="nftables Template"
+                    size="small"
+                    value={nftTemplate}
+                    onChange={(e) => setNftTemplate(e.target.value)}
+                    helperText="nftables firewall template"
+                    disabled={saving}
+                  >
+                    <MenuItem value="">
+                      <em>(Default: System Template)</em>
+                    </MenuItem>
+                    {availableTemplates
+                      .filter((t) => t.type === "nft")
+                      .map((t) => (
+                        <MenuItem key={t.id} value={t.id}>
+                          {t.name} {t.is_builtin ? "(Built-in)" : ""}
+                        </MenuItem>
+                      ))}
+                  </TextField>
                 </Box>
               </Box>
             </>

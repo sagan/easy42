@@ -501,16 +501,37 @@ func GenerateNftablesConfigWithTemplate(
 	return tplutil.RenderTemplate(tmplContent, ctx)
 }
 
-// GenerateNftablesConfig compiles the nftables configuration for a node using the default embedded template
+// GenerateNftablesConfig compiles the nftables configuration for a node using the custom template or default embedded template
 func GenerateNftablesConfig(
 	node *config.Node,
 	allNodes []config.Node,
 	links []config.Link,
 	args ...any,
 ) (string, error) {
-	tmplContent, err := GetDefaultNftablesTemplate()
+	var customTemplates []config.ConfigTemplate
+	for _, arg := range args {
+		switch v := arg.(type) {
+		case []config.ConfigTemplate:
+			customTemplates = v
+		case *config.Config:
+			if v != nil {
+				customTemplates = v.Templates
+			}
+		case config.Config:
+			customTemplates = v.Templates
+		}
+	}
+
+	var tmplContent string
+	var err error
+	if node != nil && strings.TrimSpace(node.NftTemplate) != "" {
+		tmplContent, err = FindTemplate(config.TemplateTypeNft, node.NftTemplate, customTemplates)
+	} else {
+		tmplContent, err = GetDefaultNftablesTemplate()
+	}
 	if err != nil {
 		return "", err
 	}
 	return GenerateNftablesConfigWithTemplate(tmplContent, node, allNodes, links, args...)
 }
+

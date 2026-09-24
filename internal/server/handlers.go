@@ -1129,6 +1129,80 @@ func (s *Server) handleRefreshPolicyROA(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, http.StatusOK, map[string]string{"message": "Policy ROA refreshed successfully"})
 }
 
+// Config Template Handlers
+
+func (s *Server) handleGetTemplates(w http.ResponseWriter, r *http.Request) {
+	templates := s.mgr.GetTemplates()
+	writeJSON(w, http.StatusOK, templates)
+}
+
+func (s *Server) handleGetTemplate(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	tmpl, err := s.mgr.GetTemplate(id)
+	if err != nil {
+		writeError(w, http.StatusNotFound, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, tmpl)
+}
+
+func (s *Server) handleCreateTemplate(w http.ResponseWriter, r *http.Request) {
+	var t config.ConfigTemplate
+	if err := json.NewDecoder(r.Body).Decode(&t); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid template payload")
+		return
+	}
+
+	created, err := s.mgr.CreateTemplate(t)
+	if err != nil {
+		if err == crypto.ErrVaultLocked {
+			writeError(w, http.StatusLocked, "Vault is locked. Unlock with password first.")
+			return
+		}
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusCreated, created)
+}
+
+func (s *Server) handleUpdateTemplate(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	var t config.ConfigTemplate
+	if err := json.NewDecoder(r.Body).Decode(&t); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid template payload")
+		return
+	}
+
+	updated, err := s.mgr.UpdateTemplate(id, t)
+	if err != nil {
+		if err == crypto.ErrVaultLocked {
+			writeError(w, http.StatusLocked, "Vault is locked. Unlock with password first.")
+			return
+		}
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, updated)
+}
+
+func (s *Server) handleDeleteTemplate(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	err := s.mgr.DeleteTemplate(id)
+	if err != nil {
+		if err == crypto.ErrVaultLocked {
+			writeError(w, http.StatusLocked, "Vault is locked. Unlock with password first.")
+			return
+		}
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"message": "Template deleted successfully"})
+}
+
+
 func (s *Server) handleRefreshAllROA(w http.ResponseWriter, r *http.Request) {
 	if err := s.mgr.RefreshAllROA(r.Context(), true); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())

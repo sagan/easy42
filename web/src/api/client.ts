@@ -262,6 +262,25 @@ export const api = {
     request<{ message: string }>(`/network-policies/${encodeURIComponent(id)}/refresh-roa`, {
       method: "POST",
     }),
+
+  // Config Templates
+  getTemplates: () => request<import("../types/api").ConfigTemplate[]>("/templates"),
+  getTemplate: (id: string) => request<import("../types/api").ConfigTemplate>(`/templates/${encodeURIComponent(id)}`),
+  createTemplate: (data: Partial<import("../types/api").ConfigTemplate>) =>
+    request<import("../types/api").ConfigTemplate>("/templates", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  updateTemplate: (id: string, data: Partial<import("../types/api").ConfigTemplate>) =>
+    request<import("../types/api").ConfigTemplate>(`/templates/${encodeURIComponent(id)}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+  deleteTemplate: (id: string) =>
+    request<{ message: string }>(`/templates/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    }),
+
   refreshAllROA: () =>
     request<{ message: string }>("/roa/refresh", {
       method: "POST",
@@ -289,12 +308,9 @@ export const api = {
   },
   getSyncStatus: () => request<SyncStatus>("/sync/status"),
   updateState: (nodeName?: string) =>
-    request<UpdateStateResponse>(
-      nodeName ? `/state/update?node=${encodeURIComponent(nodeName)}` : "/state/update",
-      {
-        method: "POST",
-      }
-    ),
+    request<UpdateStateResponse>(nodeName ? `/state/update?node=${encodeURIComponent(nodeName)}` : "/state/update", {
+      method: "POST",
+    }),
   getState: () => request<NetworkState>("/state"),
 
   // Helper Tasks
@@ -313,10 +329,13 @@ export const api = {
   // Looking Glass
   getLookingGlassTasks: () => request<TasksResponse>("/looking-glass/tasks"),
   saveLookingGlassTask: (task: LookingGlassTask) =>
-    request<LookingGlassTask>(task.id ? `/looking-glass/tasks/${encodeURIComponent(task.id)}` : "/looking-glass/tasks", {
-      method: task.id ? "PUT" : "POST",
-      body: JSON.stringify(task),
-    }),
+    request<LookingGlassTask>(
+      task.id ? `/looking-glass/tasks/${encodeURIComponent(task.id)}` : "/looking-glass/tasks",
+      {
+        method: task.id ? "PUT" : "POST",
+        body: JSON.stringify(task),
+      },
+    ),
   deleteLookingGlassTask: (taskId: string) =>
     request<{ deleted: boolean }>(`/looking-glass/tasks/${encodeURIComponent(taskId)}`, {
       method: "DELETE",

@@ -1,20 +1,6 @@
 import React from "react";
-import {
-  Box,
-  Typography,
-  Chip,
-  Paper,
-  Divider,
-  Tooltip,
-  IconButton,
-} from "@mui/material";
-import {
-  Star,
-  ArrowRight,
-  Network,
-  Copy,
-  Check,
-} from "lucide-react";
+import { Box, Typography, Chip, Paper, Divider, Tooltip, IconButton } from "@mui/material";
+import { Star, ArrowRight, Network, Copy, Check } from "lucide-react";
 import { BirdRouteResult } from "../../types/api";
 
 interface BirdRouteViewProps {
@@ -22,10 +8,7 @@ interface BirdRouteViewProps {
   onQueryASN?: (asn: string) => void;
 }
 
-export const BirdRouteView: React.FC<BirdRouteViewProps> = ({
-  routeResult,
-  onQueryASN,
-}) => {
+export const BirdRouteView: React.FC<BirdRouteViewProps> = ({ routeResult, onQueryASN }) => {
   const [copiedText, setCopiedText] = React.useState<string | null>(null);
 
   const handleCopy = (text: string) => {
@@ -111,7 +94,9 @@ export const BirdRouteView: React.FC<BirdRouteViewProps> = ({
           }}
         >
           {/* Top Bar: Prefix, Best Badge, Protocol, Metric */}
-          <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 1 }}>
+          <Box
+            sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 1 }}
+          >
             <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
               <Typography
                 variant="h6"
@@ -193,7 +178,16 @@ export const BirdRouteView: React.FC<BirdRouteViewProps> = ({
           {/* Middle: Next-Hop & Interface */}
           <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 3 }}>
             <Box>
-              <Typography variant="caption" sx={{ color: "#64748B", display: "block", textTransform: "uppercase", fontSize: "0.68rem", fontWeight: 600 }}>
+              <Typography
+                variant="caption"
+                sx={{
+                  color: "#64748B",
+                  display: "block",
+                  textTransform: "uppercase",
+                  fontSize: "0.68rem",
+                  fontWeight: 600,
+                }}
+              >
                 Next Hop
               </Typography>
               <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
@@ -203,7 +197,11 @@ export const BirdRouteView: React.FC<BirdRouteViewProps> = ({
                 {(route.next_hop || route.via) && (
                   <Tooltip title={copiedText === (route.next_hop || route.via) ? "Copied!" : "Copy IP"}>
                     <IconButton size="small" onClick={() => handleCopy(route.next_hop || route.via || "")}>
-                      {copiedText === (route.next_hop || route.via) ? <Check size={12} color="#10B981" /> : <Copy size={12} />}
+                      {copiedText === (route.next_hop || route.via) ? (
+                        <Check size={12} color="#10B981" />
+                      ) : (
+                        <Copy size={12} />
+                      )}
                     </IconButton>
                   </Tooltip>
                 )}
@@ -212,7 +210,16 @@ export const BirdRouteView: React.FC<BirdRouteViewProps> = ({
 
             {route.interface && (
               <Box>
-                <Typography variant="caption" sx={{ color: "#64748B", display: "block", textTransform: "uppercase", fontSize: "0.68rem", fontWeight: 600 }}>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: "#64748B",
+                    display: "block",
+                    textTransform: "uppercase",
+                    fontSize: "0.68rem",
+                    fontWeight: 600,
+                  }}
+                >
                   Interface
                 </Typography>
                 <Chip
@@ -232,7 +239,16 @@ export const BirdRouteView: React.FC<BirdRouteViewProps> = ({
 
             {route.origin && (
               <Box>
-                <Typography variant="caption" sx={{ color: "#64748B", display: "block", textTransform: "uppercase", fontSize: "0.68rem", fontWeight: 600 }}>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: "#64748B",
+                    display: "block",
+                    textTransform: "uppercase",
+                    fontSize: "0.68rem",
+                    fontWeight: 600,
+                  }}
+                >
                   Origin
                 </Typography>
                 <Typography variant="body2" sx={{ color: "#334155", fontWeight: 500, fontSize: "0.825rem" }}>
@@ -245,7 +261,17 @@ export const BirdRouteView: React.FC<BirdRouteViewProps> = ({
           {/* AS-Path Chain */}
           {route.as_path && route.as_path.length > 0 && (
             <Box sx={{ mt: 0.5 }}>
-              <Typography variant="caption" sx={{ color: "#64748B", display: "block", textTransform: "uppercase", fontSize: "0.68rem", fontWeight: 600, mb: 0.5 }}>
+              <Typography
+                variant="caption"
+                sx={{
+                  color: "#64748B",
+                  display: "block",
+                  textTransform: "uppercase",
+                  fontSize: "0.68rem",
+                  fontWeight: 600,
+                  mb: 0.5,
+                }}
+              >
                 AS-Path Sequence ({route.as_path.length} Hops)
               </Typography>
               <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 1 }}>
@@ -254,7 +280,7 @@ export const BirdRouteView: React.FC<BirdRouteViewProps> = ({
                     <Chip
                       label={`AS${asn}`}
                       size="small"
-                      onClick={() => onQueryASN ? onQueryASN(`AS${asn}`) : handleCopy(`AS${asn}`)}
+                      onClick={() => (onQueryASN ? onQueryASN(`AS${asn}`) : handleCopy(`AS${asn}`))}
                       sx={{
                         backgroundColor: aIdx === route.as_path!.length - 1 ? "#EEF2FF" : "#F8FAFC",
                         color: aIdx === route.as_path!.length - 1 ? "#4338CA" : "#334155",
@@ -268,9 +294,7 @@ export const BirdRouteView: React.FC<BirdRouteViewProps> = ({
                         },
                       }}
                     />
-                    {aIdx < route.as_path!.length - 1 && (
-                      <ArrowRight size={14} color="#94A3B8" />
-                    )}
+                    {aIdx < route.as_path!.length - 1 && <ArrowRight size={14} color="#94A3B8" />}
                   </React.Fragment>
                 ))}
               </Box>
@@ -280,7 +304,17 @@ export const BirdRouteView: React.FC<BirdRouteViewProps> = ({
           {/* BGP Communities */}
           {route.communities && route.communities.length > 0 && (
             <Box sx={{ mt: 0.5 }}>
-              <Typography variant="caption" sx={{ color: "#64748B", display: "block", textTransform: "uppercase", fontSize: "0.68rem", fontWeight: 600, mb: 0.5 }}>
+              <Typography
+                variant="caption"
+                sx={{
+                  color: "#64748B",
+                  display: "block",
+                  textTransform: "uppercase",
+                  fontSize: "0.68rem",
+                  fontWeight: 600,
+                  mb: 0.5,
+                }}
+              >
                 BGP Communities ({route.communities.length})
               </Typography>
               <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 0.8 }}>

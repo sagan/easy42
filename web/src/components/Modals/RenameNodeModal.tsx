@@ -222,7 +222,8 @@ export const RenameNodeModal: React.FC<RenameNodeModalProps> = ({
             </Typography>
             <Typography variant="caption" sx={{ color: "#475569", lineHeight: 1.4, display: "block" }}>
               Renaming replaces this node name in <code>config.json</code>, all connected links, and WireGuard
-              interfaces (<code>{isExternal ? `wg42-${trimmedNewName || "..."}` : `wg42${trimmedNewName || "..."}`}</code>).
+              interfaces (
+              <code>{isExternal ? `wg42-${trimmedNewName || "..."}` : `wg42${trimmedNewName || "..."}`}</code>).
             </Typography>
           </Box>
         </DialogContent>

@@ -1,26 +1,7 @@
 import React, { memo, useState } from "react";
 import { NodeProps, NodeResizer, Handle, Position } from "@xyflow/react";
-import {
-  Box,
-  Typography,
-  IconButton,
-  Tooltip,
-  TextField,
-  Chip,
-  Menu,
-  MenuItem,
-} from "@mui/material";
-import {
-  Layers,
-  Trash2,
-  Edit3,
-  Check,
-  EyeOff,
-  AlertTriangle,
-  Palette,
-  Share2,
-  CheckCircle2,
-} from "lucide-react";
+import { Box, Typography, IconButton, Tooltip, TextField, Chip, Menu, MenuItem } from "@mui/material";
+import { Layers, Trash2, Edit3, Check, EyeOff, AlertTriangle, Palette, Share2, CheckCircle2 } from "lucide-react";
 import { GraphBlock } from "../../types/api";
 
 export const BLOCK_PALETTE = [
@@ -265,9 +246,7 @@ export const BlockNode: React.FC<NodeProps> = memo(({ data, selected }) => {
 
           {/* Full-Mesh Core Badge */}
           {memberCount >= 2 && isFullMesh && (
-            <Tooltip
-              title={`All ${memberCount} node(s) in this block are fully interconnected via WireGuard.`}
-            >
+            <Tooltip title={`All ${memberCount} node(s) in this block are fully interconnected via WireGuard.`}>
               <Chip
                 icon={<Share2 size={11} color={blockColor} style={{ marginLeft: 4 }} />}
                 label="Full-Mesh"
@@ -302,7 +281,11 @@ export const BlockNode: React.FC<NodeProps> = memo(({ data, selected }) => {
                     <AlertTriangle size={11} color="#DC2626" style={{ marginLeft: 4 }} />
                   )
                 }
-                label={healthyCount === memberCount && brokenLinkCount === 0 ? "Healthy" : `${memberCount - healthyCount} Degraded`}
+                label={
+                  healthyCount === memberCount && brokenLinkCount === 0
+                    ? "Healthy"
+                    : `${memberCount - healthyCount} Degraded`
+                }
                 size="small"
                 sx={{
                   height: 20,
@@ -319,7 +302,9 @@ export const BlockNode: React.FC<NodeProps> = memo(({ data, selected }) => {
 
           {/* Hidden Links Badge */}
           {hiddenLinkCount > 0 && (
-            <Tooltip title={`${hiddenLinkCount} intra-block mesh link(s) hidden to keep graph clean. Click any node to focus & inspect its links.`}>
+            <Tooltip
+              title={`${hiddenLinkCount} intra-block mesh link(s) hidden to keep graph clean. Click any node to focus & inspect its links.`}
+            >
               <Chip
                 icon={<EyeOff size={11} color="#64748B" style={{ marginLeft: 4 }} />}
                 label={`${hiddenLinkCount} hidden`}

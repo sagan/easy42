@@ -1014,16 +1014,37 @@ func GenerateBirdConfigWithTemplate(
 	return tplutil.RenderTemplate(tmplContent, ctx)
 }
 
-// GenerateBirdConfig compiles the BIRD configuration for a node using the default embedded template
+// GenerateBirdConfig compiles the BIRD configuration for a node using the custom template or default embedded template
 func GenerateBirdConfig(
 	node *config.Node,
 	allNodes []config.Node,
 	links []config.Link,
 	args ...any,
 ) (string, error) {
-	tmplContent, err := GetDefaultBirdTemplate()
+	var customTemplates []config.ConfigTemplate
+	for _, arg := range args {
+		switch v := arg.(type) {
+		case []config.ConfigTemplate:
+			customTemplates = v
+		case *config.Config:
+			if v != nil {
+				customTemplates = v.Templates
+			}
+		case config.Config:
+			customTemplates = v.Templates
+		}
+	}
+
+	var tmplContent string
+	var err error
+	if node != nil && strings.TrimSpace(node.BirdTemplate) != "" {
+		tmplContent, err = FindTemplate(config.TemplateTypeBird, node.BirdTemplate, customTemplates)
+	} else {
+		tmplContent, err = GetDefaultBirdTemplate()
+	}
 	if err != nil {
 		return "", err
 	}
 	return GenerateBirdConfigWithTemplate(tmplContent, node, allNodes, links, args...)
 }
+

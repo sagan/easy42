@@ -44,17 +44,7 @@ export function getRectBorderIntersection(
 }
 
 export const BlockVirtualEdge: React.FC<EdgeProps> = memo(
-  ({
-    id,
-    source,
-    target,
-    sourceX,
-    sourceY,
-    targetX,
-    targetY,
-    style = {},
-    data,
-  }) => {
+  ({ id, source, target, sourceX, sourceY, targetX, targetY, style = {}, data }) => {
     const edgeData = data as unknown as BlockVirtualEdgeData;
     const sourceBlock = edgeData?.sourceBlock;
     const targetBlock = edgeData?.targetBlock;
@@ -66,23 +56,21 @@ export const BlockVirtualEdge: React.FC<EdgeProps> = memo(
     const targetNode = useInternalNode(target);
 
     // Compute bounding boxes of source and target blocks
-    const sPos = sourceNode?.internals?.positionAbsolute ?? sourceNode?.position ?? {
-      x: sourceX - (sourceBlock?.width || 440) / 2,
-      y: sourceY - (sourceBlock?.height || 320) / 2,
-    };
-    const sW =
-      sourceNode?.measured?.width ?? (sourceNode?.width as number | undefined) ?? sourceBlock?.width ?? 440;
-    const sH =
-      sourceNode?.measured?.height ?? (sourceNode?.height as number | undefined) ?? sourceBlock?.height ?? 320;
+    const sPos = sourceNode?.internals?.positionAbsolute ??
+      sourceNode?.position ?? {
+        x: sourceX - (sourceBlock?.width || 440) / 2,
+        y: sourceY - (sourceBlock?.height || 320) / 2,
+      };
+    const sW = sourceNode?.measured?.width ?? (sourceNode?.width as number | undefined) ?? sourceBlock?.width ?? 440;
+    const sH = sourceNode?.measured?.height ?? (sourceNode?.height as number | undefined) ?? sourceBlock?.height ?? 320;
 
-    const tPos = targetNode?.internals?.positionAbsolute ?? targetNode?.position ?? {
-      x: targetX - (targetBlock?.width || 440) / 2,
-      y: targetY - (targetBlock?.height || 320) / 2,
-    };
-    const tW =
-      targetNode?.measured?.width ?? (targetNode?.width as number | undefined) ?? targetBlock?.width ?? 440;
-    const tH =
-      targetNode?.measured?.height ?? (targetNode?.height as number | undefined) ?? targetBlock?.height ?? 320;
+    const tPos = targetNode?.internals?.positionAbsolute ??
+      targetNode?.position ?? {
+        x: targetX - (targetBlock?.width || 440) / 2,
+        y: targetY - (targetBlock?.height || 320) / 2,
+      };
+    const tW = targetNode?.measured?.width ?? (targetNode?.width as number | undefined) ?? targetBlock?.width ?? 440;
+    const tH = targetNode?.measured?.height ?? (targetNode?.height as number | undefined) ?? targetBlock?.height ?? 320;
 
     const c1 = { x: sPos.x + sW / 2, y: sPos.y + sH / 2 };
     const c2 = { x: tPos.x + tW / 2, y: tPos.y + tH / 2 };
@@ -112,14 +100,7 @@ export const BlockVirtualEdge: React.FC<EdgeProps> = memo(
         {/* SVG Gradient Definition */}
         <svg style={{ position: "absolute", top: 0, left: 0, width: 0, height: 0, pointerEvents: "none" }}>
           <defs>
-            <linearGradient
-              id={gradientId}
-              x1={sx}
-              y1={sy}
-              x2={tx}
-              y2={ty}
-              gradientUnits="userSpaceOnUse"
-            >
+            <linearGradient id={gradientId} x1={sx} y1={sy} x2={tx} y2={ty} gradientUnits="userSpaceOnUse">
               <stop offset="0%" stopColor={color1} stopOpacity={0.85} />
               <stop offset="100%" stopColor={color2} stopOpacity={0.85} />
             </linearGradient>

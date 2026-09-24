@@ -348,8 +348,7 @@ export const App: React.FC = () => {
   const handleLinkDeleted = (from: string, to: string, iface?: string) => {
     setLinks((prev) =>
       prev.filter((l) => {
-        const matchesNodes =
-          (l.from.name === from && l.to.name === to) || (l.from.name === to && l.to.name === from);
+        const matchesNodes = (l.from.name === from && l.to.name === to) || (l.from.name === to && l.to.name === from);
         if (!matchesNodes) return true;
         if (iface) {
           return l.from.interface !== iface && l.to.interface !== iface;

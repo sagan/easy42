@@ -32,7 +32,7 @@ export const BirdProtocolsView: React.FC<BirdProtocolsViewProps> = ({ protocols 
         p.proto.toLowerCase().includes(q) ||
         p.table.toLowerCase().includes(q) ||
         p.state.toLowerCase().includes(q) ||
-        p.info.toLowerCase().includes(q)
+        p.info.toLowerCase().includes(q),
     );
   }, [protocols, filter]);
 
@@ -40,9 +40,7 @@ export const BirdProtocolsView: React.FC<BirdProtocolsViewProps> = ({ protocols 
     const total = protocols.length;
     const up = protocols.filter((p) => p.connected).length;
     const bgpTotal = protocols.filter((p) => p.proto.toUpperCase() === "BGP").length;
-    const bgpUp = protocols.filter(
-      (p) => p.proto.toUpperCase() === "BGP" && p.connected
-    ).length;
+    const bgpUp = protocols.filter((p) => p.proto.toUpperCase() === "BGP" && p.connected).length;
     return { total, up, bgpTotal, bgpUp };
   }, [protocols]);
 
@@ -210,9 +208,7 @@ export const BirdProtocolsView: React.FC<BirdProtocolsViewProps> = ({ protocols 
                       backgroundColor: idx % 2 === 0 ? "#FFFFFF" : "#FAFBFD",
                     }}
                   >
-                    <TableCell sx={{ fontWeight: 600, color: "#0F172A", fontFamily: "monospace" }}>
-                      {p.name}
-                    </TableCell>
+                    <TableCell sx={{ fontWeight: 600, color: "#0F172A", fontFamily: "monospace" }}>{p.name}</TableCell>
                     <TableCell>
                       <Chip
                         label={p.proto}

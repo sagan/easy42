@@ -2662,7 +2662,7 @@ func (m *Manager) PlanSync(nodeNames ...string) ([]config.SyncAction, error) {
 			}
 		}
 
-		birdConf, err := compiler.GenerateBirdConfig(&node, nodes, links, &cfg.NetworkSettings, cfg.NetworkPolicies)
+		birdConf, err := compiler.GenerateBirdConfig(&node, nodes, links, &cfg.NetworkSettings, cfg.NetworkPolicies, cfg.Templates)
 		if err != nil {
 			continue
 		}
@@ -2718,7 +2718,7 @@ func (m *Manager) PlanSync(nodeNames ...string) ([]config.SyncAction, error) {
 			continue
 		}
 		node := n
-		nftConf, err := compiler.GenerateNftablesConfig(&node, nodes, links, &cfg.NetworkSettings, cfg.NetworkPolicies)
+		nftConf, err := compiler.GenerateNftablesConfig(&node, nodes, links, &cfg.NetworkSettings, cfg.NetworkPolicies, cfg.Templates)
 		if err != nil {
 			continue
 		}
@@ -3373,7 +3373,7 @@ func (m *Manager) GenerateBirdConfig(nodeName string) (string, error) {
 		return "", fmt.Errorf("node %s not found", nodeName)
 	}
 
-	return compiler.GenerateBirdConfig(targetNode, cfg.Nodes, cfg.Links, &cfg.NetworkSettings, cfg.NetworkPolicies)
+	return compiler.GenerateBirdConfig(targetNode, cfg.Nodes, cfg.Links, &cfg.NetworkSettings, cfg.NetworkPolicies, cfg.Templates)
 }
 
 // GenerateBirdConfigWithTemplate generates BIRD config using a custom template
@@ -3413,7 +3413,7 @@ func (m *Manager) GenerateNftablesConfig(nodeName string) (string, error) {
 		return "", fmt.Errorf("node %s not found", nodeName)
 	}
 
-	return compiler.GenerateNftablesConfig(targetNode, cfg.Nodes, cfg.Links, &cfg.NetworkSettings, cfg.NetworkPolicies)
+	return compiler.GenerateNftablesConfig(targetNode, cfg.Nodes, cfg.Links, &cfg.NetworkSettings, cfg.NetworkPolicies, cfg.Templates)
 }
 
 // GenerateNftablesConfigWithTemplate generates nftables config using a custom template
@@ -3855,5 +3855,179 @@ func (m *Manager) triggerDNSDeleteForNode(dnsCfg config.DNSConfig, nodeName stri
 			log.Printf("[CF DNS] Error deleting DNS for node %s: %v", nodeName, err)
 		}
 	}()
+}
+
+// GetTemplates returns all configuration templates (builtins + custom)
+func (m *Manager) GetTemplates() []config.ConfigTemplate {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	cfg := m.store.Get()
+	if cfg == nil {
+		return compiler.GetBuiltinTemplates()
+	}
+	return compiler.GetAllTemplates(cfg.Templates)
+}
+
+// GetTemplate returns a configuration template by ID
+func (m *Manager) GetTemplate(id string) (*config.ConfigTemplate, error) {
+	all := m.GetTemplates()
+	for _, t := range all {
+		if t.ID == id {
+			return &t, nil
+		}
+	}
+	return nil, fmt.Errorf("template %q not found", id)
+}
+
+// CreateTemplate creates a new custom configuration template
+func (m *Manager) CreateTemplate(t config.ConfigTemplate) (*config.ConfigTemplate, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if !m.vault.IsUnlocked() {
+		return nil, crypto.ErrVaultLocked
+	}
+
+	id := strings.TrimSpace(t.ID)
+	name := strings.TrimSpace(t.Name)
+	tmplType := strings.ToLower(strings.TrimSpace(t.Type))
+
+	if id == "" {
+		return nil, errors.New("template id is required")
+	}
+	if name == "" {
+		return nil, errors.New("template name is required")
+	}
+	if !config.IsValidTemplateType(tmplType) {
+		return nil, fmt.Errorf("invalid template type %q: must be wg, bird, or nft", tmplType)
+	}
+
+	if id == config.DefaultWgTemplateID || id == config.DefaultBirdTemplateID || id == config.DefaultNftTemplateID || id == "default" {
+		return nil, fmt.Errorf("cannot create template with reserved ID %q", id)
+	}
+
+	cfg := m.store.Get()
+	for _, existing := range cfg.Templates {
+		if existing.ID == id {
+			return nil, fmt.Errorf("template with ID %q already exists", id)
+		}
+	}
+
+	if err := compiler.ValidateTemplate(tmplType, t.Content); err != nil {
+		return nil, err
+	}
+
+	t.ID = id
+	t.Name = name
+	t.Type = tmplType
+	t.Description = strings.TrimSpace(t.Description)
+	t.IsBuiltin = false
+	t.ModifiedAt = time.Now().UTC()
+
+	cfg.Templates = append(cfg.Templates, t)
+	if err := m.store.Save(cfg); err != nil {
+		return nil, err
+	}
+	return &t, nil
+}
+
+// UpdateTemplate updates an existing custom configuration template
+func (m *Manager) UpdateTemplate(id string, t config.ConfigTemplate) (*config.ConfigTemplate, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if !m.vault.IsUnlocked() {
+		return nil, crypto.ErrVaultLocked
+	}
+
+	if id == config.DefaultWgTemplateID || id == config.DefaultBirdTemplateID || id == config.DefaultNftTemplateID || id == "default" {
+		return nil, fmt.Errorf("cannot modify system default template %q", id)
+	}
+
+	name := strings.TrimSpace(t.Name)
+	if name == "" {
+		return nil, errors.New("template name is required")
+	}
+
+	cfg := m.store.Get()
+	idx := -1
+	for i, existing := range cfg.Templates {
+		if existing.ID == id {
+			idx = i
+			break
+		}
+	}
+	if idx == -1 {
+		return nil, fmt.Errorf("template %q not found", id)
+	}
+
+	tmplType := cfg.Templates[idx].Type
+	if t.Type != "" {
+		newType := strings.ToLower(strings.TrimSpace(t.Type))
+		if !config.IsValidTemplateType(newType) {
+			return nil, fmt.Errorf("invalid template type %q: must be wg, bird, or nft", newType)
+		}
+		tmplType = newType
+	}
+
+	if err := compiler.ValidateTemplate(tmplType, t.Content); err != nil {
+		return nil, err
+	}
+
+	cfg.Templates[idx].Name = name
+	cfg.Templates[idx].Type = tmplType
+	cfg.Templates[idx].Description = strings.TrimSpace(t.Description)
+	cfg.Templates[idx].Content = t.Content
+	cfg.Templates[idx].ModifiedAt = time.Now().UTC()
+
+	res := cfg.Templates[idx]
+	if err := m.store.Save(cfg); err != nil {
+		return nil, err
+	}
+	return &res, nil
+}
+
+// DeleteTemplate deletes a custom configuration template by ID
+func (m *Manager) DeleteTemplate(id string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if !m.vault.IsUnlocked() {
+		return crypto.ErrVaultLocked
+	}
+
+	if id == config.DefaultWgTemplateID || id == config.DefaultBirdTemplateID || id == config.DefaultNftTemplateID || id == "default" {
+		return fmt.Errorf("cannot delete system default template %q", id)
+	}
+
+	cfg := m.store.Get()
+
+	// Check if template is currently in use by any node
+	for _, n := range cfg.Nodes {
+		if n.WgTemplate == id {
+			return fmt.Errorf("cannot delete template %q: currently assigned as WireGuard template on node %s", id, n.Name)
+		}
+		if n.BirdTemplate == id {
+			return fmt.Errorf("cannot delete template %q: currently assigned as BIRD template on node %s", id, n.Name)
+		}
+		if n.NftTemplate == id {
+			return fmt.Errorf("cannot delete template %q: currently assigned as nftables template on node %s", id, n.Name)
+		}
+	}
+
+	idx := -1
+	for i, existing := range cfg.Templates {
+		if existing.ID == id {
+			idx = i
+			break
+		}
+	}
+	if idx == -1 {
+		return fmt.Errorf("template %q not found", id)
+	}
+
+	cfg.Templates = append(cfg.Templates[:idx], cfg.Templates[idx+1:]...)
+	return m.store.Save(cfg)
 }
 

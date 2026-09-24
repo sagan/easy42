@@ -139,12 +139,9 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
   const linkSuffix = linkToEdit ? "" : existingLinksBetween.length > 0 ? `${existingLinksBetween.length}` : "";
   const linkPortOffset = linkToEdit ? 0 : existingLinksBetween.length;
 
-  const managedListenPort = (managedNode === fromNode ? fromPort : toPort) || (51820 + linkPortOffset);
+  const managedListenPort = (managedNode === fromNode ? fromPort : toPort) || 51820 + linkPortOffset;
   const { entrypoint: managedEP } = resolvePeerEntrypoint(externalNode, managedNode);
-  const managedPeerEndpoint = formatEndpoint(
-    managedEP?.ip || managedNode?.host,
-    managedListenPort,
-  );
+  const managedPeerEndpoint = formatEndpoint(managedEP?.ip || managedNode?.host, managedListenPort);
 
   useEffect(() => {
     if (!open) return;
@@ -154,7 +151,8 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
   useEffect(() => {
     if (!open) return;
     if (linkToEdit) {
-      const isMan = linkToEdit.type === "manual" || linkToEdit.from?.type === "manual" || linkToEdit.to?.type === "manual";
+      const isMan =
+        linkToEdit.type === "manual" || linkToEdit.from?.type === "manual" || linkToEdit.to?.type === "manual";
       setLinkType(isMan ? "manual" : "wireguard");
       setFromInterface(linkToEdit.from?.interface || "");
       setToInterface(linkToEdit.to?.interface || "");
@@ -227,7 +225,9 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
       setToPort(0);
       setFromMtu(1420);
       setToMtu(1420);
-      const isExt = Boolean(nodes.find((n) => n.name === initialFrom)?.is_external || nodes.find((n) => n.name === initialTo)?.is_external);
+      const isExt = Boolean(
+        nodes.find((n) => n.name === initialFrom)?.is_external || nodes.find((n) => n.name === initialTo)?.is_external,
+      );
       setFromPolicy(isExt ? "dn42" : "default");
       setToPolicy(isExt ? "dn42" : "default");
       setFromCost("");
@@ -449,7 +449,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
       } else if (isExternalLink && managedNode && externalNode) {
         const managedMtuVal = (managedNode === fromNode ? fromMtu : toMtu) || 1420;
         const extEndpoint = fullRemoteEndpoint || undefined;
-        const parsedRemotePort = typeof remotePort === "number" ? remotePort : (Number(remotePort) || 0);
+        const parsedRemotePort = typeof remotePort === "number" ? remotePort : Number(remotePort) || 0;
         const managedPolicy = managedNode === fromNode ? fromPolicy : toPolicy;
         const managedFwmark = managedNode === fromNode ? parsedFromFwmark : parsedToFwmark;
         const managedPreference = managedNode === fromNode ? parsedFromPreference : parsedToPreference;
@@ -559,8 +559,8 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
             to_use_ip: toUseIp,
             from_policy: fromPolicy,
             to_policy: toPolicy,
-            from_routing_policy: fromRoutingPolicy ? fromRoutingPolicy : (linkToEdit ? "inherit" : undefined),
-            to_routing_policy: toRoutingPolicy ? toRoutingPolicy : (linkToEdit ? "inherit" : undefined),
+            from_routing_policy: fromRoutingPolicy ? fromRoutingPolicy : linkToEdit ? "inherit" : undefined,
+            to_routing_policy: toRoutingPolicy ? toRoutingPolicy : linkToEdit ? "inherit" : undefined,
             from_cost: parsedFromCost,
             to_cost: parsedToCost,
             from_fwmark: parsedFromFwmark,
@@ -678,19 +678,29 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
             backgroundColor: isExternalLink
               ? "rgba(139, 92, 246, 0.1)"
               : linkType === "manual"
-              ? "rgba(124, 58, 237, 0.1)"
-              : "rgba(8, 145, 178, 0.1)",
+                ? "rgba(124, 58, 237, 0.1)"
+                : "rgba(8, 145, 178, 0.1)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             color: isExternalLink ? "#8B5CF6" : linkType === "manual" ? "#7C3AED" : "#0891B2",
           }}
         >
-          {isExternalLink ? <Globe size={18} /> : linkType === "manual" ? <Network size={18} /> : linkToEdit ? <Edit2 size={18} /> : <LinkIcon size={18} />}
+          {isExternalLink ? (
+            <Globe size={18} />
+          ) : linkType === "manual" ? (
+            <Network size={18} />
+          ) : linkToEdit ? (
+            <Edit2 size={18} />
+          ) : (
+            <LinkIcon size={18} />
+          )}
         </Box>
         <Typography variant="h6" sx={{ fontWeight: 700, color: "#0F172A" }}>
           {linkToEdit
-            ? (linkType === "manual" ? `Edit Manual Link: ${linkToEdit.from.name} ↔ ${linkToEdit.to.name}` : `Edit WireGuard Link: ${linkToEdit.from.name} ↔ ${linkToEdit.to.name}`)
+            ? linkType === "manual"
+              ? `Edit Manual Link: ${linkToEdit.from.name} ↔ ${linkToEdit.to.name}`
+              : `Edit WireGuard Link: ${linkToEdit.from.name} ↔ ${linkToEdit.to.name}`
             : isExternalLink
               ? "Create External Peering Link"
               : linkType === "manual"
@@ -789,7 +799,10 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                         backgroundColor: linkType === "wireguard" ? "#0891B2" : "#CBD5E1",
                       }}
                     />
-                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: linkType === "wireguard" ? "#0E7490" : "#475569" }}>
+                    <Typography
+                      variant="subtitle2"
+                      sx={{ fontWeight: 700, color: linkType === "wireguard" ? "#0E7490" : "#475569" }}
+                    >
                       WireGuard (Managed)
                     </Typography>
                   </Box>
@@ -820,7 +833,10 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                         backgroundColor: linkType === "manual" ? "#7C3AED" : "#CBD5E1",
                       }}
                     />
-                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: linkType === "manual" ? "#6D28D9" : "#475569" }}>
+                    <Typography
+                      variant="subtitle2"
+                      sx={{ fontWeight: 700, color: linkType === "manual" ? "#6D28D9" : "#475569" }}
+                    >
                       Manual Link (BGP Only)
                     </Typography>
                   </Box>
@@ -875,8 +891,13 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                         }}
                       />
                     </Box>
-                    <Typography variant="caption" sx={{ color: "#64748B", display: "block", fontSize: "0.72rem", lineHeight: 1.4, mt: 0.3 }}>
-                      Assigns a pair of IPv4 link-local addresses (169.254.X.X/32 derived automatically from the peer's main IP and link index) to the WireGuard interface of link ends. Intended for nftables IPv4 masquerading; BIRD BGP peering still uses IPv6 link-local addresses exclusively.
+                    <Typography
+                      variant="caption"
+                      sx={{ color: "#64748B", display: "block", fontSize: "0.72rem", lineHeight: 1.4, mt: 0.3 }}
+                    >
+                      Assigns a pair of IPv4 link-local addresses (169.254.X.X/32 derived automatically from the peer's
+                      main IP and link index) to the WireGuard interface of link ends. Intended for nftables IPv4
+                      masquerading; BIRD BGP peering still uses IPv6 link-local addresses exclusively.
                     </Typography>
                   </Box>
                 }
@@ -921,7 +942,9 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                     size="small"
                     value={
                       linkToEdit
-                        ? (managedNode === fromNode ? linkToEdit.from.interface : linkToEdit.to.interface)
+                        ? managedNode === fromNode
+                          ? linkToEdit.from.interface
+                          : linkToEdit.to.interface
                         : getInterfaceNameWithSuffix(externalNode.name, linkSuffix, true)
                     }
                     disabled
@@ -981,7 +1004,8 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                         Use IP (Resolve external peer domain to IP)
                       </Typography>
                       <Typography variant="caption" sx={{ color: "#64748B", display: "block", fontSize: "0.72rem" }}>
-                        Resolves remote endpoint hostname to IP in easy42 server and uses IP in {managedNode.name}'s WireGuard config.
+                        Resolves remote endpoint hostname to IP in easy42 server and uses IP in {managedNode.name}'s
+                        WireGuard config.
                       </Typography>
                     </Box>
                   }
@@ -1084,15 +1108,22 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                 </Box>
 
                 {/* Managed Node Endpoint Note */}
-                <Box sx={{ mt: 1.5, p: 1.5, borderRadius: 1.5, backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
+                <Box
+                  sx={{ mt: 1.5, p: 1.5, borderRadius: 1.5, backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0" }}
+                >
                   <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 0.8 }}>
-                    <Typography variant="caption" sx={{ color: "#475569", fontWeight: 700, display: "flex", alignItems: "center", gap: 0.6 }}>
+                    <Typography
+                      variant="caption"
+                      sx={{ color: "#475569", fontWeight: 700, display: "flex", alignItems: "center", gap: 0.6 }}
+                    >
                       <FileText size={13} color="#4F46E5" /> {managedNode?.name} ENDPOINT NOTE (MARKDOWN)
                     </Typography>
                     <Box sx={{ display: "flex", gap: 0.5 }}>
                       <Button
                         size="small"
-                        variant={(managedNode === fromNode ? fromNoteTab : toNoteTab) === "write" ? "contained" : "text"}
+                        variant={
+                          (managedNode === fromNode ? fromNoteTab : toNoteTab) === "write" ? "contained" : "text"
+                        }
                         onClick={() => (managedNode === fromNode ? setFromNoteTab("write") : setToNoteTab("write"))}
                         sx={{ minWidth: "auto", px: 1, py: 0.2, fontSize: "0.7rem", textTransform: "none" }}
                       >
@@ -1100,7 +1131,9 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                       </Button>
                       <Button
                         size="small"
-                        variant={(managedNode === fromNode ? fromNoteTab : toNoteTab) === "preview" ? "contained" : "text"}
+                        variant={
+                          (managedNode === fromNode ? fromNoteTab : toNoteTab) === "preview" ? "contained" : "text"
+                        }
                         onClick={() => (managedNode === fromNode ? setFromNoteTab("preview") : setToNoteTab("preview"))}
                         sx={{ minWidth: "auto", px: 1, py: 0.2, fontSize: "0.7rem", textTransform: "none" }}
                       >
@@ -1117,27 +1150,54 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                       size="small"
                       placeholder="Markdown note for this endpoint..."
                       value={managedNode === fromNode ? fromNote : toNote}
-                      onChange={(e) => (managedNode === fromNode ? setFromNote(e.target.value) : setToNote(e.target.value))}
+                      onChange={(e) =>
+                        managedNode === fromNode ? setFromNote(e.target.value) : setToNote(e.target.value)
+                      }
                       disabled={submitting}
-                      sx={{ "& .MuiInputBase-root": { fontSize: "0.8rem", fontFamily: "'JetBrains Mono', 'Fira Code', monospace" } }}
+                      sx={{
+                        "& .MuiInputBase-root": {
+                          fontSize: "0.8rem",
+                          fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+                        },
+                      }}
                     />
                   ) : (
-                    <Box sx={{ p: 1, minHeight: 60, maxHeight: 150, overflowY: "auto", backgroundColor: "#FFFFFF", borderRadius: 1, border: "1px solid #E2E8F0" }}>
-                      <MarkdownView content={managedNode === fromNode ? fromNote : toNote} emptyText="No note written yet" />
+                    <Box
+                      sx={{
+                        p: 1,
+                        minHeight: 60,
+                        maxHeight: 150,
+                        overflowY: "auto",
+                        backgroundColor: "#FFFFFF",
+                        borderRadius: 1,
+                        border: "1px solid #E2E8F0",
+                      }}
+                    >
+                      <MarkdownView
+                        content={managedNode === fromNode ? fromNote : toNote}
+                        emptyText="No note written yet"
+                      />
                     </Box>
                   )}
                 </Box>
 
                 {/* External Peer Endpoint Note */}
-                <Box sx={{ mt: 1.5, p: 1.5, borderRadius: 1.5, backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
+                <Box
+                  sx={{ mt: 1.5, p: 1.5, borderRadius: 1.5, backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0" }}
+                >
                   <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 0.8 }}>
-                    <Typography variant="caption" sx={{ color: "#475569", fontWeight: 700, display: "flex", alignItems: "center", gap: 0.6 }}>
+                    <Typography
+                      variant="caption"
+                      sx={{ color: "#475569", fontWeight: 700, display: "flex", alignItems: "center", gap: 0.6 }}
+                    >
                       <FileText size={13} color="#4F46E5" /> {externalNode?.name} ENDPOINT NOTE (MARKDOWN)
                     </Typography>
                     <Box sx={{ display: "flex", gap: 0.5 }}>
                       <Button
                         size="small"
-                        variant={(externalNode === fromNode ? fromNoteTab : toNoteTab) === "write" ? "contained" : "text"}
+                        variant={
+                          (externalNode === fromNode ? fromNoteTab : toNoteTab) === "write" ? "contained" : "text"
+                        }
                         onClick={() => (externalNode === fromNode ? setFromNoteTab("write") : setToNoteTab("write"))}
                         sx={{ minWidth: "auto", px: 1, py: 0.2, fontSize: "0.7rem", textTransform: "none" }}
                       >
@@ -1145,8 +1205,12 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                       </Button>
                       <Button
                         size="small"
-                        variant={(externalNode === fromNode ? fromNoteTab : toNoteTab) === "preview" ? "contained" : "text"}
-                        onClick={() => (externalNode === fromNode ? setFromNoteTab("preview") : setToNoteTab("preview"))}
+                        variant={
+                          (externalNode === fromNode ? fromNoteTab : toNoteTab) === "preview" ? "contained" : "text"
+                        }
+                        onClick={() =>
+                          externalNode === fromNode ? setFromNoteTab("preview") : setToNoteTab("preview")
+                        }
                         sx={{ minWidth: "auto", px: 1, py: 0.2, fontSize: "0.7rem", textTransform: "none" }}
                       >
                         Preview
@@ -1162,13 +1226,33 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                       size="small"
                       placeholder="Markdown note for external peer endpoint..."
                       value={externalNode === fromNode ? fromNote : toNote}
-                      onChange={(e) => (externalNode === fromNode ? setFromNote(e.target.value) : setToNote(e.target.value))}
+                      onChange={(e) =>
+                        externalNode === fromNode ? setFromNote(e.target.value) : setToNote(e.target.value)
+                      }
                       disabled={submitting}
-                      sx={{ "& .MuiInputBase-root": { fontSize: "0.8rem", fontFamily: "'JetBrains Mono', 'Fira Code', monospace" } }}
+                      sx={{
+                        "& .MuiInputBase-root": {
+                          fontSize: "0.8rem",
+                          fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+                        },
+                      }}
                     />
                   ) : (
-                    <Box sx={{ p: 1, minHeight: 60, maxHeight: 150, overflowY: "auto", backgroundColor: "#FFFFFF", borderRadius: 1, border: "1px solid #E2E8F0" }}>
-                      <MarkdownView content={externalNode === fromNode ? fromNote : toNote} emptyText="No note written yet" />
+                    <Box
+                      sx={{
+                        p: 1,
+                        minHeight: 60,
+                        maxHeight: 150,
+                        overflowY: "auto",
+                        backgroundColor: "#FFFFFF",
+                        borderRadius: 1,
+                        border: "1px solid #E2E8F0",
+                      }}
+                    >
+                      <MarkdownView
+                        content={externalNode === fromNode ? fromNote : toNote}
+                        emptyText="No note written yet"
+                      />
                     </Box>
                   )}
                 </Box>
@@ -1304,9 +1388,10 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                   "& .MuiAlert-icon": { color: "#7C3AED" },
                 }}
               >
-                <strong>Manual Link Mode:</strong> easy42 will <em>not</em> create or manage WireGuard interfaces for this link.
-                You create and manage the data plane link manually (via physical ethernet, VLAN, or custom tunnel).
-                easy42 will configure BIRD BGP peering and automatically add the specified interfaces to the <code>easy42_ifname</code> nftables set.
+                <strong>Manual Link Mode:</strong> easy42 will <em>not</em> create or manage WireGuard interfaces for
+                this link. You create and manage the data plane link manually (via physical ethernet, VLAN, or custom
+                tunnel). easy42 will configure BIRD BGP peering and automatically add the specified interfaces to the{" "}
+                <code>easy42_ifname</code> nftables set.
               </Alert>
 
               <Typography variant="caption" sx={{ color: "#475569", fontWeight: 700, letterSpacing: "0.5px" }}>
@@ -1424,9 +1509,14 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                 </Box>
 
                 {/* End 1 Note */}
-                <Box sx={{ mt: 1.5, p: 1.5, borderRadius: 1.5, backgroundColor: "#FFFFFF", border: "1px solid #DDD6FE" }}>
+                <Box
+                  sx={{ mt: 1.5, p: 1.5, borderRadius: 1.5, backgroundColor: "#FFFFFF", border: "1px solid #DDD6FE" }}
+                >
                   <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 0.8 }}>
-                    <Typography variant="caption" sx={{ color: "#6D28D9", fontWeight: 700, display: "flex", alignItems: "center", gap: 0.6 }}>
+                    <Typography
+                      variant="caption"
+                      sx={{ color: "#6D28D9", fontWeight: 700, display: "flex", alignItems: "center", gap: 0.6 }}
+                    >
                       <FileText size={13} color="#7C3AED" /> {fromNode.name} ENDPOINT NOTE (MARKDOWN)
                     </Typography>
                     <Box sx={{ display: "flex", gap: 0.5 }}>
@@ -1459,10 +1549,25 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                       value={fromNote}
                       onChange={(e) => setFromNote(e.target.value)}
                       disabled={submitting}
-                      sx={{ "& .MuiInputBase-root": { fontSize: "0.8rem", fontFamily: "'JetBrains Mono', 'Fira Code', monospace" } }}
+                      sx={{
+                        "& .MuiInputBase-root": {
+                          fontSize: "0.8rem",
+                          fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+                        },
+                      }}
                     />
                   ) : (
-                    <Box sx={{ p: 1, minHeight: 60, maxHeight: 150, overflowY: "auto", backgroundColor: "#F8FAFC", borderRadius: 1, border: "1px solid #E2E8F0" }}>
+                    <Box
+                      sx={{
+                        p: 1,
+                        minHeight: 60,
+                        maxHeight: 150,
+                        overflowY: "auto",
+                        backgroundColor: "#F8FAFC",
+                        borderRadius: 1,
+                        border: "1px solid #E2E8F0",
+                      }}
+                    >
                       <MarkdownView content={fromNote} emptyText="No note written yet" />
                     </Box>
                   )}
@@ -1580,9 +1685,14 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                 </Box>
 
                 {/* End 2 Note */}
-                <Box sx={{ mt: 1.5, p: 1.5, borderRadius: 1.5, backgroundColor: "#FFFFFF", border: "1px solid #DDD6FE" }}>
+                <Box
+                  sx={{ mt: 1.5, p: 1.5, borderRadius: 1.5, backgroundColor: "#FFFFFF", border: "1px solid #DDD6FE" }}
+                >
                   <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 0.8 }}>
-                    <Typography variant="caption" sx={{ color: "#6D28D9", fontWeight: 700, display: "flex", alignItems: "center", gap: 0.6 }}>
+                    <Typography
+                      variant="caption"
+                      sx={{ color: "#6D28D9", fontWeight: 700, display: "flex", alignItems: "center", gap: 0.6 }}
+                    >
                       <FileText size={13} color="#7C3AED" /> {toNode.name} ENDPOINT NOTE (MARKDOWN)
                     </Typography>
                     <Box sx={{ display: "flex", gap: 0.5 }}>
@@ -1615,10 +1725,25 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                       value={toNote}
                       onChange={(e) => setToNote(e.target.value)}
                       disabled={submitting}
-                      sx={{ "& .MuiInputBase-root": { fontSize: "0.8rem", fontFamily: "'JetBrains Mono', 'Fira Code', monospace" } }}
+                      sx={{
+                        "& .MuiInputBase-root": {
+                          fontSize: "0.8rem",
+                          fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+                        },
+                      }}
                     />
                   ) : (
-                    <Box sx={{ p: 1, minHeight: 60, maxHeight: 150, overflowY: "auto", backgroundColor: "#F8FAFC", borderRadius: 1, border: "1px solid #E2E8F0" }}>
+                    <Box
+                      sx={{
+                        p: 1,
+                        minHeight: 60,
+                        maxHeight: 150,
+                        overflowY: "auto",
+                        backgroundColor: "#F8FAFC",
+                        borderRadius: 1,
+                        border: "1px solid #E2E8F0",
+                      }}
+                    >
                       <MarkdownView content={toNote} emptyText="No note written yet" />
                     </Box>
                   )}
@@ -1653,7 +1778,9 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                       value={
                         linkToEdit
                           ? linkToEdit.from.interface
-                          : (toNode ? getInterfaceNameWithSuffix(toNode.name, linkSuffix, toNode.is_external) : "")
+                          : toNode
+                            ? getInterfaceNameWithSuffix(toNode.name, linkSuffix, toNode.is_external)
+                            : ""
                       }
                       disabled
                     />
@@ -1742,8 +1869,12 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                           <Typography variant="body2" sx={{ fontSize: "0.8rem", fontWeight: 600, color: "#1E293B" }}>
                             Use IP (Resolve peer endpoint domain to IP)
                           </Typography>
-                          <Typography variant="caption" sx={{ color: "#64748B", display: "block", fontSize: "0.72rem" }}>
-                            Resolves peer's endpoint hostname to IP in easy42 server and uses IP in {fromNode.name}'s WireGuard config.
+                          <Typography
+                            variant="caption"
+                            sx={{ color: "#64748B", display: "block", fontSize: "0.72rem" }}
+                          >
+                            Resolves peer's endpoint hostname to IP in easy42 server and uses IP in {fromNode.name}'s
+                            WireGuard config.
                           </Typography>
                         </Box>
                       }
@@ -1825,9 +1956,14 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                   </Box>
 
                   {/* Node 1 Endpoint Note */}
-                  <Box sx={{ mt: 1.5, p: 1.5, borderRadius: 1.5, backgroundColor: "#FFFFFF", border: "1px solid #C7D2FE" }}>
+                  <Box
+                    sx={{ mt: 1.5, p: 1.5, borderRadius: 1.5, backgroundColor: "#FFFFFF", border: "1px solid #C7D2FE" }}
+                  >
                     <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 0.8 }}>
-                      <Typography variant="caption" sx={{ color: "#4338CA", fontWeight: 700, display: "flex", alignItems: "center", gap: 0.6 }}>
+                      <Typography
+                        variant="caption"
+                        sx={{ color: "#4338CA", fontWeight: 700, display: "flex", alignItems: "center", gap: 0.6 }}
+                      >
                         <FileText size={13} color="#4F46E5" /> {fromNode.name} ENDPOINT NOTE (MARKDOWN)
                       </Typography>
                       <Box sx={{ display: "flex", gap: 0.5 }}>
@@ -1860,10 +1996,25 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                         value={fromNote}
                         onChange={(e) => setFromNote(e.target.value)}
                         disabled={submitting}
-                        sx={{ "& .MuiInputBase-root": { fontSize: "0.8rem", fontFamily: "'JetBrains Mono', 'Fira Code', monospace" } }}
+                        sx={{
+                          "& .MuiInputBase-root": {
+                            fontSize: "0.8rem",
+                            fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+                          },
+                        }}
                       />
                     ) : (
-                      <Box sx={{ p: 1, minHeight: 60, maxHeight: 150, overflowY: "auto", backgroundColor: "#F8FAFC", borderRadius: 1, border: "1px solid #E2E8F0" }}>
+                      <Box
+                        sx={{
+                          p: 1,
+                          minHeight: 60,
+                          maxHeight: 150,
+                          overflowY: "auto",
+                          backgroundColor: "#F8FAFC",
+                          borderRadius: 1,
+                          border: "1px solid #E2E8F0",
+                        }}
+                      >
                         <MarkdownView content={fromNote} emptyText="No note written yet" />
                       </Box>
                     )}
@@ -1889,7 +2040,9 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                       value={
                         linkToEdit
                           ? linkToEdit.to.interface
-                          : (fromNode ? getInterfaceNameWithSuffix(fromNode.name, linkSuffix, fromNode.is_external) : "")
+                          : fromNode
+                            ? getInterfaceNameWithSuffix(fromNode.name, linkSuffix, fromNode.is_external)
+                            : ""
                       }
                       disabled
                     />
@@ -1978,8 +2131,12 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                           <Typography variant="body2" sx={{ fontSize: "0.8rem", fontWeight: 600, color: "#1E293B" }}>
                             Use IP (Resolve peer endpoint domain to IP)
                           </Typography>
-                          <Typography variant="caption" sx={{ color: "#64748B", display: "block", fontSize: "0.72rem" }}>
-                            Resolves peer's endpoint hostname to IP in easy42 server and uses IP in {toNode.name}'s WireGuard config.
+                          <Typography
+                            variant="caption"
+                            sx={{ color: "#64748B", display: "block", fontSize: "0.72rem" }}
+                          >
+                            Resolves peer's endpoint hostname to IP in easy42 server and uses IP in {toNode.name}'s
+                            WireGuard config.
                           </Typography>
                         </Box>
                       }
@@ -2061,9 +2218,14 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                   </Box>
 
                   {/* Node 2 Endpoint Note */}
-                  <Box sx={{ mt: 1.5, p: 1.5, borderRadius: 1.5, backgroundColor: "#FFFFFF", border: "1px solid #A5F3FC" }}>
+                  <Box
+                    sx={{ mt: 1.5, p: 1.5, borderRadius: 1.5, backgroundColor: "#FFFFFF", border: "1px solid #A5F3FC" }}
+                  >
                     <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 0.8 }}>
-                      <Typography variant="caption" sx={{ color: "#0E7490", fontWeight: 700, display: "flex", alignItems: "center", gap: 0.6 }}>
+                      <Typography
+                        variant="caption"
+                        sx={{ color: "#0E7490", fontWeight: 700, display: "flex", alignItems: "center", gap: 0.6 }}
+                      >
                         <FileText size={13} color="#0891B2" /> {toNode.name} ENDPOINT NOTE (MARKDOWN)
                       </Typography>
                       <Box sx={{ display: "flex", gap: 0.5 }}>
@@ -2096,10 +2258,25 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                         value={toNote}
                         onChange={(e) => setToNote(e.target.value)}
                         disabled={submitting}
-                        sx={{ "& .MuiInputBase-root": { fontSize: "0.8rem", fontFamily: "'JetBrains Mono', 'Fira Code', monospace" } }}
+                        sx={{
+                          "& .MuiInputBase-root": {
+                            fontSize: "0.8rem",
+                            fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+                          },
+                        }}
                       />
                     ) : (
-                      <Box sx={{ p: 1, minHeight: 60, maxHeight: 150, overflowY: "auto", backgroundColor: "#F8FAFC", borderRadius: 1, border: "1px solid #E2E8F0" }}>
+                      <Box
+                        sx={{
+                          p: 1,
+                          minHeight: 60,
+                          maxHeight: 150,
+                          overflowY: "auto",
+                          backgroundColor: "#F8FAFC",
+                          borderRadius: 1,
+                          border: "1px solid #E2E8F0",
+                        }}
+                      >
                         <MarkdownView content={toNote} emptyText="No note written yet" />
                       </Box>
                     )}

@@ -28,12 +28,7 @@ interface CustomTaskEditorModalProps {
   onSave: (task: LookingGlassTask) => Promise<void>;
 }
 
-export const CustomTaskEditorModal: React.FC<CustomTaskEditorModalProps> = ({
-  open,
-  onClose,
-  taskToEdit,
-  onSave,
-}) => {
+export const CustomTaskEditorModal: React.FC<CustomTaskEditorModalProps> = ({ open, onClose, taskToEdit, onSave }) => {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState("Custom");
@@ -340,7 +335,9 @@ export const CustomTaskEditorModal: React.FC<CustomTaskEditorModalProps> = ({
                     label="Key"
                     size="small"
                     value={p.key}
-                    onChange={(e) => handleUpdateParam(idx, { key: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, "") })}
+                    onChange={(e) =>
+                      handleUpdateParam(idx, { key: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, "") })
+                    }
                     InputProps={{ sx: { fontFamily: "monospace", fontSize: "0.8rem" } }}
                   />
 

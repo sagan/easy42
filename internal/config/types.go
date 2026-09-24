@@ -80,6 +80,7 @@ type Config struct {
 	LookingGlassTasks []LookingGlassTask `json:"looking_glass_tasks,omitempty"`
 	Blocks            []Block            `json:"blocks,omitempty"`
 	DNS               DNSConfig          `json:"dns,omitempty"`
+	Templates         []ConfigTemplate   `json:"templates,omitempty"`
 }
 
 // PortSpec handles single ports (51820), port ranges ("2000-2999"), or object ({port, external_port})
@@ -203,6 +204,9 @@ type Node struct {
 	StaticRoutes  []string          `json:"static_routes,omitempty"`  // CIDR prefix list unconditionally broadcast via BGP
 	Routes        []KernelRouteRule `json:"routes,omitempty"`         // Kernel routes imported from kernel tables and broadcast via BGP
 	ConfigHooks   []ConfigHook      `json:"config_hooks,omitempty"`   // Custom configuration injection hooks
+	WgTemplate    string            `json:"wg_template,omitempty"`    // Custom WireGuard template ID/name (empty for default)
+	BirdTemplate  string            `json:"bird_template,omitempty"`  // Custom BIRD template ID/name (empty for default)
+	NftTemplate   string            `json:"nft_template,omitempty"`   // Custom nftables template ID/name (empty for default)
 	X             *float64          `json:"x,omitempty"`              // Graph X coordinate
 	Y             *float64          `json:"y,omitempty"`              // Graph Y coordinate
 	ModifiedAt    time.Time         `json:"modified_at,omitempty"`    // Last updated timestamp

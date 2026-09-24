@@ -391,7 +391,9 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = ({
 
         {/* Stats Indicator */}
         {blocksCount > 0 && (
-          <Tooltip title={`${blocksCount} block(s) configured. Intra-block and inter-block links collapsed by default; click any node to view its links.`}>
+          <Tooltip
+            title={`${blocksCount} block(s) configured. Intra-block and inter-block links collapsed by default; click any node to view its links.`}
+          >
             <Chip
               icon={<EyeOff size={13} color="#64748B" style={{ marginLeft: 6 }} />}
               label={`${hiddenLinksCount} links collapsed`}
@@ -612,9 +614,7 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
       if (pos) {
         const cx = pos.x + 130;
         const cy = pos.y + 90;
-        const target = blocks.find(
-          (b) => cx >= b.x && cx <= b.x + b.width && cy >= b.y && cy <= b.y + b.height,
-        );
+        const target = blocks.find((b) => cx >= b.x && cx <= b.x + b.width && cy >= b.y && cy <= b.y + b.height);
         if (target) {
           effMap[node.name] = target.id;
         }
@@ -688,9 +688,7 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
     // - Every pair of distinct member nodes (u, v) in the block has a direct WireGuard link (non-manual).
     const blockFullMeshStatusMap = new Map<string, boolean>();
     blocks.forEach((block) => {
-      const memberNames = nodes
-        .filter((n) => effectiveNodeBlockMap[n.name] === block.id)
-        .map((n) => n.name);
+      const memberNames = nodes.filter((n) => effectiveNodeBlockMap[n.name] === block.id).map((n) => n.name);
 
       if (memberNames.length < 2) {
         blockFullMeshStatusMap.set(block.id, false);
@@ -701,8 +699,7 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
       const hasIntraWireGuardLink = (u: string, v: string) => {
         return links.some(
           (l) =>
-            isWireGuardLink(l) &&
-            ((l.from.name === u && l.to.name === v) || (l.from.name === v && l.to.name === u)),
+            isWireGuardLink(l) && ((l.from.name === u && l.to.name === v) || (l.from.name === v && l.to.name === u)),
         );
       };
 
@@ -717,9 +714,7 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
     const blockFlowNodes: FlowNode[] = blocks.map((block) => {
       const memberNodes = nodes.filter((n) => effectiveNodeBlockMap[n.name] === block.id);
       const memberNamesSet = new Set(memberNodes.map((n) => n.name));
-      const intraLinks = links.filter(
-        (l) => memberNamesSet.has(l.from.name) && memberNamesSet.has(l.to.name),
-      );
+      const intraLinks = links.filter((l) => memberNamesSet.has(l.from.name) && memberNamesSet.has(l.to.name));
       const brokenLinks = intraLinks.filter((l) => {
         return getLinkWorkingState(l, networkState, nodeStatuses) === "not_working";
       });
@@ -1124,10 +1119,7 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
         const nodeCenterY = y + 90;
         const targetBlock = blocks.find(
           (b) =>
-            nodeCenterX >= b.x &&
-            nodeCenterX <= b.x + b.width &&
-            nodeCenterY >= b.y &&
-            nodeCenterY <= b.y + b.height,
+            nodeCenterX >= b.x && nodeCenterX <= b.x + b.width && nodeCenterY >= b.y && nodeCenterY <= b.y + b.height,
         );
 
         setNodeBlockMap((prev) => {

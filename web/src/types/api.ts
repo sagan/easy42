@@ -86,6 +86,16 @@ export interface NetworkPolicy {
   routing_policy?: string;
 }
 
+export interface ConfigTemplate {
+  id: string;
+  name: string;
+  type: "wg" | "bird" | "nft" | string;
+  description?: string;
+  content: string;
+  is_builtin?: boolean;
+  modified_at?: string;
+}
+
 export interface Node {
   name: string;
   host?: string;
@@ -107,6 +117,9 @@ export interface Node {
   static_routes?: string[];
   routes?: KernelRouteRule[];
   config_hooks?: ConfigHook[];
+  wg_template?: string;
+  bird_template?: string;
+  nft_template?: string;
   x?: number;
   y?: number;
   modified_at?: string;
@@ -446,4 +459,3 @@ export interface GraphBlock {
   height: number;
   nodes?: string[];
 }
-

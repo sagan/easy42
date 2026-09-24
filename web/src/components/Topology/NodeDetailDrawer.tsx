@@ -923,7 +923,10 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
               }}
             >
               <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <Typography variant="caption" sx={{ color: !status.connected ? "#991B1B" : "#64748B", fontWeight: 600 }}>
+                <Typography
+                  variant="caption"
+                  sx={{ color: !status.connected ? "#991B1B" : "#64748B", fontWeight: 600 }}
+                >
                   Connectivity:
                 </Typography>
                 <Chip
@@ -940,7 +943,11 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
                   <Typography variant="caption" sx={{ color: "#991B1B", fontWeight: 700, display: "block", mb: 0.25 }}>
                     SSH Connection Error:
                   </Typography>
-                  <Typography variant="caption" className="mono-font" sx={{ color: "#DC2626", display: "block", wordBreak: "break-all", fontSize: "0.68rem" }}>
+                  <Typography
+                    variant="caption"
+                    className="mono-font"
+                    sx={{ color: "#DC2626", display: "block", wordBreak: "break-all", fontSize: "0.68rem" }}
+                  >
                     {status.error}
                   </Typography>
                 </Box>
@@ -1309,11 +1316,12 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
               Standard Device Path: <code>/etc/easy42.nft</code>
             </Typography>
             <Typography variant="body2" sx={{ fontSize: "0.78rem", color: "#334155", mb: 0.5 }}>
-              easy42 automatically generates and synchronizes this file to <code>/etc/easy42.nft</code> on the node
-              and executes it to apply the firewall and NAT rules.
+              easy42 automatically generates and synchronizes this file to <code>/etc/easy42.nft</code> on the node and
+              executes it to apply the firewall and NAT rules.
             </Typography>
             <Typography variant="body2" sx={{ fontSize: "0.78rem", color: "#334155" }}>
-              To ensure persistent autostart across reboots, use the <strong>Configure Nftables Autostart</strong> task in Device Config Helper, or add to <code>/etc/nftables.conf</code>:
+              To ensure persistent autostart across reboots, use the <strong>Configure Nftables Autostart</strong> task
+              in Device Config Helper, or add to <code>/etc/nftables.conf</code>:
             </Typography>
             <Box
               component="code"

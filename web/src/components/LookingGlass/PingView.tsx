@@ -12,8 +12,8 @@ export const PingView: React.FC<PingViewProps> = ({ ping }) => {
     ping.packet_loss_pct === 0
       ? { bg: "#ECFDF5", text: "#065F46", border: "#A7F3D0" }
       : ping.packet_loss_pct <= 20
-      ? { bg: "#FFFBEB", text: "#92400E", border: "#FDE68A" }
-      : { bg: "#FEF2F2", text: "#991B1B", border: "#FECACA" };
+        ? { bg: "#FFFBEB", text: "#92400E", border: "#FDE68A" }
+        : { bg: "#FEF2F2", text: "#991B1B", border: "#FECACA" };
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 2.5 }}>
@@ -175,8 +175,7 @@ export const PingView: React.FC<PingViewProps> = ({ ping }) => {
                         borderRadius: 4,
                         backgroundColor: "#E2E8F0",
                         "& .MuiLinearProgress-bar": {
-                          backgroundColor:
-                            pkt.time_ms < 30 ? "#10B981" : pkt.time_ms < 80 ? "#F59E0B" : "#8B5CF6",
+                          backgroundColor: pkt.time_ms < 30 ? "#10B981" : pkt.time_ms < 80 ? "#F59E0B" : "#8B5CF6",
                           borderRadius: 4,
                         },
                       }}

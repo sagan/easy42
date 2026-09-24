@@ -367,7 +367,7 @@ func GenerateWgConfigContentWithTemplate(
 	return tplutil.RenderTemplate(tmplContent, ctx)
 }
 
-// GenerateWgConfigContent generates the standard WireGuard configuration content for a node's end of a link using the default template
+// GenerateWgConfigContent generates the standard WireGuard configuration content for a node's end of a link using the custom template or default template
 func GenerateWgConfigContent(
 	selfNode *config.Node,
 	peerNode *config.Node,
@@ -376,12 +376,33 @@ func GenerateWgConfigContent(
 	vault *crypto.KeyVault,
 	args ...any,
 ) (string, error) {
-	tmplContent, err := GetDefaultWgTemplate()
+	var customTemplates []config.ConfigTemplate
+	for _, arg := range args {
+		switch v := arg.(type) {
+		case []config.ConfigTemplate:
+			customTemplates = v
+		case *config.Config:
+			if v != nil {
+				customTemplates = v.Templates
+			}
+		case config.Config:
+			customTemplates = v.Templates
+		}
+	}
+
+	var tmplContent string
+	var err error
+	if selfNode != nil && strings.TrimSpace(selfNode.WgTemplate) != "" {
+		tmplContent, err = FindTemplate(config.TemplateTypeWg, selfNode.WgTemplate, customTemplates)
+	} else {
+		tmplContent, err = GetDefaultWgTemplate()
+	}
 	if err != nil {
 		return "", err
 	}
 	return GenerateWgConfigContentWithTemplate(tmplContent, selfNode, peerNode, selfEnd, peerEnd, vault, args...)
 }
+
 
 // GetInterfaceNameWithSuffix returns the standard wg42<peer_name><suffix> interface name for internal peers,
 // or wg42-<peer_name><suffix> for external peers, truncating peerName if necessary to adhere to Linux's 15-char limit.

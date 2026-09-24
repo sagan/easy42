@@ -52,7 +52,7 @@ function renderAnsi(text: string): React.ReactNode[] {
           }}
         >
           {chunk}
-        </span>
+        </span>,
       );
     }
 
@@ -81,19 +81,14 @@ function renderAnsi(text: string): React.ReactNode[] {
         }}
       >
         {remaining}
-      </span>
+      </span>,
     );
   }
 
   return parts;
 }
 
-export const TerminalView: React.FC<TerminalViewProps> = ({
-  output,
-  command,
-  durationMs,
-  exitCode,
-}) => {
+export const TerminalView: React.FC<TerminalViewProps> = ({ output, command, durationMs, exitCode }) => {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = () => {
@@ -188,7 +183,11 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
             </IconButton>
           </Tooltip>
           <Tooltip title="Download as text file">
-            <IconButton size="small" onClick={handleDownload} sx={{ color: "#94A3B8", "&:hover": { color: "#F8FAFC" } }}>
+            <IconButton
+              size="small"
+              onClick={handleDownload}
+              sx={{ color: "#94A3B8", "&:hover": { color: "#F8FAFC" } }}
+            >
               <Download size={14} />
             </IconButton>
           </Tooltip>
@@ -209,7 +208,11 @@ export const TerminalView: React.FC<TerminalViewProps> = ({
           color: "#E2E8F0",
         }}
       >
-        {output ? renderAnsi(output) : <Typography sx={{ color: "#64748B", fontStyle: "italic" }}>No output returned</Typography>}
+        {output ? (
+          renderAnsi(output)
+        ) : (
+          <Typography sx={{ color: "#64748B", fontStyle: "italic" }}>No output returned</Typography>
+        )}
       </Box>
     </Box>
   );

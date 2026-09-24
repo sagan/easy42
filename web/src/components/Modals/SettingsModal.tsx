@@ -20,6 +20,7 @@ import {
   MenuItem,
   Checkbox,
   Divider,
+  Tooltip,
 } from "@mui/material";
 import {
   Settings as SettingsIcon,
@@ -41,9 +42,12 @@ import {
   Cloud,
   RefreshCw,
   Zap,
+  FileCode,
+  Search,
+  Check,
 } from "lucide-react";
 import { api } from "../../api/client";
-import { NetworkSettings, NetworkPolicy, CloudflareDNSConfig, DNSSyncResult } from "../../types/api";
+import { NetworkSettings, NetworkPolicy, CloudflareDNSConfig, DNSSyncResult, ConfigTemplate } from "../../types/api";
 
 export const parsePrefixList = (input: string): string[] => {
   const result: string[] = [];
@@ -91,7 +95,33 @@ interface SettingsModalProps {
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onLogoutAll }) => {
-  const [activeTab, setActiveTab] = useState<"password" | "sessions" | "network" | "policies" | "dns">("password");
+  const [activeTab, setActiveTab] = useState<"password" | "sessions" | "network" | "policies" | "templates" | "dns">(
+    "password",
+  );
+
+  // Config Templates state
+  const [templates, setTemplates] = useState<ConfigTemplate[]>([]);
+  const [templatesLoading, setTemplatesLoading] = useState(false);
+  const [templatesError, setTemplatesError] = useState<string | null>(null);
+  const [templatesSuccess, setTemplatesSuccess] = useState<string | null>(null);
+  const [templateTypeFilter, setTemplateTypeFilter] = useState<"all" | "wg" | "bird" | "nft">("all");
+  const [templateSearch, setTemplateSearch] = useState("");
+
+  // Template Dialog state (create / edit / view)
+  const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
+  const [templateDialogMode, setTemplateDialogMode] = useState<"create" | "edit" | "view">("create");
+  const [templateId, setTemplateId] = useState("");
+  const [templateName, setTemplateName] = useState("");
+  const [templateType, setTemplateType] = useState<"wg" | "bird" | "nft">("bird");
+  const [templateDesc, setTemplateDesc] = useState("");
+  const [templateContent, setTemplateContent] = useState("");
+  const [templateDialogError, setTemplateDialogError] = useState<string | null>(null);
+  const [templateDialogSaving, setTemplateDialogSaving] = useState(false);
+  const [copiedTemplateContent, setCopiedTemplateContent] = useState(false);
+
+  // Template Delete confirmation state
+  const [templateToDelete, setTemplateToDelete] = useState<ConfigTemplate | null>(null);
+  const [templateDeleting, setTemplateDeleting] = useState(false);
 
   // Cloudflare DNS state
   const [cfZoneId, setCfZoneId] = useState("");
@@ -191,6 +221,167 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
     }
   }, [open, activeTab]);
 
+  // Load templates when templates tab is opened
+  React.useEffect(() => {
+    if (open && activeTab === "templates") {
+      loadTemplates();
+    }
+  }, [open, activeTab]);
+
+  const loadTemplates = async () => {
+    setTemplatesLoading(true);
+    setTemplatesError(null);
+    try {
+      const data = await api.getTemplates();
+      setTemplates(data || []);
+    } catch (err: unknown) {
+      const e = err as Error;
+      setTemplatesError(e.message || "Failed to load templates.");
+    } finally {
+      setTemplatesLoading(false);
+    }
+  };
+
+  const handleOpenCreateTemplate = (initialType?: "wg" | "bird" | "nft") => {
+    setTemplateDialogMode("create");
+    setTemplateId("");
+    setTemplateName("");
+    setTemplateType(initialType || "bird");
+    setTemplateDesc("");
+    setTemplateContent("");
+    setTemplateDialogError(null);
+    setTemplateDialogOpen(true);
+  };
+
+  const handleOpenViewTemplate = (t: ConfigTemplate) => {
+    setTemplateDialogMode("view");
+    setTemplateId(t.id);
+    setTemplateName(t.name);
+    setTemplateType((t.type as "wg" | "bird" | "nft") || "bird");
+    setTemplateDesc(t.description || "");
+    setTemplateContent(t.content);
+    setTemplateDialogError(null);
+    setTemplateDialogOpen(true);
+  };
+
+  const handleOpenEditTemplate = (t: ConfigTemplate) => {
+    setTemplateDialogMode("edit");
+    setTemplateId(t.id);
+    setTemplateName(t.name);
+    setTemplateType((t.type as "wg" | "bird" | "nft") || "bird");
+    setTemplateDesc(t.description || "");
+    setTemplateContent(t.content);
+    setTemplateDialogError(null);
+    setTemplateDialogOpen(true);
+  };
+
+  const handleOpenCloneTemplate = (t: ConfigTemplate) => {
+    setTemplateDialogMode("create");
+    const baseId = t.id.replace(/^default_/, "");
+    setTemplateId(`${baseId}-copy`);
+    setTemplateName(`${t.name} (Copy)`);
+    setTemplateType((t.type as "wg" | "bird" | "nft") || "bird");
+    setTemplateDesc(t.description || "");
+    setTemplateContent(t.content);
+    setTemplateDialogError(null);
+    setTemplateDialogOpen(true);
+  };
+
+  const handleSaveTemplate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setTemplateDialogSaving(true);
+    setTemplateDialogError(null);
+
+    const id = templateId.trim();
+    const name = templateName.trim();
+    if (!id) {
+      setTemplateDialogError("Template ID is required.");
+      setTemplateDialogSaving(false);
+      return;
+    }
+    if (!name) {
+      setTemplateDialogError("Template Name is required.");
+      setTemplateDialogSaving(false);
+      return;
+    }
+    if (!templateContent.trim()) {
+      setTemplateDialogError("Template Content cannot be empty.");
+      setTemplateDialogSaving(false);
+      return;
+    }
+
+    try {
+      if (templateDialogMode === "create") {
+        await api.createTemplate({
+          id,
+          name,
+          type: templateType,
+          description: templateDesc.trim() || undefined,
+          content: templateContent,
+        });
+        setTemplatesSuccess(`Template "${name}" created successfully.`);
+      } else {
+        await api.updateTemplate(id, {
+          name,
+          type: templateType,
+          description: templateDesc.trim() || undefined,
+          content: templateContent,
+        });
+        setTemplatesSuccess(`Template "${name}" updated successfully.`);
+      }
+      setTemplateDialogOpen(false);
+      await loadTemplates();
+    } catch (err: unknown) {
+      const e = err as Error;
+      setTemplateDialogError(e.message || "Failed to save template.");
+    } finally {
+      setTemplateDialogSaving(false);
+    }
+  };
+
+  const handleConfirmDeleteTemplate = async () => {
+    if (!templateToDelete) return;
+    setTemplateDeleting(true);
+    try {
+      await api.deleteTemplate(templateToDelete.id);
+      setTemplatesSuccess(`Template "${templateToDelete.name}" deleted successfully.`);
+      setTemplateToDelete(null);
+      await loadTemplates();
+    } catch (err: unknown) {
+      const e = err as Error;
+      setTemplatesError(e.message || "Failed to delete template.");
+    } finally {
+      setTemplateDeleting(false);
+    }
+  };
+
+  const getTemplateTypeBadge = (type: string) => {
+    switch (type) {
+      case "wg":
+        return { label: "WireGuard", color: "#6366F1", bg: "rgba(99, 102, 241, 0.1)", border: "#C7D2FE" };
+      case "bird":
+        return { label: "BIRD 2", color: "#0284C7", bg: "rgba(2, 132, 199, 0.1)", border: "#BAE6FD" };
+      case "nft":
+        return { label: "nftables", color: "#D97706", bg: "rgba(217, 119, 6, 0.1)", border: "#FDE68A" };
+      default:
+        return { label: type, color: "#64748B", bg: "rgba(100, 116, 139, 0.1)", border: "#E2E8F0" };
+    }
+  };
+
+  const filteredTemplates = templates.filter((t) => {
+    if (templateTypeFilter !== "all" && t.type !== templateTypeFilter) {
+      return false;
+    }
+    if (templateSearch.trim()) {
+      const q = templateSearch.toLowerCase().trim();
+      const matchName = t.name.toLowerCase().includes(q);
+      const matchId = t.id.toLowerCase().includes(q);
+      const matchDesc = (t.description || "").toLowerCase().includes(q);
+      if (!matchName && !matchId && !matchDesc) return false;
+    }
+    return true;
+  });
+
   // Load DNS settings when DNS tab is opened
   React.useEffect(() => {
     if (open && activeTab === "dns") {
@@ -259,7 +450,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
         setDnsSuccess(
           force
             ? `Force Sync completed: ${res.created} created, ${res.updated} updated, ${res.deleted} deleted, ${res.ignored} unchanged.`
-            : `Sync completed: ${res.created} created, ${res.updated} updated, ${res.deleted} deleted, ${res.ignored} unchanged.`
+            : `Sync completed: ${res.created} created, ${res.updated} updated, ${res.deleted} deleted, ${res.ignored} unchanged.`,
         );
       }
     } catch (err: unknown) {
@@ -647,7 +838,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
   };
 
   return (
-    <Dialog open={open} onClose={handleClose} maxWidth={activeTab === "policies" || activeTab === "dns" ? "md" : "sm"} fullWidth>
+    <Dialog open={open} onClose={handleClose} maxWidth="lg" fullWidth>
       <DialogTitle
         sx={{
           display: "flex",
@@ -711,6 +902,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
           <Tab value="sessions" icon={<ShieldAlert size={16} />} iconPosition="start" label="Sessions" />
           <Tab value="network" icon={<Globe size={16} />} iconPosition="start" label="Peering & BGP" />
           <Tab value="policies" icon={<Shield size={16} />} iconPosition="start" label="Network Policies" />
+          <Tab value="templates" icon={<FileCode size={16} />} iconPosition="start" label="Config Template" />
           <Tab value="dns" icon={<Cloud size={16} />} iconPosition="start" label="DNS" />
         </Tabs>
       </Box>
@@ -1478,6 +1670,275 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
         </Box>
       )}
 
+      {/* Tab: Config Templates */}
+      {activeTab === "templates" && (
+        <Box sx={{ display: "flex", flexDirection: "column", height: "100%" }}>
+          <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2.5, py: 3, px: 3 }}>
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "flex-start",
+                justifyContent: "space-between",
+                gap: 2,
+                flexWrap: "wrap",
+              }}
+            >
+              <Box sx={{ flex: 1, minWidth: 240 }}>
+                <Typography variant="body2" sx={{ color: "#475569", lineHeight: 1.5 }}>
+                  Customize the Go text templates used to generate WireGuard, BIRD 2, and nftables configuration files.
+                  System default templates are listed below and can be viewed (read-only) or cloned to create custom
+                  templates for nodes.
+                </Typography>
+              </Box>
+              <Button
+                variant="contained"
+                size="small"
+                startIcon={<Plus size={16} />}
+                onClick={() => handleOpenCreateTemplate()}
+                sx={{
+                  whiteSpace: "nowrap",
+                  fontWeight: 600,
+                  bgcolor: "#4F46E5",
+                  "&:hover": { bgcolor: "#4338CA" },
+                }}
+              >
+                Create Template
+              </Button>
+            </Box>
+
+            {templatesSuccess && (
+              <Alert icon={<CheckCircle2 size={18} />} severity="success" sx={{ borderRadius: 2 }}>
+                {templatesSuccess}
+              </Alert>
+            )}
+
+            {templatesError && (
+              <Alert severity="error" sx={{ borderRadius: 2 }}>
+                {templatesError}
+              </Alert>
+            )}
+
+            {/* Filter and Search Bar */}
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 1.5,
+                flexWrap: "wrap",
+              }}
+            >
+              <Box sx={{ display: "flex", alignItems: "center", gap: 0.8, flexWrap: "wrap" }}>
+                {(["all", "wg", "bird", "nft"] as const).map((filterType) => {
+                  const count =
+                    filterType === "all" ? templates.length : templates.filter((t) => t.type === filterType).length;
+                  const label =
+                    filterType === "all"
+                      ? `All (${count})`
+                      : filterType === "wg"
+                        ? `WireGuard (${count})`
+                        : filterType === "bird"
+                          ? `BIRD (${count})`
+                          : `nftables (${count})`;
+                  const isSelected = templateTypeFilter === filterType;
+                  return (
+                    <Chip
+                      key={filterType}
+                      label={label}
+                      size="small"
+                      clickable
+                      onClick={() => setTemplateTypeFilter(filterType)}
+                      sx={{
+                        fontWeight: isSelected ? 700 : 500,
+                        bgcolor: isSelected ? "#4F46E5" : "#F1F5F9",
+                        color: isSelected ? "#FFFFFF" : "#475569",
+                        "&:hover": {
+                          bgcolor: isSelected ? "#4338CA" : "#E2E8F0",
+                        },
+                      }}
+                    />
+                  );
+                })}
+              </Box>
+              <Box sx={{ width: { xs: "100%", sm: 220 } }}>
+                <TextField
+                  size="small"
+                  placeholder="Search templates..."
+                  value={templateSearch}
+                  onChange={(e) => setTemplateSearch(e.target.value)}
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <Search size={15} color="#94A3B8" />
+                      </InputAdornment>
+                    ),
+                  }}
+                  fullWidth
+                />
+              </Box>
+            </Box>
+
+            {templatesLoading ? (
+              <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
+                <CircularProgress size={24} />
+              </Box>
+            ) : (
+              <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+                {filteredTemplates.length === 0 ? (
+                  <Box
+                    sx={{
+                      p: 4,
+                      textAlign: "center",
+                      borderRadius: 2,
+                      border: "1px dashed #CBD5E1",
+                      bgcolor: "#F8FAFC",
+                    }}
+                  >
+                    <Typography variant="body2" sx={{ color: "#94A3B8" }}>
+                      No templates match your search or filter.
+                    </Typography>
+                  </Box>
+                ) : (
+                  filteredTemplates.map((t) => {
+                    const isBuiltin = Boolean(t.is_builtin);
+                    const badge = getTemplateTypeBadge(t.type);
+                    const lineCount = (t.content || "").split("\n").length;
+                    return (
+                      <Box
+                        key={t.id}
+                        sx={{
+                          p: 2,
+                          borderRadius: 2,
+                          border: "1px solid",
+                          borderColor: isBuiltin ? "#E0E7FF" : "#E2E8F0",
+                          bgcolor: isBuiltin ? "#F8FAFC" : "#FFFFFF",
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: 1.2,
+                          transition: "all 0.15s ease",
+                          "&:hover": {
+                            borderColor: isBuiltin ? "#C7D2FE" : "#CBD5E1",
+                            boxShadow: "0 2px 4px rgba(0,0,0,0.03)",
+                          },
+                        }}
+                      >
+                        <Box
+                          sx={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            flexWrap: "wrap",
+                            gap: 1,
+                          }}
+                        >
+                          <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
+                            <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0F172A" }}>
+                              {t.name}
+                            </Typography>
+                            <Typography
+                              variant="caption"
+                              className="mono-font"
+                              sx={{ color: "#64748B", bgcolor: "#F1F5F9", px: 0.8, py: 0.2, borderRadius: 1 }}
+                            >
+                              {t.id}
+                            </Typography>
+                            <Chip
+                              label={badge.label}
+                              size="small"
+                              sx={{
+                                height: 20,
+                                fontSize: "0.68rem",
+                                fontWeight: 700,
+                                bgcolor: badge.bg,
+                                color: badge.color,
+                                border: `1px solid ${badge.border}`,
+                              }}
+                            />
+                            <Chip
+                              label={isBuiltin ? "System Default" : "Custom"}
+                              size="small"
+                              sx={{
+                                height: 20,
+                                fontSize: "0.68rem",
+                                fontWeight: 700,
+                                bgcolor: isBuiltin ? "rgba(79, 70, 229, 0.1)" : "rgba(16, 185, 129, 0.12)",
+                                color: isBuiltin ? "#4F46E5" : "#059669",
+                              }}
+                            />
+                          </Box>
+
+                          <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                            <Tooltip title="View template source (read-only)">
+                              <IconButton
+                                size="small"
+                                onClick={() => handleOpenViewTemplate(t)}
+                                sx={{ color: "#64748B" }}
+                              >
+                                <Eye size={16} />
+                              </IconButton>
+                            </Tooltip>
+                            <Tooltip title="Clone as new template">
+                              <IconButton
+                                size="small"
+                                onClick={() => handleOpenCloneTemplate(t)}
+                                sx={{ color: "#64748B" }}
+                              >
+                                <Copy size={16} />
+                              </IconButton>
+                            </Tooltip>
+                            {!isBuiltin && (
+                              <>
+                                <Tooltip title="Edit template">
+                                  <IconButton
+                                    size="small"
+                                    onClick={() => handleOpenEditTemplate(t)}
+                                    sx={{ color: "#64748B" }}
+                                  >
+                                    <Edit2 size={16} />
+                                  </IconButton>
+                                </Tooltip>
+                                <Tooltip title="Delete template">
+                                  <IconButton
+                                    size="small"
+                                    onClick={() => setTemplateToDelete(t)}
+                                    sx={{ color: "#EF4444" }}
+                                  >
+                                    <Trash2 size={16} />
+                                  </IconButton>
+                                </Tooltip>
+                              </>
+                            )}
+                          </Box>
+                        </Box>
+
+                        {t.description && (
+                          <Typography variant="body2" sx={{ color: "#64748B", fontSize: "0.825rem" }}>
+                            {t.description}
+                          </Typography>
+                        )}
+
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, mt: 0.5 }}>
+                          <Typography variant="caption" sx={{ color: "#94A3B8" }}>
+                            {lineCount} lines •{" "}
+                            {t.content ? `${Math.round((t.content.length / 1024) * 10) / 10} KB` : "0 KB"}
+                          </Typography>
+                        </Box>
+                      </Box>
+                    );
+                  })
+                )}
+              </Box>
+            )}
+          </DialogContent>
+
+          <DialogActions sx={{ px: 3, py: 2, borderTop: "1px solid #E2E8F0", backgroundColor: "#F8FAFC" }}>
+            <Button onClick={handleClose} sx={{ color: "#64748B" }}>
+              Close
+            </Button>
+          </DialogActions>
+        </Box>
+      )}
+
       {/* Tab 5: Cloudflare DNS Integration */}
       {activeTab === "dns" && (
         <form onSubmit={handleSaveDNSSettings}>
@@ -1501,8 +1962,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
                 </Typography>
               </Box>
               <Typography variant="body2" sx={{ color: "#0C4A6E", fontSize: "0.85rem", lineHeight: 1.5 }}>
-                Automatically publish your easy42 nodes' main IPv4 (<b>A</b>) and IPv6 (<b>AAAA</b>) addresses to Cloudflare DNS.
-                Records are automatically updated when adding or renaming nodes, or can be synchronized on-demand.
+                Automatically publish your easy42 nodes' main IPv4 (<b>A</b>) and IPv6 (<b>AAAA</b>) addresses to
+                Cloudflare DNS. Records are automatically updated when adding or renaming nodes, or can be synchronized
+                on-demand.
               </Typography>
             </Box>
 
@@ -1530,14 +1992,33 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
                   gap: 1,
                 }}
               >
-                <Typography variant="caption" sx={{ fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                <Typography
+                  variant="caption"
+                  sx={{ fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: "0.05em" }}
+                >
                   Sync Statistics
                 </Typography>
                 <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
-                  <Chip size="small" label={`Created: ${dnsSyncResult.created}`} sx={{ bgcolor: "#DCFCE7", color: "#15803D", fontWeight: 600 }} />
-                  <Chip size="small" label={`Updated: ${dnsSyncResult.updated}`} sx={{ bgcolor: "#E0F2FE", color: "#0369A1", fontWeight: 600 }} />
-                  <Chip size="small" label={`Deleted: ${dnsSyncResult.deleted}`} sx={{ bgcolor: "#FEE2E2", color: "#B91C1C", fontWeight: 600 }} />
-                  <Chip size="small" label={`Unchanged: ${dnsSyncResult.ignored}`} sx={{ bgcolor: "#F1F5F9", color: "#475569", fontWeight: 600 }} />
+                  <Chip
+                    size="small"
+                    label={`Created: ${dnsSyncResult.created}`}
+                    sx={{ bgcolor: "#DCFCE7", color: "#15803D", fontWeight: 600 }}
+                  />
+                  <Chip
+                    size="small"
+                    label={`Updated: ${dnsSyncResult.updated}`}
+                    sx={{ bgcolor: "#E0F2FE", color: "#0369A1", fontWeight: 600 }}
+                  />
+                  <Chip
+                    size="small"
+                    label={`Deleted: ${dnsSyncResult.deleted}`}
+                    sx={{ bgcolor: "#FEE2E2", color: "#B91C1C", fontWeight: 600 }}
+                  />
+                  <Chip
+                    size="small"
+                    label={`Unchanged: ${dnsSyncResult.ignored}`}
+                    sx={{ bgcolor: "#F1F5F9", color: "#475569", fontWeight: 600 }}
+                  />
                 </Box>
               </Box>
             )}
@@ -1644,18 +2125,47 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
                     gap: 1.2,
                   }}
                 >
-                  <Typography variant="caption" sx={{ fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                  <Typography
+                    variant="caption"
+                    sx={{ fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: "0.05em" }}
+                  >
                     DNS Records Preview (Example Node: node1)
                   </Typography>
                   <Box sx={{ display: "flex", flexDirection: "column", gap: 0.8 }}>
-                    <Box sx={{ display: "flex", alignItems: "center", gap: 1, fontFamily: "monospace", fontSize: "0.82rem", color: "#1E293B" }}>
-                      <Chip label="A" size="small" sx={{ height: 20, fontSize: "0.7rem", fontWeight: 700, bgcolor: "#E0E7FF", color: "#4338CA" }} />
+                    <Box
+                      sx={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 1,
+                        fontFamily: "monospace",
+                        fontSize: "0.82rem",
+                        color: "#1E293B",
+                      }}
+                    >
+                      <Chip
+                        label="A"
+                        size="small"
+                        sx={{ height: 20, fontSize: "0.7rem", fontWeight: 700, bgcolor: "#E0E7FF", color: "#4338CA" }}
+                      />
                       <span>{`node1.${cfBaseDomain.trim() || "easy42.example.com"}`}</span>
                       <span style={{ color: "#94A3B8" }}>→</span>
                       <span style={{ color: "#059669" }}>192.168.100.1</span>
                     </Box>
-                    <Box sx={{ display: "flex", alignItems: "center", gap: 1, fontFamily: "monospace", fontSize: "0.82rem", color: "#1E293B" }}>
-                      <Chip label="AAAA" size="small" sx={{ height: 20, fontSize: "0.7rem", fontWeight: 700, bgcolor: "#EDE9FE", color: "#6D28D9" }} />
+                    <Box
+                      sx={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 1,
+                        fontFamily: "monospace",
+                        fontSize: "0.82rem",
+                        color: "#1E293B",
+                      }}
+                    >
+                      <Chip
+                        label="AAAA"
+                        size="small"
+                        sx={{ height: 20, fontSize: "0.7rem", fontWeight: 700, bgcolor: "#EDE9FE", color: "#6D28D9" }}
+                      />
                       <span>
                         {cfPublishIPv6OwnName
                           ? `node16.${cfBaseDomain.trim() || "easy42.example.com"}`
@@ -1670,13 +2180,24 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
             )}
           </DialogContent>
 
-          <DialogActions sx={{ px: 3, py: 2, borderTop: "1px solid #E2E8F0", backgroundColor: "#F8FAFC", display: "flex", justifyContent: "space-between" }}>
+          <DialogActions
+            sx={{
+              px: 3,
+              py: 2,
+              borderTop: "1px solid #E2E8F0",
+              backgroundColor: "#F8FAFC",
+              display: "flex",
+              justifyContent: "space-between",
+            }}
+          >
             <Box sx={{ display: "flex", gap: 1 }}>
               <Button
                 variant="outlined"
                 size="small"
                 onClick={() => handleSyncDNS(false)}
-                disabled={dnsLoading || dnsSaving || dnsSyncing || dnsForceSyncing || !cfZoneId || !cfApiToken || !cfBaseDomain}
+                disabled={
+                  dnsLoading || dnsSaving || dnsSyncing || dnsForceSyncing || !cfZoneId || !cfApiToken || !cfBaseDomain
+                }
                 startIcon={dnsSyncing ? <CircularProgress size={14} color="inherit" /> : <RefreshCw size={14} />}
                 sx={{
                   fontWeight: 600,
@@ -1693,7 +2214,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
                 size="small"
                 color="warning"
                 onClick={() => handleSyncDNS(true)}
-                disabled={dnsLoading || dnsSaving || dnsSyncing || dnsForceSyncing || !cfZoneId || !cfApiToken || !cfBaseDomain}
+                disabled={
+                  dnsLoading || dnsSaving || dnsSyncing || dnsForceSyncing || !cfZoneId || !cfApiToken || !cfBaseDomain
+                }
                 startIcon={dnsForceSyncing ? <CircularProgress size={14} color="inherit" /> : <Zap size={14} />}
                 sx={{
                   fontWeight: 600,
@@ -2167,7 +2690,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
               >
                 <MenuItem value="">Disabled (Default) — Do not block any</MenuItem>
                 <MenuItem value="all">Block Ingress New — Drop incoming new or invalid packets from peer</MenuItem>
-                <MenuItem value="forward">Block Ingress New for Forwarding — Drop incoming new or invalid packets if destination is not local (fib daddr type != local)</MenuItem>
+                <MenuItem value="forward">
+                  Block Ingress New for Forwarding — Drop incoming new or invalid packets if destination is not local
+                  (fib daddr type != local)
+                </MenuItem>
               </TextField>
             </Box>
 
@@ -2355,6 +2881,210 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
             )}
           </DialogActions>
         </form>
+      </Dialog>
+
+      {/* Template Create / Edit / View Dialog */}
+      <Dialog open={templateDialogOpen} onClose={() => setTemplateDialogOpen(false)} maxWidth="md" fullWidth>
+        <form onSubmit={handleSaveTemplate}>
+          <DialogTitle sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", pb: 1.5 }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <FileCode size={20} color="#4F46E5" />
+              <Typography variant="h6" sx={{ fontWeight: 700, fontSize: "1.1rem" }}>
+                {templateDialogMode === "view"
+                  ? `View Template: ${templateName}`
+                  : templateDialogMode === "create"
+                    ? "Create Config Template"
+                    : `Edit Template: ${templateName}`}
+              </Typography>
+            </Box>
+            <IconButton size="small" onClick={() => setTemplateDialogOpen(false)}>
+              <X size={18} />
+            </IconButton>
+          </DialogTitle>
+
+          <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2, py: 2 }}>
+            {templateDialogError && (
+              <Alert severity="error" sx={{ borderRadius: 2 }}>
+                {templateDialogError}
+              </Alert>
+            )}
+
+            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" }, gap: 2 }}>
+              <TextField
+                select
+                label="Template Type"
+                size="small"
+                value={templateType}
+                onChange={(e) => setTemplateType(e.target.value as "wg" | "bird" | "nft")}
+                disabled={templateDialogMode === "view" || templateDialogSaving}
+                helperText={
+                  templateType === "wg"
+                    ? "WireGuard: /etc/wireguard/<iface>.conf"
+                    : templateType === "bird"
+                      ? "BIRD 2: /etc/bird/bird.conf"
+                      : "nftables: /etc/nftables.conf"
+                }
+              >
+                <MenuItem value="wg">WireGuard (wg)</MenuItem>
+                <MenuItem value="bird">BIRD 2 (bird)</MenuItem>
+                <MenuItem value="nft">nftables (nft)</MenuItem>
+              </TextField>
+
+              <TextField
+                label="Template ID"
+                size="small"
+                value={templateId}
+                onChange={(e) => setTemplateId(e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, ""))}
+                disabled={templateDialogMode !== "create" || templateDialogSaving}
+                placeholder="e.g. my-bird-template"
+                helperText={
+                  templateDialogMode === "create"
+                    ? "Unique ID (lowercase letters, numbers, hyphens)"
+                    : "Immutable template ID"
+                }
+              />
+            </Box>
+
+            <TextField
+              label="Template Name"
+              size="small"
+              value={templateName}
+              onChange={(e) => setTemplateName(e.target.value)}
+              disabled={templateDialogMode === "view" || templateDialogSaving}
+              placeholder="e.g. Custom BIRD with Internal OSPF"
+              fullWidth
+            />
+
+            <TextField
+              label="Description (optional)"
+              size="small"
+              value={templateDesc}
+              onChange={(e) => setTemplateDesc(e.target.value)}
+              disabled={templateDialogMode === "view" || templateDialogSaving}
+              placeholder="Explain the customizations or intended usage for this template"
+              fullWidth
+            />
+
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 0.8 }}>
+              <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <Typography variant="caption" sx={{ fontWeight: 700, color: "#475569" }}>
+                  TEMPLATE CONTENT (GO TEXT TEMPLATE)
+                </Typography>
+                <Button
+                  size="small"
+                  variant="text"
+                  startIcon={copiedTemplateContent ? <Check size={14} color="#10B981" /> : <Copy size={14} />}
+                  onClick={() => {
+                    navigator.clipboard.writeText(templateContent);
+                    setCopiedTemplateContent(true);
+                    setTimeout(() => setCopiedTemplateContent(false), 2000);
+                  }}
+                  sx={{ fontSize: "0.75rem", py: 0.2 }}
+                >
+                  {copiedTemplateContent ? "Copied!" : "Copy Template"}
+                </Button>
+              </Box>
+              <TextField
+                multiline
+                minRows={14}
+                maxRows={26}
+                value={templateContent}
+                onChange={(e) => setTemplateContent(e.target.value)}
+                disabled={templateDialogMode === "view" || templateDialogSaving}
+                fullWidth
+                inputProps={{
+                  style: {
+                    fontFamily: "monospace",
+                    fontSize: "0.8rem",
+                    lineHeight: 1.45,
+                    backgroundColor: "#0F172A",
+                    color: "#F8FAFC",
+                    padding: "12px",
+                    borderRadius: "6px",
+                  },
+                }}
+              />
+              <Typography variant="caption" sx={{ color: "#94A3B8" }}>
+                Supports standard Go text/template syntax, sprout functions, and easy42 context objects.
+              </Typography>
+            </Box>
+          </DialogContent>
+
+          <DialogActions sx={{ px: 3, py: 2, borderTop: "1px solid #E2E8F0", backgroundColor: "#F8FAFC" }}>
+            {templateDialogMode === "view" ? (
+              <>
+                <Button
+                  startIcon={<Copy size={16} />}
+                  variant="outlined"
+                  onClick={() => {
+                    const t: ConfigTemplate = {
+                      id: templateId,
+                      name: templateName,
+                      type: templateType,
+                      description: templateDesc,
+                      content: templateContent,
+                    };
+                    handleOpenCloneTemplate(t);
+                  }}
+                  sx={{ mr: "auto" }}
+                >
+                  Clone As Custom Template
+                </Button>
+                <Button onClick={() => setTemplateDialogOpen(false)} sx={{ color: "#64748B" }}>
+                  Close
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button
+                  onClick={() => setTemplateDialogOpen(false)}
+                  disabled={templateDialogSaving}
+                  sx={{ color: "#64748B" }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  variant="contained"
+                  disabled={templateDialogSaving}
+                  startIcon={templateDialogSaving && <CircularProgress size={16} color="inherit" />}
+                  sx={{ fontWeight: 600, bgcolor: "#4F46E5", "&:hover": { bgcolor: "#4338CA" } }}
+                >
+                  {templateDialogSaving
+                    ? "Saving..."
+                    : templateDialogMode === "create"
+                      ? "Create Template"
+                      : "Save Changes"}
+                </Button>
+              </>
+            )}
+          </DialogActions>
+        </form>
+      </Dialog>
+
+      {/* Delete Template Confirmation Dialog */}
+      <Dialog open={Boolean(templateToDelete)} onClose={() => setTemplateToDelete(null)} maxWidth="xs" fullWidth>
+        <DialogTitle sx={{ pb: 1 }}>Delete Config Template?</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" sx={{ color: "#475569" }}>
+            Are you sure you want to delete template <strong>{templateToDelete?.name}</strong> (
+            <code>{templateToDelete?.id}</code>)? This action cannot be undone.
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, py: 2, borderTop: "1px solid #E2E8F0", backgroundColor: "#F8FAFC" }}>
+          <Button onClick={() => setTemplateToDelete(null)} disabled={templateDeleting} sx={{ color: "#64748B" }}>
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            color="error"
+            onClick={handleConfirmDeleteTemplate}
+            disabled={templateDeleting}
+            startIcon={templateDeleting && <CircularProgress size={16} color="inherit" />}
+          >
+            {templateDeleting ? "Deleting..." : "Delete"}
+          </Button>
+        </DialogActions>
       </Dialog>
     </Dialog>
   );

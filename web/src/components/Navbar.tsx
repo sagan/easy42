@@ -181,7 +181,9 @@ export const Navbar: React.FC<NavbarProps> = ({
           />
 
           {unreachableNodes && unreachableNodes.length > 0 && (
-            <Tooltip title={`${unreachableNodes.length} device(s) currently unreachable via SSH. Click to view & retry.`}>
+            <Tooltip
+              title={`${unreachableNodes.length} device(s) currently unreachable via SSH. Click to view & retry.`}
+            >
               <Chip
                 icon={<AlertTriangle size={13} color="#DC2626" />}
                 label={`${unreachableNodes.length} Unreachable`}
