@@ -146,16 +146,15 @@ func ResolvePeerEndpointWithEntrypoint(nodeFrom *config.Node, nodeTo *config.Nod
 	if nodeFrom != nil {
 		for _, epFrom := range nodeFrom.Entrypoints {
 			for _, tagFrom := range epFrom.Tags {
-				if strings.TrimSpace(tagFrom) == "" {
+				cleanTagFrom := strings.TrimSpace(tagFrom)
+				if cleanTagFrom == "" {
 					continue
 				}
 				for i := range nodeTo.Entrypoints {
 					epTo := &nodeTo.Entrypoints[i]
-					if epFrom.IsNone() && epTo.IsNone() {
-						continue
-					}
 					for _, tagTo := range epTo.Tags {
-						if strings.EqualFold(tagFrom, tagTo) {
+						cleanTagTo := strings.TrimSpace(tagTo)
+						if cleanTagTo != "" && strings.EqualFold(cleanTagFrom, cleanTagTo) {
 							selectedEP = epTo
 							break
 						}
@@ -175,24 +174,20 @@ func ResolvePeerEndpointWithEntrypoint(nodeFrom *config.Node, nodeTo *config.Nod
 
 		// 1b. Check node-level tags if no tag matched from entrypoints
 		if selectedEP == nil {
-			hasFromIP := false
-			for _, ep := range nodeFrom.Entrypoints {
-				if !ep.IsNone() {
-					hasFromIP = true
-					break
-				}
-			}
 			for _, tagFrom := range nodeFrom.Tags {
-				if strings.TrimSpace(tagFrom) == "" {
+				cleanTagFrom := strings.TrimSpace(tagFrom)
+				if cleanTagFrom == "" {
 					continue
 				}
 				for i := range nodeTo.Entrypoints {
 					epTo := &nodeTo.Entrypoints[i]
-					if !hasFromIP && epTo.IsNone() {
+					// Destination endpoint must have a reachable host/IP
+					if epTo.IsNone() {
 						continue
 					}
 					for _, tagTo := range epTo.Tags {
-						if strings.EqualFold(tagFrom, tagTo) {
+						cleanTagTo := strings.TrimSpace(tagTo)
+						if cleanTagTo != "" && strings.EqualFold(cleanTagFrom, cleanTagTo) {
 							selectedEP = epTo
 							break
 						}
@@ -264,7 +259,6 @@ func ResolvePeerEndpointWithEntrypoint(nodeFrom *config.Node, nodeTo *config.Nod
 		if len(targetListenPort) > 0 && targetListenPort[0] > 0 {
 			port = targetListenPort[0]
 		} else if nodeFrom != nil && nodeFrom.IP != "" {
-			// By default, nodeTo listens on port derived from nodeFrom.IP
 			port = DerivePortFromIP(nodeFrom.IP)
 		} else if nodeTo.IP != "" {
 			port = DerivePortFromIP(nodeTo.IP)
