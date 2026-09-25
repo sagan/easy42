@@ -201,7 +201,7 @@ protocol pipe pipe_inet_v4 {
         {{if .use_external_table}}
         if (COMM_EXTERNAL ~ bgp_large_community) then reject;
         {{end}}
-        if (source ~ [ RTS_BGP ]) && (net ~ INTERNET) then accept;
+        if (source ~ [ RTS_BGP, RTS_STATIC ]) && (net ~ INTERNET) then accept;
         reject;
     };
 }
@@ -213,6 +213,7 @@ protocol kernel kernel_inet_v4 {
     ipv4 {
         table inet_table4;
         export filter {
+            if dest ~ [ RTD_BLACKHOLE, RTD_UNREACHABLE, RTD_PROHIBIT ] then reject;
             krt_prefsrc = SELF_IP;
             accept;
         };
@@ -362,7 +363,7 @@ protocol pipe pipe_inet_v6 {
         {{if .use_external_table}}
         if (COMM_EXTERNAL ~ bgp_large_community) then reject;
         {{end}}
-        if (source ~ [ RTS_BGP ]) && (net ~ INTERNET6) then accept;
+        if (source ~ [ RTS_BGP, RTS_STATIC ]) && (net ~ INTERNET6) then accept;
         reject;
     };
 }
@@ -374,6 +375,7 @@ protocol kernel kernel_inet_v6 {
     ipv6 {
         table inet_table6;
         export filter {
+            if dest ~ [ RTD_BLACKHOLE, RTD_UNREACHABLE, RTD_PROHIBIT ] then reject;
             {{if .ip6}}
             krt_prefsrc = {{ .ip6 }};
             {{end}}
