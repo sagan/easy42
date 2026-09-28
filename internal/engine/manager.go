@@ -238,15 +238,19 @@ func (m *Manager) AddNode(node config.Node) error {
 	defer m.mu.Unlock()
 
 	node.Name = strings.TrimSpace(node.Name)
-	if node.IsExternal {
-		if len(node.Name) == 0 || len(node.Name) > 10 {
-			return errors.New("external peer name must be between 1 and 10 characters")
+	if node.Name == "" {
+		if node.IsExternal {
+			return errors.New("external peer name cannot be empty")
 		}
-	} else {
-		if len(node.Name) == 0 || len(node.Name) > 11 {
-			return errors.New("node name must be between 1 and 11 characters")
+		return errors.New("node name cannot be empty")
+	}
+
+	for _, ch := range node.Name {
+		if !((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '-' || ch == '_') {
+			return errors.New("node name may only contain alphanumeric characters, hyphens, and underscores")
 		}
 	}
+
 	if !node.IsExternal && (node.Host == "" || node.IP == "") {
 		return errors.New("host and IP are required for managed nodes")
 	}
@@ -258,9 +262,13 @@ func (m *Manager) AddNode(node config.Node) error {
 	}
 
 	cfg := m.store.Get()
+	newIface := compiler.GetInterfaceName(node.Name, node.IsExternal)
 	for _, existing := range cfg.Nodes {
 		if strings.EqualFold(existing.Name, node.Name) {
 			return fmt.Errorf("node with name %s already exists", node.Name)
+		}
+		if strings.EqualFold(compiler.GetInterfaceName(existing.Name, existing.IsExternal), newIface) {
+			return fmt.Errorf("interface name %s conflicts with existing node %s", newIface, existing.Name)
 		}
 		if node.IP != "" && !node.IsExternal && !existing.IsExternal && existing.IP == node.IP {
 			return fmt.Errorf("node with IP %s already exists (%s)", node.IP, existing.Name)
@@ -321,21 +329,28 @@ func (m *Manager) UpdateNode(name string, updated config.Node) error {
 	}
 
 	updated.Name = strings.TrimSpace(updated.Name)
-	if updated.IsExternal {
-		if len(updated.Name) == 0 || len(updated.Name) > 10 {
-			return errors.New("external peer name must be between 1 and 10 characters")
+	if updated.Name == "" {
+		if updated.IsExternal {
+			return errors.New("external peer name cannot be empty")
 		}
-	} else {
-		if len(updated.Name) == 0 || len(updated.Name) > 11 {
-			return errors.New("node name must be between 1 and 11 characters")
+		return errors.New("node name cannot be empty")
+	}
+
+	for _, ch := range updated.Name {
+		if !((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '-' || ch == '_') {
+			return errors.New("node name may only contain alphanumeric characters, hyphens, and underscores")
 		}
 	}
 
-	// Check name uniqueness if changed
+	// Check name uniqueness and interface uniqueness if changed
 	if updated.Name != name {
+		newIface := compiler.GetInterfaceName(updated.Name, updated.IsExternal)
 		for _, n := range cfg.Nodes {
-			if n.Name == updated.Name {
+			if strings.EqualFold(n.Name, updated.Name) {
 				return ErrNodeAlreadyExist
+			}
+			if n.Name != name && strings.EqualFold(compiler.GetInterfaceName(n.Name, n.IsExternal), newIface) {
+				return fmt.Errorf("interface name %s conflicts with existing node %s", newIface, n.Name)
 			}
 		}
 	}
@@ -675,14 +690,11 @@ func (m *Manager) RenameNode(oldName, newName string) (*config.Node, error) {
 		return &cp, nil
 	}
 
-	if targetNode.IsExternal {
-		if len(newName) == 0 || len(newName) > 10 {
-			return nil, errors.New("external peer name must be between 1 and 10 characters")
+	if newName == "" {
+		if targetNode.IsExternal {
+			return nil, errors.New("external peer name cannot be empty")
 		}
-	} else {
-		if len(newName) == 0 || len(newName) > 11 {
-			return nil, errors.New("node name must be between 1 and 11 characters")
-		}
+		return nil, errors.New("node name cannot be empty")
 	}
 
 	// Validate allowed characters (letters, digits, hyphen, underscore)
@@ -692,10 +704,14 @@ func (m *Manager) RenameNode(oldName, newName string) (*config.Node, error) {
 		}
 	}
 
-	// Check if new name already exists
+	// Check if new name already exists or generated interface conflicts
+	newIface := compiler.GetInterfaceName(newName, targetNode.IsExternal)
 	for _, n := range cfg.Nodes {
 		if strings.EqualFold(n.Name, newName) {
 			return nil, fmt.Errorf("node with name %s already exists", newName)
+		}
+		if n.Name != oldName && strings.EqualFold(compiler.GetInterfaceName(n.Name, n.IsExternal), newIface) {
+			return nil, fmt.Errorf("interface name %s conflicts with existing node %s", newIface, n.Name)
 		}
 	}
 

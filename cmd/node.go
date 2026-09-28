@@ -196,7 +196,7 @@ var nodeNftCmd = &cobra.Command{
 }
 
 func init() {
-	nodeAddCmd.Flags().StringVarP(&nodeName, "name", "n", "", "Node name (max 11 chars)")
+	nodeAddCmd.Flags().StringVarP(&nodeName, "name", "n", "", "Node name")
 	nodeAddCmd.Flags().StringVarP(&nodeHost, "host", "H", "", "SSH host or alias")
 	nodeAddCmd.Flags().StringVarP(&nodeIP, "ip", "i", "", "Main IPv4 address")
 	nodeAddCmd.Flags().StringVar(&nodeIP6, "ip6", "", "Main IPv6 address")

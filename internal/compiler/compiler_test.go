@@ -444,6 +444,34 @@ func TestGetInterfaceName(t *testing.T) {
 		t.Errorf("External interface name %s exceeds Linux 15 char limit: %d", ifaceExt, len(ifaceExt))
 	}
 
+	// Long node name truncated to 15 chars
+	if iface := GetInterfaceName("verylongnodename"); iface != "wg42verylongnod" {
+		t.Errorf("Expected wg42verylongnod, got %s", iface)
+	}
+	if len(GetInterfaceName("verylongnodename")) != 15 {
+		t.Errorf("Expected length 15, got %d", len(GetInterfaceName("verylongnodename")))
+	}
+
+	// Trailing hyphen conversion to valid name
+	if iface := GetInterfaceName("verylongnode-name"); iface != "wg42verylongnod" {
+		t.Errorf("Expected wg42verylongnod, got %s", iface)
+	}
+	// "alpha-beta--extra" -> prefix "wg42" + "alpha-beta-" (15 chars, ends with -) -> "wg42alpha-beta"
+	if iface := GetInterfaceName("alpha-beta--extra"); iface != "wg42alpha-beta" {
+		t.Errorf("Expected wg42alpha-beta, got %s", iface)
+	}
+	// External trailing hyphen: "tokyo-nod--peer" -> prefix "wg42-" + "tokyo-nod-" (15 chars) -> "wg42-tokyo-nod"
+	if iface := GetInterfaceName("tokyo-nod--peer", true); iface != "wg42-tokyo-nod" {
+		t.Errorf("Expected wg42-tokyo-nod, got %s", iface)
+	}
+	// All hyphens fallback
+	if iface := GetInterfaceName("-----"); iface != "wg42node" {
+		t.Errorf("Expected wg42node for all hyphens, got %s", iface)
+	}
+	if iface := GetInterfaceName("-----", true); iface != "wg42-peer" {
+		t.Errorf("Expected wg42-peer for external all hyphens, got %s", iface)
+	}
+
 	// Suffix extraction
 	if s := ExtractInterfaceSuffix("wg42bar", "bar"); s != "" {
 		t.Errorf("Expected empty suffix for wg42bar, got %s", s)

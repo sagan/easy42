@@ -91,15 +91,36 @@ func TestManager_RenameNode(t *testing.T) {
 		t.Fatalf("Expected error when renaming to existing name, got: %v", err)
 	}
 
-	// 2. Check invalid name lengths
-	_, err = mgr.RenameNode("node-a", "toolongnodename")
-	if err == nil || !strings.Contains(err.Error(), "between 1 and 11") {
-		t.Fatalf("Expected length error for internal node > 11 chars, got: %v", err)
+	// 2. Check empty name error
+	_, err = mgr.RenameNode("node-a", "")
+	if err == nil || !strings.Contains(err.Error(), "cannot be empty") {
+		t.Fatalf("Expected error for empty node name, got: %v", err)
 	}
 
-	_, err = mgr.RenameNode("dn42ext", "toolongpeername")
-	if err == nil || !strings.Contains(err.Error(), "between 1 and 10") {
-		t.Fatalf("Expected length error for external peer > 10 chars, got: %v", err)
+	_, err = mgr.RenameNode("dn42ext", "")
+	if err == nil || !strings.Contains(err.Error(), "cannot be empty") {
+		t.Fatalf("Expected error for empty external peer name, got: %v", err)
+	}
+
+	// 2b. Long node names are allowed and truncated
+	renamedLong, err := mgr.RenameNode("node-a", "verylongnodename")
+	if err != nil {
+		t.Fatalf("Expected success renaming to long node name, got: %v", err)
+	}
+	if renamedLong.Name != "verylongnodename" {
+		t.Fatalf("Expected name verylongnodename, got: %s", renamedLong.Name)
+	}
+
+	// 2c. Interface conflict check: renaming node-b to another name that truncates to the same wg42* interface
+	_, err = mgr.RenameNode("node-b", "verylongnodename2")
+	if err == nil || !strings.Contains(err.Error(), "conflicts with existing node") {
+		t.Fatalf("Expected interface conflict error, got: %v", err)
+	}
+
+	// Rename back to node-a for remaining test steps
+	_, err = mgr.RenameNode("verylongnodename", "node-a")
+	if err != nil {
+		t.Fatalf("Failed to rename back to node-a: %v", err)
 	}
 
 	// 3. Check invalid characters

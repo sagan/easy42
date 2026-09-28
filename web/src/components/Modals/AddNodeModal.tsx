@@ -32,6 +32,7 @@ import {
 import { api } from "../../api/client";
 import { Node, Entrypoint, KernelRouteRule, ConfigHook, ConfigTemplate } from "../../types/api";
 import { MarkdownView } from "../Common/MarkdownView";
+import { getInterfaceName } from "../../utils/interface";
 
 const HOOK_TYPES = [
   { value: "bird", label: "BIRD: Global / Post (e.g. protocol direct)" },
@@ -47,6 +48,7 @@ const HOOK_TYPES = [
 interface AddNodeModalProps {
   open: boolean;
   nodeToEdit?: Node | null;
+  existingNodes?: Node[];
   onClose: () => void;
   onNodeAdded?: (node: Node) => void;
   onNodeUpdated?: (node: Node) => void;
@@ -91,6 +93,7 @@ export const isNonLinkLocalIPv6 = (addrStr: string): boolean => {
 export const AddNodeModal: React.FC<AddNodeModalProps> = ({
   open,
   nodeToEdit,
+  existingNodes = [],
   onClose,
   onNodeAdded,
   onNodeUpdated,
@@ -408,6 +411,19 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
     setConfigHooks(configHooks.map((h) => (h.id === id ? { ...h, [field]: value } : h)));
   };
 
+  const cleanName = name.trim();
+  const generatedIface = cleanName ? getInterfaceName(cleanName, isExternal) : "";
+  const duplicateNameNode = existingNodes.find(
+    (n) =>
+      (!nodeToEdit || n.name.toLowerCase() !== nodeToEdit.name.toLowerCase()) &&
+      n.name.toLowerCase() === cleanName.toLowerCase(),
+  );
+  const conflictingIfaceNode = existingNodes.find(
+    (n) =>
+      (!nodeToEdit || n.name.toLowerCase() !== nodeToEdit.name.toLowerCase()) &&
+      getInterfaceName(n.name, Boolean(n.is_external)).toLowerCase() === generatedIface.toLowerCase(),
+  );
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isExternal) {
@@ -420,6 +436,17 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
         setSaveError("Name, SSH Host, and Main IP are required");
         return;
       }
+    }
+
+    if (duplicateNameNode) {
+      setSaveError(`Node with name "${cleanName}" already exists`);
+      return;
+    }
+    if (conflictingIfaceNode) {
+      setSaveError(
+        `Generated WireGuard interface "${generatedIface}" conflicts with existing node "${conflictingIfaceNode.name}"`,
+      );
+      return;
     }
 
     setSaving(true);
@@ -661,18 +688,30 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
 
               <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
                 <TextField
-                  label="Peer Name (Max 10 chars)"
+                  label="Peer Name"
                   size="small"
                   value={name}
                   onChange={(e) =>
                     setName(
                       e.target.value
                         .toLowerCase()
-                        .replace(/[^a-z0-9-]/g, "")
-                        .slice(0, 10),
+                        .replace(/[^a-z0-9-_]/g, ""),
                     )
                   }
-                  helperText="Unique identifier, e.g. dn42-peer1"
+                  error={Boolean(name && (duplicateNameNode || conflictingIfaceNode))}
+                  helperText={
+                    duplicateNameNode ? (
+                      <span style={{ color: "#DC2626" }}>Node name &quot;{cleanName}&quot; already exists!</span>
+                    ) : conflictingIfaceNode ? (
+                      <span style={{ color: "#DC2626" }}>
+                        Interface &quot;{generatedIface}&quot; conflicts with node &quot;{conflictingIfaceNode.name}&quot;!
+                      </span>
+                    ) : generatedIface ? (
+                      `Interface: ${generatedIface}`
+                    ) : (
+                      "Unique identifier, e.g. dn42-peer1"
+                    )
+                  }
                   required
                   disabled={saving || Boolean(nodeToEdit)}
                 />
@@ -943,18 +982,30 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
 
                 <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
                   <TextField
-                    label="Node Name (Max 11 chars)"
+                    label="Node Name"
                     size="small"
                     value={name}
                     onChange={(e) =>
                       setName(
                         e.target.value
                           .toLowerCase()
-                          .replace(/[^a-z0-9-]/g, "")
-                          .slice(0, 11),
+                          .replace(/[^a-z0-9-_]/g, ""),
                       )
                     }
-                    helperText="Unique hostname in mesh"
+                    error={Boolean(name && (duplicateNameNode || conflictingIfaceNode))}
+                    helperText={
+                      duplicateNameNode ? (
+                        <span style={{ color: "#DC2626" }}>Node name &quot;{cleanName}&quot; already exists!</span>
+                      ) : conflictingIfaceNode ? (
+                        <span style={{ color: "#DC2626" }}>
+                          Interface &quot;{generatedIface}&quot; conflicts with node &quot;{conflictingIfaceNode.name}&quot;!
+                        </span>
+                      ) : generatedIface ? (
+                        `Interface: ${generatedIface}`
+                      ) : (
+                        "Unique hostname in mesh"
+                      )
+                    }
                     required
                     disabled={saving}
                   />
@@ -1724,7 +1775,13 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
             type="submit"
             variant="contained"
             color="primary"
-            disabled={saving || !name || (!isExternal && (!sshHost || !ip))}
+            disabled={
+              saving ||
+              !name ||
+              Boolean(duplicateNameNode) ||
+              Boolean(conflictingIfaceNode) ||
+              (!isExternal && (!sshHost || !ip))
+            }
             startIcon={saving ? <CircularProgress size={16} color="inherit" /> : null}
           >
             {nodeToEdit ? (saving ? "Saving..." : "Save Changes") : saving ? "Adding Node..." : "Add Node"}

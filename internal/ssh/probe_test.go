@@ -59,9 +59,9 @@ func TestSanitizeNodeName(t *testing.T) {
 		expected string
 	}{
 		{"my-host", "my-host"},
-		{"My_Host.Local", "my-host-loc"}, // sanitized and truncated to 11 chars
+		{"My_Host.Local", "my-host-local"}, // sanitized
 		{"!!!", "node"},
-		{"node-with-a-very-long-name", "node-with-a"},
+		{"node-with-a-very-long-name", "node-with-a-very-long-name"},
 	}
 
 	for _, tt := range tests {

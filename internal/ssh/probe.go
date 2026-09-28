@@ -126,7 +126,7 @@ func ProbeHost(client *ssh.Client, host string, existingNodes []config.Node) (*P
 		}
 	}
 
-	// 3. Compute Suggested Node Name (max 11 chars, valid hostname)
+	// 3. Compute Suggested Node Name (valid hostname)
 	suggestedName := sanitizeNodeName(hostname)
 	suggestedName = makeUniqueNodeName(suggestedName, existingNodes)
 
@@ -231,9 +231,6 @@ var invalidCharRegex = regexp.MustCompile(`[^a-zA-Z0-9\-]`)
 func sanitizeNodeName(raw string) string {
 	cleaned := invalidCharRegex.ReplaceAllString(strings.ToLower(raw), "-")
 	cleaned = strings.Trim(cleaned, "-")
-	if len(cleaned) > 11 {
-		cleaned = cleaned[:11]
-	}
 	if cleaned == "" {
 		cleaned = "node"
 	}
@@ -252,14 +249,7 @@ func makeUniqueNodeName(base string, existing []config.Node) string {
 
 	// Append suffix
 	for i := 1; i <= 99; i++ {
-		suffix := fmt.Sprintf("-%d", i)
-		maxBaseLen := 11 - len(suffix)
-		var candidate string
-		if len(base) > maxBaseLen {
-			candidate = base[:maxBaseLen] + suffix
-		} else {
-			candidate = base + suffix
-		}
+		candidate := fmt.Sprintf("%s-%d", base, i)
 		if !names[candidate] {
 			return candidate
 		}

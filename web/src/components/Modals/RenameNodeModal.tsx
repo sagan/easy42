@@ -15,6 +15,7 @@ import {
 import { Tag, Server, Globe, AlertCircle, CheckCircle2 } from "lucide-react";
 import { Node } from "../../types/api";
 import { api } from "../../api/client";
+import { getInterfaceName } from "../../utils/interface";
 
 interface RenameNodeModalProps {
   node: Node | null;
@@ -36,7 +37,6 @@ export const RenameNodeModal: React.FC<RenameNodeModalProps> = ({
   const [error, setError] = useState<string | null>(null);
 
   const isExternal = Boolean(node?.is_external);
-  const maxLength = isExternal ? 10 : 11;
 
   useEffect(() => {
     if (node && open) {
@@ -52,15 +52,20 @@ export const RenameNodeModal: React.FC<RenameNodeModalProps> = ({
   const nameExists = existingNodes.some(
     (n) => n.name.toLowerCase() === trimmedNewName.toLowerCase() && n.name.toLowerCase() !== node.name.toLowerCase(),
   );
-  const isValidLength = trimmedNewName.length > 0 && trimmedNewName.length <= maxLength;
-  const canSubmit = isValidLength && !isSameName && !nameExists && !saving;
+  const newIfaceName = trimmedNewName ? getInterfaceName(trimmedNewName, isExternal) : "";
+  const conflictingIfaceNode = existingNodes.find(
+    (n) =>
+      n.name.toLowerCase() !== node.name.toLowerCase() &&
+      getInterfaceName(n.name, Boolean(n.is_external)).toLowerCase() === newIfaceName.toLowerCase(),
+  );
+  const isValidLength = trimmedNewName.length > 0;
+  const canSubmit = isValidLength && !isSameName && !nameExists && !conflictingIfaceNode && !saving;
 
   const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     // Sanitize: allow lowercase alphanumeric, hyphen, underscore
     const val = e.target.value
       .toLowerCase()
-      .replace(/[^a-z0-9-_]/g, "")
-      .slice(0, maxLength);
+      .replace(/[^a-z0-9-_]/g, "");
     setNewName(val);
     if (error) setError(null);
   };
@@ -175,17 +180,21 @@ export const RenameNodeModal: React.FC<RenameNodeModalProps> = ({
               autoFocus
               fullWidth
               size="small"
-              label={`New Node Name (Max ${maxLength} chars)`}
+              label={isExternal ? "New Peer Name" : "New Node Name"}
               value={newName}
               onChange={handleNameChange}
-              error={Boolean(trimmedNewName && (nameExists || isSameName || !isValidLength))}
+              error={Boolean(trimmedNewName && (nameExists || isSameName || Boolean(conflictingIfaceNode) || !isValidLength))}
               helperText={
                 nameExists ? (
                   <span style={{ color: "#DC2626" }}>Node name &quot;{trimmedNewName}&quot; already exists!</span>
+                ) : conflictingIfaceNode ? (
+                  <span style={{ color: "#DC2626" }}>
+                    Interface &quot;{newIfaceName}&quot; conflicts with existing node &quot;{conflictingIfaceNode.name}&quot;!
+                  </span>
                 ) : isSameName ? (
                   "Please enter a different name"
                 ) : (
-                  `Unique hostname in mesh (1-${maxLength} alphanumeric/hyphen chars)`
+                  `Unique hostname in mesh (alphanumeric/hyphen/underscore chars)`
                 )
               }
               disabled={saving}
@@ -193,17 +202,28 @@ export const RenameNodeModal: React.FC<RenameNodeModalProps> = ({
                 endAdornment: canSubmit ? <CheckCircle2 size={18} color="#10B981" /> : undefined,
               }}
             />
-            <Box sx={{ display: "flex", justifyContent: "flex-end", px: 0.5 }}>
+            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", px: 0.5 }}>
               <Typography
                 variant="caption"
                 className="mono-font"
                 sx={{
-                  color: trimmedNewName.length > maxLength ? "#DC2626" : "#94A3B8",
+                  color: conflictingIfaceNode ? "#DC2626" : "#4F46E5",
                   fontWeight: 600,
                   fontSize: "0.75rem",
                 }}
               >
-                {trimmedNewName.length}/{maxLength}
+                Interface: {newIfaceName || "—"} ({newIfaceName.length}/15)
+              </Typography>
+              <Typography
+                variant="caption"
+                className="mono-font"
+                sx={{
+                  color: "#94A3B8",
+                  fontWeight: 600,
+                  fontSize: "0.75rem",
+                }}
+              >
+                {trimmedNewName.length} chars
               </Typography>
             </Box>
           </Box>
@@ -222,8 +242,7 @@ export const RenameNodeModal: React.FC<RenameNodeModalProps> = ({
             </Typography>
             <Typography variant="caption" sx={{ color: "#475569", lineHeight: 1.4, display: "block" }}>
               Renaming replaces this node name in <code>config.json</code>, all connected links, and WireGuard
-              interfaces (
-              <code>{isExternal ? `wg42-${trimmedNewName || "..."}` : `wg42${trimmedNewName || "..."}`}</code>).
+              interfaces (<code>{newIfaceName || (isExternal ? "wg42-..." : "wg42...")}</code>).
             </Typography>
           </Box>
         </DialogContent>

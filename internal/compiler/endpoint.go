@@ -152,6 +152,9 @@ func ResolvePeerEndpointWithEntrypoint(nodeFrom *config.Node, nodeTo *config.Nod
 				}
 				for i := range nodeTo.Entrypoints {
 					epTo := &nodeTo.Entrypoints[i]
+					if epFrom.IsNone() && epTo.IsNone() {
+						continue
+					}
 					for _, tagTo := range epTo.Tags {
 						cleanTagTo := strings.TrimSpace(tagTo)
 						if cleanTagTo != "" && strings.EqualFold(cleanTagFrom, cleanTagTo) {

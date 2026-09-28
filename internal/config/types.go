@@ -184,7 +184,7 @@ type Hook = ConfigHook
 
 // Node represents a device/node in the network
 type Node struct {
-	Name          string            `json:"name"`                  // Max 11 chars hostname (max 10 chars for external peers)
+	Name          string            `json:"name"`                  // Node name / hostname (WireGuard interface wg42* is truncated to 15 chars)
 	Host          string            `json:"host,omitempty"`        // SSH host / alias / IP (omitted for external peers)
 	IsExternal    bool              `json:"is_external,omitempty"` // True if external unmanaged peer (e.g. DN42)
 	Description   string            `json:"description,omitempty"` // Optional description / contact info

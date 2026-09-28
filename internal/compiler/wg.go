@@ -405,26 +405,45 @@ func GenerateWgConfigContent(
 
 
 // GetInterfaceNameWithSuffix returns the standard wg42<peer_name><suffix> interface name for internal peers,
-// or wg42-<peer_name><suffix> for external peers, truncating peerName if necessary to adhere to Linux's 15-char limit.
+// or wg42-<peer_name><suffix> for external peers, truncating and sanitizing to adhere to Linux's 15-char limit.
 func GetInterfaceNameWithSuffix(peerName string, suffix string, isExternal ...bool) string {
 	cleanName := strings.TrimSpace(peerName)
 	ext := len(isExternal) > 0 && isExternal[0]
 	prefix := "wg42"
-	maxPeerLen := 11
 	if ext {
 		prefix = "wg42-"
-		maxPeerLen = 10
 	}
-	if suffix != "" {
-		maxPeerLen -= len(suffix)
-		if maxPeerLen < 0 {
-			maxPeerLen = 0
-		}
+
+	maxPeerLen := 15 - len(prefix) - len(suffix)
+	if maxPeerLen < 0 {
+		maxPeerLen = 0
 	}
+
 	if len(cleanName) > maxPeerLen {
 		cleanName = cleanName[:maxPeerLen]
 	}
-	return fmt.Sprintf("%s%s%s", prefix, cleanName, suffix)
+
+	// Truncated interface name must be valid (cannot end with "-" or "_")
+	if suffix == "" {
+		cleanName = strings.TrimRight(cleanName, "-_")
+	}
+
+	if cleanName == "" && suffix == "" {
+		if ext {
+			cleanName = "peer"
+		} else {
+			cleanName = "node"
+		}
+	}
+
+	res := fmt.Sprintf("%s%s%s", prefix, cleanName, suffix)
+	if len(res) > 15 {
+		res = res[:15]
+	}
+	for len(res) > len(prefix) && (strings.HasSuffix(res, "-") || strings.HasSuffix(res, "_")) {
+		res = strings.TrimRight(res, "-_")
+	}
+	return res
 }
 
 // GetInterfaceName returns the standard wg42<peer_name> interface name for internal peers,
@@ -433,7 +452,7 @@ func GetInterfaceName(peerName string, isExternal ...bool) string {
 	return GetInterfaceNameWithSuffix(peerName, "", isExternal...)
 }
 
-// GetExternalInterfaceName returns the external wg42-<peer_name> interface name (max 10 chars peer name)
+// GetExternalInterfaceName returns the external wg42-<peer_name> interface name
 func GetExternalInterfaceName(peerName string) string {
 	return GetInterfaceName(peerName, true)
 }

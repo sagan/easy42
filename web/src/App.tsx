@@ -563,6 +563,7 @@ export const App: React.FC = () => {
         <AddNodeModal
           open={addNodeOpen}
           nodeToEdit={nodeToEdit}
+          existingNodes={nodes}
           onClose={() => {
             setAddNodeOpen(false);
             setNodeToEdit(null);

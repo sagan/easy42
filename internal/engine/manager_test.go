@@ -829,23 +829,34 @@ func TestExternalNodeAndPeering(t *testing.T) {
 		}
 	}
 
-	// Test external node name max length validation (max 10 chars)
-	tooLongExt := config.Node{
+	// Test external node with > 10 chars succeeds
+	longExt := config.Node{
 		Name:       "12345678901", // 11 chars
 		IsExternal: true,
 		ASN:        4242421111,
 	}
-	if err := mgr.AddNode(tooLongExt); err == nil {
-		t.Errorf("Expected error adding external peer with 11 chars, got nil")
+	if err := mgr.AddNode(longExt); err != nil {
+		t.Errorf("Expected success adding external peer with 11 chars, got: %v", err)
 	}
 
-	exactExt := config.Node{
-		Name:       "1234567890", // 10 chars
+	// Adding another node whose truncated interface name conflicts fails
+	conflictingExt := config.Node{
+		Name:       "12345678901_diff", // also truncates to wg42-1234567890
 		IsExternal: true,
-		ASN:        4242421111,
+		ASN:        4242421112,
 	}
-	if err := mgr.AddNode(exactExt); err != nil {
-		t.Errorf("Expected success adding external peer with 10 chars, got: %v", err)
+	if err := mgr.AddNode(conflictingExt); err == nil {
+		t.Errorf("Expected error adding external peer with conflicting interface, got nil")
+	}
+
+	// Empty name fails
+	emptyExt := config.Node{
+		Name:       "",
+		IsExternal: true,
+		ASN:        4242421113,
+	}
+	if err := mgr.AddNode(emptyExt); err == nil {
+		t.Errorf("Expected error adding external peer with empty name, got nil")
 	}
 
 	// 6. Test RefreshNodeStatus for external node returns connected/synthetic without SSH
@@ -1883,6 +1894,87 @@ func TestLinkAssignIPv4(t *testing.T) {
 			link3.From.Address4, foundLink.From.Address4, link2.From.Address4)
 	}
 }
+
+func TestLongNodeNamesAndInterfaceConflicts(t *testing.T) {
+	tmpDir := t.TempDir()
+	store := config.NewStore(tmpDir)
+	rawPass, err := store.Initialize()
+	if err != nil {
+		t.Fatalf("Failed to init store: %v", err)
+	}
+
+	mgr := NewManager(store)
+	if err := mgr.Unlock(rawPass); err != nil {
+		t.Fatalf("Failed to unlock manager: %v", err)
+	}
+
+	// 1. Add node with long name (16 chars)
+	longNode1 := config.Node{
+		Name: "verylongnodename",
+		Host: "192.168.1.10",
+		IP:   "192.168.100.10",
+		ASN:  4224420010,
+	}
+	if err := mgr.AddNode(longNode1); err != nil {
+		t.Fatalf("Expected success adding longNode1, got: %v", err)
+	}
+	iface1 := compiler.GetInterfaceName(longNode1.Name, longNode1.IsExternal)
+	if iface1 != "wg42verylongnod" || len(iface1) != 15 {
+		t.Fatalf("Expected interface wg42verylongnod (15 chars), got: %s (%d chars)", iface1, len(iface1))
+	}
+
+	// 2. Add another node whose truncated interface conflicts
+	conflictingNode := config.Node{
+		Name: "verylongnodename2",
+		Host: "192.168.1.11",
+		IP:   "192.168.100.11",
+		ASN:  4224420011,
+	}
+	if err := mgr.AddNode(conflictingNode); err == nil || !strings.Contains(err.Error(), "conflicts with existing node") {
+		t.Fatalf("Expected conflict error adding conflictingNode, got: %v", err)
+	}
+
+	// 3. Node whose truncated name would end with hyphen is converted deterministically
+	hyphenNode := config.Node{
+		Name: "alpha-beta--extra",
+		Host: "192.168.1.12",
+		IP:   "192.168.100.12",
+		ASN:  4224420012,
+	}
+	if err := mgr.AddNode(hyphenNode); err != nil {
+		t.Fatalf("Expected success adding hyphenNode, got: %v", err)
+	}
+	ifaceHyphen := compiler.GetInterfaceName(hyphenNode.Name, hyphenNode.IsExternal)
+	if ifaceHyphen != "wg42alpha-beta" {
+		t.Fatalf("Expected interface wg42alpha-beta (no trailing hyphen), got: %s", ifaceHyphen)
+	}
+
+	// 4. External node with long name
+	longExt := config.Node{
+		Name:       "extpeerlongname",
+		IsExternal: true,
+		ASN:        4242421234,
+	}
+	if err := mgr.AddNode(longExt); err != nil {
+		t.Fatalf("Expected success adding longExt, got: %v", err)
+	}
+	ifaceExt := compiler.GetInterfaceName(longExt.Name, longExt.IsExternal)
+	if ifaceExt != "wg42-extpeerlon" || len(ifaceExt) != 15 {
+		t.Fatalf("Expected interface wg42-extpeerlon (15 chars), got: %s", ifaceExt)
+	}
+
+	// 5. UpdateNode interface conflict
+	hyphenNode.Name = "verylongnodenametest" // would conflict with verylongnodename
+	if err := mgr.UpdateNode("alpha-beta--extra", hyphenNode); err == nil || !strings.Contains(err.Error(), "conflicts with existing node") {
+		t.Fatalf("Expected conflict error on UpdateNode, got: %v", err)
+	}
+
+	// 6. RenameNode interface conflict
+	if _, err := mgr.RenameNode("alpha-beta--extra", "verylongnodenametest"); err == nil || !strings.Contains(err.Error(), "conflicts with existing node") {
+		t.Fatalf("Expected conflict error on RenameNode, got: %v", err)
+	}
+}
+
 
 
 
