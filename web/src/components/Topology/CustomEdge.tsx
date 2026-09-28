@@ -64,6 +64,26 @@ export const CustomEdge: React.FC<EdgeProps> = ({
   const isFromCostOverridden = Boolean(link?.from?.cost && link.from.cost !== 0);
   const isToCostOverridden = Boolean(link?.to?.cost && link.to.cost !== 0);
 
+  // In WireGuard links, interface names are named after the peer (wg42<peer>),
+  // so link.from.interface (e.g. wg42foo) is on node bar pointing to node foo,
+  // which users associate with the "foo" end of the link.
+  // The egress cost from the node represented on the left towards the right node is leftCost (pointing →),
+  // and the egress cost from the node represented on the right towards the left node is rightCost (pointing ←).
+  const fromIface = (link?.from?.interface || "").toLowerCase();
+  const toName = (link?.to?.name || "").toLowerCase();
+  const fromName = (link?.from?.name || "").toLowerCase();
+
+  const leftRepresentsTo =
+    Boolean(toName && fromIface.includes(toName.slice(0, 8))) ||
+    Boolean(fromIface.startsWith("wg42") && !fromIface.includes(fromName.slice(0, 8)));
+
+  const leftCost = leftRepresentsTo ? toCost : fromCost;
+  const rightCost = leftRepresentsTo ? fromCost : toCost;
+  const isLeftCostOverridden = leftRepresentsTo ? isToCostOverridden : isFromCostOverridden;
+  const isRightCostOverridden = leftRepresentsTo ? isFromCostOverridden : isToCostOverridden;
+  const leftNodeName = leftRepresentsTo ? (link?.to?.name || "Left") : (link?.from?.name || "Left");
+  const rightNodeName = leftRepresentsTo ? (link?.from?.name || "Right") : (link?.to?.name || "Right");
+
   let edgePath: string;
   let labelX: number;
   let labelY: number;
@@ -258,23 +278,23 @@ export const CustomEdge: React.FC<EdgeProps> = ({
                     lineHeight: 1,
                   }}
                   title={
-                    fromCost === toCost
-                      ? `Cost: ${fromCost}`
-                      : `Cost: ${link.from.name} (${link.from.interface}) → ${fromCost}, ${link.to.name} (${link.to.interface}) → ${toCost}`
+                    leftCost === rightCost
+                      ? `Cost: ${leftCost}`
+                      : `Cost: ${leftNodeName} → ${rightNodeName}: ${leftCost}, ${rightNodeName} → ${leftNodeName}: ${rightCost}`
                   }
                 >
-                  {fromCost === toCost ? (
+                  {leftCost === rightCost ? (
                     <Typography
                       variant="caption"
                       className="mono-font"
                       sx={{
                         fontSize: "0.60rem",
                         fontWeight: 600,
-                        color: isFromCostOverridden || isToCostOverridden ? "#D97706" : "#64748B",
+                        color: isLeftCostOverridden || isRightCostOverridden ? "#D97706" : "#64748B",
                         lineHeight: 1,
                       }}
                     >
-                      {fromCost}
+                      {leftCost}
                     </Typography>
                   ) : (
                     <>
@@ -284,11 +304,11 @@ export const CustomEdge: React.FC<EdgeProps> = ({
                         sx={{
                           fontSize: "0.60rem",
                           fontWeight: 600,
-                          color: isFromCostOverridden ? "#D97706" : "#64748B",
+                          color: isLeftCostOverridden ? "#D97706" : "#64748B",
                           lineHeight: 1,
                         }}
                       >
-                        {fromCost}
+                        {leftCost}
                       </Typography>
                       <Typography
                         variant="caption"
@@ -320,11 +340,11 @@ export const CustomEdge: React.FC<EdgeProps> = ({
                         sx={{
                           fontSize: "0.60rem",
                           fontWeight: 600,
-                          color: isToCostOverridden ? "#D97706" : "#64748B",
+                          color: isRightCostOverridden ? "#D97706" : "#64748B",
                           lineHeight: 1,
                         }}
                       >
-                        {toCost}
+                        {rightCost}
                       </Typography>
                     </>
                   )}
