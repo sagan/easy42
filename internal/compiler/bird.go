@@ -4,6 +4,7 @@ import (
 	"embed"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 
@@ -307,6 +308,17 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 	}
 	ctx["static_routes_v4"] = staticV4
 	ctx["static_routes_v6"] = staticV6
+
+	if slices.Contains(staticV4, "0.0.0.0/0") {
+		ctx["static_routes_v4_internet"] = 1
+	} else if slices.Contains(staticV4, "0.0.0.0/1") && slices.Contains(staticV4, "128.0.0.0/1") {
+		ctx["static_routes_v4_internet"] = 2
+	}
+	if slices.Contains(staticV6, "::/0") {
+		ctx["static_routes_v6_internet"] = 1
+	} else if slices.Contains(staticV6, "::/1") && slices.Contains(staticV6, "8000::/1") {
+		ctx["static_routes_v6_internet"] = 2
+	}
 
 	// 4. Index allNodes by name for fast lookup
 	nodeByName := make(map[string]*config.Node)
@@ -1065,4 +1077,3 @@ func GenerateBirdConfig(
 	}
 	return GenerateBirdConfigWithTemplate(tmplContent, node, allNodes, links, args...)
 }
-

@@ -212,11 +212,15 @@ protocol kernel kernel_inet_v4 {
     {{end}}
     ipv4 {
         table inet_table4;
+        {{if eq .static_routes_v4_internet 2 }}
+        export none;
+        {{else}}
         export filter {
             if dest ~ [ RTD_BLACKHOLE, RTD_UNREACHABLE, RTD_PROHIBIT ] then reject;
             krt_prefsrc = SELF_IP;
             accept;
         };
+        {{end}}
         import none;
     };
     kernel table INTERNET_TABLE;
@@ -374,6 +378,9 @@ protocol kernel kernel_inet_v6 {
     {{end}}
     ipv6 {
         table inet_table6;
+        {{if eq .static_routes_v6_internet 2 }}
+        export none;
+        {{else}}
         export filter {
             if dest ~ [ RTD_BLACKHOLE, RTD_UNREACHABLE, RTD_PROHIBIT ] then reject;
             {{if .ip6}}
@@ -381,6 +388,7 @@ protocol kernel kernel_inet_v6 {
             {{end}}
             accept;
         };
+        {{end}}
         import none;
     };
     kernel table INTERNET_TABLE;
