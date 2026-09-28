@@ -56,6 +56,7 @@ func (p *ClientPool) getHostLock(host string) *sync.Mutex {
 
 // CloseHost closes and removes the cached SSH and SFTP connections for a specific host
 func (p *ClientPool) CloseHost(hostAliasOrIP string) {
+	hostAliasOrIP = strings.TrimSpace(hostAliasOrIP)
 	hostLock := p.getHostLock(hostAliasOrIP)
 	hostLock.Lock()
 	defer hostLock.Unlock()
@@ -100,6 +101,7 @@ func (p *ClientPool) GetClient(hostAliasOrIP string) (*ssh.Client, *sftp.Client,
 
 // GetClientWithTimeout returns an active SSH and SFTP client with a custom dial timeout.
 func (p *ClientPool) GetClientWithTimeout(hostAliasOrIP string, dialTimeout time.Duration) (*ssh.Client, *sftp.Client, error) {
+	hostAliasOrIP = strings.TrimSpace(hostAliasOrIP)
 	hostLock := p.getHostLock(hostAliasOrIP)
 	hostLock.Lock()
 	defer hostLock.Unlock()
@@ -150,6 +152,46 @@ func (p *ClientPool) GetClientWithTimeout(hostAliasOrIP string, dialTimeout time
 	return sshClient, sftpClient, nil
 }
 
+// ParseSSHHost parses an SSH host string which may contain user, host/IP, and port.
+// Supported formats:
+//   - host
+//   - user@host
+//   - host:port
+//   - user@host:port
+//   - [ipv6]
+//   - [ipv6]:port
+//   - user@[ipv6]
+//   - user@[ipv6]:port
+//   - raw ipv6 (e.g. 2001:db8::1)
+//   - user@ipv6 (e.g. root@2001:db8::1)
+func ParseSSHHost(raw string) (user, host, port string) {
+	s := strings.TrimSpace(raw)
+	if s == "" {
+		return "", "", ""
+	}
+
+	// 1. Extract user if present (user@...)
+	if idx := strings.LastIndex(s, "@"); idx != -1 {
+		user = s[:idx]
+		s = s[idx+1:]
+	}
+
+	// 2. Check if bracketed IPv6 without port: [2001:db8::1]
+	if strings.HasPrefix(s, "[") && strings.HasSuffix(s, "]") {
+		return user, s[1 : len(s)-1], ""
+	}
+
+	// 3. Try net.SplitHostPort (handles host:port and [ipv6]:port)
+	if h, p, err := net.SplitHostPort(s); err == nil {
+		if _, err := strconv.Atoi(p); err == nil {
+			return user, h, p
+		}
+	}
+
+	// 4. Otherwise, it is a plain host, IPv4, or raw IPv6 (e.g. 2001:db8::1)
+	return user, s, ""
+}
+
 // DialSSH connects to a host using OpenSSH config, agent, and standard keys with default 5s timeout
 func DialSSH(hostAliasOrIP string) (*ssh.Client, error) {
 	return DialSSHWithTimeout(hostAliasOrIP, 5*time.Second)
@@ -165,6 +207,8 @@ func DialSSHWithTimeout(hostAliasOrIP string, timeout time.Duration) (*ssh.Clien
 		return nil, fmt.Errorf("failed to get home directory: %w", err)
 	}
 
+	explicitUser, hostPart, explicitPort := ParseSSHHost(hostAliasOrIP)
+
 	// 1. Resolve OpenSSH config (Host alias, User, Port, HostName, IdentityFile)
 	var realHost, user, portStr, identityFile string
 
@@ -174,23 +218,54 @@ func DialSSHWithTimeout(hostAliasOrIP string, timeout time.Duration) (*ssh.Clien
 		_ = f.Close()
 		if err == nil {
 			realHost, _ = cfg.Get(hostAliasOrIP, "HostName")
+			if (realHost == "" || realHost == "%h") && hostPart != hostAliasOrIP {
+				realHost, _ = cfg.Get(hostPart, "HostName")
+			}
 			user, _ = cfg.Get(hostAliasOrIP, "User")
+			if user == "" && hostPart != hostAliasOrIP {
+				user, _ = cfg.Get(hostPart, "User")
+			}
 			portStr, _ = cfg.Get(hostAliasOrIP, "Port")
+			if portStr == "" && hostPart != hostAliasOrIP {
+				portStr, _ = cfg.Get(hostPart, "Port")
+			}
 			identityFile, _ = cfg.Get(hostAliasOrIP, "IdentityFile")
+			if identityFile == "" && hostPart != hostAliasOrIP {
+				identityFile, _ = cfg.Get(hostPart, "IdentityFile")
+			}
 		}
 	}
 
-	if realHost == "" {
-		realHost = hostAliasOrIP
+	if realHost == "" || realHost == "%h" {
+		realHost = hostPart
+	} else {
+		cfgUser, cleanRealHost, cfgPort := ParseSSHHost(realHost)
+		if cleanRealHost != "" {
+			realHost = cleanRealHost
+		}
+		if user == "" && cfgUser != "" {
+			user = cfgUser
+		}
+		if portStr == "" && cfgPort != "" {
+			portStr = cfgPort
+		}
 	}
-	if user == "" {
+
+	if explicitUser != "" {
+		user = explicitUser
+	} else if user == "" {
 		user = os.Getenv("USER")
 		if user == "" {
 			user = "root"
 		}
 	}
+
 	port := 22
-	if portStr != "" {
+	if explicitPort != "" {
+		if p, err := strconv.Atoi(explicitPort); err == nil && p > 0 {
+			port = p
+		}
+	} else if portStr != "" {
 		if p, err := strconv.Atoi(portStr); err == nil && p > 0 {
 			port = p
 		}

@@ -35,6 +35,18 @@ func TestDetermineTargetMTU(t *testing.T) {
 		t.Errorf("Expected MTU 1500 for eth0, got %d", mtu)
 	}
 
+	// Match with host:port
+	mtuPort := determineTargetMTU(nil, "192.168.1.50:22", ifaces, "")
+	if mtuPort != 1500 {
+		t.Errorf("Expected MTU 1500 for eth0 with port, got %d", mtuPort)
+	}
+
+	// Match with user@host:port
+	mtuUserPort := determineTargetMTU(nil, "root@10.0.0.50:2222", ifaces, "")
+	if mtuUserPort != 9000 {
+		t.Errorf("Expected MTU 9000 for eth1 with user and port, got %d", mtuUserPort)
+	}
+
 	mtu9k := determineTargetMTU(nil, "10.0.0.50", ifaces, "")
 	if mtu9k != 9000 {
 		t.Errorf("Expected MTU 9000 for eth1, got %d", mtu9k)

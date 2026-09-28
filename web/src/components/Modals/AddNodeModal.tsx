@@ -947,7 +947,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                   <TextField
                     fullWidth
                     size="small"
-                    placeholder="e.g. router-gw1 or 192.168.1.1 or user@host"
+                    placeholder="e.g. router-gw1, 192.168.1.1:22, or user@host:22"
                     value={sshHost}
                     onChange={(e) => setSshHost(e.target.value)}
                     disabled={probing || saving}

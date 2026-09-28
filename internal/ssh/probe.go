@@ -195,15 +195,17 @@ func ProbeHost(client *ssh.Client, host string, existingNodes []config.Node) (*P
 	// 5. Determine Suggested ASN (latest recently created/modified node's ASN)
 	suggestedASN := DetermineSuggestedASN(existingNodes)
 
+	_, cleanHost, _ := ParseSSHHost(host)
+
 	// Determine target interface's MTU (fallbacks to 1500)
-	targetMTU := determineTargetMTU(client, host, ifaces, suggestedIface)
+	targetMTU := determineTargetMTU(client, cleanHost, ifaces, suggestedIface)
 
 	// 6. Detected entrypoints
 	var entrypoints []config.Entrypoint
 	// If host is a direct IP or hostname, add it as entrypoint
-	if host != "" && !strings.Contains(host, "/") {
+	if cleanHost != "" && !strings.Contains(cleanHost, "/") {
 		entrypoints = append(entrypoints, config.Entrypoint{
-			IP:   host,
+			IP:   cleanHost,
 			Tags: []string{"default"},
 			MTU:  targetMTU,
 		})
@@ -262,7 +264,7 @@ func determineTargetMTU(client *ssh.Client, host string, ifaces []config.Interfa
 	var targetIface *config.InterfaceInfo
 
 	// 1. Try to match host directly with interface addresses
-	cleanHost := strings.TrimSpace(host)
+	_, cleanHost, _ := ParseSSHHost(host)
 	if cleanHost != "" {
 		for i := range ifaces {
 			for _, addr := range ifaces[i].Addresses {

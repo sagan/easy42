@@ -172,9 +172,24 @@ func DerivePortFromASN(asn uint64) int {
 	return 20000 + int(asn%10000)
 }
 
+// StripHostPort strips user@, brackets, and :port from a host/server address if present.
+func StripHostPort(raw string) string {
+	s := strings.TrimSpace(raw)
+	if idx := strings.LastIndex(s, "@"); idx != -1 {
+		s = s[idx+1:]
+	}
+	if strings.HasPrefix(s, "[") && strings.HasSuffix(s, "]") {
+		return s[1 : len(s)-1]
+	}
+	if h, _, err := net.SplitHostPort(s); err == nil {
+		return h
+	}
+	return s
+}
+
 // FormatHostPort formats an IP (v4 or v6) or domain with a port
 func FormatHostPort(host string, port int) string {
-	host = strings.TrimSpace(host)
+	host = StripHostPort(host)
 	// Check if IPv6
 	if strings.Contains(host, ":") && !strings.HasPrefix(host, "[") {
 		return fmt.Sprintf("[%s]:%d", host, port)
