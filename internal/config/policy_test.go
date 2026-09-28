@@ -144,6 +144,22 @@ func TestEffectiveCost(t *testing.T) {
 	if c := end.EffectiveCostWithPolicy(pol); c != 30 {
 		t.Errorf("explicit cost 30 with policy struct cost 75: expected 30, got %d", c)
 	}
+
+	// Negative cost tests
+	polNeg := &NetworkPolicy{Cost: -50}
+	if c := polNeg.EffectiveCost(); c != -50 {
+		t.Errorf("policy struct cost -50: expected -50, got %d", c)
+	}
+	if c := end.EffectiveCostWithPolicy(polNeg); c != 30 {
+		t.Errorf("explicit cost 30 overrides negative policy: expected 30, got %d", c)
+	}
+	end.Cost = -40
+	if c := end.EffectiveCost(50); c != -40 {
+		t.Errorf("explicit negative cost -40 with policy cost 50: expected -40, got %d", c)
+	}
+	if c := end.EffectiveCostWithPolicy(polNeg); c != -40 {
+		t.Errorf("explicit negative cost -40 with policy struct cost -50: expected -40, got %d", c)
+	}
 }
 
 func TestEffectiveFwmarkAndPreference(t *testing.T) {

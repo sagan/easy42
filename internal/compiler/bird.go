@@ -58,7 +58,11 @@ func formatVariantTemplateName(base string, routingPolicy, baseRoutingPolicy str
 		name += "_" + routingPolicy
 	}
 	if cost != baseCost {
-		name += fmt.Sprintf("_cost_%d", cost)
+		if cost < 0 {
+			name += fmt.Sprintf("_cost_n%d", -cost)
+		} else {
+			name += fmt.Sprintf("_cost_%d", cost)
+		}
 	}
 	return name
 }
@@ -456,7 +460,7 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 	}
 
 	extCost := 0
-	if hasDN42 && dn42Pol.ID != config.PolicyDN42 && dn42Pol.Cost > 0 {
+	if hasDN42 && dn42Pol.ID != config.PolicyDN42 && dn42Pol.Cost != 0 {
 		extCost = dn42Pol.Cost
 	}
 	extRoutingPolicy := config.RoutingPolicyFull

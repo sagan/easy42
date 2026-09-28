@@ -463,7 +463,11 @@ template bgp easy42_peer {
             {{if .confed_as}}
             # Prefer routes with fewer confederation hops / lower policy cost
             if !defined(bgp_local_pref) || (bgp_local_pref = 100) then bgp_local_pref = DEFAULT_LOCAL_PREF;
+            {{if lt .default_cost 0}}
+            if bgp_local_pref <= 4294967295 - {{mul .default_cost -1}} then bgp_local_pref = bgp_local_pref + {{mul .default_cost -1}}; else bgp_local_pref = 4294967295;
+            {{else}}
             if bgp_local_pref > {{if .default_cost}}{{.default_cost}}{{else}}100{{end}} then bgp_local_pref = bgp_local_pref - {{if .default_cost}}{{.default_cost}}{{else}}100{{end}}; else bgp_local_pref = 1;
+            {{end}}
             {{end}}
             accept;
             {{end}}
@@ -494,7 +498,11 @@ template bgp easy42_peer {
             {{if .confed_as}}
             # Prefer routes with fewer confederation hops / lower policy cost
             if !defined(bgp_local_pref) || (bgp_local_pref = 100) then bgp_local_pref = DEFAULT_LOCAL_PREF;
+            {{if lt .default_cost 0}}
+            if bgp_local_pref <= 4294967295 - {{mul .default_cost -1}} then bgp_local_pref = bgp_local_pref + {{mul .default_cost -1}}; else bgp_local_pref = 4294967295;
+            {{else}}
             if bgp_local_pref > {{if .default_cost}}{{.default_cost}}{{else}}100{{end}} then bgp_local_pref = bgp_local_pref - {{if .default_cost}}{{.default_cost}}{{else}}100{{end}}; else bgp_local_pref = 1;
+            {{end}}
             {{end}}
             accept;
             {{end}}
@@ -544,7 +552,11 @@ template bgp {{.template_name}} {
             {{if $.confed_as}}
             # Prefer routes with fewer confederation hops / lower policy cost
             if !defined(bgp_local_pref) || (bgp_local_pref = 100) then bgp_local_pref = DEFAULT_LOCAL_PREF;
+            {{if lt .cost 0}}
+            if bgp_local_pref <= 4294967295 - {{mul .cost -1}} then bgp_local_pref = bgp_local_pref + {{mul .cost -1}}; else bgp_local_pref = 4294967295;
+            {{else}}
             if bgp_local_pref > {{.cost}} then bgp_local_pref = bgp_local_pref - {{.cost}}; else bgp_local_pref = 1;
+            {{end}}
             {{end}}
             accept;
             {{end}}
@@ -575,7 +587,11 @@ template bgp {{.template_name}} {
             {{if $.confed_as}}
             # Prefer routes with fewer confederation hops / lower policy cost
             if !defined(bgp_local_pref) || (bgp_local_pref = 100) then bgp_local_pref = DEFAULT_LOCAL_PREF;
+            {{if lt .cost 0}}
+            if bgp_local_pref <= 4294967295 - {{mul .cost -1}} then bgp_local_pref = bgp_local_pref + {{mul .cost -1}}; else bgp_local_pref = 4294967295;
+            {{else}}
             if bgp_local_pref > {{.cost}} then bgp_local_pref = bgp_local_pref - {{.cost}}; else bgp_local_pref = 1;
+            {{end}}
             {{end}}
             accept;
             {{end}}
@@ -623,7 +639,11 @@ template bgp none_peer {
             {{if .confed_as}}
             # Prefer routes with fewer confederation hops / lower policy cost
             if !defined(bgp_local_pref) || (bgp_local_pref = 100) then bgp_local_pref = DEFAULT_LOCAL_PREF;
+            {{if lt .none_cost 0}}
+            if bgp_local_pref <= 4294967295 - {{mul .none_cost -1}} then bgp_local_pref = bgp_local_pref + {{mul .none_cost -1}}; else bgp_local_pref = 4294967295;
+            {{else}}
             if bgp_local_pref > {{if .none_cost}}{{.none_cost}}{{else}}100{{end}} then bgp_local_pref = bgp_local_pref - {{if .none_cost}}{{.none_cost}}{{else}}100{{end}}; else bgp_local_pref = 1;
+            {{end}}
             {{end}}
             accept;
             {{end}}
@@ -651,7 +671,11 @@ template bgp none_peer {
             {{if .confed_as}}
             # Prefer routes with fewer confederation hops / lower policy cost
             if !defined(bgp_local_pref) || (bgp_local_pref = 100) then bgp_local_pref = DEFAULT_LOCAL_PREF;
+            {{if lt .none_cost 0}}
+            if bgp_local_pref <= 4294967295 - {{mul .none_cost -1}} then bgp_local_pref = bgp_local_pref + {{mul .none_cost -1}}; else bgp_local_pref = 4294967295;
+            {{else}}
             if bgp_local_pref > {{if .none_cost}}{{.none_cost}}{{else}}100{{end}} then bgp_local_pref = bgp_local_pref - {{if .none_cost}}{{.none_cost}}{{else}}100{{end}}; else bgp_local_pref = 1;
+            {{end}}
             {{end}}
             accept;
             {{end}}
@@ -697,7 +721,11 @@ template bgp {{.template_name}} {
             {{if $.confed_as}}
             # Prefer routes with fewer confederation hops / lower policy cost
             if !defined(bgp_local_pref) || (bgp_local_pref = 100) then bgp_local_pref = DEFAULT_LOCAL_PREF;
+            {{if lt .cost 0}}
+            if bgp_local_pref <= 4294967295 - {{mul .cost -1}} then bgp_local_pref = bgp_local_pref + {{mul .cost -1}}; else bgp_local_pref = 4294967295;
+            {{else}}
             if bgp_local_pref > {{.cost}} then bgp_local_pref = bgp_local_pref - {{.cost}}; else bgp_local_pref = 1;
+            {{end}}
             {{end}}
             accept;
             {{end}}
@@ -725,7 +753,11 @@ template bgp {{.template_name}} {
             {{if $.confed_as}}
             # Prefer routes with fewer confederation hops / lower policy cost
             if !defined(bgp_local_pref) || (bgp_local_pref = 100) then bgp_local_pref = DEFAULT_LOCAL_PREF;
+            {{if lt .cost 0}}
+            if bgp_local_pref <= 4294967295 - {{mul .cost -1}} then bgp_local_pref = bgp_local_pref + {{mul .cost -1}}; else bgp_local_pref = 4294967295;
+            {{else}}
             if bgp_local_pref > {{.cost}} then bgp_local_pref = bgp_local_pref - {{.cost}}; else bgp_local_pref = 1;
+            {{end}}
             {{end}}
             accept;
             {{end}}
@@ -782,7 +814,9 @@ template bgp external_peer {
             {{if .has_ext_import_v4}}
             if net ~ EXT_PREFIXES_V4 then {
               bgp_large_community.add(COMM_EXTERNAL);
-              {{if and .ext_cost (gt .ext_cost 0)}}
+              {{if lt .ext_cost 0}}
+              if DEFAULT_LOCAL_PREF <= 4294967295 - {{mul .ext_cost -1}} then bgp_local_pref = DEFAULT_LOCAL_PREF + {{mul .ext_cost -1}}; else bgp_local_pref = 4294967295;
+              {{else if and .ext_cost (gt .ext_cost 0)}}
               if DEFAULT_LOCAL_PREF > {{.ext_cost}} then bgp_local_pref = DEFAULT_LOCAL_PREF - {{.ext_cost}}; else bgp_local_pref = 1;
               {{else}}
               bgp_local_pref = DEFAULT_LOCAL_PREF;
@@ -792,7 +826,9 @@ template bgp external_peer {
             reject;
             {{else}}
             bgp_large_community.add(COMM_EXTERNAL);
-            {{if and .ext_cost (gt .ext_cost 0)}}
+            {{if lt .ext_cost 0}}
+            if DEFAULT_LOCAL_PREF <= 4294967295 - {{mul .ext_cost -1}} then bgp_local_pref = DEFAULT_LOCAL_PREF + {{mul .ext_cost -1}}; else bgp_local_pref = 4294967295;
+            {{else if and .ext_cost (gt .ext_cost 0)}}
             if DEFAULT_LOCAL_PREF > {{.ext_cost}} then bgp_local_pref = DEFAULT_LOCAL_PREF - {{.ext_cost}}; else bgp_local_pref = 1;
             {{else}}
             bgp_local_pref = DEFAULT_LOCAL_PREF;
@@ -844,7 +880,9 @@ template bgp external_peer {
             {{if .has_ext_import_v6}}
             if net ~ EXT_PREFIXES_V6 then {
               bgp_large_community.add(COMM_EXTERNAL);
-              {{if and .ext_cost (gt .ext_cost 0)}}
+              {{if lt .ext_cost 0}}
+              if DEFAULT_LOCAL_PREF <= 4294967295 - {{mul .ext_cost -1}} then bgp_local_pref = DEFAULT_LOCAL_PREF + {{mul .ext_cost -1}}; else bgp_local_pref = 4294967295;
+              {{else if and .ext_cost (gt .ext_cost 0)}}
               if DEFAULT_LOCAL_PREF > {{.ext_cost}} then bgp_local_pref = DEFAULT_LOCAL_PREF - {{.ext_cost}}; else bgp_local_pref = 1;
               {{else}}
               bgp_local_pref = DEFAULT_LOCAL_PREF;
@@ -854,7 +892,9 @@ template bgp external_peer {
             reject;
             {{else}}
             bgp_large_community.add(COMM_EXTERNAL);
-            {{if and .ext_cost (gt .ext_cost 0)}}
+            {{if lt .ext_cost 0}}
+            if DEFAULT_LOCAL_PREF <= 4294967295 - {{mul .ext_cost -1}} then bgp_local_pref = DEFAULT_LOCAL_PREF + {{mul .ext_cost -1}}; else bgp_local_pref = 4294967295;
+            {{else if and .ext_cost (gt .ext_cost 0)}}
             if DEFAULT_LOCAL_PREF > {{.ext_cost}} then bgp_local_pref = DEFAULT_LOCAL_PREF - {{.ext_cost}}; else bgp_local_pref = 1;
             {{else}}
             bgp_local_pref = DEFAULT_LOCAL_PREF;
@@ -922,7 +962,9 @@ template bgp {{.template_name}} {
             {{if $.has_ext_import_v4}}
             if net ~ EXT_PREFIXES_V4 then {
               bgp_large_community.add(COMM_EXTERNAL);
-              {{if and .cost (gt .cost 0)}}
+              {{if lt .cost 0}}
+              if DEFAULT_LOCAL_PREF <= 4294967295 - {{mul .cost -1}} then bgp_local_pref = DEFAULT_LOCAL_PREF + {{mul .cost -1}}; else bgp_local_pref = 4294967295;
+              {{else if and .cost (gt .cost 0)}}
               if DEFAULT_LOCAL_PREF > {{.cost}} then bgp_local_pref = DEFAULT_LOCAL_PREF - {{.cost}}; else bgp_local_pref = 1;
               {{else}}
               bgp_local_pref = DEFAULT_LOCAL_PREF;
@@ -932,7 +974,9 @@ template bgp {{.template_name}} {
             reject;
             {{else}}
             bgp_large_community.add(COMM_EXTERNAL);
-            {{if and .cost (gt .cost 0)}}
+            {{if lt .cost 0}}
+            if DEFAULT_LOCAL_PREF <= 4294967295 - {{mul .cost -1}} then bgp_local_pref = DEFAULT_LOCAL_PREF + {{mul .cost -1}}; else bgp_local_pref = 4294967295;
+            {{else if and .cost (gt .cost 0)}}
             if DEFAULT_LOCAL_PREF > {{.cost}} then bgp_local_pref = DEFAULT_LOCAL_PREF - {{.cost}}; else bgp_local_pref = 1;
             {{else}}
             bgp_local_pref = DEFAULT_LOCAL_PREF;
@@ -984,7 +1028,9 @@ template bgp {{.template_name}} {
             {{if $.has_ext_import_v6}}
             if net ~ EXT_PREFIXES_V6 then {
               bgp_large_community.add(COMM_EXTERNAL);
-              {{if and .cost (gt .cost 0)}}
+              {{if lt .cost 0}}
+              if DEFAULT_LOCAL_PREF <= 4294967295 - {{mul .cost -1}} then bgp_local_pref = DEFAULT_LOCAL_PREF + {{mul .cost -1}}; else bgp_local_pref = 4294967295;
+              {{else if and .cost (gt .cost 0)}}
               if DEFAULT_LOCAL_PREF > {{.cost}} then bgp_local_pref = DEFAULT_LOCAL_PREF - {{.cost}}; else bgp_local_pref = 1;
               {{else}}
               bgp_local_pref = DEFAULT_LOCAL_PREF;
@@ -994,7 +1040,9 @@ template bgp {{.template_name}} {
             reject;
             {{else}}
             bgp_large_community.add(COMM_EXTERNAL);
-            {{if and .cost (gt .cost 0)}}
+            {{if lt .cost 0}}
+            if DEFAULT_LOCAL_PREF <= 4294967295 - {{mul .cost -1}} then bgp_local_pref = DEFAULT_LOCAL_PREF + {{mul .cost -1}}; else bgp_local_pref = 4294967295;
+            {{else if and .cost (gt .cost 0)}}
             if DEFAULT_LOCAL_PREF > {{.cost}} then bgp_local_pref = DEFAULT_LOCAL_PREF - {{.cost}}; else bgp_local_pref = 1;
             {{else}}
             bgp_local_pref = DEFAULT_LOCAL_PREF;
@@ -1078,7 +1126,11 @@ template bgp {{.template_name}} {
                 {{if $.confed_as}}
                 # Prefer routes with fewer confederation hops / lower policy cost
                 if !defined(bgp_local_pref) || (bgp_local_pref = 100) then bgp_local_pref = DEFAULT_LOCAL_PREF;
+                {{if lt .cost 0}}
+                if bgp_local_pref <= 4294967295 - {{mul .cost -1}} then bgp_local_pref = bgp_local_pref + {{mul .cost -1}}; else bgp_local_pref = 4294967295;
+                {{else}}
                 if bgp_local_pref > {{.cost}} then bgp_local_pref = bgp_local_pref - {{.cost}}; else bgp_local_pref = 1;
+                {{end}}
                 {{end}}
                 accept;
             }
@@ -1087,7 +1139,11 @@ template bgp {{.template_name}} {
             {{if $.confed_as}}
             # Prefer routes with fewer confederation hops / lower policy cost
             if !defined(bgp_local_pref) || (bgp_local_pref = 100) then bgp_local_pref = DEFAULT_LOCAL_PREF;
+            {{if lt .cost 0}}
+            if bgp_local_pref <= 4294967295 - {{mul .cost -1}} then bgp_local_pref = bgp_local_pref + {{mul .cost -1}}; else bgp_local_pref = 4294967295;
+            {{else}}
             if bgp_local_pref > {{.cost}} then bgp_local_pref = bgp_local_pref - {{.cost}}; else bgp_local_pref = 1;
+            {{end}}
             {{end}}
             accept;
             {{end}}
@@ -1148,7 +1204,11 @@ template bgp {{.template_name}} {
                 {{if $.confed_as}}
                 # Prefer routes with fewer confederation hops / lower policy cost
                 if !defined(bgp_local_pref) || (bgp_local_pref = 100) then bgp_local_pref = DEFAULT_LOCAL_PREF;
+                {{if lt .cost 0}}
+                if bgp_local_pref <= 4294967295 - {{mul .cost -1}} then bgp_local_pref = bgp_local_pref + {{mul .cost -1}}; else bgp_local_pref = 4294967295;
+                {{else}}
                 if bgp_local_pref > {{.cost}} then bgp_local_pref = bgp_local_pref - {{.cost}}; else bgp_local_pref = 1;
+                {{end}}
                 {{end}}
                 accept;
             }
@@ -1157,7 +1217,11 @@ template bgp {{.template_name}} {
             {{if $.confed_as}}
             # Prefer routes with fewer confederation hops / lower policy cost
             if !defined(bgp_local_pref) || (bgp_local_pref = 100) then bgp_local_pref = DEFAULT_LOCAL_PREF;
+            {{if lt .cost 0}}
+            if bgp_local_pref <= 4294967295 - {{mul .cost -1}} then bgp_local_pref = bgp_local_pref + {{mul .cost -1}}; else bgp_local_pref = 4294967295;
+            {{else}}
             if bgp_local_pref > {{.cost}} then bgp_local_pref = bgp_local_pref - {{.cost}}; else bgp_local_pref = 1;
+            {{end}}
             {{end}}
             accept;
             {{end}}

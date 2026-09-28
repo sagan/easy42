@@ -1248,6 +1248,81 @@ func TestLinkEndCostOverrideBIRD(t *testing.T) {
 	}
 }
 
+func TestNegativeLinkCostBIRD(t *testing.T) {
+	node1 := config.Node{
+		Name:      "r1",
+		IP:        "192.168.1.1",
+		ASN:       4242421001,
+		Interface: "eth0",
+	}
+	node2 := config.Node{
+		Name:      "r2",
+		IP:        "192.168.1.2",
+		ASN:       4242421002,
+		Interface: "eth0",
+	}
+	node3 := config.Node{
+		Name:      "r3",
+		IP:        "192.168.1.3",
+		ASN:       4242421003,
+		Interface: "eth0",
+	}
+
+	netSettings := &config.NetworkSettings{
+		PublicASN: 4242420000,
+	}
+
+	// Link 1 with negative cost override -50 to boost preference
+	linkNegCost := config.Link{
+		From: config.LinkEnd{
+			Name:      "r1",
+			Interface: "wg42r2",
+			Address:   "fe80::1/64",
+			Cost:      -50,
+		},
+		To: config.LinkEnd{
+			Name:      "r2",
+			Interface: "wg42r1",
+			Address:   "fe80::2/64",
+		},
+	}
+	// Link 2 with default cost (100)
+	linkDefault := config.Link{
+		From: config.LinkEnd{
+			Name:      "r1",
+			Interface: "wg42r3",
+			Address:   "fe80::3/64",
+			Cost:      0,
+		},
+		To: config.LinkEnd{
+			Name:      "r3",
+			Interface: "wg42r1",
+			Address:   "fe80::4/64",
+		},
+	}
+
+	conf, err := GenerateBirdConfig(&node1, []config.Node{node1, node2, node3}, []config.Link{linkNegCost, linkDefault}, netSettings)
+	if err != nil {
+		t.Fatalf("GenerateBirdConfig with negative cost failed: %v", err)
+	}
+
+	expectedSnippets := []string{
+		"template bgp easy42_peer",
+		"template bgp easy42_peer_cost_n50",
+		"protocol bgp 'easy42_peer_r2' from easy42_peer_cost_n50 {",
+		"protocol bgp 'easy42_peer_r3' from easy42_peer {",
+		"if bgp_local_pref <= 4294967295 - 50 then bgp_local_pref = bgp_local_pref + 50; else bgp_local_pref = 4294967295;",
+		"if bgp_local_pref > 100 then bgp_local_pref = bgp_local_pref - 100; else bgp_local_pref = 1;",
+	}
+	for _, s := range expectedSnippets {
+		if !strings.Contains(conf, s) {
+			t.Errorf("Expected snippet %q in negative cost config:\n%s", s, conf)
+		}
+	}
+
+	validateBirdSyntax(t, conf)
+}
+
 func TestExternalLinkCostOverrideBIRD(t *testing.T) {
 	nodeManaged := config.Node{
 		Name:      "tcnj",

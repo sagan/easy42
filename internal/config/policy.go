@@ -162,9 +162,9 @@ func (p *NetworkPolicy) EffectivePreference() *int {
 	return nil
 }
 
-// EffectiveCost returns the configured cost or default 100 if unset/non-positive
+// EffectiveCost returns the configured cost or default 100 if unset (zero)
 func (p *NetworkPolicy) EffectiveCost() int {
-	if p != nil && p.Cost > 0 {
+	if p != nil && p.Cost != 0 {
 		return p.Cost
 	}
 	return 100
@@ -373,12 +373,12 @@ func (l *LinkEnd) EffectivePolicy(isRemoteExternal bool) string {
 
 // EffectiveCost returns the active cost for this LinkEnd.
 // If Cost is set (not zero), it overrides the policy cost.
-// Otherwise, it falls back to the provided policy cost (or 100 if unset/non-positive).
+// Otherwise, it falls back to the provided policy cost (or 100 if unset/zero).
 func (l *LinkEnd) EffectiveCost(policyCost int) int {
 	if l != nil && l.Cost != 0 {
 		return l.Cost
 	}
-	if policyCost > 0 {
+	if policyCost != 0 {
 		return policyCost
 	}
 	return 100
