@@ -24,8 +24,9 @@ import { NodeCard } from "./NodeCard";
 import { CustomEdge } from "./CustomEdge";
 import { BlockNode, BLOCK_PALETTE } from "./BlockNode";
 import { BlockVirtualEdge } from "./BlockVirtualEdge";
-import { Node, Link, NodeStatus, NetworkState, GraphBlock } from "../../types/api";
+import { Node, Link, NodeStatus, NetworkState, GraphBlock, NetworkPolicy } from "../../types/api";
 import { api } from "../../api/client";
+import { getEffectiveLinkCost } from "../../utils/cost";
 
 const STORAGE_KEY_VIEWPORT = "easy42_graph_viewport";
 const STORAGE_KEY_ZOOM = "easy42_graph_zoom";
@@ -252,6 +253,7 @@ interface TopologyGraphProps {
   links: Link[];
   nodeStatuses: Record<string, NodeStatus>;
   networkState?: NetworkState | null;
+  networkPolicies?: NetworkPolicy[];
   selectedTag?: string;
   onSelectNode: (node: Node) => void;
   onSelectLink: (link: Link) => void;
@@ -420,6 +422,7 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
   links,
   nodeStatuses,
   networkState,
+  networkPolicies,
   selectedTag,
   onSelectNode,
   onSelectLink,
@@ -929,6 +932,10 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
       const fromNode = nodes.find((n) => n.name === link.from.name);
       const toNode = nodes.find((n) => n.name === link.to.name);
       const isExternal = Boolean(fromNode?.is_external || toNode?.is_external);
+      const fromIsRemoteExternal = Boolean(toNode?.is_external);
+      const toIsRemoteExternal = Boolean(fromNode?.is_external);
+      const fromCost = getEffectiveLinkCost(link.from, fromIsRemoteExternal, networkPolicies);
+      const toCost = getEffectiveLinkCost(link.to, toIsRemoteExternal, networkPolicies);
 
       return {
         id: edgeId,
@@ -944,13 +951,15 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
           isExternal,
           linkIndexInPair,
           totalLinksInPair,
+          fromCost,
+          toCost,
           onSelect: onSelectLink,
         } as unknown as Record<string, unknown>,
       };
     });
 
     return [...blockVirtualEdges, ...visibleNodeEdges];
-  }, [nodes, links, blocks, networkState, onSelectLink, effectiveNodeBlockMap, focusedNodeName, nodeStatuses]);
+  }, [nodes, links, blocks, networkState, networkPolicies, onSelectLink, effectiveNodeBlockMap, focusedNodeName, nodeStatuses]);
 
   const [flowNodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [flowEdges, setEdges, onEdgesChange] = useEdgesState(initialEdges);

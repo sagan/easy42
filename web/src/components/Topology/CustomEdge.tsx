@@ -2,6 +2,7 @@ import React from "react";
 import { BaseEdge, EdgeLabelRenderer, EdgeProps, getBezierPath } from "@xyflow/react";
 import { Box, Typography } from "@mui/material";
 import { Link } from "../../types/api";
+import { getEffectiveLinkCost } from "../../utils/cost";
 
 export type LinkWorkingState = "working" | "not_working" | "unknown";
 
@@ -12,6 +13,8 @@ export interface CustomEdgeData {
   transferRxBytes?: number;
   transferTxBytes?: number;
   isExternal?: boolean;
+  fromCost?: number;
+  toCost?: number;
   onSelect: (link: Link) => void;
   [key: string]: unknown;
 }
@@ -48,6 +51,18 @@ export const CustomEdge: React.FC<EdgeProps> = ({
   const isManual = link?.type === "manual" || link?.from?.type === "manual" || link?.to?.type === "manual";
   const totalLinksInPair = (edgeData?.totalLinksInPair as number) || 1;
   const linkIndexInPair = (edgeData?.linkIndexInPair as number) || 0;
+
+  const fromCost =
+    typeof edgeData?.fromCost === "number"
+      ? edgeData.fromCost
+      : getEffectiveLinkCost(link?.from, isExternal);
+  const toCost =
+    typeof edgeData?.toCost === "number"
+      ? edgeData.toCost
+      : getEffectiveLinkCost(link?.to, isExternal);
+
+  const isFromCostOverridden = Boolean(link?.from?.cost && link.from.cost !== 0);
+  const isToCostOverridden = Boolean(link?.to?.cost && link.to.cost !== 0);
 
   let edgePath: string;
   let labelX: number;
@@ -203,23 +218,118 @@ export const CustomEdge: React.FC<EdgeProps> = ({
                 }}
               />
 
-              <Typography
-                variant="caption"
-                className="mono-font"
-                sx={{ fontSize: "0.66rem", fontWeight: 600, color: "#1E293B" }}
+              <Box
+                sx={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
               >
-                {link.from.interface}
-              </Typography>
-              <Typography variant="caption" sx={{ color: "#94A3B8", fontSize: "0.55rem" }}>
-                ↔
-              </Typography>
-              <Typography
-                variant="caption"
-                className="mono-font"
-                sx={{ fontSize: "0.66rem", fontWeight: 600, color: "#1E293B" }}
-              >
-                {link.to.interface}
-              </Typography>
+                {/* Interface names: wg42foo <-> wg42bar */}
+                <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, lineHeight: 1.2 }}>
+                  <Typography
+                    variant="caption"
+                    className="mono-font"
+                    sx={{ fontSize: "0.66rem", fontWeight: 600, color: "#1E293B", lineHeight: 1.2 }}
+                  >
+                    {link.from.interface}
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: "#94A3B8", fontSize: "0.55rem", lineHeight: 1.2 }}>
+                    ↔
+                  </Typography>
+                  <Typography
+                    variant="caption"
+                    className="mono-font"
+                    sx={{ fontSize: "0.66rem", fontWeight: 600, color: "#1E293B", lineHeight: 1.2 }}
+                  >
+                    {link.to.interface}
+                  </Typography>
+                </Box>
+
+                {/* Link Cost display below the wg42foo <-> wg42bar label */}
+                <Box
+                  data-testid="link-cost"
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 0.35,
+                    mt: 0.15,
+                    lineHeight: 1,
+                  }}
+                  title={
+                    fromCost === toCost
+                      ? `Cost: ${fromCost}`
+                      : `Cost: ${link.from.name} (${link.from.interface}) → ${fromCost}, ${link.to.name} (${link.to.interface}) → ${toCost}`
+                  }
+                >
+                  {fromCost === toCost ? (
+                    <Typography
+                      variant="caption"
+                      className="mono-font"
+                      sx={{
+                        fontSize: "0.60rem",
+                        fontWeight: 600,
+                        color: isFromCostOverridden || isToCostOverridden ? "#D97706" : "#64748B",
+                        lineHeight: 1,
+                      }}
+                    >
+                      {fromCost}
+                    </Typography>
+                  ) : (
+                    <>
+                      <Typography
+                        variant="caption"
+                        className="mono-font"
+                        sx={{
+                          fontSize: "0.60rem",
+                          fontWeight: 600,
+                          color: isFromCostOverridden ? "#D97706" : "#64748B",
+                          lineHeight: 1,
+                        }}
+                      >
+                        {fromCost}
+                      </Typography>
+                      <Typography
+                        variant="caption"
+                        sx={{
+                          fontSize: "0.55rem",
+                          fontWeight: 700,
+                          color: "#94A3B8",
+                          lineHeight: 1,
+                          userSelect: "none",
+                        }}
+                      >
+                        →
+                      </Typography>
+                      <Typography
+                        variant="caption"
+                        sx={{
+                          fontSize: "0.55rem",
+                          fontWeight: 700,
+                          color: "#94A3B8",
+                          lineHeight: 1,
+                          userSelect: "none",
+                        }}
+                      >
+                        ←
+                      </Typography>
+                      <Typography
+                        variant="caption"
+                        className="mono-font"
+                        sx={{
+                          fontSize: "0.60rem",
+                          fontWeight: 600,
+                          color: isToCostOverridden ? "#D97706" : "#64748B",
+                          lineHeight: 1,
+                        }}
+                      >
+                        {toCost}
+                      </Typography>
+                    </>
+                  )}
+                </Box>
+              </Box>
 
               {/* Status Badge */}
               <Box

@@ -32,13 +32,15 @@ import {
   Network,
 } from "lucide-react";
 import { api } from "../../api/client";
-import { Link, NetworkState, Node } from "../../types/api";
+import { Link, NetworkState, Node, NetworkPolicy } from "../../types/api";
 import { MarkdownView } from "../Common/MarkdownView";
+import { getEffectiveLinkCost } from "../../utils/cost";
 
 interface LinkDetailDrawerProps {
   link: Link | null;
   networkState?: NetworkState | null;
   nodes?: Node[];
+  networkPolicies?: NetworkPolicy[];
   open: boolean;
   onClose: () => void;
   onEditLink: (link: Link) => void;
@@ -71,6 +73,7 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
   link,
   networkState,
   nodes,
+  networkPolicies,
   open,
   onClose,
   onEditLink,
@@ -706,7 +709,11 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
                 <Gauge size={12} /> Link Cost:
               </Typography>
               <Chip
-                label={link.from.cost && link.from.cost !== 0 ? `${link.from.cost} (Override)` : "Policy default"}
+                label={
+                  link.from.cost && link.from.cost !== 0
+                    ? `${link.from.cost} (Override)`
+                    : `Policy default (${getEffectiveLinkCost(link.from, Boolean(isToExternal), networkPolicies)})`
+                }
                 size="small"
                 sx={{
                   height: 20,
@@ -1209,7 +1216,11 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
                 <Gauge size={12} /> Link Cost:
               </Typography>
               <Chip
-                label={link.to.cost && link.to.cost !== 0 ? `${link.to.cost} (Override)` : "Policy default"}
+                label={
+                  link.to.cost && link.to.cost !== 0
+                    ? `${link.to.cost} (Override)`
+                    : `Policy default (${getEffectiveLinkCost(link.to, Boolean(isFromExternal), networkPolicies)})`
+                }
                 size="small"
                 sx={{
                   height: 20,

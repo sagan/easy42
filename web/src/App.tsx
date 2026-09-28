@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { ThemeProvider, CssBaseline, Box, CircularProgress, Typography, Snackbar, Alert } from "@mui/material";
 import { theme } from "./theme";
 import { api } from "./api/client";
-import { Node, Link, NodeStatus, NetworkState } from "./types/api";
+import { Node, Link, NodeStatus, NetworkState, NetworkPolicy } from "./types/api";
 import { Navbar } from "./components/Navbar";
 import { TopologyGraph } from "./components/Topology/TopologyGraph";
 import { NodeDetailDrawer } from "./components/Topology/NodeDetailDrawer";
@@ -27,6 +27,7 @@ export const App: React.FC = () => {
   const [links, setLinks] = useState<Link[]>([]);
   const [nodeStatuses, setNodeStatuses] = useState<Record<string, NodeStatus>>({});
   const [networkState, setNetworkState] = useState<NetworkState | null>(null);
+  const [networkPolicies, setNetworkPolicies] = useState<NetworkPolicy[]>([]);
   const [, setLoadingData] = useState(false);
 
   // Selected for drawers
@@ -184,16 +185,18 @@ export const App: React.FC = () => {
   const loadData = useCallback(async () => {
     setLoadingData(true);
     try {
-      const [nodesData, linksData, statusesData, stateData] = await Promise.all([
+      const [nodesData, linksData, statusesData, stateData, policiesData] = await Promise.all([
         api.getNodes(),
         api.getLinks(),
         api.getNodeStatuses().catch(() => ({})),
         api.getState().catch(() => null),
+        api.getNetworkPolicies().catch(() => []),
       ]);
       setNodes(nodesData || []);
       setLinks(linksData || []);
       setNodeStatuses(statusesData || {});
       setNetworkState(stateData);
+      setNetworkPolicies(policiesData || []);
     } catch {
       // Handled
     } finally {
@@ -218,6 +221,7 @@ export const App: React.FC = () => {
       setIsUnlocked(false);
       setNodes([]);
       setLinks([]);
+      setNetworkPolicies([]);
     } catch {
       // ignore
     }
@@ -510,6 +514,7 @@ export const App: React.FC = () => {
             links={displayedLinks}
             nodeStatuses={nodeStatuses}
             networkState={networkState}
+            networkPolicies={networkPolicies}
             selectedTag={selectedTag}
             onSelectNode={handleSelectNode}
             onSelectLink={handleSelectLink}
@@ -551,6 +556,7 @@ export const App: React.FC = () => {
           link={selectedLink}
           networkState={networkState}
           nodes={nodes}
+          networkPolicies={networkPolicies}
           open={Boolean(selectedLink)}
           onClose={() => setSelectedLink(null)}
           onEditLink={handleEditLink}
@@ -622,7 +628,10 @@ export const App: React.FC = () => {
 
         <SettingsModal
           open={settingsOpen}
-          onClose={() => setSettingsOpen(false)}
+          onClose={() => {
+            setSettingsOpen(false);
+            loadData();
+          }}
           onLogoutAll={() => {
             setAuthenticated(false);
             setIsUnlocked(false);
