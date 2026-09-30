@@ -363,7 +363,7 @@ table inet easy42 {
     # another fallback rule: make local socket egress traffic which source ip is local uses main ip / ip6.
     fib saddr type local oifname @easy42_ifname meta nfproto ipv4 snat to $self_ip
 {{- if .ip6 }}
-    fib saddr type local oifname @easy42_ifname meta nfproto ipv6 snat to $self_ip6
+    fib saddr type local ip6 saddr != fe80::/10 oifname @easy42_ifname meta nfproto ipv6 snat to $self_ip6
 {{- end }}
 
     ip daddr @private_ip oifname @easy42_ifname accept
