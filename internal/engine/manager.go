@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -3158,7 +3159,204 @@ func (m *Manager) ExecuteSyncNodes(isForce bool, nodeNames ...string) ([]config.
 	return results, nil
 }
 
-// UpdateState connects to devices via SSH/SFTP to fetch their live state and update state.json.
+type probeOutput struct {
+	ifaces   map[string]config.StateInterface
+	hostname string
+	wgStatus []config.WgInterfaceStatus
+	err      error
+}
+
+type agentProbeConfigFile struct {
+	Path    string `json:"path"`
+	Content string `json:"content"`
+	Hash    string `json:"hash"`
+}
+
+type agentProbeResult struct {
+	Hostname string                          `json:"hostname"`
+	Configs  map[string]agentProbeConfigFile `json:"configs"`
+}
+
+type linkMetaInfo struct {
+	peerNode            string
+	peerPubKey          string
+	persistentKeepalive int
+}
+
+func (m *Manager) collectStateFromAgent(targetNode config.Node, meta map[string]linkMetaInfo, existingIfaces map[string]config.StateInterface) (probeOutput, error) {
+	if m.agentHub == nil || !m.agentHub.IsConnected(targetNode.Name) {
+		return probeOutput{}, fmt.Errorf("agent not connected")
+	}
+
+	// 1. Send ProbeSystem command to agent
+	cmdCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var probeRes agentProbeResult
+	cmdResp, err := m.agentHub.SendCommand(cmdCtx, targetNode.Name, &agentpb.CommandRequest{
+		Command: &agentpb.CommandRequest_ProbeSystem{
+			ProbeSystem: &agentpb.ProbeSystemCmd{},
+		},
+	})
+	if err == nil && cmdResp.Success && cmdResp.Stdout != "" {
+		_ = json.Unmarshal([]byte(cmdResp.Stdout), &probeRes)
+	}
+
+	// 2. Fetch live node status and telemetry
+	nodeStatus := m.agentHub.NodeStatus(targetNode.Name)
+	telemetry := m.agentHub.GetTelemetry(targetNode.Name)
+
+	wgMap := make(map[string]*config.WgInterfaceStatus)
+	for i := range nodeStatus.WgInterfaces {
+		wgMap[nodeStatus.WgInterfaces[i].Name] = &nodeStatus.WgInterfaces[i]
+	}
+
+	operUp := make(map[string]bool)
+	if telemetry != nil {
+		for _, iface := range telemetry.Interfaces {
+			operUp[iface.Name] = iface.IsUp
+		}
+	}
+
+	// 3. Assemble all known interface names
+	allIfaces := make(map[string]bool)
+	for iface := range probeRes.Configs {
+		allIfaces[iface] = true
+	}
+	for iface := range meta {
+		allIfaces[iface] = true
+	}
+	for iface := range existingIfaces {
+		allIfaces[iface] = true
+	}
+	for iface := range wgMap {
+		if strings.HasPrefix(iface, "wg42") {
+			allIfaces[iface] = true
+		}
+	}
+
+	nodeIfaces := make(map[string]config.StateInterface)
+	now := time.Now()
+
+	for ifaceName := range allIfaces {
+		if !strings.HasPrefix(ifaceName, "wg42") {
+			continue
+		}
+
+		filePath := "/etc/wireguard/" + ifaceName + ".conf"
+		if cfg, ok := probeRes.Configs[ifaceName]; ok && cfg.Path != "" {
+			filePath = cfg.Path
+		}
+
+		hash := ""
+		if cfg, ok := probeRes.Configs[ifaceName]; ok && cfg.Hash != "" {
+			hash = cfg.Hash
+		} else if ex, ok := existingIfaces[ifaceName]; ok {
+			hash = ex.ConfigHash
+		}
+
+		isStarted := operUp[ifaceName]
+		if !isStarted {
+			_, inWg := wgMap[ifaceName]
+			isStarted = inWg
+		}
+
+		status := "down"
+		if isStarted {
+			status = "active"
+		}
+
+		ifaceMeta := meta[ifaceName]
+		var latestHandshake time.Time
+		var rxBytes, txBytes int64
+		keepalive := ifaceMeta.persistentKeepalive
+
+		if wgInfo, ok := wgMap[ifaceName]; ok && len(wgInfo.Peers) > 0 {
+			var matchedPeer *config.WgPeerStatus
+			for pIdx := range wgInfo.Peers {
+				if ifaceMeta.peerPubKey != "" && wgInfo.Peers[pIdx].PublicKey == ifaceMeta.peerPubKey {
+					matchedPeer = &wgInfo.Peers[pIdx]
+					break
+				}
+			}
+			if matchedPeer == nil {
+				matchedPeer = &wgInfo.Peers[0]
+			}
+			latestHandshake = matchedPeer.LatestHandshake
+			rxBytes = matchedPeer.TransferRxBytes
+			txBytes = matchedPeer.TransferTxBytes
+			if matchedPeer.PersistentKeepalive > 0 {
+				keepalive = matchedPeer.PersistentKeepalive
+			}
+		}
+
+		var handshakePtr *time.Time
+		workingState := config.WorkingStateUnknown
+
+		if !isStarted {
+			workingState = config.WorkingStateNotWorking
+		} else if !latestHandshake.IsZero() {
+			handshakePtr = &latestHandshake
+			if now.Sub(latestHandshake) <= 3*time.Minute {
+				workingState = config.WorkingStateWorking
+			} else {
+				if keepalive > 0 {
+					workingState = config.WorkingStateNotWorking
+				} else {
+					workingState = config.WorkingStateUnknown
+				}
+			}
+		} else {
+			if keepalive > 0 {
+				workingState = config.WorkingStateNotWorking
+			} else {
+				workingState = config.WorkingStateUnknown
+			}
+		}
+
+		nodeIfaces[ifaceName] = config.StateInterface{
+			Name:            ifaceName,
+			TargetFile:      filePath,
+			ConfigHash:      hash,
+			PeerNode:        ifaceMeta.peerNode,
+			PeerPubKey:      ifaceMeta.peerPubKey,
+			Status:          status,
+			LatestHandshake: handshakePtr,
+			WorkingState:    workingState,
+			TransferRxBytes: rxBytes,
+			TransferTxBytes: txBytes,
+			AppliedAt:       now,
+		}
+	}
+
+	hostname := targetNode.Name
+	if probeRes.Hostname != "" {
+		hostname = probeRes.Hostname
+	} else if nodeStatus.Hostname != "" {
+		hostname = nodeStatus.Hostname
+	}
+
+	m.mu.Lock()
+	m.statuses[targetNode.Name] = &config.NodeStatus{
+		Name:         targetNode.Name,
+		Host:         targetNode.Host,
+		LastSeen:     now,
+		Connected:    true,
+		Hostname:     hostname,
+		WgInterfaces: nodeStatus.WgInterfaces,
+		Interfaces:   nodeStatus.Interfaces,
+		Mode:         "agent",
+	}
+	m.mu.Unlock()
+
+	return probeOutput{
+		ifaces:   nodeIfaces,
+		hostname: hostname,
+		wgStatus: nodeStatus.WgInterfaces,
+	}, nil
+}
+
+// UpdateState connects to devices via Agent or SSH/SFTP to fetch their live state and update state.json.
 // If nodeNames are provided, only those specific nodes are refreshed and their links/interfaces updated.
 func (m *Manager) UpdateState(nodeNames ...string) (*config.NetworkState, []string, error) {
 	m.mu.RLock()
@@ -3169,6 +3367,15 @@ func (m *Manager) UpdateState(nodeNames ...string) (*config.NetworkState, []stri
 	copy(links, cfg.Links)
 	m.mu.RUnlock()
 
+	currentState := m.stateStore.Get()
+	if currentState == nil {
+		currentState = &config.NetworkState{
+			Nodes: make(map[string]config.StateNode),
+		}
+	} else if currentState.Nodes == nil {
+		currentState.Nodes = make(map[string]config.StateNode)
+	}
+
 	targetMap := make(map[string]bool)
 	for _, name := range nodeNames {
 		trimmed := strings.TrimSpace(name)
@@ -3178,11 +3385,6 @@ func (m *Manager) UpdateState(nodeNames ...string) (*config.NetworkState, []stri
 	}
 	isPartialUpdate := len(targetMap) > 0
 
-	type linkMetaInfo struct {
-		peerNode            string
-		peerPubKey          string
-		persistentKeepalive int
-	}
 	linkMeta := make(map[string]map[string]linkMetaInfo)
 	for _, link := range links {
 		// End From
@@ -3244,12 +3446,61 @@ func (m *Manager) UpdateState(nodeNames ...string) (*config.NetworkState, []stri
 		go func(targetNode config.Node) {
 			defer wg.Done()
 
-			type probeOutput struct {
-				ifaces   map[string]config.StateInterface
-				hostname string
-				wgStatus []config.WgInterfaceStatus
-				err      error
+			var existingNodeIfaces map[string]config.StateInterface
+			if exNode, ok := currentState.Nodes[targetNode.Name]; ok {
+				existingNodeIfaces = exNode.Interfaces
 			}
+
+			// 1. If agent is connected, collect latest state directly via agent
+			if m.agentHub != nil && m.agentHub.IsConnected(targetNode.Name) {
+				out, err := m.collectStateFromAgent(targetNode, linkMeta[targetNode.Name], existingNodeIfaces)
+				if err == nil {
+					mu.Lock()
+					results = append(results, nodeIfaceResult{
+						nodeName: targetNode.Name,
+						host:     targetNode.Host,
+						ifaces:   out.ifaces,
+					})
+					mu.Unlock()
+					return
+				}
+				// If agent mode is active and no SSH host is configured, do not attempt SSH
+				if targetNode.IsAgentMode() && (targetNode.Host == "" || targetNode.Host == "none") {
+					mu.Lock()
+					warnings = append(warnings, fmt.Sprintf("%s: agent collection failed: %v", targetNode.Name, err))
+					mu.Unlock()
+					m.mu.Lock()
+					m.statuses[targetNode.Name] = &config.NodeStatus{
+						Name:      targetNode.Name,
+						Host:      targetNode.Host,
+						LastSeen:  time.Now(),
+						Connected: false,
+						Error:     fmt.Sprintf("agent collection failed: %v", err),
+						Mode:      "agent",
+					}
+					m.mu.Unlock()
+					return
+				}
+			}
+
+			// If node is in agent mode and disconnected, and no SSH host is configured
+			if targetNode.IsAgentMode() && (targetNode.Host == "" || targetNode.Host == "none") {
+				mu.Lock()
+				warnings = append(warnings, fmt.Sprintf("%s: agent is disconnected", targetNode.Name))
+				mu.Unlock()
+				m.mu.Lock()
+				m.statuses[targetNode.Name] = &config.NodeStatus{
+					Name:      targetNode.Name,
+					Host:      targetNode.Host,
+					LastSeen:  time.Now(),
+					Connected: false,
+					Error:     "agent is disconnected",
+					Mode:      "agent",
+				}
+				m.mu.Unlock()
+				return
+			}
+
 			outChan := make(chan probeOutput, 1)
 
 			go func() {
@@ -3427,7 +3678,7 @@ func (m *Manager) UpdateState(nodeNames ...string) (*config.NetworkState, []stri
 	wg.Wait()
 
 	// Update state store
-	currentState := m.stateStore.Get()
+	currentState = m.stateStore.Get()
 
 	// Remove deleted or external nodes from state ONLY on full cluster updates
 	if !isPartialUpdate {

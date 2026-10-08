@@ -1,13 +1,28 @@
+use std::collections::HashMap;
 use std::fs::{self, File};
 use std::io::Write;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::process::Command;
 use std::time::Instant;
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use tracing::info;
 
 use crate::collector::proto;
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ProbeConfigFile {
+    pub path: String,
+    pub content: String,
+    pub hash: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ProbeSystemResult {
+    pub hostname: String,
+    pub configs: HashMap<String, ProbeConfigFile>,
+}
 
 pub struct CommandExecutor;
 
@@ -40,7 +55,7 @@ impl CommandExecutor {
                 self.run_looking_glass(lg)
             }
             Some(proto::command_request::Command::ProbeSystem(_)) => {
-                (true, 0, "probe completed".to_string(), String::new())
+                self.probe_system()
             }
             None => (false, -1, String::new(), "unknown command".to_string()),
         };
@@ -228,6 +243,51 @@ done
                     _ => (false, -1, String::new(), format!("command '{}' not allowed by agent security policy", first_word)),
                 }
             }
+        }
+    }
+
+    fn probe_system(&self) -> (bool, i32, String, String) {
+        let hostname = fs::read_to_string("/proc/sys/kernel/hostname")
+            .unwrap_or_default()
+            .trim()
+            .to_string();
+
+        let mut configs = HashMap::new();
+        if let Ok(entries) = fs::read_dir("/etc/wireguard") {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
+                    if file_name.starts_with("wg42") && file_name.ends_with(".conf") {
+                        let iface = file_name.trim_end_matches(".conf").to_string();
+                        if let Ok(content) = fs::read_to_string(&path) {
+                            let mut hasher = Sha256::new();
+                            let normalized = content.replace("\r\n", "\n");
+                            let normalized_trimmed = normalized.trim_end();
+                            hasher.update(normalized_trimmed.as_bytes());
+                            let hash = format!("{:x}", hasher.finalize());
+
+                            configs.insert(
+                                iface,
+                                ProbeConfigFile {
+                                    path: path.to_string_lossy().to_string(),
+                                    content,
+                                    hash,
+                                },
+                            );
+                        }
+                    }
+                }
+            }
+        }
+
+        let result = ProbeSystemResult {
+            hostname,
+            configs,
+        };
+
+        match serde_json::to_string(&result) {
+            Ok(json) => (true, 0, json, String::new()),
+            Err(e) => (false, -1, String::new(), format!("failed to serialize probe result: {}", e)),
         }
     }
 }

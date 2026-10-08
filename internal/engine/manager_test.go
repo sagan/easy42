@@ -1,16 +1,28 @@
 package engine
 
 import (
+	"encoding/json"
 	"fmt"
 	"net"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
 	"time"
 
+	"easy42/internal/agent"
+	agentpb "easy42/internal/agent/proto"
 	"easy42/internal/compiler"
 	"easy42/internal/config"
+
+	"github.com/gorilla/websocket"
+	"google.golang.org/protobuf/proto"
 )
+
+var testUpgrader = websocket.Upgrader{
+	CheckOrigin: func(r *http.Request) bool { return true },
+}
 
 func TestAddLinkMTU(t *testing.T) {
 	tempDir, err := os.MkdirTemp("", "easy42-engine-test-*")
@@ -977,6 +989,172 @@ func TestUpdateStatePartialNodeFilter(t *testing.T) {
 	// Ensure node-b was NOT deleted from recorded state during partial update
 	if _, exists := stPartial.Nodes["node-b"]; !exists {
 		t.Errorf("Partial update for node-a should have preserved node-b in state store")
+	}
+}
+
+func TestUpdateStateWithAgentMode(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "easy42-engine-agent-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	store := config.NewStore(tempDir)
+	pass, err := store.Initialize()
+	if err != nil {
+		t.Fatalf("Failed to init store: %v", err)
+	}
+
+	mgr := NewManager(store)
+	if err := mgr.Unlock(pass); err != nil {
+		t.Fatalf("Failed to unlock manager: %v", err)
+	}
+
+	// 1. Add agent node with Host="none" (no SSH) and AgentToken
+	err = mgr.AddNode(config.Node{
+		Name:       "agent-router",
+		Host:       "none",
+		IP:         "172.20.1.1",
+		AgentToken: "agent-test-token-xyz",
+	})
+	if err != nil {
+		t.Fatalf("Failed to add agent node: %v", err)
+	}
+
+	// Add second node and a link
+	err = mgr.AddNode(config.Node{
+		Name: "core-router",
+		Host: "none",
+		IP:   "172.20.1.2",
+	})
+	if err != nil {
+		t.Fatalf("Failed to add core node: %v", err)
+	}
+
+	link, err := mgr.AddLink("agent-router", "core-router", 0, 0, nil)
+	if err != nil {
+		t.Fatalf("Failed to add link: %v", err)
+	}
+
+	ifaceName := link.From.Interface
+
+	// 2. Connect mock agent
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ws, err := testUpgrader.Upgrade(w, r, nil)
+		if err != nil {
+			return
+		}
+		conn := agent.NewConnection("agent-router", ws, mgr.AgentHub())
+		mgr.AgentHub().Register(conn)
+		go conn.ReadLoop()
+	}))
+	defer mockServer.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(mockServer.URL, "http")
+	clientWs, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("failed to dial mock agent server: %v", err)
+	}
+	defer clientWs.Close()
+
+	time.Sleep(50 * time.Millisecond)
+
+	if !mgr.AgentHub().IsConnected("agent-router") {
+		t.Fatalf("expected agent-router to be connected in AgentHub")
+	}
+
+	// Handle agent commands (like ProbeSystem) on clientWs
+	go func() {
+		for {
+			_, data, err := clientWs.ReadMessage()
+			if err != nil {
+				return
+			}
+			var msg agentpb.AgentMessage
+			if err := proto.Unmarshal(data, &msg); err == nil {
+				if cmd := msg.GetCommandReq(); cmd != nil {
+					probeResult := map[string]any{
+						"hostname": "agent-linux-box",
+						"configs": map[string]any{
+							ifaceName: map[string]any{
+								"path":    "/etc/wireguard/" + ifaceName + ".conf",
+								"content": "[Interface]\nPrivateKey = ...\n",
+								"hash":    "hash-core-123",
+							},
+						},
+					}
+					outJSON, _ := json.Marshal(probeResult)
+					respMsg := &agentpb.AgentMessage{
+						Payload: &agentpb.AgentMessage_CommandResp{
+							CommandResp: &agentpb.CommandResponse{
+								RequestId: cmd.RequestId,
+								Success:   true,
+								Stdout:    string(outJSON),
+							},
+						},
+					}
+					respData, _ := proto.Marshal(respMsg)
+					_ = clientWs.WriteMessage(websocket.BinaryMessage, respData)
+				}
+			}
+		}
+	}()
+
+	// Feed mock telemetry to AgentHub
+	nowSec := time.Now().Unix()
+	mgr.AgentHub().UpdateTelemetry("agent-router", &agentpb.TelemetryReport{
+		Interfaces: []*agentpb.InterfaceMetrics{
+			{Name: ifaceName, IsUp: true, Addresses: []string{"10.42.0.1/31"}},
+		},
+		WgPeers: []*agentpb.WgPeerMetrics{
+			{
+				InterfaceName:     ifaceName,
+				PublicKey:         link.To.PublicKey,
+				Endpoint:          "1.2.3.4:51820",
+				LastHandshakeTime: nowSec,
+				RxBytes:           54321,
+				TxBytes:           12345,
+			},
+		},
+	})
+
+	// 3. Run UpdateState("agent-router") - should collect via agent without trying SSH
+	st, warnings, err := mgr.UpdateState("agent-router")
+	if err != nil {
+		t.Fatalf("UpdateState failed: %v (warnings: %v)", err, warnings)
+	}
+
+	stNode, exists := st.Nodes["agent-router"]
+	if !exists {
+		t.Fatalf("expected agent-router to exist in state")
+	}
+
+	iface, ok := stNode.Interfaces[ifaceName]
+	if !ok {
+		t.Fatalf("expected %s interface in agent-router state: %+v", ifaceName, stNode.Interfaces)
+	}
+
+	if iface.Status != "active" {
+		t.Errorf("expected interface status active, got %s", iface.Status)
+	}
+	if iface.WorkingState != config.WorkingStateWorking {
+		t.Errorf("expected working state %s, got %s", config.WorkingStateWorking, iface.WorkingState)
+	}
+	if iface.TransferRxBytes != 54321 || iface.TransferTxBytes != 12345 {
+		t.Errorf("transfer bytes mismatch: rx=%d tx=%d", iface.TransferRxBytes, iface.TransferTxBytes)
+	}
+	if iface.ConfigHash != "hash-core-123" {
+		t.Errorf("expected config hash hash-core-123, got %s", iface.ConfigHash)
+	}
+
+	// Verify NodeStatus in manager
+	nodeStatuses := mgr.GetNodeStatuses()
+	nodeStatus, ok := nodeStatuses["agent-router"]
+	if !ok || !nodeStatus.Connected {
+		t.Fatalf("expected nodeStatus to be connected: %+v", nodeStatus)
+	}
+	if nodeStatus.Mode != "agent" {
+		t.Errorf("expected nodeStatus mode to be agent, got %s", nodeStatus.Mode)
 	}
 }
 

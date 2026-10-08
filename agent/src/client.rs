@@ -161,7 +161,21 @@ impl AgentClient {
                                 info!("Received command request: id={}", cmd.request_id);
                                 let exec = executor.clone();
                                 let resp_tx = tx_cmd_resp.clone();
+                                let is_probe = matches!(cmd.command, Some(proto::command_request::Command::ProbeSystem(_)));
+                                let col_opt = if is_probe { Some(self.collector.clone()) } else { None };
                                 tokio::spawn(async move {
+                                    if let Some(col) = col_opt {
+                                        let telemetry = {
+                                            let mut c = col.lock().await;
+                                            c.collect_telemetry()
+                                        };
+                                        let telem_msg = proto::AgentMessage {
+                                            seq: 0,
+                                            timestamp: now_millis(),
+                                            payload: Some(proto::agent_message::Payload::Telemetry(telemetry)),
+                                        };
+                                        let _ = resp_tx.send(telem_msg).await;
+                                    }
                                     let resp = exec.execute(cmd);
                                     let out_msg = proto::AgentMessage {
                                         seq: 0,
