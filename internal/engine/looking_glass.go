@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
+	agentpb "easy42/internal/agent/proto"
 	"easy42/internal/config"
 	"easy42/internal/lookingglass"
 	"github.com/google/uuid"
@@ -211,7 +213,70 @@ func (m *Manager) RunLookingGlass(ctx context.Context, req lookingglass.RunReque
 		timeout = 60 * time.Second
 	}
 
-	results := lookingglass.ExecuteMultiNode(ctx, m.pool, targetNodes, cmd, parser, targetVal, timeout)
+	results := make(map[string]lookingglass.NodeResult)
+	var sshNodes []config.Node
+	var agentWg sync.WaitGroup
+	var agentMu sync.Mutex
+
+	for _, node := range targetNodes {
+		if node.IsAgentMode() {
+			agentWg.Add(1)
+			go func(n config.Node) {
+				defer agentWg.Done()
+				start := time.Now()
+				nr := lookingglass.NodeResult{
+					NodeName: n.Name,
+					Command:  cmd,
+					Parser:   parser,
+				}
+				if !m.agentHub.IsConnected(n.Name) {
+					nr.ExitCode = -1
+					nr.Error = "Agent is not connected"
+					nr.DurationMs = time.Since(start).Milliseconds()
+				} else {
+					cmdCtx, cancel := context.WithTimeout(ctx, timeout)
+					defer cancel()
+					resp, err := m.agentHub.SendCommand(cmdCtx, n.Name, &agentpb.CommandRequest{
+						Command: &agentpb.CommandRequest_LookingGlass{
+							LookingGlass: &agentpb.LookingGlassCmd{
+								Tool:           agentpb.LookingGlassCmd_CUSTOM,
+								Command:        cmd,
+								TimeoutSeconds: uint32(timeout.Seconds()),
+							},
+						},
+					})
+					nr.DurationMs = time.Since(start).Milliseconds()
+					if err != nil {
+						nr.ExitCode = -1
+						nr.Error = err.Error()
+					} else {
+						nr.ExitCode = int(resp.ExitCode)
+						nr.RawOutput = resp.Stdout
+						if resp.Stderr != "" {
+							if nr.RawOutput != "" {
+								nr.RawOutput += "\n"
+							}
+							nr.RawOutput += resp.Stderr
+						}
+						nr.Parsed = lookingglass.ParseOutput(parser, nr.RawOutput, targetVal)
+					}
+				}
+				agentMu.Lock()
+				results[n.Name] = nr
+				agentMu.Unlock()
+			}(node)
+		} else {
+			sshNodes = append(sshNodes, node)
+		}
+	}
+
+	if len(sshNodes) > 0 {
+		sshResults := lookingglass.ExecuteMultiNode(ctx, m.pool, sshNodes, cmd, parser, targetVal, timeout)
+		for k, v := range sshResults {
+			results[k] = v
+		}
+	}
+	agentWg.Wait()
 
 	return lookingglass.RunResponse{
 		TaskID:  req.TaskID,

@@ -117,6 +117,7 @@ func executeScript(
 	sftpClient *sftp.Client,
 	taskID string,
 	scriptName string,
+	extraFiles ...map[string][]byte,
 ) (stdout string, stderr string, exitCode int, durationMs int64, err error) {
 	start := time.Now()
 
@@ -164,6 +165,24 @@ func executeScript(
 	}
 	_ = f.Close()
 	_ = sftpClient.Chmod(remoteScriptPath, 0755)
+
+	// Write extra payload files if provided
+	if len(extraFiles) > 0 && extraFiles[0] != nil {
+		for fname, content := range extraFiles[0] {
+			extraPath := filepath.Join(remoteDir, fname)
+			if ef, err := sftpClient.OpenFile(extraPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC); err == nil {
+				_, _ = ef.Write(content)
+				_ = ef.Close()
+				perm := os.FileMode(0644)
+				if fname == "easy42-agent" {
+					perm = 0755
+				} else if fname == "agent.toml" {
+					perm = 0600
+				}
+				_ = sftpClient.Chmod(extraPath, perm)
+			}
+		}
+	}
 
 	// Execute remote script
 	execCmd := fmt.Sprintf("sh %s", remoteScriptPath)
@@ -228,6 +247,45 @@ func RunTask(
 	}
 
 	stdout, stderr, exitCode, duration, err := executeScript(sshClient, sftpClient, taskID, "run.sh")
+	res.DurationMs = duration
+	res.ExitCode = exitCode
+
+	output := strings.TrimSpace(stdout)
+	if stderrOutput := strings.TrimSpace(stderr); stderrOutput != "" {
+		if output != "" {
+			output += "\n" + stderrOutput
+		} else {
+			output = stderrOutput
+		}
+	}
+	if output == "" && err != nil {
+		output = err.Error()
+	}
+	res.Output = output
+
+	if exitCode == 0 && err == nil {
+		res.Success = true
+	} else {
+		res.Success = false
+	}
+
+	return res
+}
+
+// RunTaskWithPayload executes the task run.sh on a remote host with extra payload files uploaded
+func RunTaskWithPayload(
+	sshClient *golangssh.Client,
+	sftpClient *sftp.Client,
+	taskID string,
+	nodeName string,
+	payload map[string][]byte,
+) TaskRunResult {
+	res := TaskRunResult{
+		TaskID:   taskID,
+		NodeName: nodeName,
+	}
+
+	stdout, stderr, exitCode, duration, err := executeScript(sshClient, sftpClient, taskID, "run.sh", payload)
 	res.DurationMs = duration
 	res.ExitCode = exitCode
 

@@ -65,6 +65,11 @@ func New(cfg Config) *Server {
 		r.Get("/auth/status", s.handleAuthStatus)
 		r.Post("/auth/logout", s.handleLogout)
 
+		// Agent routes (public - authenticated via agent token)
+		r.HandleFunc("/agent/ws", s.handleAgentWebSocket)
+		r.Get("/agent/install.sh", s.handleAgentInstallScript)
+		r.Get("/agent/bin/{arch}", s.handleAgentBinary)
+
 		// Protected routes
 		r.Group(func(r chi.Router) {
 			r.Use(s.authMiddleware)
@@ -93,6 +98,8 @@ func New(cfg Config) *Server {
 			r.Post("/nodes/{name}/restart-bird", s.handleRestartNodeBird)
 			r.Post("/nodes/{name}/interfaces/{iface}/restart", s.handleRestartNodeInterface)
 			r.Post("/nodes/{name}/restart-wg/{iface}", s.handleRestartNodeInterface)
+			r.Post("/nodes/{name}/agent-token", s.handleGenerateAgentToken)
+			r.Get("/nodes/{name}/telemetry", s.handleGetNodeTelemetry)
 
 			// Links
 			r.Get("/links", s.handleGetLinks)

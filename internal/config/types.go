@@ -210,6 +210,18 @@ type Node struct {
 	X             *float64          `json:"x,omitempty"`              // Graph X coordinate
 	Y             *float64          `json:"y,omitempty"`              // Graph Y coordinate
 	ModifiedAt    time.Time         `json:"modified_at,omitempty"`    // Last updated timestamp
+	Mode          string            `json:"mode,omitempty"`           // "ssh" (default) or "agent"
+	AgentToken    string            `json:"agent_token,omitempty"`     // Static shared token for agent authentication
+	AgentVersion  string            `json:"agent_version,omitempty"`   // Reported agent version
+	AgentLastSeen time.Time         `json:"agent_last_seen,omitempty"` // Timestamp of last agent heartbeat/report
+}
+
+// IsAgentMode returns true if the node is configured to use the agent
+func (n *Node) IsAgentMode() bool {
+	if n == nil {
+		return false
+	}
+	return strings.EqualFold(n.Mode, "agent")
 }
 
 // ExternalIp returns ExternalIP if set, or IP if not set
@@ -353,6 +365,8 @@ type NodeStatus struct {
 	Interfaces   []InterfaceInfo     `json:"interfaces"`
 	WgInterfaces []WgInterfaceStatus `json:"wg_interfaces"`
 	Error        string              `json:"error,omitempty"`
+	Mode         string              `json:"mode,omitempty"`
+	AgentVersion string              `json:"agent_version,omitempty"`
 }
 
 // ActionType represents an action to execute on a node during sync

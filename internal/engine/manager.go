@@ -11,6 +11,8 @@ import (
 	"sync"
 	"time"
 
+	"easy42/internal/agent"
+	agentpb "easy42/internal/agent/proto"
 	"easy42/internal/compiler"
 	"easy42/internal/config"
 	"easy42/internal/crypto"
@@ -34,6 +36,8 @@ type Manager struct {
 	vault       *crypto.KeyVault
 	pool        *ssh.ClientPool
 	roaManager  *roa.Manager
+	agentHub    *agent.Hub
+	serverURL   string
 	statuses    map[string]*config.NodeStatus
 	lastSync    time.Time
 	lastResults []config.SyncResult
@@ -50,9 +54,29 @@ func NewManager(store *config.Store) *Manager {
 		vault:       crypto.NewKeyVault(),
 		pool:        ssh.NewClientPool(),
 		roaManager:  roaManager,
+		agentHub:    agent.NewHub(),
 		statuses:    make(map[string]*config.NodeStatus),
 		lastResults: make([]config.SyncResult, 0),
 	}
+}
+
+// AgentHub returns the agent hub
+func (m *Manager) AgentHub() *agent.Hub {
+	return m.agentHub
+}
+
+// SetServerURL sets the base server URL for agent configuration
+func (m *Manager) SetServerURL(u string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.serverURL = u
+}
+
+// GetServerURL returns the base server URL
+func (m *Manager) GetServerURL() string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.serverURL
 }
 
 // ROAManager returns the underlying ROA cache manager
@@ -2113,7 +2137,7 @@ func (m *Manager) ProbeHost(host string, excludeNode ...string) (*ssh.ProbeResul
 	return ssh.ProbeHost(sshClient, host, nodes)
 }
 
-// RefreshNodeStatus refreshes a node's live status via SSH
+// RefreshNodeStatus refreshes a node's live status via SSH or Agent
 func (m *Manager) RefreshNodeStatus(nodeName string) (*config.NodeStatus, error) {
 	node := m.FindNode(nodeName)
 	if node == nil {
@@ -2127,6 +2151,18 @@ func (m *Manager) RefreshNodeStatus(nodeName string) (*config.NodeStatus, error)
 			LastSeen:  time.Now(),
 			Connected: true,
 			Hostname:  node.Name,
+		}
+		m.mu.Lock()
+		m.statuses[nodeName] = status
+		m.mu.Unlock()
+		return status, nil
+	}
+
+	if node.IsAgentMode() {
+		status := m.agentHub.NodeStatus(nodeName)
+		status.Host = node.Host
+		if !status.Connected {
+			status.Error = "agent is disconnected"
 		}
 		m.mu.Lock()
 		m.statuses[nodeName] = status
@@ -2173,8 +2209,31 @@ func (m *Manager) RestartNodeWireGuardInterfaces(nodeName string) (string, error
 		return "", ErrNodeNotFound
 	}
 	if node.IsExternal {
-		return "", fmt.Errorf("node %s is external and cannot be managed via SSH", nodeName)
+		return "", fmt.Errorf("node %s is external and cannot be managed", nodeName)
 	}
+
+	if node.IsAgentMode() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		resp, err := m.agentHub.SendCommand(ctx, nodeName, &agentpb.CommandRequest{
+			Command: &agentpb.CommandRequest_RestartService{
+				RestartService: &agentpb.RestartServiceCmd{
+					ServiceName: "wireguard",
+				},
+			},
+		})
+		if err != nil {
+			return "", fmt.Errorf("agent restart WireGuard failed: %w", err)
+		}
+		if !resp.Success {
+			return resp.Stdout, fmt.Errorf("failed to restart WireGuard: %s", resp.Stderr)
+		}
+		go func() {
+			_, _ = m.RefreshNodeStatus(nodeName)
+		}()
+		return resp.Stdout, nil
+	}
+
 	if node.Host == "" {
 		return "", fmt.Errorf("node %s has no host configured", nodeName)
 	}
@@ -2210,8 +2269,28 @@ func (m *Manager) RestartNodeBird(nodeName string) (string, error) {
 		return "", ErrNodeNotFound
 	}
 	if node.IsExternal {
-		return "", fmt.Errorf("node %s is external and cannot be managed via SSH", nodeName)
+		return "", fmt.Errorf("node %s is external and cannot be managed", nodeName)
 	}
+
+	if node.IsAgentMode() {
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cancel()
+		resp, err := m.agentHub.SendCommand(ctx, nodeName, &agentpb.CommandRequest{
+			Command: &agentpb.CommandRequest_RestartService{
+				RestartService: &agentpb.RestartServiceCmd{
+					ServiceName: "bird",
+				},
+			},
+		})
+		if err != nil {
+			return "", fmt.Errorf("agent restart bird failed: %w", err)
+		}
+		if !resp.Success {
+			return resp.Stdout, fmt.Errorf("failed to restart bird: %s", resp.Stderr)
+		}
+		return resp.Stdout, nil
+	}
+
 	if node.Host == "" {
 		return "", fmt.Errorf("node %s has no host configured", nodeName)
 	}
@@ -2239,8 +2318,32 @@ func (m *Manager) RestartNodeInterface(nodeName string, iface string) (string, e
 		return "", ErrNodeNotFound
 	}
 	if node.IsExternal {
-		return "", fmt.Errorf("node %s is external and cannot be managed via SSH", nodeName)
+		return "", fmt.Errorf("node %s is external and cannot be managed", nodeName)
 	}
+
+	if node.IsAgentMode() {
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cancel()
+		resp, err := m.agentHub.SendCommand(ctx, nodeName, &agentpb.CommandRequest{
+			Command: &agentpb.CommandRequest_ManageIface{
+				ManageIface: &agentpb.ManageInterface{
+					InterfaceName: iface,
+					Action:        agentpb.ManageInterface_RESTART,
+				},
+			},
+		})
+		if err != nil {
+			return "", fmt.Errorf("agent restart interface failed: %w", err)
+		}
+		if !resp.Success {
+			return resp.Stdout, fmt.Errorf("failed to restart WireGuard interface %s: %s", iface, resp.Stderr)
+		}
+		go func() {
+			_, _ = m.RefreshNodeStatus(nodeName)
+		}()
+		return resp.Stdout, nil
+	}
+
 	if node.Host == "" {
 		return "", fmt.Errorf("node %s has no host configured", nodeName)
 	}
@@ -2273,6 +2376,11 @@ func (m *Manager) GetNodeStatuses() map[string]config.NodeStatus {
 	if cfg != nil {
 		for _, n := range cfg.Nodes {
 			activeNodes[n.Name] = true
+			if n.IsAgentMode() {
+				st := m.agentHub.NodeStatus(n.Name)
+				st.Host = n.Host
+				m.statuses[n.Name] = st
+			}
 		}
 	}
 
@@ -2826,6 +2934,14 @@ func (m *Manager) ExecuteSyncNodes(isForce bool, nodeNames ...string) ([]config.
 		res := config.SyncResult{
 			NodeName: act.NodeName,
 			Action:   act.Description,
+		}
+
+		node := m.FindNode(act.NodeName)
+		if node != nil && node.IsAgentMode() {
+			m.executeAgentSyncAction(act, &res)
+			res.Duration = float64(time.Since(start).Milliseconds())
+			results = append(results, res)
+			continue
 		}
 
 		sshClient, sftpClient, err := m.pool.GetClient(act.Host)
@@ -4045,5 +4161,227 @@ func (m *Manager) DeleteTemplate(id string) error {
 
 	cfg.Templates = append(cfg.Templates[:idx], cfg.Templates[idx+1:]...)
 	return m.store.Save(cfg)
+}
+
+// executeAgentSyncAction handles applying sync actions via the connected Rust agent
+func (m *Manager) executeAgentSyncAction(act config.SyncAction, res *config.SyncResult) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	if !m.agentHub.IsConnected(act.NodeName) {
+		res.Success = false
+		res.Error = fmt.Sprintf("Node %s agent is not connected", act.NodeName)
+		return
+	}
+
+	// 1. Delete / Down interface
+	if act.Type == config.ActionDeleteConfig || act.Type == config.ActionDownInterface {
+		cmdResp, err := m.agentHub.SendCommand(ctx, act.NodeName, &agentpb.CommandRequest{
+			Command: &agentpb.CommandRequest_ManageIface{
+				ManageIface: &agentpb.ManageInterface{
+					InterfaceName: act.Interface,
+					Action:        agentpb.ManageInterface_DELETE,
+				},
+			},
+		})
+		if err != nil {
+			res.Success = false
+			res.Error = fmt.Sprintf("Agent command failed: %v", err)
+			return
+		}
+		if !cmdResp.Success {
+			res.Success = false
+			res.Error = fmt.Sprintf("Failed to delete interface %s: %s", act.Interface, cmdResp.Stderr)
+			return
+		}
+		res.Success = true
+		_ = m.stateStore.RemoveInterface(act.NodeName, act.Interface)
+		return
+	}
+
+	// 2. Write file
+	fileMode := uint32(0644)
+	if act.Type == config.ActionSyncNftablesConfig || strings.HasSuffix(act.TargetFile, ".nft") || strings.HasSuffix(act.TargetFile, ".sh") {
+		fileMode = 0755
+	} else if act.Type == config.ActionSyncConfig {
+		fileMode = 0600
+	}
+
+	fileResp, err := m.agentHub.SendCommand(ctx, act.NodeName, &agentpb.CommandRequest{
+		Command: &agentpb.CommandRequest_ApplyConfig{
+			ApplyConfig: &agentpb.ApplyConfigFile{
+				Path:     act.TargetFile,
+				Content:  []byte(act.FileContent),
+				FileMode: fileMode,
+			},
+		},
+	})
+	if err != nil {
+		res.Success = false
+		res.Error = fmt.Sprintf("Agent file write failed: %v", err)
+		return
+	}
+	if !fileResp.Success {
+		res.Success = false
+		res.Error = fmt.Sprintf("Failed to write config (%s): %s", act.TargetFile, fileResp.Stderr)
+		return
+	}
+
+	// 3. Post-action service reload depending on type
+	switch act.Type {
+	case config.ActionSyncRoaConfig:
+		res.Success = true
+		hash := config.HashConfig(compiler.NormalizeConfig(act.FileContent))
+		_ = m.stateStore.UpdateRoaState(act.NodeName, act.Host, act.TargetFile, hash, time.Now())
+
+	case config.ActionSyncBirdConfig:
+		reloadResp, err := m.agentHub.SendCommand(ctx, act.NodeName, &agentpb.CommandRequest{
+			Command: &agentpb.CommandRequest_ReloadBird{
+				ReloadBird: &agentpb.ReloadBirdCmd{},
+			},
+		})
+		if err != nil {
+			res.Success = false
+			res.Error = fmt.Sprintf("Agent BIRD reload failed: %v", err)
+			return
+		}
+		if !reloadResp.Success {
+			res.Success = false
+			res.Error = fmt.Sprintf("BIRD reload failed: %s %s", reloadResp.Stderr, reloadResp.Stdout)
+			return
+		}
+		res.Success = true
+		res.Output = reloadResp.Stdout
+		hash := config.HashConfig(compiler.NormalizeConfig(act.FileContent))
+		_ = m.stateStore.UpdateBirdState(act.NodeName, act.Host, hash, time.Now())
+
+	case config.ActionSyncNftablesConfig:
+		nftResp, err := m.agentHub.SendCommand(ctx, act.NodeName, &agentpb.CommandRequest{
+			Command: &agentpb.CommandRequest_ApplyNft{
+				ApplyNft: &agentpb.ApplyNftablesCmd{
+					ScriptPath: act.TargetFile,
+				},
+			},
+		})
+		if err != nil {
+			res.Success = false
+			res.Error = fmt.Sprintf("Agent nftables apply failed: %v", err)
+			return
+		}
+		if !nftResp.Success {
+			res.Success = false
+			res.Error = fmt.Sprintf("nftables apply failed: %s %s", nftResp.Stderr, nftResp.Stdout)
+			return
+		}
+		res.Success = true
+		res.Output = nftResp.Stdout
+		hash := config.HashConfig(compiler.NormalizeConfig(act.FileContent))
+		_ = m.stateStore.UpdateNftablesState(act.NodeName, act.Host, hash, time.Now())
+
+	default:
+		// WireGuard interface sync/up
+		wgResp, err := m.agentHub.SendCommand(ctx, act.NodeName, &agentpb.CommandRequest{
+			Command: &agentpb.CommandRequest_ManageIface{
+				ManageIface: &agentpb.ManageInterface{
+					InterfaceName: act.Interface,
+					Action:        agentpb.ManageInterface_SYNC_WG,
+					ConfigFile:    act.TargetFile,
+				},
+			},
+		})
+		if err != nil {
+			res.Success = false
+			res.Error = fmt.Sprintf("Agent WireGuard reload failed: %v", err)
+			return
+		}
+		if !wgResp.Success {
+			res.Success = false
+			res.Error = fmt.Sprintf("WireGuard reload failed: %s", wgResp.Stderr)
+			return
+		}
+		res.Success = true
+		res.Output = wgResp.Stdout
+		hash := config.HashConfig(compiler.NormalizeConfig(act.FileContent))
+		_ = m.stateStore.UpdateInterface(act.NodeName, act.Host, config.StateInterface{
+			Name:       act.Interface,
+			TargetFile: act.TargetFile,
+			ConfigHash: hash,
+			Status:     "active",
+			AppliedAt:  time.Now(),
+		})
+	}
+}
+
+// GenerateAgentToken creates or rotates the agent auth token for a node and sets its mode to "agent"
+func (m *Manager) GenerateAgentToken(nodeName string) (string, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	cfg := m.store.Get()
+	if cfg == nil {
+		return "", errors.New("config not loaded")
+	}
+
+	var found *config.Node
+	for i := range cfg.Nodes {
+		if cfg.Nodes[i].Name == nodeName {
+			found = &cfg.Nodes[i]
+			break
+		}
+	}
+	if found == nil {
+		return "", ErrNodeNotFound
+	}
+
+	token := agent.GenerateToken()
+	found.AgentToken = token
+	found.Mode = "agent"
+	found.ModifiedAt = time.Now().UTC()
+
+	if err := m.store.Save(cfg); err != nil {
+		return "", err
+	}
+	return token, nil
+}
+
+// FindNodeByAgentToken finds a node matching the provided agent token
+func (m *Manager) FindNodeByAgentToken(token string) *config.Node {
+	if strings.TrimSpace(token) == "" {
+		return nil
+	}
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	cfg := m.store.Get()
+	if cfg == nil {
+		return nil
+	}
+	for _, n := range cfg.Nodes {
+		if n.AgentToken != "" && n.AgentToken == token {
+			copyNode := n
+			return &copyNode
+		}
+	}
+	return nil
+}
+
+// ValidateAgentToken checks if the token is valid for a given node
+func (m *Manager) ValidateAgentToken(nodeName, token string) bool {
+	if strings.TrimSpace(token) == "" {
+		return false
+	}
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	cfg := m.store.Get()
+	if cfg == nil {
+		return false
+	}
+	for _, n := range cfg.Nodes {
+		if n.Name == nodeName {
+			return n.AgentToken != "" && n.AgentToken == token
+		}
+	}
+	return false
 }
 

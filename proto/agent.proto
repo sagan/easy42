@@ -1,0 +1,177 @@
+syntax = "proto3";
+
+package easy42.agent.v1;
+
+option go_package = "easy42/internal/agent/proto;agentpb";
+
+// AgentMessage is the top-level envelope for all WebSocket messages.
+message AgentMessage {
+  uint64 seq = 1;
+  int64 timestamp = 2; // Unix timestamp in milliseconds
+
+  oneof payload {
+    // Agent -> Server
+    RegisterRequest register_req = 10;
+    Heartbeat heartbeat = 11;
+    TelemetryReport telemetry = 12;
+    CommandResponse command_resp = 13;
+    ProbeResponse probe_resp = 14;
+
+    // Server -> Agent
+    RegisterResponse register_resp = 20;
+    HeartbeatAck heartbeat_ack = 21;
+    CommandRequest command_req = 22;
+  }
+}
+
+// ----------------- Registration & Handshake -----------------
+
+message RegisterRequest {
+  string node_name = 1;
+  string agent_version = 2;
+  string os_info = 3;
+  string hostname = 4;
+}
+
+message RegisterResponse {
+  bool success = 1;
+  string error_message = 2;
+  uint32 telemetry_interval_secs = 3; // Reporting interval in seconds (e.g. 10)
+}
+
+// ----------------- Heartbeats -----------------
+
+message Heartbeat {
+  int64 client_time = 1;
+}
+
+message HeartbeatAck {
+  int64 server_time = 1;
+}
+
+// ----------------- Telemetry & Metrics -----------------
+
+message TelemetryReport {
+  SystemMetrics system = 1;
+  repeated InterfaceMetrics interfaces = 2;
+  repeated WgPeerMetrics wg_peers = 3;
+  repeated BirdProtocolStatus bird_protocols = 4;
+}
+
+message SystemMetrics {
+  float cpu_percent = 1;
+  uint64 memory_used_bytes = 2;
+  uint64 memory_total_bytes = 3;
+  uint64 uptime_seconds = 4;
+  repeated float load_avg = 5; // [1m, 5m, 15m]
+}
+
+message InterfaceMetrics {
+  string name = 1;
+  bool is_up = 2;
+  uint64 rx_bytes = 3;
+  uint64 tx_bytes = 4;
+  uint64 rx_packets = 5;
+  uint64 tx_packets = 6;
+  uint64 rx_errors = 7;
+  uint64 tx_errors = 8;
+  repeated string addresses = 9;
+}
+
+message WgPeerMetrics {
+  string interface_name = 1;
+  string public_key = 2;
+  string endpoint = 3;
+  int64 last_handshake_time = 4; // Unix epoch seconds
+  uint64 rx_bytes = 5;
+  uint64 tx_bytes = 6;
+  int64 persistent_keepalive = 7;
+}
+
+message BirdProtocolStatus {
+  string name = 1;
+  string proto = 2;  // e.g. "BGP", "Kernel", "Device"
+  string state = 3;  // e.g. "up", "down", "start"
+  string info = 4;   // e.g. "Established", "Connect", "Passive"
+}
+
+// ----------------- Commands & RPC -----------------
+
+message CommandRequest {
+  string request_id = 1;
+
+  oneof command {
+    ApplyConfigFile apply_config = 10;
+    ManageInterface manage_iface = 11;
+    ReloadBirdCmd reload_bird = 12;
+    ApplyNftablesCmd apply_nft = 13;
+    LookingGlassCmd looking_glass = 14;
+    ProbeSystemCmd probe_system = 15;
+    RestartServiceCmd restart_service = 16;
+  }
+}
+
+message ApplyConfigFile {
+  string path = 1;        // Destination path (e.g. /etc/wireguard/wg42peer.conf)
+  bytes content = 2;      // File content
+  uint32 file_mode = 3;   // e.g. 0600 or 0644
+  string sha256_hash = 4; // Expected SHA-256 for verification
+}
+
+message ManageInterface {
+  string interface_name = 1;
+  enum Action {
+    UP = 0;
+    DOWN = 1;
+    RESTART = 2;
+    SYNC_WG = 3;
+    DELETE = 4;
+  }
+  Action action = 2;
+  string config_file = 3; // Optional path to wg config for SYNC_WG
+}
+
+message ReloadBirdCmd {
+  bool check_only = 1;
+}
+
+message ApplyNftablesCmd {
+  string script_path = 1;
+}
+
+message LookingGlassCmd {
+  enum Tool {
+    PING = 0;
+    TRACEROUTE = 1;
+    BIRDC = 2;
+    CUSTOM = 3;
+  }
+  Tool tool = 1;
+  string target = 2;
+  repeated string args = 3;
+  uint32 timeout_seconds = 4;
+  string command = 5;
+}
+
+message ProbeSystemCmd {}
+
+message RestartServiceCmd {
+  string service_name = 1; // "wireguard", "bird"
+}
+
+// ----------------- Responses -----------------
+
+message CommandResponse {
+  string request_id = 1;
+  bool success = 2;
+  int32 exit_code = 3;
+  string stdout = 4;
+  string stderr = 5;
+  uint64 duration_ms = 6;
+}
+
+message ProbeResponse {
+  string request_id = 1;
+  string hostname = 2;
+  repeated InterfaceMetrics interfaces = 3;
+}

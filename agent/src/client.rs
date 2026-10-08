@@ -1,0 +1,231 @@
+use std::sync::Arc;
+use std::time::Duration;
+use futures_util::{SinkExt, StreamExt};
+use http::Request;
+use prost::Message;
+use tokio::sync::Mutex;
+use tokio::time::{interval, sleep};
+use tokio_tungstenite::tungstenite::Message as WsMessage;
+use tracing::{error, info, warn};
+
+use crate::collector::{proto, MetricsCollector};
+use crate::config::AgentConfig;
+use crate::executor::CommandExecutor;
+
+pub struct AgentClient {
+    config: AgentConfig,
+    executor: Arc<CommandExecutor>,
+    collector: Arc<Mutex<MetricsCollector>>,
+}
+
+impl AgentClient {
+    pub fn new(config: AgentConfig) -> Self {
+        Self {
+            config,
+            executor: Arc::new(CommandExecutor::new()),
+            collector: Arc::new(Mutex::new(MetricsCollector::new())),
+        }
+    }
+
+    pub async fn run(&self) {
+        let mut backoff = Duration::from_secs(2);
+        let max_backoff = Duration::from_secs(60);
+
+        loop {
+            info!("Connecting to Easy42 server at {}...", self.config.server_ws_url());
+
+            match self.connect_and_serve().await {
+                Ok(()) => {
+                    info!("Connection closed normally, reconnecting...");
+                    backoff = Duration::from_secs(2);
+                }
+                Err(e) => {
+                    error!("Connection error: {}. Retrying in {:?}...", e, backoff);
+                    sleep(backoff).await;
+                    backoff = (backoff * 2).min(max_backoff);
+                }
+            }
+        }
+    }
+
+    async fn connect_and_serve(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        let ws_url = self.config.server_ws_url();
+
+        let request = Request::builder()
+            .uri(&ws_url)
+            .header("Authorization", format!("Bearer {}", self.config.token))
+            .header("X-Easy42-Agent-Token", &self.config.token)
+            .header("User-Agent", "easy42-agent/0.1.0")
+            .header("Host", get_host_from_url(&ws_url))
+            .header("Connection", "Upgrade")
+            .header("Upgrade", "websocket")
+            .header("Sec-WebSocket-Version", "13")
+            .header("Sec-WebSocket-Key", tokio_tungstenite::tungstenite::handshake::client::generate_key())
+            .body(())?;
+
+        let (ws_stream, _) = tokio_tungstenite::connect_async(request).await?;
+        info!("WebSocket connected successfully to {}", ws_url);
+
+        let (mut ws_sender, mut ws_receiver) = ws_stream.split();
+
+        // 1. Send RegisterRequest
+        let hostname = get_system_hostname();
+        let os_info = format!("{} {}", std::env::consts::OS, std::env::consts::ARCH);
+        let node_name = self.config.node_name.clone().unwrap_or_else(|| hostname.clone());
+
+        let reg_msg = proto::AgentMessage {
+            seq: 1,
+            timestamp: now_millis(),
+            payload: Some(proto::agent_message::Payload::RegisterReq(
+                proto::RegisterRequest {
+                    node_name,
+                    agent_version: "0.1.0".to_string(),
+                    os_info,
+                    hostname,
+                },
+            )),
+        };
+
+        let mut buf = Vec::new();
+        reg_msg.encode(&mut buf)?;
+        ws_sender.send(WsMessage::Binary(buf.into())).await?;
+
+        // Channels for outgoing messages from tickers
+        let (tx, mut rx) = tokio::sync::mpsc::channel::<proto::AgentMessage>(32);
+
+        // Task: Telemetry ticker
+        let tx_telemetry = tx.clone();
+        let collector_clone = self.collector.clone();
+        let interval_secs = self.config.telemetry_interval_secs;
+        let telemetry_task = tokio::spawn(async move {
+            let mut ticker = interval(Duration::from_secs(interval_secs));
+            loop {
+                ticker.tick().await;
+                let telemetry = {
+                    let mut col = collector_clone.lock().await;
+                    col.collect_telemetry()
+                };
+
+                let msg = proto::AgentMessage {
+                    seq: 0,
+                    timestamp: now_millis(),
+                    payload: Some(proto::agent_message::Payload::Telemetry(telemetry)),
+                };
+                if tx_telemetry.send(msg).await.is_err() {
+                    break;
+                }
+            }
+        });
+
+        // Task: Heartbeat ticker
+        let tx_hb = tx.clone();
+        let heartbeat_task = tokio::spawn(async move {
+            let mut ticker = interval(Duration::from_secs(15));
+            loop {
+                ticker.tick().await;
+                let msg = proto::AgentMessage {
+                    seq: 0,
+                    timestamp: now_millis(),
+                    payload: Some(proto::agent_message::Payload::Heartbeat(proto::Heartbeat {
+                        client_time: now_millis(),
+                    })),
+                };
+                if tx_hb.send(msg).await.is_err() {
+                    break;
+                }
+            }
+        });
+
+        // Writer task forwarding mpsc to WebSocket sink
+        let writer_task = tokio::spawn(async move {
+            while let Some(msg) = rx.recv().await {
+                let mut buf = Vec::new();
+                if msg.encode(&mut buf).is_ok() {
+                    if ws_sender.send(WsMessage::Binary(buf.into())).await.is_err() {
+                        break;
+                    }
+                }
+            }
+        });
+
+        // Reader loop processing incoming server commands
+        let executor = self.executor.clone();
+        let tx_cmd_resp = tx.clone();
+
+        while let Some(msg_result) = ws_receiver.next().await {
+            match msg_result {
+                Ok(WsMessage::Binary(bin)) => {
+                    if let Ok(agent_msg) = proto::AgentMessage::decode(&bin[..]) {
+                        match agent_msg.payload {
+                            Some(proto::agent_message::Payload::CommandReq(cmd)) => {
+                                info!("Received command request: id={}", cmd.request_id);
+                                let exec = executor.clone();
+                                let resp_tx = tx_cmd_resp.clone();
+                                tokio::spawn(async move {
+                                    let resp = exec.execute(cmd);
+                                    let out_msg = proto::AgentMessage {
+                                        seq: 0,
+                                        timestamp: now_millis(),
+                                        payload: Some(proto::agent_message::Payload::CommandResp(resp)),
+                                    };
+                                    let _ = resp_tx.send(out_msg).await;
+                                });
+                            }
+                            Some(proto::agent_message::Payload::HeartbeatAck(_)) => {
+                                // Heartbeat acknowledged
+                            }
+                            Some(proto::agent_message::Payload::RegisterResp(r)) => {
+                                if r.success {
+                                    info!("Agent successfully registered with Easy42 controller");
+                                } else {
+                                    warn!("Registration failed: {}", r.error_message);
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+                Ok(WsMessage::Ping(_p)) => {
+                    // Tungstenite automatically responds to Ping with Pong
+                }
+                Ok(WsMessage::Close(_)) => {
+                    info!("Received WebSocket Close frame");
+                    break;
+                }
+                Err(e) => {
+                    error!("WebSocket read error: {}", e);
+                    break;
+                }
+                _ => {}
+            }
+        }
+
+        telemetry_task.abort();
+        heartbeat_task.abort();
+        writer_task.abort();
+
+        Ok(())
+    }
+}
+
+fn now_millis() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0)
+}
+
+fn get_system_hostname() -> String {
+    std::fs::read_to_string("/proc/sys/kernel/hostname")
+        .map(|s| s.trim().to_string())
+        .unwrap_or_else(|_| "unknown".to_string())
+}
+
+fn get_host_from_url(url: &str) -> String {
+    let without_proto = url
+        .trim_start_matches("wss://")
+        .trim_start_matches("ws://")
+        .trim_start_matches("https://")
+        .trim_start_matches("http://");
+    without_proto.split('/').next().unwrap_or("localhost").to_string()
+}
