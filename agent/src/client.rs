@@ -4,7 +4,7 @@ use prost::Message;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Mutex;
-use tokio::time::{interval, sleep};
+use tokio::time::{interval, sleep, timeout};
 use tokio_tungstenite::tungstenite::Message as WsMessage;
 use tracing::{error, info, warn};
 
@@ -37,12 +37,16 @@ impl AgentClient {
                 self.config.server_ws_url()
             );
 
+            let start = std::time::Instant::now();
             match self.connect_and_serve().await {
                 Ok(()) => {
                     info!("Connection closed normally, reconnecting...");
                     backoff = Duration::from_secs(2);
                 }
                 Err(e) => {
+                    if start.elapsed() > Duration::from_secs(30) {
+                        backoff = Duration::from_secs(2);
+                    }
                     error!("Connection error: {}. Retrying in {:?}...", e, backoff);
                     sleep(backoff).await;
                     backoff = (backoff * 2).min(max_backoff);
@@ -69,12 +73,19 @@ impl AgentClient {
             )
             .body(())?;
 
-        let (ws_stream, _) = tokio_tungstenite::connect_async(request).await?;
+        // 1. Connect with a 10-second timeout to prevent hanging indefinitely on stalls
+        let connect_timeout = Duration::from_secs(10);
+        let (ws_stream, _) = match timeout(connect_timeout, tokio_tungstenite::connect_async(request)).await {
+            Ok(res) => res?,
+            Err(_) => {
+                return Err(format!("Connection attempt timed out after {:?}", connect_timeout).into());
+            }
+        };
         info!("WebSocket connected successfully to {}", ws_url);
 
         let (mut ws_sender, mut ws_receiver) = ws_stream.split();
 
-        // 1. Send RegisterRequest
+        // 2. Send RegisterRequest with timeout
         let hostname = get_system_hostname();
         let os_info = format!("{} {}", std::env::consts::OS, std::env::consts::ARCH);
         let node_name = self
@@ -98,7 +109,12 @@ impl AgentClient {
 
         let mut buf = Vec::new();
         reg_msg.encode(&mut buf)?;
-        ws_sender.send(WsMessage::Binary(buf.into())).await?;
+        match timeout(Duration::from_secs(10), ws_sender.send(WsMessage::Binary(buf.into()))).await {
+            Ok(res) => res?,
+            Err(_) => {
+                return Err("Timed out sending registration request".into());
+            }
+        };
 
         // Channels for outgoing messages from tickers
         let (tx, mut rx) = tokio::sync::mpsc::channel::<proto::AgentMessage>(32);
@@ -127,7 +143,7 @@ impl AgentClient {
             }
         });
 
-        // Task: Heartbeat ticker
+        // Task: Heartbeat ticker (every 15 seconds)
         let tx_hb = tx.clone();
         let heartbeat_task = tokio::spawn(async move {
             let mut ticker = interval(Duration::from_secs(15));
@@ -146,100 +162,124 @@ impl AgentClient {
             }
         });
 
-        // Writer task forwarding mpsc to WebSocket sink
-        let writer_task = tokio::spawn(async move {
+        // Writer future forwarding mpsc to WebSocket sink with per-send timeout
+        let writer_fut = async {
             while let Some(msg) = rx.recv().await {
                 let mut buf = Vec::new();
                 if msg.encode(&mut buf).is_ok() {
-                    if ws_sender.send(WsMessage::Binary(buf.into())).await.is_err() {
-                        break;
+                    match timeout(Duration::from_secs(10), ws_sender.send(WsMessage::Binary(buf.into()))).await {
+                        Ok(Ok(())) => {}
+                        Ok(Err(e)) => return Err(format!("WebSocket write error: {}", e)),
+                        Err(_) => return Err("WebSocket write timed out (10s)".to_string()),
                     }
                 }
             }
-        });
+            Ok::<(), String>(())
+        };
 
-        // Reader loop processing incoming server commands
+        // Reader future processing incoming server messages with read timeout (60s)
         let executor = self.executor.clone();
         let tx_cmd_resp = tx.clone();
+        let reader_fut = async {
+            loop {
+                let msg_result = match timeout(Duration::from_secs(60), ws_receiver.next()).await {
+                    Ok(Some(res)) => res,
+                    Ok(None) => {
+                        info!("WebSocket stream closed by server");
+                        return Ok(());
+                    }
+                    Err(_) => {
+                        return Err("WebSocket read timed out (no data from server for 60s)".to_string());
+                    }
+                };
 
-        while let Some(msg_result) = ws_receiver.next().await {
-            match msg_result {
-                Ok(WsMessage::Binary(bin)) => {
-                    if let Ok(agent_msg) = proto::AgentMessage::decode(&bin[..]) {
-                        match agent_msg.payload {
-                            Some(proto::agent_message::Payload::CommandReq(cmd)) => {
-                                info!("Received command request: id={}", cmd.request_id);
-                                let exec = executor.clone();
-                                let resp_tx = tx_cmd_resp.clone();
-                                let is_probe = matches!(
-                                    cmd.command,
-                                    Some(proto::command_request::Command::ProbeSystem(_))
-                                );
-                                let col_opt = if is_probe {
-                                    Some(self.collector.clone())
-                                } else {
-                                    None
-                                };
-                                tokio::spawn(async move {
-                                    if let Some(col) = col_opt {
-                                        let telemetry = {
-                                            let mut c = col.lock().await;
-                                            c.collect_telemetry()
-                                        };
-                                        let telem_msg = proto::AgentMessage {
+                match msg_result {
+                    Ok(WsMessage::Binary(bin)) => {
+                        if let Ok(agent_msg) = proto::AgentMessage::decode(&bin[..]) {
+                            match agent_msg.payload {
+                                Some(proto::agent_message::Payload::CommandReq(cmd)) => {
+                                    info!("Received command request: id={}", cmd.request_id);
+                                    let exec = executor.clone();
+                                    let resp_tx = tx_cmd_resp.clone();
+                                    let is_probe = matches!(
+                                        cmd.command,
+                                        Some(proto::command_request::Command::ProbeSystem(_))
+                                    );
+                                    let col_opt = if is_probe {
+                                        Some(self.collector.clone())
+                                    } else {
+                                        None
+                                    };
+                                    tokio::spawn(async move {
+                                        if let Some(col) = col_opt {
+                                            let telemetry = {
+                                                let mut c = col.lock().await;
+                                                c.collect_telemetry()
+                                            };
+                                            let telem_msg = proto::AgentMessage {
+                                                seq: 0,
+                                                timestamp: now_millis(),
+                                                payload: Some(
+                                                    proto::agent_message::Payload::Telemetry(telemetry),
+                                                ),
+                                            };
+                                            let _ = resp_tx.send(telem_msg).await;
+                                        }
+                                        let resp = exec.execute(cmd);
+                                        let out_msg = proto::AgentMessage {
                                             seq: 0,
                                             timestamp: now_millis(),
-                                            payload: Some(
-                                                proto::agent_message::Payload::Telemetry(telemetry),
-                                            ),
+                                            payload: Some(proto::agent_message::Payload::CommandResp(
+                                                resp,
+                                            )),
                                         };
-                                        let _ = resp_tx.send(telem_msg).await;
-                                    }
-                                    let resp = exec.execute(cmd);
-                                    let out_msg = proto::AgentMessage {
-                                        seq: 0,
-                                        timestamp: now_millis(),
-                                        payload: Some(proto::agent_message::Payload::CommandResp(
-                                            resp,
-                                        )),
-                                    };
-                                    let _ = resp_tx.send(out_msg).await;
-                                });
-                            }
-                            Some(proto::agent_message::Payload::HeartbeatAck(_)) => {
-                                // Heartbeat acknowledged
-                            }
-                            Some(proto::agent_message::Payload::RegisterResp(r)) => {
-                                if r.success {
-                                    info!("Agent successfully registered with Easy42 controller");
-                                } else {
-                                    warn!("Registration failed: {}", r.error_message);
+                                        let _ = resp_tx.send(out_msg).await;
+                                    });
                                 }
+                                Some(proto::agent_message::Payload::HeartbeatAck(_)) => {
+                                    // Heartbeat acknowledged
+                                }
+                                Some(proto::agent_message::Payload::RegisterResp(r)) => {
+                                    if r.success {
+                                        info!("Agent successfully registered with Easy42 controller");
+                                    } else {
+                                        warn!("Registration failed: {}", r.error_message);
+                                    }
+                                }
+                                _ => {}
                             }
-                            _ => {}
                         }
                     }
+                    Ok(WsMessage::Ping(_p)) => {
+                        // Tungstenite automatically responds to Ping with Pong
+                    }
+                    Ok(WsMessage::Close(_)) => {
+                        info!("Received WebSocket Close frame");
+                        return Ok(());
+                    }
+                    Err(e) => {
+                        return Err(format!("WebSocket read error: {}", e));
+                    }
+                    _ => {}
                 }
-                Ok(WsMessage::Ping(_p)) => {
-                    // Tungstenite automatically responds to Ping with Pong
-                }
-                Ok(WsMessage::Close(_)) => {
-                    info!("Received WebSocket Close frame");
-                    break;
-                }
-                Err(e) => {
-                    error!("WebSocket read error: {}", e);
-                    break;
-                }
-                _ => {}
             }
-        }
+        };
+
+        let result = tokio::select! {
+            r = writer_fut => match r {
+                Ok(()) => Ok(()),
+                Err(e) => Err(e.into()),
+            },
+            r = reader_fut => match r {
+                Ok(()) => Ok(()),
+                Err(e) => Err(e.into()),
+            },
+        };
 
         telemetry_task.abort();
         heartbeat_task.abort();
-        writer_task.abort();
 
-        Ok(())
+        result
     }
 }
 
