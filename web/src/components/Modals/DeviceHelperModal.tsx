@@ -1,9 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
 import {
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
   Button,
   Box,
   Typography,
@@ -24,18 +20,18 @@ import {
   Select,
   MenuItem,
 } from "@mui/material";
-import { Wrench, CheckCircle2, XCircle, Play, RotateCw, X, Terminal, Server, HelpCircle, Tag } from "lucide-react";
+import { CheckCircle2, XCircle, Play, RotateCw, Terminal, Server, HelpCircle, Tag } from "lucide-react";
 import { api } from "../../api/client";
 import { Node, TaskMeta, TaskStatusResult, TaskRunResult } from "../../types/api";
 
 interface DeviceHelperModalProps {
-  open: boolean;
-  onClose: () => void;
+  open?: boolean;
+  onClose?: () => void;
   nodes: Node[];
   initialNode?: string;
 }
 
-export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ open, onClose, nodes, initialNode }) => {
+export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, initialNode }) => {
   const [tasks, setTasks] = useState<TaskMeta[]>([]);
   const [loadingTasks, setLoadingTasks] = useState(false);
   const [selectedTaskId, setSelectedTaskId] = useState<string>("");
@@ -83,27 +79,25 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ open, onCl
   // Global error
   const [error, setError] = useState<string | null>(null);
 
-  // Load tasks on open
+  // Load tasks on mount
   useEffect(() => {
-    if (open) {
-      setError(null);
-      setStatuses({});
-      setRunResults({});
-      setCheckingNodes({});
-      setRunningNodes({});
-      setActiveLogNode(null);
-      setSelectedTag("All");
+    setError(null);
+    setStatuses({});
+    setRunResults({});
+    setCheckingNodes({});
+    setRunningNodes({});
+    setActiveLogNode(null);
+    setSelectedTag("All");
 
-      // Default selected nodes: initialNode if provided and managed, otherwise all managed nodes
-      if (initialNode && managedNodes.some((n) => n.name === initialNode)) {
-        setSelectedNodes([initialNode]);
-      } else {
-        setSelectedNodes(managedNodes.map((n) => n.name));
-      }
-
-      loadTasks();
+    // Default selected nodes: initialNode if provided and managed, otherwise all managed nodes
+    if (initialNode && managedNodes.some((n) => n.name === initialNode)) {
+      setSelectedNodes([initialNode]);
+    } else {
+      setSelectedNodes(managedNodes.map((n) => n.name));
     }
-  }, [open, initialNode, managedNodes]);
+
+    loadTasks();
+  }, [initialNode, managedNodes]);
 
   const loadTasks = async () => {
     setLoadingTasks(true);
@@ -299,69 +293,33 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ open, onCl
   };
 
   return (
-    <Dialog
-      open={open}
-      onClose={onClose}
-      maxWidth="lg"
-      fullWidth
-      PaperProps={{
-        sx: {
-          height: "85vh",
-          display: "flex",
-          flexDirection: "column",
-          bgcolor: "background.paper",
-          backgroundImage: "none",
-        },
-      }}
-    >
-      {/* Title */}
-      <DialogTitle
+    <Box sx={{ p: { xs: 1.5, sm: 2.5, md: 3 }, height: "100%", minHeight: 0, overflowY: "auto", display: "flex", flexDirection: "column" }}>
+      {/* Main Content Area */}
+      <Paper
+        elevation={0}
         sx={{
+          flex: 1,
+          minHeight: { xs: 550, md: 600 },
+          borderRadius: 3,
+          border: "1px solid #E2E8F0",
+          bgcolor: "#FFFFFF",
+          overflow: "hidden",
           display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          borderBottom: 1,
-          borderColor: "divider",
-          py: 1.5,
-          px: 3,
+          flexDirection: { xs: "column", md: "row" },
         }}
       >
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
-          <Box
-            sx={{
-              p: 0.8,
-              borderRadius: 1.5,
-              bgcolor: "primary.main",
-              color: "primary.contrastText",
-              display: "flex",
-            }}
-          >
-            <Wrench size={20} />
-          </Box>
-          <Box>
-            <Typography variant="h6" sx={{ fontWeight: 700, lineHeight: 1.2 }}>
-              Device Config Helper
-            </Typography>
-            <Typography variant="caption" color="text.secondary">
-              One-time idempotent setup and configuration tasks via SSH/SFTP
-            </Typography>
-          </Box>
-        </Box>
-        <IconButton onClick={onClose} size="small">
-          <X size={20} />
-        </IconButton>
-      </DialogTitle>
-
-      <DialogContent sx={{ p: 0, display: "flex", flex: 1, overflow: "hidden" }}>
         {/* Left Sidebar: Task List */}
         <Box
           sx={{
-            width: 300,
-            borderRight: 1,
+            width: { xs: "100%", md: 300 },
+            maxHeight: { xs: 160, md: "none" },
+            borderRight: { xs: 0, md: 1 },
+            borderBottom: { xs: 1, md: 0 },
             borderColor: "divider",
             display: "flex",
             flexDirection: "column",
             bgcolor: "background.default",
+            flexShrink: 0,
           }}
         >
           <Box sx={{ p: 2, borderBottom: 1, borderColor: "divider" }}>
@@ -745,13 +703,7 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ open, onCl
             </Box>
           )}
         </Box>
-      </DialogContent>
-
-      <DialogActions sx={{ px: 3, py: 1.5, borderTop: 1, borderColor: "divider" }}>
-        <Button onClick={onClose} variant="outlined">
-          Close
-        </Button>
-      </DialogActions>
-    </Dialog>
+      </Paper>
+    </Box>
   );
 };

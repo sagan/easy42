@@ -21,9 +21,9 @@ import {
   Checkbox,
   Divider,
   Tooltip,
+  Paper,
 } from "@mui/material";
 import {
-  Settings as SettingsIcon,
   KeyRound,
   Eye,
   EyeOff,
@@ -89,12 +89,12 @@ export const parsePortList = (input: string): string[] => {
 };
 
 interface SettingsModalProps {
-  open: boolean;
-  onClose: () => void;
+  open?: boolean;
+  onClose?: () => void;
   onLogoutAll: () => void;
 }
 
-export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onLogoutAll }) => {
+export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutAll }) => {
   const [activeTab, setActiveTab] = useState<"password" | "sessions" | "network" | "policies" | "templates" | "dns">(
     "password",
   );
@@ -209,24 +209,24 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
 
   // Load network settings when network tab is opened
   React.useEffect(() => {
-    if (open && activeTab === "network") {
+    if (activeTab === "network") {
       loadNetworkSettings();
     }
-  }, [open, activeTab]);
+  }, [activeTab]);
 
   // Load policies when policies tab is opened
   React.useEffect(() => {
-    if (open && activeTab === "policies") {
+    if (activeTab === "policies") {
       loadPolicies();
     }
-  }, [open, activeTab]);
+  }, [activeTab]);
 
   // Load templates when templates tab is opened
   React.useEffect(() => {
-    if (open && activeTab === "templates") {
+    if (activeTab === "templates") {
       loadTemplates();
     }
-  }, [open, activeTab]);
+  }, [activeTab]);
 
   const loadTemplates = async () => {
     setTemplatesLoading(true);
@@ -384,10 +384,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
 
   // Load DNS settings when DNS tab is opened
   React.useEffect(() => {
-    if (open && activeTab === "dns") {
+    if (activeTab === "dns") {
       loadDNSSettings();
     }
-  }, [open, activeTab]);
+  }, [activeTab]);
 
   const loadDNSSettings = async () => {
     setDnsLoading(true);
@@ -742,7 +742,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
 
   const handleClose = () => {
     resetForm();
-    onClose();
+    if (onClose) onClose();
   };
   const handleOpenClonePolicy = (p: NetworkPolicy) => {
     setPolicyDialogMode("create");
@@ -828,7 +828,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
     try {
       await api.logoutAll();
       resetForm();
-      onClose();
+      if (onClose) onClose();
       onLogoutAll();
     } catch (err: unknown) {
       const e = err as Error;
@@ -838,48 +838,23 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
   };
 
   return (
-    <Dialog open={open} onClose={handleClose} maxWidth="lg" fullWidth>
-      <DialogTitle
+    <Box sx={{ p: { xs: 1.5, sm: 2.5, md: 3 }, height: "100%", minHeight: 0, overflowY: "auto", display: "flex", flexDirection: "column" }}>
+      {/* Main Settings Card */}
+      <Paper
+        elevation={0}
         sx={{
+          borderRadius: 3,
+          border: "1px solid #E2E8F0",
+          bgcolor: "#FFFFFF",
+          overflow: "hidden",
           display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          pb: 1,
-          borderBottom: "1px solid #E2E8F0",
+          flexDirection: "column",
+          flex: 1,
+          minHeight: 0,
         }}
       >
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
-          <Box
-            sx={{
-              width: 36,
-              height: 36,
-              borderRadius: 2,
-              backgroundColor: "rgba(79, 70, 229, 0.1)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              color: "#4F46E5",
-            }}
-          >
-            <SettingsIcon size={20} />
-          </Box>
-          <Box>
-            <Typography variant="h6" sx={{ fontWeight: 700, color: "#0F172A", lineHeight: 1.2 }}>
-              Settings
-            </Typography>
-            <Typography variant="caption" sx={{ color: "#64748B" }}>
-              easy42 configuration & security
-            </Typography>
-          </Box>
-        </Box>
-
-        <IconButton size="small" onClick={handleClose} sx={{ color: "#94A3B8", "&:hover": { color: "#0F172A" } }}>
-          <X size={18} />
-        </IconButton>
-      </DialogTitle>
-
-      <Box sx={{ borderBottom: "1px solid #E2E8F0", px: 3, pt: 1, backgroundColor: "#F8FAFC" }}>
-        <Tabs
+        <Box sx={{ borderBottom: "1px solid #E2E8F0", px: { xs: 1, sm: 3 }, pt: 1, backgroundColor: "#F8FAFC", flexShrink: 0 }}>
+          <Tabs
           value={activeTab}
           onChange={(_, val) => {
             setActiveTab(val);
@@ -887,6 +862,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
             setPasswordSuccess(null);
             setLogoutAllError(null);
           }}
+          variant="scrollable"
+          scrollButtons="auto"
+          allowScrollButtonsMobile
           sx={{
             minHeight: 44,
             "& .MuiTab-root": {
@@ -909,8 +887,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
 
       {/* Tab 1: Change Password Form */}
       {activeTab === "password" && (
-        <form onSubmit={handleChangePassword}>
-          <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2.5, py: 3, px: 3 }}>
+        <form
+          onSubmit={handleChangePassword}
+          style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, overflow: "hidden" }}
+        >
+          <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2.5, py: 3, px: 3, flex: 1, minHeight: 0, overflowY: "auto" }}>
             <Typography variant="body2" sx={{ color: "#64748B" }}>
               Update your easy42 admin password. Changing the password will re-encrypt your master data encryption key
               (DEK) and invalidate other active sessions.
@@ -1013,7 +994,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
             />
           </DialogContent>
 
-          <DialogActions sx={{ px: 3, py: 2, borderTop: "1px solid #E2E8F0", backgroundColor: "#F8FAFC" }}>
+          <DialogActions sx={{ px: 3, py: 2, borderTop: "1px solid #E2E8F0", backgroundColor: "#F8FAFC", flexShrink: 0 }}>
             <Button onClick={handleClose} disabled={passwordLoading} sx={{ color: "#64748B" }}>
               Cancel
             </Button>
@@ -1036,8 +1017,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
 
       {/* Tab 2: Sessions / Logout All */}
       {activeTab === "sessions" && (
-        <Box>
-          <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2.5, py: 3, px: 3 }}>
+        <Box sx={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, overflow: "hidden" }}>
+          <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2.5, py: 3, px: 3, flex: 1, minHeight: 0, overflowY: "auto" }}>
             {logoutAllError && (
               <Alert severity="error" sx={{ borderRadius: 2 }}>
                 {logoutAllError}
@@ -1137,7 +1118,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
             )}
           </DialogContent>
 
-          <DialogActions sx={{ px: 3, py: 2, borderTop: "1px solid #E2E8F0", backgroundColor: "#F8FAFC" }}>
+          <DialogActions sx={{ px: 3, py: 2, borderTop: "1px solid #E2E8F0", backgroundColor: "#F8FAFC", flexShrink: 0 }}>
             <Button onClick={handleClose} sx={{ color: "#64748B" }}>
               Close
             </Button>
@@ -1147,8 +1128,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
 
       {/* Tab 3: Peering & BGP Network Settings */}
       {activeTab === "network" && (
-        <form onSubmit={handleSaveNetworkSettings}>
-          <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2.5, py: 3, px: 3 }}>
+        <form
+          onSubmit={handleSaveNetworkSettings}
+          style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, overflow: "hidden" }}
+        >
+          <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2.5, py: 3, px: 3, flex: 1, minHeight: 0, overflowY: "auto" }}>
             <Typography variant="body2" sx={{ color: "#64748B" }}>
               Configure global BGP confederation parameters for external peering (such as DN42 or private networks). BGP
               confederation replaces your internal mesh ASNs with your public ASN in external BGP sessions. Subnet
@@ -1214,7 +1198,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
             )}
           </DialogContent>
 
-          <DialogActions sx={{ px: 3, py: 2, borderTop: "1px solid #E2E8F0", backgroundColor: "#F8FAFC" }}>
+          <DialogActions sx={{ px: 3, py: 2, borderTop: "1px solid #E2E8F0", backgroundColor: "#F8FAFC", flexShrink: 0 }}>
             <Button onClick={handleClose} sx={{ color: "#64748B" }}>
               Close
             </Button>
@@ -1233,8 +1217,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
 
       {/* Tab 4: Network Policies */}
       {activeTab === "policies" && (
-        <Box sx={{ display: "flex", flexDirection: "column", height: "100%" }}>
-          <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2.5, py: 3, px: 3 }}>
+        <Box sx={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, height: "100%", overflow: "hidden" }}>
+          <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2.5, py: 3, px: 3, flex: 1, minHeight: 0, overflowY: "auto" }}>
             <Box sx={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 2 }}>
               <Box>
                 <Typography variant="body2" sx={{ color: "#475569", lineHeight: 1.5 }}>
@@ -1662,7 +1646,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
             )}
           </DialogContent>
 
-          <DialogActions sx={{ px: 3, py: 2, borderTop: "1px solid #E2E8F0", backgroundColor: "#F8FAFC" }}>
+          <DialogActions sx={{ px: 3, py: 2, borderTop: "1px solid #E2E8F0", backgroundColor: "#F8FAFC", flexShrink: 0 }}>
             <Button onClick={handleClose} sx={{ color: "#64748B" }}>
               Close
             </Button>
@@ -1672,8 +1656,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
 
       {/* Tab: Config Templates */}
       {activeTab === "templates" && (
-        <Box sx={{ display: "flex", flexDirection: "column", height: "100%" }}>
-          <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2.5, py: 3, px: 3 }}>
+        <Box sx={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, height: "100%", overflow: "hidden" }}>
+          <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2.5, py: 3, px: 3, flex: 1, minHeight: 0, overflowY: "auto" }}>
             <Box
               sx={{
                 display: "flex",
@@ -1931,7 +1915,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
             )}
           </DialogContent>
 
-          <DialogActions sx={{ px: 3, py: 2, borderTop: "1px solid #E2E8F0", backgroundColor: "#F8FAFC" }}>
+          <DialogActions sx={{ px: 3, py: 2, borderTop: "1px solid #E2E8F0", backgroundColor: "#F8FAFC", flexShrink: 0 }}>
             <Button onClick={handleClose} sx={{ color: "#64748B" }}>
               Close
             </Button>
@@ -1941,8 +1925,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
 
       {/* Tab 5: Cloudflare DNS Integration */}
       {activeTab === "dns" && (
-        <form onSubmit={handleSaveDNSSettings}>
-          <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2.5, py: 3, px: 3 }}>
+        <form
+          onSubmit={handleSaveDNSSettings}
+          style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, overflow: "hidden" }}
+        >
+          <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2.5, py: 3, px: 3, flex: 1, minHeight: 0, overflowY: "auto" }}>
             {/* Informative Header / Description */}
             <Box
               sx={{
@@ -2188,6 +2175,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
               backgroundColor: "#F8FAFC",
               display: "flex",
               justifyContent: "space-between",
+              flexShrink: 0,
             }}
           >
             <Box sx={{ display: "flex", gap: 1 }}>
@@ -3086,6 +3074,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ open, onClose, onL
           </Button>
         </DialogActions>
       </Dialog>
-    </Dialog>
+      </Paper>
+    </Box>
   );
 };

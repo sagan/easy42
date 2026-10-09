@@ -175,3 +175,66 @@ func TestAgentWebSocketAuthentication(t *testing.T) {
 		t.Fatalf("expected status.Connected to be true")
 	}
 }
+
+func TestFleetLiveStatusAndMetricsEndpoints(t *testing.T) {
+	srv, mgr, cleanup := setupAgentTestServer(t)
+	defer cleanup()
+
+	// 1. Test GET /api/nodes/live
+	reqLive := httptest.NewRequest(http.MethodGet, "/api/nodes/live", nil)
+	rrLive := httptest.NewRecorder()
+	srv.handleGetFleetLiveStatus(rrLive, reqLive)
+
+	if rrLive.Code != http.StatusOK {
+		t.Fatalf("expected 200, got: %d, body: %s", rrLive.Code, rrLive.Body.String())
+	}
+
+	var liveResp struct {
+		Summary struct {
+			TotalNodes int `json:"total_nodes"`
+		} `json:"summary"`
+		Nodes []any `json:"nodes"`
+	}
+	if err := json.Unmarshal(rrLive.Body.Bytes(), &liveResp); err != nil {
+		t.Fatalf("failed to decode live json: %v", err)
+	}
+	if liveResp.Summary.TotalNodes != 1 {
+		t.Fatalf("expected 1 total node, got %d", liveResp.Summary.TotalNodes)
+	}
+
+	// 2. Record dummy metric point
+	_ = mgr.StateStore().RecordMetrics("node-test-1", config.NodeMetricInput{
+		Timestamp:        time.Now(),
+		CPUPercent:       33.3,
+		MemoryUsedBytes:  1000,
+		MemoryTotalBytes: 2000,
+		UptimeSeconds:    5000,
+	})
+
+	// 3. Test GET /api/nodes/{name}/metrics
+	reqMetrics := httptest.NewRequest(http.MethodGet, "/api/nodes/node-test-1/metrics?range=1h", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("name", "node-test-1")
+	reqMetrics = reqMetrics.WithContext(context.WithValue(reqMetrics.Context(), chi.RouteCtxKey, rctx))
+	rrMetrics := httptest.NewRecorder()
+	srv.handleGetNodeMetrics(rrMetrics, reqMetrics)
+
+	if rrMetrics.Code != http.StatusOK {
+		t.Fatalf("expected 200, got: %d, body: %s", rrMetrics.Code, rrMetrics.Body.String())
+	}
+
+	var metricsResp struct {
+		Node   string                   `json:"node"`
+		Range  string                   `json:"range"`
+		Points []config.NodeMetricPoint `json:"points"`
+	}
+	if err := json.Unmarshal(rrMetrics.Body.Bytes(), &metricsResp); err != nil {
+		t.Fatalf("failed to decode metrics json: %v", err)
+	}
+	if metricsResp.Node != "node-test-1" || len(metricsResp.Points) != 1 {
+		t.Fatalf("expected 1 metric point for node-test-1, got: %+v", metricsResp)
+	}
+	if metricsResp.Points[0].CPUPercent != 33.3 {
+		t.Fatalf("expected 33.3 CPU, got %f", metricsResp.Points[0].CPUPercent)
+	}
+}

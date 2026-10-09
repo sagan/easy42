@@ -90,6 +90,7 @@ func New(cfg Config) *Server {
 			r.Delete("/nodes/{name}", s.handleDeleteNode)
 			r.Post("/nodes/probe", s.handleProbeNode)
 			r.Get("/nodes/status", s.handleGetNodeStatuses)
+			r.Get("/nodes/live", s.handleGetFleetLiveStatus)
 			r.Post("/nodes/{name}/status", s.handleRefreshNodeStatus)
 			r.Post("/nodes/{name}/state", s.handleUpdateNodeState)
 			r.Get("/nodes/{name}/bird", s.handleGetNodeBirdConfig)
@@ -100,6 +101,7 @@ func New(cfg Config) *Server {
 			r.Post("/nodes/{name}/restart-wg/{iface}", s.handleRestartNodeInterface)
 			r.Post("/nodes/{name}/agent-token", s.handleGenerateAgentToken)
 			r.Get("/nodes/{name}/telemetry", s.handleGetNodeTelemetry)
+			r.Get("/nodes/{name}/metrics", s.handleGetNodeMetrics)
 
 			// Links
 			r.Get("/links", s.handleGetLinks)
@@ -200,6 +202,9 @@ func (s *Server) Start() error {
 
 // Shutdown gracefully stops the server
 func (s *Server) Shutdown(ctx context.Context) error {
+	if s.mgr != nil {
+		s.mgr.Close()
+	}
 	if s.httpSrv != nil {
 		return s.httpSrv.Shutdown(ctx)
 	}

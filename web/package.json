@@ -18,7 +18,8 @@
     "lucide-react": "^0.475.0",
     "marked": "^18.0.13",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "react-router-dom": "^7.18.4"
   },
   "devDependencies": {
     "@types/dompurify": "^3.0.5",

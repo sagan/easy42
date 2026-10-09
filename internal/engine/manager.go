@@ -42,6 +42,7 @@ type Manager struct {
 	statuses    map[string]*config.NodeStatus
 	lastSync    time.Time
 	lastResults []config.SyncResult
+	stopCh      chan struct{}
 }
 
 // NewManager creates a new Manager instance
@@ -49,7 +50,7 @@ func NewManager(store *config.Store) *Manager {
 	stateStore := config.NewStateStore(store.DataDir())
 	_, _ = stateStore.Load()
 	roaManager := roa.NewManager(filepath.Join(store.DataDir(), "cache", "roa"))
-	return &Manager{
+	m := &Manager{
 		store:       store,
 		stateStore:  stateStore,
 		vault:       crypto.NewKeyVault(),
@@ -58,6 +59,24 @@ func NewManager(store *config.Store) *Manager {
 		agentHub:    agent.NewHub(),
 		statuses:    make(map[string]*config.NodeStatus),
 		lastResults: make([]config.SyncResult, 0),
+		stopCh:      make(chan struct{}),
+	}
+	m.setupAgentMetricsListeners()
+	m.startRetentionWorker()
+	return m
+}
+
+// Close stops background routines and releases resources
+func (m *Manager) Close() {
+	if m.stopCh != nil {
+		select {
+		case <-m.stopCh:
+		default:
+			close(m.stopCh)
+		}
+	}
+	if m.stateStore != nil {
+		_ = m.stateStore.Close()
 	}
 }
 

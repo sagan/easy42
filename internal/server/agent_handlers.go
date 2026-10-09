@@ -369,3 +369,44 @@ echo "[Easy42 Agent Installer] Installation completed successfully!"
 	w.Header().Set("Content-Type", "text/x-shellscript; charset=utf-8")
 	_, _ = w.Write([]byte(script))
 }
+
+// handleGetNodeMetrics returns recorded historical metrics snapshots for a node
+func (s *Server) handleGetNodeMetrics(w http.ResponseWriter, r *http.Request) {
+	name := chi.URLParam(r, "name")
+	node := s.mgr.FindNode(name)
+	if node == nil {
+		writeError(w, http.StatusNotFound, "node not found")
+		return
+	}
+
+	rangeStr := r.URL.Query().Get("range")
+	if rangeStr == "" {
+		rangeStr = "24h"
+	}
+
+	points, err := s.mgr.GetNodeMetricsHistory(name, rangeStr)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"node":   name,
+		"range":  rangeStr,
+		"points": points,
+	})
+}
+
+// handleGetFleetLiveStatus returns aggregate fleet metrics and live status for all nodes
+func (s *Server) handleGetFleetLiveStatus(w http.ResponseWriter, r *http.Request) {
+	summary, nodes, err := s.mgr.GetFleetLiveStatus()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"summary": summary,
+		"nodes":   nodes,
+	})
+}

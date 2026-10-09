@@ -189,6 +189,7 @@ func (c *AgentConnection) handleIncomingMessage(msg *agentpb.AgentMessage) {
 				},
 			},
 		})
+		c.hub.NotifyRegister(c)
 
 	case *agentpb.AgentMessage_Heartbeat:
 		// Heartbeat response

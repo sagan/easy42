@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -16,7 +17,7 @@ func TestStateStoreLifecycle(t *testing.T) {
 
 	store := NewStateStore(tempDir)
 	if store.Exists() {
-		t.Errorf("Expected state.json not to exist initially")
+		t.Errorf("Expected data.db not to exist initially")
 	}
 
 	st, err := store.Load()
@@ -42,7 +43,7 @@ func TestStateStoreLifecycle(t *testing.T) {
 	}
 
 	if !store.Exists() {
-		t.Errorf("Expected state.json to exist after update")
+		t.Errorf("Expected data.db to exist after update")
 	}
 
 	// Reload from disk in a fresh store instance
@@ -78,14 +79,17 @@ func TestStateStoreLifecycle(t *testing.T) {
 		t.Errorf("Expected node-a to be removed")
 	}
 
-	// Check state file content exists and is valid json
-	content, err := os.ReadFile(filepath.Join(tempDir, "state.json"))
+	// Check state db file content exists and is not empty
+	content, err := os.ReadFile(store.FilePath())
 	if err != nil {
-		t.Fatalf("Failed to read state.json: %v", err)
+		t.Fatalf("Failed to read data.db: %v", err)
 	}
 	if len(content) == 0 {
-		t.Errorf("state.json is empty")
+		t.Errorf("data.db is empty")
 	}
+
+	_ = store.Close()
+	_ = store2.Close()
 }
 
 func TestStateStoreBirdState(t *testing.T) {
@@ -133,6 +137,9 @@ func TestStateStoreBirdState(t *testing.T) {
 	if nodeLoaded.BirdAppliedAt == nil || !nodeLoaded.BirdAppliedAt.Equal(appliedAt) {
 		t.Errorf("Loaded appliedAt mismatch: %v vs %v", appliedAt, nodeLoaded.BirdAppliedAt)
 	}
+
+	_ = store.Close()
+	_ = store2.Close()
 }
 
 func TestUpdateNftablesState(t *testing.T) {
@@ -173,5 +180,130 @@ func TestUpdateNftablesState(t *testing.T) {
 	}
 	if nodeLoaded.NftablesAppliedAt == nil || !nodeLoaded.NftablesAppliedAt.Equal(appliedAt) {
 		t.Errorf("Loaded appliedAt mismatch: %v vs %v", appliedAt, nodeLoaded.NftablesAppliedAt)
+	}
+
+	_ = store.Close()
+	_ = store2.Close()
+}
+
+func TestStateStoreMetrics(t *testing.T) {
+	tempDir := t.TempDir()
+	store := NewStateStore(tempDir)
+	defer store.Close()
+
+	baseTime := time.Now().Add(-10 * time.Minute)
+
+	// Record sample 1
+	err := store.RecordMetrics("node-test", NodeMetricInput{
+		Timestamp:        baseTime,
+		CPUPercent:       15.5,
+		MemoryUsedBytes:  1024 * 1024 * 512,
+		MemoryTotalBytes: 1024 * 1024 * 1024,
+		UptimeSeconds:    12345,
+		Load1m:           0.5,
+		Load5m:           0.3,
+		Load15m:          0.1,
+		NetRxBytes:       1000,
+		NetTxBytes:       2000,
+	})
+	if err != nil {
+		t.Fatalf("RecordMetrics 1 failed: %v", err)
+	}
+
+	// Record sample 2 (10 seconds later, 10,000 rx bytes delta -> 1,000 bytes/sec)
+	err = store.RecordMetrics("node-test", NodeMetricInput{
+		Timestamp:        baseTime.Add(10 * time.Second),
+		CPUPercent:       25.0,
+		MemoryUsedBytes:  1024 * 1024 * 600,
+		MemoryTotalBytes: 1024 * 1024 * 1024,
+		UptimeSeconds:    12355,
+		Load1m:           0.8,
+		Load5m:           0.4,
+		Load15m:          0.2,
+		NetRxBytes:       11000,
+		NetTxBytes:       12000,
+	})
+	if err != nil {
+		t.Fatalf("RecordMetrics 2 failed: %v", err)
+	}
+
+	history, err := store.GetMetricsHistory("node-test", baseTime.Add(-time.Minute), 100)
+	if err != nil {
+		t.Fatalf("GetMetricsHistory failed: %v", err)
+	}
+	if len(history) != 2 {
+		t.Fatalf("Expected 2 metric points, got %d", len(history))
+	}
+
+	// Check sample 2 rate calculation
+	pt2 := history[1]
+	if pt2.NetRxRate != 1000.0 {
+		t.Errorf("Expected NetRxRate 1000.0, got %f", pt2.NetRxRate)
+	}
+
+	latest, err := store.GetLatestMetrics()
+	if err != nil {
+		t.Fatalf("GetLatestMetrics failed: %v", err)
+	}
+	if latest["node-test"].CPUPercent != 25.0 {
+		t.Errorf("Expected latest CPU 25.0, got %f", latest["node-test"].CPUPercent)
+	}
+}
+
+func TestStateStoreLegacyMigration(t *testing.T) {
+	tempDir := t.TempDir()
+
+	legacyState := NetworkState{
+		Version:   1,
+		UpdatedAt: time.Now(),
+		Nodes: map[string]StateNode{
+			"legacy-node": {
+				Name:           "legacy-node",
+				Host:           "1.2.3.4",
+				BirdConfigHash: "test-bird-hash",
+				Interfaces: map[string]StateInterface{
+					"wg42leg": {
+						Name:       "wg42leg",
+						ConfigHash: "iface-hash",
+					},
+				},
+			},
+		},
+	}
+
+	data, err := json.Marshal(legacyState)
+	if err != nil {
+		t.Fatalf("Marshal legacy state failed: %v", err)
+	}
+
+	legacyFile := filepath.Join(tempDir, "state.json")
+	if err := os.WriteFile(legacyFile, data, 0600); err != nil {
+		t.Fatalf("Write legacy file failed: %v", err)
+	}
+
+	// Now initialize StateStore with SQLite
+	store := NewStateStore(tempDir)
+	defer store.Close()
+
+	st, err := store.Load()
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+
+	if _, ok := st.Nodes["legacy-node"]; !ok {
+		t.Fatalf("Expected legacy-node to be migrated into SQLite")
+	}
+
+	if st.Nodes["legacy-node"].BirdConfigHash != "test-bird-hash" {
+		t.Errorf("BirdConfigHash mismatch: got %s", st.Nodes["legacy-node"].BirdConfigHash)
+	}
+
+	// Verify legacy state.json was renamed to state.json.migrated
+	if _, err := os.Stat(legacyFile); !os.IsNotExist(err) {
+		t.Errorf("Expected original state.json to be moved")
+	}
+
+	if _, err := os.Stat(filepath.Join(tempDir, "state.json.migrated")); err != nil {
+		t.Errorf("Expected state.json.migrated to exist")
 	}
 }

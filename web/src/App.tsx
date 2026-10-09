@@ -1,696 +1,76 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
-import { ThemeProvider, CssBaseline, Box, CircularProgress, Typography, Snackbar, Alert } from "@mui/material";
+import React from "react";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { ThemeProvider, CssBaseline, Box, CircularProgress, Typography } from "@mui/material";
 import { theme } from "./theme";
-import { api } from "./api/client";
-import { Node, Link, NodeStatus, NetworkState, NetworkPolicy } from "./types/api";
-import { Navbar } from "./components/Navbar";
-import { TopologyGraph } from "./components/Topology/TopologyGraph";
-import { NodeDetailDrawer } from "./components/Topology/NodeDetailDrawer";
-import { LinkDetailDrawer } from "./components/Topology/LinkDetailDrawer";
-import { AddNodeModal } from "./components/Modals/AddNodeModal";
-import { RenameNodeModal } from "./components/Modals/RenameNodeModal";
-import { AddLinkModal } from "./components/Modals/AddLinkModal";
-import { UnlockModal } from "./components/Modals/UnlockModal";
-import { SyncProgressModal } from "./components/Modals/SyncProgressModal";
-import { SettingsModal } from "./components/Modals/SettingsModal";
-import { DeviceHelperModal } from "./components/Modals/DeviceHelperModal";
-import { LookingGlassModal } from "./components/Modals/LookingGlassModal";
+import { MeshProvider, useMesh } from "./context/MeshContext";
+import { AppLayout } from "./components/Layout/AppLayout";
+import { NodesPage } from "./pages/NodesPage";
+import { TopologyPage } from "./pages/TopologyPage";
+import { LookingGlassPage } from "./pages/LookingGlassPage";
+import { DeviceHelperPage } from "./pages/DeviceHelperPage";
+import { SettingsPage } from "./pages/SettingsPage";
 import { LoginPage } from "./components/Login/LoginPage";
 
-export const App: React.FC = () => {
-  const [checkingAuth, setCheckingAuth] = useState(true);
-  const [authenticated, setAuthenticated] = useState(false);
-  const [isUnlocked, setIsUnlocked] = useState(false);
-
-  // Mesh State
-  const [nodes, setNodes] = useState<Node[]>([]);
-  const [links, setLinks] = useState<Link[]>([]);
-  const [nodeStatuses, setNodeStatuses] = useState<Record<string, NodeStatus>>({});
-  const [networkState, setNetworkState] = useState<NetworkState | null>(null);
-  const [networkPolicies, setNetworkPolicies] = useState<NetworkPolicy[]>([]);
-  const [, setLoadingData] = useState(false);
-
-  // Selected for drawers
-  const [selectedNode, setSelectedNode] = useState<Node | null>(null);
-  const [selectedLink, setSelectedLink] = useState<Link | null>(null);
-
-  // Modals
-  const [addNodeOpen, setAddNodeOpen] = useState(false);
-  const [nodeToEdit, setNodeToEdit] = useState<Node | null>(null);
-  const [renameModalOpen, setRenameModalOpen] = useState(false);
-  const [nodeToRename, setNodeToRename] = useState<Node | null>(null);
-  const [addLinkOpen, setAddLinkOpen] = useState(false);
-  const [linkToEdit, setLinkToEdit] = useState<Link | null>(null);
-  const [connectFrom, setConnectFrom] = useState<string>("");
-  const [connectTo, setConnectTo] = useState<string>("");
-  const [unlockOpen, setUnlockOpen] = useState(false);
-  const [syncOpen, setSyncOpen] = useState(false);
-  const [syncTargetNode, setSyncTargetNode] = useState<string | null>(null);
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const [helperOpen, setHelperOpen] = useState(false);
-  const [helperInitialNode, setHelperInitialNode] = useState<string | undefined>(undefined);
-  const [lookingGlassOpen, setLookingGlassOpen] = useState(false);
-  const [lookingGlassInitialNode, setLookingGlassInitialNode] = useState<string | undefined>(undefined);
-  const [lookingGlassInitialTask] = useState<string | undefined>(undefined);
-  const [updatingState, setUpdatingState] = useState(false);
-  const [refreshingNodeName, setRefreshingNodeName] = useState<string | null>(null);
-  const [addBlockTrigger, setAddBlockTrigger] = useState(0);
-  const [stateToast, setStateToast] = useState<{
-    message: string;
-    severity: "success" | "warning" | "error" | "info";
-  } | null>(null);
-
-  // Unreachable nodes
-  const unreachableNodes = useMemo(() => {
-    return nodes.filter((n) => !n.is_external && nodeStatuses[n.name] && !nodeStatuses[n.name].connected);
-  }, [nodes, nodeStatuses]);
-
-  // Tag filter
-  const [selectedTag, setSelectedTag] = useState<string>("All");
-
-  // Unique tags across all nodes
-  const uniqueTags = useMemo(() => {
-    const set = new Set<string>();
-    nodes.forEach((n) => {
-      n.tags?.forEach((t) => {
-        const trimmed = t.trim();
-        if (trimmed) set.add(trimmed);
-      });
-    });
-    return Array.from(set).sort();
-  }, [nodes]);
-
-  // If selected tag is no longer available, fallback to 'All'
-  useEffect(() => {
-    if (selectedTag !== "All" && !uniqueTags.includes(selectedTag)) {
-      setSelectedTag("All");
-    }
-  }, [selectedTag, uniqueTags]);
-
-  // Displayed nodes and links filtered by selected tag
-  const displayedNodes = useMemo(() => {
-    if (selectedTag === "All") return nodes;
-    return nodes.filter((n) => n.tags && n.tags.includes(selectedTag));
-  }, [nodes, selectedTag]);
-
-  const displayedLinks = useMemo(() => {
-    const displayedNames = new Set(displayedNodes.map((n) => n.name));
-    return links.filter((l) => displayedNames.has(l.from.name) && displayedNames.has(l.to.name));
-  }, [links, displayedNodes]);
-
-  // Displayed internal nodes (excluding external unmanaged nodes)
-  const displayedInternalNodes = useMemo(() => {
-    return displayedNodes.filter((n) => !n.is_external);
-  }, [displayedNodes]);
-
-  // Missing links between displayed internal nodes
-  const missingMeshLinksCount = useMemo(() => {
-    if (displayedInternalNodes.length < 2) return 0;
-    let count = 0;
-    for (let i = 0; i < displayedInternalNodes.length; i++) {
-      for (let j = i + 1; j < displayedInternalNodes.length; j++) {
-        const n1 = displayedInternalNodes[i].name;
-        const n2 = displayedInternalNodes[j].name;
-        const exists = links.some(
-          (l) => (l.from.name === n1 && l.to.name === n2) || (l.from.name === n2 && l.to.name === n1),
-        );
-        if (!exists) count++;
-      }
-    }
-    return count;
-  }, [displayedInternalNodes, links]);
-
-  // Create full mesh handler
-  const handleCreateFullMesh = async () => {
-    if (displayedInternalNodes.length < 2) {
-      setStateToast({
-        message: "At least 2 displayed internal nodes are required to create a full mesh.",
-        severity: "warning",
-      });
-      return;
-    }
-
-    if (missingMeshLinksCount === 0) {
-      setStateToast({
-        message: "All displayed internal nodes are already fully connected in a mesh.",
-        severity: "info",
-      });
-      return;
-    }
-
-    if (!isUnlocked) {
-      setUnlockOpen(true);
-      return;
-    }
-
-    const confirmMsg = `Create full mesh network between ${displayedInternalNodes.length} displayed internal nodes? This will automatically add ${missingMeshLinksCount} missing link(s).`;
-    if (!window.confirm(confirmMsg)) {
-      return;
-    }
-
-    try {
-      const nodeNames = displayedInternalNodes.map((n) => n.name);
-      const added = await api.createFullMesh(nodeNames);
-      await loadData();
-      setStateToast({
-        message: `Full mesh established: added ${added.length} new link(s) between displayed internal nodes.`,
-        severity: "success",
-      });
-    } catch (err: unknown) {
-      const e = err as Error & { status?: number };
-      if (e.status === 423) {
-        setUnlockOpen(true);
-      } else {
-        setStateToast({
-          message: `Failed to create full mesh: ${e.message}`,
-          severity: "error",
-        });
-      }
-    }
-  };
-
-  const checkAuth = useCallback(async () => {
-    try {
-      const res = await api.getAuthStatus();
-      setAuthenticated(res.authenticated);
-      setIsUnlocked(res.unlocked);
-    } catch {
-      setAuthenticated(false);
-      setIsUnlocked(false);
-    } finally {
-      setCheckingAuth(false);
-    }
-  }, []);
-
-  const loadData = useCallback(async () => {
-    setLoadingData(true);
-    try {
-      const [nodesData, linksData, statusesData, stateData, policiesData] = await Promise.all([
-        api.getNodes(),
-        api.getLinks(),
-        api.getNodeStatuses().catch(() => ({})),
-        api.getState().catch(() => null),
-        api.getNetworkPolicies().catch(() => []),
-      ]);
-      setNodes(nodesData || []);
-      setLinks(linksData || []);
-      setNodeStatuses(statusesData || {});
-      setNetworkState(stateData);
-      setNetworkPolicies(policiesData || []);
-    } catch {
-      // Handled
-    } finally {
-      setLoadingData(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    checkAuth();
-  }, [checkAuth]);
-
-  useEffect(() => {
-    if (authenticated) {
-      loadData();
-    }
-  }, [authenticated, loadData]);
-
-  // Periodic background poll for live agent telemetry and node statuses
-  useEffect(() => {
-    if (!authenticated) return;
-    const interval = setInterval(async () => {
-      try {
-        const statusesData = await api.getNodeStatuses();
-        if (statusesData) {
-          setNodeStatuses(statusesData);
-        }
-      } catch {
-        // Silently ignore background polling errors
-      }
-    }, 5000);
-    return () => clearInterval(interval);
-  }, [authenticated]);
-
-  const handleLogout = async () => {
-    try {
-      await api.logout();
-      setAuthenticated(false);
-      setIsUnlocked(false);
-      setNodes([]);
-      setLinks([]);
-      setNetworkPolicies([]);
-    } catch {
-      // ignore
-    }
-  };
-
-  const handleUnlockToggle = async () => {
-    if (isUnlocked) {
-      await api.lock();
-      setIsUnlocked(false);
-    } else {
-      setUnlockOpen(true);
-    }
-  };
-
-  const handleConnectNodes = useCallback((source: string, target: string) => {
-    setConnectFrom(source);
-    setConnectTo(target);
-    setLinkToEdit(null);
-    setAddLinkOpen(true);
-  }, []);
-
-  const handleSelectNode = useCallback((node: Node) => {
-    setSelectedNode(node);
-  }, []);
-
-  const handleSelectLink = useCallback((link: Link) => {
-    setSelectedLink(link);
-  }, []);
-
-  const handleNodePositionChange = useCallback(async (name: string, x: number, y: number) => {
-    setNodes((prev) => prev.map((n) => (n.name === name ? { ...n, x, y } : n)));
-    setSelectedNode((prev) => (prev && prev.name === name ? { ...prev, x, y } : prev));
-    try {
-      await api.updateNodePosition(name, x, y);
-    } catch (err) {
-      console.error("Failed to persist node position:", err);
-    }
-  }, []);
-
-  const handleEditNode = (node: Node) => {
-    setNodeToEdit(node);
-    setAddNodeOpen(true);
-  };
-
-  const handleOpenRenameNode = (node: Node) => {
-    setNodeToRename(node);
-    setRenameModalOpen(true);
-  };
-
-  const handleNodeRenamed = (oldName: string, updatedNode: Node) => {
-    setNodes((prev) => prev.map((n) => (n.name === oldName ? updatedNode : n)));
-    if (selectedNode?.name === oldName) {
-      setSelectedNode(updatedNode);
-    }
-    setStateToast({
-      message: `Node "${oldName}" successfully renamed to "${updatedNode.name}"`,
-      severity: "success",
-    });
-    loadData();
-  };
-
-  const handleEditLink = (link: Link) => {
-    setLinkToEdit(link);
-    setAddLinkOpen(true);
-  };
-
-  const handleNodeAdded = (newNode: Node) => {
-    setNodes((prev) => [...prev, newNode]);
-  };
-
-  const handleNodeUpdated = (updatedNode: Node) => {
-    const oldName = nodeToEdit?.name || updatedNode.name;
-    setNodes((prev) => prev.map((n) => (n.name === oldName ? updatedNode : n)));
-    if (selectedNode?.name === oldName) {
-      setSelectedNode(updatedNode);
-    }
-    loadData();
-  };
-
-  const handleNodeDeleted = (name: string) => {
-    setNodes((prev) => prev.filter((n) => n.name !== name));
-    setLinks((prev) => prev.filter((l) => l.from.name !== name && l.to.name !== name));
-    setNodeStatuses((prev) => {
-      const next = { ...prev };
-      delete next[name];
-      return next;
-    });
-    if (selectedNode?.name === name) {
-      setSelectedNode(null);
-    }
-    loadData();
-  };
-
-  const handleLinkAdded = (newLink: Link) => {
-    setLinks((prev) => [...prev, newLink]);
-  };
-
-  const handleLinkUpdated = (updatedLink: Link) => {
-    setLinks((prev) =>
-      prev.map((l) => {
-        const matches =
-          (l.from.name === updatedLink.from.name &&
-            l.to.name === updatedLink.to.name &&
-            l.from.interface === updatedLink.from.interface &&
-            l.to.interface === updatedLink.to.interface) ||
-          (l.from.name === updatedLink.to.name &&
-            l.to.name === updatedLink.from.name &&
-            l.from.interface === updatedLink.to.interface &&
-            l.to.interface === updatedLink.from.interface);
-        return matches ? updatedLink : l;
-      }),
-    );
-    if (
-      selectedLink &&
-      ((selectedLink.from.name === updatedLink.from.name &&
-        selectedLink.to.name === updatedLink.to.name &&
-        selectedLink.from.interface === updatedLink.from.interface &&
-        selectedLink.to.interface === updatedLink.to.interface) ||
-        (selectedLink.from.name === updatedLink.to.name &&
-          selectedLink.to.name === updatedLink.from.name &&
-          selectedLink.from.interface === updatedLink.to.interface &&
-          selectedLink.to.interface === updatedLink.from.interface))
-    ) {
-      setSelectedLink(updatedLink);
-    }
-  };
-
-  const handleLinkDeleted = (from: string, to: string, iface?: string) => {
-    setLinks((prev) =>
-      prev.filter((l) => {
-        const matchesNodes = (l.from.name === from && l.to.name === to) || (l.from.name === to && l.to.name === from);
-        if (!matchesNodes) return true;
-        if (iface) {
-          return l.from.interface !== iface && l.to.interface !== iface;
-        }
-        return false;
-      }),
-    );
-    setSelectedLink(null);
-  };
-
-  const handleStatusRefreshed = (status: NodeStatus) => {
-    setNodeStatuses((prev) => ({ ...prev, [status.name]: status }));
-  };
-
-  const handleUpdateState = async (targetNode?: string) => {
-    if (targetNode) {
-      setRefreshingNodeName(targetNode);
-    } else {
-      setUpdatingState(true);
-    }
-    try {
-      const res = await api.updateState(targetNode);
-      await loadData();
-      if (res.failed_nodes && Object.keys(res.failed_nodes).length > 0) {
-        if (targetNode && res.failed_nodes[targetNode]) {
-          setStateToast({
-            message: `Failed to refresh "${targetNode}": ${res.failed_nodes[targetNode]}`,
-            severity: "error",
-          });
-        } else {
-          const failedNames = Object.keys(res.failed_nodes).join(", ");
-          setStateToast({
-            message: `Network state updated. ${Object.keys(res.failed_nodes).length} device(s) unreachable: ${failedNames}`,
-            severity: "warning",
-          });
-        }
-      } else if (res.warnings && res.warnings.length > 0) {
-        setStateToast({
-          message: `Network state reconciled with warnings: ${res.warnings.join("; ")}`,
-          severity: "warning",
-        });
-      } else {
-        setStateToast({
-          message: targetNode
-            ? `State and links for "${targetNode}" successfully refreshed.`
-            : "Network state successfully fetched from all devices and state.json reconciled.",
-          severity: "success",
-        });
-      }
-    } catch (err: unknown) {
-      const e = err as Error;
-      setStateToast({
-        message: `Failed to update state: ${e.message}`,
-        severity: "error",
-      });
-    } finally {
-      setUpdatingState(false);
-      setRefreshingNodeName(null);
-    }
-  };
-
-  const handleRefreshLink = async (link: Link) => {
-    await handleUpdateState(`${link.from.name},${link.to.name}`);
-  };
+const AppContent: React.FC = () => {
+  const { checkingAuth, authenticated, setAuthenticated, loadData } = useMesh();
 
   if (checkingAuth) {
     return (
-      <ThemeProvider theme={theme}>
-        <CssBaseline />
-        <Box
-          sx={{
-            minHeight: "100vh",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 2,
-            backgroundColor: "#F8FAFC",
-          }}
-        >
-          <CircularProgress size={32} color="primary" />
-          <Typography variant="body1" sx={{ color: "#64748B" }}>
-            Initializing easy42...
-          </Typography>
-        </Box>
-      </ThemeProvider>
+      <Box
+        sx={{
+          display: "flex",
+          height: "100vh",
+          width: "100vw",
+          alignItems: "center",
+          justifyContent: "center",
+          flexDirection: "column",
+          gap: 2,
+          bgcolor: "#F8FAFC",
+        }}
+      >
+        <CircularProgress size={40} sx={{ color: "#4F46E5" }} />
+        <Typography variant="body2" sx={{ color: "#64748B", fontWeight: 600 }}>
+          Connecting to easy42...
+        </Typography>
+      </Box>
     );
   }
 
   if (!authenticated) {
     return (
-      <ThemeProvider theme={theme}>
-        <CssBaseline />
-        <LoginPage
-          onLoginSuccess={() => {
-            setAuthenticated(true);
-            setIsUnlocked(true);
-            loadData();
-          }}
-        />
-      </ThemeProvider>
+      <LoginPage
+        onLoginSuccess={() => {
+          setAuthenticated(true);
+          loadData();
+        }}
+      />
     );
   }
 
   return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<AppLayout />}>
+          <Route index element={<Navigate to="/nodes" replace />} />
+          <Route path="nodes" element={<NodesPage />} />
+          <Route path="topology" element={<TopologyPage />} />
+          <Route path="looking-glass" element={<LookingGlassPage />} />
+          <Route path="helper" element={<DeviceHelperPage />} />
+          <Route path="settings" element={<SettingsPage />} />
+          <Route path="*" element={<Navigate to="/nodes" replace />} />
+        </Route>
+      </Routes>
+    </BrowserRouter>
+  );
+};
+
+export const App: React.FC = () => {
+  return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      <Box sx={{ minHeight: "100vh", display: "flex", flexDirection: "column", backgroundColor: "#F8FAFC" }}>
-        {/* Navigation Bar */}
-        <Navbar
-          nodeCount={displayedNodes.length}
-          totalNodeCount={nodes.length}
-          linkCount={displayedLinks.length}
-          totalLinkCount={links.length}
-          isUnlocked={isUnlocked}
-          uniqueTags={uniqueTags}
-          selectedTag={selectedTag}
-          onSelectTag={setSelectedTag}
-          onAddNode={() => {
-            setNodeToEdit(null);
-            setAddNodeOpen(true);
-          }}
-          onAddLink={() => {
-            setConnectFrom("");
-            setConnectTo("");
-            setLinkToEdit(null);
-            setAddLinkOpen(true);
-          }}
-          onAddBlock={() => setAddBlockTrigger((prev) => prev + 1)}
-          onCreateFullMesh={handleCreateFullMesh}
-          missingMeshLinksCount={missingMeshLinksCount}
-          displayedNodeCount={displayedInternalNodes.length}
-          onSync={() => {
-            setSyncTargetNode(null);
-            setSyncOpen(true);
-          }}
-          onUpdateState={() => handleUpdateState()}
-          updatingState={updatingState}
-          onOpenHelper={() => {
-            setHelperInitialNode(undefined);
-            setHelperOpen(true);
-          }}
-          onOpenLookingGlass={() => {
-            setLookingGlassInitialNode(undefined);
-            setLookingGlassOpen(true);
-          }}
-          onUnlockToggle={handleUnlockToggle}
-          onOpenSettings={() => setSettingsOpen(true)}
-          onLogout={handleLogout}
-          unreachableNodes={unreachableNodes}
-          nodeStatuses={nodeStatuses}
-          nodes={nodes}
-          onUpdateNodeState={(nodeName) => handleUpdateState(nodeName)}
-        />
-
-        {/* Visual Topology Editor */}
-        <Box sx={{ flex: 1, position: "relative" }}>
-          <TopologyGraph
-            nodes={displayedNodes}
-            links={displayedLinks}
-            nodeStatuses={nodeStatuses}
-            networkState={networkState}
-            networkPolicies={networkPolicies}
-            selectedTag={selectedTag}
-            onSelectNode={handleSelectNode}
-            onSelectLink={handleSelectLink}
-            onConnectNodes={handleConnectNodes}
-            onNodePositionChange={handleNodePositionChange}
-            onRefreshNode={(nodeName) => handleUpdateState(nodeName)}
-            refreshingNodeName={refreshingNodeName}
-            addBlockTrigger={addBlockTrigger}
-          />
-        </Box>
-
-        {/* Drawers */}
-        <NodeDetailDrawer
-          node={selectedNode}
-          status={selectedNode ? nodeStatuses[selectedNode.name] : undefined}
-          open={Boolean(selectedNode)}
-          onClose={() => setSelectedNode(null)}
-          onEditNode={handleEditNode}
-          onRenameNode={handleOpenRenameNode}
-          onNodeDeleted={handleNodeDeleted}
-          onStatusRefreshed={handleStatusRefreshed}
-          onOpenHelper={(nodeName) => {
-            setHelperInitialNode(nodeName);
-            setHelperOpen(true);
-          }}
-          onOpenLookingGlass={(nodeName) => {
-            setLookingGlassInitialNode(nodeName);
-            setLookingGlassOpen(true);
-          }}
-          onUpdateNodeState={(nodeName) => handleUpdateState(nodeName)}
-          onSyncNode={(nodeName) => {
-            setSyncTargetNode(nodeName);
-            setSyncOpen(true);
-          }}
-          onNodeUpdated={handleNodeUpdated}
-        />
-
-        <LinkDetailDrawer
-          link={selectedLink}
-          networkState={networkState}
-          nodes={nodes}
-          networkPolicies={networkPolicies}
-          open={Boolean(selectedLink)}
-          onClose={() => setSelectedLink(null)}
-          onEditLink={handleEditLink}
-          onLinkDeleted={handleLinkDeleted}
-          onRefreshLink={handleRefreshLink}
-          onLinkUpdated={handleLinkUpdated}
-        />
-
-        {/* Modals */}
-        <AddNodeModal
-          open={addNodeOpen}
-          nodeToEdit={nodeToEdit}
-          existingNodes={nodes}
-          onClose={() => {
-            setAddNodeOpen(false);
-            setNodeToEdit(null);
-          }}
-          onNodeAdded={handleNodeAdded}
-          onNodeUpdated={handleNodeUpdated}
-        />
-
-        <RenameNodeModal
-          open={renameModalOpen}
-          node={nodeToRename}
-          existingNodes={nodes}
-          onClose={() => {
-            setRenameModalOpen(false);
-            setNodeToRename(null);
-          }}
-          onNodeRenamed={handleNodeRenamed}
-        />
-
-        <AddLinkModal
-          open={addLinkOpen}
-          nodes={nodes}
-          links={links}
-          initialFrom={connectFrom}
-          initialTo={connectTo}
-          linkToEdit={linkToEdit}
-          onClose={() => {
-            setAddLinkOpen(false);
-            setLinkToEdit(null);
-          }}
-          onLinkAdded={handleLinkAdded}
-          onLinkUpdated={handleLinkUpdated}
-          onNeedUnlock={() => setUnlockOpen(true)}
-        />
-
-        <UnlockModal
-          open={unlockOpen}
-          onClose={() => setUnlockOpen(false)}
-          onUnlocked={() => {
-            setIsUnlocked(true);
-            loadData();
-          }}
-        />
-
-        <SyncProgressModal
-          open={syncOpen}
-          targetNode={syncTargetNode}
-          onClose={() => {
-            setSyncOpen(false);
-            setSyncTargetNode(null);
-          }}
-          onSyncComplete={() => loadData()}
-          onNeedUnlock={() => setUnlockOpen(true)}
-          unreachableNodes={unreachableNodes}
-        />
-
-        <SettingsModal
-          open={settingsOpen}
-          onClose={() => {
-            setSettingsOpen(false);
-            loadData();
-          }}
-          onLogoutAll={() => {
-            setAuthenticated(false);
-            setIsUnlocked(false);
-            setNodes([]);
-            setLinks([]);
-            setSelectedNode(null);
-            setSelectedLink(null);
-          }}
-        />
-
-        <DeviceHelperModal
-          open={helperOpen}
-          onClose={() => setHelperOpen(false)}
-          nodes={nodes}
-          initialNode={helperInitialNode}
-        />
-
-        <LookingGlassModal
-          open={lookingGlassOpen}
-          onClose={() => setLookingGlassOpen(false)}
-          nodes={nodes}
-          initialNode={lookingGlassInitialNode}
-          initialTask={lookingGlassInitialTask}
-        />
-
-        <Snackbar
-          open={Boolean(stateToast)}
-          autoHideDuration={6000}
-          onClose={() => setStateToast(null)}
-          anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
-        >
-          {stateToast ? (
-            <Alert
-              onClose={() => setStateToast(null)}
-              severity={stateToast.severity}
-              variant="filled"
-              sx={{ width: "100%", borderRadius: 2 }}
-            >
-              {stateToast.message}
-            </Alert>
-          ) : undefined}
-        </Snackbar>
-      </Box>
+      <MeshProvider>
+        <AppContent />
+      </MeshProvider>
     </ThemeProvider>
   );
 };

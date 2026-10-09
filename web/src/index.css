@@ -19,6 +19,9 @@ body {
   overflow: hidden;
   /* user-select: none; */
   background-color: #f8fafc;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 code,

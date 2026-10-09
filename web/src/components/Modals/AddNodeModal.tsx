@@ -14,6 +14,8 @@ import {
   IconButton,
   Tooltip,
   Chip,
+  useTheme,
+  useMediaQuery,
 } from "@mui/material";
 import {
   Search,
@@ -606,8 +608,11 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
     }
   };
 
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
+
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth fullScreen={isMobile}>
       <DialogTitle sx={{ display: "flex", alignItems: "center", gap: 1.5, pb: 1, borderBottom: "1px solid #E2E8F0" }}>
         <Box
           sx={{

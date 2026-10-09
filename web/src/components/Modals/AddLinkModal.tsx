@@ -17,6 +17,8 @@ import {
   Chip,
   Tooltip,
   IconButton,
+  useTheme,
+  useMediaQuery,
 } from "@mui/material";
 import { Link as LinkIcon, ArrowRightLeft, Edit2, Globe, Copy, Check, FileText, Network } from "lucide-react";
 import { api } from "../../api/client";
@@ -667,8 +669,11 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
     }
   };
 
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
+
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth fullScreen={isMobile}>
       <DialogTitle sx={{ display: "flex", alignItems: "center", gap: 1.5, pb: 1, borderBottom: "1px solid #E2E8F0" }}>
         <Box
           sx={{

@@ -1,4 +1,4 @@
-import {
+import type {
   AuthStatus,
   Node,
   Link,
@@ -17,6 +17,8 @@ import {
   LGRunRequest,
   LGRunResponse,
   GraphBlock,
+  FleetLiveResponse,
+  NodeMetricsResponse,
 } from "../types/api";
 
 const API_BASE = "/api";
@@ -353,4 +355,11 @@ export const api = {
       method: "PUT",
       body: JSON.stringify(blocks),
     }),
+
+  // Monitoring
+  getFleetLiveStatus: () => request<FleetLiveResponse>("/nodes/live"),
+  getNodeMetrics: (nodeName: string, range?: string) =>
+    request<NodeMetricsResponse>(
+      `/nodes/${encodeURIComponent(nodeName)}/metrics${range ? `?range=${encodeURIComponent(range)}` : ""}`,
+    ),
 };

@@ -14,6 +14,8 @@ import {
   AccordionSummary,
   AccordionDetails,
   Tooltip,
+  useTheme,
+  useMediaQuery,
 } from "@mui/material";
 import {
   RefreshCw,
@@ -146,8 +148,11 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
   const pendingActions = safeActions.filter((a) => a.needs_apply !== false);
   const syncedActions = safeActions.filter((a) => a.needs_apply === false);
 
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
+
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
+    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth fullScreen={isMobile}>
       <DialogTitle
         sx={{
           display: "flex",

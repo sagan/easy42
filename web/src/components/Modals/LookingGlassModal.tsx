@@ -1,8 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
 import {
-  Dialog,
-  DialogTitle,
-  DialogContent,
   Box,
   Typography,
   IconButton,
@@ -21,8 +18,6 @@ import {
   MenuItem,
 } from "@mui/material";
 import {
-  Compass,
-  X,
   Play,
   Terminal,
   Settings2,
@@ -46,16 +41,14 @@ import { TracerouteView } from "../LookingGlass/TracerouteView";
 import { CustomTaskEditorModal } from "../LookingGlass/CustomTaskEditorModal";
 
 interface LookingGlassModalProps {
-  open: boolean;
-  onClose: () => void;
+  open?: boolean;
+  onClose?: () => void;
   nodes: Node[];
   initialNode?: string;
   initialTask?: string;
 }
 
 export const LookingGlassModal: React.FC<LookingGlassModalProps> = ({
-  open,
-  onClose,
   nodes,
   initialNode,
   initialTask,
@@ -136,25 +129,23 @@ export const LookingGlassModal: React.FC<LookingGlassModalProps> = ({
   };
 
   useEffect(() => {
-    if (open) {
-      loadTasks();
-      setError(null);
-      setRunResponse(null);
-      setActiveResultNode(null);
+    loadTasks();
+    setError(null);
+    setRunResponse(null);
+    setActiveResultNode(null);
 
-      // Set initial node
-      if (initialNode && managedNodes.some((n) => n.name === initialNode)) {
-        setSelectedNodes([initialNode]);
-      } else if (managedNodes.length > 0 && selectedNodes.length === 0) {
-        setSelectedNodes([managedNodes[0].name]);
-      }
-
-      // Set initial task
-      if (initialTask) {
-        setSelectedTaskId(initialTask);
-      }
+    // Set initial node
+    if (initialNode && managedNodes.some((n) => n.name === initialNode)) {
+      setSelectedNodes([initialNode]);
+    } else if (managedNodes.length > 0 && selectedNodes.length === 0) {
+      setSelectedNodes([managedNodes[0].name]);
     }
-  }, [open, initialNode, initialTask, managedNodes]);
+
+    // Set initial task
+    if (initialTask) {
+      setSelectedTaskId(initialTask);
+    }
+  }, [initialNode, initialTask, managedNodes]);
 
   // Sync param defaults when selected task changes
   useEffect(() => {
@@ -286,55 +277,28 @@ export const LookingGlassModal: React.FC<LookingGlassModalProps> = ({
     runResponse && activeResultNode ? runResponse.results[activeResultNode] : undefined;
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth>
-      {/* Header */}
-      <DialogTitle
+    <Box sx={{ p: { xs: 1.5, sm: 2.5, md: 3 }, height: "100%", minHeight: 0, overflowY: "auto", display: "flex", flexDirection: "column" }}>
+      {/* Main Content Area */}
+      <Paper
+        elevation={0}
         sx={{
+          borderRadius: 3,
+          border: "1px solid #E2E8F0",
+          bgcolor: "#FFFFFF",
+          p: { xs: 2, sm: 3 },
           display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          pb: 1.5,
-          pt: 2,
-          borderBottom: "1px solid #E2E8F0",
+          flexDirection: "column",
+          gap: 2.5,
         }}
       >
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
-          <Box
-            sx={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              width: 40,
-              height: 40,
-              borderRadius: 2,
-              background: "linear-gradient(135deg, #4F46E5 0%, #0891B2 100%)",
-              color: "#FFFFFF",
-              boxShadow: "0 2px 10px rgba(79, 70, 229, 0.25)",
-            }}
-          >
-            <Compass size={22} />
-          </Box>
-          <Box>
-            <Typography variant="h6" sx={{ fontWeight: 700, fontSize: "1.2rem", color: "#0F172A" }}>
-              Looking Glass
-            </Typography>
-            <Typography variant="caption" sx={{ color: "#64748B", fontSize: "0.78rem" }}>
-              Agentless network queries, BGP routing inspection & diagnostics across nodes
-            </Typography>
-          </Box>
-        </Box>
-
-        <IconButton size="small" onClick={onClose}>
-          <X size={20} />
-        </IconButton>
-      </DialogTitle>
-
-      <DialogContent sx={{ p: 3, display: "flex", flexDirection: "column", gap: 2.5 }}>
         {/* Navigation Tabs */}
         <Box sx={{ borderBottom: "1px solid #E2E8F0" }}>
           <Tabs
             value={activeTab}
             onChange={(_, val) => setActiveTab(val)}
+            variant="scrollable"
+            scrollButtons="auto"
+            allowScrollButtonsMobile
             textColor="primary"
             indicatorColor="primary"
             sx={{ minHeight: 44 }}
@@ -995,7 +959,7 @@ export const LookingGlassModal: React.FC<LookingGlassModalProps> = ({
             </Box>
           </Box>
         )}
-      </DialogContent>
+      </Paper>
 
       {/* Task Editor Modal */}
       <CustomTaskEditorModal
@@ -1004,6 +968,6 @@ export const LookingGlassModal: React.FC<LookingGlassModalProps> = ({
         taskToEdit={taskToEdit}
         onSave={handleSaveCustomTask}
       />
-    </Dialog>
+    </Box>
   );
 };

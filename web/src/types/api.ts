@@ -474,3 +474,52 @@ export interface GraphBlock {
   height: number;
   nodes?: string[];
 }
+
+export interface NodeMetricPoint {
+  timestamp: number;
+  cpu_percent: number;
+  memory_used_bytes: number;
+  memory_total_bytes: number;
+  uptime_seconds: number;
+  load_1m: number;
+  load_5m: number;
+  load_15m: number;
+  net_rx_bytes: number;
+  net_tx_bytes: number;
+  net_rx_rate: number;
+  net_tx_rate: number;
+}
+
+export interface NodeMetricsResponse {
+  node: string;
+  range: string;
+  points: NodeMetricPoint[];
+}
+
+export interface FleetMetricsSummary {
+  total_nodes: number;
+  online_nodes: number;
+  offline_nodes: number;
+  no_agent_nodes?: number;
+  total_rx_rate: number;
+  total_tx_rate: number;
+  average_cpu: number;
+  average_mem_perc: number;
+}
+
+export interface NodeLiveStatus {
+  name: string;
+  hostname: string;
+  os_info: string;
+  agent_version: string;
+  uptime_seconds: number;
+  connected: boolean;
+  agent_installed?: boolean;
+  last_seen: string;
+  metrics?: NodeMetricPoint;
+}
+
+export interface FleetLiveResponse {
+  summary: FleetMetricsSummary;
+  nodes: NodeLiveStatus[];
+}

@@ -12,12 +12,20 @@ import (
 	"easy42/internal/config"
 )
 
+// TelemetryListener handles telemetry reports received by the hub
+type TelemetryListener func(nodeName string, t *agentpb.TelemetryReport)
+
+// RegisterListener handles new agent registrations
+type RegisterListener func(conn *AgentConnection)
+
 // Hub manages active agent connections and cached telemetry
 type Hub struct {
 	mu          sync.RWMutex
 	connections map[string]*AgentConnection
 	telemetry   map[string]*agentpb.TelemetryReport
 	lastSeen    map[string]time.Time
+	onTelemetry []TelemetryListener
+	onRegister  []RegisterListener
 }
 
 // NewHub creates a new Hub instance
@@ -26,6 +34,31 @@ func NewHub() *Hub {
 		connections: make(map[string]*AgentConnection),
 		telemetry:   make(map[string]*agentpb.TelemetryReport),
 		lastSeen:    make(map[string]time.Time),
+	}
+}
+
+// OnTelemetry registers a listener invoked when telemetry is received
+func (h *Hub) OnTelemetry(l TelemetryListener) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.onTelemetry = append(h.onTelemetry, l)
+}
+
+// OnRegister registers a listener invoked when an agent registers
+func (h *Hub) OnRegister(l RegisterListener) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.onRegister = append(h.onRegister, l)
+}
+
+// NotifyRegister triggers registered registration listeners
+func (h *Hub) NotifyRegister(conn *AgentConnection) {
+	h.mu.RLock()
+	listeners := append([]RegisterListener(nil), h.onRegister...)
+	h.mu.RUnlock()
+
+	for _, l := range listeners {
+		go l(conn)
 	}
 }
 
@@ -76,9 +109,14 @@ func (h *Hub) RecordHeartbeat(nodeName string) {
 // UpdateTelemetry stores the latest telemetry report for a node
 func (h *Hub) UpdateTelemetry(nodeName string, t *agentpb.TelemetryReport) {
 	h.mu.Lock()
-	defer h.mu.Unlock()
 	h.telemetry[nodeName] = t
 	h.lastSeen[nodeName] = time.Now()
+	listeners := append([]TelemetryListener(nil), h.onTelemetry...)
+	h.mu.Unlock()
+
+	for _, l := range listeners {
+		go l(nodeName, t)
+	}
 }
 
 // GetTelemetry retrieves the latest telemetry report for a node
