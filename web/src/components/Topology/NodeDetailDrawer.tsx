@@ -15,6 +15,7 @@ import {
   DialogContent,
   DialogActions,
   TextField,
+  LinearProgress,
 } from "@mui/material";
 import {
   X,
@@ -35,9 +36,30 @@ import {
   RotateCcw,
   FileText,
   Check,
+  Cpu,
+  Camera,
+  AlertTriangle,
 } from "lucide-react";
 import { api } from "../../api/client";
 import { Node, NodeStatus } from "../../types/api";
+
+const formatBytes = (bytes?: number): string => {
+  if (!bytes || isNaN(bytes) || bytes <= 0) return "0B";
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(1024));
+  const val = bytes / Math.pow(1024, i);
+  return `${val >= 10 || i === 0 ? val.toFixed(0) : val.toFixed(1)} ${units[i]}`;
+};
+
+const formatUptime = (seconds?: number): string => {
+  if (!seconds || seconds <= 0) return "Just started";
+  const days = Math.floor(seconds / 86400);
+  const hours = Math.floor((seconds % 86400) / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  if (days > 0) return `${days}d ${hours}h`;
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  return `${minutes}m`;
+};
 import { MarkdownView } from "../Common/MarkdownView";
 
 interface NodeDetailDrawerProps {
@@ -937,6 +959,197 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
                   sx={{ height: 20, fontSize: "0.7rem", fontWeight: 700 }}
                 />
               </Box>
+
+              {/* Monitoring Mode Row */}
+              <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600 }}>
+                  Mode:
+                </Typography>
+                {status.mode === "agent" || node.mode === "agent" ? (
+                  <Chip
+                    icon={
+                      status.connected ? (
+                        <Box
+                          sx={{
+                            width: 6,
+                            height: 6,
+                            borderRadius: "50%",
+                            backgroundColor: "#10B981",
+                            ml: 0.5,
+                            boxShadow: "0 0 4px #10B981",
+                          }}
+                        />
+                      ) : (
+                        <AlertTriangle size={11} style={{ color: "#DC2626", marginLeft: 4 }} />
+                      )
+                    }
+                    label={status.connected ? "Agent Live" : "Agent Offline"}
+                    size="small"
+                    sx={{
+                      height: 20,
+                      fontSize: "0.7rem",
+                      fontWeight: 700,
+                      backgroundColor: status.connected ? "#ECFDF5" : "#FEE2E2",
+                      color: status.connected ? "#059669" : "#DC2626",
+                      border: status.connected ? "1px solid #A7F3D0" : "1px solid #FECDD3",
+                    }}
+                  />
+                ) : (
+                  <Chip
+                    icon={<Camera size={11} style={{ color: "#64748B", marginLeft: 4 }} />}
+                    label="SSH Snapshot"
+                    size="small"
+                    sx={{
+                      height: 20,
+                      fontSize: "0.7rem",
+                      fontWeight: 600,
+                      backgroundColor: "#F1F5F9",
+                      color: "#475569",
+                      border: "1px solid #E2E8F0",
+                    }}
+                  />
+                )}
+              </Box>
+
+              {/* Informational note when in SSH Snapshot mode */}
+              {status.mode !== "agent" && node.mode !== "agent" && !node.is_external && (
+                <Box
+                  sx={{
+                    p: 1,
+                    backgroundColor: "rgba(241, 245, 249, 0.7)",
+                    borderRadius: 1.5,
+                    border: "1px dashed #CBD5E1",
+                  }}
+                >
+                  <Typography variant="caption" sx={{ color: "#475569", display: "block", fontSize: "0.7rem", lineHeight: 1.35 }}>
+                    <strong>Note:</strong> Status was fetched from last manual refresh (SSH snapshot). For continuous live telemetry and automatic status updates, install the Easy42 Agent.
+                  </Typography>
+                </Box>
+              )}
+
+              {/* Agent Version if present */}
+              {status.agent_version && (
+                <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <Typography variant="caption" sx={{ color: "#64748B" }}>
+                    Agent Version:
+                  </Typography>
+                  <Typography variant="caption" className="mono-font" sx={{ color: "#0F172A", fontWeight: 600 }}>
+                    {status.agent_version}
+                  </Typography>
+                </Box>
+              )}
+
+              {/* Live Telemetry Metrics Card (when agent is working and metrics are present) */}
+              {status.metrics && (
+                <Box
+                  sx={{
+                    mt: 0.5,
+                    p: 1.25,
+                    backgroundColor: "#FFFFFF",
+                    borderRadius: 1.5,
+                    border: "1px solid #A7F3D0",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 1,
+                  }}
+                >
+                  <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                      <Cpu size={13} color="#059669" />
+                      <Typography variant="caption" sx={{ fontWeight: 700, color: "#065F46" }}>
+                        Live System Metrics
+                      </Typography>
+                    </Box>
+                    {status.metrics.uptime_seconds ? (
+                      <Typography variant="caption" sx={{ fontSize: "0.68rem", color: "#64748B" }}>
+                        Up: {formatUptime(status.metrics.uptime_seconds)}
+                      </Typography>
+                    ) : null}
+                  </Box>
+
+                  {/* CPU Usage Bar */}
+                  <Box>
+                    <Box sx={{ display: "flex", justifyContent: "space-between", mb: 0.25 }}>
+                      <Typography variant="caption" sx={{ fontSize: "0.7rem", color: "#64748B" }}>
+                        CPU Usage:
+                      </Typography>
+                      <Typography
+                        variant="caption"
+                        className="mono-font"
+                        sx={{
+                          fontSize: "0.72rem",
+                          fontWeight: 700,
+                          color:
+                            status.metrics.cpu_percent > 85
+                              ? "#DC2626"
+                              : status.metrics.cpu_percent > 60
+                                ? "#D97706"
+                                : "#059669",
+                        }}
+                      >
+                        {status.metrics.cpu_percent.toFixed(1)}%
+                      </Typography>
+                    </Box>
+                    <LinearProgress
+                      variant="determinate"
+                      value={Math.min(100, Math.max(0, status.metrics.cpu_percent))}
+                      sx={{
+                        height: 6,
+                        borderRadius: 3,
+                        backgroundColor: "#E2E8F0",
+                        "& .MuiLinearProgress-bar": {
+                          backgroundColor:
+                            status.metrics.cpu_percent > 85
+                              ? "#DC2626"
+                              : status.metrics.cpu_percent > 60
+                                ? "#D97706"
+                                : "#10B981",
+                        },
+                      }}
+                    />
+                  </Box>
+
+                  {/* Memory Usage Bar */}
+                  {status.metrics.memory_total_bytes > 0 && (
+                    <Box>
+                      <Box sx={{ display: "flex", justifyContent: "space-between", mb: 0.25 }}>
+                        <Typography variant="caption" sx={{ fontSize: "0.7rem", color: "#64748B" }}>
+                          Memory Usage:
+                        </Typography>
+                        <Typography variant="caption" className="mono-font" sx={{ fontSize: "0.72rem", fontWeight: 700, color: "#0F172A" }}>
+                          {formatBytes(status.metrics.memory_used_bytes)} / {formatBytes(status.metrics.memory_total_bytes)} (
+                          {Math.round((status.metrics.memory_used_bytes / status.metrics.memory_total_bytes) * 100)}%)
+                        </Typography>
+                      </Box>
+                      <LinearProgress
+                        variant="determinate"
+                        value={Math.min(
+                          100,
+                          Math.max(0, (status.metrics.memory_used_bytes / status.metrics.memory_total_bytes) * 100),
+                        )}
+                        sx={{
+                          height: 6,
+                          borderRadius: 3,
+                          backgroundColor: "#E2E8F0",
+                          "& .MuiLinearProgress-bar": { backgroundColor: "#0284C7" },
+                        }}
+                      />
+                    </Box>
+                  )}
+
+                  {/* Load Average */}
+                  {status.metrics.load_avg && status.metrics.load_avg.length > 0 && (
+                    <Box sx={{ display: "flex", justifyContent: "space-between", pt: 0.25 }}>
+                      <Typography variant="caption" sx={{ fontSize: "0.7rem", color: "#64748B" }}>
+                        Load Average (1/5/15m):
+                      </Typography>
+                      <Typography variant="caption" className="mono-font" sx={{ fontSize: "0.72rem", fontWeight: 600, color: "#334155" }}>
+                        {status.metrics.load_avg.map((v) => v.toFixed(2)).join(", ")}
+                      </Typography>
+                    </Box>
+                  )}
+                </Box>
+              )}
 
               {!status.connected && status.error && (
                 <Box sx={{ mt: 0.5, p: 1, backgroundColor: "#FFFFFF", borderRadius: 1.5, border: "1px solid #FECDD3" }}>

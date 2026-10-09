@@ -128,6 +128,16 @@ func (h *Hub) NodeStatus(nodeName string) *config.NodeStatus {
 	}
 
 	if telemetry != nil {
+		if telemetry.System != nil {
+			status.Metrics = &config.SystemMetrics{
+				CPUPercent:       telemetry.System.CpuPercent,
+				MemoryUsedBytes:  telemetry.System.MemoryUsedBytes,
+				MemoryTotalBytes: telemetry.System.MemoryTotalBytes,
+				UptimeSeconds:    telemetry.System.UptimeSeconds,
+				LoadAvg:          telemetry.System.LoadAvg,
+			}
+		}
+
 		for _, iface := range telemetry.Interfaces {
 			status.Interfaces = append(status.Interfaces, config.InterfaceInfo{
 				Name:      iface.Name,

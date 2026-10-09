@@ -355,6 +355,15 @@ type WgInterfaceStatus struct {
 	Peers      []WgPeerStatus `json:"peers"`
 }
 
+// SystemMetrics represents live hardware metrics reported by a node agent
+type SystemMetrics struct {
+	CPUPercent       float32   `json:"cpu_percent"`
+	MemoryUsedBytes  uint64    `json:"memory_used_bytes"`
+	MemoryTotalBytes uint64    `json:"memory_total_bytes"`
+	UptimeSeconds    uint64    `json:"uptime_seconds"`
+	LoadAvg          []float32 `json:"load_avg,omitempty"`
+}
+
 // NodeStatus represents cached runtime status of a node
 type NodeStatus struct {
 	Name         string              `json:"name"`
@@ -367,6 +376,7 @@ type NodeStatus struct {
 	Error        string              `json:"error,omitempty"`
 	Mode         string              `json:"mode,omitempty"`
 	AgentVersion string              `json:"agent_version,omitempty"`
+	Metrics      *SystemMetrics      `json:"metrics,omitempty"`
 }
 
 // ActionType represents an action to execute on a node during sync

@@ -2377,7 +2377,7 @@ func (m *Manager) GetNodeStatuses() map[string]config.NodeStatus {
 	if cfg != nil {
 		for _, n := range cfg.Nodes {
 			activeNodes[n.Name] = true
-			if n.IsAgentMode() {
+			if n.IsAgentMode() || m.agentHub.IsConnected(n.Name) {
 				st := m.agentHub.NodeStatus(n.Name)
 				st.Host = n.Host
 				m.statuses[n.Name] = st
@@ -3346,6 +3346,8 @@ func (m *Manager) collectStateFromAgent(targetNode config.Node, meta map[string]
 		WgInterfaces: nodeStatus.WgInterfaces,
 		Interfaces:   nodeStatus.Interfaces,
 		Mode:         "agent",
+		AgentVersion: nodeStatus.AgentVersion,
+		Metrics:      nodeStatus.Metrics,
 	}
 	m.mu.Unlock()
 

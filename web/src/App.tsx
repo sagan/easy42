@@ -214,6 +214,22 @@ export const App: React.FC = () => {
     }
   }, [authenticated, loadData]);
 
+  // Periodic background poll for live agent telemetry and node statuses
+  useEffect(() => {
+    if (!authenticated) return;
+    const interval = setInterval(async () => {
+      try {
+        const statusesData = await api.getNodeStatuses();
+        if (statusesData) {
+          setNodeStatuses(statusesData);
+        }
+      } catch {
+        // Silently ignore background polling errors
+      }
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [authenticated]);
+
   const handleLogout = async () => {
     try {
       await api.logout();

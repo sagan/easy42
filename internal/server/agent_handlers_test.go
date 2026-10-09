@@ -58,7 +58,7 @@ func TestAgentInstallScript(t *testing.T) {
 		t.Fatalf("expected 200, got: %d", rr.Code)
 	}
 	body := rr.Body.String()
-	if !strings.Contains(body, "#!/bin/bash") || !strings.Contains(body, "easy42-agent") {
+	if (!strings.Contains(body, "#!/bin/sh") && !strings.Contains(body, "#!/bin/bash")) || !strings.Contains(body, "easy42-agent") {
 		t.Fatalf("unexpected install script content: %s", body)
 	}
 }

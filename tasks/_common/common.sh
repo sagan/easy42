@@ -168,6 +168,35 @@ is_service_enabled() {
     esac
 }
 
+# Checks if a service is currently running
+is_service_running() {
+    local name="${1%.service}"
+    case "$INIT_SYSTEM" in
+        systemd)
+            systemctl is-active --quiet "${name}.service" 2>/dev/null || systemctl is-active --quiet "$name" 2>/dev/null
+            ;;
+        openrc)
+            if command -v rc-service >/dev/null 2>&1; then
+                rc-service "$name" status >/dev/null 2>&1
+            elif [ -x "/etc/init.d/${name}" ]; then
+                /etc/init.d/"$name" status >/dev/null 2>&1
+            else
+                pgrep -f "$name" >/dev/null 2>&1
+            fi
+            ;;
+        procd)
+            if [ -x "/etc/init.d/${name}" ]; then
+                /etc/init.d/"$name" running >/dev/null 2>&1 || pgrep -f "$name" >/dev/null 2>&1
+            else
+                pgrep -f "$name" >/dev/null 2>&1
+            fi
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
 # Enables a service to start on boot
 enable_service() {
     local name="${1%.service}"
@@ -217,7 +246,11 @@ start_service() {
             $SUDO systemctl start "$name"
             ;;
         openrc)
-            $SUDO rc-service "$name" start
+            if command -v rc-service >/dev/null 2>&1; then
+                $SUDO rc-service "$name" start
+            else
+                $SUDO /etc/init.d/"$name" start
+            fi
             ;;
         procd)
             $SUDO /etc/init.d/"$name" start
@@ -236,7 +269,11 @@ stop_service() {
             $SUDO systemctl stop "$name"
             ;;
         openrc)
-            $SUDO rc-service "$name" stop
+            if command -v rc-service >/dev/null 2>&1; then
+                $SUDO rc-service "$name" stop
+            else
+                $SUDO /etc/init.d/"$name" stop
+            fi
             ;;
         procd)
             $SUDO /etc/init.d/"$name" stop
@@ -255,7 +292,11 @@ restart_service() {
             $SUDO systemctl restart "$name"
             ;;
         openrc)
-            $SUDO rc-service "$name" restart
+            if command -v rc-service >/dev/null 2>&1; then
+                $SUDO rc-service "$name" restart
+            else
+                $SUDO /etc/init.d/"$name" restart
+            fi
             ;;
         procd)
             $SUDO /etc/init.d/"$name" restart

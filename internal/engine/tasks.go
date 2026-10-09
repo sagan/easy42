@@ -162,7 +162,7 @@ func (m *Manager) RunTask(ctx context.Context, taskID string, nodeNames []string
 					}
 				}
 
-				archOut, err := ssh.RunCommand(sshClient, "uname -m")
+				archOut, err := ssh.RunCommand(sshClient, agent.ArchDetectCommand)
 				if err != nil {
 					mu.Lock()
 					results[n.Name] = tasks.TaskRunResult{

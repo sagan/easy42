@@ -123,6 +123,10 @@ export interface Node {
   x?: number;
   y?: number;
   modified_at?: string;
+  mode?: "ssh" | "agent" | string;
+  agent_token?: string;
+  agent_version?: string;
+  agent_last_seen?: string;
 }
 
 export interface LinkEnd {
@@ -183,6 +187,14 @@ export interface WgInterfaceStatus {
   peers: WgPeerStatus[];
 }
 
+export interface SystemMetrics {
+  cpu_percent: number;
+  memory_used_bytes: number;
+  memory_total_bytes: number;
+  uptime_seconds?: number;
+  load_avg?: number[];
+}
+
 export interface NodeStatus {
   name: string;
   host: string;
@@ -192,6 +204,9 @@ export interface NodeStatus {
   interfaces?: InterfaceInfo[];
   wg_interfaces?: WgInterfaceStatus[];
   error?: string;
+  mode?: "ssh" | "agent" | string;
+  agent_version?: string;
+  metrics?: SystemMetrics;
 }
 
 export interface ProbeResult {

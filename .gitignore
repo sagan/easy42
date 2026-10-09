@@ -4,6 +4,7 @@ node_modules
 
 # ignore all root dir files by default
 /*.*
+!Cross.toml
 /easy42
 /agent/target
 /internal/agent/embedded/*

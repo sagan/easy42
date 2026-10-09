@@ -12,8 +12,29 @@ import {
   Share2,
   CheckCircle2,
   Network,
+  Cpu,
+  Activity,
+  Camera,
 } from "lucide-react";
 import { Node, NodeStatus } from "../../types/api";
+
+const formatBytes = (bytes?: number): string => {
+  if (!bytes || isNaN(bytes) || bytes <= 0) return "0B";
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(1024));
+  const val = bytes / Math.pow(1024, i);
+  return `${val >= 10 || i === 0 ? val.toFixed(0) : val.toFixed(1)} ${units[i]}`;
+};
+
+const formatUptime = (seconds?: number): string => {
+  if (!seconds || seconds <= 0) return "Just started";
+  const days = Math.floor(seconds / 86400);
+  const hours = Math.floor((seconds % 86400) / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  if (days > 0) return `${days}d ${hours}h`;
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  return `${minutes}m`;
+};
 
 export interface NodeData {
   node: Node;
@@ -54,6 +75,9 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
   const isOnline = status ? status.connected : true;
   const isExternal = Boolean(node.is_external);
   const isRefreshing = refreshingNodeName === node.name;
+  const isAgentConfigured = node.mode === "agent" || Boolean(node.agent_token);
+  const isAgentMode = status?.mode === "agent" || isAgentConfigured;
+  const isAgentWorking = isAgentMode && isOnline && !isExternal;
 
   return (
     <Box
@@ -81,11 +105,15 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
                   : "2px dashed #EF4444"
               : !isOnline
                 ? "1.5px solid #EF4444"
-                : "1.5px solid #E2E8F0",
+                : isAgentWorking
+                  ? "1.5px solid #10B981"
+                  : "1.5px solid #E2E8F0",
         borderTop:
           inBlock && isBlockFullMesh
             ? `4px solid ${isFocused ? "#4F46E5" : !isHealthy ? "#EF4444" : blockColor || "#6366F1"}`
-            : undefined,
+            : isAgentWorking && (!inBlock || !isBlockFullMesh)
+              ? "3px solid #10B981"
+              : undefined,
         borderRadius: 2.5,
         boxShadow: isFocused
           ? "0 0 0 3px rgba(79, 70, 229, 0.25), 0 12px 28px rgba(79, 70, 229, 0.2)"
@@ -97,7 +125,9 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
                 ? "0 4px 6px -1px rgba(139, 92, 246, 0.08), 0 2px 4px -2px rgba(139, 92, 246, 0.05)"
                 : !isOnline
                   ? "0 4px 10px rgba(239, 68, 68, 0.15), 0 2px 4px rgba(239, 68, 68, 0.1)"
-                  : "0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05)",
+                  : isAgentWorking
+                    ? "0 4px 12px -1px rgba(16, 185, 129, 0.12), 0 2px 4px -2px rgba(16, 185, 129, 0.08)"
+                    : "0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05)",
         overflow: "hidden",
         cursor: "pointer",
         transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
@@ -111,12 +141,16 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
                 ? "#7C3AED"
                 : !isOnline
                   ? "#DC2626"
-                  : "#4F46E5",
+                  : isAgentWorking
+                    ? "#059669"
+                    : "#4F46E5",
           boxShadow: isFocused
             ? "0 0 0 3px rgba(79, 70, 229, 0.35), 0 16px 32px rgba(79, 70, 229, 0.25)"
             : inBlock && isBlockFullMesh
               ? `0 8px 20px ${blockColor || "#6366F1"}30`
-              : "0 10px 15px -3px rgba(79, 70, 229, 0.12), 0 4px 6px -4px rgba(79, 70, 229, 0.12)",
+              : isAgentWorking
+                ? "0 10px 22px -3px rgba(16, 185, 129, 0.22), 0 4px 6px -4px rgba(16, 185, 129, 0.15)"
+                : "0 10px 15px -3px rgba(79, 70, 229, 0.12), 0 4px 6px -4px rgba(79, 70, 229, 0.12)",
         },
       }}
     >
@@ -222,7 +256,7 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
                   }}
                 />
               )}
-              {isExternal && (
+              {isExternal ? (
                 <Chip
                   label="EXTERNAL"
                   size="small"
@@ -237,12 +271,19 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
                     px: 0,
                   }}
                 />
-              )}
-              {!isExternal && !isOnline && (
-                <Tooltip title={status?.error || "Device is offline or unreachable via SSH"}>
+              ) : !isOnline ? (
+                <Tooltip
+                  title={
+                    isAgentMode
+                      ? `Agent offline or unreachable. Last seen: ${
+                          status?.last_seen ? new Date(status.last_seen).toLocaleString() : node.agent_last_seen || "Unknown"
+                        }`
+                      : status?.error || "Device is offline or unreachable via SSH"
+                  }
+                >
                   <Chip
                     icon={<AlertTriangle size={10} color="#DC2626" />}
-                    label="OFFLINE"
+                    label={isAgentMode ? "AGENT OFFLINE" : "OFFLINE"}
                     size="small"
                     sx={{
                       height: 16,
@@ -253,6 +294,59 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
                       border: "1px solid #FECDD3",
                       letterSpacing: "0.5px",
                       px: 0,
+                    }}
+                  />
+                </Tooltip>
+              ) : isAgentWorking ? (
+                <Tooltip title="Agent connected & reporting live telemetry in real-time. Link states and node metrics are continuously up to date.">
+                  <Chip
+                    icon={
+                      <Box
+                        sx={{
+                          width: 6,
+                          height: 6,
+                          borderRadius: "50%",
+                          backgroundColor: "#10B981",
+                          ml: 0.5,
+                          boxShadow: "0 0 4px #10B981",
+                        }}
+                      />
+                    }
+                    label="LIVE"
+                    size="small"
+                    sx={{
+                      height: 16,
+                      fontSize: "0.55rem",
+                      fontWeight: 800,
+                      backgroundColor: "#ECFDF5",
+                      color: "#059669",
+                      border: "1px solid #A7F3D0",
+                      letterSpacing: "0.5px",
+                      px: 0,
+                      "& .MuiChip-label": { px: 0.5 },
+                    }}
+                  />
+                </Tooltip>
+              ) : (
+                <Tooltip
+                  title={`SSH Snapshot (refreshed: ${
+                    status?.last_seen ? new Date(status.last_seen).toLocaleTimeString() : "manual"
+                  }). Not reporting live telemetry; for reference only.`}
+                >
+                  <Chip
+                    icon={<Camera size={9} style={{ color: "#64748B", marginLeft: 4 }} />}
+                    label="SNAPSHOT"
+                    size="small"
+                    sx={{
+                      height: 16,
+                      fontSize: "0.52rem",
+                      fontWeight: 700,
+                      backgroundColor: "#F1F5F9",
+                      color: "#64748B",
+                      border: "1px solid #CBD5E1",
+                      letterSpacing: "0.3px",
+                      px: 0,
+                      "& .MuiChip-label": { px: 0.4 },
                     }}
                   />
                 </Tooltip>
@@ -521,6 +615,173 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
           </Box>
         )}
       </Box>
+
+      {/* Live State Bottom Line (Present when agent is working) */}
+      {isAgentWorking && (
+        <Tooltip
+          arrow
+          placement="bottom"
+          title={
+            <Box sx={{ p: 0.5 }}>
+              <Typography
+                variant="caption"
+                sx={{ fontWeight: 800, display: "block", color: "#6EE7B7", mb: 0.5, letterSpacing: "0.3px" }}
+              >
+                LIVE NODE METRICS
+              </Typography>
+              <Box sx={{ display: "grid", gridTemplateColumns: "auto auto", gap: "3px 12px", fontSize: "0.72rem" }}>
+                <span style={{ color: "#94A3B8" }}>CPU Usage:</span>
+                <span style={{ fontWeight: 700, color: "#FFFFFF" }}>
+                  {status?.metrics ? `${status.metrics.cpu_percent.toFixed(1)}%` : "Awaiting..."}
+                </span>
+                <span style={{ color: "#94A3B8" }}>RAM Usage:</span>
+                <span style={{ fontWeight: 700, color: "#FFFFFF" }}>
+                  {status?.metrics && status.metrics.memory_total_bytes > 0
+                    ? `${formatBytes(status.metrics.memory_used_bytes)} / ${formatBytes(
+                        status.metrics.memory_total_bytes,
+                      )} (${Math.round((status.metrics.memory_used_bytes / status.metrics.memory_total_bytes) * 100)}%)`
+                    : "Awaiting..."}
+                </span>
+                {status?.metrics?.load_avg && status.metrics.load_avg.length > 0 && (
+                  <>
+                    <span style={{ color: "#94A3B8" }}>Load Average:</span>
+                    <span style={{ fontWeight: 700, color: "#FFFFFF" }}>
+                      {status.metrics.load_avg.map((v) => v.toFixed(2)).join(", ")}
+                    </span>
+                  </>
+                )}
+                {status?.metrics?.uptime_seconds ? (
+                  <>
+                    <span style={{ color: "#94A3B8" }}>Uptime:</span>
+                    <span style={{ fontWeight: 700, color: "#FFFFFF" }}>
+                      {formatUptime(status.metrics.uptime_seconds)}
+                    </span>
+                  </>
+                ) : null}
+                {status?.agent_version && (
+                  <>
+                    <span style={{ color: "#94A3B8" }}>Agent:</span>
+                    <span style={{ fontWeight: 700, color: "#FFFFFF" }}>{status.agent_version}</span>
+                  </>
+                )}
+                <span style={{ color: "#94A3B8" }}>Status:</span>
+                <span style={{ fontWeight: 700, color: "#10B981" }}>Continuous Real-Time</span>
+              </Box>
+            </Box>
+          }
+        >
+          <Box
+            sx={{
+              px: 1.25,
+              py: 0.6,
+              backgroundColor: "rgba(16, 185, 129, 0.06)",
+              borderTop: "1px solid rgba(16, 185, 129, 0.22)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 1,
+            }}
+          >
+            {/* Live Indicator */}
+            <Box sx={{ display: "flex", alignItems: "center", gap: 0.6, flexShrink: 0 }}>
+              <Box
+                sx={{
+                  width: 6,
+                  height: 6,
+                  borderRadius: "50%",
+                  backgroundColor: "#10B981",
+                  boxShadow: "0 0 0 0 rgba(16, 185, 129, 0.7)",
+                  animation: "livePulse 2s infinite",
+                  "@keyframes livePulse": {
+                    "0%": { boxShadow: "0 0 0 0 rgba(16, 185, 129, 0.7)" },
+                    "70%": { boxShadow: "0 0 0 4px rgba(16, 185, 129, 0)" },
+                    "100%": { boxShadow: "0 0 0 0 rgba(16, 185, 129, 0)" },
+                  },
+                }}
+              />
+              <Typography
+                variant="caption"
+                sx={{
+                  fontSize: "0.62rem",
+                  fontWeight: 800,
+                  color: "#059669",
+                  letterSpacing: "0.5px",
+                  lineHeight: 1,
+                }}
+              >
+                LIVE
+              </Typography>
+            </Box>
+
+            {/* Metrics Pills */}
+            {status?.metrics ? (
+              <Box sx={{ display: "flex", alignItems: "center", gap: 0.6, minWidth: 0 }}>
+                {/* CPU Pill */}
+                <Box
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 0.35,
+                    fontSize: "0.65rem",
+                    fontWeight: 700,
+                    color:
+                      status.metrics.cpu_percent > 85
+                        ? "#DC2626"
+                        : status.metrics.cpu_percent > 60
+                          ? "#D97706"
+                          : "#047857",
+                    backgroundColor: "#FFFFFF",
+                    px: 0.6,
+                    py: 0.15,
+                    borderRadius: 1,
+                    border: "1px solid rgba(16, 185, 129, 0.25)",
+                    lineHeight: 1.2,
+                  }}
+                >
+                  <Cpu size={10} style={{ opacity: 0.8 }} />
+                  <span className="mono-font">{Math.round(status.metrics.cpu_percent)}%</span>
+                </Box>
+
+                {/* RAM Pill */}
+                <Box
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 0.35,
+                    fontSize: "0.65rem",
+                    fontWeight: 700,
+                    color: "#047857",
+                    backgroundColor: "#FFFFFF",
+                    px: 0.6,
+                    py: 0.15,
+                    borderRadius: 1,
+                    border: "1px solid rgba(16, 185, 129, 0.25)",
+                    lineHeight: 1.2,
+                  }}
+                >
+                  <Activity size={10} style={{ opacity: 0.8 }} />
+                  <span className="mono-font">
+                    {formatBytes(status.metrics.memory_used_bytes)}
+                    {status.metrics.memory_total_bytes > 0 &&
+                      ` (${Math.round((status.metrics.memory_used_bytes / status.metrics.memory_total_bytes) * 100)}%)`}
+                  </span>
+                </Box>
+              </Box>
+            ) : (
+              <Typography
+                variant="caption"
+                sx={{
+                  fontSize: "0.62rem",
+                  color: "#059669",
+                  fontWeight: 600,
+                }}
+              >
+                reporting live
+              </Typography>
+            )}
+          </Box>
+        </Tooltip>
+      )}
 
       {/* Offline Alert Strip */}
       {!isExternal && !isOnline && (

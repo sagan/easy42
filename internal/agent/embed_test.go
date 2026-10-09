@@ -38,9 +38,42 @@ func TestEmbeddedAgentBinaries(t *testing.T) {
 	}
 }
 
+func TestNormalizeArch(t *testing.T) {
+	cases := []struct {
+		input    string
+		expected string
+	}{
+		{"x86_64", "x86_64"},
+		{"amd64", "x86_64"},
+		{"aarch64", "aarch64"},
+		{"arm64", "aarch64"},
+		{"armv7l", "armv7"},
+		{"armhf", "armv7"},
+		{"mipsel", "mipsel"},
+		{"mipsle", "mipsel"},
+		{"mips64el", "mipsel"},
+		{"mips", "mips"},
+	}
+
+	for _, c := range cases {
+		if got := NormalizeArch(c.input); got != c.expected {
+			t.Errorf("NormalizeArch(%q) = %q, want %q", c.input, got, c.expected)
+		}
+	}
+}
+
 func TestUnsupportedArch(t *testing.T) {
 	_, err := GetAgentBinary("unknown_arch_123")
 	if err == nil {
 		t.Fatalf("expected error for unsupported arch, got nil")
+	}
+
+	// Test MIPS big-endian specific error message
+	_, errMips := GetAgentBinary("mips")
+	if errMips == nil {
+		t.Fatalf("expected error for mips (big-endian), got nil")
+	}
+	if !bytes.Contains([]byte(errMips.Error()), []byte("big-endian MIPS is not supported")) {
+		t.Errorf("expected error message to mention big-endian MIPS, got: %v", errMips)
 	}
 }

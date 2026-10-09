@@ -23,6 +23,7 @@ http = "1.0"
 
 [build-dependencies]
 prost-build = "0.13"
+protoc-bin-vendored = "3.3.0"
 
 [profile.release]
 opt-level = "z"
