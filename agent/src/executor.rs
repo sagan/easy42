@@ -1,3 +1,5 @@
+use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::fs::{self, File};
 use std::io::Write;
@@ -5,8 +7,6 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::process::Command;
 use std::time::Instant;
-use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 use tracing::info;
 
 use crate::collector::proto;
@@ -42,21 +42,13 @@ impl CommandExecutor {
             Some(proto::command_request::Command::ManageIface(manage)) => {
                 self.manage_interface(manage)
             }
-            Some(proto::command_request::Command::ReloadBird(reload)) => {
-                self.reload_bird(reload)
-            }
+            Some(proto::command_request::Command::ReloadBird(reload)) => self.reload_bird(reload),
             Some(proto::command_request::Command::ApplyNft(apply_nft)) => {
                 self.apply_nftables(apply_nft)
             }
-            Some(proto::command_request::Command::RestartService(svc)) => {
-                self.restart_service(svc)
-            }
-            Some(proto::command_request::Command::LookingGlass(lg)) => {
-                self.run_looking_glass(lg)
-            }
-            Some(proto::command_request::Command::ProbeSystem(_)) => {
-                self.probe_system()
-            }
+            Some(proto::command_request::Command::RestartService(svc)) => self.restart_service(svc),
+            Some(proto::command_request::Command::LookingGlass(lg)) => self.run_looking_glass(lg),
+            Some(proto::command_request::Command::ProbeSystem(_)) => self.probe_system(),
             None => (false, -1, String::new(), "unknown command".to_string()),
         };
 
@@ -83,7 +75,10 @@ impl CommandExecutor {
                     false,
                     -1,
                     String::new(),
-                    format!("SHA-256 mismatch: expected {}, got {}", req.sha256_hash, calculated),
+                    format!(
+                        "SHA-256 mismatch: expected {}, got {}",
+                        req.sha256_hash, calculated
+                    ),
                 );
             }
         }
@@ -91,7 +86,12 @@ impl CommandExecutor {
         let target_path = Path::new(&req.path);
         if let Some(parent) = target_path.parent() {
             if let Err(e) = fs::create_dir_all(parent) {
-                return (false, -1, String::new(), format!("failed to create dir {:?}: {}", parent, e));
+                return (
+                    false,
+                    -1,
+                    String::new(),
+                    format!("failed to create dir {:?}: {}", parent, e),
+                );
             }
             // Ensure parent directories have 0755 permissions
             let mut curr = Some(parent);
@@ -117,30 +117,57 @@ impl CommandExecutor {
             Ok(mut file) => {
                 if let Err(e) = file.write_all(&req.content) {
                     let _ = fs::remove_file(&tmp_path);
-                    return (false, -1, String::new(), format!("failed to write tmp file: {}", e));
+                    return (
+                        false,
+                        -1,
+                        String::new(),
+                        format!("failed to write tmp file: {}", e),
+                    );
                 }
                 if let Err(e) = file.sync_all() {
                     let _ = fs::remove_file(&tmp_path);
-                    return (false, -1, String::new(), format!("failed to sync tmp file: {}", e));
+                    return (
+                        false,
+                        -1,
+                        String::new(),
+                        format!("failed to sync tmp file: {}", e),
+                    );
                 }
                 let _ = fs::set_permissions(&tmp_path, fs::Permissions::from_mode(mode));
 
                 if let Err(e) = fs::rename(&tmp_path, &req.path) {
                     let _ = fs::remove_file(&tmp_path);
-                    return (false, -1, String::new(), format!("failed to atomic rename to {}: {}", req.path, e));
+                    return (
+                        false,
+                        -1,
+                        String::new(),
+                        format!("failed to atomic rename to {}: {}", req.path, e),
+                    );
                 }
                 let _ = fs::set_permissions(&req.path, fs::Permissions::from_mode(mode));
                 info!("Successfully wrote file {} (mode {:o})", req.path, mode);
                 (true, 0, format!("wrote {}", req.path), String::new())
             }
-            Err(e) => (false, -1, String::new(), format!("failed to create tmp file {}: {}", tmp_path, e)),
+            Err(e) => (
+                false,
+                -1,
+                String::new(),
+                format!("failed to create tmp file {}: {}", tmp_path, e),
+            ),
         }
     }
 
     fn manage_interface(&self, req: proto::ManageInterface) -> (bool, i32, String, String) {
         let action = match proto::manage_interface::Action::try_from(req.action) {
             Ok(a) => a,
-            Err(_) => return (false, -1, String::new(), "invalid interface action".to_string()),
+            Err(_) => {
+                return (
+                    false,
+                    -1,
+                    String::new(),
+                    "invalid interface action".to_string(),
+                )
+            }
         };
 
         let iface = req.interface_name;
@@ -195,9 +222,7 @@ impl CommandExecutor {
 
     fn restart_service(&self, req: proto::RestartServiceCmd) -> (bool, i32, String, String) {
         match req.service_name.as_str() {
-            "bird" => {
-                run_shell("systemctl restart bird 2>/dev/null || service bird restart 2>&1")
-            }
+            "bird" => run_shell("systemctl restart bird 2>/dev/null || service bird restart 2>&1"),
             "wireguard" => {
                 let cmd = r#"sh -c '
 for i in $( { for c in /etc/wireguard/*.conf; do [ -f "$c" ] && basename "$c" .conf; done; wg show interfaces 2>/dev/null | tr " " "\n"; } | sort -u ); do
@@ -208,7 +233,12 @@ done
 '"#;
                 run_shell(cmd)
             }
-            other => (false, -1, String::new(), format!("unsupported service restart: {}", other)),
+            other => (
+                false,
+                -1,
+                String::new(),
+                format!("unsupported service restart: {}", other),
+            ),
         }
     }
 
@@ -223,9 +253,7 @@ done
                 let count = req.args.first().cloned().unwrap_or_else(|| "4".to_string());
                 run_cmd("ping", &["-c", &count, &req.target])
             }
-            proto::looking_glass_cmd::Tool::Traceroute => {
-                run_cmd("traceroute", &[&req.target])
-            }
+            proto::looking_glass_cmd::Tool::Traceroute => run_cmd("traceroute", &[&req.target]),
             proto::looking_glass_cmd::Tool::Birdc => {
                 let mut full_args = vec!["show"];
                 let args_ref: Vec<&str> = req.args.iter().map(|s| s.as_str()).collect();
@@ -240,7 +268,15 @@ done
                 let first_word = req.command.split_whitespace().next().unwrap_or("");
                 match first_word {
                     "ping" | "traceroute" | "birdc" | "ip" | "wg" => run_shell(&req.command),
-                    _ => (false, -1, String::new(), format!("command '{}' not allowed by agent security policy", first_word)),
+                    _ => (
+                        false,
+                        -1,
+                        String::new(),
+                        format!(
+                            "command '{}' not allowed by agent security policy",
+                            first_word
+                        ),
+                    ),
                 }
             }
         }
@@ -280,14 +316,16 @@ done
             }
         }
 
-        let result = ProbeSystemResult {
-            hostname,
-            configs,
-        };
+        let result = ProbeSystemResult { hostname, configs };
 
         match serde_json::to_string(&result) {
             Ok(json) => (true, 0, json, String::new()),
-            Err(e) => (false, -1, String::new(), format!("failed to serialize probe result: {}", e)),
+            Err(e) => (
+                false,
+                -1,
+                String::new(),
+                format!("failed to serialize probe result: {}", e),
+            ),
         }
     }
 }
@@ -300,18 +338,23 @@ fn run_cmd(program: &str, args: &[&str]) -> (bool, i32, String, String) {
             let stderr = String::from_utf8_lossy(&output.stderr).to_string();
             (output.status.success(), code, stdout, stderr)
         }
-        Err(e) => (false, -1, String::new(), format!("failed to execute {}: {}", program, e)),
+        Err(e) => (
+            false,
+            -1,
+            String::new(),
+            format!("failed to execute {}: {}", program, e),
+        ),
     }
 }
 
 fn run_shell(cmd_str: &str) -> (bool, i32, String, String) {
-    match Command::new("bash").arg("-c").arg(cmd_str).output() {
+    match Command::new("sh").arg("-c").arg(cmd_str).output() {
         Ok(output) => {
             let code = output.status.code().unwrap_or(-1);
             let stdout = String::from_utf8_lossy(&output.stdout).to_string();
             let stderr = String::from_utf8_lossy(&output.stderr).to_string();
             (output.status.success(), code, stdout, stderr)
         }
-        Err(e) => (false, -1, String::new(), format!("failed to run bash: {}", e)),
+        Err(e) => (false, -1, String::new(), format!("failed to run sh: {}", e)),
     }
 }

@@ -7,15 +7,15 @@ proto:
 
 build-agent:
 	mkdir -p internal/agent/embedded bin
-	cross build --manifest-path agent/Cargo.toml --release --target x86_64-unknown-linux-musl
-	cp agent/target/x86_64-unknown-linux-musl/release/easy42-agent internal/agent/embedded/easy42-agent-x86_64
-	cp agent/target/x86_64-unknown-linux-musl/release/easy42-agent bin/easy42-agent
-	cross build --manifest-path agent/Cargo.toml --release --target aarch64-unknown-linux-musl
-	cp agent/target/aarch64-unknown-linux-musl/release/easy42-agent internal/agent/embedded/easy42-agent-aarch64
-	cross build --manifest-path agent/Cargo.toml --release --target armv7-unknown-linux-musleabihf
-	cp agent/target/armv7-unknown-linux-musleabihf/release/easy42-agent internal/agent/embedded/easy42-agent-armv7
-	cross +nightly build --manifest-path agent/Cargo.toml --release --target mipsel-unknown-linux-musl
-	cp agent/target/mipsel-unknown-linux-musl/release/easy42-agent internal/agent/embedded/easy42-agent-mipsel
+	cross build --manifest-path agent/Cargo.toml --target-dir agent/target/x86_64 --release --target x86_64-unknown-linux-musl
+	cp agent/target/x86_64/x86_64-unknown-linux-musl/release/easy42-agent internal/agent/embedded/easy42-agent-x86_64
+	cp agent/target/x86_64/x86_64-unknown-linux-musl/release/easy42-agent bin/easy42-agent
+	cross build --manifest-path agent/Cargo.toml --target-dir agent/target/aarch64 --release --target aarch64-unknown-linux-musl
+	cp agent/target/aarch64/aarch64-unknown-linux-musl/release/easy42-agent internal/agent/embedded/easy42-agent-aarch64
+	cross build --manifest-path agent/Cargo.toml --target-dir agent/target/armv7 --release --target armv7-unknown-linux-musleabihf
+	cp agent/target/armv7/armv7-unknown-linux-musleabihf/release/easy42-agent internal/agent/embedded/easy42-agent-armv7
+	cross +nightly build --manifest-path agent/Cargo.toml --target-dir agent/target/mipsel --release --target mipsel-unknown-linux-musl
+	cp agent/target/mipsel/mipsel-unknown-linux-musl/release/easy42-agent internal/agent/embedded/easy42-agent-mipsel
 
 build: build-agent
 	go build -trimpath -ldflags "-s -w" -o bin/easy42 main.go

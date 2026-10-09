@@ -3,8 +3,8 @@ mod collector;
 mod config;
 mod executor;
 
-use std::path::PathBuf;
 use clap::Parser;
+use std::path::PathBuf;
 use tracing::info;
 use tracing_subscriber::EnvFilter;
 
@@ -83,8 +83,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // 2. Initialize tracing
-    let filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new(&config.log_level));
+    let filter =
+        EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(&config.log_level));
     tracing_subscriber::fmt().with_env_filter(filter).init();
 
     info!("Starting Easy42 Agent v0.1.0");

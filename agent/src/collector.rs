@@ -181,7 +181,11 @@ impl MetricsCollector {
                         peers.push(proto::WgPeerMetrics {
                             interface_name: iface,
                             public_key: pubkey,
-                            endpoint: if endpoint == "(none)" { "".to_string() } else { endpoint },
+                            endpoint: if endpoint == "(none)" {
+                                "".to_string()
+                            } else {
+                                endpoint
+                            },
                             last_handshake_time: handshake,
                             rx_bytes: rx,
                             tx_bytes: tx,
@@ -200,7 +204,8 @@ impl MetricsCollector {
         if let Ok(output) = Command::new("birdc").args(["show", "protocols"]).output() {
             if output.status.success() {
                 let text = String::from_utf8_lossy(&output.stdout);
-                for line in text.lines().skip(1) { // Skip header: Name Proto Table State Since Info
+                for line in text.lines().skip(1) {
+                    // Skip header: Name Proto Table State Since Info
                     let parts: Vec<&str> = line.split_whitespace().collect();
                     if parts.len() >= 5 {
                         let name = parts[0].to_string();
@@ -249,7 +254,9 @@ fn get_interface_addresses() -> HashMap<String, Vec<String>> {
                         let mut addrs = Vec::new();
                         if let Some(addr_info) = iface["addr_info"].as_array() {
                             for a in addr_info {
-                                if let (Some(local), Some(prefix)) = (a["local"].as_str(), a["prefixlen"].as_u64()) {
+                                if let (Some(local), Some(prefix)) =
+                                    (a["local"].as_str(), a["prefixlen"].as_u64())
+                                {
                                     addrs.push(format!("{}/{}", local, prefix));
                                 }
                             }

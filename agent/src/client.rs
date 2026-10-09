@@ -1,8 +1,8 @@
-use std::sync::Arc;
-use std::time::Duration;
 use futures_util::{SinkExt, StreamExt};
 use http::Request;
 use prost::Message;
+use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::Mutex;
 use tokio::time::{interval, sleep};
 use tokio_tungstenite::tungstenite::Message as WsMessage;
@@ -32,7 +32,10 @@ impl AgentClient {
         let max_backoff = Duration::from_secs(60);
 
         loop {
-            info!("Connecting to Easy42 server at {}...", self.config.server_ws_url());
+            info!(
+                "Connecting to Easy42 server at {}...",
+                self.config.server_ws_url()
+            );
 
             match self.connect_and_serve().await {
                 Ok(()) => {
@@ -60,7 +63,10 @@ impl AgentClient {
             .header("Connection", "Upgrade")
             .header("Upgrade", "websocket")
             .header("Sec-WebSocket-Version", "13")
-            .header("Sec-WebSocket-Key", tokio_tungstenite::tungstenite::handshake::client::generate_key())
+            .header(
+                "Sec-WebSocket-Key",
+                tokio_tungstenite::tungstenite::handshake::client::generate_key(),
+            )
             .body(())?;
 
         let (ws_stream, _) = tokio_tungstenite::connect_async(request).await?;
@@ -71,7 +77,11 @@ impl AgentClient {
         // 1. Send RegisterRequest
         let hostname = get_system_hostname();
         let os_info = format!("{} {}", std::env::consts::OS, std::env::consts::ARCH);
-        let node_name = self.config.node_name.clone().unwrap_or_else(|| hostname.clone());
+        let node_name = self
+            .config
+            .node_name
+            .clone()
+            .unwrap_or_else(|| hostname.clone());
 
         let reg_msg = proto::AgentMessage {
             seq: 1,
@@ -161,8 +171,15 @@ impl AgentClient {
                                 info!("Received command request: id={}", cmd.request_id);
                                 let exec = executor.clone();
                                 let resp_tx = tx_cmd_resp.clone();
-                                let is_probe = matches!(cmd.command, Some(proto::command_request::Command::ProbeSystem(_)));
-                                let col_opt = if is_probe { Some(self.collector.clone()) } else { None };
+                                let is_probe = matches!(
+                                    cmd.command,
+                                    Some(proto::command_request::Command::ProbeSystem(_))
+                                );
+                                let col_opt = if is_probe {
+                                    Some(self.collector.clone())
+                                } else {
+                                    None
+                                };
                                 tokio::spawn(async move {
                                     if let Some(col) = col_opt {
                                         let telemetry = {
@@ -172,7 +189,9 @@ impl AgentClient {
                                         let telem_msg = proto::AgentMessage {
                                             seq: 0,
                                             timestamp: now_millis(),
-                                            payload: Some(proto::agent_message::Payload::Telemetry(telemetry)),
+                                            payload: Some(
+                                                proto::agent_message::Payload::Telemetry(telemetry),
+                                            ),
                                         };
                                         let _ = resp_tx.send(telem_msg).await;
                                     }
@@ -180,7 +199,9 @@ impl AgentClient {
                                     let out_msg = proto::AgentMessage {
                                         seq: 0,
                                         timestamp: now_millis(),
-                                        payload: Some(proto::agent_message::Payload::CommandResp(resp)),
+                                        payload: Some(proto::agent_message::Payload::CommandResp(
+                                            resp,
+                                        )),
                                     };
                                     let _ = resp_tx.send(out_msg).await;
                                 });
@@ -241,5 +262,9 @@ fn get_host_from_url(url: &str) -> String {
         .trim_start_matches("ws://")
         .trim_start_matches("https://")
         .trim_start_matches("http://");
-    without_proto.split('/').next().unwrap_or("localhost").to_string()
+    without_proto
+        .split('/')
+        .next()
+        .unwrap_or("localhost")
+        .to_string()
 }
