@@ -15,7 +15,7 @@ use crate::config::AgentConfig;
 #[command(name = "easy42-agent", version = "0.1.0", about = "Easy42 Node Agent")]
 struct Cli {
     /// Path to configuration file
-    #[arg(short, long, default_value = "/etc/easy42/agent.toml")]
+    #[arg(short, long, default_value = "/etc/easy42/agent.json")]
     config: PathBuf,
 
     /// Easy42 controller server URL (e.g. https://controller.easy42.net)

@@ -229,13 +229,10 @@ echo "[Easy42 Agent Installer] Detected init system: $INIT_SYSTEM"
 mkdir -p /etc/easy42 /usr/local/bin
 
 # Write configuration
-cat <<EOF > /etc/easy42/agent.toml
-# Easy42 Agent Configuration
-server = "${SERVER_URL}"
-token = "${TOKEN}"
-log_level = "info"
+cat <<EOF > /etc/easy42/agent.json
+{"server":"${SERVER_URL}","token":"${TOKEN}","log_level":"info"}
 EOF
-chmod 600 /etc/easy42/agent.toml
+chmod 600 /etc/easy42/agent.json
 
 # Download binary from server embedded resources
 BIN_URL="${SERVER_URL}/api/agent/bin/${TARGET_ARCH}"
@@ -289,7 +286,7 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=/usr/local/bin/easy42-agent --config /etc/easy42/agent.toml
+ExecStart=/usr/local/bin/easy42-agent --config /etc/easy42/agent.json
 Restart=always
 RestartSec=5
 LimitNOFILE=65536
@@ -313,7 +310,7 @@ name="easy42-agent"
 description="Easy42 Node Agent"
 
 command="/usr/local/bin/easy42-agent"
-command_args="--config /etc/easy42/agent.toml"
+command_args="--config /etc/easy42/agent.json"
 command_background=true
 pidfile="/run/easy42-agent.pid"
 output_log="/var/log/easy42-agent.log"
@@ -347,7 +344,7 @@ USE_PROCD=1
 
 start_service() {
     procd_open_instance
-    procd_set_param command /usr/local/bin/easy42-agent --config /etc/easy42/agent.toml
+    procd_set_param command /usr/local/bin/easy42-agent --config /etc/easy42/agent.json
     procd_set_param respawn
     procd_set_param stdout 1
     procd_set_param stderr 1
@@ -362,7 +359,7 @@ EOF
 
   *)
     echo "[Easy42 Agent Installer] Warning: unsupported init system '$INIT_SYSTEM'. Starting binary directly in background..."
-    nohup /usr/local/bin/easy42-agent --config /etc/easy42/agent.toml >/var/log/easy42-agent.log 2>&1 &
+    nohup /usr/local/bin/easy42-agent --config /etc/easy42/agent.json >/var/log/easy42-agent.log 2>&1 &
     ;;
 esac
 

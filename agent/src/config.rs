@@ -25,7 +25,7 @@ fn default_telemetry_interval() -> u64 {
 impl AgentConfig {
     pub fn load_from_file<P: AsRef<Path>>(path: P) -> Result<Self, Box<dyn std::error::Error>> {
         let content = fs::read_to_string(path)?;
-        let config: AgentConfig = toml::from_str(&content)?;
+        let config: AgentConfig = serde_json::from_str(&content)?;
         Ok(config)
     }
 

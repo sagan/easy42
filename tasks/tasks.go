@@ -176,7 +176,7 @@ func executeScript(
 				perm := os.FileMode(0644)
 				if fname == "easy42-agent" {
 					perm = 0755
-				} else if fname == "agent.toml" {
+				} else if fname == "agent.json" {
 					perm = 0600
 				}
 				_ = sftpClient.Chmod(extraPath, perm)
