@@ -187,12 +187,20 @@ export interface WgInterfaceStatus {
   peers: WgPeerStatus[];
 }
 
+export interface DiskMetrics {
+  path: string;
+  total_bytes: number;
+  used_bytes: number;
+  free_bytes: number;
+}
+
 export interface SystemMetrics {
   cpu_percent: number;
   memory_used_bytes: number;
   memory_total_bytes: number;
   uptime_seconds?: number;
   load_avg?: number[];
+  disks?: DiskMetrics[];
 }
 
 export interface NodeStatus {
@@ -207,6 +215,7 @@ export interface NodeStatus {
   mode?: "ssh" | "agent" | string;
   agent_version?: string;
   metrics?: SystemMetrics;
+  disks?: DiskMetrics[];
 }
 
 export interface ProbeResult {

@@ -1,5 +1,7 @@
 use std::collections::HashMap;
+use std::ffi::CString;
 use std::fs;
+use std::mem::MaybeUninit;
 use std::path::Path;
 
 pub mod proto {
@@ -53,7 +55,17 @@ impl MetricsCollector {
             interfaces: self.collect_interfaces().await,
             wg_peers: self.collect_wg_peers().await,
             bird_protocols: self.collect_bird_protocols().await,
+            disks: self.collect_disks(),
         }
+    }
+
+    pub fn collect_disks(&self) -> Vec<proto::DiskMetrics> {
+        let mut disks = Vec::new();
+        // Hardcoded to only collect root path "/" for now, structured as a list for future mount points
+        if let Some(root_disk) = collect_disk_usage("/") {
+            disks.push(root_disk);
+        }
+        disks
     }
 
     pub fn collect_system_metrics(&mut self) -> proto::SystemMetrics {
@@ -353,9 +365,69 @@ pub fn categorize_interface_with_sysfs<P: AsRef<Path>>(
     }
 }
 
+pub fn collect_disk_usage(path: &str) -> Option<proto::DiskMetrics> {
+    let c_path = CString::new(path).ok()?;
+    let mut stat = MaybeUninit::<libc::statvfs>::uninit();
+
+    let res = unsafe { libc::statvfs(c_path.as_ptr(), stat.as_mut_ptr()) };
+    if res != 0 {
+        tracing::warn!("statvfs failed for path: {}", path);
+        return None;
+    }
+
+    let stat = unsafe { stat.assume_init() };
+    let block_size = if stat.f_frsize > 0 {
+        stat.f_frsize as u64
+    } else {
+        stat.f_bsize as u64
+    };
+
+    let total_blocks = stat.f_blocks as u64;
+    let free_blocks = stat.f_bfree as u64;
+    let avail_blocks = stat.f_bavail as u64;
+
+    let total_bytes = total_blocks.saturating_mul(block_size);
+    let used_blocks = total_blocks.saturating_sub(free_blocks);
+    let used_bytes = used_blocks.saturating_mul(block_size);
+    let free_bytes = avail_blocks.saturating_mul(block_size);
+
+    Some(proto::DiskMetrics {
+        path: path.to_string(),
+        total_bytes,
+        used_bytes,
+        free_bytes,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_collect_disk_usage_root() {
+        let usage = collect_disk_usage("/");
+        assert!(usage.is_some(), "collect_disk_usage('/') should succeed on Linux");
+        let usage = usage.unwrap();
+        assert_eq!(usage.path, "/");
+        assert!(usage.total_bytes > 0, "total_bytes should be greater than 0");
+        assert!(usage.used_bytes > 0, "used_bytes should be greater than 0");
+        assert!(usage.total_bytes >= usage.used_bytes, "total_bytes >= used_bytes");
+    }
+
+    #[test]
+    fn test_collect_disk_usage_nonexistent() {
+        let usage = collect_disk_usage("/nonexistent_path_that_should_not_exist_4242");
+        assert!(usage.is_none());
+    }
+
+    #[test]
+    fn test_collector_collect_disks() {
+        let collector = MetricsCollector::new();
+        let disks = collector.collect_disks();
+        assert_eq!(disks.len(), 1);
+        assert_eq!(disks[0].path, "/");
+        assert!(disks[0].total_bytes > 0);
+    }
 
     #[test]
     fn test_categorize_interface_types() {

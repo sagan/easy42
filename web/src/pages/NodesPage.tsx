@@ -47,7 +47,7 @@ import { NodeMetricsDrawer } from "../components/Nodes/NodeMetricsDrawer";
 import { NodeDetailDrawer } from "../components/Topology/NodeDetailDrawer";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
-export type SortField = "name" | "status" | "block" | "host" | "uptime" | "cpu" | "memory" | "network";
+export type SortField = "name" | "status" | "block" | "host" | "uptime" | "cpu" | "memory" | "disk" | "network";
 
 export const NodesPage: React.FC = () => {
   const {
@@ -388,6 +388,17 @@ export const NodesPage: React.FC = () => {
           const memA = agentA ? (liveA?.metrics?.memory_used_bytes ?? statusA?.metrics?.memory_used_bytes ?? 0) : -1;
           const memB = agentB ? (liveB?.metrics?.memory_used_bytes ?? statusB?.metrics?.memory_used_bytes ?? 0) : -1;
           comparison = memA - memB;
+          break;
+        }
+
+        case "disk": {
+          const disksA = statusA?.metrics?.disks || statusA?.disks || [];
+          const disksB = statusB?.metrics?.disks || statusB?.disks || [];
+          const diskA = disksA.find((d) => d.path === "/") || disksA[0];
+          const diskB = disksB.find((d) => d.path === "/") || disksB[0];
+          const usedA = agentA && diskA ? diskA.used_bytes : -1;
+          const usedB = agentB && diskB ? diskB.used_bytes : -1;
+          comparison = usedA - usedB;
           break;
         }
 
@@ -790,6 +801,11 @@ export const NodesPage: React.FC = () => {
             const memUsedGB = metrics ? metrics.memory_used_bytes / (1024 * 1024 * 1024) : 0;
             const memTotalGB = metrics ? metrics.memory_total_bytes / (1024 * 1024 * 1024) : 0;
             const memPercent = memTotalGB > 0 ? (memUsedGB / memTotalGB) * 100 : 0;
+            const disks = status?.metrics?.disks || status?.disks || [];
+            const primaryDisk = disks.find((d) => d.path === "/") || disks[0];
+            const diskUsedGB = primaryDisk ? primaryDisk.used_bytes / (1024 * 1024 * 1024) : 0;
+            const diskTotalGB = primaryDisk ? primaryDisk.total_bytes / (1024 * 1024 * 1024) : 0;
+            const diskPercent = diskTotalGB > 0 ? (diskUsedGB / diskTotalGB) * 100 : 0;
             const rxRate = live?.metrics?.net_rx_rate ?? 0;
             const txRate = live?.metrics?.net_tx_rate ?? 0;
             const nodeBlocks = nodeBlocksMap.get(n.name) || [];
@@ -932,6 +948,39 @@ export const NodesPage: React.FC = () => {
                             }}
                           />
                         </Box>
+
+                        {/* Disk */}
+                        {primaryDisk && diskTotalGB > 0 && (
+                          <Box>
+                            <Box sx={{ display: "flex", justifyContent: "space-between", mb: 0.5 }}>
+                              <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600 }}>
+                                Disk ({primaryDisk.path})
+                              </Typography>
+                              <Typography
+                                variant="caption"
+                                sx={{
+                                  fontWeight: 700,
+                                  color: diskPercent > 85 ? "#E11D48" : diskPercent > 70 ? "#F59E0B" : "#334155",
+                                }}
+                              >
+                                {diskUsedGB.toFixed(1)} / {diskTotalGB.toFixed(1)} GB ({diskPercent.toFixed(0)}%)
+                              </Typography>
+                            </Box>
+                            <LinearProgress
+                              variant="determinate"
+                              value={Math.min(100, Math.max(0, diskPercent))}
+                              sx={{
+                                height: 6,
+                                borderRadius: 3,
+                                bgcolor: "#F1F5F9",
+                                "& .MuiLinearProgress-bar": {
+                                  bgcolor: diskPercent > 85 ? "#E11D48" : diskPercent > 70 ? "#F59E0B" : "#10B981",
+                                  borderRadius: 3,
+                                },
+                              }}
+                            />
+                          </Box>
+                        )}
                       </Box>
 
                       {/* Network Transfer & Load */}
@@ -1168,6 +1217,18 @@ export const NodesPage: React.FC = () => {
                   </TableSortLabel>
                 </TableCell>
                 <TableCell
+                  sortDirection={sortField === "disk" ? sortOrder : false}
+                  sx={{ fontWeight: 700, color: "#475569" }}
+                >
+                  <TableSortLabel
+                    active={sortField === "disk"}
+                    direction={sortField === "disk" ? sortOrder : "asc"}
+                    onClick={() => handleRequestSort("disk")}
+                  >
+                    Disk
+                  </TableSortLabel>
+                </TableCell>
+                <TableCell
                   sortDirection={sortField === "network" ? sortOrder : false}
                   sx={{ fontWeight: 700, color: "#475569" }}
                 >
@@ -1187,7 +1248,7 @@ export const NodesPage: React.FC = () => {
             <TableBody>
               {sortedNodes.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={9} align="center" sx={{ py: 4, color: "#64748B" }}>
+                  <TableCell colSpan={10} align="center" sx={{ py: 4, color: "#64748B" }}>
                     No servers match the selected filters.
                   </TableCell>
                 </TableRow>
@@ -1209,6 +1270,11 @@ export const NodesPage: React.FC = () => {
                 const cpuPercent = metrics?.cpu_percent ?? 0;
                 const memUsedGB = metrics ? metrics.memory_used_bytes / (1024 * 1024 * 1024) : 0;
                 const memTotalGB = metrics ? metrics.memory_total_bytes / (1024 * 1024 * 1024) : 0;
+                const disks = status?.metrics?.disks || status?.disks || [];
+                const primaryDisk = disks.find((d) => d.path === "/") || disks[0];
+                const diskUsedGB = primaryDisk ? primaryDisk.used_bytes / (1024 * 1024 * 1024) : 0;
+                const diskTotalGB = primaryDisk ? primaryDisk.total_bytes / (1024 * 1024 * 1024) : 0;
+                const diskPercent = diskTotalGB > 0 ? (diskUsedGB / diskTotalGB) * 100 : 0;
                 const rxRate = live?.metrics?.net_rx_rate ?? 0;
                 const txRate = live?.metrics?.net_tx_rate ?? 0;
                 const nodeBlocks = nodeBlocksMap.get(n.name) || [];
@@ -1282,6 +1348,44 @@ export const NodesPage: React.FC = () => {
                     <TableCell sx={{ color: "#334155", fontSize: "0.85rem" }}>
                       {agentInstalled && memTotalGB > 0 ? (
                         `${memUsedGB.toFixed(1)} / ${memTotalGB.toFixed(1)} GB`
+                      ) : (
+                        <Typography variant="body2" sx={{ color: "#94A3B8" }}>
+                          —
+                        </Typography>
+                      )}
+                    </TableCell>
+                    <TableCell sx={{ color: "#334155", fontSize: "0.85rem" }}>
+                      {agentInstalled && primaryDisk && diskTotalGB > 0 ? (
+                        <Box sx={{ display: "flex", flexDirection: "column", gap: 0.3, minWidth: 95 }}>
+                          <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                            <Typography variant="caption" sx={{ fontWeight: 600, color: "#334155", fontSize: "0.75rem" }}>
+                              {diskUsedGB.toFixed(1)} / {diskTotalGB.toFixed(1)} GB
+                            </Typography>
+                            <Typography
+                              variant="caption"
+                              sx={{
+                                fontWeight: 700,
+                                fontSize: "0.7rem",
+                                color: diskPercent > 85 ? "#E11D48" : diskPercent > 70 ? "#F59E0B" : "#059669",
+                              }}
+                            >
+                              {diskPercent.toFixed(0)}%
+                            </Typography>
+                          </Box>
+                          <LinearProgress
+                            variant="determinate"
+                            value={Math.min(100, Math.max(0, diskPercent))}
+                            sx={{
+                              height: 4,
+                              borderRadius: 2,
+                              bgcolor: "#F1F5F9",
+                              "& .MuiLinearProgress-bar": {
+                                bgcolor: diskPercent > 85 ? "#E11D48" : diskPercent > 70 ? "#F59E0B" : "#10B981",
+                                borderRadius: 2,
+                              },
+                            }}
+                          />
+                        </Box>
                       ) : (
                         <Typography variant="body2" sx={{ color: "#94A3B8" }}>
                           —

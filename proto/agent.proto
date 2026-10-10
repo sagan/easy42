@@ -56,6 +56,14 @@ message TelemetryReport {
   repeated InterfaceMetrics interfaces = 2;
   repeated WgPeerMetrics wg_peers = 3;
   repeated BirdProtocolStatus bird_protocols = 4;
+  repeated DiskMetrics disks = 5;
+}
+
+message DiskMetrics {
+  string path = 1;
+  uint64 total_bytes = 2;
+  uint64 used_bytes = 3;
+  uint64 free_bytes = 4;
 }
 
 message SystemMetrics {

@@ -19,6 +19,7 @@ futures-util = { version = "0.3", default-features = false, features = ["sink", 
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 http = "1.0"
+libc = "0.2"
 
 [build-dependencies]
 prost-build = "0.13"

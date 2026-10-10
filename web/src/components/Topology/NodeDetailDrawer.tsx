@@ -1137,6 +1137,36 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
                     </Box>
                   )}
 
+                  {/* Disk Usage */}
+                  {(status.metrics.disks || status.disks)?.map((disk) => {
+                    const pct = disk.total_bytes > 0 ? (disk.used_bytes / disk.total_bytes) * 100 : 0;
+                    return (
+                      <Box key={disk.path} sx={{ mb: 1 }}>
+                        <Box sx={{ display: "flex", justifyContent: "space-between", mb: 0.25 }}>
+                          <Typography variant="caption" sx={{ fontSize: "0.7rem", color: "#64748B" }}>
+                            Disk Usage ({disk.path}):
+                          </Typography>
+                          <Typography variant="caption" className="mono-font" sx={{ fontSize: "0.72rem", fontWeight: 700, color: "#0F172A" }}>
+                            {formatBytes(disk.used_bytes)} / {formatBytes(disk.total_bytes)} ({Math.round(pct)}%)
+                          </Typography>
+                        </Box>
+                        <LinearProgress
+                          variant="determinate"
+                          value={Math.min(100, Math.max(0, pct))}
+                          sx={{
+                            height: 6,
+                            borderRadius: 3,
+                            backgroundColor: "#E2E8F0",
+                            "& .MuiLinearProgress-bar": {
+                              backgroundColor:
+                                pct > 85 ? "#E11D48" : pct > 70 ? "#F59E0B" : "#10B981",
+                            },
+                          }}
+                        />
+                      </Box>
+                    );
+                  })}
+
                   {/* Load Average */}
                   {status.metrics.load_avg && status.metrics.load_avg.length > 0 && (
                     <Box sx={{ display: "flex", justifyContent: "space-between", pt: 0.25 }}>

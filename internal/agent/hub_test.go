@@ -91,6 +91,14 @@ func TestHubRegistrationAndStatus(t *testing.T) {
 				TxBytes:           2048,
 			},
 		},
+		Disks: []*agentpb.DiskMetrics{
+			{
+				Path:       "/",
+				TotalBytes: 100 * 1024 * 1024 * 1024,
+				UsedBytes:  40 * 1024 * 1024 * 1024,
+				FreeBytes:  60 * 1024 * 1024 * 1024,
+			},
+		},
 	})
 
 	status := hub.NodeStatus("node1")
@@ -102,6 +110,12 @@ func TestHubRegistrationAndStatus(t *testing.T) {
 	}
 	if len(status.WgInterfaces) != 1 || len(status.WgInterfaces[0].Peers) != 1 {
 		t.Fatalf("unexpected wg interfaces: %+v", status.WgInterfaces)
+	}
+	if len(status.Disks) != 1 || status.Disks[0].Path != "/" || status.Disks[0].TotalBytes != 100*1024*1024*1024 {
+		t.Fatalf("unexpected disks: %+v", status.Disks)
+	}
+	if status.Metrics == nil || len(status.Metrics.Disks) != 1 || status.Metrics.Disks[0].Path != "/" {
+		t.Fatalf("unexpected metrics disks: %+v", status.Metrics)
 	}
 }
 

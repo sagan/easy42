@@ -355,13 +355,22 @@ type WgInterfaceStatus struct {
 	Peers      []WgPeerStatus `json:"peers"`
 }
 
+// DiskMetrics represents file system / disk usage metrics reported by a node agent
+type DiskMetrics struct {
+	Path       string `json:"path"`
+	TotalBytes uint64 `json:"total_bytes"`
+	UsedBytes  uint64 `json:"used_bytes"`
+	FreeBytes  uint64 `json:"free_bytes"`
+}
+
 // SystemMetrics represents live hardware metrics reported by a node agent
 type SystemMetrics struct {
-	CPUPercent       float32   `json:"cpu_percent"`
-	MemoryUsedBytes  uint64    `json:"memory_used_bytes"`
-	MemoryTotalBytes uint64    `json:"memory_total_bytes"`
-	UptimeSeconds    uint64    `json:"uptime_seconds"`
-	LoadAvg          []float32 `json:"load_avg,omitempty"`
+	CPUPercent       float32       `json:"cpu_percent"`
+	MemoryUsedBytes  uint64        `json:"memory_used_bytes"`
+	MemoryTotalBytes uint64        `json:"memory_total_bytes"`
+	UptimeSeconds    uint64        `json:"uptime_seconds"`
+	LoadAvg          []float32     `json:"load_avg,omitempty"`
+	Disks            []DiskMetrics `json:"disks,omitempty"`
 }
 
 // NodeStatus represents cached runtime status of a node
@@ -373,6 +382,7 @@ type NodeStatus struct {
 	Hostname     string              `json:"hostname"`
 	Interfaces   []InterfaceInfo     `json:"interfaces"`
 	WgInterfaces []WgInterfaceStatus `json:"wg_interfaces"`
+	Disks        []DiskMetrics       `json:"disks,omitempty"`
 	Error        string              `json:"error,omitempty"`
 	Mode         string              `json:"mode,omitempty"`
 	AgentVersion string              `json:"agent_version,omitempty"`

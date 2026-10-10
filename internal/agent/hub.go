@@ -209,6 +209,20 @@ func (h *Hub) NodeStatus(nodeName string) *config.NodeStatus {
 			})
 		}
 
+		for _, disk := range telemetry.Disks {
+			dm := config.DiskMetrics{
+				Path:       disk.Path,
+				TotalBytes: disk.TotalBytes,
+				UsedBytes:  disk.UsedBytes,
+				FreeBytes:  disk.FreeBytes,
+			}
+			status.Disks = append(status.Disks, dm)
+			if status.Metrics == nil {
+				status.Metrics = &config.SystemMetrics{}
+			}
+			status.Metrics.Disks = append(status.Metrics.Disks, dm)
+		}
+
 		// Group WireGuard peers by interface
 		wgMap := make(map[string]*config.WgInterfaceStatus)
 		for _, peer := range telemetry.WgPeers {
