@@ -43,8 +43,6 @@ import {
 } from "lucide-react";
 import { useMesh } from "../context/MeshContext";
 import { NodeLiveStatus } from "../types/api";
-import { NodeMetricsDrawer } from "../components/Nodes/NodeMetricsDrawer";
-import { NodeDetailDrawer } from "../components/Topology/NodeDetailDrawer";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
 export type SortField = "name" | "status" | "block" | "host" | "uptime" | "cpu" | "memory" | "disk" | "network";
@@ -57,15 +55,6 @@ export const NodesPage: React.FC = () => {
     refreshFleetLive,
     selectedTag,
     setSelectedTag,
-    selectedNode,
-    setSelectedNode,
-    setNodeToEdit,
-    setAddNodeOpen,
-    setNodeToRename,
-    setRenameModalOpen,
-    setSyncTargetNode,
-    setSyncOpen,
-    loadData,
     handleUpdateState,
     updatingState,
     blocks,
@@ -101,7 +90,6 @@ export const NodesPage: React.FC = () => {
 
   // Local state for search term with instant UI feedback & URL synchronization
   const [searchTerm, setSearchTerm] = useState(urlSearch);
-  const [selectedMetricsNode, setSelectedMetricsNode] = useState<string | null>(null);
 
   // Synchronize local search term if URL search changes externally
   useEffect(() => {
@@ -303,7 +291,6 @@ export const NodesPage: React.FC = () => {
     return "#E11D48"; // red
   };
 
-  const selectedNodeLive = selectedMetricsNode ? liveMap.get(selectedMetricsNode) : null;
   const isFiltering = Boolean(
     searchTerm.trim() ||
     (urlTag !== "All" && managedTags.includes(urlTag)) ||
@@ -818,6 +805,7 @@ export const NodesPage: React.FC = () => {
               <Grid item xs={12} sm={6} lg={4} xl={3} key={n.name}>
                 <Paper
                   elevation={0}
+                  onClick={() => navigate(`/nodes/${encodeURIComponent(n.name)}`)}
                   sx={{
                     p: 2.2,
                     borderRadius: 3,
@@ -826,6 +814,7 @@ export const NodesPage: React.FC = () => {
                     display: "flex",
                     flexDirection: "column",
                     gap: 1.8,
+                    cursor: "pointer",
                     transition: "all 0.2s ease-in-out",
                     "&:hover": {
                       boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.08)",
@@ -1085,7 +1074,10 @@ export const NodesPage: React.FC = () => {
                         <span>
                           <IconButton
                             size="small"
-                            onClick={() => setSelectedMetricsNode(n.name)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigate(`/nodes/${encodeURIComponent(n.name)}?tab=metrics`);
+                            }}
                             disabled={!agentInstalled}
                             sx={{
                               color: "#4F46E5",
@@ -1103,7 +1095,10 @@ export const NodesPage: React.FC = () => {
                       <Tooltip title="Looking Glass">
                         <IconButton
                           size="small"
-                          onClick={() => navigate(`/looking-glass?node=${encodeURIComponent(n.name)}`)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate(`/looking-glass?node=${encodeURIComponent(n.name)}`);
+                          }}
                           sx={{
                             color: "#0891B2",
                             bgcolor: "#ECFEFF",
@@ -1115,11 +1110,13 @@ export const NodesPage: React.FC = () => {
                         </IconButton>
                       </Tooltip>
 
-                      {/* Requirement 1: Opens NodeDetailDrawer */}
-                      <Tooltip title="Node Topology Details">
+                      <Tooltip title="Node Details">
                         <IconButton
                           size="small"
-                          onClick={() => setSelectedNode(n)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate(`/nodes/${encodeURIComponent(n.name)}`);
+                          }}
                           sx={{
                             color: "#64748B",
                             bgcolor: "#F1F5F9",
@@ -1316,7 +1313,16 @@ export const NodesPage: React.FC = () => {
                             bgcolor: isOnline ? "#10B981" : agentInstalled ? "#EF4444" : "#94A3B8",
                           }}
                         />
-                        <Typography variant="body2" sx={{ fontWeight: 700, color: "#0F172A" }}>
+                        <Typography
+                          variant="body2"
+                          onClick={() => navigate(`/nodes/${encodeURIComponent(n.name)}`)}
+                          sx={{
+                            fontWeight: 700,
+                            color: "#0F172A",
+                            cursor: "pointer",
+                            "&:hover": { color: "#4F46E5", textDecoration: "underline" },
+                          }}
+                        >
                           {n.name}
                         </Typography>
                       </Box>
@@ -1441,11 +1447,11 @@ export const NodesPage: React.FC = () => {
                       )}
                     </TableCell>
                     <TableCell align="right">
-                      <Tooltip title={agentInstalled ? "Historical Charts" : "Agent not installed"}>
+                      <Tooltip title={agentInstalled ? "Historical Charts & Telemetry" : "Agent not installed"}>
                         <span>
                           <IconButton
                             size="small"
-                            onClick={() => setSelectedMetricsNode(n.name)}
+                            onClick={() => navigate(`/nodes/${encodeURIComponent(n.name)}?tab=metrics`)}
                             disabled={!agentInstalled}
                             sx={{
                               color: "#4F46E5",
@@ -1465,9 +1471,12 @@ export const NodesPage: React.FC = () => {
                           <Compass size={16} />
                         </IconButton>
                       </Tooltip>
-                      {/* Requirement 1: Opens NodeDetailDrawer */}
-                      <Tooltip title="Node Topology Details">
-                        <IconButton size="small" onClick={() => setSelectedNode(n)} sx={{ color: "#64748B" }}>
+                      <Tooltip title="Node Details">
+                        <IconButton
+                          size="small"
+                          onClick={() => navigate(`/nodes/${encodeURIComponent(n.name)}`)}
+                          sx={{ color: "#64748B" }}
+                        >
                           <Info size={16} />
                         </IconButton>
                       </Tooltip>
@@ -1479,50 +1488,6 @@ export const NodesPage: React.FC = () => {
           </Table>
         </TableContainer>
       )}
-
-      {/* Historical Telemetry Charts Drawer */}
-      <NodeMetricsDrawer
-        open={Boolean(selectedMetricsNode)}
-        onClose={() => setSelectedMetricsNode(null)}
-        nodeName={selectedMetricsNode}
-        nodeLive={selectedNodeLive}
-      />
-
-      {/* Requirement 1: Mounted Topology Node Details Drawer with full action handlers */}
-      <NodeDetailDrawer
-        node={selectedNode}
-        status={selectedNode ? nodeStatuses[selectedNode.name] : undefined}
-        open={Boolean(selectedNode)}
-        onClose={() => setSelectedNode(null)}
-        onEditNode={(node) => {
-          setNodeToEdit(node);
-          setAddNodeOpen(true);
-        }}
-        onRenameNode={(node) => {
-          setNodeToRename(node);
-          setRenameModalOpen(true);
-        }}
-        onNodeDeleted={() => {
-          setSelectedNode(null);
-          loadData();
-          refreshFleetLive();
-        }}
-        onStatusRefreshed={() => {
-          loadData();
-          refreshFleetLive();
-        }}
-        onOpenHelper={(name) => navigate(`/helper?node=${encodeURIComponent(name)}`)}
-        onOpenLookingGlass={(name) => navigate(`/looking-glass?node=${encodeURIComponent(name)}`)}
-        onUpdateNodeState={(name) => handleUpdateState(name)}
-        onSyncNode={(name) => {
-          setSyncTargetNode(name);
-          setSyncOpen(true);
-        }}
-        onNodeUpdated={() => {
-          loadData();
-          refreshFleetLive();
-        }}
-      />
     </Box>
   );
 };

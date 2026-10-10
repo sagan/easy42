@@ -2,16 +2,17 @@ package lookingglass
 
 import (
 	"bufio"
+	"math"
 	"regexp"
 	"strconv"
 	"strings"
 )
 
 var (
-	// Ping regexes
-	pingPacketRegex = regexp.MustCompile(`bytes from ([^:]+): icmp_seq=(\d+) ttl=(\d+) time=([\d\.]+) ms`)
-	pingLossRegex   = regexp.MustCompile(`(\d+) packets transmitted, (\d+) received.*?[,\s]+([\d\.]+)% packet loss`)
-	pingRTTRegex    = regexp.MustCompile(`(?:rtt|round-trip) min/avg/max/(?:mdev|stddev) = ([\d\.]+)/([\d\.]+)/([\d\.]+)/([\d\.]+) ms`)
+	// Ping regexes - supports iputils, BusyBox, BSD/macOS, IPv6 (with hlim and colons)
+	pingPacketRegex = regexp.MustCompile(`bytes from (.+?):\s+.*?\b(?:icmp_)?seq=(\d+).*?\b(?:ttl|hlim)=(\d+).*?\btime=([\d\.]+)\s*ms?`)
+	pingLossRegex   = regexp.MustCompile(`(\d+)\s+packets transmitted,\s+(\d+)\s+(?:packets\s+)?received.*?[,\s]+([\d\.]+)\s*%\s+packet loss`)
+	pingRTTRegex    = regexp.MustCompile(`(?:rtt|round-trip)\s+(?:\(ms\)\s+)?min/avg/max(?:/(?:mdev|stddev|std-dev))?\s*=\s*([\d\.]+)\s*/\s*([\d\.]+)\s*/\s*([\d\.]+)(?:\s*/\s*([\d\.]+))?\s*ms?`)
 
 	// Traceroute regexes
 	traceHopRegex = regexp.MustCompile(`^\s*(\d+)\s+([^\s]+)\s+\(([\d\.:a-fA-F]+)\)(.*)$`)
@@ -200,7 +201,7 @@ func ParseBIRDRoute(raw string, target string) BirdRouteResult {
 	}
 }
 
-// ParsePing parses standard Linux ping output
+// ParsePing parses standard Linux and Busybox ping output
 func ParsePing(raw string) PingResult {
 	res := PingResult{
 		Packets: []PingPacket{},
@@ -210,21 +211,27 @@ func ParsePing(raw string) PingResult {
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 
-		// Target header: PING 1.1.1.1 (1.1.1.1) 56(84) bytes of data.
-		if strings.HasPrefix(line, "PING ") {
+		// Target header:
+		// PING 1.1.1.1 (1.1.1.1) 56(84) bytes of data.
+		// PING 172.20.0.53 (172.20.0.53): 56 data bytes
+		if strings.HasPrefix(line, "PING ") || strings.HasPrefix(line, "PING6 ") {
 			fields := strings.Fields(line)
 			if len(fields) >= 2 {
-				res.Host = fields[1]
+				res.Host = strings.Trim(fields[1], "():")
 			}
-			if len(fields) >= 3 {
-				res.IP = strings.Trim(fields[2], "()")
+			if len(fields) >= 3 && strings.Contains(fields[2], "(") {
+				res.IP = strings.Trim(fields[2], "():")
+			} else if res.Host != "" {
+				res.IP = res.Host
 			}
 			continue
 		}
 
-		// Packet line: 64 bytes from 1.1.1.1: icmp_seq=1 ttl=58 time=14.2 ms
+		// Packet line:
+		// 64 bytes from 1.1.1.1: icmp_seq=1 ttl=58 time=14.2 ms
+		// 64 bytes from 172.20.0.53: seq=0 ttl=63 time=286.977 ms
 		if match := pingPacketRegex.FindStringSubmatch(line); len(match) == 5 {
-			host := match[1]
+			host := strings.TrimSpace(match[1])
 			seq, _ := strconv.Atoi(match[2])
 			ttl, _ := strconv.Atoi(match[3])
 			tMs, _ := strconv.ParseFloat(match[4], 64)
@@ -238,7 +245,9 @@ func ParsePing(raw string) PingResult {
 			continue
 		}
 
-		// Loss line: 4 packets transmitted, 4 received, 0% packet loss, time 3004ms
+		// Loss line:
+		// 4 packets transmitted, 4 received, 0% packet loss, time 3004ms
+		// 2 packets transmitted, 2 packets received, 0% packet loss
 		if match := pingLossRegex.FindStringSubmatch(line); len(match) == 4 {
 			res.PacketsSent, _ = strconv.Atoi(match[1])
 			res.PacketsReceived, _ = strconv.Atoi(match[2])
@@ -246,14 +255,52 @@ func ParsePing(raw string) PingResult {
 			continue
 		}
 
-		// RTT line: rtt min/avg/max/mdev = 13.921/14.187/14.512/0.218 ms
+		// RTT line:
+		// rtt min/avg/max/mdev = 13.921/14.187/14.512/0.218 ms
+		// round-trip min/avg/max = 286.209/286.593/286.977 ms
 		if match := pingRTTRegex.FindStringSubmatch(line); len(match) == 5 {
 			res.MinRTT, _ = strconv.ParseFloat(match[1], 64)
 			res.AvgRTT, _ = strconv.ParseFloat(match[2], 64)
 			res.MaxRTT, _ = strconv.ParseFloat(match[3], 64)
-			res.MdevRTT, _ = strconv.ParseFloat(match[4], 64)
+			if match[4] != "" {
+				res.MdevRTT, _ = strconv.ParseFloat(match[4], 64)
+			}
 			continue
 		}
+	}
+
+	// Fallback calculations if RTT summary was omitted but probes were captured
+	if res.AvgRTT == 0 && len(res.Packets) > 0 {
+		minR := res.Packets[0].TimeMs
+		maxR := res.Packets[0].TimeMs
+		sumR := 0.0
+		for _, p := range res.Packets {
+			if p.TimeMs < minR {
+				minR = p.TimeMs
+			}
+			if p.TimeMs > maxR {
+				maxR = p.TimeMs
+			}
+			sumR += p.TimeMs
+		}
+		res.MinRTT = minR
+		res.MaxRTT = maxR
+		res.AvgRTT = sumR / float64(len(res.Packets))
+	}
+
+	// Calculate MdevRTT if missing (e.g. Busybox) and multiple packets exist
+	if res.MdevRTT == 0 && len(res.Packets) > 1 && res.AvgRTT > 0 {
+		var sumSq float64
+		for _, p := range res.Packets {
+			diff := p.TimeMs - res.AvgRTT
+			sumSq += diff * diff
+		}
+		res.MdevRTT = math.Sqrt(sumSq / float64(len(res.Packets)))
+	}
+
+	if res.PacketsSent == 0 && len(res.Packets) > 0 {
+		res.PacketsReceived = len(res.Packets)
+		res.PacketsSent = len(res.Packets)
 	}
 
 	return res

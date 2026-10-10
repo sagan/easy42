@@ -5,6 +5,7 @@ import { theme } from "./theme";
 import { MeshProvider, useMesh } from "./context/MeshContext";
 import { AppLayout } from "./components/Layout/AppLayout";
 import { NodesPage } from "./pages/NodesPage";
+import { NodeDetailPage } from "./pages/NodeDetailPage";
 import { TopologyPage } from "./pages/TopologyPage";
 import { LookingGlassPage } from "./pages/LookingGlassPage";
 import { DeviceHelperPage } from "./pages/DeviceHelperPage";
@@ -53,6 +54,7 @@ const AppContent: React.FC = () => {
         <Route path="/" element={<AppLayout />}>
           <Route index element={<Navigate to="/nodes" replace />} />
           <Route path="nodes" element={<NodesPage />} />
+          <Route path="nodes/:nodeName" element={<NodeDetailPage />} />
           <Route path="topology" element={<TopologyPage />} />
           <Route path="looking-glass" element={<LookingGlassPage />} />
           <Route path="helper" element={<DeviceHelperPage />} />

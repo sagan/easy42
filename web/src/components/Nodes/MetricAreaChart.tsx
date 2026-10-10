@@ -196,20 +196,33 @@ export const MetricAreaChart: React.FC<MetricAreaChartProps> = ({
               </linearGradient>
             </defs>
 
-            {/* Subtle horizontal grid lines */}
+            {/* Subtle horizontal grid lines & Y-axis scale values */}
             {[0, 0.5, 1].map((pct) => {
               const y = padding.top + plotHeight * (1 - pct);
+              const tickVal = pct * stats.max;
               return (
-                <line
-                  key={pct}
-                  x1={padding.left}
-                  y1={y}
-                  x2={padding.left + plotWidth}
-                  y2={y}
-                  stroke="#F1F5F9"
-                  strokeWidth="1"
-                  strokeDasharray="4 4"
-                />
+                <g key={pct}>
+                  <line
+                    x1={padding.left}
+                    y1={y}
+                    x2={padding.left + plotWidth}
+                    y2={y}
+                    stroke="#F1F5F9"
+                    strokeWidth="1"
+                    strokeDasharray="4 4"
+                  />
+                  {pct > 0 && (
+                    <text
+                      x={padding.left + 4}
+                      y={y - 3}
+                      fontSize="9"
+                      fill="#94A3B8"
+                      fontFamily="sans-serif"
+                    >
+                      {defaultFormat(tickVal)}
+                    </text>
+                  )}
+                </g>
               );
             })}
 

@@ -8,10 +8,11 @@ interface PingViewProps {
 }
 
 export const PingView: React.FC<PingViewProps> = ({ ping }) => {
+  const lossPct = ping.packet_loss_pct ?? 0;
   const lossColor =
-    ping.packet_loss_pct === 0
+    lossPct === 0
       ? { bg: "#ECFDF5", text: "#065F46", border: "#A7F3D0" }
-      : ping.packet_loss_pct <= 20
+      : lossPct <= 20
         ? { bg: "#FFFBEB", text: "#92400E", border: "#FDE68A" }
         : { bg: "#FEF2F2", text: "#991B1B", border: "#FECACA" };
 
@@ -45,10 +46,10 @@ export const PingView: React.FC<PingViewProps> = ({ ping }) => {
             <ShieldAlert size={16} color={lossColor.text} />
           </Box>
           <Typography variant="h5" sx={{ fontWeight: 700, color: lossColor.text }}>
-            {ping.packet_loss_pct.toFixed(1)}%
+            {lossPct.toFixed(1)}%
           </Typography>
           <Typography variant="caption" sx={{ color: lossColor.text }}>
-            {ping.packets_received} / {ping.packets_sent} packets received
+            {ping.packets_received ?? 0} / {ping.packets_sent ?? 0} packets received
           </Typography>
         </Paper>
 

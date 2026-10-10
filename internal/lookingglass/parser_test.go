@@ -88,6 +88,60 @@ rtt min/avg/max/mdev = 14.200/14.350/14.500/0.150 ms
 	}
 }
 
+func TestParsePing_BusyBox(t *testing.T) {
+	raw := `PING 172.20.0.53 (172.20.0.53): 56 data bytes
+64 bytes from 172.20.0.53: seq=0 ttl=63 time=286.977 ms
+64 bytes from 172.20.0.53: seq=1 ttl=63 time=286.209 ms
+
+--- 172.20.0.53 ping statistics ---
+2 packets transmitted, 2 packets received, 0% packet loss
+round-trip min/avg/max = 286.209/286.593/286.977 ms
+`
+	p := ParsePing(raw)
+	if p.Host != "172.20.0.53" || p.IP != "172.20.0.53" {
+		t.Errorf("expected host/ip 172.20.0.53, got host=%s ip=%s", p.Host, p.IP)
+	}
+	if p.PacketsSent != 2 || p.PacketsReceived != 2 || p.PacketLossPct != 0.0 {
+		t.Errorf("unexpected packet stats: sent=%d rec=%d loss=%f", p.PacketsSent, p.PacketsReceived, p.PacketLossPct)
+	}
+	if p.MinRTT != 286.209 || p.AvgRTT != 286.593 || p.MaxRTT != 286.977 {
+		t.Errorf("unexpected RTTs: min=%f avg=%f max=%f", p.MinRTT, p.AvgRTT, p.MaxRTT)
+	}
+	if len(p.Packets) != 2 {
+		t.Fatalf("expected 2 packet entries, got %d", len(p.Packets))
+	}
+	if p.Packets[0].Seq != 0 || p.Packets[0].TTL != 63 || p.Packets[0].TimeMs != 286.977 {
+		t.Errorf("unexpected packet 0: %+v", p.Packets[0])
+	}
+	if p.Packets[1].Seq != 1 || p.Packets[1].TTL != 63 || p.Packets[1].TimeMs != 286.209 {
+		t.Errorf("unexpected packet 1: %+v", p.Packets[1])
+	}
+}
+
+func TestParsePing_IPv6(t *testing.T) {
+	raw := `PING 2001:db8::1 (2001:db8::1): 56 data bytes
+64 bytes from 2001:db8::1: seq=0 hlim=64 time=12.345 ms
+64 bytes from 2001:db8::1: seq=1 hlim=64 time=12.100 ms
+
+--- 2001:db8::1 ping statistics ---
+2 packets transmitted, 2 packets received, 0% packet loss
+round-trip min/avg/max = 12.100/12.222/12.345 ms
+`
+	p := ParsePing(raw)
+	if p.Host != "2001:db8::1" || p.IP != "2001:db8::1" {
+		t.Errorf("expected host/ip 2001:db8::1, got host=%s ip=%s", p.Host, p.IP)
+	}
+	if p.PacketsSent != 2 || p.PacketsReceived != 2 {
+		t.Errorf("unexpected stats: sent=%d rec=%d", p.PacketsSent, p.PacketsReceived)
+	}
+	if len(p.Packets) != 2 {
+		t.Fatalf("expected 2 packets, got %d", len(p.Packets))
+	}
+	if p.Packets[0].TTL != 64 || p.Packets[0].TimeMs != 12.345 {
+		t.Errorf("unexpected pkt 0: %+v", p.Packets[0])
+	}
+}
+
 func TestParseTraceroute(t *testing.T) {
 	raw := `traceroute to 1.1.1.1 (1.1.1.1), 30 hops max, 60 byte packets
  1  gateway (192.168.1.1)  0.345 ms  0.312 ms  0.289 ms

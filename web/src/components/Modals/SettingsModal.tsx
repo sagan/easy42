@@ -740,10 +740,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
     setPoliciesSuccess(null);
   };
 
-  const handleClose = () => {
-    resetForm();
-    if (onClose) onClose();
-  };
+
   const handleOpenClonePolicy = (p: NetworkPolicy) => {
     setPolicyDialogMode("create");
     setPolicyId(`${p.id}-copy`);
@@ -992,26 +989,22 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                 },
               }}
             />
+            <Box sx={{ display: "flex", justifyContent: "flex-end", pt: 1 }}>
+              <Button
+                type="submit"
+                variant="contained"
+                disabled={passwordLoading || !currentPassword || !newPassword || !confirmPassword}
+                startIcon={passwordLoading ? <CircularProgress size={16} color="inherit" /> : <KeyRound size={16} />}
+                sx={{
+                  background: "linear-gradient(135deg, #4F46E5 0%, #3730A3 100%)",
+                  fontWeight: 700,
+                  color: "#FFFFFF",
+                }}
+              >
+                {passwordLoading ? "Updating Password..." : "Change Password"}
+              </Button>
+            </Box>
           </DialogContent>
-
-          <DialogActions sx={{ px: 3, py: 2, borderTop: "1px solid #E2E8F0", backgroundColor: "#F8FAFC", flexShrink: 0 }}>
-            <Button onClick={handleClose} disabled={passwordLoading} sx={{ color: "#64748B" }}>
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              variant="contained"
-              disabled={passwordLoading || !currentPassword || !newPassword || !confirmPassword}
-              startIcon={passwordLoading ? <CircularProgress size={16} color="inherit" /> : <KeyRound size={16} />}
-              sx={{
-                background: "linear-gradient(135deg, #4F46E5 0%, #3730A3 100%)",
-                fontWeight: 700,
-                color: "#FFFFFF",
-              }}
-            >
-              {passwordLoading ? "Updating Password..." : "Change Password"}
-            </Button>
-          </DialogActions>
         </form>
       )}
 
@@ -1118,11 +1111,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
             )}
           </DialogContent>
 
-          <DialogActions sx={{ px: 3, py: 2, borderTop: "1px solid #E2E8F0", backgroundColor: "#F8FAFC", flexShrink: 0 }}>
-            <Button onClick={handleClose} sx={{ color: "#64748B" }}>
-              Close
-            </Button>
-          </DialogActions>
+
         </Box>
       )}
 
@@ -1194,24 +1183,20 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                   helperText="Excluded subnets for built-in dn42 policy (used as DisallowedDstCIDRs & DisallowedSrcCIDRs). Rejects BGP export, drops inbound traffic, and triggers SNAT for internal egress traffic."
                   disabled={networkSaving}
                 />
+                <Box sx={{ display: "flex", justifyContent: "flex-end", pt: 1 }}>
+                  <Button
+                    type="submit"
+                    variant="contained"
+                    disabled={networkLoading || networkSaving}
+                    startIcon={networkSaving && <CircularProgress size={16} color="inherit" />}
+                    sx={{ fontWeight: 600 }}
+                  >
+                    {networkSaving ? "Saving..." : "Save Settings"}
+                  </Button>
+                </Box>
               </>
             )}
           </DialogContent>
-
-          <DialogActions sx={{ px: 3, py: 2, borderTop: "1px solid #E2E8F0", backgroundColor: "#F8FAFC", flexShrink: 0 }}>
-            <Button onClick={handleClose} sx={{ color: "#64748B" }}>
-              Close
-            </Button>
-            <Button
-              type="submit"
-              variant="contained"
-              disabled={networkLoading || networkSaving}
-              startIcon={networkSaving && <CircularProgress size={16} color="inherit" />}
-              sx={{ fontWeight: 600 }}
-            >
-              {networkSaving ? "Saving..." : "Save Settings"}
-            </Button>
-          </DialogActions>
         </form>
       )}
 
@@ -1646,11 +1631,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
             )}
           </DialogContent>
 
-          <DialogActions sx={{ px: 3, py: 2, borderTop: "1px solid #E2E8F0", backgroundColor: "#F8FAFC", flexShrink: 0 }}>
-            <Button onClick={handleClose} sx={{ color: "#64748B" }}>
-              Close
-            </Button>
-          </DialogActions>
+
         </Box>
       )}
 
@@ -1915,11 +1896,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
             )}
           </DialogContent>
 
-          <DialogActions sx={{ px: 3, py: 2, borderTop: "1px solid #E2E8F0", backgroundColor: "#F8FAFC", flexShrink: 0 }}>
-            <Button onClick={handleClose} sx={{ color: "#64748B" }}>
-              Close
-            </Button>
-          </DialogActions>
+
         </Box>
       )}
 
@@ -2203,76 +2180,69 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                     )}
                   </Box>
                 </Box>
+                <Box
+                  sx={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    pt: 2,
+                    flexWrap: "wrap",
+                    gap: 1.5,
+                  }}
+                >
+                  <Box sx={{ display: "flex", gap: 1 }}>
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      onClick={() => handleSyncDNS(false)}
+                      disabled={
+                        dnsLoading || dnsSaving || dnsSyncing || dnsForceSyncing || !cfZoneId || !cfApiToken || !cfBaseDomain
+                      }
+                      startIcon={dnsSyncing ? <CircularProgress size={14} color="inherit" /> : <RefreshCw size={14} />}
+                      sx={{
+                        fontWeight: 600,
+                        textTransform: "none",
+                        borderColor: "#0284C7",
+                        color: "#0284C7",
+                        "&:hover": { borderColor: "#0369A1", bgcolor: "rgba(2, 132, 199, 0.04)" },
+                      }}
+                    >
+                      {dnsSyncing ? "Syncing..." : "Sync DNS"}
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      color="warning"
+                      onClick={() => handleSyncDNS(true)}
+                      disabled={
+                        dnsLoading || dnsSaving || dnsSyncing || dnsForceSyncing || !cfZoneId || !cfApiToken || !cfBaseDomain
+                      }
+                      startIcon={dnsForceSyncing ? <CircularProgress size={14} color="inherit" /> : <Zap size={14} />}
+                      sx={{
+                        fontWeight: 600,
+                        textTransform: "none",
+                        borderColor: "#F59E0B",
+                        color: "#D97706",
+                        "&:hover": { borderColor: "#D97706", bgcolor: "rgba(245, 158, 11, 0.04)" },
+                      }}
+                    >
+                      {dnsForceSyncing ? "Force Syncing..." : "Force Sync"}
+                    </Button>
+                  </Box>
+
+                  <Button
+                    type="submit"
+                    variant="contained"
+                    disabled={dnsLoading || dnsSaving || dnsSyncing || dnsForceSyncing}
+                    startIcon={dnsSaving && <CircularProgress size={16} color="inherit" />}
+                    sx={{ fontWeight: 600, bgcolor: "#4F46E5", "&:hover": { bgcolor: "#4338CA" } }}
+                  >
+                    {dnsSaving ? "Saving..." : "Save Settings"}
+                  </Button>
+                </Box>
               </>
             )}
           </DialogContent>
-
-          <DialogActions
-            sx={{
-              px: 3,
-              py: 2,
-              borderTop: "1px solid #E2E8F0",
-              backgroundColor: "#F8FAFC",
-              display: "flex",
-              justifyContent: "space-between",
-              flexShrink: 0,
-            }}
-          >
-            <Box sx={{ display: "flex", gap: 1 }}>
-              <Button
-                variant="outlined"
-                size="small"
-                onClick={() => handleSyncDNS(false)}
-                disabled={
-                  dnsLoading || dnsSaving || dnsSyncing || dnsForceSyncing || !cfZoneId || !cfApiToken || !cfBaseDomain
-                }
-                startIcon={dnsSyncing ? <CircularProgress size={14} color="inherit" /> : <RefreshCw size={14} />}
-                sx={{
-                  fontWeight: 600,
-                  textTransform: "none",
-                  borderColor: "#0284C7",
-                  color: "#0284C7",
-                  "&:hover": { borderColor: "#0369A1", bgcolor: "rgba(2, 132, 199, 0.04)" },
-                }}
-              >
-                {dnsSyncing ? "Syncing..." : "Sync DNS"}
-              </Button>
-              <Button
-                variant="outlined"
-                size="small"
-                color="warning"
-                onClick={() => handleSyncDNS(true)}
-                disabled={
-                  dnsLoading || dnsSaving || dnsSyncing || dnsForceSyncing || !cfZoneId || !cfApiToken || !cfBaseDomain
-                }
-                startIcon={dnsForceSyncing ? <CircularProgress size={14} color="inherit" /> : <Zap size={14} />}
-                sx={{
-                  fontWeight: 600,
-                  textTransform: "none",
-                  borderColor: "#F59E0B",
-                  color: "#D97706",
-                  "&:hover": { borderColor: "#D97706", bgcolor: "rgba(245, 158, 11, 0.04)" },
-                }}
-              >
-                {dnsForceSyncing ? "Force Syncing..." : "Force Sync"}
-              </Button>
-            </Box>
-
-            <Box sx={{ display: "flex", gap: 1 }}>
-              <Button onClick={handleClose} sx={{ color: "#64748B" }}>
-                Close
-              </Button>
-              <Button
-                type="submit"
-                variant="contained"
-                disabled={dnsLoading || dnsSaving || dnsSyncing || dnsForceSyncing}
-                startIcon={dnsSaving && <CircularProgress size={16} color="inherit" />}
-                sx={{ fontWeight: 600, bgcolor: "#4F46E5", "&:hover": { bgcolor: "#4338CA" } }}
-              >
-                {dnsSaving ? "Saving..." : "Save Settings"}
-              </Button>
-            </Box>
-          </DialogActions>
         </form>
       )}
 
