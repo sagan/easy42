@@ -2062,7 +2062,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                   placeholder="e.g. easy42.example.com"
                   value={cfBaseDomain}
                   onChange={(e) => setCfBaseDomain(e.target.value)}
-                  helperText="Node hostnames are published as <name>.<domain> under this base domain."
+                  helperText="Node hostnames are published as <name>.<domain> and *.<name>.<domain> under this base domain."
                   disabled={dnsSaving || dnsSyncing || dnsForceSyncing}
                 />
 
@@ -2095,8 +2095,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                   />
                   <Typography variant="caption" sx={{ color: "#64748B", ml: 3.5, mt: -0.5 }}>
                     {cfPublishIPv6OwnName
-                      ? "When enabled, main IPv6 is published to <name>6.<domain> (separate AAAA record), while main IPv4 is published to <name>.<domain> (A record)."
-                      : "When disabled, main IPv4 (A) and main IPv6 (AAAA) are both published under the same <name>.<domain> record name."}
+                      ? "When enabled, main IPv6 is published to <name>6.<domain> (separate AAAA record), while main IPv4 is published to <name>.<domain> and *.<name>.<domain> (A records)."
+                      : "When disabled, main IPv4 (A) and main IPv6 (AAAA) are both published under <name>.<domain> and *.<name>.<domain>."}
                   </Typography>
                 </Box>
 
@@ -2149,6 +2149,25 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                       }}
                     >
                       <Chip
+                        label="A"
+                        size="small"
+                        sx={{ height: 20, fontSize: "0.7rem", fontWeight: 700, bgcolor: "#E0E7FF", color: "#4338CA" }}
+                      />
+                      <span>{`*.node1.${cfBaseDomain.trim() || "easy42.example.com"}`}</span>
+                      <span style={{ color: "#94A3B8" }}>→</span>
+                      <span style={{ color: "#059669" }}>192.168.100.1</span>
+                    </Box>
+                    <Box
+                      sx={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 1,
+                        fontFamily: "monospace",
+                        fontSize: "0.82rem",
+                        color: "#1E293B",
+                      }}
+                    >
+                      <Chip
                         label="AAAA"
                         size="small"
                         sx={{ height: 20, fontSize: "0.7rem", fontWeight: 700, bgcolor: "#EDE9FE", color: "#6D28D9" }}
@@ -2161,6 +2180,27 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                       <span style={{ color: "#94A3B8" }}>→</span>
                       <span style={{ color: "#059669" }}>fd42:a159:f9f0::1</span>
                     </Box>
+                    {!cfPublishIPv6OwnName && (
+                      <Box
+                        sx={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 1,
+                          fontFamily: "monospace",
+                          fontSize: "0.82rem",
+                          color: "#1E293B",
+                        }}
+                      >
+                        <Chip
+                          label="AAAA"
+                          size="small"
+                          sx={{ height: 20, fontSize: "0.7rem", fontWeight: 700, bgcolor: "#EDE9FE", color: "#6D28D9" }}
+                        />
+                        <span>{`*.node1.${cfBaseDomain.trim() || "easy42.example.com"}`}</span>
+                        <span style={{ color: "#94A3B8" }}>→</span>
+                        <span style={{ color: "#059669" }}>fd42:a159:f9f0::1</span>
+                      </Box>
+                    )}
                   </Box>
                 </Box>
               </>

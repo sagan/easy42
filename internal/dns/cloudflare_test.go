@@ -128,21 +128,52 @@ func TestExpectedRecordsForNode(t *testing.T) {
 	}
 
 	// Toggle OFF
-	aRec, aaaaRec := ExpectedRecordsForNode(node, "easy42.example.com", false)
-	if aRec == nil || aRec.Name != "node1.easy42.example.com" || aRec.Content != "192.168.100.1" {
-		t.Fatalf("unexpected aRec: %+v", aRec)
+	recs1 := ExpectedRecordsForNode(node, "easy42.example.com", false)
+	if len(recs1) != 4 {
+		t.Fatalf("expected 4 records when toggle false, got %d: %+v", len(recs1), recs1)
 	}
-	if aaaaRec == nil || aaaaRec.Name != "node1.easy42.example.com" || aaaaRec.Content != "fd42:a159:f9f0::1" {
-		t.Fatalf("unexpected aaaaRec when toggle false: %+v", aaaaRec)
+	findRec := func(recs []DNSRecord, rType, name string) *DNSRecord {
+		for _, r := range recs {
+			if r.Type == rType && strings.EqualFold(r.Name, name) {
+				return &r
+			}
+		}
+		return nil
+	}
+
+	aRec := findRec(recs1, "A", "node1.easy42.example.com")
+	if aRec == nil || aRec.Content != "192.168.100.1" {
+		t.Fatalf("unexpected A record: %+v", aRec)
+	}
+	wildARec := findRec(recs1, "A", "*.node1.easy42.example.com")
+	if wildARec == nil || wildARec.Content != "192.168.100.1" {
+		t.Fatalf("unexpected wildcard A record: %+v", wildARec)
+	}
+	aaaaRec := findRec(recs1, "AAAA", "node1.easy42.example.com")
+	if aaaaRec == nil || aaaaRec.Content != "fd42:a159:f9f0::1" {
+		t.Fatalf("unexpected AAAA record: %+v", aaaaRec)
+	}
+	wildAAAARec := findRec(recs1, "AAAA", "*.node1.easy42.example.com")
+	if wildAAAARec == nil || wildAAAARec.Content != "fd42:a159:f9f0::1" {
+		t.Fatalf("unexpected wildcard AAAA record: %+v", wildAAAARec)
 	}
 
 	// Toggle ON
-	aRec2, aaaaRec2 := ExpectedRecordsForNode(node, "easy42.example.com", true)
-	if aRec2 == nil || aRec2.Name != "node1.easy42.example.com" {
-		t.Fatalf("unexpected aRec2: %+v", aRec2)
+	recs2 := ExpectedRecordsForNode(node, "easy42.example.com", true)
+	if len(recs2) != 3 {
+		t.Fatalf("expected 3 records when toggle true, got %d: %+v", len(recs2), recs2)
 	}
-	if aaaaRec2 == nil || aaaaRec2.Name != "node16.easy42.example.com" || aaaaRec2.Content != "fd42:a159:f9f0::1" {
-		t.Fatalf("unexpected aaaaRec2 when toggle true: %+v", aaaaRec2)
+	aRec2 := findRec(recs2, "A", "node1.easy42.example.com")
+	if aRec2 == nil || aRec2.Content != "192.168.100.1" {
+		t.Fatalf("unexpected A record: %+v", aRec2)
+	}
+	wildARec2 := findRec(recs2, "A", "*.node1.easy42.example.com")
+	if wildARec2 == nil || wildARec2.Content != "192.168.100.1" {
+		t.Fatalf("unexpected wildcard A record: %+v", wildARec2)
+	}
+	aaaaRec2 := findRec(recs2, "AAAA", "node16.easy42.example.com")
+	if aaaaRec2 == nil || aaaaRec2.Content != "fd42:a159:f9f0::1" {
+		t.Fatalf("unexpected AAAA record when toggle true: %+v", aaaaRec2)
 	}
 }
 
@@ -164,35 +195,35 @@ func TestSync(t *testing.T) {
 		PublishIPv6OwnName: false,
 	}
 
-	// 1. Initial sync (creates all 4 records)
+	// 1. Initial sync (creates all 8 records: 2 nodes * 4 records)
 	res, err := Sync(context.Background(), client, nodes, dnsCfg, false)
 	if err != nil {
 		t.Fatalf("Sync failed: %v", err)
 	}
-	if res.Created != 4 {
-		t.Errorf("expected 4 created, got %d", res.Created)
+	if res.Created != 8 {
+		t.Errorf("expected 8 created, got %d", res.Created)
 	}
-	if len(mock.records) != 4 {
-		t.Errorf("expected 4 records in mock, got %d", len(mock.records))
+	if len(mock.records) != 8 {
+		t.Errorf("expected 8 records in mock, got %d", len(mock.records))
 	}
 
-	// 2. Second sync with no changes (should ignore all 4)
+	// 2. Second sync with no changes (should ignore all 8)
 	res2, err := Sync(context.Background(), client, nodes, dnsCfg, false)
 	if err != nil {
 		t.Fatalf("Sync failed: %v", err)
 	}
-	if res2.Ignored != 4 {
-		t.Errorf("expected 4 ignored, got %d", res2.Ignored)
+	if res2.Ignored != 8 {
+		t.Errorf("expected 8 ignored, got %d", res2.Ignored)
 	}
 
-	// 3. Update an IP
+	// 3. Update an IP (updates both n1 and *.n1 A records)
 	nodes[0].IP = "10.0.0.10"
 	res3, err := Sync(context.Background(), client, nodes, dnsCfg, false)
 	if err != nil {
 		t.Fatalf("Sync failed: %v", err)
 	}
-	if res3.Updated != 1 || res3.Ignored != 3 {
-		t.Errorf("expected 1 updated, 3 ignored, got updated=%d, ignored=%d", res3.Updated, res3.Ignored)
+	if res3.Updated != 2 || res3.Ignored != 6 {
+		t.Errorf("expected 2 updated, 6 ignored, got updated=%d, ignored=%d", res3.Updated, res3.Ignored)
 	}
 
 	// 4. Toggle PublishIPv6OwnName = true
@@ -201,9 +232,9 @@ func TestSync(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Sync failed: %v", err)
 	}
-	// Should create 2 new AAAA at n16 and n26, ignore 2 A records, and delete old 2 AAAA at n1 and n2
-	if res4.Created != 2 || res4.Deleted != 2 || res4.Ignored != 2 {
-		t.Errorf("expected 2 created, 2 deleted, 2 ignored, got created=%d, deleted=%d, ignored=%d",
+	// Should create 2 new AAAA at n16 and n26, ignore 4 A records, and delete old 4 AAAA at n1, *.n1, n2, *.n2
+	if res4.Created != 2 || res4.Deleted != 4 || res4.Ignored != 4 {
+		t.Errorf("expected 2 created, 4 deleted, 4 ignored, got created=%d, deleted=%d, ignored=%d",
 			res4.Created, res4.Deleted, res4.Ignored)
 	}
 }
@@ -214,11 +245,17 @@ func TestForceSyncDeletesOrphanedRecords(t *testing.T) {
 
 	client := NewClient("zone-123", "secret-token", "easy42.example.com").WithBaseURL(srv.URL)
 
-	// Add an orphaned record to mock that doesn't correspond to any node
+	// Add orphaned records to mock that don't correspond to any node
 	mock.records["orphan-1"] = DNSRecord{
 		ID:      "orphan-1",
 		Type:    "A",
 		Name:    "ghost.easy42.example.com",
+		Content: "10.99.99.99",
+	}
+	mock.records["orphan-wild"] = DNSRecord{
+		ID:      "orphan-wild",
+		Type:    "A",
+		Name:    "*.ghost.easy42.example.com",
 		Content: "10.99.99.99",
 	}
 	mock.records["orphan-2"] = DNSRecord{
@@ -251,12 +288,15 @@ func TestForceSyncDeletesOrphanedRecords(t *testing.T) {
 		t.Fatalf("Force Sync failed: %v", err)
 	}
 
-	if res.Deleted != 2 {
-		t.Errorf("expected 2 orphans deleted, got %d", res.Deleted)
+	if res.Deleted != 3 {
+		t.Errorf("expected 3 orphans deleted, got %d", res.Deleted)
 	}
 
 	if _, ok := mock.records["orphan-1"]; ok {
 		t.Errorf("orphan-1 was not deleted")
+	}
+	if _, ok := mock.records["orphan-wild"]; ok {
+		t.Errorf("orphan-wild was not deleted")
 	}
 	if _, ok := mock.records["orphan-2"]; ok {
 		t.Errorf("orphan-2 was not deleted")
@@ -284,8 +324,9 @@ func TestSyncNodeAndRename(t *testing.T) {
 		t.Fatalf("SyncNode failed: %v", err)
 	}
 
-	if len(mock.records) != 2 {
-		t.Fatalf("expected 2 records, got %d", len(mock.records))
+	// When PublishIPv6OwnName is true, expect 3 records: oldnode A, *.oldnode A, oldnode6 AAAA
+	if len(mock.records) != 3 {
+		t.Fatalf("expected 3 records, got %d", len(mock.records))
 	}
 
 	// Rename node to newnode

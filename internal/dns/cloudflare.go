@@ -255,14 +255,16 @@ func (c *Client) DeleteRecord(ctx context.Context, id string) error {
 }
 
 // ExpectedRecordsForNode calculates the expected DNS records for a given node
-func ExpectedRecordsForNode(node config.Node, baseDomain string, publishIPv6OwnName bool) (aRec *DNSRecord, aaaaRec *DNSRecord) {
+func ExpectedRecordsForNode(node config.Node, baseDomain string, publishIPv6OwnName bool) []DNSRecord {
+	var records []DNSRecord
+
 	nodeName := strings.ToLower(strings.TrimSpace(node.Name))
 	if nodeName == "" {
-		return nil, nil
+		return nil
 	}
 	baseDomain = NormalizeDomain(baseDomain)
 	if baseDomain == "" {
-		return nil, nil
+		return nil
 	}
 
 	ipv4 := CleanIP(node.IP)
@@ -271,38 +273,61 @@ func ExpectedRecordsForNode(node config.Node, baseDomain string, publishIPv6OwnN
 	// Validate IPv4
 	if ipv4 != "" {
 		if parsed := net.ParseIP(ipv4); parsed != nil && parsed.To4() != nil {
-			aRec = &DNSRecord{
+			ipStr := parsed.String()
+			records = append(records, DNSRecord{
 				Type:    "A",
 				Name:    fmt.Sprintf("%s.%s", nodeName, baseDomain),
-				Content: parsed.String(),
+				Content: ipStr,
 				TTL:     1,
 				Proxied: false,
 				Comment: easy42RecordComment,
-			}
+			})
+			records = append(records, DNSRecord{
+				Type:    "A",
+				Name:    fmt.Sprintf("*.%s.%s", nodeName, baseDomain),
+				Content: ipStr,
+				TTL:     1,
+				Proxied: false,
+				Comment: easy42RecordComment,
+			})
 		}
 	}
 
 	// Validate IPv6
 	if ipv6 != "" {
 		if parsed := net.ParseIP(ipv6); parsed != nil && parsed.To4() == nil {
-			var recName string
+			ip6Str := parsed.String()
 			if publishIPv6OwnName {
-				recName = fmt.Sprintf("%s6.%s", nodeName, baseDomain)
+				records = append(records, DNSRecord{
+					Type:    "AAAA",
+					Name:    fmt.Sprintf("%s6.%s", nodeName, baseDomain),
+					Content: ip6Str,
+					TTL:     1,
+					Proxied: false,
+					Comment: easy42RecordComment,
+				})
 			} else {
-				recName = fmt.Sprintf("%s.%s", nodeName, baseDomain)
-			}
-			aaaaRec = &DNSRecord{
-				Type:    "AAAA",
-				Name:    recName,
-				Content: parsed.String(),
-				TTL:     1,
-				Proxied: false,
-				Comment: easy42RecordComment,
+				records = append(records, DNSRecord{
+					Type:    "AAAA",
+					Name:    fmt.Sprintf("%s.%s", nodeName, baseDomain),
+					Content: ip6Str,
+					TTL:     1,
+					Proxied: false,
+					Comment: easy42RecordComment,
+				})
+				records = append(records, DNSRecord{
+					Type:    "AAAA",
+					Name:    fmt.Sprintf("*.%s.%s", nodeName, baseDomain),
+					Content: ip6Str,
+					TTL:     1,
+					Proxied: false,
+					Comment: easy42RecordComment,
+				})
 			}
 		}
 	}
 
-	return aRec, aaaaRec
+	return records
 }
 
 // IPMatches checks if two IP representations evaluate to the exact same IP
@@ -337,11 +362,12 @@ func SyncNode(ctx context.Context, client *Client, node config.Node, oldName str
 		return nil
 	}
 
-	aExpected, aaaaExpected := ExpectedRecordsForNode(node, baseDomain, dnsCfg.PublishIPv6OwnName)
+	expectedRecords := ExpectedRecordsForNode(node, baseDomain, dnsCfg.PublishIPv6OwnName)
 
 	// Fetch existing records for this node's potential hostnames
 	namesToQuery := []string{
 		fmt.Sprintf("%s.%s", nodeName, baseDomain),
+		fmt.Sprintf("*.%s.%s", nodeName, baseDomain),
 		fmt.Sprintf("%s6.%s", nodeName, baseDomain),
 	}
 
@@ -354,61 +380,51 @@ func SyncNode(ctx context.Context, client *Client, node config.Node, oldName str
 		existing = append(existing, recs...)
 	}
 
-	// Reconcile A record
-	syncSingleExpected(ctx, client, "A", aExpected, existing)
-
-	// Reconcile AAAA record
-	syncSingleExpected(ctx, client, "AAAA", aaaaExpected, existing)
-
-	// Also delete any obsolete AAAA records (e.g. if toggle is ON, delete <name>.<domain> AAAA; if toggle is OFF, delete <name>6.<domain> AAAA)
-	targetAAAAName := ""
-	if aaaaExpected != nil {
-		targetAAAAName = strings.ToLower(aaaaExpected.Name)
-	}
-	for _, rec := range existing {
-		if rec.Type == "AAAA" && (targetAAAAName == "" || !strings.EqualFold(rec.Name, targetAAAAName)) {
-			// This AAAA record is not the expected target for this node, delete it
-			_ = client.DeleteRecord(ctx, rec.ID)
-		}
+	type recordKey struct {
+		Type string
+		Name string
 	}
 
-	return nil
-}
+	expectedMap := make(map[recordKey]DNSRecord)
+	for _, r := range expectedRecords {
+		expectedMap[recordKey{Type: strings.ToUpper(r.Type), Name: strings.ToLower(r.Name)}] = r
+	}
 
-func syncSingleExpected(ctx context.Context, client *Client, recType string, expected *DNSRecord, existing []DNSRecord) {
-	var matching []DNSRecord
-	for _, rec := range existing {
-		if rec.Type == recType {
-			if expected != nil && strings.EqualFold(rec.Name, expected.Name) {
-				matching = append(matching, rec)
+	existingGrouped := make(map[recordKey][]DNSRecord)
+	for _, r := range existing {
+		key := recordKey{Type: strings.ToUpper(r.Type), Name: strings.ToLower(strings.Trim(r.Name, "."))}
+		existingGrouped[key] = append(existingGrouped[key], r)
+	}
+
+	// Reconcile expected records
+	for key, expected := range expectedMap {
+		matches := existingGrouped[key]
+		if len(matches) == 0 {
+			_, _ = client.CreateRecord(ctx, expected)
+		} else {
+			keep := matches[0]
+			if !IPMatches(keep.Content, expected.Content) || keep.Proxied != expected.Proxied {
+				_, _ = client.UpdateRecord(ctx, keep.ID, expected)
+			}
+			for i := 1; i < len(matches); i++ {
+				_ = client.DeleteRecord(ctx, matches[i].ID)
 			}
 		}
 	}
 
-	if expected == nil {
-		// No record expected: delete any matching records
-		for _, rec := range matching {
-			_ = client.DeleteRecord(ctx, rec.ID)
+	// Delete any existing A or AAAA records for this node that are no longer expected
+	for key, matches := range existingGrouped {
+		if key.Type != "A" && key.Type != "AAAA" {
+			continue
 		}
-		return
+		if _, isExpected := expectedMap[key]; !isExpected {
+			for _, rec := range matches {
+				_ = client.DeleteRecord(ctx, rec.ID)
+			}
+		}
 	}
 
-	if len(matching) == 0 {
-		// Create record
-		_, _ = client.CreateRecord(ctx, *expected)
-		return
-	}
-
-	// One or more records already exist
-	keep := matching[0]
-	if !IPMatches(keep.Content, expected.Content) || keep.Proxied != expected.Proxied {
-		_, _ = client.UpdateRecord(ctx, keep.ID, *expected)
-	}
-
-	// Delete any duplicate records
-	for i := 1; i < len(matching); i++ {
-		_ = client.DeleteRecord(ctx, matching[i].ID)
-	}
+	return nil
 }
 
 // DeleteNodeRecords deletes all DNS records for a given node name
@@ -427,6 +443,7 @@ func DeleteNodeRecords(ctx context.Context, client *Client, nodeName string, dns
 
 	names := []string{
 		fmt.Sprintf("%s.%s", nodeName, baseDomain),
+		fmt.Sprintf("*.%s.%s", nodeName, baseDomain),
 		fmt.Sprintf("%s6.%s", nodeName, baseDomain),
 	}
 
@@ -490,12 +507,9 @@ func Sync(ctx context.Context, client *Client, nodes []config.Node, dnsCfg confi
 		}
 		validNodeNames[cleanName] = true
 
-		aRec, aaaaRec := ExpectedRecordsForNode(node, baseDomain, dnsCfg.PublishIPv6OwnName)
-		if aRec != nil {
-			expectedMap[recordKey{Type: aRec.Type, Name: strings.ToLower(aRec.Name)}] = aRec
-		}
-		if aaaaRec != nil {
-			expectedMap[recordKey{Type: aaaaRec.Type, Name: strings.ToLower(aaaaRec.Name)}] = aaaaRec
+		for _, rec := range ExpectedRecordsForNode(node, baseDomain, dnsCfg.PublishIPv6OwnName) {
+			r := rec
+			expectedMap[recordKey{Type: r.Type, Name: strings.ToLower(r.Name)}] = &r
 		}
 	}
 
@@ -549,11 +563,21 @@ func Sync(ctx context.Context, client *Client, nodes []config.Node, dnsCfg confi
 	if !force {
 		for cleanNodeName := range validNodeNames {
 			nodeNameDomain := fmt.Sprintf("%s.%s", cleanNodeName, baseDomain)
+			nodeWildDomain := fmt.Sprintf("*.%s.%s", cleanNodeName, baseDomain)
 			nodeName6Domain := fmt.Sprintf("%s6.%s", cleanNodeName, baseDomain)
 
 			if dnsCfg.PublishIPv6OwnName {
-				// Old <name>.<domain> AAAA records should be removed
+				// Old <name>.<domain> and *.<name>.<domain> AAAA records should be removed
 				if recs, ok := existingMap[recordKey{Type: "AAAA", Name: nodeNameDomain}]; ok {
+					for _, r := range recs {
+						if err := client.DeleteRecord(ctx, r.ID); err != nil {
+							result.Errors = append(result.Errors, fmt.Sprintf("failed to delete stale AAAA %s: %v", r.Name, err))
+						} else {
+							result.Deleted++
+						}
+					}
+				}
+				if recs, ok := existingMap[recordKey{Type: "AAAA", Name: nodeWildDomain}]; ok {
 					for _, r := range recs {
 						if err := client.DeleteRecord(ctx, r.ID); err != nil {
 							result.Errors = append(result.Errors, fmt.Sprintf("failed to delete stale AAAA %s: %v", r.Name, err))
@@ -603,14 +627,21 @@ func Sync(ctx context.Context, client *Client, nodes []config.Node, dnsCfg confi
 			// Check if this record corresponds to an existing node
 			correspondsToNode := false
 
-			if validNodeNames[sub] {
+			checkSub := sub
+			isWildcard := false
+			if strings.HasPrefix(checkSub, "*.") {
+				isWildcard = true
+				checkSub = strings.TrimPrefix(checkSub, "*.")
+			}
+
+			if validNodeNames[checkSub] {
 				// Sub matches node name exactly
 				if recType == "A" {
 					correspondsToNode = true
 				} else if recType == "AAAA" && !dnsCfg.PublishIPv6OwnName {
 					correspondsToNode = true
 				}
-			} else if dnsCfg.PublishIPv6OwnName && strings.HasSuffix(sub, "6") {
+			} else if !isWildcard && dnsCfg.PublishIPv6OwnName && strings.HasSuffix(sub, "6") {
 				baseNode := strings.TrimSuffix(sub, "6")
 				if validNodeNames[baseNode] && recType == "AAAA" {
 					correspondsToNode = true
