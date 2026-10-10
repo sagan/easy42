@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::fs;
-use std::process::Command;
 
 pub mod proto {
     include!(concat!(env!("OUT_DIR"), "/easy42.agent.v1.rs"));
@@ -19,12 +18,12 @@ impl MetricsCollector {
         }
     }
 
-    pub fn collect_telemetry(&mut self) -> proto::TelemetryReport {
+    pub async fn collect_telemetry(&mut self) -> proto::TelemetryReport {
         proto::TelemetryReport {
             system: Some(self.collect_system_metrics()),
-            interfaces: self.collect_interfaces(),
-            wg_peers: self.collect_wg_peers(),
-            bird_protocols: self.collect_bird_protocols(),
+            interfaces: self.collect_interfaces().await,
+            wg_peers: self.collect_wg_peers().await,
+            bird_protocols: self.collect_bird_protocols().await,
         }
     }
 
@@ -118,9 +117,9 @@ impl MetricsCollector {
         vec![0.0, 0.0, 0.0]
     }
 
-    pub fn collect_interfaces(&self) -> Vec<proto::InterfaceMetrics> {
+    pub async fn collect_interfaces(&self) -> Vec<proto::InterfaceMetrics> {
         let mut list = Vec::new();
-        let addr_map = get_interface_addresses();
+        let addr_map = get_interface_addresses().await;
 
         if let Ok(dev) = fs::read_to_string("/proc/net/dev") {
             for line in dev.lines().skip(2) {
@@ -159,67 +158,62 @@ impl MetricsCollector {
         list
     }
 
-    pub fn collect_wg_peers(&self) -> Vec<proto::WgPeerMetrics> {
+    pub async fn collect_wg_peers(&self) -> Vec<proto::WgPeerMetrics> {
         let mut peers = Vec::new();
 
-        // Run `wg show all dump`
-        if let Ok(output) = Command::new("wg").args(["show", "all", "dump"]).output() {
-            if output.status.success() {
-                let text = String::from_utf8_lossy(&output.stdout);
-                for line in text.lines() {
-                    let parts: Vec<&str> = line.split('\t').collect();
-                    // Peer format: <interface> <public-key> <preshared-key> <endpoint> <allowed-ips> <latest-handshake> <transfer-rx> <transfer-tx> <persistent-keepalive>
-                    if parts.len() >= 9 {
-                        let iface = parts[0].to_string();
-                        let pubkey = parts[1].to_string();
-                        let endpoint = parts[3].to_string();
-                        let handshake = parts[5].parse::<i64>().unwrap_or(0);
-                        let rx = parts[6].parse::<u64>().unwrap_or(0);
-                        let tx = parts[7].parse::<u64>().unwrap_or(0);
-                        let keepalive = parts[8].parse::<i64>().unwrap_or(0);
+        // Run `wg show all dump` with 3-second timeout
+        if let Some(text) = run_cmd_timed("wg", &["show", "all", "dump"], std::time::Duration::from_secs(3)).await {
+            for line in text.lines() {
+                let parts: Vec<&str> = line.split('\t').collect();
+                // Peer format: <interface> <public-key> <preshared-key> <endpoint> <allowed-ips> <latest-handshake> <transfer-rx> <transfer-tx> <persistent-keepalive>
+                if parts.len() >= 9 {
+                    let iface = parts[0].to_string();
+                    let pubkey = parts[1].to_string();
+                    let endpoint = parts[3].to_string();
+                    let handshake = parts[5].parse::<i64>().unwrap_or(0);
+                    let rx = parts[6].parse::<u64>().unwrap_or(0);
+                    let tx = parts[7].parse::<u64>().unwrap_or(0);
+                    let keepalive = parts[8].parse::<i64>().unwrap_or(0);
 
-                        peers.push(proto::WgPeerMetrics {
-                            interface_name: iface,
-                            public_key: pubkey,
-                            endpoint: if endpoint == "(none)" {
-                                "".to_string()
-                            } else {
-                                endpoint
-                            },
-                            last_handshake_time: handshake,
-                            rx_bytes: rx,
-                            tx_bytes: tx,
-                            persistent_keepalive: keepalive,
-                        });
-                    }
+                    peers.push(proto::WgPeerMetrics {
+                        interface_name: iface,
+                        public_key: pubkey,
+                        endpoint: if endpoint == "(none)" {
+                            "".to_string()
+                        } else {
+                            endpoint
+                        },
+                        last_handshake_time: handshake,
+                        rx_bytes: rx,
+                        tx_bytes: tx,
+                        persistent_keepalive: keepalive,
+                    });
                 }
             }
         }
         peers
     }
 
-    pub fn collect_bird_protocols(&self) -> Vec<proto::BirdProtocolStatus> {
+    pub async fn collect_bird_protocols(&self) -> Vec<proto::BirdProtocolStatus> {
         let mut protocols = Vec::new();
 
-        if let Ok(output) = Command::new("birdc").args(["show", "protocols"]).output() {
-            if output.status.success() {
-                let text = String::from_utf8_lossy(&output.stdout);
-                for line in text.lines().skip(1) {
-                    // Skip header: Name Proto Table State Since Info
-                    let parts: Vec<&str> = line.split_whitespace().collect();
-                    if parts.len() >= 5 {
-                        let name = parts[0].to_string();
-                        let proto = parts[1].to_string();
-                        let state = parts[3].to_string();
-                        let info = parts[4..].join(" ");
+        // Run `birdc show protocols` with 3-second timeout
+        if let Some(text) = run_cmd_timed("birdc", &["show", "protocols"], std::time::Duration::from_secs(3)).await {
+            for line in text.lines().skip(1) {
+                // Skip header: Name Proto Table State Since Info
+                let parts: Vec<&str> = line.split_whitespace().collect();
+                if parts.len() >= 5 {
+                    let name = parts[0].to_string();
+                    let proto = parts[1].to_string();
+                    let state = parts[3].to_string();
+                    let info = parts[4..].join(" ");
 
-                        protocols.push(proto::BirdProtocolStatus {
-                            name,
-                            proto,
-                            state,
-                            info,
-                        });
-                    }
+                    protocols.push(proto::BirdProtocolStatus {
+                        name,
+                        proto,
+                        state,
+                        info,
+                    });
                 }
             }
         }
@@ -243,29 +237,39 @@ fn check_interface_up(name: &str) -> bool {
     true
 }
 
-fn get_interface_addresses() -> HashMap<String, Vec<String>> {
+async fn get_interface_addresses() -> HashMap<String, Vec<String>> {
     let mut map: HashMap<String, Vec<String>> = HashMap::new();
-    if let Ok(output) = Command::new("ip").args(["-j", "addr", "show"]).output() {
-        if output.status.success() {
-            if let Ok(val) = serde_json::from_slice::<serde_json::Value>(&output.stdout) {
-                if let Some(arr) = val.as_array() {
-                    for iface in arr {
-                        let name = iface["ifname"].as_str().unwrap_or("").to_string();
-                        let mut addrs = Vec::new();
-                        if let Some(addr_info) = iface["addr_info"].as_array() {
-                            for a in addr_info {
-                                if let (Some(local), Some(prefix)) =
-                                    (a["local"].as_str(), a["prefixlen"].as_u64())
-                                {
-                                    addrs.push(format!("{}/{}", local, prefix));
-                                }
+    if let Some(stdout_str) = run_cmd_timed("ip", &["-j", "addr", "show"], std::time::Duration::from_secs(3)).await {
+        if let Ok(val) = serde_json::from_str::<serde_json::Value>(&stdout_str) {
+            if let Some(arr) = val.as_array() {
+                for iface in arr {
+                    let name = iface["ifname"].as_str().unwrap_or("").to_string();
+                    let mut addrs = Vec::new();
+                    if let Some(addr_info) = iface["addr_info"].as_array() {
+                        for a in addr_info {
+                            if let (Some(local), Some(prefix)) =
+                                (a["local"].as_str(), a["prefixlen"].as_u64())
+                            {
+                                addrs.push(format!("{}/{}", local, prefix));
                             }
                         }
-                        map.insert(name, addrs);
                     }
+                    map.insert(name, addrs);
                 }
             }
         }
     }
     map
+}
+
+async fn run_cmd_timed(program: &str, args: &[&str], timeout_dur: std::time::Duration) -> Option<String> {
+    use tokio::process::Command;
+    let mut cmd = Command::new(program);
+    cmd.args(args);
+    match tokio::time::timeout(timeout_dur, cmd.output()).await {
+        Ok(Ok(output)) if output.status.success() => {
+            Some(String::from_utf8_lossy(&output.stdout).to_string())
+        }
+        _ => None,
+    }
 }

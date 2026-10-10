@@ -172,3 +172,48 @@ func TestHubCommandDispatch(t *testing.T) {
 		t.Fatalf("unexpected command response: %+v", resp)
 	}
 }
+
+func TestHubReconnectRace(t *testing.T) {
+	hub := NewHub()
+
+	// Mock server that registers connections
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ws, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			return
+		}
+		conn := NewConnection("node-race", ws, hub)
+		hub.Register(conn)
+		go conn.ReadLoop()
+	}))
+	defer server.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http")
+
+	// 1. Establish first connection
+	client1, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("failed to dial client 1: %v", err)
+	}
+	defer client1.Close()
+
+	time.Sleep(50 * time.Millisecond)
+	if !hub.IsConnected("node-race") {
+		t.Fatalf("expected node-race to be connected on client 1")
+	}
+
+	// 2. Establish second connection (reconnect) for the same node
+	client2, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("failed to dial client 2: %v", err)
+	}
+	defer client2.Close()
+
+	// Wait for old connection to be closed and old.Close() goroutine to finish
+	time.Sleep(100 * time.Millisecond)
+
+	// 3. node-race MUST still be connected via client 2!
+	if !hub.IsConnected("node-race") {
+		t.Fatalf("node-race was erroneously unregistered when old connection closed!")
+	}
+}

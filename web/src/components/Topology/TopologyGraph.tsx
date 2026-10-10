@@ -238,8 +238,8 @@ export function getLinkWorkingState(
     return "not_working";
   }
   if (isManual) {
-    const fromOnline = nodeStatuses?.[link.from.name] ? nodeStatuses[link.from.name].connected : true;
-    const toOnline = nodeStatuses?.[link.to.name] ? nodeStatuses[link.to.name].connected : true;
+    const fromOnline = Boolean(nodeStatuses?.[link.from.name]?.connected);
+    const toOnline = Boolean(nodeStatuses?.[link.to.name]?.connected);
     return fromOnline && toOnline ? "working" : "not_working";
   }
   if (fromIface?.working_state === "unknown" || toIface?.working_state === "unknown") {
@@ -642,7 +642,7 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
     > = {};
 
     nodes.forEach((node) => {
-      const isOnline = nodeStatuses[node.name] ? nodeStatuses[node.name].connected : true;
+      const isOnline = Boolean(node.is_external || nodeStatuses[node.name]?.connected);
       const nodeLinks = links.filter((l) => l.from.name === node.name || l.to.name === node.name);
 
       let upLinks = 0;

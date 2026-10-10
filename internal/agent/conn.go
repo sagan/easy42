@@ -69,7 +69,7 @@ func (c *AgentConnection) Close() {
 	c.closeOnce.Do(func() {
 		close(c.closed)
 		_ = c.ws.Close()
-		c.hub.Unregister(c.nodeName)
+		c.hub.Unregister(c)
 
 		c.pendingMu.Lock()
 		for id, ch := range c.pending {

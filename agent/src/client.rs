@@ -116,8 +116,13 @@ impl AgentClient {
             }
         };
 
-        // Channels for outgoing messages from tickers
-        let (tx, mut rx) = tokio::sync::mpsc::channel::<proto::AgentMessage>(32);
+        // Channels for outgoing messages from tickers and pong responses
+        enum OutgoingMessage {
+            Proto(proto::AgentMessage),
+            Raw(WsMessage),
+        }
+
+        let (tx, mut rx) = tokio::sync::mpsc::channel::<OutgoingMessage>(32);
 
         // Task: Telemetry ticker
         let tx_telemetry = tx.clone();
@@ -129,7 +134,7 @@ impl AgentClient {
                 ticker.tick().await;
                 let telemetry = {
                     let mut col = collector_clone.lock().await;
-                    col.collect_telemetry()
+                    col.collect_telemetry().await
                 };
 
                 let msg = proto::AgentMessage {
@@ -137,7 +142,7 @@ impl AgentClient {
                     timestamp: now_millis(),
                     payload: Some(proto::agent_message::Payload::Telemetry(telemetry)),
                 };
-                if tx_telemetry.send(msg).await.is_err() {
+                if tx_telemetry.send(OutgoingMessage::Proto(msg)).await.is_err() {
                     break;
                 }
             }
@@ -156,7 +161,7 @@ impl AgentClient {
                         client_time: now_millis(),
                     })),
                 };
-                if tx_hb.send(msg).await.is_err() {
+                if tx_hb.send(OutgoingMessage::Proto(msg)).await.is_err() {
                     break;
                 }
             }
@@ -164,32 +169,41 @@ impl AgentClient {
 
         // Writer future forwarding mpsc to WebSocket sink with per-send timeout
         let writer_fut = async {
-            while let Some(msg) = rx.recv().await {
-                let mut buf = Vec::new();
-                if msg.encode(&mut buf).is_ok() {
-                    match timeout(Duration::from_secs(10), ws_sender.send(WsMessage::Binary(buf.into()))).await {
-                        Ok(Ok(())) => {}
-                        Ok(Err(e)) => return Err(format!("WebSocket write error: {}", e)),
-                        Err(_) => return Err("WebSocket write timed out (10s)".to_string()),
+            while let Some(out_msg) = rx.recv().await {
+                let ws_msg = match out_msg {
+                    OutgoingMessage::Proto(msg) => {
+                        let mut buf = Vec::new();
+                        if msg.encode(&mut buf).is_err() {
+                            continue;
+                        }
+                        WsMessage::Binary(buf.into())
                     }
+                    OutgoingMessage::Raw(raw) => raw,
+                };
+
+                match timeout(Duration::from_secs(10), ws_sender.send(ws_msg)).await {
+                    Ok(Ok(())) => {}
+                    Ok(Err(e)) => return Err(format!("WebSocket write error: {}", e)),
+                    Err(_) => return Err("WebSocket write timed out (10s)".to_string()),
                 }
             }
             Ok::<(), String>(())
         };
 
-        // Reader future processing incoming server messages with read timeout (60s)
+        // Reader future processing incoming server messages with read timeout (45s)
         let executor = self.executor.clone();
         let tx_cmd_resp = tx.clone();
+        let tx_pong = tx.clone();
         let reader_fut = async {
             loop {
-                let msg_result = match timeout(Duration::from_secs(60), ws_receiver.next()).await {
+                let msg_result = match timeout(Duration::from_secs(45), ws_receiver.next()).await {
                     Ok(Some(res)) => res,
                     Ok(None) => {
                         info!("WebSocket stream closed by server");
                         return Ok(());
                     }
                     Err(_) => {
-                        return Err("WebSocket read timed out (no data from server for 60s)".to_string());
+                        return Err("WebSocket read timed out (no data from server for 45s)".to_string());
                     }
                 };
 
@@ -214,7 +228,7 @@ impl AgentClient {
                                         if let Some(col) = col_opt {
                                             let telemetry = {
                                                 let mut c = col.lock().await;
-                                                c.collect_telemetry()
+                                                c.collect_telemetry().await
                                             };
                                             let telem_msg = proto::AgentMessage {
                                                 seq: 0,
@@ -223,9 +237,9 @@ impl AgentClient {
                                                     proto::agent_message::Payload::Telemetry(telemetry),
                                                 ),
                                             };
-                                            let _ = resp_tx.send(telem_msg).await;
+                                            let _ = resp_tx.send(OutgoingMessage::Proto(telem_msg)).await;
                                         }
-                                        let resp = exec.execute(cmd);
+                                        let resp = exec.execute(cmd).await;
                                         let out_msg = proto::AgentMessage {
                                             seq: 0,
                                             timestamp: now_millis(),
@@ -233,7 +247,7 @@ impl AgentClient {
                                                 resp,
                                             )),
                                         };
-                                        let _ = resp_tx.send(out_msg).await;
+                                        let _ = resp_tx.send(OutgoingMessage::Proto(out_msg)).await;
                                     });
                                 }
                                 Some(proto::agent_message::Payload::HeartbeatAck(_)) => {
@@ -244,14 +258,15 @@ impl AgentClient {
                                         info!("Agent successfully registered with Easy42 controller");
                                     } else {
                                         warn!("Registration failed: {}", r.error_message);
+                                        return Err(format!("Registration rejected by server: {}", r.error_message));
                                     }
                                 }
                                 _ => {}
                             }
                         }
                     }
-                    Ok(WsMessage::Ping(_p)) => {
-                        // Tungstenite automatically responds to Ping with Pong
+                    Ok(WsMessage::Ping(payload)) => {
+                        let _ = tx_pong.send(OutgoingMessage::Raw(WsMessage::Pong(payload))).await;
                     }
                     Ok(WsMessage::Close(_)) => {
                         info!("Received WebSocket Close frame");

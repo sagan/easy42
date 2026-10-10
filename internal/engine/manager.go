@@ -2396,10 +2396,25 @@ func (m *Manager) GetNodeStatuses() map[string]config.NodeStatus {
 	if cfg != nil {
 		for _, n := range cfg.Nodes {
 			activeNodes[n.Name] = true
+			if n.IsExternal {
+				if _, ok := m.statuses[n.Name]; !ok {
+					m.statuses[n.Name] = &config.NodeStatus{
+						Name:      n.Name,
+						Host:      "external",
+						LastSeen:  time.Now(),
+						Connected: true,
+						Hostname:  n.Name,
+					}
+				}
+				continue
+			}
 			if n.IsAgentMode() || m.agentHub.IsConnected(n.Name) {
 				st := m.agentHub.NodeStatus(n.Name)
 				st.Host = n.Host
 				m.statuses[n.Name] = st
+			} else if existing, ok := m.statuses[n.Name]; ok {
+				existing.Connected = false
+				m.statuses[n.Name] = existing
 			}
 		}
 	}

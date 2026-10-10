@@ -498,7 +498,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               ?.filter((n) => !n.is_external)
               .map((n) => {
                 const st = nodeStatuses?.[n.name];
-                const isOnline = st ? st.connected : true;
+                const isOnline = Boolean(st?.connected);
                 return (
                   <MenuItem
                     key={n.name}

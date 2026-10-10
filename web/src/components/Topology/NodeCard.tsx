@@ -72,8 +72,8 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
     onRefreshNode,
     refreshingNodeName,
   } = nodeData;
-  const isOnline = status ? status.connected : true;
   const isExternal = Boolean(node.is_external);
+  const isOnline = isExternal ? true : Boolean(status?.connected);
   const isRefreshing = refreshingNodeName === node.name;
   const isAgentConfigured = node.mode === "agent" || Boolean(node.agent_token);
   const isAgentMode = status?.mode === "agent" || isAgentConfigured;

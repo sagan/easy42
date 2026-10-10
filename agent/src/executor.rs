@@ -5,7 +5,6 @@ use std::fs::{self, File};
 use std::io::Write;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
-use std::process::Command;
 use std::time::Instant;
 use tracing::info;
 
@@ -31,7 +30,7 @@ impl CommandExecutor {
         Self
     }
 
-    pub fn execute(&self, cmd: proto::CommandRequest) -> proto::CommandResponse {
+    pub async fn execute(&self, cmd: proto::CommandRequest) -> proto::CommandResponse {
         let req_id = cmd.request_id;
         let start = Instant::now();
 
@@ -40,14 +39,20 @@ impl CommandExecutor {
                 self.apply_config_file(apply)
             }
             Some(proto::command_request::Command::ManageIface(manage)) => {
-                self.manage_interface(manage)
+                self.manage_interface(manage).await
             }
-            Some(proto::command_request::Command::ReloadBird(reload)) => self.reload_bird(reload),
+            Some(proto::command_request::Command::ReloadBird(reload)) => {
+                self.reload_bird(reload).await
+            }
             Some(proto::command_request::Command::ApplyNft(apply_nft)) => {
-                self.apply_nftables(apply_nft)
+                self.apply_nftables(apply_nft).await
             }
-            Some(proto::command_request::Command::RestartService(svc)) => self.restart_service(svc),
-            Some(proto::command_request::Command::LookingGlass(lg)) => self.run_looking_glass(lg),
+            Some(proto::command_request::Command::RestartService(svc)) => {
+                self.restart_service(svc).await
+            }
+            Some(proto::command_request::Command::LookingGlass(lg)) => {
+                self.run_looking_glass(lg).await
+            }
             Some(proto::command_request::Command::ProbeSystem(_)) => self.probe_system(),
             None => (false, -1, String::new(), "unknown command".to_string()),
         };
@@ -157,7 +162,7 @@ impl CommandExecutor {
         }
     }
 
-    fn manage_interface(&self, req: proto::ManageInterface) -> (bool, i32, String, String) {
+    async fn manage_interface(&self, req: proto::ManageInterface) -> (bool, i32, String, String) {
         let action = match proto::manage_interface::Action::try_from(req.action) {
             Ok(a) => a,
             Err(_) => {
@@ -174,13 +179,13 @@ impl CommandExecutor {
 
         match action {
             proto::manage_interface::Action::Up => {
-                run_shell(&format!("wg-quick up {} 2>&1 || true", iface))
+                run_shell(&format!("wg-quick up {} 2>&1 || true", iface)).await
             }
             proto::manage_interface::Action::Down => {
-                run_shell(&format!("wg-quick down {} 2>&1 || ip link del dev {} 2>&1 || true", iface, iface))
+                run_shell(&format!("wg-quick down {} 2>&1 || ip link del dev {} 2>&1 || true", iface, iface)).await
             }
             proto::manage_interface::Action::Restart => {
-                run_shell(&format!("wg-quick down {} 2>/dev/null || ip link del dev {} 2>/dev/null; wg-quick up {}", iface, iface, iface))
+                run_shell(&format!("wg-quick down {} 2>/dev/null || ip link del dev {} 2>/dev/null; wg-quick up {}", iface, iface, iface)).await
             }
             proto::manage_interface::Action::SyncWg => {
                 let conf_file = if req.config_file.is_empty() {
@@ -189,49 +194,53 @@ impl CommandExecutor {
                     req.config_file
                 };
                 // If interface not up, bring it up; if already up, run wg syncconf
-                let check_up = Command::new("ip").args(["link", "show", &iface]).output();
+                let check_up = tokio::process::Command::new("ip").args(["link", "show", &iface]).output().await;
                 let is_up = check_up.map(|o| o.status.success()).unwrap_or(false);
                 if is_up {
-                    run_shell(&format!("wg syncconf {} <(wg-quick strip {}) 2>&1 || wg-quick down {} 2>/dev/null; wg-quick up {}", iface, conf_file, iface, iface))
+                    run_shell(&format!(
+                        "(wg-quick strip \"{conf}\" | wg syncconf \"{iface}\" /dev/stdin) 2>&1 || (wg-quick down \"{iface}\" 2>/dev/null; wg-quick up \"{iface}\")",
+                        conf = conf_file,
+                        iface = iface
+                    )).await
                 } else {
-                    run_shell(&format!("wg-quick up {} 2>&1", iface))
+                    run_shell(&format!("wg-quick up {} 2>&1", iface)).await
                 }
             }
             proto::manage_interface::Action::Delete => {
-                run_shell(&format!("wg-quick down {} 2>/dev/null || ip link del dev {} 2>/dev/null; rm -f /etc/wireguard/{}.conf", iface, iface, iface))
+                run_shell(&format!("wg-quick down {} 2>/dev/null || ip link del dev {} 2>/dev/null; rm -f /etc/wireguard/{}.conf", iface, iface, iface)).await
             }
         }
     }
 
-    fn reload_bird(&self, req: proto::ReloadBirdCmd) -> (bool, i32, String, String) {
+    async fn reload_bird(&self, req: proto::ReloadBirdCmd) -> (bool, i32, String, String) {
         if req.check_only {
-            run_shell("bird -p")
+            run_shell("bird -p").await
         } else {
-            run_shell("birdc configure")
+            run_shell("birdc configure").await
         }
     }
 
-    fn apply_nftables(&self, req: proto::ApplyNftablesCmd) -> (bool, i32, String, String) {
+    async fn apply_nftables(&self, req: proto::ApplyNftablesCmd) -> (bool, i32, String, String) {
         let script = if req.script_path.is_empty() {
             "/etc/easy42.nft"
         } else {
             &req.script_path
         };
-        run_shell(&format!("chmod +x {} 2>/dev/null; {}", script, script))
+        run_shell(&format!("chmod +x {} 2>/dev/null; {}", script, script)).await
     }
 
-    fn restart_service(&self, req: proto::RestartServiceCmd) -> (bool, i32, String, String) {
+    async fn restart_service(&self, req: proto::RestartServiceCmd) -> (bool, i32, String, String) {
         match req.service_name.as_str() {
-            "bird" => run_shell("systemctl restart bird 2>/dev/null || service bird restart 2>&1"),
+            "bird" => {
+                run_shell("systemctl restart bird 2>/dev/null || service bird restart 2>&1").await
+            }
             "wireguard" => {
-                let cmd = r#"sh -c '
-for i in $( { for c in /etc/wireguard/*.conf; do [ -f "$c" ] && basename "$c" .conf; done; wg show interfaces 2>/dev/null | tr " " "\n"; } | sort -u ); do
+                let cmd = r#"for i in $( { for c in /etc/wireguard/*.conf; do [ -f "$c" ] && { name="${c##*/}"; printf "%s\n" "${name%.conf}"; }; done; wg show interfaces 2>/dev/null | tr " " "\n"; } | sort -u ); do
   [ -n "$i" ] || continue
   wg-quick down "$i" 2>/dev/null || ip link del dev "$i" 2>/dev/null
   [ -f "/etc/wireguard/$i.conf" ] && wg-quick up "$i"
-done
-'"#;
-                run_shell(cmd)
+done"#;
+                run_shell(cmd).await
             }
             other => (
                 false,
@@ -242,7 +251,7 @@ done
         }
     }
 
-    fn run_looking_glass(&self, req: proto::LookingGlassCmd) -> (bool, i32, String, String) {
+    async fn run_looking_glass(&self, req: proto::LookingGlassCmd) -> (bool, i32, String, String) {
         let tool = match proto::looking_glass_cmd::Tool::try_from(req.tool) {
             Ok(t) => t,
             Err(_) => proto::looking_glass_cmd::Tool::Custom,
@@ -251,14 +260,16 @@ done
         match tool {
             proto::looking_glass_cmd::Tool::Ping => {
                 let count = req.args.first().cloned().unwrap_or_else(|| "4".to_string());
-                run_cmd("ping", &["-c", &count, &req.target])
+                run_cmd("ping", &["-c", &count, &req.target]).await
             }
-            proto::looking_glass_cmd::Tool::Traceroute => run_cmd("traceroute", &[&req.target]),
+            proto::looking_glass_cmd::Tool::Traceroute => {
+                run_cmd("traceroute", &[&req.target]).await
+            }
             proto::looking_glass_cmd::Tool::Birdc => {
                 let mut full_args = vec!["show"];
                 let args_ref: Vec<&str> = req.args.iter().map(|s| s.as_str()).collect();
                 full_args.extend(args_ref);
-                run_cmd("birdc", &full_args)
+                run_cmd("birdc", &full_args).await
             }
             proto::looking_glass_cmd::Tool::Custom => {
                 if req.command.is_empty() {
@@ -267,7 +278,7 @@ done
                 // Sanitize command: restrict to diagnostics (ping, traceroute, birdc, wg, ip)
                 let first_word = req.command.split_whitespace().next().unwrap_or("");
                 match first_word {
-                    "ping" | "traceroute" | "birdc" | "ip" | "wg" => run_shell(&req.command),
+                    "ping" | "traceroute" | "birdc" | "ip" | "wg" => run_shell(&req.command).await,
                     _ => (
                         false,
                         -1,
@@ -330,31 +341,49 @@ done
     }
 }
 
-fn run_cmd(program: &str, args: &[&str]) -> (bool, i32, String, String) {
-    match Command::new(program).args(args).output() {
-        Ok(output) => {
+async fn run_cmd(program: &str, args: &[&str]) -> (bool, i32, String, String) {
+    use tokio::process::Command;
+    let mut cmd = Command::new(program);
+    cmd.args(args);
+    match tokio::time::timeout(std::time::Duration::from_secs(30), cmd.output()).await {
+        Ok(Ok(output)) => {
             let code = output.status.code().unwrap_or(-1);
             let stdout = String::from_utf8_lossy(&output.stdout).to_string();
             let stderr = String::from_utf8_lossy(&output.stderr).to_string();
             (output.status.success(), code, stdout, stderr)
         }
-        Err(e) => (
+        Ok(Err(e)) => (
             false,
             -1,
             String::new(),
             format!("failed to execute {}: {}", program, e),
         ),
+        Err(_) => (
+            false,
+            -1,
+            String::new(),
+            format!("command {} timed out after 30s", program),
+        ),
     }
 }
 
-fn run_shell(cmd_str: &str) -> (bool, i32, String, String) {
-    match Command::new("sh").arg("-c").arg(cmd_str).output() {
-        Ok(output) => {
+async fn run_shell(cmd_str: &str) -> (bool, i32, String, String) {
+    use tokio::process::Command;
+    let mut cmd = Command::new("sh");
+    cmd.arg("-c").arg(cmd_str);
+    match tokio::time::timeout(std::time::Duration::from_secs(30), cmd.output()).await {
+        Ok(Ok(output)) => {
             let code = output.status.code().unwrap_or(-1);
             let stdout = String::from_utf8_lossy(&output.stdout).to_string();
             let stderr = String::from_utf8_lossy(&output.stderr).to_string();
             (output.status.success(), code, stdout, stderr)
         }
-        Err(e) => (false, -1, String::new(), format!("failed to run sh: {}", e)),
+        Ok(Err(e)) => (false, -1, String::new(), format!("failed to run sh: {}", e)),
+        Err(_) => (
+            false,
+            -1,
+            String::new(),
+            "command timed out after 30s".to_string(),
+        ),
     }
 }

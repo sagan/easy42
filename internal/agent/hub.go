@@ -76,19 +76,36 @@ func (h *Hub) Register(conn *AgentConnection) {
 	h.lastSeen[conn.NodeName()] = time.Now()
 }
 
-// Unregister removes a connection for a node
-func (h *Hub) Unregister(nodeName string) {
+// Unregister removes a connection for a node if it matches the active connection
+func (h *Hub) Unregister(conn *AgentConnection) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if current, exists := h.connections[conn.NodeName()]; exists && current == conn {
+		delete(h.connections, conn.NodeName())
+	}
+}
+
+// UnregisterNode removes the active connection for a node by name
+func (h *Hub) UnregisterNode(nodeName string) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	delete(h.connections, nodeName)
 }
 
-// IsConnected returns whether the node agent is currently connected
+// IsConnected returns whether the node agent is currently connected and active
 func (h *Hub) IsConnected(nodeName string) bool {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 	_, exists := h.connections[nodeName]
-	return exists
+	if !exists {
+		return false
+	}
+	if lastSeen, ok := h.lastSeen[nodeName]; ok && !lastSeen.IsZero() {
+		if time.Since(lastSeen) > 45*time.Second {
+			return false
+		}
+	}
+	return true
 }
 
 // GetConnection retrieves the active connection for a node
@@ -96,7 +113,15 @@ func (h *Hub) GetConnection(nodeName string) (*AgentConnection, bool) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 	conn, exists := h.connections[nodeName]
-	return conn, exists
+	if !exists {
+		return nil, false
+	}
+	if lastSeen, ok := h.lastSeen[nodeName]; ok && !lastSeen.IsZero() {
+		if time.Since(lastSeen) > 45*time.Second {
+			return nil, false
+		}
+	}
+	return conn, true
 }
 
 // RecordHeartbeat records the last heartbeat time for a node
