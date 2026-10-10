@@ -30,7 +30,7 @@ interface MeshContextType {
   fleetLive: FleetLiveResponse | null;
   loadingData: boolean;
   loadData: () => Promise<void>;
-  refreshFleetLive: () => Promise<void>;
+  refreshFleetLive: (flush?: boolean) => Promise<void>;
 
   // Filter & tags
   selectedTag: string;
@@ -231,10 +231,10 @@ export const MeshProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
-  const refreshFleetLive = useCallback(async () => {
+  const refreshFleetLive = useCallback(async (flush = false) => {
     try {
       const [liveData, statusesData] = await Promise.all([
-        api.getFleetLiveStatus().catch(() => null),
+        api.getFleetLiveStatus(flush).catch(() => null),
         api.getNodeStatuses().catch(() => ({})),
       ]);
       if (liveData) setFleetLive(liveData);

@@ -202,11 +202,18 @@ func (h *Hub) NodeStatus(nodeName string) *config.NodeStatus {
 		}
 
 		for _, iface := range telemetry.Interfaces {
-			status.Interfaces = append(status.Interfaces, config.InterfaceInfo{
+			info := config.InterfaceInfo{
 				Name:      iface.Name,
 				Up:        iface.IsUp,
 				Addresses: iface.Addresses,
-			})
+				Flags:     iface.Flags,
+				RxBytes:   iface.RxBytes,
+				TxBytes:   iface.TxBytes,
+			}
+			if (iface.Flags & config.IfaceFlagPrimary) != 0 {
+				status.PrimaryInterface = iface.Name
+			}
+			status.Interfaces = append(status.Interfaces, info)
 		}
 
 		for _, disk := range telemetry.Disks {

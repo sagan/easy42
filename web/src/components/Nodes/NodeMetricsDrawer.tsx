@@ -13,6 +13,7 @@ import {
   useTheme,
   useMediaQuery,
   Grid,
+  Tooltip,
 } from "@mui/material";
 import { X, RefreshCw, Server, ArrowDown, ArrowUp } from "lucide-react";
 import { api } from "../../api/client";
@@ -38,11 +39,11 @@ export const NodeMetricsDrawer: React.FC<NodeMetricsDrawerProps> = ({
   const [loading, setLoading] = useState<boolean>(false);
   const [points, setPoints] = useState<NodeMetricPoint[]>([]);
 
-  const fetchMetrics = useCallback(async () => {
+  const fetchMetrics = useCallback(async (flush = false) => {
     if (!nodeName) return;
     setLoading(true);
     try {
-      const res = await api.getNodeMetrics(nodeName, range);
+      const res = await api.getNodeMetrics(nodeName, range, flush);
       setPoints(res.points || []);
     } catch {
       setPoints([]);
@@ -133,9 +134,11 @@ export const NodeMetricsDrawer: React.FC<NodeMetricsDrawerProps> = ({
         </Box>
 
         <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-          <IconButton size="small" onClick={fetchMetrics} disabled={loading} sx={{ color: "#64748B" }}>
-            <RefreshCw size={18} className={loading ? "spin" : ""} />
-          </IconButton>
+          <Tooltip title="Refresh telemetry (flush agent cache)">
+            <IconButton size="small" onClick={() => fetchMetrics(true)} disabled={loading} sx={{ color: "#64748B" }}>
+              <RefreshCw size={18} className={loading ? "spin" : ""} />
+            </IconButton>
+          </Tooltip>
           <IconButton size="small" onClick={onClose} sx={{ color: "#64748B" }}>
             <X size={20} />
           </IconButton>
@@ -194,7 +197,7 @@ export const NodeMetricsDrawer: React.FC<NodeMetricsDrawerProps> = ({
           <Grid item xs={6} sm={3}>
             <Box sx={{ p: 1.5, bgcolor: "#F8FAFC", borderRadius: 2, border: "1px solid #E2E8F0" }}>
               <Typography variant="caption" sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}>
-                <ArrowDown size={14} color="#059669" /> Inbound
+                <ArrowDown size={14} color="#059669" /> Inbound{nodeLive.primary_interface ? ` (${nodeLive.primary_interface})` : ""}
               </Typography>
               <Typography variant="h6" sx={{ fontWeight: 700, color: "#0F172A" }}>
                 {formatNetRate(nodeLive.metrics.net_rx_rate)}
@@ -204,7 +207,7 @@ export const NodeMetricsDrawer: React.FC<NodeMetricsDrawerProps> = ({
           <Grid item xs={6} sm={3}>
             <Box sx={{ p: 1.5, bgcolor: "#F8FAFC", borderRadius: 2, border: "1px solid #E2E8F0" }}>
               <Typography variant="caption" sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}>
-                <ArrowUp size={14} color="#0891B2" /> Outbound
+                <ArrowUp size={14} color="#0891B2" /> Outbound{nodeLive.primary_interface ? ` (${nodeLive.primary_interface})` : ""}
               </Typography>
               <Typography variant="h6" sx={{ fontWeight: 700, color: "#0F172A" }}>
                 {formatNetRate(nodeLive.metrics.net_tx_rate)}
@@ -243,7 +246,7 @@ export const NodeMetricsDrawer: React.FC<NodeMetricsDrawerProps> = ({
             />
 
             <MetricAreaChart
-              title="Network Bandwidth"
+              title={nodeLive?.primary_interface ? `Network Bandwidth (${nodeLive.primary_interface})` : "Network Bandwidth"}
               data={netData}
               color="#059669"
               color2="#0891B2"

@@ -384,6 +384,10 @@ func (s *Server) handleGetNodeMetrics(w http.ResponseWriter, r *http.Request) {
 		rangeStr = "24h"
 	}
 
+	if r.URL.Query().Get("flush") == "true" {
+		_, _ = s.mgr.RefreshNodeStatus(name)
+	}
+
 	points, err := s.mgr.GetNodeMetricsHistory(name, rangeStr)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
@@ -399,6 +403,9 @@ func (s *Server) handleGetNodeMetrics(w http.ResponseWriter, r *http.Request) {
 
 // handleGetFleetLiveStatus returns aggregate fleet metrics and live status for all nodes
 func (s *Server) handleGetFleetLiveStatus(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Query().Get("flush") == "true" {
+		s.mgr.FlushFleetInterfaceCache(r.Context())
+	}
 	summary, nodes, err := s.mgr.GetFleetLiveStatus()
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())

@@ -334,7 +334,15 @@ type InterfaceInfo struct {
 	Up        bool     `json:"up"`
 	Type      string   `json:"type,omitempty"`
 	MTU       int      `json:"mtu,omitempty"`
+	Flags     uint32   `json:"flags"`
+	RxBytes   uint64   `json:"rx_bytes,omitempty"`
+	TxBytes   uint64   `json:"tx_bytes,omitempty"`
 }
+
+const (
+	IfaceFlagPrimary  uint32 = 1 << 0 // Bit 0: Primary interface
+	IfaceFlagPhysical uint32 = 1 << 1 // Bit 1: Physical interface
+)
 
 // WgPeerStatus represents runtime WireGuard peer info
 type WgPeerStatus struct {
@@ -385,8 +393,9 @@ type NodeStatus struct {
 	Disks        []DiskMetrics       `json:"disks,omitempty"`
 	Error        string              `json:"error,omitempty"`
 	Mode         string              `json:"mode,omitempty"`
-	AgentVersion string              `json:"agent_version,omitempty"`
-	Metrics      *SystemMetrics      `json:"metrics,omitempty"`
+	AgentVersion     string              `json:"agent_version,omitempty"`
+	PrimaryInterface string              `json:"primary_interface,omitempty"`
+	Metrics          *SystemMetrics      `json:"metrics,omitempty"`
 }
 
 // ActionType represents an action to execute on a node during sync

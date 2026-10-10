@@ -1216,6 +1216,55 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
                   </Typography>
                 </Box>
               )}
+              {status.interfaces && status.interfaces.length > 0 && (
+                <Box sx={{ mt: 1, pt: 1, borderTop: "1px dashed #E2E8F0" }}>
+                  <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 700, display: "block", mb: 0.5 }}>
+                    Network Interfaces:
+                  </Typography>
+                  <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
+                    {status.interfaces.map((inf) => {
+                      const isPrimary = ((inf.flags ?? 0) & 1) !== 0;
+                      const isPhysical = ((inf.flags ?? 0) & 2) !== 0;
+                      return (
+                        <Box
+                          key={inf.name}
+                          sx={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            p: 0.5,
+                            borderRadius: 1,
+                            bgcolor: isPrimary ? "#EFF6FF" : "#F8FAFC",
+                          }}
+                        >
+                          <Box sx={{ display: "flex", alignItems: "center", gap: 0.8 }}>
+                            <Typography variant="caption" className="mono-font" sx={{ fontWeight: 700, color: "#0F172A" }}>
+                              {inf.name}
+                            </Typography>
+                            {isPrimary && (
+                              <Chip
+                                label="Primary"
+                                size="small"
+                                sx={{ height: 16, fontSize: "0.6rem", bgcolor: "#DBEAFE", color: "#1D4ED8", fontWeight: 700 }}
+                              />
+                            )}
+                            {isPhysical && (
+                              <Chip
+                                label="Physical"
+                                size="small"
+                                sx={{ height: 16, fontSize: "0.6rem", bgcolor: "#E0E7FF", color: "#4338CA", fontWeight: 600 }}
+                              />
+                            )}
+                          </Box>
+                          <Typography variant="caption" sx={{ color: inf.up ? "#059669" : "#94A3B8", fontWeight: 600 }}>
+                            {inf.up ? "UP" : "DOWN"}
+                          </Typography>
+                        </Box>
+                      );
+                    })}
+                  </Box>
+                </Box>
+              )}
             </Box>
           </Box>
         )}

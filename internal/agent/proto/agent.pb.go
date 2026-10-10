@@ -772,6 +772,7 @@ type InterfaceMetrics struct {
 	RxErrors      uint64                 `protobuf:"varint,7,opt,name=rx_errors,json=rxErrors,proto3" json:"rx_errors,omitempty"`
 	TxErrors      uint64                 `protobuf:"varint,8,opt,name=tx_errors,json=txErrors,proto3" json:"tx_errors,omitempty"`
 	Addresses     []string               `protobuf:"bytes,9,rep,name=addresses,proto3" json:"addresses,omitempty"`
+	Flags         uint32                 `protobuf:"varint,10,opt,name=flags,proto3" json:"flags,omitempty"` // Bit 0: Primary, Bit 1: Physical
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -867,6 +868,13 @@ func (x *InterfaceMetrics) GetAddresses() []string {
 		return x.Addresses
 	}
 	return nil
+}
+
+func (x *InterfaceMetrics) GetFlags() uint32 {
+	if x != nil {
+		return x.Flags
+	}
+	return 0
 }
 
 type WgPeerMetrics struct {
@@ -1041,6 +1049,7 @@ type CommandRequest struct {
 	//	*CommandRequest_LookingGlass
 	//	*CommandRequest_ProbeSystem
 	//	*CommandRequest_RestartService
+	//	*CommandRequest_FlushCache
 	Command       isCommandRequest_Command `protobuf_oneof:"command"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -1153,6 +1162,15 @@ func (x *CommandRequest) GetRestartService() *RestartServiceCmd {
 	return nil
 }
 
+func (x *CommandRequest) GetFlushCache() *FlushCacheCmd {
+	if x != nil {
+		if x, ok := x.Command.(*CommandRequest_FlushCache); ok {
+			return x.FlushCache
+		}
+	}
+	return nil
+}
+
 type isCommandRequest_Command interface {
 	isCommandRequest_Command()
 }
@@ -1185,6 +1203,10 @@ type CommandRequest_RestartService struct {
 	RestartService *RestartServiceCmd `protobuf:"bytes,16,opt,name=restart_service,json=restartService,proto3,oneof"`
 }
 
+type CommandRequest_FlushCache struct {
+	FlushCache *FlushCacheCmd `protobuf:"bytes,17,opt,name=flush_cache,json=flushCache,proto3,oneof"`
+}
+
 func (*CommandRequest_ApplyConfig) isCommandRequest_Command() {}
 
 func (*CommandRequest_ManageIface) isCommandRequest_Command() {}
@@ -1198,6 +1220,8 @@ func (*CommandRequest_LookingGlass) isCommandRequest_Command() {}
 func (*CommandRequest_ProbeSystem) isCommandRequest_Command() {}
 
 func (*CommandRequest_RestartService) isCommandRequest_Command() {}
+
+func (*CommandRequest_FlushCache) isCommandRequest_Command() {}
 
 type ApplyConfigFile struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -1527,6 +1551,42 @@ func (*ProbeSystemCmd) Descriptor() ([]byte, []int) {
 	return file_proto_agent_proto_rawDescGZIP(), []int{17}
 }
 
+type FlushCacheCmd struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *FlushCacheCmd) Reset() {
+	*x = FlushCacheCmd{}
+	mi := &file_proto_agent_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FlushCacheCmd) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FlushCacheCmd) ProtoMessage() {}
+
+func (x *FlushCacheCmd) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_agent_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FlushCacheCmd.ProtoReflect.Descriptor instead.
+func (*FlushCacheCmd) Descriptor() ([]byte, []int) {
+	return file_proto_agent_proto_rawDescGZIP(), []int{18}
+}
+
 type RestartServiceCmd struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	ServiceName   string                 `protobuf:"bytes,1,opt,name=service_name,json=serviceName,proto3" json:"service_name,omitempty"` // "wireguard", "bird"
@@ -1536,7 +1596,7 @@ type RestartServiceCmd struct {
 
 func (x *RestartServiceCmd) Reset() {
 	*x = RestartServiceCmd{}
-	mi := &file_proto_agent_proto_msgTypes[18]
+	mi := &file_proto_agent_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1548,7 +1608,7 @@ func (x *RestartServiceCmd) String() string {
 func (*RestartServiceCmd) ProtoMessage() {}
 
 func (x *RestartServiceCmd) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_agent_proto_msgTypes[18]
+	mi := &file_proto_agent_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1561,7 +1621,7 @@ func (x *RestartServiceCmd) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RestartServiceCmd.ProtoReflect.Descriptor instead.
 func (*RestartServiceCmd) Descriptor() ([]byte, []int) {
-	return file_proto_agent_proto_rawDescGZIP(), []int{18}
+	return file_proto_agent_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *RestartServiceCmd) GetServiceName() string {
@@ -1585,7 +1645,7 @@ type CommandResponse struct {
 
 func (x *CommandResponse) Reset() {
 	*x = CommandResponse{}
-	mi := &file_proto_agent_proto_msgTypes[19]
+	mi := &file_proto_agent_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1597,7 +1657,7 @@ func (x *CommandResponse) String() string {
 func (*CommandResponse) ProtoMessage() {}
 
 func (x *CommandResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_agent_proto_msgTypes[19]
+	mi := &file_proto_agent_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1610,7 +1670,7 @@ func (x *CommandResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CommandResponse.ProtoReflect.Descriptor instead.
 func (*CommandResponse) Descriptor() ([]byte, []int) {
-	return file_proto_agent_proto_rawDescGZIP(), []int{19}
+	return file_proto_agent_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *CommandResponse) GetRequestId() string {
@@ -1666,7 +1726,7 @@ type ProbeResponse struct {
 
 func (x *ProbeResponse) Reset() {
 	*x = ProbeResponse{}
-	mi := &file_proto_agent_proto_msgTypes[20]
+	mi := &file_proto_agent_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1678,7 +1738,7 @@ func (x *ProbeResponse) String() string {
 func (*ProbeResponse) ProtoMessage() {}
 
 func (x *ProbeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_agent_proto_msgTypes[20]
+	mi := &file_proto_agent_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1691,7 +1751,7 @@ func (x *ProbeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProbeResponse.ProtoReflect.Descriptor instead.
 func (*ProbeResponse) Descriptor() ([]byte, []int) {
-	return file_proto_agent_proto_rawDescGZIP(), []int{20}
+	return file_proto_agent_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *ProbeResponse) GetRequestId() string {
@@ -1772,7 +1832,7 @@ const file_proto_agent_proto_rawDesc = "" +
 	"\x11memory_used_bytes\x18\x02 \x01(\x04R\x0fmemoryUsedBytes\x12,\n" +
 	"\x12memory_total_bytes\x18\x03 \x01(\x04R\x10memoryTotalBytes\x12%\n" +
 	"\x0euptime_seconds\x18\x04 \x01(\x04R\ruptimeSeconds\x12\x19\n" +
-	"\bload_avg\x18\x05 \x03(\x02R\aloadAvg\"\x87\x02\n" +
+	"\bload_avg\x18\x05 \x03(\x02R\aloadAvg\"\x9d\x02\n" +
 	"\x10InterfaceMetrics\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x13\n" +
 	"\x05is_up\x18\x02 \x01(\bR\x04isUp\x12\x19\n" +
@@ -1784,7 +1844,9 @@ const file_proto_agent_proto_rawDesc = "" +
 	"tx_packets\x18\x06 \x01(\x04R\ttxPackets\x12\x1b\n" +
 	"\trx_errors\x18\a \x01(\x04R\brxErrors\x12\x1b\n" +
 	"\ttx_errors\x18\b \x01(\x04R\btxErrors\x12\x1c\n" +
-	"\taddresses\x18\t \x03(\tR\taddresses\"\x8a\x02\n" +
+	"\taddresses\x18\t \x03(\tR\taddresses\x12\x14\n" +
+	"\x05flags\x18\n" +
+	" \x01(\rR\x05flags\"\x8a\x02\n" +
 	"\rWgPeerMetrics\x12%\n" +
 	"\x0einterface_name\x18\x01 \x01(\tR\rinterfaceName\x12\x1d\n" +
 	"\n" +
@@ -1798,7 +1860,7 @@ const file_proto_agent_proto_rawDesc = "" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x14\n" +
 	"\x05proto\x18\x02 \x01(\tR\x05proto\x12\x14\n" +
 	"\x05state\x18\x03 \x01(\tR\x05state\x12\x12\n" +
-	"\x04info\x18\x04 \x01(\tR\x04info\"\xab\x04\n" +
+	"\x04info\x18\x04 \x01(\tR\x04info\"\xee\x04\n" +
 	"\x0eCommandRequest\x12\x1d\n" +
 	"\n" +
 	"request_id\x18\x01 \x01(\tR\trequestId\x12E\n" +
@@ -1810,7 +1872,9 @@ const file_proto_agent_proto_rawDesc = "" +
 	"\tapply_nft\x18\r \x01(\v2!.easy42.agent.v1.ApplyNftablesCmdH\x00R\bapplyNft\x12G\n" +
 	"\rlooking_glass\x18\x0e \x01(\v2 .easy42.agent.v1.LookingGlassCmdH\x00R\flookingGlass\x12D\n" +
 	"\fprobe_system\x18\x0f \x01(\v2\x1f.easy42.agent.v1.ProbeSystemCmdH\x00R\vprobeSystem\x12M\n" +
-	"\x0frestart_service\x18\x10 \x01(\v2\".easy42.agent.v1.RestartServiceCmdH\x00R\x0erestartServiceB\t\n" +
+	"\x0frestart_service\x18\x10 \x01(\v2\".easy42.agent.v1.RestartServiceCmdH\x00R\x0erestartService\x12A\n" +
+	"\vflush_cache\x18\x11 \x01(\v2\x1e.easy42.agent.v1.FlushCacheCmdH\x00R\n" +
+	"flushCacheB\t\n" +
 	"\acommand\"}\n" +
 	"\x0fApplyConfigFile\x12\x12\n" +
 	"\x04path\x18\x01 \x01(\tR\x04path\x12\x18\n" +
@@ -1849,7 +1913,8 @@ const file_proto_agent_proto_rawDesc = "" +
 	"\x05BIRDC\x10\x02\x12\n" +
 	"\n" +
 	"\x06CUSTOM\x10\x03\"\x10\n" +
-	"\x0eProbeSystemCmd\"6\n" +
+	"\x0eProbeSystemCmd\"\x0f\n" +
+	"\rFlushCacheCmd\"6\n" +
 	"\x11RestartServiceCmd\x12!\n" +
 	"\fservice_name\x18\x01 \x01(\tR\vserviceName\"\xb8\x01\n" +
 	"\x0fCommandResponse\x12\x1d\n" +
@@ -1882,7 +1947,7 @@ func file_proto_agent_proto_rawDescGZIP() []byte {
 }
 
 var file_proto_agent_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_proto_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 21)
+var file_proto_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 22)
 var file_proto_agent_proto_goTypes = []any{
 	(ManageInterface_Action)(0), // 0: easy42.agent.v1.ManageInterface.Action
 	(LookingGlassCmd_Tool)(0),   // 1: easy42.agent.v1.LookingGlassCmd.Tool
@@ -1904,16 +1969,17 @@ var file_proto_agent_proto_goTypes = []any{
 	(*ApplyNftablesCmd)(nil),    // 17: easy42.agent.v1.ApplyNftablesCmd
 	(*LookingGlassCmd)(nil),     // 18: easy42.agent.v1.LookingGlassCmd
 	(*ProbeSystemCmd)(nil),      // 19: easy42.agent.v1.ProbeSystemCmd
-	(*RestartServiceCmd)(nil),   // 20: easy42.agent.v1.RestartServiceCmd
-	(*CommandResponse)(nil),     // 21: easy42.agent.v1.CommandResponse
-	(*ProbeResponse)(nil),       // 22: easy42.agent.v1.ProbeResponse
+	(*FlushCacheCmd)(nil),       // 20: easy42.agent.v1.FlushCacheCmd
+	(*RestartServiceCmd)(nil),   // 21: easy42.agent.v1.RestartServiceCmd
+	(*CommandResponse)(nil),     // 22: easy42.agent.v1.CommandResponse
+	(*ProbeResponse)(nil),       // 23: easy42.agent.v1.ProbeResponse
 }
 var file_proto_agent_proto_depIdxs = []int32{
 	3,  // 0: easy42.agent.v1.AgentMessage.register_req:type_name -> easy42.agent.v1.RegisterRequest
 	5,  // 1: easy42.agent.v1.AgentMessage.heartbeat:type_name -> easy42.agent.v1.Heartbeat
 	7,  // 2: easy42.agent.v1.AgentMessage.telemetry:type_name -> easy42.agent.v1.TelemetryReport
-	21, // 3: easy42.agent.v1.AgentMessage.command_resp:type_name -> easy42.agent.v1.CommandResponse
-	22, // 4: easy42.agent.v1.AgentMessage.probe_resp:type_name -> easy42.agent.v1.ProbeResponse
+	22, // 3: easy42.agent.v1.AgentMessage.command_resp:type_name -> easy42.agent.v1.CommandResponse
+	23, // 4: easy42.agent.v1.AgentMessage.probe_resp:type_name -> easy42.agent.v1.ProbeResponse
 	4,  // 5: easy42.agent.v1.AgentMessage.register_resp:type_name -> easy42.agent.v1.RegisterResponse
 	6,  // 6: easy42.agent.v1.AgentMessage.heartbeat_ack:type_name -> easy42.agent.v1.HeartbeatAck
 	13, // 7: easy42.agent.v1.AgentMessage.command_req:type_name -> easy42.agent.v1.CommandRequest
@@ -1928,15 +1994,16 @@ var file_proto_agent_proto_depIdxs = []int32{
 	17, // 16: easy42.agent.v1.CommandRequest.apply_nft:type_name -> easy42.agent.v1.ApplyNftablesCmd
 	18, // 17: easy42.agent.v1.CommandRequest.looking_glass:type_name -> easy42.agent.v1.LookingGlassCmd
 	19, // 18: easy42.agent.v1.CommandRequest.probe_system:type_name -> easy42.agent.v1.ProbeSystemCmd
-	20, // 19: easy42.agent.v1.CommandRequest.restart_service:type_name -> easy42.agent.v1.RestartServiceCmd
-	0,  // 20: easy42.agent.v1.ManageInterface.action:type_name -> easy42.agent.v1.ManageInterface.Action
-	1,  // 21: easy42.agent.v1.LookingGlassCmd.tool:type_name -> easy42.agent.v1.LookingGlassCmd.Tool
-	10, // 22: easy42.agent.v1.ProbeResponse.interfaces:type_name -> easy42.agent.v1.InterfaceMetrics
-	23, // [23:23] is the sub-list for method output_type
-	23, // [23:23] is the sub-list for method input_type
-	23, // [23:23] is the sub-list for extension type_name
-	23, // [23:23] is the sub-list for extension extendee
-	0,  // [0:23] is the sub-list for field type_name
+	21, // 19: easy42.agent.v1.CommandRequest.restart_service:type_name -> easy42.agent.v1.RestartServiceCmd
+	20, // 20: easy42.agent.v1.CommandRequest.flush_cache:type_name -> easy42.agent.v1.FlushCacheCmd
+	0,  // 21: easy42.agent.v1.ManageInterface.action:type_name -> easy42.agent.v1.ManageInterface.Action
+	1,  // 22: easy42.agent.v1.LookingGlassCmd.tool:type_name -> easy42.agent.v1.LookingGlassCmd.Tool
+	10, // 23: easy42.agent.v1.ProbeResponse.interfaces:type_name -> easy42.agent.v1.InterfaceMetrics
+	24, // [24:24] is the sub-list for method output_type
+	24, // [24:24] is the sub-list for method input_type
+	24, // [24:24] is the sub-list for extension type_name
+	24, // [24:24] is the sub-list for extension extendee
+	0,  // [0:24] is the sub-list for field type_name
 }
 
 func init() { file_proto_agent_proto_init() }
@@ -1962,6 +2029,7 @@ func file_proto_agent_proto_init() {
 		(*CommandRequest_LookingGlass)(nil),
 		(*CommandRequest_ProbeSystem)(nil),
 		(*CommandRequest_RestartService)(nil),
+		(*CommandRequest_FlushCache)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
@@ -1969,7 +2037,7 @@ func file_proto_agent_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_agent_proto_rawDesc), len(file_proto_agent_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   21,
+			NumMessages:   22,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

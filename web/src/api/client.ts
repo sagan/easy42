@@ -357,9 +357,15 @@ export const api = {
     }),
 
   // Monitoring
-  getFleetLiveStatus: () => request<FleetLiveResponse>("/nodes/live"),
-  getNodeMetrics: (nodeName: string, range?: string) =>
-    request<NodeMetricsResponse>(
-      `/nodes/${encodeURIComponent(nodeName)}/metrics${range ? `?range=${encodeURIComponent(range)}` : ""}`,
-    ),
+  getFleetLiveStatus: (flush?: boolean) =>
+    request<FleetLiveResponse>(flush ? "/nodes/live?flush=true" : "/nodes/live"),
+  getNodeMetrics: (nodeName: string, range?: string, flush?: boolean) => {
+    const params = new URLSearchParams();
+    if (range) params.append("range", range);
+    if (flush) params.append("flush", "true");
+    const qs = params.toString();
+    return request<NodeMetricsResponse>(
+      `/nodes/${encodeURIComponent(nodeName)}/metrics${qs ? `?${qs}` : ""}`,
+    );
+  },
 };

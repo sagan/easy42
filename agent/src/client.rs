@@ -214,20 +214,27 @@ impl AgentClient {
                                 Some(proto::agent_message::Payload::CommandReq(cmd)) => {
                                     info!("Received command request: id={}", cmd.request_id);
                                     let exec = executor.clone();
-                                    let resp_tx = tx_cmd_resp.clone();
+                                    let is_flush = matches!(
+                                        cmd.command,
+                                        Some(proto::command_request::Command::FlushCache(_))
+                                    );
                                     let is_probe = matches!(
                                         cmd.command,
                                         Some(proto::command_request::Command::ProbeSystem(_))
                                     );
-                                    let col_opt = if is_probe {
+                                    let col_opt = if is_probe || is_flush {
                                         Some(self.collector.clone())
                                     } else {
                                         None
                                     };
+                                    let resp_tx = tx_cmd_resp.clone();
                                     tokio::spawn(async move {
                                         if let Some(col) = col_opt {
                                             let telemetry = {
                                                 let mut c = col.lock().await;
+                                                if is_flush || is_probe {
+                                                    c.flush_interface_cache();
+                                                }
                                                 c.collect_telemetry().await
                                             };
                                             let telem_msg = proto::AgentMessage {

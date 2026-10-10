@@ -725,10 +725,10 @@ export const NodesPage: React.FC = () => {
             </ToggleButton>
           </ToggleButtonGroup>
 
-          <Tooltip title="Refresh live telemetry">
+          <Tooltip title="Refresh live telemetry (flush agent cache)">
             <IconButton
               size="small"
-              onClick={refreshFleetLive}
+              onClick={() => refreshFleetLive(true)}
               sx={{
                 bgcolor: "#F8FAFC",
                 border: "1px solid #E2E8F0",
@@ -806,6 +806,10 @@ export const NodesPage: React.FC = () => {
             const diskUsedGB = primaryDisk ? primaryDisk.used_bytes / (1024 * 1024 * 1024) : 0;
             const diskTotalGB = primaryDisk ? primaryDisk.total_bytes / (1024 * 1024 * 1024) : 0;
             const diskPercent = diskTotalGB > 0 ? (diskUsedGB / diskTotalGB) * 100 : 0;
+            const primaryIface =
+              status?.primary_interface ||
+              live?.primary_interface ||
+              status?.interfaces?.find((i) => ((i.flags ?? 0) & 1) !== 0)?.name;
             const rxRate = live?.metrics?.net_rx_rate ?? 0;
             const txRate = live?.metrics?.net_tx_rate ?? 0;
             const nodeBlocks = nodeBlocksMap.get(n.name) || [];
@@ -995,20 +999,37 @@ export const NodesPage: React.FC = () => {
                           alignItems: "center",
                         }}
                       >
-                        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                          <Box sx={{ display: "flex", alignItems: "center", gap: 0.3, color: "#059669" }}>
-                            <ArrowDown size={14} />
-                            <Typography variant="caption" sx={{ fontWeight: 700 }}>
-                              {formatNetRate(rxRate)}
-                            </Typography>
+                        <Tooltip title={primaryIface ? `Primary Interface: ${primaryIface}` : "Primary Interface Bandwidth"}>
+                          <Box sx={{ display: "flex", alignItems: "center", gap: 0.8 }}>
+                            {primaryIface && (
+                              <Chip
+                                label={primaryIface}
+                                size="small"
+                                sx={{
+                                  height: 18,
+                                  fontSize: "0.62rem",
+                                  bgcolor: "#EFF6FF",
+                                  color: "#2563EB",
+                                  fontWeight: 700,
+                                  borderRadius: 1,
+                                  "& .MuiChip-label": { px: 0.6 },
+                                }}
+                              />
+                            )}
+                            <Box sx={{ display: "flex", alignItems: "center", gap: 0.3, color: "#059669" }}>
+                              <ArrowDown size={14} />
+                              <Typography variant="caption" sx={{ fontWeight: 700 }}>
+                                {formatNetRate(rxRate)}
+                              </Typography>
+                            </Box>
+                            <Box sx={{ display: "flex", alignItems: "center", gap: 0.3, color: "#0891B2" }}>
+                              <ArrowUp size={14} />
+                              <Typography variant="caption" sx={{ fontWeight: 700 }}>
+                                {formatNetRate(txRate)}
+                              </Typography>
+                            </Box>
                           </Box>
-                          <Box sx={{ display: "flex", alignItems: "center", gap: 0.3, color: "#0891B2" }}>
-                            <ArrowUp size={14} />
-                            <Typography variant="caption" sx={{ fontWeight: 700 }}>
-                              {formatNetRate(txRate)}
-                            </Typography>
-                          </Box>
-                        </Box>
+                        </Tooltip>
 
                         <Typography variant="caption" sx={{ color: "#64748B", fontSize: "0.75rem" }}>
                           Load:{" "}
@@ -1275,6 +1296,10 @@ export const NodesPage: React.FC = () => {
                 const diskUsedGB = primaryDisk ? primaryDisk.used_bytes / (1024 * 1024 * 1024) : 0;
                 const diskTotalGB = primaryDisk ? primaryDisk.total_bytes / (1024 * 1024 * 1024) : 0;
                 const diskPercent = diskTotalGB > 0 ? (diskUsedGB / diskTotalGB) * 100 : 0;
+                const primaryIface =
+                  status?.primary_interface ||
+                  live?.primary_interface ||
+                  status?.interfaces?.find((i) => ((i.flags ?? 0) & 1) !== 0)?.name;
                 const rxRate = live?.metrics?.net_rx_rate ?? 0;
                 const txRate = live?.metrics?.net_tx_rate ?? 0;
                 const nodeBlocks = nodeBlocksMap.get(n.name) || [];
@@ -1394,15 +1419,21 @@ export const NodesPage: React.FC = () => {
                     </TableCell>
                     <TableCell>
                       {agentInstalled ? (
-                        <>
-                          <Typography variant="caption" sx={{ color: "#059669", fontWeight: 700 }}>
-                            ↓ {formatNetRate(rxRate)}
-                          </Typography>
-                          {"  "}
-                          <Typography variant="caption" sx={{ color: "#0891B2", fontWeight: 700 }}>
-                            ↑ {formatNetRate(txRate)}
-                          </Typography>
-                        </>
+                        <Box sx={{ display: "flex", flexDirection: "column", gap: 0.3 }}>
+                          <Box sx={{ display: "flex", alignItems: "center", gap: 0.8 }}>
+                            <Typography variant="caption" sx={{ color: "#059669", fontWeight: 700 }}>
+                              ↓ {formatNetRate(rxRate)}
+                            </Typography>
+                            <Typography variant="caption" sx={{ color: "#0891B2", fontWeight: 700 }}>
+                              ↑ {formatNetRate(txRate)}
+                            </Typography>
+                          </Box>
+                          {primaryIface && (
+                            <Typography variant="caption" className="mono-font" sx={{ color: "#64748B", fontSize: "0.68rem" }}>
+                              {primaryIface} (primary)
+                            </Typography>
+                          )}
+                        </Box>
                       ) : (
                         <Typography variant="body2" sx={{ color: "#94A3B8" }}>
                           —

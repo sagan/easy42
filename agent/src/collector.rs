@@ -14,19 +14,29 @@ pub enum InterfaceCategory {
     Loopback,
     BridgeOrEphemeral,
     Tunnel,
+    PointToPoint,
     Other,
 }
 
 impl InterfaceCategory {
     pub fn is_reported(&self) -> bool {
-        matches!(self, InterfaceCategory::Physical | InterfaceCategory::Tunnel)
+        matches!(
+            self,
+            InterfaceCategory::Physical
+                | InterfaceCategory::Tunnel
+                | InterfaceCategory::PointToPoint
+        )
     }
 }
+
+pub const IFACE_FLAG_PRIMARY: u32 = 1 << 0;  // Bit 0: Primary interface
+pub const IFACE_FLAG_PHYSICAL: u32 = 1 << 1; // Bit 1: Physical interface
 
 pub struct MetricsCollector {
     prev_cpu_idle: u64,
     prev_cpu_total: u64,
     interface_types: HashMap<String, InterfaceCategory>,
+    cached_primary_iface: Option<String>,
 }
 
 impl Default for MetricsCollector {
@@ -41,7 +51,13 @@ impl MetricsCollector {
             prev_cpu_idle: 0,
             prev_cpu_total: 0,
             interface_types: HashMap::new(),
+            cached_primary_iface: None,
         }
+    }
+
+    pub fn flush_interface_cache(&mut self) {
+        self.interface_types.clear();
+        self.cached_primary_iface = None;
     }
 
     #[allow(dead_code)]
@@ -162,6 +178,15 @@ impl MetricsCollector {
         let mut list = Vec::new();
         let addr_map = get_interface_addresses().await;
 
+        let primary_iface = match &self.cached_primary_iface {
+            Some(name) => Some(name.clone()),
+            None => {
+                let detected = detect_primary_interface().await;
+                self.cached_primary_iface = detected.clone();
+                detected
+            }
+        };
+
         if let Ok(dev) = fs::read_to_string("/proc/net/dev") {
             for line in dev.lines().skip(2) {
                 let mut parts = line.split_whitespace();
@@ -200,6 +225,18 @@ impl MetricsCollector {
                     let is_up = check_interface_up(&iface_name);
                     let addresses = addr_map.get(&iface_name).cloned().unwrap_or_default();
 
+                    let mut flags = 0u32;
+                    if let Some(ref pri) = primary_iface {
+                        if &iface_name == pri {
+                            flags |= IFACE_FLAG_PRIMARY;
+                        }
+                    }
+                    if is_physical_interface(&iface_name, "/sys/class/net")
+                        || category == InterfaceCategory::Physical
+                    {
+                        flags |= IFACE_FLAG_PHYSICAL;
+                    }
+
                     list.push(proto::InterfaceMetrics {
                         name: iface_name,
                         is_up,
@@ -210,6 +247,7 @@ impl MetricsCollector {
                         rx_errors,
                         tx_errors,
                         addresses,
+                        flags,
                     });
                 }
             }
@@ -359,10 +397,40 @@ pub fn categorize_interface_with_sysfs<P: AsRef<Path>>(
                 InterfaceCategory::BridgeOrEphemeral
             }
         }
+        Some(512) => InterfaceCategory::PointToPoint,
         Some(772) => InterfaceCategory::Loopback,
         Some(65534) => InterfaceCategory::Tunnel,
         _ => InterfaceCategory::Other,
     }
+}
+
+pub fn is_physical_interface<P: AsRef<Path>>(name: &str, sys_net_dir: P) -> bool {
+    let iface_dir = sys_net_dir.as_ref().join(name);
+    let device_path = iface_dir.join("device");
+    device_path.exists() || fs::symlink_metadata(&device_path).is_ok()
+}
+
+pub async fn detect_primary_interface() -> Option<String> {
+    if let Some(stdout) = run_cmd_timed("ip", &["route", "show", "default"], std::time::Duration::from_secs(3)).await {
+        parse_default_route_interface(&stdout)
+    } else {
+        None
+    }
+}
+
+pub fn parse_default_route_interface(output: &str) -> Option<String> {
+    for line in output.lines() {
+        let parts: Vec<&str> = line.split_whitespace().collect();
+        if parts.first() != Some(&"default") {
+            continue;
+        }
+        if let Some(pos) = parts.iter().position(|&x| x == "dev") {
+            if let Some(iface) = parts.get(pos + 1) {
+                return Some(iface.to_string());
+            }
+        }
+    }
+    None
 }
 
 pub fn collect_disk_usage(path: &str) -> Option<proto::DiskMetrics> {
@@ -487,7 +555,17 @@ mod tests {
         );
         assert!(InterfaceCategory::Tunnel.is_reported());
 
-        // 5. Unknown / other
+        // 5. Point-to-Point device: type 512
+        let ppp_dir = temp_dir.join("ppp0");
+        fs::create_dir_all(&ppp_dir).unwrap();
+        fs::write(ppp_dir.join("type"), "512\n").unwrap();
+        assert_eq!(
+            categorize_interface_with_sysfs("ppp0", &temp_dir),
+            InterfaceCategory::PointToPoint
+        );
+        assert!(InterfaceCategory::PointToPoint.is_reported());
+
+        // 6. Unknown / other
         let sit_dir = temp_dir.join("sit0");
         fs::create_dir_all(&sit_dir).unwrap();
         fs::write(sit_dir.join("type"), "776\n").unwrap();
@@ -497,7 +575,7 @@ mod tests {
         );
         assert!(!InterfaceCategory::Other.is_reported());
 
-        // 6. Non-existent interface
+        // 7. Non-existent interface
         assert_eq!(
             categorize_interface_with_sysfs("nonexistent", &temp_dir),
             InterfaceCategory::Other
@@ -544,6 +622,23 @@ mod tests {
         if Path::new("/sys/class/net/ens3").exists() {
             assert_eq!(collector.interface_category("ens3"), Some(InterfaceCategory::Physical));
         }
+
+        // Test flush_interface_cache
+        collector.flush_interface_cache();
+        assert!(collector.interface_types.is_empty());
+        assert!(collector.cached_primary_iface.is_none());
+    }
+
+    #[test]
+    fn test_parse_default_route() {
+        let route_sample1 = "default via 172.24.3.254 dev ens3 proto static\n";
+        assert_eq!(parse_default_route_interface(route_sample1), Some("ens3".to_string()));
+
+        let route_sample2 = "default dev ppp0 scope link\n10.0.0.0/8 dev eth0 proto kernel\n";
+        assert_eq!(parse_default_route_interface(route_sample2), Some("ppp0".to_string()));
+
+        let route_sample3 = "10.0.0.0/8 dev eth0 proto kernel\n";
+        assert_eq!(parse_default_route_interface(route_sample3), None);
     }
 }
 

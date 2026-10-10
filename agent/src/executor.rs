@@ -54,6 +54,9 @@ impl CommandExecutor {
                 self.run_looking_glass(lg).await
             }
             Some(proto::command_request::Command::ProbeSystem(_)) => self.probe_system(),
+            Some(proto::command_request::Command::FlushCache(_)) => {
+                (true, 0, "interface cache flushed".to_string(), String::new())
+            }
             None => (false, -1, String::new(), "unknown command".to_string()),
         };
 

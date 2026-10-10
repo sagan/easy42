@@ -37,12 +37,23 @@ func (m *Manager) setupAgentMetricsListeners() {
 				input.Load15m = t.System.LoadAvg[2]
 			}
 		}
+		var primaryFound bool
 		for _, iface := range t.Interfaces {
-			if iface.Name == "lo" {
-				continue
+			if (iface.Flags & config.IfaceFlagPrimary) != 0 {
+				input.NetRxBytes = iface.RxBytes
+				input.NetTxBytes = iface.TxBytes
+				primaryFound = true
+				break
 			}
-			input.NetRxBytes += iface.RxBytes
-			input.NetTxBytes += iface.TxBytes
+		}
+		if !primaryFound {
+			for _, iface := range t.Interfaces {
+				if iface.Name == "lo" {
+					continue
+				}
+				input.NetRxBytes += iface.RxBytes
+				input.NetTxBytes += iface.TxBytes
+			}
 		}
 		_ = m.stateStore.RecordMetrics(nodeName, input)
 	})
@@ -144,6 +155,17 @@ func (m *Manager) GetFleetLiveStatus() (config.FleetMetricsSummary, []config.Nod
 
 		if status.Hostname == "" {
 			status.Hostname = n.Host
+		}
+
+		if m.agentHub != nil {
+			if telem := m.agentHub.GetTelemetry(n.Name); telem != nil {
+				for _, iface := range telem.Interfaces {
+					if (iface.Flags & config.IfaceFlagPrimary) != 0 {
+						status.PrimaryInterface = iface.Name
+						break
+					}
+				}
+			}
 		}
 
 		pt, hasMetrics := latestMetrics[n.Name]

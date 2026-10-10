@@ -168,7 +168,13 @@ export interface InterfaceInfo {
   up: boolean;
   type?: string;
   mtu?: number;
+  flags?: number;
+  rx_bytes?: number;
+  tx_bytes?: number;
 }
+
+export const IFACE_FLAG_PRIMARY = 1 << 0;
+export const IFACE_FLAG_PHYSICAL = 1 << 1;
 
 export interface WgPeerStatus {
   public_key: string;
@@ -214,6 +220,7 @@ export interface NodeStatus {
   error?: string;
   mode?: "ssh" | "agent" | string;
   agent_version?: string;
+  primary_interface?: string;
   metrics?: SystemMetrics;
   disks?: DiskMetrics[];
 }
@@ -525,6 +532,7 @@ export interface NodeLiveStatus {
   connected: boolean;
   agent_installed?: boolean;
   last_seen: string;
+  primary_interface?: string;
   metrics?: NodeMetricPoint;
 }
 

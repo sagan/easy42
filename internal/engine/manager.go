@@ -2179,6 +2179,15 @@ func (m *Manager) RefreshNodeStatus(nodeName string) (*config.NodeStatus, error)
 	}
 
 	if node.IsAgentMode() {
+		if m.agentHub != nil && m.agentHub.IsConnected(nodeName) {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			_, _ = m.agentHub.SendCommand(ctx, nodeName, &agentpb.CommandRequest{
+				Command: &agentpb.CommandRequest_FlushCache{
+					FlushCache: &agentpb.FlushCacheCmd{},
+				},
+			})
+			cancel()
+		}
 		status := m.agentHub.NodeStatus(nodeName)
 		status.Host = node.Host
 		if !status.Connected {
@@ -2220,6 +2229,39 @@ func (m *Manager) RefreshNodeStatus(nodeName string) (*config.NodeStatus, error)
 	m.mu.Unlock()
 
 	return status, nil
+}
+
+// FlushFleetInterfaceCache triggers all connected agents to flush their interface cache and re-collect telemetry
+func (m *Manager) FlushFleetInterfaceCache(ctx context.Context) {
+	if m.agentHub == nil {
+		return
+	}
+	m.mu.RLock()
+	cfg := m.store.Get()
+	var nodes []config.Node
+	if cfg != nil {
+		nodes = cfg.Nodes
+	}
+	m.mu.RUnlock()
+
+	var wg sync.WaitGroup
+	for _, n := range nodes {
+		if n.IsExternal || !n.IsAgentMode() || !m.agentHub.IsConnected(n.Name) {
+			continue
+		}
+		wg.Add(1)
+		go func(nodeName string) {
+			defer wg.Done()
+			cmdCtx, cancel := context.WithTimeout(ctx, 4*time.Second)
+			defer cancel()
+			_, _ = m.agentHub.SendCommand(cmdCtx, nodeName, &agentpb.CommandRequest{
+				Command: &agentpb.CommandRequest_FlushCache{
+					FlushCache: &agentpb.FlushCacheCmd{},
+				},
+			})
+		}(n.Name)
+	}
+	wg.Wait()
 }
 
 // RestartNodeWireGuardInterfaces restarts all WireGuard interfaces on a managed node

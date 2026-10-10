@@ -126,9 +126,10 @@ type NodeLiveStatus struct {
 	AgentVersion   string           `json:"agent_version"`
 	UptimeSeconds  uint64           `json:"uptime_seconds"`
 	Connected      bool             `json:"connected"`
-	AgentInstalled bool             `json:"agent_installed"`
-	LastSeen       time.Time        `json:"last_seen"`
-	Metrics        *NodeMetricPoint `json:"metrics,omitempty"`
+	AgentInstalled   bool             `json:"agent_installed"`
+	LastSeen         time.Time        `json:"last_seen"`
+	PrimaryInterface string           `json:"primary_interface,omitempty"`
+	Metrics          *NodeMetricPoint `json:"metrics,omitempty"`
 }
 
 type prevNetSample struct {
