@@ -18,8 +18,8 @@ import {
   OnMoveEnd,
   NodeChange,
 } from "@xyflow/react";
-import { Box, Typography, Button, Chip, Tooltip } from "@mui/material";
-import { Network, Layers, EyeOff, X, Eye, Maximize2 } from "lucide-react";
+import { Box, Typography, Button, Chip, Tooltip, Divider, FormControl, Select, MenuItem, Menu } from "@mui/material";
+import { Network, Layers, EyeOff, X, Eye, Maximize2, Plus, Link as LinkIcon, Share2, ChevronDown } from "lucide-react";
 import { NodeCard } from "./NodeCard";
 import { CustomEdge } from "./CustomEdge";
 import { BlockNode, BLOCK_PALETTE } from "./BlockNode";
@@ -255,6 +255,8 @@ interface TopologyGraphProps {
   networkState?: NetworkState | null;
   networkPolicies?: NetworkPolicy[];
   selectedTag?: string;
+  onSelectTag?: (tag: string) => void;
+  uniqueTags?: string[];
   onSelectNode: (node: Node) => void;
   onSelectLink: (link: Link) => void;
   onConnectNodes: (sourceName: string, targetName: string) => void;
@@ -262,6 +264,13 @@ interface TopologyGraphProps {
   onRefreshNode?: (nodeName: string) => void;
   refreshingNodeName?: string | null;
   addBlockTrigger?: number;
+  onAddNode?: () => void;
+  onAddLink?: () => void;
+  onAddBlock?: () => void;
+  onCreateFullMesh?: () => void;
+  missingMeshLinksCount?: number;
+  displayedInternalNodesCount?: number;
+  onCreateBlockFullMesh?: (blockName: string, memberNames: string[]) => void;
 }
 
 const nodeTypes = {
@@ -275,7 +284,15 @@ const edgeTypes = {
 };
 
 interface FloatingToolbarProps {
+  onAddNode?: () => void;
+  onAddLink?: () => void;
   onAddBlock: () => void;
+  onCreateFullMesh?: () => void;
+  missingMeshLinksCount?: number;
+  displayedInternalNodesCount?: number;
+  selectedTag?: string;
+  onSelectTag?: (tag: string) => void;
+  uniqueTags?: string[];
   focusedNodeName: string | null;
   onClearFocus: () => void;
   blocksCount: number;
@@ -283,52 +300,194 @@ interface FloatingToolbarProps {
 }
 
 const FloatingToolbar: React.FC<FloatingToolbarProps> = ({
+  onAddNode,
+  onAddLink,
   onAddBlock,
+  onCreateFullMesh,
+  missingMeshLinksCount = 0,
+  displayedInternalNodesCount = 0,
+  selectedTag,
+  onSelectTag,
+  uniqueTags = [],
   focusedNodeName,
   onClearFocus,
   blocksCount,
   hiddenLinksCount,
 }) => {
   const { fitView } = useReactFlow();
+  const [addMenuAnchor, setAddMenuAnchor] = useState<null | HTMLElement>(null);
 
   return (
-    <Panel position="top-right" style={{ margin: 16 }}>
+    <Panel position="top-right" style={{ margin: 14 }}>
       <Box
         sx={{
           display: "flex",
+          flexWrap: "wrap",
           alignItems: "center",
-          gap: 1,
-          backgroundColor: "rgba(255, 255, 255, 0.95)",
+          gap: 0.75,
+          backgroundColor: "rgba(255, 255, 255, 0.94)",
           backdropFilter: "blur(8px)",
           border: "1px solid #E2E8F0",
           borderRadius: 2.5,
-          p: 0.75,
-          boxShadow: "0 4px 12px rgba(0, 0, 0, 0.05)",
+          p: "6px 10px",
+          boxShadow: "0 4px 16px -2px rgba(15, 23, 42, 0.08), 0 2px 6px -1px rgba(15, 23, 42, 0.04)",
+          maxWidth: "calc(100vw - 32px)",
         }}
       >
-        {/* Add Block Button */}
+        {/* Single "+" Dropdown Menu Button */}
         <Button
-          variant="contained"
           size="small"
-          startIcon={<Layers size={15} />}
-          onClick={onAddBlock}
+          variant="contained"
+          startIcon={<Plus size={15} />}
+          endIcon={<ChevronDown size={13} />}
+          onClick={(e) => setAddMenuAnchor(e.currentTarget)}
           sx={{
             backgroundColor: "#4F46E5",
             color: "#FFFFFF",
-            fontWeight: 600,
+            fontWeight: 700,
             fontSize: "0.8rem",
             textTransform: "none",
             borderRadius: 1.75,
-            px: 1.5,
-            py: 0.6,
+            px: 1.25,
+            py: 0.5,
             boxShadow: "0 2px 4px rgba(79, 70, 229, 0.2)",
             "&:hover": {
               backgroundColor: "#4338CA",
             },
           }}
         >
-          Add Block
+          Add
         </Button>
+
+        <Menu
+          anchorEl={addMenuAnchor}
+          open={Boolean(addMenuAnchor)}
+          onClose={() => setAddMenuAnchor(null)}
+          PaperProps={{
+            sx: {
+              mt: 0.75,
+              minWidth: 160,
+              borderRadius: 2,
+              boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05)",
+              border: "1px solid #E2E8F0",
+              p: 0.5,
+            },
+          }}
+        >
+          {onAddNode && (
+            <MenuItem
+              onClick={() => {
+                setAddMenuAnchor(null);
+                onAddNode();
+              }}
+              sx={{
+                borderRadius: 1.25,
+                py: 0.75,
+                px: 1.25,
+                display: "flex",
+                alignItems: "center",
+                gap: 1.25,
+                fontSize: "0.82rem",
+                fontWeight: 600,
+                color: "#1E293B",
+                "&:hover": { bgcolor: "#F1F5F9" },
+              }}
+            >
+              <Plus size={15} color="#4F46E5" />
+              Node
+            </MenuItem>
+          )}
+
+          {onAddLink && (
+            <MenuItem
+              onClick={() => {
+                setAddMenuAnchor(null);
+                onAddLink();
+              }}
+              sx={{
+                borderRadius: 1.25,
+                py: 0.75,
+                px: 1.25,
+                display: "flex",
+                alignItems: "center",
+                gap: 1.25,
+                fontSize: "0.82rem",
+                fontWeight: 600,
+                color: "#1E293B",
+                "&:hover": { bgcolor: "#F1F5F9" },
+              }}
+            >
+              <LinkIcon size={15} color="#4F46E5" />
+              Link
+            </MenuItem>
+          )}
+
+          <MenuItem
+            onClick={() => {
+              setAddMenuAnchor(null);
+              onAddBlock();
+            }}
+            sx={{
+              borderRadius: 1.25,
+              py: 0.75,
+              px: 1.25,
+              display: "flex",
+              alignItems: "center",
+              gap: 1.25,
+              fontSize: "0.82rem",
+              fontWeight: 600,
+              color: "#1E293B",
+              "&:hover": { bgcolor: "#F1F5F9" },
+            }}
+          >
+            <Layers size={15} color="#4F46E5" />
+            Block
+          </MenuItem>
+
+          {onCreateFullMesh && (
+            <>
+              <Divider sx={{ my: 0.5, borderColor: "#E2E8F0" }} />
+              <MenuItem
+                disabled={displayedInternalNodesCount < 2}
+                onClick={() => {
+                  setAddMenuAnchor(null);
+                  onCreateFullMesh();
+                }}
+                sx={{
+                  borderRadius: 1.25,
+                  py: 0.75,
+                  px: 1.25,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 1.25,
+                  fontSize: "0.82rem",
+                  fontWeight: 600,
+                  color: missingMeshLinksCount > 0 ? "#4F46E5" : "#64748B",
+                  "&:hover": { bgcolor: "#F1F5F9" },
+                }}
+              >
+                <Share2 size={15} color={missingMeshLinksCount > 0 ? "#4F46E5" : "#64748B"} />
+                <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%" }}>
+                  <span>Full Mesh</span>
+                  {missingMeshLinksCount > 0 && (
+                    <Chip
+                      label={`+${missingMeshLinksCount}`}
+                      size="small"
+                      sx={{
+                        height: 18,
+                        fontSize: "0.65rem",
+                        fontWeight: 700,
+                        backgroundColor: "rgba(79, 70, 229, 0.1)",
+                        color: "#4F46E5",
+                        borderRadius: 1,
+                      }}
+                    />
+                  )}
+                </Box>
+              </MenuItem>
+            </>
+          )}
+        </Menu>
 
         {/* Fit View Button */}
         <Tooltip title="Center and fit all nodes in view">
@@ -345,7 +504,7 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = ({
               textTransform: "none",
               borderRadius: 1.75,
               px: 1.25,
-              py: 0.6,
+              py: 0.5,
               "&:hover": {
                 borderColor: "#94A3B8",
                 backgroundColor: "#F8FAFC",
@@ -356,23 +515,61 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = ({
           </Button>
         </Tooltip>
 
+        {/* Tag filter dropdown */}
+        {onSelectTag && (
+          <>
+            <Divider orientation="vertical" flexItem sx={{ mx: 0.5, my: 0.5, borderColor: "#E2E8F0" }} />
+            <FormControl size="small" sx={{ minWidth: 100 }}>
+              <Select
+                value={selectedTag || "All"}
+                onChange={(e) => onSelectTag(e.target.value)}
+                sx={{
+                  height: 31,
+                  fontSize: "0.8rem",
+                  fontWeight: 500,
+                  borderRadius: 1.75,
+                  bgcolor: "#FFFFFF",
+                  "& .MuiSelect-select": {
+                    py: 0.5,
+                    px: 1.25,
+                  },
+                }}
+              >
+                <MenuItem value="All" sx={{ fontSize: "0.8rem" }}>
+                  All Tags
+                </MenuItem>
+                {uniqueTags.map((t) => (
+                  <MenuItem key={t} value={t} sx={{ fontSize: "0.8rem" }}>
+                    {t}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </>
+        )}
+
+        {/* Node Focus & Collapsed Stats */}
+        {(focusedNodeName || blocksCount > 0) && (
+          <Divider orientation="vertical" flexItem sx={{ mx: 0.5, my: 0.5, borderColor: "#E2E8F0" }} />
+        )}
+
         {/* Focused Node Banner */}
         {focusedNodeName && (
           <Box
             sx={{
               display: "flex",
               alignItems: "center",
-              gap: 1,
+              gap: 0.75,
               backgroundColor: "#EEF2FF",
               border: "1px solid #C7D2FE",
               borderRadius: 1.75,
-              px: 1.25,
-              py: 0.4,
+              px: 1.2,
+              py: 0.35,
             }}
           >
-            <Eye size={14} color="#4F46E5" />
+            <Eye size={13} color="#4F46E5" />
             <Typography variant="caption" sx={{ fontWeight: 700, color: "#3730A3" }}>
-              Focus: {focusedNodeName} (all links shown)
+              Focus: {focusedNodeName}
             </Typography>
             <Tooltip title="Clear node focus (or press Escape)">
               <Box
@@ -385,7 +582,7 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = ({
                   "&:hover": { color: "#312E81" },
                 }}
               >
-                <X size={14} />
+                <X size={13} />
               </Box>
             </Tooltip>
           </Box>
@@ -401,7 +598,7 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = ({
               label={`${hiddenLinksCount} links collapsed`}
               size="small"
               sx={{
-                height: 26,
+                height: 28,
                 fontSize: "0.72rem",
                 fontWeight: 600,
                 backgroundColor: "#F1F5F9",
@@ -424,6 +621,8 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
   networkState,
   networkPolicies,
   selectedTag,
+  onSelectTag,
+  uniqueTags,
   onSelectNode,
   onSelectLink,
   onConnectNodes,
@@ -431,6 +630,13 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
   onRefreshNode,
   refreshingNodeName,
   addBlockTrigger,
+  onAddNode,
+  onAddLink,
+  onAddBlock,
+  onCreateFullMesh,
+  missingMeshLinksCount,
+  displayedInternalNodesCount,
+  onCreateBlockFullMesh,
 }) => {
   // Block state
   const [blocks, setBlocks] = useState<GraphBlock[]>(getStoredBlocks);
@@ -568,6 +774,14 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
     prevTriggerRef.current = addBlockTrigger;
   }, [addBlockTrigger, handleAddBlock]);
 
+  const handleToolbarAddBlock = useCallback(() => {
+    if (onAddBlock) {
+      onAddBlock();
+    } else {
+      handleAddBlock();
+    }
+  }, [onAddBlock, handleAddBlock]);
+
   const handleRenameBlock = useCallback((id: string, name: string) => {
     setBlocks((prev) => prev.map((b) => (b.id === id ? { ...b, name } : b)));
   }, []);
@@ -626,6 +840,21 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
 
     return { nodePosMap: posMap, effectiveNodeBlockMap: effMap };
   }, [nodes, blocks, nodeBlockMap]);
+
+  const handleCreateBlockFullMesh = useCallback(
+    (blockId: string) => {
+      const targetBlock = blocks.find((b) => b.id === blockId);
+      if (!targetBlock) return;
+      const memberNames = nodes
+        .filter((n) => effectiveNodeBlockMap[n.name] === blockId)
+        .map((n) => n.name);
+
+      if (onCreateBlockFullMesh) {
+        onCreateBlockFullMesh(targetBlock.name, memberNames);
+      }
+    },
+    [blocks, nodes, effectiveNodeBlockMap, onCreateBlockFullMesh],
+  );
 
   // Initial nodes: combine background Block nodes and NodeCard custom nodes
   const initialNodes: FlowNode[] = useMemo(() => {
@@ -749,6 +978,7 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
           onRenameBlock: handleRenameBlock,
           onDeleteBlock: handleDeleteBlock,
           onChangeColor: handleChangeBlockColor,
+          onCreateBlockFullMesh: handleCreateBlockFullMesh,
         } as unknown as Record<string, unknown>,
       };
     });
@@ -1264,9 +1494,17 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
         onMoveEnd={handleMoveEnd}
         attributionPosition="bottom-left"
       >
-        {/* Floating Top-Right Block & Focus Toolbar */}
+        {/* Consolidated Floating Toolbar */}
         <FloatingToolbar
-          onAddBlock={handleAddBlock}
+          onAddNode={onAddNode}
+          onAddLink={onAddLink}
+          onAddBlock={handleToolbarAddBlock}
+          onCreateFullMesh={onCreateFullMesh}
+          missingMeshLinksCount={missingMeshLinksCount}
+          displayedInternalNodesCount={displayedInternalNodesCount}
+          selectedTag={selectedTag}
+          onSelectTag={onSelectTag}
+          uniqueTags={uniqueTags}
           focusedNodeName={focusedNodeName}
           onClearFocus={() => setFocusedNodeName(null)}
           blocksCount={blocks.length}

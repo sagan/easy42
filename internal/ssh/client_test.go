@@ -1,9 +1,17 @@
 package ssh
 
 import (
+	"crypto/rand"
+	"crypto/rsa"
+	"net"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"golang.org/x/crypto/ssh"
+	"golang.org/x/crypto/ssh/knownhosts"
 )
 
 func TestParseSSHHost(t *testing.T) {
@@ -86,3 +94,56 @@ func TestDialSSHWithTimeoutPortHandling(t *testing.T) {
 		t.Errorf("Dial error expected to mention 127.0.0.1:54321, got: %s", errMsg)
 	}
 }
+
+func TestHostKeyVerificationRejectsUnknownAndMismatch(t *testing.T) {
+	tmpDir := t.TempDir()
+	khPath := filepath.Join(tmpDir, "known_hosts")
+
+	key1, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	signer1, err := ssh.NewSignerFromKey(key1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pub1 := signer1.PublicKey()
+
+	key2, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	signer2, err := ssh.NewSignerFromKey(key2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pub2 := signer2.PublicKey()
+
+	line := knownhosts.Line([]string{"known-host:22"}, pub1)
+	if err := os.WriteFile(khPath, []byte(line+"\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	cb, err := knownhosts.New(khPath)
+	if err != nil {
+		t.Fatalf("failed to parse known_hosts: %v", err)
+	}
+
+	remoteAddr, _ := net.ResolveTCPAddr("tcp", "127.0.0.1:22")
+
+	// Known host with matching key should succeed
+	if err := cb("known-host:22", remoteAddr, pub1); err != nil {
+		t.Errorf("expected matching key to succeed, got: %v", err)
+	}
+
+	// Unknown host should fail
+	if err := cb("unknown-host:22", remoteAddr, pub1); err == nil {
+		t.Errorf("expected unknown host to be rejected, got nil error")
+	}
+
+	// Known host with mismatched key should fail
+	if err := cb("known-host:22", remoteAddr, pub2); err == nil {
+		t.Errorf("expected mismatched key to be rejected, got nil error")
+	}
+}
+

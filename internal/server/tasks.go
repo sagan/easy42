@@ -59,7 +59,9 @@ func (s *Server) handleTaskRun(w http.ResponseWriter, r *http.Request) {
 	if r.TLS == nil && !strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https") {
 		scheme = "http"
 	}
-	s.mgr.SetServerURL(fmt.Sprintf("%s://%s", scheme, r.Host))
+	if isSafeHost(r.Host) {
+		s.mgr.SetServerURL(fmt.Sprintf("%s://%s", scheme, r.Host))
+	}
 
 	results, err := s.mgr.RunTask(r.Context(), taskID, req.Nodes)
 	if err != nil {

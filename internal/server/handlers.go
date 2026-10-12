@@ -17,6 +17,10 @@ import (
 
 // Auth Handlers
 
+func isRequestSecure(r *http.Request) bool {
+	return r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")
+}
+
 type loginRequest struct {
 	Password string `json:"password"`
 }
@@ -62,6 +66,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		Path:     "/",
 		Expires:  time.Now().Add(30 * 24 * time.Hour),
 		HttpOnly: true,
+		Secure:   isRequestSecure(r),
 		SameSite: http.SameSiteLaxMode,
 	})
 
@@ -142,6 +147,7 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 		Path:     "/",
 		Expires:  time.Unix(0, 0),
 		HttpOnly: true,
+		Secure:   isRequestSecure(r),
 		MaxAge:   -1,
 	})
 	writeJSON(w, http.StatusOK, map[string]any{"logged_out": true})
@@ -183,6 +189,7 @@ func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 		Path:     "/",
 		Expires:  time.Now().Add(30 * 24 * time.Hour),
 		HttpOnly: true,
+		Secure:   isRequestSecure(r),
 		SameSite: http.SameSiteLaxMode,
 	})
 
@@ -205,6 +212,7 @@ func (s *Server) handleLogoutAll(w http.ResponseWriter, r *http.Request) {
 		Path:     "/",
 		Expires:  time.Unix(0, 0),
 		HttpOnly: true,
+		Secure:   isRequestSecure(r),
 		MaxAge:   -1,
 	})
 
@@ -889,6 +897,42 @@ func (s *Server) handleUpdateLink(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if req.FromCost != nil || req.FromFwmark != nil || req.FromPreference != nil || req.FromMark != nil {
+		if req.From == nil {
+			req.From = &config.LinkEnd{}
+		}
+		if req.FromCost != nil {
+			req.From.Cost = *req.FromCost
+		}
+		if req.FromFwmark != nil {
+			req.From.Fwmark = strings.TrimSpace(*req.FromFwmark)
+		}
+		if req.FromPreference != nil {
+			req.From.Preference = req.FromPreference
+		}
+		if req.FromMark != nil {
+			req.From.Mark = strings.TrimSpace(*req.FromMark)
+		}
+	}
+
+	if req.ToCost != nil || req.ToFwmark != nil || req.ToPreference != nil || req.ToMark != nil {
+		if req.To == nil {
+			req.To = &config.LinkEnd{}
+		}
+		if req.ToCost != nil {
+			req.To.Cost = *req.ToCost
+		}
+		if req.ToFwmark != nil {
+			req.To.Fwmark = strings.TrimSpace(*req.ToFwmark)
+		}
+		if req.ToPreference != nil {
+			req.To.Preference = req.ToPreference
+		}
+		if req.ToMark != nil {
+			req.To.Mark = strings.TrimSpace(*req.ToMark)
+		}
+	}
+
 	var link *config.Link
 	var err error
 	if req.From != nil || req.To != nil {
@@ -924,31 +968,6 @@ func (s *Server) handleUpdateLink(w http.ResponseWriter, r *http.Request) {
 		}
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
-	}
-
-	if req.FromCost != nil && link != nil {
-		link.From.Cost = *req.FromCost
-	}
-	if req.ToCost != nil && link != nil {
-		link.To.Cost = *req.ToCost
-	}
-	if req.FromFwmark != nil && link != nil {
-		link.From.Fwmark = strings.TrimSpace(*req.FromFwmark)
-	}
-	if req.ToFwmark != nil && link != nil {
-		link.To.Fwmark = strings.TrimSpace(*req.ToFwmark)
-	}
-	if req.FromPreference != nil && link != nil {
-		link.From.Preference = req.FromPreference
-	}
-	if req.ToPreference != nil && link != nil {
-		link.To.Preference = req.ToPreference
-	}
-	if req.FromMark != nil && link != nil {
-		link.From.Mark = strings.TrimSpace(*req.FromMark)
-	}
-	if req.ToMark != nil && link != nil {
-		link.To.Mark = strings.TrimSpace(*req.ToMark)
 	}
 
 	writeJSON(w, http.StatusOK, link)

@@ -33,13 +33,19 @@ func NormalizeArch(arch string) string {
 // GetAgentBinary returns the embedded prebuilt agent binary for the given architecture
 func GetAgentBinary(arch string) ([]byte, error) {
 	norm := NormalizeArch(arch)
+	switch norm {
+	case "x86_64", "aarch64", "armv7", "mipsel":
+		// valid supported architectures
+	case "mips":
+		return nil, fmt.Errorf("unsupported agent architecture \"mips\" (big-endian MIPS is not supported; available: x86_64, aarch64, armv7, mipsel)")
+	default:
+		return nil, fmt.Errorf("unsupported agent architecture %q (available: x86_64, aarch64, armv7, mipsel)", arch)
+	}
+
 	filename := fmt.Sprintf("embedded/easy42-agent-%s", norm)
 	data, err := EmbeddedAgentFS.ReadFile(filename)
 	if err != nil {
-		if norm == "mips" {
-			return nil, fmt.Errorf("unsupported agent architecture \"mips\" (big-endian MIPS is not supported; available: x86_64, aarch64, armv7, mipsel)")
-		}
-		return nil, fmt.Errorf("unsupported agent architecture %q (available: x86_64, aarch64, armv7, mipsel)", arch)
+		return nil, fmt.Errorf("failed to read embedded agent binary for %s: %w", norm, err)
 	}
 	return data, nil
 }

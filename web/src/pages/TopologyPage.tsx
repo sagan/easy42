@@ -1,6 +1,5 @@
 import React, { useState, useCallback } from "react";
-import { Box, Button, Select, MenuItem, FormControl, Tooltip } from "@mui/material";
-import { Plus, Link as LinkIcon, Layers, Share2 } from "lucide-react";
+import { Box } from "@mui/material";
 import { useMesh } from "../context/MeshContext";
 import { TopologyGraph } from "../components/Topology/TopologyGraph";
 import { NodeDetailDrawer } from "../components/Topology/NodeDetailDrawer";
@@ -42,6 +41,7 @@ export const TopologyPage: React.FC = () => {
     setSyncOpen,
     addBlockTrigger,
     setAddBlockTrigger,
+    setStateToast,
   } = useMesh();
 
   const navigate = useNavigate();
@@ -71,16 +71,13 @@ export const TopologyPage: React.FC = () => {
     [setConnectFrom, setConnectTo, setLinkToEdit, setAddLinkOpen],
   );
 
-  const handleNodePositionChange = useCallback(
-    async (name: string, x: number, y: number) => {
-      try {
-        await api.updateNodePosition(name, x, y);
-      } catch (err) {
-        console.error("Failed to persist node position:", err);
-      }
-    },
-    [],
-  );
+  const handleNodePositionChange = useCallback(async (name: string, x: number, y: number) => {
+    try {
+      await api.updateNodePosition(name, x, y);
+    } catch (err) {
+      console.error("Failed to persist node position:", err);
+    }
+  }, []);
 
   const handleEditNode = (node: Node) => {
     setNodeToEdit(node);
@@ -106,119 +103,86 @@ export const TopologyPage: React.FC = () => {
     }
   };
 
+  const handleAddNode = useCallback(() => {
+    if (!isUnlocked) {
+      setUnlockOpen(true);
+    } else {
+      setNodeToEdit(null);
+      setAddNodeOpen(true);
+    }
+  }, [isUnlocked, setUnlockOpen, setNodeToEdit, setAddNodeOpen]);
+
+  const handleAddLink = useCallback(() => {
+    if (!isUnlocked) {
+      setUnlockOpen(true);
+    } else {
+      setLinkToEdit(null);
+      setConnectFrom("");
+      setConnectTo("");
+      setAddLinkOpen(true);
+    }
+  }, [isUnlocked, setUnlockOpen, setLinkToEdit, setConnectFrom, setConnectTo, setAddLinkOpen]);
+
+  const handleAddBlock = useCallback(() => {
+    if (!isUnlocked) {
+      setUnlockOpen(true);
+    } else {
+      setAddBlockTrigger((c) => c + 1);
+    }
+  }, [isUnlocked, setUnlockOpen, setAddBlockTrigger]);
+
+  const handleCreateBlockFullMesh = useCallback(
+    async (blockName: string, memberNames: string[]) => {
+      if (memberNames.length < 2) {
+        setStateToast({
+          message: "At least 2 nodes in the block are required to create a full mesh.",
+          severity: "warning",
+        });
+        return;
+      }
+      if (!isUnlocked) {
+        setUnlockOpen(true);
+        return;
+      }
+
+      const confirmMsg = `Create full mesh network between ${memberNames.length} nodes in block "${blockName}"? This will automatically add missing link(s).`;
+      if (!window.confirm(confirmMsg)) return;
+
+      try {
+        const added = await api.createFullMesh(memberNames);
+        await loadData();
+        setStateToast({
+          message: `Block "${blockName}" full mesh established: added ${added.length} new link(s).`,
+          severity: "success",
+        });
+      } catch (err: unknown) {
+        const e = err as Error & { status?: number };
+        if (e.status === 423) {
+          setUnlockOpen(true);
+        } else {
+          setStateToast({
+            message: `Failed to create block full mesh: ${e.message}`,
+            severity: "error",
+          });
+        }
+      }
+    },
+    [isUnlocked, setUnlockOpen, setStateToast, loadData],
+  );
+
   return (
-    <Box sx={{ width: "100%", height: "100%", position: "relative", overflow: "hidden", display: "flex", flexDirection: "column" }}>
-      {/* Floating Topology Toolbar */}
-      <Box
-        sx={{
-          position: "absolute",
-          top: { xs: 8, sm: 14 },
-          left: { xs: 8, sm: 16 },
-          right: { xs: 8, sm: "auto" },
-          zIndex: 10,
-          display: "flex",
-          flexWrap: "wrap",
-          alignItems: "center",
-          gap: 1,
-          bgcolor: "rgba(255, 255, 255, 0.92)",
-          backdropFilter: "blur(8px)",
-          p: 1,
-          borderRadius: 2.5,
-          border: "1px solid #E2E8F0",
-          boxShadow: "0 4px 12px rgba(0, 0, 0, 0.05)",
-        }}
-      >
-        <Button
-          size="small"
-          variant="contained"
-          startIcon={<Plus size={15} />}
-          onClick={() => {
-            if (!isUnlocked) {
-              setUnlockOpen(true);
-            } else {
-              setNodeToEdit(null);
-              setAddNodeOpen(true);
-            }
-          }}
-          sx={{ borderRadius: 2, fontSize: "0.8rem", px: 1.5 }}
-        >
-          Node
-        </Button>
-
-        <Button
-          size="small"
-          variant="outlined"
-          startIcon={<LinkIcon size={15} />}
-          onClick={() => {
-            if (!isUnlocked) {
-              setUnlockOpen(true);
-            } else {
-              setLinkToEdit(null);
-              setConnectFrom("");
-              setConnectTo("");
-              setAddLinkOpen(true);
-            }
-          }}
-          sx={{ borderRadius: 2, fontSize: "0.8rem", px: 1.5 }}
-        >
-          Link
-        </Button>
-
-        <Button
-          size="small"
-          variant="outlined"
-          startIcon={<Layers size={15} />}
-          onClick={() => {
-            if (!isUnlocked) {
-              setUnlockOpen(true);
-            } else {
-              setAddBlockTrigger((c) => c + 1);
-            }
-          }}
-          sx={{ borderRadius: 2, fontSize: "0.8rem", px: 1.5, display: { xs: "none", sm: "inline-flex" } }}
-        >
-          Block
-        </Button>
-
-        {displayedInternalNodes.length >= 2 && (
-          <Tooltip title={missingMeshLinksCount > 0 ? `Add ${missingMeshLinksCount} missing links to create a full mesh` : "Mesh complete"}>
-            <Button
-              size="small"
-              variant="outlined"
-              color={missingMeshLinksCount > 0 ? "secondary" : "inherit"}
-              startIcon={<Share2 size={15} />}
-              onClick={handleCreateFullMesh}
-              sx={{ borderRadius: 2, fontSize: "0.8rem", px: 1.5, display: { xs: "none", md: "inline-flex" } }}
-            >
-              Full Mesh {missingMeshLinksCount > 0 && `(${missingMeshLinksCount})`}
-            </Button>
-          </Tooltip>
-        )}
-
-        {/* Tag filter dropdown */}
-        <FormControl size="small" sx={{ minWidth: 100 }}>
-          <Select
-            value={selectedTag}
-            onChange={(e) => setSelectedTag(e.target.value)}
-            sx={{
-              height: 32,
-              fontSize: "0.8rem",
-              borderRadius: 2,
-              bgcolor: "#FFFFFF",
-            }}
-          >
-            <MenuItem value="All">All Tags</MenuItem>
-            {uniqueTags.map((t) => (
-              <MenuItem key={t} value={t}>
-                {t}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
-      </Box>
-
-      {/* Main Canvas */}
-      <Box sx={{ flex: 1, position: "relative" }}>
+    <Box
+      sx={{
+        width: "100%",
+        height: "100%",
+        position: "relative",
+        overflow: "hidden",
+        display: "flex",
+        flexDirection: "column",
+      }}
+    >
+      {/* Main Canvas with single consolidated floating toolbar */}
+      <Box sx={{ flex: 1, position: "relative", width: "100%", height: "100%" }}>
         <TopologyGraph
           nodes={displayedNodes}
           links={displayedLinks}
@@ -226,6 +190,8 @@ export const TopologyPage: React.FC = () => {
           networkState={networkState}
           networkPolicies={networkPolicies}
           selectedTag={selectedTag}
+          onSelectTag={setSelectedTag}
+          uniqueTags={uniqueTags}
           onSelectNode={handleSelectNode}
           onSelectLink={handleSelectLink}
           onConnectNodes={handleConnectNodes}
@@ -233,6 +199,13 @@ export const TopologyPage: React.FC = () => {
           onRefreshNode={handleRefreshNode}
           refreshingNodeName={refreshingNodeName}
           addBlockTrigger={addBlockTrigger}
+          onAddNode={handleAddNode}
+          onAddLink={handleAddLink}
+          onAddBlock={handleAddBlock}
+          onCreateFullMesh={handleCreateFullMesh}
+          missingMeshLinksCount={missingMeshLinksCount}
+          displayedInternalNodesCount={displayedInternalNodes.length}
+          onCreateBlockFullMesh={handleCreateBlockFullMesh}
         />
       </Box>
 
@@ -249,6 +222,7 @@ export const TopologyPage: React.FC = () => {
           loadData();
         }}
         onStatusRefreshed={() => loadData()}
+        onOpenDetails={(name) => navigate(`/nodes/${encodeURIComponent(name)}`)}
         onOpenHelper={(name) => navigate(`/helper?node=${encodeURIComponent(name)}`)}
         onOpenLookingGlass={(name) => navigate(`/looking-glass?node=${encodeURIComponent(name)}`)}
         onUpdateNodeState={(name) => handleUpdateState(name)}

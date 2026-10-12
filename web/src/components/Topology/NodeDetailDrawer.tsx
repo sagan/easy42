@@ -71,6 +71,7 @@ interface NodeDetailDrawerProps {
   onRenameNode?: (node: Node) => void;
   onNodeDeleted: (name: string) => void;
   onStatusRefreshed: (status: NodeStatus) => void;
+  onOpenDetails: (nodeName: string) => void;
   onOpenHelper?: (nodeName: string) => void;
   onOpenLookingGlass?: (nodeName: string) => void;
   onUpdateNodeState?: (nodeName: string) => Promise<void>;
@@ -87,6 +88,7 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
   onRenameNode,
   onNodeDeleted,
   onStatusRefreshed,
+  onOpenDetails,
   onOpenHelper,
   onOpenLookingGlass,
   onUpdateNodeState,
@@ -1021,8 +1023,12 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
                     border: "1px dashed #CBD5E1",
                   }}
                 >
-                  <Typography variant="caption" sx={{ color: "#475569", display: "block", fontSize: "0.7rem", lineHeight: 1.35 }}>
-                    <strong>Note:</strong> Status was fetched from last manual refresh (SSH snapshot). For continuous live telemetry and automatic status updates, install the Easy42 Agent.
+                  <Typography
+                    variant="caption"
+                    sx={{ color: "#475569", display: "block", fontSize: "0.7rem", lineHeight: 1.35 }}
+                  >
+                    <strong>Note:</strong> Status was fetched from last manual refresh (SSH snapshot). For continuous
+                    live telemetry and automatic status updates, install the Easy42 Agent.
                   </Typography>
                 </Box>
               )}
@@ -1116,8 +1122,13 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
                         <Typography variant="caption" sx={{ fontSize: "0.7rem", color: "#64748B" }}>
                           Memory Usage:
                         </Typography>
-                        <Typography variant="caption" className="mono-font" sx={{ fontSize: "0.72rem", fontWeight: 700, color: "#0F172A" }}>
-                          {formatBytes(status.metrics.memory_used_bytes)} / {formatBytes(status.metrics.memory_total_bytes)} (
+                        <Typography
+                          variant="caption"
+                          className="mono-font"
+                          sx={{ fontSize: "0.72rem", fontWeight: 700, color: "#0F172A" }}
+                        >
+                          {formatBytes(status.metrics.memory_used_bytes)} /{" "}
+                          {formatBytes(status.metrics.memory_total_bytes)} (
                           {Math.round((status.metrics.memory_used_bytes / status.metrics.memory_total_bytes) * 100)}%)
                         </Typography>
                       </Box>
@@ -1146,7 +1157,11 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
                           <Typography variant="caption" sx={{ fontSize: "0.7rem", color: "#64748B" }}>
                             Disk Usage ({disk.path}):
                           </Typography>
-                          <Typography variant="caption" className="mono-font" sx={{ fontSize: "0.72rem", fontWeight: 700, color: "#0F172A" }}>
+                          <Typography
+                            variant="caption"
+                            className="mono-font"
+                            sx={{ fontSize: "0.72rem", fontWeight: 700, color: "#0F172A" }}
+                          >
                             {formatBytes(disk.used_bytes)} / {formatBytes(disk.total_bytes)} ({Math.round(pct)}%)
                           </Typography>
                         </Box>
@@ -1158,8 +1173,7 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
                             borderRadius: 3,
                             backgroundColor: "#E2E8F0",
                             "& .MuiLinearProgress-bar": {
-                              backgroundColor:
-                                pct > 85 ? "#E11D48" : pct > 70 ? "#F59E0B" : "#10B981",
+                              backgroundColor: pct > 85 ? "#E11D48" : pct > 70 ? "#F59E0B" : "#10B981",
                             },
                           }}
                         />
@@ -1173,7 +1187,11 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
                       <Typography variant="caption" sx={{ fontSize: "0.7rem", color: "#64748B" }}>
                         Load Average (1/5/15m):
                       </Typography>
-                      <Typography variant="caption" className="mono-font" sx={{ fontSize: "0.72rem", fontWeight: 600, color: "#334155" }}>
+                      <Typography
+                        variant="caption"
+                        className="mono-font"
+                        sx={{ fontSize: "0.72rem", fontWeight: 600, color: "#334155" }}
+                      >
                         {status.metrics.load_avg.map((v) => v.toFixed(2)).join(", ")}
                       </Typography>
                     </Box>
@@ -1238,21 +1256,37 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
                           }}
                         >
                           <Box sx={{ display: "flex", alignItems: "center", gap: 0.8 }}>
-                            <Typography variant="caption" className="mono-font" sx={{ fontWeight: 700, color: "#0F172A" }}>
+                            <Typography
+                              variant="caption"
+                              className="mono-font"
+                              sx={{ fontWeight: 700, color: "#0F172A" }}
+                            >
                               {inf.name}
                             </Typography>
                             {isPrimary && (
                               <Chip
                                 label="Primary"
                                 size="small"
-                                sx={{ height: 16, fontSize: "0.6rem", bgcolor: "#DBEAFE", color: "#1D4ED8", fontWeight: 700 }}
+                                sx={{
+                                  height: 16,
+                                  fontSize: "0.6rem",
+                                  bgcolor: "#DBEAFE",
+                                  color: "#1D4ED8",
+                                  fontWeight: 700,
+                                }}
                               />
                             )}
                             {isPhysical && (
                               <Chip
                                 label="Physical"
                                 size="small"
-                                sx={{ height: 16, fontSize: "0.6rem", bgcolor: "#E0E7FF", color: "#4338CA", fontWeight: 600 }}
+                                sx={{
+                                  height: 16,
+                                  fontSize: "0.6rem",
+                                  bgcolor: "#E0E7FF",
+                                  color: "#4338CA",
+                                  fontWeight: 600,
+                                }}
                               />
                             )}
                           </Box>
@@ -1330,6 +1364,25 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
             {updatingState ? "Updating State & Links..." : "Update State & Links"}
           </Button>
         )}
+
+        <Button
+          fullWidth
+          variant="outlined"
+          startIcon={<Server size={16} />}
+          onClick={() => onOpenDetails(node.name)}
+          sx={{
+            borderColor: "#CBD5E1",
+            color: "#334155",
+            fontWeight: 600,
+            "&:hover": {
+              borderColor: "#4F46E5",
+              backgroundColor: "rgba(79, 70, 229, 0.05)",
+              color: "#4F46E5",
+            },
+          }}
+        >
+          Node Details
+        </Button>
 
         {onOpenHelper && !node.is_external && (
           <Button

@@ -309,22 +309,22 @@ func DialSSHWithTimeout(hostAliasOrIP string, timeout time.Duration) (*ssh.Clien
 		return nil, fmt.Errorf("no SSH authentication methods (keys or agent) found for %s", hostAliasOrIP)
 	}
 
-	// 3. Host Key Callback (known_hosts or fallback)
+	// 3. Host Key Callback (uses ~/.ssh/known_hosts directly and rejects unmatched or unknown host)
 	knownHostsPath := filepath.Join(home, ".ssh", "known_hosts")
-	var hostKeyCallback ssh.HostKeyCallback
-	if khCallback, err := knownhosts.New(knownHostsPath); err == nil {
-		hostKeyCallback = func(hostname string, remote net.Addr, key ssh.PublicKey) error {
-			// If known_hosts fails, we can fall back to accept or log
-			err := khCallback(hostname, remote, key)
-			if err != nil {
-				// Fallback to accepting key to avoid blocking initial setup
+	khCallback, err := knownhosts.New(knownHostsPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read known_hosts (%s): %w", knownHostsPath, err)
+	}
+	hostKeyCallback := func(hostname string, remote net.Addr, key ssh.PublicKey) error {
+		err := khCallback(hostname, remote, key)
+		if err != nil && hostPart != "" && hostPart != realHost {
+			// Check if host alias is configured in known_hosts
+			aliasAddr := net.JoinHostPort(hostPart, strconv.Itoa(port))
+			if err2 := khCallback(aliasAddr, remote, key); err2 == nil {
 				return nil
 			}
-			return nil
 		}
-	} else {
-		// Fallback callback
-		hostKeyCallback = ssh.InsecureIgnoreHostKey()
+		return err
 	}
 
 	clientConfig := &ssh.ClientConfig{

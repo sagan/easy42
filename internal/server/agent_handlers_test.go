@@ -152,10 +152,20 @@ func TestAgentWebSocketAuthentication(t *testing.T) {
 		t.Fatalf("expected 401 Unauthorized, got: %d", resp.StatusCode)
 	}
 
-	// 2. Dial with valid token in query param
-	conn, _, err := websocket.DefaultDialer.Dial(wsURL+"?token="+token, nil)
+	// 2. Dial with token in query param should fail with 401 (query param token disabled)
+	_, qResp, qErr := websocket.DefaultDialer.Dial(wsURL+"?token="+token, nil)
+	if qErr == nil {
+		t.Fatalf("expected connection with query param token to fail")
+	}
+	if qResp != nil && qResp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expected 401 Unauthorized for query param token, got: %d", qResp.StatusCode)
+	}
+
+	// 3. Dial with valid token in X-Easy42-Agent-Token header
+	headers := http.Header{"X-Easy42-Agent-Token": []string{token}}
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, headers)
 	if err != nil {
-		t.Fatalf("expected successful WebSocket connection with token: %v", err)
+		t.Fatalf("expected successful WebSocket connection with token header: %v", err)
 	}
 	defer conn.Close()
 

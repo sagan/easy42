@@ -144,6 +144,7 @@ func (m *Manager) Unlock(password string) error {
 	if err != nil {
 		return fmt.Errorf("failed to decrypt DEK: %w", err)
 	}
+	defer crypto.Memzero(dek)
 
 	return m.vault.Unlock(dek)
 }
@@ -181,6 +182,7 @@ func (m *Manager) ChangePassword(oldPassword, newPassword string) error {
 	if err != nil {
 		return fmt.Errorf("failed to decrypt DEK: %w", err)
 	}
+	defer crypto.Memzero(dek)
 
 	newHash, err := crypto.HashPassword(newPassword)
 	if err != nil {
@@ -2080,7 +2082,8 @@ func (m *Manager) UpdateLinkWithOptions(node1Name, node2Name string, customFrom,
 		return nil, err
 	}
 
-	return link, nil
+	linkCopy := *link
+	return &linkCopy, nil
 }
 
 // DeleteLink removes a link between two nodes, optionally matching a specific interface

@@ -140,8 +140,14 @@ func DecryptDEK(password string, encryptedDEK string) ([]byte, error) {
 	return dek, nil
 }
 
-func memzero(b []byte) {
+// Memzero wipes sensitive byte slices from memory
+func Memzero(b []byte) {
 	for i := range b {
 		b[i] = 0
 	}
 }
+
+func memzero(b []byte) {
+	Memzero(b)
+}
+

@@ -57,8 +57,13 @@ func RunCommandWithTimeout(client *ssh.Client, command string, timeout time.Dura
 	}
 }
 
-// RunCommandWithExitCode executes a command and returns stdout, stderr, exit code, and execution error
+// RunCommandWithExitCode executes a command and returns stdout, stderr, exit code, and execution error with a default 10m timeout
 func RunCommandWithExitCode(client *ssh.Client, command string) (string, string, int, error) {
+	return RunCommandWithExitCodeTimeout(client, command, 10*time.Minute)
+}
+
+// RunCommandWithExitCodeTimeout executes a command with a timeout and returns stdout, stderr, exit code, and error
+func RunCommandWithExitCodeTimeout(client *ssh.Client, command string, timeout time.Duration) (string, string, int, error) {
 	session, err := client.NewSession()
 	if err != nil {
 		return "", "", -1, fmt.Errorf("failed to create ssh session: %w", err)
@@ -69,16 +74,31 @@ func RunCommandWithExitCode(client *ssh.Client, command string) (string, string,
 	session.Stdout = &stdout
 	session.Stderr = &stderr
 
-	runErr := session.Run(command)
-	exitCode := 0
-	if runErr != nil {
-		if exitErr, ok := runErr.(*ssh.ExitError); ok {
-			exitCode = exitErr.ExitStatus()
-		} else {
-			exitCode = -1
-		}
+	if timeout <= 0 {
+		timeout = 10 * time.Minute
 	}
-	return stdout.String(), stderr.String(), exitCode, runErr
+
+	done := make(chan error, 1)
+	go func() {
+		done <- session.Run(command)
+	}()
+
+	select {
+	case <-time.After(timeout):
+		_ = session.Signal(ssh.SIGKILL)
+		_ = session.Close()
+		return stdout.String(), stderr.String(), -1, fmt.Errorf("command timed out after %v: %s", timeout, command)
+	case runErr := <-done:
+		exitCode := 0
+		if runErr != nil {
+			if exitErr, ok := runErr.(*ssh.ExitError); ok {
+				exitCode = exitErr.ExitStatus()
+			} else {
+				exitCode = -1
+			}
+		}
+		return stdout.String(), stderr.String(), exitCode, runErr
+	}
 }
 
 // IsInterfaceUp checks if a network interface is present and UP
@@ -234,8 +254,8 @@ func SyncWireGuard(client *ssh.Client, iface string, confPath string) error {
 		return UpWireGuard(client, iface)
 	}
 
-	// Try wg syncconf with stripped config
-	cmd := fmt.Sprintf("sh -l -c 'wg syncconf %s <(wg-quick strip %s)'", iface, confPath)
+	// Try wg syncconf with stripped config via stdin pipe (POSIX compatible)
+	cmd := fmt.Sprintf("sh -l -c 'wg-quick strip %s | wg syncconf %s /dev/stdin'", confPath, iface)
 	_, err := RunCommand(client, cmd)
 	if err != nil {
 		// Fallback to restart

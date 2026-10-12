@@ -1,6 +1,6 @@
 import React, { memo, useState } from "react";
 import { NodeProps, NodeResizer, Handle, Position } from "@xyflow/react";
-import { Box, Typography, IconButton, Tooltip, TextField, Chip, Menu, MenuItem } from "@mui/material";
+import { Box, Typography, IconButton, Tooltip, TextField, Chip, Menu, MenuItem, Button } from "@mui/material";
 import { Layers, Trash2, Edit3, Check, EyeOff, AlertTriangle, Palette, Share2, CheckCircle2 } from "lucide-react";
 import { GraphBlock } from "../../types/api";
 
@@ -24,6 +24,7 @@ export interface BlockNodeData {
   onRenameBlock: (id: string, newName: string) => void;
   onDeleteBlock: (id: string) => void;
   onChangeColor: (id: string, color: string) => void;
+  onCreateBlockFullMesh?: (id: string) => void;
   [key: string]: unknown;
 }
 
@@ -39,6 +40,7 @@ export const BlockNode: React.FC<NodeProps> = memo(({ data, selected }) => {
     onRenameBlock,
     onDeleteBlock,
     onChangeColor,
+    onCreateBlockFullMesh,
   } = nodeData;
 
   const [isEditing, setIsEditing] = useState(false);
@@ -261,6 +263,41 @@ export const BlockNode: React.FC<NodeProps> = memo(({ data, selected }) => {
                   borderRadius: 1,
                 }}
               />
+            </Tooltip>
+          )}
+
+          {/* + Full Mesh Action Button when not yet full-mesh */}
+          {memberCount >= 2 && !isFullMesh && (
+            <Tooltip title={`Create missing links between all ${memberCount} nodes in this block to make it full-mesh`}>
+              <Button
+                size="small"
+                variant="outlined"
+                className="nodrag"
+                startIcon={<Share2 size={11} />}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onCreateBlockFullMesh?.(block.id);
+                }}
+                sx={{
+                  height: 20,
+                  fontSize: "0.68rem",
+                  fontWeight: 700,
+                  textTransform: "none",
+                  px: 0.8,
+                  py: 0,
+                  minWidth: "auto",
+                  borderRadius: 1,
+                  borderColor: `${blockColor}60`,
+                  color: blockColor,
+                  backgroundColor: `${blockColor}10`,
+                  "&:hover": {
+                    backgroundColor: `${blockColor}25`,
+                    borderColor: blockColor,
+                  },
+                }}
+              >
+                + Full Mesh
+              </Button>
             </Tooltip>
           )}
 

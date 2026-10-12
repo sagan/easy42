@@ -56,6 +56,7 @@ interface NavbarProps {
   onSync: () => void;
   onUpdateState?: () => void;
   updatingState?: boolean;
+  onOpenDetails: () => void;
   onOpenHelper?: () => void;
   onOpenLookingGlass?: () => void;
   onUnlockToggle: () => void;

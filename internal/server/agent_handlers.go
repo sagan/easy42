@@ -3,12 +3,19 @@ package server
 import (
 	"fmt"
 	"net/http"
+	"regexp"
 	"strings"
 
 	"easy42/internal/agent"
 	"github.com/go-chi/chi/v5"
 	"github.com/gorilla/websocket"
 )
+
+var safeHostRegex = regexp.MustCompile(`^[a-zA-Z0-9._:\[\]-]+$`)
+
+func isSafeHost(host string) bool {
+	return host != "" && safeHostRegex.MatchString(host)
+}
 
 var agentWsUpgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
@@ -28,9 +35,6 @@ func (s *Server) handleAgentWebSocket(w http.ResponseWriter, r *http.Request) {
 	}
 	if token == "" {
 		token = r.Header.Get("X-Easy42-Agent-Token")
-	}
-	if token == "" {
-		token = r.URL.Query().Get("token")
 	}
 
 	token = strings.TrimSpace(token)
@@ -76,7 +80,14 @@ func (s *Server) handleGenerateAgentToken(w http.ResponseWriter, r *http.Request
 		scheme = "http"
 	}
 	host := r.Host
+	if !isSafeHost(host) {
+		writeError(w, http.StatusBadRequest, "Invalid Host header")
+		return
+	}
 	serverURL := fmt.Sprintf("%s://%s", scheme, host)
+	if configuredURL := s.mgr.GetServerURL(); configuredURL != "" {
+		serverURL = configuredURL
+	}
 
 	installCmd := fmt.Sprintf("curl -fsSL %s/api/agent/install.sh | bash -s -- --server %s --token %s", serverURL, serverURL, token)
 
@@ -130,7 +141,15 @@ func (s *Server) handleAgentInstallScript(w http.ResponseWriter, r *http.Request
 	if r.TLS == nil && !strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https") {
 		scheme = "http"
 	}
-	serverURL := fmt.Sprintf("%s://%s", scheme, r.Host)
+	host := r.Host
+	if !isSafeHost(host) {
+		http.Error(w, "Invalid Host header", http.StatusBadRequest)
+		return
+	}
+	serverURL := fmt.Sprintf("%s://%s", scheme, host)
+	if configuredURL := s.mgr.GetServerURL(); configuredURL != "" {
+		serverURL = configuredURL
+	}
 
 	script := `#!/bin/sh
 set -e

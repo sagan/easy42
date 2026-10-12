@@ -141,11 +141,7 @@ export const NodeDetailPage: React.FC = () => {
   // Tabs state synced with query params
   const tabParam = searchParams.get("tab") || "overview";
   const validTabs = ["overview", "metrics", "telemetry", "networking", "routing", "firewall"];
-  const currentTab = validTabs.includes(tabParam)
-    ? tabParam === "telemetry"
-      ? "metrics"
-      : tabParam
-    : "overview";
+  const currentTab = validTabs.includes(tabParam) ? (tabParam === "telemetry" ? "metrics" : tabParam) : "overview";
 
   const handleTabChange = (_: React.SyntheticEvent, newValue: string) => {
     setSearchParams(
@@ -334,9 +330,7 @@ export const NodeDetailPage: React.FC = () => {
   const handleRestartAllWg = async () => {
     if (!node) return;
     if (
-      !window.confirm(
-        `Restart all WireGuard interfaces on node "${node.name}"? This may temporarily disrupt traffic.`,
-      )
+      !window.confirm(`Restart all WireGuard interfaces on node "${node.name}"? This may temporarily disrupt traffic.`)
     ) {
       return;
     }
@@ -715,11 +709,7 @@ export const NodeDetailPage: React.FC = () => {
             <Typography variant="body2" sx={{ color: "#64748B", mb: 3 }}>
               Node <strong>"{decodedNodeName}"</strong> was not found in the current Easy42 mesh topology.
             </Typography>
-            <Button
-              variant="contained"
-              startIcon={<ArrowLeft size={16} />}
-              onClick={() => navigate("/nodes")}
-            >
+            <Button variant="contained" startIcon={<ArrowLeft size={16} />} onClick={() => navigate("/nodes")}>
               Return to Nodes List
             </Button>
           </Paper>
@@ -1295,7 +1285,11 @@ export const NodeDetailPage: React.FC = () => {
                           </Tooltip>
                         )}
                       </Box>
-                      <Typography variant="body1" className="mono-font" sx={{ fontWeight: 700, color: "#0891B2", mt: 0.5 }}>
+                      <Typography
+                        variant="body1"
+                        className="mono-font"
+                        sx={{ fontWeight: 700, color: "#0891B2", mt: 0.5 }}
+                      >
                         {node.ip || "—"}
                       </Typography>
                     </Box>
@@ -1333,7 +1327,11 @@ export const NodeDetailPage: React.FC = () => {
                       <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600 }}>
                         Autonomous System Number (ASN)
                       </Typography>
-                      <Typography variant="body1" className="mono-font" sx={{ fontWeight: 700, color: "#4F46E5", mt: 0.5 }}>
+                      <Typography
+                        variant="body1"
+                        className="mono-font"
+                        sx={{ fontWeight: 700, color: "#4F46E5", mt: 0.5 }}
+                      >
                         AS{node.asn}
                       </Typography>
                     </Box>
@@ -1342,7 +1340,11 @@ export const NodeDetailPage: React.FC = () => {
                       <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600 }}>
                         Kernel Export Table
                       </Typography>
-                      <Typography variant="body1" className="mono-font" sx={{ fontWeight: 700, color: "#0F172A", mt: 0.5 }}>
+                      <Typography
+                        variant="body1"
+                        className="mono-font"
+                        sx={{ fontWeight: 700, color: "#0F172A", mt: 0.5 }}
+                      >
                         Table {node.table ?? 254}
                       </Typography>
                     </Box>
@@ -1448,7 +1450,9 @@ export const NodeDetailPage: React.FC = () => {
                         easy42 Agent Version:
                       </Typography>
                       <Typography variant="body2" className="mono-font" sx={{ fontWeight: 600, color: "#0F172A" }}>
-                        {live?.agent_version || status?.agent_version ? `v${live?.agent_version || status?.agent_version}` : "Not reported"}
+                        {live?.agent_version || status?.agent_version
+                          ? `v${live?.agent_version || status?.agent_version}`
+                          : "Not reported"}
                       </Typography>
                     </Box>
                     <Divider />
@@ -1740,9 +1744,7 @@ export const NodeDetailPage: React.FC = () => {
                 <Grid item xs={12} lg={6}>
                   <MetricAreaChart
                     title={
-                      live?.primary_interface
-                        ? `Network Bandwidth (${live.primary_interface})`
-                        : "Network Bandwidth"
+                      live?.primary_interface ? `Network Bandwidth (${live.primary_interface})` : "Network Bandwidth"
                     }
                     data={netData}
                     color="#059669"
@@ -1850,7 +1852,7 @@ export const NodeDetailPage: React.FC = () => {
                             </TableCell>
                             <TableCell>
                               <Typography variant="body2">
-                                {selfEnd.persistent_keepalive ? `${selfEnd.persistent_keepalive}s` : "Default (25s)"}
+                                {selfEnd.persistent_keepalive ? `${selfEnd.persistent_keepalive}s` : "-"}
                               </Typography>
                             </TableCell>
                             <TableCell>
@@ -1935,7 +1937,11 @@ export const NodeDetailPage: React.FC = () => {
                               }}
                             >
                               <Box>
-                                <Typography variant="caption" className="mono-font" sx={{ fontWeight: 700, color: "#0F172A" }}>
+                                <Typography
+                                  variant="caption"
+                                  className="mono-font"
+                                  sx={{ fontWeight: 700, color: "#0F172A" }}
+                                >
                                   Peer: {p.public_key ? `${p.public_key.substring(0, 16)}...` : "—"}
                                 </Typography>
                                 <Typography variant="caption" sx={{ color: "#64748B", display: "block" }}>
@@ -1943,7 +1949,10 @@ export const NodeDetailPage: React.FC = () => {
                                 </Typography>
                               </Box>
                               <Box sx={{ textAlign: "right" }}>
-                                <Typography variant="caption" sx={{ color: "#059669", fontWeight: 600, display: "block" }}>
+                                <Typography
+                                  variant="caption"
+                                  sx={{ color: "#059669", fontWeight: 600, display: "block" }}
+                                >
                                   Rx: {formatBytes(p.transfer_rx_bytes)} • Tx: {formatBytes(p.transfer_tx_bytes)}
                                 </Typography>
                                 <Typography variant="caption" sx={{ color: "#64748B" }}>
@@ -1984,21 +1993,37 @@ export const NodeDetailPage: React.FC = () => {
                         >
                           <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 0.8 }}>
                             <Box sx={{ display: "flex", alignItems: "center", gap: 0.8 }}>
-                              <Typography variant="body2" className="mono-font" sx={{ fontWeight: 700, color: "#0F172A" }}>
+                              <Typography
+                                variant="body2"
+                                className="mono-font"
+                                sx={{ fontWeight: 700, color: "#0F172A" }}
+                              >
                                 {inf.name}
                               </Typography>
                               {isPrimary && (
                                 <Chip
                                   label="Primary"
                                   size="small"
-                                  sx={{ height: 16, fontSize: "0.6rem", bgcolor: "#DBEAFE", color: "#1D4ED8", fontWeight: 700 }}
+                                  sx={{
+                                    height: 16,
+                                    fontSize: "0.6rem",
+                                    bgcolor: "#DBEAFE",
+                                    color: "#1D4ED8",
+                                    fontWeight: 700,
+                                  }}
                                 />
                               )}
                               {isPhysical && (
                                 <Chip
                                   label="Physical"
                                   size="small"
-                                  sx={{ height: 16, fontSize: "0.6rem", bgcolor: "#E0E7FF", color: "#4338CA", fontWeight: 600 }}
+                                  sx={{
+                                    height: 16,
+                                    fontSize: "0.6rem",
+                                    bgcolor: "#E0E7FF",
+                                    color: "#4338CA",
+                                    fontWeight: 600,
+                                  }}
                                 />
                               )}
                             </Box>
@@ -2016,7 +2041,12 @@ export const NodeDetailPage: React.FC = () => {
                           </Box>
                           <Box sx={{ display: "flex", flexDirection: "column", gap: 0.2 }}>
                             {inf.addresses?.map((addr, aIdx) => (
-                              <Typography key={aIdx} variant="caption" className="mono-font" sx={{ color: "#64748B", fontSize: "0.7rem" }}>
+                              <Typography
+                                key={aIdx}
+                                variant="caption"
+                                className="mono-font"
+                                sx={{ color: "#64748B", fontSize: "0.7rem" }}
+                              >
                                 {addr}
                               </Typography>
                             ))}
@@ -2281,7 +2311,14 @@ export const NodeDetailPage: React.FC = () => {
 
       {/* BIRD Config Dialog */}
       <Dialog open={viewingBird} onClose={() => setViewingBird(false)} maxWidth="md" fullWidth>
-        <DialogTitle sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid #E2E8F0" }}>
+        <DialogTitle
+          sx={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            borderBottom: "1px solid #E2E8F0",
+          }}
+        >
           <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
             <FileCode size={20} color="#4F46E5" />
             <Typography variant="h6" sx={{ fontWeight: 700 }}>
@@ -2297,7 +2334,15 @@ export const NodeDetailPage: React.FC = () => {
             Deployed to <code>/etc/bird_easy42.conf</code>. Ensure your main BIRD config includes:
             <Box
               component="pre"
-              sx={{ m: 0.5, p: 0.8, bgcolor: "#EEF2FF", color: "#4338CA", borderRadius: 1, fontFamily: "monospace", fontSize: "0.75rem" }}
+              sx={{
+                m: 0.5,
+                p: 0.8,
+                bgcolor: "#EEF2FF",
+                color: "#4338CA",
+                borderRadius: 1,
+                fontFamily: "monospace",
+                fontSize: "0.75rem",
+              }}
             >
               include "/etc/bird_easy42.conf";
             </Box>
@@ -2343,7 +2388,14 @@ export const NodeDetailPage: React.FC = () => {
 
       {/* Nftables Config Dialog */}
       <Dialog open={viewingNftables} onClose={() => setViewingNftables(false)} maxWidth="md" fullWidth>
-        <DialogTitle sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid #E2E8F0" }}>
+        <DialogTitle
+          sx={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            borderBottom: "1px solid #E2E8F0",
+          }}
+        >
           <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
             <Shield size={20} color="#E11D48" />
             <Typography variant="h6" sx={{ fontWeight: 700 }}>

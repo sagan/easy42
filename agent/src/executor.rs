@@ -17,6 +17,66 @@ pub struct ProbeConfigFile {
     pub hash: String,
 }
 
+fn is_allowed_config_path(path: &Path) -> bool {
+    if !path.is_absolute() {
+        return false;
+    }
+    for comp in path.components() {
+        if let std::path::Component::ParentDir = comp {
+            return false;
+        }
+    }
+    let p_str = path.to_string_lossy();
+
+    // 1. Exact static configuration files used by easy42
+    if p_str == "/etc/easy42.nft"
+        || p_str == "/etc/bird_easy42.conf"
+        || p_str == "/etc/easy42/agent.json"
+    {
+        return true;
+    }
+
+    // 2. WireGuard interface configs: /etc/wireguard/wg42*.conf
+    if let Some(iface) = p_str
+        .strip_prefix("/etc/wireguard/")
+        .and_then(|s| s.strip_suffix(".conf"))
+    {
+        if iface.starts_with("wg42") && is_valid_iface_name(iface) {
+            return true;
+        }
+    }
+
+    // 3. Dynamic ROA table configs: /etc/easy42_*_roa4.conf and /etc/easy42_*_roa6.conf
+    if let Some(rest) = p_str.strip_prefix("/etc/easy42_") {
+        let policy_id = if let Some(id) = rest.strip_suffix("_roa4.conf") {
+            Some(id)
+        } else {
+            rest.strip_suffix("_roa6.conf")
+        };
+        if let Some(id) = policy_id {
+            if !id.is_empty()
+                && !id.contains('/')
+                && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+            {
+                return true;
+            }
+        }
+    }
+
+    // 4. Temporary test directory (for test suites)
+    if p_str.starts_with("/tmp/") {
+        return true;
+    }
+
+    false
+}
+
+fn is_valid_iface_name(iface: &str) -> bool {
+    !iface.is_empty()
+        && iface.len() <= 15
+        && iface.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+}
+
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ProbeSystemResult {
     pub hostname: String,
@@ -92,6 +152,15 @@ impl CommandExecutor {
         }
 
         let target_path = Path::new(&req.path);
+        if !is_allowed_config_path(target_path) {
+            return (
+                false,
+                -1,
+                String::new(),
+                format!("path '{}' not allowed by agent security policy", req.path),
+            );
+        }
+
         if let Some(parent) = target_path.parent() {
             if let Err(e) = fs::create_dir_all(parent) {
                 return (
@@ -179,16 +248,46 @@ impl CommandExecutor {
         };
 
         let iface = req.interface_name;
+        if !is_valid_iface_name(&iface) {
+            return (
+                false,
+                -1,
+                String::new(),
+                format!("invalid interface name: {}", iface),
+            );
+        }
 
         match action {
             proto::manage_interface::Action::Up => {
-                run_shell(&format!("wg-quick up {} 2>&1 || true", iface)).await
+                let res = run_cmd("wg-quick", &["up", &iface]).await;
+                if res.0 {
+                    res
+                } else {
+                    let check = run_cmd("ip", &["link", "show", &iface]).await;
+                    if check.0 {
+                        (true, 0, res.2, res.3)
+                    } else {
+                        res
+                    }
+                }
             }
             proto::manage_interface::Action::Down => {
-                run_shell(&format!("wg-quick down {} 2>&1 || ip link del dev {} 2>&1 || true", iface, iface)).await
+                let res = run_cmd("wg-quick", &["down", &iface]).await;
+                if res.0 {
+                    res
+                } else {
+                    let ip_del = run_cmd("ip", &["link", "del", "dev", &iface]).await;
+                    if ip_del.0 {
+                        (true, 0, ip_del.2, ip_del.3)
+                    } else {
+                        res
+                    }
+                }
             }
             proto::manage_interface::Action::Restart => {
-                run_shell(&format!("wg-quick down {} 2>/dev/null || ip link del dev {} 2>/dev/null; wg-quick up {}", iface, iface, iface)).await
+                let _ = run_cmd("wg-quick", &["down", &iface]).await;
+                let _ = run_cmd("ip", &["link", "del", "dev", &iface]).await;
+                run_cmd("wg-quick", &["up", &iface]).await
             }
             proto::manage_interface::Action::SyncWg => {
                 let conf_file = if req.config_file.is_empty() {
@@ -196,7 +295,15 @@ impl CommandExecutor {
                 } else {
                     req.config_file
                 };
-                // If interface not up, bring it up; if already up, run wg syncconf
+                let conf_path = Path::new(&conf_file);
+                if !is_allowed_config_path(conf_path) {
+                    return (
+                        false,
+                        -1,
+                        String::new(),
+                        format!("config path '{}' not allowed by agent security policy", conf_file),
+                    );
+                }
                 let check_up = tokio::process::Command::new("ip").args(["link", "show", &iface]).output().await;
                 let is_up = check_up.map(|o| o.status.success()).unwrap_or(false);
                 if is_up {
@@ -206,11 +313,15 @@ impl CommandExecutor {
                         iface = iface
                     )).await
                 } else {
-                    run_shell(&format!("wg-quick up {} 2>&1", iface)).await
+                    run_cmd("wg-quick", &["up", &iface]).await
                 }
             }
             proto::manage_interface::Action::Delete => {
-                run_shell(&format!("wg-quick down {} 2>/dev/null || ip link del dev {} 2>/dev/null; rm -f /etc/wireguard/{}.conf", iface, iface, iface)).await
+                let _ = run_cmd("wg-quick", &["down", &iface]).await;
+                let _ = run_cmd("ip", &["link", "del", "dev", &iface]).await;
+                let conf_path = format!("/etc/wireguard/{}.conf", iface);
+                let _ = std::fs::remove_file(&conf_path);
+                (true, 0, format!("deleted interface {}", iface), String::new())
             }
         }
     }
@@ -229,7 +340,21 @@ impl CommandExecutor {
         } else {
             &req.script_path
         };
-        run_shell(&format!("chmod +x {} 2>/dev/null; {}", script, script)).await
+        let script_path = Path::new(script);
+        if !is_allowed_config_path(script_path) {
+            return (
+                false,
+                -1,
+                String::new(),
+                format!("script path '{}' not allowed by agent security policy", script),
+            );
+        }
+        if let Ok(metadata) = fs::metadata(script_path) {
+            let mut perms = metadata.permissions();
+            perms.set_mode(0o755);
+            let _ = fs::set_permissions(script_path, perms);
+        }
+        run_cmd(script, &[]).await
     }
 
     async fn restart_service(&self, req: proto::RestartServiceCmd) -> (bool, i32, String, String) {
@@ -278,17 +403,31 @@ done"#;
                 if req.command.is_empty() {
                     return (false, -1, String::new(), "empty custom command".to_string());
                 }
-                // Sanitize command: restrict to diagnostics (ping, traceroute, birdc, wg, ip)
-                let first_word = req.command.split_whitespace().next().unwrap_or("");
-                match first_word {
-                    "ping" | "traceroute" | "birdc" | "ip" | "wg" => run_shell(&req.command).await,
+                // Reject dangerous shell metacharacters
+                if req.command.chars().any(|c| matches!(c, ';' | '&' | '|' | '`' | '$' | '\n' | '\r' | '>' | '<')) {
+                    return (
+                        false,
+                        -1,
+                        String::new(),
+                        "command contains disallowed characters".to_string(),
+                    );
+                }
+                let words: Vec<&str> = req.command.split_whitespace().collect();
+                if words.is_empty() {
+                    return (false, -1, String::new(), "empty custom command".to_string());
+                }
+                let program = words[0];
+                match program {
+                    "ping" | "traceroute" | "birdc" | "ip" | "wg" | "mtr" | "whois" | "dig" => {
+                        run_cmd(program, &words[1..]).await
+                    }
                     _ => (
                         false,
                         -1,
                         String::new(),
                         format!(
                             "command '{}' not allowed by agent security policy",
-                            first_word
+                            program
                         ),
                     ),
                 }
@@ -390,3 +529,62 @@ async fn run_shell(cmd_str: &str) -> (bool, i32, String, String) {
         ),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::Path;
+
+    #[test]
+    fn test_allowed_config_paths() {
+        // Valid exact paths
+        assert!(is_allowed_config_path(Path::new("/etc/easy42.nft")));
+        assert!(is_allowed_config_path(Path::new("/etc/bird_easy42.conf")));
+        assert!(is_allowed_config_path(Path::new("/etc/easy42/agent.json")));
+
+        // Valid WireGuard configs
+        assert!(is_allowed_config_path(Path::new("/etc/wireguard/wg42_node1.conf")));
+        assert!(is_allowed_config_path(Path::new("/etc/wireguard/wg42.conf")));
+
+        // Valid ROA configs
+        assert!(is_allowed_config_path(Path::new("/etc/easy42_policy1_roa4.conf")));
+        assert!(is_allowed_config_path(Path::new("/etc/easy42_policy1_roa6.conf")));
+
+        // Valid test paths
+        assert!(is_allowed_config_path(Path::new("/tmp/test.conf")));
+        assert!(is_allowed_config_path(Path::new("/tmp/sub/dir/test.txt")));
+
+        // Invalid paths - loose prefixes that must be rejected
+        assert!(!is_allowed_config_path(Path::new("/etc/wireguard/other.conf")));
+        assert!(!is_allowed_config_path(Path::new("/etc/wireguard/wg42_toolongname12345.conf")));
+        assert!(!is_allowed_config_path(Path::new("/etc/bird/bird.conf")));
+        assert!(!is_allowed_config_path(Path::new("/etc/bird.conf")));
+        assert!(!is_allowed_config_path(Path::new("/etc/nftables.conf")));
+        assert!(!is_allowed_config_path(Path::new("/etc/easy42/evil.sh")));
+        assert!(!is_allowed_config_path(Path::new("/etc/cron.d/backdoor")));
+        assert!(!is_allowed_config_path(Path::new("/root/.ssh/authorized_keys")));
+        assert!(!is_allowed_config_path(Path::new("/etc/sudoers.d/easy42")));
+
+        // Path traversal attempts
+        assert!(!is_allowed_config_path(Path::new("/etc/wireguard/../cron.d/backdoor")));
+        assert!(!is_allowed_config_path(Path::new("/tmp/../etc/shadow")));
+
+        // Relative paths
+        assert!(!is_allowed_config_path(Path::new("etc/easy42.nft")));
+    }
+
+    #[test]
+    fn test_valid_iface_name() {
+        assert!(is_valid_iface_name("wg42"));
+        assert!(is_valid_iface_name("wg42_a_b"));
+        assert!(is_valid_iface_name("wg-0"));
+        assert!(is_valid_iface_name("eth0"));
+
+        assert!(!is_valid_iface_name(""));
+        assert!(!is_valid_iface_name("this_name_is_way_too_long_for_ifname"));
+        assert!(!is_valid_iface_name("wg42;rm -rf"));
+        assert!(!is_valid_iface_name("wg 42"));
+        assert!(!is_valid_iface_name("wg$foo"));
+    }
+}
+
