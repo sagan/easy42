@@ -1,6 +1,9 @@
 package ssh
 
 import (
+	"context"
+	"crypto/ed25519"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -209,8 +212,8 @@ func DialSSHWithTimeout(hostAliasOrIP string, timeout time.Duration) (*ssh.Clien
 
 	explicitUser, hostPart, explicitPort := ParseSSHHost(hostAliasOrIP)
 
-	// 1. Resolve OpenSSH config (Host alias, User, Port, HostName, IdentityFile)
-	var realHost, user, portStr, identityFile string
+	// 1. Resolve OpenSSH config (Host alias, User, Port, HostName, IdentityFile, HostKeyAlgorithms)
+	var realHost, user, portStr, identityFile, hostKeyAlgosConfig string
 
 	sshConfigPath := filepath.Join(home, ".ssh", "config")
 	if f, err := os.Open(sshConfigPath); err == nil {
@@ -232,6 +235,10 @@ func DialSSHWithTimeout(hostAliasOrIP string, timeout time.Duration) (*ssh.Clien
 			identityFile, _ = cfg.Get(hostAliasOrIP, "IdentityFile")
 			if identityFile == "" && hostPart != hostAliasOrIP {
 				identityFile, _ = cfg.Get(hostPart, "IdentityFile")
+			}
+			hostKeyAlgosConfig, _ = cfg.Get(hostAliasOrIP, "HostKeyAlgorithms")
+			if hostKeyAlgosConfig == "" && hostPart != hostAliasOrIP {
+				hostKeyAlgosConfig, _ = cfg.Get(hostPart, "HostKeyAlgorithms")
 			}
 		}
 	}
@@ -309,18 +316,64 @@ func DialSSHWithTimeout(hostAliasOrIP string, timeout time.Duration) (*ssh.Clien
 		return nil, fmt.Errorf("no SSH authentication methods (keys or agent) found for %s", hostAliasOrIP)
 	}
 
-	// 3. Host Key Callback (uses ~/.ssh/known_hosts directly and rejects unmatched or unknown host)
+	// 3. Host Key Callback and Algorithm Discovery
 	knownHostsPath := filepath.Join(home, ".ssh", "known_hosts")
-	khCallback, err := knownhosts.New(knownHostsPath)
+	var khFiles []string
+	for _, p := range []string{
+		knownHostsPath,
+		filepath.Join(home, ".ssh", "known_hosts2"),
+		"/etc/ssh/ssh_known_hosts",
+		"/etc/ssh/ssh_known_hosts2",
+	} {
+		if _, err := os.Stat(p); err == nil {
+			khFiles = append(khFiles, p)
+		}
+	}
+	if len(khFiles) == 0 {
+		khFiles = []string{knownHostsPath}
+	}
+
+	khCallback, err := knownhosts.New(khFiles...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read known_hosts (%s): %w", knownHostsPath, err)
 	}
+
+	targetAddr := net.JoinHostPort(realHost, strconv.Itoa(port))
+
+	// Probe known key types from known_hosts to prioritize matching algorithms
+	probeAddrs := []string{targetAddr}
+	if hostPart != "" && hostPart != realHost {
+		probeAddrs = append(probeAddrs, net.JoinHostPort(hostPart, strconv.Itoa(port)))
+	}
+	if net.ParseIP(realHost) == nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
+		var r net.Resolver
+		if ips, err := r.LookupIP(ctx, "ip", realHost); err == nil {
+			for _, ip := range ips {
+				probeAddrs = append(probeAddrs, net.JoinHostPort(ip.String(), strconv.Itoa(port)))
+			}
+		}
+		cancel()
+	}
+
+	knownTypes := getKnownKeyTypes(khCallback, probeAddrs...)
+	hostKeyAlgorithms := orderHostKeyAlgorithms(knownTypes, hostKeyAlgosConfig)
+
 	hostKeyCallback := func(hostname string, remote net.Addr, key ssh.PublicKey) error {
 		err := khCallback(hostname, remote, key)
-		if err != nil && hostPart != "" && hostPart != realHost {
-			// Check if host alias is configured in known_hosts
+		if err == nil {
+			return nil
+		}
+		// 1. Try host alias if different from realHost
+		if hostPart != "" && hostPart != realHost {
 			aliasAddr := net.JoinHostPort(hostPart, strconv.Itoa(port))
 			if err2 := khCallback(aliasAddr, remote, key); err2 == nil {
+				return nil
+			}
+		}
+		// 2. Try remote address if different from hostname
+		if remote != nil && remote.String() != "" && remote.String() != hostname {
+			if err2 := khCallback(remote.String(), remote, key); err2 == nil {
 				return nil
 			}
 		}
@@ -328,17 +381,181 @@ func DialSSHWithTimeout(hostAliasOrIP string, timeout time.Duration) (*ssh.Clien
 	}
 
 	clientConfig := &ssh.ClientConfig{
-		User:            user,
-		Auth:            authMethods,
-		HostKeyCallback: hostKeyCallback,
-		Timeout:         timeout,
+		User:              user,
+		Auth:              authMethods,
+		HostKeyCallback:   hostKeyCallback,
+		HostKeyAlgorithms: hostKeyAlgorithms,
+		Timeout:           timeout,
 	}
 
-	targetAddr := net.JoinHostPort(realHost, strconv.Itoa(port))
 	client, err := ssh.Dial("tcp", targetAddr, clientConfig)
 	if err != nil {
 		return nil, fmt.Errorf("ssh dial to %s (%s) failed: %w", hostAliasOrIP, targetAddr, err)
 	}
 
 	return client, nil
+}
+
+// defaultHostKeyAlgorithms specifies OpenSSH-standard host key algorithm preference order
+var defaultHostKeyAlgorithms = []string{
+	ssh.CertAlgoED25519v01,
+	ssh.CertAlgoECDSA256v01,
+	ssh.CertAlgoECDSA384v01,
+	ssh.CertAlgoECDSA521v01,
+	ssh.CertAlgoRSASHA512v01,
+	ssh.CertAlgoRSASHA256v01,
+	ssh.CertAlgoRSAv01,
+	ssh.KeyAlgoED25519,
+	ssh.KeyAlgoECDSA256,
+	ssh.KeyAlgoECDSA384,
+	ssh.KeyAlgoECDSA521,
+	ssh.KeyAlgoRSASHA512,
+	ssh.KeyAlgoRSASHA256,
+	ssh.KeyAlgoRSA,
+}
+
+var (
+	probeKeyOnce sync.Once
+	probePubKey  ssh.PublicKey
+	probeAddr    = &net.TCPAddr{IP: net.IPv4zero, Port: 22}
+)
+
+func getProbePublicKey() ssh.PublicKey {
+	probeKeyOnce.Do(func() {
+		pub, err := ssh.NewPublicKey(ed25519.PublicKey(make([]byte, ed25519.PublicKeySize)))
+		if err == nil {
+			probePubKey = pub
+		}
+	})
+	return probePubKey
+}
+
+// getKnownKeyTypes queries known_hosts callbacks with probe addresses to identify recorded key types
+func getKnownKeyTypes(khCallback ssh.HostKeyCallback, addrs ...string) []string {
+	probeKey := getProbePublicKey()
+	if probeKey == nil {
+		return nil
+	}
+
+	var keyTypes []string
+	seen := make(map[string]bool)
+
+	for _, addr := range addrs {
+		if addr == "" {
+			continue
+		}
+		if _, _, err := net.SplitHostPort(addr); err != nil {
+			addr = net.JoinHostPort(addr, "22")
+		}
+
+		err := khCallback(addr, probeAddr, probeKey)
+		if err == nil {
+			t := probeKey.Type()
+			if !seen[t] {
+				seen[t] = true
+				keyTypes = append(keyTypes, t)
+			}
+			continue
+		}
+
+		var keyErr *knownhosts.KeyError
+		if errors.As(err, &keyErr) {
+			for _, want := range keyErr.Want {
+				t := want.Key.Type()
+				if !seen[t] {
+					seen[t] = true
+					keyTypes = append(keyTypes, t)
+				}
+			}
+		}
+	}
+	return keyTypes
+}
+
+// algosForKeyType maps an OpenSSH public key type to corresponding host key algorithms
+func algosForKeyType(keyType string) []string {
+	switch keyType {
+	case ssh.KeyAlgoED25519:
+		return []string{ssh.KeyAlgoED25519, ssh.CertAlgoED25519v01}
+	case ssh.KeyAlgoECDSA256:
+		return []string{ssh.KeyAlgoECDSA256, ssh.CertAlgoECDSA256v01}
+	case ssh.KeyAlgoECDSA384:
+		return []string{ssh.KeyAlgoECDSA384, ssh.CertAlgoECDSA384v01}
+	case ssh.KeyAlgoECDSA521:
+		return []string{ssh.KeyAlgoECDSA521, ssh.CertAlgoECDSA521v01}
+	case ssh.KeyAlgoRSA:
+		return []string{
+			ssh.KeyAlgoRSASHA512,
+			ssh.KeyAlgoRSASHA256,
+			ssh.KeyAlgoRSA,
+			ssh.CertAlgoRSASHA512v01,
+			ssh.CertAlgoRSASHA256v01,
+			ssh.CertAlgoRSAv01,
+		}
+	case "sk-ssh-ed25519@openssh.com":
+		return []string{"sk-ssh-ed25519@openssh.com", "sk-ssh-ed25519-cert-v01@openssh.com"}
+	case "sk-ecdsa-sha2-nistp256@openssh.com":
+		return []string{"sk-ecdsa-sha2-nistp256@openssh.com", "sk-ecdsa-sha2-nistp256-cert-v01@openssh.com"}
+	default:
+		return []string{keyType}
+	}
+}
+
+// orderHostKeyAlgorithms builds the ordered list of host key algorithms, prioritizing known host keys
+func orderHostKeyAlgorithms(knownKeyTypes []string, configAlgos string) []string {
+	if configAlgos != "" {
+		fields := strings.Split(configAlgos, ",")
+		var clean []string
+		for _, f := range fields {
+			f = strings.TrimSpace(f)
+			if f != "" {
+				clean = append(clean, f)
+			}
+		}
+		if len(clean) > 0 {
+			first := clean[0]
+			if strings.HasPrefix(first, "+") {
+				clean[0] = strings.TrimPrefix(first, "+")
+				return mergeAlgorithms(defaultHostKeyAlgorithms, clean)
+			} else if strings.HasPrefix(first, "^") {
+				clean[0] = strings.TrimPrefix(first, "^")
+				return mergeAlgorithms(clean, defaultHostKeyAlgorithms)
+			} else if strings.HasPrefix(first, "-") {
+				clean[0] = strings.TrimPrefix(first, "-")
+				toRemove := make(map[string]bool)
+				for _, r := range clean {
+					toRemove[r] = true
+				}
+				var filtered []string
+				for _, d := range defaultHostKeyAlgorithms {
+					if !toRemove[d] {
+						filtered = append(filtered, d)
+					}
+				}
+				return filtered
+			}
+			return clean
+		}
+	}
+
+	var prioritized []string
+	for _, kt := range knownKeyTypes {
+		prioritized = append(prioritized, algosForKeyType(kt)...)
+	}
+
+	return mergeAlgorithms(prioritized, defaultHostKeyAlgorithms)
+}
+
+func mergeAlgorithms(lists ...[]string) []string {
+	var result []string
+	seen := make(map[string]bool)
+	for _, list := range lists {
+		for _, algo := range list {
+			if !seen[algo] && algo != "" {
+				seen[algo] = true
+				result = append(result, algo)
+			}
+		}
+	}
+	return result
 }

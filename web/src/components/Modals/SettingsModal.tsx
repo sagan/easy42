@@ -765,7 +765,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
     setPoliciesSuccess(null);
   };
 
-
   const handleOpenClonePolicy = (p: NetworkPolicy) => {
     setPolicyDialogMode("create");
     setPolicyId(`${p.id}-copy`);
@@ -860,7 +859,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
   };
 
   return (
-    <Box sx={{ p: { xs: 1.5, sm: 2.5, md: 3 }, height: "100%", minHeight: 0, overflowY: "auto", display: "flex", flexDirection: "column" }}>
+    <Box
+      sx={{
+        p: { xs: 1.5, sm: 2.5, md: 3 },
+        height: "100%",
+        minHeight: 0,
+        overflowY: "auto",
+        display: "flex",
+        flexDirection: "column",
+      }}
+    >
       {/* Main Settings Card */}
       <Paper
         elevation={0}
@@ -875,991 +883,555 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
           minHeight: 0,
         }}
       >
-        <Box sx={{ borderBottom: "1px solid #E2E8F0", px: { xs: 1, sm: 3 }, pt: 1, backgroundColor: "#F8FAFC", flexShrink: 0 }}>
-          <Tabs
-          value={activeTab}
-          onChange={(_, val) => {
-            setActiveTab(val);
-            setPasswordError(null);
-            setPasswordSuccess(null);
-            setLogoutAllError(null);
-          }}
-          variant="scrollable"
-          scrollButtons="auto"
-          allowScrollButtonsMobile
+        <Box
           sx={{
-            minHeight: 44,
-            "& .MuiTab-root": {
-              minHeight: 44,
-              textTransform: "none",
-              fontWeight: 600,
-              fontSize: "0.875rem",
-              gap: 1,
-            },
+            borderBottom: "1px solid #E2E8F0",
+            px: { xs: 1, sm: 3 },
+            pt: 1,
+            backgroundColor: "#F8FAFC",
+            flexShrink: 0,
           }}
         >
-          <Tab value="password" icon={<KeyRound size={16} />} iconPosition="start" label="Change Password" />
-          <Tab value="sessions" icon={<ShieldAlert size={16} />} iconPosition="start" label="Sessions" />
-          <Tab value="network" icon={<Globe size={16} />} iconPosition="start" label="Peering & BGP" />
-          <Tab value="policies" icon={<Shield size={16} />} iconPosition="start" label="Network Policies" />
-          <Tab value="templates" icon={<FileCode size={16} />} iconPosition="start" label="Config Template" />
-          <Tab value="dns" icon={<Cloud size={16} />} iconPosition="start" label="DNS" />
-        </Tabs>
-      </Box>
+          <Tabs
+            value={activeTab}
+            onChange={(_, val) => {
+              setActiveTab(val);
+              setPasswordError(null);
+              setPasswordSuccess(null);
+              setLogoutAllError(null);
+            }}
+            variant="scrollable"
+            scrollButtons="auto"
+            allowScrollButtonsMobile
+            sx={{
+              minHeight: 44,
+              "& .MuiTab-root": {
+                minHeight: 44,
+                textTransform: "none",
+                fontWeight: 600,
+                fontSize: "0.875rem",
+                gap: 1,
+              },
+            }}
+          >
+            <Tab value="password" icon={<KeyRound size={16} />} iconPosition="start" label="Change Password" />
+            <Tab value="sessions" icon={<ShieldAlert size={16} />} iconPosition="start" label="Sessions" />
+            <Tab value="network" icon={<Globe size={16} />} iconPosition="start" label="Peering & BGP" />
+            <Tab value="policies" icon={<Shield size={16} />} iconPosition="start" label="Network Policies" />
+            <Tab value="templates" icon={<FileCode size={16} />} iconPosition="start" label="Config Template" />
+            <Tab value="dns" icon={<Cloud size={16} />} iconPosition="start" label="DNS" />
+          </Tabs>
+        </Box>
 
-      {/* Tab 1: Change Password Form */}
-      {activeTab === "password" && (
-        <form
-          onSubmit={handleChangePassword}
-          style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, overflow: "hidden" }}
-        >
-          <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2.5, py: 3, px: 3, flex: 1, minHeight: 0, overflowY: "auto" }}>
-            <Typography variant="body2" sx={{ color: "#64748B" }}>
-              Update your easy42 admin password. Changing the password will re-encrypt your master data encryption key
-              (DEK) and invalidate other active sessions.
-            </Typography>
-
-            {passwordSuccess && (
-              <Alert icon={<CheckCircle2 size={18} />} severity="success" sx={{ borderRadius: 2 }}>
-                {passwordSuccess}
-              </Alert>
-            )}
-
-            {passwordError && (
-              <Alert severity="error" sx={{ borderRadius: 2 }}>
-                {passwordError}
-              </Alert>
-            )}
-
-            <TextField
-              fullWidth
-              size="small"
-              label="Current Password"
-              type={showCurrentPassword ? "text" : "password"}
-              value={currentPassword}
-              onChange={(e) => setCurrentPassword(e.target.value)}
-              required
-              disabled={passwordLoading}
-              slotProps={{
-                input: {
-                  endAdornment: (
-                    <InputAdornment position="end">
-                      <IconButton
-                        size="small"
-                        edge="end"
-                        onClick={() => setShowCurrentPassword(!showCurrentPassword)}
-                        aria-label="toggle current password visibility"
-                      >
-                        {showCurrentPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                      </IconButton>
-                    </InputAdornment>
-                  ),
-                },
-              }}
-            />
-
-            <TextField
-              fullWidth
-              size="small"
-              label="New Password"
-              type={showNewPassword ? "text" : "password"}
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              required
-              disabled={passwordLoading}
-              helperText="Minimum 6 characters"
-              slotProps={{
-                input: {
-                  endAdornment: (
-                    <InputAdornment position="end">
-                      <IconButton
-                        size="small"
-                        edge="end"
-                        onClick={() => setShowNewPassword(!showNewPassword)}
-                        aria-label="toggle new password visibility"
-                      >
-                        {showNewPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                      </IconButton>
-                    </InputAdornment>
-                  ),
-                },
-              }}
-            />
-
-            <TextField
-              fullWidth
-              size="small"
-              label="Confirm New Password"
-              type={showConfirmPassword ? "text" : "password"}
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              required
-              disabled={passwordLoading}
-              error={Boolean(confirmPassword && newPassword !== confirmPassword)}
-              helperText={confirmPassword && newPassword !== confirmPassword ? "Passwords do not match" : ""}
-              slotProps={{
-                input: {
-                  endAdornment: (
-                    <InputAdornment position="end">
-                      <IconButton
-                        size="small"
-                        edge="end"
-                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                        aria-label="toggle confirm password visibility"
-                      >
-                        {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                      </IconButton>
-                    </InputAdornment>
-                  ),
-                },
-              }}
-            />
-            <Box sx={{ display: "flex", justifyContent: "flex-end", pt: 1 }}>
-              <Button
-                type="submit"
-                variant="contained"
-                disabled={passwordLoading || !currentPassword || !newPassword || !confirmPassword}
-                startIcon={passwordLoading ? <CircularProgress size={16} color="inherit" /> : <KeyRound size={16} />}
-                sx={{
-                  background: "linear-gradient(135deg, #4F46E5 0%, #3730A3 100%)",
-                  fontWeight: 700,
-                  color: "#FFFFFF",
-                }}
-              >
-                {passwordLoading ? "Updating Password..." : "Change Password"}
-              </Button>
-            </Box>
-          </DialogContent>
-        </form>
-      )}
-
-      {/* Tab 2: Sessions / Logout All */}
-      {activeTab === "sessions" && (
-        <Box sx={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, overflow: "hidden" }}>
-          <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2.5, py: 3, px: 3, flex: 1, minHeight: 0, overflowY: "auto" }}>
-            {logoutAllError && (
-              <Alert severity="error" sx={{ borderRadius: 2 }}>
-                {logoutAllError}
-              </Alert>
-            )}
-
-            <Box
+        {/* Tab 1: Change Password Form */}
+        {activeTab === "password" && (
+          <form
+            onSubmit={handleChangePassword}
+            style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, overflow: "hidden" }}
+          >
+            <DialogContent
               sx={{
-                p: 2.5,
-                borderRadius: 2,
-                border: "1px solid #FEE2E2",
-                backgroundColor: "#FEF2F2",
                 display: "flex",
                 flexDirection: "column",
-                gap: 1.5,
+                gap: 2.5,
+                py: 3,
+                px: 3,
+                flex: 1,
+                minHeight: 0,
+                overflowY: "auto",
               }}
             >
-              <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, color: "#B91C1C" }}>
-                <ShieldAlert size={22} />
-                <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
-                  Reset Session Secret & Log Out All Sessions
-                </Typography>
-              </Box>
-
-              <Typography variant="body2" sx={{ color: "#7F1D1D", lineHeight: 1.6 }}>
-                Clicking <strong>Logout all</strong> will regenerate the <code>session_secret</code> in{" "}
-                <code>config.json</code> and immediately lock the in-memory vault.
+              <Typography variant="body2" sx={{ color: "#64748B" }}>
+                Update your easy42 admin password. Changing the password will re-encrypt your master data encryption key
+                (DEK) and invalidate other active sessions.
               </Typography>
 
-              <Typography variant="body2" sx={{ color: "#991B1B", lineHeight: 1.6 }}>
-                This invalidates every active session across all devices and browsers, including your current one. You
-                and any other users will be required to log in again.
-              </Typography>
-            </Box>
+              {passwordSuccess && (
+                <Alert icon={<CheckCircle2 size={18} />} severity="success" sx={{ borderRadius: 2 }}>
+                  {passwordSuccess}
+                </Alert>
+              )}
 
-            {!logoutAllConfirming ? (
-              <Box sx={{ display: "flex", justifyContent: "flex-start", pt: 1 }}>
+              {passwordError && (
+                <Alert severity="error" sx={{ borderRadius: 2 }}>
+                  {passwordError}
+                </Alert>
+              )}
+
+              <TextField
+                fullWidth
+                size="small"
+                label="Current Password"
+                type={showCurrentPassword ? "text" : "password"}
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                required
+                disabled={passwordLoading}
+                slotProps={{
+                  input: {
+                    endAdornment: (
+                      <InputAdornment position="end">
+                        <IconButton
+                          size="small"
+                          edge="end"
+                          onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                          aria-label="toggle current password visibility"
+                        >
+                          {showCurrentPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                        </IconButton>
+                      </InputAdornment>
+                    ),
+                  },
+                }}
+              />
+
+              <TextField
+                fullWidth
+                size="small"
+                label="New Password"
+                type={showNewPassword ? "text" : "password"}
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                required
+                disabled={passwordLoading}
+                helperText="Minimum 6 characters"
+                slotProps={{
+                  input: {
+                    endAdornment: (
+                      <InputAdornment position="end">
+                        <IconButton
+                          size="small"
+                          edge="end"
+                          onClick={() => setShowNewPassword(!showNewPassword)}
+                          aria-label="toggle new password visibility"
+                        >
+                          {showNewPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                        </IconButton>
+                      </InputAdornment>
+                    ),
+                  },
+                }}
+              />
+
+              <TextField
+                fullWidth
+                size="small"
+                label="Confirm New Password"
+                type={showConfirmPassword ? "text" : "password"}
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                required
+                disabled={passwordLoading}
+                error={Boolean(confirmPassword && newPassword !== confirmPassword)}
+                helperText={confirmPassword && newPassword !== confirmPassword ? "Passwords do not match" : ""}
+                slotProps={{
+                  input: {
+                    endAdornment: (
+                      <InputAdornment position="end">
+                        <IconButton
+                          size="small"
+                          edge="end"
+                          onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                          aria-label="toggle confirm password visibility"
+                        >
+                          {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                        </IconButton>
+                      </InputAdornment>
+                    ),
+                  },
+                }}
+              />
+              <Box sx={{ display: "flex", justifyContent: "flex-end", pt: 1 }}>
                 <Button
-                  variant="outlined"
-                  color="error"
-                  startIcon={<LogOut size={16} />}
-                  onClick={() => setLogoutAllConfirming(true)}
+                  type="submit"
+                  variant="contained"
+                  disabled={passwordLoading || !currentPassword || !newPassword || !confirmPassword}
+                  startIcon={passwordLoading ? <CircularProgress size={16} color="inherit" /> : <KeyRound size={16} />}
                   sx={{
-                    borderColor: "#F87171",
-                    color: "#DC2626",
+                    background: "linear-gradient(135deg, #4F46E5 0%, #3730A3 100%)",
                     fontWeight: 700,
-                    "&:hover": {
-                      borderColor: "#DC2626",
-                      backgroundColor: "rgba(220, 38, 38, 0.06)",
-                    },
+                    color: "#FFFFFF",
                   }}
                 >
-                  Logout all
+                  {passwordLoading ? "Updating Password..." : "Change Password"}
                 </Button>
               </Box>
-            ) : (
+            </DialogContent>
+          </form>
+        )}
+
+        {/* Tab 2: Sessions / Logout All */}
+        {activeTab === "sessions" && (
+          <Box sx={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, overflow: "hidden" }}>
+            <DialogContent
+              sx={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 2.5,
+                py: 3,
+                px: 3,
+                flex: 1,
+                minHeight: 0,
+                overflowY: "auto",
+              }}
+            >
+              {logoutAllError && (
+                <Alert severity="error" sx={{ borderRadius: 2 }}>
+                  {logoutAllError}
+                </Alert>
+              )}
+
               <Box
                 sx={{
-                  p: 2,
+                  p: 2.5,
                   borderRadius: 2,
-                  border: "1px solid #CBD5E1",
-                  backgroundColor: "#F8FAFC",
+                  border: "1px solid #FEE2E2",
+                  backgroundColor: "#FEF2F2",
                   display: "flex",
                   flexDirection: "column",
                   gap: 1.5,
                 }}
               >
-                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0F172A" }}>
-                  Are you sure you want to log out all sessions?
-                </Typography>
-                <Typography variant="body2" sx={{ color: "#64748B" }}>
-                  All connected browsers will immediately lose authentication and return to the login screen.
-                </Typography>
-                <Box sx={{ display: "flex", gap: 1.5, pt: 0.5 }}>
-                  <Button
-                    size="small"
-                    variant="outlined"
-                    onClick={() => setLogoutAllConfirming(false)}
-                    disabled={logoutAllLoading}
-                    sx={{ color: "#64748B", borderColor: "#CBD5E1" }}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    size="small"
-                    variant="contained"
-                    color="error"
-                    disabled={logoutAllLoading}
-                    onClick={handleLogoutAll}
-                    startIcon={logoutAllLoading ? <CircularProgress size={14} color="inherit" /> : <LogOut size={14} />}
-                    sx={{ fontWeight: 700 }}
-                  >
-                    {logoutAllLoading ? "Logging out all..." : "Confirm: Log Out All"}
-                  </Button>
-                </Box>
-              </Box>
-            )}
-          </DialogContent>
-
-
-        </Box>
-      )}
-
-      {/* Tab 3: Peering & BGP Network Settings */}
-      {activeTab === "network" && (
-        <form
-          onSubmit={handleSaveNetworkSettings}
-          style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, overflow: "hidden" }}
-        >
-          <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2.5, py: 3, px: 3, flex: 1, minHeight: 0, overflowY: "auto" }}>
-            <Typography variant="body2" sx={{ color: "#64748B" }}>
-              Configure global BGP confederation parameters for external peering (such as DN42 or private networks). BGP
-              confederation replaces your internal mesh ASNs with your public ASN in external BGP sessions. Subnet
-              filtering and firewall policies are configured per-link under Network Policies.
-            </Typography>
-
-            {networkLoading ? (
-              <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
-                <CircularProgress size={24} />
-              </Box>
-            ) : (
-              <>
-                {networkSuccess && (
-                  <Alert icon={<CheckCircle2 size={18} />} severity="success" sx={{ borderRadius: 2 }}>
-                    {networkSuccess}
-                  </Alert>
-                )}
-
-                {networkError && (
-                  <Alert severity="error" sx={{ borderRadius: 2 }}>
-                    {networkError}
-                  </Alert>
-                )}
-
-                <TextField
-                  fullWidth
-                  size="small"
-                  label="Public / DN42 ASN"
-                  type="number"
-                  placeholder="e.g. 4242420000"
-                  value={publicAsn}
-                  onChange={(e) => setPublicAsn(e.target.value === "" ? "" : Number(e.target.value))}
-                  helperText="Your network's public ASN (e.g. DN42 ASN). When set, BIRD confederation exposes this ASN to external peers."
-                  disabled={networkSaving}
-                />
-
-                <TextField
-                  fullWidth
-                  size="small"
-                  multiline
-                  rows={2}
-                  label="Local DN42 Networks"
-                  placeholder="e.g. 172.20.229.0/27, fd00:dead:beef::/48"
-                  value={localDn42Networks}
-                  onChange={(e) => setLocalDn42Networks(e.target.value)}
-                  helperText="Internal DN42 CIDRs (IPv4 and/or IPv6). When external DN42 traffic is forwarded to these networks, the built-in DN42 filter input port rules are enforced."
-                  disabled={networkSaving}
-                />
-
-                <TextField
-                  fullWidth
-                  size="small"
-                  multiline
-                  rows={2}
-                  label="Disallowed CIDRs for dn42"
-                  placeholder="e.g. fd42:1234:5678::/48, 172.20.99.0/24"
-                  value={disallowedDn42Networks}
-                  onChange={(e) => setDisallowedDn42Networks(e.target.value)}
-                  helperText="Excluded subnets for built-in dn42 policy (used as DisallowedDstCIDRs & DisallowedSrcCIDRs). Rejects BGP export, drops inbound traffic, and triggers SNAT for internal egress traffic."
-                  disabled={networkSaving}
-                />
-
-                <Divider sx={{ my: 0.5 }} />
-
-                <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                    <Activity size={18} color="#4F46E5" />
-                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#1E293B" }}>
-                      FlapAlerted Integration
-                    </Typography>
-                    <Chip
-                      label="BGP Flap Detection"
-                      size="small"
-                      sx={{
-                        height: 20,
-                        fontSize: "0.68rem",
-                        fontWeight: 600,
-                        bgcolor: "#EEF2FF",
-                        color: "#4F46E5",
-                      }}
-                    />
-                  </Box>
-                  <Typography variant="body2" sx={{ color: "#64748B", fontSize: "0.82rem" }}>
-                    Configure FlapAlerted BGP route flap detection. The FlapAlerted service is deployed separately on any host in the network (e.g.{" "}
-                    <code style={{ background: "#F1F5F9", padding: "2px 6px", borderRadius: 4, fontFamily: "monospace" }}>
-                      FlapAlerted -asn {faAsn || 4224420000}
-                    </code>
-                    ). Nodes with <strong>enable_fa</strong> enabled will peer with this instance.
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, color: "#B91C1C" }}>
+                  <ShieldAlert size={22} />
+                  <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+                    Reset Session Secret & Log Out All Sessions
                   </Typography>
-
-                  <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "2fr 1fr 1fr" }, gap: 2 }}>
-                    <TextField
-                      fullWidth
-                      size="small"
-                      label="FlapAlerted Address"
-                      placeholder="e.g. fd42:a159:f9f0:8000::c8"
-                      value={faAddress}
-                      onChange={(e) => setFaAddress(e.target.value)}
-                      helperText="Private IPv4 or IPv6 routable inside easy42"
-                      disabled={networkSaving}
-                    />
-                    <TextField
-                      fullWidth
-                      size="small"
-                      label="FlapAlerted Port"
-                      type="number"
-                      placeholder="1790"
-                      value={faPort}
-                      onChange={(e) => setFaPort(e.target.value === "" ? "" : Number(e.target.value))}
-                      helperText="Default: 1790"
-                      disabled={networkSaving}
-                    />
-                    <TextField
-                      fullWidth
-                      size="small"
-                      label="FlapAlerted ASN"
-                      type="number"
-                      placeholder="4224420000"
-                      value={faAsn}
-                      onChange={(e) => setFaAsn(e.target.value === "" ? "" : Number(e.target.value))}
-                      helperText="Default: 4224420000"
-                      disabled={networkSaving}
-                    />
-                  </Box>
                 </Box>
-                <Box sx={{ display: "flex", justifyContent: "flex-end", pt: 1 }}>
+
+                <Typography variant="body2" sx={{ color: "#7F1D1D", lineHeight: 1.6 }}>
+                  Clicking <strong>Logout all</strong> will regenerate the <code>session_secret</code> in{" "}
+                  <code>config.json</code> and immediately lock the in-memory vault.
+                </Typography>
+
+                <Typography variant="body2" sx={{ color: "#991B1B", lineHeight: 1.6 }}>
+                  This invalidates every active session across all devices and browsers, including your current one. You
+                  and any other users will be required to log in again.
+                </Typography>
+              </Box>
+
+              {!logoutAllConfirming ? (
+                <Box sx={{ display: "flex", justifyContent: "flex-start", pt: 1 }}>
                   <Button
-                    type="submit"
-                    variant="contained"
-                    disabled={networkLoading || networkSaving}
-                    startIcon={networkSaving && <CircularProgress size={16} color="inherit" />}
-                    sx={{ fontWeight: 600 }}
-                  >
-                    {networkSaving ? "Saving..." : "Save Settings"}
-                  </Button>
-                </Box>
-              </>
-            )}
-          </DialogContent>
-        </form>
-      )}
-
-      {/* Tab 4: Network Policies */}
-      {activeTab === "policies" && (
-        <Box sx={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, height: "100%", overflow: "hidden" }}>
-          <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2.5, py: 3, px: 3, flex: 1, minHeight: 0, overflowY: "auto" }}>
-            <Box sx={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 2 }}>
-              <Box>
-                <Typography variant="body2" sx={{ color: "#475569", lineHeight: 1.5 }}>
-                  Define link-level firewall and routing policies. Network policies restrict ingress allowed destination
-                  & source IPs (dropping unauthorized packets in nftables while preserving established return flows),
-                  filter BGP route imports, and configure outbound SNAT / masquerade.
-                </Typography>
-              </Box>
-              <Button
-                variant="contained"
-                size="small"
-                startIcon={<Plus size={16} />}
-                onClick={handleOpenCreatePolicy}
-                sx={{
-                  whiteSpace: "nowrap",
-                  fontWeight: 600,
-                  bgcolor: "#4F46E5",
-                  "&:hover": { bgcolor: "#4338CA" },
-                }}
-              >
-                Create Policy
-              </Button>
-            </Box>
-
-            {policiesSuccess && (
-              <Alert icon={<CheckCircle2 size={18} />} severity="success" sx={{ borderRadius: 2 }}>
-                {policiesSuccess}
-              </Alert>
-            )}
-
-            {policiesError && (
-              <Alert severity="error" sx={{ borderRadius: 2 }}>
-                {policiesError}
-              </Alert>
-            )}
-
-            {policiesLoading ? (
-              <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
-                <CircularProgress size={24} />
-              </Box>
-            ) : (
-              <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, mt: 1 }}>
-                {policies.map((p) => {
-                  const isBuiltin = Boolean(p.is_internal);
-                  return (
-                    <Box
-                      key={p.id}
-                      sx={{
-                        p: 2,
-                        borderRadius: 2,
-                        border: "1px solid",
-                        borderColor: isBuiltin ? "#E0E7FF" : "#E2E8F0",
-                        bgcolor: isBuiltin ? "#F8FAFC" : "#FFFFFF",
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: 1.2,
-                        transition: "all 0.15s ease",
-                        "&:hover": {
-                          borderColor: isBuiltin ? "#C7D2FE" : "#CBD5E1",
-                          boxShadow: "0 2px 4px rgba(0,0,0,0.03)",
-                        },
-                      }}
-                    >
-                      <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                          <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0F172A" }}>
-                            {p.name}
-                          </Typography>
-                          <Typography
-                            variant="caption"
-                            className="mono-font"
-                            sx={{ color: "#64748B", bgcolor: "#F1F5F9", px: 0.8, py: 0.2, borderRadius: 1 }}
-                          >
-                            {p.id}
-                          </Typography>
-                          <Chip
-                            label={isBuiltin ? "Built-in" : "Custom"}
-                            size="small"
-                            sx={{
-                              height: 20,
-                              fontSize: "0.68rem",
-                              fontWeight: 700,
-                              bgcolor: isBuiltin ? "rgba(79, 70, 229, 0.1)" : "rgba(16, 185, 129, 0.12)",
-                              color: isBuiltin ? "#4F46E5" : "#059669",
-                            }}
-                          />
-                          {(p.roa4 || p.roa6) && (
-                            <Chip
-                              label={p.roa_strict ? "ROA (Strict)" : "ROA"}
-                              size="small"
-                              sx={{
-                                height: 20,
-                                fontSize: "0.68rem",
-                                fontWeight: 700,
-                                bgcolor: "rgba(14, 165, 233, 0.12)",
-                                color: "#0284C7",
-                              }}
-                            />
-                          )}
-                          {p.routing_policy && p.routing_policy !== "full" && (
-                            <Chip
-                              label={
-                                p.routing_policy === "stub"
-                                  ? "Stub"
-                                  : p.routing_policy === "receive_only"
-                                    ? "Receive Only"
-                                    : p.routing_policy === "advertise_only"
-                                      ? "Advertise Only"
-                                      : p.routing_policy
-                              }
-                              size="small"
-                              sx={{
-                                height: 20,
-                                fontSize: "0.68rem",
-                                fontWeight: 700,
-                                bgcolor: "rgba(245, 158, 11, 0.12)",
-                                color: "#D97706",
-                              }}
-                            />
-                          )}
-                          {p.block_ingress_new && (
-                            <Chip
-                              label={
-                                p.block_ingress_new === "all"
-                                  ? "Block Ingress New"
-                                  : p.block_ingress_new === "forward"
-                                    ? "Block Ingress Forward"
-                                    : p.block_ingress_new
-                              }
-                              size="small"
-                              sx={{
-                                height: 20,
-                                fontSize: "0.68rem",
-                                fontWeight: 700,
-                                bgcolor: "rgba(239, 68, 68, 0.12)",
-                                color: "#DC2626",
-                              }}
-                            />
-                          )}
-                        </Box>
-                        <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-                          {(p.roa4 || p.roa6) && (
-                            <Button
-                              size="small"
-                              variant="outlined"
-                              onClick={async () => {
-                                try {
-                                  await api.refreshPolicyROA(p.id);
-                                  setPoliciesSuccess(`ROA cache for "${p.name}" refreshed.`);
-                                } catch (err: unknown) {
-                                  const e = err as Error;
-                                  setPoliciesError(e.message || "Failed to refresh ROA.");
-                                }
-                              }}
-                              sx={{
-                                py: 0.3,
-                                px: 1,
-                                minWidth: 0,
-                                fontSize: "0.75rem",
-                                color: "#0284C7",
-                                borderColor: "#BAE6FD",
-                              }}
-                            >
-                              Sync ROA
-                            </Button>
-                          )}
-                          <Button
-                            size="small"
-                            variant="outlined"
-                            onClick={() => handleOpenViewPolicy(p)}
-                            sx={{
-                              py: 0.3,
-                              px: 1,
-                              minWidth: 0,
-                              fontSize: "0.75rem",
-                              color: "#475569",
-                              borderColor: "#CBD5E1",
-                            }}
-                          >
-                            View
-                          </Button>
-                          <Button
-                            size="small"
-                            variant="outlined"
-                            startIcon={<Copy size={12} />}
-                            onClick={() => handleOpenClonePolicy(p)}
-                            sx={{
-                              py: 0.3,
-                              px: 1,
-                              minWidth: 0,
-                              fontSize: "0.75rem",
-                              color: "#4F46E5",
-                              borderColor: "#C7D2FE",
-                            }}
-                          >
-                            Clone
-                          </Button>
-                          {!isBuiltin && (
-                            <>
-                              <IconButton
-                                size="small"
-                                onClick={() => handleOpenEditPolicy(p)}
-                                sx={{ color: "#4F46E5", p: 0.5 }}
-                                title="Edit Policy"
-                              >
-                                <Edit2 size={15} />
-                              </IconButton>
-                              <IconButton
-                                size="small"
-                                onClick={() => handleDeletePolicy(p)}
-                                sx={{ color: "#EF4444", p: 0.5 }}
-                                title="Delete Policy"
-                              >
-                                <Trash2 size={15} />
-                              </IconButton>
-                            </>
-                          )}
-                        </Box>
-                      </Box>
-
-                      {p.description && (
-                        <Typography variant="caption" sx={{ color: "#64748B" }}>
-                          {p.description}
-                        </Typography>
-                      )}
-
-                      <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, pt: 0.5 }}>
-                        <Chip
-                          size="small"
-                          label={`Cost: ${p.cost ?? 100}`}
-                          variant="outlined"
-                          sx={{
-                            fontSize: "0.7rem",
-                            height: 22,
-                            borderColor: "#C7D2FE",
-                            bgcolor: "#EEF2FF",
-                            color: "#4338CA",
-                          }}
-                        />
-                        {p.fwmark && (
-                          <Chip
-                            size="small"
-                            label={`FwMark: ${p.fwmark}`}
-                            variant="outlined"
-                            sx={{
-                              fontSize: "0.7rem",
-                              height: 22,
-                              borderColor: "#DDD6FE",
-                              bgcolor: "#FAF5FF",
-                              color: "#6D28D9",
-                            }}
-                          />
-                        )}
-                        {p.preference !== undefined && (
-                          <Chip
-                            size="small"
-                            label={`Preference: ${p.preference}`}
-                            variant="outlined"
-                            sx={{
-                              fontSize: "0.7rem",
-                              height: 22,
-                              borderColor: "#BBF7D0",
-                              bgcolor: "#F0FDF4",
-                              color: "#15803D",
-                            }}
-                          />
-                        )}
-                        {p.mark && (
-                          <Chip
-                            size="small"
-                            label={`Mark: ${p.mark}`}
-                            variant="outlined"
-                            sx={{
-                              fontSize: "0.7rem",
-                              height: 22,
-                              borderColor: "#DDD6FE",
-                              bgcolor: "#FAF5FF",
-                              color: "#6D28D9",
-                            }}
-                          />
-                        )}
-                        <Chip
-                          size="small"
-                          label={`Allowed Dst: ${p.allowed_dst_cidrs && p.allowed_dst_cidrs.length > 0 ? `${p.allowed_dst_cidrs.length} prefix(es)` : "All"}`}
-                          variant="outlined"
-                          sx={{ fontSize: "0.7rem", height: 22 }}
-                        />
-                        <Chip
-                          size="small"
-                          label={`Allowed Src: ${p.allowed_src_cidrs && p.allowed_src_cidrs.length > 0 ? `${p.allowed_src_cidrs.length} prefix(es)` : "All"}`}
-                          variant="outlined"
-                          sx={{ fontSize: "0.7rem", height: 22 }}
-                        />
-                        {p.disallowed_dst_cidrs && p.disallowed_dst_cidrs.length > 0 && (
-                          <Chip
-                            size="small"
-                            label={`Disallowed Dst: ${p.disallowed_dst_cidrs.length} prefix(es)`}
-                            variant="outlined"
-                            sx={{
-                              fontSize: "0.7rem",
-                              height: 22,
-                              borderColor: "#FECACA",
-                              bgcolor: "#FEF2F2",
-                              color: "#DC2626",
-                            }}
-                          />
-                        )}
-                        {p.disallowed_src_cidrs && p.disallowed_src_cidrs.length > 0 && (
-                          <Chip
-                            size="small"
-                            label={`Disallowed Src: ${p.disallowed_src_cidrs.length} prefix(es)`}
-                            variant="outlined"
-                            sx={{
-                              fontSize: "0.7rem",
-                              height: 22,
-                              borderColor: "#FECACA",
-                              bgcolor: "#FEF2F2",
-                              color: "#DC2626",
-                            }}
-                          />
-                        )}
-                        <Chip
-                          size="small"
-                          label={`Forward Filter: ${p.filter_forward ? "Enabled" : "Disabled"}`}
-                          variant="outlined"
-                          sx={{
-                            fontSize: "0.7rem",
-                            height: 22,
-                            borderColor: p.filter_forward ? "#C7D2FE" : undefined,
-                            bgcolor: p.filter_forward ? "#EEF2FF" : undefined,
-                            color: p.filter_forward ? "#4338CA" : undefined,
-                          }}
-                        />
-                        <Chip
-                          size="small"
-                          label={`Input Filter: ${p.filter_input ? "Enabled" : "Disabled"}`}
-                          variant="outlined"
-                          sx={{
-                            fontSize: "0.7rem",
-                            height: 22,
-                            borderColor: p.filter_input ? "#FED7AA" : undefined,
-                            bgcolor: p.filter_input ? "#FFF7ED" : undefined,
-                            color: p.filter_input ? "#C2410C" : undefined,
-                          }}
-                        />
-                        <Chip
-                          size="small"
-                          label={`Leak Protect: ${p.reject_internet ? "Internet Rejection" : "None"}`}
-                          variant="outlined"
-                          sx={{ fontSize: "0.7rem", height: 22 }}
-                        />
-                        <Chip
-                          size="small"
-                          label={`SNAT: ${p.snat?.enabled ? (p.snat.condition === "not_dst" ? "SNAT (src != dst)" : "SNAT (all)") : "Disabled"}`}
-                          variant="outlined"
-                          sx={{
-                            fontSize: "0.7rem",
-                            height: 22,
-                            borderColor: p.snat?.enabled ? "#A5F3FC" : undefined,
-                            bgcolor: p.snat?.enabled ? "#F0FDFA" : undefined,
-                            color: p.snat?.enabled ? "#0F766E" : undefined,
-                          }}
-                        />
-                        {p.forward_snat && (
-                          <Chip
-                            size="small"
-                            label={`Forward SNAT: ${p.forward_snat_target === "external_ip" ? "External IP" : p.forward_snat_target === "main_ip" ? "Main IP" : "Masquerade"}`}
-                            variant="outlined"
-                            sx={{
-                              fontSize: "0.7rem",
-                              height: 22,
-                              borderColor: "#BAE6FD",
-                              bgcolor: "#F0F9FF",
-                              color: "#0369A1",
-                            }}
-                          />
-                        )}
-                        {p.local_networks && p.local_networks.length > 0 && (
-                          <Chip
-                            size="small"
-                            label={`Local Nets: ${p.local_networks.length}`}
-                            variant="outlined"
-                            sx={{
-                              fontSize: "0.7rem",
-                              height: 22,
-                              borderColor: "#E2E8F0",
-                              bgcolor: "#F8FAFC",
-                              color: "#475569",
-                            }}
-                          />
-                        )}
-                        {p.dscp_ingress !== undefined && p.dscp_ingress !== null && (
-                          <Chip
-                            size="small"
-                            label={`DSCP In: ${p.dscp_ingress}`}
-                            variant="outlined"
-                            sx={{
-                              fontSize: "0.7rem",
-                              height: 22,
-                              borderColor: "#DDD6FE",
-                              bgcolor: "#F5F3FF",
-                              color: "#6D28D9",
-                            }}
-                          />
-                        )}
-                        {p.dscp_egress !== undefined && p.dscp_egress !== null && (
-                          <Chip
-                            size="small"
-                            label={`DSCP Out: ${p.dscp_egress}`}
-                            variant="outlined"
-                            sx={{
-                              fontSize: "0.7rem",
-                              height: 22,
-                              borderColor: "#DDD6FE",
-                              bgcolor: "#F5F3FF",
-                              color: "#6D28D9",
-                            }}
-                          />
-                        )}
-                      </Box>
-                    </Box>
-                  );
-                })}
-              </Box>
-            )}
-          </DialogContent>
-
-
-        </Box>
-      )}
-
-      {/* Tab: Config Templates */}
-      {activeTab === "templates" && (
-        <Box sx={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, height: "100%", overflow: "hidden" }}>
-          <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2.5, py: 3, px: 3, flex: 1, minHeight: 0, overflowY: "auto" }}>
-            <Box
-              sx={{
-                display: "flex",
-                alignItems: "flex-start",
-                justifyContent: "space-between",
-                gap: 2,
-                flexWrap: "wrap",
-              }}
-            >
-              <Box sx={{ flex: 1, minWidth: 240 }}>
-                <Typography variant="body2" sx={{ color: "#475569", lineHeight: 1.5 }}>
-                  Customize the Go text templates used to generate WireGuard, BIRD 2, and nftables configuration files.
-                  System default templates are listed below and can be viewed (read-only) or cloned to create custom
-                  templates for nodes.
-                </Typography>
-              </Box>
-              <Button
-                variant="contained"
-                size="small"
-                startIcon={<Plus size={16} />}
-                onClick={() => handleOpenCreateTemplate()}
-                sx={{
-                  whiteSpace: "nowrap",
-                  fontWeight: 600,
-                  bgcolor: "#4F46E5",
-                  "&:hover": { bgcolor: "#4338CA" },
-                }}
-              >
-                Create Template
-              </Button>
-            </Box>
-
-            {templatesSuccess && (
-              <Alert icon={<CheckCircle2 size={18} />} severity="success" sx={{ borderRadius: 2 }}>
-                {templatesSuccess}
-              </Alert>
-            )}
-
-            {templatesError && (
-              <Alert severity="error" sx={{ borderRadius: 2 }}>
-                {templatesError}
-              </Alert>
-            )}
-
-            {/* Filter and Search Bar */}
-            <Box
-              sx={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                gap: 1.5,
-                flexWrap: "wrap",
-              }}
-            >
-              <Box sx={{ display: "flex", alignItems: "center", gap: 0.8, flexWrap: "wrap" }}>
-                {(["all", "wg", "bird", "nft"] as const).map((filterType) => {
-                  const count =
-                    filterType === "all" ? templates.length : templates.filter((t) => t.type === filterType).length;
-                  const label =
-                    filterType === "all"
-                      ? `All (${count})`
-                      : filterType === "wg"
-                        ? `WireGuard (${count})`
-                        : filterType === "bird"
-                          ? `BIRD (${count})`
-                          : `nftables (${count})`;
-                  const isSelected = templateTypeFilter === filterType;
-                  return (
-                    <Chip
-                      key={filterType}
-                      label={label}
-                      size="small"
-                      clickable
-                      onClick={() => setTemplateTypeFilter(filterType)}
-                      sx={{
-                        fontWeight: isSelected ? 700 : 500,
-                        bgcolor: isSelected ? "#4F46E5" : "#F1F5F9",
-                        color: isSelected ? "#FFFFFF" : "#475569",
-                        "&:hover": {
-                          bgcolor: isSelected ? "#4338CA" : "#E2E8F0",
-                        },
-                      }}
-                    />
-                  );
-                })}
-              </Box>
-              <Box sx={{ width: { xs: "100%", sm: 220 } }}>
-                <TextField
-                  size="small"
-                  placeholder="Search templates..."
-                  value={templateSearch}
-                  onChange={(e) => setTemplateSearch(e.target.value)}
-                  InputProps={{
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <Search size={15} color="#94A3B8" />
-                      </InputAdornment>
-                    ),
-                  }}
-                  fullWidth
-                />
-              </Box>
-            </Box>
-
-            {templatesLoading ? (
-              <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
-                <CircularProgress size={24} />
-              </Box>
-            ) : (
-              <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
-                {filteredTemplates.length === 0 ? (
-                  <Box
+                    variant="outlined"
+                    color="error"
+                    startIcon={<LogOut size={16} />}
+                    onClick={() => setLogoutAllConfirming(true)}
                     sx={{
-                      p: 4,
-                      textAlign: "center",
-                      borderRadius: 2,
-                      border: "1px dashed #CBD5E1",
-                      bgcolor: "#F8FAFC",
+                      borderColor: "#F87171",
+                      color: "#DC2626",
+                      fontWeight: 700,
+                      "&:hover": {
+                        borderColor: "#DC2626",
+                        backgroundColor: "rgba(220, 38, 38, 0.06)",
+                      },
                     }}
                   >
-                    <Typography variant="body2" sx={{ color: "#94A3B8" }}>
-                      No templates match your search or filter.
-                    </Typography>
+                    Logout all
+                  </Button>
+                </Box>
+              ) : (
+                <Box
+                  sx={{
+                    p: 2,
+                    borderRadius: 2,
+                    border: "1px solid #CBD5E1",
+                    backgroundColor: "#F8FAFC",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 1.5,
+                  }}
+                >
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0F172A" }}>
+                    Are you sure you want to log out all sessions?
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: "#64748B" }}>
+                    All connected browsers will immediately lose authentication and return to the login screen.
+                  </Typography>
+                  <Box sx={{ display: "flex", gap: 1.5, pt: 0.5 }}>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      onClick={() => setLogoutAllConfirming(false)}
+                      disabled={logoutAllLoading}
+                      sx={{ color: "#64748B", borderColor: "#CBD5E1" }}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      size="small"
+                      variant="contained"
+                      color="error"
+                      disabled={logoutAllLoading}
+                      onClick={handleLogoutAll}
+                      startIcon={
+                        logoutAllLoading ? <CircularProgress size={14} color="inherit" /> : <LogOut size={14} />
+                      }
+                      sx={{ fontWeight: 700 }}
+                    >
+                      {logoutAllLoading ? "Logging out all..." : "Confirm: Log Out All"}
+                    </Button>
                   </Box>
-                ) : (
-                  filteredTemplates.map((t) => {
-                    const isBuiltin = Boolean(t.is_builtin);
-                    const badge = getTemplateTypeBadge(t.type);
-                    const lineCount = (t.content || "").split("\n").length;
+                </Box>
+              )}
+            </DialogContent>
+          </Box>
+        )}
+
+        {/* Tab 3: Peering & BGP Network Settings */}
+        {activeTab === "network" && (
+          <form
+            onSubmit={handleSaveNetworkSettings}
+            style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, overflow: "hidden" }}
+          >
+            <DialogContent
+              sx={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 2.5,
+                py: 3,
+                px: 3,
+                flex: 1,
+                minHeight: 0,
+                overflowY: "auto",
+              }}
+            >
+              <Typography variant="body2" sx={{ color: "#64748B" }}>
+                Configure global BGP confederation parameters for external peering (such as DN42 or private networks).
+                BGP confederation replaces your internal mesh ASNs with your public ASN in external BGP sessions. Subnet
+                filtering and firewall policies are configured per-link under Network Policies.
+              </Typography>
+
+              {networkLoading ? (
+                <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
+                  <CircularProgress size={24} />
+                </Box>
+              ) : (
+                <>
+                  {networkSuccess && (
+                    <Alert icon={<CheckCircle2 size={18} />} severity="success" sx={{ borderRadius: 2 }}>
+                      {networkSuccess}
+                    </Alert>
+                  )}
+
+                  {networkError && (
+                    <Alert severity="error" sx={{ borderRadius: 2 }}>
+                      {networkError}
+                    </Alert>
+                  )}
+
+                  <TextField
+                    fullWidth
+                    size="small"
+                    label="Public / DN42 ASN"
+                    type="number"
+                    placeholder="e.g. 4242420000"
+                    value={publicAsn}
+                    onChange={(e) => setPublicAsn(e.target.value === "" ? "" : Number(e.target.value))}
+                    helperText="Your network's public ASN (e.g. DN42 ASN). When set, BIRD confederation exposes this ASN to external peers."
+                    disabled={networkSaving}
+                  />
+
+                  <TextField
+                    fullWidth
+                    size="small"
+                    multiline
+                    rows={2}
+                    label="Local DN42 Networks"
+                    placeholder="e.g. 172.20.229.0/27, fd00:dead:beef::/48"
+                    value={localDn42Networks}
+                    onChange={(e) => setLocalDn42Networks(e.target.value)}
+                    helperText="Internal DN42 CIDRs (IPv4 and/or IPv6). When external DN42 traffic is forwarded to these networks, the built-in DN42 filter input port rules are enforced."
+                    disabled={networkSaving}
+                  />
+
+                  <TextField
+                    fullWidth
+                    size="small"
+                    multiline
+                    rows={2}
+                    label="Disallowed CIDRs for dn42"
+                    placeholder="e.g. fd42:1234:5678::/48, 172.20.99.0/24"
+                    value={disallowedDn42Networks}
+                    onChange={(e) => setDisallowedDn42Networks(e.target.value)}
+                    helperText="Excluded subnets for built-in dn42 policy (used as DisallowedDstCIDRs & DisallowedSrcCIDRs). Rejects BGP export, drops inbound traffic, and triggers SNAT for internal egress traffic."
+                    disabled={networkSaving}
+                  />
+
+                  <Divider sx={{ my: 0.5 }} />
+
+                  <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                      <Activity size={18} color="#4F46E5" />
+                      <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#1E293B" }}>
+                        FlapAlerted Integration
+                      </Typography>
+                      <Chip
+                        label="BGP Flap Detection"
+                        size="small"
+                        sx={{
+                          height: 20,
+                          fontSize: "0.68rem",
+                          fontWeight: 600,
+                          bgcolor: "#EEF2FF",
+                          color: "#4F46E5",
+                        }}
+                      />
+                    </Box>
+                    <Typography variant="body2" sx={{ color: "#64748B", fontSize: "0.82rem" }}>
+                      Configure{" "}
+                      <a
+                        href="https://github.com/Kioubit/FlapAlerted"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{ color: "#4F46E5", textDecoration: "none", fontWeight: 600 }}
+                      >
+                        FlapAlerted{" "}
+                      </a>
+                      BGP route flap detection. The FlapAlerted service is deployed separately on any host in the
+                      network (e.g.{" "}
+                      <code
+                        style={{ background: "#F1F5F9", padding: "2px 6px", borderRadius: 4, fontFamily: "monospace" }}
+                      >
+                        FlapAlerted -asn {faAsn || 4224420000}
+                      </code>
+                      ). Nodes with <strong>enable_fa</strong> enabled will peer with this instance.
+                    </Typography>
+                    <Typography variant="body2" sx={{ color: "#64748B", fontSize: "0.82rem" }}>
+                      Deployed FA instance:{" "}
+                      {faAddress ? (
+                        <>
+                          <a
+                            href={`http://${faAddress.includes(":") ? "[" + faAddress + "]" : faAddress}:8699`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{ color: "#4F46E5", textDecoration: "none", fontWeight: 600 }}
+                          >
+                            {faAddress.includes(":") ? `[${faAddress}]` : faAddress}:8699
+                          </a>
+                          &nbsp;(Click to Open Dashboard)
+                        </>
+                      ) : (
+                        "-"
+                      )}
+                    </Typography>
+
+                    <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "2fr 1fr 1fr" }, gap: 2 }}>
+                      <TextField
+                        fullWidth
+                        size="small"
+                        label="FlapAlerted Address"
+                        placeholder="e.g. fd42:a159:f9f0:8000::c8"
+                        value={faAddress}
+                        onChange={(e) => setFaAddress(e.target.value)}
+                        helperText="Private IPv4 or IPv6 routable inside easy42"
+                        disabled={networkSaving}
+                      />
+                      <TextField
+                        fullWidth
+                        size="small"
+                        label="FlapAlerted Port"
+                        type="number"
+                        placeholder="1790"
+                        value={faPort}
+                        onChange={(e) => setFaPort(e.target.value === "" ? "" : Number(e.target.value))}
+                        helperText="Default: 1790"
+                        disabled={networkSaving}
+                      />
+                      <TextField
+                        fullWidth
+                        size="small"
+                        label="FlapAlerted ASN"
+                        type="number"
+                        placeholder="4224420000"
+                        value={faAsn}
+                        onChange={(e) => setFaAsn(e.target.value === "" ? "" : Number(e.target.value))}
+                        helperText="Default: 4224420000"
+                        disabled={networkSaving}
+                      />
+                    </Box>
+                  </Box>
+                  <Box sx={{ display: "flex", justifyContent: "flex-end", pt: 1 }}>
+                    <Button
+                      type="submit"
+                      variant="contained"
+                      disabled={networkLoading || networkSaving}
+                      startIcon={networkSaving && <CircularProgress size={16} color="inherit" />}
+                      sx={{ fontWeight: 600 }}
+                    >
+                      {networkSaving ? "Saving..." : "Save Settings"}
+                    </Button>
+                  </Box>
+                </>
+              )}
+            </DialogContent>
+          </form>
+        )}
+
+        {/* Tab 4: Network Policies */}
+        {activeTab === "policies" && (
+          <Box
+            sx={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, height: "100%", overflow: "hidden" }}
+          >
+            <DialogContent
+              sx={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 2.5,
+                py: 3,
+                px: 3,
+                flex: 1,
+                minHeight: 0,
+                overflowY: "auto",
+              }}
+            >
+              <Box sx={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 2 }}>
+                <Box>
+                  <Typography variant="body2" sx={{ color: "#475569", lineHeight: 1.5 }}>
+                    Define link-level firewall and routing policies. Network policies restrict ingress allowed
+                    destination & source IPs (dropping unauthorized packets in nftables while preserving established
+                    return flows), filter BGP route imports, and configure outbound SNAT / masquerade.
+                  </Typography>
+                </Box>
+                <Button
+                  variant="contained"
+                  size="small"
+                  startIcon={<Plus size={16} />}
+                  onClick={handleOpenCreatePolicy}
+                  sx={{
+                    whiteSpace: "nowrap",
+                    fontWeight: 600,
+                    bgcolor: "#4F46E5",
+                    "&:hover": { bgcolor: "#4338CA" },
+                  }}
+                >
+                  Create Policy
+                </Button>
+              </Box>
+
+              {policiesSuccess && (
+                <Alert icon={<CheckCircle2 size={18} />} severity="success" sx={{ borderRadius: 2 }}>
+                  {policiesSuccess}
+                </Alert>
+              )}
+
+              {policiesError && (
+                <Alert severity="error" sx={{ borderRadius: 2 }}>
+                  {policiesError}
+                </Alert>
+              )}
+
+              {policiesLoading ? (
+                <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
+                  <CircularProgress size={24} />
+                </Box>
+              ) : (
+                <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, mt: 1 }}>
+                  {policies.map((p) => {
+                    const isBuiltin = Boolean(p.is_internal);
                     return (
                       <Box
-                        key={t.id}
+                        key={p.id}
                         sx={{
                           p: 2,
                           borderRadius: 2,
@@ -1876,40 +1448,20 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                           },
                         }}
                       >
-                        <Box
-                          sx={{
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "space-between",
-                            flexWrap: "wrap",
-                            gap: 1,
-                          }}
-                        >
-                          <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
+                        <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                             <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0F172A" }}>
-                              {t.name}
+                              {p.name}
                             </Typography>
                             <Typography
                               variant="caption"
                               className="mono-font"
                               sx={{ color: "#64748B", bgcolor: "#F1F5F9", px: 0.8, py: 0.2, borderRadius: 1 }}
                             >
-                              {t.id}
+                              {p.id}
                             </Typography>
                             <Chip
-                              label={badge.label}
-                              size="small"
-                              sx={{
-                                height: 20,
-                                fontSize: "0.68rem",
-                                fontWeight: 700,
-                                bgcolor: badge.bg,
-                                color: badge.color,
-                                border: `1px solid ${badge.border}`,
-                              }}
-                            />
-                            <Chip
-                              label={isBuiltin ? "System Default" : "Custom"}
+                              label={isBuiltin ? "Built-in" : "Custom"}
                               size="small"
                               sx={{
                                 height: 20,
@@ -1919,334 +1471,870 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                                 color: isBuiltin ? "#4F46E5" : "#059669",
                               }}
                             />
+                            {(p.roa4 || p.roa6) && (
+                              <Chip
+                                label={p.roa_strict ? "ROA (Strict)" : "ROA"}
+                                size="small"
+                                sx={{
+                                  height: 20,
+                                  fontSize: "0.68rem",
+                                  fontWeight: 700,
+                                  bgcolor: "rgba(14, 165, 233, 0.12)",
+                                  color: "#0284C7",
+                                }}
+                              />
+                            )}
+                            {p.routing_policy && p.routing_policy !== "full" && (
+                              <Chip
+                                label={
+                                  p.routing_policy === "stub"
+                                    ? "Stub"
+                                    : p.routing_policy === "receive_only"
+                                      ? "Receive Only"
+                                      : p.routing_policy === "advertise_only"
+                                        ? "Advertise Only"
+                                        : p.routing_policy
+                                }
+                                size="small"
+                                sx={{
+                                  height: 20,
+                                  fontSize: "0.68rem",
+                                  fontWeight: 700,
+                                  bgcolor: "rgba(245, 158, 11, 0.12)",
+                                  color: "#D97706",
+                                }}
+                              />
+                            )}
+                            {p.block_ingress_new && (
+                              <Chip
+                                label={
+                                  p.block_ingress_new === "all"
+                                    ? "Block Ingress New"
+                                    : p.block_ingress_new === "forward"
+                                      ? "Block Ingress Forward"
+                                      : p.block_ingress_new
+                                }
+                                size="small"
+                                sx={{
+                                  height: 20,
+                                  fontSize: "0.68rem",
+                                  fontWeight: 700,
+                                  bgcolor: "rgba(239, 68, 68, 0.12)",
+                                  color: "#DC2626",
+                                }}
+                              />
+                            )}
                           </Box>
-
                           <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-                            <Tooltip title="View template source (read-only)">
-                              <IconButton
+                            {(p.roa4 || p.roa6) && (
+                              <Button
                                 size="small"
-                                onClick={() => handleOpenViewTemplate(t)}
-                                sx={{ color: "#64748B" }}
+                                variant="outlined"
+                                onClick={async () => {
+                                  try {
+                                    await api.refreshPolicyROA(p.id);
+                                    setPoliciesSuccess(`ROA cache for "${p.name}" refreshed.`);
+                                  } catch (err: unknown) {
+                                    const e = err as Error;
+                                    setPoliciesError(e.message || "Failed to refresh ROA.");
+                                  }
+                                }}
+                                sx={{
+                                  py: 0.3,
+                                  px: 1,
+                                  minWidth: 0,
+                                  fontSize: "0.75rem",
+                                  color: "#0284C7",
+                                  borderColor: "#BAE6FD",
+                                }}
                               >
-                                <Eye size={16} />
-                              </IconButton>
-                            </Tooltip>
-                            <Tooltip title="Clone as new template">
-                              <IconButton
-                                size="small"
-                                onClick={() => handleOpenCloneTemplate(t)}
-                                sx={{ color: "#64748B" }}
-                              >
-                                <Copy size={16} />
-                              </IconButton>
-                            </Tooltip>
+                                Sync ROA
+                              </Button>
+                            )}
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              onClick={() => handleOpenViewPolicy(p)}
+                              sx={{
+                                py: 0.3,
+                                px: 1,
+                                minWidth: 0,
+                                fontSize: "0.75rem",
+                                color: "#475569",
+                                borderColor: "#CBD5E1",
+                              }}
+                            >
+                              View
+                            </Button>
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              startIcon={<Copy size={12} />}
+                              onClick={() => handleOpenClonePolicy(p)}
+                              sx={{
+                                py: 0.3,
+                                px: 1,
+                                minWidth: 0,
+                                fontSize: "0.75rem",
+                                color: "#4F46E5",
+                                borderColor: "#C7D2FE",
+                              }}
+                            >
+                              Clone
+                            </Button>
                             {!isBuiltin && (
                               <>
-                                <Tooltip title="Edit template">
-                                  <IconButton
-                                    size="small"
-                                    onClick={() => handleOpenEditTemplate(t)}
-                                    sx={{ color: "#64748B" }}
-                                  >
-                                    <Edit2 size={16} />
-                                  </IconButton>
-                                </Tooltip>
-                                <Tooltip title="Delete template">
-                                  <IconButton
-                                    size="small"
-                                    onClick={() => setTemplateToDelete(t)}
-                                    sx={{ color: "#EF4444" }}
-                                  >
-                                    <Trash2 size={16} />
-                                  </IconButton>
-                                </Tooltip>
+                                <IconButton
+                                  size="small"
+                                  onClick={() => handleOpenEditPolicy(p)}
+                                  sx={{ color: "#4F46E5", p: 0.5 }}
+                                  title="Edit Policy"
+                                >
+                                  <Edit2 size={15} />
+                                </IconButton>
+                                <IconButton
+                                  size="small"
+                                  onClick={() => handleDeletePolicy(p)}
+                                  sx={{ color: "#EF4444", p: 0.5 }}
+                                  title="Delete Policy"
+                                >
+                                  <Trash2 size={15} />
+                                </IconButton>
                               </>
                             )}
                           </Box>
                         </Box>
 
-                        {t.description && (
-                          <Typography variant="body2" sx={{ color: "#64748B", fontSize: "0.825rem" }}>
-                            {t.description}
+                        {p.description && (
+                          <Typography variant="caption" sx={{ color: "#64748B" }}>
+                            {p.description}
                           </Typography>
                         )}
 
-                        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, mt: 0.5 }}>
-                          <Typography variant="caption" sx={{ color: "#94A3B8" }}>
-                            {lineCount} lines •{" "}
-                            {t.content ? `${Math.round((t.content.length / 1024) * 10) / 10} KB` : "0 KB"}
-                          </Typography>
+                        <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, pt: 0.5 }}>
+                          <Chip
+                            size="small"
+                            label={`Cost: ${p.cost ?? 100}`}
+                            variant="outlined"
+                            sx={{
+                              fontSize: "0.7rem",
+                              height: 22,
+                              borderColor: "#C7D2FE",
+                              bgcolor: "#EEF2FF",
+                              color: "#4338CA",
+                            }}
+                          />
+                          {p.fwmark && (
+                            <Chip
+                              size="small"
+                              label={`FwMark: ${p.fwmark}`}
+                              variant="outlined"
+                              sx={{
+                                fontSize: "0.7rem",
+                                height: 22,
+                                borderColor: "#DDD6FE",
+                                bgcolor: "#FAF5FF",
+                                color: "#6D28D9",
+                              }}
+                            />
+                          )}
+                          {p.preference !== undefined && (
+                            <Chip
+                              size="small"
+                              label={`Preference: ${p.preference}`}
+                              variant="outlined"
+                              sx={{
+                                fontSize: "0.7rem",
+                                height: 22,
+                                borderColor: "#BBF7D0",
+                                bgcolor: "#F0FDF4",
+                                color: "#15803D",
+                              }}
+                            />
+                          )}
+                          {p.mark && (
+                            <Chip
+                              size="small"
+                              label={`Mark: ${p.mark}`}
+                              variant="outlined"
+                              sx={{
+                                fontSize: "0.7rem",
+                                height: 22,
+                                borderColor: "#DDD6FE",
+                                bgcolor: "#FAF5FF",
+                                color: "#6D28D9",
+                              }}
+                            />
+                          )}
+                          <Chip
+                            size="small"
+                            label={`Allowed Dst: ${p.allowed_dst_cidrs && p.allowed_dst_cidrs.length > 0 ? `${p.allowed_dst_cidrs.length} prefix(es)` : "All"}`}
+                            variant="outlined"
+                            sx={{ fontSize: "0.7rem", height: 22 }}
+                          />
+                          <Chip
+                            size="small"
+                            label={`Allowed Src: ${p.allowed_src_cidrs && p.allowed_src_cidrs.length > 0 ? `${p.allowed_src_cidrs.length} prefix(es)` : "All"}`}
+                            variant="outlined"
+                            sx={{ fontSize: "0.7rem", height: 22 }}
+                          />
+                          {p.disallowed_dst_cidrs && p.disallowed_dst_cidrs.length > 0 && (
+                            <Chip
+                              size="small"
+                              label={`Disallowed Dst: ${p.disallowed_dst_cidrs.length} prefix(es)`}
+                              variant="outlined"
+                              sx={{
+                                fontSize: "0.7rem",
+                                height: 22,
+                                borderColor: "#FECACA",
+                                bgcolor: "#FEF2F2",
+                                color: "#DC2626",
+                              }}
+                            />
+                          )}
+                          {p.disallowed_src_cidrs && p.disallowed_src_cidrs.length > 0 && (
+                            <Chip
+                              size="small"
+                              label={`Disallowed Src: ${p.disallowed_src_cidrs.length} prefix(es)`}
+                              variant="outlined"
+                              sx={{
+                                fontSize: "0.7rem",
+                                height: 22,
+                                borderColor: "#FECACA",
+                                bgcolor: "#FEF2F2",
+                                color: "#DC2626",
+                              }}
+                            />
+                          )}
+                          <Chip
+                            size="small"
+                            label={`Forward Filter: ${p.filter_forward ? "Enabled" : "Disabled"}`}
+                            variant="outlined"
+                            sx={{
+                              fontSize: "0.7rem",
+                              height: 22,
+                              borderColor: p.filter_forward ? "#C7D2FE" : undefined,
+                              bgcolor: p.filter_forward ? "#EEF2FF" : undefined,
+                              color: p.filter_forward ? "#4338CA" : undefined,
+                            }}
+                          />
+                          <Chip
+                            size="small"
+                            label={`Input Filter: ${p.filter_input ? "Enabled" : "Disabled"}`}
+                            variant="outlined"
+                            sx={{
+                              fontSize: "0.7rem",
+                              height: 22,
+                              borderColor: p.filter_input ? "#FED7AA" : undefined,
+                              bgcolor: p.filter_input ? "#FFF7ED" : undefined,
+                              color: p.filter_input ? "#C2410C" : undefined,
+                            }}
+                          />
+                          <Chip
+                            size="small"
+                            label={`Leak Protect: ${p.reject_internet ? "Internet Rejection" : "None"}`}
+                            variant="outlined"
+                            sx={{ fontSize: "0.7rem", height: 22 }}
+                          />
+                          <Chip
+                            size="small"
+                            label={`SNAT: ${p.snat?.enabled ? (p.snat.condition === "not_dst" ? "SNAT (src != dst)" : "SNAT (all)") : "Disabled"}`}
+                            variant="outlined"
+                            sx={{
+                              fontSize: "0.7rem",
+                              height: 22,
+                              borderColor: p.snat?.enabled ? "#A5F3FC" : undefined,
+                              bgcolor: p.snat?.enabled ? "#F0FDFA" : undefined,
+                              color: p.snat?.enabled ? "#0F766E" : undefined,
+                            }}
+                          />
+                          {p.forward_snat && (
+                            <Chip
+                              size="small"
+                              label={`Forward SNAT: ${p.forward_snat_target === "external_ip" ? "External IP" : p.forward_snat_target === "main_ip" ? "Main IP" : "Masquerade"}`}
+                              variant="outlined"
+                              sx={{
+                                fontSize: "0.7rem",
+                                height: 22,
+                                borderColor: "#BAE6FD",
+                                bgcolor: "#F0F9FF",
+                                color: "#0369A1",
+                              }}
+                            />
+                          )}
+                          {p.local_networks && p.local_networks.length > 0 && (
+                            <Chip
+                              size="small"
+                              label={`Local Nets: ${p.local_networks.length}`}
+                              variant="outlined"
+                              sx={{
+                                fontSize: "0.7rem",
+                                height: 22,
+                                borderColor: "#E2E8F0",
+                                bgcolor: "#F8FAFC",
+                                color: "#475569",
+                              }}
+                            />
+                          )}
+                          {p.dscp_ingress !== undefined && p.dscp_ingress !== null && (
+                            <Chip
+                              size="small"
+                              label={`DSCP In: ${p.dscp_ingress}`}
+                              variant="outlined"
+                              sx={{
+                                fontSize: "0.7rem",
+                                height: 22,
+                                borderColor: "#DDD6FE",
+                                bgcolor: "#F5F3FF",
+                                color: "#6D28D9",
+                              }}
+                            />
+                          )}
+                          {p.dscp_egress !== undefined && p.dscp_egress !== null && (
+                            <Chip
+                              size="small"
+                              label={`DSCP Out: ${p.dscp_egress}`}
+                              variant="outlined"
+                              sx={{
+                                fontSize: "0.7rem",
+                                height: 22,
+                                borderColor: "#DDD6FE",
+                                bgcolor: "#F5F3FF",
+                                color: "#6D28D9",
+                              }}
+                            />
+                          )}
                         </Box>
                       </Box>
                     );
-                  })
-                )}
-              </Box>
-            )}
-          </DialogContent>
+                  })}
+                </Box>
+              )}
+            </DialogContent>
+          </Box>
+        )}
 
-
-        </Box>
-      )}
-
-      {/* Tab 5: Cloudflare DNS Integration */}
-      {activeTab === "dns" && (
-        <form
-          onSubmit={handleSaveDNSSettings}
-          style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, overflow: "hidden" }}
-        >
-          <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2.5, py: 3, px: 3, flex: 1, minHeight: 0, overflowY: "auto" }}>
-            {/* Informative Header / Description */}
-            <Box
+        {/* Tab: Config Templates */}
+        {activeTab === "templates" && (
+          <Box
+            sx={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, height: "100%", overflow: "hidden" }}
+          >
+            <DialogContent
               sx={{
-                p: 2,
-                borderRadius: 2,
-                bgcolor: "#F0F9FF",
-                border: "1px solid #BAE6FD",
                 display: "flex",
                 flexDirection: "column",
-                gap: 0.8,
+                gap: 2.5,
+                py: 3,
+                px: 3,
+                flex: 1,
+                minHeight: 0,
+                overflowY: "auto",
               }}
             >
-              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                <Cloud size={20} color="#0284C7" />
-                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0369A1" }}>
-                  Cloudflare DNS Integration
-                </Typography>
-              </Box>
-              <Typography variant="body2" sx={{ color: "#0C4A6E", fontSize: "0.85rem", lineHeight: 1.5 }}>
-                Automatically publish your easy42 nodes' main IPv4 (<b>A</b>) and IPv6 (<b>AAAA</b>) addresses to
-                Cloudflare DNS. Records are automatically updated when adding or renaming nodes, or can be synchronized
-                on-demand.
-              </Typography>
-            </Box>
-
-            {dnsSuccess && (
-              <Alert icon={<CheckCircle2 size={18} />} severity="success" sx={{ borderRadius: 2 }}>
-                {dnsSuccess}
-              </Alert>
-            )}
-
-            {dnsError && (
-              <Alert severity="error" sx={{ borderRadius: 2 }}>
-                {dnsError}
-              </Alert>
-            )}
-
-            {dnsSyncResult && (
               <Box
                 sx={{
-                  p: 1.8,
-                  borderRadius: 2,
-                  bgcolor: "#F8FAFC",
-                  border: "1px solid #E2E8F0",
                   display: "flex",
-                  flexDirection: "column",
-                  gap: 1,
+                  alignItems: "flex-start",
+                  justifyContent: "space-between",
+                  gap: 2,
+                  flexWrap: "wrap",
                 }}
               >
-                <Typography
-                  variant="caption"
-                  sx={{ fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: "0.05em" }}
-                >
-                  Sync Statistics
-                </Typography>
-                <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
-                  <Chip
-                    size="small"
-                    label={`Created: ${dnsSyncResult.created}`}
-                    sx={{ bgcolor: "#DCFCE7", color: "#15803D", fontWeight: 600 }}
-                  />
-                  <Chip
-                    size="small"
-                    label={`Updated: ${dnsSyncResult.updated}`}
-                    sx={{ bgcolor: "#E0F2FE", color: "#0369A1", fontWeight: 600 }}
-                  />
-                  <Chip
-                    size="small"
-                    label={`Deleted: ${dnsSyncResult.deleted}`}
-                    sx={{ bgcolor: "#FEE2E2", color: "#B91C1C", fontWeight: 600 }}
-                  />
-                  <Chip
-                    size="small"
-                    label={`Unchanged: ${dnsSyncResult.ignored}`}
-                    sx={{ bgcolor: "#F1F5F9", color: "#475569", fontWeight: 600 }}
-                  />
-                </Box>
-              </Box>
-            )}
-
-            {dnsLoading ? (
-              <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
-                <CircularProgress size={24} />
-              </Box>
-            ) : (
-              <>
-                <TextField
-                  fullWidth
-                  size="small"
-                  label="Cloudflare Zone ID"
-                  placeholder="e.g. 023e105f4ecef8ad9ca31a8372d0c353"
-                  value={cfZoneId}
-                  onChange={(e) => setCfZoneId(e.target.value)}
-                  helperText="Your domain's Zone ID found on the Cloudflare dashboard Overview tab."
-                  disabled={dnsSaving || dnsSyncing || dnsForceSyncing}
-                />
-
-                <TextField
-                  fullWidth
-                  size="small"
-                  label="Cloudflare API Token"
-                  placeholder="e.g. secret_api_token"
-                  type={showCfToken ? "text" : "password"}
-                  value={cfApiToken}
-                  onChange={(e) => setCfApiToken(e.target.value)}
-                  helperText="Create a token with 'Zone.DNS - Edit' permission in Cloudflare User API Tokens."
-                  disabled={dnsSaving || dnsSyncing || dnsForceSyncing}
-                  slotProps={{
-                    input: {
-                      endAdornment: (
-                        <InputAdornment position="end">
-                          <IconButton
-                            size="small"
-                            edge="end"
-                            onClick={() => setShowCfToken(!showCfToken)}
-                            aria-label="toggle API token visibility"
-                          >
-                            {showCfToken ? <EyeOff size={16} /> : <Eye size={16} />}
-                          </IconButton>
-                        </InputAdornment>
-                      ),
-                    },
-                  }}
-                />
-
-                <TextField
-                  fullWidth
-                  size="small"
-                  label="Base Domain"
-                  placeholder="e.g. easy42.example.com"
-                  value={cfBaseDomain}
-                  onChange={(e) => setCfBaseDomain(e.target.value)}
-                  helperText="Node hostnames are published as <name>.<domain> and *.<name>.<domain> under this base domain."
-                  disabled={dnsSaving || dnsSyncing || dnsForceSyncing}
-                />
-
-                {/* Toggle: Publish main ipv6 to it's own name */}
-                <Box
-                  sx={{
-                    p: 2,
-                    borderRadius: 2,
-                    border: "1px solid #E2E8F0",
-                    bgcolor: "#FFFFFF",
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: 0.8,
-                  }}
-                >
-                  <FormControlLabel
-                    control={
-                      <Switch
-                        checked={cfPublishIPv6OwnName}
-                        onChange={(e) => setCfPublishIPv6OwnName(e.target.checked)}
-                        disabled={dnsSaving || dnsSyncing || dnsForceSyncing}
-                        color="primary"
-                      />
-                    }
-                    label={
-                      <Typography variant="body2" sx={{ fontWeight: 600, color: "#1E293B" }}>
-                        Publish main ipv6 to it's own name
-                      </Typography>
-                    }
-                  />
-                  <Typography variant="caption" sx={{ color: "#64748B", ml: 3.5, mt: -0.5 }}>
-                    {cfPublishIPv6OwnName
-                      ? "When enabled, main IPv6 is published to <name>6.<domain> (separate AAAA record), while main IPv4 is published to <name>.<domain> and *.<name>.<domain> (A records)."
-                      : "When disabled, main IPv4 (A) and main IPv6 (AAAA) are both published under <name>.<domain> and *.<name>.<domain>."}
+                <Box sx={{ flex: 1, minWidth: 240 }}>
+                  <Typography variant="body2" sx={{ color: "#475569", lineHeight: 1.5 }}>
+                    Customize the Go text templates used to generate WireGuard, BIRD 2, and nftables configuration
+                    files. System default templates are listed below and can be viewed (read-only) or cloned to create
+                    custom templates for nodes.
                   </Typography>
                 </Box>
+                <Button
+                  variant="contained"
+                  size="small"
+                  startIcon={<Plus size={16} />}
+                  onClick={() => handleOpenCreateTemplate()}
+                  sx={{
+                    whiteSpace: "nowrap",
+                    fontWeight: 600,
+                    bgcolor: "#4F46E5",
+                    "&:hover": { bgcolor: "#4338CA" },
+                  }}
+                >
+                  Create Template
+                </Button>
+              </Box>
 
-                {/* Live DNS Record Preview */}
+              {templatesSuccess && (
+                <Alert icon={<CheckCircle2 size={18} />} severity="success" sx={{ borderRadius: 2 }}>
+                  {templatesSuccess}
+                </Alert>
+              )}
+
+              {templatesError && (
+                <Alert severity="error" sx={{ borderRadius: 2 }}>
+                  {templatesError}
+                </Alert>
+              )}
+
+              {/* Filter and Search Bar */}
+              <Box
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 1.5,
+                  flexWrap: "wrap",
+                }}
+              >
+                <Box sx={{ display: "flex", alignItems: "center", gap: 0.8, flexWrap: "wrap" }}>
+                  {(["all", "wg", "bird", "nft"] as const).map((filterType) => {
+                    const count =
+                      filterType === "all" ? templates.length : templates.filter((t) => t.type === filterType).length;
+                    const label =
+                      filterType === "all"
+                        ? `All (${count})`
+                        : filterType === "wg"
+                          ? `WireGuard (${count})`
+                          : filterType === "bird"
+                            ? `BIRD (${count})`
+                            : `nftables (${count})`;
+                    const isSelected = templateTypeFilter === filterType;
+                    return (
+                      <Chip
+                        key={filterType}
+                        label={label}
+                        size="small"
+                        clickable
+                        onClick={() => setTemplateTypeFilter(filterType)}
+                        sx={{
+                          fontWeight: isSelected ? 700 : 500,
+                          bgcolor: isSelected ? "#4F46E5" : "#F1F5F9",
+                          color: isSelected ? "#FFFFFF" : "#475569",
+                          "&:hover": {
+                            bgcolor: isSelected ? "#4338CA" : "#E2E8F0",
+                          },
+                        }}
+                      />
+                    );
+                  })}
+                </Box>
+                <Box sx={{ width: { xs: "100%", sm: 220 } }}>
+                  <TextField
+                    size="small"
+                    placeholder="Search templates..."
+                    value={templateSearch}
+                    onChange={(e) => setTemplateSearch(e.target.value)}
+                    InputProps={{
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <Search size={15} color="#94A3B8" />
+                        </InputAdornment>
+                      ),
+                    }}
+                    fullWidth
+                  />
+                </Box>
+              </Box>
+
+              {templatesLoading ? (
+                <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
+                  <CircularProgress size={24} />
+                </Box>
+              ) : (
+                <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+                  {filteredTemplates.length === 0 ? (
+                    <Box
+                      sx={{
+                        p: 4,
+                        textAlign: "center",
+                        borderRadius: 2,
+                        border: "1px dashed #CBD5E1",
+                        bgcolor: "#F8FAFC",
+                      }}
+                    >
+                      <Typography variant="body2" sx={{ color: "#94A3B8" }}>
+                        No templates match your search or filter.
+                      </Typography>
+                    </Box>
+                  ) : (
+                    filteredTemplates.map((t) => {
+                      const isBuiltin = Boolean(t.is_builtin);
+                      const badge = getTemplateTypeBadge(t.type);
+                      const lineCount = (t.content || "").split("\n").length;
+                      return (
+                        <Box
+                          key={t.id}
+                          sx={{
+                            p: 2,
+                            borderRadius: 2,
+                            border: "1px solid",
+                            borderColor: isBuiltin ? "#E0E7FF" : "#E2E8F0",
+                            bgcolor: isBuiltin ? "#F8FAFC" : "#FFFFFF",
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: 1.2,
+                            transition: "all 0.15s ease",
+                            "&:hover": {
+                              borderColor: isBuiltin ? "#C7D2FE" : "#CBD5E1",
+                              boxShadow: "0 2px 4px rgba(0,0,0,0.03)",
+                            },
+                          }}
+                        >
+                          <Box
+                            sx={{
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "space-between",
+                              flexWrap: "wrap",
+                              gap: 1,
+                            }}
+                          >
+                            <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
+                              <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0F172A" }}>
+                                {t.name}
+                              </Typography>
+                              <Typography
+                                variant="caption"
+                                className="mono-font"
+                                sx={{ color: "#64748B", bgcolor: "#F1F5F9", px: 0.8, py: 0.2, borderRadius: 1 }}
+                              >
+                                {t.id}
+                              </Typography>
+                              <Chip
+                                label={badge.label}
+                                size="small"
+                                sx={{
+                                  height: 20,
+                                  fontSize: "0.68rem",
+                                  fontWeight: 700,
+                                  bgcolor: badge.bg,
+                                  color: badge.color,
+                                  border: `1px solid ${badge.border}`,
+                                }}
+                              />
+                              <Chip
+                                label={isBuiltin ? "System Default" : "Custom"}
+                                size="small"
+                                sx={{
+                                  height: 20,
+                                  fontSize: "0.68rem",
+                                  fontWeight: 700,
+                                  bgcolor: isBuiltin ? "rgba(79, 70, 229, 0.1)" : "rgba(16, 185, 129, 0.12)",
+                                  color: isBuiltin ? "#4F46E5" : "#059669",
+                                }}
+                              />
+                            </Box>
+
+                            <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                              <Tooltip title="View template source (read-only)">
+                                <IconButton
+                                  size="small"
+                                  onClick={() => handleOpenViewTemplate(t)}
+                                  sx={{ color: "#64748B" }}
+                                >
+                                  <Eye size={16} />
+                                </IconButton>
+                              </Tooltip>
+                              <Tooltip title="Clone as new template">
+                                <IconButton
+                                  size="small"
+                                  onClick={() => handleOpenCloneTemplate(t)}
+                                  sx={{ color: "#64748B" }}
+                                >
+                                  <Copy size={16} />
+                                </IconButton>
+                              </Tooltip>
+                              {!isBuiltin && (
+                                <>
+                                  <Tooltip title="Edit template">
+                                    <IconButton
+                                      size="small"
+                                      onClick={() => handleOpenEditTemplate(t)}
+                                      sx={{ color: "#64748B" }}
+                                    >
+                                      <Edit2 size={16} />
+                                    </IconButton>
+                                  </Tooltip>
+                                  <Tooltip title="Delete template">
+                                    <IconButton
+                                      size="small"
+                                      onClick={() => setTemplateToDelete(t)}
+                                      sx={{ color: "#EF4444" }}
+                                    >
+                                      <Trash2 size={16} />
+                                    </IconButton>
+                                  </Tooltip>
+                                </>
+                              )}
+                            </Box>
+                          </Box>
+
+                          {t.description && (
+                            <Typography variant="body2" sx={{ color: "#64748B", fontSize: "0.825rem" }}>
+                              {t.description}
+                            </Typography>
+                          )}
+
+                          <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, mt: 0.5 }}>
+                            <Typography variant="caption" sx={{ color: "#94A3B8" }}>
+                              {lineCount} lines •{" "}
+                              {t.content ? `${Math.round((t.content.length / 1024) * 10) / 10} KB` : "0 KB"}
+                            </Typography>
+                          </Box>
+                        </Box>
+                      );
+                    })
+                  )}
+                </Box>
+              )}
+            </DialogContent>
+          </Box>
+        )}
+
+        {/* Tab 5: Cloudflare DNS Integration */}
+        {activeTab === "dns" && (
+          <form
+            onSubmit={handleSaveDNSSettings}
+            style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, overflow: "hidden" }}
+          >
+            <DialogContent
+              sx={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 2.5,
+                py: 3,
+                px: 3,
+                flex: 1,
+                minHeight: 0,
+                overflowY: "auto",
+              }}
+            >
+              {/* Informative Header / Description */}
+              <Box
+                sx={{
+                  p: 2,
+                  borderRadius: 2,
+                  bgcolor: "#F0F9FF",
+                  border: "1px solid #BAE6FD",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 0.8,
+                }}
+              >
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                  <Cloud size={20} color="#0284C7" />
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0369A1" }}>
+                    Cloudflare DNS Integration
+                  </Typography>
+                </Box>
+                <Typography variant="body2" sx={{ color: "#0C4A6E", fontSize: "0.85rem", lineHeight: 1.5 }}>
+                  Automatically publish your easy42 nodes' main IPv4 (<b>A</b>) and IPv6 (<b>AAAA</b>) addresses to
+                  Cloudflare DNS. Records are automatically updated when adding or renaming nodes, or can be
+                  synchronized on-demand.
+                </Typography>
+              </Box>
+
+              {dnsSuccess && (
+                <Alert icon={<CheckCircle2 size={18} />} severity="success" sx={{ borderRadius: 2 }}>
+                  {dnsSuccess}
+                </Alert>
+              )}
+
+              {dnsError && (
+                <Alert severity="error" sx={{ borderRadius: 2 }}>
+                  {dnsError}
+                </Alert>
+              )}
+
+              {dnsSyncResult && (
                 <Box
                   sx={{
-                    p: 2,
+                    p: 1.8,
                     borderRadius: 2,
-                    border: "1px dashed #CBD5E1",
                     bgcolor: "#F8FAFC",
+                    border: "1px solid #E2E8F0",
                     display: "flex",
                     flexDirection: "column",
-                    gap: 1.2,
+                    gap: 1,
                   }}
                 >
                   <Typography
                     variant="caption"
                     sx={{ fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: "0.05em" }}
                   >
-                    DNS Records Preview (Example Node: node1)
+                    Sync Statistics
                   </Typography>
-                  <Box sx={{ display: "flex", flexDirection: "column", gap: 0.8 }}>
-                    <Box
-                      sx={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 1,
-                        fontFamily: "monospace",
-                        fontSize: "0.82rem",
-                        color: "#1E293B",
-                      }}
+                  <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+                    <Chip
+                      size="small"
+                      label={`Created: ${dnsSyncResult.created}`}
+                      sx={{ bgcolor: "#DCFCE7", color: "#15803D", fontWeight: 600 }}
+                    />
+                    <Chip
+                      size="small"
+                      label={`Updated: ${dnsSyncResult.updated}`}
+                      sx={{ bgcolor: "#E0F2FE", color: "#0369A1", fontWeight: 600 }}
+                    />
+                    <Chip
+                      size="small"
+                      label={`Deleted: ${dnsSyncResult.deleted}`}
+                      sx={{ bgcolor: "#FEE2E2", color: "#B91C1C", fontWeight: 600 }}
+                    />
+                    <Chip
+                      size="small"
+                      label={`Unchanged: ${dnsSyncResult.ignored}`}
+                      sx={{ bgcolor: "#F1F5F9", color: "#475569", fontWeight: 600 }}
+                    />
+                  </Box>
+                </Box>
+              )}
+
+              {dnsLoading ? (
+                <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
+                  <CircularProgress size={24} />
+                </Box>
+              ) : (
+                <>
+                  <TextField
+                    fullWidth
+                    size="small"
+                    label="Cloudflare Zone ID"
+                    placeholder="e.g. 023e105f4ecef8ad9ca31a8372d0c353"
+                    value={cfZoneId}
+                    onChange={(e) => setCfZoneId(e.target.value)}
+                    helperText="Your domain's Zone ID found on the Cloudflare dashboard Overview tab."
+                    disabled={dnsSaving || dnsSyncing || dnsForceSyncing}
+                  />
+
+                  <TextField
+                    fullWidth
+                    size="small"
+                    label="Cloudflare API Token"
+                    placeholder="e.g. secret_api_token"
+                    type={showCfToken ? "text" : "password"}
+                    value={cfApiToken}
+                    onChange={(e) => setCfApiToken(e.target.value)}
+                    helperText="Create a token with 'Zone.DNS - Edit' permission in Cloudflare User API Tokens."
+                    disabled={dnsSaving || dnsSyncing || dnsForceSyncing}
+                    slotProps={{
+                      input: {
+                        endAdornment: (
+                          <InputAdornment position="end">
+                            <IconButton
+                              size="small"
+                              edge="end"
+                              onClick={() => setShowCfToken(!showCfToken)}
+                              aria-label="toggle API token visibility"
+                            >
+                              {showCfToken ? <EyeOff size={16} /> : <Eye size={16} />}
+                            </IconButton>
+                          </InputAdornment>
+                        ),
+                      },
+                    }}
+                  />
+
+                  <TextField
+                    fullWidth
+                    size="small"
+                    label="Base Domain"
+                    placeholder="e.g. easy42.example.com"
+                    value={cfBaseDomain}
+                    onChange={(e) => setCfBaseDomain(e.target.value)}
+                    helperText="Node hostnames are published as <name>.<domain> and *.<name>.<domain> under this base domain."
+                    disabled={dnsSaving || dnsSyncing || dnsForceSyncing}
+                  />
+
+                  {/* Toggle: Publish main ipv6 to it's own name */}
+                  <Box
+                    sx={{
+                      p: 2,
+                      borderRadius: 2,
+                      border: "1px solid #E2E8F0",
+                      bgcolor: "#FFFFFF",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 0.8,
+                    }}
+                  >
+                    <FormControlLabel
+                      control={
+                        <Switch
+                          checked={cfPublishIPv6OwnName}
+                          onChange={(e) => setCfPublishIPv6OwnName(e.target.checked)}
+                          disabled={dnsSaving || dnsSyncing || dnsForceSyncing}
+                          color="primary"
+                        />
+                      }
+                      label={
+                        <Typography variant="body2" sx={{ fontWeight: 600, color: "#1E293B" }}>
+                          Publish main ipv6 to it's own name
+                        </Typography>
+                      }
+                    />
+                    <Typography variant="caption" sx={{ color: "#64748B", ml: 3.5, mt: -0.5 }}>
+                      {cfPublishIPv6OwnName
+                        ? "When enabled, main IPv6 is published to <name>6.<domain> (separate AAAA record), while main IPv4 is published to <name>.<domain> and *.<name>.<domain> (A records)."
+                        : "When disabled, main IPv4 (A) and main IPv6 (AAAA) are both published under <name>.<domain> and *.<name>.<domain>."}
+                    </Typography>
+                  </Box>
+
+                  {/* Live DNS Record Preview */}
+                  <Box
+                    sx={{
+                      p: 2,
+                      borderRadius: 2,
+                      border: "1px dashed #CBD5E1",
+                      bgcolor: "#F8FAFC",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 1.2,
+                    }}
+                  >
+                    <Typography
+                      variant="caption"
+                      sx={{ fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: "0.05em" }}
                     >
-                      <Chip
-                        label="A"
-                        size="small"
-                        sx={{ height: 20, fontSize: "0.7rem", fontWeight: 700, bgcolor: "#E0E7FF", color: "#4338CA" }}
-                      />
-                      <span>{`node1.${cfBaseDomain.trim() || "easy42.example.com"}`}</span>
-                      <span style={{ color: "#94A3B8" }}>→</span>
-                      <span style={{ color: "#059669" }}>192.168.100.1</span>
-                    </Box>
-                    <Box
-                      sx={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 1,
-                        fontFamily: "monospace",
-                        fontSize: "0.82rem",
-                        color: "#1E293B",
-                      }}
-                    >
-                      <Chip
-                        label="A"
-                        size="small"
-                        sx={{ height: 20, fontSize: "0.7rem", fontWeight: 700, bgcolor: "#E0E7FF", color: "#4338CA" }}
-                      />
-                      <span>{`*.node1.${cfBaseDomain.trim() || "easy42.example.com"}`}</span>
-                      <span style={{ color: "#94A3B8" }}>→</span>
-                      <span style={{ color: "#059669" }}>192.168.100.1</span>
-                    </Box>
-                    <Box
-                      sx={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 1,
-                        fontFamily: "monospace",
-                        fontSize: "0.82rem",
-                        color: "#1E293B",
-                      }}
-                    >
-                      <Chip
-                        label="AAAA"
-                        size="small"
-                        sx={{ height: 20, fontSize: "0.7rem", fontWeight: 700, bgcolor: "#EDE9FE", color: "#6D28D9" }}
-                      />
-                      <span>
-                        {cfPublishIPv6OwnName
-                          ? `node16.${cfBaseDomain.trim() || "easy42.example.com"}`
-                          : `node1.${cfBaseDomain.trim() || "easy42.example.com"}`}
-                      </span>
-                      <span style={{ color: "#94A3B8" }}>→</span>
-                      <span style={{ color: "#059669" }}>fd42:a159:f9f0::1</span>
-                    </Box>
-                    {!cfPublishIPv6OwnName && (
+                      DNS Records Preview (Example Node: node1)
+                    </Typography>
+                    <Box sx={{ display: "flex", flexDirection: "column", gap: 0.8 }}>
+                      <Box
+                        sx={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 1,
+                          fontFamily: "monospace",
+                          fontSize: "0.82rem",
+                          color: "#1E293B",
+                        }}
+                      >
+                        <Chip
+                          label="A"
+                          size="small"
+                          sx={{ height: 20, fontSize: "0.7rem", fontWeight: 700, bgcolor: "#E0E7FF", color: "#4338CA" }}
+                        />
+                        <span>{`node1.${cfBaseDomain.trim() || "easy42.example.com"}`}</span>
+                        <span style={{ color: "#94A3B8" }}>→</span>
+                        <span style={{ color: "#059669" }}>192.168.100.1</span>
+                      </Box>
+                      <Box
+                        sx={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 1,
+                          fontFamily: "monospace",
+                          fontSize: "0.82rem",
+                          color: "#1E293B",
+                        }}
+                      >
+                        <Chip
+                          label="A"
+                          size="small"
+                          sx={{ height: 20, fontSize: "0.7rem", fontWeight: 700, bgcolor: "#E0E7FF", color: "#4338CA" }}
+                        />
+                        <span>{`*.node1.${cfBaseDomain.trim() || "easy42.example.com"}`}</span>
+                        <span style={{ color: "#94A3B8" }}>→</span>
+                        <span style={{ color: "#059669" }}>192.168.100.1</span>
+                      </Box>
                       <Box
                         sx={{
                           display: "flex",
@@ -2262,917 +2350,965 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                           size="small"
                           sx={{ height: 20, fontSize: "0.7rem", fontWeight: 700, bgcolor: "#EDE9FE", color: "#6D28D9" }}
                         />
-                        <span>{`*.node1.${cfBaseDomain.trim() || "easy42.example.com"}`}</span>
+                        <span>
+                          {cfPublishIPv6OwnName
+                            ? `node16.${cfBaseDomain.trim() || "easy42.example.com"}`
+                            : `node1.${cfBaseDomain.trim() || "easy42.example.com"}`}
+                        </span>
                         <span style={{ color: "#94A3B8" }}>→</span>
                         <span style={{ color: "#059669" }}>fd42:a159:f9f0::1</span>
                       </Box>
-                    )}
+                      {!cfPublishIPv6OwnName && (
+                        <Box
+                          sx={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 1,
+                            fontFamily: "monospace",
+                            fontSize: "0.82rem",
+                            color: "#1E293B",
+                          }}
+                        >
+                          <Chip
+                            label="AAAA"
+                            size="small"
+                            sx={{
+                              height: 20,
+                              fontSize: "0.7rem",
+                              fontWeight: 700,
+                              bgcolor: "#EDE9FE",
+                              color: "#6D28D9",
+                            }}
+                          />
+                          <span>{`*.node1.${cfBaseDomain.trim() || "easy42.example.com"}`}</span>
+                          <span style={{ color: "#94A3B8" }}>→</span>
+                          <span style={{ color: "#059669" }}>fd42:a159:f9f0::1</span>
+                        </Box>
+                      )}
+                    </Box>
                   </Box>
-                </Box>
-                <Box
-                  sx={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    pt: 2,
-                    flexWrap: "wrap",
-                    gap: 1.5,
-                  }}
-                >
-                  <Box sx={{ display: "flex", gap: 1 }}>
-                    <Button
-                      variant="outlined"
-                      size="small"
-                      onClick={() => handleSyncDNS(false)}
-                      disabled={
-                        dnsLoading || dnsSaving || dnsSyncing || dnsForceSyncing || !cfZoneId || !cfApiToken || !cfBaseDomain
-                      }
-                      startIcon={dnsSyncing ? <CircularProgress size={14} color="inherit" /> : <RefreshCw size={14} />}
-                      sx={{
-                        fontWeight: 600,
-                        textTransform: "none",
-                        borderColor: "#0284C7",
-                        color: "#0284C7",
-                        "&:hover": { borderColor: "#0369A1", bgcolor: "rgba(2, 132, 199, 0.04)" },
-                      }}
-                    >
-                      {dnsSyncing ? "Syncing..." : "Sync DNS"}
-                    </Button>
-                    <Button
-                      variant="outlined"
-                      size="small"
-                      color="warning"
-                      onClick={() => handleSyncDNS(true)}
-                      disabled={
-                        dnsLoading || dnsSaving || dnsSyncing || dnsForceSyncing || !cfZoneId || !cfApiToken || !cfBaseDomain
-                      }
-                      startIcon={dnsForceSyncing ? <CircularProgress size={14} color="inherit" /> : <Zap size={14} />}
-                      sx={{
-                        fontWeight: 600,
-                        textTransform: "none",
-                        borderColor: "#F59E0B",
-                        color: "#D97706",
-                        "&:hover": { borderColor: "#D97706", bgcolor: "rgba(245, 158, 11, 0.04)" },
-                      }}
-                    >
-                      {dnsForceSyncing ? "Force Syncing..." : "Force Sync"}
-                    </Button>
-                  </Box>
-
-                  <Button
-                    type="submit"
-                    variant="contained"
-                    disabled={dnsLoading || dnsSaving || dnsSyncing || dnsForceSyncing}
-                    startIcon={dnsSaving && <CircularProgress size={16} color="inherit" />}
-                    sx={{ fontWeight: 600, bgcolor: "#4F46E5", "&:hover": { bgcolor: "#4338CA" } }}
+                  <Box
+                    sx={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      pt: 2,
+                      flexWrap: "wrap",
+                      gap: 1.5,
+                    }}
                   >
-                    {dnsSaving ? "Saving..." : "Save Settings"}
-                  </Button>
-                </Box>
-              </>
-            )}
-          </DialogContent>
-        </form>
-      )}
+                    <Box sx={{ display: "flex", gap: 1 }}>
+                      <Button
+                        variant="outlined"
+                        size="small"
+                        onClick={() => handleSyncDNS(false)}
+                        disabled={
+                          dnsLoading ||
+                          dnsSaving ||
+                          dnsSyncing ||
+                          dnsForceSyncing ||
+                          !cfZoneId ||
+                          !cfApiToken ||
+                          !cfBaseDomain
+                        }
+                        startIcon={
+                          dnsSyncing ? <CircularProgress size={14} color="inherit" /> : <RefreshCw size={14} />
+                        }
+                        sx={{
+                          fontWeight: 600,
+                          textTransform: "none",
+                          borderColor: "#0284C7",
+                          color: "#0284C7",
+                          "&:hover": { borderColor: "#0369A1", bgcolor: "rgba(2, 132, 199, 0.04)" },
+                        }}
+                      >
+                        {dnsSyncing ? "Syncing..." : "Sync DNS"}
+                      </Button>
+                      <Button
+                        variant="outlined"
+                        size="small"
+                        color="warning"
+                        onClick={() => handleSyncDNS(true)}
+                        disabled={
+                          dnsLoading ||
+                          dnsSaving ||
+                          dnsSyncing ||
+                          dnsForceSyncing ||
+                          !cfZoneId ||
+                          !cfApiToken ||
+                          !cfBaseDomain
+                        }
+                        startIcon={dnsForceSyncing ? <CircularProgress size={14} color="inherit" /> : <Zap size={14} />}
+                        sx={{
+                          fontWeight: 600,
+                          textTransform: "none",
+                          borderColor: "#F59E0B",
+                          color: "#D97706",
+                          "&:hover": { borderColor: "#D97706", bgcolor: "rgba(245, 158, 11, 0.04)" },
+                        }}
+                      >
+                        {dnsForceSyncing ? "Force Syncing..." : "Force Sync"}
+                      </Button>
+                    </Box>
 
-      {/* Sub-dialog: Policy Editor & Viewer */}
-      <Dialog open={policyDialogOpen} onClose={() => setPolicyDialogOpen(false)} maxWidth="sm" fullWidth>
-        <form onSubmit={handleSavePolicy}>
-          <DialogTitle
-            sx={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              pb: 1,
-              borderBottom: "1px solid #E2E8F0",
-            }}
-          >
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-              <Shield size={20} color="#4F46E5" />
-              <Typography variant="h6" sx={{ fontWeight: 700, fontSize: "1.1rem", color: "#0F172A" }}>
-                {policyDialogMode === "view"
-                  ? "View Network Policy"
-                  : policyDialogMode === "edit"
-                    ? "Edit Network Policy"
-                    : "Create Network Policy"}
-              </Typography>
-            </Box>
-            <IconButton size="small" onClick={() => setPolicyDialogOpen(false)} sx={{ color: "#94A3B8" }}>
-              <X size={18} />
-            </IconButton>
-          </DialogTitle>
-
-          <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2, py: 2.5, px: 3 }}>
-            {policyDialogMode === "view" && (
-              <Alert icon={<Lock size={16} />} severity="info" sx={{ py: 0.5, borderRadius: 2 }}>
-                Built-in policies are managed by easy42 and are read-only.
-              </Alert>
-            )}
-
-            {policyDialogError && (
-              <Alert severity="error" sx={{ borderRadius: 2 }}>
-                {policyDialogError}
-              </Alert>
-            )}
-
-            <Box sx={{ display: "flex", gap: 2 }}>
-              <TextField
-                fullWidth
-                size="small"
-                label="Policy ID"
-                placeholder="e.g. partner-lan"
-                value={policyId}
-                onChange={(e) => setPolicyId(e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, ""))}
-                disabled={policyDialogMode !== "create" || policyDialogSaving}
-                helperText="Unique identifier (letters, numbers, hyphens)"
-                required
-              />
-              <TextField
-                fullWidth
-                size="small"
-                label="Policy Name"
-                placeholder="e.g. Partner LAN Policy"
-                value={policyName}
-                onChange={(e) => setPolicyName(e.target.value)}
-                disabled={policyDialogMode === "view" || policyDialogSaving}
-                required
-              />
-            </Box>
-
-            <TextField
-              fullWidth
-              size="small"
-              label="Description (optional)"
-              placeholder="e.g. Limits access to specific subnets and enables anti-spoofing"
-              value={policyDesc}
-              onChange={(e) => setPolicyDesc(e.target.value)}
-              disabled={policyDialogMode === "view" || policyDialogSaving}
-            />
-
-            <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
-              <TextField
-                fullWidth
-                size="small"
-                type="number"
-                label="Internal BGP Cost"
-                placeholder="100"
-                value={policyCost}
-                onChange={(e) => setPolicyCost(e.target.value)}
-                disabled={policyDialogMode === "view" || policyDialogSaving}
-                helperText="Cost deducted from local preference on each internal hop (default 100)."
-              />
-              <TextField
-                select
-                fullWidth
-                size="small"
-                label="Routing Policy"
-                value={policyRoutingPolicy}
-                onChange={(e) => setPolicyRoutingPolicy(e.target.value)}
-                disabled={policyDialogMode === "view" || policyDialogSaving}
-                helperText="BGP route advertising & receiving behavior."
-              >
-                <MenuItem value="full">Full (Default) — Advertise & receive all valid routes</MenuItem>
-                <MenuItem value="stub">Stub — Receive all, only send local routes (no transit)</MenuItem>
-                <MenuItem value="receive_only">Receive Only — Import routes only, advertise none</MenuItem>
-                <MenuItem value="advertise_only">Advertise Only — Export local routes only, import none</MenuItem>
-              </TextField>
-            </Box>
-
-            <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 2 }}>
-              <TextField
-                fullWidth
-                size="small"
-                label="WireGuard FwMark (optional)"
-                placeholder="e.g. 51820 or 0xca64"
-                value={policyFwmark}
-                onChange={(e) => setPolicyFwmark(e.target.value)}
-                disabled={policyDialogMode === "view" || policyDialogSaving}
-                helperText="FwMark set in local WireGuard [Interface]."
-              />
-              <TextField
-                fullWidth
-                size="small"
-                type="number"
-                label="BGP Preference (optional)"
-                placeholder="e.g. 100"
-                value={policyPreference}
-                onChange={(e) => setPolicyPreference(e.target.value)}
-                disabled={policyDialogMode === "view" || policyDialogSaving}
-                helperText="BGP protocol preference in bird.conf."
-              />
-              <TextField
-                fullWidth
-                size="small"
-                label="Netfilter Mark (optional)"
-                placeholder="e.g. 42 or 0x1234"
-                value={policyMark}
-                onChange={(e) => setPolicyMark(e.target.value)}
-                disabled={policyDialogMode === "view" || policyDialogSaving}
-                helperText="Rewrite mark of received packets via nftables."
-              />
-            </Box>
-
-            <TextField
-              fullWidth
-              size="small"
-              label="Ingress Allowed Destination Subnets (CIDRs)"
-              placeholder={"e.g. 172.20.0.0/14{21,29}\nfd00::/8{44,64}"}
-              multiline
-              rows={3}
-              value={policyAllowedDst}
-              onChange={(e) => setPolicyAllowedDst(e.target.value)}
-              disabled={policyDialogMode === "view" || policyDialogSaving}
-              helperText="Restricts traffic dst IP via nftables (return traffic allowed) & filters BGP export routes. Leave empty for unrestricted."
-            />
-
-            <TextField
-              fullWidth
-              size="small"
-              label="Ingress Allowed Source Subnets (CIDRs)"
-              placeholder={"e.g. 172.20.10.0/24\nfd00:1::/48"}
-              multiline
-              rows={3}
-              value={policyAllowedSrc}
-              onChange={(e) => setPolicyAllowedSrc(e.target.value)}
-              disabled={policyDialogMode === "view" || policyDialogSaving}
-              helperText="Anti-spoofing & BGP route import filter: drops inbound traffic with source IP not matching, and BGP import only permits routes matching these subnets. Leave empty for unrestricted."
-            />
-
-            <TextField
-              fullWidth
-              size="small"
-              label="Ingress Disallowed Destination Subnets (CIDRs)"
-              placeholder={"e.g. fd42:1234:5678::/48\n172.20.99.0/24"}
-              multiline
-              rows={3}
-              value={policyDisallowedDst}
-              onChange={(e) => setPolicyDisallowedDst(e.target.value)}
-              disabled={policyDialogMode === "view" || policyDialogSaving}
-              helperText="Reverse of Allowed Dst: drops inbound traffic to these subnets, blocks BGP export, and triggers SNAT (under not_dst) for egress traffic originating from these subnets (e.g. private LAN subnets carved out of DN42 ULA fd00::/8)."
-            />
-
-            <TextField
-              fullWidth
-              size="small"
-              label="Ingress Disallowed Source Subnets (CIDRs)"
-              placeholder={"e.g. 172.20.99.0/24\nfd42:1234:5678::/48"}
-              multiline
-              rows={3}
-              value={policyDisallowedSrc}
-              onChange={(e) => setPolicyDisallowedSrc(e.target.value)}
-              disabled={policyDialogMode === "view" || policyDialogSaving}
-              helperText="Reverse of Allowed Src: inbound traffic on this link matching these source subnets will be dropped, and blocks matching BGP import routes. Leave empty for unrestricted."
-            />
-
-            <Box
-              sx={{
-                display: "flex",
-                flexDirection: "column",
-                gap: 1,
-                p: 2,
-                borderRadius: 2,
-                bgcolor: "#F8FAFC",
-                border: "1px solid #E2E8F0",
-              }}
-            >
-              <Typography
-                variant="subtitle2"
-                sx={{ fontWeight: 700, color: "#1E293B", display: "flex", alignItems: "center", gap: 0.8 }}
-              >
-                <Sliders size={16} /> Route Leak Protection
-              </Typography>
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={policyRejectInternet}
-                    onChange={(e) => setPolicyRejectInternet(e.target.checked)}
-                    disabled={policyDialogMode === "view" || policyDialogSaving}
-                  />
-                }
-                label={
-                  <Box>
-                    <Typography variant="body2" sx={{ fontWeight: 600, color: "#0F172A" }}>
-                      Reject Internet Routes
-                    </Typography>
-                    <Typography variant="caption" sx={{ color: "#64748B" }}>
-                      Prevents importing and exporting default / Internet routes (0.0.0.0/0, 128.0.0.0/1, ::/0).
-                    </Typography>
+                    <Button
+                      type="submit"
+                      variant="contained"
+                      disabled={dnsLoading || dnsSaving || dnsSyncing || dnsForceSyncing}
+                      startIcon={dnsSaving && <CircularProgress size={16} color="inherit" />}
+                      sx={{ fontWeight: 600, bgcolor: "#4F46E5", "&:hover": { bgcolor: "#4338CA" } }}
+                    >
+                      {dnsSaving ? "Saving..." : "Save Settings"}
+                    </Button>
                   </Box>
-                }
-              />
-            </Box>
-
-            <Box
-              sx={{
-                display: "flex",
-                flexDirection: "column",
-                gap: 1.5,
-                p: 2,
-                borderRadius: 2,
-                bgcolor: "#F8FAFC",
-                border: "1px solid #E2E8F0",
-              }}
-            >
-              <Typography
-                variant="subtitle2"
-                sx={{ fontWeight: 700, color: "#1E293B", display: "flex", alignItems: "center", gap: 0.8 }}
-              >
-                <Shield size={16} /> Route Origination Authorization (ROA)
-              </Typography>
-              <Typography variant="caption" sx={{ color: "#64748B" }}>
-                Validates route origin ASNs in BGP import filters using BIRD ROA tables. Accepts a URL or local server
-                file path.
-              </Typography>
-
-              <TextField
-                fullWidth
-                size="small"
-                label="IPv4 ROA File / URL"
-                placeholder="https://dn42.burble.com/roa/dn42_roa_bird2_4.conf"
-                value={policyRoa4}
-                onChange={(e) => setPolicyRoa4(e.target.value)}
-                disabled={policyDialogMode === "view" || policyDialogSaving}
-                helperText="URL or local path to IPv4 BIRD ROA definitions."
-              />
-
-              <TextField
-                fullWidth
-                size="small"
-                label="IPv6 ROA File / URL"
-                placeholder="https://dn42.burble.com/roa/dn42_roa_bird2_6.conf"
-                value={policyRoa6}
-                onChange={(e) => setPolicyRoa6(e.target.value)}
-                disabled={policyDialogMode === "view" || policyDialogSaving}
-                helperText="URL or local path to IPv6 BIRD ROA definitions."
-              />
-
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={policyRoaStrict}
-                    onChange={(e) => setPolicyRoaStrict(e.target.checked)}
-                    disabled={policyDialogMode === "view" || policyDialogSaving}
-                  />
-                }
-                label={
-                  <Box>
-                    <Typography variant="body2" sx={{ fontWeight: 600, color: "#0F172A" }}>
-                      Strict ROA Validation
-                    </Typography>
-                    <Typography variant="caption" sx={{ color: "#64748B" }}>
-                      When enabled, routes with ROA_UNKNOWN status are rejected. (Default: disabled, permits VALID and
-                      UNKNOWN, rejects INVALID).
-                    </Typography>
-                  </Box>
-                }
-              />
-            </Box>
-
-            {/* Traffic Filtering & Host Firewall */}
-            <Box
-              sx={{
-                display: "flex",
-                flexDirection: "column",
-                gap: 1.5,
-                p: 2,
-                borderRadius: 2,
-                bgcolor: "#F8FAFC",
-                border: "1px solid #E2E8F0",
-              }}
-            >
-              <Typography
-                variant="subtitle2"
-                sx={{ fontWeight: 700, color: "#1E293B", display: "flex", alignItems: "center", gap: 0.8 }}
-              >
-                <Shield size={16} /> Traffic Filtering & Host Firewall
-              </Typography>
-
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={policyFilterForward}
-                    onChange={(e) => setPolicyFilterForward(e.target.checked)}
-                    disabled={policyDialogMode === "view" || policyDialogSaving}
-                  />
-                }
-                label={
-                  <Box>
-                    <Typography variant="body2" sx={{ fontWeight: 600, color: "#0F172A" }}>
-                      Filter Transit / Forwarded Traffic
-                    </Typography>
-                    <Typography variant="caption" sx={{ color: "#64748B" }}>
-                      Drops forwarded packets whose source or destination IP does not match the configured allowed
-                      CIDRs.
-                    </Typography>
-                  </Box>
-                }
-              />
-
-              <Divider sx={{ my: 0.5 }} />
-
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={policyFilterInput}
-                    onChange={(e) => setPolicyFilterInput(e.target.checked)}
-                    disabled={policyDialogMode === "view" || policyDialogSaving}
-                  />
-                }
-                label={
-                  <Box>
-                    <Typography variant="body2" sx={{ fontWeight: 600, color: "#0F172A" }}>
-                      Filter Input Traffic (Host Firewall)
-                    </Typography>
-                    <Typography variant="caption" sx={{ color: "#64748B" }}>
-                      Restricts incoming traffic targeting the host itself from this link. BGP (TCP port 179) and
-                      established return traffic are always permitted.
-                    </Typography>
-                  </Box>
-                }
-              />
-
-              {policyFilterInput && (
-                <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, pl: 4, pt: 0.5 }}>
-                  <Box sx={{ display: "flex", gap: 3 }}>
-                    <FormControlLabel
-                      control={
-                        <Checkbox
-                          size="small"
-                          checked={policyInputAllowIcmp}
-                          onChange={(e) => setPolicyInputAllowIcmp(e.target.checked)}
-                          disabled={policyDialogMode === "view" || policyDialogSaving}
-                        />
-                      }
-                      label={
-                        <Typography variant="body2" sx={{ fontSize: "0.85rem", color: "#334155" }}>
-                          Allow ICMP (IPv4 Ping)
-                        </Typography>
-                      }
-                    />
-                    <FormControlLabel
-                      control={
-                        <Checkbox
-                          size="small"
-                          checked={policyInputAllowIcmp6}
-                          onChange={(e) => setPolicyInputAllowIcmp6(e.target.checked)}
-                          disabled={policyDialogMode === "view" || policyDialogSaving}
-                        />
-                      }
-                      label={
-                        <Typography variant="body2" sx={{ fontSize: "0.85rem", color: "#334155" }}>
-                          Allow ICMPv6 (IPv6 Ping & NDP)
-                        </Typography>
-                      }
-                    />
-                  </Box>
-
-                  <TextField
-                    fullWidth
-                    size="small"
-                    label="Allowed TCP Ports"
-                    placeholder="e.g. 80, 443, 8000-8080 (or all)"
-                    value={policyInputTcpPorts}
-                    onChange={(e) => setPolicyInputTcpPorts(e.target.value)}
-                    disabled={policyDialogMode === "view" || policyDialogSaving}
-                    helperText="Comma or newline separated list of ports (1-65535) or ranges (e.g. 8000-8080). BGP 179 is always permitted."
-                  />
-
-                  <TextField
-                    fullWidth
-                    size="small"
-                    label="Allowed UDP Ports"
-                    placeholder="e.g. 53, 5000-5010 (or all)"
-                    value={policyInputUdpPorts}
-                    onChange={(e) => setPolicyInputUdpPorts(e.target.value)}
-                    disabled={policyDialogMode === "view" || policyDialogSaving}
-                    helperText="Comma or newline separated list of ports (1-65535) or ranges. Defaults to 53 for DN42 DNS."
-                  />
-
-                  <TextField
-                    fullWidth
-                    size="small"
-                    multiline
-                    rows={2}
-                    label="Protected Local Networks"
-                    placeholder="e.g. 172.20.229.0/27, fd00:dead:beef::/48"
-                    value={policyLocalNetworks}
-                    onChange={(e) => setPolicyLocalNetworks(e.target.value)}
-                    disabled={policyDialogMode === "view" || policyDialogSaving}
-                    helperText="Subnets treated as local. Forwarded traffic entering from this link destined to these subnets will be subjected to the input filter port rules."
-                  />
-                </Box>
+                </>
               )}
+            </DialogContent>
+          </form>
+        )}
 
-              <Divider sx={{ my: 0.5 }} />
-
-              <TextField
-                select
-                fullWidth
-                size="small"
-                label="Block Ingress New Connections"
-                value={policyBlockIngressNew}
-                onChange={(e) => setPolicyBlockIngressNew(e.target.value)}
-                disabled={policyDialogMode === "view" || policyDialogSaving}
-                helperText="Stateful ingress firewall: drop incoming packets from link peer if conntrack state is new or invalid."
-              >
-                <MenuItem value="">Disabled (Default) — Do not block any</MenuItem>
-                <MenuItem value="all">Block Ingress New — Drop incoming new or invalid packets from peer</MenuItem>
-                <MenuItem value="forward">
-                  Block Ingress New for Forwarding — Drop incoming new or invalid packets if destination is not local
-                  (fib daddr type != local)
-                </MenuItem>
-              </TextField>
-            </Box>
-
-            <Box
+        {/* Sub-dialog: Policy Editor & Viewer */}
+        <Dialog open={policyDialogOpen} onClose={() => setPolicyDialogOpen(false)} maxWidth="sm" fullWidth>
+          <form onSubmit={handleSavePolicy}>
+            <DialogTitle
               sx={{
                 display: "flex",
-                flexDirection: "column",
-                gap: 1.5,
-                p: 2,
-                borderRadius: 2,
-                bgcolor: "#F8FAFC",
-                border: "1px solid #E2E8F0",
+                alignItems: "center",
+                justifyContent: "space-between",
+                pb: 1,
+                borderBottom: "1px solid #E2E8F0",
               }}
             >
-              <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#1E293B" }}>
-                  Outbound SNAT / Masquerade
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                <Shield size={20} color="#4F46E5" />
+                <Typography variant="h6" sx={{ fontWeight: 700, fontSize: "1.1rem", color: "#0F172A" }}>
+                  {policyDialogMode === "view"
+                    ? "View Network Policy"
+                    : policyDialogMode === "edit"
+                      ? "Edit Network Policy"
+                      : "Create Network Policy"}
                 </Typography>
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={policySnatEnabled}
-                      onChange={(e) => setPolicySnatEnabled(e.target.checked)}
-                      disabled={policyDialogMode === "view" || policyDialogSaving}
-                    />
-                  }
-                  label={policySnatEnabled ? "Enabled" : "Disabled"}
-                  sx={{ m: 0 }}
-                />
               </Box>
+              <IconButton size="small" onClick={() => setPolicyDialogOpen(false)} sx={{ color: "#94A3B8" }}>
+                <X size={18} />
+              </IconButton>
+            </DialogTitle>
 
-              {policySnatEnabled && (
-                <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, pt: 1 }}>
-                  <TextField
-                    select
-                    fullWidth
-                    size="small"
-                    label="SNAT Condition"
-                    value={policySnatCondition}
-                    onChange={(e) => setPolicySnatCondition(e.target.value)}
-                    disabled={policyDialogMode === "view" || policyDialogSaving}
-                  >
-                    <MenuItem value="not_dst">Traffic whose source IP is NOT in allowed destination CIDRs</MenuItem>
-                    <MenuItem value="all">All egress traffic on this link</MenuItem>
-                  </TextField>
-
-                  <TextField
-                    select
-                    fullWidth
-                    size="small"
-                    label="SNAT Target IP"
-                    value={policySnatTarget}
-                    onChange={(e) => setPolicySnatTarget(e.target.value)}
-                    disabled={policyDialogMode === "view" || policyDialogSaving}
-                  >
-                    <MenuItem value="masquerade">Interface IP (Masquerade)</MenuItem>
-                    <MenuItem value="external_ip">External / Peering IP</MenuItem>
-                    <MenuItem value="main_ip">Main IP</MenuItem>
-                  </TextField>
-                </Box>
+            <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2, py: 2.5, px: 3 }}>
+              {policyDialogMode === "view" && (
+                <Alert icon={<Lock size={16} />} severity="info" sx={{ py: 0.5, borderRadius: 2 }}>
+                  Built-in policies are managed by easy42 and are read-only.
+                </Alert>
               )}
-            </Box>
 
-            <Box
-              sx={{
-                display: "flex",
-                flexDirection: "column",
-                gap: 1.5,
-                p: 2,
-                borderRadius: 2,
-                bgcolor: "#F8FAFC",
-                border: "1px solid #E2E8F0",
-              }}
-            >
-              <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <Box>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#1E293B" }}>
-                    Forward SNAT / Masquerade
-                  </Typography>
-                  <Typography variant="caption" sx={{ color: "#64748B" }}>
-                    SNAT / masquerade when forwarding received traffic from link peer to any other interface.
-                  </Typography>
-                </Box>
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={policyForwardSnat}
-                      onChange={(e) => setPolicyForwardSnat(e.target.checked)}
-                      disabled={policyDialogMode === "view" || policyDialogSaving}
-                    />
-                  }
-                  label={policyForwardSnat ? "Enabled" : "Disabled"}
-                  sx={{ m: 0 }}
-                />
-              </Box>
-
-              {policyForwardSnat && (
-                <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, pt: 1 }}>
-                  <TextField
-                    select
-                    fullWidth
-                    size="small"
-                    label="SNAT Target IP"
-                    value={policyForwardSnatTarget}
-                    onChange={(e) => setPolicyForwardSnatTarget(e.target.value)}
-                    disabled={policyDialogMode === "view" || policyDialogSaving}
-                  >
-                    <MenuItem value="masquerade">Interface IP (Masquerade)</MenuItem>
-                    <MenuItem value="external_ip">External / Peering IP</MenuItem>
-                    <MenuItem value="main_ip">Main IP</MenuItem>
-                  </TextField>
-                </Box>
+              {policyDialogError && (
+                <Alert severity="error" sx={{ borderRadius: 2 }}>
+                  {policyDialogError}
+                </Alert>
               )}
-            </Box>
-
-            <Box
-              sx={{
-                display: "flex",
-                flexDirection: "column",
-                gap: 1.5,
-                p: 2,
-                borderRadius: 2,
-                bgcolor: "#F8FAFC",
-                border: "1px solid #E2E8F0",
-              }}
-            >
-              <Typography
-                variant="subtitle2"
-                sx={{ fontWeight: 700, color: "#1E293B", display: "flex", alignItems: "center", gap: 0.8 }}
-              >
-                <Shield size={16} /> DSCP Marking
-              </Typography>
-              <Typography variant="caption" sx={{ color: "#64748B" }}>
-                Set / rewrite the Differentiated Services Code Point (DSCP) on packets traversing this link. Valid
-                values: 0–63. Leave empty to disable.
-              </Typography>
 
               <Box sx={{ display: "flex", gap: 2 }}>
                 <TextField
                   fullWidth
                   size="small"
-                  type="number"
-                  label="Ingress DSCP"
-                  placeholder="e.g. 46 (EF)"
-                  value={policyDscpIngress}
-                  onChange={(e) =>
-                    setPolicyDscpIngress(e.target.value === "" ? "" : Math.max(0, Math.min(63, Number(e.target.value))))
-                  }
+                  label="Policy ID"
+                  placeholder="e.g. partner-lan"
+                  value={policyId}
+                  onChange={(e) => setPolicyId(e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, ""))}
+                  disabled={policyDialogMode !== "create" || policyDialogSaving}
+                  helperText="Unique identifier (letters, numbers, hyphens)"
+                  required
+                />
+                <TextField
+                  fullWidth
+                  size="small"
+                  label="Policy Name"
+                  placeholder="e.g. Partner LAN Policy"
+                  value={policyName}
+                  onChange={(e) => setPolicyName(e.target.value)}
                   disabled={policyDialogMode === "view" || policyDialogSaving}
-                  helperText="Rewrite DSCP on packets received from the link peer."
-                  inputProps={{ min: 0, max: 63 }}
+                  required
+                />
+              </Box>
+
+              <TextField
+                fullWidth
+                size="small"
+                label="Description (optional)"
+                placeholder="e.g. Limits access to specific subnets and enables anti-spoofing"
+                value={policyDesc}
+                onChange={(e) => setPolicyDesc(e.target.value)}
+                disabled={policyDialogMode === "view" || policyDialogSaving}
+              />
+
+              <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
+                <TextField
+                  fullWidth
+                  size="small"
+                  type="number"
+                  label="Internal BGP Cost"
+                  placeholder="100"
+                  value={policyCost}
+                  onChange={(e) => setPolicyCost(e.target.value)}
+                  disabled={policyDialogMode === "view" || policyDialogSaving}
+                  helperText="Cost deducted from local preference on each internal hop (default 100)."
+                />
+                <TextField
+                  select
+                  fullWidth
+                  size="small"
+                  label="Routing Policy"
+                  value={policyRoutingPolicy}
+                  onChange={(e) => setPolicyRoutingPolicy(e.target.value)}
+                  disabled={policyDialogMode === "view" || policyDialogSaving}
+                  helperText="BGP route advertising & receiving behavior."
+                >
+                  <MenuItem value="full">Full (Default) — Advertise & receive all valid routes</MenuItem>
+                  <MenuItem value="stub">Stub — Receive all, only send local routes (no transit)</MenuItem>
+                  <MenuItem value="receive_only">Receive Only — Import routes only, advertise none</MenuItem>
+                  <MenuItem value="advertise_only">Advertise Only — Export local routes only, import none</MenuItem>
+                </TextField>
+              </Box>
+
+              <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 2 }}>
+                <TextField
+                  fullWidth
+                  size="small"
+                  label="WireGuard FwMark (optional)"
+                  placeholder="e.g. 51820 or 0xca64"
+                  value={policyFwmark}
+                  onChange={(e) => setPolicyFwmark(e.target.value)}
+                  disabled={policyDialogMode === "view" || policyDialogSaving}
+                  helperText="FwMark set in local WireGuard [Interface]."
                 />
                 <TextField
                   fullWidth
                   size="small"
                   type="number"
-                  label="Egress DSCP"
-                  placeholder="e.g. 46 (EF)"
-                  value={policyDscpEgress}
-                  onChange={(e) =>
-                    setPolicyDscpEgress(e.target.value === "" ? "" : Math.max(0, Math.min(63, Number(e.target.value))))
-                  }
+                  label="BGP Preference (optional)"
+                  placeholder="e.g. 100"
+                  value={policyPreference}
+                  onChange={(e) => setPolicyPreference(e.target.value)}
                   disabled={policyDialogMode === "view" || policyDialogSaving}
-                  helperText="Rewrite DSCP on packets sent to the link peer."
-                  inputProps={{ min: 0, max: 63 }}
+                  helperText="BGP protocol preference in bird.conf."
+                />
+                <TextField
+                  fullWidth
+                  size="small"
+                  label="Netfilter Mark (optional)"
+                  placeholder="e.g. 42 or 0x1234"
+                  value={policyMark}
+                  onChange={(e) => setPolicyMark(e.target.value)}
+                  disabled={policyDialogMode === "view" || policyDialogSaving}
+                  helperText="Rewrite mark of received packets via nftables."
                 />
               </Box>
-            </Box>
-          </DialogContent>
-
-          <DialogActions sx={{ px: 3, py: 2, borderTop: "1px solid #E2E8F0", backgroundColor: "#F8FAFC" }}>
-            <Button onClick={() => setPolicyDialogOpen(false)} sx={{ color: "#64748B" }}>
-              {policyDialogMode === "view" ? "Close" : "Cancel"}
-            </Button>
-            {policyDialogMode !== "view" && (
-              <Button
-                type="submit"
-                variant="contained"
-                disabled={policyDialogSaving}
-                startIcon={policyDialogSaving && <CircularProgress size={16} color="inherit" />}
-                sx={{ fontWeight: 600, bgcolor: "#4F46E5", "&:hover": { bgcolor: "#4338CA" } }}
-              >
-                {policyDialogSaving ? "Saving..." : policyDialogMode === "create" ? "Create Policy" : "Save Changes"}
-              </Button>
-            )}
-          </DialogActions>
-        </form>
-      </Dialog>
-
-      {/* Template Create / Edit / View Dialog */}
-      <Dialog open={templateDialogOpen} onClose={() => setTemplateDialogOpen(false)} maxWidth="md" fullWidth>
-        <form onSubmit={handleSaveTemplate}>
-          <DialogTitle sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", pb: 1.5 }}>
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-              <FileCode size={20} color="#4F46E5" />
-              <Typography variant="h6" sx={{ fontWeight: 700, fontSize: "1.1rem" }}>
-                {templateDialogMode === "view"
-                  ? `View Template: ${templateName}`
-                  : templateDialogMode === "create"
-                    ? "Create Config Template"
-                    : `Edit Template: ${templateName}`}
-              </Typography>
-            </Box>
-            <IconButton size="small" onClick={() => setTemplateDialogOpen(false)}>
-              <X size={18} />
-            </IconButton>
-          </DialogTitle>
-
-          <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2, py: 2 }}>
-            {templateDialogError && (
-              <Alert severity="error" sx={{ borderRadius: 2 }}>
-                {templateDialogError}
-              </Alert>
-            )}
-
-            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" }, gap: 2 }}>
-              <TextField
-                select
-                label="Template Type"
-                size="small"
-                value={templateType}
-                onChange={(e) => setTemplateType(e.target.value as "wg" | "bird" | "nft")}
-                disabled={templateDialogMode === "view" || templateDialogSaving}
-                helperText={
-                  templateType === "wg"
-                    ? "WireGuard: /etc/wireguard/<iface>.conf"
-                    : templateType === "bird"
-                      ? "BIRD 2: /etc/bird/bird.conf"
-                      : "nftables: /etc/nftables.conf"
-                }
-              >
-                <MenuItem value="wg">WireGuard (wg)</MenuItem>
-                <MenuItem value="bird">BIRD 2 (bird)</MenuItem>
-                <MenuItem value="nft">nftables (nft)</MenuItem>
-              </TextField>
 
               <TextField
-                label="Template ID"
-                size="small"
-                value={templateId}
-                onChange={(e) => setTemplateId(e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, ""))}
-                disabled={templateDialogMode !== "create" || templateDialogSaving}
-                placeholder="e.g. my-bird-template"
-                helperText={
-                  templateDialogMode === "create"
-                    ? "Unique ID (lowercase letters, numbers, hyphens)"
-                    : "Immutable template ID"
-                }
-              />
-            </Box>
-
-            <TextField
-              label="Template Name"
-              size="small"
-              value={templateName}
-              onChange={(e) => setTemplateName(e.target.value)}
-              disabled={templateDialogMode === "view" || templateDialogSaving}
-              placeholder="e.g. Custom BIRD with Internal OSPF"
-              fullWidth
-            />
-
-            <TextField
-              label="Description (optional)"
-              size="small"
-              value={templateDesc}
-              onChange={(e) => setTemplateDesc(e.target.value)}
-              disabled={templateDialogMode === "view" || templateDialogSaving}
-              placeholder="Explain the customizations or intended usage for this template"
-              fullWidth
-            />
-
-            <Box sx={{ display: "flex", flexDirection: "column", gap: 0.8 }}>
-              <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <Typography variant="caption" sx={{ fontWeight: 700, color: "#475569" }}>
-                  TEMPLATE CONTENT (GO TEXT TEMPLATE)
-                </Typography>
-                <Button
-                  size="small"
-                  variant="text"
-                  startIcon={copiedTemplateContent ? <Check size={14} color="#10B981" /> : <Copy size={14} />}
-                  onClick={() => {
-                    navigator.clipboard.writeText(templateContent);
-                    setCopiedTemplateContent(true);
-                    setTimeout(() => setCopiedTemplateContent(false), 2000);
-                  }}
-                  sx={{ fontSize: "0.75rem", py: 0.2 }}
-                >
-                  {copiedTemplateContent ? "Copied!" : "Copy Template"}
-                </Button>
-              </Box>
-              <TextField
-                multiline
-                minRows={14}
-                maxRows={26}
-                value={templateContent}
-                onChange={(e) => setTemplateContent(e.target.value)}
-                disabled={templateDialogMode === "view" || templateDialogSaving}
                 fullWidth
-                inputProps={{
-                  style: {
-                    fontFamily: "monospace",
-                    fontSize: "0.8rem",
-                    lineHeight: 1.45,
-                    backgroundColor: "#0F172A",
-                    color: "#F8FAFC",
-                    padding: "12px",
-                    borderRadius: "6px",
-                  },
-                }}
+                size="small"
+                label="Ingress Allowed Destination Subnets (CIDRs)"
+                placeholder={"e.g. 172.20.0.0/14{21,29}\nfd00::/8{44,64}"}
+                multiline
+                rows={3}
+                value={policyAllowedDst}
+                onChange={(e) => setPolicyAllowedDst(e.target.value)}
+                disabled={policyDialogMode === "view" || policyDialogSaving}
+                helperText="Restricts traffic dst IP via nftables (return traffic allowed) & filters BGP export routes. Leave empty for unrestricted."
               />
-              <Typography variant="caption" sx={{ color: "#94A3B8" }}>
-                Supports standard Go text/template syntax, sprout functions, and easy42 context objects.
-              </Typography>
-            </Box>
-          </DialogContent>
 
-          <DialogActions sx={{ px: 3, py: 2, borderTop: "1px solid #E2E8F0", backgroundColor: "#F8FAFC" }}>
-            {templateDialogMode === "view" ? (
-              <>
-                <Button
-                  startIcon={<Copy size={16} />}
-                  variant="outlined"
-                  onClick={() => {
-                    const t: ConfigTemplate = {
-                      id: templateId,
-                      name: templateName,
-                      type: templateType,
-                      description: templateDesc,
-                      content: templateContent,
-                    };
-                    handleOpenCloneTemplate(t);
-                  }}
-                  sx={{ mr: "auto" }}
+              <TextField
+                fullWidth
+                size="small"
+                label="Ingress Allowed Source Subnets (CIDRs)"
+                placeholder={"e.g. 172.20.10.0/24\nfd00:1::/48"}
+                multiline
+                rows={3}
+                value={policyAllowedSrc}
+                onChange={(e) => setPolicyAllowedSrc(e.target.value)}
+                disabled={policyDialogMode === "view" || policyDialogSaving}
+                helperText="Anti-spoofing & BGP route import filter: drops inbound traffic with source IP not matching, and BGP import only permits routes matching these subnets. Leave empty for unrestricted."
+              />
+
+              <TextField
+                fullWidth
+                size="small"
+                label="Ingress Disallowed Destination Subnets (CIDRs)"
+                placeholder={"e.g. fd42:1234:5678::/48\n172.20.99.0/24"}
+                multiline
+                rows={3}
+                value={policyDisallowedDst}
+                onChange={(e) => setPolicyDisallowedDst(e.target.value)}
+                disabled={policyDialogMode === "view" || policyDialogSaving}
+                helperText="Reverse of Allowed Dst: drops inbound traffic to these subnets, blocks BGP export, and triggers SNAT (under not_dst) for egress traffic originating from these subnets (e.g. private LAN subnets carved out of DN42 ULA fd00::/8)."
+              />
+
+              <TextField
+                fullWidth
+                size="small"
+                label="Ingress Disallowed Source Subnets (CIDRs)"
+                placeholder={"e.g. 172.20.99.0/24\nfd42:1234:5678::/48"}
+                multiline
+                rows={3}
+                value={policyDisallowedSrc}
+                onChange={(e) => setPolicyDisallowedSrc(e.target.value)}
+                disabled={policyDialogMode === "view" || policyDialogSaving}
+                helperText="Reverse of Allowed Src: inbound traffic on this link matching these source subnets will be dropped, and blocks matching BGP import routes. Leave empty for unrestricted."
+              />
+
+              <Box
+                sx={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 1,
+                  p: 2,
+                  borderRadius: 2,
+                  bgcolor: "#F8FAFC",
+                  border: "1px solid #E2E8F0",
+                }}
+              >
+                <Typography
+                  variant="subtitle2"
+                  sx={{ fontWeight: 700, color: "#1E293B", display: "flex", alignItems: "center", gap: 0.8 }}
                 >
-                  Clone As Custom Template
-                </Button>
-                <Button onClick={() => setTemplateDialogOpen(false)} sx={{ color: "#64748B" }}>
-                  Close
-                </Button>
-              </>
-            ) : (
-              <>
-                <Button
-                  onClick={() => setTemplateDialogOpen(false)}
-                  disabled={templateDialogSaving}
-                  sx={{ color: "#64748B" }}
+                  <Sliders size={16} /> Route Leak Protection
+                </Typography>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={policyRejectInternet}
+                      onChange={(e) => setPolicyRejectInternet(e.target.checked)}
+                      disabled={policyDialogMode === "view" || policyDialogSaving}
+                    />
+                  }
+                  label={
+                    <Box>
+                      <Typography variant="body2" sx={{ fontWeight: 600, color: "#0F172A" }}>
+                        Reject Internet Routes
+                      </Typography>
+                      <Typography variant="caption" sx={{ color: "#64748B" }}>
+                        Prevents importing and exporting default / Internet routes (0.0.0.0/0, 128.0.0.0/1, ::/0).
+                      </Typography>
+                    </Box>
+                  }
+                />
+              </Box>
+
+              <Box
+                sx={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 1.5,
+                  p: 2,
+                  borderRadius: 2,
+                  bgcolor: "#F8FAFC",
+                  border: "1px solid #E2E8F0",
+                }}
+              >
+                <Typography
+                  variant="subtitle2"
+                  sx={{ fontWeight: 700, color: "#1E293B", display: "flex", alignItems: "center", gap: 0.8 }}
                 >
-                  Cancel
-                </Button>
+                  <Shield size={16} /> Route Origination Authorization (ROA)
+                </Typography>
+                <Typography variant="caption" sx={{ color: "#64748B" }}>
+                  Validates route origin ASNs in BGP import filters using BIRD ROA tables. Accepts a URL or local server
+                  file path.
+                </Typography>
+
+                <TextField
+                  fullWidth
+                  size="small"
+                  label="IPv4 ROA File / URL"
+                  placeholder="https://dn42.burble.com/roa/dn42_roa_bird2_4.conf"
+                  value={policyRoa4}
+                  onChange={(e) => setPolicyRoa4(e.target.value)}
+                  disabled={policyDialogMode === "view" || policyDialogSaving}
+                  helperText="URL or local path to IPv4 BIRD ROA definitions."
+                />
+
+                <TextField
+                  fullWidth
+                  size="small"
+                  label="IPv6 ROA File / URL"
+                  placeholder="https://dn42.burble.com/roa/dn42_roa_bird2_6.conf"
+                  value={policyRoa6}
+                  onChange={(e) => setPolicyRoa6(e.target.value)}
+                  disabled={policyDialogMode === "view" || policyDialogSaving}
+                  helperText="URL or local path to IPv6 BIRD ROA definitions."
+                />
+
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={policyRoaStrict}
+                      onChange={(e) => setPolicyRoaStrict(e.target.checked)}
+                      disabled={policyDialogMode === "view" || policyDialogSaving}
+                    />
+                  }
+                  label={
+                    <Box>
+                      <Typography variant="body2" sx={{ fontWeight: 600, color: "#0F172A" }}>
+                        Strict ROA Validation
+                      </Typography>
+                      <Typography variant="caption" sx={{ color: "#64748B" }}>
+                        When enabled, routes with ROA_UNKNOWN status are rejected. (Default: disabled, permits VALID and
+                        UNKNOWN, rejects INVALID).
+                      </Typography>
+                    </Box>
+                  }
+                />
+              </Box>
+
+              {/* Traffic Filtering & Host Firewall */}
+              <Box
+                sx={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 1.5,
+                  p: 2,
+                  borderRadius: 2,
+                  bgcolor: "#F8FAFC",
+                  border: "1px solid #E2E8F0",
+                }}
+              >
+                <Typography
+                  variant="subtitle2"
+                  sx={{ fontWeight: 700, color: "#1E293B", display: "flex", alignItems: "center", gap: 0.8 }}
+                >
+                  <Shield size={16} /> Traffic Filtering & Host Firewall
+                </Typography>
+
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={policyFilterForward}
+                      onChange={(e) => setPolicyFilterForward(e.target.checked)}
+                      disabled={policyDialogMode === "view" || policyDialogSaving}
+                    />
+                  }
+                  label={
+                    <Box>
+                      <Typography variant="body2" sx={{ fontWeight: 600, color: "#0F172A" }}>
+                        Filter Transit / Forwarded Traffic
+                      </Typography>
+                      <Typography variant="caption" sx={{ color: "#64748B" }}>
+                        Drops forwarded packets whose source or destination IP does not match the configured allowed
+                        CIDRs.
+                      </Typography>
+                    </Box>
+                  }
+                />
+
+                <Divider sx={{ my: 0.5 }} />
+
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={policyFilterInput}
+                      onChange={(e) => setPolicyFilterInput(e.target.checked)}
+                      disabled={policyDialogMode === "view" || policyDialogSaving}
+                    />
+                  }
+                  label={
+                    <Box>
+                      <Typography variant="body2" sx={{ fontWeight: 600, color: "#0F172A" }}>
+                        Filter Input Traffic (Host Firewall)
+                      </Typography>
+                      <Typography variant="caption" sx={{ color: "#64748B" }}>
+                        Restricts incoming traffic targeting the host itself from this link. BGP (TCP port 179) and
+                        established return traffic are always permitted.
+                      </Typography>
+                    </Box>
+                  }
+                />
+
+                {policyFilterInput && (
+                  <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, pl: 4, pt: 0.5 }}>
+                    <Box sx={{ display: "flex", gap: 3 }}>
+                      <FormControlLabel
+                        control={
+                          <Checkbox
+                            size="small"
+                            checked={policyInputAllowIcmp}
+                            onChange={(e) => setPolicyInputAllowIcmp(e.target.checked)}
+                            disabled={policyDialogMode === "view" || policyDialogSaving}
+                          />
+                        }
+                        label={
+                          <Typography variant="body2" sx={{ fontSize: "0.85rem", color: "#334155" }}>
+                            Allow ICMP (IPv4 Ping)
+                          </Typography>
+                        }
+                      />
+                      <FormControlLabel
+                        control={
+                          <Checkbox
+                            size="small"
+                            checked={policyInputAllowIcmp6}
+                            onChange={(e) => setPolicyInputAllowIcmp6(e.target.checked)}
+                            disabled={policyDialogMode === "view" || policyDialogSaving}
+                          />
+                        }
+                        label={
+                          <Typography variant="body2" sx={{ fontSize: "0.85rem", color: "#334155" }}>
+                            Allow ICMPv6 (IPv6 Ping & NDP)
+                          </Typography>
+                        }
+                      />
+                    </Box>
+
+                    <TextField
+                      fullWidth
+                      size="small"
+                      label="Allowed TCP Ports"
+                      placeholder="e.g. 80, 443, 8000-8080 (or all)"
+                      value={policyInputTcpPorts}
+                      onChange={(e) => setPolicyInputTcpPorts(e.target.value)}
+                      disabled={policyDialogMode === "view" || policyDialogSaving}
+                      helperText="Comma or newline separated list of ports (1-65535) or ranges (e.g. 8000-8080). BGP 179 is always permitted."
+                    />
+
+                    <TextField
+                      fullWidth
+                      size="small"
+                      label="Allowed UDP Ports"
+                      placeholder="e.g. 53, 5000-5010 (or all)"
+                      value={policyInputUdpPorts}
+                      onChange={(e) => setPolicyInputUdpPorts(e.target.value)}
+                      disabled={policyDialogMode === "view" || policyDialogSaving}
+                      helperText="Comma or newline separated list of ports (1-65535) or ranges. Defaults to 53 for DN42 DNS."
+                    />
+
+                    <TextField
+                      fullWidth
+                      size="small"
+                      multiline
+                      rows={2}
+                      label="Protected Local Networks"
+                      placeholder="e.g. 172.20.229.0/27, fd00:dead:beef::/48"
+                      value={policyLocalNetworks}
+                      onChange={(e) => setPolicyLocalNetworks(e.target.value)}
+                      disabled={policyDialogMode === "view" || policyDialogSaving}
+                      helperText="Subnets treated as local. Forwarded traffic entering from this link destined to these subnets will be subjected to the input filter port rules."
+                    />
+                  </Box>
+                )}
+
+                <Divider sx={{ my: 0.5 }} />
+
+                <TextField
+                  select
+                  fullWidth
+                  size="small"
+                  label="Block Ingress New Connections"
+                  value={policyBlockIngressNew}
+                  onChange={(e) => setPolicyBlockIngressNew(e.target.value)}
+                  disabled={policyDialogMode === "view" || policyDialogSaving}
+                  helperText="Stateful ingress firewall: drop incoming packets from link peer if conntrack state is new or invalid."
+                >
+                  <MenuItem value="">Disabled (Default) — Do not block any</MenuItem>
+                  <MenuItem value="all">Block Ingress New — Drop incoming new or invalid packets from peer</MenuItem>
+                  <MenuItem value="forward">
+                    Block Ingress New for Forwarding — Drop incoming new or invalid packets if destination is not local
+                    (fib daddr type != local)
+                  </MenuItem>
+                </TextField>
+              </Box>
+
+              <Box
+                sx={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 1.5,
+                  p: 2,
+                  borderRadius: 2,
+                  bgcolor: "#F8FAFC",
+                  border: "1px solid #E2E8F0",
+                }}
+              >
+                <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#1E293B" }}>
+                    Outbound SNAT / Masquerade
+                  </Typography>
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={policySnatEnabled}
+                        onChange={(e) => setPolicySnatEnabled(e.target.checked)}
+                        disabled={policyDialogMode === "view" || policyDialogSaving}
+                      />
+                    }
+                    label={policySnatEnabled ? "Enabled" : "Disabled"}
+                    sx={{ m: 0 }}
+                  />
+                </Box>
+
+                {policySnatEnabled && (
+                  <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, pt: 1 }}>
+                    <TextField
+                      select
+                      fullWidth
+                      size="small"
+                      label="SNAT Condition"
+                      value={policySnatCondition}
+                      onChange={(e) => setPolicySnatCondition(e.target.value)}
+                      disabled={policyDialogMode === "view" || policyDialogSaving}
+                    >
+                      <MenuItem value="not_dst">Traffic whose source IP is NOT in allowed destination CIDRs</MenuItem>
+                      <MenuItem value="all">All egress traffic on this link</MenuItem>
+                    </TextField>
+
+                    <TextField
+                      select
+                      fullWidth
+                      size="small"
+                      label="SNAT Target IP"
+                      value={policySnatTarget}
+                      onChange={(e) => setPolicySnatTarget(e.target.value)}
+                      disabled={policyDialogMode === "view" || policyDialogSaving}
+                    >
+                      <MenuItem value="masquerade">Interface IP (Masquerade)</MenuItem>
+                      <MenuItem value="external_ip">External / Peering IP</MenuItem>
+                      <MenuItem value="main_ip">Main IP</MenuItem>
+                    </TextField>
+                  </Box>
+                )}
+              </Box>
+
+              <Box
+                sx={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 1.5,
+                  p: 2,
+                  borderRadius: 2,
+                  bgcolor: "#F8FAFC",
+                  border: "1px solid #E2E8F0",
+                }}
+              >
+                <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <Box>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#1E293B" }}>
+                      Forward SNAT / Masquerade
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: "#64748B" }}>
+                      SNAT / masquerade when forwarding received traffic from link peer to any other interface.
+                    </Typography>
+                  </Box>
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={policyForwardSnat}
+                        onChange={(e) => setPolicyForwardSnat(e.target.checked)}
+                        disabled={policyDialogMode === "view" || policyDialogSaving}
+                      />
+                    }
+                    label={policyForwardSnat ? "Enabled" : "Disabled"}
+                    sx={{ m: 0 }}
+                  />
+                </Box>
+
+                {policyForwardSnat && (
+                  <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, pt: 1 }}>
+                    <TextField
+                      select
+                      fullWidth
+                      size="small"
+                      label="SNAT Target IP"
+                      value={policyForwardSnatTarget}
+                      onChange={(e) => setPolicyForwardSnatTarget(e.target.value)}
+                      disabled={policyDialogMode === "view" || policyDialogSaving}
+                    >
+                      <MenuItem value="masquerade">Interface IP (Masquerade)</MenuItem>
+                      <MenuItem value="external_ip">External / Peering IP</MenuItem>
+                      <MenuItem value="main_ip">Main IP</MenuItem>
+                    </TextField>
+                  </Box>
+                )}
+              </Box>
+
+              <Box
+                sx={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 1.5,
+                  p: 2,
+                  borderRadius: 2,
+                  bgcolor: "#F8FAFC",
+                  border: "1px solid #E2E8F0",
+                }}
+              >
+                <Typography
+                  variant="subtitle2"
+                  sx={{ fontWeight: 700, color: "#1E293B", display: "flex", alignItems: "center", gap: 0.8 }}
+                >
+                  <Shield size={16} /> DSCP Marking
+                </Typography>
+                <Typography variant="caption" sx={{ color: "#64748B" }}>
+                  Set / rewrite the Differentiated Services Code Point (DSCP) on packets traversing this link. Valid
+                  values: 0–63. Leave empty to disable.
+                </Typography>
+
+                <Box sx={{ display: "flex", gap: 2 }}>
+                  <TextField
+                    fullWidth
+                    size="small"
+                    type="number"
+                    label="Ingress DSCP"
+                    placeholder="e.g. 46 (EF)"
+                    value={policyDscpIngress}
+                    onChange={(e) =>
+                      setPolicyDscpIngress(
+                        e.target.value === "" ? "" : Math.max(0, Math.min(63, Number(e.target.value))),
+                      )
+                    }
+                    disabled={policyDialogMode === "view" || policyDialogSaving}
+                    helperText="Rewrite DSCP on packets received from the link peer."
+                    inputProps={{ min: 0, max: 63 }}
+                  />
+                  <TextField
+                    fullWidth
+                    size="small"
+                    type="number"
+                    label="Egress DSCP"
+                    placeholder="e.g. 46 (EF)"
+                    value={policyDscpEgress}
+                    onChange={(e) =>
+                      setPolicyDscpEgress(
+                        e.target.value === "" ? "" : Math.max(0, Math.min(63, Number(e.target.value))),
+                      )
+                    }
+                    disabled={policyDialogMode === "view" || policyDialogSaving}
+                    helperText="Rewrite DSCP on packets sent to the link peer."
+                    inputProps={{ min: 0, max: 63 }}
+                  />
+                </Box>
+              </Box>
+            </DialogContent>
+
+            <DialogActions sx={{ px: 3, py: 2, borderTop: "1px solid #E2E8F0", backgroundColor: "#F8FAFC" }}>
+              <Button onClick={() => setPolicyDialogOpen(false)} sx={{ color: "#64748B" }}>
+                {policyDialogMode === "view" ? "Close" : "Cancel"}
+              </Button>
+              {policyDialogMode !== "view" && (
                 <Button
                   type="submit"
                   variant="contained"
-                  disabled={templateDialogSaving}
-                  startIcon={templateDialogSaving && <CircularProgress size={16} color="inherit" />}
+                  disabled={policyDialogSaving}
+                  startIcon={policyDialogSaving && <CircularProgress size={16} color="inherit" />}
                   sx={{ fontWeight: 600, bgcolor: "#4F46E5", "&:hover": { bgcolor: "#4338CA" } }}
                 >
-                  {templateDialogSaving
-                    ? "Saving..."
-                    : templateDialogMode === "create"
-                      ? "Create Template"
-                      : "Save Changes"}
+                  {policyDialogSaving ? "Saving..." : policyDialogMode === "create" ? "Create Policy" : "Save Changes"}
                 </Button>
-              </>
-            )}
-          </DialogActions>
-        </form>
-      </Dialog>
+              )}
+            </DialogActions>
+          </form>
+        </Dialog>
 
-      {/* Delete Template Confirmation Dialog */}
-      <Dialog open={Boolean(templateToDelete)} onClose={() => setTemplateToDelete(null)} maxWidth="xs" fullWidth>
-        <DialogTitle sx={{ pb: 1 }}>Delete Config Template?</DialogTitle>
-        <DialogContent>
-          <Typography variant="body2" sx={{ color: "#475569" }}>
-            Are you sure you want to delete template <strong>{templateToDelete?.name}</strong> (
-            <code>{templateToDelete?.id}</code>)? This action cannot be undone.
-          </Typography>
-        </DialogContent>
-        <DialogActions sx={{ px: 3, py: 2, borderTop: "1px solid #E2E8F0", backgroundColor: "#F8FAFC" }}>
-          <Button onClick={() => setTemplateToDelete(null)} disabled={templateDeleting} sx={{ color: "#64748B" }}>
-            Cancel
-          </Button>
-          <Button
-            variant="contained"
-            color="error"
-            onClick={handleConfirmDeleteTemplate}
-            disabled={templateDeleting}
-            startIcon={templateDeleting && <CircularProgress size={16} color="inherit" />}
-          >
-            {templateDeleting ? "Deleting..." : "Delete"}
-          </Button>
-        </DialogActions>
-      </Dialog>
+        {/* Template Create / Edit / View Dialog */}
+        <Dialog open={templateDialogOpen} onClose={() => setTemplateDialogOpen(false)} maxWidth="md" fullWidth>
+          <form onSubmit={handleSaveTemplate}>
+            <DialogTitle sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", pb: 1.5 }}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                <FileCode size={20} color="#4F46E5" />
+                <Typography variant="h6" sx={{ fontWeight: 700, fontSize: "1.1rem" }}>
+                  {templateDialogMode === "view"
+                    ? `View Template: ${templateName}`
+                    : templateDialogMode === "create"
+                      ? "Create Config Template"
+                      : `Edit Template: ${templateName}`}
+                </Typography>
+              </Box>
+              <IconButton size="small" onClick={() => setTemplateDialogOpen(false)}>
+                <X size={18} />
+              </IconButton>
+            </DialogTitle>
+
+            <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2, py: 2 }}>
+              {templateDialogError && (
+                <Alert severity="error" sx={{ borderRadius: 2 }}>
+                  {templateDialogError}
+                </Alert>
+              )}
+
+              <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" }, gap: 2 }}>
+                <TextField
+                  select
+                  label="Template Type"
+                  size="small"
+                  value={templateType}
+                  onChange={(e) => setTemplateType(e.target.value as "wg" | "bird" | "nft")}
+                  disabled={templateDialogMode === "view" || templateDialogSaving}
+                  helperText={
+                    templateType === "wg"
+                      ? "WireGuard: /etc/wireguard/<iface>.conf"
+                      : templateType === "bird"
+                        ? "BIRD 2: /etc/bird/bird.conf"
+                        : "nftables: /etc/nftables.conf"
+                  }
+                >
+                  <MenuItem value="wg">WireGuard (wg)</MenuItem>
+                  <MenuItem value="bird">BIRD 2 (bird)</MenuItem>
+                  <MenuItem value="nft">nftables (nft)</MenuItem>
+                </TextField>
+
+                <TextField
+                  label="Template ID"
+                  size="small"
+                  value={templateId}
+                  onChange={(e) => setTemplateId(e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, ""))}
+                  disabled={templateDialogMode !== "create" || templateDialogSaving}
+                  placeholder="e.g. my-bird-template"
+                  helperText={
+                    templateDialogMode === "create"
+                      ? "Unique ID (lowercase letters, numbers, hyphens)"
+                      : "Immutable template ID"
+                  }
+                />
+              </Box>
+
+              <TextField
+                label="Template Name"
+                size="small"
+                value={templateName}
+                onChange={(e) => setTemplateName(e.target.value)}
+                disabled={templateDialogMode === "view" || templateDialogSaving}
+                placeholder="e.g. Custom BIRD with Internal OSPF"
+                fullWidth
+              />
+
+              <TextField
+                label="Description (optional)"
+                size="small"
+                value={templateDesc}
+                onChange={(e) => setTemplateDesc(e.target.value)}
+                disabled={templateDialogMode === "view" || templateDialogSaving}
+                placeholder="Explain the customizations or intended usage for this template"
+                fullWidth
+              />
+
+              <Box sx={{ display: "flex", flexDirection: "column", gap: 0.8 }}>
+                <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <Typography variant="caption" sx={{ fontWeight: 700, color: "#475569" }}>
+                    TEMPLATE CONTENT (GO TEXT TEMPLATE)
+                  </Typography>
+                  <Button
+                    size="small"
+                    variant="text"
+                    startIcon={copiedTemplateContent ? <Check size={14} color="#10B981" /> : <Copy size={14} />}
+                    onClick={() => {
+                      navigator.clipboard.writeText(templateContent);
+                      setCopiedTemplateContent(true);
+                      setTimeout(() => setCopiedTemplateContent(false), 2000);
+                    }}
+                    sx={{ fontSize: "0.75rem", py: 0.2 }}
+                  >
+                    {copiedTemplateContent ? "Copied!" : "Copy Template"}
+                  </Button>
+                </Box>
+                <TextField
+                  multiline
+                  minRows={14}
+                  maxRows={26}
+                  value={templateContent}
+                  onChange={(e) => setTemplateContent(e.target.value)}
+                  disabled={templateDialogMode === "view" || templateDialogSaving}
+                  fullWidth
+                  inputProps={{
+                    style: {
+                      fontFamily: "monospace",
+                      fontSize: "0.8rem",
+                      lineHeight: 1.45,
+                      backgroundColor: "#0F172A",
+                      color: "#F8FAFC",
+                      padding: "12px",
+                      borderRadius: "6px",
+                    },
+                  }}
+                />
+                <Typography variant="caption" sx={{ color: "#94A3B8" }}>
+                  Supports standard Go text/template syntax, sprout functions, and easy42 context objects.
+                </Typography>
+              </Box>
+            </DialogContent>
+
+            <DialogActions sx={{ px: 3, py: 2, borderTop: "1px solid #E2E8F0", backgroundColor: "#F8FAFC" }}>
+              {templateDialogMode === "view" ? (
+                <>
+                  <Button
+                    startIcon={<Copy size={16} />}
+                    variant="outlined"
+                    onClick={() => {
+                      const t: ConfigTemplate = {
+                        id: templateId,
+                        name: templateName,
+                        type: templateType,
+                        description: templateDesc,
+                        content: templateContent,
+                      };
+                      handleOpenCloneTemplate(t);
+                    }}
+                    sx={{ mr: "auto" }}
+                  >
+                    Clone As Custom Template
+                  </Button>
+                  <Button onClick={() => setTemplateDialogOpen(false)} sx={{ color: "#64748B" }}>
+                    Close
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button
+                    onClick={() => setTemplateDialogOpen(false)}
+                    disabled={templateDialogSaving}
+                    sx={{ color: "#64748B" }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    variant="contained"
+                    disabled={templateDialogSaving}
+                    startIcon={templateDialogSaving && <CircularProgress size={16} color="inherit" />}
+                    sx={{ fontWeight: 600, bgcolor: "#4F46E5", "&:hover": { bgcolor: "#4338CA" } }}
+                  >
+                    {templateDialogSaving
+                      ? "Saving..."
+                      : templateDialogMode === "create"
+                        ? "Create Template"
+                        : "Save Changes"}
+                  </Button>
+                </>
+              )}
+            </DialogActions>
+          </form>
+        </Dialog>
+
+        {/* Delete Template Confirmation Dialog */}
+        <Dialog open={Boolean(templateToDelete)} onClose={() => setTemplateToDelete(null)} maxWidth="xs" fullWidth>
+          <DialogTitle sx={{ pb: 1 }}>Delete Config Template?</DialogTitle>
+          <DialogContent>
+            <Typography variant="body2" sx={{ color: "#475569" }}>
+              Are you sure you want to delete template <strong>{templateToDelete?.name}</strong> (
+              <code>{templateToDelete?.id}</code>)? This action cannot be undone.
+            </Typography>
+          </DialogContent>
+          <DialogActions sx={{ px: 3, py: 2, borderTop: "1px solid #E2E8F0", backgroundColor: "#F8FAFC" }}>
+            <Button onClick={() => setTemplateToDelete(null)} disabled={templateDeleting} sx={{ color: "#64748B" }}>
+              Cancel
+            </Button>
+            <Button
+              variant="contained"
+              color="error"
+              onClick={handleConfirmDeleteTemplate}
+              disabled={templateDeleting}
+              startIcon={templateDeleting && <CircularProgress size={16} color="inherit" />}
+            >
+              {templateDeleting ? "Deleting..." : "Delete"}
+            </Button>
+          </DialogActions>
+        </Dialog>
       </Paper>
     </Box>
   );
