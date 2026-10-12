@@ -2,14 +2,17 @@ package server
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"easy42/internal/config"
 	"easy42/internal/engine"
@@ -1892,5 +1895,100 @@ func TestLinkAssignIPv4API(t *testing.T) {
 		t.Fatalf("Expected cleared Address4, got from=%q to=%q", updatedLink.From.Address4, updatedLink.To.Address4)
 	}
 }
+
+func TestServerMultipleListeners(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "easy42-multi-listen-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	store := config.NewStore(tempDir)
+	if _, err := store.Initialize(); err != nil {
+		t.Fatalf("Failed to init store: %v", err)
+	}
+
+	mgr := engine.NewManager(store)
+	srv := New(Config{
+		ListenAddr: "127.0.0.1:0, 127.0.0.1:0",
+		Manager:    mgr,
+	})
+
+	if len(srv.ListenAddrs()) != 2 {
+		t.Fatalf("Expected 2 listen addrs, got %d: %v", len(srv.ListenAddrs()), srv.ListenAddrs())
+	}
+
+	errChan := make(chan error, 1)
+	go func() {
+		errChan <- srv.Start()
+	}()
+
+	// Wait for listeners to start
+	var listeners []net.Listener
+	for i := 0; i < 50; i++ {
+		listeners = srv.Listeners()
+		if len(listeners) == 2 {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+
+	if len(listeners) != 2 {
+		t.Fatalf("Expected 2 active listeners, got %d", len(listeners))
+	}
+
+	// Verify both listeners respond to HTTP requests
+	client := &http.Client{Timeout: 2 * time.Second}
+	for i, ln := range listeners {
+		addr := ln.Addr().String()
+		resp, err := client.Get(fmt.Sprintf("http://%s/api/auth/status", addr))
+		if err != nil {
+			t.Fatalf("Failed to query listener %d (%s): %v", i, addr, err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("Listener %d (%s) returned status %d, expected 200", i, addr, resp.StatusCode)
+		}
+	}
+
+	// Graceful shutdown
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(ctx); err != nil {
+		t.Fatalf("Shutdown failed: %v", err)
+	}
+
+	select {
+	case err := <-errChan:
+		if err != nil {
+			t.Fatalf("Start returned error after shutdown: %v", err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("Server did not stop within timeout")
+	}
+}
+
+func TestServerInvalidAddress(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "easy42-multi-listen-fail-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	store := config.NewStore(tempDir)
+	_, _ = store.Initialize()
+
+	mgr := engine.NewManager(store)
+	srv := New(Config{
+		ListenAddr: "127.0.0.1:0, 999.999.999.999:99999",
+		Manager:    mgr,
+	})
+
+	err = srv.Start()
+	if err == nil {
+		t.Fatal("Expected error from invalid address, got nil")
+	}
+}
+
 
 

@@ -3,9 +3,13 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io/fs"
+	"net"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"easy42/internal/crypto"
@@ -17,26 +21,72 @@ import (
 
 // Server encapsulates the HTTP REST API server and static frontend handler
 type Server struct {
-	mgr       *engine.Manager
-	router    *chi.Mux
-	distFS    fs.FS
-	listen    string
-	httpSrv   *http.Server
+	mgr         *engine.Manager
+	router      *chi.Mux
+	distFS      fs.FS
+	listen      string
+	listenAddrs []string
+	httpSrv     *http.Server
+	listeners   []net.Listener
+	closed      bool
+	mu          sync.Mutex
 }
 
 // Config provides options for server creation
 type Config struct {
-	ListenAddr string
-	Manager    *engine.Manager
-	DistFS     fs.FS
+	ListenAddr  string
+	ListenAddrs []string
+	Manager     *engine.Manager
+	DistFS      fs.FS
 }
 
 // New creates and configures the HTTP server router
 func New(cfg Config) *Server {
+	var rawAddrs []string
+	if len(cfg.ListenAddrs) > 0 {
+		rawAddrs = append(rawAddrs, cfg.ListenAddrs...)
+	}
+	if cfg.ListenAddr != "" {
+		rawAddrs = append(rawAddrs, cfg.ListenAddr)
+	}
+
+	var parsedAddrs []string
+	for _, raw := range rawAddrs {
+		for _, part := range strings.Split(raw, ",") {
+			trimmed := strings.TrimSpace(part)
+			if trimmed != "" {
+				parsedAddrs = append(parsedAddrs, trimmed)
+			}
+		}
+	}
+
+	seen := make(map[string]bool)
+	var finalAddrs []string
+	for _, a := range parsedAddrs {
+		_, port, err := net.SplitHostPort(a)
+		if err == nil && port != "0" {
+			if seen[a] {
+				continue
+			}
+			seen[a] = true
+		} else if err != nil {
+			if seen[a] {
+				continue
+			}
+			seen[a] = true
+		}
+		finalAddrs = append(finalAddrs, a)
+	}
+
+	if len(finalAddrs) == 0 {
+		finalAddrs = []string{"127.0.0.1:4242"}
+	}
+
 	s := &Server{
-		mgr:    cfg.Manager,
-		distFS: cfg.DistFS,
-		listen: cfg.ListenAddr,
+		mgr:         cfg.Manager,
+		distFS:      cfg.DistFS,
+		listen:      strings.Join(finalAddrs, ","),
+		listenAddrs: finalAddrs,
 	}
 
 	r := chi.NewRouter()
@@ -189,26 +239,141 @@ func New(cfg Config) *Server {
 	return s
 }
 
-// Start launches the HTTP server
+// ListenAddrs returns a copy of configured listen addresses
+func (s *Server) ListenAddrs() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]string(nil), s.listenAddrs...)
+}
+
+// Listeners returns a copy of active net.Listeners if started
+func (s *Server) Listeners() []net.Listener {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	res := make([]net.Listener, len(s.listeners))
+	copy(res, s.listeners)
+	return res
+}
+
+// Start launches the HTTP server on all configured listen addresses
 func (s *Server) Start() error {
+	s.mu.Lock()
+	if len(s.listenAddrs) == 0 {
+		s.listenAddrs = []string{"127.0.0.1:4242"}
+	}
+	addrs := append([]string(nil), s.listenAddrs...)
+	s.mu.Unlock()
+
+	listeners := make([]net.Listener, 0, len(addrs))
+	for _, addr := range addrs {
+		ln, err := net.Listen("tcp", addr)
+		if err != nil {
+			for _, l := range listeners {
+				_ = l.Close()
+			}
+			return fmt.Errorf("failed to listen on %s: %w", addr, err)
+		}
+		listeners = append(listeners, ln)
+	}
+
+	return s.Serve(listeners...)
+}
+
+// Serve binds the HTTP server to the provided listeners and starts serving
+func (s *Server) Serve(listeners ...net.Listener) error {
+	if len(listeners) == 0 {
+		return errors.New("no listeners provided")
+	}
+
+	s.mu.Lock()
+	if s.closed {
+		s.mu.Unlock()
+		for _, l := range listeners {
+			_ = l.Close()
+		}
+		return http.ErrServerClosed
+	}
+	s.listeners = listeners
 	s.httpSrv = &http.Server{
 		Addr:         s.listen,
 		Handler:      s.router,
 		ReadTimeout:  30 * time.Second,
 		WriteTimeout: 60 * time.Second,
 	}
-	return s.httpSrv.ListenAndServe()
+	s.mu.Unlock()
+
+	errChan := make(chan error, len(listeners))
+	var wg sync.WaitGroup
+
+	for _, ln := range listeners {
+		wg.Add(1)
+		go func(l net.Listener) {
+			defer wg.Done()
+			if err := s.httpSrv.Serve(l); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				errChan <- err
+			}
+		}(ln)
+	}
+
+	go func() {
+		wg.Wait()
+		close(errChan)
+	}()
+
+	var firstErr error
+	for err := range errChan {
+		if firstErr == nil && err != nil {
+			firstErr = err
+			_ = s.httpSrv.Close()
+		}
+	}
+	return firstErr
 }
 
-// Shutdown gracefully stops the server
+// Shutdown gracefully stops the server and closes all listeners
 func (s *Server) Shutdown(ctx context.Context) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.closed = true
+
 	if s.mgr != nil {
 		s.mgr.Close()
 	}
+
+	var err error
 	if s.httpSrv != nil {
-		return s.httpSrv.Shutdown(ctx)
+		err = s.httpSrv.Shutdown(ctx)
 	}
-	return nil
+
+	for _, l := range s.listeners {
+		_ = l.Close()
+	}
+
+	return err
+}
+
+// Close immediately stops the server and closes all listeners
+func (s *Server) Close() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.closed = true
+
+	if s.mgr != nil {
+		s.mgr.Close()
+	}
+
+	var err error
+	if s.httpSrv != nil {
+		err = s.httpSrv.Close()
+	}
+
+	for _, l := range s.listeners {
+		_ = l.Close()
+	}
+
+	return err
 }
 
 // JSON helpers

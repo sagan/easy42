@@ -963,7 +963,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
               }}
             >
               {/* Section 1: Change Master Password */}
-              <Box component="form" onSubmit={handleChangePassword} sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+              <Box
+                component="form"
+                onSubmit={handleChangePassword}
+                sx={{ display: "flex", flexDirection: "column", gap: 2 }}
+              >
                 <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                   <KeyRound size={18} color="#4F46E5" />
                   <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#0F172A" }}>
@@ -971,8 +975,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                   </Typography>
                 </Box>
                 <Typography variant="body2" sx={{ color: "#64748B" }}>
-                  Update your easy42 admin password. Changing the password will re-encrypt your master data encryption key
-                  (DEK) and invalidate other active sessions.
+                  Update your easy42 admin password. Changing the password will re-encrypt your master data encryption
+                  key (DEK) and invalidate other active sessions.
                 </Typography>
 
                 {passwordSuccess && (
@@ -1075,7 +1079,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                     type="submit"
                     variant="contained"
                     disabled={passwordLoading || !currentPassword || !newPassword || !confirmPassword}
-                    startIcon={passwordLoading ? <CircularProgress size={16} color="inherit" /> : <KeyRound size={16} />}
+                    startIcon={
+                      passwordLoading ? <CircularProgress size={16} color="inherit" /> : <KeyRound size={16} />
+                    }
                     sx={{
                       background: "linear-gradient(135deg, #4F46E5 0%, #3730A3 100%)",
                       fontWeight: 700,
@@ -1128,8 +1134,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                   </Typography>
 
                   <Typography variant="body2" sx={{ color: "#991B1B", lineHeight: 1.6 }}>
-                    This invalidates every active session across all devices and browsers, including your current one. You
-                    and any other users will be required to log in again.
+                    This invalidates every active session across all devices and browsers, including your current one.
+                    You and any other users will be required to log in again.
                   </Typography>
                 </Box>
 
@@ -2926,12 +2932,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                   fullWidth
                   size="small"
                   label="Block Ingress New Connections"
-                  value={policyBlockIngressNew}
-                  onChange={(e) => setPolicyBlockIngressNew(e.target.value)}
+                  value={policyBlockIngressNew || "_"}
+                  onChange={(e) => setPolicyBlockIngressNew(e.target.value === "_" ? "" : e.target.value)}
                   disabled={policyDialogMode === "view" || policyDialogSaving}
                   helperText="Stateful ingress firewall: drop incoming packets from link peer if conntrack state is new or invalid."
                 >
-                  <MenuItem value="">Disabled (Default) — Do not block any</MenuItem>
+                  <MenuItem value="_">Disabled (Default) — Do not block any</MenuItem>
                   <MenuItem value="all">Block Ingress New — Drop incoming new or invalid packets from peer</MenuItem>
                   <MenuItem value="forward">
                     Block Ingress New for Forwarding — Drop incoming new or invalid packets if destination is not local

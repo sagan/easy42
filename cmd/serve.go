@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -15,8 +16,42 @@ import (
 	"github.com/spf13/cobra"
 )
 
+type listenAddrValue struct {
+	addrs   []string
+	changed bool
+}
+
+func (v *listenAddrValue) String() string {
+	if len(v.addrs) == 0 {
+		return "127.0.0.1:4242"
+	}
+	return strings.Join(v.addrs, ",")
+}
+
+func (v *listenAddrValue) Set(val string) error {
+	if !v.changed {
+		v.addrs = nil
+		v.changed = true
+	}
+	for _, part := range strings.Split(val, ",") {
+		trimmed := strings.TrimSpace(part)
+		if trimmed != "" {
+			v.addrs = append(v.addrs, trimmed)
+		}
+	}
+	listenAddr = strings.Join(v.addrs, ",")
+	return nil
+}
+
+func (v *listenAddrValue) Type() string {
+	return "string"
+}
+
 var (
-	listenAddr string
+	listenAddr  string
+	listenValue = listenAddrValue{
+		addrs: []string{"127.0.0.1:4242"},
+	}
 )
 
 var serveCmd = &cobra.Command{
@@ -50,13 +85,20 @@ var serveCmd = &cobra.Command{
 			fmt.Fprintf(os.Stderr, "Warning: unable to load embedded frontend: %v\n", err)
 		}
 
+		if len(listenValue.addrs) == 0 {
+			return fmt.Errorf("no listen addresses specified")
+		}
+
 		srv := server.New(server.Config{
-			ListenAddr: listenAddr,
-			Manager:    mgr,
-			DistFS:     distFS,
+			ListenAddrs: listenValue.addrs,
+			ListenAddr:  listenAddr,
+			Manager:     mgr,
+			DistFS:      distFS,
 		})
 
-		fmt.Printf("easy42 web server starting on http://%s\n", listenAddr)
+		for _, addr := range srv.ListenAddrs() {
+			fmt.Printf("easy42 web server starting on http://%s\n", addr)
+		}
 		fmt.Printf("Data directory: %s\n", GetDataDir())
 
 		// Graceful shutdown handling
@@ -75,6 +117,7 @@ var serveCmd = &cobra.Command{
 }
 
 func init() {
-	serveCmd.Flags().StringVarP(&listenAddr, "listen", "l", "127.0.0.1:4242", "Address to listen on")
+	listenAddr = "127.0.0.1:4242"
+	serveCmd.Flags().VarP(&listenValue, "listen", "l", "Address to listen on")
 	RootCmd.AddCommand(serveCmd)
 }
