@@ -103,15 +103,25 @@ export function isManualLink(
 ): boolean {
   if (!link) return false;
   // 1. Explicit link type
-  if (link.type && link.type.toLowerCase().trim() === "manual") return true;
+  const lType = link.type?.toLowerCase().trim();
+  if (lType === "manual") return true;
+  if (lType === "wireguard") return false;
+
   // 2. Explicit endpoint type
-  if (link.from?.type && link.from.type.toLowerCase().trim() === "manual") return true;
-  if (link.to?.type && link.to.type.toLowerCase().trim() === "manual") return true;
+  const fromType = link.from?.type?.toLowerCase().trim();
+  const toType = link.to?.type?.toLowerCase().trim();
+  if (fromType === "manual" || toType === "manual") return true;
+  if (fromType === "wireguard" && toType === "wireguard") return false;
+
   // 3. Tags containing "manual"
   if (link.tags && link.tags.some((t) => t.toLowerCase().trim() === "manual")) return true;
-  // 4. In easy42, all WireGuard interfaces start with "wg". If an interface doesn't start with "wg", it's a manual interface.
-  if (link.from?.interface && !link.from.interface.toLowerCase().startsWith("wg")) return true;
-  if (link.to?.interface && !link.to.interface.toLowerCase().startsWith("wg")) return true;
+
+  // 4. In easy42, all managed WireGuard interfaces start with "wg".
+  // If interface is specified and explicitly doesn't start with "wg", treat as manual only when type is unspecified.
+  const fromIface = link.from?.interface?.toLowerCase().trim();
+  const toIface = link.to?.interface?.toLowerCase().trim();
+  if (fromIface && !fromIface.startsWith("wg")) return true;
+  if (toIface && !toIface.startsWith("wg")) return true;
 
   return false;
 }
@@ -161,9 +171,6 @@ export function getMaximumCliqueNodes(
   nodeNames.forEach((n) => adj.set(n, new Set()));
 
   links.forEach((l) => {
-    // Manual links do not count towards WireGuard full-mesh
-    if (isManualLink(l)) return;
-
     if (nodeSet.has(l.from.name) && nodeSet.has(l.to.name) && l.from.name !== l.to.name) {
       adj.get(l.from.name)!.add(l.to.name);
       adj.get(l.to.name)!.add(l.from.name);
@@ -217,8 +224,55 @@ export function getMaximumCliqueNodes(
 }
 
 /**
+ * Evaluates whether a WireGuard peer has an active/recent handshake (within 3 minutes).
+ */
+export function isRecentHandshake(dateStr?: string): boolean {
+  if (!dateStr) return false;
+  const d = new Date(dateStr).getTime();
+  if (isNaN(d) || d <= 0) return false;
+  if (new Date(dateStr).getFullYear() < 2020) return false;
+  const ageMs = Date.now() - d;
+  return ageMs >= 0 && ageMs <= 3 * 60 * 1000;
+}
+
+/**
+ * Checks whether live WireGuard telemetry for a node endpoint indicates
+ * the link is actively working or confirmed down.
+ */
+export function checkLiveEndpointWorkingState(
+  nodeStatus?: NodeStatus,
+  ifaceName?: string,
+  peerPubKey?: string,
+): "working" | "not_working" | "unknown" {
+  if (!nodeStatus || !nodeStatus.connected || !nodeStatus.wg_interfaces || !ifaceName) {
+    return "unknown";
+  }
+
+  const wgIface = nodeStatus.wg_interfaces.find((w) => w.name === ifaceName);
+  if (!wgIface) {
+    return "not_working";
+  }
+
+  const peer = wgIface.peers?.find((p) => (peerPubKey ? p.public_key === peerPubKey : true)) || wgIface.peers?.[0];
+  if (!peer) {
+    return "not_working";
+  }
+
+  if (isRecentHandshake(peer.latest_handshake)) {
+    return "working";
+  }
+
+  if (peer.persistent_keepalive > 0) {
+    return "not_working";
+  }
+
+  return "unknown";
+}
+
+/**
  * Determines the working state of a link ("working", "not_working", or "unknown").
- * For WireGuard links, uses the interface's recorded working_state in networkState.
+ * Prioritizes real-time live telemetry from connected agents, falling back to
+ * recorded working_state in networkState.
  * For manual links (BGP-only data plane), easy42 does not manage WireGuard handshakes;
  * if both participating nodes are online and reachable, the manual link is considered working.
  */
@@ -228,6 +282,44 @@ export function getLinkWorkingState(
   nodeStatuses?: Record<string, NodeStatus>,
 ): "working" | "not_working" | "unknown" {
   const isManual = isManualLink(link);
+
+  if (isManual) {
+    const fromOnline = Boolean(nodeStatuses?.[link.from.name]?.connected);
+    const toOnline = Boolean(nodeStatuses?.[link.to.name]?.connected);
+    return fromOnline && toOnline ? "working" : "not_working";
+  }
+
+  // 1. Check real-time live telemetry from connected agents first
+  const fromLive = checkLiveEndpointWorkingState(
+    nodeStatuses?.[link.from.name],
+    link.from.interface,
+    link.to.public_key,
+  );
+  const toLive = checkLiveEndpointWorkingState(
+    nodeStatuses?.[link.to.name],
+    link.to.interface,
+    link.from.public_key,
+  );
+
+  // If either endpoint has a verified recent handshake, the WireGuard link is working!
+  if (fromLive === "working" || toLive === "working") {
+    return "working";
+  }
+
+  // If both endpoints are monitored live and both confirm not_working
+  if (fromLive === "not_working" && toLive === "not_working") {
+    return "not_working";
+  }
+
+  // If one endpoint is monitored live and confirms not_working, while other is not connected
+  if (
+    (fromLive === "not_working" && !nodeStatuses?.[link.to.name]?.connected) ||
+    (toLive === "not_working" && !nodeStatuses?.[link.from.name]?.connected)
+  ) {
+    return "not_working";
+  }
+
+  // 2. Fall back to persisted networkState
   const fromIface = networkState?.nodes?.[link.from.name]?.interfaces?.[link.from.interface];
   const toIface = networkState?.nodes?.[link.to.name]?.interfaces?.[link.to.interface];
 
@@ -236,11 +328,6 @@ export function getLinkWorkingState(
   }
   if (fromIface?.working_state === "not_working" || toIface?.working_state === "not_working") {
     return "not_working";
-  }
-  if (isManual) {
-    const fromOnline = Boolean(nodeStatuses?.[link.from.name]?.connected);
-    const toOnline = Boolean(nodeStatuses?.[link.to.name]?.connected);
-    return fromOnline && toOnline ? "working" : "not_working";
   }
   if (fromIface?.working_state === "unknown" || toIface?.working_state === "unknown") {
     return "unknown";
@@ -792,7 +879,7 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
       const next = { ...prev };
       for (const [nodeName, bId] of Object.entries(next)) {
         if (bId === id) {
-          delete next[nodeName];
+          next[nodeName] = "";
         }
       }
       return next;
@@ -825,6 +912,10 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
       const explicitId = nodeBlockMap[node.name];
       if (explicitId && blocks.some((b) => b.id === explicitId)) {
         effMap[node.name] = explicitId;
+        return;
+      }
+      if (explicitId === "") {
+        // Explicitly unassigned from any block (global canvas area)
         return;
       }
       const pos = posMap.get(node.name);
@@ -927,16 +1018,19 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
         return;
       }
 
-      // Check if every pair (u, v) of nodes inside this block has a direct WireGuard link
-      const hasIntraWireGuardLink = (u: string, v: string) => {
-        return links.some(
-          (l) =>
-            isWireGuardLink(l) && ((l.from.name === u && l.to.name === v) || (l.from.name === v && l.to.name === u)),
-        );
+      // Check if every pair (u, v) of nodes inside this block has a direct link (WireGuard or manual)
+      const hasIntraLink = (u: string, v: string) => {
+        const uClean = u.trim().toLowerCase();
+        const vClean = v.trim().toLowerCase();
+        return links.some((l) => {
+          const fromName = l.from?.name?.trim().toLowerCase();
+          const toName = l.to?.name?.trim().toLowerCase();
+          return (fromName === uClean && toName === vClean) || (fromName === vClean && toName === uClean);
+        });
       };
 
       const isFullMesh = memberNames.every((u, i) =>
-        memberNames.slice(i + 1).every((v) => hasIntraWireGuardLink(u, v)),
+        memberNames.slice(i + 1).every((v) => hasIntraLink(u, v)),
       );
 
       blockFullMeshStatusMap.set(block.id, isFullMesh);
@@ -1200,13 +1294,8 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
       const currentMap = new Map(currentNodes.map((n) => [n.id, n]));
       return initialNodes.map((n) => {
         const existing = currentMap.get(n.id);
-        const nodeData = (n.data as { node?: Node })?.node;
-        let pos = n.position;
-        if (typeof nodeData?.x === "number" && typeof nodeData?.y === "number") {
-          pos = { x: nodeData.x, y: nodeData.y };
-        } else if (existing?.position) {
-          pos = existing.position;
-        }
+        // Preserve current active position on canvas if already rendered
+        const pos = existing?.position ?? n.position;
 
         return {
           ...n,
@@ -1337,7 +1426,7 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
               next[fn.id] = target.id;
               changed = true;
             } else if (!target && current === node.id) {
-              delete next[fn.id];
+              next[fn.id] = "";
               changed = true;
             }
           });
@@ -1367,10 +1456,8 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
             if (currentBlockId === targetBlock.id) return prev;
             return { ...prev, [n.id]: targetBlock.id };
           } else {
-            if (!currentBlockId) return prev;
-            const next = { ...prev };
-            delete next[n.id];
-            return next;
+            if (currentBlockId === "") return prev;
+            return { ...prev, [n.id]: "" };
           }
         });
       }

@@ -248,7 +248,7 @@ export const BlockNode: React.FC<NodeProps> = memo(({ data, selected }) => {
 
           {/* Full-Mesh Core Badge */}
           {memberCount >= 2 && isFullMesh && (
-            <Tooltip title={`All ${memberCount} node(s) in this block are fully interconnected via WireGuard.`}>
+            <Tooltip title={`All ${memberCount} node(s) in this block are fully interconnected.`}>
               <Chip
                 icon={<Share2 size={11} color={blockColor} style={{ marginLeft: 4 }} />}
                 label="Full-Mesh"

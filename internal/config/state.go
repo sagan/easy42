@@ -550,6 +550,88 @@ func (s *StateStore) UpdateInterface(nodeName, host string, iface StateInterface
 	return s.saveNodeLocked(node)
 }
 
+// UpdateInterfacesTelemetry updates live telemetry metrics (status, handshakes, transfer bytes, working state)
+// for the given node's interfaces in stateStore without overwriting configuration hashes.
+func (s *StateStore) UpdateInterfacesTelemetry(nodeName string, updates map[string]StateInterface) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if err := s.initDBLocked(); err != nil {
+		return err
+	}
+
+	if s.state == nil {
+		s.state = &NetworkState{
+			Version:   1,
+			UpdatedAt: time.Now(),
+			Nodes:     make(map[string]StateNode),
+		}
+	}
+
+	node, exists := s.state.Nodes[nodeName]
+	if !exists {
+		node = StateNode{
+			Name:       nodeName,
+			LastSeen:   time.Now(),
+			Interfaces: make(map[string]StateInterface),
+		}
+	}
+	if node.Interfaces == nil {
+		node.Interfaces = make(map[string]StateInterface)
+	}
+
+	hasChanges := false
+	now := time.Now()
+
+	for name, upd := range updates {
+		existing, ok := node.Interfaces[name]
+		if !ok {
+			node.Interfaces[name] = upd
+			hasChanges = true
+			continue
+		}
+
+		changed := existing.Status != upd.Status ||
+			existing.WorkingState != upd.WorkingState ||
+			existing.TransferRxBytes != upd.TransferRxBytes ||
+			existing.TransferTxBytes != upd.TransferTxBytes
+
+		if upd.LatestHandshake != nil {
+			if existing.LatestHandshake == nil || !existing.LatestHandshake.Equal(*upd.LatestHandshake) {
+				changed = true
+			}
+		} else if existing.LatestHandshake != nil {
+			changed = true
+		}
+
+		if changed {
+			hasChanges = true
+			existing.Status = upd.Status
+			existing.WorkingState = upd.WorkingState
+			existing.LatestHandshake = upd.LatestHandshake
+			existing.TransferRxBytes = upd.TransferRxBytes
+			existing.TransferTxBytes = upd.TransferTxBytes
+			if upd.PeerNode != "" {
+				existing.PeerNode = upd.PeerNode
+			}
+			if upd.PeerPubKey != "" {
+				existing.PeerPubKey = upd.PeerPubKey
+			}
+			node.Interfaces[name] = existing
+		}
+	}
+
+	if !hasChanges {
+		return nil
+	}
+
+	node.LastSeen = now
+	s.state.Nodes[nodeName] = node
+	s.state.UpdatedAt = now
+
+	return s.saveNodeLocked(node)
+}
+
 // UpdateBirdState records or updates the applied BIRD config hash for a node
 func (s *StateStore) UpdateBirdState(nodeName, host, configHash string, appliedAt time.Time) error {
 	s.mu.Lock()

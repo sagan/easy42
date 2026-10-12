@@ -77,6 +77,9 @@ interface MeshContextType {
   addBlockTrigger: number;
   setAddBlockTrigger: React.Dispatch<React.SetStateAction<number>>;
 
+  // Node position update
+  updateNodePosition: (name: string, x: number, y: number) => void;
+
   // Toast
   stateToast: {
     message: string;
@@ -233,12 +236,14 @@ export const MeshProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const refreshFleetLive = useCallback(async (flush = false) => {
     try {
-      const [liveData, statusesData] = await Promise.all([
+      const [liveData, statusesData, stateData] = await Promise.all([
         api.getFleetLiveStatus(flush).catch(() => null),
         api.getNodeStatuses().catch(() => ({})),
+        api.getState().catch(() => null),
       ]);
       if (liveData) setFleetLive(liveData);
       if (statusesData) setNodeStatuses(statusesData);
+      if (stateData) setNetworkState(stateData);
     } catch {
       // Ignore background refresh errors
     }
@@ -335,6 +340,12 @@ export const MeshProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [displayedInternalNodes, missingMeshLinksCount, isUnlocked, loadData]);
 
+  const updateNodePosition = useCallback((name: string, x: number, y: number) => {
+    setNodes((prev) =>
+      prev.map((n) => (n.name === name ? { ...n, x, y } : n))
+    );
+  }, []);
+
   const value: MeshContextType = {
     checkingAuth,
     authenticated,
@@ -392,6 +403,7 @@ export const MeshProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setSelectedLink,
     addBlockTrigger,
     setAddBlockTrigger,
+    updateNodePosition,
     stateToast,
     setStateToast,
   };

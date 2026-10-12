@@ -56,11 +56,188 @@ func (m *Manager) setupAgentMetricsListeners() {
 			}
 		}
 		_ = m.stateStore.RecordMetrics(nodeName, input)
+		m.handleAgentTelemetryInterfaces(nodeName, t)
 	})
 
 	m.agentHub.OnRegister(func(conn *agent.AgentConnection) {
 		_ = m.stateStore.RecordNodeInfo(conn.NodeName(), conn.AgentVersion(), conn.OSInfo(), conn.Hostname())
 	})
+}
+
+// handleAgentTelemetryInterfaces updates the node interfaces and their working states in stateStore
+// based on real-time agent telemetry.
+func (m *Manager) handleAgentTelemetryInterfaces(nodeName string, t *agentpb.TelemetryReport) {
+	if m.stateStore == nil || t == nil {
+		return
+	}
+
+	m.mu.RLock()
+	cfg := m.store.Get()
+	var links []config.Link
+	if cfg != nil {
+		links = append([]config.Link(nil), cfg.Links...)
+	}
+	m.mu.RUnlock()
+
+	type linkMeta struct {
+		peerNode   string
+		peerPubKey string
+		keepalive  int
+	}
+	meta := make(map[string]linkMeta)
+	for _, l := range links {
+		ka := 0
+		if l.From.PersistentKeepalive > 0 || l.To.PersistentKeepalive > 0 {
+			ka = 25
+		}
+		if l.From.Name == nodeName {
+			meta[l.From.Interface] = linkMeta{
+				peerNode:   l.To.Name,
+				peerPubKey: l.To.PublicKey,
+				keepalive:  ka,
+			}
+		}
+		if l.To.Name == nodeName {
+			meta[l.To.Interface] = linkMeta{
+				peerNode:   l.From.Name,
+				peerPubKey: l.From.PublicKey,
+				keepalive:  ka,
+			}
+		}
+	}
+
+	operUp := make(map[string]bool)
+	for _, iface := range t.Interfaces {
+		operUp[iface.Name] = iface.IsUp
+	}
+
+	type peerInfo struct {
+		pubKey    string
+		handshake time.Time
+		rx        int64
+		tx        int64
+		keepalive int
+	}
+	wgMap := make(map[string][]peerInfo)
+	for _, p := range t.WgPeers {
+		var hs time.Time
+		if p.LastHandshakeTime > 0 {
+			hs = time.Unix(p.LastHandshakeTime, 0)
+		}
+		wgMap[p.InterfaceName] = append(wgMap[p.InterfaceName], peerInfo{
+			pubKey:    p.PublicKey,
+			handshake: hs,
+			rx:        int64(p.RxBytes),
+			tx:        int64(p.TxBytes),
+			keepalive: int(p.PersistentKeepalive),
+		})
+	}
+
+	allIfaces := make(map[string]bool)
+	for ifaceName := range meta {
+		allIfaces[ifaceName] = true
+	}
+	for ifaceName := range wgMap {
+		if strings.HasPrefix(ifaceName, "wg42") {
+			allIfaces[ifaceName] = true
+		}
+	}
+	currState := m.stateStore.Get()
+	if currState != nil && currState.Nodes != nil {
+		if stNode, ok := currState.Nodes[nodeName]; ok {
+			for ifaceName := range stNode.Interfaces {
+				if strings.HasPrefix(ifaceName, "wg42") {
+					allIfaces[ifaceName] = true
+				}
+			}
+		}
+	}
+
+	if len(allIfaces) == 0 {
+		return
+	}
+
+	now := time.Now()
+	updates := make(map[string]config.StateInterface)
+
+	for ifaceName := range allIfaces {
+		if !strings.HasPrefix(ifaceName, "wg42") {
+			continue
+		}
+
+		peers := wgMap[ifaceName]
+		isStarted := operUp[ifaceName]
+		if !isStarted && len(peers) > 0 {
+			isStarted = true
+		}
+
+		status := "down"
+		if isStarted {
+			status = "active"
+		}
+
+		mInfo := meta[ifaceName]
+		keepalive := mInfo.keepalive
+		var latestHandshake time.Time
+		var rxBytes, txBytes int64
+
+		if len(peers) > 0 {
+			var matched *peerInfo
+			for idx := range peers {
+				if mInfo.peerPubKey != "" && peers[idx].pubKey == mInfo.peerPubKey {
+					matched = &peers[idx]
+					break
+				}
+			}
+			if matched == nil {
+				matched = &peers[0]
+			}
+			latestHandshake = matched.handshake
+			rxBytes = matched.rx
+			txBytes = matched.tx
+			if matched.keepalive > 0 {
+				keepalive = matched.keepalive
+			}
+		}
+
+		var handshakePtr *time.Time
+		workingState := config.WorkingStateUnknown
+
+		if !isStarted {
+			workingState = config.WorkingStateNotWorking
+		} else if !latestHandshake.IsZero() {
+			handshakePtr = &latestHandshake
+			if now.Sub(latestHandshake) <= 3*time.Minute {
+				workingState = config.WorkingStateWorking
+			} else {
+				if keepalive > 0 {
+					workingState = config.WorkingStateNotWorking
+				} else {
+					workingState = config.WorkingStateUnknown
+				}
+			}
+		} else {
+			if keepalive > 0 {
+				workingState = config.WorkingStateNotWorking
+			} else {
+				workingState = config.WorkingStateUnknown
+			}
+		}
+
+		updates[ifaceName] = config.StateInterface{
+			Name:            ifaceName,
+			TargetFile:      "/etc/wireguard/" + ifaceName + ".conf",
+			PeerNode:        mInfo.peerNode,
+			PeerPubKey:      mInfo.peerPubKey,
+			Status:          status,
+			LatestHandshake: handshakePtr,
+			WorkingState:    workingState,
+			TransferRxBytes: rxBytes,
+			TransferTxBytes: txBytes,
+		}
+	}
+
+	_ = m.stateStore.UpdateInterfacesTelemetry(nodeName, updates)
 }
 
 // startRetentionWorker starts the background task cleaning metrics older than 7 days

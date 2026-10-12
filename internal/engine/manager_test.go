@@ -1158,6 +1158,88 @@ func TestUpdateStateWithAgentMode(t *testing.T) {
 	}
 }
 
+func TestAgentTelemetryAutoUpdatesStateStore(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "easy42-telem-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	store := config.NewStore(tempDir)
+	pass, err := store.Initialize()
+	if err != nil {
+		t.Fatalf("Failed to init store: %v", err)
+	}
+
+	mgr := NewManager(store)
+	if err := mgr.Unlock(pass); err != nil {
+		t.Fatalf("Failed to unlock manager: %v", err)
+	}
+
+	// Add nodes and link
+	nodeA := config.Node{Name: "node-a", Host: "10.0.0.1", IP: "172.20.1.1", Mode: "agent"}
+	nodeB := config.Node{Name: "node-b", Host: "10.0.0.2", IP: "172.20.1.2", Mode: "agent"}
+	if err := mgr.AddNode(nodeA); err != nil {
+		t.Fatalf("AddNode A failed: %v", err)
+	}
+	if err := mgr.AddNode(nodeB); err != nil {
+		t.Fatalf("AddNode B failed: %v", err)
+	}
+
+	link, err := mgr.AddLink("node-a", "node-b", 0, 0, nil)
+	if err != nil {
+		t.Fatalf("AddLink failed: %v", err)
+	}
+
+	ifaceName := link.From.Interface
+
+	// Simulate initial state where interface was not_working
+	_ = mgr.StateStore().UpdateInterface("node-a", "10.0.0.1", config.StateInterface{
+		Name:         ifaceName,
+		TargetFile:   "/etc/wireguard/" + ifaceName + ".conf",
+		ConfigHash:   "initial-hash",
+		Status:       "down",
+		WorkingState: config.WorkingStateNotWorking,
+	})
+
+	// Now agent on node-a pushes telemetry with recent handshake
+	nowSec := time.Now().Unix()
+	mgr.AgentHub().UpdateTelemetry("node-a", &agentpb.TelemetryReport{
+		Interfaces: []*agentpb.InterfaceMetrics{
+			{Name: ifaceName, IsUp: true},
+		},
+		WgPeers: []*agentpb.WgPeerMetrics{
+			{
+				InterfaceName:     ifaceName,
+				PublicKey:         link.To.PublicKey,
+				Endpoint:          "10.0.0.2:51820",
+				LastHandshakeTime: nowSec,
+				RxBytes:           1000,
+				TxBytes:           2000,
+			},
+		},
+	})
+
+	// Wait briefly for telemetry listener goroutines
+	time.Sleep(50 * time.Millisecond)
+
+	// Verify stateStore was updated automatically without any manual UpdateState call
+	st := mgr.StateStore().Get()
+	iface, ok := st.Nodes["node-a"].Interfaces[ifaceName]
+	if !ok {
+		t.Fatalf("interface %s not found in stateStore", ifaceName)
+	}
+	if iface.WorkingState != config.WorkingStateWorking {
+		t.Errorf("expected working state %s, got %s", config.WorkingStateWorking, iface.WorkingState)
+	}
+	if iface.Status != "active" {
+		t.Errorf("expected status active, got %s", iface.Status)
+	}
+	if iface.ConfigHash != "initial-hash" {
+		t.Errorf("expected ConfigHash to be preserved as initial-hash, got %s", iface.ConfigHash)
+	}
+}
+
 func TestDeleteNodeCleansUpMemoryAndState(t *testing.T) {
 	tempDir, err := os.MkdirTemp("", "easy42-engine-del-*")
 	if err != nil {

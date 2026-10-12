@@ -32,13 +32,15 @@ import {
   Network,
 } from "lucide-react";
 import { api } from "../../api/client";
-import { Link, NetworkState, Node, NetworkPolicy } from "../../types/api";
+import { Link, NetworkState, Node, NetworkPolicy, NodeStatus } from "../../types/api";
 import { MarkdownView } from "../Common/MarkdownView";
 import { getEffectiveLinkCost } from "../../utils/cost";
+import { getLinkWorkingState } from "./TopologyGraph";
 
 interface LinkDetailDrawerProps {
   link: Link | null;
   networkState?: NetworkState | null;
+  nodeStatuses?: Record<string, NodeStatus>;
   nodes?: Node[];
   networkPolicies?: NetworkPolicy[];
   open: boolean;
@@ -72,6 +74,7 @@ function formatHandshakeAgo(dateStr?: string): string {
 export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
   link,
   networkState,
+  nodeStatuses,
   nodes,
   networkPolicies,
   open,
@@ -384,15 +387,24 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
         const fromIface = networkState?.nodes?.[link.from.name]?.interfaces?.[link.from.interface];
         const toIface = networkState?.nodes?.[link.to.name]?.interfaces?.[link.to.interface];
 
-        let workingState: "working" | "not_working" | "unknown" = "unknown";
-        if (fromIface?.working_state === "working" || toIface?.working_state === "working") {
-          workingState = "working";
-        } else if (fromIface?.working_state === "not_working" || toIface?.working_state === "not_working") {
-          workingState = "not_working";
-        }
+        const workingState = getLinkWorkingState(link, networkState, nodeStatuses);
 
-        const hsFrom = fromIface?.latest_handshake ? new Date(fromIface.latest_handshake) : null;
-        const hsTo = toIface?.latest_handshake ? new Date(toIface.latest_handshake) : null;
+        // Resolve real-time live peer stats if available from nodeStatuses
+        const fromWg = nodeStatuses?.[link.from.name]?.wg_interfaces?.find((w) => w.name === link.from.interface);
+        const fromPeer =
+          fromWg?.peers?.find((p) => (link.to.public_key ? p.public_key === link.to.public_key : true)) ||
+          fromWg?.peers?.[0];
+
+        const toWg = nodeStatuses?.[link.to.name]?.wg_interfaces?.find((w) => w.name === link.to.interface);
+        const toPeer =
+          toWg?.peers?.find((p) => (link.from.public_key ? p.public_key === link.from.public_key : true)) ||
+          toWg?.peers?.[0];
+
+        const hsFromStr = fromPeer?.latest_handshake || fromIface?.latest_handshake;
+        const hsToStr = toPeer?.latest_handshake || toIface?.latest_handshake;
+
+        const hsFrom = hsFromStr ? new Date(hsFromStr) : null;
+        const hsTo = hsToStr ? new Date(hsToStr) : null;
         let newestHandshake: Date | null = null;
         if (hsFrom && hsTo) {
           newestHandshake = hsFrom >= hsTo ? hsFrom : hsTo;
@@ -400,8 +412,13 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
           newestHandshake = hsFrom || hsTo;
         }
 
-        const totalRx = (fromIface?.transfer_rx_bytes || 0) + (toIface?.transfer_rx_bytes || 0);
-        const totalTx = (fromIface?.transfer_tx_bytes || 0) + (toIface?.transfer_tx_bytes || 0);
+        const rxFrom = fromPeer?.transfer_rx_bytes ?? fromIface?.transfer_rx_bytes ?? 0;
+        const rxTo = toPeer?.transfer_rx_bytes ?? toIface?.transfer_rx_bytes ?? 0;
+        const txFrom = fromPeer?.transfer_tx_bytes ?? fromIface?.transfer_tx_bytes ?? 0;
+        const txTo = toPeer?.transfer_tx_bytes ?? toIface?.transfer_tx_bytes ?? 0;
+
+        const totalRx = rxFrom + rxTo;
+        const totalTx = txFrom + txTo;
 
         return (
           <Box

@@ -41,6 +41,7 @@ export const TopologyPage: React.FC = () => {
     setSyncOpen,
     addBlockTrigger,
     setAddBlockTrigger,
+    updateNodePosition,
     setStateToast,
   } = useMesh();
 
@@ -71,13 +72,17 @@ export const TopologyPage: React.FC = () => {
     [setConnectFrom, setConnectTo, setLinkToEdit, setAddLinkOpen],
   );
 
-  const handleNodePositionChange = useCallback(async (name: string, x: number, y: number) => {
-    try {
-      await api.updateNodePosition(name, x, y);
-    } catch (err) {
-      console.error("Failed to persist node position:", err);
-    }
-  }, []);
+  const handleNodePositionChange = useCallback(
+    async (name: string, x: number, y: number) => {
+      updateNodePosition(name, x, y);
+      try {
+        await api.updateNodePosition(name, x, y);
+      } catch (err) {
+        console.error("Failed to persist node position:", err);
+      }
+    },
+    [updateNodePosition],
+  );
 
   const handleEditNode = (node: Node) => {
     setNodeToEdit(node);
@@ -243,6 +248,7 @@ export const TopologyPage: React.FC = () => {
           loadData();
         }}
         networkState={networkState}
+        nodeStatuses={nodeStatuses}
       />
     </Box>
   );

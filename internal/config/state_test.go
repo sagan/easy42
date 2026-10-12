@@ -307,3 +307,52 @@ func TestStateStoreLegacyMigration(t *testing.T) {
 		t.Errorf("Expected state.json.migrated to exist")
 	}
 }
+
+func TestStateStoreUpdateInterfacesTelemetry(t *testing.T) {
+	tempDir := t.TempDir()
+	store := NewStateStore(tempDir)
+	defer store.Close()
+
+	// Initial interface with not_working state
+	_ = store.UpdateInterface("node-a", "10.0.0.1", StateInterface{
+		Name:         "wg42b",
+		TargetFile:   "/etc/wireguard/wg42b.conf",
+		ConfigHash:   "hash123",
+		Status:       "down",
+		WorkingState: WorkingStateNotWorking,
+	})
+
+	now := time.Now()
+	err := store.UpdateInterfacesTelemetry("node-a", map[string]StateInterface{
+		"wg42b": {
+			Name:            "wg42b",
+			Status:          "active",
+			WorkingState:    WorkingStateWorking,
+			LatestHandshake: &now,
+			TransferRxBytes: 1024,
+			TransferTxBytes: 2048,
+		},
+	})
+	if err != nil {
+		t.Fatalf("UpdateInterfacesTelemetry failed: %v", err)
+	}
+
+	st := store.Get()
+	iface := st.Nodes["node-a"].Interfaces["wg42b"]
+	if iface.WorkingState != WorkingStateWorking {
+		t.Errorf("expected working state %s, got %s", WorkingStateWorking, iface.WorkingState)
+	}
+	if iface.Status != "active" {
+		t.Errorf("expected status active, got %s", iface.Status)
+	}
+	if iface.ConfigHash != "hash123" {
+		t.Errorf("expected ConfigHash to be preserved, got %s", iface.ConfigHash)
+	}
+	if iface.TargetFile != "/etc/wireguard/wg42b.conf" {
+		t.Errorf("expected TargetFile to be preserved, got %s", iface.TargetFile)
+	}
+	if iface.TransferRxBytes != 1024 || iface.TransferTxBytes != 2048 {
+		t.Errorf("expected rx=1024, tx=2048, got rx=%d, tx=%d", iface.TransferRxBytes, iface.TransferTxBytes)
+	}
+}
+
