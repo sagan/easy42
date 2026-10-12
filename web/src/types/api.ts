@@ -29,6 +29,12 @@ export interface NetworkSettings {
   local_dn42_networks?: string[];
   disallowed_dn42_networks?: string[];
   disallowed_dn42_cidrs?: string[];
+  flapalerted_address?: string;
+  flapalerted_port?: number;
+  flapalerted_asn?: number;
+  fa_address?: string;
+  fa_port?: number;
+  fa_asn?: number;
 }
 
 export interface CloudflareDNSConfig {
@@ -127,6 +133,7 @@ export interface Node {
   agent_token?: string;
   agent_version?: string;
   agent_last_seen?: string;
+  enable_fa?: boolean;
 }
 
 export interface LinkEnd {

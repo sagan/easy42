@@ -2098,7 +2098,7 @@ export const NodeDetailPage: React.FC = () => {
               </Box>
 
               <Grid container spacing={2}>
-                <Grid item xs={12} sm={4}>
+                <Grid item xs={12} sm={3}>
                   <Box sx={{ p: 2, bgcolor: "#F8FAFC", borderRadius: 2, border: "1px solid #E2E8F0" }}>
                     <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600 }}>
                       Export Table
@@ -2109,7 +2109,7 @@ export const NodeDetailPage: React.FC = () => {
                   </Box>
                 </Grid>
 
-                <Grid item xs={12} sm={4}>
+                <Grid item xs={12} sm={3}>
                   <Box sx={{ p: 2, bgcolor: "#F8FAFC", borderRadius: 2, border: "1px solid #E2E8F0" }}>
                     <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600 }}>
                       External Export Table
@@ -2120,7 +2120,7 @@ export const NodeDetailPage: React.FC = () => {
                   </Box>
                 </Grid>
 
-                <Grid item xs={12} sm={4}>
+                <Grid item xs={12} sm={3}>
                   <Box sx={{ p: 2, bgcolor: "#F8FAFC", borderRadius: 2, border: "1px solid #E2E8F0" }}>
                     <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600 }}>
                       Target Config Path
@@ -2128,6 +2128,27 @@ export const NodeDetailPage: React.FC = () => {
                     <Typography variant="h6" className="mono-font" sx={{ fontWeight: 700, color: "#0891B2", mt: 0.5 }}>
                       /etc/bird_easy42.conf
                     </Typography>
+                  </Box>
+                </Grid>
+
+                <Grid item xs={12} sm={3}>
+                  <Box sx={{ p: 2, bgcolor: "#F8FAFC", borderRadius: 2, border: "1px solid #E2E8F0" }}>
+                    <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600 }}>
+                      FlapAlerted Peering
+                    </Typography>
+                    <Box sx={{ mt: 0.8 }}>
+                      <Chip
+                        label={node.enable_fa ? "Enabled" : "Disabled"}
+                        size="small"
+                        sx={{
+                          fontWeight: 700,
+                          fontSize: "0.75rem",
+                          bgcolor: node.enable_fa ? "#EEF2FF" : "#F1F5F9",
+                          color: node.enable_fa ? "#4F46E5" : "#64748B",
+                          border: node.enable_fa ? "1px solid rgba(79, 70, 229, 0.25)" : "1px solid #E2E8F0",
+                        }}
+                      />
+                    </Box>
                   </Box>
                 </Grid>
               </Grid>

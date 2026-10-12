@@ -4,6 +4,7 @@ import (
 	"embed"
 	"encoding/json"
 	"fmt"
+	"net"
 	"slices"
 	"sort"
 	"strings"
@@ -174,6 +175,61 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 		commExternal = "(4224420000, 1, 1)"
 	}
 	ctx["comm_external"] = commExternal
+
+	// FlapAlerted integration
+	var faAddr string
+	faPort := 1790
+	var faASN uint64 = 4224420000
+
+	if settings != nil {
+		faAddr = settings.GetFlapAlertedAddress()
+		faPort = settings.GetFlapAlertedPort()
+		faASN = settings.GetFlapAlertedASN()
+	}
+
+	ip4Clean := strings.TrimSpace(node.IP)
+	if idx := strings.Index(ip4Clean, "/"); idx != -1 {
+		ip4Clean = strings.TrimSpace(ip4Clean[:idx])
+	}
+
+	ip6Clean := strings.TrimSpace(node.IP6)
+	if idx := strings.Index(ip6Clean, "/"); idx != -1 {
+		ip6Clean = strings.TrimSpace(ip6Clean[:idx])
+	}
+
+	if node.EnableFA && faAddr != "" {
+		var isIPv6 bool
+		if parsed := net.ParseIP(faAddr); parsed != nil {
+			isIPv6 = parsed.To4() == nil
+		} else {
+			isIPv6 = strings.Contains(faAddr, ":")
+		}
+
+		var localIP string
+		if isIPv6 {
+			localIP = ip6Clean
+			if localIP == "" {
+				localIP = ip4Clean
+			}
+		} else {
+			localIP = ip4Clean
+			if localIP == "" {
+				localIP = ip6Clean
+			}
+		}
+
+		if localIP != "" {
+			ctx["enable_fa"] = true
+			ctx["fa_local_ip"] = localIP
+			ctx["fa_neighbor_ip"] = faAddr
+			ctx["fa_asn"] = faASN
+			ctx["fa_port"] = faPort
+		} else {
+			ctx["enable_fa"] = false
+		}
+	} else {
+		ctx["enable_fa"] = false
+	}
 
 	dn42Pol, hasDN42 := policyMap[config.PolicyDN42]
 	var dn42ImportV4, dn42ImportV6, dn42ExportV4, dn42ExportV6 string

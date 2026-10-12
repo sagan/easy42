@@ -2385,6 +2385,118 @@ func TestNodeKernelMetric(t *testing.T) {
 	validateBirdSyntax(t, confZeroMetric)
 }
 
+func TestFlapAlertedBGPPeering(t *testing.T) {
+	nodeV6 := config.Node{
+		Name:     "router-fa",
+		IP:       "192.168.100.1",
+		IP6:      "fd42:a159:f9f0::1",
+		ASN:      4224420001,
+		EnableFA: true,
+	}
+
+	netSettingsV6 := &config.NetworkSettings{
+		FlapAlertedAddress: "fd42:a159:f9f0:8000::c8",
+		FlapAlertedPort:    1790,
+		FlapAlertedASN:     4224420000,
+	}
+
+	// 1. Enabled with IPv6 FlapAlerted address -> local IP should be node's IPv6
+	confV6, err := GenerateBirdConfig(&nodeV6, []config.Node{nodeV6}, nil, netSettingsV6)
+	if err != nil {
+		t.Fatalf("GenerateBirdConfig failed: %v", err)
+	}
+	expectedV6Snippet := `protocol bgp flapalerted {
+    local fd42:a159:f9f0::1 as 4224420000;
+    neighbor fd42:a159:f9f0:8000::c8 as 4224420000 port 1790;
+    multihop;
+
+    ipv4 {
+        add paths on;
+        export all;
+        import none;
+        extended next hop on;
+    };
+
+    ipv6 {
+        add paths on;
+        export all;
+        import none;
+        extended next hop on;
+    };
+}`
+	if !strings.Contains(confV6, expectedV6Snippet) {
+		t.Fatalf("Expected FlapAlerted block in conf:\n%s\n\nFull config:\n%s", expectedV6Snippet, confV6)
+	}
+	validateBirdSyntax(t, confV6)
+
+	// 2. Enabled with IPv4 FlapAlerted address & custom port/asn -> local IP should be node's IPv4
+	nodeV4 := config.Node{
+		Name:     "router-fa4",
+		IP:       "192.168.100.2",
+		IP6:      "fd42:a159:f9f0::2",
+		ASN:      4224420002,
+		EnableFA: true,
+	}
+	netSettingsV4 := &config.NetworkSettings{
+		FlapAlertedAddress: "10.100.0.50",
+		FlapAlertedPort:    2790,
+		FlapAlertedASN:     4224420200,
+	}
+	confV4, err := GenerateBirdConfig(&nodeV4, []config.Node{nodeV4}, nil, netSettingsV4)
+	if err != nil {
+		t.Fatalf("GenerateBirdConfig failed: %v", err)
+	}
+	expectedV4Snippet := `protocol bgp flapalerted {
+    local 192.168.100.2 as 4224420200;
+    neighbor 10.100.0.50 as 4224420200 port 2790;
+    multihop;
+
+    ipv4 {
+        add paths on;
+        export all;
+        import none;
+        extended next hop on;
+    };
+
+    ipv6 {
+        add paths on;
+        export all;
+        import none;
+        extended next hop on;
+    };
+}`
+	if !strings.Contains(confV4, expectedV4Snippet) {
+		t.Fatalf("Expected FlapAlerted block in conf:\n%s\n\nFull config:\n%s", expectedV4Snippet, confV4)
+	}
+	validateBirdSyntax(t, confV4)
+
+	// 3. Node with EnableFA = false -> should NOT contain flapalerted
+	nodeDisabled := nodeV6
+	nodeDisabled.EnableFA = false
+	confDisabled, err := GenerateBirdConfig(&nodeDisabled, []config.Node{nodeDisabled}, nil, netSettingsV6)
+	if err != nil {
+		t.Fatalf("GenerateBirdConfig failed: %v", err)
+	}
+	if strings.Contains(confDisabled, "protocol bgp flapalerted") {
+		t.Fatalf("Expected no FlapAlerted block when EnableFA=false, but found it in:\n%s", confDisabled)
+	}
+	validateBirdSyntax(t, confDisabled)
+
+	// 4. Node with EnableFA = true but empty FlapAlerted address -> should NOT contain flapalerted
+	netSettingsEmpty := &config.NetworkSettings{
+		FlapAlertedAddress: "",
+	}
+	confEmpty, err := GenerateBirdConfig(&nodeV6, []config.Node{nodeV6}, nil, netSettingsEmpty)
+	if err != nil {
+		t.Fatalf("GenerateBirdConfig failed: %v", err)
+	}
+	if strings.Contains(confEmpty, "protocol bgp flapalerted") {
+		t.Fatalf("Expected no FlapAlerted block when address is empty, but found it in:\n%s", confEmpty)
+	}
+	validateBirdSyntax(t, confEmpty)
+}
+
+
 
 
 

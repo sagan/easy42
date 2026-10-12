@@ -16,6 +16,8 @@ import {
   Chip,
   useTheme,
   useMediaQuery,
+  Switch,
+  FormControlLabel,
 } from "@mui/material";
 import {
   Search,
@@ -139,6 +141,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
   const [wgTemplate, setWgTemplate] = useState<string>("");
   const [birdTemplate, setBirdTemplate] = useState<string>("");
   const [nftTemplate, setNftTemplate] = useState<string>("");
+  const [enableFa, setEnableFa] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
@@ -175,6 +178,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
       setWgTemplate(nodeToEdit.wg_template || "");
       setBirdTemplate(nodeToEdit.bird_template || "");
       setNftTemplate(nodeToEdit.nft_template || "");
+      setEnableFa(Boolean(nodeToEdit.enable_fa));
       if (nodeToEdit.routes && nodeToEdit.routes.length > 0) {
         setKernelRoutes(
           nodeToEdit.routes.map((r, idx) => ({
@@ -262,6 +266,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
       setWgTemplate("");
       setBirdTemplate("");
       setNftTemplate("");
+      setEnableFa(false);
       setEntrypoints([{ id: "nat-fallback", ip: "", portStr: "", tagStr: "nat", mtuStr: "", isNone: true }]);
       setDiscoveredIps([]);
       setProbeError(null);
@@ -585,6 +590,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
         wg_template: wgTemplate.trim() || undefined,
         bird_template: birdTemplate.trim() || undefined,
         nft_template: nftTemplate.trim() || undefined,
+        enable_fa: enableFa,
         note: note.trim() || undefined,
         x: nodeToEdit?.x,
         y: nodeToEdit?.y,
@@ -1460,6 +1466,51 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                       ))}
                   </Box>
                 )}
+
+                {/* FlapAlerted BGP Peering Switch */}
+                <Box
+                  sx={{
+                    p: 1.5,
+                    borderRadius: 2,
+                    bgcolor: enableFa ? "rgba(79, 70, 229, 0.04)" : "#F8FAFC",
+                    border: enableFa ? "1px solid rgba(79, 70, 229, 0.3)" : "1px solid #E2E8F0",
+                    transition: "all 0.2s ease",
+                  }}
+                >
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={enableFa}
+                        onChange={(e) => setEnableFa(e.target.checked)}
+                        color="primary"
+                        disabled={saving}
+                      />
+                    }
+                    label={
+                      <Box>
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                          <Typography variant="body2" sx={{ fontWeight: 600, color: "#1E293B" }}>
+                            Enable FlapAlerted Peering (enable_fa)
+                          </Typography>
+                          <Chip
+                            label="FlapAlerted"
+                            size="small"
+                            sx={{
+                              height: 20,
+                              fontSize: "0.68rem",
+                              fontWeight: 600,
+                              bgcolor: enableFa ? "#EEF2FF" : "#F1F5F9",
+                              color: enableFa ? "#4F46E5" : "#64748B",
+                            }}
+                          />
+                        </Box>
+                        <Typography variant="caption" sx={{ color: "#64748B" }}>
+                          When enabled, adds the FlapAlerted BGP peering session to this node's generated bird.conf to report route flapping.
+                        </Typography>
+                      </Box>
+                    }
+                  />
+                </Box>
 
                 {/* Imported Kernel Route Rules */}
                 <Box sx={{ mt: 1 }}>

@@ -45,6 +45,7 @@ import {
   FileCode,
   Search,
   Check,
+  Activity,
 } from "lucide-react";
 import { api } from "../../api/client";
 import { NetworkSettings, NetworkPolicy, CloudflareDNSConfig, DNSSyncResult, ConfigTemplate } from "../../types/api";
@@ -153,6 +154,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
   const [localDn42Networks, setLocalDn42Networks] = useState("");
   const [disallowedDn42Networks, setDisallowedDn42Networks] = useState("");
   const [networkPrefixes, setNetworkPrefixes] = useState<string[]>([]);
+  const [faAddress, setFaAddress] = useState("");
+  const [faPort, setFaPort] = useState<number | "">(1790);
+  const [faAsn, setFaAsn] = useState<number | "">(4224420000);
   const [networkLoading, setNetworkLoading] = useState(false);
   const [networkSaving, setNetworkSaving] = useState(false);
   const [networkError, setNetworkError] = useState<string | null>(null);
@@ -485,6 +489,21 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
       setLocalDn42Networks((settings.local_dn42_networks || []).join("\n"));
       setDisallowedDn42Networks((settings.disallowed_dn42_networks || settings.disallowed_dn42_cidrs || []).join("\n"));
       setNetworkPrefixes(settings.prefixes || []);
+      setFaAddress(settings.flapalerted_address || settings.fa_address || "");
+      setFaPort(
+        settings.flapalerted_port !== undefined && settings.flapalerted_port !== null
+          ? settings.flapalerted_port
+          : settings.fa_port !== undefined && settings.fa_port !== null
+            ? settings.fa_port
+            : 1790,
+      );
+      setFaAsn(
+        settings.flapalerted_asn !== undefined && settings.flapalerted_asn !== null
+          ? settings.flapalerted_asn
+          : settings.fa_asn !== undefined && settings.fa_asn !== null
+            ? settings.fa_asn
+            : 4224420000,
+      );
     } catch (err: unknown) {
       const e = err as Error;
       setNetworkError(e.message || "Failed to load network settings.");
@@ -505,6 +524,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
       local_dn42_networks: parsePrefixList(localDn42Networks),
       disallowed_dn42_networks: parsePrefixList(disallowedDn42Networks),
       disallowed_dn42_cidrs: parsePrefixList(disallowedDn42Networks),
+      flapalerted_address: faAddress.trim() || undefined,
+      flapalerted_port: faPort === "" ? 1790 : Number(faPort),
+      flapalerted_asn: faAsn === "" ? 4224420000 : Number(faAsn),
+      fa_address: faAddress.trim() || undefined,
+      fa_port: faPort === "" ? 1790 : Number(faPort),
+      fa_asn: faAsn === "" ? 4224420000 : Number(faAsn),
     };
 
     try {
@@ -1183,6 +1208,70 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                   helperText="Excluded subnets for built-in dn42 policy (used as DisallowedDstCIDRs & DisallowedSrcCIDRs). Rejects BGP export, drops inbound traffic, and triggers SNAT for internal egress traffic."
                   disabled={networkSaving}
                 />
+
+                <Divider sx={{ my: 0.5 }} />
+
+                <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                    <Activity size={18} color="#4F46E5" />
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#1E293B" }}>
+                      FlapAlerted Integration
+                    </Typography>
+                    <Chip
+                      label="BGP Flap Detection"
+                      size="small"
+                      sx={{
+                        height: 20,
+                        fontSize: "0.68rem",
+                        fontWeight: 600,
+                        bgcolor: "#EEF2FF",
+                        color: "#4F46E5",
+                      }}
+                    />
+                  </Box>
+                  <Typography variant="body2" sx={{ color: "#64748B", fontSize: "0.82rem" }}>
+                    Configure FlapAlerted BGP route flap detection. The FlapAlerted service is deployed separately on any host in the network (e.g.{" "}
+                    <code style={{ background: "#F1F5F9", padding: "2px 6px", borderRadius: 4, fontFamily: "monospace" }}>
+                      FlapAlerted -asn {faAsn || 4224420000}
+                    </code>
+                    ). Nodes with <strong>enable_fa</strong> enabled will peer with this instance.
+                  </Typography>
+
+                  <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "2fr 1fr 1fr" }, gap: 2 }}>
+                    <TextField
+                      fullWidth
+                      size="small"
+                      label="FlapAlerted Address"
+                      placeholder="e.g. fd42:a159:f9f0:8000::c8"
+                      value={faAddress}
+                      onChange={(e) => setFaAddress(e.target.value)}
+                      helperText="Private IPv4 or IPv6 routable inside easy42"
+                      disabled={networkSaving}
+                    />
+                    <TextField
+                      fullWidth
+                      size="small"
+                      label="FlapAlerted Port"
+                      type="number"
+                      placeholder="1790"
+                      value={faPort}
+                      onChange={(e) => setFaPort(e.target.value === "" ? "" : Number(e.target.value))}
+                      helperText="Default: 1790"
+                      disabled={networkSaving}
+                    />
+                    <TextField
+                      fullWidth
+                      size="small"
+                      label="FlapAlerted ASN"
+                      type="number"
+                      placeholder="4224420000"
+                      value={faAsn}
+                      onChange={(e) => setFaAsn(e.target.value === "" ? "" : Number(e.target.value))}
+                      helperText="Default: 4224420000"
+                      disabled={networkSaving}
+                    />
+                  </Box>
+                </Box>
                 <Box sx={{ display: "flex", justifyContent: "flex-end", pt: 1 }}>
                   <Button
                     type="submit"

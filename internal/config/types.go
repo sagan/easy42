@@ -15,6 +15,51 @@ type NetworkSettings struct {
 	LocalDN42Networks      []string `json:"local_dn42_networks,omitempty"`       // Local DN42 networks protected by filter_input
 	DisallowedDN42Networks []string `json:"disallowed_dn42_networks,omitempty"` // Disallowed CIDRs for dn42 (used by built-in dn42 policy)
 	DisallowedDN42CIDRs    []string `json:"disallowed_dn42_cidrs,omitempty"`    // Alias for disallowed_dn42_networks
+	FlapAlertedAddress     string   `json:"flapalerted_address,omitempty"`      // FlapAlerted instance IP address
+	FlapAlertedPort        int      `json:"flapalerted_port,omitempty"`         // FlapAlerted BGP port (default 1790)
+	FlapAlertedASN         uint64   `json:"flapalerted_asn,omitempty"`          // FlapAlerted BGP ASN (default 4224420000)
+	FAAddress              string   `json:"fa_address,omitempty"`               // Alias for flapalerted_address
+	FAPort                 int      `json:"fa_port,omitempty"`                  // Alias for flapalerted_port
+	FAASN                  uint64   `json:"fa_asn,omitempty"`                   // Alias for flapalerted_asn
+}
+
+// GetFlapAlertedAddress returns the configured FlapAlerted IP address or alias
+func (s *NetworkSettings) GetFlapAlertedAddress() string {
+	if s == nil {
+		return ""
+	}
+	if strings.TrimSpace(s.FlapAlertedAddress) != "" {
+		return strings.TrimSpace(s.FlapAlertedAddress)
+	}
+	return strings.TrimSpace(s.FAAddress)
+}
+
+// GetFlapAlertedPort returns the configured FlapAlerted BGP port (default 1790)
+func (s *NetworkSettings) GetFlapAlertedPort() int {
+	if s == nil {
+		return 1790
+	}
+	if s.FlapAlertedPort > 0 {
+		return s.FlapAlertedPort
+	}
+	if s.FAPort > 0 {
+		return s.FAPort
+	}
+	return 1790
+}
+
+// GetFlapAlertedASN returns the configured FlapAlerted ASN (default 4224420000)
+func (s *NetworkSettings) GetFlapAlertedASN() uint64 {
+	if s == nil {
+		return 4224420000
+	}
+	if s.FlapAlertedASN > 0 {
+		return s.FlapAlertedASN
+	}
+	if s.FAASN > 0 {
+		return s.FAASN
+	}
+	return 4224420000
 }
 
 // Block represents a visual block grouping of nodes on the topology graph
@@ -214,6 +259,7 @@ type Node struct {
 	AgentToken    string            `json:"agent_token,omitempty"`     // Static shared token for agent authentication
 	AgentVersion  string            `json:"agent_version,omitempty"`   // Reported agent version
 	AgentLastSeen time.Time         `json:"agent_last_seen,omitempty"` // Timestamp of last agent heartbeat/report
+	EnableFA      bool              `json:"enable_fa,omitempty"`       // Enable FlapAlerted BGP peering
 }
 
 // IsAgentMode returns true if the node is configured to use the agent

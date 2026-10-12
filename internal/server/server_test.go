@@ -635,6 +635,9 @@ func TestNetworkSettingsAndExternalPeeringAPI(t *testing.T) {
 		Prefixes:               []string{"172.20.10.0/24", "172.20.0.0/14{21,29}"},
 		LocalDN42Networks:      []string{"172.20.229.0/27"},
 		DisallowedDN42Networks: []string{"fd42:1234:5678::/48", "172.20.99.0/24"},
+		FlapAlertedAddress:     "fd42:a159:f9f0:8000::c8",
+		FlapAlertedPort:        1790,
+		FlapAlertedASN:         4224420000,
 	}
 	bodyPutSettings, _ := json.Marshal(settingsUpdate)
 	reqPutSettings := httptest.NewRequest("PUT", "/api/settings/network", bytes.NewReader(bodyPutSettings))
@@ -655,6 +658,15 @@ func TestNetworkSettingsAndExternalPeeringAPI(t *testing.T) {
 	}
 	if len(savedSettings.DisallowedDN42Networks) != 2 || savedSettings.DisallowedDN42Networks[0] != "fd42:1234:5678::/48" {
 		t.Errorf("Expected DisallowedDN42Networks [fd42:1234:5678::/48, 172.20.99.0/24], got %v", savedSettings.DisallowedDN42Networks)
+	}
+	if savedSettings.GetFlapAlertedAddress() != "fd42:a159:f9f0:8000::c8" {
+		t.Errorf("Expected FlapAlertedAddress fd42:a159:f9f0:8000::c8, got %s", savedSettings.GetFlapAlertedAddress())
+	}
+	if savedSettings.GetFlapAlertedPort() != 1790 {
+		t.Errorf("Expected FlapAlertedPort 1790, got %d", savedSettings.GetFlapAlertedPort())
+	}
+	if savedSettings.GetFlapAlertedASN() != 4224420000 {
+		t.Errorf("Expected FlapAlertedASN 4224420000, got %d", savedSettings.GetFlapAlertedASN())
 	}
 
 	// Verify that built-in dn42 policy automatically inherits DisallowedDstCIDRs & DisallowedSrcCIDRs

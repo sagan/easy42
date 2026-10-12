@@ -4125,6 +4125,26 @@ func (m *Manager) UpdateNetworkSettings(settings config.NetworkSettings) error {
 		settings.DisallowedDN42Networks = config.CleanPrefixes(settings.DisallowedDN42Networks)
 	}
 	settings.DisallowedDN42CIDRs = settings.DisallowedDN42Networks
+	if faAddr := settings.GetFlapAlertedAddress(); faAddr != "" {
+		settings.FlapAlertedAddress = faAddr
+		settings.FAAddress = faAddr
+		if settings.FlapAlertedPort == 0 && settings.FAPort == 0 {
+			settings.FlapAlertedPort = 1790
+			settings.FAPort = 1790
+		} else {
+			p := settings.GetFlapAlertedPort()
+			settings.FlapAlertedPort = p
+			settings.FAPort = p
+		}
+		if settings.FlapAlertedASN == 0 && settings.FAASN == 0 {
+			settings.FlapAlertedASN = 4224420000
+			settings.FAASN = 4224420000
+		} else {
+			a := settings.GetFlapAlertedASN()
+			settings.FlapAlertedASN = a
+			settings.FAASN = a
+		}
+	}
 	cfg.NetworkSettings = settings
 	return m.store.Save(cfg)
 }

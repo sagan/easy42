@@ -158,6 +158,18 @@ func (s *Store) Load() (*Config, error) {
 		cfg.NetworkSettings.DisallowedDN42Networks = CleanPrefixes(cfg.NetworkSettings.DisallowedDN42Networks)
 	}
 	cfg.NetworkSettings.DisallowedDN42CIDRs = cfg.NetworkSettings.DisallowedDN42Networks
+	if faAddr := cfg.NetworkSettings.GetFlapAlertedAddress(); faAddr != "" {
+		cfg.NetworkSettings.FlapAlertedAddress = faAddr
+		cfg.NetworkSettings.FAAddress = faAddr
+		if cfg.NetworkSettings.FlapAlertedPort == 0 && cfg.NetworkSettings.FAPort == 0 {
+			cfg.NetworkSettings.FlapAlertedPort = 1790
+			cfg.NetworkSettings.FAPort = 1790
+		}
+		if cfg.NetworkSettings.FlapAlertedASN == 0 && cfg.NetworkSettings.FAASN == 0 {
+			cfg.NetworkSettings.FlapAlertedASN = 4224420000
+			cfg.NetworkSettings.FAASN = 4224420000
+		}
+	}
 
 	s.config = &cfg
 	return &cfg, nil
@@ -187,6 +199,18 @@ func (s *Store) Save(cfg *Config) error {
 		cfg.NetworkSettings.DisallowedDN42Networks = CleanPrefixes(cfg.NetworkSettings.DisallowedDN42Networks)
 	}
 	cfg.NetworkSettings.DisallowedDN42CIDRs = cfg.NetworkSettings.DisallowedDN42Networks
+	if faAddr := cfg.NetworkSettings.GetFlapAlertedAddress(); faAddr != "" {
+		cfg.NetworkSettings.FlapAlertedAddress = faAddr
+		cfg.NetworkSettings.FAAddress = faAddr
+		if cfg.NetworkSettings.FlapAlertedPort == 0 && cfg.NetworkSettings.FAPort == 0 {
+			cfg.NetworkSettings.FlapAlertedPort = 1790
+			cfg.NetworkSettings.FAPort = 1790
+		}
+		if cfg.NetworkSettings.FlapAlertedASN == 0 && cfg.NetworkSettings.FAASN == 0 {
+			cfg.NetworkSettings.FlapAlertedASN = 4224420000
+			cfg.NetworkSettings.FAASN = 4224420000
+		}
+	}
 
 	data, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {

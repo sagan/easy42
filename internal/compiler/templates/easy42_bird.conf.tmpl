@@ -1323,6 +1323,31 @@ protocol bgp 'peer_{{.remote.name}}' from {{.bgp_template}} {
 {{end}}
 {{end}}
 
+{{if .enable_fa}}
+# ==============================================================================
+# FlapAlerted BGP Peering
+# ==============================================================================
+protocol bgp flapalerted {
+    local {{.fa_local_ip}} as {{.fa_asn}};
+    neighbor {{.fa_neighbor_ip}} as {{.fa_asn}} port {{.fa_port}};
+    multihop;
+
+    ipv4 {
+        add paths on;
+        export all;
+        import none;
+        extended next hop on;
+    };
+
+    ipv6 {
+        add paths on;
+        export all;
+        import none;
+        extended next hop on;
+    };
+}
+{{end}}
+
 {{if .bird_hooks}}
 # ==============================================================================
 # Custom BIRD Hooks
