@@ -3973,6 +3973,7 @@ func (m *Manager) CreateNetworkPolicy(p config.NetworkPolicy) (*config.NetworkPo
 	p.Mark = strings.TrimSpace(p.Mark)
 	p.ForwardSNATTarget = strings.TrimSpace(p.ForwardSNATTarget)
 	p.BlockIngressNew = config.NormalizeBlockIngressNew(p.BlockIngressNew)
+	p.IngressNewWhitelist = config.CleanIngressNewWhitelist(p.IngressNewWhitelist)
 	p.RoutingPolicy = config.NormalizeRoutingPolicy(p.RoutingPolicy)
 
 	cfg.NetworkPolicies = append(cfg.NetworkPolicies, p)
@@ -4043,6 +4044,7 @@ func (m *Manager) UpdateNetworkPolicy(id string, p config.NetworkPolicy) (*confi
 	cfg.NetworkPolicies[idx].Preference = p.Preference
 	cfg.NetworkPolicies[idx].Mark = strings.TrimSpace(p.Mark)
 	cfg.NetworkPolicies[idx].BlockIngressNew = config.NormalizeBlockIngressNew(p.BlockIngressNew)
+	cfg.NetworkPolicies[idx].IngressNewWhitelist = config.CleanIngressNewWhitelist(p.IngressNewWhitelist)
 	cfg.NetworkPolicies[idx].RoutingPolicy = config.NormalizeRoutingPolicy(p.RoutingPolicy)
 
 	if err := m.store.Save(cfg); err != nil {

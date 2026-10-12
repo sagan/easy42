@@ -9,7 +9,6 @@ import {
   Divider,
   CircularProgress,
   Alert,
-  Tooltip,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -309,38 +308,37 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
 
         <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
           {!node.is_external && onSyncNode && (
-            <Tooltip title="Sync Node">
-              <IconButton
-                id="sync-node-header-btn"
-                size="small"
-                onClick={() => onSyncNode(node.name)}
-                sx={{ color: "#4F46E5", "&:hover": { backgroundColor: "rgba(79, 70, 229, 0.08)" } }}
-              >
-                <RefreshCw size={18} />
-              </IconButton>
-            </Tooltip>
-          )}
-          {onRenameNode && (
-            <Tooltip title="Rename Node">
-              <IconButton
-                id="rename-node-header-btn"
-                size="small"
-                onClick={() => onRenameNode(node)}
-                sx={{ color: "#4F46E5", "&:hover": { backgroundColor: "rgba(79, 70, 229, 0.08)" } }}
-              >
-                <Tag size={18} />
-              </IconButton>
-            </Tooltip>
-          )}
-          <Tooltip title="Edit Node">
             <IconButton
+              id="sync-node-header-btn"
+              title="Sync Node"
               size="small"
-              onClick={() => onEditNode(node)}
+              onClick={() => onSyncNode(node.name)}
               sx={{ color: "#4F46E5", "&:hover": { backgroundColor: "rgba(79, 70, 229, 0.08)" } }}
             >
-              <Edit2 size={18} />
+              <RefreshCw size={18} />
             </IconButton>
-          </Tooltip>
+          )}
+          {onRenameNode && (
+            <IconButton
+              id="rename-node-header-btn"
+              title="Rename Node"
+              size="small"
+              onClick={() => onRenameNode(node)}
+              sx={{ color: "#4F46E5", "&:hover": { backgroundColor: "rgba(79, 70, 229, 0.08)" } }}
+            >
+              <Tag size={18} />
+            </IconButton>
+          )}
+
+          <IconButton
+            size="small"
+            title="Edit Node"
+            onClick={() => onEditNode(node)}
+            sx={{ color: "#4F46E5", "&:hover": { backgroundColor: "rgba(79, 70, 229, 0.08)" } }}
+          >
+            <Edit2 size={18} />
+          </IconButton>
+
           <IconButton size="small" onClick={onClose} sx={{ color: "#94A3B8" }}>
             <X size={20} />
           </IconButton>
@@ -1459,56 +1457,54 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
 
         {!node.is_external && (
           <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}>
-            <Tooltip title="Restart all wg interfaces using wg-quick">
-              <Button
-                id="restart-all-wg-btn"
-                fullWidth
-                variant="outlined"
-                startIcon={restartingWg ? <CircularProgress size={15} color="inherit" /> : <RotateCcw size={15} />}
-                onClick={handleRestartAllWg}
-                disabled={restartingWg || restartingBird || updatingState || refreshing || deleting}
-                sx={{
-                  borderColor: "#0284C7",
-                  color: "#0284C7",
-                  fontWeight: 600,
-                  fontSize: "0.75rem",
-                  lineHeight: 1.2,
-                  textTransform: "none",
-                  py: 0.9,
-                  "&:hover": {
-                    borderColor: "#0369A1",
-                    backgroundColor: "rgba(2, 132, 199, 0.06)",
-                  },
-                }}
-              >
-                {restartingWg ? "Restarting..." : "Restart all wg interfaces"}
-              </Button>
-            </Tooltip>
-            <Tooltip title='Restart bird routing service ("service bird restart")'>
-              <Button
-                id="restart-bird-btn"
-                fullWidth
-                variant="outlined"
-                startIcon={restartingBird ? <CircularProgress size={15} color="inherit" /> : <RotateCcw size={15} />}
-                onClick={handleRestartBird}
-                disabled={restartingWg || restartingBird || updatingState || refreshing || deleting}
-                sx={{
-                  borderColor: "#D97706",
-                  color: "#D97706",
-                  fontWeight: 600,
-                  fontSize: "0.75rem",
-                  lineHeight: 1.2,
-                  textTransform: "none",
-                  py: 0.9,
-                  "&:hover": {
-                    borderColor: "#B45309",
-                    backgroundColor: "rgba(217, 119, 6, 0.06)",
-                  },
-                }}
-              >
-                {restartingBird ? "Restarting..." : "Restart bird"}
-              </Button>
-            </Tooltip>
+            <Button
+              id="restart-all-wg-btn"
+              title="Restart all wg interfaces using wg-quick"
+              fullWidth
+              variant="outlined"
+              startIcon={restartingWg ? <CircularProgress size={15} color="inherit" /> : <RotateCcw size={15} />}
+              onClick={handleRestartAllWg}
+              disabled={restartingWg || restartingBird || updatingState || refreshing || deleting}
+              sx={{
+                borderColor: "#0284C7",
+                color: "#0284C7",
+                fontWeight: 600,
+                fontSize: "0.75rem",
+                lineHeight: 1.2,
+                textTransform: "none",
+                py: 0.9,
+                "&:hover": {
+                  borderColor: "#0369A1",
+                  backgroundColor: "rgba(2, 132, 199, 0.06)",
+                },
+              }}
+            >
+              {restartingWg ? "Restarting..." : "Restart all wg interfaces"}
+            </Button>
+            <Button
+              id="restart-bird-btn"
+              title='Restart bird routing service ("service bird restart")'
+              fullWidth
+              variant="outlined"
+              startIcon={restartingBird ? <CircularProgress size={15} color="inherit" /> : <RotateCcw size={15} />}
+              onClick={handleRestartBird}
+              disabled={restartingWg || restartingBird || updatingState || refreshing || deleting}
+              sx={{
+                borderColor: "#D97706",
+                color: "#D97706",
+                fontWeight: 600,
+                fontSize: "0.75rem",
+                lineHeight: 1.2,
+                textTransform: "none",
+                py: 0.9,
+                "&:hover": {
+                  borderColor: "#B45309",
+                  backgroundColor: "rgba(217, 119, 6, 0.06)",
+                },
+              }}
+            >
+              {restartingBird ? "Restarting..." : "Restart bird"}
+            </Button>
           </Box>
         )}
         <Box sx={{ display: "grid", gridTemplateColumns: onRenameNode ? "1fr 1fr" : "1fr", gap: 1.5 }}>

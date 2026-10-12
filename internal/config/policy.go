@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"net/netip"
 	"strconv"
 	"strings"
 )
@@ -112,14 +113,15 @@ type NetworkPolicy struct {
 	ForwardSNATTarget  string      `json:"forward_snat_target,omitempty"` // "masquerade" | "external_ip" | "main_ip" | custom IP string
 	DSCPIngress        *int        `json:"dscp_ingress,omitempty"`        // Rewrite DSCP on packets received from the link peer (0-63)
 	DSCPEgress         *int        `json:"dscp_egress,omitempty"`         // Rewrite DSCP on packets sent to the link peer (0-63)
-	BlockIngressNew    string      `json:"block_ingress_new,omitempty"`   // Block ingress new/invalid connections: "" (disabled) | "all" | "forward"
-	ROA4               string      `json:"roa4,omitempty"`
-	ROA6               string      `json:"roa6,omitempty"`
-	ROAStrict          bool        `json:"roa_strict,omitempty"`
-	Fwmark             string      `json:"fwmark,omitempty"`         // Local WireGuard [Interface] FwMark
-	Preference         *int        `json:"preference,omitempty"`     // BIRD peer BGP protocol preference
-	Mark               string      `json:"mark,omitempty"`           // Netfilter mark for received packets from the link peer
-	RoutingPolicy      string      `json:"routing_policy,omitempty"` // BGP meta routing policy ("full", "stub", "receive_only", "advertise_only")
+	BlockIngressNew     string      `json:"block_ingress_new,omitempty"`      // Block ingress new/invalid connections: "" (disabled) | "all" | "forward"
+	IngressNewWhitelist []string    `json:"ingress_new_whitelist,omitempty"`  // Whitelist dst addr:port exceptions for block ingress new
+	ROA4                string      `json:"roa4,omitempty"`
+	ROA6                string      `json:"roa6,omitempty"`
+	ROAStrict           bool        `json:"roa_strict,omitempty"`
+	Fwmark              string      `json:"fwmark,omitempty"`         // Local WireGuard [Interface] FwMark
+	Preference          *int        `json:"preference,omitempty"`     // BIRD peer BGP protocol preference
+	Mark                string      `json:"mark,omitempty"`           // Netfilter mark for received packets from the link peer
+	RoutingPolicy       string      `json:"routing_policy,omitempty"` // BGP meta routing policy ("full", "stub", "receive_only", "advertise_only")
 }
 
 // EffectiveBlockIngressNew returns the active block ingress new option or "" if unset/disabled
@@ -128,6 +130,14 @@ func (p *NetworkPolicy) EffectiveBlockIngressNew() string {
 		return NormalizeBlockIngressNew(p.BlockIngressNew)
 	}
 	return BlockIngressNewDisabled
+}
+
+// EffectiveIngressNewWhitelist returns the active ingress new whitelist or nil if block ingress new is disabled
+func (p *NetworkPolicy) EffectiveIngressNewWhitelist() []string {
+	if p != nil && p.EffectiveBlockIngressNew() != BlockIngressNewDisabled {
+		return CleanIngressNewWhitelist(p.IngressNewWhitelist)
+	}
+	return nil
 }
 
 // EffectiveRoutingPolicy returns the active routing policy or "full" if unset
@@ -236,6 +246,94 @@ func CleanPortList(ports []string) []string {
 					seen[normalized] = true
 					result = append(result, normalized)
 				}
+			}
+		}
+	}
+
+	return result
+}
+
+// CleanIngressNewWhitelist normalizes and validates a list of ingress new whitelist entries.
+// Accepted formats: "ip:port" or "ip:port/proto" (where proto is "tcp" or "udp").
+// If proto is omitted, it implies tcp+udp.
+func CleanIngressNewWhitelist(whitelist []string) []string {
+	if len(whitelist) == 0 {
+		return nil
+	}
+
+	seen := make(map[string]bool)
+	var result []string
+
+	for _, entry := range whitelist {
+		for _, raw := range strings.FieldsFunc(entry, func(r rune) bool {
+			return r == ',' || r == '\n' || r == '\r' || r == '\t' || r == ' '
+		}) {
+			s := strings.TrimSpace(raw)
+			if s == "" {
+				continue
+			}
+
+			proto := ""
+			mainPart := s
+			if idx := strings.LastIndex(s, "/"); idx != -1 {
+				suffix := strings.ToLower(s[idx+1:])
+				if suffix == "tcp" || suffix == "udp" {
+					proto = suffix
+					mainPart = s[:idx]
+				}
+			}
+
+			colonIdx := strings.LastIndex(mainPart, ":")
+			if colonIdx == -1 {
+				continue
+			}
+
+			ipPart := strings.TrimSpace(mainPart[:colonIdx])
+			ipPart = strings.TrimPrefix(ipPart, "[")
+			ipPart = strings.TrimSuffix(ipPart, "]")
+
+			portPart := strings.TrimSpace(mainPart[colonIdx+1:])
+			if ipPart == "" || portPart == "" {
+				continue
+			}
+
+			// Validate IPv4 addr or prefix
+			if addr, err := netip.ParseAddr(ipPart); err == nil {
+				if !addr.Is4() {
+					continue
+				}
+			} else if prefix, err2 := netip.ParsePrefix(ipPart); err2 == nil {
+				if !prefix.Addr().Is4() {
+					continue
+				}
+			} else {
+				continue
+			}
+
+			// Validate Port or Port Range
+			if parts := strings.Split(portPart, "-"); len(parts) == 2 {
+				low, err1 := strconv.Atoi(strings.TrimSpace(parts[0]))
+				high, err2 := strconv.Atoi(strings.TrimSpace(parts[1]))
+				if err1 != nil || err2 != nil || low <= 0 || high > 65535 || low > high {
+					continue
+				}
+				portPart = fmt.Sprintf("%d-%d", low, high)
+			} else {
+				pNum, err := strconv.Atoi(portPart)
+				if err != nil || pNum <= 0 || pNum > 65535 {
+					continue
+				}
+				portPart = strconv.Itoa(pNum)
+			}
+
+			normalized := fmt.Sprintf("%s:%s", ipPart, portPart)
+			if proto != "" {
+				normalized = fmt.Sprintf("%s:%s/%s", ipPart, portPart, proto)
+			}
+
+			if !seen[normalized] {
+				seen[normalized] = true
+				result = append(result, normalized)
 			}
 		}
 	}

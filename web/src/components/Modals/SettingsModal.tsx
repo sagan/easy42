@@ -91,6 +91,13 @@ export const parsePortList = (input: string): string[] => {
     .filter(Boolean);
 };
 
+export const parseWhitelistList = (input: string): string[] => {
+  return input
+    .split(/[\n,\s]+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+};
+
 export type SettingsTab = "security" | "network" | "policies" | "templates" | "dns";
 
 const VALID_TABS: Record<string, SettingsTab> = {
@@ -227,6 +234,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
   const [policyMark, setPolicyMark] = useState("");
   const [policyRoutingPolicy, setPolicyRoutingPolicy] = useState<string>("full");
   const [policyBlockIngressNew, setPolicyBlockIngressNew] = useState<string>("");
+  const [policyIngressNewWhitelist, setPolicyIngressNewWhitelist] = useState<string>("");
 
   // Logout all state
   const [logoutAllConfirming, setLogoutAllConfirming] = useState(false);
@@ -601,6 +609,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
     setPolicyMark("");
     setPolicyRoutingPolicy("full");
     setPolicyBlockIngressNew("");
+    setPolicyIngressNewWhitelist("");
     setPolicyDialogError(null);
     setPolicyDialogOpen(true);
   };
@@ -638,6 +647,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
     setPolicyMark(p.mark || "");
     setPolicyRoutingPolicy(p.routing_policy || "full");
     setPolicyBlockIngressNew(p.block_ingress_new || "");
+    setPolicyIngressNewWhitelist((p.ingress_new_whitelist || []).join("\n"));
     setPolicyDialogError(null);
     setPolicyDialogOpen(true);
   };
@@ -675,6 +685,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
     setPolicyMark(p.mark || "");
     setPolicyRoutingPolicy(p.routing_policy || "full");
     setPolicyBlockIngressNew(p.block_ingress_new || "");
+    setPolicyIngressNewWhitelist((p.ingress_new_whitelist || []).join("\n"));
     setPolicyDialogError(null);
     setPolicyDialogOpen(true);
   };
@@ -757,6 +768,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
         mark: policyMark.trim() || undefined,
         routing_policy: policyRoutingPolicy || "full",
         block_ingress_new: policyBlockIngressNew || undefined,
+        ingress_new_whitelist:
+          policyBlockIngressNew && policyBlockIngressNew !== "_"
+            ? parseWhitelistList(policyIngressNewWhitelist)
+            : undefined,
       };
 
       if (policyDialogMode === "create") {
@@ -823,6 +838,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
     setPolicyMark(p.mark || "");
     setPolicyRoutingPolicy(p.routing_policy || "full");
     setPolicyBlockIngressNew(p.block_ingress_new || "");
+    setPolicyIngressNewWhitelist((p.ingress_new_whitelist || []).join("\n"));
     setPolicyDialogError(null);
     setPolicyDialogOpen(true);
   };
@@ -1551,6 +1567,19 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                                   fontWeight: 700,
                                   bgcolor: "rgba(239, 68, 68, 0.12)",
                                   color: "#DC2626",
+                                }}
+                              />
+                            )}
+                            {p.block_ingress_new && p.ingress_new_whitelist && p.ingress_new_whitelist.length > 0 && (
+                              <Chip
+                                label={`WL: ${p.ingress_new_whitelist.length}`}
+                                size="small"
+                                sx={{
+                                  height: 20,
+                                  fontSize: "0.68rem",
+                                  fontWeight: 700,
+                                  bgcolor: "rgba(16, 185, 129, 0.12)",
+                                  color: "#059669",
                                 }}
                               />
                             )}
@@ -2944,6 +2973,21 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                     (fib daddr type != local)
                   </MenuItem>
                 </TextField>
+
+                {Boolean(policyBlockIngressNew && policyBlockIngressNew !== "_") && (
+                  <TextField
+                    label="Ingress New Whitelist (Allowed Destinations)"
+                    multiline
+                    rows={3}
+                    fullWidth
+                    size="small"
+                    placeholder={"192.168.1.1:443\n192.168.1.1:443/tcp\n10.0.0.1:80/udp"}
+                    value={policyIngressNewWhitelist}
+                    onChange={(e) => setPolicyIngressNewWhitelist(e.target.value)}
+                    disabled={policyDialogMode === "view" || policyDialogSaving}
+                    helperText="Exceptions to block ingress new: list of allowed dst addresses and ports (e.g. 192.168.1.1:443 or 192.168.1.1:443/tcp). Omitting protocol implies TCP+UDP."
+                  />
+                )}
               </Box>
 
               <Box

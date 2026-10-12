@@ -83,6 +83,7 @@ export interface NetworkPolicy {
   dscp_ingress?: number;
   dscp_egress?: number;
   block_ingress_new?: string;
+  ingress_new_whitelist?: string[];
   roa4?: string;
   roa6?: string;
   roa_strict?: boolean;

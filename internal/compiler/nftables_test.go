@@ -1387,6 +1387,117 @@ func TestGenerateNftablesConfig_ManualLink(t *testing.T) {
 	}
 }
 
+func TestBlockIngressNewWhitelistNftables(t *testing.T) {
+	// Test FormatNftIngressNewWhitelist
+	t.Run("FormatNftIngressNewWhitelist", func(t *testing.T) {
+		got := FormatNftIngressNewWhitelist([]string{
+			"192.168.1.1:443",
+			"10.0.0.1:80/tcp",
+			"172.16.0.1:53/udp",
+		})
+		expectedElements := []string{
+			"10.0.0.1 . tcp . 80",
+			"172.16.0.1 . udp . 53",
+			"192.168.1.1 . tcp . 443",
+			"192.168.1.1 . udp . 443",
+		}
+		expectedStr := strings.Join(expectedElements, ",\n      ")
+		if got != expectedStr {
+			t.Errorf("FormatNftIngressNewWhitelist mismatch:\ngot:\n%s\nexpected:\n%s", got, expectedStr)
+		}
+	})
+
+	// Test config generation with whitelist
+	node := config.Node{
+		Name: "test-node",
+		IP:   "192.168.100.1",
+	}
+	allNodes := []config.Node{
+		node,
+		{Name: "peer-a", IP: "192.168.100.2"},
+		{Name: "peer-b", IP: "192.168.100.3"},
+	}
+
+	policyAll := config.NetworkPolicy{
+		ID:                  "pol_block_all",
+		Name:                "Block All Ingress New With Whitelist",
+		BlockIngressNew:     config.BlockIngressNewAll,
+		IngressNewWhitelist: []string{"192.168.1.1:443"}, // implies tcp+udp
+	}
+
+	policyFwd := config.NetworkPolicy{
+		ID:                  "pol_block_fwd",
+		Name:                "Block Forward Ingress New With Whitelist",
+		BlockIngressNew:     config.BlockIngressNewForward,
+		IngressNewWhitelist: []string{"10.0.0.1:80/tcp"},
+	}
+
+	links := []config.Link{
+		{
+			From: config.LinkEnd{Name: "test-node", Interface: "wg42all", Policy: "pol_block_all"},
+			To:   config.LinkEnd{Name: "peer-a", Interface: "wg42"},
+		},
+		{
+			From: config.LinkEnd{Name: "test-node", Interface: "wg42fwd", Policy: "pol_block_fwd"},
+			To:   config.LinkEnd{Name: "peer-b", Interface: "wg42"},
+		},
+	}
+
+	conf, err := GenerateNftablesConfig(&node, allNodes, links, nil, []config.NetworkPolicy{policyAll, policyFwd})
+	if err != nil {
+		t.Fatalf("GenerateNftablesConfig failed: %v", err)
+	}
+
+	// Verify sets
+	expectedSetAll := `set pol_pol_block_all_ingress_new_wl {
+    type ipv4_addr . inet_proto . inet_service
+    flags interval
+    elements = { 
+      192.168.1.1 . tcp . 443,
+      192.168.1.1 . udp . 443
+    }
+  }`
+	if !strings.Contains(conf, expectedSetAll) {
+		t.Errorf("Expected set %q in conf, got:\n%s", expectedSetAll, conf)
+	}
+
+	expectedSetFwd := `set pol_pol_block_fwd_ingress_new_wl {
+    type ipv4_addr . inet_proto . inet_service
+    flags interval
+    elements = { 
+      10.0.0.1 . tcp . 80
+    }
+  }`
+	if !strings.Contains(conf, expectedSetFwd) {
+		t.Errorf("Expected set %q in conf, got:\n%s", expectedSetFwd, conf)
+	}
+
+	// Verify drop rules with whitelist condition
+	expectedRuleAll := "iifname @pol_pol_block_all_ifname ct state { new, invalid } ip daddr . meta l4proto . th dport != @pol_pol_block_all_ingress_new_wl drop"
+	if !strings.Contains(conf, expectedRuleAll) {
+		t.Errorf("Expected rule %q in conf, got:\n%s", expectedRuleAll, conf)
+	}
+
+	expectedRuleFwd := "iifname @pol_pol_block_fwd_ifname ct state { new, invalid } fib daddr type != local ip daddr . meta l4proto . th dport != @pol_pol_block_fwd_ingress_new_wl drop"
+	if !strings.Contains(conf, expectedRuleFwd) {
+		t.Errorf("Expected rule %q in conf, got:\n%s", expectedRuleFwd, conf)
+	}
+
+	// nft -c -f validation
+	if nftPath, err := exec.LookPath("nft"); err == nil {
+		tmpDir := t.TempDir()
+		tmpFile := filepath.Join(tmpDir, "easy42.nft")
+		if err := os.WriteFile(tmpFile, []byte(conf), 0644); err != nil {
+			t.Fatalf("WriteFile failed: %v", err)
+		}
+		cmd := exec.Command(nftPath, "-c", "-f", tmpFile)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("nft -c -f validation failed: %v\nOutput:\n%s\nConfig:\n%s", err, string(out), conf)
+		}
+	}
+}
+
 
 
 

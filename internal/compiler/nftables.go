@@ -107,6 +107,63 @@ func FormatNftPrefixList(prefixes []string, defaultList []string, isV6 bool) str
 	return "{ " + strings.Join(result, ", ") + " }"
 }
 
+// FormatNftIngressNewWhitelist translates a list of whitelist rules into nftables set elements.
+// Each rule can be in format "ip:port" or "ip:port/proto" (e.g. "192.168.1.1:443" or "192.168.1.1:443/tcp").
+// If /tcp or /udp is not present, it implies tcp+udp.
+func FormatNftIngressNewWhitelist(whitelist []string) string {
+	cleaned := config.CleanIngressNewWhitelist(whitelist)
+	if len(cleaned) == 0 {
+		return ""
+	}
+
+	seen := make(map[string]bool)
+	var elements []string
+
+	for _, entry := range cleaned {
+		proto := ""
+		raw := entry
+		if idx := strings.LastIndex(raw, "/"); idx != -1 {
+			suffix := strings.ToLower(raw[idx+1:])
+			if suffix == "tcp" || suffix == "udp" {
+				proto = suffix
+				raw = raw[:idx]
+			}
+		}
+
+		colonIdx := strings.LastIndex(raw, ":")
+		if colonIdx == -1 {
+			continue
+		}
+		ipPart := strings.TrimSpace(raw[:colonIdx])
+		portPart := strings.TrimSpace(raw[colonIdx+1:])
+		if ipPart == "" || portPart == "" {
+			continue
+		}
+
+		var protos []string
+		if proto != "" {
+			protos = []string{proto}
+		} else {
+			protos = []string{"tcp", "udp"}
+		}
+
+		for _, p := range protos {
+			elem := fmt.Sprintf("%s . %s . %s", ipPart, p, portPart)
+			if !seen[elem] {
+				seen[elem] = true
+				elements = append(elements, elem)
+			}
+		}
+	}
+
+	if len(elements) == 0 {
+		return ""
+	}
+
+	sort.Strings(elements)
+	return strings.Join(elements, ",\n      ")
+}
+
 // BuildNftablesNodeContext prepares the template context specifically for nftables generation
 func BuildNftablesNodeContext(
 	node *config.Node,
@@ -373,6 +430,11 @@ func BuildNftablesNodeContext(
 			dscpEgress = *pol.DSCPEgress
 		}
 
+		var ingressNewWlStr string
+		if hasBlockIngressNew && len(pol.IngressNewWhitelist) > 0 {
+			ingressNewWlStr = FormatNftIngressNewWhitelist(pol.IngressNewWhitelist)
+		}
+
 		nftPolicies = append(nftPolicies, map[string]any{
 			"id":                     cleanID,
 			"name":                   pol.Name,
@@ -408,6 +470,7 @@ func BuildNftablesNodeContext(
 			"dscp_egress":            dscpEgress,
 			"mark":                   strings.TrimSpace(pol.Mark),
 			"block_ingress_new":      pol.EffectiveBlockIngressNew(),
+			"ingress_new_wl":         ingressNewWlStr,
 		})
 	}
 	sort.Slice(nftPolicies, func(i, j int) bool {

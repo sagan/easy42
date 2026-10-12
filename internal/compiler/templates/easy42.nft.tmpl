@@ -159,6 +159,15 @@ table inet easy42 {
     elements = $pol_{{ .id }}_local_v6
   }
   {{- end }}
+  {{- if .ingress_new_wl }}
+  set pol_{{ .id }}_ingress_new_wl {
+    type ipv4_addr . inet_proto . inet_service
+    flags interval
+    elements = { 
+      {{ .ingress_new_wl }}
+    }
+  }
+  {{- end }}
 {{- end }}
 {{- $has_block_ingress_new := false }}
 {{- range .nft_policies }}
@@ -171,9 +180,17 @@ table inet easy42 {
     type filter hook prerouting priority filter; policy accept;
 {{- range .nft_policies }}
   {{- if eq .block_ingress_new "all" }}
+    {{- if .ingress_new_wl }}
+    iifname @pol_{{ .id }}_ifname ct state { new, invalid } ip daddr . meta l4proto . th dport != @pol_{{ .id }}_ingress_new_wl drop
+    {{- else }}
     iifname @pol_{{ .id }}_ifname ct state { new, invalid } drop
+    {{- end }}
   {{- else if eq .block_ingress_new "forward" }}
+    {{- if .ingress_new_wl }}
+    iifname @pol_{{ .id }}_ifname ct state { new, invalid } fib daddr type != local ip daddr . meta l4proto . th dport != @pol_{{ .id }}_ingress_new_wl drop
+    {{- else }}
     iifname @pol_{{ .id }}_ifname ct state { new, invalid } fib daddr type != local drop
+    {{- end }}
   {{- end }}
 {{- end }}
   }

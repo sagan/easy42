@@ -476,4 +476,88 @@ func TestBlockIngressNewHelpers(t *testing.T) {
 	}
 }
 
+func TestCleanIngressNewWhitelist(t *testing.T) {
+	// nil / empty
+	if got := CleanIngressNewWhitelist(nil); got != nil {
+		t.Errorf("expected nil for nil input, got %v", got)
+	}
+	if got := CleanIngressNewWhitelist([]string{}); got != nil {
+		t.Errorf("expected nil for empty input, got %v", got)
+	}
+
+	// standard elements
+	input := []string{
+		"192.168.1.1:443",
+		"192.168.1.1:443/tcp",
+		"192.168.1.1:443/UDP",
+		"10.0.0.0/24:80",
+		"10.0.0.0/24:80/tcp",
+		"172.16.1.1:8000-8080",
+		"172.16.1.1:8000-8080/udp",
+	}
+	cleaned := CleanIngressNewWhitelist(input)
+	expected := []string{
+		"192.168.1.1:443",
+		"192.168.1.1:443/tcp",
+		"192.168.1.1:443/udp",
+		"10.0.0.0/24:80",
+		"10.0.0.0/24:80/tcp",
+		"172.16.1.1:8000-8080",
+		"172.16.1.1:8000-8080/udp",
+	}
+	if len(cleaned) != len(expected) {
+		t.Fatalf("expected %d elements, got %d: %v", len(expected), len(cleaned), cleaned)
+	}
+	for i, v := range expected {
+		if cleaned[i] != v {
+			t.Errorf("expected element %d to be %q, got %q", i, v, cleaned[i])
+		}
+	}
+
+	// whitespace, commas, newlines splitting and deduplication
+	multilineInput := []string{
+		"192.168.1.1:443, 192.168.1.1:443/tcp\n192.168.1.1:443",
+	}
+	cleanedMulti := CleanIngressNewWhitelist(multilineInput)
+	if len(cleanedMulti) != 2 {
+		t.Fatalf("expected 2 deduplicated elements, got %d: %v", len(cleanedMulti), cleanedMulti)
+	}
+
+	// invalid elements filtered out
+	invalidInput := []string{
+		"invalid",
+		"999.999.999.999:80",
+		"192.168.1.1:0",
+		"192.168.1.1:70000",
+		"192.168.1.1:80-70",
+		"fd00::1:443", // IPv6 not accepted for ipv4 set
+	}
+	if got := CleanIngressNewWhitelist(invalidInput); len(got) != 0 {
+		t.Errorf("expected empty for invalid entries, got %v", got)
+	}
+}
+
+func TestEffectiveIngressNewWhitelist(t *testing.T) {
+	var nilPol *NetworkPolicy
+	if got := nilPol.EffectiveIngressNewWhitelist(); got != nil {
+		t.Errorf("expected nil for nil policy, got %v", got)
+	}
+
+	disabledPol := &NetworkPolicy{
+		BlockIngressNew:     BlockIngressNewDisabled,
+		IngressNewWhitelist: []string{"192.168.1.1:443"},
+	}
+	if got := disabledPol.EffectiveIngressNewWhitelist(); got != nil {
+		t.Errorf("expected nil when BlockIngressNew is disabled, got %v", got)
+	}
+
+	enabledPol := &NetworkPolicy{
+		BlockIngressNew:     BlockIngressNewAll,
+		IngressNewWhitelist: []string{"192.168.1.1:443"},
+	}
+	if got := enabledPol.EffectiveIngressNewWhitelist(); len(got) != 1 || got[0] != "192.168.1.1:443" {
+		t.Errorf("expected ['192.168.1.1:443'], got %v", got)
+	}
+}
+
 
