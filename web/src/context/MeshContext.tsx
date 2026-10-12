@@ -6,6 +6,7 @@ import {
   NodeStatus,
   NetworkState,
   NetworkPolicy,
+  NetworkSettings,
   FleetLiveResponse,
   GraphBlock,
 } from "../types/api";
@@ -27,6 +28,9 @@ interface MeshContextType {
   nodeStatuses: Record<string, NodeStatus>;
   networkState: NetworkState | null;
   networkPolicies: NetworkPolicy[];
+  networkSettings: NetworkSettings | null;
+  refreshNetworkSettings: () => Promise<void>;
+  flapAlertedUrl: string | null;
   fleetLive: FleetLiveResponse | null;
   loadingData: boolean;
   loadData: () => Promise<void>;
@@ -102,6 +106,7 @@ export const MeshProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [nodeStatuses, setNodeStatuses] = useState<Record<string, NodeStatus>>({});
   const [networkState, setNetworkState] = useState<NetworkState | null>(null);
   const [networkPolicies, setNetworkPolicies] = useState<NetworkPolicy[]>([]);
+  const [networkSettings, setNetworkSettings] = useState<NetworkSettings | null>(null);
   const [fleetLive, setFleetLive] = useState<FleetLiveResponse | null>(null);
   const [loadingData, setLoadingData] = useState(false);
 
@@ -200,20 +205,23 @@ export const MeshProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const loadData = useCallback(async () => {
     setLoadingData(true);
     try {
-      const [nodesData, linksData, statusesData, stateData, policiesData, liveData, blocksData] = await Promise.all([
-        api.getNodes(),
-        api.getLinks(),
-        api.getNodeStatuses().catch(() => ({})),
-        api.getState().catch(() => null),
-        api.getNetworkPolicies().catch(() => []),
-        api.getFleetLiveStatus().catch(() => null),
-        api.getBlocks().catch(() => []),
-      ]);
+      const [nodesData, linksData, statusesData, stateData, policiesData, liveData, blocksData, settingsData] =
+        await Promise.all([
+          api.getNodes(),
+          api.getLinks(),
+          api.getNodeStatuses().catch(() => ({})),
+          api.getState().catch(() => null),
+          api.getNetworkPolicies().catch(() => []),
+          api.getFleetLiveStatus().catch(() => null),
+          api.getBlocks().catch(() => []),
+          api.getNetworkSettings().catch(() => null),
+        ]);
       setNodes(nodesData || []);
       setLinks(linksData || []);
       setNodeStatuses(statusesData || {});
       setNetworkState(stateData);
       setNetworkPolicies(policiesData || []);
+      if (settingsData) setNetworkSettings(settingsData);
       if (liveData) setFleetLive(liveData);
       if (blocksData && blocksData.length > 0) {
         setBlocks(blocksData);
@@ -233,6 +241,21 @@ export const MeshProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setLoadingData(false);
     }
   }, []);
+
+  const refreshNetworkSettings = useCallback(async () => {
+    try {
+      const data = await api.getNetworkSettings();
+      setNetworkSettings(data);
+    } catch {
+      // Ignore background refresh errors
+    }
+  }, []);
+
+  const flapAlertedUrl = useMemo(() => {
+    const addr = (networkSettings?.flapalerted_address || networkSettings?.fa_address || "").trim();
+    if (!addr) return null;
+    return `http://${addr.includes(":") ? `[${addr}]` : addr}:8699`;
+  }, [networkSettings]);
 
   const refreshFleetLive = useCallback(async (flush = false) => {
     try {
@@ -360,6 +383,9 @@ export const MeshProvider: React.FC<{ children: React.ReactNode }> = ({ children
     nodeStatuses,
     networkState,
     networkPolicies,
+    networkSettings,
+    refreshNetworkSettings,
+    flapAlertedUrl,
     fleetLive,
     loadingData,
     loadData,

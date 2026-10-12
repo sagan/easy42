@@ -38,6 +38,7 @@ import {
   X,
   Share2,
   Activity,
+  ExternalLink,
 } from "lucide-react";
 import { useMesh } from "../../context/MeshContext";
 import { api } from "../../api/client";
@@ -61,6 +62,7 @@ export const AppLayout: React.FC = () => {
     setAuthenticated,
     loadData,
     refreshFleetLive,
+    flapAlertedUrl,
     updatingState,
     addNodeOpen,
     setAddNodeOpen,
@@ -215,6 +217,36 @@ export const AppLayout: React.FC = () => {
                     </Button>
                   );
                 })}
+
+                {flapAlertedUrl && (
+                  <Tooltip title="Open FlapAlerted Dashboard">
+                    <Button
+                      component="a"
+                      href={flapAlertedUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      endIcon={<ExternalLink size={13} />}
+                      sx={{
+                        px: 1.6,
+                        py: 0.8,
+                        borderRadius: 2,
+                        fontSize: "0.85rem",
+                        fontWeight: 700,
+                        color: "#0891B2",
+                        bgcolor: "rgba(8, 145, 178, 0.08)",
+                        border: "1px solid rgba(8, 145, 178, 0.25)",
+                        textDecoration: "none",
+                        "&:hover": {
+                          bgcolor: "rgba(8, 145, 178, 0.16)",
+                          color: "#0e7490",
+                          borderColor: "#0891B2",
+                        },
+                      }}
+                    >
+                      FA
+                    </Button>
+                  </Tooltip>
+                )}
               </Box>
             )}
           </Box>
@@ -406,6 +438,33 @@ export const AppLayout: React.FC = () => {
                 </ListItem>
               );
             })}
+
+            {flapAlertedUrl && (
+              <ListItem disablePadding sx={{ mb: 0.5 }}>
+                <ListItemButton
+                  component="a"
+                  href={flapAlertedUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => setMobileDrawerOpen(false)}
+                  sx={{
+                    borderRadius: 2,
+                    bgcolor: "rgba(8, 145, 178, 0.08)",
+                    color: "#0891B2",
+                    fontWeight: 700,
+                    "&:hover": { bgcolor: "rgba(8, 145, 178, 0.16)" },
+                  }}
+                >
+                  <ListItemIcon sx={{ minWidth: 36, color: "#0891B2" }}>
+                    <ExternalLink size={18} />
+                  </ListItemIcon>
+                  <ListItemText
+                    primary="FA Dashboard"
+                    primaryTypographyProps={{ fontSize: "0.9rem", fontWeight: 700 }}
+                  />
+                </ListItemButton>
+              </ListItem>
+            )}
           </List>
 
           <Box sx={{ mt: "auto", pt: 2, borderTop: "1px solid #E2E8F0" }}>

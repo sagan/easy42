@@ -1,4 +1,6 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import { useMesh } from "../../context/MeshContext";
 import {
   Dialog,
   DialogTitle,
@@ -89,6 +91,18 @@ export const parsePortList = (input: string): string[] => {
     .filter(Boolean);
 };
 
+export type SettingsTab = "security" | "network" | "policies" | "templates" | "dns";
+
+const VALID_TABS: Record<string, SettingsTab> = {
+  security: "security",
+  password: "security",
+  sessions: "security",
+  network: "network",
+  policies: "policies",
+  templates: "templates",
+  dns: "dns",
+};
+
 interface SettingsModalProps {
   open?: boolean;
   onClose?: () => void;
@@ -96,9 +110,17 @@ interface SettingsModalProps {
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutAll }) => {
-  const [activeTab, setActiveTab] = useState<"password" | "sessions" | "network" | "policies" | "templates" | "dns">(
-    "password",
-  );
+  const { tab } = useParams<{ tab?: string }>();
+  const navigate = useNavigate();
+  const { refreshNetworkSettings } = useMesh();
+
+  const activeTab: SettingsTab = (tab && VALID_TABS[tab]) || "security";
+
+  useEffect(() => {
+    if (!tab || tab === "password" || tab === "sessions" || !VALID_TABS[tab]) {
+      navigate("/settings/security", { replace: true });
+    }
+  }, [tab, navigate]);
 
   // Config Templates state
   const [templates, setTemplates] = useState<ConfigTemplate[]>([]);
@@ -535,6 +557,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
     try {
       await api.updateNetworkSettings(payload);
       setNetworkSuccess("BGP confederation and network settings updated successfully.");
+      if (refreshNetworkSettings) {
+        refreshNetworkSettings();
+      }
     } catch (err: unknown) {
       const e = err as Error;
       setNetworkError(e.message || "Failed to update network settings.");
@@ -895,7 +920,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
           <Tabs
             value={activeTab}
             onChange={(_, val) => {
-              setActiveTab(val);
+              navigate(`/settings/${val}`);
               setPasswordError(null);
               setPasswordSuccess(null);
               setLogoutAllError(null);
@@ -914,8 +939,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
               },
             }}
           >
-            <Tab value="password" icon={<KeyRound size={16} />} iconPosition="start" label="Change Password" />
-            <Tab value="sessions" icon={<ShieldAlert size={16} />} iconPosition="start" label="Sessions" />
+            <Tab value="security" icon={<KeyRound size={16} />} iconPosition="start" label="Password & Sessions" />
             <Tab value="network" icon={<Globe size={16} />} iconPosition="start" label="Peering & BGP" />
             <Tab value="policies" icon={<Shield size={16} />} iconPosition="start" label="Network Policies" />
             <Tab value="templates" icon={<FileCode size={16} />} iconPosition="start" label="Config Template" />
@@ -923,151 +947,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
           </Tabs>
         </Box>
 
-        {/* Tab 1: Change Password Form */}
-        {activeTab === "password" && (
-          <form
-            onSubmit={handleChangePassword}
-            style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, overflow: "hidden" }}
-          >
-            <DialogContent
-              sx={{
-                display: "flex",
-                flexDirection: "column",
-                gap: 2.5,
-                py: 3,
-                px: 3,
-                flex: 1,
-                minHeight: 0,
-                overflowY: "auto",
-              }}
-            >
-              <Typography variant="body2" sx={{ color: "#64748B" }}>
-                Update your easy42 admin password. Changing the password will re-encrypt your master data encryption key
-                (DEK) and invalidate other active sessions.
-              </Typography>
-
-              {passwordSuccess && (
-                <Alert icon={<CheckCircle2 size={18} />} severity="success" sx={{ borderRadius: 2 }}>
-                  {passwordSuccess}
-                </Alert>
-              )}
-
-              {passwordError && (
-                <Alert severity="error" sx={{ borderRadius: 2 }}>
-                  {passwordError}
-                </Alert>
-              )}
-
-              <TextField
-                fullWidth
-                size="small"
-                label="Current Password"
-                type={showCurrentPassword ? "text" : "password"}
-                value={currentPassword}
-                onChange={(e) => setCurrentPassword(e.target.value)}
-                required
-                disabled={passwordLoading}
-                slotProps={{
-                  input: {
-                    endAdornment: (
-                      <InputAdornment position="end">
-                        <IconButton
-                          size="small"
-                          edge="end"
-                          onClick={() => setShowCurrentPassword(!showCurrentPassword)}
-                          aria-label="toggle current password visibility"
-                        >
-                          {showCurrentPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                        </IconButton>
-                      </InputAdornment>
-                    ),
-                  },
-                }}
-              />
-
-              <TextField
-                fullWidth
-                size="small"
-                label="New Password"
-                type={showNewPassword ? "text" : "password"}
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                required
-                disabled={passwordLoading}
-                helperText="Minimum 6 characters"
-                slotProps={{
-                  input: {
-                    endAdornment: (
-                      <InputAdornment position="end">
-                        <IconButton
-                          size="small"
-                          edge="end"
-                          onClick={() => setShowNewPassword(!showNewPassword)}
-                          aria-label="toggle new password visibility"
-                        >
-                          {showNewPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                        </IconButton>
-                      </InputAdornment>
-                    ),
-                  },
-                }}
-              />
-
-              <TextField
-                fullWidth
-                size="small"
-                label="Confirm New Password"
-                type={showConfirmPassword ? "text" : "password"}
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                required
-                disabled={passwordLoading}
-                error={Boolean(confirmPassword && newPassword !== confirmPassword)}
-                helperText={confirmPassword && newPassword !== confirmPassword ? "Passwords do not match" : ""}
-                slotProps={{
-                  input: {
-                    endAdornment: (
-                      <InputAdornment position="end">
-                        <IconButton
-                          size="small"
-                          edge="end"
-                          onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                          aria-label="toggle confirm password visibility"
-                        >
-                          {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                        </IconButton>
-                      </InputAdornment>
-                    ),
-                  },
-                }}
-              />
-              <Box sx={{ display: "flex", justifyContent: "flex-end", pt: 1 }}>
-                <Button
-                  type="submit"
-                  variant="contained"
-                  disabled={passwordLoading || !currentPassword || !newPassword || !confirmPassword}
-                  startIcon={passwordLoading ? <CircularProgress size={16} color="inherit" /> : <KeyRound size={16} />}
-                  sx={{
-                    background: "linear-gradient(135deg, #4F46E5 0%, #3730A3 100%)",
-                    fontWeight: 700,
-                    color: "#FFFFFF",
-                  }}
-                >
-                  {passwordLoading ? "Updating Password..." : "Change Password"}
-                </Button>
-              </Box>
-            </DialogContent>
-          </form>
-        )}
-
-        {/* Tab 2: Sessions / Logout All */}
-        {activeTab === "sessions" && (
+        {/* Tab: Password & Sessions */}
+        {activeTab === "security" && (
           <Box sx={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, overflow: "hidden" }}>
             <DialogContent
               sx={{
                 display: "flex",
                 flexDirection: "column",
-                gap: 2.5,
+                gap: 3.5,
                 py: 3,
                 px: 3,
                 flex: 1,
@@ -1075,105 +962,242 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                 overflowY: "auto",
               }}
             >
-              {logoutAllError && (
-                <Alert severity="error" sx={{ borderRadius: 2 }}>
-                  {logoutAllError}
-                </Alert>
-              )}
+              {/* Section 1: Change Master Password */}
+              <Box component="form" onSubmit={handleChangePassword} sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                  <KeyRound size={18} color="#4F46E5" />
+                  <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#0F172A" }}>
+                    Change Master Password
+                  </Typography>
+                </Box>
+                <Typography variant="body2" sx={{ color: "#64748B" }}>
+                  Update your easy42 admin password. Changing the password will re-encrypt your master data encryption key
+                  (DEK) and invalidate other active sessions.
+                </Typography>
 
-              <Box
-                sx={{
-                  p: 2.5,
-                  borderRadius: 2,
-                  border: "1px solid #FEE2E2",
-                  backgroundColor: "#FEF2F2",
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 1.5,
-                }}
-              >
-                <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, color: "#B91C1C" }}>
-                  <ShieldAlert size={22} />
-                  <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
-                    Reset Session Secret & Log Out All Sessions
+                {passwordSuccess && (
+                  <Alert icon={<CheckCircle2 size={18} />} severity="success" sx={{ borderRadius: 2 }}>
+                    {passwordSuccess}
+                  </Alert>
+                )}
+
+                {passwordError && (
+                  <Alert severity="error" sx={{ borderRadius: 2 }}>
+                    {passwordError}
+                  </Alert>
+                )}
+
+                <TextField
+                  fullWidth
+                  size="small"
+                  label="Current Password"
+                  type={showCurrentPassword ? "text" : "password"}
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  required
+                  disabled={passwordLoading}
+                  slotProps={{
+                    input: {
+                      endAdornment: (
+                        <InputAdornment position="end">
+                          <IconButton
+                            size="small"
+                            edge="end"
+                            onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                            aria-label="toggle current password visibility"
+                          >
+                            {showCurrentPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                          </IconButton>
+                        </InputAdornment>
+                      ),
+                    },
+                  }}
+                />
+
+                <TextField
+                  fullWidth
+                  size="small"
+                  label="New Password"
+                  type={showNewPassword ? "text" : "password"}
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  required
+                  disabled={passwordLoading}
+                  helperText="Minimum 6 characters"
+                  slotProps={{
+                    input: {
+                      endAdornment: (
+                        <InputAdornment position="end">
+                          <IconButton
+                            size="small"
+                            edge="end"
+                            onClick={() => setShowNewPassword(!showNewPassword)}
+                            aria-label="toggle new password visibility"
+                          >
+                            {showNewPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                          </IconButton>
+                        </InputAdornment>
+                      ),
+                    },
+                  }}
+                />
+
+                <TextField
+                  fullWidth
+                  size="small"
+                  label="Confirm New Password"
+                  type={showConfirmPassword ? "text" : "password"}
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  required
+                  disabled={passwordLoading}
+                  error={Boolean(confirmPassword && newPassword !== confirmPassword)}
+                  helperText={confirmPassword && newPassword !== confirmPassword ? "Passwords do not match" : ""}
+                  slotProps={{
+                    input: {
+                      endAdornment: (
+                        <InputAdornment position="end">
+                          <IconButton
+                            size="small"
+                            edge="end"
+                            onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                            aria-label="toggle confirm password visibility"
+                          >
+                            {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                          </IconButton>
+                        </InputAdornment>
+                      ),
+                    },
+                  }}
+                />
+                <Box sx={{ display: "flex", justifyContent: "flex-end", pt: 0.5 }}>
+                  <Button
+                    type="submit"
+                    variant="contained"
+                    disabled={passwordLoading || !currentPassword || !newPassword || !confirmPassword}
+                    startIcon={passwordLoading ? <CircularProgress size={16} color="inherit" /> : <KeyRound size={16} />}
+                    sx={{
+                      background: "linear-gradient(135deg, #4F46E5 0%, #3730A3 100%)",
+                      fontWeight: 700,
+                      color: "#FFFFFF",
+                    }}
+                  >
+                    {passwordLoading ? "Updating Password..." : "Change Password"}
+                  </Button>
+                </Box>
+              </Box>
+
+              <Divider />
+
+              {/* Section 2: Active Sessions & Invalidation */}
+              <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                  <ShieldAlert size={18} color="#DC2626" />
+                  <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#0F172A" }}>
+                    Active Sessions & Invalidation
                   </Typography>
                 </Box>
 
-                <Typography variant="body2" sx={{ color: "#7F1D1D", lineHeight: 1.6 }}>
-                  Clicking <strong>Logout all</strong> will regenerate the <code>session_secret</code> in{" "}
-                  <code>config.json</code> and immediately lock the in-memory vault.
-                </Typography>
+                {logoutAllError && (
+                  <Alert severity="error" sx={{ borderRadius: 2 }}>
+                    {logoutAllError}
+                  </Alert>
+                )}
 
-                <Typography variant="body2" sx={{ color: "#991B1B", lineHeight: 1.6 }}>
-                  This invalidates every active session across all devices and browsers, including your current one. You
-                  and any other users will be required to log in again.
-                </Typography>
-              </Box>
-
-              {!logoutAllConfirming ? (
-                <Box sx={{ display: "flex", justifyContent: "flex-start", pt: 1 }}>
-                  <Button
-                    variant="outlined"
-                    color="error"
-                    startIcon={<LogOut size={16} />}
-                    onClick={() => setLogoutAllConfirming(true)}
-                    sx={{
-                      borderColor: "#F87171",
-                      color: "#DC2626",
-                      fontWeight: 700,
-                      "&:hover": {
-                        borderColor: "#DC2626",
-                        backgroundColor: "rgba(220, 38, 38, 0.06)",
-                      },
-                    }}
-                  >
-                    Logout all
-                  </Button>
-                </Box>
-              ) : (
                 <Box
                   sx={{
-                    p: 2,
+                    p: 2.5,
                     borderRadius: 2,
-                    border: "1px solid #CBD5E1",
-                    backgroundColor: "#F8FAFC",
+                    border: "1px solid #FEE2E2",
+                    backgroundColor: "#FEF2F2",
                     display: "flex",
                     flexDirection: "column",
                     gap: 1.5,
                   }}
                 >
-                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0F172A" }}>
-                    Are you sure you want to log out all sessions?
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, color: "#B91C1C" }}>
+                    <ShieldAlert size={22} />
+                    <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+                      Reset Session Secret & Log Out All Sessions
+                    </Typography>
+                  </Box>
+
+                  <Typography variant="body2" sx={{ color: "#7F1D1D", lineHeight: 1.6 }}>
+                    Clicking <strong>Logout all</strong> will regenerate the <code>session_secret</code> in{" "}
+                    <code>config.json</code> and immediately lock the in-memory vault.
                   </Typography>
-                  <Typography variant="body2" sx={{ color: "#64748B" }}>
-                    All connected browsers will immediately lose authentication and return to the login screen.
+
+                  <Typography variant="body2" sx={{ color: "#991B1B", lineHeight: 1.6 }}>
+                    This invalidates every active session across all devices and browsers, including your current one. You
+                    and any other users will be required to log in again.
                   </Typography>
-                  <Box sx={{ display: "flex", gap: 1.5, pt: 0.5 }}>
+                </Box>
+
+                {!logoutAllConfirming ? (
+                  <Box sx={{ display: "flex", justifyContent: "flex-start", pt: 0.5 }}>
                     <Button
-                      size="small"
                       variant="outlined"
-                      onClick={() => setLogoutAllConfirming(false)}
-                      disabled={logoutAllLoading}
-                      sx={{ color: "#64748B", borderColor: "#CBD5E1" }}
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      size="small"
-                      variant="contained"
                       color="error"
-                      disabled={logoutAllLoading}
-                      onClick={handleLogoutAll}
-                      startIcon={
-                        logoutAllLoading ? <CircularProgress size={14} color="inherit" /> : <LogOut size={14} />
-                      }
-                      sx={{ fontWeight: 700 }}
+                      startIcon={<LogOut size={16} />}
+                      onClick={() => setLogoutAllConfirming(true)}
+                      sx={{
+                        borderColor: "#F87171",
+                        color: "#DC2626",
+                        fontWeight: 700,
+                        "&:hover": {
+                          borderColor: "#DC2626",
+                          backgroundColor: "rgba(220, 38, 38, 0.06)",
+                        },
+                      }}
                     >
-                      {logoutAllLoading ? "Logging out all..." : "Confirm: Log Out All"}
+                      Logout all
                     </Button>
                   </Box>
-                </Box>
-              )}
+                ) : (
+                  <Box
+                    sx={{
+                      p: 2,
+                      borderRadius: 2,
+                      border: "1px solid #CBD5E1",
+                      backgroundColor: "#F8FAFC",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 1.5,
+                    }}
+                  >
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0F172A" }}>
+                      Are you sure you want to log out all sessions?
+                    </Typography>
+                    <Typography variant="body2" sx={{ color: "#64748B" }}>
+                      All connected browsers will immediately lose authentication and return to the login screen.
+                    </Typography>
+                    <Box sx={{ display: "flex", gap: 1.5, pt: 0.5 }}>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        onClick={() => setLogoutAllConfirming(false)}
+                        disabled={logoutAllLoading}
+                        sx={{ color: "#64748B", borderColor: "#CBD5E1" }}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        size="small"
+                        variant="contained"
+                        color="error"
+                        disabled={logoutAllLoading}
+                        onClick={handleLogoutAll}
+                        startIcon={
+                          logoutAllLoading ? <CircularProgress size={14} color="inherit" /> : <LogOut size={14} />
+                        }
+                        sx={{ fontWeight: 700 }}
+                      >
+                        {logoutAllLoading ? "Logging out all..." : "Confirm: Log Out All"}
+                      </Button>
+                    </Box>
+                  </Box>
+                )}
+              </Box>
             </DialogContent>
           </Box>
         )}
