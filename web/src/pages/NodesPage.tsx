@@ -406,7 +406,7 @@ export const NodesPage: React.FC = () => {
   }, [filteredNodes, sortField, sortOrder, liveMap, nodeStatuses, nodeBlocksMap]);
 
   return (
-    <Box sx={{ p: { xs: 1.5, sm: 2.5, md: 3 }, height: "100%", overflowY: "auto", display: "flex", flexDirection: "column", gap: 2.5 }}>
+    <Box sx={{ p: { xs: 1.5, sm: 2.5, md: 3 }, display: "flex", flexDirection: "column", gap: 2.5 }}>
       {/* Fleet Overview Top Summary Banner */}
       <Grid container spacing={{ xs: 1.5, sm: 2 }}>
         <Grid item xs={12} sm={6} md={3}>

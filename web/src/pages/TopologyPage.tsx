@@ -179,7 +179,8 @@ export const TopologyPage: React.FC = () => {
     <Box
       sx={{
         width: "100%",
-        height: "100%",
+        flex: 1,
+        minHeight: 0,
         position: "relative",
         overflow: "hidden",
         display: "flex",

@@ -467,7 +467,7 @@ export const AppLayout: React.FC = () => {
           flex: 1,
           minHeight: 0,
           position: "relative",
-          overflow: "hidden",
+          overflowY: "auto",
           display: "flex",
           flexDirection: "column",
           pb: isMobile ? "calc(58px + env(safe-area-inset-bottom, 0px))" : 0,
