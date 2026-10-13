@@ -16,11 +16,13 @@ message AgentMessage {
     TelemetryReport telemetry = 12;
     CommandResponse command_resp = 13;
     ProbeResponse probe_resp = 14;
+    CronTaskReport cron_task_report = 15;
 
     // Server -> Agent
     RegisterResponse register_resp = 20;
     HeartbeatAck heartbeat_ack = 21;
     CommandRequest command_req = 22;
+    SyncCronTasks sync_cron_tasks = 23;
   }
 }
 
@@ -188,3 +190,31 @@ message ProbeResponse {
   string hostname = 2;
   repeated InterfaceMetrics interfaces = 3;
 }
+
+// ----------------- Cron Tasks -----------------
+
+message SyncCronTasks {
+  repeated CronTaskSpec tasks = 1;
+}
+
+message CronTaskSpec {
+  string task_id = 1;
+  string name = 2;
+  string task_type = 3; // "ping" or "tcp_ping"
+  string cron_expr = 4;
+  string target = 5;
+  uint32 count = 6;
+  uint32 timeout_seconds = 7;
+  map<string, string> params = 8;
+}
+
+message CronTaskReport {
+  string task_id = 1;
+  string node_name = 2;
+  int64 executed_at = 3; // Unix timestamp in seconds
+  int32 exit_code = 4;
+  uint64 duration_ms = 5;
+  string raw_output = 6;
+  string error_message = 7;
+}
+

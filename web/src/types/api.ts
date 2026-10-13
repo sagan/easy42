@@ -572,3 +572,60 @@ export interface FleetLiveResponse {
   summary: FleetMetricsSummary;
   nodes: NodeLiveStatus[];
 }
+
+export interface CronTask {
+  id: string;
+  name: string;
+  description?: string;
+  task_type: "ping" | "tcp_ping";
+  cron_expr: string;
+  nodes: string[];
+  params: Record<string, string>;
+  timeout_sec?: number;
+  enabled: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface CronTaskResultRecord {
+  id: number;
+  task_id: string;
+  task_name: string;
+  task_type: string;
+  node_name: string;
+  executed_at: number;
+  duration_ms: number;
+  exit_code: number;
+  error?: string;
+  target: string;
+  packets_sent: number;
+  packets_received: number;
+  packet_loss_pct: number;
+  min_rtt_ms: number;
+  avg_rtt_ms: number;
+  max_rtt_ms: number;
+  mdev_rtt_ms: number;
+  raw_output: string;
+  parsed_json?: string;
+}
+
+export interface CronTaskStatsSummary {
+  task_id: string;
+  task_name: string;
+  task_type: string;
+  target: string;
+  total_runs: number;
+  latest_run_time: number;
+  latest_avg_rtt_ms: number;
+  latest_loss_pct: number;
+  overall_avg_rtt_ms: number;
+  overall_loss_pct: number;
+  last_status: "ok" | "degraded" | "failed" | "unknown";
+}
+
+export interface NodeCronTasksResultsResponse {
+  results: CronTaskResultRecord[];
+  summary: CronTaskStatsSummary[];
+  tasks: CronTask[];
+}
+

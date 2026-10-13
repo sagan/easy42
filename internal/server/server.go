@@ -215,6 +215,14 @@ func New(cfg Config) *Server {
 			r.Delete("/looking-glass/tasks/{id}", s.handleDeleteLookingGlassTask)
 			r.Post("/looking-glass/run", s.handleRunLookingGlass)
 
+			// Cron Tasks
+			r.Get("/cron-tasks", s.handleGetCronTasks)
+			r.Post("/cron-tasks", s.handleCreateCronTask)
+			r.Put("/cron-tasks/{id}", s.handleUpdateCronTask)
+			r.Delete("/cron-tasks/{id}", s.handleDeleteCronTask)
+			r.Post("/cron-tasks/{id}/toggle", s.handleToggleCronTask)
+			r.Get("/nodes/{name}/cron-tasks/results", s.handleGetNodeCronTasksResults)
+
 			// FlapAlerted Metrics
 			r.Get("/flaps/metrics/stream", s.handleFlapAlertedMetricsStream)
 			r.Get("/flaps/metrics", s.handleFlapAlertedMetrics)

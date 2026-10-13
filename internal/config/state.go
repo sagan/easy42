@@ -243,6 +243,31 @@ func (s *StateStore) initDBLocked() error {
 	);
 
 	CREATE INDEX IF NOT EXISTS idx_node_metrics_node_time ON node_metrics(node_name, timestamp);
+
+	CREATE TABLE IF NOT EXISTS cron_task_results (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		task_id TEXT NOT NULL,
+		task_name TEXT NOT NULL DEFAULT '',
+		task_type TEXT NOT NULL DEFAULT '',
+		node_name TEXT NOT NULL,
+		executed_at INTEGER NOT NULL,
+		duration_ms INTEGER NOT NULL DEFAULT 0,
+		exit_code INTEGER NOT NULL DEFAULT 0,
+		error TEXT NOT NULL DEFAULT '',
+		target TEXT NOT NULL DEFAULT '',
+		packets_sent INTEGER NOT NULL DEFAULT 0,
+		packets_received INTEGER NOT NULL DEFAULT 0,
+		packet_loss_pct REAL NOT NULL DEFAULT 0,
+		min_rtt_ms REAL NOT NULL DEFAULT 0,
+		avg_rtt_ms REAL NOT NULL DEFAULT 0,
+		max_rtt_ms REAL NOT NULL DEFAULT 0,
+		mdev_rtt_ms REAL NOT NULL DEFAULT 0,
+		raw_output TEXT NOT NULL DEFAULT '',
+		parsed_json TEXT NOT NULL DEFAULT ''
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_cron_task_results_node_time ON cron_task_results(node_name, executed_at);
+	CREATE INDEX IF NOT EXISTS idx_cron_task_results_task_time ON cron_task_results(task_id, executed_at);
 	`
 
 	if _, err := db.Exec(schema); err != nil {
@@ -1207,3 +1232,113 @@ func (s *StateStore) CleanMetricsOlderThan(retention time.Duration) (int64, erro
 	}
 	return res.RowsAffected()
 }
+
+// RecordCronTaskResult persists a parsed cron task execution report into SQLite
+func (s *StateStore) RecordCronTaskResult(record CronTaskResultRecord) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if err := s.initDBLocked(); err != nil {
+		return err
+	}
+
+	if record.ExecutedAt == 0 {
+		record.ExecutedAt = time.Now().Unix()
+	}
+
+	_, err := s.db.Exec(`
+		INSERT INTO cron_task_results (
+			task_id, task_name, task_type, node_name, executed_at, duration_ms, exit_code,
+			error, target, packets_sent, packets_received, packet_loss_pct,
+			min_rtt_ms, avg_rtt_ms, max_rtt_ms, mdev_rtt_ms, raw_output, parsed_json
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, record.TaskID, record.TaskName, record.TaskType, record.NodeName, record.ExecutedAt,
+		record.DurationMs, record.ExitCode, record.Error, record.Target,
+		record.PacketsSent, record.PacketsReceived, record.PacketLossPct,
+		record.MinRTTMs, record.AvgRTTMs, record.MaxRTTMs, record.MdevRTTMs,
+		record.RawOutput, record.ParsedJSON)
+
+	return err
+}
+
+// GetNodeCronTaskResults retrieves chronological cron task results for a node
+func (s *StateStore) GetNodeCronTaskResults(nodeName string, taskID string, startTime time.Time, limit int) ([]CronTaskResultRecord, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if s.db == nil {
+		return []CronTaskResultRecord{}, nil
+	}
+
+	if limit <= 0 {
+		limit = 100
+	}
+	if limit > 1000 {
+		limit = 1000
+	}
+
+	var (
+		rows *sql.Rows
+		err  error
+	)
+
+	startTs := startTime.Unix()
+	if taskID != "" {
+		rows, err = s.db.Query(`
+			SELECT id, task_id, task_name, task_type, node_name, executed_at, duration_ms,
+			       exit_code, error, target, packets_sent, packets_received, packet_loss_pct,
+			       min_rtt_ms, avg_rtt_ms, max_rtt_ms, mdev_rtt_ms, raw_output, parsed_json
+			FROM cron_task_results
+			WHERE node_name = ? AND task_id = ? AND executed_at >= ?
+			ORDER BY executed_at DESC
+			LIMIT ?
+		`, nodeName, taskID, startTs, limit)
+	} else {
+		rows, err = s.db.Query(`
+			SELECT id, task_id, task_name, task_type, node_name, executed_at, duration_ms,
+			       exit_code, error, target, packets_sent, packets_received, packet_loss_pct,
+			       min_rtt_ms, avg_rtt_ms, max_rtt_ms, mdev_rtt_ms, raw_output, parsed_json
+			FROM cron_task_results
+			WHERE node_name = ? AND executed_at >= ?
+			ORDER BY executed_at DESC
+			LIMIT ?
+		`, nodeName, startTs, limit)
+	}
+
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var records []CronTaskResultRecord
+	for rows.Next() {
+		var r CronTaskResultRecord
+		if err := rows.Scan(
+			&r.ID, &r.TaskID, &r.TaskName, &r.TaskType, &r.NodeName, &r.ExecutedAt, &r.DurationMs,
+			&r.ExitCode, &r.Error, &r.Target, &r.PacketsSent, &r.PacketsReceived, &r.PacketLossPct,
+			&r.MinRTTMs, &r.AvgRTTMs, &r.MaxRTTMs, &r.MdevRTTMs, &r.RawOutput, &r.ParsedJSON,
+		); err == nil {
+			records = append(records, r)
+		}
+	}
+
+	return records, nil
+}
+
+// CleanCronResultsOlderThan deletes historical cron task results older than retention period
+func (s *StateStore) CleanCronResultsOlderThan(retention time.Duration) (int64, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if err := s.initDBLocked(); err != nil {
+		return 0, err
+	}
+
+	cutoff := time.Now().Add(-retention).Unix()
+	res, err := s.db.Exec("DELETE FROM cron_task_results WHERE executed_at < ?", cutoff)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
+}
+

@@ -18,14 +18,18 @@ type TelemetryListener func(nodeName string, t *agentpb.TelemetryReport)
 // RegisterListener handles new agent registrations
 type RegisterListener func(conn *AgentConnection)
 
+// CronTaskReportListener handles cron task reports from agents
+type CronTaskReportListener func(nodeName string, r *agentpb.CronTaskReport)
+
 // Hub manages active agent connections and cached telemetry
 type Hub struct {
-	mu          sync.RWMutex
-	connections map[string]*AgentConnection
-	telemetry   map[string]*agentpb.TelemetryReport
-	lastSeen    map[string]time.Time
-	onTelemetry []TelemetryListener
-	onRegister  []RegisterListener
+	mu               sync.RWMutex
+	connections      map[string]*AgentConnection
+	telemetry        map[string]*agentpb.TelemetryReport
+	lastSeen         map[string]time.Time
+	onTelemetry      []TelemetryListener
+	onRegister       []RegisterListener
+	onCronTaskReport []CronTaskReportListener
 }
 
 // NewHub creates a new Hub instance
@@ -49,6 +53,33 @@ func (h *Hub) OnRegister(l RegisterListener) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.onRegister = append(h.onRegister, l)
+}
+
+// OnCronTaskReport registers a listener invoked when a cron task result report is received
+func (h *Hub) OnCronTaskReport(l CronTaskReportListener) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.onCronTaskReport = append(h.onCronTaskReport, l)
+}
+
+// RecordCronTaskReport notifies listeners of an incoming cron task result
+func (h *Hub) RecordCronTaskReport(nodeName string, r *agentpb.CronTaskReport) {
+	h.mu.RLock()
+	listeners := append([]CronTaskReportListener(nil), h.onCronTaskReport...)
+	h.mu.RUnlock()
+
+	for _, l := range listeners {
+		go l(nodeName, r)
+	}
+}
+
+// SyncCronTasks sends the latest cron tasks to a specific node agent if connected
+func (h *Hub) SyncCronTasks(nodeName string, tasks []*agentpb.CronTaskSpec) error {
+	conn, ok := h.GetConnection(nodeName)
+	if !ok {
+		return nil // Agent not connected; will receive on next connect
+	}
+	return conn.SyncCronTasks(tasks)
 }
 
 // NotifyRegister triggers registered registration listeners

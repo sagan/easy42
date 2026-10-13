@@ -67,12 +67,14 @@ import {
   ArrowRightLeft,
   Zap,
   Terminal,
+  Clock,
 } from "lucide-react";
 import { useMesh } from "../context/MeshContext";
 import { api } from "../api/client";
 import { Node, NodeMetricPoint, GraphBlock } from "../types/api";
 import { MetricAreaChart } from "../components/Nodes/MetricAreaChart";
 import { MarkdownView } from "../components/Common/MarkdownView";
+import { NodeCronTasksTab } from "../components/Nodes/NodeCronTasksTab";
 
 const formatBytes = (bytes?: number): string => {
   if (!bytes || isNaN(bytes) || bytes <= 0) return "0 B";
@@ -143,7 +145,7 @@ export const NodeDetailPage: React.FC = () => {
 
   // Tabs state synced with query params
   const tabParam = searchParams.get("tab") || "overview";
-  const validTabs = ["overview", "metrics", "telemetry", "networking", "routing", "firewall", "agent"];
+  const validTabs = ["overview", "metrics", "telemetry", "networking", "routing", "firewall", "agent", "cron_tasks"];
   const currentTab = validTabs.includes(tabParam) ? (tabParam === "telemetry" ? "metrics" : tabParam) : "overview";
 
   const handleTabChange = (_: React.SyntheticEvent, newValue: string) => {
@@ -223,7 +225,8 @@ export const NodeDetailPage: React.FC = () => {
   useEffect(() => {
     if (currentTab === "agent" && node && !node.agent_token && !agentToken && !generatingToken) {
       setGeneratingToken(true);
-      api.generateAgentToken(node.name)
+      api
+        .generateAgentToken(node.name)
         .then((res) => {
           setAgentToken(res.token);
           loadData();
@@ -1320,22 +1323,43 @@ export const NodeDetailPage: React.FC = () => {
               },
             }}
           >
-            <Tab value="overview" icon={<Sliders size={16} />} iconPosition="start" label="Overview & Specs" />
+            <Tab
+              value="overview"
+              icon={<Sliders size={16} />}
+              iconPosition="start"
+              label="Overview"
+              title="Overview & Specs"
+            />
             <Tab
               value="metrics"
               icon={<Activity size={16} />}
               iconPosition="start"
-              label="Telemetry & Historical Charts"
+              label="Metrics"
+              title="Telemetry & Historical Charts"
             />
             <Tab
               value="networking"
               icon={<Network size={16} />}
               iconPosition="start"
-              label={`Network & Links (${nodeLinks.length})`}
+              label="Network"
+              title={`Network & Links (${nodeLinks.length})`}
             />
-            <Tab value="routing" icon={<Radio size={16} />} iconPosition="start" label="Routing & BIRD" />
-            <Tab value="firewall" icon={<Shield size={16} />} iconPosition="start" label="Firewall & Security" />
-            <Tab value="agent" icon={<Zap size={16} />} iconPosition="start" label="Agent" />
+            <Tab
+              value="routing"
+              icon={<Radio size={16} />}
+              iconPosition="start"
+              label="Routing"
+              title="Routing & BIRD"
+            />
+            <Tab
+              value="firewall"
+              icon={<Shield size={16} />}
+              iconPosition="start"
+              label="Firewall"
+              title="Firewall & Security"
+            />
+            <Tab value="agent" icon={<Zap size={16} />} iconPosition="start" label="Agent" title="Agent" />
+            <Tab value="cron_tasks" icon={<Clock size={16} />} iconPosition="start" label="Tasks" title="Cron Tasks" />
           </Tabs>
         </Box>
 
@@ -2427,7 +2451,15 @@ export const NodeDetailPage: React.FC = () => {
                 gap: 2.5,
               }}
             >
-              <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 1.5 }}>
+              <Box
+                sx={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  flexWrap: "wrap",
+                  gap: 1.5,
+                }}
+              >
                 <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
                   <Box
                     sx={{
@@ -2503,7 +2535,10 @@ export const NodeDetailPage: React.FC = () => {
                     <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600 }}>
                       Installation Status
                     </Typography>
-                    <Typography variant="body1" sx={{ fontWeight: 700, color: agentInstalled ? "#059669" : "#64748B", mt: 0.5 }}>
+                    <Typography
+                      variant="body1"
+                      sx={{ fontWeight: 700, color: agentInstalled ? "#059669" : "#64748B", mt: 0.5 }}
+                    >
                       {agentInstalled ? "Installed & Configured" : "Not Installed"}
                     </Typography>
                   </Box>
@@ -2514,7 +2549,11 @@ export const NodeDetailPage: React.FC = () => {
                     <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600 }}>
                       Agent Version
                     </Typography>
-                    <Typography variant="body1" className="mono-font" sx={{ fontWeight: 700, color: "#0F172A", mt: 0.5 }}>
+                    <Typography
+                      variant="body1"
+                      className="mono-font"
+                      sx={{ fontWeight: 700, color: "#0F172A", mt: 0.5 }}
+                    >
                       {live?.agent_version || status?.agent_version || node?.agent_version
                         ? `v${live?.agent_version || status?.agent_version || node?.agent_version}`
                         : "Not Reported"}
@@ -2539,7 +2578,9 @@ export const NodeDetailPage: React.FC = () => {
                       Last Communication
                     </Typography>
                     <Typography variant="body2" sx={{ fontWeight: 600, color: "#0F172A", mt: 0.5 }}>
-                      {live?.last_seen || status?.last_seen || (node.agent_last_seen ? new Date(node.agent_last_seen).toLocaleString() : "Never")}
+                      {live?.last_seen ||
+                        status?.last_seen ||
+                        (node.agent_last_seen ? new Date(node.agent_last_seen).toLocaleString() : "Never")}
                     </Typography>
                   </Box>
                 </Grid>
@@ -2548,7 +2589,16 @@ export const NodeDetailPage: React.FC = () => {
 
             {/* Install / Re-install Shell Snippet Card */}
             <Paper elevation={0} sx={{ p: 3, borderRadius: 3, bgcolor: "#FFFFFF", border: "1px solid #E2E8F0" }}>
-              <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2, flexWrap: "wrap", gap: 1 }}>
+              <Box
+                sx={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  mb: 2,
+                  flexWrap: "wrap",
+                  gap: 1,
+                }}
+              >
                 <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                   <Terminal size={18} color="#4F46E5" />
                   <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#0F172A" }}>
@@ -2568,7 +2618,9 @@ export const NodeDetailPage: React.FC = () => {
               </Box>
 
               <Typography variant="body2" sx={{ color: "#64748B", mb: 2 }}>
-                Run the command below directly on the node via console or SSH. The installer script detects the CPU architecture (<code>x86_64</code>, <code>aarch64</code>, <code>armv7</code>, <code>mipsel</code>) and system service manager (<code>systemd</code>, <code>openrc</code>, <code>procd</code>) automatically.
+                Run the command below directly on the node via console or SSH. The installer script detects the CPU
+                architecture (<code>x86_64</code>, <code>aarch64</code>, <code>armv7</code>, <code>mipsel</code>) and
+                system service manager (<code>systemd</code>, <code>openrc</code>, <code>procd</code>) automatically.
               </Typography>
 
               {/* Overwrite config checkbox */}
@@ -2663,7 +2715,15 @@ export const NodeDetailPage: React.FC = () => {
                 gap: 2,
               }}
             >
-              <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 1 }}>
+              <Box
+                sx={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  flexWrap: "wrap",
+                  gap: 1,
+                }}
+              >
                 <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                   <Trash2 size={18} color="#DC2626" />
                   <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#991B1B" }}>
@@ -2692,11 +2752,17 @@ export const NodeDetailPage: React.FC = () => {
               </Box>
 
               <Typography variant="body2" sx={{ color: "#64748B" }}>
-                Uninstalling removes the node's agent credentials and records from the Easy42 backend and resets the node mode to standard SSH. Easy42 will also attempt to SSH to the node in the background (best effort) to stop the agent service, delete init units, and remove <code>/usr/local/bin/easy42-agent</code> and <code>/etc/easy42/agent.json</code>.
+                Uninstalling removes the node's agent credentials and records from the Easy42 backend and resets the
+                node mode to standard SSH. Easy42 will also attempt to SSH to the node in the background (best effort)
+                to stop the agent service, delete init units, and remove <code>/usr/local/bin/easy42-agent</code> and{" "}
+                <code>/etc/easy42/agent.json</code>.
               </Typography>
             </Paper>
           </Box>
         )}
+
+        {/* Tab 7: Cron Tasks */}
+        {currentTab === "cron_tasks" && node && <NodeCronTasksTab nodeName={node.name} />}
       </Box>
 
       {/* BIRD Config Dialog */}
@@ -2861,7 +2927,9 @@ export const NodeDetailPage: React.FC = () => {
         </DialogTitle>
         <DialogContent sx={{ pt: 2.5 }}>
           <Alert severity="warning" sx={{ mb: 2, borderRadius: 2 }}>
-            This will immediately remove the agent token and mode records for <strong>{node?.name}</strong> from Easy42. If SSH is configured on this node, Easy42 will also execute a background best-effort cleanup to stop the service and remove agent files.
+            This will immediately remove the agent token and mode records for <strong>{node?.name}</strong> from Easy42.
+            If SSH is configured on this node, Easy42 will also execute a background best-effort cleanup to stop the
+            service and remove agent files.
           </Alert>
           <Typography variant="body2" sx={{ color: "#475569" }}>
             Are you sure you want to uninstall the agent from this node?

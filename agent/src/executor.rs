@@ -498,7 +498,7 @@ done"#;
 
 /// run_tcp_ping connects to `host:port` `count` times, measuring TCP handshake RTT each time.
 /// Returns JSON-encoded TCPPingResult on stdout, or an error message on stderr.
-async fn run_tcp_ping(target: &str, count: u32, timeout_secs: u32) -> (bool, i32, String, String) {
+pub(crate) async fn run_tcp_ping(target: &str, count: u32, timeout_secs: u32) -> (bool, i32, String, String) {
     // Parse "host:port" or "[ipv6]:port"
     let addrs: Vec<SocketAddr> = match target.to_socket_addrs() {
         Ok(iter) => iter.collect(),
@@ -589,7 +589,7 @@ async fn run_tcp_ping(target: &str, count: u32, timeout_secs: u32) -> (bool, i32
     (success, exit_code, json, String::new())
 }
 
-async fn run_cmd(program: &str, args: &[&str]) -> (bool, i32, String, String) {
+pub(crate) async fn run_cmd(program: &str, args: &[&str]) -> (bool, i32, String, String) {
     use tokio::process::Command;
     let mut cmd = Command::new(program);
     cmd.args(args);

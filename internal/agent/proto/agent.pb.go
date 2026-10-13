@@ -79,11 +79,11 @@ func (ManageInterface_Action) EnumDescriptor() ([]byte, []int) {
 type LookingGlassCmd_Tool int32
 
 const (
-	LookingGlassCmd_PING      LookingGlassCmd_Tool = 0
+	LookingGlassCmd_PING       LookingGlassCmd_Tool = 0
 	LookingGlassCmd_TRACEROUTE LookingGlassCmd_Tool = 1
-	LookingGlassCmd_BIRDC     LookingGlassCmd_Tool = 2
-	LookingGlassCmd_CUSTOM    LookingGlassCmd_Tool = 3
-	LookingGlassCmd_TCP_PING  LookingGlassCmd_Tool = 4
+	LookingGlassCmd_BIRDC      LookingGlassCmd_Tool = 2
+	LookingGlassCmd_CUSTOM     LookingGlassCmd_Tool = 3
+	LookingGlassCmd_TCP_PING   LookingGlassCmd_Tool = 4
 )
 
 // Enum value maps for LookingGlassCmd_Tool.
@@ -143,9 +143,11 @@ type AgentMessage struct {
 	//	*AgentMessage_Telemetry
 	//	*AgentMessage_CommandResp
 	//	*AgentMessage_ProbeResp
+	//	*AgentMessage_CronTaskReport
 	//	*AgentMessage_RegisterResp
 	//	*AgentMessage_HeartbeatAck
 	//	*AgentMessage_CommandReq
+	//	*AgentMessage_SyncCronTasks
 	Payload       isAgentMessage_Payload `protobuf_oneof:"payload"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -247,6 +249,15 @@ func (x *AgentMessage) GetProbeResp() *ProbeResponse {
 	return nil
 }
 
+func (x *AgentMessage) GetCronTaskReport() *CronTaskReport {
+	if x != nil {
+		if x, ok := x.Payload.(*AgentMessage_CronTaskReport); ok {
+			return x.CronTaskReport
+		}
+	}
+	return nil
+}
+
 func (x *AgentMessage) GetRegisterResp() *RegisterResponse {
 	if x != nil {
 		if x, ok := x.Payload.(*AgentMessage_RegisterResp); ok {
@@ -269,6 +280,15 @@ func (x *AgentMessage) GetCommandReq() *CommandRequest {
 	if x != nil {
 		if x, ok := x.Payload.(*AgentMessage_CommandReq); ok {
 			return x.CommandReq
+		}
+	}
+	return nil
+}
+
+func (x *AgentMessage) GetSyncCronTasks() *SyncCronTasks {
+	if x != nil {
+		if x, ok := x.Payload.(*AgentMessage_SyncCronTasks); ok {
+			return x.SyncCronTasks
 		}
 	}
 	return nil
@@ -299,6 +319,10 @@ type AgentMessage_ProbeResp struct {
 	ProbeResp *ProbeResponse `protobuf:"bytes,14,opt,name=probe_resp,json=probeResp,proto3,oneof"`
 }
 
+type AgentMessage_CronTaskReport struct {
+	CronTaskReport *CronTaskReport `protobuf:"bytes,15,opt,name=cron_task_report,json=cronTaskReport,proto3,oneof"`
+}
+
 type AgentMessage_RegisterResp struct {
 	// Server -> Agent
 	RegisterResp *RegisterResponse `protobuf:"bytes,20,opt,name=register_resp,json=registerResp,proto3,oneof"`
@@ -312,6 +336,10 @@ type AgentMessage_CommandReq struct {
 	CommandReq *CommandRequest `protobuf:"bytes,22,opt,name=command_req,json=commandReq,proto3,oneof"`
 }
 
+type AgentMessage_SyncCronTasks struct {
+	SyncCronTasks *SyncCronTasks `protobuf:"bytes,23,opt,name=sync_cron_tasks,json=syncCronTasks,proto3,oneof"`
+}
+
 func (*AgentMessage_RegisterReq) isAgentMessage_Payload() {}
 
 func (*AgentMessage_Heartbeat) isAgentMessage_Payload() {}
@@ -322,11 +350,15 @@ func (*AgentMessage_CommandResp) isAgentMessage_Payload() {}
 
 func (*AgentMessage_ProbeResp) isAgentMessage_Payload() {}
 
+func (*AgentMessage_CronTaskReport) isAgentMessage_Payload() {}
+
 func (*AgentMessage_RegisterResp) isAgentMessage_Payload() {}
 
 func (*AgentMessage_HeartbeatAck) isAgentMessage_Payload() {}
 
 func (*AgentMessage_CommandReq) isAgentMessage_Payload() {}
+
+func (*AgentMessage_SyncCronTasks) isAgentMessage_Payload() {}
 
 type RegisterRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -1778,11 +1810,247 @@ func (x *ProbeResponse) GetInterfaces() []*InterfaceMetrics {
 	return nil
 }
 
+type SyncCronTasks struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Tasks         []*CronTaskSpec        `protobuf:"bytes,1,rep,name=tasks,proto3" json:"tasks,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SyncCronTasks) Reset() {
+	*x = SyncCronTasks{}
+	mi := &file_proto_agent_proto_msgTypes[22]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SyncCronTasks) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SyncCronTasks) ProtoMessage() {}
+
+func (x *SyncCronTasks) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_agent_proto_msgTypes[22]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SyncCronTasks.ProtoReflect.Descriptor instead.
+func (*SyncCronTasks) Descriptor() ([]byte, []int) {
+	return file_proto_agent_proto_rawDescGZIP(), []int{22}
+}
+
+func (x *SyncCronTasks) GetTasks() []*CronTaskSpec {
+	if x != nil {
+		return x.Tasks
+	}
+	return nil
+}
+
+type CronTaskSpec struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	TaskId         string                 `protobuf:"bytes,1,opt,name=task_id,json=taskId,proto3" json:"task_id,omitempty"`
+	Name           string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	TaskType       string                 `protobuf:"bytes,3,opt,name=task_type,json=taskType,proto3" json:"task_type,omitempty"` // "ping" or "tcp_ping"
+	CronExpr       string                 `protobuf:"bytes,4,opt,name=cron_expr,json=cronExpr,proto3" json:"cron_expr,omitempty"`
+	Target         string                 `protobuf:"bytes,5,opt,name=target,proto3" json:"target,omitempty"`
+	Count          uint32                 `protobuf:"varint,6,opt,name=count,proto3" json:"count,omitempty"`
+	TimeoutSeconds uint32                 `protobuf:"varint,7,opt,name=timeout_seconds,json=timeoutSeconds,proto3" json:"timeout_seconds,omitempty"`
+	Params         map[string]string      `protobuf:"bytes,8,rep,name=params,proto3" json:"params,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *CronTaskSpec) Reset() {
+	*x = CronTaskSpec{}
+	mi := &file_proto_agent_proto_msgTypes[23]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CronTaskSpec) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CronTaskSpec) ProtoMessage() {}
+
+func (x *CronTaskSpec) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_agent_proto_msgTypes[23]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CronTaskSpec.ProtoReflect.Descriptor instead.
+func (*CronTaskSpec) Descriptor() ([]byte, []int) {
+	return file_proto_agent_proto_rawDescGZIP(), []int{23}
+}
+
+func (x *CronTaskSpec) GetTaskId() string {
+	if x != nil {
+		return x.TaskId
+	}
+	return ""
+}
+
+func (x *CronTaskSpec) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *CronTaskSpec) GetTaskType() string {
+	if x != nil {
+		return x.TaskType
+	}
+	return ""
+}
+
+func (x *CronTaskSpec) GetCronExpr() string {
+	if x != nil {
+		return x.CronExpr
+	}
+	return ""
+}
+
+func (x *CronTaskSpec) GetTarget() string {
+	if x != nil {
+		return x.Target
+	}
+	return ""
+}
+
+func (x *CronTaskSpec) GetCount() uint32 {
+	if x != nil {
+		return x.Count
+	}
+	return 0
+}
+
+func (x *CronTaskSpec) GetTimeoutSeconds() uint32 {
+	if x != nil {
+		return x.TimeoutSeconds
+	}
+	return 0
+}
+
+func (x *CronTaskSpec) GetParams() map[string]string {
+	if x != nil {
+		return x.Params
+	}
+	return nil
+}
+
+type CronTaskReport struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	TaskId        string                 `protobuf:"bytes,1,opt,name=task_id,json=taskId,proto3" json:"task_id,omitempty"`
+	NodeName      string                 `protobuf:"bytes,2,opt,name=node_name,json=nodeName,proto3" json:"node_name,omitempty"`
+	ExecutedAt    int64                  `protobuf:"varint,3,opt,name=executed_at,json=executedAt,proto3" json:"executed_at,omitempty"` // Unix timestamp in seconds
+	ExitCode      int32                  `protobuf:"varint,4,opt,name=exit_code,json=exitCode,proto3" json:"exit_code,omitempty"`
+	DurationMs    uint64                 `protobuf:"varint,5,opt,name=duration_ms,json=durationMs,proto3" json:"duration_ms,omitempty"`
+	RawOutput     string                 `protobuf:"bytes,6,opt,name=raw_output,json=rawOutput,proto3" json:"raw_output,omitempty"`
+	ErrorMessage  string                 `protobuf:"bytes,7,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CronTaskReport) Reset() {
+	*x = CronTaskReport{}
+	mi := &file_proto_agent_proto_msgTypes[24]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CronTaskReport) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CronTaskReport) ProtoMessage() {}
+
+func (x *CronTaskReport) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_agent_proto_msgTypes[24]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CronTaskReport.ProtoReflect.Descriptor instead.
+func (*CronTaskReport) Descriptor() ([]byte, []int) {
+	return file_proto_agent_proto_rawDescGZIP(), []int{24}
+}
+
+func (x *CronTaskReport) GetTaskId() string {
+	if x != nil {
+		return x.TaskId
+	}
+	return ""
+}
+
+func (x *CronTaskReport) GetNodeName() string {
+	if x != nil {
+		return x.NodeName
+	}
+	return ""
+}
+
+func (x *CronTaskReport) GetExecutedAt() int64 {
+	if x != nil {
+		return x.ExecutedAt
+	}
+	return 0
+}
+
+func (x *CronTaskReport) GetExitCode() int32 {
+	if x != nil {
+		return x.ExitCode
+	}
+	return 0
+}
+
+func (x *CronTaskReport) GetDurationMs() uint64 {
+	if x != nil {
+		return x.DurationMs
+	}
+	return 0
+}
+
+func (x *CronTaskReport) GetRawOutput() string {
+	if x != nil {
+		return x.RawOutput
+	}
+	return ""
+}
+
+func (x *CronTaskReport) GetErrorMessage() string {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return ""
+}
+
 var File_proto_agent_proto protoreflect.FileDescriptor
 
 const file_proto_agent_proto_rawDesc = "" +
 	"\n" +
-	"\x11proto/agent.proto\x12\x0feasy42.agent.v1\"\xea\x04\n" +
+	"\x11proto/agent.proto\x12\x0feasy42.agent.v1\"\x81\x06\n" +
 	"\fAgentMessage\x12\x10\n" +
 	"\x03seq\x18\x01 \x01(\x04R\x03seq\x12\x1c\n" +
 	"\ttimestamp\x18\x02 \x01(\x03R\ttimestamp\x12E\n" +
@@ -1792,11 +2060,13 @@ const file_proto_agent_proto_rawDesc = "" +
 	"\ttelemetry\x18\f \x01(\v2 .easy42.agent.v1.TelemetryReportH\x00R\ttelemetry\x12E\n" +
 	"\fcommand_resp\x18\r \x01(\v2 .easy42.agent.v1.CommandResponseH\x00R\vcommandResp\x12?\n" +
 	"\n" +
-	"probe_resp\x18\x0e \x01(\v2\x1e.easy42.agent.v1.ProbeResponseH\x00R\tprobeResp\x12H\n" +
+	"probe_resp\x18\x0e \x01(\v2\x1e.easy42.agent.v1.ProbeResponseH\x00R\tprobeResp\x12K\n" +
+	"\x10cron_task_report\x18\x0f \x01(\v2\x1f.easy42.agent.v1.CronTaskReportH\x00R\x0ecronTaskReport\x12H\n" +
 	"\rregister_resp\x18\x14 \x01(\v2!.easy42.agent.v1.RegisterResponseH\x00R\fregisterResp\x12D\n" +
 	"\rheartbeat_ack\x18\x15 \x01(\v2\x1d.easy42.agent.v1.HeartbeatAckH\x00R\fheartbeatAck\x12B\n" +
 	"\vcommand_req\x18\x16 \x01(\v2\x1f.easy42.agent.v1.CommandRequestH\x00R\n" +
-	"commandReqB\t\n" +
+	"commandReq\x12H\n" +
+	"\x0fsync_cron_tasks\x18\x17 \x01(\v2\x1e.easy42.agent.v1.SyncCronTasksH\x00R\rsyncCronTasksB\t\n" +
 	"\apayload\"\x88\x01\n" +
 	"\x0fRegisterRequest\x12\x1b\n" +
 	"\tnode_name\x18\x01 \x01(\tR\bnodeName\x12#\n" +
@@ -1902,20 +2172,21 @@ const file_proto_agent_proto_rawDesc = "" +
 	"check_only\x18\x01 \x01(\bR\tcheckOnly\"3\n" +
 	"\x10ApplyNftablesCmd\x12\x1f\n" +
 	"\vscript_path\x18\x01 \x01(\tR\n" +
-	"scriptPath\"\xf4\x01\n" +
+	"scriptPath\"\x82\x02\n" +
 	"\x0fLookingGlassCmd\x129\n" +
 	"\x04tool\x18\x01 \x01(\x0e2%.easy42.agent.v1.LookingGlassCmd.ToolR\x04tool\x12\x16\n" +
 	"\x06target\x18\x02 \x01(\tR\x06target\x12\x12\n" +
 	"\x04args\x18\x03 \x03(\tR\x04args\x12'\n" +
 	"\x0ftimeout_seconds\x18\x04 \x01(\rR\x0etimeoutSeconds\x12\x18\n" +
-	"\acommand\x18\x05 \x01(\tR\acommand\"7\n" +
+	"\acommand\x18\x05 \x01(\tR\acommand\"E\n" +
 	"\x04Tool\x12\b\n" +
 	"\x04PING\x10\x00\x12\x0e\n" +
 	"\n" +
 	"TRACEROUTE\x10\x01\x12\t\n" +
 	"\x05BIRDC\x10\x02\x12\n" +
 	"\n" +
-	"\x06CUSTOM\x10\x03\"\x10\n" +
+	"\x06CUSTOM\x10\x03\x12\f\n" +
+	"\bTCP_PING\x10\x04\"\x10\n" +
 	"\x0eProbeSystemCmd\"\x0f\n" +
 	"\rFlushCacheCmd\"6\n" +
 	"\x11RestartServiceCmd\x12!\n" +
@@ -1935,7 +2206,32 @@ const file_proto_agent_proto_rawDesc = "" +
 	"\bhostname\x18\x02 \x01(\tR\bhostname\x12A\n" +
 	"\n" +
 	"interfaces\x18\x03 \x03(\v2!.easy42.agent.v1.InterfaceMetricsR\n" +
-	"interfacesB%Z#easy42/internal/agent/proto;agentpbb\x06proto3"
+	"interfaces\"D\n" +
+	"\rSyncCronTasks\x123\n" +
+	"\x05tasks\x18\x01 \x03(\v2\x1d.easy42.agent.v1.CronTaskSpecR\x05tasks\"\xca\x02\n" +
+	"\fCronTaskSpec\x12\x17\n" +
+	"\atask_id\x18\x01 \x01(\tR\x06taskId\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12\x1b\n" +
+	"\ttask_type\x18\x03 \x01(\tR\btaskType\x12\x1b\n" +
+	"\tcron_expr\x18\x04 \x01(\tR\bcronExpr\x12\x16\n" +
+	"\x06target\x18\x05 \x01(\tR\x06target\x12\x14\n" +
+	"\x05count\x18\x06 \x01(\rR\x05count\x12'\n" +
+	"\x0ftimeout_seconds\x18\a \x01(\rR\x0etimeoutSeconds\x12A\n" +
+	"\x06params\x18\b \x03(\v2).easy42.agent.v1.CronTaskSpec.ParamsEntryR\x06params\x1a9\n" +
+	"\vParamsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xe9\x01\n" +
+	"\x0eCronTaskReport\x12\x17\n" +
+	"\atask_id\x18\x01 \x01(\tR\x06taskId\x12\x1b\n" +
+	"\tnode_name\x18\x02 \x01(\tR\bnodeName\x12\x1f\n" +
+	"\vexecuted_at\x18\x03 \x01(\x03R\n" +
+	"executedAt\x12\x1b\n" +
+	"\texit_code\x18\x04 \x01(\x05R\bexitCode\x12\x1f\n" +
+	"\vduration_ms\x18\x05 \x01(\x04R\n" +
+	"durationMs\x12\x1d\n" +
+	"\n" +
+	"raw_output\x18\x06 \x01(\tR\trawOutput\x12#\n" +
+	"\rerror_message\x18\a \x01(\tR\ferrorMessageB%Z#easy42/internal/agent/proto;agentpbb\x06proto3"
 
 var (
 	file_proto_agent_proto_rawDescOnce sync.Once
@@ -1950,7 +2246,7 @@ func file_proto_agent_proto_rawDescGZIP() []byte {
 }
 
 var file_proto_agent_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_proto_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 22)
+var file_proto_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 26)
 var file_proto_agent_proto_goTypes = []any{
 	(ManageInterface_Action)(0), // 0: easy42.agent.v1.ManageInterface.Action
 	(LookingGlassCmd_Tool)(0),   // 1: easy42.agent.v1.LookingGlassCmd.Tool
@@ -1976,6 +2272,10 @@ var file_proto_agent_proto_goTypes = []any{
 	(*RestartServiceCmd)(nil),   // 21: easy42.agent.v1.RestartServiceCmd
 	(*CommandResponse)(nil),     // 22: easy42.agent.v1.CommandResponse
 	(*ProbeResponse)(nil),       // 23: easy42.agent.v1.ProbeResponse
+	(*SyncCronTasks)(nil),       // 24: easy42.agent.v1.SyncCronTasks
+	(*CronTaskSpec)(nil),        // 25: easy42.agent.v1.CronTaskSpec
+	(*CronTaskReport)(nil),      // 26: easy42.agent.v1.CronTaskReport
+	nil,                         // 27: easy42.agent.v1.CronTaskSpec.ParamsEntry
 }
 var file_proto_agent_proto_depIdxs = []int32{
 	3,  // 0: easy42.agent.v1.AgentMessage.register_req:type_name -> easy42.agent.v1.RegisterRequest
@@ -1983,30 +2283,34 @@ var file_proto_agent_proto_depIdxs = []int32{
 	7,  // 2: easy42.agent.v1.AgentMessage.telemetry:type_name -> easy42.agent.v1.TelemetryReport
 	22, // 3: easy42.agent.v1.AgentMessage.command_resp:type_name -> easy42.agent.v1.CommandResponse
 	23, // 4: easy42.agent.v1.AgentMessage.probe_resp:type_name -> easy42.agent.v1.ProbeResponse
-	4,  // 5: easy42.agent.v1.AgentMessage.register_resp:type_name -> easy42.agent.v1.RegisterResponse
-	6,  // 6: easy42.agent.v1.AgentMessage.heartbeat_ack:type_name -> easy42.agent.v1.HeartbeatAck
-	13, // 7: easy42.agent.v1.AgentMessage.command_req:type_name -> easy42.agent.v1.CommandRequest
-	9,  // 8: easy42.agent.v1.TelemetryReport.system:type_name -> easy42.agent.v1.SystemMetrics
-	10, // 9: easy42.agent.v1.TelemetryReport.interfaces:type_name -> easy42.agent.v1.InterfaceMetrics
-	11, // 10: easy42.agent.v1.TelemetryReport.wg_peers:type_name -> easy42.agent.v1.WgPeerMetrics
-	12, // 11: easy42.agent.v1.TelemetryReport.bird_protocols:type_name -> easy42.agent.v1.BirdProtocolStatus
-	8,  // 12: easy42.agent.v1.TelemetryReport.disks:type_name -> easy42.agent.v1.DiskMetrics
-	14, // 13: easy42.agent.v1.CommandRequest.apply_config:type_name -> easy42.agent.v1.ApplyConfigFile
-	15, // 14: easy42.agent.v1.CommandRequest.manage_iface:type_name -> easy42.agent.v1.ManageInterface
-	16, // 15: easy42.agent.v1.CommandRequest.reload_bird:type_name -> easy42.agent.v1.ReloadBirdCmd
-	17, // 16: easy42.agent.v1.CommandRequest.apply_nft:type_name -> easy42.agent.v1.ApplyNftablesCmd
-	18, // 17: easy42.agent.v1.CommandRequest.looking_glass:type_name -> easy42.agent.v1.LookingGlassCmd
-	19, // 18: easy42.agent.v1.CommandRequest.probe_system:type_name -> easy42.agent.v1.ProbeSystemCmd
-	21, // 19: easy42.agent.v1.CommandRequest.restart_service:type_name -> easy42.agent.v1.RestartServiceCmd
-	20, // 20: easy42.agent.v1.CommandRequest.flush_cache:type_name -> easy42.agent.v1.FlushCacheCmd
-	0,  // 21: easy42.agent.v1.ManageInterface.action:type_name -> easy42.agent.v1.ManageInterface.Action
-	1,  // 22: easy42.agent.v1.LookingGlassCmd.tool:type_name -> easy42.agent.v1.LookingGlassCmd.Tool
-	10, // 23: easy42.agent.v1.ProbeResponse.interfaces:type_name -> easy42.agent.v1.InterfaceMetrics
-	24, // [24:24] is the sub-list for method output_type
-	24, // [24:24] is the sub-list for method input_type
-	24, // [24:24] is the sub-list for extension type_name
-	24, // [24:24] is the sub-list for extension extendee
-	0,  // [0:24] is the sub-list for field type_name
+	26, // 5: easy42.agent.v1.AgentMessage.cron_task_report:type_name -> easy42.agent.v1.CronTaskReport
+	4,  // 6: easy42.agent.v1.AgentMessage.register_resp:type_name -> easy42.agent.v1.RegisterResponse
+	6,  // 7: easy42.agent.v1.AgentMessage.heartbeat_ack:type_name -> easy42.agent.v1.HeartbeatAck
+	13, // 8: easy42.agent.v1.AgentMessage.command_req:type_name -> easy42.agent.v1.CommandRequest
+	24, // 9: easy42.agent.v1.AgentMessage.sync_cron_tasks:type_name -> easy42.agent.v1.SyncCronTasks
+	9,  // 10: easy42.agent.v1.TelemetryReport.system:type_name -> easy42.agent.v1.SystemMetrics
+	10, // 11: easy42.agent.v1.TelemetryReport.interfaces:type_name -> easy42.agent.v1.InterfaceMetrics
+	11, // 12: easy42.agent.v1.TelemetryReport.wg_peers:type_name -> easy42.agent.v1.WgPeerMetrics
+	12, // 13: easy42.agent.v1.TelemetryReport.bird_protocols:type_name -> easy42.agent.v1.BirdProtocolStatus
+	8,  // 14: easy42.agent.v1.TelemetryReport.disks:type_name -> easy42.agent.v1.DiskMetrics
+	14, // 15: easy42.agent.v1.CommandRequest.apply_config:type_name -> easy42.agent.v1.ApplyConfigFile
+	15, // 16: easy42.agent.v1.CommandRequest.manage_iface:type_name -> easy42.agent.v1.ManageInterface
+	16, // 17: easy42.agent.v1.CommandRequest.reload_bird:type_name -> easy42.agent.v1.ReloadBirdCmd
+	17, // 18: easy42.agent.v1.CommandRequest.apply_nft:type_name -> easy42.agent.v1.ApplyNftablesCmd
+	18, // 19: easy42.agent.v1.CommandRequest.looking_glass:type_name -> easy42.agent.v1.LookingGlassCmd
+	19, // 20: easy42.agent.v1.CommandRequest.probe_system:type_name -> easy42.agent.v1.ProbeSystemCmd
+	21, // 21: easy42.agent.v1.CommandRequest.restart_service:type_name -> easy42.agent.v1.RestartServiceCmd
+	20, // 22: easy42.agent.v1.CommandRequest.flush_cache:type_name -> easy42.agent.v1.FlushCacheCmd
+	0,  // 23: easy42.agent.v1.ManageInterface.action:type_name -> easy42.agent.v1.ManageInterface.Action
+	1,  // 24: easy42.agent.v1.LookingGlassCmd.tool:type_name -> easy42.agent.v1.LookingGlassCmd.Tool
+	10, // 25: easy42.agent.v1.ProbeResponse.interfaces:type_name -> easy42.agent.v1.InterfaceMetrics
+	25, // 26: easy42.agent.v1.SyncCronTasks.tasks:type_name -> easy42.agent.v1.CronTaskSpec
+	27, // 27: easy42.agent.v1.CronTaskSpec.params:type_name -> easy42.agent.v1.CronTaskSpec.ParamsEntry
+	28, // [28:28] is the sub-list for method output_type
+	28, // [28:28] is the sub-list for method input_type
+	28, // [28:28] is the sub-list for extension type_name
+	28, // [28:28] is the sub-list for extension extendee
+	0,  // [0:28] is the sub-list for field type_name
 }
 
 func init() { file_proto_agent_proto_init() }
@@ -2020,9 +2324,11 @@ func file_proto_agent_proto_init() {
 		(*AgentMessage_Telemetry)(nil),
 		(*AgentMessage_CommandResp)(nil),
 		(*AgentMessage_ProbeResp)(nil),
+		(*AgentMessage_CronTaskReport)(nil),
 		(*AgentMessage_RegisterResp)(nil),
 		(*AgentMessage_HeartbeatAck)(nil),
 		(*AgentMessage_CommandReq)(nil),
+		(*AgentMessage_SyncCronTasks)(nil),
 	}
 	file_proto_agent_proto_msgTypes[11].OneofWrappers = []any{
 		(*CommandRequest_ApplyConfig)(nil),
@@ -2040,7 +2346,7 @@ func file_proto_agent_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_agent_proto_rawDesc), len(file_proto_agent_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   22,
+			NumMessages:   26,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

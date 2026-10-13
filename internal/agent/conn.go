@@ -212,5 +212,21 @@ func (c *AgentConnection) handleIncomingMessage(msg *agentpb.AgentMessage) {
 			ch <- resp
 		}
 		c.pendingMu.Unlock()
+
+	case *agentpb.AgentMessage_CronTaskReport:
+		c.hub.RecordCronTaskReport(c.nodeName, payload.CronTaskReport)
 	}
 }
+
+// SyncCronTasks sends the full set of cron tasks to the connected agent
+func (c *AgentConnection) SyncCronTasks(tasks []*agentpb.CronTaskSpec) error {
+	msg := &agentpb.AgentMessage{
+		Payload: &agentpb.AgentMessage_SyncCronTasks{
+			SyncCronTasks: &agentpb.SyncCronTasks{
+				Tasks: tasks,
+			},
+		},
+	}
+	return c.SendMessage(msg)
+}
+

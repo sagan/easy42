@@ -150,6 +150,7 @@ type Config struct {
 	Nodes             []Node             `json:"nodes"`
 	Links             []Link             `json:"links"`
 	LookingGlassTasks []LookingGlassTask `json:"looking_glass_tasks,omitempty"`
+	CronTasks         []CronTask         `json:"cron_tasks,omitempty"`
 	Blocks            []Block            `json:"blocks,omitempty"`
 	DNS               DNSConfig          `json:"dns,omitempty"`
 	Templates         []ConfigTemplate   `json:"templates,omitempty"`

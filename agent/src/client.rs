@@ -10,6 +10,7 @@ use tracing::{error, info, warn};
 
 use crate::collector::{proto, MetricsCollector};
 use crate::config::AgentConfig;
+use crate::cron::CronScheduler;
 use crate::executor::CommandExecutor;
 
 pub struct AgentClient {
@@ -99,7 +100,7 @@ impl AgentClient {
             timestamp: now_millis(),
             payload: Some(proto::agent_message::Payload::RegisterReq(
                 proto::RegisterRequest {
-                    node_name,
+                    node_name: node_name.clone(),
                     agent_version: "0.1.0".to_string(),
                     os_info,
                     hostname,
@@ -165,6 +166,22 @@ impl AgentClient {
                     break;
                 }
             }
+        });
+
+        // Task: Cron scheduler loop
+        let cron_scheduler = Arc::new(CronScheduler::new(node_name.clone()));
+        let tx_cron_proto = tx.clone();
+        let (cron_out_tx, mut cron_out_rx) = tokio::sync::mpsc::channel::<proto::AgentMessage>(32);
+        let cron_forward_task = tokio::spawn(async move {
+            while let Some(msg) = cron_out_rx.recv().await {
+                if tx_cron_proto.send(OutgoingMessage::Proto(msg)).await.is_err() {
+                    break;
+                }
+            }
+        });
+        let cron_scheduler_loop = cron_scheduler.clone();
+        let cron_task = tokio::spawn(async move {
+            cron_scheduler_loop.run_loop(cron_out_tx).await;
         });
 
         // Writer future forwarding mpsc to WebSocket sink with per-send timeout
@@ -268,6 +285,10 @@ impl AgentClient {
                                         return Err(format!("Registration rejected by server: {}", r.error_message));
                                     }
                                 }
+                                Some(proto::agent_message::Payload::SyncCronTasks(sync)) => {
+                                    info!("Received cron tasks sync: {} task(s)", sync.tasks.len());
+                                    cron_scheduler.update_tasks(sync.tasks).await;
+                                }
                                 _ => {}
                             }
                         }
@@ -300,6 +321,8 @@ impl AgentClient {
 
         telemetry_task.abort();
         heartbeat_task.abort();
+        cron_task.abort();
+        cron_forward_task.abort();
 
         result
     }

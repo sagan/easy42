@@ -62,6 +62,7 @@ func NewManager(store *config.Store) *Manager {
 		stopCh:      make(chan struct{}),
 	}
 	m.setupAgentMetricsListeners()
+	m.setupAgentCronTasksListeners()
 	m.startRetentionWorker()
 	return m
 }

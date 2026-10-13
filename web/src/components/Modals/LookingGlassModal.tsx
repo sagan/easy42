@@ -17,7 +17,7 @@ import {
   Select,
   MenuItem,
 } from "@mui/material";
-import { Play, Terminal, Settings2, CheckCircle2, XCircle, Plus, Edit3, Trash2, Eye, Server, Zap } from "lucide-react";
+import { Play, Terminal, Settings2, CheckCircle2, XCircle, Plus, Edit3, Trash2, Eye, Server, Zap, Clock } from "lucide-react";
 import { api } from "../../api/client";
 import { Node, LookingGlassTask, LGRunRequest, LGRunResponse, LGNodeResult } from "../../types/api";
 import { TaskParamForm } from "../LookingGlass/TaskParamForm";
@@ -28,6 +28,7 @@ import { PingView } from "../LookingGlass/PingView";
 import { TracerouteView } from "../LookingGlass/TracerouteView";
 import { TcpPingView } from "../LookingGlass/TcpPingView";
 import { CustomTaskEditorModal } from "../LookingGlass/CustomTaskEditorModal";
+import { CronTasksTab } from "../LookingGlass/CronTasksTab";
 
 interface LookingGlassModalProps {
   open?: boolean;
@@ -317,6 +318,12 @@ export const LookingGlassModal: React.FC<LookingGlassModalProps> = ({ nodes, ini
               iconPosition="start"
               sx={{ textTransform: "none", fontWeight: 600, fontSize: "0.875rem", minHeight: 44 }}
             />
+            <Tab
+              label="Cron Tasks"
+              icon={<Clock size={16} />}
+              iconPosition="start"
+              sx={{ textTransform: "none", fontWeight: 600, fontSize: "0.875rem", minHeight: 44 }}
+            />
           </Tabs>
         </Box>
 
@@ -327,7 +334,7 @@ export const LookingGlassModal: React.FC<LookingGlassModalProps> = ({ nodes, ini
         )}
 
         {/* Tab 0: Preset Tasks & Tab 1: Ad-Hoc -> Configuration & Execution Controls */}
-        {activeTab !== 2 && (
+        {activeTab < 2 && (
           <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
             {/* 1. Target Node Selector Bar */}
             <Paper
@@ -958,6 +965,19 @@ export const LookingGlassModal: React.FC<LookingGlassModalProps> = ({ nodes, ini
               ))}
             </Box>
           </Box>
+        )}
+
+        {/* Tab 3: Cron Tasks */}
+        {activeTab === 3 && (
+          <CronTasksTab
+            nodes={managedNodes}
+            onExecuteNow={(task) => {
+              setSelectedTaskId(task.task_type === "tcp_ping" ? "tcp_ping" : "ping");
+              setSelectedNodes(task.nodes);
+              setParamValues(task.params || {});
+              setActiveTab(0);
+            }}
+          />
         )}
       </Paper>
 

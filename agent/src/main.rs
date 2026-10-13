@@ -1,6 +1,7 @@
 mod client;
 mod collector;
 mod config;
+mod cron;
 mod executor;
 
 use clap::Parser;

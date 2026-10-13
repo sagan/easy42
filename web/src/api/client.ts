@@ -19,6 +19,8 @@ import type {
   GraphBlock,
   FleetLiveResponse,
   NodeMetricsResponse,
+  CronTask,
+  NodeCronTasksResultsResponse,
 } from "../types/api";
 
 const API_BASE = "/api";
@@ -394,4 +396,36 @@ export const api = {
       `/nodes/${encodeURIComponent(nodeName)}/metrics${qs ? `?${qs}` : ""}`,
     );
   },
+
+  // Cron Tasks
+  getCronTasks: () => request<CronTask[]>("/cron-tasks"),
+  createCronTask: (task: Partial<CronTask>) =>
+    request<CronTask>("/cron-tasks", {
+      method: "POST",
+      body: JSON.stringify(task),
+    }),
+  updateCronTask: (id: string, task: Partial<CronTask>) =>
+    request<CronTask>(`/cron-tasks/${encodeURIComponent(id)}`, {
+      method: "PUT",
+      body: JSON.stringify(task),
+    }),
+  deleteCronTask: (id: string) =>
+    request<{ deleted: boolean }>(`/cron-tasks/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    }),
+  toggleCronTask: (id: string) =>
+    request<CronTask>(`/cron-tasks/${encodeURIComponent(id)}/toggle`, {
+      method: "POST",
+    }),
+  getNodeCronTasksResults: (nodeName: string, taskId?: string, range?: string, limit?: number) => {
+    const params = new URLSearchParams();
+    if (taskId) params.append("task_id", taskId);
+    if (range) params.append("range", range);
+    if (limit) params.append("limit", limit.toString());
+    const qs = params.toString();
+    return request<NodeCronTasksResultsResponse>(
+      `/nodes/${encodeURIComponent(nodeName)}/cron-tasks/results${qs ? `?${qs}` : ""}`,
+    );
+  },
 };
+

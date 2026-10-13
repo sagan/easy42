@@ -251,6 +251,7 @@ func (m *Manager) startRetentionWorker() {
 				return
 			case <-ticker.C:
 				_, _ = m.stateStore.CleanMetricsOlderThan(7 * 24 * time.Hour)
+				_, _ = m.stateStore.CleanCronResultsOlderThan(30 * 24 * time.Hour)
 			}
 		}
 	}()
