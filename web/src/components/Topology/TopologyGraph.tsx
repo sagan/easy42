@@ -18,8 +18,8 @@ import {
   OnMoveEnd,
   NodeChange,
 } from "@xyflow/react";
-import { Box, Typography, Button, Chip, Tooltip, Divider, FormControl, Select, MenuItem, Menu } from "@mui/material";
-import { Network, Layers, EyeOff, X, Eye, Maximize2, Plus, Link as LinkIcon, Share2, ChevronDown } from "lucide-react";
+import { Box, Typography, Button, Chip, Tooltip, Divider, FormControl, Select, MenuItem, Menu, Autocomplete, TextField } from "@mui/material";
+import { Network, Layers, EyeOff, X, Eye, Maximize2, Plus, Link as LinkIcon, Share2, ChevronDown, Search } from "lucide-react";
 import { NodeCard } from "./NodeCard";
 import { CustomEdge } from "./CustomEdge";
 import { BlockNode, BLOCK_PALETTE } from "./BlockNode";
@@ -368,6 +368,9 @@ const edgeTypes = {
 };
 
 interface FloatingToolbarProps {
+  nodes?: Node[];
+  onSelectNode?: (node: Node) => void;
+  onFocusNode?: (nodeName: string) => void;
   onAddNode?: () => void;
   onAddLink?: () => void;
   onAddBlock: () => void;
@@ -384,6 +387,9 @@ interface FloatingToolbarProps {
 }
 
 const FloatingToolbar: React.FC<FloatingToolbarProps> = ({
+  nodes = [],
+  onSelectNode,
+  onFocusNode,
   onAddNode,
   onAddLink,
   onAddBlock,
@@ -400,6 +406,65 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = ({
 }) => {
   const { fitView } = useReactFlow();
   const [addMenuAnchor, setAddMenuAnchor] = useState<null | HTMLElement>(null);
+  const [fitMenuAnchor, setFitMenuAnchor] = useState<null | HTMLElement>(null);
+  const [locateInputValue, setLocateInputValue] = useState("");
+
+  const MAX_RECENT_COUNT = 5;
+
+  const { sortedNodes, recentNodeNames } = useMemo(() => {
+    if (!nodes || nodes.length === 0) {
+      return { sortedNodes: [], recentNodeNames: new Set<string>() };
+    }
+
+    const getModifiedTime = (n: Node): number => {
+      if (!n.modified_at) return 0;
+      const t = new Date(n.modified_at).getTime();
+      return isNaN(t) || t <= 0 ? 0 : t;
+    };
+
+    const nodesWithTime = nodes
+      .filter((n) => getModifiedTime(n) > 0)
+      .sort((a, b) => getModifiedTime(b) - getModifiedTime(a));
+
+    let recent: Node[] = [];
+    if (nodesWithTime.length > 0) {
+      recent = nodesWithTime.slice(0, MAX_RECENT_COUNT);
+    } else if (nodes.length > MAX_RECENT_COUNT) {
+      recent = nodes.slice(-MAX_RECENT_COUNT).reverse();
+    }
+
+    const recentSet = new Set(recent.map((n) => n.name));
+    const remaining = nodes
+      .filter((n) => !recentSet.has(n.name))
+      .sort((a, b) => a.name.localeCompare(b.name));
+
+    return {
+      sortedNodes: [...recent, ...remaining],
+      recentNodeNames: recentSet,
+    };
+  }, [nodes]);
+
+  const handleLocateNode = useCallback(
+    (targetNode: Node) => {
+      setFitMenuAnchor(null);
+      setLocateInputValue("");
+
+      fitView({
+        nodes: [{ id: targetNode.name }],
+        duration: 500,
+        maxZoom: 1.2,
+        padding: 0.4,
+      });
+
+      if (onFocusNode) {
+        onFocusNode(targetNode.name);
+      }
+      if (onSelectNode) {
+        onSelectNode(targetNode);
+      }
+    },
+    [fitView, onFocusNode, onSelectNode]
+  );
 
   return (
     <Panel position="top-right" style={{ margin: 14 }}>
@@ -573,31 +638,265 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = ({
           )}
         </Menu>
 
-        {/* Fit View Button */}
-        <Tooltip title="Center and fit all nodes in view">
-          <Button
-            variant="outlined"
-            size="small"
-            startIcon={<Maximize2 size={15} />}
-            onClick={() => fitView({ padding: 0.2, duration: 400 })}
+        {/* Fit Dropdown Menu Button */}
+        <Button
+          variant="outlined"
+          size="small"
+          startIcon={<Maximize2 size={15} />}
+          endIcon={<ChevronDown size={13} />}
+          onClick={(e) => setFitMenuAnchor(e.currentTarget)}
+          sx={{
+            borderColor: "#CBD5E1",
+            color: "#334155",
+            fontWeight: 600,
+            fontSize: "0.8rem",
+            textTransform: "none",
+            borderRadius: 1.75,
+            px: 1.25,
+            py: 0.5,
+            "&:hover": {
+              borderColor: "#94A3B8",
+              backgroundColor: "#F8FAFC",
+            },
+          }}
+        >
+          Fit
+        </Button>
+
+        <Menu
+          anchorEl={fitMenuAnchor}
+          open={Boolean(fitMenuAnchor)}
+          onClose={() => {
+            setFitMenuAnchor(null);
+            setLocateInputValue("");
+          }}
+          transitionDuration={{ enter: 0, exit: 100 }}
+          disableAutoFocusItem
+          PaperProps={{
+            sx: {
+              mt: 0.75,
+              minWidth: 260,
+              maxWidth: 320,
+              borderRadius: 2,
+              boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05)",
+              border: "1px solid #E2E8F0",
+              p: 0.5,
+            },
+          }}
+        >
+          <MenuItem
+            onClick={() => {
+              setFitMenuAnchor(null);
+              fitView({ padding: 0.2, duration: 400 });
+            }}
             sx={{
-              borderColor: "#CBD5E1",
-              color: "#334155",
-              fontWeight: 600,
-              fontSize: "0.8rem",
-              textTransform: "none",
-              borderRadius: 1.75,
+              borderRadius: 1.25,
+              py: 0.75,
               px: 1.25,
-              py: 0.5,
-              "&:hover": {
-                borderColor: "#94A3B8",
-                backgroundColor: "#F8FAFC",
-              },
+              display: "flex",
+              alignItems: "center",
+              gap: 1.25,
+              fontSize: "0.82rem",
+              fontWeight: 600,
+              color: "#1E293B",
+              "&:hover": { bgcolor: "#F1F5F9" },
             }}
           >
+            <Maximize2 size={15} color="#4F46E5" />
             Fit View
-          </Button>
-        </Tooltip>
+          </MenuItem>
+
+          <Divider sx={{ my: 0.5, borderColor: "#E2E8F0" }} />
+
+          <MenuItem
+            component="div"
+            disableRipple
+            sx={{
+              display: "block",
+              cursor: "default",
+              px: 1.25,
+              py: 0.75,
+              "&:hover": { backgroundColor: "transparent" },
+            }}
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => {
+              if (e.key !== "Escape") {
+                e.stopPropagation();
+              }
+            }}
+          >
+            <Typography
+              variant="caption"
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                gap: 0.5,
+                fontWeight: 600,
+                color: "#64748B",
+                fontSize: "0.72rem",
+                mb: 0.75,
+              }}
+            >
+              <Search size={12} color="#64748B" />
+              Locate Node
+            </Typography>
+
+            <Autocomplete
+              size="small"
+              autoHighlight
+              openOnFocus
+              options={sortedNodes}
+              getOptionLabel={(option) => option.name}
+              isOptionEqualToValue={(option, value) => option.name === value?.name}
+              inputValue={locateInputValue}
+              onInputChange={(_event, value) => setLocateInputValue(value)}
+              onChange={(_event, option) => {
+                if (option) {
+                  handleLocateNode(option);
+                }
+              }}
+              filterOptions={(options, state) => {
+                const q = state.inputValue.trim().toLowerCase();
+                if (!q) return options;
+                const prefixMatches: Node[] = [];
+                const otherMatches: Node[] = [];
+                for (const n of options) {
+                  if (n.name.toLowerCase().startsWith(q)) {
+                    prefixMatches.push(n);
+                  } else if (
+                    n.name.toLowerCase().includes(q) ||
+                    (n.ip && n.ip.toLowerCase().includes(q))
+                  ) {
+                    otherMatches.push(n);
+                  }
+                }
+                return [...prefixMatches, ...otherMatches];
+              }}
+              slotProps={{
+                popper: {
+                  placement: "bottom-start",
+                  modifiers: [
+                    {
+                      name: "flip",
+                      enabled: false,
+                    },
+                    {
+                      name: "preventOverflow",
+                      options: {
+                        altAxis: true,
+                      },
+                    },
+                  ],
+                  sx: {
+                    zIndex: 1400,
+                  },
+                },
+              }}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  placeholder="Enter prefix to find..."
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      const q = locateInputValue.trim().toLowerCase();
+                      if (q) {
+                        const match =
+                          sortedNodes.find((n) => n.name.toLowerCase().startsWith(q)) ||
+                          sortedNodes.find((n) => n.name.toLowerCase().includes(q));
+                        if (match) {
+                          e.preventDefault();
+                          handleLocateNode(match);
+                        }
+                      }
+                    }
+                  }}
+                  sx={{
+                    "& .MuiOutlinedInput-root": {
+                      fontSize: "0.82rem",
+                      borderRadius: 1.5,
+                      backgroundColor: "#F8FAFC",
+                      "& fieldset": {
+                        borderColor: "#CBD5E1",
+                      },
+                      "&:hover fieldset": {
+                        borderColor: "#94A3B8",
+                      },
+                      "&.Mui-focused fieldset": {
+                        borderColor: "#4F46E5",
+                      },
+                      "& input": {
+                        py: 0.5,
+                        px: 0.75,
+                      },
+                    },
+                  }}
+                />
+              )}
+              renderOption={(props, option) => {
+                const { key, ...otherProps } = props as any;
+                const isRecent = recentNodeNames.has(option.name);
+                return (
+                  <Box
+                    component="li"
+                    key={key || option.name}
+                    {...otherProps}
+                    sx={{
+                      fontSize: "0.82rem",
+                      py: 0.6,
+                      px: 1,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: 1,
+                    }}
+                  >
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1, minWidth: 0 }}>
+                      <Typography
+                        variant="body2"
+                        sx={{
+                          fontSize: "0.82rem",
+                          fontWeight: 600,
+                          color: "#1E293B",
+                        }}
+                        noWrap
+                      >
+                        {option.name}
+                      </Typography>
+                      {option.ip && (
+                        <Typography
+                          variant="caption"
+                          sx={{
+                            fontSize: "0.72rem",
+                            color: "#64748B",
+                          }}
+                          noWrap
+                        >
+                          {option.ip}
+                        </Typography>
+                      )}
+                    </Box>
+                    {isRecent && (
+                      <Chip
+                        label="Recent"
+                        size="small"
+                        sx={{
+                          height: 18,
+                          fontSize: "0.62rem",
+                          fontWeight: 700,
+                          backgroundColor: "rgba(79, 70, 229, 0.1)",
+                          color: "#4F46E5",
+                          borderRadius: 1,
+                          flexShrink: 0,
+                        }}
+                      />
+                    )}
+                  </Box>
+                );
+              }}
+            />
+          </MenuItem>
+        </Menu>
 
         {/* Tag filter dropdown */}
         {onSelectTag && (
@@ -1586,6 +1885,9 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
       >
         {/* Consolidated Floating Toolbar */}
         <FloatingToolbar
+          nodes={nodes}
+          onSelectNode={onSelectNode}
+          onFocusNode={(nodeName) => setFocusedNodeName(nodeName)}
           onAddNode={onAddNode}
           onAddLink={onAddLink}
           onAddBlock={handleToolbarAddBlock}
