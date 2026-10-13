@@ -296,11 +296,7 @@ export function getLinkWorkingState(
     link.from.interface,
     link.to.public_key,
   );
-  const toLive = checkLiveEndpointWorkingState(
-    nodeStatuses?.[link.to.name],
-    link.to.interface,
-    link.from.public_key,
-  );
+  const toLive = checkLiveEndpointWorkingState(nodeStatuses?.[link.to.name], link.to.interface, link.from.public_key);
 
   // If either endpoint has a verified recent handshake, the WireGuard link is working!
   if (fromLive === "working" || toLive === "working") {
@@ -937,9 +933,7 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
     (blockId: string) => {
       const targetBlock = blocks.find((b) => b.id === blockId);
       if (!targetBlock) return;
-      const memberNames = nodes
-        .filter((n) => effectiveNodeBlockMap[n.name] === blockId)
-        .map((n) => n.name);
+      const memberNames = nodes.filter((n) => effectiveNodeBlockMap[n.name] === blockId).map((n) => n.name);
 
       if (onCreateBlockFullMesh) {
         onCreateBlockFullMesh(targetBlock.name, memberNames);
@@ -1030,9 +1024,7 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
         });
       };
 
-      const isFullMesh = memberNames.every((u, i) =>
-        memberNames.slice(i + 1).every((v) => hasIntraLink(u, v)),
-      );
+      const isFullMesh = memberNames.every((u, i) => memberNames.slice(i + 1).every((v) => hasIntraLink(u, v)));
 
       blockFullMeshStatusMap.set(block.id, isFullMesh);
     });
@@ -1284,7 +1276,17 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
     });
 
     return [...blockVirtualEdges, ...visibleNodeEdges];
-  }, [nodes, links, blocks, networkState, networkPolicies, onSelectLink, effectiveNodeBlockMap, focusedNodeName, nodeStatuses]);
+  }, [
+    nodes,
+    links,
+    blocks,
+    networkState,
+    networkPolicies,
+    onSelectLink,
+    effectiveNodeBlockMap,
+    focusedNodeName,
+    nodeStatuses,
+  ]);
 
   const [flowNodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [flowEdges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
@@ -1606,6 +1608,8 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
           nodeColor="#E2E8F0"
           nodeBorderRadius={4}
           maskColor="rgba(248, 250, 252, 0.7)"
+          pannable
+          zoomable
         />
       </ReactFlow>
     </Box>

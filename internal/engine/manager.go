@@ -4749,3 +4749,90 @@ func (m *Manager) ValidateAgentToken(nodeName, token string) bool {
 	return false
 }
 
+// UninstallAgent removes the agent configuration and records for a node from the easy42 backend,
+// closes any active agent connection, and attempts in the background (best effort)
+// to clean up agent service and files via SSH if the node has SSH configured.
+func (m *Manager) UninstallAgent(nodeName string) error {
+	m.mu.Lock()
+	cfg := m.store.Get()
+	if cfg == nil {
+		m.mu.Unlock()
+		return errors.New("config not loaded")
+	}
+
+	var found *config.Node
+	for i := range cfg.Nodes {
+		if cfg.Nodes[i].Name == nodeName {
+			found = &cfg.Nodes[i]
+			break
+		}
+	}
+	if found == nil {
+		m.mu.Unlock()
+		return ErrNodeNotFound
+	}
+
+	host := found.Host
+
+	// 1. Remove agent record from easy42 backend configuration
+	found.Mode = "ssh"
+	found.AgentToken = ""
+	found.AgentVersion = ""
+	found.AgentLastSeen = time.Time{}
+	found.ModifiedAt = time.Now().UTC()
+
+	if err := m.store.Save(cfg); err != nil {
+		m.mu.Unlock()
+		return err
+	}
+	m.mu.Unlock()
+
+	// 2. Disconnect active agent connection & remove telemetry in agent hub
+	if m.agentHub != nil {
+		m.agentHub.RemoveNode(nodeName)
+	}
+
+	// 3. Remove agent info record from SQLite state store
+	if m.stateStore != nil {
+		_ = m.stateStore.DeleteNodeInfo(nodeName)
+	}
+
+	// 4. Trigger node status refresh in easy42 backend
+	go func() {
+		_, _ = m.RefreshNodeStatus(nodeName)
+	}()
+
+	// 5. Try to ssh to node and remove agent files & system service in background (best effort)
+	if host != "" && host != "none" {
+		go func(targetHost, targetName string) {
+			client, _, err := m.pool.GetClient(targetHost)
+			if err != nil {
+				return
+			}
+			cleanupCmd := `sh -c '
+if command -v systemctl >/dev/null 2>&1; then
+    systemctl stop easy42-agent 2>/dev/null || true
+    systemctl disable easy42-agent 2>/dev/null || true
+    rm -f /etc/systemd/system/easy42-agent.service 2>/dev/null || true
+    systemctl daemon-reload 2>/dev/null || true
+fi
+if command -v rc-service >/dev/null 2>&1; then
+    rc-service easy42-agent stop 2>/dev/null || true
+    rc-update del easy42-agent default 2>/dev/null || true
+fi
+if [ -x /etc/init.d/easy42-agent ]; then
+    /etc/init.d/easy42-agent stop 2>/dev/null || true
+    /etc/init.d/easy42-agent disable 2>/dev/null || true
+    rm -f /etc/init.d/easy42-agent 2>/dev/null || true
+fi
+killall easy42-agent 2>/dev/null || true
+rm -f /usr/local/bin/easy42-agent 2>/dev/null || true
+rm -f /etc/easy42/agent.json 2>/dev/null || true
+'`
+			_, _ = ssh.RunCommand(client, cleanupCmd)
+		}(host, nodeName)
+	}
+
+	return nil
+}
+

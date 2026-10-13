@@ -91,12 +91,12 @@ export const AppLayout: React.FC = () => {
   const currentPath = location.pathname.startsWith("/topology")
     ? "/topology"
     : location.pathname.startsWith("/looking-glass")
-    ? "/looking-glass"
-    : location.pathname.startsWith("/helper")
-    ? "/helper"
-    : location.pathname.startsWith("/settings")
-    ? "/settings"
-    : "/nodes";
+      ? "/looking-glass"
+      : location.pathname.startsWith("/helper")
+        ? "/helper"
+        : location.pathname.startsWith("/settings")
+          ? "/settings"
+          : "/nodes";
 
   const navItems = [
     { label: "Nodes", path: "/nodes", icon: <Server size={18} /> },
@@ -270,21 +270,36 @@ export const AppLayout: React.FC = () => {
                         }}
                         title={
                           <Box sx={{ display: "flex", flexDirection: "column", gap: 0.8 }}>
-                            <Box sx={{ display: "flex", alignItems: "center", gap: 1, pb: 0.8, borderBottom: "1px solid rgba(255, 255, 255, 0.1)" }}>
+                            <Box
+                              sx={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 1,
+                                pb: 0.8,
+                                borderBottom: "1px solid rgba(255, 255, 255, 0.1)",
+                              }}
+                            >
                               <Activity size={15} color="#38BDF8" />
-                              <Typography variant="subtitle2" sx={{ fontWeight: 700, fontSize: "0.82rem", color: "#F8FAFC" }}>
+                              <Typography
+                                variant="subtitle2"
+                                sx={{ fontWeight: 700, fontSize: "0.82rem", color: "#F8FAFC" }}
+                              >
                                 FlapAlerted Metrics
                               </Typography>
                             </Box>
                             <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5, fontSize: "0.78rem" }}>
                               <Box sx={{ display: "flex", justifyContent: "space-between", gap: 2 }}>
-                                <Typography variant="caption" sx={{ color: "#94A3B8" }}>Avg Route Changes (90m):</Typography>
+                                <Typography variant="caption" sx={{ color: "#94A3B8" }}>
+                                  Avg Route Changes (90m):
+                                </Typography>
                                 <Typography variant="caption" sx={{ fontWeight: 700, color: "#38BDF8" }}>
                                   {flapAlertedMetrics.AverageRouteChanges90}
                                 </Typography>
                               </Box>
                               <Box sx={{ display: "flex", justifyContent: "space-between", gap: 2 }}>
-                                <Typography variant="caption" sx={{ color: "#94A3B8" }}>Active Flaps:</Typography>
+                                <Typography variant="caption" sx={{ color: "#94A3B8" }}>
+                                  Active Flaps:
+                                </Typography>
                                 <Typography
                                   variant="caption"
                                   sx={{
@@ -296,19 +311,25 @@ export const AppLayout: React.FC = () => {
                                 </Typography>
                               </Box>
                               <Box sx={{ display: "flex", justifyContent: "space-between", gap: 2 }}>
-                                <Typography variant="caption" sx={{ color: "#94A3B8" }}>Active Flap Path Changes:</Typography>
+                                <Typography variant="caption" sx={{ color: "#94A3B8" }}>
+                                  Active Flap Path Changes:
+                                </Typography>
                                 <Typography variant="caption" sx={{ fontWeight: 600, color: "#F1F5F9" }}>
                                   {flapAlertedMetrics.ActiveFlapTotalPathChangeCount ?? 0}
                                 </Typography>
                               </Box>
                               <Box sx={{ display: "flex", justifyContent: "space-between", gap: 2 }}>
-                                <Typography variant="caption" sx={{ color: "#94A3B8" }}>Total Path Changes:</Typography>
+                                <Typography variant="caption" sx={{ color: "#94A3B8" }}>
+                                  Total Path Changes:
+                                </Typography>
                                 <Typography variant="caption" sx={{ fontWeight: 600, color: "#F1F5F9" }}>
                                   {flapAlertedMetrics.TotalPathChangeCount ?? 0}
                                 </Typography>
                               </Box>
                               <Box sx={{ display: "flex", justifyContent: "space-between", gap: 2 }}>
-                                <Typography variant="caption" sx={{ color: "#94A3B8" }}>Sessions:</Typography>
+                                <Typography variant="caption" sx={{ color: "#94A3B8" }}>
+                                  Sessions:
+                                </Typography>
                                 <Typography variant="caption" sx={{ fontWeight: 600, color: "#F1F5F9" }}>
                                   {flapAlertedMetrics.Sessions ?? 0}
                                 </Typography>
@@ -318,10 +339,6 @@ export const AppLayout: React.FC = () => {
                         }
                       >
                         <Box
-                          component="a"
-                          href={flapAlertedUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
                           sx={{
                             display: "inline-flex",
                             alignItems: "center",
@@ -555,7 +572,10 @@ export const AppLayout: React.FC = () => {
                     <ListItemIcon sx={{ minWidth: 36, color: isActive ? "#4F46E5" : "#64748B" }}>
                       {item.icon}
                     </ListItemIcon>
-                    <ListItemText primary={item.label} primaryTypographyProps={{ fontSize: "0.9rem", fontWeight: isActive ? 700 : 500 }} />
+                    <ListItemText
+                      primary={item.label}
+                      primaryTypographyProps={{ fontSize: "0.9rem", fontWeight: isActive ? 700 : 500 }}
+                    />
                   </ListItemButton>
                 </ListItem>
               );

@@ -137,6 +137,32 @@ export const api = {
         method: "POST",
       },
     ),
+  generateAgentToken: (name: string) =>
+    request<{ node: string; token: string; server_url: string; install_command: string }>(
+      `/nodes/${encodeURIComponent(name)}/agent-token`,
+      {
+        method: "POST",
+      },
+    ),
+  getNodeAgent: (name: string) =>
+    request<{
+      node: string;
+      mode: string;
+      token: string;
+      server_url: string;
+      install_command: string;
+      connected: boolean;
+      last_seen?: string;
+      agent_version?: string;
+      telemetry?: any;
+    }>(`/nodes/${encodeURIComponent(name)}/agent`),
+  uninstallAgent: (name: string) =>
+    request<{ success: boolean; message: string; node: string }>(
+      `/nodes/${encodeURIComponent(name)}/agent/uninstall`,
+      {
+        method: "POST",
+      },
+    ),
 
   // Links
   getLinks: () => request<Link[]>("/links"),

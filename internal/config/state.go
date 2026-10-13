@@ -972,6 +972,19 @@ func (s *StateStore) RecordNodeInfo(nodeName, agentVersion, osInfo, hostname str
 	return err
 }
 
+// DeleteNodeInfo removes recorded agent info for a node
+func (s *StateStore) DeleteNodeInfo(nodeName string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.db == nil {
+		return nil
+	}
+
+	_, err := s.db.Exec(`DELETE FROM node_info WHERE node_name = ?`, nodeName)
+	return err
+}
+
 // GetNodeInfo returns recorded agent info for a node
 func (s *StateStore) GetNodeInfo(nodeName string) (*NodeInfo, error) {
 	s.mu.RLock()

@@ -320,8 +320,8 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
                 >
                   <Typography variant="body2" sx={{ fontWeight: 700, color: "#92400E" }}>
                     {targetNode
-                      ? `Node ${targetNode} is currently unreachable via SSH`
-                      : `${relevantUnreachable.length} node(s) currently unreachable via SSH: ${relevantUnreachable.map((n) => n.name).join(", ")}`}
+                      ? `Node ${targetNode} is currently unreachable`
+                      : `${relevantUnreachable.length} node(s) currently unreachable: ${relevantUnreachable.map((n) => n.name).join(", ")}`}
                   </Typography>
                   <Typography variant="caption" sx={{ color: "#B45309", display: "block", mt: 0.25 }}>
                     {targetNode

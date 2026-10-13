@@ -36,9 +36,13 @@ fi
 # 2. Install agent configuration if provided
 if [ -f "$SCRIPT_DIR/agent.json" ]; then
     mkdir -p /etc/easy42
-    cp -f "$SCRIPT_DIR/agent.json" /etc/easy42/agent.json
-    chmod 600 /etc/easy42/agent.json
-    echo "Wrote /etc/easy42/agent.json"
+    if [ -f /etc/easy42/agent.json ]; then
+        echo "Preserving existing /etc/easy42/agent.json"
+    else
+        cp -f "$SCRIPT_DIR/agent.json" /etc/easy42/agent.json
+        chmod 600 /etc/easy42/agent.json
+        echo "Wrote /etc/easy42/agent.json"
+    fi
 fi
 
 # 3. Stop old service and clean up stale service files from mismatched init system

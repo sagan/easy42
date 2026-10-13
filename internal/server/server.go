@@ -150,6 +150,10 @@ func New(cfg Config) *Server {
 			r.Post("/nodes/{name}/interfaces/{iface}/restart", s.handleRestartNodeInterface)
 			r.Post("/nodes/{name}/restart-wg/{iface}", s.handleRestartNodeInterface)
 			r.Post("/nodes/{name}/agent-token", s.handleGenerateAgentToken)
+			r.Get("/nodes/{name}/agent-token", s.handleGetNodeAgent)
+			r.Get("/nodes/{name}/agent", s.handleGetNodeAgent)
+			r.Post("/nodes/{name}/agent/uninstall", s.handleUninstallAgent)
+			r.Delete("/nodes/{name}/agent", s.handleUninstallAgent)
 			r.Get("/nodes/{name}/telemetry", s.handleGetNodeTelemetry)
 			r.Get("/nodes/{name}/metrics", s.handleGetNodeMetrics)
 

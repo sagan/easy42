@@ -61,6 +61,12 @@ func TestAgentInstallScript(t *testing.T) {
 	if (!strings.Contains(body, "#!/bin/sh") && !strings.Contains(body, "#!/bin/bash")) || !strings.Contains(body, "easy42-agent") {
 		t.Fatalf("unexpected install script content: %s", body)
 	}
+	if !strings.Contains(body, "--overwrite-config") {
+		t.Fatalf("expected install.sh to support --overwrite-config")
+	}
+	if !strings.Contains(body, "Preserving existing /etc/easy42/agent.json") {
+		t.Fatalf("expected install.sh to preserve existing config by default")
+	}
 }
 
 func TestAgentBinaryDownload(t *testing.T) {
@@ -246,5 +252,60 @@ func TestFleetLiveStatusAndMetricsEndpoints(t *testing.T) {
 	}
 	if metricsResp.Points[0].CPUPercent != 33.3 {
 		t.Fatalf("expected 33.3 CPU, got %f", metricsResp.Points[0].CPUPercent)
+	}
+}
+
+func TestAgentGetAndUninstall(t *testing.T) {
+	srv, mgr, cleanup := setupAgentTestServer(t)
+	defer cleanup()
+
+	// Generate agent token for node-test-1
+	token, err := mgr.GenerateAgentToken("node-test-1")
+	if err != nil {
+		t.Fatalf("GenerateAgentToken failed: %v", err)
+	}
+
+	// 1. Test GET /api/nodes/{name}/agent
+	reqGet := httptest.NewRequest(http.MethodGet, "/api/nodes/node-test-1/agent", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("name", "node-test-1")
+	reqGet = reqGet.WithContext(context.WithValue(reqGet.Context(), chi.RouteCtxKey, rctx))
+	rrGet := httptest.NewRecorder()
+	srv.handleGetNodeAgent(rrGet, reqGet)
+
+	if rrGet.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rrGet.Code, rrGet.Body.String())
+	}
+	var agentInfo map[string]any
+	if err := json.Unmarshal(rrGet.Body.Bytes(), &agentInfo); err != nil {
+		t.Fatalf("failed to decode json: %v", err)
+	}
+	if agentInfo["token"] != token {
+		t.Fatalf("expected token %s, got %v", token, agentInfo["token"])
+	}
+	installCmd, ok := agentInfo["install_command"].(string)
+	if !ok || !strings.Contains(installCmd, "curl") || !strings.Contains(installCmd, "--token") {
+		t.Fatalf("unexpected install_command: %v", agentInfo["install_command"])
+	}
+
+	// 2. Test POST /api/nodes/{name}/agent/uninstall
+	reqUninstall := httptest.NewRequest(http.MethodPost, "/api/nodes/node-test-1/agent/uninstall", nil)
+	rctxUninstall := chi.NewRouteContext()
+	rctxUninstall.URLParams.Add("name", "node-test-1")
+	reqUninstall = reqUninstall.WithContext(context.WithValue(reqUninstall.Context(), chi.RouteCtxKey, rctxUninstall))
+	rrUninstall := httptest.NewRecorder()
+	srv.handleUninstallAgent(rrUninstall, reqUninstall)
+
+	if rrUninstall.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rrUninstall.Code, rrUninstall.Body.String())
+	}
+
+	// Verify node is no longer in agent mode
+	node := mgr.FindNode("node-test-1")
+	if node == nil {
+		t.Fatalf("node-test-1 missing")
+	}
+	if node.Mode != "ssh" || node.AgentToken != "" {
+		t.Fatalf("expected node to have mode ssh and empty token, got mode=%s token=%s", node.Mode, node.AgentToken)
 	}
 }

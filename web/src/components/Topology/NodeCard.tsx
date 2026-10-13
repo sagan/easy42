@@ -276,9 +276,11 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
                   title={
                     isAgentMode
                       ? `Agent offline or unreachable. Last seen: ${
-                          status?.last_seen ? new Date(status.last_seen).toLocaleString() : node.agent_last_seen || "Unknown"
+                          status?.last_seen
+                            ? new Date(status.last_seen).toLocaleString()
+                            : node.agent_last_seen || "Unknown"
                         }`
-                      : status?.error || "Device is offline or unreachable via SSH"
+                      : status?.error || "Device is offline or unreachable"
                   }
                 >
                   <Chip
@@ -797,7 +799,7 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
           }}
         >
           <AlertTriangle size={12} color="#DC2626" style={{ flexShrink: 0 }} />
-          <Tooltip title={status?.error || "Device unreachable via SSH"}>
+          <Tooltip title={status?.error || "Device unreachable"}>
             <Typography
               variant="caption"
               sx={{
@@ -809,7 +811,7 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
                 whiteSpace: "nowrap",
               }}
             >
-              {status?.error ? `Unreachable: ${status.error}` : "Unreachable via SSH"}
+              {status?.error ? `Unreachable: ${status.error}` : "Unreachable"}
             </Typography>
           </Tooltip>
         </Box>

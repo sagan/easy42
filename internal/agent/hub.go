@@ -92,6 +92,18 @@ func (h *Hub) UnregisterNode(nodeName string) {
 	delete(h.connections, nodeName)
 }
 
+// RemoveNode closes any active connection, removes the node from connections, telemetry, and lastSeen
+func (h *Hub) RemoveNode(nodeName string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if conn, exists := h.connections[nodeName]; exists {
+		go conn.Close()
+		delete(h.connections, nodeName)
+	}
+	delete(h.telemetry, nodeName)
+	delete(h.lastSeen, nodeName)
+}
+
 // IsConnected returns whether the node agent is currently connected and active
 func (h *Hub) IsConnected(nodeName string) bool {
 	h.mu.RLock()

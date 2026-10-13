@@ -1,12 +1,14 @@
 package server
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"regexp"
 	"strings"
 
 	"easy42/internal/agent"
+	"easy42/internal/engine"
 	"github.com/go-chi/chi/v5"
 	"github.com/gorilla/websocket"
 )
@@ -89,13 +91,78 @@ func (s *Server) handleGenerateAgentToken(w http.ResponseWriter, r *http.Request
 		serverURL = configuredURL
 	}
 
-	installCmd := fmt.Sprintf("curl -fsSL %s/api/agent/install.sh | bash -s -- --server %s --token %s", serverURL, serverURL, token)
+	installCmd := fmt.Sprintf("curl %s/api/agent/install.sh | sh -s -- --token %q", serverURL, token)
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"node":            name,
 		"token":           token,
 		"server_url":      serverURL,
 		"install_command": installCmd,
+	})
+}
+
+// handleGetNodeAgent returns agent configuration, token, install command, and status for a node
+func (s *Server) handleGetNodeAgent(w http.ResponseWriter, r *http.Request) {
+	name := chi.URLParam(r, "name")
+	node := s.mgr.FindNode(name)
+	if node == nil {
+		writeError(w, http.StatusNotFound, "node not found")
+		return
+	}
+
+	scheme := "https"
+	if r.TLS == nil && !strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https") {
+		scheme = "http"
+	}
+	host := r.Host
+	if !isSafeHost(host) {
+		writeError(w, http.StatusBadRequest, "Invalid Host header")
+		return
+	}
+	serverURL := fmt.Sprintf("%s://%s", scheme, host)
+	if configuredURL := s.mgr.GetServerURL(); configuredURL != "" {
+		serverURL = configuredURL
+	}
+
+	token := node.AgentToken
+	installCmd := ""
+	if token != "" {
+		installCmd = fmt.Sprintf("curl %s/api/agent/install.sh | sh -s -- --token %q", serverURL, token)
+	}
+
+	connected := s.mgr.AgentHub().IsConnected(name)
+	lastSeen := s.mgr.AgentHub().GetLastSeen(name)
+	telemetry := s.mgr.AgentHub().GetTelemetry(name)
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"node":            name,
+		"mode":            node.Mode,
+		"token":           token,
+		"server_url":      serverURL,
+		"install_command": installCmd,
+		"connected":       connected,
+		"last_seen":       lastSeen,
+		"agent_version":   node.AgentVersion,
+		"telemetry":       telemetry,
+	})
+}
+
+// handleUninstallAgent uninstalls the agent from a node
+func (s *Server) handleUninstallAgent(w http.ResponseWriter, r *http.Request) {
+	name := chi.URLParam(r, "name")
+	if err := s.mgr.UninstallAgent(name); err != nil {
+		if errors.Is(err, engine.ErrNodeNotFound) {
+			writeError(w, http.StatusNotFound, "node not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"success": true,
+		"message": fmt.Sprintf("Agent uninstalled for node %s", name),
+		"node":    name,
 	})
 }
 
@@ -156,6 +223,7 @@ set -e
 
 SERVER_URL="` + serverURL + `"
 TOKEN=""
+OVERWRITE_CONFIG="false"
 
 while [ $# -gt 0 ]; do
   case $1 in
@@ -163,9 +231,21 @@ while [ $# -gt 0 ]; do
       SERVER_URL="$2"
       shift 2
       ;;
+    --server=*)
+      SERVER_URL="${1#*=}"
+      shift
+      ;;
     --token)
       TOKEN="$2"
       shift 2
+      ;;
+    --token=*)
+      TOKEN="${1#*=}"
+      shift
+      ;;
+    --overwrite-config)
+      OVERWRITE_CONFIG="true"
+      shift
       ;;
     *)
       shift
@@ -248,10 +328,15 @@ echo "[Easy42 Agent Installer] Detected init system: $INIT_SYSTEM"
 mkdir -p /etc/easy42 /usr/local/bin
 
 # Write configuration
-cat <<EOF > /etc/easy42/agent.json
+if [ -f /etc/easy42/agent.json ] && [ "$OVERWRITE_CONFIG" != "true" ]; then
+  echo "[Easy42 Agent Installer] Preserving existing /etc/easy42/agent.json"
+else
+  cat <<EOF > /etc/easy42/agent.json
 {"server":"${SERVER_URL}","token":"${TOKEN}","log_level":"info"}
 EOF
-chmod 600 /etc/easy42/agent.json
+  chmod 600 /etc/easy42/agent.json
+  echo "[Easy42 Agent Installer] Configuration written to /etc/easy42/agent.json"
+fi
 
 # Download binary from server embedded resources
 BIN_URL="${SERVER_URL}/api/agent/bin/${TARGET_ARCH}"

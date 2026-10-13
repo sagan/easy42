@@ -33,6 +33,8 @@ import {
   MenuItem,
   InputAdornment,
   ButtonGroup,
+  Checkbox,
+  FormControlLabel,
 } from "@mui/material";
 import {
   Server,
@@ -64,6 +66,7 @@ import {
   Sliders,
   ArrowRightLeft,
   Zap,
+  Terminal,
 } from "lucide-react";
 import { useMesh } from "../context/MeshContext";
 import { api } from "../api/client";
@@ -140,7 +143,7 @@ export const NodeDetailPage: React.FC = () => {
 
   // Tabs state synced with query params
   const tabParam = searchParams.get("tab") || "overview";
-  const validTabs = ["overview", "metrics", "telemetry", "networking", "routing", "firewall"];
+  const validTabs = ["overview", "metrics", "telemetry", "networking", "routing", "firewall", "agent"];
   const currentTab = validTabs.includes(tabParam) ? (tabParam === "telemetry" ? "metrics" : tabParam) : "overview";
 
   const handleTabChange = (_: React.SyntheticEvent, newValue: string) => {
@@ -202,6 +205,84 @@ export const NodeDetailPage: React.FC = () => {
       setNoteTab("write");
     }
   }, [node?.name, node?.note]);
+
+  // Agent tab state
+  const [overwriteConfig, setOverwriteConfig] = useState(false);
+  const [agentToken, setAgentToken] = useState<string>("");
+  const [generatingToken, setGeneratingToken] = useState(false);
+  const [uninstallModalOpen, setUninstallModalOpen] = useState(false);
+  const [uninstallingAgent, setUninstallingAgent] = useState(false);
+
+  useEffect(() => {
+    if (node?.agent_token) {
+      setAgentToken(node.agent_token);
+    }
+  }, [node?.agent_token]);
+
+  // If node does not have token, generate or fetch one when visiting the agent tab
+  useEffect(() => {
+    if (currentTab === "agent" && node && !node.agent_token && !agentToken && !generatingToken) {
+      setGeneratingToken(true);
+      api.generateAgentToken(node.name)
+        .then((res) => {
+          setAgentToken(res.token);
+          loadData();
+        })
+        .catch(() => {})
+        .finally(() => setGeneratingToken(false));
+    }
+  }, [currentTab, node?.name, node?.agent_token, agentToken, generatingToken]);
+
+  const handleRotateAgentToken = async () => {
+    if (!node) return;
+    setGeneratingToken(true);
+    try {
+      const res = await api.generateAgentToken(node.name);
+      setAgentToken(res.token);
+      await loadData();
+      setStateToast({
+        message: `Agent token rotated successfully for ${node.name}`,
+        severity: "success",
+      });
+    } catch (err: any) {
+      setStateToast({
+        message: `Failed to generate token: ${err.message || err}`,
+        severity: "error",
+      });
+    } finally {
+      setGeneratingToken(false);
+    }
+  };
+
+  const handleUninstallAgent = async () => {
+    if (!node) return;
+    setUninstallingAgent(true);
+    try {
+      await api.uninstallAgent(node.name);
+      setUninstallModalOpen(false);
+      setAgentToken("");
+      setStateToast({
+        message: `Agent uninstalled successfully for ${node.name}. Background cleanup initiated.`,
+        severity: "success",
+      });
+      await loadData();
+      await refreshFleetLive();
+      try {
+        await api.refreshNodeStatus(node.name);
+      } catch (_) {}
+    } catch (err: any) {
+      setStateToast({
+        message: `Failed to uninstall agent: ${err.message || err}`,
+        severity: "error",
+      });
+    } finally {
+      setUninstallingAgent(false);
+    }
+  };
+
+  const serverUrl = window.location.origin;
+  const currentToken = agentToken || node?.agent_token || "aaa";
+  const installSnippet = `curl ${serverUrl}/api/agent/install.sh | sh -s -- --token "${currentToken}"${overwriteConfig ? " --overwrite-config" : ""}`;
 
   // Fetch telemetry
   const fetchMetrics = useCallback(
@@ -1254,6 +1335,7 @@ export const NodeDetailPage: React.FC = () => {
             />
             <Tab value="routing" icon={<Radio size={16} />} iconPosition="start" label="Routing & BIRD" />
             <Tab value="firewall" icon={<Shield size={16} />} iconPosition="start" label="Firewall & Security" />
+            <Tab value="agent" icon={<Zap size={16} />} iconPosition="start" label="Agent" />
           </Tabs>
         </Box>
 
@@ -2328,6 +2410,293 @@ export const NodeDetailPage: React.FC = () => {
             </Paper>
           </Box>
         )}
+
+        {/* Tab 6: Agent Management */}
+        {currentTab === "agent" && node && (
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
+            {/* Status Hero Card */}
+            <Paper
+              elevation={0}
+              sx={{
+                p: 3,
+                borderRadius: 3,
+                bgcolor: "#FFFFFF",
+                border: "1px solid #E2E8F0",
+                display: "flex",
+                flexDirection: "column",
+                gap: 2.5,
+              }}
+            >
+              <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 1.5 }}>
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+                  <Box
+                    sx={{
+                      p: 1.2,
+                      borderRadius: 2,
+                      bgcolor: agentInstalled && isOnline ? "#ECFDF5" : agentInstalled ? "#FEF3C7" : "#F1F5F9",
+                      color: agentInstalled && isOnline ? "#059669" : agentInstalled ? "#D97706" : "#64748B",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <Zap size={22} />
+                  </Box>
+                  <Box>
+                    <Typography variant="h6" sx={{ fontWeight: 700, color: "#0F172A", lineHeight: 1.2 }}>
+                      Node Agent Management
+                    </Typography>
+                    <Typography variant="body2" sx={{ color: "#64748B", mt: 0.2 }}>
+                      Lightweight background daemon for zero-touch interface sync, real-time telemetry & execution
+                    </Typography>
+                  </Box>
+                </Box>
+
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                  {agentInstalled && (
+                    <Chip
+                      size="small"
+                      icon={
+                        <Box
+                          sx={{
+                            width: 8,
+                            height: 8,
+                            borderRadius: "50%",
+                            bgcolor: isOnline ? "#10B981" : "#EF4444",
+                            boxShadow: isOnline ? "0 0 8px #10B981" : "none",
+                            mr: -0.5,
+                          }}
+                        />
+                      }
+                      label={isOnline ? "Online & Connected" : "Disconnected"}
+                      sx={{
+                        fontWeight: 700,
+                        fontSize: "0.8rem",
+                        bgcolor: isOnline ? "#ECFDF5" : "#FEF2F2",
+                        color: isOnline ? "#059669" : "#DC2626",
+                        border: "1px solid",
+                        borderColor: isOnline ? "#A7F3D0" : "#FECDD3",
+                      }}
+                    />
+                  )}
+                  <Chip
+                    size="small"
+                    label={agentInstalled ? "Agent Installed" : "Not Installed (SSH Mode)"}
+                    sx={{
+                      fontWeight: 700,
+                      fontSize: "0.8rem",
+                      bgcolor: agentInstalled ? "#EEF2FF" : "#F8FAFC",
+                      color: agentInstalled ? "#4F46E5" : "#64748B",
+                      border: "1px solid",
+                      borderColor: agentInstalled ? "#C7D2FE" : "#E2E8F0",
+                    }}
+                  />
+                </Box>
+              </Box>
+
+              <Divider />
+
+              {/* Status Details Grid */}
+              <Grid container spacing={2}>
+                <Grid item xs={12} sm={6} md={3}>
+                  <Box sx={{ p: 2, bgcolor: "#F8FAFC", borderRadius: 2, border: "1px solid #E2E8F0" }}>
+                    <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600 }}>
+                      Installation Status
+                    </Typography>
+                    <Typography variant="body1" sx={{ fontWeight: 700, color: agentInstalled ? "#059669" : "#64748B", mt: 0.5 }}>
+                      {agentInstalled ? "Installed & Configured" : "Not Installed"}
+                    </Typography>
+                  </Box>
+                </Grid>
+
+                <Grid item xs={12} sm={6} md={3}>
+                  <Box sx={{ p: 2, bgcolor: "#F8FAFC", borderRadius: 2, border: "1px solid #E2E8F0" }}>
+                    <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600 }}>
+                      Agent Version
+                    </Typography>
+                    <Typography variant="body1" className="mono-font" sx={{ fontWeight: 700, color: "#0F172A", mt: 0.5 }}>
+                      {live?.agent_version || status?.agent_version || node?.agent_version
+                        ? `v${live?.agent_version || status?.agent_version || node?.agent_version}`
+                        : "Not Reported"}
+                    </Typography>
+                  </Box>
+                </Grid>
+
+                <Grid item xs={12} sm={6} md={3}>
+                  <Box sx={{ p: 2, bgcolor: "#F8FAFC", borderRadius: 2, border: "1px solid #E2E8F0" }}>
+                    <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600 }}>
+                      Operating Mode
+                    </Typography>
+                    <Typography variant="body1" sx={{ fontWeight: 700, color: "#4F46E5", mt: 0.5 }}>
+                      {node.mode === "agent" ? "Agent (WebSocket)" : "SSH Standard"}
+                    </Typography>
+                  </Box>
+                </Grid>
+
+                <Grid item xs={12} sm={6} md={3}>
+                  <Box sx={{ p: 2, bgcolor: "#F8FAFC", borderRadius: 2, border: "1px solid #E2E8F0" }}>
+                    <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600 }}>
+                      Last Communication
+                    </Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 600, color: "#0F172A", mt: 0.5 }}>
+                      {live?.last_seen || status?.last_seen || (node.agent_last_seen ? new Date(node.agent_last_seen).toLocaleString() : "Never")}
+                    </Typography>
+                  </Box>
+                </Grid>
+              </Grid>
+            </Paper>
+
+            {/* Install / Re-install Shell Snippet Card */}
+            <Paper elevation={0} sx={{ p: 3, borderRadius: 3, bgcolor: "#FFFFFF", border: "1px solid #E2E8F0" }}>
+              <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2, flexWrap: "wrap", gap: 1 }}>
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                  <Terminal size={18} color="#4F46E5" />
+                  <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#0F172A" }}>
+                    Install / Re-install Agent via Curl
+                  </Typography>
+                </Box>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  startIcon={generatingToken ? <CircularProgress size={14} /> : <RotateCcw size={14} />}
+                  onClick={handleRotateAgentToken}
+                  disabled={generatingToken}
+                  sx={{ fontSize: "0.78rem", textTransform: "none", color: "#4F46E5", borderColor: "#C7D2FE" }}
+                >
+                  {generatingToken ? "Generating..." : "Rotate Token"}
+                </Button>
+              </Box>
+
+              <Typography variant="body2" sx={{ color: "#64748B", mb: 2 }}>
+                Run the command below directly on the node via console or SSH. The installer script detects the CPU architecture (<code>x86_64</code>, <code>aarch64</code>, <code>armv7</code>, <code>mipsel</code>) and system service manager (<code>systemd</code>, <code>openrc</code>, <code>procd</code>) automatically.
+              </Typography>
+
+              {/* Overwrite config checkbox */}
+              <Box sx={{ mb: 2, p: 1.5, bgcolor: "#F8FAFC", borderRadius: 2, border: "1px solid #E2E8F0" }}>
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={overwriteConfig}
+                      onChange={(e) => setOverwriteConfig(e.target.checked)}
+                      sx={{
+                        color: "#94A3B8",
+                        "&.Mui-checked": {
+                          color: "#4F46E5",
+                        },
+                      }}
+                    />
+                  }
+                  label={
+                    <Box>
+                      <Typography variant="body2" sx={{ fontWeight: 600, color: "#0F172A" }}>
+                        Overwrite existing agent config
+                      </Typography>
+                      <Typography variant="caption" sx={{ color: "#64748B" }}>
+                        When unchecked (default), existing <code>/etc/easy42/agent.json</code> on the node is preserved.
+                      </Typography>
+                    </Box>
+                  }
+                />
+              </Box>
+
+              {/* Code Snippet Box */}
+              <Box
+                sx={{
+                  p: 2,
+                  borderRadius: 2.5,
+                  bgcolor: "#0F172A",
+                  color: "#F8FAFC",
+                  border: "1px solid #1E293B",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 2,
+                  flexWrap: { xs: "wrap", md: "nowrap" },
+                }}
+              >
+                <Box
+                  component="code"
+                  className="mono-font"
+                  sx={{
+                    wordBreak: "break-all",
+                    whiteSpace: "pre-wrap",
+                    color: "#38BDF8",
+                    fontSize: "0.85rem",
+                    flex: 1,
+                  }}
+                >
+                  {installSnippet}
+                </Box>
+                <Tooltip title={copiedKey === "agent_install" ? "Copied!" : "Copy Command"}>
+                  <Button
+                    size="small"
+                    variant="contained"
+                    startIcon={copiedKey === "agent_install" ? <Check size={14} /> : <Copy size={14} />}
+                    onClick={() => handleCopy("agent_install", installSnippet)}
+                    sx={{
+                      flexShrink: 0,
+                      bgcolor: copiedKey === "agent_install" ? "#059669" : "#4F46E5",
+                      "&:hover": {
+                        bgcolor: copiedKey === "agent_install" ? "#047857" : "#4338CA",
+                      },
+                      fontSize: "0.78rem",
+                      textTransform: "none",
+                      fontWeight: 600,
+                    }}
+                  >
+                    {copiedKey === "agent_install" ? "Copied" : "Copy Command"}
+                  </Button>
+                </Tooltip>
+              </Box>
+            </Paper>
+
+            {/* Uninstall Card */}
+            <Paper
+              elevation={0}
+              sx={{
+                p: 3,
+                borderRadius: 3,
+                bgcolor: "#FFFFFF",
+                border: "1px solid #FEE2E2",
+                display: "flex",
+                flexDirection: "column",
+                gap: 2,
+              }}
+            >
+              <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 1 }}>
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                  <Trash2 size={18} color="#DC2626" />
+                  <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#991B1B" }}>
+                    Uninstall Agent
+                  </Typography>
+                </Box>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  color="error"
+                  startIcon={<Trash2 size={15} />}
+                  onClick={() => setUninstallModalOpen(true)}
+                  sx={{
+                    fontWeight: 600,
+                    textTransform: "none",
+                    borderColor: "#FCA5A5",
+                    color: "#DC2626",
+                    "&:hover": {
+                      borderColor: "#DC2626",
+                      bgcolor: "#FEF2F2",
+                    },
+                  }}
+                >
+                  Uninstall agent
+                </Button>
+              </Box>
+
+              <Typography variant="body2" sx={{ color: "#64748B" }}>
+                Uninstalling removes the node's agent credentials and records from the Easy42 backend and resets the node mode to standard SSH. Easy42 will also attempt to SSH to the node in the background (best effort) to stop the agent service, delete init units, and remove <code>/usr/local/bin/easy42-agent</code> and <code>/etc/easy42/agent.json</code>.
+              </Typography>
+            </Paper>
+          </Box>
+        )}
       </Box>
 
       {/* BIRD Config Dialog */}
@@ -2466,6 +2835,56 @@ export const NodeDetailPage: React.FC = () => {
           </Button>
           <Button size="small" variant="contained" onClick={() => setViewingNftables(false)}>
             Close
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Uninstall Agent Dialog */}
+      <Dialog
+        open={uninstallModalOpen}
+        onClose={() => !uninstallingAgent && setUninstallModalOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            gap: 1.5,
+            borderBottom: "1px solid #E2E8F0",
+          }}
+        >
+          <Trash2 size={20} color="#DC2626" />
+          <Typography variant="h6" sx={{ fontWeight: 700, color: "#991B1B" }}>
+            Uninstall Agent: {node?.name}
+          </Typography>
+        </DialogTitle>
+        <DialogContent sx={{ pt: 2.5 }}>
+          <Alert severity="warning" sx={{ mb: 2, borderRadius: 2 }}>
+            This will immediately remove the agent token and mode records for <strong>{node?.name}</strong> from Easy42. If SSH is configured on this node, Easy42 will also execute a background best-effort cleanup to stop the service and remove agent files.
+          </Alert>
+          <Typography variant="body2" sx={{ color: "#475569" }}>
+            Are you sure you want to uninstall the agent from this node?
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, py: 1.5, borderTop: "1px solid #E2E8F0", bgcolor: "#F8FAFC" }}>
+          <Button
+            size="small"
+            variant="outlined"
+            onClick={() => setUninstallModalOpen(false)}
+            disabled={uninstallingAgent}
+          >
+            Cancel
+          </Button>
+          <Button
+            size="small"
+            variant="contained"
+            color="error"
+            onClick={handleUninstallAgent}
+            disabled={uninstallingAgent}
+            startIcon={uninstallingAgent ? <CircularProgress size={14} color="inherit" /> : <Trash2 size={14} />}
+          >
+            {uninstallingAgent ? "Uninstalling..." : "Uninstall Agent"}
           </Button>
         </DialogActions>
       </Dialog>
