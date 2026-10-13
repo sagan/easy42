@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"easy42/internal/crypto"
@@ -170,6 +171,13 @@ func (s *Store) Load() (*Config, error) {
 			cfg.NetworkSettings.FAASN = 4224420000
 		}
 	}
+	if faURL := strings.TrimSpace(cfg.NetworkSettings.FlapAlertedURL); faURL != "" {
+		cfg.NetworkSettings.FlapAlertedURL = faURL
+		cfg.NetworkSettings.FAURL = faURL
+	} else if faURL := strings.TrimSpace(cfg.NetworkSettings.FAURL); faURL != "" {
+		cfg.NetworkSettings.FlapAlertedURL = faURL
+		cfg.NetworkSettings.FAURL = faURL
+	}
 
 	s.config = &cfg
 	return &cfg, nil
@@ -210,6 +218,13 @@ func (s *Store) Save(cfg *Config) error {
 			cfg.NetworkSettings.FlapAlertedASN = 4224420000
 			cfg.NetworkSettings.FAASN = 4224420000
 		}
+	}
+	if faURL := strings.TrimSpace(cfg.NetworkSettings.FlapAlertedURL); faURL != "" {
+		cfg.NetworkSettings.FlapAlertedURL = faURL
+		cfg.NetworkSettings.FAURL = faURL
+	} else if faURL := strings.TrimSpace(cfg.NetworkSettings.FAURL); faURL != "" {
+		cfg.NetworkSettings.FlapAlertedURL = faURL
+		cfg.NetworkSettings.FAURL = faURL
 	}
 
 	data, err := json.MarshalIndent(cfg, "", "  ")

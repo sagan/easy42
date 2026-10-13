@@ -35,6 +35,16 @@ export interface NetworkSettings {
   fa_address?: string;
   fa_port?: number;
   fa_asn?: number;
+  flapalerted_url?: string;
+  fa_url?: string;
+}
+
+export interface FlapAlertedMetrics {
+  ActiveFlapCount: number;
+  ActiveFlapTotalPathChangeCount: number;
+  TotalPathChangeCount: number;
+  AverageRouteChanges90: string | number;
+  Sessions: number;
 }
 
 export interface CloudflareDNSConfig {

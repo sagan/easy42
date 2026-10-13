@@ -186,6 +186,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
   const [faAddress, setFaAddress] = useState("");
   const [faPort, setFaPort] = useState<number | "">(1790);
   const [faAsn, setFaAsn] = useState<number | "">(4224420000);
+  const [faUrl, setFaUrl] = useState("");
   const [networkLoading, setNetworkLoading] = useState(false);
   const [networkSaving, setNetworkSaving] = useState(false);
   const [networkError, setNetworkError] = useState<string | null>(null);
@@ -534,6 +535,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
             ? settings.fa_asn
             : 4224420000,
       );
+      setFaUrl(settings.flapalerted_url || settings.fa_url || "");
     } catch (err: unknown) {
       const e = err as Error;
       setNetworkError(e.message || "Failed to load network settings.");
@@ -560,6 +562,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
       fa_address: faAddress.trim() || undefined,
       fa_port: faPort === "" ? 1790 : Number(faPort),
       fa_asn: faAsn === "" ? 4224420000 : Number(faAsn),
+      flapalerted_url: faUrl.trim() || undefined,
+      fa_url: faUrl.trim() || undefined,
     };
 
     try {
@@ -1345,21 +1349,31 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                     </Typography>
                     <Typography variant="body2" sx={{ color: "#64748B", fontSize: "0.82rem" }}>
                       Deployed FA instance:{" "}
-                      {faAddress ? (
-                        <>
-                          <a
-                            href={`http://${faAddress.includes(":") ? "[" + faAddress + "]" : faAddress}:8699`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            style={{ color: "#4F46E5", textDecoration: "none", fontWeight: 600 }}
-                          >
-                            {faAddress.includes(":") ? `[${faAddress}]` : faAddress}:8699
-                          </a>
-                          &nbsp;(Click to Open Dashboard)
-                        </>
-                      ) : (
-                        "-"
-                      )}
+                      {(() => {
+                        const trimmedUrl = faUrl.trim();
+                        const effectiveUrl = trimmedUrl
+                          ? (trimmedUrl.startsWith("http://") || trimmedUrl.startsWith("https://")
+                              ? trimmedUrl
+                              : `http://${trimmedUrl}`)
+                          : faAddress.trim()
+                            ? `http://${faAddress.trim().includes(":") && !faAddress.trim().startsWith("[") ? `[${faAddress.trim()}]` : faAddress.trim()}:8699`
+                            : "";
+                        return effectiveUrl ? (
+                          <>
+                            <a
+                              href={effectiveUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              style={{ color: "#4F46E5", textDecoration: "none", fontWeight: 600 }}
+                            >
+                              {effectiveUrl}
+                            </a>
+                            &nbsp;(Click to Open Dashboard)
+                          </>
+                        ) : (
+                          "-"
+                        );
+                      })()}
                     </Typography>
 
                     <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "2fr 1fr 1fr" }, gap: 2 }}>
@@ -1396,6 +1410,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                         disabled={networkSaving}
                       />
                     </Box>
+
+                    <TextField
+                      fullWidth
+                      size="small"
+                      label="FlapAlerted URL"
+                      placeholder="e.g. http://[fd42:a159:f9f0:8000::c8]:8699 or https://fa.example.com"
+                      value={faUrl}
+                      onChange={(e) => setFaUrl(e.target.value)}
+                      helperText="Custom FlapAlerted web & metrics URL. If not set, derived from FlapAlerted address and port 8699."
+                      disabled={networkSaving}
+                    />
                   </Box>
                   <Box sx={{ display: "flex", justifyContent: "flex-end", pt: 1 }}>
                     <Button

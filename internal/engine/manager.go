@@ -4147,6 +4147,16 @@ func (m *Manager) UpdateNetworkSettings(settings config.NetworkSettings) error {
 			settings.FAASN = a
 		}
 	}
+	if faURL := strings.TrimSpace(settings.FlapAlertedURL); faURL != "" {
+		settings.FlapAlertedURL = faURL
+		settings.FAURL = faURL
+	} else if faURL := strings.TrimSpace(settings.FAURL); faURL != "" {
+		settings.FlapAlertedURL = faURL
+		settings.FAURL = faURL
+	} else {
+		settings.FlapAlertedURL = ""
+		settings.FAURL = ""
+	}
 	cfg.NetworkSettings = settings
 	return m.store.Save(cfg)
 }

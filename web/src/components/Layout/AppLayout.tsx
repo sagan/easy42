@@ -63,6 +63,7 @@ export const AppLayout: React.FC = () => {
     loadData,
     refreshFleetLive,
     flapAlertedUrl,
+    flapAlertedMetrics,
     updatingState,
     addNodeOpen,
     setAddNodeOpen,
@@ -219,33 +220,154 @@ export const AppLayout: React.FC = () => {
                 })}
 
                 {flapAlertedUrl && (
-                  <Tooltip title="Open FlapAlerted Dashboard">
-                    <Button
-                      component="a"
-                      href={flapAlertedUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      endIcon={<ExternalLink size={13} />}
-                      sx={{
-                        px: 1.6,
-                        py: 0.8,
-                        borderRadius: 2,
-                        fontSize: "0.85rem",
-                        fontWeight: 700,
-                        color: "#0891B2",
-                        bgcolor: "rgba(8, 145, 178, 0.08)",
-                        border: "1px solid rgba(8, 145, 178, 0.25)",
-                        textDecoration: "none",
-                        "&:hover": {
-                          bgcolor: "rgba(8, 145, 178, 0.16)",
-                          color: "#0e7490",
-                          borderColor: "#0891B2",
-                        },
-                      }}
-                    >
-                      FA
-                    </Button>
-                  </Tooltip>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 0.8 }}>
+                    <Tooltip title="Open FlapAlerted Dashboard">
+                      <Button
+                        component="a"
+                        href={flapAlertedUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        endIcon={<ExternalLink size={13} />}
+                        sx={{
+                          px: 1.6,
+                          py: 0.8,
+                          borderRadius: 2,
+                          fontSize: "0.85rem",
+                          fontWeight: 700,
+                          color: "#0891B2",
+                          bgcolor: "rgba(8, 145, 178, 0.08)",
+                          border: "1px solid rgba(8, 145, 178, 0.25)",
+                          textDecoration: "none",
+                          "&:hover": {
+                            bgcolor: "rgba(8, 145, 178, 0.16)",
+                            color: "#0e7490",
+                            borderColor: "#0891B2",
+                          },
+                        }}
+                      >
+                        FA
+                      </Button>
+                    </Tooltip>
+
+                    {flapAlertedMetrics && flapAlertedMetrics.AverageRouteChanges90 !== undefined && (
+                      <Tooltip
+                        arrow
+                        componentsProps={{
+                          tooltip: {
+                            sx: {
+                              bgcolor: "#0F172A",
+                              color: "#F8FAFC",
+                              boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.3), 0 8px 10px -6px rgba(0, 0, 0, 0.3)",
+                              p: 1.5,
+                              borderRadius: 2,
+                              border: "1px solid rgba(255, 255, 255, 0.1)",
+                              maxWidth: 280,
+                            },
+                          },
+                          arrow: {
+                            sx: { color: "#0F172A" },
+                          },
+                        }}
+                        title={
+                          <Box sx={{ display: "flex", flexDirection: "column", gap: 0.8 }}>
+                            <Box sx={{ display: "flex", alignItems: "center", gap: 1, pb: 0.8, borderBottom: "1px solid rgba(255, 255, 255, 0.1)" }}>
+                              <Activity size={15} color="#38BDF8" />
+                              <Typography variant="subtitle2" sx={{ fontWeight: 700, fontSize: "0.82rem", color: "#F8FAFC" }}>
+                                FlapAlerted Metrics
+                              </Typography>
+                            </Box>
+                            <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5, fontSize: "0.78rem" }}>
+                              <Box sx={{ display: "flex", justifyContent: "space-between", gap: 2 }}>
+                                <Typography variant="caption" sx={{ color: "#94A3B8" }}>Avg Route Changes (90m):</Typography>
+                                <Typography variant="caption" sx={{ fontWeight: 700, color: "#38BDF8" }}>
+                                  {flapAlertedMetrics.AverageRouteChanges90}
+                                </Typography>
+                              </Box>
+                              <Box sx={{ display: "flex", justifyContent: "space-between", gap: 2 }}>
+                                <Typography variant="caption" sx={{ color: "#94A3B8" }}>Active Flaps:</Typography>
+                                <Typography
+                                  variant="caption"
+                                  sx={{
+                                    fontWeight: 700,
+                                    color: (flapAlertedMetrics.ActiveFlapCount ?? 0) > 0 ? "#F87171" : "#4ADE80",
+                                  }}
+                                >
+                                  {flapAlertedMetrics.ActiveFlapCount ?? 0}
+                                </Typography>
+                              </Box>
+                              <Box sx={{ display: "flex", justifyContent: "space-between", gap: 2 }}>
+                                <Typography variant="caption" sx={{ color: "#94A3B8" }}>Active Flap Path Changes:</Typography>
+                                <Typography variant="caption" sx={{ fontWeight: 600, color: "#F1F5F9" }}>
+                                  {flapAlertedMetrics.ActiveFlapTotalPathChangeCount ?? 0}
+                                </Typography>
+                              </Box>
+                              <Box sx={{ display: "flex", justifyContent: "space-between", gap: 2 }}>
+                                <Typography variant="caption" sx={{ color: "#94A3B8" }}>Total Path Changes:</Typography>
+                                <Typography variant="caption" sx={{ fontWeight: 600, color: "#F1F5F9" }}>
+                                  {flapAlertedMetrics.TotalPathChangeCount ?? 0}
+                                </Typography>
+                              </Box>
+                              <Box sx={{ display: "flex", justifyContent: "space-between", gap: 2 }}>
+                                <Typography variant="caption" sx={{ color: "#94A3B8" }}>Sessions:</Typography>
+                                <Typography variant="caption" sx={{ fontWeight: 600, color: "#F1F5F9" }}>
+                                  {flapAlertedMetrics.Sessions ?? 0}
+                                </Typography>
+                              </Box>
+                            </Box>
+                          </Box>
+                        }
+                      >
+                        <Box
+                          component="a"
+                          href={flapAlertedUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          sx={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 0.5,
+                            px: 1.2,
+                            py: 0.7,
+                            borderRadius: 2,
+                            bgcolor: "rgba(8, 145, 178, 0.08)",
+                            border: "1px solid rgba(8, 145, 178, 0.25)",
+                            textDecoration: "none",
+                            cursor: "pointer",
+                            transition: "all 0.15s ease",
+                            "&:hover": {
+                              bgcolor: "rgba(8, 145, 178, 0.16)",
+                              borderColor: "#0891B2",
+                            },
+                          }}
+                        >
+                          <Box
+                            sx={{
+                              width: 6,
+                              height: 6,
+                              borderRadius: "50%",
+                              bgcolor: (flapAlertedMetrics.ActiveFlapCount ?? 0) > 0 ? "#EF4444" : "#10B981",
+                              boxShadow:
+                                (flapAlertedMetrics.ActiveFlapCount ?? 0) > 0
+                                  ? "0 0 6px rgba(239, 68, 68, 0.6)"
+                                  : "0 0 6px rgba(16, 185, 129, 0.6)",
+                            }}
+                          />
+                          <Typography
+                            component="span"
+                            sx={{
+                              fontSize: "0.85rem",
+                              fontWeight: 700,
+                              fontVariantNumeric: "tabular-nums",
+                              color: "#0891B2",
+                              lineHeight: 1,
+                            }}
+                          >
+                            {flapAlertedMetrics.AverageRouteChanges90}
+                          </Typography>
+                        </Box>
+                      </Tooltip>
+                    )}
+                  </Box>
                 )}
               </Box>
             )}
@@ -460,8 +582,27 @@ export const AppLayout: React.FC = () => {
                   </ListItemIcon>
                   <ListItemText
                     primary="FA Dashboard"
+                    secondary={
+                      flapAlertedMetrics?.AverageRouteChanges90 !== undefined
+                        ? `Avg Route Changes: ${flapAlertedMetrics.AverageRouteChanges90}`
+                        : undefined
+                    }
                     primaryTypographyProps={{ fontSize: "0.9rem", fontWeight: 700 }}
+                    secondaryTypographyProps={{ fontSize: "0.75rem", color: "#0891B2" }}
                   />
+                  {flapAlertedMetrics?.AverageRouteChanges90 !== undefined && (
+                    <Chip
+                      size="small"
+                      label={flapAlertedMetrics.AverageRouteChanges90}
+                      sx={{
+                        height: 20,
+                        fontSize: "0.72rem",
+                        fontWeight: 700,
+                        bgcolor: "rgba(8, 145, 178, 0.15)",
+                        color: "#0891B2",
+                      }}
+                    />
+                  )}
                 </ListItemButton>
               </ListItem>
             )}

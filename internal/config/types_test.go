@@ -99,6 +99,32 @@ func TestFlapAlertedSettings(t *testing.T) {
 	if aliasNS.GetFlapAlertedASN() != 4224420200 {
 		t.Errorf("Expected ASN 4224420200, got %d", aliasNS.GetFlapAlertedASN())
 	}
+
+	// Test URL derivation and custom URLs
+	if ns.GetFlapAlertedURL() != "http://[fd42:a159:f9f0:8000::c8]:8699" {
+		t.Errorf("Expected derived IPv6 URL http://[fd42:a159:f9f0:8000::c8]:8699, got %s", ns.GetFlapAlertedURL())
+	}
+	if aliasNS.GetFlapAlertedURL() != "http://10.0.0.5:8699" {
+		t.Errorf("Expected derived IPv4 URL http://10.0.0.5:8699, got %s", aliasNS.GetFlapAlertedURL())
+	}
+	if emptyNS.GetFlapAlertedURL() != "" {
+		t.Errorf("Expected empty URL when unconfigured, got %s", emptyNS.GetFlapAlertedURL())
+	}
+
+	customNS := NetworkSettings{
+		FlapAlertedAddress: "fd42:a159:f9f0:8000::c8",
+		FlapAlertedURL:     "https://fa.example.com",
+	}
+	if customNS.GetFlapAlertedURL() != "https://fa.example.com" {
+		t.Errorf("Expected custom URL https://fa.example.com, got %s", customNS.GetFlapAlertedURL())
+	}
+
+	customWithoutScheme := NetworkSettings{
+		FlapAlertedURL: "fa.example.com:8699",
+	}
+	if customWithoutScheme.GetFlapAlertedURL() != "http://fa.example.com:8699" {
+		t.Errorf("Expected custom URL with prepended http://, got %s", customWithoutScheme.GetFlapAlertedURL())
+	}
 }
 
 func TestNodeEnableFA(t *testing.T) {

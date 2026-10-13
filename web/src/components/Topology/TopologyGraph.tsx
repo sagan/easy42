@@ -225,6 +225,7 @@ export function getMaximumCliqueNodes(
 
 /**
  * Evaluates whether a WireGuard peer has an active/recent handshake (within 3 minutes).
+ * Allows future timestamps within a 5-minute clock skew window to handle client/server NTP drift.
  */
 export function isRecentHandshake(dateStr?: string): boolean {
   if (!dateStr) return false;
@@ -232,7 +233,7 @@ export function isRecentHandshake(dateStr?: string): boolean {
   if (isNaN(d) || d <= 0) return false;
   if (new Date(dateStr).getFullYear() < 2020) return false;
   const ageMs = Date.now() - d;
-  return ageMs >= 0 && ageMs <= 3 * 60 * 1000;
+  return ageMs >= -5 * 60 * 1000 && ageMs <= 3 * 60 * 1000;
 }
 
 /**

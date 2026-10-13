@@ -210,6 +210,10 @@ func New(cfg Config) *Server {
 			r.Put("/looking-glass/tasks/{id}", s.handleSaveLookingGlassTask)
 			r.Delete("/looking-glass/tasks/{id}", s.handleDeleteLookingGlassTask)
 			r.Post("/looking-glass/run", s.handleRunLookingGlass)
+
+			// FlapAlerted Metrics
+			r.Get("/flaps/metrics/stream", s.handleFlapAlertedMetricsStream)
+			r.Get("/flaps/metrics", s.handleFlapAlertedMetrics)
 		})
 	})
 

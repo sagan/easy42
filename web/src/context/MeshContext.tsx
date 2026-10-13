@@ -9,6 +9,7 @@ import {
   NetworkSettings,
   FleetLiveResponse,
   GraphBlock,
+  FlapAlertedMetrics,
 } from "../types/api";
 
 interface MeshContextType {
@@ -31,6 +32,7 @@ interface MeshContextType {
   networkSettings: NetworkSettings | null;
   refreshNetworkSettings: () => Promise<void>;
   flapAlertedUrl: string | null;
+  flapAlertedMetrics: FlapAlertedMetrics | null;
   fleetLive: FleetLiveResponse | null;
   loadingData: boolean;
   loadData: () => Promise<void>;
@@ -252,10 +254,75 @@ export const MeshProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const flapAlertedUrl = useMemo(() => {
+    let customUrl = (networkSettings?.flapalerted_url || networkSettings?.fa_url || "").trim();
+    if (customUrl) {
+      if (!customUrl.startsWith("http://") && !customUrl.startsWith("https://")) {
+        customUrl = `http://${customUrl}`;
+      }
+      return customUrl;
+    }
     const addr = (networkSettings?.flapalerted_address || networkSettings?.fa_address || "").trim();
     if (!addr) return null;
-    return `http://${addr.includes(":") ? `[${addr}]` : addr}:8699`;
+    return `http://${addr.includes(":") && !addr.startsWith("[") ? `[${addr}]` : addr}:8699`;
   }, [networkSettings]);
+
+  const [flapAlertedMetrics, setFlapAlertedMetrics] = useState<FlapAlertedMetrics | null>(null);
+
+  useEffect(() => {
+    if (!flapAlertedUrl || !authenticated) {
+      setFlapAlertedMetrics(null);
+      return;
+    }
+
+    let es: EventSource | null = null;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    let isCancelled = false;
+
+    const connect = () => {
+      if (isCancelled) return;
+      try {
+        es = new EventSource("/api/flaps/metrics/stream", { withCredentials: true });
+
+        es.onmessage = (event) => {
+          if (isCancelled) return;
+          try {
+            if (event.data) {
+              const data = JSON.parse(event.data);
+              setFlapAlertedMetrics(data);
+            }
+          } catch {
+            // Ignore invalid parse
+          }
+        };
+
+        es.onerror = () => {
+          if (isCancelled) return;
+          setFlapAlertedMetrics(null);
+          if (es) {
+            es.close();
+            es = null;
+          }
+          reconnectTimer = setTimeout(connect, 10000);
+        };
+      } catch {
+        setFlapAlertedMetrics(null);
+        if (!isCancelled) {
+          reconnectTimer = setTimeout(connect, 10000);
+        }
+      }
+    };
+
+    connect();
+
+    return () => {
+      isCancelled = true;
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      if (es) {
+        es.close();
+        es = null;
+      }
+    };
+  }, [flapAlertedUrl, authenticated]);
 
   const refreshFleetLive = useCallback(async (flush = false) => {
     try {
@@ -386,6 +453,7 @@ export const MeshProvider: React.FC<{ children: React.ReactNode }> = ({ children
     networkSettings,
     refreshNetworkSettings,
     flapAlertedUrl,
+    flapAlertedMetrics,
     fleetLive,
     loadingData,
     loadData,

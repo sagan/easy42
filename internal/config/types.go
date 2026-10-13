@@ -21,6 +21,8 @@ type NetworkSettings struct {
 	FAAddress              string   `json:"fa_address,omitempty"`               // Alias for flapalerted_address
 	FAPort                 int      `json:"fa_port,omitempty"`                  // Alias for flapalerted_port
 	FAASN                  uint64   `json:"fa_asn,omitempty"`                   // Alias for flapalerted_asn
+	FlapAlertedURL         string   `json:"flapalerted_url,omitempty"`          // FlapAlerted web/dashboard base URL
+	FAURL                  string   `json:"fa_url,omitempty"`                   // Alias for flapalerted_url
 }
 
 // GetFlapAlertedAddress returns the configured FlapAlerted IP address or alias
@@ -60,6 +62,31 @@ func (s *NetworkSettings) GetFlapAlertedASN() uint64 {
 		return s.FAASN
 	}
 	return 4224420000
+}
+
+// GetFlapAlertedURL returns the configured FlapAlerted URL or derives it from FlapAlertedAddress and port 8699
+func (s *NetworkSettings) GetFlapAlertedURL() string {
+	if s == nil {
+		return ""
+	}
+	raw := strings.TrimSpace(s.FlapAlertedURL)
+	if raw == "" {
+		raw = strings.TrimSpace(s.FAURL)
+	}
+	if raw != "" {
+		if !strings.HasPrefix(raw, "http://") && !strings.HasPrefix(raw, "https://") {
+			return "http://" + raw
+		}
+		return raw
+	}
+	addr := s.GetFlapAlertedAddress()
+	if addr == "" {
+		return ""
+	}
+	if strings.Contains(addr, ":") && !strings.HasPrefix(addr, "[") {
+		return fmt.Sprintf("http://[%s]:8699", addr)
+	}
+	return fmt.Sprintf("http://%s:8699", addr)
 }
 
 // Block represents a visual block grouping of nodes on the topology graph
