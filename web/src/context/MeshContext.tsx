@@ -94,7 +94,7 @@ interface MeshContextType {
   setStateToast: (toast: { message: string; severity: "success" | "warning" | "error" | "info" } | null) => void;
 }
 
-const MeshContext = createContext<MeshContextType | null>(null);
+export const MeshContext = createContext<MeshContextType | null>(null);
 
 export const MeshProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [checkingAuth, setCheckingAuth] = useState(true);

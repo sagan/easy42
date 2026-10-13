@@ -466,6 +466,7 @@ export interface TracerouteResult {
 export interface MTRHop {
   hop: number;
   host: string;
+  ip?: string;
   loss_pct: number;
   sent: number;
   last_ms: number;

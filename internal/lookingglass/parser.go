@@ -16,7 +16,7 @@ var (
 
 	// Traceroute regexes
 	traceHopRegex = regexp.MustCompile(`^\s*(\d+)\s+([^\s]+)\s+\(([\d\.:a-fA-F]+)\)(.*)$`)
-	traceTimeRegex = regexp.MustCompile(`([\d\.]+)\s+ms`)
+	traceTimeRegex = regexp.MustCompile(`([\d\.]+)\s*ms`)
 
 	// MTR report regex
 	mtrRowRegex = regexp.MustCompile(`^\s*(\d+)\.\|--\s+([^\s]+)\s+([\d\.]+)%\s+(\d+)\s+([\d\.]+)\s+([\d\.]+)\s+([\d\.]+)\s+([\d\.]+)\s+([\d\.]+)`)
@@ -347,13 +347,21 @@ func ParseTraceroute(raw string, target string) TracerouteResult {
 					times = append(times, val)
 				}
 			}
+			if len(times) == 0 {
+				for _, token := range strings.Fields(rest) {
+					token = strings.TrimSuffix(strings.TrimSuffix(token, "ms"), "s")
+					if val, err := strconv.ParseFloat(token, 64); err == nil {
+						times = append(times, val)
+					}
+				}
+			}
 
 			res.Hops = append(res.Hops, TracerouteHop{
 				Hop:      hopNum,
 				Host:     host,
 				IP:       ip,
 				Times:    times,
-				TimedOut: false,
+				TimedOut: len(times) == 0,
 			})
 			continue
 		}
@@ -371,6 +379,14 @@ func ParseTraceroute(raw string, target string) TracerouteResult {
 				if len(tm) > 1 {
 					val, _ := strconv.ParseFloat(tm[1], 64)
 					times = append(times, val)
+				}
+			}
+			if len(times) == 0 {
+				for _, token := range strings.Fields(rest) {
+					token = strings.TrimSuffix(strings.TrimSuffix(token, "ms"), "s")
+					if val, err := strconv.ParseFloat(token, 64); err == nil {
+						times = append(times, val)
+					}
 				}
 			}
 

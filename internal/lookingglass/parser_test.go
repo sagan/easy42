@@ -162,3 +162,34 @@ func TestParseTraceroute(t *testing.T) {
 		t.Errorf("unexpected hop 3: %+v", tr.Hops[2])
 	}
 }
+
+func TestParseTraceroute_NoSpaceAndNoDNS(t *testing.T) {
+	raw := `traceroute to 172.20.0.53 (172.20.0.53), 30 hops max
+  1   192.168.142.110  0.471ms  0.615ms  0.398ms 
+  2   192.168.142.207  47.114ms  47.273ms  48.445ms 
+  3   172.22.105.165  49.601ms  57.882ms  50.281ms 
+  4   172.22.105.168  49.273ms  54.201ms  50.791ms 
+  5   172.23.91.115  281.184ms  285.655ms  280.175ms 
+  6   172.31.254.118  288.902ms  289.497ms  289.443ms 
+  7   172.20.0.53  310.464ms  288.319ms  296.389ms 
+`
+	tr := ParseTraceroute(raw, "172.20.0.53")
+	if len(tr.Hops) != 7 {
+		t.Fatalf("expected 7 hops, got %d", len(tr.Hops))
+	}
+	for i, hop := range tr.Hops {
+		if hop.TimedOut {
+			t.Errorf("hop %d unexpectedly timed out", hop.Hop)
+		}
+		if len(hop.Times) != 3 {
+			t.Errorf("hop %d expected 3 times, got %d (%v)", hop.Hop, len(hop.Times), hop.Times)
+		}
+		if i == 0 && hop.IP != "192.168.142.110" {
+			t.Errorf("hop 1 expected IP 192.168.142.110, got %s", hop.IP)
+		}
+		if i == 6 && hop.IP != "172.20.0.53" {
+			t.Errorf("hop 7 expected IP 172.20.0.53, got %s", hop.IP)
+		}
+	}
+}
+

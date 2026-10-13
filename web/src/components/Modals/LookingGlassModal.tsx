@@ -730,9 +730,9 @@ export const LookingGlassModal: React.FC<LookingGlassModalProps> = ({
                       ) : activeResult.parser === "ping" ? (
                         <PingView ping={activeResult.parsed} />
                       ) : activeResult.parser === "traceroute" ? (
-                        <TracerouteView traceResult={activeResult.parsed} />
+                        <TracerouteView traceResult={activeResult.parsed} nodes={nodes} />
                       ) : activeResult.parser === "mtr" ? (
-                        <TracerouteView mtrResult={activeResult.parsed} />
+                        <TracerouteView mtrResult={activeResult.parsed} nodes={nodes} />
                       ) : (
                         <TerminalView
                           output={activeResult.raw_output}
