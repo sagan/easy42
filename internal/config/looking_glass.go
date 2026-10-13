@@ -9,6 +9,7 @@ const (
 	ParamTypeNumber   ParameterType = "number"
 	ParamTypeSelect   ParameterType = "select"
 	ParamTypeBoolean  ParameterType = "boolean"
+	ParamTypeHostPort ParameterType = "host_port"
 )
 
 // TaskParam defines a user-configurable parameter in a Looking Glass task
@@ -62,6 +63,34 @@ func DefaultLookingGlassTasks() []LookingGlassTask {
 					Label:        "Packet Count",
 					Type:         ParamTypeNumber,
 					Description:  "Number of echo requests to send (1-20)",
+					Required:     false,
+					DefaultValue: "4",
+				},
+			},
+		},
+		{
+			ID:          "tcp_ping",
+			Name:        "TCP Ping",
+			Description: "Test TCP port connectivity and measure handshake latency (Agent required)",
+			Category:    "Connectivity",
+			CommandTmpl: "tcp_ping {{target}} {{count}}",
+			Parser:      "tcp_ping",
+			TimeoutSec:  15,
+			IsBuiltin:   true,
+			Params: []TaskParam{
+				{
+					Key:          "target",
+					Label:        "Target (<host>:<port>)",
+					Type:         ParamTypeHostPort,
+					Description:  "Destination address e.g. 1.1.1.1:80, [2606:4700::1111]:443, or example.com:443",
+					Required:     true,
+					DefaultValue: "1.1.1.1:80",
+				},
+				{
+					Key:          "count",
+					Label:        "Probe Count",
+					Type:         ParamTypeNumber,
+					Description:  "Number of TCP connection attempts (1-20)",
 					Required:     false,
 					DefaultValue: "4",
 				},
@@ -197,7 +226,7 @@ func DefaultLookingGlassTasks() []LookingGlassTask {
 			Name:        "BIRD Status & Memory",
 			Description: "Show BIRD daemon status, uptime, router ID, and memory usage",
 			Category:    "BGP / Routing",
-			CommandTmpl: "birdc show status && echo '---' && birdc show memory",
+			CommandTmpl: "birdc show status",
 			Parser:      "raw",
 			TimeoutSec:  10,
 			IsBuiltin:   true,

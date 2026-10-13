@@ -2,6 +2,7 @@ package lookingglass
 
 import (
 	"bufio"
+	"encoding/json"
 	"math"
 	"regexp"
 	"strconv"
@@ -35,6 +36,8 @@ func ParseOutput(parser string, raw string, target string) interface{} {
 		return ParseTraceroute(raw, target)
 	case "mtr":
 		return ParseMTR(raw, target)
+	case "tcp_ping":
+		return ParseTCPPing(raw)
 	default:
 		return nil
 	}
@@ -440,3 +443,19 @@ func ParseMTR(raw string, target string) MTRResult {
 
 	return res
 }
+
+// ParseTCPPing parses the JSON output produced by the agent's TCP ping tool
+func ParseTCPPing(raw string) *TCPPingResult {
+	trimmed := strings.TrimSpace(raw)
+	start := strings.Index(trimmed, "{")
+	end := strings.LastIndex(trimmed, "}")
+	if start != -1 && end != -1 && end >= start {
+		trimmed = trimmed[start : end+1]
+	}
+	var res TCPPingResult
+	if err := json.Unmarshal([]byte(trimmed), &res); err != nil {
+		return nil
+	}
+	return &res
+}
+

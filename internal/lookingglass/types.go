@@ -130,3 +130,18 @@ type TasksResponse struct {
 	Builtin []config.LookingGlassTask `json:"builtin"`
 	Custom  []config.LookingGlassTask `json:"custom"`
 }
+
+// TCPPingResult represents parsed TCP ping results from agent
+type TCPPingResult struct {
+	Target          string    `json:"target"`
+	ResolvedAddr    string    `json:"resolved_addr"`
+	PacketsSent     int       `json:"packets_sent"`
+	PacketsReceived int       `json:"packets_received"`
+	PacketLossPct   float64   `json:"packet_loss_pct"`
+	MinRTT          float64   `json:"min_rtt_ms"`
+	AvgRTT          float64   `json:"avg_rtt_ms"`
+	MaxRTT          float64   `json:"max_rtt_ms"`
+	MdevRTT         float64   `json:"mdev_rtt_ms"`
+	RTTs            []float64 `json:"rtts"`
+}
+

@@ -3,9 +3,10 @@ use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::fs::{self, File};
 use std::io::Write;
+use std::net::{SocketAddr, TcpStream, ToSocketAddrs};
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use tracing::info;
 
 use crate::collector::proto;
@@ -432,6 +433,18 @@ done"#;
                     ),
                 }
             }
+            proto::looking_glass_cmd::Tool::TcpPing => {
+                // Native TCP ping: dial target, measure RTT, return JSON
+                let target = req.target.clone();
+                let timeout_secs = if req.timeout_seconds > 0 { req.timeout_seconds } else { 10 };
+                // Repeat count from args[0], default 4
+                let count: u32 = req.args.first()
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or(4)
+                    .min(20);
+
+                run_tcp_ping(&target, count, timeout_secs).await
+            }
         }
     }
 
@@ -481,6 +494,99 @@ done"#;
             ),
         }
     }
+}
+
+/// run_tcp_ping connects to `host:port` `count` times, measuring TCP handshake RTT each time.
+/// Returns JSON-encoded TCPPingResult on stdout, or an error message on stderr.
+async fn run_tcp_ping(target: &str, count: u32, timeout_secs: u32) -> (bool, i32, String, String) {
+    // Parse "host:port" or "[ipv6]:port"
+    let addrs: Vec<SocketAddr> = match target.to_socket_addrs() {
+        Ok(iter) => iter.collect(),
+        Err(e) => {
+            return (
+                false,
+                -1,
+                String::new(),
+                format!("failed to resolve '{}': {}", target, e),
+            )
+        }
+    };
+    if addrs.is_empty() {
+        return (
+            false,
+            -1,
+            String::new(),
+            format!("no addresses resolved for '{}'", target),
+        );
+    }
+    let addr = addrs[0];
+    let timeout = Duration::from_secs(timeout_secs as u64);
+
+    let mut rtts: Vec<f64> = Vec::new();
+    let mut failures: u32 = 0;
+
+    for _ in 0..count {
+        let addr_clone = addr;
+        let timeout_clone = timeout;
+        let probe_start = Instant::now();
+        let result = tokio::task::spawn_blocking(move || {
+            TcpStream::connect_timeout(&addr_clone, timeout_clone)
+        })
+        .await;
+
+        match result {
+            Ok(Ok(_stream)) => {
+                let rtt_ms = probe_start.elapsed().as_secs_f64() * 1000.0;
+                rtts.push(rtt_ms);
+            }
+            _ => {
+                failures += 1;
+            }
+        }
+
+        // Small pause between probes to avoid overwhelming the target
+        if count > 1 {
+            tokio::time::sleep(Duration::from_millis(200)).await;
+        }
+    }
+
+    let packets_sent = count;
+    let packets_received = rtts.len() as u32;
+    let loss_pct = if packets_sent > 0 {
+        (failures as f64 / packets_sent as f64) * 100.0
+    } else {
+        100.0
+    };
+
+    let (min_rtt, max_rtt, avg_rtt, mdev_rtt) = if !rtts.is_empty() {
+        let min = rtts.iter().cloned().fold(f64::INFINITY, f64::min);
+        let max = rtts.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+        let avg = rtts.iter().sum::<f64>() / rtts.len() as f64;
+        let variance = rtts.iter().map(|&r| (r - avg).powi(2)).sum::<f64>() / rtts.len() as f64;
+        let mdev = variance.sqrt();
+        (min, max, avg, mdev)
+    } else {
+        (0.0, 0.0, 0.0, 0.0)
+    };
+
+    // Build structured JSON output matching TCPPingResult on the server side
+    let json = format!(
+        r#"{{"target":"{target}","resolved_addr":"{addr}","packets_sent":{ps},"packets_received":{pr},"packet_loss_pct":{loss:.2},"min_rtt_ms":{min:.3},"avg_rtt_ms":{avg:.3},"max_rtt_ms":{max:.3},"mdev_rtt_ms":{mdev:.3},"rtts":[{rtts_json}]}}"#,
+        target = target,
+        addr = addr,
+        ps = packets_sent,
+        pr = packets_received,
+        loss = loss_pct,
+        min = min_rtt,
+        avg = avg_rtt,
+        max = max_rtt,
+        mdev = mdev_rtt,
+        rtts_json = rtts.iter().map(|r| format!("{:.3}", r)).collect::<Vec<_>>().join(","),
+    );
+
+    let success = packets_received > 0;
+    let exit_code = if success { 0 } else { 1 };
+    (success, exit_code, json, String::new())
 }
 
 async fn run_cmd(program: &str, args: &[&str]) -> (bool, i32, String, String) {

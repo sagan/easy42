@@ -67,6 +67,30 @@ func TestSanitizeParam(t *testing.T) {
 	if err == nil {
 		t.Errorf("expected error for invalid select option, got nil")
 	}
+	// HostPort test
+	hpParam := config.TaskParam{
+		Key:      "target",
+		Label:    "Target",
+		Type:     config.ParamTypeHostPort,
+		Required: true,
+	}
+	validHostPorts := []string{"1.1.1.1:80", "[2001:db8::1]:443", "example.com:8080"}
+	for _, hp := range validHostPorts {
+		res, err := SanitizeParam(hpParam, hp)
+		if err != nil {
+			t.Errorf("expected '%s' to be valid, got: %v", hp, err)
+		}
+		if res != hp {
+			t.Errorf("expected '%s', got '%s'", hp, res)
+		}
+	}
+
+	invalidHostPorts := []string{"1.1.1.1", "[2001:db8::1]", "1.1.1.1:99999", "1.1.1.1:0", "1.1.1.1:80; ls"}
+	for _, hp := range invalidHostPorts {
+		if _, err := SanitizeParam(hpParam, hp); err == nil {
+			t.Errorf("expected '%s' to be rejected, but it passed", hp)
+		}
+	}
 }
 
 func TestBuildCommand(t *testing.T) {
@@ -108,6 +132,7 @@ func TestValidateAdHocCommand(t *testing.T) {
 		"birdc show protocols",
 		"ip route get 1.1.1.1",
 		"whois -h whois.dn42 AS4242420000",
+		"tcp_ping 1.1.1.1:80 4",
 	}
 	for _, c := range valid {
 		if err := ValidateAdHocCommand(c); err != nil {
@@ -128,3 +153,4 @@ func TestValidateAdHocCommand(t *testing.T) {
 		}
 	}
 }
+

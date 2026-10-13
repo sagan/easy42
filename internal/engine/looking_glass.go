@@ -218,7 +218,21 @@ func (m *Manager) RunLookingGlass(ctx context.Context, req lookingglass.RunReque
 	var agentWg sync.WaitGroup
 	var agentMu sync.Mutex
 
+	isTCPPing := parser == "tcp_ping" || req.TaskID == "tcp_ping" || strings.HasPrefix(cmd, "tcp_ping ")
+
 	for _, node := range targetNodes {
+		if isTCPPing && !node.IsAgentMode() {
+			results[node.Name] = lookingglass.NodeResult{
+				NodeName:   node.Name,
+				Command:    cmd,
+				Parser:     parser,
+				ExitCode:   -1,
+				Error:      "TCP ping requires the easy42 agent to be running on the node",
+				DurationMs: 0,
+			}
+			continue
+		}
+
 		if node.IsAgentMode() {
 			agentWg.Add(1)
 			go func(n config.Node) {
@@ -236,13 +250,40 @@ func (m *Manager) RunLookingGlass(ctx context.Context, req lookingglass.RunReque
 				} else {
 					cmdCtx, cancel := context.WithTimeout(ctx, timeout)
 					defer cancel()
+
+					var lgCmd *agentpb.LookingGlassCmd
+					if isTCPPing {
+						countStr := "4"
+						target := targetVal
+						if req.Params != nil && req.Params["count"] != "" {
+							countStr = req.Params["count"]
+						}
+						if target == "" {
+							parts := strings.Fields(cmd)
+							if len(parts) > 1 {
+								target = parts[1]
+							}
+							if len(parts) > 2 {
+								countStr = parts[2]
+							}
+						}
+						lgCmd = &agentpb.LookingGlassCmd{
+							Tool:           agentpb.LookingGlassCmd_TCP_PING,
+							Target:         target,
+							Args:           []string{countStr},
+							TimeoutSeconds: uint32(timeout.Seconds()),
+						}
+					} else {
+						lgCmd = &agentpb.LookingGlassCmd{
+							Tool:           agentpb.LookingGlassCmd_CUSTOM,
+							Command:        cmd,
+							TimeoutSeconds: uint32(timeout.Seconds()),
+						}
+					}
+
 					resp, err := m.agentHub.SendCommand(cmdCtx, n.Name, &agentpb.CommandRequest{
 						Command: &agentpb.CommandRequest_LookingGlass{
-							LookingGlass: &agentpb.LookingGlassCmd{
-								Tool:           agentpb.LookingGlassCmd_CUSTOM,
-								Command:        cmd,
-								TimeoutSeconds: uint32(timeout.Seconds()),
-							},
+							LookingGlass: lgCmd,
 						},
 					})
 					nr.DurationMs = time.Since(start).Milliseconds()

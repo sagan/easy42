@@ -358,7 +358,7 @@ export interface TaskRunResult {
 }
 
 // Looking Glass Types
-export type ParameterType = "string" | "ip_or_cidr" | "number" | "select" | "boolean";
+export type ParameterType = "string" | "ip_or_cidr" | "number" | "select" | "boolean" | "host_port";
 
 export interface TaskParam {
   key: string;
@@ -446,6 +446,19 @@ export interface PingResult {
   max_rtt_ms: number;
   mdev_rtt_ms: number;
   packets?: PingPacket[];
+}
+
+export interface TcpPingResult {
+  target: string;
+  resolved_addr: string;
+  packets_sent: number;
+  packets_received: number;
+  packet_loss_pct: number;
+  min_rtt_ms: number;
+  avg_rtt_ms: number;
+  max_rtt_ms: number;
+  mdev_rtt_ms: number;
+  rtts: number[];
 }
 
 export interface TracerouteHop {

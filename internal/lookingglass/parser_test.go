@@ -193,3 +193,31 @@ func TestParseTraceroute_NoSpaceAndNoDNS(t *testing.T) {
 	}
 }
 
+func TestParseTCPPing(t *testing.T) {
+	raw := `{"target":"1.1.1.1:80","resolved_addr":"1.1.1.1:80","packets_sent":4,"packets_received":4,"packet_loss_pct":0.00,"min_rtt_ms":12.340,"avg_rtt_ms":14.500,"max_rtt_ms":16.780,"mdev_rtt_ms":1.620,"rtts":[12.340,14.500,16.780,14.380]}`
+	parsed := ParseTCPPing(raw)
+	if parsed == nil {
+		t.Fatalf("expected non-nil result from ParseTCPPing")
+	}
+	if parsed.Target != "1.1.1.1:80" {
+		t.Errorf("expected target 1.1.1.1:80, got %s", parsed.Target)
+	}
+	if parsed.PacketsSent != 4 || parsed.PacketsReceived != 4 {
+		t.Errorf("unexpected packet counts: sent=%d, recv=%d", parsed.PacketsSent, parsed.PacketsReceived)
+	}
+	if len(parsed.RTTs) != 4 {
+		t.Errorf("expected 4 RTT values, got %d", len(parsed.RTTs))
+	}
+
+	// Test via ParseOutput
+	res := ParseOutput("tcp_ping", raw, "1.1.1.1:80")
+	tcpRes, ok := res.(*TCPPingResult)
+	if !ok || tcpRes == nil {
+		t.Fatalf("expected *TCPPingResult from ParseOutput")
+	}
+	if tcpRes.AvgRTT != 14.500 {
+		t.Errorf("expected AvgRTT 14.500, got %f", tcpRes.AvgRTT)
+	}
+}
+
+

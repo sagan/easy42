@@ -155,6 +155,7 @@ message LookingGlassCmd {
     TRACEROUTE = 1;
     BIRDC = 2;
     CUSTOM = 3;
+    TCP_PING = 4;
   }
   Tool tool = 1;
   string target = 2;

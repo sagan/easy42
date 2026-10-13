@@ -41,6 +41,19 @@ func TestLookingGlassAPI(t *testing.T) {
 	if len(tasksResp.Builtin) == 0 {
 		t.Fatalf("expected built-in tasks, got 0")
 	}
+	foundTCPPing := false
+	for _, bt := range tasksResp.Builtin {
+		if bt.ID == "tcp_ping" {
+			foundTCPPing = true
+			if len(bt.Params) == 0 || bt.Params[0].Type != config.ParamTypeHostPort {
+				t.Fatalf("expected tcp_ping target param to have ParamTypeHostPort")
+			}
+			break
+		}
+	}
+	if !foundTCPPing {
+		t.Fatalf("expected tcp_ping in built-in tasks, but not found")
+	}
 
 	// 2. Create Custom Task
 	newTask := config.LookingGlassTask{

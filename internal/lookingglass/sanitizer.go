@@ -31,6 +31,7 @@ var (
 		"ip addr show",
 		"whois",
 		"dig",
+		"tcp_ping",
 	}
 )
 
@@ -104,6 +105,25 @@ func SanitizeParam(spec config.TaskParam, val string) (string, error) {
 			return "true", nil
 		}
 		return "false", nil
+
+	case config.ParamTypeHostPort:
+		host, portStr, err := net.SplitHostPort(val)
+		if err != nil {
+			return "", fmt.Errorf("parameter '%s' must be in <host>:<port> format: %v", spec.Label, err)
+		}
+		port, err := strconv.Atoi(portStr)
+		if err != nil || port < 1 || port > 65535 {
+			return "", fmt.Errorf("parameter '%s' must have a valid port between 1 and 65535", spec.Label)
+		}
+		if ip := net.ParseIP(host); ip == nil {
+			if !hostnameRegex.MatchString(host) {
+				return "", fmt.Errorf("parameter '%s' must be a valid IP address or hostname", spec.Label)
+			}
+		}
+		if strings.Contains(host, ":") {
+			return fmt.Sprintf("[%s]:%d", host, port), nil
+		}
+		return fmt.Sprintf("%s:%d", host, port), nil
 
 	case config.ParamTypeString:
 		fallthrough

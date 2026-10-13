@@ -79,10 +79,11 @@ func (ManageInterface_Action) EnumDescriptor() ([]byte, []int) {
 type LookingGlassCmd_Tool int32
 
 const (
-	LookingGlassCmd_PING       LookingGlassCmd_Tool = 0
+	LookingGlassCmd_PING      LookingGlassCmd_Tool = 0
 	LookingGlassCmd_TRACEROUTE LookingGlassCmd_Tool = 1
-	LookingGlassCmd_BIRDC      LookingGlassCmd_Tool = 2
-	LookingGlassCmd_CUSTOM     LookingGlassCmd_Tool = 3
+	LookingGlassCmd_BIRDC     LookingGlassCmd_Tool = 2
+	LookingGlassCmd_CUSTOM    LookingGlassCmd_Tool = 3
+	LookingGlassCmd_TCP_PING  LookingGlassCmd_Tool = 4
 )
 
 // Enum value maps for LookingGlassCmd_Tool.
@@ -92,12 +93,14 @@ var (
 		1: "TRACEROUTE",
 		2: "BIRDC",
 		3: "CUSTOM",
+		4: "TCP_PING",
 	}
 	LookingGlassCmd_Tool_value = map[string]int32{
 		"PING":       0,
 		"TRACEROUTE": 1,
 		"BIRDC":      2,
 		"CUSTOM":     3,
+		"TCP_PING":   4,
 	}
 )
 

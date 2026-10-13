@@ -17,19 +17,7 @@ import {
   Select,
   MenuItem,
 } from "@mui/material";
-import {
-  Play,
-  Terminal,
-  Settings2,
-  CheckCircle2,
-  XCircle,
-  Plus,
-  Edit3,
-  Trash2,
-  Eye,
-  Server,
-  Zap,
-} from "lucide-react";
+import { Play, Terminal, Settings2, CheckCircle2, XCircle, Plus, Edit3, Trash2, Eye, Server, Zap } from "lucide-react";
 import { api } from "../../api/client";
 import { Node, LookingGlassTask, LGRunRequest, LGRunResponse, LGNodeResult } from "../../types/api";
 import { TaskParamForm } from "../LookingGlass/TaskParamForm";
@@ -38,6 +26,7 @@ import { BirdProtocolsView } from "../LookingGlass/BirdProtocolsView";
 import { BirdRouteView } from "../LookingGlass/BirdRouteView";
 import { PingView } from "../LookingGlass/PingView";
 import { TracerouteView } from "../LookingGlass/TracerouteView";
+import { TcpPingView } from "../LookingGlass/TcpPingView";
 import { CustomTaskEditorModal } from "../LookingGlass/CustomTaskEditorModal";
 
 interface LookingGlassModalProps {
@@ -48,11 +37,7 @@ interface LookingGlassModalProps {
   initialTask?: string;
 }
 
-export const LookingGlassModal: React.FC<LookingGlassModalProps> = ({
-  nodes,
-  initialNode,
-  initialTask,
-}) => {
+export const LookingGlassModal: React.FC<LookingGlassModalProps> = ({ nodes, initialNode, initialTask }) => {
   // Navigation tabs: 0 = Presets, 1 = Ad-Hoc, 2 = Manage Tasks
   const [activeTab, setActiveTab] = useState<number>(0);
 
@@ -166,6 +151,10 @@ export const LookingGlassModal: React.FC<LookingGlassModalProps> = ({
         setAdHocCommand("ping -c 4 172.20.0.1");
         setAdHocParser("ping");
         break;
+      case "tcp_ping":
+        setAdHocCommand("tcp_ping 1.1.1.1:80 4");
+        setAdHocParser("tcp_ping");
+        break;
       case "traceroute":
         setAdHocCommand("traceroute -m 30 -w 2 172.20.0.1");
         setAdHocParser("traceroute");
@@ -198,16 +187,14 @@ export const LookingGlassModal: React.FC<LookingGlassModalProps> = ({
   // Node selection toggles
   const handleToggleNode = (nodeName: string) => {
     if (selectedNodes.includes(nodeName)) {
-      if (selectedNodes.length > 1) {
-        setSelectedNodes(selectedNodes.filter((n) => n !== nodeName));
-      }
+      setSelectedNodes(selectedNodes.filter((n) => n !== nodeName));
     } else {
       setSelectedNodes([...selectedNodes, nodeName]);
     }
   };
 
   const handleSelectAllFiltered = () => {
-    setSelectedNodes(filteredNodes.map((n) => n.name));
+    setSelectedNodes(selectedNodes.length === filteredNodes.length ? [] : filteredNodes.map((n) => n.name));
   };
 
   // Execute Looking Glass
@@ -277,7 +264,16 @@ export const LookingGlassModal: React.FC<LookingGlassModalProps> = ({
     runResponse && activeResultNode ? runResponse.results[activeResultNode] : undefined;
 
   return (
-    <Box sx={{ p: { xs: 1.5, sm: 2.5, md: 3 }, height: "100%", minHeight: 0, overflowY: "auto", display: "flex", flexDirection: "column" }}>
+    <Box
+      sx={{
+        p: { xs: 1.5, sm: 2.5, md: 3 },
+        height: "100%",
+        minHeight: 0,
+        overflowY: "auto",
+        display: "flex",
+        flexDirection: "column",
+      }}
+    >
       {/* Main Content Area */}
       <Paper
         elevation={0}
@@ -402,7 +398,7 @@ export const LookingGlassModal: React.FC<LookingGlassModalProps> = ({
                     onClick={handleSelectAllFiltered}
                     sx={{ fontSize: "0.75rem", textTransform: "none", ml: 1, py: 0 }}
                   >
-                    Select All
+                    {selectedNodes.length === filteredNodes.length ? "Deselect All" : "Select All"}
                   </Button>
                 </Box>
               </Box>
@@ -562,6 +558,7 @@ export const LookingGlassModal: React.FC<LookingGlassModalProps> = ({
                   </Typography>
                   {[
                     { id: "ping", label: "Ping" },
+                    { id: "tcp_ping", label: "TCP Ping" },
                     { id: "traceroute", label: "Traceroute" },
                     { id: "mtr", label: "MTR" },
                     { id: "bird_protocols", label: "BIRD Protocols" },
@@ -606,6 +603,7 @@ export const LookingGlassModal: React.FC<LookingGlassModalProps> = ({
                     >
                       <MenuItem value="raw">Raw Terminal</MenuItem>
                       <MenuItem value="ping">Ping Metrics</MenuItem>
+                      <MenuItem value="tcp_ping">TCP Ping Metrics</MenuItem>
                       <MenuItem value="traceroute">Traceroute</MenuItem>
                       <MenuItem value="mtr">MTR Report</MenuItem>
                       <MenuItem value="bird_protocols">BIRD Protocols</MenuItem>
@@ -729,6 +727,8 @@ export const LookingGlassModal: React.FC<LookingGlassModalProps> = ({
                         />
                       ) : activeResult.parser === "ping" ? (
                         <PingView ping={activeResult.parsed} />
+                      ) : activeResult.parser === "tcp_ping" ? (
+                        <TcpPingView tcpPing={activeResult.parsed} />
                       ) : activeResult.parser === "traceroute" ? (
                         <TracerouteView traceResult={activeResult.parsed} nodes={nodes} />
                       ) : activeResult.parser === "mtr" ? (

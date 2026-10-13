@@ -242,7 +242,7 @@ export const CustomTaskEditorModal: React.FC<CustomTaskEditorModalProps> = ({ op
             InputProps={{
               sx: { fontFamily: "monospace", fontSize: "0.85rem", backgroundColor: "#F8FAFC" },
             }}
-            helperText="Allowed command prefixes: ping, traceroute, mtr, birdc, ip route, whois, dig"
+            helperText="Allowed command prefixes: ping, tcp_ping, traceroute, mtr, birdc, ip route, whois, dig"
           />
         </Box>
 
@@ -260,6 +260,7 @@ export const CustomTaskEditorModal: React.FC<CustomTaskEditorModalProps> = ({ op
               <MenuItem value="bird_protocols">BIRD Protocols Table</MenuItem>
               <MenuItem value="bird_route">BIRD Route Visualizer</MenuItem>
               <MenuItem value="ping">ICMP Ping Metrics</MenuItem>
+              <MenuItem value="tcp_ping">TCP Ping Metrics</MenuItem>
               <MenuItem value="traceroute">Traceroute Hop Table</MenuItem>
               <MenuItem value="mtr">MTR Report Table</MenuItem>
             </Select>
@@ -358,6 +359,7 @@ export const CustomTaskEditorModal: React.FC<CustomTaskEditorModalProps> = ({ op
                     >
                       <MenuItem value="string">String</MenuItem>
                       <MenuItem value="ip_or_cidr">IP or CIDR</MenuItem>
+                      <MenuItem value="host_port">Host:Port (&lt;host&gt;:&lt;port&gt;)</MenuItem>
                       <MenuItem value="number">Number</MenuItem>
                       <MenuItem value="select">Select</MenuItem>
                       <MenuItem value="boolean">Boolean</MenuItem>
