@@ -485,7 +485,16 @@ func TestLocalNetworksForwardFilter(t *testing.T) {
 		PublicASN: 4242420000,
 	}
 
-	conf, err := GenerateNftablesConfig(&nodeBar, allNodes, links, netSettings)
+	builtins := config.GetBuiltinPolicies(netSettings)
+	var customPolicies []config.NetworkPolicy
+	for _, p := range builtins {
+		if p.ID == config.PolicyDN42 {
+			p.LocalNetworks = []string{"172.20.229.0/27", "fd42:a159:f9f0::/48"}
+			customPolicies = append(customPolicies, p)
+		}
+	}
+
+	conf, err := GenerateNftablesConfig(&nodeBar, allNodes, links, netSettings, customPolicies)
 	if err != nil {
 		t.Fatalf("GenerateNftablesConfig failed: %v", err)
 	}
