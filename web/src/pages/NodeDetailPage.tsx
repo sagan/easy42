@@ -153,6 +153,10 @@ export const NodeDetailPage: React.FC = () => {
       (prev) => {
         const next = new URLSearchParams(prev);
         next.set("tab", newValue);
+        if (newValue !== "cron_tasks") {
+          next.delete("task");
+          next.delete("taskId");
+        }
         return next;
       },
       { replace: true },
@@ -1005,7 +1009,7 @@ export const NodeDetailPage: React.FC = () => {
               <MenuItem
                 onClick={() => {
                   setMoreMenuAnchor(null);
-                  navigate(`/looking-glass?node=${encodeURIComponent(node?.name || "")}`);
+                  navigate(`/looking-glass/presets?node=${encodeURIComponent(node?.name || "")}`);
                 }}
                 sx={{ fontSize: "0.82rem", gap: 1.2, py: 1 }}
               >
@@ -1163,7 +1167,7 @@ export const NodeDetailPage: React.FC = () => {
                 variant="outlined"
                 size="small"
                 startIcon={<Compass size={15} />}
-                onClick={() => navigate(`/looking-glass?node=${encodeURIComponent(node?.name || "")}`)}
+                onClick={() => navigate(`/looking-glass/presets?node=${encodeURIComponent(node?.name || "")}`)}
                 sx={{
                   color: "#0891B2",
                   borderColor: "#CFFAFE",

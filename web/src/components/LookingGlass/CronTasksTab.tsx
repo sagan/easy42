@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Box,
   Typography,
@@ -7,7 +8,6 @@ import {
   Chip,
   Switch,
   IconButton,
-  Tooltip,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -26,16 +26,7 @@ import {
   TableBody,
   TableContainer,
 } from "@mui/material";
-import {
-  Clock,
-  Plus,
-  Trash2,
-  Edit2,
-  Play,
-  CheckCircle2,
-  Activity,
-  RefreshCw,
-} from "lucide-react";
+import { Clock, Plus, Trash2, Edit2, Play, CheckCircle2, Activity, RefreshCw } from "lucide-react";
 import { api } from "../../api/client";
 import type { CronTask, Node } from "../../types/api";
 
@@ -60,6 +51,7 @@ export const describeCronExpr = (expr: string): string => {
 };
 
 export const CronTasksTab: React.FC<CronTasksTabProps> = ({ nodes, onExecuteNow }) => {
+  const navigate = useNavigate();
   const [tasks, setTasks] = useState<CronTask[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -113,7 +105,8 @@ export const CronTasksTab: React.FC<CronTasksTabProps> = ({ nodes, onExecuteNow 
     setFormTimeout("15");
     setFormCronExpr("*/5 * * * *");
     // Default to first agent node or first available node
-    const defaultNode = availableNodes.find((n) => n.mode === "agent" || Boolean(n.agent_token))?.name || availableNodes[0]?.name;
+    const defaultNode =
+      availableNodes.find((n) => n.mode === "agent" || Boolean(n.agent_token))?.name || availableNodes[0]?.name;
     setFormNodes(defaultNode ? [defaultNode] : []);
     setFormError(null);
     setModalOpen(true);
@@ -296,9 +289,9 @@ export const CronTasksTab: React.FC<CronTasksTabProps> = ({ nodes, onExecuteNow 
           "& .MuiAlert-icon": { color: "#16A34A" },
         }}
       >
-        <strong>Agent-Driven Execution:</strong> Only <strong>Ping (ICMP)</strong> and{" "}
-        <strong>TCP Ping</strong> tasks are supported as cron tasks. Tasks run stateless in node agent memory and
-        stream latency & loss statistics back to easy42.
+        <strong>Agent-Driven Execution:</strong> Only <strong>Ping (ICMP)</strong> and <strong>TCP Ping</strong> tasks
+        are supported as cron tasks. Tasks run stateless in node agent memory and stream latency & loss statistics back
+        to easy42.
       </Alert>
 
       {error && (
@@ -334,8 +327,8 @@ export const CronTasksTab: React.FC<CronTasksTabProps> = ({ nodes, onExecuteNow 
             No Cron Tasks Configured
           </Typography>
           <Typography variant="body2" sx={{ color: "#64748B", mt: 0.5, maxWidth: 450, mx: "auto", mb: 2 }}>
-            Create automated recurring ping or TCP ping checks to continuously monitor connectivity and latency
-            across your nodes.
+            Create automated recurring ping or TCP ping checks to continuously monitor connectivity and latency across
+            your nodes.
           </Typography>
           <Button
             variant="contained"
@@ -370,12 +363,7 @@ export const CronTasksTab: React.FC<CronTasksTabProps> = ({ nodes, onExecuteNow 
               {tasks.map((task) => (
                 <TableRow key={task.id} hover sx={{ "&:last-child td, &:last-child th": { border: 0 } }}>
                   <TableCell>
-                    <Switch
-                      size="small"
-                      checked={task.enabled}
-                      onChange={() => handleToggle(task)}
-                      color="primary"
-                    />
+                    <Switch size="small" checked={task.enabled} onChange={() => handleToggle(task)} color="primary" />
                   </TableCell>
                   <TableCell>
                     <Box>
@@ -403,10 +391,7 @@ export const CronTasksTab: React.FC<CronTasksTabProps> = ({ nodes, onExecuteNow 
                     />
                   </TableCell>
                   <TableCell>
-                    <Typography
-                      variant="body2"
-                      sx={{ fontFamily: "monospace", fontWeight: 600, color: "#334155" }}
-                    >
+                    <Typography variant="body2" sx={{ fontFamily: "monospace", fontWeight: 600, color: "#334155" }}>
                       {task.params?.target || "—"}
                     </Typography>
                   </TableCell>
@@ -431,48 +416,70 @@ export const CronTasksTab: React.FC<CronTasksTabProps> = ({ nodes, onExecuteNow 
                   </TableCell>
                   <TableCell>
                     <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5, maxWidth: 220 }}>
-                      {task.nodes.map((nodeName) => (
-                        <Chip
-                          key={nodeName}
-                          size="small"
-                          label={nodeName}
-                          variant="outlined"
-                          sx={{ fontSize: "0.7rem", height: 22, borderColor: "#CBD5E1" }}
-                        />
-                      ))}
+                      {task.nodes && task.nodes.length > 0 ? (
+                        task.nodes.map((nodeName) => (
+                          <Chip
+                            size="small"
+                            title={`View task "${task.name}" on ${nodeName}`}
+                            label={nodeName}
+                            clickable
+                            onClick={() =>
+                              navigate(
+                                `/nodes/${encodeURIComponent(nodeName)}?tab=cron_tasks&task=${encodeURIComponent(task.id)}`,
+                              )
+                            }
+                            variant="outlined"
+                            sx={{
+                              fontSize: "0.7rem",
+                              height: 22,
+                              borderColor: "#CBD5E1",
+                              color: "#4F46E5",
+                              bgcolor: "#F8FAFC",
+                              cursor: "pointer",
+                              fontWeight: 500,
+                              "&:hover": {
+                                borderColor: "#818CF8",
+                                bgcolor: "#EEF2FF",
+                                color: "#3730A3",
+                              },
+                            }}
+                          />
+                        ))
+                      ) : (
+                        <Typography variant="caption" sx={{ color: "#94A3B8" }}>
+                          None
+                        </Typography>
+                      )}
                     </Box>
                   </TableCell>
                   <TableCell align="right">
                     <Box sx={{ display: "flex", justifyContent: "flex-end", gap: 0.5 }}>
                       {onExecuteNow && (
-                        <Tooltip title="Run now in Looking Glass">
-                          <IconButton
-                            size="small"
-                            onClick={() => onExecuteNow(task)}
-                            sx={{ color: "#4F46E5", "&:hover": { bgcolor: "#EEF2FF" } }}
-                          >
-                            <Play size={16} />
-                          </IconButton>
-                        </Tooltip>
+                        <IconButton
+                          size="small"
+                          title="Run now in Looking Glass"
+                          onClick={() => onExecuteNow(task)}
+                          sx={{ color: "#4F46E5", "&:hover": { bgcolor: "#EEF2FF" } }}
+                        >
+                          <Play size={16} />
+                        </IconButton>
                       )}
-                      <Tooltip title="Edit task">
-                        <IconButton
-                          size="small"
-                          onClick={() => openEditModal(task)}
-                          sx={{ color: "#64748B", "&:hover": { bgcolor: "#F1F5F9" } }}
-                        >
-                          <Edit2 size={16} />
-                        </IconButton>
-                      </Tooltip>
-                      <Tooltip title="Delete task">
-                        <IconButton
-                          size="small"
-                          onClick={() => handleDelete(task)}
-                          sx={{ color: "#DC2626", "&:hover": { bgcolor: "#FEE2E2" } }}
-                        >
-                          <Trash2 size={16} />
-                        </IconButton>
-                      </Tooltip>
+                      <IconButton
+                        size="small"
+                        title="Edit task"
+                        onClick={() => openEditModal(task)}
+                        sx={{ color: "#64748B", "&:hover": { bgcolor: "#F1F5F9" } }}
+                      >
+                        <Edit2 size={16} />
+                      </IconButton>
+                      <IconButton
+                        size="small"
+                        title="Delete task"
+                        onClick={() => handleDelete(task)}
+                        sx={{ color: "#DC2626", "&:hover": { bgcolor: "#FEE2E2" } }}
+                      >
+                        <Trash2 size={16} />
+                      </IconButton>
                     </Box>
                   </TableCell>
                 </TableRow>
@@ -553,7 +560,9 @@ export const CronTasksTab: React.FC<CronTasksTabProps> = ({ nodes, onExecuteNow 
               size="small"
               value={formTarget}
               onChange={(e) => setFormTarget(e.target.value)}
-              placeholder={formType === "tcp_ping" ? "e.g. 1.1.1.1:443 or example.com:80" : "e.g. 1.1.1.1 or example.com"}
+              placeholder={
+                formType === "tcp_ping" ? "e.g. 1.1.1.1:443 or example.com:80" : "e.g. 1.1.1.1 or example.com"
+              }
               helperText={
                 formType === "tcp_ping"
                   ? "Requires easy42-agent on nodes. Measures TCP handshake RTT."
@@ -702,8 +711,8 @@ export const CronTasksTab: React.FC<CronTasksTabProps> = ({ nodes, onExecuteNow 
               })}
             </Box>
             <Typography variant="caption" sx={{ color: "#64748B", display: "block", mt: 0.75 }}>
-              * Cron tasks are executed solely by node agents. If a node does not have an active agent, the task
-              will automatically execute once the agent comes online.
+              * Cron tasks are executed solely by node agents. If a node does not have an active agent, the task will
+              automatically execute once the agent comes online.
             </Typography>
           </Box>
         </DialogContent>

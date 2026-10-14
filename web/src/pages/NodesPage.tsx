@@ -1097,7 +1097,7 @@ export const NodesPage: React.FC = () => {
                           size="small"
                           onClick={(e) => {
                             e.stopPropagation();
-                            navigate(`/looking-glass?node=${encodeURIComponent(n.name)}`);
+                            navigate(`/looking-glass/presets?node=${encodeURIComponent(n.name)}`);
                           }}
                           sx={{
                             color: "#0891B2",
@@ -1465,7 +1465,7 @@ export const NodesPage: React.FC = () => {
                       <Tooltip title="Looking Glass">
                         <IconButton
                           size="small"
-                          onClick={() => navigate(`/looking-glass?node=${encodeURIComponent(n.name)}`)}
+                          onClick={() => navigate(`/looking-glass/presets?node=${encodeURIComponent(n.name)}`)}
                           sx={{ color: "#0891B2" }}
                         >
                           <Compass size={16} />

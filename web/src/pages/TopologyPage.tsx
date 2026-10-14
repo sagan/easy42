@@ -230,7 +230,7 @@ export const TopologyPage: React.FC = () => {
         onStatusRefreshed={() => loadData()}
         onOpenDetails={(name) => navigate(`/nodes/${encodeURIComponent(name)}`)}
         onOpenHelper={(name) => navigate(`/helper?node=${encodeURIComponent(name)}`)}
-        onOpenLookingGlass={(name) => navigate(`/looking-glass?node=${encodeURIComponent(name)}`)}
+        onOpenLookingGlass={(name) => navigate(`/looking-glass/presets?node=${encodeURIComponent(name)}`)}
         onUpdateNodeState={(name) => handleUpdateState(name)}
         onSyncNode={(name) => {
           setSyncTargetNode(name);

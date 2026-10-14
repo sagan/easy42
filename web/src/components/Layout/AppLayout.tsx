@@ -101,7 +101,7 @@ export const AppLayout: React.FC = () => {
   const navItems = [
     { label: "Nodes", path: "/nodes", icon: <Server size={18} /> },
     { label: "Topology", path: "/topology", icon: <Network size={18} /> },
-    { label: isMobile ? "LG" : "Looking Glass", path: "/looking-glass", icon: <Compass size={18} /> },
+    { label: isMobile ? "LG" : "Looking Glass", path: "/looking-glass/presets", icon: <Compass size={18} /> },
     { label: isMobile ? "Helper" : "Device Helper", path: "/helper", icon: <Wrench size={18} /> },
     { label: "Settings", path: "/settings", icon: <Settings size={18} /> },
   ];

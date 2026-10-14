@@ -1180,7 +1180,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                     sx={{
                       background: "linear-gradient(135deg, #4F46E5 0%, #3730A3 100%)",
                       fontWeight: 700,
-                      color: "#FFFFFF",
                     }}
                   >
                     {passwordLoading ? "Updating Password..." : "Change Password"}
@@ -1427,9 +1426,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                       {(() => {
                         const trimmedUrl = faUrl.trim();
                         const effectiveUrl = trimmedUrl
-                          ? (trimmedUrl.startsWith("http://") || trimmedUrl.startsWith("https://")
-                              ? trimmedUrl
-                              : `http://${trimmedUrl}`)
+                          ? trimmedUrl.startsWith("http://") || trimmedUrl.startsWith("https://")
+                            ? trimmedUrl
+                            : `http://${trimmedUrl}`
                           : faAddress.trim()
                             ? `http://${faAddress.trim().includes(":") && !faAddress.trim().startsWith("[") ? `[${faAddress.trim()}]` : faAddress.trim()}:8699`
                             : "";
@@ -3294,13 +3293,22 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                   </Typography>
                   <Typography variant="caption" sx={{ color: "#64748B" }}>
                     Append custom BIRD routing daemon configuration snippets to the peer's IPv4 &amp; IPv6 import and
-                    export filter blocks (e.g. matching/adding/stripping BGP communities, modifying bgp_local_pref, or AS-path prepending).
+                    export filter blocks (e.g. matching/adding/stripping BGP communities, modifying bgp_local_pref, or
+                    AS-path prepending).
                   </Typography>
                 </Box>
 
                 {/* Import Filter */}
                 <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
-                  <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 1 }}>
+                  <Box
+                    sx={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      flexWrap: "wrap",
+                      gap: 1,
+                    }}
+                  >
                     <Typography variant="body2" sx={{ fontWeight: 600, color: "#334155" }}>
                       BIRD Import Filter Snippet
                     </Typography>
@@ -3359,7 +3367,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
 
                 {/* Export Filter */}
                 <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
-                  <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 1 }}>
+                  <Box
+                    sx={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      flexWrap: "wrap",
+                      gap: 1,
+                    }}
+                  >
                     <Typography variant="body2" sx={{ fontWeight: 600, color: "#334155" }}>
                       BIRD Export Filter Snippet
                     </Typography>
@@ -3542,17 +3558,50 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                   maxRows={26}
                   value={templateContent}
                   onChange={(e) => setTemplateContent(e.target.value)}
-                  disabled={templateDialogMode === "view" || templateDialogSaving}
+                  disabled={templateDialogSaving}
+                  InputProps={{
+                    readOnly: templateDialogMode === "view",
+                  }}
                   fullWidth
+                  sx={{
+                    "& .MuiInputBase-root": {
+                      backgroundColor: "#0F172A",
+                      borderRadius: "6px",
+                      p: 1.5,
+                      border: "1px solid #334155",
+                      "&:hover": {
+                        borderColor: templateDialogMode === "view" ? "#334155" : "#64748B",
+                      },
+                      "&.Mui-focused": {
+                        borderColor: "#6366F1",
+                      },
+                      "&.Mui-disabled": {
+                        backgroundColor: "#0F172A",
+                      },
+                    },
+                    "& .MuiOutlinedInput-notchedOutline": {
+                      border: "none",
+                    },
+                    "& .MuiInputBase-input": {
+                      fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+                      fontSize: "0.82rem",
+                      lineHeight: 1.5,
+                      color: "#F8FAFC !important",
+                      WebkitTextFillColor: "#F8FAFC !important",
+                      p: 0,
+                    },
+                    "& .MuiInputBase-input.Mui-disabled": {
+                      color: "#94A3B8 !important",
+                      WebkitTextFillColor: "#94A3B8 !important",
+                    },
+                  }}
                   inputProps={{
                     style: {
-                      fontFamily: "monospace",
-                      fontSize: "0.8rem",
-                      lineHeight: 1.45,
-                      backgroundColor: "#0F172A",
+                      fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+                      fontSize: "0.82rem",
+                      lineHeight: 1.5,
                       color: "#F8FAFC",
-                      padding: "12px",
-                      borderRadius: "6px",
+                      WebkitTextFillColor: "#F8FAFC",
                     },
                   }}
                 />

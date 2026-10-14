@@ -35,7 +35,7 @@ import {
   ExternalLink,
   ArrowUpRight,
 } from "lucide-react";
-import { Link as RouterLink } from "react-router-dom";
+import { Link as RouterLink, useSearchParams } from "react-router-dom";
 import { api } from "../../api/client";
 import type {
   CronTaskResultRecord,
@@ -47,8 +47,11 @@ interface NodeCronTasksTabProps {
 }
 
 export const NodeCronTasksTab: React.FC<NodeCronTasksTabProps> = ({ nodeName }) => {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [range, setRange] = useState<string>("24h");
-  const [selectedTask, setSelectedTask] = useState<string>("");
+  const [selectedTask, setSelectedTask] = useState<string>(
+    () => searchParams.get("task") || searchParams.get("taskId") || ""
+  );
   const [viewMode, setViewMode] = useState<"both" | "charts" | "table">("both");
 
   const [loading, setLoading] = useState<boolean>(true);
@@ -58,6 +61,31 @@ export const NodeCronTasksTab: React.FC<NodeCronTasksTabProps> = ({ nodeName }) 
   // Raw output modal state
   const [inspectRecord, setInspectRecord] = useState<CronTaskResultRecord | null>(null);
   const [copied, setCopied] = useState(false);
+
+  // Sync selectedTask if URL query params change (e.g. browser back/forward or external navigation)
+  useEffect(() => {
+    const paramTask = searchParams.get("task") || searchParams.get("taskId") || "";
+    if (paramTask !== selectedTask) {
+      setSelectedTask(paramTask);
+    }
+  }, [searchParams]);
+
+  const handleTaskChange = (taskId: string) => {
+    setSelectedTask(taskId);
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (taskId) {
+          next.set("task", taskId);
+        } else {
+          next.delete("task");
+          next.delete("taskId");
+        }
+        return next;
+      },
+      { replace: true }
+    );
+  };
 
   const fetchData = async () => {
     setLoading(true);
@@ -148,7 +176,7 @@ export const NodeCronTasksTab: React.FC<NodeCronTasksTabProps> = ({ nodeName }) 
               labelId="task-filter-select-label"
               value={selectedTask}
               label="Filter by Task"
-              onChange={(e) => setSelectedTask(e.target.value)}
+              onChange={(e) => handleTaskChange(e.target.value)}
               sx={{ bgcolor: "#F8FAFC" }}
             >
               <MenuItem value="">
@@ -159,6 +187,11 @@ export const NodeCronTasksTab: React.FC<NodeCronTasksTabProps> = ({ nodeName }) 
                   {t.name} ({t.task_type === "tcp_ping" ? "TCP" : "ICMP"})
                 </MenuItem>
               ))}
+              {selectedTask && !assignedTasks.some((t) => t.id === selectedTask) && (
+                <MenuItem value={selectedTask}>
+                  <em>Task ({selectedTask})</em>
+                </MenuItem>
+              )}
             </Select>
           </FormControl>
         </Box>
@@ -233,7 +266,7 @@ export const NodeCronTasksTab: React.FC<NodeCronTasksTabProps> = ({ nodeName }) 
 
           <Button
             component={RouterLink}
-            to="/looking-glass"
+            to="/looking-glass/cron"
             size="small"
             variant="outlined"
             startIcon={<ExternalLink size={14} />}
@@ -435,7 +468,7 @@ export const NodeCronTasksTab: React.FC<NodeCronTasksTabProps> = ({ nodeName }) 
           </Typography>
           <Button
             component={RouterLink}
-            to="/looking-glass"
+            to="/looking-glass/cron"
             variant="contained"
             sx={{ bgcolor: "#4F46E5", textTransform: "none", fontWeight: 600 }}
           >

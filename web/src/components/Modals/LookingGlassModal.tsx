@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
+import { useParams, useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import {
   Box,
   Typography,
@@ -30,6 +31,34 @@ import { TcpPingView } from "../LookingGlass/TcpPingView";
 import { CustomTaskEditorModal } from "../LookingGlass/CustomTaskEditorModal";
 import { CronTasksTab } from "../LookingGlass/CronTasksTab";
 
+export type LookingGlassTab = "presets" | "adhoc" | "manage" | "cron";
+
+export const VALID_LG_TABS: Record<string, LookingGlassTab> = {
+  presets: "presets",
+  preset: "presets",
+  adhoc: "adhoc",
+  "ad-hoc": "adhoc",
+  manage: "manage",
+  "manage-tasks": "manage",
+  tasks: "manage",
+  cron: "cron",
+  "cron-tasks": "cron",
+};
+
+export const TAB_TO_INDEX: Record<LookingGlassTab, number> = {
+  presets: 0,
+  adhoc: 1,
+  manage: 2,
+  cron: 3,
+};
+
+export const INDEX_TO_TAB: Record<number, LookingGlassTab> = {
+  0: "presets",
+  1: "adhoc",
+  2: "manage",
+  3: "cron",
+};
+
 interface LookingGlassModalProps {
   open?: boolean;
   onClose?: () => void;
@@ -39,8 +68,28 @@ interface LookingGlassModalProps {
 }
 
 export const LookingGlassModal: React.FC<LookingGlassModalProps> = ({ nodes, initialNode, initialTask }) => {
-  // Navigation tabs: 0 = Presets, 1 = Ad-Hoc, 2 = Manage Tasks
-  const [activeTab, setActiveTab] = useState<number>(0);
+  const { tab } = useParams<{ tab?: string }>();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
+
+  // Route-based active tab (0 = Presets, 1 = Ad-Hoc, 2 = Manage Tasks, 3 = Cron Tasks)
+  const currentTab: LookingGlassTab = (tab && VALID_LG_TABS[tab]) || "presets";
+  const activeTab: number = TAB_TO_INDEX[currentTab];
+
+  // Canonicalize or redirect /looking-glass or aliases to /looking-glass/<tab>, preserving query parameters
+  useEffect(() => {
+    if (!tab || !VALID_LG_TABS[tab]) {
+      navigate(`/looking-glass/presets${location.search}`, { replace: true });
+    } else if (tab !== VALID_LG_TABS[tab]) {
+      navigate(`/looking-glass/${VALID_LG_TABS[tab]}${location.search}`, { replace: true });
+    }
+  }, [tab, location.search, navigate]);
+
+  const handleTabChange = (val: number) => {
+    const nextTab = INDEX_TO_TAB[val] || "presets";
+    navigate(`/looking-glass/${nextTab}`);
+  };
 
   // Managed nodes (exclude external)
   const managedNodes = useMemo(() => {
@@ -66,14 +115,57 @@ export const LookingGlassModal: React.FC<LookingGlassModalProps> = ({ nodes, ini
     return managedNodes.filter((n) => n.tags && n.tags.includes(selectedTag));
   }, [managedNodes, selectedTag]);
 
-  // Selected node names
+  // Selected node names (restored from URL params or default)
   const [selectedNodes, setSelectedNodes] = useState<string[]>([]);
+  const hasInitializedNodes = useRef(false);
+  const lastParamNodesRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (managedNodes.length === 0) return;
+
+    const nodesParam = searchParams.get("nodes");
+    const nodeParam = searchParams.get("node") || initialNode;
+    const currentParamKey = nodesParam ? `nodes:${nodesParam}` : nodeParam ? `node:${nodeParam}` : null;
+
+    if (!hasInitializedNodes.current) {
+      hasInitializedNodes.current = true;
+      lastParamNodesRef.current = currentParamKey;
+      let queryNodes: string[] = [];
+      if (nodesParam) {
+        queryNodes = nodesParam.split(",").map((s) => s.trim()).filter(Boolean);
+      } else if (nodeParam) {
+        queryNodes = [nodeParam.trim()].filter(Boolean);
+      }
+      if (queryNodes.length > 0) {
+        const valid = queryNodes.filter((q) => managedNodes.some((m) => m.name === q));
+        if (valid.length > 0) {
+          setSelectedNodes(valid);
+          return;
+        }
+      }
+      setSelectedNodes([managedNodes[0].name]);
+    } else if (currentParamKey && currentParamKey !== lastParamNodesRef.current) {
+      lastParamNodesRef.current = currentParamKey;
+      let queryNodes: string[] = [];
+      if (nodesParam) {
+        queryNodes = nodesParam.split(",").map((s) => s.trim()).filter(Boolean);
+      } else if (nodeParam) {
+        queryNodes = [nodeParam.trim()].filter(Boolean);
+      }
+      const valid = queryNodes.filter((q) => managedNodes.some((m) => m.name === q));
+      if (valid.length > 0) {
+        setSelectedNodes(valid);
+      }
+    }
+  }, [managedNodes, searchParams, initialNode]);
 
   // Task Catalog
   const [builtinTasks, setBuiltinTasks] = useState<LookingGlassTask[]>([]);
   const [customTasks, setCustomTasks] = useState<LookingGlassTask[]>([]);
   const [, setLoadingTasks] = useState(false);
-  const [selectedTaskId, setSelectedTaskId] = useState<string>("ping");
+  const [selectedTaskId, setSelectedTaskId] = useState<string>(
+    () => searchParams.get("task") || initialTask || "ping"
+  );
 
   // Selected task object
   const selectedTask = useMemo(() => {
@@ -84,10 +176,25 @@ export const LookingGlassModal: React.FC<LookingGlassModalProps> = ({ nodes, ini
   // Task Parameters state: map[key]value
   const [paramValues, setParamValues] = useState<Record<string, string>>({});
 
-  // Ad-Hoc command state
-  const [adHocTool, setAdHocTool] = useState<string>("ping");
-  const [adHocCommand, setAdHocCommand] = useState<string>("ping -c 4 172.20.0.1");
-  const [adHocParser, setAdHocParser] = useState<string>("ping");
+  // Ad-Hoc command state (initialized from URL if present)
+  const [adHocTool, setAdHocTool] = useState<string>(() => searchParams.get("tool") || "ping");
+  const [adHocCommand, setAdHocCommand] = useState<string>(
+    () => searchParams.get("cmd") || searchParams.get("command") || "ping -c 4 172.20.0.1"
+  );
+  const [adHocParser, setAdHocParser] = useState<string>(
+    () => searchParams.get("parser") || searchParams.get("visualizer") || "ping"
+  );
+
+  useEffect(() => {
+    if (currentTab === "adhoc") {
+      const cmd = searchParams.get("cmd") || searchParams.get("command");
+      const parser = searchParams.get("parser") || searchParams.get("visualizer");
+      const tool = searchParams.get("tool");
+      if (cmd !== null) setAdHocCommand(cmd);
+      if (parser !== null) setAdHocParser(parser);
+      if (tool !== null) setAdHocTool(tool);
+    }
+  }, [currentTab, searchParams]);
 
   // Task execution state
   const [running, setRunning] = useState(false);
@@ -116,29 +223,20 @@ export const LookingGlassModal: React.FC<LookingGlassModalProps> = ({ nodes, ini
 
   useEffect(() => {
     loadTasks();
-    setError(null);
-    setRunResponse(null);
-    setActiveResultNode(null);
+  }, []);
 
-    // Set initial node
-    if (initialNode && managedNodes.some((n) => n.name === initialNode)) {
-      setSelectedNodes([initialNode]);
-    } else if (managedNodes.length > 0 && selectedNodes.length === 0) {
-      setSelectedNodes([managedNodes[0].name]);
-    }
-
-    // Set initial task
-    if (initialTask) {
-      setSelectedTaskId(initialTask);
-    }
-  }, [initialNode, initialTask, managedNodes]);
-
-  // Sync param defaults when selected task changes
+  // Sync param defaults when selected task changes or on initial load with URL parameters
   useEffect(() => {
     if (selectedTask && selectedTask.params) {
+      const urlTask = searchParams.get("task") || initialTask;
+      const isFromUrl = !urlTask || urlTask === selectedTask.id;
       const defaults: Record<string, string> = {};
       selectedTask.params.forEach((p) => {
-        defaults[p.key] = p.default_value || "";
+        if (isFromUrl && searchParams.has(p.key)) {
+          defaults[p.key] = searchParams.get(p.key)!;
+        } else {
+          defaults[p.key] = p.default_value || "";
+        }
       });
       setParamValues(defaults);
     }
@@ -203,6 +301,44 @@ export const LookingGlassModal: React.FC<LookingGlassModalProps> = ({ nodes, ini
     if (selectedNodes.length === 0) {
       setError("Please select at least one target node");
       return;
+    }
+
+    // Sync current tab form values to URL query variables ONLY on Run Looking Glass
+    const newParams = new URLSearchParams();
+    if (selectedNodes.length > 1) {
+      newParams.set("nodes", selectedNodes.join(","));
+    } else if (selectedNodes.length === 1) {
+      newParams.set("node", selectedNodes[0]);
+    }
+
+    if (activeTab === 0) {
+      newParams.set("task", selectedTaskId);
+      if (selectedTask?.params) {
+        selectedTask.params.forEach((p) => {
+          const val = paramValues[p.key] !== undefined ? paramValues[p.key] : p.default_value || "";
+          if (val !== "") {
+            newParams.set(p.key, val);
+          }
+        });
+      }
+      lastParamNodesRef.current = newParams.has("nodes")
+        ? `nodes:${newParams.get("nodes")}`
+        : `node:${newParams.get("node")}`;
+      navigate({ pathname: "/looking-glass/presets", search: newParams.toString() }, { replace: true });
+    } else if (activeTab === 1) {
+      if (adHocTool) {
+        newParams.set("tool", adHocTool);
+      }
+      if (adHocCommand.trim()) {
+        newParams.set("cmd", adHocCommand.trim());
+      }
+      if (adHocParser) {
+        newParams.set("parser", adHocParser);
+      }
+      lastParamNodesRef.current = newParams.has("nodes")
+        ? `nodes:${newParams.get("nodes")}`
+        : `node:${newParams.get("node")}`;
+      navigate({ pathname: "/looking-glass/adhoc", search: newParams.toString() }, { replace: true });
     }
 
     setRunning(true);
@@ -292,7 +428,7 @@ export const LookingGlassModal: React.FC<LookingGlassModalProps> = ({ nodes, ini
         <Box sx={{ borderBottom: "1px solid #E2E8F0" }}>
           <Tabs
             value={activeTab}
-            onChange={(_, val) => setActiveTab(val)}
+            onChange={(_, val) => handleTabChange(val)}
             variant="scrollable"
             scrollButtons="auto"
             allowScrollButtonsMobile
@@ -726,10 +862,10 @@ export const LookingGlassModal: React.FC<LookingGlassModalProps> = ({ nodes, ini
                         <BirdRouteView
                           routeResult={activeResult.parsed}
                           onQueryASN={(asn) => {
-                            setActiveTab(1);
                             setAdHocTool("whois");
                             setAdHocCommand(`whois -h whois.dn42 ${asn}`);
                             setAdHocParser("raw");
+                            navigate("/looking-glass/adhoc");
                           }}
                         />
                       ) : activeResult.parser === "ping" ? (
@@ -954,7 +1090,7 @@ export const LookingGlassModal: React.FC<LookingGlassModalProps> = ({ nodes, ini
                       size="small"
                       onClick={() => {
                         setSelectedTaskId(t.id);
-                        setActiveTab(0);
+                        navigate("/looking-glass/presets");
                       }}
                       sx={{ textTransform: "none", fontSize: "0.75rem" }}
                     >
@@ -975,7 +1111,7 @@ export const LookingGlassModal: React.FC<LookingGlassModalProps> = ({ nodes, ini
               setSelectedTaskId(task.task_type === "tcp_ping" ? "tcp_ping" : "ping");
               setSelectedNodes(task.nodes);
               setParamValues(task.params || {});
-              setActiveTab(0);
+              navigate("/looking-glass/presets");
             }}
           />
         )}
