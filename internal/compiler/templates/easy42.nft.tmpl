@@ -352,6 +352,7 @@ table inet easy42 {
         {{- end }}
       {{- end }}
     {{- end }}
+    oifname @pol_{{ .id }}_ifname accept
   {{- end }}
 {{- end }}
 {{- range .nft_policies }}
