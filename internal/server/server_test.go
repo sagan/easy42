@@ -179,12 +179,12 @@ func TestUpdateLinkAPI(t *testing.T) {
 
 	// Add link
 	linkReq := map[string]any{
-		"from_node": "n1",
-		"to_node":   "n2",
-		"from_port": 50001,
-		"to_port":   50002,
-		"from_mtu":  1400,
-		"to_mtu":    1400,
+		"from_node":       "n1",
+		"to_node":         "n2",
+		"from_port":       50001,
+		"to_port":         50002,
+		"from_mtu":        1400,
+		"to_mtu":          1400,
 		"from_cost":       35,
 		"to_cost":         45,
 		"from_fwmark":     "51820",
@@ -222,12 +222,12 @@ func TestUpdateLinkAPI(t *testing.T) {
 
 	// Update link
 	updateReq := map[string]any{
-		"from_node": "n1",
-		"to_node":   "n2",
-		"from_port": 51000,
-		"to_port":   52000,
-		"from_mtu":  1360,
-		"to_mtu":    1360,
+		"from_node":       "n1",
+		"to_node":         "n2",
+		"from_port":       51000,
+		"to_port":         52000,
+		"from_mtu":        1360,
+		"to_mtu":          1360,
 		"from_cost":       80,
 		"from_fwmark":     "0x1234",
 		"from_preference": 220,
@@ -636,7 +636,6 @@ func TestNetworkSettingsAndExternalPeeringAPI(t *testing.T) {
 	settingsUpdate := config.NetworkSettings{
 		PublicASN:              4242421234,
 		Prefixes:               []string{"172.20.10.0/24", "172.20.0.0/14{21,29}"},
-		LocalDN42Networks:      []string{"172.20.229.0/27"},
 		DisallowedDN42Networks: []string{"fd42:1234:5678::/48", "172.20.99.0/24"},
 		FlapAlertedAddress:     "fd42:a159:f9f0:8000::c8",
 		FlapAlertedPort:        1790,
@@ -655,9 +654,6 @@ func TestNetworkSettingsAndExternalPeeringAPI(t *testing.T) {
 	_ = json.Unmarshal(wPutSettings.Body.Bytes(), &savedSettings)
 	if savedSettings.PublicASN != 4242421234 {
 		t.Errorf("Expected PublicASN 4242421234, got %d", savedSettings.PublicASN)
-	}
-	if len(savedSettings.LocalDN42Networks) != 1 || savedSettings.LocalDN42Networks[0] != "172.20.229.0/27" {
-		t.Errorf("Expected LocalDN42Networks [172.20.229.0/27], got %v", savedSettings.LocalDN42Networks)
 	}
 	if len(savedSettings.DisallowedDN42Networks) != 2 || savedSettings.DisallowedDN42Networks[0] != "fd42:1234:5678::/48" {
 		t.Errorf("Expected DisallowedDN42Networks [fd42:1234:5678::/48, 172.20.99.0/24], got %v", savedSettings.DisallowedDN42Networks)
@@ -1989,6 +1985,3 @@ func TestServerInvalidAddress(t *testing.T) {
 		t.Fatal("Expected error from invalid address, got nil")
 	}
 }
-
-
-

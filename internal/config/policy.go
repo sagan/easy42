@@ -91,37 +91,37 @@ type SNATConfig struct {
 
 // NetworkPolicy defines routing and firewall controls deployed on a link endpoint
 type NetworkPolicy struct {
-	ID                 string      `json:"id"`
-	Name               string      `json:"name"`
-	Description        string      `json:"description,omitempty"`
-	IsInternal         bool        `json:"is_internal,omitempty"` // true for built-in virtual policies (read-only)
-	Cost               int         `json:"cost,omitempty"`        // Cost deducted from bgp_local_pref on internal hops (default 100)
-	LocalNetworks      []string    `json:"local_networks,omitempty"`
-	AllowedDstCIDRs    []string    `json:"allowed_dst_cidrs,omitempty"`
-	AllowedSrcCIDRs    []string    `json:"allowed_src_cidrs,omitempty"`
-	DisallowedDstCIDRs []string    `json:"disallowed_dst_cidrs,omitempty"`
-	DisallowedSrcCIDRs []string    `json:"disallowed_src_cidrs,omitempty"`
-	RejectInternet     bool        `json:"reject_internet"`
-	FilterForward      bool        `json:"filter_forward"`
-	FilterInput        bool        `json:"filter_input"`
-	InputAllowICMP     bool        `json:"input_allow_icmp"`
-	InputAllowICMP6    bool        `json:"input_allow_icmp6"`
-	InputTCPPorts      []string    `json:"input_tcp_ports,omitempty"`
-	InputUDPPorts      []string    `json:"input_udp_ports,omitempty"`
-	SNAT               *SNATConfig `json:"snat,omitempty"`
-	ForwardSNAT        bool        `json:"forward_snat,omitempty"`
-	ForwardSNATTarget  string      `json:"forward_snat_target,omitempty"` // "masquerade" | "external_ip" | "main_ip" | custom IP string
-	DSCPIngress        *int        `json:"dscp_ingress,omitempty"`        // Rewrite DSCP on packets received from the link peer (0-63)
-	DSCPEgress         *int        `json:"dscp_egress,omitempty"`         // Rewrite DSCP on packets sent to the link peer (0-63)
-	BlockIngressNew     string      `json:"block_ingress_new,omitempty"`      // Block ingress new/invalid connections: "" (disabled) | "all" | "forward"
-	IngressNewWhitelist []string    `json:"ingress_new_whitelist,omitempty"`  // Whitelist dst addr:port exceptions for block ingress new
+	ID                  string      `json:"id"`
+	Name                string      `json:"name"`
+	Description         string      `json:"description,omitempty"`
+	IsInternal          bool        `json:"is_internal,omitempty"` // true for built-in virtual policies (read-only)
+	Cost                int         `json:"cost,omitempty"`        // Cost deducted from bgp_local_pref on internal hops (default 100)
+	LocalNetworks       []string    `json:"local_networks,omitempty"`
+	AllowedDstCIDRs     []string    `json:"allowed_dst_cidrs,omitempty"`
+	AllowedSrcCIDRs     []string    `json:"allowed_src_cidrs,omitempty"`
+	DisallowedDstCIDRs  []string    `json:"disallowed_dst_cidrs,omitempty"`
+	DisallowedSrcCIDRs  []string    `json:"disallowed_src_cidrs,omitempty"`
+	RejectInternet      bool        `json:"reject_internet"`
+	FilterForward       bool        `json:"filter_forward"`
+	FilterInput         bool        `json:"filter_input"`
+	InputAllowICMP      bool        `json:"input_allow_icmp"`
+	InputAllowICMP6     bool        `json:"input_allow_icmp6"`
+	InputTCPPorts       []string    `json:"input_tcp_ports,omitempty"`
+	InputUDPPorts       []string    `json:"input_udp_ports,omitempty"`
+	SNAT                *SNATConfig `json:"snat,omitempty"`
+	ForwardSNAT         bool        `json:"forward_snat,omitempty"`
+	ForwardSNATTarget   string      `json:"forward_snat_target,omitempty"`   // "masquerade" | "external_ip" | "main_ip" | custom IP string
+	DSCPIngress         *int        `json:"dscp_ingress,omitempty"`          // Rewrite DSCP on packets received from the link peer (0-63)
+	DSCPEgress          *int        `json:"dscp_egress,omitempty"`           // Rewrite DSCP on packets sent to the link peer (0-63)
+	BlockIngressNew     string      `json:"block_ingress_new,omitempty"`     // Block ingress new/invalid connections: "" (disabled) | "all" | "forward"
+	IngressNewWhitelist []string    `json:"ingress_new_whitelist,omitempty"` // Whitelist dst addr:port exceptions for block ingress new
 	ROA4                string      `json:"roa4,omitempty"`
 	ROA6                string      `json:"roa6,omitempty"`
 	ROAStrict           bool        `json:"roa_strict,omitempty"`
-	Fwmark              string      `json:"fwmark,omitempty"`         // Local WireGuard [Interface] FwMark
-	Preference          *int        `json:"preference,omitempty"`     // BIRD peer BGP protocol preference
-	Mark                string      `json:"mark,omitempty"`           // Netfilter mark for received packets from the link peer
-	RoutingPolicy       string      `json:"routing_policy,omitempty"` // BGP meta routing policy ("full", "stub", "receive_only", "advertise_only")
+	Fwmark              string      `json:"fwmark,omitempty"`              // Local WireGuard [Interface] FwMark
+	Preference          *int        `json:"preference,omitempty"`          // BIRD peer BGP protocol preference
+	Mark                string      `json:"mark,omitempty"`                // Netfilter mark for received packets from the link peer
+	RoutingPolicy       string      `json:"routing_policy,omitempty"`      // BGP meta routing policy ("full", "stub", "receive_only", "advertise_only")
 	BirdImportFilter    string      `json:"bird_import_filter,omitempty"`  // Custom BIRD snippet appended to import filter block end
 	BirdExportFilter    string      `json:"bird_export_filter,omitempty"`  // Custom BIRD snippet appended to export filter block end
 	BirdExportFillter   string      `json:"bird_export_fillter,omitempty"` // Alias for export filter
@@ -384,11 +384,6 @@ func GetBuiltinPolicies(netSettings *NetworkSettings) []NetworkPolicy {
 		}
 	}
 
-	var localDN42 []string
-	if netSettings != nil && len(netSettings.LocalDN42Networks) > 0 {
-		localDN42 = CleanPrefixes(netSettings.LocalDN42Networks)
-	}
-
 	var disallowedDN42 []string
 	if netSettings != nil {
 		if len(netSettings.DisallowedDN42Networks) > 0 {
@@ -417,7 +412,6 @@ func GetBuiltinPolicies(netSettings *NetworkSettings) []NetworkPolicy {
 			IsInternal:         true,
 			Cost:               100,
 			RoutingPolicy:      RoutingPolicyFull,
-			LocalNetworks:      localDN42,
 			AllowedDstCIDRs:    dn42Prefixes,
 			AllowedSrcCIDRs:    dn42Prefixes,
 			DisallowedDstCIDRs: disallowedDN42,

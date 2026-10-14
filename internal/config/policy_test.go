@@ -45,25 +45,6 @@ func TestGetBuiltinPolicies(t *testing.T) {
 	}
 }
 
-func TestGetBuiltinPolicies_LocalDN42Networks(t *testing.T) {
-	netSettings := &NetworkSettings{
-		LocalDN42Networks: []string{"172.20.229.0/27", "fd00:dead:beef::/48"},
-	}
-	policies := GetBuiltinPolicies(netSettings)
-	for _, p := range policies {
-		if p.ID == PolicyDN42 {
-			if len(p.LocalNetworks) != 2 {
-				t.Fatalf("expected 2 LocalNetworks in PolicyDN42, got %v", p.LocalNetworks)
-			}
-			if p.LocalNetworks[0] != "172.20.229.0/27" || p.LocalNetworks[1] != "fd00:dead:beef::/48" {
-				t.Errorf("unexpected LocalNetworks: %v", p.LocalNetworks)
-			}
-			return
-		}
-	}
-	t.Fatalf("PolicyDN42 not found")
-}
-
 func TestGetBuiltinPolicies_DisallowedDN42Networks(t *testing.T) {
 	netSettings := &NetworkSettings{
 		DisallowedDN42Networks: []string{"fd42:1234:5678::/48", "172.20.99.0/24"},
@@ -578,8 +559,8 @@ func TestEffectiveBirdFilters(t *testing.T) {
 	}
 
 	pol := &NetworkPolicy{
-		BirdImportFilter:  "  import rule;  ",
-		BirdExportFilter:  "  export rule;  ",
+		BirdImportFilter: "  import rule;  ",
+		BirdExportFilter: "  export rule;  ",
 	}
 	if pol.EffectiveBirdImportFilter() != "import rule;" {
 		t.Errorf("expected trimmed import rule, got %q", pol.EffectiveBirdImportFilter())
@@ -596,5 +577,3 @@ func TestEffectiveBirdFilters(t *testing.T) {
 		t.Errorf("expected trimmed alias export rule, got %q", aliasPol.EffectiveBirdExportFilter())
 	}
 }
-
-

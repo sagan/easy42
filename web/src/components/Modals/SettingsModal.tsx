@@ -226,7 +226,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
 
   // Network / Peering state
   const [publicAsn, setPublicAsn] = useState<number | "">("");
-  const [localDn42Networks, setLocalDn42Networks] = useState("");
   const [disallowedDn42Networks, setDisallowedDn42Networks] = useState("");
   const [networkPrefixes, setNetworkPrefixes] = useState<string[]>([]);
   const [faAddress, setFaAddress] = useState("");
@@ -581,7 +580,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
     try {
       const settings = await api.getNetworkSettings();
       setPublicAsn(settings.public_asn || "");
-      setLocalDn42Networks((settings.local_dn42_networks || []).join("\n"));
       setDisallowedDn42Networks((settings.disallowed_dn42_networks || settings.disallowed_dn42_cidrs || []).join("\n"));
       setNetworkPrefixes(settings.prefixes || []);
       setFaAddress(settings.flapalerted_address || settings.fa_address || "");
@@ -617,7 +615,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
     const payload: NetworkSettings = {
       public_asn: publicAsn === "" ? 0 : Number(publicAsn),
       prefixes: networkPrefixes,
-      local_dn42_networks: parsePrefixList(localDn42Networks),
       disallowed_dn42_networks: parsePrefixList(disallowedDn42Networks),
       disallowed_dn42_cidrs: parsePrefixList(disallowedDn42Networks),
       flapalerted_address: faAddress.trim() || undefined,
@@ -1353,19 +1350,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                     value={publicAsn}
                     onChange={(e) => setPublicAsn(e.target.value === "" ? "" : Number(e.target.value))}
                     helperText="Your network's public ASN (e.g. DN42 ASN). When set, BIRD confederation exposes this ASN to external peers."
-                    disabled={networkSaving}
-                  />
-
-                  <TextField
-                    fullWidth
-                    size="small"
-                    multiline
-                    rows={2}
-                    label="Local DN42 Networks"
-                    placeholder="e.g. 172.20.229.0/27, fd00:dead:beef::/48"
-                    value={localDn42Networks}
-                    onChange={(e) => setLocalDn42Networks(e.target.value)}
-                    helperText="Internal DN42 CIDRs (IPv4 and/or IPv6). When external DN42 traffic is forwarded to these networks, the built-in DN42 filter input port rules are enforced."
                     disabled={networkSaving}
                   />
 

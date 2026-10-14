@@ -482,8 +482,7 @@ func TestLocalNetworksForwardFilter(t *testing.T) {
 	}
 
 	netSettings := &config.NetworkSettings{
-		PublicASN:         4242420000,
-		LocalDN42Networks: []string{"172.20.229.0/27", "fd42:a159:f9f0::/48"},
+		PublicASN: 4242420000,
 	}
 
 	conf, err := GenerateNftablesConfig(&nodeBar, allNodes, links, netSettings)
@@ -538,10 +537,9 @@ func TestLocalNetworksForwardFilter(t *testing.T) {
 	}
 }
 
-
 func TestDSCPNftables(t *testing.T) {
-	dscpIngress := 46  // EF
-	dscpEgress := 10   // AF11
+	dscpIngress := 46 // EF
+	dscpEgress := 10  // AF11
 	node := config.Node{
 		Name:        "dscp-node",
 		IP:          "192.168.100.1",
@@ -625,7 +623,7 @@ func TestDSCPNftables(t *testing.T) {
 }
 
 func TestDSCPIngressOnly(t *testing.T) {
-	dscpVal := 0  // CS0
+	dscpVal := 0 // CS0
 	node := config.Node{
 		Name: "dscp-in",
 		IP:   "192.168.100.1",
@@ -1497,8 +1495,3 @@ func TestBlockIngressNewWhitelistNftables(t *testing.T) {
 		}
 	}
 }
-
-
-
-
-

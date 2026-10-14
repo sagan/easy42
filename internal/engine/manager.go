@@ -4115,7 +4115,6 @@ func (m *Manager) GetNetworkSettings() config.NetworkSettings {
 	}
 	ns := cfg.NetworkSettings
 	ns.Prefixes = config.CleanPrefixes(ns.Prefixes)
-	ns.LocalDN42Networks = config.CleanPrefixes(ns.LocalDN42Networks)
 	if len(ns.DisallowedDN42Networks) == 0 && len(ns.DisallowedDN42CIDRs) > 0 {
 		ns.DisallowedDN42Networks = config.CleanPrefixes(ns.DisallowedDN42CIDRs)
 	} else {
@@ -4135,7 +4134,6 @@ func (m *Manager) UpdateNetworkSettings(settings config.NetworkSettings) error {
 		return config.ErrConfigNotFound
 	}
 	settings.Prefixes = config.CleanPrefixes(settings.Prefixes)
-	settings.LocalDN42Networks = config.CleanPrefixes(settings.LocalDN42Networks)
 	if len(settings.DisallowedDN42Networks) == 0 && len(settings.DisallowedDN42CIDRs) > 0 {
 		settings.DisallowedDN42Networks = config.CleanPrefixes(settings.DisallowedDN42CIDRs)
 	} else {
@@ -4850,4 +4848,3 @@ rm -f /etc/easy42/agent.json 2>/dev/null || true
 
 	return nil
 }
-

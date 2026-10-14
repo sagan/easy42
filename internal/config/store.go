@@ -152,7 +152,6 @@ func (s *Store) Load() (*Config, error) {
 	}
 
 	cfg.NetworkSettings.Prefixes = CleanPrefixes(cfg.NetworkSettings.Prefixes)
-	cfg.NetworkSettings.LocalDN42Networks = CleanPrefixes(cfg.NetworkSettings.LocalDN42Networks)
 	if len(cfg.NetworkSettings.DisallowedDN42Networks) == 0 && len(cfg.NetworkSettings.DisallowedDN42CIDRs) > 0 {
 		cfg.NetworkSettings.DisallowedDN42Networks = CleanPrefixes(cfg.NetworkSettings.DisallowedDN42CIDRs)
 	} else {
@@ -200,7 +199,6 @@ func (s *Store) Save(cfg *Config) error {
 	}
 
 	cfg.NetworkSettings.Prefixes = CleanPrefixes(cfg.NetworkSettings.Prefixes)
-	cfg.NetworkSettings.LocalDN42Networks = CleanPrefixes(cfg.NetworkSettings.LocalDN42Networks)
 	if len(cfg.NetworkSettings.DisallowedDN42Networks) == 0 && len(cfg.NetworkSettings.DisallowedDN42CIDRs) > 0 {
 		cfg.NetworkSettings.DisallowedDN42Networks = CleanPrefixes(cfg.NetworkSettings.DisallowedDN42CIDRs)
 	} else {

@@ -10,9 +10,8 @@ import (
 
 // NetworkSettings represents global network-wide peering and routing configurations
 type NetworkSettings struct {
-	PublicASN              uint64   `json:"public_asn,omitempty"`                // Public / DN42 ASN (e.g. 4242421234)
-	Prefixes               []string `json:"prefixes,omitempty"`                  // Prefixes permitted for peering (export and import)
-	LocalDN42Networks      []string `json:"local_dn42_networks,omitempty"`       // Local DN42 networks protected by filter_input
+	PublicASN              uint64   `json:"public_asn,omitempty"`               // Public / DN42 ASN (e.g. 4242421234)
+	Prefixes               []string `json:"prefixes,omitempty"`                 // Prefixes permitted for peering (export and import)
 	DisallowedDN42Networks []string `json:"disallowed_dn42_networks,omitempty"` // Disallowed CIDRs for dn42 (used by built-in dn42 policy)
 	DisallowedDN42CIDRs    []string `json:"disallowed_dn42_cidrs,omitempty"`    // Alias for disallowed_dn42_networks
 	FlapAlertedAddress     string   `json:"flapalerted_address,omitempty"`      // FlapAlerted instance IP address
@@ -257,33 +256,33 @@ type Hook = ConfigHook
 
 // Node represents a device/node in the network
 type Node struct {
-	Name          string            `json:"name"`                  // Node name / hostname (WireGuard interface wg42* is truncated to 15 chars)
-	Host          string            `json:"host,omitempty"`        // SSH host / alias / IP (omitted for external peers)
-	IsExternal    bool              `json:"is_external,omitempty"` // True if external unmanaged peer (e.g. DN42)
-	Description   string            `json:"description,omitempty"` // Optional description / contact info
-	Note          string            `json:"note,omitempty"`        // Markdown format text note
-	IP            string            `json:"ip,omitempty"`          // Main IPv4 (e.g. 192.168.100.1)
-	IP6           string            `json:"ip6,omitempty"`         // Main IPv6 (e.g. fd42:a159:f9f0::1)
+	Name          string            `json:"name"`                   // Node name / hostname (WireGuard interface wg42* is truncated to 15 chars)
+	Host          string            `json:"host,omitempty"`         // SSH host / alias / IP (omitted for external peers)
+	IsExternal    bool              `json:"is_external,omitempty"`  // True if external unmanaged peer (e.g. DN42)
+	Description   string            `json:"description,omitempty"`  // Optional description / contact info
+	Note          string            `json:"note,omitempty"`         // Markdown format text note
+	IP            string            `json:"ip,omitempty"`           // Main IPv4 (e.g. 192.168.100.1)
+	IP6           string            `json:"ip6,omitempty"`          // Main IPv6 (e.g. fd42:a159:f9f0::1)
 	ExternalIP    string            `json:"external_ip,omitempty"`  // External / DN42 IPv4 (e.g. 172.20.x.x)
 	ExternalIP6   string            `json:"external_ip6,omitempty"` // External / DN42 IPv6 (e.g. fd42:a159:f9f0::d)
-	Interface     string            `json:"interface,omitempty"`   // Main IP interface name (e.g. lo, dn42, eth0)
-	ASN           uint64            `json:"asn"`                   // AS Number (default in 4224420000..4224429999 or external ASN)
-	Entrypoints   []Entrypoint      `json:"entrypoints,omitempty"` // External entrypoints
+	Interface     string            `json:"interface,omitempty"`    // Main IP interface name (e.g. lo, dn42, eth0)
+	ASN           uint64            `json:"asn"`                    // AS Number (default in 4224420000..4224429999 or external ASN)
+	Entrypoints   []Entrypoint      `json:"entrypoints,omitempty"`  // External entrypoints
 	Tags          []string          `json:"tags,omitempty"`
-	Table         int               `json:"table,omitempty"`          // Main routing table bird used to export BGP learned routing to (defaults to 254)
-	ExternalTable int               `json:"external_table,omitempty"` // Routing table for routes learned from external BGP peers (if set and != Table)
-	InternetTable int               `json:"internet_table,omitempty"` // Routing table for Internet routes learned from peers (if set and != Table)
-	Metric        *int              `json:"metric,omitempty"`         // Global metric when bird export routes to kernel
-	StaticRoutes  []string          `json:"static_routes,omitempty"`  // CIDR prefix list unconditionally broadcast via BGP
-	Routes        []KernelRouteRule `json:"routes,omitempty"`         // Kernel routes imported from kernel tables and broadcast via BGP
-	ConfigHooks   []ConfigHook      `json:"config_hooks,omitempty"`   // Custom configuration injection hooks
-	WgTemplate    string            `json:"wg_template,omitempty"`    // Custom WireGuard template ID/name (empty for default)
-	BirdTemplate  string            `json:"bird_template,omitempty"`  // Custom BIRD template ID/name (empty for default)
-	NftTemplate   string            `json:"nft_template,omitempty"`   // Custom nftables template ID/name (empty for default)
-	X             *float64          `json:"x,omitempty"`              // Graph X coordinate
-	Y             *float64          `json:"y,omitempty"`              // Graph Y coordinate
-	ModifiedAt    time.Time         `json:"modified_at,omitempty"`    // Last updated timestamp
-	Mode          string            `json:"mode,omitempty"`           // "ssh" (default) or "agent"
+	Table         int               `json:"table,omitempty"`           // Main routing table bird used to export BGP learned routing to (defaults to 254)
+	ExternalTable int               `json:"external_table,omitempty"`  // Routing table for routes learned from external BGP peers (if set and != Table)
+	InternetTable int               `json:"internet_table,omitempty"`  // Routing table for Internet routes learned from peers (if set and != Table)
+	Metric        *int              `json:"metric,omitempty"`          // Global metric when bird export routes to kernel
+	StaticRoutes  []string          `json:"static_routes,omitempty"`   // CIDR prefix list unconditionally broadcast via BGP
+	Routes        []KernelRouteRule `json:"routes,omitempty"`          // Kernel routes imported from kernel tables and broadcast via BGP
+	ConfigHooks   []ConfigHook      `json:"config_hooks,omitempty"`    // Custom configuration injection hooks
+	WgTemplate    string            `json:"wg_template,omitempty"`     // Custom WireGuard template ID/name (empty for default)
+	BirdTemplate  string            `json:"bird_template,omitempty"`   // Custom BIRD template ID/name (empty for default)
+	NftTemplate   string            `json:"nft_template,omitempty"`    // Custom nftables template ID/name (empty for default)
+	X             *float64          `json:"x,omitempty"`               // Graph X coordinate
+	Y             *float64          `json:"y,omitempty"`               // Graph Y coordinate
+	ModifiedAt    time.Time         `json:"modified_at,omitempty"`     // Last updated timestamp
+	Mode          string            `json:"mode,omitempty"`            // "ssh" (default) or "agent"
 	AgentToken    string            `json:"agent_token,omitempty"`     // Static shared token for agent authentication
 	AgentVersion  string            `json:"agent_version,omitempty"`   // Reported agent version
 	AgentLastSeen time.Time         `json:"agent_last_seen,omitempty"` // Timestamp of last agent heartbeat/report
@@ -457,16 +456,16 @@ type SystemMetrics struct {
 
 // NodeStatus represents cached runtime status of a node
 type NodeStatus struct {
-	Name         string              `json:"name"`
-	Host         string              `json:"host"`
-	Connected    bool                `json:"connected"`
-	LastSeen     time.Time           `json:"last_seen"`
-	Hostname     string              `json:"hostname"`
-	Interfaces   []InterfaceInfo     `json:"interfaces"`
-	WgInterfaces []WgInterfaceStatus `json:"wg_interfaces"`
-	Disks        []DiskMetrics       `json:"disks,omitempty"`
-	Error        string              `json:"error,omitempty"`
-	Mode         string              `json:"mode,omitempty"`
+	Name             string              `json:"name"`
+	Host             string              `json:"host"`
+	Connected        bool                `json:"connected"`
+	LastSeen         time.Time           `json:"last_seen"`
+	Hostname         string              `json:"hostname"`
+	Interfaces       []InterfaceInfo     `json:"interfaces"`
+	WgInterfaces     []WgInterfaceStatus `json:"wg_interfaces"`
+	Disks            []DiskMetrics       `json:"disks,omitempty"`
+	Error            string              `json:"error,omitempty"`
+	Mode             string              `json:"mode,omitempty"`
 	AgentVersion     string              `json:"agent_version,omitempty"`
 	PrimaryInterface string              `json:"primary_interface,omitempty"`
 	Metrics          *SystemMetrics      `json:"metrics,omitempty"`
@@ -476,12 +475,12 @@ type NodeStatus struct {
 type ActionType string
 
 const (
-	ActionCreateConfig   ActionType = "create_config"
-	ActionUpdateConfig   ActionType = "update_config"
-	ActionDeleteConfig   ActionType = "delete_config"
-	ActionUpInterface    ActionType = "up_interface"
-	ActionSyncConfig     ActionType = "sync_config"
-	ActionDownInterface  ActionType = "down_interface"
+	ActionCreateConfig       ActionType = "create_config"
+	ActionUpdateConfig       ActionType = "update_config"
+	ActionDeleteConfig       ActionType = "delete_config"
+	ActionUpInterface        ActionType = "up_interface"
+	ActionSyncConfig         ActionType = "sync_config"
+	ActionDownInterface      ActionType = "down_interface"
 	ActionSyncBirdConfig     ActionType = "sync_bird"
 	ActionSyncNftablesConfig ActionType = "sync_nftables"
 	ActionSyncRoaConfig      ActionType = "sync_roa"
