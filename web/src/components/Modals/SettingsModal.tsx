@@ -98,6 +98,52 @@ export const parseWhitelistList = (input: string): string[] => {
     .filter(Boolean);
 };
 
+export const IMPORT_FILTER_EXAMPLES = [
+  {
+    label: "Adjust Local Pref",
+    desc: "Set local_pref based on incoming community",
+    snippet: `# Adjust bgp_local_pref according to incoming community\nif (64512, 100) ~ bgp_community then bgp_local_pref = 200;\nelse if (64512, 50) ~ bgp_community then bgp_local_pref = 50;\n`,
+  },
+  {
+    label: "Add Large Community",
+    desc: "Tag accepted routes with a large community",
+    snippet: `# Add custom large community to imported routes\nbgp_large_community.add((4242421234, 1, 1));\n`,
+  },
+  {
+    label: "Filter by Community",
+    desc: "Reject routes matching a specific community",
+    snippet: `# Reject blackhole or do-not-import community\nif (64512, 666) ~ bgp_community then reject;\n`,
+  },
+  {
+    label: "Remove Community",
+    desc: "Strip specific communities on import",
+    snippet: `# Remove peer's internal communities\nbgp_community.delete([(64512, *)]);\n`,
+  },
+];
+
+export const EXPORT_FILTER_EXAMPLES = [
+  {
+    label: "Add Large Community",
+    desc: "Tag exported routes with an egress community",
+    snippet: `# Tag outgoing routes with community\nbgp_large_community.add((4242421234, 2, 1));\n`,
+  },
+  {
+    label: "Strip Communities",
+    desc: "Remove internal communities before announcing",
+    snippet: `# Strip internal communities before export\nbgp_community.delete([(64512, *)]);\nbgp_large_community.delete([(4242421234, *, *)]);\n`,
+  },
+  {
+    label: "AS-Path Prepend",
+    desc: "Prepend ASN to deprioritize path",
+    snippet: `# Deprioritize this link by prepending own AS on export\nbgp_path.prepend(SELF_AS);\n`,
+  },
+  {
+    label: "Filter by Community",
+    desc: "Do not export routes with specific community",
+    snippet: `# Do not export routes marked no-export\nif (64512, 666) ~ bgp_community then reject;\n`,
+  },
+];
+
 export type SettingsTab = "security" | "network" | "policies" | "templates" | "dns";
 
 const VALID_TABS: Record<string, SettingsTab> = {
@@ -236,6 +282,24 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
   const [policyRoutingPolicy, setPolicyRoutingPolicy] = useState<string>("full");
   const [policyBlockIngressNew, setPolicyBlockIngressNew] = useState<string>("");
   const [policyIngressNewWhitelist, setPolicyIngressNewWhitelist] = useState<string>("");
+  const [policyBirdImportFilter, setPolicyBirdImportFilter] = useState<string>("");
+  const [policyBirdExportFilter, setPolicyBirdExportFilter] = useState<string>("");
+
+  const handleAppendImportExample = (snippet: string) => {
+    setPolicyBirdImportFilter((prev) => {
+      const trimmed = prev.trim();
+      if (!trimmed) return snippet;
+      return `${trimmed}\n\n${snippet}`;
+    });
+  };
+
+  const handleAppendExportExample = (snippet: string) => {
+    setPolicyBirdExportFilter((prev) => {
+      const trimmed = prev.trim();
+      if (!trimmed) return snippet;
+      return `${trimmed}\n\n${snippet}`;
+    });
+  };
 
   // Logout all state
   const [logoutAllConfirming, setLogoutAllConfirming] = useState(false);
@@ -614,6 +678,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
     setPolicyRoutingPolicy("full");
     setPolicyBlockIngressNew("");
     setPolicyIngressNewWhitelist("");
+    setPolicyBirdImportFilter("");
+    setPolicyBirdExportFilter("");
     setPolicyDialogError(null);
     setPolicyDialogOpen(true);
   };
@@ -652,6 +718,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
     setPolicyRoutingPolicy(p.routing_policy || "full");
     setPolicyBlockIngressNew(p.block_ingress_new || "");
     setPolicyIngressNewWhitelist((p.ingress_new_whitelist || []).join("\n"));
+    setPolicyBirdImportFilter(p.bird_import_filter || "");
+    setPolicyBirdExportFilter(p.bird_export_filter || p.bird_export_fillter || "");
     setPolicyDialogError(null);
     setPolicyDialogOpen(true);
   };
@@ -690,6 +758,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
     setPolicyRoutingPolicy(p.routing_policy || "full");
     setPolicyBlockIngressNew(p.block_ingress_new || "");
     setPolicyIngressNewWhitelist((p.ingress_new_whitelist || []).join("\n"));
+    setPolicyBirdImportFilter(p.bird_import_filter || "");
+    setPolicyBirdExportFilter(p.bird_export_filter || p.bird_export_fillter || "");
     setPolicyDialogError(null);
     setPolicyDialogOpen(true);
   };
@@ -776,6 +846,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
           policyBlockIngressNew && policyBlockIngressNew !== "_"
             ? parseWhitelistList(policyIngressNewWhitelist)
             : undefined,
+        bird_import_filter: policyBirdImportFilter.trim() || undefined,
+        bird_export_filter: policyBirdExportFilter.trim() || undefined,
+        bird_export_fillter: policyBirdExportFilter.trim() || undefined,
       };
 
       if (policyDialogMode === "create") {
@@ -843,6 +916,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
     setPolicyRoutingPolicy(p.routing_policy || "full");
     setPolicyBlockIngressNew(p.block_ingress_new || "");
     setPolicyIngressNewWhitelist((p.ingress_new_whitelist || []).join("\n"));
+    setPolicyBirdImportFilter(p.bird_import_filter || "");
+    setPolicyBirdExportFilter(p.bird_export_filter || p.bird_export_fillter || "");
     setPolicyDialogError(null);
     setPolicyDialogOpen(true);
   };
@@ -1605,6 +1680,19 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                                   fontWeight: 700,
                                   bgcolor: "rgba(16, 185, 129, 0.12)",
                                   color: "#059669",
+                                }}
+                              />
+                            )}
+                            {(p.bird_import_filter || p.bird_export_filter || p.bird_export_fillter) && (
+                              <Chip
+                                label="BIRD Filter"
+                                size="small"
+                                sx={{
+                                  height: 20,
+                                  fontSize: "0.68rem",
+                                  fontWeight: 700,
+                                  bgcolor: "rgba(99, 102, 241, 0.12)",
+                                  color: "#4F46E5",
                                 }}
                               />
                             )}
@@ -3181,6 +3269,148 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                     disabled={policyDialogMode === "view" || policyDialogSaving}
                     helperText="Rewrite DSCP on packets sent to the link peer."
                     inputProps={{ min: 0, max: 63 }}
+                  />
+                </Box>
+              </Box>
+
+              {/* Custom BIRD Route Filters */}
+              <Box
+                sx={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 1.5,
+                  p: 2,
+                  borderRadius: 2,
+                  bgcolor: "#F8FAFC",
+                  border: "1px solid #E2E8F0",
+                }}
+              >
+                <Box>
+                  <Typography
+                    variant="subtitle2"
+                    sx={{ fontWeight: 700, color: "#1E293B", display: "flex", alignItems: "center", gap: 0.8 }}
+                  >
+                    <FileCode size={16} /> Custom BIRD Route Filters
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: "#64748B" }}>
+                    Append custom BIRD routing daemon configuration snippets to the peer's IPv4 &amp; IPv6 import and
+                    export filter blocks (e.g. matching/adding/stripping BGP communities, modifying bgp_local_pref, or AS-path prepending).
+                  </Typography>
+                </Box>
+
+                {/* Import Filter */}
+                <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                  <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 1 }}>
+                    <Typography variant="body2" sx={{ fontWeight: 600, color: "#334155" }}>
+                      BIRD Import Filter Snippet
+                    </Typography>
+                    {policyDialogMode !== "view" && (
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 0.8, flexWrap: "wrap" }}>
+                        <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600, mr: 0.5 }}>
+                          Add example:
+                        </Typography>
+                        {IMPORT_FILTER_EXAMPLES.map((ex) => (
+                          <Tooltip key={ex.label} title={ex.desc}>
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              onClick={() => handleAppendImportExample(ex.snippet)}
+                              disabled={policyDialogSaving}
+                              sx={{
+                                textTransform: "none",
+                                fontSize: "0.75rem",
+                                py: 0.2,
+                                px: 1,
+                                height: 24,
+                                borderColor: "#CBD5E1",
+                                color: "#475569",
+                                bgcolor: "#FFFFFF",
+                                "&:hover": { bgcolor: "#F1F5F9", borderColor: "#94A3B8" },
+                              }}
+                            >
+                              + {ex.label}
+                            </Button>
+                          </Tooltip>
+                        ))}
+                      </Box>
+                    )}
+                  </Box>
+                  <TextField
+                    fullWidth
+                    size="small"
+                    multiline
+                    rows={4}
+                    placeholder={`# Snippet appended to peer's IPv4 & IPv6 import filter block end\n# e.g.\nif (64512, 100) ~ bgp_community then bgp_local_pref = 200;\nbgp_large_community.add((4242421234, 1, 1));`}
+                    value={policyBirdImportFilter}
+                    onChange={(e) => setPolicyBirdImportFilter(e.target.value)}
+                    disabled={policyDialogMode === "view" || policyDialogSaving}
+                    InputProps={{
+                      sx: {
+                        fontFamily: "monospace",
+                        fontSize: "0.82rem",
+                        bgcolor: "#FFFFFF",
+                      },
+                    }}
+                    helperText="Executed before accepting valid routes on import. Can adjust bgp_local_pref, add/remove BGP communities, or reject matching routes."
+                  />
+                </Box>
+
+                <Divider sx={{ my: 0.5 }} />
+
+                {/* Export Filter */}
+                <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                  <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 1 }}>
+                    <Typography variant="body2" sx={{ fontWeight: 600, color: "#334155" }}>
+                      BIRD Export Filter Snippet
+                    </Typography>
+                    {policyDialogMode !== "view" && (
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 0.8, flexWrap: "wrap" }}>
+                        <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600, mr: 0.5 }}>
+                          Add example:
+                        </Typography>
+                        {EXPORT_FILTER_EXAMPLES.map((ex) => (
+                          <Tooltip key={ex.label} title={ex.desc}>
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              onClick={() => handleAppendExportExample(ex.snippet)}
+                              disabled={policyDialogSaving}
+                              sx={{
+                                textTransform: "none",
+                                fontSize: "0.75rem",
+                                py: 0.2,
+                                px: 1,
+                                height: 24,
+                                borderColor: "#CBD5E1",
+                                color: "#475569",
+                                bgcolor: "#FFFFFF",
+                                "&:hover": { bgcolor: "#F1F5F9", borderColor: "#94A3B8" },
+                              }}
+                            >
+                              + {ex.label}
+                            </Button>
+                          </Tooltip>
+                        ))}
+                      </Box>
+                    )}
+                  </Box>
+                  <TextField
+                    fullWidth
+                    size="small"
+                    multiline
+                    rows={4}
+                    placeholder={`# Snippet appended to peer's IPv4 & IPv6 export filter block end\n# e.g.\nbgp_community.delete([(64512, *)]);\nbgp_large_community.add((4242421234, 2, 1));`}
+                    value={policyBirdExportFilter}
+                    onChange={(e) => setPolicyBirdExportFilter(e.target.value)}
+                    disabled={policyDialogMode === "view" || policyDialogSaving}
+                    InputProps={{
+                      sx: {
+                        fontFamily: "monospace",
+                        fontSize: "0.82rem",
+                        bgcolor: "#FFFFFF",
+                      },
+                    }}
+                    helperText="Executed before exporting routes to the peer. Can strip private communities, add export tags, or prepend AS path."
                   />
                 </Box>
               </Box>

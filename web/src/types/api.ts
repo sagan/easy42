@@ -101,6 +101,9 @@ export interface NetworkPolicy {
   preference?: number;
   mark?: string;
   routing_policy?: string;
+  bird_import_filter?: string;
+  bird_export_filter?: string;
+  bird_export_fillter?: string;
 }
 
 export interface ConfigTemplate {

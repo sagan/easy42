@@ -122,6 +122,28 @@ type NetworkPolicy struct {
 	Preference          *int        `json:"preference,omitempty"`     // BIRD peer BGP protocol preference
 	Mark                string      `json:"mark,omitempty"`           // Netfilter mark for received packets from the link peer
 	RoutingPolicy       string      `json:"routing_policy,omitempty"` // BGP meta routing policy ("full", "stub", "receive_only", "advertise_only")
+	BirdImportFilter    string      `json:"bird_import_filter,omitempty"`  // Custom BIRD snippet appended to import filter block end
+	BirdExportFilter    string      `json:"bird_export_filter,omitempty"`  // Custom BIRD snippet appended to export filter block end
+	BirdExportFillter   string      `json:"bird_export_fillter,omitempty"` // Alias for export filter
+}
+
+// EffectiveBirdImportFilter returns the configured BIRD import filter snippet or empty string if unset
+func (p *NetworkPolicy) EffectiveBirdImportFilter() string {
+	if p != nil {
+		return strings.TrimSpace(p.BirdImportFilter)
+	}
+	return ""
+}
+
+// EffectiveBirdExportFilter returns the configured BIRD export filter snippet or empty string if unset
+func (p *NetworkPolicy) EffectiveBirdExportFilter() string {
+	if p != nil {
+		if s := strings.TrimSpace(p.BirdExportFilter); s != "" {
+			return s
+		}
+		return strings.TrimSpace(p.BirdExportFillter)
+	}
+	return ""
 }
 
 // EffectiveBlockIngressNew returns the active block ingress new option or "" if unset/disabled

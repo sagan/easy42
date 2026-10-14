@@ -2496,6 +2496,70 @@ func TestFlapAlertedBGPPeering(t *testing.T) {
 	validateBirdSyntax(t, confEmpty)
 }
 
+func TestCustomBirdFilters(t *testing.T) {
+	node1 := config.Node{
+		Name:      "node1",
+		ASN:       4242420001,
+		IP:        "172.20.1.1",
+		IP6:       "fd42:1::1",
+		Interface: "wg0",
+	}
+	node2 := config.Node{
+		Name:      "node2",
+		ASN:       4242420002,
+		IP:        "172.20.1.2",
+		IP6:       "fd42:1::2",
+		Interface: "wg0",
+	}
+
+	importSnippet := "# Custom Import Rules\nif (64512, 100) ~ bgp_community then bgp_local_pref = 200;\nbgp_large_community.add((4242420001, 1, 1));"
+	exportSnippet := "# Custom Export Rules\nbgp_community.delete([(64512, *)]);\nbgp_large_community.add((4242420001, 2, 1));"
+
+	customPol := config.NetworkPolicy{
+		ID:               "partner-lan",
+		Name:             "Partner LAN",
+		Cost:             50,
+		BirdImportFilter: importSnippet,
+		BirdExportFilter: exportSnippet,
+	}
+
+	link := config.Link{
+		From: config.LinkEnd{
+			Name:   "node1",
+			Policy: "partner-lan",
+		},
+		To: config.LinkEnd{
+			Name:   "node2",
+			Policy: "partner-lan",
+		},
+	}
+
+	netSettings := &config.NetworkSettings{}
+
+	conf, err := GenerateBirdConfig(&node1, []config.Node{node1, node2}, []config.Link{link}, netSettings, []config.NetworkPolicy{customPol})
+	if err != nil {
+		t.Fatalf("GenerateBirdConfig failed: %v", err)
+	}
+
+	if !strings.Contains(conf, "template bgp pol_peer_partner_lan") {
+		t.Fatalf("Expected template bgp pol_peer_partner_lan in config, got:\n%s", conf)
+	}
+	if !strings.Contains(conf, "if (64512, 100) ~ bgp_community then bgp_local_pref = 200;") {
+		t.Fatalf("Expected importSnippet in bird config, got:\n%s", conf)
+	}
+	if !strings.Contains(conf, "bgp_large_community.add((4242420001, 1, 1));") {
+		t.Fatalf("Expected import large community in bird config, got:\n%s", conf)
+	}
+	if !strings.Contains(conf, "bgp_community.delete([(64512, *)]);") {
+		t.Fatalf("Expected export delete community in bird config, got:\n%s", conf)
+	}
+	if !strings.Contains(conf, "bgp_large_community.add((4242420001, 2, 1));") {
+		t.Fatalf("Expected export large community in bird config, got:\n%s", conf)
+	}
+
+	validateBirdSyntax(t, conf)
+}
+
 
 
 

@@ -51,12 +51,20 @@ func TestNetworkPolicyManagerCRUD(t *testing.T) {
 		DSCPIngress:        &dscpIn,
 		DSCPEgress:         &dscpOut,
 		BlockIngressNew:    "forwarding", // test normalization to "forward"
+		BirdImportFilter:   "bgp_local_pref = 150;",
+		BirdExportFilter:   "bgp_path.prepend(SELF_AS);",
 	})
 	if err != nil {
 		t.Fatalf("CreateNetworkPolicy failed: %v", err)
 	}
 	if custom.ID != "pol-office" || custom.IsInternal || custom.Cost != 100 {
 		t.Errorf("unexpected custom policy: %+v", custom)
+	}
+	if custom.BirdImportFilter != "bgp_local_pref = 150;" {
+		t.Errorf("expected BirdImportFilter 'bgp_local_pref = 150;', got %q", custom.BirdImportFilter)
+	}
+	if custom.BirdExportFilter != "bgp_path.prepend(SELF_AS);" {
+		t.Errorf("expected BirdExportFilter 'bgp_path.prepend(SELF_AS);', got %q", custom.BirdExportFilter)
 	}
 	if custom.BlockIngressNew != config.BlockIngressNewForward {
 		t.Errorf("expected BlockIngressNew 'forward', got %q", custom.BlockIngressNew)
@@ -94,12 +102,20 @@ func TestNetworkPolicyManagerCRUD(t *testing.T) {
 		DisallowedSrcCIDRs: []string{"172.20.201.128/25"},
 		DSCPIngress:        &dscpInUpdated,
 		BlockIngressNew:    "all",
+		BirdImportFilter:   "bgp_local_pref = 200;",
+		BirdExportFillter:  "bgp_community.delete([(64512, *)]);", // test alias
 	})
 	if err != nil {
 		t.Fatalf("UpdateNetworkPolicy failed: %v", err)
 	}
 	if updated.Name != "Branch Office Updated" || updated.Cost != 250 {
 		t.Errorf("expected updated name and cost 250, got name=%s cost=%d", updated.Name, updated.Cost)
+	}
+	if updated.BirdImportFilter != "bgp_local_pref = 200;" {
+		t.Errorf("expected updated BirdImportFilter 'bgp_local_pref = 200;', got %q", updated.BirdImportFilter)
+	}
+	if updated.BirdExportFilter != "bgp_community.delete([(64512, *)]);" {
+		t.Errorf("expected updated BirdExportFilter from alias, got %q", updated.BirdExportFilter)
 	}
 	if updated.BlockIngressNew != config.BlockIngressNewAll {
 		t.Errorf("expected updated BlockIngressNew 'all', got %q", updated.BlockIngressNew)

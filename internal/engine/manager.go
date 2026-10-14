@@ -3976,6 +3976,13 @@ func (m *Manager) CreateNetworkPolicy(p config.NetworkPolicy) (*config.NetworkPo
 	p.BlockIngressNew = config.NormalizeBlockIngressNew(p.BlockIngressNew)
 	p.IngressNewWhitelist = config.CleanIngressNewWhitelist(p.IngressNewWhitelist)
 	p.RoutingPolicy = config.NormalizeRoutingPolicy(p.RoutingPolicy)
+	p.BirdImportFilter = strings.TrimSpace(p.BirdImportFilter)
+	if p.BirdExportFilter == "" && p.BirdExportFillter != "" {
+		p.BirdExportFilter = strings.TrimSpace(p.BirdExportFillter)
+	} else {
+		p.BirdExportFilter = strings.TrimSpace(p.BirdExportFilter)
+	}
+	p.BirdExportFillter = p.BirdExportFilter
 
 	cfg.NetworkPolicies = append(cfg.NetworkPolicies, p)
 	if err := m.store.Save(cfg); err != nil {
@@ -4047,6 +4054,13 @@ func (m *Manager) UpdateNetworkPolicy(id string, p config.NetworkPolicy) (*confi
 	cfg.NetworkPolicies[idx].BlockIngressNew = config.NormalizeBlockIngressNew(p.BlockIngressNew)
 	cfg.NetworkPolicies[idx].IngressNewWhitelist = config.CleanIngressNewWhitelist(p.IngressNewWhitelist)
 	cfg.NetworkPolicies[idx].RoutingPolicy = config.NormalizeRoutingPolicy(p.RoutingPolicy)
+	cfg.NetworkPolicies[idx].BirdImportFilter = strings.TrimSpace(p.BirdImportFilter)
+	if p.BirdExportFilter == "" && p.BirdExportFillter != "" {
+		cfg.NetworkPolicies[idx].BirdExportFilter = strings.TrimSpace(p.BirdExportFillter)
+	} else {
+		cfg.NetworkPolicies[idx].BirdExportFilter = strings.TrimSpace(p.BirdExportFilter)
+	}
+	cfg.NetworkPolicies[idx].BirdExportFillter = cfg.NetworkPolicies[idx].BirdExportFilter
 
 	if err := m.store.Save(cfg); err != nil {
 		return nil, err

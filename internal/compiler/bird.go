@@ -491,9 +491,13 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 
 	defaultCost := 100
 	defaultRoutingPolicy := config.RoutingPolicyFull
+	defaultImportFilter := ""
+	defaultExportFilter := ""
 	if p, ok := policyMap[config.PolicyDefault]; ok {
 		defaultCost = p.EffectiveCost()
 		defaultRoutingPolicy = p.EffectiveRoutingPolicy()
+		defaultImportFilter = p.EffectiveBirdImportFilter()
+		defaultExportFilter = p.EffectiveBirdExportFilter()
 	}
 	if variants, ok := policyVariantsMap[config.PolicyDefault]; ok && len(variants) == 1 {
 		for v := range variants {
@@ -504,9 +508,13 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 
 	noneCost := 100
 	noneRoutingPolicy := config.RoutingPolicyFull
+	noneImportFilter := ""
+	noneExportFilter := ""
 	if p, ok := policyMap[config.PolicyNone]; ok {
 		noneCost = p.EffectiveCost()
 		noneRoutingPolicy = p.EffectiveRoutingPolicy()
+		noneImportFilter = p.EffectiveBirdImportFilter()
+		noneExportFilter = p.EffectiveBirdExportFilter()
 	}
 	if variants, ok := policyVariantsMap[config.PolicyNone]; ok && len(variants) == 1 {
 		for v := range variants {
@@ -520,8 +528,12 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 		extCost = dn42Pol.Cost
 	}
 	extRoutingPolicy := config.RoutingPolicyFull
+	extImportFilter := ""
+	extExportFilter := ""
 	if hasDN42 {
 		extRoutingPolicy = dn42Pol.EffectiveRoutingPolicy()
+		extImportFilter = dn42Pol.EffectiveBirdImportFilter()
+		extExportFilter = dn42Pol.EffectiveBirdExportFilter()
 	}
 	if len(extVariantsMap) == 1 {
 		for v := range extVariantsMap {
@@ -690,9 +702,13 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 		})
 		for _, v := range extraVariants {
 			customDefaultTemplates = append(customDefaultTemplates, map[string]any{
-				"template_name":  formatVariantTemplateName("easy42_peer", v.routingPolicy, defaultRoutingPolicy, v.cost, defaultCost),
-				"cost":           v.cost,
-				"routing_policy": v.routingPolicy,
+				"template_name":          formatVariantTemplateName("easy42_peer", v.routingPolicy, defaultRoutingPolicy, v.cost, defaultCost),
+				"cost":                   v.cost,
+				"routing_policy":         v.routingPolicy,
+				"has_bird_import_filter": defaultImportFilter != "",
+				"bird_import_filter":     defaultImportFilter,
+				"has_bird_export_filter": defaultExportFilter != "",
+				"bird_export_filter":     defaultExportFilter,
 			})
 		}
 	}
@@ -713,9 +729,13 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 		})
 		for _, v := range extraVariants {
 			customNoneTemplates = append(customNoneTemplates, map[string]any{
-				"template_name":  formatVariantTemplateName("none_peer", v.routingPolicy, noneRoutingPolicy, v.cost, noneCost),
-				"cost":           v.cost,
-				"routing_policy": v.routingPolicy,
+				"template_name":          formatVariantTemplateName("none_peer", v.routingPolicy, noneRoutingPolicy, v.cost, noneCost),
+				"cost":                   v.cost,
+				"routing_policy":         v.routingPolicy,
+				"has_bird_import_filter": noneImportFilter != "",
+				"bird_import_filter":     noneImportFilter,
+				"has_bird_export_filter": noneExportFilter != "",
+				"bird_export_filter":     noneExportFilter,
 			})
 		}
 	}
@@ -735,9 +755,13 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 	})
 	for _, v := range extraExtVariants {
 		customExternalTemplates = append(customExternalTemplates, map[string]any{
-			"template_name":  formatVariantTemplateName("external_peer", v.routingPolicy, extRoutingPolicy, v.cost, extCost),
-			"cost":           v.cost,
-			"routing_policy": v.routingPolicy,
+			"template_name":          formatVariantTemplateName("external_peer", v.routingPolicy, extRoutingPolicy, v.cost, extCost),
+			"cost":                   v.cost,
+			"routing_policy":         v.routingPolicy,
+			"has_bird_import_filter": extImportFilter != "",
+			"bird_import_filter":     extImportFilter,
+			"has_bird_export_filter": extExportFilter != "",
+			"bird_export_filter":     extExportFilter,
 		})
 	}
 
@@ -802,6 +826,8 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 
 		baseCfg := customBaseConfigs[id]
 		baseTmplName := "pol_peer_" + cleanID
+		importFilter := pol.EffectiveBirdImportFilter()
+		exportFilter := pol.EffectiveBirdExportFilter()
 
 		customBirdPolicies = append(customBirdPolicies, map[string]any{
 			"id":                            cleanID,
@@ -826,6 +852,10 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 			"has_disallowed_export_v6":      disallowedExportV6 != "",
 			"disallowed_export_prefixes_v4": disallowedExportV4,
 			"disallowed_export_prefixes_v6": disallowedExportV6,
+			"has_bird_import_filter":        importFilter != "",
+			"bird_import_filter":            importFilter,
+			"has_bird_export_filter":        exportFilter != "",
+			"bird_export_filter":            exportFilter,
 			"has_roa":                       hasRoa,
 			"roa_fn":                        roaFn,
 		})
@@ -868,6 +898,10 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 					"has_disallowed_export_v6":      disallowedExportV6 != "",
 					"disallowed_export_prefixes_v4": disallowedExportV4,
 					"disallowed_export_prefixes_v6": disallowedExportV6,
+					"has_bird_import_filter":        importFilter != "",
+					"bird_import_filter":            importFilter,
+					"has_bird_export_filter":        exportFilter != "",
+					"bird_export_filter":            exportFilter,
 					"has_roa":                       hasRoa,
 					"roa_fn":                        roaFn,
 				})
@@ -932,6 +966,18 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 	ctx["roa_policies"] = roaPolicies
 	ctx["has_dn42_roa"] = hasDN42Roa
 	ctx["has_default_roa"] = hasDefaultRoa
+	ctx["default_bird_import_filter"] = defaultImportFilter
+	ctx["has_default_bird_import_filter"] = defaultImportFilter != ""
+	ctx["default_bird_export_filter"] = defaultExportFilter
+	ctx["has_default_bird_export_filter"] = defaultExportFilter != ""
+	ctx["none_bird_import_filter"] = noneImportFilter
+	ctx["has_none_bird_import_filter"] = noneImportFilter != ""
+	ctx["none_bird_export_filter"] = noneExportFilter
+	ctx["has_none_bird_export_filter"] = noneExportFilter != ""
+	ctx["ext_bird_import_filter"] = extImportFilter
+	ctx["has_ext_bird_import_filter"] = extImportFilter != ""
+	ctx["ext_bird_export_filter"] = extExportFilter
+	ctx["has_ext_bird_export_filter"] = extExportFilter != ""
 
 	var birdHooksPre []string
 	var birdHooksPost []string

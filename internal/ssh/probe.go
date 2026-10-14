@@ -43,13 +43,9 @@ type ipJSONInterface struct {
 func ProbeHost(client *ssh.Client, host string, existingNodes []config.Node) (*ProbeResult, error) {
 	// 1. Get Hostname
 	var hostname string
-	hostnameOut, err := RunCommand(client, "hostname")
+	hostnameOut, err := RunCommand(client, "cat /proc/sys/kernel/hostname")
 	if err != nil {
-		if strings.Contains(err.Error(), " not found") {
-			hostname = "unknown"
-		} else {
-			return nil, fmt.Errorf("failed to get hostname: %w", err)
-		}
+		hostname = "unknown"
 	} else {
 		hostname = strings.TrimSpace(hostnameOut)
 	}

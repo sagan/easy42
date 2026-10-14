@@ -560,4 +560,41 @@ func TestEffectiveIngressNewWhitelist(t *testing.T) {
 	}
 }
 
+func TestEffectiveBirdFilters(t *testing.T) {
+	var nilPol *NetworkPolicy
+	if nilPol.EffectiveBirdImportFilter() != "" {
+		t.Errorf("expected empty string for nil policy import filter")
+	}
+	if nilPol.EffectiveBirdExportFilter() != "" {
+		t.Errorf("expected empty string for nil policy export filter")
+	}
+
+	emptyPol := &NetworkPolicy{}
+	if emptyPol.EffectiveBirdImportFilter() != "" {
+		t.Errorf("expected empty string for unset import filter")
+	}
+	if emptyPol.EffectiveBirdExportFilter() != "" {
+		t.Errorf("expected empty string for unset export filter")
+	}
+
+	pol := &NetworkPolicy{
+		BirdImportFilter:  "  import rule;  ",
+		BirdExportFilter:  "  export rule;  ",
+	}
+	if pol.EffectiveBirdImportFilter() != "import rule;" {
+		t.Errorf("expected trimmed import rule, got %q", pol.EffectiveBirdImportFilter())
+	}
+	if pol.EffectiveBirdExportFilter() != "export rule;" {
+		t.Errorf("expected trimmed export rule, got %q", pol.EffectiveBirdExportFilter())
+	}
+
+	// Test bird_export_fillter alias
+	aliasPol := &NetworkPolicy{
+		BirdExportFillter: "  alias export rule;  ",
+	}
+	if aliasPol.EffectiveBirdExportFilter() != "alias export rule;" {
+		t.Errorf("expected trimmed alias export rule, got %q", aliasPol.EffectiveBirdExportFilter())
+	}
+}
+
 
