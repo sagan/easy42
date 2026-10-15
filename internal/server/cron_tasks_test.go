@@ -145,3 +145,94 @@ func TestCronTasksAPI(t *testing.T) {
 		t.Fatalf("expected 0 tasks after delete, got %d", len(listAfter))
 	}
 }
+
+func TestCronTaskICMPPingParsing(t *testing.T) {
+	srv, mgr, cleanup := setupTestServerWithCron(t)
+	defer cleanup()
+
+	rawPingOutput := `PING 1.1.1.1 (1.1.1.1) 56(84) bytes of data.
+64 bytes from 1.1.1.1: icmp_seq=1 ttl=60 time=1.66 ms
+64 bytes from 1.1.1.1: icmp_seq=2 ttl=60 time=2.03 ms
+64 bytes from 1.1.1.1: icmp_seq=3 ttl=60 time=1.82 ms
+64 bytes from 1.1.1.1: icmp_seq=4 ttl=60 time=3.52 ms
+
+--- 1.1.1.1 ping statistics ---
+4 packets transmitted, 4 received, 0% packet loss, time 3005ms
+rtt min/avg/max/mdev = 1.663/2.257/3.515/0.737 ms`
+
+	// 1. Test PopulateCronTaskParsedMetrics directly
+	record := config.CronTaskResultRecord{
+		TaskID:     "task-icmp-1",
+		TaskName:   "ping-cf",
+		TaskType:   "ping",
+		NodeName:   "node1",
+		ExecutedAt: time.Now().Unix(),
+		Target:     "1.1.1.1",
+		RawOutput:  rawPingOutput,
+	}
+
+	engine.PopulateCronTaskParsedMetrics(&record)
+
+	if record.PacketsSent != 4 {
+		t.Errorf("expected 4 packets sent, got %d", record.PacketsSent)
+	}
+	if record.PacketsReceived != 4 {
+		t.Errorf("expected 4 packets received, got %d", record.PacketsReceived)
+	}
+	if record.PacketLossPct != 0.0 {
+		t.Errorf("expected 0.0 packet loss, got %f", record.PacketLossPct)
+	}
+	if record.MinRTTMs != 1.663 {
+		t.Errorf("expected MinRTT 1.663, got %f", record.MinRTTMs)
+	}
+	if record.AvgRTTMs != 2.257 {
+		t.Errorf("expected AvgRTT 2.257, got %f", record.AvgRTTMs)
+	}
+	if record.MaxRTTMs != 3.515 {
+		t.Errorf("expected MaxRTT 3.515, got %f", record.MaxRTTMs)
+	}
+	if record.MdevRTTMs != 0.737 {
+		t.Errorf("expected MdevRTT 0.737, got %f", record.MdevRTTMs)
+	}
+	if record.Target != "1.1.1.1" {
+		t.Errorf("expected target 1.1.1.1, got %s", record.Target)
+	}
+	if record.ParsedJSON == "" {
+		t.Errorf("expected non-empty ParsedJSON")
+	}
+
+	// 2. Test reparsing on GetNodeCronTasksResults for previously unparsed results
+	stateStore := mgr.StateStore()
+	unparsedRecord := config.CronTaskResultRecord{
+		TaskID:     "task-icmp-historical",
+		TaskName:   "ping-historical",
+		TaskType:   "ping",
+		NodeName:   "node1",
+		ExecutedAt: time.Now().Unix(),
+		Target:     "1.1.1.1",
+		RawOutput:  rawPingOutput,
+		// PacketsSent: 0, AvgRTTMs: 0
+	}
+	if err := stateStore.RecordCronTaskResult(unparsedRecord); err != nil {
+		t.Fatalf("failed to record unparsed cron result: %v", err)
+	}
+
+	resResp, err := mgr.GetNodeCronTasksResults("node1", "task-icmp-historical", "24h", 100)
+	if err != nil {
+		t.Fatalf("failed to get node cron task results: %v", err)
+	}
+	if len(resResp.Results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(resResp.Results))
+	}
+	r := resResp.Results[0]
+	if r.PacketsSent != 4 || r.PacketsReceived != 4 {
+		t.Errorf("expected 4/4 packets after query populate, got %d/%d", r.PacketsReceived, r.PacketsSent)
+	}
+	if r.AvgRTTMs != 2.257 {
+		t.Errorf("expected AvgRTT 2.257 after query populate, got %f", r.AvgRTTMs)
+	}
+	if r.MinRTTMs != 1.663 || r.MaxRTTMs != 3.515 {
+		t.Errorf("expected min/max 1.663/3.515, got %f/%f", r.MinRTTMs, r.MaxRTTMs)
+	}
+	_ = srv
+}

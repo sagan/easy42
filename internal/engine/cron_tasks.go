@@ -70,51 +70,75 @@ func (m *Manager) setupAgentCronTasksListeners() {
 			record.ExecutedAt = time.Now().Unix()
 		}
 
-		// Parse output using lookingglass parsers
-		if taskType == "tcp_ping" {
-			parsed := lookingglass.ParseOutput("tcp_ping", r.RawOutput, target)
-			if tp, ok := parsed.(*lookingglass.TCPPingResult); ok && tp != nil {
-				record.PacketsSent = tp.PacketsSent
-				record.PacketsReceived = tp.PacketsReceived
-				record.PacketLossPct = tp.PacketLossPct
-				record.MinRTTMs = tp.MinRTT
-				record.AvgRTTMs = tp.AvgRTT
-				record.MaxRTTMs = tp.MaxRTT
-				record.MdevRTTMs = tp.MdevRTT
-				if record.Target == "" {
-					record.Target = tp.Target
-				}
-				if jsonBytes, err := json.Marshal(tp); err == nil {
-					record.ParsedJSON = string(jsonBytes)
-				}
-			}
-		} else {
-			// default: ping
-			parsed := lookingglass.ParseOutput("ping", r.RawOutput, target)
-			if p, ok := parsed.(*lookingglass.PingResult); ok && p != nil {
-				record.PacketsSent = p.PacketsSent
-				record.PacketsReceived = p.PacketsReceived
-				record.PacketLossPct = p.PacketLossPct
-				record.MinRTTMs = p.MinRTT
-				record.AvgRTTMs = p.AvgRTT
-				record.MaxRTTMs = p.MaxRTT
-				record.MdevRTTMs = p.MdevRTT
-				if record.Target == "" {
-					record.Target = p.Host
-				}
-				if jsonBytes, err := json.Marshal(p); err == nil {
-					record.ParsedJSON = string(jsonBytes)
-				}
-			}
-		}
-
-		// If execution failed with non-zero exit code and no packets received, ensure packet loss is 100%
-		if record.ExitCode != 0 && record.PacketsReceived == 0 {
-			record.PacketLossPct = 100.0
-		}
+		PopulateCronTaskParsedMetrics(&record)
 
 		_ = m.stateStore.RecordCronTaskResult(record)
 	})
+}
+
+// PopulateCronTaskParsedMetrics parses raw task output and fills in metrics fields if not already populated
+func PopulateCronTaskParsedMetrics(record *config.CronTaskResultRecord) {
+	if record == nil || record.RawOutput == "" {
+		return
+	}
+
+	if record.TaskType == "tcp_ping" {
+		parsed := lookingglass.ParseOutput("tcp_ping", record.RawOutput, record.Target)
+		var tcpRes *lookingglass.TCPPingResult
+		if tp, ok := parsed.(*lookingglass.TCPPingResult); ok && tp != nil {
+			tcpRes = tp
+		} else if tp, ok := parsed.(lookingglass.TCPPingResult); ok {
+			tcpRes = &tp
+		}
+		if tcpRes != nil {
+			record.PacketsSent = tcpRes.PacketsSent
+			record.PacketsReceived = tcpRes.PacketsReceived
+			record.PacketLossPct = tcpRes.PacketLossPct
+			record.MinRTTMs = tcpRes.MinRTT
+			record.AvgRTTMs = tcpRes.AvgRTT
+			record.MaxRTTMs = tcpRes.MaxRTT
+			record.MdevRTTMs = tcpRes.MdevRTT
+			if record.Target == "" {
+				record.Target = tcpRes.Target
+			}
+			if record.ParsedJSON == "" {
+				if jsonBytes, err := json.Marshal(tcpRes); err == nil {
+					record.ParsedJSON = string(jsonBytes)
+				}
+			}
+		}
+	} else {
+		// default: ping
+		parsed := lookingglass.ParseOutput("ping", record.RawOutput, record.Target)
+		var pingRes *lookingglass.PingResult
+		if p, ok := parsed.(*lookingglass.PingResult); ok && p != nil {
+			pingRes = p
+		} else if p, ok := parsed.(lookingglass.PingResult); ok {
+			pingRes = &p
+		}
+		if pingRes != nil {
+			record.PacketsSent = pingRes.PacketsSent
+			record.PacketsReceived = pingRes.PacketsReceived
+			record.PacketLossPct = pingRes.PacketLossPct
+			record.MinRTTMs = pingRes.MinRTT
+			record.AvgRTTMs = pingRes.AvgRTT
+			record.MaxRTTMs = pingRes.MaxRTT
+			record.MdevRTTMs = pingRes.MdevRTT
+			if record.Target == "" {
+				record.Target = pingRes.Host
+			}
+			if record.ParsedJSON == "" {
+				if jsonBytes, err := json.Marshal(pingRes); err == nil {
+					record.ParsedJSON = string(jsonBytes)
+				}
+			}
+		}
+	}
+
+	// If execution failed with non-zero exit code and no packets received, ensure packet loss is 100%
+	if record.ExitCode != 0 && record.PacketsReceived == 0 {
+		record.PacketLossPct = 100.0
+	}
 }
 
 // GetCronTasks returns all configured cron tasks
@@ -430,6 +454,9 @@ func (m *Manager) GetNodeCronTasksResults(nodeName string, taskID string, rangeS
 	// Results are ordered by executed_at DESC
 	for i := range results {
 		r := &results[i]
+		if r.PacketsSent == 0 && r.RawOutput != "" {
+			PopulateCronTaskParsedMetrics(r)
+		}
 		ac, exists := accumMap[r.TaskID]
 		if !exists {
 			ac = &accum{latest: r}

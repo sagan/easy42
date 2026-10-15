@@ -169,7 +169,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
   const linkSuffix = linkToEdit ? "" : existingLinksBetween.length > 0 ? `${existingLinksBetween.length}` : "";
   const linkPortOffset = linkToEdit ? 0 : existingLinksBetween.length;
 
-  const managedListenPort = (managedNode === fromNode ? fromPort : toPort) || 51820 + linkPortOffset;
+  const managedListenPort = (managedNode === fromNode ? fromPort : toPort) || 10000 + linkPortOffset;
   const { entrypoint: managedEP } = resolvePeerEntrypoint(externalNode, managedNode);
   const managedPeerEndpoint = formatEndpoint(managedEP?.ip || managedNode?.host, managedListenPort);
 
@@ -318,15 +318,19 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
       const publicAsnStr = String(publicAsn).trim();
       const publicSuffix4 = publicAsnStr ? publicAsnStr.slice(-4) : "1";
       let publicPort5 = Number(publicAsnStr.slice(-5));
-      if (isNaN(publicPort5) || publicPort5 <= 0 || publicPort5 > 65535) {
-        publicPort5 = 51820;
+      if (isNaN(publicPort5) || publicPort5 <= 0) {
+        publicPort5 = 10000 + linkPortOffset;
+      } else if (publicPort5 > 65535) {
+        publicPort5 -= 40000;
       }
 
       const extAsnStr = String(externalNode.asn || "").trim();
       const extSuffix4 = extAsnStr ? extAsnStr.slice(-4) : "2";
       let extPort5 = Number(extAsnStr.slice(-5));
-      if (isNaN(extPort5) || extPort5 <= 0 || extPort5 > 65535) {
-        extPort5 = 51820 + linkPortOffset;
+      if (isNaN(extPort5) || extPort5 <= 0) {
+        extPort5 = 10000 + linkPortOffset;
+      } else if (extPort5 > 65535) {
+        extPort5 -= 40000;
       }
 
       const peerKey = `${managedNode.name}-${externalNode.name}-${externalNode.asn}-${publicAsn}`;
@@ -1444,7 +1448,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                     size="small"
                     value={remotePort}
                     onChange={(e) => setRemotePort(e.target.value === "" ? "" : Number(e.target.value))}
-                    placeholder="e.g. 51820"
+                    placeholder="e.g. 10000"
                     helperText="WireGuard listen port (or leave empty)"
                   />
                 </Box>

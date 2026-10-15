@@ -25,8 +25,9 @@ import {
   TableCell,
   TableBody,
   TableContainer,
+  InputAdornment,
 } from "@mui/material";
-import { Clock, Plus, Trash2, Edit2, Play, CheckCircle2, Activity, RefreshCw } from "lucide-react";
+import { Clock, Plus, Trash2, Edit2, Play, CheckCircle2, Activity, RefreshCw, Search, X } from "lucide-react";
 import { api } from "../../api/client";
 import type { CronTask, Node } from "../../types/api";
 
@@ -70,6 +71,7 @@ export const CronTasksTab: React.FC<CronTasksTabProps> = ({ nodes, onExecuteNow 
   const [formTimeout, setFormTimeout] = useState("15");
   const [formCronExpr, setFormCronExpr] = useState("*/5 * * * *");
   const [formNodes, setFormNodes] = useState<string[]>([]);
+  const [nodeFilter, setNodeFilter] = useState("");
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -95,6 +97,19 @@ export const CronTasksTab: React.FC<CronTasksTabProps> = ({ nodes, onExecuteNow 
     return (nodes || []).filter((n) => !n.is_external);
   }, [nodes]);
 
+  const filteredAvailableNodes = React.useMemo(() => {
+    if (!nodeFilter.trim()) return availableNodes;
+    const q = nodeFilter.trim().toLowerCase();
+    return availableNodes.filter(
+      (n) =>
+        n.name.toLowerCase().includes(q) ||
+        (n.description && n.description.toLowerCase().includes(q)) ||
+        (n.host && n.host.toLowerCase().includes(q)) ||
+        (n.ip && n.ip.toLowerCase().includes(q)) ||
+        (n.tags && n.tags.some((t) => t.toLowerCase().includes(q)))
+    );
+  }, [availableNodes, nodeFilter]);
+
   const openCreateModal = () => {
     setEditingTask(null);
     setFormName("");
@@ -108,6 +123,7 @@ export const CronTasksTab: React.FC<CronTasksTabProps> = ({ nodes, onExecuteNow 
     const defaultNode =
       availableNodes.find((n) => n.mode === "agent" || Boolean(n.agent_token))?.name || availableNodes[0]?.name;
     setFormNodes(defaultNode ? [defaultNode] : []);
+    setNodeFilter("");
     setFormError(null);
     setModalOpen(true);
   };
@@ -122,6 +138,7 @@ export const CronTasksTab: React.FC<CronTasksTabProps> = ({ nodes, onExecuteNow 
     setFormTimeout(task.timeout_sec ? String(task.timeout_sec) : "15");
     setFormCronExpr(task.cron_expr);
     setFormNodes(task.nodes || []);
+    setNodeFilter("");
     setFormError(null);
     setModalOpen(true);
   };
@@ -644,20 +661,54 @@ export const CronTasksTab: React.FC<CronTasksTabProps> = ({ nodes, onExecuteNow 
               <Box sx={{ display: "flex", gap: 1 }}>
                 <Button
                   size="small"
-                  onClick={() => setFormNodes(availableNodes.map((n) => n.name))}
+                  onClick={() => {
+                    const toAdd = filteredAvailableNodes.map((n) => n.name);
+                    setFormNodes((prev) => Array.from(new Set([...prev, ...toAdd])));
+                  }}
                   sx={{ textTransform: "none", fontSize: "0.75rem" }}
                 >
-                  Select All
+                  {nodeFilter.trim() ? "Select Filtered" : "Select All"}
                 </Button>
                 <Button
                   size="small"
-                  onClick={() => setFormNodes([])}
+                  onClick={() => {
+                    if (nodeFilter.trim()) {
+                      const toRemove = new Set(filteredAvailableNodes.map((n) => n.name));
+                      setFormNodes((prev) => prev.filter((name) => !toRemove.has(name)));
+                    } else {
+                      setFormNodes([]);
+                    }
+                  }}
                   sx={{ textTransform: "none", fontSize: "0.75rem" }}
                 >
-                  Clear
+                  {nodeFilter.trim() ? "Clear Filtered" : "Clear"}
                 </Button>
               </Box>
             </Box>
+
+            <TextField
+              size="small"
+              fullWidth
+              placeholder="Filter nodes by name, IP, tag..."
+              value={nodeFilter}
+              onChange={(e) => setNodeFilter(e.target.value)}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <Search size={15} color="#94A3B8" />
+                  </InputAdornment>
+                ),
+                endAdornment: nodeFilter ? (
+                  <InputAdornment position="end">
+                    <IconButton size="small" onClick={() => setNodeFilter("")} edge="end" sx={{ p: 0.5 }}>
+                      <X size={14} color="#94A3B8" />
+                    </IconButton>
+                  </InputAdornment>
+                ) : undefined,
+                sx: { height: 34, fontSize: "0.8rem", bgcolor: "#FFFFFF" },
+              }}
+              sx={{ mb: 1.5 }}
+            />
 
             <Box
               sx={{
@@ -672,43 +723,51 @@ export const CronTasksTab: React.FC<CronTasksTabProps> = ({ nodes, onExecuteNow 
                 border: "1px solid #E2E8F0",
               }}
             >
-              {availableNodes.map((n) => {
-                const isSelected = formNodes.includes(n.name);
-                const isAgent = n.mode === "agent" || Boolean(n.agent_token);
-                return (
-                  <Paper
-                    key={n.name}
-                    elevation={0}
-                    onClick={() => toggleNodeSelection(n.name)}
-                    sx={{
-                      p: 1.25,
-                      borderRadius: 2,
-                      border: "1px solid",
-                      borderColor: isSelected ? "#4F46E5" : "#E2E8F0",
-                      bgcolor: isSelected ? "#EEF2FF" : "#FFFFFF",
-                      cursor: "pointer",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      transition: "all 0.15s ease",
-                      "&:hover": { borderColor: "#818CF8" },
-                    }}
-                  >
-                    <Box>
-                      <Typography
-                        variant="body2"
-                        sx={{ fontWeight: isSelected ? 700 : 500, color: isSelected ? "#312E81" : "#1E293B" }}
-                      >
-                        {n.name}
-                      </Typography>
-                      <Typography variant="caption" sx={{ color: isAgent ? "#16A34A" : "#D97706" }}>
-                        {isAgent ? "Agent Node" : "No Agent"}
-                      </Typography>
-                    </Box>
-                    {isSelected && <CheckCircle2 size={16} color="#4F46E5" />}
-                  </Paper>
-                );
-              })}
+              {filteredAvailableNodes.length === 0 ? (
+                <Box sx={{ gridColumn: "1 / -1", py: 3, textAlign: "center", color: "#94A3B8" }}>
+                  <Typography variant="body2">
+                    {availableNodes.length === 0 ? "No managed nodes available" : `No nodes matching "${nodeFilter}"`}
+                  </Typography>
+                </Box>
+              ) : (
+                filteredAvailableNodes.map((n) => {
+                  const isSelected = formNodes.includes(n.name);
+                  const isAgent = n.mode === "agent" || Boolean(n.agent_token);
+                  return (
+                    <Paper
+                      key={n.name}
+                      elevation={0}
+                      onClick={() => toggleNodeSelection(n.name)}
+                      sx={{
+                        p: 1.25,
+                        borderRadius: 2,
+                        border: "1px solid",
+                        borderColor: isSelected ? "#4F46E5" : "#E2E8F0",
+                        bgcolor: isSelected ? "#EEF2FF" : "#FFFFFF",
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        transition: "all 0.15s ease",
+                        "&:hover": { borderColor: "#818CF8" },
+                      }}
+                    >
+                      <Box>
+                        <Typography
+                          variant="body2"
+                          sx={{ fontWeight: isSelected ? 700 : 500, color: isSelected ? "#312E81" : "#1E293B" }}
+                        >
+                          {n.name}
+                        </Typography>
+                        <Typography variant="caption" sx={{ color: isAgent ? "#16A34A" : "#D97706" }}>
+                          {isAgent ? "Agent Node" : "No Agent"}
+                        </Typography>
+                      </Box>
+                      {isSelected && <CheckCircle2 size={16} color="#4F46E5" />}
+                    </Paper>
+                  );
+                })
+              )}
             </Box>
             <Typography variant="caption" sx={{ color: "#64748B", display: "block", mt: 0.75 }}>
               * Cron tasks are executed solely by node agents. If a node does not have an active agent, the task will
