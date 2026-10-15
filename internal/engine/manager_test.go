@@ -2235,6 +2235,76 @@ func TestLongNodeNamesAndInterfaceConflicts(t *testing.T) {
 	}
 }
 
+func TestUpdateNodePreservesAgentFields(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "mgr-agent-preserve-test-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	store := config.NewStore(tmpDir)
+	pass, err := store.Initialize()
+	if err != nil {
+		t.Fatalf("Failed to init store: %v", err)
+	}
+
+	mgr := NewManager(store)
+	if err := mgr.Unlock(pass); err != nil {
+		t.Fatalf("Failed to unlock manager: %v", err)
+	}
+
+	lastSeen := time.Now().UTC().Add(-5 * time.Minute).Truncate(time.Second)
+	initialNode := config.Node{
+		Name:          "agent-node-1",
+		Host:          "192.168.1.50",
+		IP:            "192.168.100.50",
+		ASN:           4224420050,
+		Mode:          "agent",
+		AgentToken:    "secret-agent-token-12345",
+		AgentVersion:  "1.2.3",
+		AgentLastSeen: lastSeen,
+	}
+
+	if err := mgr.AddNode(initialNode); err != nil {
+		t.Fatalf("AddNode failed: %v", err)
+	}
+
+	// Update the node without specifying agent fields (e.g. from a UI modal edit)
+	updatedPayload := config.Node{
+		Name: initialNode.Name,
+		Host: "192.168.1.51",
+		IP:   "192.168.100.51",
+		ASN:  4224420050,
+		Note: "Updated note",
+	}
+
+	if err := mgr.UpdateNode(initialNode.Name, updatedPayload); err != nil {
+		t.Fatalf("UpdateNode failed: %v", err)
+	}
+
+	saved := mgr.GetNode(initialNode.Name)
+	if saved == nil {
+		t.Fatalf("GetNode returned nil")
+	}
+
+	if saved.AgentToken != "secret-agent-token-12345" {
+		t.Errorf("AgentToken was not preserved! got %q, want %q", saved.AgentToken, "secret-agent-token-12345")
+	}
+	if saved.Mode != "agent" {
+		t.Errorf("Mode was not preserved! got %q, want %q", saved.Mode, "agent")
+	}
+	if saved.AgentVersion != "1.2.3" {
+		t.Errorf("AgentVersion was not preserved! got %q, want %q", saved.AgentVersion, "1.2.3")
+	}
+	if !saved.AgentLastSeen.Equal(lastSeen) {
+		t.Errorf("AgentLastSeen was not preserved! got %v, want %v", saved.AgentLastSeen, lastSeen)
+	}
+	if saved.IP != "192.168.100.51" || saved.Note != "Updated note" {
+		t.Errorf("Updated fields were not applied properly: IP=%s Note=%s", saved.IP, saved.Note)
+	}
+}
+
+
 
 
 

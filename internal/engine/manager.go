@@ -519,6 +519,20 @@ func (m *Manager) UpdateNode(name string, updated config.Node) error {
 		updated.Y = oldNode.Y
 	}
 
+	// Preserve agent fields if not explicitly specified in updated node
+	if updated.AgentToken == "" && oldNode.AgentToken != "" {
+		updated.AgentToken = oldNode.AgentToken
+	}
+	if updated.Mode == "" && oldNode.Mode != "" {
+		updated.Mode = oldNode.Mode
+	}
+	if updated.AgentVersion == "" && oldNode.AgentVersion != "" {
+		updated.AgentVersion = oldNode.AgentVersion
+	}
+	if updated.AgentLastSeen.IsZero() && !oldNode.AgentLastSeen.IsZero() {
+		updated.AgentLastSeen = oldNode.AgentLastSeen
+	}
+
 	cfg.Nodes[idx] = updated
 
 	// Re-resolve endpoints for connected links

@@ -591,9 +591,14 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
         bird_template: birdTemplate.trim() || undefined,
         nft_template: nftTemplate.trim() || undefined,
         enable_fa: enableFa,
+        description: description.trim() || undefined,
         note: note.trim() || undefined,
         x: nodeToEdit?.x,
         y: nodeToEdit?.y,
+        mode: nodeToEdit?.mode,
+        agent_token: nodeToEdit?.agent_token,
+        agent_version: nodeToEdit?.agent_version,
+        agent_last_seen: nodeToEdit?.agent_last_seen,
       };
     }
 

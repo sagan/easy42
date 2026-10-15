@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"easy42/internal/ssh"
+
 	"github.com/pkg/sftp"
 	golangssh "golang.org/x/crypto/ssh"
 )
@@ -174,9 +175,10 @@ func executeScript(
 				_, _ = ef.Write(content)
 				_ = ef.Close()
 				perm := os.FileMode(0644)
-				if fname == "easy42-agent" {
+				switch fname {
+				case "easy42-agent":
 					perm = 0755
-				} else if fname == "agent.json" {
+				case "agent.json":
 					perm = 0600
 				}
 				_ = sftpClient.Chmod(extraPath, perm)

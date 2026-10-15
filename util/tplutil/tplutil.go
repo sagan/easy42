@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"maps"
-	"os"
 	"strings"
 	"sync"
 	"text/template"
@@ -63,21 +62,12 @@ func (t *Template) Exec(data any) (string, error) {
 }
 
 // Get a Go text template instance from tpl string.
-// If tpl starts with "@" char, treat it (the rest part after @) as a file name
-// and read template contents from it instead.
 func GetTemplate(tpl string, strict bool) (*Template, error) {
 	return GetTemplateWithFuncs(tpl, strict, nil)
 }
 
 // GetTemplateWithFuncs parses a template and registers extra dynamic functions before compilation.
 func GetTemplateWithFuncs(tpl string, strict bool, extraFuncs map[string]any) (*Template, error) {
-	if strings.HasPrefix(tpl, "@") {
-		contents, err := os.ReadFile(tpl[1:])
-		if err != nil {
-			return nil, err
-		}
-		tpl = string(contents)
-	}
 	templateInstance := template.New("template").Funcs(templateFuncs)
 	if extraFuncs != nil {
 		templateInstance = templateInstance.Funcs(extraFuncs)

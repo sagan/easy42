@@ -225,35 +225,35 @@ export const NodeDetailPage: React.FC = () => {
     }
   }, [node?.agent_token]);
 
-  // If node does not have token, generate or fetch one when visiting the agent tab
+  // When visiting the agent tab, query existing token from server if not yet loaded
   useEffect(() => {
-    if (currentTab === "agent" && node && !node.agent_token && !agentToken && !generatingToken) {
-      setGeneratingToken(true);
+    if (currentTab === "agent" && node && !node.agent_token && !agentToken) {
       api
-        .generateAgentToken(node.name)
+        .getNodeAgent(node.name)
         .then((res) => {
-          setAgentToken(res.token);
-          loadData();
+          if (res?.token) {
+            setAgentToken(res.token);
+          }
         })
-        .catch(() => {})
-        .finally(() => setGeneratingToken(false));
+        .catch(() => {});
     }
-  }, [currentTab, node?.name, node?.agent_token, agentToken, generatingToken]);
+  }, [currentTab, node?.name, node?.agent_token, agentToken]);
 
   const handleRotateAgentToken = async () => {
     if (!node) return;
+    const isRotating = Boolean(agentToken || node.agent_token);
     setGeneratingToken(true);
     try {
       const res = await api.generateAgentToken(node.name);
       setAgentToken(res.token);
       await loadData();
       setStateToast({
-        message: `Agent token rotated successfully for ${node.name}`,
+        message: `Agent token ${isRotating ? "rotated" : "generated"} successfully for ${node.name}`,
         severity: "success",
       });
     } catch (err: any) {
       setStateToast({
-        message: `Failed to generate token: ${err.message || err}`,
+        message: `Failed to ${isRotating ? "rotate" : "generate"} token: ${err.message || err}`,
         severity: "error",
       });
     } finally {
@@ -288,8 +288,10 @@ export const NodeDetailPage: React.FC = () => {
   };
 
   const serverUrl = window.location.origin;
-  const currentToken = agentToken || node?.agent_token || "aaa";
-  const installSnippet = `curl ${serverUrl}/api/agent/install.sh | sh -s -- --token "${currentToken}"${overwriteConfig ? " --overwrite-config" : ""}`;
+  const currentToken = agentToken || node?.agent_token || "";
+  const installSnippet = currentToken
+    ? `curl ${serverUrl}/api/agent/install.sh | sh -s -- --token "${currentToken}"${overwriteConfig ? " --overwrite-config" : ""}`
+    : `# No agent token generated yet. Click "Generate Token" above.`;
 
   // Fetch telemetry
   const fetchMetrics = useCallback(
@@ -2617,7 +2619,7 @@ export const NodeDetailPage: React.FC = () => {
                   disabled={generatingToken}
                   sx={{ fontSize: "0.78rem", textTransform: "none", color: "#4F46E5", borderColor: "#C7D2FE" }}
                 >
-                  {generatingToken ? "Generating..." : "Rotate Token"}
+                  {generatingToken ? (currentToken ? "Rotating..." : "Generating...") : (currentToken ? "Rotate Token" : "Generate Token")}
                 </Button>
               </Box>
 
