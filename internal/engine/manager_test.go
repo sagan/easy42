@@ -2354,6 +2354,106 @@ func TestUpdateNodePreservesAgentFields(t *testing.T) {
 	}
 }
 
+func TestPlanSyncWhenVaultLocked(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "easy42-vault-sync-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	store := config.NewStore(tempDir)
+	pass, err := store.Initialize()
+	if err != nil {
+		t.Fatalf("Failed to init store: %v", err)
+	}
+
+	mgr := NewManager(store)
+	if err := mgr.Unlock(pass); err != nil {
+		t.Fatalf("Failed to unlock manager: %v", err)
+	}
+
+	// Add two nodes and a link
+	nodeA := config.Node{
+		Name:      "test-node-a",
+		Host:      "192.168.10.1",
+		IP:        "192.168.100.1",
+		Interface: "lo",
+		ASN:       4224420001,
+	}
+	nodeB := config.Node{
+		Name:      "test-node-b",
+		Host:      "192.168.10.2",
+		IP:        "192.168.100.2",
+		Interface: "lo",
+		ASN:       4224420002,
+	}
+
+	if err := mgr.AddNode(nodeA); err != nil {
+		t.Fatalf("Failed to add nodeA: %v", err)
+	}
+	if err := mgr.AddNode(nodeB); err != nil {
+		t.Fatalf("Failed to add nodeB: %v", err)
+	}
+
+	if _, err := mgr.AddLink("test-node-a", "test-node-b", 0, 0, nil); err != nil {
+		t.Fatalf("Failed to add link: %v", err)
+	}
+
+	// 1. Lock the vault
+	mgr.Lock()
+	if mgr.IsUnlocked() {
+		t.Fatalf("Manager should be locked")
+	}
+
+	// 2. PlanSync while locked should succeed without error
+	actionsLocked, err := mgr.PlanSync()
+	if err != nil {
+		t.Fatalf("PlanSync while vault locked should NOT fail, got: %v", err)
+	}
+
+	// Verify that WireGuard interface actions are skipped
+	for _, act := range actionsLocked {
+		if act.Type == config.ActionSyncConfig || act.Type == config.ActionDeleteConfig {
+			t.Errorf("Expected WireGuard action to be skipped when vault locked, got: %+v", act)
+		}
+	}
+
+	// Verify that non-wireguard actions (e.g. BIRD routing) ARE planned
+	hasBird := false
+	for _, act := range actionsLocked {
+		if act.Type == config.ActionSyncBirdConfig {
+			hasBird = true
+			break
+		}
+	}
+	if !hasBird {
+		t.Errorf("Expected BIRD config actions to be planned even when vault locked")
+	}
+
+	// 3. Unlock the vault and PlanSync again
+	if err := mgr.Unlock(pass); err != nil {
+		t.Fatalf("Failed to re-unlock manager: %v", err)
+	}
+
+	actionsUnlocked, err := mgr.PlanSync()
+	if err != nil {
+		t.Fatalf("PlanSync while unlocked failed: %v", err)
+	}
+
+	// Verify WireGuard actions are present when unlocked
+	hasWg := false
+	for _, act := range actionsUnlocked {
+		if act.Type == config.ActionSyncConfig {
+			hasWg = true
+			break
+		}
+	}
+	if !hasWg {
+		t.Errorf("Expected WireGuard actions to be planned when vault is unlocked")
+	}
+}
+
+
 
 
 

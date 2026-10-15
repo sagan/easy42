@@ -1177,6 +1177,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                     sx={{
                       background: "linear-gradient(135deg, #4F46E5 0%, #3730A3 100%)",
                       fontWeight: 700,
+                      color: "#ffffff",
                     }}
                   >
                     {passwordLoading ? "Updating Password..." : "Change Password"}

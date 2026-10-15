@@ -3,8 +3,10 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"net"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -101,6 +103,19 @@ var serveCmd = &cobra.Command{
 		}
 		fmt.Printf("Data directory: %s\n", GetDataDir())
 
+		primaryAddr := "127.0.0.1:4242"
+		addrs := srv.ListenAddrs()
+		if len(addrs) > 0 {
+			primaryAddr = addrs[0]
+			host, port, err := net.SplitHostPort(primaryAddr)
+			if err == nil && (host == "0.0.0.0" || host == "" || host == "::") {
+				primaryAddr = net.JoinHostPort("127.0.0.1", port)
+			}
+		}
+		serverURLFile := filepath.Join(GetDataDir(), "server.url")
+		_ = os.WriteFile(serverURLFile, []byte(fmt.Sprintf("http://%s", primaryAddr)), 0644)
+		defer os.Remove(serverURLFile)
+
 		// Graceful shutdown handling
 		sigChan := make(chan os.Signal, 1)
 		signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
@@ -108,6 +123,7 @@ var serveCmd = &cobra.Command{
 		go func() {
 			<-sigChan
 			fmt.Println("\nShutting down easy42 server...")
+			_ = os.Remove(serverURLFile)
 			_ = srv.Shutdown(cmd.Context())
 			os.Exit(0)
 		}()

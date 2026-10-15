@@ -1274,8 +1274,9 @@ func (s *Server) handleSyncPreview(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+	scope := r.URL.Query().Get("scope")
 
-	actions, err := s.mgr.PlanSync(targetNodes...)
+	actions, err := s.mgr.PlanSyncWithScope(scope, targetNodes...)
 	if err != nil {
 		if err == crypto.ErrVaultLocked {
 			writeError(w, http.StatusLocked, "Vault is locked. Unlock with password first.")
@@ -1293,6 +1294,7 @@ func (s *Server) handleSyncPreview(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleExecuteSync(w http.ResponseWriter, r *http.Request) {
 	force := r.URL.Query().Get("force") == "true"
+	scope := r.URL.Query().Get("scope")
 	var targetNodes []string
 	if nodeParam := r.URL.Query().Get("node"); nodeParam != "" {
 		for _, part := range strings.Split(nodeParam, ",") {
@@ -1306,12 +1308,16 @@ func (s *Server) handleExecuteSync(w http.ResponseWriter, r *http.Request) {
 	if r.Body != nil {
 		var req struct {
 			Force bool     `json:"force"`
+			Scope string   `json:"scope"`
 			Node  string   `json:"node"`
 			Nodes []string `json:"nodes"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err == nil {
 			if !force && req.Force {
 				force = true
+			}
+			if req.Scope != "" && scope == "" {
+				scope = req.Scope
 			}
 			if req.Node != "" {
 				targetNodes = append(targetNodes, strings.TrimSpace(req.Node))
@@ -1325,7 +1331,7 @@ func (s *Server) handleExecuteSync(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	results, err := s.mgr.ExecuteSyncNodes(force, targetNodes...)
+	results, err := s.mgr.ExecuteSyncNodesWithScope(force, scope, targetNodes...)
 	if err != nil {
 		if err == crypto.ErrVaultLocked {
 			writeError(w, http.StatusLocked, "Vault is locked. Unlock with password first.")

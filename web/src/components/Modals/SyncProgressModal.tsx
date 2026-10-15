@@ -31,8 +31,11 @@ import {
   Network,
   Shield,
   AlertTriangle,
+  Lock,
+  Unlock,
 } from "lucide-react";
 import { api } from "../../api/client";
+import { useMesh } from "../../context/MeshContext";
 import { SyncAction, SyncResult, Node } from "../../types/api";
 
 interface SyncProgressModalProps {
@@ -52,6 +55,10 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
   unreachableNodes,
   targetNode,
 }) => {
+  const mesh = useMesh();
+  const isUnlocked = mesh.isUnlocked;
+  const handleUnlockTrigger = onNeedUnlock || (() => mesh.setUnlockOpen(true));
+
   const [loadingPreview, setLoadingPreview] = useState(false);
   const [actions, setActions] = useState<SyncAction[]>([]);
   const [previewError, setPreviewError] = useState<string | null>(null);
@@ -69,7 +76,7 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
       setStateMessage(null);
       loadPreview();
     }
-  }, [open, targetNode]);
+  }, [open, targetNode, isUnlocked]);
 
   const loadPreview = async () => {
     setLoadingPreview(true);
@@ -80,11 +87,6 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
       setActions(data || []);
     } catch (err: unknown) {
       const e = err as Error & { status?: number };
-      if (e.status === 423 && onNeedUnlock) {
-        onClose();
-        onNeedUnlock();
-        return;
-      }
       setPreviewError(e.message || "Failed to generate sync preview");
     } finally {
       setLoadingPreview(false);
@@ -131,11 +133,6 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
       onSyncComplete();
     } catch (err: unknown) {
       const e = err as Error & { status?: number };
-      if (e.status === 423 && onNeedUnlock) {
-        onClose();
-        onNeedUnlock();
-        return;
-      }
       setSyncError(e.message || "Sync execution failed");
     } finally {
       setSyncing(false);
@@ -257,6 +254,18 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
                 : "Some actions encountered errors. Review details below."}
             </Alert>
 
+            {!isUnlocked && (
+              <Alert
+                severity="info"
+                icon={<Lock size={18} color="#D97706" />}
+                sx={{ borderRadius: 2, backgroundColor: "#FFFBEB", border: "1px solid #FDE68A" }}
+              >
+                <Typography variant="body2" sx={{ fontWeight: 600, color: "#92400E" }}>
+                  Vault was locked during sync: only BIRD routing, ROA, and firewall rules were applied. WireGuard interface tasks were skipped.
+                </Typography>
+              </Alert>
+            )}
+
             <Box sx={{ display: "flex", flexDirection: "column", gap: 1, maxHeight: 360, overflowY: "auto" }}>
               {safeResults.map((res, i) => (
                 <Box
@@ -306,6 +315,50 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
         ) : (
           /* Action Plan Preview */
           <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+            {/* Vault Locked Warning / Notice */}
+            {!isUnlocked && (
+              <Alert
+                severity="warning"
+                icon={<Lock size={20} color="#D97706" />}
+                action={
+                  <Button
+                    color="inherit"
+                    size="small"
+                    variant="outlined"
+                    startIcon={<Unlock size={14} />}
+                    onClick={handleUnlockTrigger}
+                    sx={{
+                      textTransform: "none",
+                      fontWeight: 700,
+                      borderColor: "rgba(180, 83, 9, 0.4)",
+                      color: "#92400E",
+                      bgcolor: "rgba(255, 255, 255, 0.8)",
+                      whiteSpace: "nowrap",
+                      "&:hover": {
+                        borderColor: "#92400E",
+                        backgroundColor: "#FEF3C7",
+                      },
+                    }}
+                  >
+                    Unlock Vault
+                  </Button>
+                }
+                sx={{
+                  borderRadius: 2,
+                  backgroundColor: "#FFFBEB",
+                  border: "1px solid #FDE68A",
+                  "& .MuiAlert-message": { width: "100%", pr: 1 },
+                }}
+              >
+                <Typography variant="body2" sx={{ fontWeight: 700, color: "#92400E" }}>
+                  Key Vault is Locked — WireGuard tasks are skipped
+                </Typography>
+                <Typography variant="caption" sx={{ color: "#B45309", display: "block", mt: 0.25, lineHeight: 1.4 }}>
+                  WireGuard private keys cannot be decrypted while the vault is locked. WireGuard interface creation, updates, and interface cleanup are skipped. Only BIRD routing, ROA tables, and firewall (nftables) configurations are planned and will be synced. Click <strong>Unlock Vault</strong> to decrypt private keys and configure WireGuard interfaces.
+                </Typography>
+              </Alert>
+            )}
+
             {/* Unreachable Nodes Warning */}
             {(() => {
               const relevantUnreachable = targetNode
@@ -354,7 +407,41 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
                     : "Diff calculated against recorded state and live device interfaces"}
                 </Typography>
               </Box>
-              <Box sx={{ display: "flex", gap: 1 }}>
+              <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
+                {!isUnlocked ? (
+                  <Tooltip title="Master key vault is locked. WireGuard tasks are skipped. Click to unlock vault.">
+                    <Chip
+                      icon={<Lock size={12} color="#D97706" />}
+                      label="WG Skipped"
+                      size="small"
+                      onClick={handleUnlockTrigger}
+                      sx={{
+                        fontWeight: 700,
+                        fontSize: "0.72rem",
+                        bgcolor: "#FEF3C7",
+                        color: "#92400E",
+                        border: "1px solid #FCD34D",
+                        cursor: "pointer",
+                        "&:hover": { bgcolor: "#FDE68A" },
+                      }}
+                    />
+                  </Tooltip>
+                ) : (
+                  <Tooltip title="Master key vault is unlocked. Full configuration including WireGuard tunnels is active.">
+                    <Chip
+                      icon={<Unlock size={12} color="#059669" />}
+                      label="Vault Unlocked"
+                      size="small"
+                      sx={{
+                        fontWeight: 600,
+                        fontSize: "0.72rem",
+                        bgcolor: "#ECFDF5",
+                        color: "#059669",
+                        border: "1px solid #A7F3D0",
+                      }}
+                    />
+                  </Tooltip>
+                )}
                 <Chip
                   label={`${pendingActions.length} Pending`}
                   size="small"
@@ -373,15 +460,25 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
               <Alert severity="success" sx={{ borderRadius: 2 }}>
                 {targetNode ? (
                   <>
-                    All WireGuard interfaces, routing, and firewall configurations on <strong>{targetNode}</strong> are
+                    All BIRD routing and firewall configurations on <strong>{targetNode}</strong> are
                     currently in sync with recorded device state. You can use <strong>Force Apply</strong> to re-push
                     configs from scratch, or <strong>Update State</strong> to refresh from the remote host.
+                    {!isUnlocked && (
+                      <Typography variant="caption" sx={{ display: "block", mt: 0.5, color: "#065F46" }}>
+                        Note: WireGuard interface synchronization was skipped because the vault is locked. Unlock the vault to verify WireGuard tunnels.
+                      </Typography>
+                    )}
                   </>
                 ) : (
                   <>
-                    All WireGuard interfaces and BIRD routing configurations are currently in sync with recorded device
+                    All BIRD routing and firewall configurations are currently in sync with recorded device
                     states. You can use <strong>Force Apply All</strong> to re-push configs from scratch, or{" "}
                     <strong>Update State</strong> to refresh from remote hosts.
+                    {!isUnlocked && (
+                      <Typography variant="caption" sx={{ display: "block", mt: 0.5, color: "#065F46" }}>
+                        Note: WireGuard interface synchronization was skipped because the vault is locked. Unlock the vault to verify WireGuard tunnels.
+                      </Typography>
+                    )}
                   </>
                 )}
               </Alert>
@@ -389,9 +486,23 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
 
             {safeActions.length === 0 && (
               <Alert severity="info" sx={{ borderRadius: 2 }}>
-                {targetNode
-                  ? `No configuration changes or links found for node ${targetNode}.`
-                  : "No mesh nodes or links configured yet."}
+                {!isUnlocked ? (
+                  <>
+                    No routing (BIRD) or firewall changes needed. WireGuard tasks are skipped because the vault is locked.{" "}
+                    <Button
+                      size="small"
+                      onClick={handleUnlockTrigger}
+                      sx={{ p: 0, textTransform: "none", fontWeight: 700, minWidth: "auto", color: "#0284C7", textDecoration: "underline" }}
+                    >
+                      Unlock the vault
+                    </Button>{" "}
+                    to synchronize WireGuard tunnels.
+                  </>
+                ) : targetNode ? (
+                  `No configuration changes or links found for node ${targetNode}.`
+                ) : (
+                  "No mesh nodes or links configured yet."
+                )}
               </Alert>
             )}
 

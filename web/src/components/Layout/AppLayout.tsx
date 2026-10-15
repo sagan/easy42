@@ -689,6 +689,7 @@ export const AppLayout: React.FC = () => {
           refreshFleetLive();
         }}
         targetNode={syncTargetNode}
+        onNeedUnlock={() => setUnlockOpen(true)}
       />
 
       {/* Notification Toast */}

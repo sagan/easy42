@@ -82,10 +82,10 @@ export const NodesPage: React.FC = () => {
           next.set("order", newOrder);
           return next;
         },
-        { replace: true }
+        { replace: true },
       );
     },
-    [sortField, sortOrder, setSearchParams]
+    [sortField, sortOrder, setSearchParams],
   );
 
   // Local state for search term with instant UI feedback & URL synchronization
@@ -117,7 +117,7 @@ export const NodesPage: React.FC = () => {
           }
           return next;
         },
-        { replace: true }
+        { replace: true },
       );
     }, 250);
     return () => clearTimeout(timer);
@@ -152,10 +152,10 @@ export const NodesPage: React.FC = () => {
           }
           return next;
         },
-        { replace: true }
+        { replace: true },
       );
     },
-    [setSearchParams]
+    [setSearchParams],
   );
 
   const handleSelectTag = (tag: string) => {
@@ -182,7 +182,7 @@ export const NodesPage: React.FC = () => {
         next.delete("block");
         return next;
       },
-      { replace: true }
+      { replace: true },
     );
   };
 
@@ -243,11 +243,9 @@ export const NodesPage: React.FC = () => {
   // Requirement 3: Filter nodes by tag, block, and search term
   const filteredNodes = useMemo(() => {
     return managedNodes.filter((n) => {
-      const matchTag =
-        urlTag === "All" || !managedTags.includes(urlTag) || (n.tags && n.tags.includes(urlTag));
+      const matchTag = urlTag === "All" || !managedTags.includes(urlTag) || (n.tags && n.tags.includes(urlTag));
       const nBlocks = nodeBlocksMap.get(n.name) || [];
-      const matchBlock =
-        urlBlock === "All" || !managedBlocks.includes(urlBlock) || nBlocks.includes(urlBlock);
+      const matchBlock = urlBlock === "All" || !managedBlocks.includes(urlBlock) || nBlocks.includes(urlBlock);
       const q = searchTerm.toLowerCase().trim();
       const matchSearch =
         !q ||
@@ -294,7 +292,7 @@ export const NodesPage: React.FC = () => {
   const isFiltering = Boolean(
     searchTerm.trim() ||
     (urlTag !== "All" && managedTags.includes(urlTag)) ||
-    (urlBlock !== "All" && managedBlocks.includes(urlBlock))
+    (urlBlock !== "All" && managedBlocks.includes(urlBlock)),
   );
 
   // Sort displayed nodes by active column and order
@@ -309,18 +307,16 @@ export const NodesPage: React.FC = () => {
       const isOnlineA = Boolean(liveA?.connected ?? statusA?.connected);
       const isOnlineB = Boolean(liveB?.connected ?? statusB?.connected);
       const agentA = Boolean(
-        liveA?.agent_installed ?? (
-          statusA?.connected ||
+        liveA?.agent_installed ??
+        (statusA?.connected ||
           Boolean(statusA?.agent_version) ||
-          Boolean(statusA?.metrics && statusA.metrics.memory_total_bytes > 0)
-        )
+          Boolean(statusA?.metrics && statusA.metrics.memory_total_bytes > 0)),
       );
       const agentB = Boolean(
-        liveB?.agent_installed ?? (
-          statusB?.connected ||
+        liveB?.agent_installed ??
+        (statusB?.connected ||
           Boolean(statusB?.agent_version) ||
-          Boolean(statusB?.metrics && statusB.metrics.memory_total_bytes > 0)
-        )
+          Boolean(statusB?.metrics && statusB.metrics.memory_total_bytes > 0)),
       );
 
       let comparison = 0;
@@ -390,8 +386,8 @@ export const NodesPage: React.FC = () => {
         }
 
         case "network": {
-          const netA = agentA ? ((liveA?.metrics?.net_rx_rate ?? 0) + (liveA?.metrics?.net_tx_rate ?? 0)) : -1;
-          const netB = agentB ? ((liveB?.metrics?.net_rx_rate ?? 0) + (liveB?.metrics?.net_tx_rate ?? 0)) : -1;
+          const netA = agentA ? (liveA?.metrics?.net_rx_rate ?? 0) + (liveA?.metrics?.net_tx_rate ?? 0) : -1;
+          const netB = agentB ? (liveB?.metrics?.net_rx_rate ?? 0) + (liveB?.metrics?.net_tx_rate ?? 0) : -1;
           comparison = netA - netB;
           break;
         }
@@ -438,11 +434,17 @@ export const NodesPage: React.FC = () => {
               <Server size={20} />
             </Box>
             <Box sx={{ minWidth: 0, flex: 1 }}>
-              <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600, fontSize: { xs: "0.65rem", sm: "0.75rem" } }}>
+              <Typography
+                variant="caption"
+                sx={{ color: "#64748B", fontWeight: 600, fontSize: { xs: "0.65rem", sm: "0.75rem" } }}
+              >
                 SERVERS FLEET
               </Typography>
               <Box sx={{ display: "flex", alignItems: "baseline", gap: 0.8 }}>
-                <Typography variant="h5" sx={{ fontWeight: 800, color: "#0F172A", fontSize: { xs: "1.2rem", sm: "1.5rem" } }}>
+                <Typography
+                  variant="h5"
+                  sx={{ fontWeight: 800, color: "#0F172A", fontSize: { xs: "1.2rem", sm: "1.5rem" } }}
+                >
                   {fleetLive?.summary.online_nodes ?? 0}
                 </Typography>
                 <Typography variant="body2" sx={{ color: "#64748B", fontSize: { xs: "0.7rem", sm: "0.875rem" } }}>
@@ -450,7 +452,14 @@ export const NodesPage: React.FC = () => {
                 </Typography>
               </Box>
               <Box sx={{ display: "flex", gap: 0.8, mt: 0.3, alignItems: "center", flexWrap: "wrap" }}>
-                <Typography variant="caption" sx={{ color: "#E11D48", fontWeight: 600, fontSize: "0.7rem" }}>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: fleetLive?.summary.offline_nodes ? "#E11D48" : "#64748B",
+                    fontWeight: 600,
+                    fontSize: "0.7rem",
+                  }}
+                >
                   {fleetLive?.summary.offline_nodes ?? 0} Offline
                 </Typography>
                 <Typography variant="caption" sx={{ color: "#CBD5E1", fontSize: "0.7rem" }}>
@@ -493,14 +502,44 @@ export const NodesPage: React.FC = () => {
               <Activity size={20} />
             </Box>
             <Box sx={{ minWidth: 0 }}>
-              <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600, fontSize: { xs: "0.65rem", sm: "0.75rem" } }}>
+              <Typography
+                variant="caption"
+                sx={{ color: "#64748B", fontWeight: 600, fontSize: { xs: "0.65rem", sm: "0.75rem" } }}
+              >
                 REALTIME TRAFFIC
               </Typography>
-              <Box sx={{ display: "flex", flexDirection: { xs: "column", sm: "row" }, alignItems: { xs: "flex-start", sm: "center" }, gap: { xs: 0.2, sm: 1 } }}>
-                <Typography variant="body2" sx={{ fontWeight: 700, color: "#059669", display: "flex", alignItems: "center", gap: 0.2, fontSize: { xs: "0.75rem", sm: "0.875rem" } }}>
+              <Box
+                sx={{
+                  display: "flex",
+                  flexDirection: { xs: "column", sm: "row" },
+                  alignItems: { xs: "flex-start", sm: "center" },
+                  gap: { xs: 0.2, sm: 1 },
+                }}
+              >
+                <Typography
+                  variant="body2"
+                  sx={{
+                    fontWeight: 700,
+                    color: "#059669",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 0.2,
+                    fontSize: { xs: "0.75rem", sm: "0.875rem" },
+                  }}
+                >
                   <ArrowDown size={13} /> {formatNetRate(fleetLive?.summary.total_rx_rate)}
                 </Typography>
-                <Typography variant="body2" sx={{ fontWeight: 700, color: "#0891B2", display: "flex", alignItems: "center", gap: 0.2, fontSize: { xs: "0.75rem", sm: "0.875rem" } }}>
+                <Typography
+                  variant="body2"
+                  sx={{
+                    fontWeight: 700,
+                    color: "#0891B2",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 0.2,
+                    fontSize: { xs: "0.75rem", sm: "0.875rem" },
+                  }}
+                >
                   <ArrowUp size={13} /> {formatNetRate(fleetLive?.summary.total_tx_rate)}
                 </Typography>
               </Box>
@@ -537,10 +576,16 @@ export const NodesPage: React.FC = () => {
               <Cpu size={20} />
             </Box>
             <Box sx={{ minWidth: 0 }}>
-              <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600, fontSize: { xs: "0.65rem", sm: "0.75rem" } }}>
+              <Typography
+                variant="caption"
+                sx={{ color: "#64748B", fontWeight: 600, fontSize: { xs: "0.65rem", sm: "0.75rem" } }}
+              >
                 AVERAGE CPU
               </Typography>
-              <Typography variant="h5" sx={{ fontWeight: 800, color: "#0F172A", fontSize: { xs: "1.2rem", sm: "1.5rem" } }}>
+              <Typography
+                variant="h5"
+                sx={{ fontWeight: 800, color: "#0F172A", fontSize: { xs: "1.2rem", sm: "1.5rem" } }}
+              >
                 {(fleetLive?.summary.average_cpu ?? 0).toFixed(1)}%
               </Typography>
             </Box>
@@ -576,10 +621,16 @@ export const NodesPage: React.FC = () => {
               <HardDrive size={20} />
             </Box>
             <Box sx={{ minWidth: 0 }}>
-              <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600, fontSize: { xs: "0.65rem", sm: "0.75rem" } }}>
+              <Typography
+                variant="caption"
+                sx={{ color: "#64748B", fontWeight: 600, fontSize: { xs: "0.65rem", sm: "0.75rem" } }}
+              >
                 AVERAGE MEMORY
               </Typography>
-              <Typography variant="h5" sx={{ fontWeight: 800, color: "#0F172A", fontSize: { xs: "1.2rem", sm: "1.5rem" } }}>
+              <Typography
+                variant="h5"
+                sx={{ fontWeight: 800, color: "#0F172A", fontSize: { xs: "1.2rem", sm: "1.5rem" } }}
+              >
                 {(fleetLive?.summary.average_mem_perc ?? 0).toFixed(1)}%
               </Typography>
             </Box>
@@ -776,11 +827,10 @@ export const NodesPage: React.FC = () => {
             const status = nodeStatuses[n.name];
             const isOnline = Boolean(live?.connected ?? status?.connected);
             const agentInstalled = Boolean(
-              live?.agent_installed ?? (
-                status?.connected ||
+              live?.agent_installed ??
+              (status?.connected ||
                 Boolean(status?.agent_version && status.agent_version.length > 0) ||
-                Boolean(status?.metrics && status.metrics.memory_total_bytes > 0)
-              )
+                Boolean(status?.metrics && status.metrics.memory_total_bytes > 0)),
             );
 
             const metrics = live?.metrics ?? status?.metrics;
@@ -878,12 +928,15 @@ export const NodesPage: React.FC = () => {
                           border: !agentInstalled ? "1px solid #E2E8F0" : "none",
                         }}
                       />
-                      <Typography variant="caption" sx={{ display: "block", color: "#94A3B8", mt: 0.3, fontSize: "0.7rem" }}>
+                      <Typography
+                        variant="caption"
+                        sx={{ display: "block", color: "#94A3B8", mt: 0.3, fontSize: "0.7rem" }}
+                      >
                         {isOnline
                           ? formatUptime(live?.uptime_seconds ?? metrics?.uptime_seconds)
                           : agentInstalled
-                          ? "Offline"
-                          : "Not Monitored"}
+                            ? "Offline"
+                            : "Not Monitored"}
                       </Typography>
                     </Box>
                   </Box>
@@ -988,7 +1041,9 @@ export const NodesPage: React.FC = () => {
                           alignItems: "center",
                         }}
                       >
-                        <Tooltip title={primaryIface ? `Primary Interface: ${primaryIface}` : "Primary Interface Bandwidth"}>
+                        <Tooltip
+                          title={primaryIface ? `Primary Interface: ${primaryIface}` : "Primary Interface Bandwidth"}
+                        >
                           <Box sx={{ display: "flex", alignItems: "center", gap: 0.8 }}>
                             {primaryIface && (
                               <Chip
@@ -1026,8 +1081,8 @@ export const NodesPage: React.FC = () => {
                             {live?.metrics?.load_1m !== undefined
                               ? live.metrics.load_1m.toFixed(2)
                               : status?.metrics?.load_avg?.[0] !== undefined
-                              ? status.metrics.load_avg[0].toFixed(2)
-                              : "-"}
+                                ? status.metrics.load_avg[0].toFixed(2)
+                                : "-"}
                           </strong>
                         </Typography>
                       </Box>
@@ -1277,11 +1332,10 @@ export const NodesPage: React.FC = () => {
                 const status = nodeStatuses[n.name];
                 const isOnline = Boolean(live?.connected ?? status?.connected);
                 const agentInstalled = Boolean(
-                  live?.agent_installed ?? (
-                    status?.connected ||
+                  live?.agent_installed ??
+                  (status?.connected ||
                     Boolean(status?.agent_version && status.agent_version.length > 0) ||
-                    Boolean(status?.metrics && status.metrics.memory_total_bytes > 0)
-                  )
+                    Boolean(status?.metrics && status.metrics.memory_total_bytes > 0)),
                 );
 
                 const metrics = live?.metrics ?? status?.metrics;
@@ -1348,7 +1402,14 @@ export const NodesPage: React.FC = () => {
                             key={b}
                             label={b}
                             size="small"
-                            sx={{ height: 20, fontSize: "0.65rem", fontWeight: 600, bgcolor: "#EEF2FF", color: "#4F46E5", mr: 0.5 }}
+                            sx={{
+                              height: 20,
+                              fontSize: "0.65rem",
+                              fontWeight: 600,
+                              bgcolor: "#EEF2FF",
+                              color: "#4F46E5",
+                              mr: 0.5,
+                            }}
                           />
                         ))
                       ) : (
@@ -1362,8 +1423,8 @@ export const NodesPage: React.FC = () => {
                       {isOnline
                         ? formatUptime(live?.uptime_seconds ?? metrics?.uptime_seconds)
                         : agentInstalled
-                        ? "Offline"
-                        : "—"}
+                          ? "Offline"
+                          : "—"}
                     </TableCell>
                     <TableCell>
                       {agentInstalled ? (
@@ -1389,7 +1450,10 @@ export const NodesPage: React.FC = () => {
                       {agentInstalled && primaryDisk && diskTotalGB > 0 ? (
                         <Box sx={{ display: "flex", flexDirection: "column", gap: 0.3, minWidth: 95 }}>
                           <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                            <Typography variant="caption" sx={{ fontWeight: 600, color: "#334155", fontSize: "0.75rem" }}>
+                            <Typography
+                              variant="caption"
+                              sx={{ fontWeight: 600, color: "#334155", fontSize: "0.75rem" }}
+                            >
                               {diskUsedGB.toFixed(1)} / {diskTotalGB.toFixed(1)} GB
                             </Typography>
                             <Typography
@@ -1435,7 +1499,11 @@ export const NodesPage: React.FC = () => {
                             </Typography>
                           </Box>
                           {primaryIface && (
-                            <Typography variant="caption" className="mono-font" sx={{ color: "#64748B", fontSize: "0.68rem" }}>
+                            <Typography
+                              variant="caption"
+                              className="mono-font"
+                              sx={{ color: "#64748B", fontSize: "0.68rem" }}
+                            >
                               {primaryIface} (primary)
                             </Typography>
                           )}

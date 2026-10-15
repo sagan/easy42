@@ -2495,8 +2495,16 @@ func (m *Manager) GetNodeStatuses() map[string]config.NodeStatus {
 // PlanSync computes the sync actions required to bring remote devices up to date.
 // If nodeNames are provided, only changes for those target nodes are computed.
 func (m *Manager) PlanSync(nodeNames ...string) ([]config.SyncAction, error) {
+	return m.PlanSyncWithScope("", nodeNames...)
+}
+
+// PlanSyncWithScope computes sync actions with a scope filter ("public", "full", or "")
+func (m *Manager) PlanSyncWithScope(scope string, nodeNames ...string) ([]config.SyncAction, error) {
 	m.mu.RLock()
-	if !m.vault.IsUnlocked() {
+	isVaultUnlocked := m.vault.IsUnlocked()
+	if strings.EqualFold(scope, "public") {
+		isVaultUnlocked = false
+	} else if strings.EqualFold(scope, "full") && !isVaultUnlocked {
 		m.mu.RUnlock()
 		return nil, crypto.ErrVaultLocked
 	}
@@ -2525,313 +2533,319 @@ func (m *Manager) PlanSync(nodeNames ...string) ([]config.SyncAction, error) {
 	actions := make([]config.SyncAction, 0)
 
 	// 1. Detect unused/deleted wg42* interfaces on remote devices by running `wg`
-	expectedIfacesPerNode := make(map[string]map[string]bool)
-	manualIfacesPerNode := make(map[string]map[string]bool)
-	for _, n := range nodes {
-		expectedIfacesPerNode[n.Name] = make(map[string]bool)
-		manualIfacesPerNode[n.Name] = make(map[string]bool)
-	}
-	for _, link := range links {
-		if link.IsManual() {
-			manualIfacesPerNode[link.From.Name][link.From.Interface] = true
-			manualIfacesPerNode[link.To.Name][link.To.Interface] = true
-			continue
+	// WireGuard tasks require the vault to be unlocked to decrypt private keys and manage interfaces.
+	if isVaultUnlocked {
+		expectedIfacesPerNode := make(map[string]map[string]bool)
+		manualIfacesPerNode := make(map[string]map[string]bool)
+		for _, n := range nodes {
+			expectedIfacesPerNode[n.Name] = make(map[string]bool)
+			manualIfacesPerNode[n.Name] = make(map[string]bool)
 		}
-		if em, ok := expectedIfacesPerNode[link.From.Name]; ok {
-			em[link.From.Interface] = true
+		for _, link := range links {
+			if link.IsManual() {
+				manualIfacesPerNode[link.From.Name][link.From.Interface] = true
+				manualIfacesPerNode[link.To.Name][link.To.Interface] = true
+				continue
+			}
+			if em, ok := expectedIfacesPerNode[link.From.Name]; ok {
+				em[link.From.Interface] = true
+			}
+			if em, ok := expectedIfacesPerNode[link.To.Name]; ok {
+				em[link.To.Interface] = true
+			}
 		}
-		if em, ok := expectedIfacesPerNode[link.To.Name]; ok {
-			em[link.To.Interface] = true
-		}
-	}
 
-	var wg sync.WaitGroup
-	var cleanActionsMu sync.Mutex
-	var cleanActions []config.SyncAction
+		var wg sync.WaitGroup
+		var cleanActionsMu sync.Mutex
+		var cleanActions []config.SyncAction
 
-	for _, n := range nodes {
-		if n.IsExternal {
-			continue
-		}
-		if isPartial && !targetMap[n.Name] {
-			continue
-		}
-		node := n
-		wg.Add(1)
-		go func(targetNode config.Node) {
-			defer wg.Done()
+		for _, n := range nodes {
+			if n.IsExternal {
+				continue
+			}
+			if isPartial && !targetMap[n.Name] {
+				continue
+			}
+			node := n
+			wg.Add(1)
+			go func(targetNode config.Node) {
+				defer wg.Done()
 
-			// 1. If agent is connected, probe running interfaces & configs directly via agent
-			if m.agentHub != nil && m.agentHub.IsConnected(targetNode.Name) {
+				// 1. If agent is connected, probe running interfaces & configs directly via agent
+				if m.agentHub != nil && m.agentHub.IsConnected(targetNode.Name) {
+					expected := expectedIfacesPerNode[targetNode.Name]
+					manualIfs := manualIfacesPerNode[targetNode.Name]
+
+					cmdCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+					var probeRes agentProbeResult
+					cmdResp, err := m.agentHub.SendCommand(cmdCtx, targetNode.Name, &agentpb.CommandRequest{
+						Command: &agentpb.CommandRequest_ProbeSystem{
+							ProbeSystem: &agentpb.ProbeSystemCmd{},
+						},
+					})
+					cancel()
+					if err == nil && cmdResp.Success && cmdResp.Stdout != "" {
+						_ = json.Unmarshal([]byte(cmdResp.Stdout), &probeRes)
+					}
+
+					nodeStatus := m.agentHub.NodeStatus(targetNode.Name)
+					telemetry := m.agentHub.GetTelemetry(targetNode.Name)
+
+					candidateIfaces := make(map[string]string)
+					for cfgIface, cfgFile := range probeRes.Configs {
+						if strings.HasPrefix(cfgIface, "wg42") {
+							targetFile := cfgFile.Path
+							if targetFile == "" {
+								targetFile = fmt.Sprintf("/etc/wireguard/%s.conf", cfgIface)
+							}
+							candidateIfaces[cfgIface] = targetFile
+						}
+					}
+					for _, wgInfo := range nodeStatus.WgInterfaces {
+						if strings.HasPrefix(wgInfo.Name, "wg42") {
+							if _, exists := candidateIfaces[wgInfo.Name]; !exists {
+								candidateIfaces[wgInfo.Name] = fmt.Sprintf("/etc/wireguard/%s.conf", wgInfo.Name)
+							}
+						}
+					}
+					if telemetry != nil {
+						for _, iface := range telemetry.Interfaces {
+							if strings.HasPrefix(iface.Name, "wg42") {
+								if _, exists := candidateIfaces[iface.Name]; !exists {
+									candidateIfaces[iface.Name] = fmt.Sprintf("/etc/wireguard/%s.conf", iface.Name)
+								}
+							}
+						}
+						for _, peer := range telemetry.WgPeers {
+							if strings.HasPrefix(peer.InterfaceName, "wg42") {
+								if _, exists := candidateIfaces[peer.InterfaceName]; !exists {
+									candidateIfaces[peer.InterfaceName] = fmt.Sprintf("/etc/wireguard/%s.conf", peer.InterfaceName)
+								}
+							}
+						}
+					}
+
+					for iface, targetFile := range candidateIfaces {
+						if !expected[iface] && !manualIfs[iface] {
+							cleanActionsMu.Lock()
+							cleanActions = append(cleanActions, config.SyncAction{
+								NodeName:    targetNode.Name,
+								Host:        targetNode.Host,
+								Type:        config.ActionDeleteConfig,
+								Interface:   iface,
+								TargetFile:  targetFile,
+								Command:     fmt.Sprintf("wg-quick down %s && rm -f %s", iface, targetFile),
+								Description: fmt.Sprintf("Remove deleted interface %s on %s", iface, targetNode.Name),
+								FileContent: fmt.Sprintf("# Deleted interface %s is no longer in graph.\n# Action: wg-quick down %s && rm -f %s\n", iface, iface, targetFile),
+								NeedsApply:  true,
+								Status:      "pending",
+								DiffStatus:  "delete",
+							})
+							cleanActionsMu.Unlock()
+						}
+					}
+					return
+				}
+
+				// If node is configured for agent mode but currently disconnected, do not attempt SSH
+				if targetNode.IsAgentMode() {
+					m.mu.Lock()
+					m.statuses[targetNode.Name] = &config.NodeStatus{
+						Name:      targetNode.Name,
+						Host:      targetNode.Host,
+						LastSeen:  time.Now(),
+						Connected: false,
+						Error:     "agent is disconnected",
+						Mode:      "agent",
+					}
+					m.mu.Unlock()
+					return
+				}
+
+				sshClient, _, err := m.pool.GetClientWithTimeout(targetNode.Host, 3*time.Second)
+				if err != nil {
+					m.mu.Lock()
+					m.statuses[targetNode.Name] = &config.NodeStatus{
+						Name:      targetNode.Name,
+						Host:      targetNode.Host,
+						LastSeen:  time.Now(),
+						Connected: false,
+						Error:     err.Error(),
+					}
+					m.mu.Unlock()
+					return
+				}
+				runningIfaces, err := ssh.GetRunningWgInterfaces(sshClient)
+				if err != nil {
+					return
+				}
 				expected := expectedIfacesPerNode[targetNode.Name]
 				manualIfs := manualIfacesPerNode[targetNode.Name]
-
-				cmdCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-				var probeRes agentProbeResult
-				cmdResp, err := m.agentHub.SendCommand(cmdCtx, targetNode.Name, &agentpb.CommandRequest{
-					Command: &agentpb.CommandRequest_ProbeSystem{
-						ProbeSystem: &agentpb.ProbeSystemCmd{},
-					},
-				})
-				cancel()
-				if err == nil && cmdResp.Success && cmdResp.Stdout != "" {
-					_ = json.Unmarshal([]byte(cmdResp.Stdout), &probeRes)
-				}
-
-				nodeStatus := m.agentHub.NodeStatus(targetNode.Name)
-				telemetry := m.agentHub.GetTelemetry(targetNode.Name)
-
-				candidateIfaces := make(map[string]string)
-				for cfgIface, cfgFile := range probeRes.Configs {
-					if strings.HasPrefix(cfgIface, "wg42") {
-						targetFile := cfgFile.Path
-						if targetFile == "" {
-							targetFile = fmt.Sprintf("/etc/wireguard/%s.conf", cfgIface)
-						}
-						candidateIfaces[cfgIface] = targetFile
-					}
-				}
-				for _, wgInfo := range nodeStatus.WgInterfaces {
-					if strings.HasPrefix(wgInfo.Name, "wg42") {
-						if _, exists := candidateIfaces[wgInfo.Name]; !exists {
-							candidateIfaces[wgInfo.Name] = fmt.Sprintf("/etc/wireguard/%s.conf", wgInfo.Name)
+				for _, iface := range runningIfaces {
+					// We only manage wg42* prefix wireguard interfaces
+					if strings.HasPrefix(iface, "wg42") {
+						if !expected[iface] && !manualIfs[iface] {
+							targetFile := fmt.Sprintf("/etc/wireguard/%s.conf", iface)
+							cleanActionsMu.Lock()
+							cleanActions = append(cleanActions, config.SyncAction{
+								NodeName:    targetNode.Name,
+								Host:        targetNode.Host,
+								Type:        config.ActionDeleteConfig,
+								Interface:   iface,
+								TargetFile:  targetFile,
+								Command:     fmt.Sprintf("wg-quick down %s && rm -f %s", iface, targetFile),
+								Description: fmt.Sprintf("Remove deleted interface %s on %s", iface, targetNode.Name),
+								FileContent: fmt.Sprintf("# Deleted interface %s is no longer in graph.\n# Action: wg-quick down %s && rm -f %s\n", iface, iface, targetFile),
+								NeedsApply:  true,
+								Status:      "pending",
+								DiffStatus:  "delete",
+							})
+							cleanActionsMu.Unlock()
 						}
 					}
 				}
-				if telemetry != nil {
-					for _, iface := range telemetry.Interfaces {
-						if strings.HasPrefix(iface.Name, "wg42") {
-							if _, exists := candidateIfaces[iface.Name]; !exists {
-								candidateIfaces[iface.Name] = fmt.Sprintf("/etc/wireguard/%s.conf", iface.Name)
+			}(node)
+		}
+		wg.Wait()
+
+		// Also check stateStore for recorded interfaces that are no longer expected
+		for _, n := range nodes {
+			if n.IsExternal {
+				continue
+			}
+			if isPartial && !targetMap[n.Name] {
+				continue
+			}
+			expected := expectedIfacesPerNode[n.Name]
+			manualIfs := manualIfacesPerNode[n.Name]
+			if stNode, ok := currentState.Nodes[n.Name]; ok {
+				for ifaceName := range stNode.Interfaces {
+					if strings.HasPrefix(ifaceName, "wg42") && !expected[ifaceName] && !manualIfs[ifaceName] {
+						alreadyAdded := false
+						for _, ca := range cleanActions {
+							if ca.NodeName == n.Name && ca.Interface == ifaceName {
+								alreadyAdded = true
+								break
+							}
+						}
+						if !alreadyAdded {
+							targetFile := fmt.Sprintf("/etc/wireguard/%s.conf", ifaceName)
+							cleanActions = append(cleanActions, config.SyncAction{
+								NodeName:    n.Name,
+								Host:        n.Host,
+								Type:        config.ActionDeleteConfig,
+								Interface:   ifaceName,
+								TargetFile:  targetFile,
+								Command:     fmt.Sprintf("wg-quick down %s && rm -f %s", ifaceName, targetFile),
+								Description: fmt.Sprintf("Remove deleted interface %s on %s", ifaceName, n.Name),
+								FileContent: fmt.Sprintf("# Deleted interface %s is no longer in graph.\n# Action: wg-quick down %s && rm -f %s\n", ifaceName, ifaceName, targetFile),
+								NeedsApply:  true,
+								Status:      "pending",
+								DiffStatus:  "delete",
+							})
+						}
+					}
+				}
+			}
+		}
+
+		// Sort clean actions for determinism
+		sort.Slice(cleanActions, func(i, j int) bool {
+			if cleanActions[i].NodeName != cleanActions[j].NodeName {
+				return cleanActions[i].NodeName < cleanActions[j].NodeName
+			}
+			return cleanActions[i].Interface < cleanActions[j].Interface
+		})
+		actions = append(actions, cleanActions...)
+	}
+
+	// 2. Active links configuration (WireGuard tunnels)
+	// Skipped if vault is locked since WireGuard private keys cannot be decrypted.
+	if isVaultUnlocked {
+		for _, link := range links {
+			if link.IsManual() {
+				continue
+			}
+			fromNode := nodeMap[link.From.Name]
+			toNode := nodeMap[link.To.Name]
+			if fromNode == nil || toNode == nil {
+				continue
+			}
+
+			// 1. From node end (only if fromNode is managed)
+			if !fromNode.IsExternal && (!isPartial || targetMap[fromNode.Name]) {
+				fromConf, err := compiler.GenerateWgConfigContent(fromNode, toNode, &link.From, &link.To, m.vault, cfg, &link)
+				if err == nil {
+					targetFile := fmt.Sprintf("/etc/wireguard/%s.conf", link.From.Interface)
+					desiredHash := config.HashConfig(compiler.NormalizeConfig(fromConf))
+
+					needsApply := true
+					status := "pending"
+					diffStatus := "create"
+
+					if stNode, ok := currentState.Nodes[fromNode.Name]; ok {
+						if stIface, ok := stNode.Interfaces[link.From.Interface]; ok {
+							if stIface.ConfigHash == desiredHash {
+								needsApply = false
+								status = "synced"
+								diffStatus = "synced"
+							} else {
+								diffStatus = "update"
 							}
 						}
 					}
-					for _, peer := range telemetry.WgPeers {
-						if strings.HasPrefix(peer.InterfaceName, "wg42") {
-							if _, exists := candidateIfaces[peer.InterfaceName]; !exists {
-								candidateIfaces[peer.InterfaceName] = fmt.Sprintf("/etc/wireguard/%s.conf", peer.InterfaceName)
+
+					actions = append(actions, config.SyncAction{
+						NodeName:    fromNode.Name,
+						Host:        fromNode.Host,
+						Type:        config.ActionSyncConfig,
+						Interface:   link.From.Interface,
+						TargetFile:  targetFile,
+						FileContent: fromConf,
+						Description: fmt.Sprintf("Configure %s on %s (peer %s)", link.From.Interface, fromNode.Name, toNode.Name),
+						NeedsApply:  needsApply,
+						Status:      status,
+						DiffStatus:  diffStatus,
+					})
+				}
+			}
+
+			// 2. To node end (only if toNode is managed)
+			if !toNode.IsExternal && (!isPartial || targetMap[toNode.Name]) {
+				toConf, err := compiler.GenerateWgConfigContent(toNode, fromNode, &link.To, &link.From, m.vault, cfg, &link)
+				if err == nil {
+					targetFile := fmt.Sprintf("/etc/wireguard/%s.conf", link.To.Interface)
+					desiredHash := config.HashConfig(compiler.NormalizeConfig(toConf))
+
+					needsApply := true
+					status := "pending"
+					diffStatus := "create"
+
+					if stNode, ok := currentState.Nodes[toNode.Name]; ok {
+						if stIface, ok := stNode.Interfaces[link.To.Interface]; ok {
+							if stIface.ConfigHash == desiredHash {
+								needsApply = false
+								status = "synced"
+								diffStatus = "synced"
+							} else {
+								diffStatus = "update"
 							}
 						}
 					}
+
+					actions = append(actions, config.SyncAction{
+						NodeName:    toNode.Name,
+						Host:        toNode.Host,
+						Type:        config.ActionSyncConfig,
+						Interface:   link.To.Interface,
+						TargetFile:  targetFile,
+						FileContent: toConf,
+						Description: fmt.Sprintf("Configure %s on %s (peer %s)", link.To.Interface, toNode.Name, fromNode.Name),
+						NeedsApply:  needsApply,
+						Status:      status,
+						DiffStatus:  diffStatus,
+					})
 				}
-
-				for iface, targetFile := range candidateIfaces {
-					if !expected[iface] && !manualIfs[iface] {
-						cleanActionsMu.Lock()
-						cleanActions = append(cleanActions, config.SyncAction{
-							NodeName:    targetNode.Name,
-							Host:        targetNode.Host,
-							Type:        config.ActionDeleteConfig,
-							Interface:   iface,
-							TargetFile:  targetFile,
-							Command:     fmt.Sprintf("wg-quick down %s && rm -f %s", iface, targetFile),
-							Description: fmt.Sprintf("Remove deleted interface %s on %s", iface, targetNode.Name),
-							FileContent: fmt.Sprintf("# Deleted interface %s is no longer in graph.\n# Action: wg-quick down %s && rm -f %s\n", iface, iface, targetFile),
-							NeedsApply:  true,
-							Status:      "pending",
-							DiffStatus:  "delete",
-						})
-						cleanActionsMu.Unlock()
-					}
-				}
-				return
-			}
-
-			// If node is configured for agent mode but currently disconnected, do not attempt SSH
-			if targetNode.IsAgentMode() {
-				m.mu.Lock()
-				m.statuses[targetNode.Name] = &config.NodeStatus{
-					Name:      targetNode.Name,
-					Host:      targetNode.Host,
-					LastSeen:  time.Now(),
-					Connected: false,
-					Error:     "agent is disconnected",
-					Mode:      "agent",
-				}
-				m.mu.Unlock()
-				return
-			}
-
-			sshClient, _, err := m.pool.GetClientWithTimeout(targetNode.Host, 3*time.Second)
-			if err != nil {
-				m.mu.Lock()
-				m.statuses[targetNode.Name] = &config.NodeStatus{
-					Name:      targetNode.Name,
-					Host:      targetNode.Host,
-					LastSeen:  time.Now(),
-					Connected: false,
-					Error:     err.Error(),
-				}
-				m.mu.Unlock()
-				return
-			}
-			runningIfaces, err := ssh.GetRunningWgInterfaces(sshClient)
-			if err != nil {
-				return
-			}
-			expected := expectedIfacesPerNode[targetNode.Name]
-			manualIfs := manualIfacesPerNode[targetNode.Name]
-			for _, iface := range runningIfaces {
-				// We only manage wg42* prefix wireguard interfaces
-				if strings.HasPrefix(iface, "wg42") {
-					if !expected[iface] && !manualIfs[iface] {
-						targetFile := fmt.Sprintf("/etc/wireguard/%s.conf", iface)
-						cleanActionsMu.Lock()
-						cleanActions = append(cleanActions, config.SyncAction{
-							NodeName:    targetNode.Name,
-							Host:        targetNode.Host,
-							Type:        config.ActionDeleteConfig,
-							Interface:   iface,
-							TargetFile:  targetFile,
-							Command:     fmt.Sprintf("wg-quick down %s && rm -f %s", iface, targetFile),
-							Description: fmt.Sprintf("Remove deleted interface %s on %s", iface, targetNode.Name),
-							FileContent: fmt.Sprintf("# Deleted interface %s is no longer in graph.\n# Action: wg-quick down %s && rm -f %s\n", iface, iface, targetFile),
-							NeedsApply:  true,
-							Status:      "pending",
-							DiffStatus:  "delete",
-						})
-						cleanActionsMu.Unlock()
-					}
-				}
-			}
-		}(node)
-	}
-	wg.Wait()
-
-	// Also check stateStore for recorded interfaces that are no longer expected
-	for _, n := range nodes {
-		if n.IsExternal {
-			continue
-		}
-		if isPartial && !targetMap[n.Name] {
-			continue
-		}
-		expected := expectedIfacesPerNode[n.Name]
-		manualIfs := manualIfacesPerNode[n.Name]
-		if stNode, ok := currentState.Nodes[n.Name]; ok {
-			for ifaceName := range stNode.Interfaces {
-				if strings.HasPrefix(ifaceName, "wg42") && !expected[ifaceName] && !manualIfs[ifaceName] {
-					alreadyAdded := false
-					for _, ca := range cleanActions {
-						if ca.NodeName == n.Name && ca.Interface == ifaceName {
-							alreadyAdded = true
-							break
-						}
-					}
-					if !alreadyAdded {
-						targetFile := fmt.Sprintf("/etc/wireguard/%s.conf", ifaceName)
-						cleanActions = append(cleanActions, config.SyncAction{
-							NodeName:    n.Name,
-							Host:        n.Host,
-							Type:        config.ActionDeleteConfig,
-							Interface:   ifaceName,
-							TargetFile:  targetFile,
-							Command:     fmt.Sprintf("wg-quick down %s && rm -f %s", ifaceName, targetFile),
-							Description: fmt.Sprintf("Remove deleted interface %s on %s", ifaceName, n.Name),
-							FileContent: fmt.Sprintf("# Deleted interface %s is no longer in graph.\n# Action: wg-quick down %s && rm -f %s\n", ifaceName, ifaceName, targetFile),
-							NeedsApply:  true,
-							Status:      "pending",
-							DiffStatus:  "delete",
-						})
-					}
-				}
-			}
-		}
-	}
-
-	// Sort clean actions for determinism
-	sort.Slice(cleanActions, func(i, j int) bool {
-		if cleanActions[i].NodeName != cleanActions[j].NodeName {
-			return cleanActions[i].NodeName < cleanActions[j].NodeName
-		}
-		return cleanActions[i].Interface < cleanActions[j].Interface
-	})
-	actions = append(actions, cleanActions...)
-
-	// 2. Active links configuration
-	for _, link := range links {
-		if link.IsManual() {
-			continue
-		}
-		fromNode := nodeMap[link.From.Name]
-		toNode := nodeMap[link.To.Name]
-		if fromNode == nil || toNode == nil {
-			continue
-		}
-
-		// 1. From node end (only if fromNode is managed)
-		if !fromNode.IsExternal && (!isPartial || targetMap[fromNode.Name]) {
-			fromConf, err := compiler.GenerateWgConfigContent(fromNode, toNode, &link.From, &link.To, m.vault, cfg, &link)
-			if err == nil {
-				targetFile := fmt.Sprintf("/etc/wireguard/%s.conf", link.From.Interface)
-				desiredHash := config.HashConfig(compiler.NormalizeConfig(fromConf))
-
-				needsApply := true
-				status := "pending"
-				diffStatus := "create"
-
-				if stNode, ok := currentState.Nodes[fromNode.Name]; ok {
-					if stIface, ok := stNode.Interfaces[link.From.Interface]; ok {
-						if stIface.ConfigHash == desiredHash {
-							needsApply = false
-							status = "synced"
-							diffStatus = "synced"
-						} else {
-							diffStatus = "update"
-						}
-					}
-				}
-
-				actions = append(actions, config.SyncAction{
-					NodeName:    fromNode.Name,
-					Host:        fromNode.Host,
-					Type:        config.ActionSyncConfig,
-					Interface:   link.From.Interface,
-					TargetFile:  targetFile,
-					FileContent: fromConf,
-					Description: fmt.Sprintf("Configure %s on %s (peer %s)", link.From.Interface, fromNode.Name, toNode.Name),
-					NeedsApply:  needsApply,
-					Status:      status,
-					DiffStatus:  diffStatus,
-				})
-			}
-		}
-
-		// 2. To node end (only if toNode is managed)
-		if !toNode.IsExternal && (!isPartial || targetMap[toNode.Name]) {
-			toConf, err := compiler.GenerateWgConfigContent(toNode, fromNode, &link.To, &link.From, m.vault, cfg, &link)
-			if err == nil {
-				targetFile := fmt.Sprintf("/etc/wireguard/%s.conf", link.To.Interface)
-				desiredHash := config.HashConfig(compiler.NormalizeConfig(toConf))
-
-				needsApply := true
-				status := "pending"
-				diffStatus := "create"
-
-				if stNode, ok := currentState.Nodes[toNode.Name]; ok {
-					if stIface, ok := stNode.Interfaces[link.To.Interface]; ok {
-						if stIface.ConfigHash == desiredHash {
-							needsApply = false
-							status = "synced"
-							diffStatus = "synced"
-						} else {
-							diffStatus = "update"
-						}
-					}
-				}
-
-				actions = append(actions, config.SyncAction{
-					NodeName:    toNode.Name,
-					Host:        toNode.Host,
-					Type:        config.ActionSyncConfig,
-					Interface:   link.To.Interface,
-					TargetFile:  targetFile,
-					FileContent: toConf,
-					Description: fmt.Sprintf("Configure %s on %s (peer %s)", link.To.Interface, toNode.Name, fromNode.Name),
-					NeedsApply:  needsApply,
-					Status:      status,
-					DiffStatus:  diffStatus,
-				})
 			}
 		}
 	}
@@ -3099,7 +3113,12 @@ func (m *Manager) ExecuteSync(force ...bool) ([]config.SyncResult, error) {
 
 // ExecuteSyncNodes executes planned actions across specified nodes (or all nodes if none specified)
 func (m *Manager) ExecuteSyncNodes(isForce bool, nodeNames ...string) ([]config.SyncResult, error) {
-	actions, err := m.PlanSync(nodeNames...)
+	return m.ExecuteSyncNodesWithScope(isForce, "", nodeNames...)
+}
+
+// ExecuteSyncNodesWithScope executes planned actions across specified nodes with a scope filter
+func (m *Manager) ExecuteSyncNodesWithScope(isForce bool, scope string, nodeNames ...string) ([]config.SyncResult, error) {
+	actions, err := m.PlanSyncWithScope(scope, nodeNames...)
 	if err != nil {
 		return nil, err
 	}
