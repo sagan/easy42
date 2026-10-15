@@ -2408,7 +2408,7 @@ export const NodeDetailPage: React.FC = () => {
                         }}
                       >
                         <Typography variant="body2" className="mono-font" sx={{ fontWeight: 700, color: "#0891B2" }}>
-                          {ep.ip || "Outbound SNAT (Strict)"}
+                          {ep.ip || (node.is_external ? "No endpoint" : "Outbound SNAT (Strict)")}
                         </Typography>
                         <Box sx={{ display: "flex", gap: 0.8, alignItems: "center" }}>
                           {ep.ports?.map((p, pIdx) => (

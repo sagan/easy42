@@ -209,7 +209,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
       if (nodeToEdit.entrypoints && nodeToEdit.entrypoints.length > 0) {
         let hasNone = false;
         const mapped: EditableEntrypoint[] = nodeToEdit.entrypoints.map((ep, idx) => {
-          const isNone = !ep.ip || ep.ip.trim() === "";
+          const isNone = !nodeToEdit.is_external && (!ep.ip || ep.ip.trim() === "");
           if (isNone) hasNone = true;
           let portStr = "";
           if (ep.ports && ep.ports.length > 0) {
@@ -226,7 +226,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
             ip: ep.ip || "",
             portStr,
             tagStr: ep.tags?.join(", ") || (isNone ? "nat" : nodeToEdit.is_external ? "external" : "direct"),
-            mtuStr: ep.mtu ? String(ep.mtu) : isNone ? "" : "1500",
+            mtuStr: ep.mtu ? String(ep.mtu) : isNone || nodeToEdit.is_external ? "" : "1500",
             isNone,
           };
         });
@@ -361,7 +361,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
       id: `ep-${Date.now()}`,
       ip: "",
       portStr: "",
-      tagStr: "",
+      tagStr: isExternal ? "external" : "",
       mtuStr: "",
       isNone: false,
     };
@@ -470,7 +470,14 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
       return ensureFallbackLast(eps)
         .filter((ep) => {
           if (forExternal) {
-            return !ep.isNone && ep.ip.trim() !== "";
+            if (ep.isNone || ep.id === "nat-fallback") return false;
+            // If there are multiple endpoints and this one is completely blank (no IP, no port, no tag, no MTU), filter it out
+            const hasData =
+              ep.ip.trim() !== "" || ep.portStr.trim() !== "" || ep.mtuStr.trim() !== "" || ep.tagStr.trim() !== "";
+            if (!hasData && eps.filter((e) => !e.isNone && e.id !== "nat-fallback").length > 1) {
+              return false;
+            }
+            return true;
           }
           return true;
         })
@@ -661,14 +668,18 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                 onClick={() => {
                   setIsExternal(false);
                   setEntrypoints((prev) => {
-                    const hasNone = prev.some((e) => e.isNone);
+                    // Filter out any default unconfigured external entrypoint
+                    const nonExternalDefault = prev.filter(
+                      (e) => e.isNone || e.ip.trim() !== "" || e.portStr.trim() !== "" || e.mtuStr.trim() !== "",
+                    );
+                    const hasNone = nonExternalDefault.some((e) => e.isNone);
                     if (!hasNone) {
                       return ensureFallbackLast([
-                        ...prev,
+                        ...nonExternalDefault,
                         { id: "nat-fallback", ip: "", portStr: "", tagStr: "nat", mtuStr: "", isNone: true },
                       ]);
                     }
-                    return ensureFallbackLast(prev);
+                    return ensureFallbackLast(nonExternalDefault);
                   });
                 }}
                 startIcon={<Server size={16} />}
@@ -681,11 +692,23 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                 size="small"
                 onClick={() => {
                   setIsExternal(true);
-                  if (entrypoints.length === 1 && entrypoints[0].isNone) {
-                    setEntrypoints([
-                      { id: `ep-0-${Date.now()}`, ip: "", portStr: "", tagStr: "external", mtuStr: "", isNone: false },
-                    ]);
-                  }
+                  setEntrypoints((prev) => {
+                    // Remove internal nat-fallback endpoints for external peers
+                    const filtered = prev.filter((e) => !e.isNone && e.id !== "nat-fallback");
+                    if (filtered.length === 0) {
+                      return [
+                        {
+                          id: `ep-0-${Date.now()}`,
+                          ip: "",
+                          portStr: "",
+                          tagStr: "external",
+                          mtuStr: "",
+                          isNone: false,
+                        },
+                      ];
+                    }
+                    return filtered;
+                  });
                 }}
                 startIcon={<Globe size={16} />}
                 sx={{ flex: 1, textTransform: "none", fontWeight: 600 }}

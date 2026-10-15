@@ -1778,14 +1778,34 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
     }
   }, []);
 
+  const isValidConnection = useCallback(
+    (connection: Connection | Edge) => {
+      if (!connection.source || !connection.target || connection.source === connection.target) {
+        return false;
+      }
+      const srcNode = nodes.find((n) => n.name === connection.source);
+      const tgtNode = nodes.find((n) => n.name === connection.target);
+      if (srcNode?.is_external && tgtNode?.is_external) {
+        return false;
+      }
+      return true;
+    },
+    [nodes],
+  );
+
   const onConnect = useCallback(
     (connection: Connection) => {
       if (connection.source && connection.target && connection.source !== connection.target) {
+        const srcNode = nodes.find((n) => n.name === connection.source);
+        const tgtNode = nodes.find((n) => n.name === connection.target);
+        if (srcNode?.is_external && tgtNode?.is_external) {
+          return;
+        }
         onConnectNodes(connection.source, connection.target);
       }
       setEdges((eds) => addEdge(connection, eds));
     },
-    [onConnectNodes, setEdges],
+    [nodes, onConnectNodes, setEdges],
   );
 
   // Hidden links count (both intra-block links and collapsed inter-block links)
@@ -1876,6 +1896,7 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
           }
         }}
         onConnect={onConnect}
+        isValidConnection={isValidConnection}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         defaultViewport={initialViewport}

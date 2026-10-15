@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   Dialog,
   DialogTitle,
@@ -20,9 +20,10 @@ import {
   useTheme,
   useMediaQuery,
 } from "@mui/material";
-import { Link as LinkIcon, ArrowRightLeft, Edit2, Globe, Copy, Check, FileText, Network } from "lucide-react";
+import { Link as LinkIcon, ArrowRightLeft, Edit2, Globe, Copy, Check, FileText, Network, AlertCircle } from "lucide-react";
 import { api } from "../../api/client";
-import { Node, Link, NetworkPolicy } from "../../types/api";
+import { Node, Link, NetworkPolicy, NetworkSettings } from "../../types/api";
+import { useMesh } from "../../context/MeshContext";
 import { MarkdownView } from "../Common/MarkdownView";
 import { derivePortFromIP } from "../../utils/port";
 import { resolvePeerEntrypoint, extractPort, formatEndpoint } from "../../utils/endpoint";
@@ -117,11 +118,28 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const { networkSettings: ctxNetworkSettings } = useMesh();
+  const [networkSettings, setNetworkSettings] = useState<NetworkSettings | null>(ctxNetworkSettings);
+
+  useEffect(() => {
+    if (ctxNetworkSettings) {
+      setNetworkSettings(ctxNetworkSettings);
+    }
+  }, [ctxNetworkSettings]);
+
+  useEffect(() => {
+    if (!open) return;
+    if (!ctxNetworkSettings) {
+      api.getNetworkSettings().then(setNetworkSettings).catch(console.error);
+    }
+  }, [open, ctxNetworkSettings]);
+
   const fromNode = nodes.find((n) => n.name === fromNodeName);
   const toNode = nodes.find((n) => n.name === toNodeName);
-  const isExternalLink = Boolean(fromNode?.is_external || toNode?.is_external);
-  const managedNode = fromNode?.is_external ? toNode : fromNode;
-  const externalNode = fromNode?.is_external ? fromNode : toNode;
+  const isBothExternal = Boolean(fromNode?.is_external && toNode?.is_external);
+  const isExternalLink = !isBothExternal && Boolean(fromNode?.is_external || toNode?.is_external);
+  const managedNode = fromNode?.is_external ? (toNode?.is_external ? undefined : toNode) : fromNode;
+  const externalNode = fromNode?.is_external ? fromNode : toNode?.is_external ? toNode : undefined;
 
   // Resolve external peer's entrypoint using matching tags with managed node
   const { entrypoint: resolvedExtEP, matchedTag } = resolvePeerEntrypoint(managedNode, externalNode);
@@ -221,8 +239,20 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
       setFromNeighborAddress("");
       setToNeighborAddress("");
 
-      setFromNodeName(initialFrom || "");
-      setToNodeName(initialTo || "");
+      if (initialFrom && initialTo) {
+        const nFrom = nodes.find((n) => n.name === initialFrom);
+        const nTo = nodes.find((n) => n.name === initialTo);
+        if (nFrom?.is_external && nTo?.is_external) {
+          setFromNodeName(initialFrom);
+          setToNodeName("");
+        } else {
+          setFromNodeName(initialFrom);
+          setToNodeName(initialTo);
+        }
+      } else {
+        setFromNodeName(initialFrom || "");
+        setToNodeName(initialTo || "");
+      }
       setFromPort(0);
       setToPort(0);
       setFromMtu(1420);
@@ -251,6 +281,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
       setFromUseIp(false);
       setToUseIp(false);
       setError(null);
+      lastExtPeerRef.current = "";
     }
   }, [open, linkToEdit, initialFrom, initialTo, nodes]);
 
@@ -266,32 +297,62 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
     }
   }, [isExternalLink, linkToEdit]);
 
+  const lastExtPeerRef = useRef<string>("");
+
   // Auto calculate default ports and MTUs only when creating new link
   useEffect(() => {
     if (linkToEdit) return;
 
-    if (isExternalLink) {
-      if (managedNode === fromNode && fromPort === 0) {
-        setFromPort(51820 + linkPortOffset);
-      }
-      if (managedNode === toNode && toPort === 0) {
-        setToPort(51820 + linkPortOffset);
+    if (isExternalLink && managedNode && externalNode) {
+      const publicAsn = networkSettings?.public_asn || managedNode.asn || 4242420000;
+      const publicAsnStr = String(publicAsn).trim();
+      const publicSuffix4 = publicAsnStr ? publicAsnStr.slice(-4) : "1";
+      let publicPort5 = Number(publicAsnStr.slice(-5));
+      if (isNaN(publicPort5) || publicPort5 <= 0 || publicPort5 > 65535) {
+        publicPort5 = 51820;
       }
 
-      // Auto prefill remotePort from external node's resolved entrypoint if available
-      const { entrypoint: extEP } = resolvePeerEntrypoint(managedNode, externalNode);
-      if (extEP?.ports && extEP.ports.length > 0) {
-        const p = extEP.ports[0].external_port || extEP.ports[0].port;
-        if (p) {
-          setRemotePort(p);
+      const extAsnStr = String(externalNode.asn || "").trim();
+      const extSuffix4 = extAsnStr ? extAsnStr.slice(-4) : "2";
+      let extPort5 = Number(extAsnStr.slice(-5));
+      if (isNaN(extPort5) || extPort5 <= 0 || extPort5 > 65535) {
+        extPort5 = 51820 + linkPortOffset;
+      }
+
+      const peerKey = `${managedNode.name}-${externalNode.name}-${externalNode.asn}-${publicAsn}`;
+      if (lastExtPeerRef.current !== peerKey) {
+        lastExtPeerRef.current = peerKey;
+
+        // Local WG Address: fe80::<suffix>/64 where <suffix> is last 4 digits of Public ASN
+        setLocalAddress(`fe80::${publicSuffix4}/64`);
+
+        // Local Listen Port: external peer ASN last 5 digits
+        if (managedNode === fromNode) {
+          setFromPort(extPort5);
+        } else {
+          setToPort(extPort5);
+        }
+
+        // Remote WG Address: fe80::<suffix> where <suffix> is last 4 digits of external node ASN
+        setRemoteAddress(`fe80::${extSuffix4}`);
+
+        // Remote Port: Public ASN last 5 digits (or entrypoint port if specified on external node)
+        const { entrypoint: extEP } = resolvePeerEntrypoint(managedNode, externalNode);
+        let foundPort: number | "" = "";
+        if (extEP?.ports && extEP.ports.length > 0) {
+          const p = extEP.ports[0].external_port || extEP.ports[0].port;
+          if (p) foundPort = p;
+        }
+        setRemotePort(foundPort || publicPort5);
+
+        if (extEP?.mtu && extEP.mtu > 0) {
+          if (managedNode === fromNode) setFromMtu(extEP.mtu - 80);
+          else setToMtu(extEP.mtu - 80);
         }
       }
-
-      if (extEP?.mtu && extEP.mtu > 0) {
-        if (managedNode === fromNode) setFromMtu(extEP.mtu - 80);
-        else setToMtu(extEP.mtu - 80);
-      }
       return;
+    } else {
+      lastExtPeerRef.current = "";
     }
 
     if (toNode && toNode.ip) {
@@ -330,7 +391,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
       setFromMtu(getUsedEpMTU(toNode, fromNode));
       setToMtu(getUsedEpMTU(fromNode, toNode));
     }
-  }, [fromNode, toNode, linkToEdit, isExternalLink, managedNode, externalNode, fromPort, toPort]);
+  }, [fromNode, toNode, linkToEdit, isExternalLink, managedNode, externalNode, fromPort, toPort, networkSettings]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -680,18 +741,28 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
             width: 34,
             height: 34,
             borderRadius: 2,
-            backgroundColor: isExternalLink
-              ? "rgba(139, 92, 246, 0.1)"
-              : linkType === "manual"
-                ? "rgba(124, 58, 237, 0.1)"
-                : "rgba(8, 145, 178, 0.1)",
+            backgroundColor: isBothExternal
+              ? "rgba(239, 68, 68, 0.1)"
+              : isExternalLink
+                ? "rgba(139, 92, 246, 0.1)"
+                : linkType === "manual"
+                  ? "rgba(124, 58, 237, 0.1)"
+                  : "rgba(8, 145, 178, 0.1)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            color: isExternalLink ? "#8B5CF6" : linkType === "manual" ? "#7C3AED" : "#0891B2",
+            color: isBothExternal
+              ? "#EF4444"
+              : isExternalLink
+                ? "#8B5CF6"
+                : linkType === "manual"
+                  ? "#7C3AED"
+                  : "#0891B2",
           }}
         >
-          {isExternalLink ? (
+          {isBothExternal ? (
+            <AlertCircle size={18} />
+          ) : isExternalLink ? (
             <Globe size={18} />
           ) : linkType === "manual" ? (
             <Network size={18} />
@@ -706,11 +777,13 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
             ? linkType === "manual"
               ? `Edit Manual Link: ${linkToEdit.from.name} ↔ ${linkToEdit.to.name}`
               : `Edit WireGuard Link: ${linkToEdit.from.name} ↔ ${linkToEdit.to.name}`
-            : isExternalLink
-              ? "Create External Peering Link"
-              : linkType === "manual"
-                ? "Create Manual (BGP Only) Link"
-                : "Create WireGuard Link"}
+            : isBothExternal
+              ? "Invalid Link (Both External)"
+              : isExternalLink
+                ? "Create External Peering Link"
+                : linkType === "manual"
+                  ? "Create Manual (BGP Only) Link"
+                  : "Create WireGuard Link"}
         </Typography>
       </DialogTitle>
 
@@ -723,15 +796,27 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
               label="Source Node (From)"
               size="small"
               value={fromNodeName}
-              onChange={(e) => setFromNodeName(e.target.value)}
+              onChange={(e) => {
+                const newFrom = e.target.value;
+                setFromNodeName(newFrom);
+                const selected = nodes.find((n) => n.name === newFrom);
+                if (selected?.is_external && toNode?.is_external) {
+                  setToNodeName("");
+                }
+              }}
               required
               disabled={submitting || Boolean(linkToEdit)}
             >
-              {nodes.map((n) => (
-                <MenuItem key={n.name} value={n.name} disabled={n.name === toNodeName}>
-                  {n.name} {n.is_external ? "(External Peer)" : n.ip ? `(${n.ip})` : ""}
-                </MenuItem>
-              ))}
+              {nodes.map((n) => {
+                const isSelf = n.name === toNodeName;
+                const isBothExt = Boolean(toNode?.is_external && n.is_external);
+                return (
+                  <MenuItem key={n.name} value={n.name} disabled={isSelf || isBothExt}>
+                    {n.name} {n.is_external ? "(External Peer)" : n.ip ? `(${n.ip})` : ""}
+                    {isBothExt ? " — cannot link to another external peer" : ""}
+                  </MenuItem>
+                );
+              })}
             </TextField>
 
             <Box
@@ -755,17 +840,35 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
               label="Target Node (To)"
               size="small"
               value={toNodeName}
-              onChange={(e) => setToNodeName(e.target.value)}
+              onChange={(e) => {
+                const newTo = e.target.value;
+                setToNodeName(newTo);
+                const selected = nodes.find((n) => n.name === newTo);
+                if (selected?.is_external && fromNode?.is_external) {
+                  setFromNodeName("");
+                }
+              }}
               required
               disabled={submitting || Boolean(linkToEdit)}
             >
-              {nodes.map((n) => (
-                <MenuItem key={n.name} value={n.name} disabled={n.name === fromNodeName}>
-                  {n.name} {n.is_external ? "(External Peer)" : n.ip ? `(${n.ip})` : ""}
-                </MenuItem>
-              ))}
+              {nodes.map((n) => {
+                const isSelf = n.name === fromNodeName;
+                const isBothExt = Boolean(fromNode?.is_external && n.is_external);
+                return (
+                  <MenuItem key={n.name} value={n.name} disabled={isSelf || isBothExt}>
+                    {n.name} {n.is_external ? "(External Peer)" : n.ip ? `(${n.ip})` : ""}
+                    {isBothExt ? " — cannot link to another external peer" : ""}
+                  </MenuItem>
+                );
+              })}
             </TextField>
           </Box>
+
+          {isBothExternal && (
+            <Alert severity="error" sx={{ borderRadius: 2 }}>
+              Cannot link two external peers together. easy42 is a mesh control plane for your managed nodes; an external peer (DN42 / upstream) must connect to one of your managed nodes.
+            </Alert>
+          )}
 
           {linkToEdit && (
             <Typography variant="caption" sx={{ color: "#64748B", fontStyle: "italic", mt: -1.5 }}>
@@ -776,7 +879,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
           )}
 
           {/* Link Type Selector (when not external link) */}
-          {!isExternalLink && (
+          {!isExternalLink && !isBothExternal && (
             <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
               <Typography variant="caption" sx={{ color: "#475569", fontWeight: 700, letterSpacing: "0.5px" }}>
                 LINK TYPE
@@ -1296,20 +1399,31 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                   <TextField
                     label="Resolved Entrypoint (IP / Host)"
                     size="small"
-                    value={resolvedExtIp || (externalNode ? "No Entrypoint Configured" : "")}
+                    value={
+                      resolvedExtIp ||
+                      (resolvedExtEP
+                        ? "No endpoint (passive)"
+                        : externalNode?.entrypoints && externalNode.entrypoints.length > 0
+                          ? "No matching tag (passive)"
+                          : externalNode
+                            ? "No endpoint configured"
+                            : "")
+                    }
                     disabled
                     helperText={
                       matchedTag
-                        ? `Matched tag: #${matchedTag} with ${managedNode?.name}`
+                        ? `Matched tag: #${matchedTag} with ${managedNode?.name}${
+                            !resolvedExtIp ? " (No endpoint host, passive listener)" : ""
+                          }`
                         : resolvedExtIp
                           ? "Resolved from external peer's entrypoints"
-                          : "Configure an entrypoint on the external peer"
+                          : "Peer has no endpoint host; WireGuard will await incoming connection"
                     }
                     InputProps={{
                       sx: {
                         backgroundColor: "#FFFFFF",
                         fontWeight: 600,
-                        color: resolvedExtIp ? "#6D28D9" : "#94A3B8",
+                        color: resolvedExtIp ? "#6D28D9" : resolvedExtEP ? "#059669" : "#94A3B8",
                       },
                     }}
                   />
@@ -1330,18 +1444,17 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                     size="small"
                     value={remoteAddress}
                     onChange={(e) => setRemoteAddress(e.target.value)}
-                    placeholder="e.g. fe80::2/64 or 172.20.x.y/32"
-                    helperText="Peer's WireGuard IP address"
+                    placeholder="e.g. fe80::9876 or 172.20.x.y/32"
+                    helperText="Peer's WireGuard IP address (fe80::<peer ASN last 4 digits>)"
                     required
                   />
                   <TextField
                     size="small"
-                    label="Remote WireGuard Public Key"
+                    label="Remote WireGuard Public Key (Optional)"
                     value={remotePublicKey}
                     onChange={(e) => setRemotePublicKey(e.target.value)}
                     placeholder="Base64 44-character key"
-                    helperText="WireGuard public key of peer"
-                    required
+                    helperText="WireGuard public key of peer (optional, can be added later)"
                   />
                 </Box>
 
@@ -1758,7 +1871,8 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
           ) : (
             /* Generated Standard Link Ends */
             fromNode &&
-            toNode && (
+            toNode &&
+            !isBothExternal && (
               <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
                 <Typography variant="caption" sx={{ color: "#475569", fontWeight: 700, letterSpacing: "0.5px" }}>
                   WIREGUARD INTERFACE SPECIFICATIONS
@@ -2306,7 +2420,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
             type="submit"
             variant="contained"
             color="primary"
-            disabled={submitting || !fromNodeName || !toNodeName || fromNodeName === toNodeName}
+            disabled={submitting || !fromNodeName || !toNodeName || fromNodeName === toNodeName || isBothExternal}
             startIcon={submitting ? <CircularProgress size={16} color="inherit" /> : null}
           >
             {linkToEdit ? (submitting ? "Saving..." : "Save Changes") : submitting ? "Creating Link..." : "Create Link"}

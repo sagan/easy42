@@ -906,6 +906,56 @@ func TestExternalNodeAndPeering(t *testing.T) {
 	if st, ok := statuses["peer-dn42"]; !ok || !st.Connected {
 		t.Errorf("Expected synthetic status for external node peer-dn42, got %+v", st)
 	}
+
+	// 9. Test external node with empty host entrypoint (no endpoint / passive listener)
+	noHostExt := config.Node{
+		Name:       "peer-nohost",
+		IsExternal: true,
+		ASN:        4242429999,
+		Entrypoints: []config.Entrypoint{
+			{
+				Tags: []string{"external"},
+			},
+		},
+	}
+	if err := mgr.AddNode(noHostExt); err != nil {
+		t.Fatalf("AddNode peer-nohost failed: %v", err)
+	}
+	savedNoHost := mgr.GetNode("peer-nohost")
+	if savedNoHost == nil || len(savedNoHost.Entrypoints) != 1 {
+		t.Fatalf("Expected saved external node to preserve entrypoint with empty host")
+	}
+	if len(savedNoHost.Entrypoints[0].Tags) != 1 || savedNoHost.Entrypoints[0].Tags[0] != "external" {
+		t.Errorf("Expected tag 'external', got %+v", savedNoHost.Entrypoints[0].Tags)
+	}
+
+	// Add link to peer-nohost without specifying explicit endpoint
+	linkEndFrom := config.LinkEnd{
+		Name:       "gw1",
+		ListenPort: 51821,
+		Address:    "fe80::1002/64",
+	}
+	linkEndTo := config.LinkEnd{
+		Name:      "peer-nohost",
+		Address:   "fe80::9999/64",
+		PublicKey: "bm9ob3N0LXRlc3QtcHVibGljLWtleS0xMjM0NQ==",
+	}
+	nohostLink, err := mgr.AddLinkAdvanced("gw1", "peer-nohost", &linkEndFrom, &linkEndTo, []string{"dn42"})
+	if err != nil {
+		t.Fatalf("AddLinkAdvanced for peer-nohost failed: %v", err)
+	}
+	if nohostLink.From.ResolvedEndpoint != "" {
+		t.Errorf("Expected empty resolved endpoint for peer without host, got %q", nohostLink.From.ResolvedEndpoint)
+	}
+
+	// Generate WireGuard config for gw1 and verify [Peer] for peer-nohost does not contain Endpoint =
+	wgConf, err := compiler.GenerateWgConfigContent(&managed, &noHostExt, &nohostLink.From, &nohostLink.To, mgr.Vault())
+	if err != nil {
+		t.Fatalf("GenerateWgConfigContent failed: %v", err)
+	}
+	if strings.Contains(wgConf, "Endpoint =") {
+		t.Errorf("Expected WG config to have no Endpoint directive for passive peer, got:\n%s", wgConf)
+	}
 }
 
 func TestUpdateStatePartialNodeFilter(t *testing.T) {
