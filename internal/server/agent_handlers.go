@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"net/http"
 	"regexp"
+	"strconv"
 	"strings"
+	"time"
 
 	"easy42/internal/agent"
 	"easy42/internal/engine"
@@ -492,22 +494,72 @@ func (s *Server) handleGetNodeMetrics(w http.ResponseWriter, r *http.Request) {
 	if rangeStr == "" {
 		rangeStr = "24h"
 	}
+	iface := r.URL.Query().Get("interface")
 
 	if r.URL.Query().Get("flush") == "true" {
 		_, _ = s.mgr.RefreshNodeStatus(name)
 	}
 
-	points, err := s.mgr.GetNodeMetricsHistory(name, rangeStr)
+	points, interfaces, selectedIface, err := s.mgr.GetNodeMetricsHistory(name, rangeStr, iface)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
-		"node":   name,
-		"range":  rangeStr,
-		"points": points,
+		"node":       name,
+		"range":      rangeStr,
+		"interface":  selectedIface,
+		"interfaces": interfaces,
+		"points":     points,
 	})
+}
+
+// handleGetNodeTraffic returns derived network traffic usage for a node interface in any specified timespan
+func (s *Server) handleGetNodeTraffic(w http.ResponseWriter, r *http.Request) {
+	name := chi.URLParam(r, "name")
+	node := s.mgr.FindNode(name)
+	if node == nil {
+		writeError(w, http.StatusNotFound, "node not found")
+		return
+	}
+
+	iface := r.URL.Query().Get("interface")
+	rangeStr := r.URL.Query().Get("range")
+	startStr := r.URL.Query().Get("start")
+	endStr := r.URL.Query().Get("end")
+
+	var start, end time.Time
+	if startStr != "" {
+		if sec, err := strconv.ParseInt(startStr, 10, 64); err == nil {
+			start = time.Unix(sec, 0)
+		} else if t, err := time.Parse(time.RFC3339, startStr); err == nil {
+			start = t
+		}
+	}
+	if endStr != "" {
+		if sec, err := strconv.ParseInt(endStr, 10, 64); err == nil {
+			end = time.Unix(sec, 0)
+		} else if t, err := time.Parse(time.RFC3339, endStr); err == nil {
+			end = t
+		}
+	}
+
+	if start.IsZero() {
+		dur, _ := engine.ParseMetricRange(rangeStr)
+		start = time.Now().Add(-dur)
+	}
+	if end.IsZero() {
+		end = time.Now()
+	}
+
+	summary, err := s.mgr.GetNodeInterfaceTraffic(name, iface, start, end, 250)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, summary)
 }
 
 // handleGetFleetLiveStatus returns aggregate fleet metrics and live status for all nodes

@@ -156,6 +156,7 @@ func New(cfg Config) *Server {
 			r.Delete("/nodes/{name}/agent", s.handleUninstallAgent)
 			r.Get("/nodes/{name}/telemetry", s.handleGetNodeTelemetry)
 			r.Get("/nodes/{name}/metrics", s.handleGetNodeMetrics)
+			r.Get("/nodes/{name}/traffic", s.handleGetNodeTraffic)
 
 			// Links
 			r.Get("/links", s.handleGetLinks)

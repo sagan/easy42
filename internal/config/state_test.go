@@ -250,6 +250,153 @@ func TestStateStoreMetrics(t *testing.T) {
 	}
 }
 
+func TestStateStoreInterfaceTrafficDerivedStats(t *testing.T) {
+	tempDir := t.TempDir()
+	store := NewStateStore(tempDir)
+	defer store.Close()
+
+	baseTime := time.Now().Add(-1 * time.Hour)
+
+	// Snapshot 1: eth0 at 1000 rx, 2000 tx
+	err := store.RecordMetrics("node-alpha", NodeMetricInput{
+		Timestamp:  baseTime,
+		CPUPercent: 10,
+		NetRxBytes: 1000,
+		NetTxBytes: 2000,
+		Interfaces: []InterfaceMetricInput{
+			{Name: "eth0", RxBytes: 1000, TxBytes: 2000, IsPrimary: true},
+			{Name: "wg42node2", RxBytes: 500, TxBytes: 800},
+		},
+	})
+	if err != nil {
+		t.Fatalf("RecordMetrics 1 failed: %v", err)
+	}
+
+	// Snapshot 2: 10s later, eth0 rx increased to 2500 (delta: 1500), tx to 3000 (delta: 1000)
+	err = store.RecordMetrics("node-alpha", NodeMetricInput{
+		Timestamp:  baseTime.Add(10 * time.Second),
+		CPUPercent: 12,
+		NetRxBytes: 2500,
+		NetTxBytes: 3000,
+		Interfaces: []InterfaceMetricInput{
+			{Name: "eth0", RxBytes: 2500, TxBytes: 3000, IsPrimary: true},
+			{Name: "wg42node2", RxBytes: 700, TxBytes: 900},
+		},
+	})
+	if err != nil {
+		t.Fatalf("RecordMetrics 2 failed: %v", err)
+	}
+
+	// Snapshot 3: 20s later, interface RESTARTED! Raw counter reset to 300 rx (< 2500), 100 tx (< 3000).
+	// Reset event must be detected, and new value added to previous accumulated value.
+	// Previous accum rx: 1000 + 1500 = 2500. New accum rx should be 2500 + 300 = 2800!
+	// Previous accum tx: 2000 + 1000 = 3000. New accum tx should be 3000 + 100 = 3100!
+	err = store.RecordMetrics("node-alpha", NodeMetricInput{
+		Timestamp:  baseTime.Add(20 * time.Second),
+		CPUPercent: 15,
+		NetRxBytes: 300,
+		NetTxBytes: 100,
+		Interfaces: []InterfaceMetricInput{
+			{Name: "eth0", RxBytes: 300, TxBytes: 100, IsPrimary: true},
+			{Name: "wg42node2", RxBytes: 900, TxBytes: 1100},
+		},
+	})
+	if err != nil {
+		t.Fatalf("RecordMetrics 3 failed: %v", err)
+	}
+
+	// Snapshot 4: 30s later, eth0 rx increased to 500 (delta: 200), tx to 400 (delta: 300)
+	// New accum rx: 2800 + 200 = 3000.
+	// New accum tx: 3100 + 300 = 3400.
+	err = store.RecordMetrics("node-alpha", NodeMetricInput{
+		Timestamp:  baseTime.Add(30 * time.Second),
+		CPUPercent: 14,
+		NetRxBytes: 500,
+		NetTxBytes: 400,
+		Interfaces: []InterfaceMetricInput{
+			{Name: "eth0", RxBytes: 500, TxBytes: 400, IsPrimary: true},
+			{Name: "wg42node2", RxBytes: 1200, TxBytes: 1300},
+		},
+	})
+	if err != nil {
+		t.Fatalf("RecordMetrics 4 failed: %v", err)
+	}
+
+	// Verify distinct interfaces
+	ifaces, err := store.GetNodeInterfaces("node-alpha")
+	if err != nil {
+		t.Fatalf("GetNodeInterfaces failed: %v", err)
+	}
+	if len(ifaces) != 2 || ifaces[0] != "eth0" || ifaces[1] != "wg42node2" {
+		t.Fatalf("Unexpected interfaces: %v", ifaces)
+	}
+
+	// Query derived traffic summary for eth0
+	summary, err := store.GetNodeInterfaceTraffic("node-alpha", "eth0", baseTime.Add(-time.Minute), baseTime.Add(time.Minute), 100)
+	if err != nil {
+		t.Fatalf("GetNodeInterfaceTraffic failed: %v", err)
+	}
+	if len(summary.Points) != 4 {
+		t.Fatalf("Expected 4 points, got %d", len(summary.Points))
+	}
+
+	// Point 0 (start of timespan): Traffic starts from 0
+	if summary.Points[0].TrafficRxBytes != 0 || summary.Points[0].TrafficTxBytes != 0 {
+		t.Errorf("Point 0 traffic should start from 0, got rx=%d tx=%d", summary.Points[0].TrafficRxBytes, summary.Points[0].TrafficTxBytes)
+	}
+
+	// Point 1: 1500 rx, 1000 tx
+	if summary.Points[1].TrafficRxBytes != 1500 || summary.Points[1].TrafficTxBytes != 1000 {
+		t.Errorf("Point 1 expected rx=1500 tx=1000, got rx=%d tx=%d", summary.Points[1].TrafficRxBytes, summary.Points[1].TrafficTxBytes)
+	}
+
+	// Point 2 (after reset): accumulated 1500 + 300 = 1800 rx, 1000 + 100 = 1100 tx
+	if !summary.Points[2].ResetDetected {
+		t.Errorf("Point 2 should have ResetDetected=true")
+	}
+	if summary.Points[2].TrafficRxBytes != 1800 || summary.Points[2].TrafficTxBytes != 1100 {
+		t.Errorf("Point 2 expected rx=1800 tx=1100, got rx=%d tx=%d", summary.Points[2].TrafficRxBytes, summary.Points[2].TrafficTxBytes)
+	}
+
+	// Point 3: accumulated 1800 + 200 = 2000 rx, 1100 + 300 = 1400 tx
+	if summary.Points[3].TrafficRxBytes != 2000 || summary.Points[3].TrafficTxBytes != 1400 {
+		t.Errorf("Point 3 expected rx=2000 tx=1400, got rx=%d tx=%d", summary.Points[3].TrafficRxBytes, summary.Points[3].TrafficTxBytes)
+	}
+	if summary.TotalRxBytes != 2000 || summary.TotalTxBytes != 1400 {
+		t.Errorf("Total expected rx=2000 tx=1400, got rx=%d tx=%d", summary.TotalRxBytes, summary.TotalTxBytes)
+	}
+
+	// Query unified history with interface selected
+	history, availIfaces, selectedIface, err := store.GetMetricsHistoryWithInterface("node-alpha", "eth0", baseTime.Add(-time.Minute), 100)
+	if err != nil {
+		t.Fatalf("GetMetricsHistoryWithInterface failed: %v", err)
+	}
+	if selectedIface != "eth0" {
+		t.Errorf("Expected selectedIface eth0, got %s", selectedIface)
+	}
+	if len(availIfaces) != 2 {
+		t.Errorf("Expected 2 availIfaces, got %d", len(availIfaces))
+	}
+	if len(history) != 4 {
+		t.Fatalf("Expected 4 history points, got %d", len(history))
+	}
+	if history[0].TrafficRxBytes != 0 {
+		t.Errorf("History point 0 traffic rx should be 0, got %d", history[0].TrafficRxBytes)
+	}
+	if history[3].TrafficRxBytes != 2000 {
+		t.Errorf("History point 3 traffic rx should be 2000, got %d", history[3].TrafficRxBytes)
+	}
+
+	// Clean metrics older than 10 minutes (should clean our samples which were 1 hour ago)
+	cleaned, err := store.CleanMetricsOlderThan(10 * time.Minute)
+	if err != nil {
+		t.Fatalf("CleanMetricsOlderThan failed: %v", err)
+	}
+	if cleaned != 4 {
+		t.Errorf("Expected 4 cleaned rows, got %d", cleaned)
+	}
+}
+
 func TestStateStoreLegacyMigration(t *testing.T) {
 	tempDir := t.TempDir()
 

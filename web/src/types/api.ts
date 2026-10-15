@@ -539,12 +539,39 @@ export interface NodeMetricPoint {
   net_tx_bytes: number;
   net_rx_rate: number;
   net_tx_rate: number;
+  traffic_rx_bytes?: number;
+  traffic_tx_bytes?: number;
 }
 
 export interface NodeMetricsResponse {
   node: string;
   range: string;
+  interface?: string;
+  interfaces?: string[];
   points: NodeMetricPoint[];
+}
+
+export interface InterfaceTrafficPoint {
+  timestamp: number;
+  raw_rx_bytes: number;
+  raw_tx_bytes: number;
+  accum_rx_bytes: number;
+  accum_tx_bytes: number;
+  traffic_rx_bytes: number;
+  traffic_tx_bytes: number;
+  rx_rate: number;
+  tx_rate: number;
+  reset_detected: boolean;
+}
+
+export interface NodeInterfaceTrafficSummary {
+  node_name: string;
+  interface_name: string;
+  start_time: number;
+  end_time: number;
+  total_rx_bytes: number;
+  total_tx_bytes: number;
+  points: InterfaceTrafficPoint[];
 }
 
 export interface FleetMetricsSummary {

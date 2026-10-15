@@ -240,9 +240,11 @@ func TestFleetLiveStatusAndMetricsEndpoints(t *testing.T) {
 	}
 
 	var metricsResp struct {
-		Node   string                   `json:"node"`
-		Range  string                   `json:"range"`
-		Points []config.NodeMetricPoint `json:"points"`
+		Node       string                   `json:"node"`
+		Range      string                   `json:"range"`
+		Interface  string                   `json:"interface"`
+		Interfaces []string                 `json:"interfaces"`
+		Points     []config.NodeMetricPoint `json:"points"`
 	}
 	if err := json.Unmarshal(rrMetrics.Body.Bytes(), &metricsResp); err != nil {
 		t.Fatalf("failed to decode metrics json: %v", err)
@@ -252,6 +254,82 @@ func TestFleetLiveStatusAndMetricsEndpoints(t *testing.T) {
 	}
 	if metricsResp.Points[0].CPUPercent != 33.3 {
 		t.Fatalf("expected 33.3 CPU, got %f", metricsResp.Points[0].CPUPercent)
+	}
+
+	// 4. Record interface samples with reset and test interface query
+	baseT := time.Now().Add(-20 * time.Minute)
+	_ = mgr.StateStore().RecordMetrics("node-test-1", config.NodeMetricInput{
+		Timestamp:  baseT,
+		CPUPercent: 10,
+		Interfaces: []config.InterfaceMetricInput{
+			{Name: "eth0", RxBytes: 1000, TxBytes: 2000, IsPrimary: true},
+		},
+	})
+	_ = mgr.StateStore().RecordMetrics("node-test-1", config.NodeMetricInput{
+		Timestamp:  baseT.Add(10 * time.Second),
+		CPUPercent: 20,
+		Interfaces: []config.InterfaceMetricInput{
+			{Name: "eth0", RxBytes: 2500, TxBytes: 3000, IsPrimary: true},
+		},
+	})
+	// Reset event:
+	_ = mgr.StateStore().RecordMetrics("node-test-1", config.NodeMetricInput{
+		Timestamp:  baseT.Add(20 * time.Second),
+		CPUPercent: 25,
+		Interfaces: []config.InterfaceMetricInput{
+			{Name: "eth0", RxBytes: 200, TxBytes: 150, IsPrimary: true},
+		},
+	})
+
+	// Query /api/nodes/{name}/metrics with interface=eth0
+	reqIfaceMetrics := httptest.NewRequest(http.MethodGet, "/api/nodes/node-test-1/metrics?range=1h&interface=eth0", nil)
+	rctxIface := chi.NewRouteContext()
+	rctxIface.URLParams.Add("name", "node-test-1")
+	reqIfaceMetrics = reqIfaceMetrics.WithContext(context.WithValue(reqIfaceMetrics.Context(), chi.RouteCtxKey, rctxIface))
+	rrIfaceMetrics := httptest.NewRecorder()
+	srv.handleGetNodeMetrics(rrIfaceMetrics, reqIfaceMetrics)
+	if rrIfaceMetrics.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rrIfaceMetrics.Code)
+	}
+	var ifaceResp struct {
+		Node       string                   `json:"node"`
+		Interface  string                   `json:"interface"`
+		Interfaces []string                 `json:"interfaces"`
+		Points     []config.NodeMetricPoint `json:"points"`
+	}
+	if err := json.Unmarshal(rrIfaceMetrics.Body.Bytes(), &ifaceResp); err != nil {
+		t.Fatalf("failed to decode iface metrics: %v", err)
+	}
+	if ifaceResp.Interface != "eth0" {
+		t.Errorf("expected eth0 interface, got %s", ifaceResp.Interface)
+	}
+	if len(ifaceResp.Points) < 3 {
+		t.Fatalf("expected at least 3 points, got %d", len(ifaceResp.Points))
+	}
+
+	// 5. Query /api/nodes/{name}/traffic
+	reqTraffic := httptest.NewRequest(http.MethodGet, "/api/nodes/node-test-1/traffic?interface=eth0&range=1h", nil)
+	rctxTraffic := chi.NewRouteContext()
+	rctxTraffic.URLParams.Add("name", "node-test-1")
+	reqTraffic = reqTraffic.WithContext(context.WithValue(reqTraffic.Context(), chi.RouteCtxKey, rctxTraffic))
+	rrTraffic := httptest.NewRecorder()
+	srv.handleGetNodeTraffic(rrTraffic, reqTraffic)
+	if rrTraffic.Code != http.StatusOK {
+		t.Fatalf("expected 200 from traffic handler, got %d", rrTraffic.Code)
+	}
+	var trafficSummary config.NodeInterfaceTrafficSummary
+	if err := json.Unmarshal(rrTraffic.Body.Bytes(), &trafficSummary); err != nil {
+		t.Fatalf("failed to decode traffic summary: %v", err)
+	}
+	if trafficSummary.InterfaceName != "eth0" {
+		t.Errorf("expected eth0, got %s", trafficSummary.InterfaceName)
+	}
+	if len(trafficSummary.Points) < 3 {
+		t.Fatalf("expected at least 3 traffic points, got %d", len(trafficSummary.Points))
+	}
+	// First point must start from 0
+	if trafficSummary.Points[0].TrafficRxBytes != 0 {
+		t.Errorf("expected point 0 traffic rx to start from 0, got %d", trafficSummary.Points[0].TrafficRxBytes)
 	}
 }
 

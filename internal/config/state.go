@@ -66,6 +66,14 @@ func HashConfig(content string) string {
 	return hex.EncodeToString(h[:])
 }
 
+// InterfaceMetricInput represents a per-interface snapshot reported by an agent
+type InterfaceMetricInput struct {
+	Name      string `json:"name"`
+	RxBytes   uint64 `json:"rx_bytes"`
+	TxBytes   uint64 `json:"tx_bytes"`
+	IsPrimary bool   `json:"is_primary,omitempty"`
+}
+
 // NodeMetricInput represents an incoming telemetry point to be recorded
 type NodeMetricInput struct {
 	Timestamp        time.Time
@@ -78,6 +86,7 @@ type NodeMetricInput struct {
 	Load15m          float32
 	NetRxBytes       uint64
 	NetTxBytes       uint64
+	Interfaces       []InterfaceMetricInput
 }
 
 // NodeMetricPoint represents a recorded telemetry snapshot at a point in time
@@ -92,8 +101,35 @@ type NodeMetricPoint struct {
 	Load15m          float32 `json:"load_15m"`
 	NetRxBytes       uint64  `json:"net_rx_bytes"`
 	NetTxBytes       uint64  `json:"net_tx_bytes"`
-	NetRxRate        float64 `json:"net_rx_rate"` // bytes/second
-	NetTxRate        float64 `json:"net_tx_rate"` // bytes/second
+	NetRxRate        float64 `json:"net_rx_rate"`        // bytes/second
+	NetTxRate        float64 `json:"net_tx_rate"`        // bytes/second
+	TrafficRxBytes   uint64  `json:"traffic_rx_bytes"`   // Accumulated rx traffic starting from 0 in queried timespan
+	TrafficTxBytes   uint64  `json:"traffic_tx_bytes"`   // Accumulated tx traffic starting from 0 in queried timespan
+}
+
+// InterfaceTrafficPoint represents a point in the derived traffic time series
+type InterfaceTrafficPoint struct {
+	Timestamp      int64   `json:"timestamp"`
+	RawRxBytes     uint64  `json:"raw_rx_bytes"`
+	RawTxBytes     uint64  `json:"raw_tx_bytes"`
+	AccumRxBytes   uint64  `json:"accum_rx_bytes"`
+	AccumTxBytes   uint64  `json:"accum_tx_bytes"`
+	TrafficRxBytes uint64  `json:"traffic_rx_bytes"` // Normalized to 0 at timespan start
+	TrafficTxBytes uint64  `json:"traffic_tx_bytes"` // Normalized to 0 at timespan start
+	RxRate         float64 `json:"rx_rate"`
+	TxRate         float64 `json:"tx_rate"`
+	ResetDetected  bool    `json:"reset_detected"`
+}
+
+// NodeInterfaceTrafficSummary represents derived traffic statistics over a timespan
+type NodeInterfaceTrafficSummary struct {
+	NodeName      string                  `json:"node_name"`
+	InterfaceName string                  `json:"interface_name"`
+	StartTime     int64                   `json:"start_time"`
+	EndTime       int64                   `json:"end_time"`
+	TotalRxBytes  uint64                  `json:"total_rx_bytes"`
+	TotalTxBytes  uint64                  `json:"total_tx_bytes"`
+	Points        []InterfaceTrafficPoint `json:"points"`
 }
 
 // NodeInfo represents transient metadata about a node agent
@@ -147,8 +183,9 @@ type StateStore struct {
 	state    *NetworkState
 
 	// in-memory tracking of previous network transfer for rate calculation
-	prevNetMu sync.Mutex
-	prevNet   map[string]prevNetSample
+	prevNetMu    sync.Mutex
+	prevNet      map[string]prevNetSample
+	prevIfaceNet map[string]prevNetSample
 }
 
 // NewStateStore creates a new StateStore pointing to the given data directory
@@ -157,9 +194,10 @@ func NewStateStore(dataDir string) *StateStore {
 		dataDir = DefaultDataDir()
 	}
 	return &StateStore{
-		dataDir:  dataDir,
-		filePath: filepath.Join(dataDir, "data.db"),
-		prevNet:  make(map[string]prevNetSample),
+		dataDir:      dataDir,
+		filePath:     filepath.Join(dataDir, "data.db"),
+		prevNet:      make(map[string]prevNetSample),
+		prevIfaceNet: make(map[string]prevNetSample),
 	}
 }
 
@@ -243,6 +281,38 @@ func (s *StateStore) initDBLocked() error {
 	);
 
 	CREATE INDEX IF NOT EXISTS idx_node_metrics_node_time ON node_metrics(node_name, timestamp);
+
+	CREATE TABLE IF NOT EXISTS node_interface_metrics (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		node_name TEXT NOT NULL,
+		interface_name TEXT NOT NULL,
+		timestamp INTEGER NOT NULL,
+		rx_bytes INTEGER NOT NULL DEFAULT 0,
+		tx_bytes INTEGER NOT NULL DEFAULT 0,
+		rx_rate REAL NOT NULL DEFAULT 0,
+		tx_rate REAL NOT NULL DEFAULT 0
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_node_iface_metrics_lookup ON node_interface_metrics(node_name, interface_name, timestamp);
+	CREATE INDEX IF NOT EXISTS idx_node_iface_metrics_time ON node_interface_metrics(timestamp);
+
+	CREATE TABLE IF NOT EXISTS node_interface_traffic_stats (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		node_name TEXT NOT NULL,
+		interface_name TEXT NOT NULL,
+		timestamp INTEGER NOT NULL,
+		raw_rx_bytes INTEGER NOT NULL DEFAULT 0,
+		raw_tx_bytes INTEGER NOT NULL DEFAULT 0,
+		accum_rx_bytes INTEGER NOT NULL DEFAULT 0,
+		accum_tx_bytes INTEGER NOT NULL DEFAULT 0,
+		rx_rate REAL NOT NULL DEFAULT 0,
+		tx_rate REAL NOT NULL DEFAULT 0,
+		reset_detected INTEGER NOT NULL DEFAULT 0
+	);
+
+	CREATE UNIQUE INDEX IF NOT EXISTS idx_traffic_stats_unique ON node_interface_traffic_stats(node_name, interface_name, timestamp);
+	CREATE INDEX IF NOT EXISTS idx_traffic_stats_lookup ON node_interface_traffic_stats(node_name, interface_name, timestamp);
+	CREATE INDEX IF NOT EXISTS idx_traffic_stats_time ON node_interface_traffic_stats(timestamp);
 
 	CREATE TABLE IF NOT EXISTS cron_task_results (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -900,7 +970,7 @@ func (s *StateStore) Reset() error {
 		return err
 	}
 
-	_, _ = s.db.Exec("DELETE FROM node_states; DELETE FROM node_metrics; DELETE FROM node_info; DELETE FROM meta;")
+	_, _ = s.db.Exec("DELETE FROM node_states; DELETE FROM node_metrics; DELETE FROM node_info; DELETE FROM meta; DELETE FROM node_interface_metrics; DELETE FROM node_interface_traffic_stats;")
 
 	s.state = &NetworkState{
 		Version:   1,
@@ -970,6 +1040,51 @@ func (s *StateStore) RecordMetrics(nodeName string, input NodeMetricInput) error
 	`, nodeName, ts, input.CPUPercent, input.MemoryUsedBytes, input.MemoryTotalBytes,
 		input.UptimeSeconds, input.Load1m, input.Load5m, input.Load15m,
 		input.NetRxBytes, input.NetTxBytes, rxRate, txRate)
+
+	// Record per-interface snapshots if provided
+	if len(input.Interfaces) > 0 {
+		stmt, ifErr := s.db.Prepare(`
+			INSERT INTO node_interface_metrics (
+				node_name, interface_name, timestamp, rx_bytes, tx_bytes, rx_rate, tx_rate
+			) VALUES (?, ?, ?, ?, ?, ?, ?)
+		`)
+		if ifErr == nil {
+			defer stmt.Close()
+			s.prevNetMu.Lock()
+			for _, iface := range input.Interfaces {
+				if iface.Name == "" {
+					continue
+				}
+				key := nodeName + "/" + iface.Name
+				prevIf, hasPrevIf := s.prevIfaceNet[key]
+				var ifRxRate, ifTxRate float64
+				if hasPrevIf {
+					dt := input.Timestamp.Sub(prevIf.timestamp).Seconds()
+					if dt >= 0.5 {
+						if iface.RxBytes >= prevIf.rxBytes {
+							ifRxRate = float64(iface.RxBytes-prevIf.rxBytes) / dt
+						} else {
+							ifRxRate = float64(iface.RxBytes) / dt
+						}
+						if iface.TxBytes >= prevIf.txBytes {
+							ifTxRate = float64(iface.TxBytes-prevIf.txBytes) / dt
+						} else {
+							ifTxRate = float64(iface.TxBytes) / dt
+						}
+					}
+				}
+				s.prevIfaceNet[key] = prevNetSample{
+					timestamp: input.Timestamp,
+					rxBytes:   iface.RxBytes,
+					txBytes:   iface.TxBytes,
+				}
+				_, _ = stmt.Exec(nodeName, iface.Name, ts, iface.RxBytes, iface.TxBytes, ifRxRate, ifTxRate)
+			}
+			s.prevNetMu.Unlock()
+		}
+		// Update derived state table periodically when underlying data changes
+		_ = s.updateInterfaceTrafficStatsLocked(nodeName, "")
+	}
 
 	// Update node_info last_seen & uptime
 	_, _ = s.db.Exec(`
@@ -1134,46 +1249,375 @@ func (s *StateStore) GetLatestMetrics() (map[string]NodeMetricPoint, error) {
 	return res, nil
 }
 
-// GetMetricsHistory returns historical metric snapshots, downsampled if exceeding maxPoints
-func (s *StateStore) GetMetricsHistory(nodeName string, start time.Time, maxPoints int) ([]NodeMetricPoint, error) {
+// updateInterfaceTrafficStatsLocked updates the derived traffic stats table for a node and interface
+func (s *StateStore) updateInterfaceTrafficStatsLocked(nodeName, interfaceName string) error {
+	if s.db == nil {
+		return nil
+	}
+
+	if interfaceName == "" {
+		var query string
+		var args []any
+		if nodeName != "" {
+			query = "SELECT DISTINCT interface_name FROM node_interface_metrics WHERE node_name = ?"
+			args = append(args, nodeName)
+		} else {
+			query = "SELECT DISTINCT node_name, interface_name FROM node_interface_metrics"
+		}
+		rows, err := s.db.Query(query, args...)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+
+		type nodeIfacePair struct {
+			node  string
+			iface string
+		}
+		var pairs []nodeIfacePair
+		for rows.Next() {
+			if nodeName != "" {
+				var iface string
+				if err := rows.Scan(&iface); err == nil && iface != "" {
+					pairs = append(pairs, nodeIfacePair{node: nodeName, iface: iface})
+				}
+			} else {
+				var n, iface string
+				if err := rows.Scan(&n, &iface); err == nil && iface != "" {
+					pairs = append(pairs, nodeIfacePair{node: n, iface: iface})
+				}
+			}
+		}
+		rows.Close()
+
+		for _, p := range pairs {
+			_ = s.updateSingleInterfaceTrafficStatsLocked(p.node, p.iface)
+		}
+		return nil
+	}
+
+	return s.updateSingleInterfaceTrafficStatsLocked(nodeName, interfaceName)
+}
+
+// updateSingleInterfaceTrafficStatsLocked processes new snapshots for a single node interface
+// into the derived node_interface_traffic_stats table.
+func (s *StateStore) updateSingleInterfaceTrafficStatsLocked(nodeName, interfaceName string) error {
+	if s.db == nil || nodeName == "" || interfaceName == "" {
+		return nil
+	}
+
+	// 1. Get the latest derived state for this interface
+	var (
+		lastTs     int64
+		lastRawRx  uint64
+		lastRawTx  uint64
+		accumRx    uint64
+		accumTx    uint64
+		hasDerived bool
+	)
+	row := s.db.QueryRow(`
+		SELECT timestamp, raw_rx_bytes, raw_tx_bytes, accum_rx_bytes, accum_tx_bytes
+		FROM node_interface_traffic_stats
+		WHERE node_name = ? AND interface_name = ?
+		ORDER BY timestamp DESC LIMIT 1
+	`, nodeName, interfaceName)
+	if err := row.Scan(&lastTs, &lastRawRx, &lastRawTx, &accumRx, &accumTx); err == nil {
+		hasDerived = true
+	}
+
+	// 2. Query newer raw snapshots from node_interface_metrics
+	var query string
+	var args []any
+	if hasDerived {
+		query = `
+			SELECT timestamp, rx_bytes, tx_bytes, rx_rate, tx_rate
+			FROM node_interface_metrics
+			WHERE node_name = ? AND interface_name = ? AND timestamp > ?
+			ORDER BY timestamp ASC
+		`
+		args = []any{nodeName, interfaceName, lastTs}
+	} else {
+		query = `
+			SELECT timestamp, rx_bytes, tx_bytes, rx_rate, tx_rate
+			FROM node_interface_metrics
+			WHERE node_name = ? AND interface_name = ?
+			ORDER BY timestamp ASC
+		`
+		args = []any{nodeName, interfaceName}
+	}
+
+	rows, err := s.db.Query(query, args...)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	type rawSnapshot struct {
+		ts     int64
+		rx     uint64
+		tx     uint64
+		rxRate float64
+		txRate float64
+	}
+	var newSnaps []rawSnapshot
+	for rows.Next() {
+		var sn rawSnapshot
+		if err := rows.Scan(&sn.ts, &sn.rx, &sn.tx, &sn.rxRate, &sn.txRate); err == nil {
+			newSnaps = append(newSnaps, sn)
+		}
+	}
+	rows.Close()
+
+	if len(newSnaps) == 0 {
+		return nil
+	}
+
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if tx != nil {
+			_ = tx.Rollback()
+		}
+	}()
+
+	stmt, err := tx.Prepare(`
+		INSERT INTO node_interface_traffic_stats (
+			node_name, interface_name, timestamp, raw_rx_bytes, raw_tx_bytes,
+			accum_rx_bytes, accum_tx_bytes, rx_rate, tx_rate, reset_detected
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT(node_name, interface_name, timestamp) DO UPDATE SET
+			raw_rx_bytes=excluded.raw_rx_bytes,
+			raw_tx_bytes=excluded.raw_tx_bytes,
+			accum_rx_bytes=excluded.accum_rx_bytes,
+			accum_tx_bytes=excluded.accum_tx_bytes,
+			rx_rate=excluded.rx_rate,
+			tx_rate=excluded.tx_rate,
+			reset_detected=excluded.reset_detected
+	`)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	for _, snap := range newSnaps {
+		resetDetected := 0
+		if !hasDerived {
+			// First snapshot ever recorded for this interface: initial baseline
+			accumRx = snap.rx
+			accumTx = snap.tx
+			lastRawRx = snap.rx
+			lastRawTx = snap.tx
+			hasDerived = true
+		} else {
+			// RX: check for interface restart / counter reset
+			if snap.rx < lastRawRx {
+				// Reset event detected: counter restarted or reset to 0.
+				// Add the new value to previous snapshot accumulated value.
+				accumRx += snap.rx
+				resetDetected = 1
+			} else {
+				accumRx += (snap.rx - lastRawRx)
+			}
+			lastRawRx = snap.rx
+
+			// TX: check for interface restart / counter reset
+			if snap.tx < lastRawTx {
+				// Reset event detected: counter restarted or reset to 0.
+				// Add the new value to previous snapshot accumulated value.
+				accumTx += snap.tx
+				resetDetected = 1
+			} else {
+				accumTx += (snap.tx - lastRawTx)
+			}
+			lastRawTx = snap.tx
+		}
+
+		if _, err := stmt.Exec(
+			nodeName, interfaceName, snap.ts, snap.rx, snap.tx,
+			accumRx, accumTx, snap.rxRate, snap.txRate, resetDetected,
+		); err != nil {
+			return err
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	tx = nil
+	return nil
+}
+
+// UpdateInterfaceTrafficStats generates/updates the derived interface traffic stats table
+func (s *StateStore) UpdateInterfaceTrafficStats(nodeName, interfaceName string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if err := s.initDBLocked(); err != nil {
+		return err
+	}
+	return s.updateInterfaceTrafficStatsLocked(nodeName, interfaceName)
+}
+
+// GetNodeInterfaces returns a list of distinct interfaces recorded for the node
+func (s *StateStore) GetNodeInterfaces(nodeName string) ([]string, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
 	if s.db == nil {
-		return []NodeMetricPoint{}, nil
+		return []string{}, nil
+	}
+
+	rows, err := s.db.Query(`
+		SELECT DISTINCT interface_name
+		FROM node_interface_metrics
+		WHERE node_name = ?
+		ORDER BY interface_name ASC
+	`, nodeName)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var list []string
+	for rows.Next() {
+		var iface string
+		if err := rows.Scan(&iface); err == nil && iface != "" {
+			list = append(list, iface)
+		}
+	}
+	return list, nil
+}
+
+// GetMetricsHistoryWithInterface returns historical metric snapshots with interface-specific traffic and rates
+func (s *StateStore) GetMetricsHistoryWithInterface(nodeName string, interfaceName string, start time.Time, maxPoints int) ([]NodeMetricPoint, []string, string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if err := s.initDBLocked(); err != nil {
+		return []NodeMetricPoint{}, nil, "", err
 	}
 
 	if maxPoints <= 0 {
 		maxPoints = 250
 	}
 
-	rows, err := s.db.Query(`
-		SELECT timestamp, cpu_percent, memory_used_bytes, memory_total_bytes,
-		       uptime_seconds, load_1m, load_5m, load_15m, net_rx_bytes, net_tx_bytes,
-		       net_rx_rate, net_tx_rate
-		FROM node_metrics
-		WHERE node_name = ? AND timestamp >= ?
-		ORDER BY timestamp ASC
-	`, nodeName, start.Unix())
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var points []NodeMetricPoint
-	for rows.Next() {
-		var pt NodeMetricPoint
-		if err := rows.Scan(
-			&pt.Timestamp, &pt.CPUPercent, &pt.MemoryUsedBytes, &pt.MemoryTotalBytes,
-			&pt.UptimeSeconds, &pt.Load1m, &pt.Load5m, &pt.Load15m,
-			&pt.NetRxBytes, &pt.NetTxBytes, &pt.NetRxRate, &pt.NetTxRate,
-		); err == nil {
-			points = append(points, pt)
+	// Fetch available interfaces for this node from raw metrics
+	var availableIfaces []string
+	if ifRows, err := s.db.Query("SELECT DISTINCT interface_name FROM node_interface_metrics WHERE node_name = ? ORDER BY interface_name ASC", nodeName); err == nil {
+		defer ifRows.Close()
+		for ifRows.Next() {
+			var ifn string
+			if ifRows.Scan(&ifn) == nil && ifn != "" {
+				availableIfaces = append(availableIfaces, ifn)
+			}
 		}
+		ifRows.Close()
+	}
+
+	// If no interface was specified, pick the first available interface if any exist
+	selectedIface := interfaceName
+	if selectedIface == "" && len(availableIfaces) > 0 {
+		selectedIface = availableIfaces[0]
+	}
+
+	// On-demand update derived traffic stats for the selected interface
+	if selectedIface != "" {
+		_ = s.updateInterfaceTrafficStatsLocked(nodeName, selectedIface)
+	}
+
+	var (
+		points []NodeMetricPoint
+		err    error
+	)
+
+	if selectedIface != "" {
+		rows, qErr := s.db.Query(`
+			SELECT m.timestamp, m.cpu_percent, m.memory_used_bytes, m.memory_total_bytes,
+			       m.uptime_seconds, m.load_1m, m.load_5m, m.load_15m,
+			       COALESCE(t.raw_rx_bytes, m.net_rx_bytes),
+			       COALESCE(t.raw_tx_bytes, m.net_tx_bytes),
+			       COALESCE(t.rx_rate, m.net_rx_rate),
+			       COALESCE(t.tx_rate, m.net_tx_rate),
+			       COALESCE(t.accum_rx_bytes, 0),
+			       COALESCE(t.accum_tx_bytes, 0)
+			FROM node_metrics m
+			LEFT JOIN node_interface_traffic_stats t
+			  ON m.node_name = t.node_name AND m.timestamp = t.timestamp AND t.interface_name = ?
+			WHERE m.node_name = ? AND m.timestamp >= ?
+			ORDER BY m.timestamp ASC
+		`, selectedIface, nodeName, start.Unix())
+		if qErr != nil {
+			return nil, availableIfaces, selectedIface, qErr
+		}
+		defer rows.Close()
+
+		type pointWithAccum struct {
+			pt      NodeMetricPoint
+			accumRx uint64
+			accumTx uint64
+		}
+		var rawPts []pointWithAccum
+		for rows.Next() {
+			var p pointWithAccum
+			if err := rows.Scan(
+				&p.pt.Timestamp, &p.pt.CPUPercent, &p.pt.MemoryUsedBytes, &p.pt.MemoryTotalBytes,
+				&p.pt.UptimeSeconds, &p.pt.Load1m, &p.pt.Load5m, &p.pt.Load15m,
+				&p.pt.NetRxBytes, &p.pt.NetTxBytes, &p.pt.NetRxRate, &p.pt.NetTxRate,
+				&p.accumRx, &p.accumTx,
+			); err == nil {
+				rawPts = append(rawPts, p)
+			}
+		}
+		rows.Close()
+
+		if len(rawPts) > 0 {
+			// Find baseline offset at the start point of the queried timespan
+			baseRx := rawPts[0].accumRx
+			baseTx := rawPts[0].accumTx
+			for i := range rawPts {
+				var tRx, tTx uint64
+				if rawPts[i].accumRx >= baseRx {
+					tRx = rawPts[i].accumRx - baseRx
+				}
+				if rawPts[i].accumTx >= baseTx {
+					tTx = rawPts[i].accumTx - baseTx
+				}
+				rawPts[i].pt.TrafficRxBytes = tRx
+				rawPts[i].pt.TrafficTxBytes = tTx
+				points = append(points, rawPts[i].pt)
+			}
+		}
+	} else {
+		rows, qErr := s.db.Query(`
+			SELECT timestamp, cpu_percent, memory_used_bytes, memory_total_bytes,
+			       uptime_seconds, load_1m, load_5m, load_15m, net_rx_bytes, net_tx_bytes,
+			       net_rx_rate, net_tx_rate
+			FROM node_metrics
+			WHERE node_name = ? AND timestamp >= ?
+			ORDER BY timestamp ASC
+		`, nodeName, start.Unix())
+		if qErr != nil {
+			return nil, availableIfaces, selectedIface, qErr
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			var pt NodeMetricPoint
+			if err := rows.Scan(
+				&pt.Timestamp, &pt.CPUPercent, &pt.MemoryUsedBytes, &pt.MemoryTotalBytes,
+				&pt.UptimeSeconds, &pt.Load1m, &pt.Load5m, &pt.Load15m,
+				&pt.NetRxBytes, &pt.NetTxBytes, &pt.NetRxRate, &pt.NetTxRate,
+			); err == nil {
+				points = append(points, pt)
+			}
+		}
+		rows.Close()
 	}
 
 	if len(points) <= maxPoints {
-		return points, nil
+		return points, availableIfaces, selectedIface, nil
 	}
 
 	// Downsample to fit maxPoints buckets
@@ -1218,10 +1662,139 @@ func (s *StateStore) GetMetricsHistory(nodeName string, start time.Time, maxPoin
 			NetTxBytes:       lastPt.NetTxBytes,
 			NetRxRate:        sumRxRate / count,
 			NetTxRate:        sumTxRate / count,
+			TrafficRxBytes:   lastPt.TrafficRxBytes,
+			TrafficTxBytes:   lastPt.TrafficTxBytes,
 		})
 	}
 
-	return downsampled, nil
+	return downsampled, availableIfaces, selectedIface, err
+}
+
+// GetMetricsHistory returns historical metric snapshots, downsampled if exceeding maxPoints
+func (s *StateStore) GetMetricsHistory(nodeName string, start time.Time, maxPoints int) ([]NodeMetricPoint, error) {
+	pts, _, _, err := s.GetMetricsHistoryWithInterface(nodeName, "", start, maxPoints)
+	return pts, err
+}
+
+// GetNodeInterfaceTraffic returns the derived network traffic usage for a node interface in any specified timespan
+func (s *StateStore) GetNodeInterfaceTraffic(nodeName, interfaceName string, start, end time.Time, maxPoints int) (*NodeInterfaceTrafficSummary, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if err := s.initDBLocked(); err != nil {
+		return nil, err
+	}
+
+	if maxPoints <= 0 {
+		maxPoints = 250
+	}
+	if end.IsZero() {
+		end = time.Now()
+	}
+
+	// On-demand update
+	_ = s.updateInterfaceTrafficStatsLocked(nodeName, interfaceName)
+
+	summary := &NodeInterfaceTrafficSummary{
+		NodeName:      nodeName,
+		InterfaceName: interfaceName,
+		StartTime:     start.Unix(),
+		EndTime:       end.Unix(),
+		Points:        make([]InterfaceTrafficPoint, 0),
+	}
+
+	rows, err := s.db.Query(`
+		SELECT timestamp, raw_rx_bytes, raw_tx_bytes, accum_rx_bytes, accum_tx_bytes,
+		       rx_rate, tx_rate, reset_detected
+		FROM node_interface_traffic_stats
+		WHERE node_name = ? AND interface_name = ? AND timestamp >= ? AND timestamp <= ?
+		ORDER BY timestamp ASC
+	`, nodeName, interfaceName, start.Unix(), end.Unix())
+	if err != nil {
+		return summary, err
+	}
+	defer rows.Close()
+
+	var rawPoints []InterfaceTrafficPoint
+	for rows.Next() {
+		var pt InterfaceTrafficPoint
+		var resetInt int
+		if err := rows.Scan(
+			&pt.Timestamp, &pt.RawRxBytes, &pt.RawTxBytes, &pt.AccumRxBytes, &pt.AccumTxBytes,
+			&pt.RxRate, &pt.TxRate, &resetInt,
+		); err == nil {
+			pt.ResetDetected = (resetInt != 0)
+			rawPoints = append(rawPoints, pt)
+		}
+	}
+	rows.Close()
+
+	if len(rawPoints) == 0 {
+		return summary, nil
+	}
+
+	// Calculate traffic relative to timespan start point (starting from 0)
+	baseRx := rawPoints[0].AccumRxBytes
+	baseTx := rawPoints[0].AccumTxBytes
+	for i := range rawPoints {
+		if rawPoints[i].AccumRxBytes >= baseRx {
+			rawPoints[i].TrafficRxBytes = rawPoints[i].AccumRxBytes - baseRx
+		}
+		if rawPoints[i].AccumTxBytes >= baseTx {
+			rawPoints[i].TrafficTxBytes = rawPoints[i].AccumTxBytes - baseTx
+		}
+	}
+
+	last := rawPoints[len(rawPoints)-1]
+	summary.TotalRxBytes = last.TrafficRxBytes
+	summary.TotalTxBytes = last.TrafficTxBytes
+
+	if len(rawPoints) <= maxPoints {
+		summary.Points = rawPoints
+		return summary, nil
+	}
+
+	// Downsample to fit maxPoints buckets
+	downsampled := make([]InterfaceTrafficPoint, 0, maxPoints)
+	bucketSize := float64(len(rawPoints)) / float64(maxPoints)
+
+	for i := 0; i < maxPoints; i++ {
+		startIdx := int(float64(i) * bucketSize)
+		endIdx := int(float64(i+1) * bucketSize)
+		if endIdx > len(rawPoints) {
+			endIdx = len(rawPoints)
+		}
+		if startIdx >= endIdx {
+			continue
+		}
+
+		var sumRxRate, sumTxRate float64
+		anyReset := false
+		count := float64(endIdx - startIdx)
+		for j := startIdx; j < endIdx; j++ {
+			sumRxRate += rawPoints[j].RxRate
+			sumTxRate += rawPoints[j].TxRate
+			if rawPoints[j].ResetDetected {
+				anyReset = true
+			}
+		}
+
+		lastPt := rawPoints[endIdx-1]
+		downsampled = append(downsampled, InterfaceTrafficPoint{
+			Timestamp:      lastPt.Timestamp,
+			RawRxBytes:     lastPt.RawRxBytes,
+			RawTxBytes:     lastPt.RawTxBytes,
+			AccumRxBytes:   lastPt.AccumRxBytes,
+			AccumTxBytes:   lastPt.AccumTxBytes,
+			TrafficRxBytes: lastPt.TrafficRxBytes,
+			TrafficTxBytes: lastPt.TrafficTxBytes,
+			RxRate:         sumRxRate / count,
+			TxRate:         sumTxRate / count,
+			ResetDetected:  anyReset,
+		})
+	}
+	summary.Points = downsampled
+	return summary, nil
 }
 
 // CleanMetricsOlderThan deletes historical metrics older than the given retention period
@@ -1238,6 +1811,8 @@ func (s *StateStore) CleanMetricsOlderThan(retention time.Duration) (int64, erro
 	if err != nil {
 		return 0, err
 	}
+	_, _ = s.db.Exec("DELETE FROM node_interface_metrics WHERE timestamp < ?", cutoff)
+	_, _ = s.db.Exec("DELETE FROM node_interface_traffic_stats WHERE timestamp < ?", cutoff)
 	return res.RowsAffected()
 }
 

@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"sort"
 	"strings"
 	"time"
 
@@ -39,11 +40,16 @@ func (m *Manager) setupAgentMetricsListeners() {
 		}
 		var primaryFound bool
 		for _, iface := range t.Interfaces {
+			input.Interfaces = append(input.Interfaces, config.InterfaceMetricInput{
+				Name:      iface.Name,
+				RxBytes:   iface.RxBytes,
+				TxBytes:   iface.TxBytes,
+				IsPrimary: (iface.Flags & config.IfaceFlagPrimary) != 0,
+			})
 			if (iface.Flags & config.IfaceFlagPrimary) != 0 {
 				input.NetRxBytes = iface.RxBytes
 				input.NetTxBytes = iface.TxBytes
 				primaryFound = true
-				break
 			}
 		}
 		if !primaryFound {
@@ -241,14 +247,19 @@ func (m *Manager) handleAgentTelemetryInterfaces(nodeName string, t *agentpb.Tel
 }
 
 // startRetentionWorker starts the background task cleaning metrics older than 7 days
+// and periodically updating derived interface traffic statistics
 func (m *Manager) startRetentionWorker() {
 	ticker := time.NewTicker(1 * time.Hour)
+	trafficTicker := time.NewTicker(30 * time.Second)
 	go func() {
 		for {
 			select {
 			case <-m.stopCh:
 				ticker.Stop()
+				trafficTicker.Stop()
 				return
+			case <-trafficTicker.C:
+				_ = m.stateStore.UpdateInterfaceTrafficStats("", "")
 			case <-ticker.C:
 				_, _ = m.stateStore.CleanMetricsOlderThan(7 * 24 * time.Hour)
 				_, _ = m.stateStore.CleanCronResultsOlderThan(30 * 24 * time.Hour)
@@ -275,11 +286,67 @@ func ParseMetricRange(rangeStr string) (time.Duration, int) {
 	}
 }
 
-// GetNodeMetricsHistory retrieves recorded metric points for a node
-func (m *Manager) GetNodeMetricsHistory(nodeName string, rangeStr string) ([]config.NodeMetricPoint, error) {
+// GetNodeMetricsHistory retrieves recorded metric points for a node with optional interface selection
+func (m *Manager) GetNodeMetricsHistory(nodeName string, rangeStr string, interfaceName string) ([]config.NodeMetricPoint, []string, string, error) {
 	duration, maxPoints := ParseMetricRange(rangeStr)
 	start := time.Now().Add(-duration)
-	return m.stateStore.GetMetricsHistory(nodeName, start, maxPoints)
+
+	if interfaceName == "" {
+		if m.agentHub != nil {
+			if telem := m.agentHub.GetTelemetry(nodeName); telem != nil {
+				for _, iface := range telem.Interfaces {
+					if (iface.Flags & config.IfaceFlagPrimary) != 0 {
+						interfaceName = iface.Name
+						break
+					}
+				}
+			}
+		}
+	}
+
+	points, ifaces, selectedIface, err := m.stateStore.GetMetricsHistoryWithInterface(nodeName, interfaceName, start, maxPoints)
+	if err != nil {
+		return nil, nil, "", err
+	}
+
+	known := make(map[string]bool)
+	for _, ifn := range ifaces {
+		known[ifn] = true
+	}
+	if m.agentHub != nil {
+		if telem := m.agentHub.GetTelemetry(nodeName); telem != nil {
+			for _, iface := range telem.Interfaces {
+				if iface.Name != "" && !known[iface.Name] {
+					ifaces = append(ifaces, iface.Name)
+					known[iface.Name] = true
+				}
+			}
+		}
+	}
+	sort.Strings(ifaces)
+
+	if selectedIface == "" && len(ifaces) > 0 {
+		selectedIface = ifaces[0]
+	}
+
+	return points, ifaces, selectedIface, nil
+}
+
+// GetNodeInterfaceTraffic retrieves derived interface traffic statistics for any specified timespan
+func (m *Manager) GetNodeInterfaceTraffic(nodeName, interfaceName string, start, end time.Time, maxPoints int) (*config.NodeInterfaceTrafficSummary, error) {
+	if interfaceName == "" {
+		if m.agentHub != nil {
+			if telem := m.agentHub.GetTelemetry(nodeName); telem != nil {
+				for _, iface := range telem.Interfaces {
+					if (iface.Flags & config.IfaceFlagPrimary) != 0 {
+						interfaceName = iface.Name
+						break
+					}
+				}
+			}
+		}
+	}
+	return m.stateStore.GetNodeInterfaceTraffic(nodeName, interfaceName, start, end, maxPoints)
 }
 
 // GetFleetLiveStatus compiles a fleet summary and list of all nodes with live status

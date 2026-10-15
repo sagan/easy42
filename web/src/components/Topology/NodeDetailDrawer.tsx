@@ -1257,7 +1257,10 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
                     WireGuard Interfaces:
                   </Typography>
                   <Typography variant="caption" className="mono-font" sx={{ color: "#059669", fontWeight: 600 }}>
-                    {status.wg_interfaces.map((w) => w.name).join(", ")}
+                    {[...status.wg_interfaces]
+                      .sort((a, b) => (a.name || "").localeCompare(b.name || "", undefined, { numeric: true, sensitivity: "base" }))
+                      .map((w) => w.name)
+                      .join(", ")}
                   </Typography>
                 </Box>
               )}
@@ -1267,7 +1270,9 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
                     Network Interfaces:
                   </Typography>
                   <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
-                    {status.interfaces.map((inf) => {
+                    {[...status.interfaces]
+                      .sort((a, b) => (a.name || "").localeCompare(b.name || "", undefined, { numeric: true, sensitivity: "base" }))
+                      .map((inf) => {
                       const isPrimary = ((inf.flags ?? 0) & 1) !== 0;
                       const isPhysical = ((inf.flags ?? 0) & 2) !== 0;
                       return (

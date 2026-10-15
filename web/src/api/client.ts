@@ -19,6 +19,7 @@ import type {
   GraphBlock,
   FleetLiveResponse,
   NodeMetricsResponse,
+  NodeInterfaceTrafficSummary,
   CronTask,
   NodeCronTasksResultsResponse,
   ServerTask,
@@ -400,13 +401,25 @@ export const api = {
   // Monitoring
   getFleetLiveStatus: (flush?: boolean) =>
     request<FleetLiveResponse>(flush ? "/nodes/live?flush=true" : "/nodes/live"),
-  getNodeMetrics: (nodeName: string, range?: string, flush?: boolean) => {
+  getNodeMetrics: (nodeName: string, range?: string, flush?: boolean, iface?: string) => {
     const params = new URLSearchParams();
     if (range) params.append("range", range);
     if (flush) params.append("flush", "true");
+    if (iface) params.append("interface", iface);
     const qs = params.toString();
     return request<NodeMetricsResponse>(
       `/nodes/${encodeURIComponent(nodeName)}/metrics${qs ? `?${qs}` : ""}`,
+    );
+  },
+  getNodeTraffic: (nodeName: string, iface?: string, range?: string, start?: number, end?: number) => {
+    const params = new URLSearchParams();
+    if (iface) params.append("interface", iface);
+    if (range) params.append("range", range);
+    if (start) params.append("start", start.toString());
+    if (end) params.append("end", end.toString());
+    const qs = params.toString();
+    return request<NodeInterfaceTrafficSummary>(
+      `/nodes/${encodeURIComponent(nodeName)}/traffic${qs ? `?${qs}` : ""}`,
     );
   },
 

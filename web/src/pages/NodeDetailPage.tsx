@@ -35,6 +35,7 @@ import {
   ButtonGroup,
   Checkbox,
   FormControlLabel,
+  Autocomplete,
 } from "@mui/material";
 import {
   Server,
@@ -171,6 +172,8 @@ export const NodeDetailPage: React.FC = () => {
   const [range, setRange] = useState<string>("24h");
   const [metricsLoading, setMetricsLoading] = useState(false);
   const [points, setPoints] = useState<NodeMetricPoint[]>([]);
+  const [selectedInterface, setSelectedInterface] = useState<string>("");
+  const [metricsInterfaces, setMetricsInterfaces] = useState<string[]>([]);
 
   // Action states
   const [probing, setProbing] = useState(false);
@@ -295,19 +298,26 @@ export const NodeDetailPage: React.FC = () => {
 
   // Fetch telemetry
   const fetchMetrics = useCallback(
-    async (flush = false) => {
+    async (flush = false, ifaceOverride?: string) => {
       if (!decodedNodeName) return;
       setMetricsLoading(true);
       try {
-        const res = await api.getNodeMetrics(decodedNodeName, range, flush);
+        const targetIface = ifaceOverride !== undefined ? ifaceOverride : selectedInterface;
+        const res = await api.getNodeMetrics(decodedNodeName, range, flush, targetIface);
         setPoints(res.points || []);
+        if (res.interfaces && res.interfaces.length > 0) {
+          setMetricsInterfaces(res.interfaces);
+        }
+        if (res.interface && !selectedInterface && ifaceOverride === undefined) {
+          setSelectedInterface(res.interface);
+        }
       } catch {
         setPoints([]);
       } finally {
         setMetricsLoading(false);
       }
     },
-    [decodedNodeName, range],
+    [decodedNodeName, range, selectedInterface],
   );
 
   useEffect(() => {
@@ -315,6 +325,35 @@ export const NodeDetailPage: React.FC = () => {
       fetchMetrics();
     }
   }, [decodedNodeName, range, fetchMetrics]);
+
+  // Node interface list for the metrics interface selector
+  const availableInterfaces = useMemo(() => {
+    const set = new Set<string>();
+    if (live?.primary_interface) set.add(live.primary_interface);
+    if (status?.primary_interface) set.add(status.primary_interface);
+    (status?.interfaces || []).forEach((i) => {
+      if (i.name) set.add(i.name);
+    });
+    (status?.wg_interfaces || []).forEach((w) => {
+      if (w.name) set.add(w.name);
+    });
+    (metricsInterfaces || []).forEach((i) => {
+      if (i) set.add(i);
+    });
+    return Array.from(set).sort((a, b) => {
+      const pri = live?.primary_interface || status?.primary_interface;
+      if (a === pri) return -1;
+      if (b === pri) return 1;
+      return a.localeCompare(b);
+    });
+  }, [live?.primary_interface, status?.primary_interface, status?.interfaces, status?.wg_interfaces, metricsInterfaces]);
+
+  const currentDisplayInterface = useMemo(() => {
+    if (selectedInterface) return selectedInterface;
+    if (live?.primary_interface) return live.primary_interface;
+    if (status?.primary_interface) return status.primary_interface;
+    return availableInterfaces.length > 0 ? availableInterfaces[0] : "";
+  }, [selectedInterface, live?.primary_interface, status?.primary_interface, availableInterfaces]);
 
   // Grouped nodes for the sidebar
   // Grouped by node belonging block and ordered by name inside each block
@@ -377,11 +416,37 @@ export const NodeDetailPage: React.FC = () => {
     );
   }, [blocks, node]);
 
-  // Links connected to this node
+  // Links connected to this node, sorted by interface name order
   const nodeLinks = useMemo(() => {
     if (!node) return [];
-    return links.filter((l) => l.from.name === node.name || l.to.name === node.name);
+    return links
+      .filter((l) => l.from.name === node.name || l.to.name === node.name)
+      .sort((a, b) => {
+        const ifaceA = (a.from.name === node.name ? a.from.interface : a.to.interface) || "";
+        const ifaceB = (b.from.name === node.name ? b.from.interface : b.to.interface) || "";
+        const cmp = ifaceA.localeCompare(ifaceB, undefined, { numeric: true, sensitivity: "base" });
+        if (cmp !== 0) return cmp;
+        const peerA = (a.from.name === node.name ? a.to.name : a.from.name) || "";
+        const peerB = (b.from.name === node.name ? b.to.name : b.from.name) || "";
+        return peerA.localeCompare(peerB, undefined, { numeric: true, sensitivity: "base" });
+      });
   }, [links, node]);
+
+  // WireGuard kernel interfaces, sorted by interface name order
+  const sortedWgInterfaces = useMemo(() => {
+    if (!status?.wg_interfaces) return [];
+    return [...status.wg_interfaces].sort((a, b) =>
+      (a.name || "").localeCompare(b.name || "", undefined, { numeric: true, sensitivity: "base" }),
+    );
+  }, [status?.wg_interfaces]);
+
+  // Host physical & virtual interfaces, sorted by interface name order
+  const sortedHostInterfaces = useMemo(() => {
+    if (!status?.interfaces) return [];
+    return [...status.interfaces].sort((a, b) =>
+      (a.name || "").localeCompare(b.name || "", undefined, { numeric: true, sensitivity: "base" }),
+    );
+  }, [status?.interfaces]);
 
   // Actions
   const handleProbe = async () => {
@@ -519,6 +584,15 @@ export const NodeDetailPage: React.FC = () => {
         timestamp: p.timestamp,
         value: p.net_rx_rate,
         value2: p.net_tx_rate,
+      })),
+    [points],
+  );
+  const trafficData = useMemo(
+    () =>
+      points.map((p) => ({
+        timestamp: p.timestamp,
+        value: p.traffic_rx_bytes || 0,
+        value2: p.traffic_tx_bytes || 0,
       })),
     [points],
   );
@@ -1766,7 +1840,38 @@ export const NodeDetailPage: React.FC = () => {
                 </Box>
               </Box>
 
-              <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, flexWrap: "wrap" }}>
+                {availableInterfaces.length > 0 && (
+                  <Autocomplete
+                    size="small"
+                    options={availableInterfaces}
+                    value={selectedInterface || currentDisplayInterface}
+                    onChange={(_, val) => {
+                      if (val) {
+                        setSelectedInterface(val);
+                        fetchMetrics(false, val);
+                      }
+                    }}
+                    disableClearable
+                    sx={{ width: 175, bgcolor: "#F8FAFC" }}
+                    renderInput={(params) => (
+                      <TextField
+                        {...params}
+                        label="Interface"
+                        size="small"
+                        InputProps={{
+                          ...params.InputProps,
+                          startAdornment: (
+                            <InputAdornment position="start">
+                              <Network size={15} color="#4F46E5" />
+                            </InputAdornment>
+                          ),
+                        }}
+                      />
+                    )}
+                  />
+                )}
+
                 <ButtonGroup size="small" variant="outlined" sx={{ bgcolor: "#F8FAFC" }}>
                   {["1h", "6h", "24h", "7d"].map((r) => (
                     <Button
@@ -1856,7 +1961,9 @@ export const NodeDetailPage: React.FC = () => {
                 <Grid item xs={12} lg={6}>
                   <MetricAreaChart
                     title={
-                      live?.primary_interface ? `Network Bandwidth (${live.primary_interface})` : "Network Bandwidth"
+                      (selectedInterface || currentDisplayInterface)
+                        ? `Network Bandwidth (${selectedInterface || currentDisplayInterface})`
+                        : "Network Bandwidth"
                     }
                     data={netData}
                     color="#059669"
@@ -1868,8 +1975,26 @@ export const NodeDetailPage: React.FC = () => {
                   />
                 </Grid>
 
-                {/* 4. System Load Average */}
+                {/* 4. Network Traffics (Accumulated Usage) */}
                 <Grid item xs={12} lg={6}>
+                  <MetricAreaChart
+                    title={
+                      (selectedInterface || currentDisplayInterface)
+                        ? `Network Traffics (${selectedInterface || currentDisplayInterface})`
+                        : "Network Traffics"
+                    }
+                    data={trafficData}
+                    color="#2563EB"
+                    color2="#7C3AED"
+                    label1="Inbound (Rx)"
+                    label2="Outbound (Tx)"
+                    height={210}
+                    formatValue={formatBytes}
+                  />
+                </Grid>
+
+                {/* 5. System Load Average */}
+                <Grid item xs={12} lg={12}>
                   <MetricAreaChart
                     title="System Load Average"
                     data={loadDataPoints}
@@ -1994,7 +2119,7 @@ export const NodeDetailPage: React.FC = () => {
             </Paper>
 
             {/* WireGuard Interfaces & Handshake Status */}
-            {status?.wg_interfaces && status.wg_interfaces.length > 0 && (
+            {sortedWgInterfaces.length > 0 && (
               <Paper elevation={0} sx={{ p: 3, borderRadius: 3, bgcolor: "#FFFFFF", border: "1px solid #E2E8F0" }}>
                 <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
                   <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0F172A" }}>
@@ -2013,7 +2138,7 @@ export const NodeDetailPage: React.FC = () => {
                 </Box>
 
                 <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                  {status.wg_interfaces.map((wg) => (
+                  {sortedWgInterfaces.map((wg) => (
                     <Box key={wg.name} sx={{ p: 2, bgcolor: "#F8FAFC", borderRadius: 2, border: "1px solid #E2E8F0" }}>
                       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1.5 }}>
                         <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
@@ -2082,13 +2207,13 @@ export const NodeDetailPage: React.FC = () => {
             )}
 
             {/* Network Interfaces on Host */}
-            {status?.interfaces && status.interfaces.length > 0 && (
+            {sortedHostInterfaces.length > 0 && (
               <Paper elevation={0} sx={{ p: 3, borderRadius: 3, bgcolor: "#FFFFFF", border: "1px solid #E2E8F0" }}>
                 <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0F172A", mb: 2 }}>
-                  Host Physical & Virtual Interfaces ({status.interfaces.length})
+                  Host Physical & Virtual Interfaces ({sortedHostInterfaces.length})
                 </Typography>
                 <Grid container spacing={1.5}>
-                  {status.interfaces.map((inf) => {
+                  {sortedHostInterfaces.map((inf) => {
                     const isPrimary = ((inf.flags ?? 0) & 1) !== 0;
                     const isPhysical = ((inf.flags ?? 0) & 2) !== 0;
 
