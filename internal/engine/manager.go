@@ -2196,7 +2196,7 @@ func (m *Manager) RefreshNodeStatus(nodeName string) (*config.NodeStatus, error)
 		return status, nil
 	}
 
-	if node.IsAgentMode() {
+	if node.IsAgentMode() || (m.agentHub != nil && m.agentHub.IsConnected(nodeName)) {
 		if m.agentHub != nil && m.agentHub.IsConnected(nodeName) {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			_, _ = m.agentHub.SendCommand(ctx, nodeName, &agentpb.CommandRequest{
@@ -2292,7 +2292,7 @@ func (m *Manager) RestartNodeWireGuardInterfaces(nodeName string) (string, error
 		return "", fmt.Errorf("node %s is external and cannot be managed", nodeName)
 	}
 
-	if node.IsAgentMode() {
+	if node.IsAgentMode() || (m.agentHub != nil && m.agentHub.IsConnected(nodeName)) {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 		resp, err := m.agentHub.SendCommand(ctx, nodeName, &agentpb.CommandRequest{
@@ -2352,7 +2352,7 @@ func (m *Manager) RestartNodeBird(nodeName string) (string, error) {
 		return "", fmt.Errorf("node %s is external and cannot be managed", nodeName)
 	}
 
-	if node.IsAgentMode() {
+	if node.IsAgentMode() || (m.agentHub != nil && m.agentHub.IsConnected(nodeName)) {
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
 		resp, err := m.agentHub.SendCommand(ctx, nodeName, &agentpb.CommandRequest{
@@ -2401,7 +2401,7 @@ func (m *Manager) RestartNodeInterface(nodeName string, iface string) (string, e
 		return "", fmt.Errorf("node %s is external and cannot be managed", nodeName)
 	}
 
-	if node.IsAgentMode() {
+	if node.IsAgentMode() || (m.agentHub != nil && m.agentHub.IsConnected(nodeName)) {
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
 		resp, err := m.agentHub.SendCommand(ctx, nodeName, &agentpb.CommandRequest{
@@ -2560,6 +2560,98 @@ func (m *Manager) PlanSync(nodeNames ...string) ([]config.SyncAction, error) {
 		wg.Add(1)
 		go func(targetNode config.Node) {
 			defer wg.Done()
+
+			// 1. If agent is connected, probe running interfaces & configs directly via agent
+			if m.agentHub != nil && m.agentHub.IsConnected(targetNode.Name) {
+				expected := expectedIfacesPerNode[targetNode.Name]
+				manualIfs := manualIfacesPerNode[targetNode.Name]
+
+				cmdCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+				var probeRes agentProbeResult
+				cmdResp, err := m.agentHub.SendCommand(cmdCtx, targetNode.Name, &agentpb.CommandRequest{
+					Command: &agentpb.CommandRequest_ProbeSystem{
+						ProbeSystem: &agentpb.ProbeSystemCmd{},
+					},
+				})
+				cancel()
+				if err == nil && cmdResp.Success && cmdResp.Stdout != "" {
+					_ = json.Unmarshal([]byte(cmdResp.Stdout), &probeRes)
+				}
+
+				nodeStatus := m.agentHub.NodeStatus(targetNode.Name)
+				telemetry := m.agentHub.GetTelemetry(targetNode.Name)
+
+				candidateIfaces := make(map[string]string)
+				for cfgIface, cfgFile := range probeRes.Configs {
+					if strings.HasPrefix(cfgIface, "wg42") {
+						targetFile := cfgFile.Path
+						if targetFile == "" {
+							targetFile = fmt.Sprintf("/etc/wireguard/%s.conf", cfgIface)
+						}
+						candidateIfaces[cfgIface] = targetFile
+					}
+				}
+				for _, wgInfo := range nodeStatus.WgInterfaces {
+					if strings.HasPrefix(wgInfo.Name, "wg42") {
+						if _, exists := candidateIfaces[wgInfo.Name]; !exists {
+							candidateIfaces[wgInfo.Name] = fmt.Sprintf("/etc/wireguard/%s.conf", wgInfo.Name)
+						}
+					}
+				}
+				if telemetry != nil {
+					for _, iface := range telemetry.Interfaces {
+						if strings.HasPrefix(iface.Name, "wg42") {
+							if _, exists := candidateIfaces[iface.Name]; !exists {
+								candidateIfaces[iface.Name] = fmt.Sprintf("/etc/wireguard/%s.conf", iface.Name)
+							}
+						}
+					}
+					for _, peer := range telemetry.WgPeers {
+						if strings.HasPrefix(peer.InterfaceName, "wg42") {
+							if _, exists := candidateIfaces[peer.InterfaceName]; !exists {
+								candidateIfaces[peer.InterfaceName] = fmt.Sprintf("/etc/wireguard/%s.conf", peer.InterfaceName)
+							}
+						}
+					}
+				}
+
+				for iface, targetFile := range candidateIfaces {
+					if !expected[iface] && !manualIfs[iface] {
+						cleanActionsMu.Lock()
+						cleanActions = append(cleanActions, config.SyncAction{
+							NodeName:    targetNode.Name,
+							Host:        targetNode.Host,
+							Type:        config.ActionDeleteConfig,
+							Interface:   iface,
+							TargetFile:  targetFile,
+							Command:     fmt.Sprintf("wg-quick down %s && rm -f %s", iface, targetFile),
+							Description: fmt.Sprintf("Remove deleted interface %s on %s", iface, targetNode.Name),
+							FileContent: fmt.Sprintf("# Deleted interface %s is no longer in graph.\n# Action: wg-quick down %s && rm -f %s\n", iface, iface, targetFile),
+							NeedsApply:  true,
+							Status:      "pending",
+							DiffStatus:  "delete",
+						})
+						cleanActionsMu.Unlock()
+					}
+				}
+				return
+			}
+
+			// If node is configured for agent mode but currently disconnected, do not attempt SSH
+			if targetNode.IsAgentMode() {
+				m.mu.Lock()
+				m.statuses[targetNode.Name] = &config.NodeStatus{
+					Name:      targetNode.Name,
+					Host:      targetNode.Host,
+					LastSeen:  time.Now(),
+					Connected: false,
+					Error:     "agent is disconnected",
+					Mode:      "agent",
+				}
+				m.mu.Unlock()
+				return
+			}
+
 			sshClient, _, err := m.pool.GetClientWithTimeout(targetNode.Host, 3*time.Second)
 			if err != nil {
 				m.mu.Lock()
@@ -3032,7 +3124,7 @@ func (m *Manager) ExecuteSyncNodes(isForce bool, nodeNames ...string) ([]config.
 		}
 
 		node := m.FindNode(act.NodeName)
-		if node != nil && node.IsAgentMode() {
+		if node != nil && (node.IsAgentMode() || (m.agentHub != nil && m.agentHub.IsConnected(act.NodeName))) {
 			m.executeAgentSyncAction(act, &res)
 			res.Duration = float64(time.Since(start).Milliseconds())
 			results = append(results, res)
@@ -3560,8 +3652,8 @@ func (m *Manager) UpdateState(nodeNames ...string) (*config.NetworkState, []stri
 					mu.Unlock()
 					return
 				}
-				// If agent mode is active and no SSH host is configured, do not attempt SSH
-				if targetNode.IsAgentMode() && (targetNode.Host == "" || targetNode.Host == "none") {
+				// If agent mode is active, do not attempt SSH
+				if targetNode.IsAgentMode() {
 					mu.Lock()
 					warnings = append(warnings, fmt.Sprintf("%s: agent collection failed: %v", targetNode.Name, err))
 					mu.Unlock()
@@ -3579,8 +3671,8 @@ func (m *Manager) UpdateState(nodeNames ...string) (*config.NetworkState, []stri
 				}
 			}
 
-			// If node is in agent mode and disconnected, and no SSH host is configured
-			if targetNode.IsAgentMode() && (targetNode.Host == "" || targetNode.Host == "none") {
+			// If node is in agent mode and disconnected, do not attempt SSH
+			if targetNode.IsAgentMode() {
 				mu.Lock()
 				warnings = append(warnings, fmt.Sprintf("%s: agent is disconnected", targetNode.Name))
 				mu.Unlock()
@@ -4733,6 +4825,29 @@ func (m *Manager) GenerateAgentToken(nodeName string) (string, error) {
 		return "", err
 	}
 	return token, nil
+}
+
+// SetNodeMode sets the operation mode of a node (e.g. "agent" or "ssh")
+func (m *Manager) SetNodeMode(nodeName string, mode string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	cfg := m.store.Get()
+	if cfg == nil {
+		return errors.New("config not loaded")
+	}
+
+	for i := range cfg.Nodes {
+		if cfg.Nodes[i].Name == nodeName {
+			if cfg.Nodes[i].Mode != mode {
+				cfg.Nodes[i].Mode = mode
+				cfg.Nodes[i].ModifiedAt = time.Now().UTC()
+				return m.store.Save(cfg)
+			}
+			return nil
+		}
+	}
+	return ErrNodeNotFound
 }
 
 // FindNodeByAgentToken finds a node matching the provided agent token

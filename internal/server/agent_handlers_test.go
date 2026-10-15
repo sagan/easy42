@@ -309,3 +309,70 @@ func TestAgentGetAndUninstall(t *testing.T) {
 		t.Fatalf("expected node to have mode ssh and empty token, got mode=%s token=%s", node.Mode, node.AgentToken)
 	}
 }
+
+func TestAgentSyncAndStateUpdateNoSSH(t *testing.T) {
+	srv, mgr, cleanup := setupAgentTestServer(t)
+	defer cleanup()
+
+	// 1. Generate token and connect agent WebSocket
+	token, err := mgr.GenerateAgentToken("node-test-1")
+	if err != nil {
+		t.Fatalf("GenerateAgentToken failed: %v", err)
+	}
+
+	_ = mgr.Vault().Unlock([]byte("12345678901234567890123456789012"))
+
+	ts := httptest.NewServer(srv.router)
+	defer ts.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(ts.URL, "http") + "/api/agent/ws"
+	headers := http.Header{"X-Easy42-Agent-Token": []string{token}}
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, headers)
+	if err != nil {
+		t.Fatalf("WebSocket connection failed: %v", err)
+	}
+
+	time.Sleep(50 * time.Millisecond)
+
+	if !mgr.AgentHub().IsConnected("node-test-1") {
+		t.Fatalf("expected node-test-1 to be connected")
+	}
+
+	// 2. PlanSync for node-test-1 should use agent and succeed without attempting SSH to dummy IP
+	actions, err := mgr.PlanSync("node-test-1")
+	if err != nil {
+		t.Fatalf("PlanSync failed: %v", err)
+	}
+	_ = actions
+
+	// 3. UpdateState for node-test-1 should use agent without SSH
+	state, warnings, err := mgr.UpdateState("node-test-1")
+	if err != nil {
+		t.Fatalf("UpdateState failed: %v", err)
+	}
+	if state == nil {
+		t.Fatalf("expected non-nil state")
+	}
+	_ = warnings
+
+	// 4. Close agent connection
+	_ = conn.Close()
+	time.Sleep(50 * time.Millisecond)
+
+	// 5. When agent is disconnected, UpdateState should NOT attempt SSH for agent-mode node
+	_, warningsDisc, errDisc := mgr.UpdateState("node-test-1")
+	if errDisc != nil {
+		t.Fatalf("UpdateState on disconnected agent node failed: %v", errDisc)
+	}
+	foundDiscWarning := false
+	for _, w := range warningsDisc {
+		if strings.Contains(w, "agent is disconnected") {
+			foundDiscWarning = true
+			break
+		}
+	}
+	if !foundDiscWarning {
+		t.Fatalf("expected 'agent is disconnected' warning, got: %v", warningsDisc)
+	}
+}
+

@@ -193,8 +193,8 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
           <Tooltip
             title={
               targetNode
-                ? `Connect to ${targetNode} via SSH to probe live state and update state.json`
-                : "Connect to all devices via SSH to probe live state and update state.json"
+                ? `Connect to ${targetNode} via Agent / SSH to probe live state and update state.json`
+                : "Connect to devices via Agent / SSH to probe live state and update state.json"
             }
           >
             <Button

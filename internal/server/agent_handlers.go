@@ -59,6 +59,11 @@ func (s *Server) handleAgentWebSocket(w http.ResponseWriter, r *http.Request) {
 	conn := agent.NewConnection(node.Name, ws, s.mgr.AgentHub())
 	s.mgr.AgentHub().Register(conn)
 
+	// Ensure node mode is set to "agent" in config if not already
+	if !strings.EqualFold(node.Mode, "agent") {
+		_ = s.mgr.SetNodeMode(node.Name, "agent")
+	}
+
 	// Update node runtime status
 	go func() {
 		_, _ = s.mgr.RefreshNodeStatus(node.Name)

@@ -294,7 +294,7 @@ func (n *Node) IsAgentMode() bool {
 	if n == nil {
 		return false
 	}
-	return strings.EqualFold(n.Mode, "agent")
+	return strings.EqualFold(n.Mode, "agent") || strings.TrimSpace(n.AgentToken) != ""
 }
 
 // ExternalIp returns ExternalIP if set, or IP if not set

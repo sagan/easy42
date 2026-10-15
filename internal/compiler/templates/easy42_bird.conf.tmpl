@@ -1470,6 +1470,7 @@ template bgp {{.template_name}} {
 {{range .links}}
 {{if .is_external}}
 protocol bgp 'ext_peer_{{.remote.name}}' from {{.bgp_template}} {
+    bfd no; # Disable bfd for external peering
 {{if .has_preference -}}
     ipv4 { preference {{ .preference }}; };
     ipv6 { preference {{ .preference }}; };
