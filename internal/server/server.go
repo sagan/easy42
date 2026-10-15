@@ -183,6 +183,11 @@ func New(cfg Config) *Server {
 			r.Put("/settings/tasks/{id}", s.handleUpdateServerTask)
 			r.Post("/settings/tasks/{id}/run", s.handleRunServerTask)
 
+			// Database & Maintenance Settings
+			r.Get("/settings/database", s.handleGetDatabaseInfo)
+			r.Put("/settings/database", s.handleUpdateDatabaseSettings)
+			r.Post("/settings/database/vacuum", s.handleVacuumDatabase)
+
 			// Network Policies
 			r.Get("/network-policies", s.handleGetNetworkPolicies)
 			r.Post("/network-policies", s.handleCreateNetworkPolicy)

@@ -23,6 +23,7 @@ import type {
   CronTask,
   NodeCronTasksResultsResponse,
   ServerTask,
+  DatabaseInfo,
 } from "../types/api";
 
 const API_BASE = "/api";
@@ -281,6 +282,18 @@ export const api = {
     }),
   runServerTask: (id: string) =>
     request<ServerTask>(`/settings/tasks/${encodeURIComponent(id)}/run`, {
+      method: "POST",
+    }),
+
+  // Database Settings & Maintenance
+  getDatabaseInfo: () => request<DatabaseInfo>("/settings/database"),
+  updateDatabaseSettings: (settings: { retention_days: number }) =>
+    request<DatabaseInfo>("/settings/database", {
+      method: "PUT",
+      body: JSON.stringify(settings),
+    }),
+  reclaimDatabase: () =>
+    request<DatabaseInfo>("/settings/database/vacuum", {
       method: "POST",
     }),
 

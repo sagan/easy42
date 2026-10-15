@@ -261,7 +261,8 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
                 sx={{ borderRadius: 2, backgroundColor: "#FFFBEB", border: "1px solid #FDE68A" }}
               >
                 <Typography variant="body2" sx={{ fontWeight: 600, color: "#92400E" }}>
-                  Vault was locked during sync: only BIRD routing, ROA, and firewall rules were applied. WireGuard interface tasks were skipped.
+                  Vault was locked during sync: only BIRD routing, ROA, and firewall rules were applied. WireGuard
+                  interface tasks were skipped.
                 </Typography>
               </Alert>
             )}
@@ -354,7 +355,10 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
                   Key Vault is Locked — WireGuard tasks are skipped
                 </Typography>
                 <Typography variant="caption" sx={{ color: "#B45309", display: "block", mt: 0.25, lineHeight: 1.4 }}>
-                  WireGuard private keys cannot be decrypted while the vault is locked. WireGuard interface creation, updates, and interface cleanup are skipped. Only BIRD routing, ROA tables, and firewall (nftables) configurations are planned and will be synced. Click <strong>Unlock Vault</strong> to decrypt private keys and configure WireGuard interfaces.
+                  WireGuard private keys cannot be decrypted while the vault is locked. WireGuard interface creation,
+                  updates, and interface cleanup are skipped. Only BIRD routing, ROA tables, and firewall (nftables)
+                  configurations are planned and will be synced. Click <strong>Unlock Vault</strong> to decrypt private
+                  keys and configure WireGuard interfaces.
                 </Typography>
               </Alert>
             )}
@@ -460,23 +464,25 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
               <Alert severity="success" sx={{ borderRadius: 2 }}>
                 {targetNode ? (
                   <>
-                    All BIRD routing and firewall configurations on <strong>{targetNode}</strong> are
-                    currently in sync with recorded device state. You can use <strong>Force Apply</strong> to re-push
-                    configs from scratch, or <strong>Update State</strong> to refresh from the remote host.
+                    All BIRD routing and firewall configurations on <strong>{targetNode}</strong> are currently in sync
+                    with recorded device state. You can use <strong>Force Apply</strong> to re-push configs from
+                    scratch, or <strong>Update State</strong> to refresh from the remote host.
                     {!isUnlocked && (
                       <Typography variant="caption" sx={{ display: "block", mt: 0.5, color: "#065F46" }}>
-                        Note: WireGuard interface synchronization was skipped because the vault is locked. Unlock the vault to verify WireGuard tunnels.
+                        Note: WireGuard interface synchronization was skipped because the vault is locked. Unlock the
+                        vault to verify WireGuard tunnels.
                       </Typography>
                     )}
                   </>
                 ) : (
                   <>
-                    All BIRD routing and firewall configurations are currently in sync with recorded device
-                    states. You can use <strong>Force Apply All</strong> to re-push configs from scratch, or{" "}
+                    All BIRD routing and firewall configurations are currently in sync with recorded device states. You
+                    can use <strong>Force Apply All</strong> to re-push configs from scratch, or{" "}
                     <strong>Update State</strong> to refresh from remote hosts.
                     {!isUnlocked && (
                       <Typography variant="caption" sx={{ display: "block", mt: 0.5, color: "#065F46" }}>
-                        Note: WireGuard interface synchronization was skipped because the vault is locked. Unlock the vault to verify WireGuard tunnels.
+                        Note: WireGuard interface synchronization was skipped because the vault is locked. Unlock the
+                        vault to verify WireGuard tunnels.
                       </Typography>
                     )}
                   </>
@@ -488,11 +494,19 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
               <Alert severity="info" sx={{ borderRadius: 2 }}>
                 {!isUnlocked ? (
                   <>
-                    No routing (BIRD) or firewall changes needed. WireGuard tasks are skipped because the vault is locked.{" "}
+                    No routing (BIRD) or firewall changes needed. WireGuard tasks are skipped because the vault is
+                    locked.{" "}
                     <Button
                       size="small"
                       onClick={handleUnlockTrigger}
-                      sx={{ p: 0, textTransform: "none", fontWeight: 700, minWidth: "auto", color: "#0284C7", textDecoration: "underline" }}
+                      sx={{
+                        p: 0,
+                        textTransform: "none",
+                        fontWeight: 700,
+                        minWidth: "auto",
+                        color: "#0284C7",
+                        textDecoration: "underline",
+                      }}
                     >
                       Unlock the vault
                     </Button>{" "}

@@ -246,8 +246,8 @@ func (m *Manager) handleAgentTelemetryInterfaces(nodeName string, t *agentpb.Tel
 	_ = m.stateStore.UpdateInterfacesTelemetry(nodeName, updates)
 }
 
-// startRetentionWorker starts the background task cleaning metrics older than 7 days
-// and periodically updating derived interface traffic statistics
+// startRetentionWorker starts the background task cleaning historical metrics and cron results
+// older than the configured retention period (default 47 days), and periodically updating interface traffic stats
 func (m *Manager) startRetentionWorker() {
 	ticker := time.NewTicker(1 * time.Hour)
 	trafficTicker := time.NewTicker(30 * time.Second)
@@ -261,8 +261,9 @@ func (m *Manager) startRetentionWorker() {
 			case <-trafficTicker.C:
 				_ = m.stateStore.UpdateInterfaceTrafficStats("", "")
 			case <-ticker.C:
-				_, _ = m.stateStore.CleanMetricsOlderThan(7 * 24 * time.Hour)
-				_, _ = m.stateStore.CleanCronResultsOlderThan(30 * 24 * time.Hour)
+				retention := m.GetRetentionDuration()
+				_, _ = m.stateStore.CleanMetricsOlderThan(retention)
+				_, _ = m.stateStore.CleanCronResultsOlderThan(retention)
 			}
 		}
 	}()

@@ -63,9 +63,7 @@ export const RenameNodeModal: React.FC<RenameNodeModalProps> = ({
 
   const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     // Sanitize: allow lowercase alphanumeric, hyphen, underscore
-    const val = e.target.value
-      .toLowerCase()
-      .replace(/[^a-z0-9-_]/g, "");
+    const val = e.target.value.toLowerCase().replace(/[^a-z0-9-_]/g, "");
     setNewName(val);
     if (error) setError(null);
   };
@@ -183,13 +181,16 @@ export const RenameNodeModal: React.FC<RenameNodeModalProps> = ({
               label={isExternal ? "New Peer Name" : "New Node Name"}
               value={newName}
               onChange={handleNameChange}
-              error={Boolean(trimmedNewName && (nameExists || isSameName || Boolean(conflictingIfaceNode) || !isValidLength))}
+              error={Boolean(
+                trimmedNewName && (nameExists || isSameName || Boolean(conflictingIfaceNode) || !isValidLength),
+              )}
               helperText={
                 nameExists ? (
                   <span style={{ color: "#DC2626" }}>Node name &quot;{trimmedNewName}&quot; already exists!</span>
                 ) : conflictingIfaceNode ? (
                   <span style={{ color: "#DC2626" }}>
-                    Interface &quot;{newIfaceName}&quot; conflicts with existing node &quot;{conflictingIfaceNode.name}&quot;!
+                    Interface &quot;{newIfaceName}&quot; conflicts with existing node &quot;{conflictingIfaceNode.name}
+                    &quot;!
                   </span>
                 ) : isSameName ? (
                   "Please enter a different name"

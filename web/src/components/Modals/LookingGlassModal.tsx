@@ -18,7 +18,20 @@ import {
   Select,
   MenuItem,
 } from "@mui/material";
-import { Play, Terminal, Settings2, CheckCircle2, XCircle, Plus, Edit3, Trash2, Eye, Server, Zap, Clock } from "lucide-react";
+import {
+  Play,
+  Terminal,
+  Settings2,
+  CheckCircle2,
+  XCircle,
+  Plus,
+  Edit3,
+  Trash2,
+  Eye,
+  Server,
+  Zap,
+  Clock,
+} from "lucide-react";
 import { api } from "../../api/client";
 import { Node, LookingGlassTask, LGRunRequest, LGRunResponse, LGNodeResult } from "../../types/api";
 import { TaskParamForm } from "../LookingGlass/TaskParamForm";
@@ -132,7 +145,10 @@ export const LookingGlassModal: React.FC<LookingGlassModalProps> = ({ nodes, ini
       lastParamNodesRef.current = currentParamKey;
       let queryNodes: string[] = [];
       if (nodesParam) {
-        queryNodes = nodesParam.split(",").map((s) => s.trim()).filter(Boolean);
+        queryNodes = nodesParam
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean);
       } else if (nodeParam) {
         queryNodes = [nodeParam.trim()].filter(Boolean);
       }
@@ -148,7 +164,10 @@ export const LookingGlassModal: React.FC<LookingGlassModalProps> = ({ nodes, ini
       lastParamNodesRef.current = currentParamKey;
       let queryNodes: string[] = [];
       if (nodesParam) {
-        queryNodes = nodesParam.split(",").map((s) => s.trim()).filter(Boolean);
+        queryNodes = nodesParam
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean);
       } else if (nodeParam) {
         queryNodes = [nodeParam.trim()].filter(Boolean);
       }
@@ -163,9 +182,7 @@ export const LookingGlassModal: React.FC<LookingGlassModalProps> = ({ nodes, ini
   const [builtinTasks, setBuiltinTasks] = useState<LookingGlassTask[]>([]);
   const [customTasks, setCustomTasks] = useState<LookingGlassTask[]>([]);
   const [, setLoadingTasks] = useState(false);
-  const [selectedTaskId, setSelectedTaskId] = useState<string>(
-    () => searchParams.get("task") || initialTask || "ping"
-  );
+  const [selectedTaskId, setSelectedTaskId] = useState<string>(() => searchParams.get("task") || initialTask || "ping");
 
   // Selected task object
   const selectedTask = useMemo(() => {
@@ -179,10 +196,10 @@ export const LookingGlassModal: React.FC<LookingGlassModalProps> = ({ nodes, ini
   // Ad-Hoc command state (initialized from URL if present)
   const [adHocTool, setAdHocTool] = useState<string>(() => searchParams.get("tool") || "ping");
   const [adHocCommand, setAdHocCommand] = useState<string>(
-    () => searchParams.get("cmd") || searchParams.get("command") || "ping -c 4 172.20.0.1"
+    () => searchParams.get("cmd") || searchParams.get("command") || "ping -c 4 172.20.0.1",
   );
   const [adHocParser, setAdHocParser] = useState<string>(
-    () => searchParams.get("parser") || searchParams.get("visualizer") || "ping"
+    () => searchParams.get("parser") || searchParams.get("visualizer") || "ping",
   );
 
   useEffect(() => {

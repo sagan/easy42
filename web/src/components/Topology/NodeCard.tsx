@@ -277,7 +277,7 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
                     isAgentMode
                       ? `Agent offline or unreachable. Last seen: ${
                           status?.last_seen
-                            ? new Date(status.last_seen).toLocaleString()
+                            ? new Date(status.last_seen).toISOString()
                             : node.agent_last_seen || "Unknown"
                         }`
                       : status?.error || "Device is offline or unreachable"
@@ -332,7 +332,7 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
               ) : (
                 <Tooltip
                   title={`SSH Snapshot (refreshed: ${
-                    status?.last_seen ? new Date(status.last_seen).toLocaleTimeString() : "manual"
+                    status?.last_seen ? new Date(status.last_seen).toISOString() : "manual"
                   }). Not reporting live telemetry; for reference only.`}
                 >
                   <Chip

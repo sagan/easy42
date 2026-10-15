@@ -52,9 +52,20 @@ import {
   Clock,
   Play,
   AlertCircle,
+  Database,
+  HardDrive,
+  Sparkles,
 } from "lucide-react";
 import { api } from "../../api/client";
-import { NetworkSettings, NetworkPolicy, CloudflareDNSConfig, DNSSyncResult, ConfigTemplate, ServerTask } from "../../types/api";
+import {
+  NetworkSettings,
+  NetworkPolicy,
+  CloudflareDNSConfig,
+  DNSSyncResult,
+  ConfigTemplate,
+  ServerTask,
+  DatabaseInfo,
+} from "../../types/api";
 
 export const parsePrefixList = (input: string): string[] => {
   const result: string[] = [];
@@ -148,7 +159,7 @@ export const EXPORT_FILTER_EXAMPLES = [
   },
 ];
 
-export type SettingsTab = "security" | "network" | "policies" | "templates" | "dns" | "tasks";
+export type SettingsTab = "security" | "network" | "policies" | "templates" | "dns" | "tasks" | "database";
 
 const VALID_TABS: Record<string, SettingsTab> = {
   security: "security",
@@ -159,6 +170,7 @@ const VALID_TABS: Record<string, SettingsTab> = {
   templates: "templates",
   dns: "dns",
   tasks: "tasks",
+  database: "database",
 };
 
 interface SettingsModalProps {
@@ -227,6 +239,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
   const [taskEnabledDraft, setTaskEnabledDraft] = useState<Record<string, boolean>>({});
   const [savingTaskId, setSavingTaskId] = useState<string | null>(null);
   const [runningTaskId, setRunningTaskId] = useState<string | null>(null);
+
+  // Database & Storage state
+  const [dbInfo, setDbInfo] = useState<DatabaseInfo | null>(null);
+  const [dbLoading, setDbLoading] = useState(false);
+  const [dbSaving, setDbSaving] = useState(false);
+  const [dbVacuuming, setDbVacuuming] = useState(false);
+  const [dbError, setDbError] = useState<string | null>(null);
+  const [dbSuccess, setDbSuccess] = useState<string | null>(null);
+  const [retentionDraft, setRetentionDraft] = useState<number | string>(47);
 
   // Password change state
   const [currentPassword, setCurrentPassword] = useState("");
@@ -604,6 +625,68 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
     }
   };
 
+  // Load Database Info when Database tab is opened
+  React.useEffect(() => {
+    if (activeTab === "database") {
+      loadDatabaseInfo();
+    }
+  }, [activeTab]);
+
+  const loadDatabaseInfo = async () => {
+    setDbLoading(true);
+    setDbError(null);
+    try {
+      const data = await api.getDatabaseInfo();
+      setDbInfo(data);
+      setRetentionDraft(data.retention_days);
+    } catch (err: unknown) {
+      const e = err as Error;
+      setDbError(e.message || "Failed to load database status.");
+    } finally {
+      setDbLoading(false);
+    }
+  };
+
+  const handleSaveRetention = async () => {
+    const days = parseInt(String(retentionDraft), 10);
+    if (isNaN(days) || days < 1 || days > 3650) {
+      setDbError("Retention must be between 1 and 3650 days (up to 10 years).");
+      return;
+    }
+    setDbSaving(true);
+    setDbError(null);
+    setDbSuccess(null);
+    try {
+      const updated = await api.updateDatabaseSettings({ retention_days: days });
+      setDbInfo(updated);
+      setRetentionDraft(updated.retention_days);
+      setDbSuccess(
+        `Retention period successfully updated to ${updated.retention_days} days. Historical telemetry samples and cron results have been pruned.`,
+      );
+    } catch (err: unknown) {
+      const e = err as Error;
+      setDbError(e.message || "Failed to update retention days.");
+    } finally {
+      setDbSaving(false);
+    }
+  };
+
+  const handleReclaimDatabase = async () => {
+    setDbVacuuming(true);
+    setDbError(null);
+    setDbSuccess(null);
+    try {
+      const updated = await api.reclaimDatabase();
+      setDbInfo(updated);
+      setDbSuccess(`Database reclaimed successfully! Current database size is ${updated.total_size_human}.`);
+    } catch (err: unknown) {
+      const e = err as Error;
+      setDbError(e.message || "Failed to reclaim database space.");
+    } finally {
+      setDbVacuuming(false);
+    }
+  };
+
   const handleSaveTaskConfig = async (taskId: string) => {
     const cronExpr = (taskCronDraft[taskId] || "0 0 * * *").trim();
     const enabled = taskEnabledDraft[taskId] !== undefined ? taskEnabledDraft[taskId] : true;
@@ -647,16 +730,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
 
   const formatDateTime = (isoStr?: string) => {
     if (!isoStr) return "Never";
-    const d = new Date(isoStr);
-    if (isNaN(d.getTime())) return isoStr;
-    return d.toLocaleString(undefined, {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-    });
+    return isoStr;
   };
 
   const formatRelativeTime = (isoStr?: string) => {
@@ -1191,12 +1265,43 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
               },
             }}
           >
-            <Tab value="security" icon={<KeyRound size={16} />} iconPosition="start" label="Password & Sessions" />
-            <Tab value="network" icon={<Globe size={16} />} iconPosition="start" label="Peering & BGP" />
-            <Tab value="policies" icon={<Shield size={16} />} iconPosition="start" label="Network Policies" />
-            <Tab value="templates" icon={<FileCode size={16} />} iconPosition="start" label="Config Template" />
-            <Tab value="dns" icon={<Cloud size={16} />} iconPosition="start" label="DNS" />
-            <Tab value="tasks" icon={<CalendarClock size={16} />} iconPosition="start" label="Tasks" />
+            <Tab
+              value="security"
+              icon={<KeyRound size={16} />}
+              iconPosition="start"
+              label="Security"
+              title="Password & Sessions"
+            />
+            <Tab
+              value="network"
+              icon={<Globe size={16} />}
+              iconPosition="start"
+              label="Network"
+              title="Peering & BGP"
+            />
+            <Tab
+              value="policies"
+              icon={<Shield size={16} />}
+              iconPosition="start"
+              label="Policies"
+              title="Network Policies"
+            />
+            <Tab
+              value="templates"
+              icon={<FileCode size={16} />}
+              iconPosition="start"
+              label="Templates"
+              title="Config Template"
+            />
+            <Tab value="dns" icon={<Cloud size={16} />} iconPosition="start" label="DNS" title="DNS" />
+            <Tab value="tasks" icon={<CalendarClock size={16} />} iconPosition="start" label="Tasks" title="Tasks" />
+            <Tab
+              value="database"
+              icon={<Database size={16} />}
+              iconPosition="start"
+              label="Database"
+              title="Database"
+            />
           </Tabs>
         </Box>
 
@@ -2833,7 +2938,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                       Server Background Tasks
                     </Typography>
                     <Typography variant="body2" sx={{ color: "#64748B", fontSize: "0.85rem", lineHeight: 1.4 }}>
-                      Central management for easy42 background tasks. The task list is immutable; configure schedules, toggle automation, or run any task on demand.
+                      Central management for easy42 background tasks. The task list is immutable; configure schedules,
+                      toggle automation, or run any task on demand.
                     </Typography>
                   </Box>
                 </Box>
@@ -2878,7 +2984,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                     const isRunning = runningTaskId === task.id || task.last_status === "running";
                     const isSaving = savingTaskId === task.id;
                     const draftCron = taskCronDraft[task.id] !== undefined ? taskCronDraft[task.id] : task.cron_expr;
-                    const draftEnabled = taskEnabledDraft[task.id] !== undefined ? taskEnabledDraft[task.id] : task.enabled;
+                    const draftEnabled =
+                      taskEnabledDraft[task.id] !== undefined ? taskEnabledDraft[task.id] : task.enabled;
                     const hasChanges = draftCron !== task.cron_expr || draftEnabled !== task.enabled;
 
                     const getTaskIcon = (id: string) => {
@@ -2923,7 +3030,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                         }}
                       >
                         {/* Task Card Header */}
-                        <Box sx={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 2 }}>
+                        <Box
+                          sx={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 2 }}
+                        >
                           <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
                             <Box
                               sx={{
@@ -3046,7 +3155,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                             gap: 1.8,
                           }}
                         >
-                          <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 1 }}>
+                          <Box
+                            sx={{
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "space-between",
+                              flexWrap: "wrap",
+                              gap: 1,
+                            }}
+                          >
                             <FormControlLabel
                               control={
                                 <Switch
@@ -3093,9 +3210,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                                 size="small"
                                 label="Cron Expression"
                                 value={draftCron}
-                                onChange={(e) =>
-                                  setTaskCronDraft((prev) => ({ ...prev, [task.id]: e.target.value }))
-                                }
+                                onChange={(e) => setTaskCronDraft((prev) => ({ ...prev, [task.id]: e.target.value }))}
                                 placeholder="0 0 * * *"
                                 helperText={getCronHumanSummary(draftCron)}
                                 sx={{
@@ -3104,7 +3219,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                                 }}
                               />
 
-                              <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 0.8, mt: { xs: 0, sm: -2 } }}>
+                              <Box
+                                sx={{
+                                  display: "flex",
+                                  alignItems: "center",
+                                  flexWrap: "wrap",
+                                  gap: 0.8,
+                                  mt: { xs: 0, sm: -2 },
+                                }}
+                              >
                                 <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600, mr: 0.5 }}>
                                   Presets:
                                 </Typography>
@@ -3118,9 +3241,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                                       label={preset.label}
                                       clickable
                                       variant={isSelected ? "filled" : "outlined"}
-                                      onClick={() =>
-                                        setTaskCronDraft((prev) => ({ ...prev, [task.id]: preset.value }))
-                                      }
+                                      onClick={() => setTaskCronDraft((prev) => ({ ...prev, [task.id]: preset.value }))}
                                       sx={{
                                         fontSize: "0.75rem",
                                         fontWeight: 500,
@@ -3158,12 +3279,19 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                             >
                               <Box sx={{ display: "flex", alignItems: "center", gap: 0.8, color: "#64748B" }}>
                                 <CalendarClock size={14} />
-                                <Typography variant="caption" sx={{ fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                                <Typography
+                                  variant="caption"
+                                  sx={{ fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}
+                                >
                                   Next Run
                                 </Typography>
                               </Box>
                               <Typography variant="body2" sx={{ fontWeight: 600, color: "#1E293B" }}>
-                                {draftEnabled && task.next_run ? formatDateTime(task.next_run) : draftEnabled ? "Scheduled" : "Disabled"}
+                                {draftEnabled && task.next_run
+                                  ? formatDateTime(task.next_run)
+                                  : draftEnabled
+                                    ? "Scheduled"
+                                    : "Disabled"}
                               </Typography>
                             </Box>
 
@@ -3180,7 +3308,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                             >
                               <Box sx={{ display: "flex", alignItems: "center", gap: 0.8, color: "#64748B" }}>
                                 <Clock size={14} />
-                                <Typography variant="caption" sx={{ fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                                <Typography
+                                  variant="caption"
+                                  sx={{ fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}
+                                >
                                   Last Executed
                                 </Typography>
                               </Box>
@@ -3188,7 +3319,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                                 {task.last_run ? (
                                   <>
                                     {formatDateTime(task.last_run)}{" "}
-                                    <span style={{ color: "#64748B", fontWeight: 400 }}>({formatRelativeTime(task.last_run)})</span>
+                                    <span style={{ color: "#64748B", fontWeight: 400 }}>
+                                      ({formatRelativeTime(task.last_run)})
+                                    </span>
                                   </>
                                 ) : (
                                   "Never executed"
@@ -3209,7 +3342,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                             >
                               <Box sx={{ display: "flex", alignItems: "center", gap: 0.8, color: "#64748B" }}>
                                 <Activity size={14} />
-                                <Typography variant="caption" sx={{ fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                                <Typography
+                                  variant="caption"
+                                  sx={{ fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}
+                                >
                                   Duration
                                 </Typography>
                               </Box>
@@ -3225,8 +3361,18 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                               sx={{
                                 p: 1.5,
                                 borderRadius: 1.5,
-                                bgcolor: task.last_status === "error" ? "#FEF2F2" : task.last_status === "success" ? "#F0FDF4" : "#F8FAFC",
-                                border: task.last_status === "error" ? "1px solid #FECACA" : task.last_status === "success" ? "1px solid #BBF7D0" : "1px solid #E2E8F0",
+                                bgcolor:
+                                  task.last_status === "error"
+                                    ? "#FEF2F2"
+                                    : task.last_status === "success"
+                                      ? "#F0FDF4"
+                                      : "#F8FAFC",
+                                border:
+                                  task.last_status === "error"
+                                    ? "1px solid #FECACA"
+                                    : task.last_status === "success"
+                                      ? "1px solid #BBF7D0"
+                                      : "1px solid #E2E8F0",
                                 display: "flex",
                                 alignItems: "flex-start",
                                 gap: 1.2,
@@ -3246,7 +3392,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                                     fontWeight: 700,
                                     textTransform: "uppercase",
                                     letterSpacing: "0.04em",
-                                    color: task.last_status === "error" ? "#991B1B" : task.last_status === "success" ? "#166534" : "#475569",
+                                    color:
+                                      task.last_status === "error"
+                                        ? "#991B1B"
+                                        : task.last_status === "success"
+                                          ? "#166534"
+                                          : "#475569",
                                     display: "block",
                                     mb: 0.3,
                                   }}
@@ -3258,7 +3409,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                                   sx={{
                                     fontFamily: "monospace",
                                     fontSize: "0.82rem",
-                                    color: task.last_status === "error" ? "#B91C1C" : task.last_status === "success" ? "#15803D" : "#334155",
+                                    color:
+                                      task.last_status === "error"
+                                        ? "#B91C1C"
+                                        : task.last_status === "success"
+                                          ? "#15803D"
+                                          : "#334155",
                                     wordBreak: "break-all",
                                   }}
                                 >
@@ -3273,6 +3429,525 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                   })}
                 </Box>
               )}
+            </DialogContent>
+          </Box>
+        )}
+
+        {/* Tab: Database & Storage Maintenance */}
+        {activeTab === "database" && (
+          <Box sx={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, overflow: "hidden" }}>
+            <DialogContent
+              sx={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 2.5,
+                py: 3,
+                px: 3,
+                flex: 1,
+                minHeight: 0,
+                overflowY: "auto",
+              }}
+            >
+              {/* Header description */}
+              <Box
+                sx={{
+                  p: 2,
+                  borderRadius: 2,
+                  bgcolor: "#F8FAFC",
+                  border: "1px solid #E2E8F0",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 2,
+                }}
+              >
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+                  <Box
+                    sx={{
+                      width: 40,
+                      height: 40,
+                      borderRadius: 2,
+                      bgcolor: "#EEF2FF",
+                      color: "#4F46E5",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      flexShrink: 0,
+                    }}
+                  >
+                    <Database size={22} />
+                  </Box>
+                  <Box>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0F172A", fontSize: "0.95rem" }}>
+                      SQLite Database & Storage
+                    </Typography>
+                    <Typography variant="body2" sx={{ color: "#64748B", fontSize: "0.85rem", lineHeight: 1.4 }}>
+                      Monitor SQLite data storage metrics, configure unified retention duration for metrics and cron
+                      results, and reclaim unused disk space.
+                    </Typography>
+                  </Box>
+                </Box>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  startIcon={<RefreshCw size={14} className={dbLoading ? "spin" : ""} />}
+                  onClick={loadDatabaseInfo}
+                  disabled={dbLoading || dbVacuuming}
+                  sx={{
+                    textTransform: "none",
+                    fontWeight: 600,
+                    flexShrink: 0,
+                    borderColor: "#CBD5E1",
+                    color: "#334155",
+                    "&:hover": { borderColor: "#94A3B8", bgcolor: "#F1F5F9" },
+                  }}
+                >
+                  {dbLoading ? "Refreshing..." : "Refresh"}
+                </Button>
+              </Box>
+
+              {dbSuccess && (
+                <Alert icon={<CheckCircle2 size={18} />} severity="success" sx={{ borderRadius: 2 }}>
+                  {dbSuccess}
+                </Alert>
+              )}
+
+              {dbError && (
+                <Alert icon={<AlertCircle size={18} />} severity="error" sx={{ borderRadius: 2 }}>
+                  {dbError}
+                </Alert>
+              )}
+
+              {dbLoading && !dbInfo ? (
+                <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", py: 8 }}>
+                  <CircularProgress size={32} />
+                </Box>
+              ) : dbInfo ? (
+                <Box sx={{ display: "flex", flexDirection: "column", gap: 2.5 }}>
+                  {/* Card 1: Storage Overview & Statistics */}
+                  <Paper
+                    elevation={0}
+                    sx={{
+                      p: 2.5,
+                      borderRadius: 2.5,
+                      border: "1px solid #E2E8F0",
+                      bgcolor: "#FFFFFF",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 2,
+                    }}
+                  >
+                    <Box
+                      sx={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        flexWrap: "wrap",
+                        gap: 1,
+                      }}
+                    >
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                        <HardDrive size={18} color="#4F46E5" />
+                        <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#0F172A" }}>
+                          Database State & Storage Metrics
+                        </Typography>
+                      </Box>
+                      <Chip
+                        size="small"
+                        label="SQLite 3 (WAL Mode)"
+                        sx={{ bgcolor: "#F1F5F9", color: "#475569", fontWeight: 600, fontSize: "0.75rem" }}
+                      />
+                    </Box>
+
+                    {/* Stats Grid */}
+                    <Box
+                      sx={{
+                        display: "grid",
+                        gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr", md: "1fr 1fr 1fr 1fr" },
+                        gap: 2,
+                      }}
+                    >
+                      <Box sx={{ p: 2, borderRadius: 2, bgcolor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
+                        <Typography
+                          variant="caption"
+                          sx={{
+                            color: "#64748B",
+                            fontWeight: 600,
+                            textTransform: "uppercase",
+                            letterSpacing: "0.04em",
+                          }}
+                        >
+                          Total DB Size
+                        </Typography>
+                        <Box sx={{ display: "flex", alignItems: "baseline", gap: 1, mt: 0.5 }}>
+                          <Typography variant="h5" sx={{ fontWeight: 700, color: "#0F172A" }}>
+                            {dbInfo.total_size_human}
+                          </Typography>
+                        </Box>
+                        <Typography variant="caption" sx={{ color: "#94A3B8" }}>
+                          {dbInfo.total_size_bytes.toLocaleString()} bytes
+                        </Typography>
+                        {Boolean(dbInfo.wal_size_bytes && dbInfo.wal_size_bytes > 0) && (
+                          <Box sx={{ mt: 0.8 }}>
+                            <Chip
+                              size="small"
+                              label={`WAL: ${((dbInfo.wal_size_bytes || 0) / 1024).toFixed(1)} KB`}
+                              sx={{
+                                height: 20,
+                                fontSize: "0.7rem",
+                                bgcolor: "#EFF6FF",
+                                color: "#1D4ED8",
+                                fontWeight: 600,
+                              }}
+                            />
+                          </Box>
+                        )}
+                      </Box>
+
+                      <Box sx={{ p: 2, borderRadius: 2, bgcolor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
+                        <Typography
+                          variant="caption"
+                          sx={{
+                            color: "#64748B",
+                            fontWeight: 600,
+                            textTransform: "uppercase",
+                            letterSpacing: "0.04em",
+                          }}
+                        >
+                          Retention Threshold
+                        </Typography>
+                        <Box sx={{ display: "flex", alignItems: "baseline", gap: 1, mt: 0.5 }}>
+                          <Typography variant="h5" sx={{ fontWeight: 700, color: "#4F46E5" }}>
+                            {dbInfo.retention_days} Days
+                          </Typography>
+                        </Box>
+                        <Typography variant="caption" sx={{ color: "#64748B" }}>
+                          Unified metrics & cron results
+                        </Typography>
+                      </Box>
+
+                      <Box sx={{ p: 2, borderRadius: 2, bgcolor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
+                        <Typography
+                          variant="caption"
+                          sx={{
+                            color: "#64748B",
+                            fontWeight: 600,
+                            textTransform: "uppercase",
+                            letterSpacing: "0.04em",
+                          }}
+                        >
+                          Telemetry Records
+                        </Typography>
+                        <Box sx={{ display: "flex", alignItems: "baseline", gap: 1, mt: 0.5 }}>
+                          <Typography variant="h5" sx={{ fontWeight: 700, color: "#0F172A" }}>
+                            {((dbInfo.metrics_count || 0) + (dbInfo.interface_metrics_count || 0)).toLocaleString()}
+                          </Typography>
+                        </Box>
+                        <Typography variant="caption" sx={{ color: "#64748B" }}>
+                          {(dbInfo.metrics_count || 0).toLocaleString()} system /{" "}
+                          {(dbInfo.interface_metrics_count || 0).toLocaleString()} iface
+                        </Typography>
+                      </Box>
+
+                      <Box sx={{ p: 2, borderRadius: 2, bgcolor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
+                        <Typography
+                          variant="caption"
+                          sx={{
+                            color: "#64748B",
+                            fontWeight: 600,
+                            textTransform: "uppercase",
+                            letterSpacing: "0.04em",
+                          }}
+                        >
+                          Cron Task Results
+                        </Typography>
+                        <Box sx={{ display: "flex", alignItems: "baseline", gap: 1, mt: 0.5 }}>
+                          <Typography variant="h5" sx={{ fontWeight: 700, color: "#0F172A" }}>
+                            {(dbInfo.cron_results_count || 0).toLocaleString()}
+                          </Typography>
+                        </Box>
+                        <Typography variant="caption" sx={{ color: "#64748B" }}>
+                          Execution histories stored
+                        </Typography>
+                      </Box>
+                    </Box>
+
+                    {/* Detailed Properties Row */}
+                    <Box
+                      sx={{
+                        p: 2,
+                        borderRadius: 2,
+                        bgcolor: "#F8FAFC",
+                        border: "1px solid #E2E8F0",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 1.5,
+                      }}
+                    >
+                      <Box
+                        sx={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          flexWrap: "wrap",
+                          gap: 1,
+                        }}
+                      >
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                          <Typography variant="caption" sx={{ fontWeight: 600, color: "#64748B" }}>
+                            Database File:
+                          </Typography>
+                          <Typography
+                            variant="body2"
+                            sx={{
+                              fontFamily: "monospace",
+                              bgcolor: "#FFFFFF",
+                              px: 1,
+                              py: 0.3,
+                              borderRadius: 1,
+                              border: "1px solid #CBD5E1",
+                              fontSize: "0.8rem",
+                              color: "#1E293B",
+                            }}
+                          >
+                            {dbInfo.file_path}
+                          </Typography>
+                        </Box>
+                        <Button
+                          size="small"
+                          startIcon={<Copy size={13} />}
+                          onClick={() => {
+                            if (dbInfo.file_path) {
+                              navigator.clipboard.writeText(dbInfo.file_path);
+                            }
+                          }}
+                          sx={{ textTransform: "none", fontSize: "0.75rem", color: "#64748B" }}
+                        >
+                          Copy Path
+                        </Button>
+                      </Box>
+
+                      <Divider sx={{ borderColor: "#E2E8F0" }} />
+
+                      <Box
+                        sx={{
+                          display: "grid",
+                          gridTemplateColumns: { xs: "1fr", sm: "repeat(3, 1fr)" },
+                          gap: 1.5,
+                        }}
+                      >
+                        <Box>
+                          <Typography variant="caption" sx={{ color: "#64748B", display: "block" }}>
+                            Page Size
+                          </Typography>
+                          <Typography variant="body2" sx={{ fontWeight: 600, color: "#1E293B" }}>
+                            {dbInfo.page_size ? `${dbInfo.page_size} bytes` : "4096 bytes"}
+                          </Typography>
+                        </Box>
+                        <Box>
+                          <Typography variant="caption" sx={{ color: "#64748B", display: "block" }}>
+                            Allocated Pages
+                          </Typography>
+                          <Typography variant="body2" sx={{ fontWeight: 600, color: "#1E293B" }}>
+                            {dbInfo.page_count ? dbInfo.page_count.toLocaleString() : "0"}
+                          </Typography>
+                        </Box>
+                        <Box>
+                          <Typography variant="caption" sx={{ color: "#64748B", display: "block" }}>
+                            Freelist Pages
+                          </Typography>
+                          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                            <Typography variant="body2" sx={{ fontWeight: 600, color: "#1E293B" }}>
+                              {dbInfo.freelist_count ? dbInfo.freelist_count.toLocaleString() : "0"}
+                            </Typography>
+                            {Boolean(dbInfo.freelist_count && dbInfo.freelist_count > 0) && (
+                              <Chip
+                                size="small"
+                                label="Reclaimable Space"
+                                sx={{
+                                  height: 18,
+                                  fontSize: "0.65rem",
+                                  bgcolor: "#FEF3C7",
+                                  color: "#B45309",
+                                  fontWeight: 600,
+                                }}
+                              />
+                            )}
+                          </Box>
+                        </Box>
+                      </Box>
+                    </Box>
+                  </Paper>
+
+                  {/* Card 2: Data Retention Settings */}
+                  <Paper
+                    elevation={0}
+                    sx={{
+                      p: 2.5,
+                      borderRadius: 2.5,
+                      border: "1px solid #E2E8F0",
+                      bgcolor: "#FFFFFF",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 2,
+                    }}
+                  >
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                      <Clock size={18} color="#4F46E5" />
+                      <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#0F172A" }}>
+                        Data Retention Policy
+                      </Typography>
+                    </Box>
+                    <Typography variant="body2" sx={{ color: "#64748B", lineHeight: 1.5 }}>
+                      Configure how long easy42 retains node telemetry (CPU, memory, traffic metrics) and cron task
+                      execution logs. Records older than this period are purged automatically during background hourly
+                      maintenance.
+                    </Typography>
+
+                    <Box
+                      sx={{
+                        p: 2,
+                        borderRadius: 2,
+                        bgcolor: "#F8FAFC",
+                        border: "1px solid #E2E8F0",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 2,
+                      }}
+                    >
+                      <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 2 }}>
+                        <TextField
+                          label="Retention Days"
+                          type="number"
+                          size="small"
+                          value={retentionDraft}
+                          onChange={(e) => setRetentionDraft(e.target.value)}
+                          InputProps={{
+                            endAdornment: <InputAdornment position="end">days</InputAdornment>,
+                            inputProps: { min: 1, max: 3650 },
+                          }}
+                          sx={{ width: 170, bgcolor: "#FFFFFF" }}
+                        />
+
+                        <Button
+                          variant="contained"
+                          startIcon={dbSaving ? <CircularProgress size={14} color="inherit" /> : <Check size={16} />}
+                          onClick={handleSaveRetention}
+                          disabled={dbSaving || dbLoading || Number(retentionDraft) === dbInfo.retention_days}
+                          sx={{
+                            textTransform: "none",
+                            fontWeight: 600,
+                            bgcolor: "#4F46E5",
+                            "&:hover": { bgcolor: "#4338CA" },
+                          }}
+                        >
+                          {dbSaving ? "Saving..." : "Save Retention"}
+                        </Button>
+                      </Box>
+
+                      {/* Presets */}
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
+                        <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600 }}>
+                          Quick Presets:
+                        </Typography>
+                        {[
+                          { days: 7, label: "7 Days" },
+                          { days: 14, label: "14 Days" },
+                          { days: 30, label: "30 Days" },
+                          { days: 47, label: "47 Days (Default)" },
+                          { days: 90, label: "90 Days" },
+                        ].map((preset) => {
+                          const isSelected = Number(retentionDraft) === preset.days;
+                          return (
+                            <Chip
+                              key={preset.days}
+                              size="small"
+                              label={preset.label}
+                              clickable
+                              variant={isSelected ? "filled" : "outlined"}
+                              onClick={() => setRetentionDraft(preset.days)}
+                              sx={{
+                                fontSize: "0.75rem",
+                                fontWeight: 500,
+                                bgcolor: isSelected ? "#4F46E5" : "transparent",
+                                color: isSelected ? "#FFFFFF" : "#475569",
+                                borderColor: "#CBD5E1",
+                              }}
+                            />
+                          );
+                        })}
+                      </Box>
+                    </Box>
+                  </Paper>
+
+                  {/* Card 3: Database Space Reclamation */}
+                  <Paper
+                    elevation={0}
+                    sx={{
+                      p: 2.5,
+                      borderRadius: 2.5,
+                      border: "1px solid #E2E8F0",
+                      bgcolor: "#FFFFFF",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 2,
+                    }}
+                  >
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                      <Sparkles size={18} color="#4F46E5" />
+                      <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#0F172A" }}>
+                        Reclaim Database Space
+                      </Typography>
+                    </Box>
+                    <Typography variant="body2" sx={{ color: "#64748B", lineHeight: 1.5 }}>
+                      When older metrics and logs are cleaned, SQLite preserves the empty pages in its internal freelist
+                      for future writes, so the file size on disk may not immediately shrink. Triggering a{" "}
+                      <strong>VACUUM</strong> rebuilds the entire database file, defragmenting pages, releasing unused
+                      freelists, and truncating the Write-Ahead Log (WAL) to return space to the operating system.
+                    </Typography>
+
+                    <Box
+                      sx={{
+                        p: 2,
+                        borderRadius: 2,
+                        bgcolor: "#F8FAFC",
+                        border: "1px solid #E2E8F0",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        flexWrap: "wrap",
+                        gap: 2,
+                      }}
+                    >
+                      <Box>
+                        <Typography variant="body2" sx={{ fontWeight: 600, color: "#1E293B" }}>
+                          Run SQLite VACUUM Optimization
+                        </Typography>
+                        <Typography variant="caption" sx={{ color: "#64748B", display: "block" }}>
+                          Safe online maintenance. Current database size: {dbInfo.total_size_human}
+                        </Typography>
+                      </Box>
+
+                      <Button
+                        variant="contained"
+                        startIcon={
+                          dbVacuuming ? <CircularProgress size={14} color="inherit" /> : <Sparkles size={16} />
+                        }
+                        onClick={handleReclaimDatabase}
+                        disabled={dbVacuuming || dbLoading}
+                        sx={{
+                          textTransform: "none",
+                          fontWeight: 600,
+                          bgcolor: "#4F46E5",
+                          "&:hover": { bgcolor: "#4338CA" },
+                        }}
+                      >
+                        {dbVacuuming ? "Reclaiming Space..." : "Reclaim Database"}
+                      </Button>
+                    </Box>
+                  </Paper>
+                </Box>
+              ) : null}
             </DialogContent>
           </Box>
         )}

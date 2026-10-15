@@ -151,7 +151,7 @@ export const NodeMetricsDrawer: React.FC<NodeMetricsDrawerProps> = ({
           Telemetry Range
         </Typography>
         <ButtonGroup size="small" variant="outlined" sx={{ bgcolor: "#F8FAFC" }}>
-          {["1h", "6h", "24h", "7d"].map((r) => (
+          {["1h", "6h", "24h", "7d", "30d"].map((r) => (
             <Button
               key={r}
               onClick={() => setRange(r)}

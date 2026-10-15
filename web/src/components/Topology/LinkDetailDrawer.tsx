@@ -468,7 +468,7 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
                 </Typography>
                 <Typography variant="caption" sx={{ fontWeight: 600, color: "#1E293B" }}>
                   {newestHandshake
-                    ? `${newestHandshake.toLocaleTimeString()} (${formatHandshakeAgo(newestHandshake.toISOString())} ago)`
+                    ? `${newestHandshake.toISOString()} (${formatHandshakeAgo(newestHandshake.toISOString())} ago)`
                     : "None observed"}
                 </Typography>
               </Box>

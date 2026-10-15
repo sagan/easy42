@@ -139,6 +139,22 @@ func (d DNSConfig) IsConfigured() bool {
 		strings.TrimSpace(d.BaseDomain) != ""
 }
 
+// DefaultRetentionDays defines the default data retention period in days for metrics and cron results
+const DefaultRetentionDays = 47
+
+// DatabaseSettings represents user-configurable settings for data storage and retention
+type DatabaseSettings struct {
+	RetentionDays int `json:"retention_days,omitempty"`
+}
+
+// GetRetentionDays returns the retention days or DefaultRetentionDays if <= 0
+func (d *DatabaseSettings) GetRetentionDays() int {
+	if d == nil || d.RetentionDays <= 0 {
+		return DefaultRetentionDays
+	}
+	return d.RetentionDays
+}
+
 // Config represents the top-level configuration stored in config.json
 type Config struct {
 	PasswordHash      string             `json:"password_hash"`
@@ -154,6 +170,15 @@ type Config struct {
 	DNS               DNSConfig          `json:"dns,omitempty"`
 	Templates         []ConfigTemplate   `json:"templates,omitempty"`
 	ServerTasks       []ServerTaskConfig `json:"server_tasks,omitempty"`
+	Database          DatabaseSettings   `json:"database,omitempty"`
+}
+
+// GetRetentionDays returns the configured retention days or DefaultRetentionDays
+func (c *Config) GetRetentionDays() int {
+	if c == nil {
+		return DefaultRetentionDays
+	}
+	return c.Database.GetRetentionDays()
 }
 
 // ServerTaskConfig represents user-configurable settings for a server background task

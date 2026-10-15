@@ -2010,3 +2010,86 @@ func (s *StateStore) GetServerTaskStates() (map[string]ServerTaskState, error) {
 	return states, nil
 }
 
+// DatabaseStats represents size and storage metrics of the SQLite database
+type DatabaseStats struct {
+	FilePath              string `json:"file_path"`
+	TotalSizeBytes        int64  `json:"total_size_bytes"`
+	TotalSizeHuman        string `json:"total_size_human"`
+	PageSize              int64  `json:"page_size,omitempty"`
+	PageCount             int64  `json:"page_count,omitempty"`
+	FreelistCount         int64  `json:"freelist_count,omitempty"`
+	WALSizeBytes          int64  `json:"wal_size_bytes,omitempty"`
+	MetricsCount          int64  `json:"metrics_count"`
+	InterfaceMetricsCount int64  `json:"interface_metrics_count"`
+	CronResultsCount      int64  `json:"cron_results_count"`
+}
+
+func formatBytes(b int64) string {
+	const unit = 1024
+	if b < unit {
+		return fmt.Sprintf("%d B", b)
+	}
+	div, exp := int64(unit), 0
+	for n := b / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.2f %cB", float64(b)/float64(div), "KMGTPE"[exp])
+}
+
+// GetDatabaseStats returns size, page statistics, and row counts of the SQLite database
+func (s *StateStore) GetDatabaseStats() (DatabaseStats, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if err := s.initDBLocked(); err != nil {
+		return DatabaseStats{}, err
+	}
+
+	stats := DatabaseStats{
+		FilePath: s.filePath,
+	}
+
+	// Calculate total file size from main db file, WAL, and SHM
+	if fi, err := os.Stat(s.filePath); err == nil {
+		stats.TotalSizeBytes += fi.Size()
+	}
+	if fi, err := os.Stat(s.filePath + "-wal"); err == nil {
+		stats.WALSizeBytes = fi.Size()
+		stats.TotalSizeBytes += fi.Size()
+	}
+	if fi, err := os.Stat(s.filePath + "-shm"); err == nil {
+		stats.TotalSizeBytes += fi.Size()
+	}
+	stats.TotalSizeHuman = formatBytes(stats.TotalSizeBytes)
+
+	// SQLite pragmas
+	_ = s.db.QueryRow("PRAGMA page_size").Scan(&stats.PageSize)
+	_ = s.db.QueryRow("PRAGMA page_count").Scan(&stats.PageCount)
+	_ = s.db.QueryRow("PRAGMA freelist_count").Scan(&stats.FreelistCount)
+
+	// Table row counts
+	_ = s.db.QueryRow("SELECT COUNT(*) FROM node_metrics").Scan(&stats.MetricsCount)
+	_ = s.db.QueryRow("SELECT COUNT(*) FROM node_interface_metrics").Scan(&stats.InterfaceMetricsCount)
+	_ = s.db.QueryRow("SELECT COUNT(*) FROM cron_task_results").Scan(&stats.CronResultsCount)
+
+	return stats, nil
+}
+
+// Vacuum executes SQLite VACUUM command and truncates WAL to reclaim free space
+func (s *StateStore) Vacuum() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if err := s.initDBLocked(); err != nil {
+		return err
+	}
+
+	if _, err := s.db.Exec("VACUUM"); err != nil {
+		return err
+	}
+	_, _ = s.db.Exec("PRAGMA wal_checkpoint(TRUNCATE)")
+	return nil
+}
+
+

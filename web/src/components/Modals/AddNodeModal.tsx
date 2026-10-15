@@ -730,20 +730,15 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                   label="Peer Name"
                   size="small"
                   value={name}
-                  onChange={(e) =>
-                    setName(
-                      e.target.value
-                        .toLowerCase()
-                        .replace(/[^a-z0-9-_]/g, ""),
-                    )
-                  }
+                  onChange={(e) => setName(e.target.value.toLowerCase().replace(/[^a-z0-9-_]/g, ""))}
                   error={Boolean(name && (duplicateNameNode || conflictingIfaceNode))}
                   helperText={
                     duplicateNameNode ? (
                       <span style={{ color: "#DC2626" }}>Node name &quot;{cleanName}&quot; already exists!</span>
                     ) : conflictingIfaceNode ? (
                       <span style={{ color: "#DC2626" }}>
-                        Interface &quot;{generatedIface}&quot; conflicts with node &quot;{conflictingIfaceNode.name}&quot;!
+                        Interface &quot;{generatedIface}&quot; conflicts with node &quot;{conflictingIfaceNode.name}
+                        &quot;!
                       </span>
                     ) : generatedIface ? (
                       `Interface: ${generatedIface}`
@@ -1024,20 +1019,15 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                     label="Node Name"
                     size="small"
                     value={name}
-                    onChange={(e) =>
-                      setName(
-                        e.target.value
-                          .toLowerCase()
-                          .replace(/[^a-z0-9-_]/g, ""),
-                      )
-                    }
+                    onChange={(e) => setName(e.target.value.toLowerCase().replace(/[^a-z0-9-_]/g, ""))}
                     error={Boolean(name && (duplicateNameNode || conflictingIfaceNode))}
                     helperText={
                       duplicateNameNode ? (
                         <span style={{ color: "#DC2626" }}>Node name &quot;{cleanName}&quot; already exists!</span>
                       ) : conflictingIfaceNode ? (
                         <span style={{ color: "#DC2626" }}>
-                          Interface &quot;{generatedIface}&quot; conflicts with node &quot;{conflictingIfaceNode.name}&quot;!
+                          Interface &quot;{generatedIface}&quot; conflicts with node &quot;{conflictingIfaceNode.name}
+                          &quot;!
                         </span>
                       ) : generatedIface ? (
                         `Interface: ${generatedIface}`
@@ -1533,7 +1523,8 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                           />
                         </Box>
                         <Typography variant="caption" sx={{ color: "#64748B" }}>
-                          When enabled, adds the FlapAlerted BGP peering session to this node's generated bird.conf to report route flapping.
+                          When enabled, adds the FlapAlerted BGP peering session to this node's generated bird.conf to
+                          report route flapping.
                         </Typography>
                       </Box>
                     }

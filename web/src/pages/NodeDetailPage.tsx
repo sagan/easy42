@@ -346,7 +346,13 @@ export const NodeDetailPage: React.FC = () => {
       if (b === pri) return 1;
       return a.localeCompare(b);
     });
-  }, [live?.primary_interface, status?.primary_interface, status?.interfaces, status?.wg_interfaces, metricsInterfaces]);
+  }, [
+    live?.primary_interface,
+    status?.primary_interface,
+    status?.interfaces,
+    status?.wg_interfaces,
+    metricsInterfaces,
+  ]);
 
   const currentDisplayInterface = useMemo(() => {
     if (selectedInterface) return selectedInterface;
@@ -1873,7 +1879,7 @@ export const NodeDetailPage: React.FC = () => {
                 )}
 
                 <ButtonGroup size="small" variant="outlined" sx={{ bgcolor: "#F8FAFC" }}>
-                  {["1h", "6h", "24h", "7d"].map((r) => (
+                  {["1h", "6h", "24h", "7d", "30d"].map((r) => (
                     <Button
                       key={r}
                       onClick={() => setRange(r)}
@@ -1961,7 +1967,7 @@ export const NodeDetailPage: React.FC = () => {
                 <Grid item xs={12} lg={6}>
                   <MetricAreaChart
                     title={
-                      (selectedInterface || currentDisplayInterface)
+                      selectedInterface || currentDisplayInterface
                         ? `Network Bandwidth (${selectedInterface || currentDisplayInterface})`
                         : "Network Bandwidth"
                     }
@@ -1979,7 +1985,7 @@ export const NodeDetailPage: React.FC = () => {
                 <Grid item xs={12} lg={6}>
                   <MetricAreaChart
                     title={
-                      (selectedInterface || currentDisplayInterface)
+                      selectedInterface || currentDisplayInterface
                         ? `Network Traffics (${selectedInterface || currentDisplayInterface})`
                         : "Network Traffics"
                     }
@@ -2709,9 +2715,9 @@ export const NodeDetailPage: React.FC = () => {
                       Last Communication
                     </Typography>
                     <Typography variant="body2" sx={{ fontWeight: 600, color: "#0F172A", mt: 0.5 }}>
-                      {live?.last_seen ||
-                        status?.last_seen ||
-                        (node.agent_last_seen ? new Date(node.agent_last_seen).toLocaleString() : "Never")}
+                      {live?.last_seen || status?.last_seen || node.agent_last_seen
+                        ? new Date((live?.last_seen || status?.last_seen || node.agent_last_seen)!).toISOString()
+                        : "Never"}
                     </Typography>
                   </Box>
                 </Grid>
@@ -2744,7 +2750,13 @@ export const NodeDetailPage: React.FC = () => {
                   disabled={generatingToken}
                   sx={{ fontSize: "0.78rem", textTransform: "none", color: "#4F46E5", borderColor: "#C7D2FE" }}
                 >
-                  {generatingToken ? (currentToken ? "Rotating..." : "Generating...") : (currentToken ? "Rotate Token" : "Generate Token")}
+                  {generatingToken
+                    ? currentToken
+                      ? "Rotating..."
+                      : "Generating..."
+                    : currentToken
+                      ? "Rotate Token"
+                      : "Generate Token"}
                 </Button>
               </Box>
 

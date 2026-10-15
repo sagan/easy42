@@ -37,10 +37,7 @@ import {
 } from "lucide-react";
 import { Link as RouterLink, useSearchParams } from "react-router-dom";
 import { api } from "../../api/client";
-import type {
-  CronTaskResultRecord,
-  NodeCronTasksResultsResponse,
-} from "../../types/api";
+import type { CronTaskResultRecord, NodeCronTasksResultsResponse } from "../../types/api";
 
 interface NodeCronTasksTabProps {
   nodeName: string;
@@ -50,7 +47,7 @@ export const NodeCronTasksTab: React.FC<NodeCronTasksTabProps> = ({ nodeName }) 
   const [searchParams, setSearchParams] = useSearchParams();
   const [range, setRange] = useState<string>("24h");
   const [selectedTask, setSelectedTask] = useState<string>(
-    () => searchParams.get("task") || searchParams.get("taskId") || ""
+    () => searchParams.get("task") || searchParams.get("taskId") || "",
   );
   const [viewMode, setViewMode] = useState<"both" | "charts" | "table">("both");
 
@@ -83,7 +80,7 @@ export const NodeCronTasksTab: React.FC<NodeCronTasksTabProps> = ({ nodeName }) 
         }
         return next;
       },
-      { replace: true }
+      { replace: true },
     );
   };
 
@@ -492,11 +489,7 @@ export const NodeCronTasksTab: React.FC<NodeCronTasksTabProps> = ({ nodeName }) 
 
               {/* Packet Loss Chart */}
               <Grid item xs={12} lg={6}>
-                <CronPacketLossChart
-                  title="Packet Loss Rate (%)"
-                  points={chartPoints}
-                  color="#DC2626"
-                />
+                <CronPacketLossChart title="Packet Loss Rate (%)" points={chartPoints} color="#DC2626" />
               </Grid>
             </Grid>
           )}
@@ -553,13 +546,7 @@ export const NodeCronTasksTab: React.FC<NodeCronTasksTabProps> = ({ nodeName }) 
                       return (
                         <TableRow key={r.id} hover>
                           <TableCell sx={{ whiteSpace: "nowrap", color: "#64748B", fontSize: "0.8rem" }}>
-                            {new Date(r.executed_at * 1000).toLocaleString([], {
-                              month: "short",
-                              day: "numeric",
-                              hour: "2-digit",
-                              minute: "2-digit",
-                              second: "2-digit",
-                            })}
+                            {new Date(r.executed_at * 1000).toISOString()}
                           </TableCell>
                           <TableCell>
                             <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
@@ -668,26 +655,29 @@ export const NodeCronTasksTab: React.FC<NodeCronTasksTabProps> = ({ nodeName }) 
         fullWidth
         PaperProps={{ sx: { borderRadius: 3, p: 1 } }}
       >
-        <DialogTitle sx={{ fontWeight: 700, color: "#0F172A", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <DialogTitle
+          sx={{
+            fontWeight: 700,
+            color: "#0F172A",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+          }}
+        >
           <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
             <Terminal size={20} color="#4F46E5" />
             <span>
               {inspectRecord?.task_name} Output ({inspectRecord?.target})
             </span>
           </Box>
-          <Button
-            size="small"
-            startIcon={<Copy size={14} />}
-            onClick={handleCopyRaw}
-            sx={{ textTransform: "none" }}
-          >
+          <Button size="small" startIcon={<Copy size={14} />} onClick={handleCopyRaw} sx={{ textTransform: "none" }}>
             {copied ? "Copied!" : "Copy"}
           </Button>
         </DialogTitle>
         <DialogContent>
           <Box sx={{ display: "flex", gap: 2, mb: 1.5, flexWrap: "wrap" }}>
             <Typography variant="caption" sx={{ color: "#64748B" }}>
-              Executed: <strong>{inspectRecord ? new Date(inspectRecord.executed_at * 1000).toLocaleString() : ""}</strong>
+              Executed: <strong>{inspectRecord ? new Date(inspectRecord.executed_at * 1000).toISOString() : ""}</strong>
             </Typography>
             <Typography variant="caption" sx={{ color: "#64748B" }}>
               Duration: <strong>{inspectRecord?.duration_ms} ms</strong>
@@ -846,11 +836,7 @@ const CronLatencyChart: React.FC<CronLatencyChartProps> = ({
         <Box sx={{ textAlign: "right" }}>
           {activePoint ? (
             <Typography variant="caption" sx={{ color: "#475569", fontWeight: 600 }}>
-              {new Date(activePoint.executed_at * 1000).toLocaleTimeString([], {
-                hour: "2-digit",
-                minute: "2-digit",
-                second: "2-digit",
-              })}
+              {new Date(activePoint.executed_at * 1000).toISOString()}
             </Typography>
           ) : (
             <Typography variant="caption" sx={{ color: "#64748B" }}>
@@ -958,7 +944,7 @@ const CronLatencyChart: React.FC<CronLatencyChartProps> = ({
           {points.length > 1 && (
             <>
               <text x={padding.left} y={height - 5} fontSize="9" fill="#94A3B8" fontFamily="sans-serif">
-                {new Date(points[0].executed_at * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                {new Date(points[0].executed_at * 1000).toISOString()}
               </text>
               <text
                 x={padding.left + plotWidth}
@@ -968,10 +954,7 @@ const CronLatencyChart: React.FC<CronLatencyChartProps> = ({
                 fill="#94A3B8"
                 fontFamily="sans-serif"
               >
-                {new Date(points[points.length - 1].executed_at * 1000).toLocaleTimeString([], {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}
+                {new Date(points[points.length - 1].executed_at * 1000).toISOString()}
               </text>
             </>
           )}
@@ -1007,11 +990,7 @@ interface CronPacketLossChartProps {
   color?: string;
 }
 
-const CronPacketLossChart: React.FC<CronPacketLossChartProps> = ({
-  title,
-  points,
-  color = "#DC2626",
-}) => {
+const CronPacketLossChart: React.FC<CronPacketLossChartProps> = ({ title, points, color = "#DC2626" }) => {
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
 
   const stats = useMemo(() => {
@@ -1093,11 +1072,7 @@ const CronPacketLossChart: React.FC<CronPacketLossChartProps> = ({
         <Box sx={{ textAlign: "right" }}>
           {activePoint ? (
             <Typography variant="caption" sx={{ color: "#475569", fontWeight: 600 }}>
-              {new Date(activePoint.executed_at * 1000).toLocaleTimeString([], {
-                hour: "2-digit",
-                minute: "2-digit",
-                second: "2-digit",
-              })}
+              {new Date(activePoint.executed_at * 1000).toISOString()}
             </Typography>
           ) : (
             <Typography variant="caption" sx={{ color: "#64748B" }}>
@@ -1190,7 +1165,7 @@ const CronPacketLossChart: React.FC<CronPacketLossChartProps> = ({
           {points.length > 1 && (
             <>
               <text x={padding.left} y={height - 5} fontSize="9" fill="#94A3B8" fontFamily="sans-serif">
-                {new Date(points[0].executed_at * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                {new Date(points[0].executed_at * 1000).toISOString()}
               </text>
               <text
                 x={padding.left + plotWidth}
@@ -1200,10 +1175,7 @@ const CronPacketLossChart: React.FC<CronPacketLossChartProps> = ({
                 fill="#94A3B8"
                 fontFamily="sans-serif"
               >
-                {new Date(points[points.length - 1].executed_at * 1000).toLocaleTimeString([], {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}
+                {new Date(points[points.length - 1].executed_at * 1000).toISOString()}
               </text>
             </>
           )}

@@ -672,3 +672,18 @@ export interface ServerTask {
   last_message: string;
 }
 
+export interface DatabaseInfo {
+  retention_days: number;
+  file_path: string;
+  total_size_bytes: number;
+  total_size_human: string;
+  page_size?: number;
+  page_count?: number;
+  freelist_count?: number;
+  wal_size_bytes?: number;
+  metrics_count?: number;
+  interface_metrics_count?: number;
+  cron_results_count?: number;
+}
+
+

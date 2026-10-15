@@ -143,17 +143,16 @@ export const MetricAreaChart: React.FC<MetricAreaChartProps> = ({
           </Typography>
           <Box sx={{ display: "flex", alignItems: "baseline", gap: 1 }}>
             <Typography variant="h6" sx={{ fontWeight: 700, color: "#0F172A", fontSize: "1.2rem" }}>
-              {activePoint
-                ? defaultFormat(activePoint.value)
-                : defaultFormat(stats.current)}
+              {activePoint ? defaultFormat(activePoint.value) : defaultFormat(stats.current)}
             </Typography>
             {hasDualSeries && (
               <Typography variant="body2" sx={{ fontWeight: 600, color: color2 }}>
-                / {activePoint && activePoint.value2 !== undefined
+                /{" "}
+                {activePoint && activePoint.value2 !== undefined
                   ? defaultFormat(activePoint.value2)
                   : stats.current2 !== undefined
-                  ? defaultFormat(stats.current2)
-                  : ""}
+                    ? defaultFormat(stats.current2)
+                    : ""}
               </Typography>
             )}
           </Box>
@@ -162,7 +161,7 @@ export const MetricAreaChart: React.FC<MetricAreaChartProps> = ({
         <Box sx={{ textAlign: "right" }}>
           {activePoint ? (
             <Typography variant="caption" sx={{ color: "#475569", fontWeight: 600 }}>
-              {new Date(activePoint.timestamp * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+              {new Date(activePoint.timestamp * 1000).toISOString()}
             </Typography>
           ) : (
             <Box sx={{ display: "flex", gap: 1 }}>
@@ -212,13 +211,7 @@ export const MetricAreaChart: React.FC<MetricAreaChartProps> = ({
                     strokeDasharray="4 4"
                   />
                   {pct > 0 && (
-                    <text
-                      x={padding.left + 4}
-                      y={y - 3}
-                      fontSize="9"
-                      fill="#94A3B8"
-                      fontFamily="sans-serif"
-                    >
+                    <text x={padding.left + 4} y={y - 3} fontSize="9" fill="#94A3B8" fontFamily="sans-serif">
                       {defaultFormat(tickVal)}
                     </text>
                   )}
@@ -283,14 +276,8 @@ export const MetricAreaChart: React.FC<MetricAreaChartProps> = ({
             {/* Time label bottom */}
             {data.length > 1 && (
               <>
-                <text
-                  x={padding.left}
-                  y={height - 5}
-                  fontSize="10"
-                  fill="#94A3B8"
-                  fontFamily="sans-serif"
-                >
-                  {new Date(data[0].timestamp * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                <text x={padding.left} y={height - 5} fontSize="10" fill="#94A3B8" fontFamily="sans-serif">
+                  {new Date(data[0].timestamp * 1000).toISOString()}
                 </text>
                 <text
                   x={padding.left + plotWidth}
@@ -300,7 +287,7 @@ export const MetricAreaChart: React.FC<MetricAreaChartProps> = ({
                   fill="#94A3B8"
                   fontFamily="sans-serif"
                 >
-                  {new Date(data[data.length - 1].timestamp * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                  {new Date(data[data.length - 1].timestamp * 1000).toISOString()}
                 </text>
               </>
             )}

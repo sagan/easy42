@@ -20,7 +20,17 @@ import {
   useTheme,
   useMediaQuery,
 } from "@mui/material";
-import { Link as LinkIcon, ArrowRightLeft, Edit2, Globe, Copy, Check, FileText, Network, AlertCircle } from "lucide-react";
+import {
+  Link as LinkIcon,
+  ArrowRightLeft,
+  Edit2,
+  Globe,
+  Copy,
+  Check,
+  FileText,
+  Network,
+  AlertCircle,
+} from "lucide-react";
 import { api } from "../../api/client";
 import { Node, Link, NetworkPolicy, NetworkSettings } from "../../types/api";
 import { useMesh } from "../../context/MeshContext";
@@ -866,7 +876,8 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
 
           {isBothExternal && (
             <Alert severity="error" sx={{ borderRadius: 2 }}>
-              Cannot link two external peers together. easy42 is a mesh control plane for your managed nodes; an external peer (DN42 / upstream) must connect to one of your managed nodes.
+              Cannot link two external peers together. easy42 is a mesh control plane for your managed nodes; an
+              external peer (DN42 / upstream) must connect to one of your managed nodes.
             </Alert>
           )}
 

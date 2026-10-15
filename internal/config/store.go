@@ -112,6 +112,9 @@ func (s *Store) Initialize() (string, error) {
 		Nodes:       make([]Node, 0),
 		Links:       make([]Link, 0),
 		ServerTasks: DefaultServerTasks(),
+		Database: DatabaseSettings{
+			RetentionDays: DefaultRetentionDays,
+		},
 	}
 
 	data, err := json.MarshalIndent(cfg, "", "  ")

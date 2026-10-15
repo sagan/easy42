@@ -293,7 +293,16 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
   };
 
   return (
-    <Box sx={{ p: { xs: 1.5, sm: 2.5, md: 3 }, height: "100%", minHeight: 0, overflowY: "auto", display: "flex", flexDirection: "column" }}>
+    <Box
+      sx={{
+        p: { xs: 1.5, sm: 2.5, md: 3 },
+        height: "100%",
+        minHeight: 0,
+        overflowY: "auto",
+        display: "flex",
+        flexDirection: "column",
+      }}
+    >
       {/* Main Content Area */}
       <Paper
         elevation={0}
