@@ -177,6 +177,11 @@ func New(cfg Config) *Server {
 			r.Put("/settings/dns", s.handleUpdateDNSConfig)
 			r.Post("/settings/dns/sync", s.handleSyncDNS)
 
+			// Server Background Tasks
+			r.Get("/settings/tasks", s.handleGetServerTasks)
+			r.Put("/settings/tasks/{id}", s.handleUpdateServerTask)
+			r.Post("/settings/tasks/{id}/run", s.handleRunServerTask)
+
 			// Network Policies
 			r.Get("/network-policies", s.handleGetNetworkPolicies)
 			r.Post("/network-policies", s.handleCreateNetworkPolicy)

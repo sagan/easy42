@@ -109,8 +109,9 @@ func (s *Store) Initialize() (string, error) {
 			PublicASN: 4242420001,
 			Prefixes:  prefixes,
 		},
-		Nodes: make([]Node, 0),
-		Links: make([]Link, 0),
+		Nodes:       make([]Node, 0),
+		Links:       make([]Link, 0),
+		ServerTasks: DefaultServerTasks(),
 	}
 
 	data, err := json.MarshalIndent(cfg, "", "  ")
@@ -158,6 +159,18 @@ func (s *Store) Load() (*Config, error) {
 		cfg.NetworkSettings.DisallowedDN42Networks = CleanPrefixes(cfg.NetworkSettings.DisallowedDN42Networks)
 	}
 	cfg.NetworkSettings.DisallowedDN42CIDRs = cfg.NetworkSettings.DisallowedDN42Networks
+	originalTasks := cfg.ServerTasks
+	cfg.ServerTasks = NormalizeServerTasks(cfg.ServerTasks)
+	needsSave := len(originalTasks) != len(cfg.ServerTasks)
+	if !needsSave {
+		for i, t := range originalTasks {
+			if t.ID != cfg.ServerTasks[i].ID {
+				needsSave = true
+				break
+			}
+		}
+	}
+
 	if faAddr := cfg.NetworkSettings.GetFlapAlertedAddress(); faAddr != "" {
 		cfg.NetworkSettings.FlapAlertedAddress = faAddr
 		cfg.NetworkSettings.FAAddress = faAddr
@@ -178,6 +191,10 @@ func (s *Store) Load() (*Config, error) {
 		cfg.NetworkSettings.FAURL = faURL
 	}
 
+	if needsSave {
+		_ = s.saveLocked(&cfg)
+	}
+
 	s.config = &cfg
 	return &cfg, nil
 }
@@ -193,7 +210,10 @@ func (s *Store) Get() *Config {
 func (s *Store) Save(cfg *Config) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	return s.saveLocked(cfg)
+}
 
+func (s *Store) saveLocked(cfg *Config) error {
 	if err := os.MkdirAll(s.dataDir, 0700); err != nil {
 		return fmt.Errorf("failed to create data dir: %w", err)
 	}
@@ -205,6 +225,7 @@ func (s *Store) Save(cfg *Config) error {
 		cfg.NetworkSettings.DisallowedDN42Networks = CleanPrefixes(cfg.NetworkSettings.DisallowedDN42Networks)
 	}
 	cfg.NetworkSettings.DisallowedDN42CIDRs = cfg.NetworkSettings.DisallowedDN42Networks
+	cfg.ServerTasks = NormalizeServerTasks(cfg.ServerTasks)
 	if faAddr := cfg.NetworkSettings.GetFlapAlertedAddress(); faAddr != "" {
 		cfg.NetworkSettings.FlapAlertedAddress = faAddr
 		cfg.NetworkSettings.FAAddress = faAddr

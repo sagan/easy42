@@ -21,6 +21,7 @@ import type {
   NodeMetricsResponse,
   CronTask,
   NodeCronTasksResultsResponse,
+  ServerTask,
 } from "../types/api";
 
 const API_BASE = "/api";
@@ -268,6 +269,18 @@ export const api = {
     request<import("../types/api").DNSSyncResult>("/settings/dns/sync", {
       method: "POST",
       body: JSON.stringify({ force: Boolean(force) }),
+    }),
+
+  // Server Background Tasks Settings
+  getServerTasks: () => request<ServerTask[]>("/settings/tasks"),
+  updateServerTask: (id: string, data: { cron_expr: string; enabled: boolean }) =>
+    request<ServerTask>(`/settings/tasks/${encodeURIComponent(id)}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+  runServerTask: (id: string) =>
+    request<ServerTask>(`/settings/tasks/${encodeURIComponent(id)}/run`, {
+      method: "POST",
     }),
 
   // Network Policies

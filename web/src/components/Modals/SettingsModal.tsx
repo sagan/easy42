@@ -48,9 +48,13 @@ import {
   Search,
   Check,
   Activity,
+  CalendarClock,
+  Clock,
+  Play,
+  AlertCircle,
 } from "lucide-react";
 import { api } from "../../api/client";
-import { NetworkSettings, NetworkPolicy, CloudflareDNSConfig, DNSSyncResult, ConfigTemplate } from "../../types/api";
+import { NetworkSettings, NetworkPolicy, CloudflareDNSConfig, DNSSyncResult, ConfigTemplate, ServerTask } from "../../types/api";
 
 export const parsePrefixList = (input: string): string[] => {
   const result: string[] = [];
@@ -144,7 +148,7 @@ export const EXPORT_FILTER_EXAMPLES = [
   },
 ];
 
-export type SettingsTab = "security" | "network" | "policies" | "templates" | "dns";
+export type SettingsTab = "security" | "network" | "policies" | "templates" | "dns" | "tasks";
 
 const VALID_TABS: Record<string, SettingsTab> = {
   security: "security",
@@ -154,6 +158,7 @@ const VALID_TABS: Record<string, SettingsTab> = {
   policies: "policies",
   templates: "templates",
   dns: "dns",
+  tasks: "tasks",
 };
 
 interface SettingsModalProps {
@@ -212,6 +217,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
   const [dnsError, setDnsError] = useState<string | null>(null);
   const [dnsSuccess, setDnsSuccess] = useState<string | null>(null);
   const [dnsSyncResult, setDnsSyncResult] = useState<DNSSyncResult | null>(null);
+
+  // Server Background Tasks state
+  const [serverTasks, setServerTasks] = useState<ServerTask[]>([]);
+  const [tasksLoading, setTasksLoading] = useState(false);
+  const [tasksError, setTasksError] = useState<string | null>(null);
+  const [tasksSuccess, setTasksSuccess] = useState<string | null>(null);
+  const [taskCronDraft, setTaskCronDraft] = useState<Record<string, string>>({});
+  const [taskEnabledDraft, setTaskEnabledDraft] = useState<Record<string, boolean>>({});
+  const [savingTaskId, setSavingTaskId] = useState<string | null>(null);
+  const [runningTaskId, setRunningTaskId] = useState<string | null>(null);
 
   // Password change state
   const [currentPassword, setCurrentPassword] = useState("");
@@ -558,6 +573,151 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
       setDnsSyncing(false);
       setDnsForceSyncing(false);
     }
+  };
+
+  // Load Server Tasks when Tasks tab is opened
+  React.useEffect(() => {
+    if (activeTab === "tasks") {
+      loadServerTasks();
+    }
+  }, [activeTab]);
+
+  const loadServerTasks = async () => {
+    setTasksLoading(true);
+    setTasksError(null);
+    try {
+      const data = await api.getServerTasks();
+      setServerTasks(data);
+      const crons: Record<string, string> = {};
+      const enabledMap: Record<string, boolean> = {};
+      data.forEach((t) => {
+        crons[t.id] = t.cron_expr;
+        enabledMap[t.id] = t.enabled;
+      });
+      setTaskCronDraft(crons);
+      setTaskEnabledDraft(enabledMap);
+    } catch (err: unknown) {
+      const e = err as Error;
+      setTasksError(e.message || "Failed to load background tasks.");
+    } finally {
+      setTasksLoading(false);
+    }
+  };
+
+  const handleSaveTaskConfig = async (taskId: string) => {
+    const cronExpr = (taskCronDraft[taskId] || "0 0 * * *").trim();
+    const enabled = taskEnabledDraft[taskId] !== undefined ? taskEnabledDraft[taskId] : true;
+    setSavingTaskId(taskId);
+    setTasksError(null);
+    setTasksSuccess(null);
+    try {
+      const updated = await api.updateServerTask(taskId, { cron_expr: cronExpr, enabled });
+      setServerTasks((prev) => prev.map((t) => (t.id === taskId ? updated : t)));
+      setTaskCronDraft((prev) => ({ ...prev, [taskId]: updated.cron_expr }));
+      setTaskEnabledDraft((prev) => ({ ...prev, [taskId]: updated.enabled }));
+      setTasksSuccess(`Successfully updated configuration for "${updated.name}".`);
+    } catch (err: unknown) {
+      const e = err as Error;
+      setTasksError(e.message || `Failed to update task ${taskId}.`);
+    } finally {
+      setSavingTaskId(null);
+    }
+  };
+
+  const handleRunTaskImmediately = async (taskId: string) => {
+    setRunningTaskId(taskId);
+    setTasksError(null);
+    setTasksSuccess(null);
+    try {
+      const updated = await api.runServerTask(taskId);
+      setServerTasks((prev) => prev.map((t) => (t.id === taskId ? updated : t)));
+      if (updated.last_status === "error") {
+        setTasksError(`Task "${updated.name}" encountered error: ${updated.last_message}`);
+      } else {
+        setTasksSuccess(`Task "${updated.name}" executed successfully: ${updated.last_message}`);
+      }
+    } catch (err: unknown) {
+      const e = err as Error;
+      setTasksError(e.message || `Failed to run task ${taskId}.`);
+      await loadServerTasks();
+    } finally {
+      setRunningTaskId(null);
+    }
+  };
+
+  const formatDateTime = (isoStr?: string) => {
+    if (!isoStr) return "Never";
+    const d = new Date(isoStr);
+    if (isNaN(d.getTime())) return isoStr;
+    return d.toLocaleString(undefined, {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    });
+  };
+
+  const formatRelativeTime = (isoStr?: string) => {
+    if (!isoStr) return "";
+    const d = new Date(isoStr);
+    if (isNaN(d.getTime())) return "";
+    const diffSec = Math.floor((Date.now() - d.getTime()) / 1000);
+    if (diffSec < 5) return "just now";
+    if (diffSec < 60) return `${diffSec}s ago`;
+    const diffMin = Math.floor(diffSec / 60);
+    if (diffMin < 60) return `${diffMin}m ago`;
+    const diffHr = Math.floor(diffMin / 60);
+    if (diffHr < 24) return `${diffHr}h ago`;
+    const diffDay = Math.floor(diffHr / 24);
+    return `${diffDay}d ago`;
+  };
+
+  const getCronHumanSummary = (expr?: string) => {
+    if (!expr) return "Daily schedule (default)";
+    const trimmed = expr.trim().replace(/\s+/g, " ");
+    const match = trimmed.match(/^(\d{1,2})\s+(\d{1,2})\s+\*\s+\*\s+\*$/);
+    if (match) {
+      const min = parseInt(match[1], 10);
+      const hour = parseInt(match[2], 10);
+      if (min >= 0 && min < 60 && hour >= 0 && hour < 24) {
+        const timeStr = `${hour.toString().padStart(2, "0")}:${min.toString().padStart(2, "0")}`;
+        return `Once every day at ${timeStr}`;
+      }
+    }
+    if (trimmed === "0 */12 * * *") return "Every 12 hours";
+    if (trimmed === "0 */6 * * *") return "Every 6 hours";
+    if (trimmed === "0 */2 * * *") return "Every 2 hours";
+    if (trimmed === "0 * * * *") return "Every hour at minute 0";
+    if (trimmed === "*/30 * * * *") return "Every 30 minutes";
+    if (trimmed === "*/15 * * * *") return "Every 15 minutes";
+    if (trimmed === "*/5 * * * *") return "Every 5 minutes";
+    return "Custom schedule";
+  };
+
+  const getTaskCronPresets = (expr?: string) => {
+    const trimmed = (expr || "").trim().replace(/\s+/g, " ");
+    const match = trimmed.match(/^(\d{1,2})\s+(\d{1,2})\s+\*\s+\*\s+\*$/);
+    let dailyLabel = "Daily (00:00)";
+    let dailyValue = "0 0 * * *";
+
+    if (match) {
+      const min = parseInt(match[1], 10);
+      const hour = parseInt(match[2], 10);
+      if (min >= 0 && min < 60 && hour >= 0 && hour < 24) {
+        const timeStr = `${hour.toString().padStart(2, "0")}:${min.toString().padStart(2, "0")}`;
+        dailyLabel = `Daily (${timeStr})`;
+        dailyValue = `${min} ${hour} * * *`;
+      }
+    }
+
+    return [
+      { label: dailyLabel, value: dailyValue },
+      { label: "Every 12h", value: "0 */12 * * *" },
+      { label: "Every 6h", value: "0 */6 * * *" },
+      { label: "Every 1h", value: "0 * * * *" },
+    ];
   };
 
   const loadPolicies = async () => {
@@ -1036,6 +1196,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
             <Tab value="policies" icon={<Shield size={16} />} iconPosition="start" label="Network Policies" />
             <Tab value="templates" icon={<FileCode size={16} />} iconPosition="start" label="Config Template" />
             <Tab value="dns" icon={<Cloud size={16} />} iconPosition="start" label="DNS" />
+            <Tab value="tasks" icon={<CalendarClock size={16} />} iconPosition="start" label="Tasks" />
           </Tabs>
         </Box>
 
@@ -2621,6 +2782,499 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
               )}
             </DialogContent>
           </form>
+        )}
+
+        {/* Tab: Server Background Tasks */}
+        {activeTab === "tasks" && (
+          <Box sx={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, overflow: "hidden" }}>
+            <DialogContent
+              sx={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 2.5,
+                py: 3,
+                px: 3,
+                flex: 1,
+                minHeight: 0,
+                overflowY: "auto",
+              }}
+            >
+              {/* Header description */}
+              <Box
+                sx={{
+                  p: 2,
+                  borderRadius: 2,
+                  bgcolor: "#F8FAFC",
+                  border: "1px solid #E2E8F0",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 2,
+                }}
+              >
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+                  <Box
+                    sx={{
+                      width: 40,
+                      height: 40,
+                      borderRadius: 2,
+                      bgcolor: "#EEF2FF",
+                      color: "#4F46E5",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      flexShrink: 0,
+                    }}
+                  >
+                    <CalendarClock size={22} />
+                  </Box>
+                  <Box>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0F172A", fontSize: "0.95rem" }}>
+                      Server Background Tasks
+                    </Typography>
+                    <Typography variant="body2" sx={{ color: "#64748B", fontSize: "0.85rem", lineHeight: 1.4 }}>
+                      Central management for easy42 background tasks. The task list is immutable; configure schedules, toggle automation, or run any task on demand.
+                    </Typography>
+                  </Box>
+                </Box>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  startIcon={<RefreshCw size={14} />}
+                  onClick={loadServerTasks}
+                  disabled={tasksLoading}
+                  sx={{
+                    textTransform: "none",
+                    fontWeight: 600,
+                    flexShrink: 0,
+                    borderColor: "#CBD5E1",
+                    color: "#334155",
+                    "&:hover": { borderColor: "#94A3B8", bgcolor: "#F1F5F9" },
+                  }}
+                >
+                  {tasksLoading ? "Refreshing..." : "Refresh"}
+                </Button>
+              </Box>
+
+              {tasksSuccess && (
+                <Alert icon={<CheckCircle2 size={18} />} severity="success" sx={{ borderRadius: 2 }}>
+                  {tasksSuccess}
+                </Alert>
+              )}
+
+              {tasksError && (
+                <Alert severity="error" icon={<AlertCircle size={18} />} sx={{ borderRadius: 2 }}>
+                  {tasksError}
+                </Alert>
+              )}
+
+              {tasksLoading && serverTasks.length === 0 ? (
+                <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", py: 8 }}>
+                  <CircularProgress size={32} />
+                </Box>
+              ) : (
+                <Box sx={{ display: "flex", flexDirection: "column", gap: 2.5 }}>
+                  {serverTasks.map((task) => {
+                    const isRunning = runningTaskId === task.id || task.last_status === "running";
+                    const isSaving = savingTaskId === task.id;
+                    const draftCron = taskCronDraft[task.id] !== undefined ? taskCronDraft[task.id] : task.cron_expr;
+                    const draftEnabled = taskEnabledDraft[task.id] !== undefined ? taskEnabledDraft[task.id] : task.enabled;
+                    const hasChanges = draftCron !== task.cron_expr || draftEnabled !== task.enabled;
+
+                    const getTaskIcon = (id: string) => {
+                      switch (id) {
+                        case "update_roa":
+                          return <Globe size={20} color="#2563EB" />;
+                        case "sync":
+                          return <Zap size={20} color="#7C3AED" />;
+                        case "sync_dns":
+                          return <Cloud size={20} color="#0284C7" />;
+                        default:
+                          return <Activity size={20} color="#4F46E5" />;
+                      }
+                    };
+
+                    const getTaskBg = (id: string) => {
+                      switch (id) {
+                        case "update_roa":
+                          return "#EFF6FF";
+                        case "sync":
+                          return "#F5F3FF";
+                        case "sync_dns":
+                          return "#F0F9FF";
+                        default:
+                          return "#EEF2FF";
+                      }
+                    };
+
+                    return (
+                      <Paper
+                        key={task.id}
+                        elevation={0}
+                        sx={{
+                          p: 2.5,
+                          borderRadius: 2.5,
+                          border: "1px solid #E2E8F0",
+                          bgcolor: "#FFFFFF",
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: 2,
+                          boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
+                        }}
+                      >
+                        {/* Task Card Header */}
+                        <Box sx={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 2 }}>
+                          <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+                            <Box
+                              sx={{
+                                width: 40,
+                                height: 40,
+                                borderRadius: 2,
+                                bgcolor: getTaskBg(task.id),
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                flexShrink: 0,
+                              }}
+                            >
+                              {getTaskIcon(task.id)}
+                            </Box>
+                            <Box>
+                              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                                <Typography sx={{ fontWeight: 700, fontSize: "1.05rem", color: "#0F172A" }}>
+                                  {task.name}
+                                </Typography>
+                                <Chip
+                                  size="small"
+                                  label={task.id}
+                                  sx={{
+                                    fontFamily: "monospace",
+                                    fontSize: "0.72rem",
+                                    fontWeight: 600,
+                                    height: 20,
+                                    bgcolor: "#F1F5F9",
+                                    color: "#475569",
+                                  }}
+                                />
+                                <Chip
+                                  size="small"
+                                  label="Predefined"
+                                  sx={{
+                                    fontSize: "0.72rem",
+                                    fontWeight: 600,
+                                    height: 20,
+                                    bgcolor: "#EDE9FE",
+                                    color: "#6D28D9",
+                                  }}
+                                />
+                              </Box>
+                              <Typography variant="body2" sx={{ color: "#64748B", fontSize: "0.85rem", mt: 0.3 }}>
+                                {task.description}
+                              </Typography>
+                            </Box>
+                          </Box>
+
+                          <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexShrink: 0 }}>
+                            {/* Status Chip */}
+                            {isRunning ? (
+                              <Chip
+                                size="small"
+                                icon={<CircularProgress size={12} color="inherit" />}
+                                label="Running"
+                                sx={{ bgcolor: "#DBEAFE", color: "#1D4ED8", fontWeight: 700, fontSize: "0.8rem" }}
+                              />
+                            ) : task.last_status === "success" ? (
+                              <Chip
+                                size="small"
+                                icon={<CheckCircle2 size={13} color="#15803D" />}
+                                label="Success"
+                                sx={{ bgcolor: "#DCFCE7", color: "#15803D", fontWeight: 700, fontSize: "0.8rem" }}
+                              />
+                            ) : task.last_status === "error" ? (
+                              <Chip
+                                size="small"
+                                icon={<AlertCircle size={13} color="#B91C1C" />}
+                                label="Failed"
+                                sx={{ bgcolor: "#FEE2E2", color: "#B91C1C", fontWeight: 700, fontSize: "0.8rem" }}
+                              />
+                            ) : (
+                              <Chip
+                                size="small"
+                                icon={<Clock size={13} color="#64748B" />}
+                                label="Never Run"
+                                sx={{ bgcolor: "#F1F5F9", color: "#64748B", fontWeight: 600, fontSize: "0.8rem" }}
+                              />
+                            )}
+
+                            {/* Run Now Button */}
+                            <Button
+                              variant="outlined"
+                              size="small"
+                              startIcon={
+                                isRunning ? (
+                                  <CircularProgress size={14} color="inherit" />
+                                ) : (
+                                  <Play size={14} fill="currentColor" />
+                                )
+                              }
+                              onClick={() => handleRunTaskImmediately(task.id)}
+                              disabled={isRunning || isSaving || runningTaskId !== null}
+                              sx={{
+                                textTransform: "none",
+                                fontWeight: 600,
+                                borderColor: "#4F46E5",
+                                color: "#4F46E5",
+                                "&:hover": { borderColor: "#4338CA", bgcolor: "rgba(79, 70, 229, 0.04)" },
+                              }}
+                            >
+                              {isRunning ? "Running..." : "Run Now"}
+                            </Button>
+                          </Box>
+                        </Box>
+
+                        <Divider sx={{ borderColor: "#F1F5F9" }} />
+
+                        {/* Schedule Configuration Box */}
+                        <Box
+                          sx={{
+                            p: 2,
+                            borderRadius: 2,
+                            bgcolor: "#F8FAFC",
+                            border: "1px solid #E2E8F0",
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: 1.8,
+                          }}
+                        >
+                          <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 1 }}>
+                            <FormControlLabel
+                              control={
+                                <Switch
+                                  checked={draftEnabled}
+                                  onChange={(e) =>
+                                    setTaskEnabledDraft((prev) => ({ ...prev, [task.id]: e.target.checked }))
+                                  }
+                                  color="primary"
+                                />
+                              }
+                              label={
+                                <Typography
+                                  sx={{
+                                    fontWeight: 600,
+                                    fontSize: "0.875rem",
+                                    color: draftEnabled ? "#0F172A" : "#64748B",
+                                  }}
+                                >
+                                  {draftEnabled ? "Automated Execution Active" : "Automated Execution Disabled"}
+                                </Typography>
+                              }
+                            />
+
+                            <Button
+                              variant="contained"
+                              size="small"
+                              onClick={() => handleSaveTaskConfig(task.id)}
+                              disabled={!hasChanges || isSaving}
+                              startIcon={isSaving && <CircularProgress size={14} color="inherit" />}
+                              sx={{
+                                textTransform: "none",
+                                fontWeight: 600,
+                                bgcolor: "#4F46E5",
+                                "&:hover": { bgcolor: "#4338CA" },
+                              }}
+                            >
+                              {isSaving ? "Saving..." : "Save Settings"}
+                            </Button>
+                          </Box>
+
+                          <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                            <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, flexWrap: "wrap" }}>
+                              <TextField
+                                size="small"
+                                label="Cron Expression"
+                                value={draftCron}
+                                onChange={(e) =>
+                                  setTaskCronDraft((prev) => ({ ...prev, [task.id]: e.target.value }))
+                                }
+                                placeholder="0 0 * * *"
+                                helperText={getCronHumanSummary(draftCron)}
+                                sx={{
+                                  width: { xs: "100%", sm: 260 },
+                                  "& .MuiInputBase-input": { fontFamily: "monospace", fontWeight: 600 },
+                                }}
+                              />
+
+                              <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 0.8, mt: { xs: 0, sm: -2 } }}>
+                                <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600, mr: 0.5 }}>
+                                  Presets:
+                                </Typography>
+                                {getTaskCronPresets(draftCron).map((preset) => {
+                                  const normalizedDraft = (draftCron || "").trim().replace(/\s+/g, " ");
+                                  const isSelected = normalizedDraft === preset.value;
+                                  return (
+                                    <Chip
+                                      key={preset.label}
+                                      size="small"
+                                      label={preset.label}
+                                      clickable
+                                      variant={isSelected ? "filled" : "outlined"}
+                                      onClick={() =>
+                                        setTaskCronDraft((prev) => ({ ...prev, [task.id]: preset.value }))
+                                      }
+                                      sx={{
+                                        fontSize: "0.75rem",
+                                        fontWeight: 500,
+                                        bgcolor: isSelected ? "#4F46E5" : "transparent",
+                                        color: isSelected ? "#FFFFFF" : "#475569",
+                                        borderColor: "#CBD5E1",
+                                      }}
+                                    />
+                                  );
+                                })}
+                              </Box>
+                            </Box>
+                          </Box>
+                        </Box>
+
+                        {/* Execution State & Telemetry */}
+                        <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+                          <Box
+                            sx={{
+                              display: "grid",
+                              gridTemplateColumns: { xs: "1fr", sm: "1fr 1.2fr 0.8fr" },
+                              gap: 1.5,
+                            }}
+                          >
+                            <Box
+                              sx={{
+                                p: 1.5,
+                                borderRadius: 1.5,
+                                bgcolor: "#F8FAFC",
+                                border: "1px solid #E2E8F0",
+                                display: "flex",
+                                flexDirection: "column",
+                                gap: 0.3,
+                              }}
+                            >
+                              <Box sx={{ display: "flex", alignItems: "center", gap: 0.8, color: "#64748B" }}>
+                                <CalendarClock size={14} />
+                                <Typography variant="caption" sx={{ fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                                  Next Run
+                                </Typography>
+                              </Box>
+                              <Typography variant="body2" sx={{ fontWeight: 600, color: "#1E293B" }}>
+                                {draftEnabled && task.next_run ? formatDateTime(task.next_run) : draftEnabled ? "Scheduled" : "Disabled"}
+                              </Typography>
+                            </Box>
+
+                            <Box
+                              sx={{
+                                p: 1.5,
+                                borderRadius: 1.5,
+                                bgcolor: "#F8FAFC",
+                                border: "1px solid #E2E8F0",
+                                display: "flex",
+                                flexDirection: "column",
+                                gap: 0.3,
+                              }}
+                            >
+                              <Box sx={{ display: "flex", alignItems: "center", gap: 0.8, color: "#64748B" }}>
+                                <Clock size={14} />
+                                <Typography variant="caption" sx={{ fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                                  Last Executed
+                                </Typography>
+                              </Box>
+                              <Typography variant="body2" sx={{ fontWeight: 600, color: "#1E293B" }}>
+                                {task.last_run ? (
+                                  <>
+                                    {formatDateTime(task.last_run)}{" "}
+                                    <span style={{ color: "#64748B", fontWeight: 400 }}>({formatRelativeTime(task.last_run)})</span>
+                                  </>
+                                ) : (
+                                  "Never executed"
+                                )}
+                              </Typography>
+                            </Box>
+
+                            <Box
+                              sx={{
+                                p: 1.5,
+                                borderRadius: 1.5,
+                                bgcolor: "#F8FAFC",
+                                border: "1px solid #E2E8F0",
+                                display: "flex",
+                                flexDirection: "column",
+                                gap: 0.3,
+                              }}
+                            >
+                              <Box sx={{ display: "flex", alignItems: "center", gap: 0.8, color: "#64748B" }}>
+                                <Activity size={14} />
+                                <Typography variant="caption" sx={{ fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                                  Duration
+                                </Typography>
+                              </Box>
+                              <Typography variant="body2" sx={{ fontWeight: 600, color: "#1E293B" }}>
+                                {task.last_run ? `${task.last_duration_ms} ms` : "—"}
+                              </Typography>
+                            </Box>
+                          </Box>
+
+                          {/* Last Result Box */}
+                          {task.last_message && (
+                            <Box
+                              sx={{
+                                p: 1.5,
+                                borderRadius: 1.5,
+                                bgcolor: task.last_status === "error" ? "#FEF2F2" : task.last_status === "success" ? "#F0FDF4" : "#F8FAFC",
+                                border: task.last_status === "error" ? "1px solid #FECACA" : task.last_status === "success" ? "1px solid #BBF7D0" : "1px solid #E2E8F0",
+                                display: "flex",
+                                alignItems: "flex-start",
+                                gap: 1.2,
+                              }}
+                            >
+                              {task.last_status === "error" ? (
+                                <AlertCircle size={16} color="#DC2626" style={{ marginTop: 2, flexShrink: 0 }} />
+                              ) : task.last_status === "success" ? (
+                                <CheckCircle2 size={16} color="#16A34A" style={{ marginTop: 2, flexShrink: 0 }} />
+                              ) : (
+                                <Activity size={16} color="#475569" style={{ marginTop: 2, flexShrink: 0 }} />
+                              )}
+                              <Box sx={{ flex: 1, minWidth: 0 }}>
+                                <Typography
+                                  variant="caption"
+                                  sx={{
+                                    fontWeight: 700,
+                                    textTransform: "uppercase",
+                                    letterSpacing: "0.04em",
+                                    color: task.last_status === "error" ? "#991B1B" : task.last_status === "success" ? "#166534" : "#475569",
+                                    display: "block",
+                                    mb: 0.3,
+                                  }}
+                                >
+                                  {task.last_status === "error" ? "Execution Error" : "Execution Result"}
+                                </Typography>
+                                <Typography
+                                  variant="body2"
+                                  sx={{
+                                    fontFamily: "monospace",
+                                    fontSize: "0.82rem",
+                                    color: task.last_status === "error" ? "#B91C1C" : task.last_status === "success" ? "#15803D" : "#334155",
+                                    wordBreak: "break-all",
+                                  }}
+                                >
+                                  {task.last_message}
+                                </Typography>
+                              </Box>
+                            </Box>
+                          )}
+                        </Box>
+                      </Paper>
+                    );
+                  })}
+                </Box>
+              )}
+            </DialogContent>
+          </Box>
         )}
 
         {/* Sub-dialog: Policy Editor & Viewer */}

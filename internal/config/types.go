@@ -153,6 +153,14 @@ type Config struct {
 	Blocks            []Block            `json:"blocks,omitempty"`
 	DNS               DNSConfig          `json:"dns,omitempty"`
 	Templates         []ConfigTemplate   `json:"templates,omitempty"`
+	ServerTasks       []ServerTaskConfig `json:"server_tasks,omitempty"`
+}
+
+// ServerTaskConfig represents user-configurable settings for a server background task
+type ServerTaskConfig struct {
+	ID       string `json:"id"`
+	CronExpr string `json:"cron_expr"`
+	Enabled  bool   `json:"enabled"`
 }
 
 // PortSpec handles single ports (51820), port ranges ("2000-2999"), or object ({port, external_port})

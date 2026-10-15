@@ -81,6 +81,7 @@ var serveCmd = &cobra.Command{
 		}
 
 		mgr := engine.NewManager(store)
+		mgr.StartServerTasks(context.Background())
 		mgr.StartROABackgroundRefresher(context.Background(), 1*time.Hour)
 		distFS, err := web.DistFS()
 		if err != nil {

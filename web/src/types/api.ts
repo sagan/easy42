@@ -632,3 +632,16 @@ export interface NodeCronTasksResultsResponse {
   tasks: CronTask[];
 }
 
+export interface ServerTask {
+  id: string;
+  name: string;
+  description: string;
+  cron_expr: string;
+  enabled: boolean;
+  next_run?: string;
+  last_run?: string;
+  last_status: "never_run" | "running" | "success" | "error";
+  last_duration_ms: number;
+  last_message: string;
+}
+

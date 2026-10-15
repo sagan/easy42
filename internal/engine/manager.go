@@ -39,10 +39,12 @@ type Manager struct {
 	roaManager  *roa.Manager
 	agentHub    *agent.Hub
 	serverURL   string
-	statuses    map[string]*config.NodeStatus
-	lastSync    time.Time
-	lastResults []config.SyncResult
-	stopCh      chan struct{}
+	statuses      map[string]*config.NodeStatus
+	lastSync      time.Time
+	lastResults   []config.SyncResult
+	stopCh        chan struct{}
+	serverTasksMu sync.Mutex
+	runningTasks  map[string]bool
 }
 
 // NewManager creates a new Manager instance
@@ -51,15 +53,16 @@ func NewManager(store *config.Store) *Manager {
 	_, _ = stateStore.Load()
 	roaManager := roa.NewManager(filepath.Join(store.DataDir(), "cache", "roa"))
 	m := &Manager{
-		store:       store,
-		stateStore:  stateStore,
-		vault:       crypto.NewKeyVault(),
-		pool:        ssh.NewClientPool(),
-		roaManager:  roaManager,
-		agentHub:    agent.NewHub(),
-		statuses:    make(map[string]*config.NodeStatus),
-		lastResults: make([]config.SyncResult, 0),
-		stopCh:      make(chan struct{}),
+		store:        store,
+		stateStore:   stateStore,
+		vault:        crypto.NewKeyVault(),
+		pool:         ssh.NewClientPool(),
+		roaManager:   roaManager,
+		agentHub:     agent.NewHub(),
+		statuses:     make(map[string]*config.NodeStatus),
+		lastResults:  make([]config.SyncResult, 0),
+		stopCh:       make(chan struct{}),
+		runningTasks: make(map[string]bool),
 	}
 	m.setupAgentMetricsListeners()
 	m.setupAgentCronTasksListeners()

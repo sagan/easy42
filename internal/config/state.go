@@ -268,6 +268,14 @@ func (s *StateStore) initDBLocked() error {
 
 	CREATE INDEX IF NOT EXISTS idx_cron_task_results_node_time ON cron_task_results(node_name, executed_at);
 	CREATE INDEX IF NOT EXISTS idx_cron_task_results_task_time ON cron_task_results(task_id, executed_at);
+
+	CREATE TABLE IF NOT EXISTS server_task_states (
+		task_id TEXT PRIMARY KEY,
+		last_run INTEGER NOT NULL DEFAULT 0,
+		last_status TEXT NOT NULL DEFAULT '',
+		last_duration_ms INTEGER NOT NULL DEFAULT 0,
+		last_message TEXT NOT NULL DEFAULT ''
+	);
 	`
 
 	if _, err := db.Exec(schema); err != nil {
@@ -1340,5 +1348,90 @@ func (s *StateStore) CleanCronResultsOlderThan(retention time.Duration) (int64, 
 		return 0, err
 	}
 	return res.RowsAffected()
+}
+
+// ServerTaskState represents the recorded state of a server background task
+type ServerTaskState struct {
+	TaskID         string    `json:"task_id"`
+	LastRun        time.Time `json:"last_run"`
+	LastStatus     string    `json:"last_status"` // "never_run", "idle", "running", "success", "error"
+	LastDurationMs int64     `json:"last_duration_ms"`
+	LastMessage    string    `json:"last_message"`
+}
+
+// RecordServerTaskState records or updates execution state of a server background task
+func (s *StateStore) RecordServerTaskState(state ServerTaskState) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if err := s.initDBLocked(); err != nil {
+		return err
+	}
+
+	var lastRunUnix int64
+	if !state.LastRun.IsZero() {
+		lastRunUnix = state.LastRun.Unix()
+	}
+
+	_, err := s.db.Exec(`
+		INSERT INTO server_task_states (task_id, last_run, last_status, last_duration_ms, last_message)
+		VALUES (?, ?, ?, ?, ?)
+		ON CONFLICT(task_id) DO UPDATE SET
+			last_run = excluded.last_run,
+			last_status = excluded.last_status,
+			last_duration_ms = excluded.last_duration_ms,
+			last_message = excluded.last_message
+	`, state.TaskID, lastRunUnix, state.LastStatus, state.LastDurationMs, state.LastMessage)
+
+	return err
+}
+
+// GetServerTaskStates retrieves recorded execution states of all server background tasks
+func (s *StateStore) GetServerTaskStates() (map[string]ServerTaskState, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if s.db == nil {
+		return map[string]ServerTaskState{}, nil
+	}
+
+	rows, err := s.db.Query(`
+		SELECT task_id, last_run, last_status, last_duration_ms, last_message
+		FROM server_task_states
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	states := make(map[string]ServerTaskState)
+	for rows.Next() {
+		var (
+			taskID         string
+			lastRunUnix    int64
+			lastStatus     string
+			lastDurationMs int64
+			lastMessage    string
+		)
+		if err := rows.Scan(&taskID, &lastRunUnix, &lastStatus, &lastDurationMs, &lastMessage); err == nil {
+			var lastRun time.Time
+			if lastRunUnix > 0 {
+				lastRun = time.Unix(lastRunUnix, 0)
+			}
+			states[taskID] = ServerTaskState{
+				TaskID:         taskID,
+				LastRun:        lastRun,
+				LastStatus:     lastStatus,
+				LastDurationMs: lastDurationMs,
+				LastMessage:    lastMessage,
+			}
+		}
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return states, nil
 }
 
