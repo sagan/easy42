@@ -66,6 +66,7 @@ import {
   ServerTask,
   DatabaseInfo,
 } from "../../types/api";
+import { ViewNetworkPolicyModal } from "./ViewNetworkPolicyModal";
 
 export const parsePrefixList = (input: string): string[] => {
   const result: string[] = [];
@@ -281,9 +282,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
 
   // Policy editor / viewer dialog state
   const [policyDialogOpen, setPolicyDialogOpen] = useState(false);
-  const [policyDialogMode, setPolicyDialogMode] = useState<"view" | "edit" | "create">("view");
+  const [policyDialogMode, setPolicyDialogMode] = useState<"view" | "edit" | "create">("edit");
   const [policyDialogError, setPolicyDialogError] = useState<string | null>(null);
   const [policyDialogSaving, setPolicyDialogSaving] = useState(false);
+
+  // Standalone View Policy Modal
+  const [viewPolicyModalOpen, setViewPolicyModalOpen] = useState(false);
+  const [policyToView, setPolicyToView] = useState<NetworkPolicy | null>(null);
 
   const [policyId, setPolicyId] = useState("");
   const [policyName, setPolicyName] = useState("");
@@ -916,43 +921,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
   };
 
   const handleOpenViewPolicy = (p: NetworkPolicy) => {
-    setPolicyDialogMode("view");
-    setPolicyId(p.id);
-    setPolicyName(p.name);
-    setPolicyDesc(p.description || "");
-    setPolicyCost(p.cost ?? 100);
-    setPolicyAllowedDst((p.allowed_dst_cidrs || []).join("\n"));
-    setPolicyAllowedSrc((p.allowed_src_cidrs || []).join("\n"));
-    setPolicyDisallowedDst((p.disallowed_dst_cidrs || []).join("\n"));
-    setPolicyDisallowedSrc((p.disallowed_src_cidrs || []).join("\n"));
-    setPolicyLocalNetworks((p.local_networks || []).join("\n"));
-    setPolicyRejectInternet(Boolean(p.reject_internet));
-    setPolicyFilterForward(Boolean(p.filter_forward));
-    setPolicyFilterInput(Boolean(p.filter_input));
-    setPolicyInputAllowIcmp(p.input_allow_icmp !== false);
-    setPolicyInputAllowIcmp6(p.input_allow_icmp6 !== false);
-    setPolicyInputTcpPorts((p.input_tcp_ports || []).join(", "));
-    setPolicyInputUdpPorts((p.input_udp_ports || []).join(", "));
-    setPolicySnatEnabled(Boolean(p.snat?.enabled));
-    setPolicySnatCondition(p.snat?.condition || "not_dst");
-    setPolicySnatTarget(p.snat?.target || "masquerade");
-    setPolicyForwardSnat(Boolean(p.forward_snat));
-    setPolicyForwardSnatTarget(p.forward_snat_target || "masquerade");
-    setPolicyRoa4(p.roa4 || "");
-    setPolicyRoa6(p.roa6 || "");
-    setPolicyRoaStrict(Boolean(p.roa_strict));
-    setPolicyDscpIngress(p.dscp_ingress ?? "");
-    setPolicyDscpEgress(p.dscp_egress ?? "");
-    setPolicyFwmark(p.fwmark || "");
-    setPolicyPreference(p.preference !== undefined ? p.preference : "");
-    setPolicyMark(p.mark || "");
-    setPolicyRoutingPolicy(p.routing_policy || "full");
-    setPolicyBlockIngressNew(p.block_ingress_new || "");
-    setPolicyIngressNewWhitelist((p.ingress_new_whitelist || []).join("\n"));
-    setPolicyBirdImportFilter(p.bird_import_filter || "");
-    setPolicyBirdExportFilter(p.bird_export_filter || p.bird_export_fillter || "");
-    setPolicyDialogError(null);
-    setPolicyDialogOpen(true);
+    setPolicyToView(p);
+    setViewPolicyModalOpen(true);
   };
 
   const handleOpenEditPolicy = (p: NetworkPolicy) => {
@@ -4764,6 +4734,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
             </DialogActions>
           </form>
         </Dialog>
+
+        {/* Standalone View Network Policy Modal */}
+        <ViewNetworkPolicyModal
+          open={viewPolicyModalOpen}
+          onClose={() => setViewPolicyModalOpen(false)}
+          policy={policyToView}
+          onEdit={(p) => handleOpenEditPolicy(p)}
+        />
 
         {/* Template Create / Edit / View Dialog */}
         <Dialog open={templateDialogOpen} onClose={() => setTemplateDialogOpen(false)} maxWidth="md" fullWidth>

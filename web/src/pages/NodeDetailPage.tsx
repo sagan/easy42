@@ -69,13 +69,51 @@ import {
   Zap,
   Terminal,
   Clock,
+  Key,
+  ChevronDown,
 } from "lucide-react";
 import { useMesh } from "../context/MeshContext";
 import { api } from "../api/client";
-import { Node, NodeMetricPoint, GraphBlock } from "../types/api";
+import { Node, NodeMetricPoint, GraphBlock, Link, NetworkPolicy } from "../types/api";
 import { MetricAreaChart } from "../components/Nodes/MetricAreaChart";
 import { MarkdownView } from "../components/Common/MarkdownView";
 import { NodeCronTasksTab } from "../components/Nodes/NodeCronTasksTab";
+import { getLinkWorkingState, isManualLink } from "../components/Topology/TopologyGraph";
+import { extractPort } from "../utils/endpoint";
+import { ViewNetworkPolicyModal } from "../components/Modals/ViewNetworkPolicyModal";
+
+const getHandshakeRelativeLabel = (dateStr?: string): { text: string; isHealthy: boolean } => {
+  if (!dateStr || dateStr === "None" || dateStr.trim() === "") {
+    return { text: "Never", isHealthy: false };
+  }
+  const date = new Date(dateStr);
+  const time = date.getTime();
+  if (isNaN(time) || time <= 0 || date.getFullYear() < 2020) {
+    return { text: "Never", isHealthy: false };
+  }
+
+  const diffSec = Math.floor((Date.now() - time) / 1000);
+
+  // WireGuard re-keys every ~3 minutes; allow slightly longer timespan (~5 minutes / 300s)
+  // and clock skew
+  if (diffSec <= 300 && diffSec >= -300) {
+    return { text: "Recent", isHealthy: true };
+  }
+  if (diffSec < -300) {
+    return { text: "Recent", isHealthy: true };
+  }
+
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) {
+    return { text: `${diffMin}min ago`, isHealthy: false };
+  }
+  const diffHours = Math.floor(diffMin / 60);
+  if (diffHours < 24) {
+    return { text: `${diffHours}h ago`, isHealthy: false };
+  }
+  const diffDays = Math.floor(diffHours / 24);
+  return { text: `${diffDays}d ago`, isHealthy: false };
+};
 
 const formatBytes = (bytes?: number): string => {
   if (!bytes || isNaN(bytes) || bytes <= 0) return "0 B";
@@ -114,6 +152,8 @@ export const NodeDetailPage: React.FC = () => {
     blocks,
     links,
     nodeStatuses,
+    networkState,
+    networkPolicies,
     fleetLive,
     loadData,
     refreshFleetLive,
@@ -123,6 +163,8 @@ export const NodeDetailPage: React.FC = () => {
     setAddNodeOpen,
     setNodeToRename,
     setRenameModalOpen,
+    setLinkToEdit,
+    setAddLinkOpen,
     setSyncTargetNode,
     setSyncOpen,
     setStateToast,
@@ -221,6 +263,19 @@ export const NodeDetailPage: React.FC = () => {
   const [generatingToken, setGeneratingToken] = useState(false);
   const [uninstallModalOpen, setUninstallModalOpen] = useState(false);
   const [uninstallingAgent, setUninstallingAgent] = useState(false);
+
+  // View Policy Modal
+  const [viewPolicyModalOpen, setViewPolicyModalOpen] = useState(false);
+  const [policyToView, setPolicyToView] = useState<NetworkPolicy | null>(null);
+
+  // Link Actions Dropdown Menu
+  const [linkMenuAnchor, setLinkMenuAnchor] = useState<{
+    el: HTMLElement;
+    link: Link;
+    isWireGuard: boolean;
+    localKey: string;
+    peerKey: string;
+  } | null>(null);
 
   useEffect(() => {
     if (node?.agent_token) {
@@ -2038,14 +2093,17 @@ export const NodeDetailPage: React.FC = () => {
                   </Typography>
                 </Box>
               ) : (
-                <TableContainer>
-                  <Table size="small">
+                <TableContainer sx={{ overflowX: "auto" }}>
+                  <Table size="small" sx={{ minWidth: 900 }}>
                     <TableHead sx={{ bgcolor: "#F8FAFC" }}>
                       <TableRow>
                         <TableCell sx={{ fontWeight: 700, color: "#475569" }}>Peer Node</TableCell>
+                        <TableCell sx={{ fontWeight: 700, color: "#475569" }}>State</TableCell>
                         <TableCell sx={{ fontWeight: 700, color: "#475569" }}>Interface</TableCell>
                         <TableCell sx={{ fontWeight: 700, color: "#475569" }}>Tunnel Address</TableCell>
                         <TableCell sx={{ fontWeight: 700, color: "#475569" }}>Listen Port</TableCell>
+                        <TableCell sx={{ fontWeight: 700, color: "#475569" }}>Peer Address</TableCell>
+                        <TableCell sx={{ fontWeight: 700, color: "#475569" }}>Peer Port</TableCell>
                         <TableCell sx={{ fontWeight: 700, color: "#475569" }}>Keepalive</TableCell>
                         <TableCell sx={{ fontWeight: 700, color: "#475569" }}>Cost / Policy</TableCell>
                         <TableCell align="right" sx={{ fontWeight: 700, color: "#475569" }}>
@@ -2058,6 +2116,27 @@ export const NodeDetailPage: React.FC = () => {
                         const isFrom = link.from.name === node?.name;
                         const peerEnd = isFrom ? link.to : link.from;
                         const selfEnd = isFrom ? link.from : link.to;
+
+                        const workingState = getLinkWorkingState(link, networkState, nodeStatuses);
+                        const isUp = workingState === "working";
+                        const isDown = workingState === "not_working";
+
+                        const rawPeerAddress = peerEnd.address || selfEnd.neighbor_address || peerEnd.address4 || "";
+                        const cleanPeerAddress = rawPeerAddress ? rawPeerAddress.replace(/\/64$/, "") : "—";
+                        const peerPort = peerEnd.listen_port || extractPort(peerEnd.endpoint) || extractPort(peerEnd.resolved_endpoint) || "—";
+
+                        const policyId = selfEnd.policy || "default";
+                        const matchedPolicy = networkPolicies?.find((p) => p.id === policyId || p.name === policyId) || null;
+                        const fallbackPolicy: NetworkPolicy = {
+                          id: policyId,
+                          name: selfEnd.policy ? selfEnd.policy : "Default (Internal)",
+                          description: "Standard mesh policy",
+                          cost: selfEnd.cost ?? 100,
+                        };
+
+                        const isWg = !isManualLink(link);
+                        const localKey = selfEnd.public_key || sortedWgInterfaces.find((w) => w.name === selfEnd.interface)?.public_key || "";
+                        const peerKey = peerEnd.public_key || "";
 
                         return (
                           <TableRow key={idx} hover>
@@ -2079,6 +2158,21 @@ export const NodeDetailPage: React.FC = () => {
                               </Box>
                             </TableCell>
                             <TableCell>
+                              <Chip
+                                label={isUp ? "Up" : isDown ? "Down" : "Unknown"}
+                                size="small"
+                                sx={{
+                                  fontWeight: 700,
+                                  fontSize: "0.7rem",
+                                  height: 20,
+                                  bgcolor: isUp ? "#ECFDF5" : isDown ? "#FEF2F2" : "#F1F5F9",
+                                  color: isUp ? "#059669" : isDown ? "#DC2626" : "#64748B",
+                                  border: "1px solid",
+                                  borderColor: isUp ? "#A7F3D0" : isDown ? "#FECDD3" : "#CBD5E1",
+                                }}
+                              />
+                            </TableCell>
+                            <TableCell>
                               <Typography variant="body2" className="mono-font" sx={{ color: "#334155" }}>
                                 {selfEnd.interface || "—"}
                               </Typography>
@@ -2094,26 +2188,94 @@ export const NodeDetailPage: React.FC = () => {
                               </Typography>
                             </TableCell>
                             <TableCell>
+                              <Typography variant="body2" className="mono-font" sx={{ color: "#0891B2" }}>
+                                {cleanPeerAddress}
+                              </Typography>
+                            </TableCell>
+                            <TableCell>
+                              <Typography variant="body2" className="mono-font">
+                                {peerPort}
+                              </Typography>
+                            </TableCell>
+                            <TableCell>
                               <Typography variant="body2">
                                 {selfEnd.persistent_keepalive ? `${selfEnd.persistent_keepalive}s` : "-"}
                               </Typography>
                             </TableCell>
                             <TableCell>
-                              <Chip
-                                label={selfEnd.policy || "Default Mesh"}
-                                size="small"
-                                sx={{ height: 20, fontSize: "0.7rem", bgcolor: "#F1F5F9" }}
-                              />
+                              <Box sx={{ display: "flex", alignItems: "center", gap: 0.8 }}>
+                                {selfEnd.cost !== undefined && selfEnd.cost !== null ? (
+                                  <Typography variant="caption" className="mono-font" sx={{ color: "#475569", fontWeight: 700 }}>
+                                    {selfEnd.cost}
+                                  </Typography>
+                                ) : matchedPolicy?.cost !== undefined ? (
+                                  <Typography variant="caption" className="mono-font" sx={{ color: "#94A3B8" }}>
+                                    {matchedPolicy.cost}
+                                  </Typography>
+                                ) : null}
+                                <Tooltip title="Click to view network policy details">
+                                  <Chip
+                                    icon={<Shield size={12} color="#4F46E5" />}
+                                    label={matchedPolicy?.name || selfEnd.policy || "Default (Internal)"}
+                                    size="small"
+                                    onClick={() => {
+                                      setPolicyToView(matchedPolicy || fallbackPolicy);
+                                      setViewPolicyModalOpen(true);
+                                    }}
+                                    clickable
+                                    sx={{
+                                      height: 22,
+                                      fontSize: "0.72rem",
+                                      fontWeight: 600,
+                                      bgcolor: "#EEF2FF",
+                                      color: "#4F46E5",
+                                      border: "1px solid #C7D2FE",
+                                      cursor: "pointer",
+                                      "&:hover": {
+                                        bgcolor: "#E0E7FF",
+                                        borderColor: "#818CF8",
+                                      },
+                                    }}
+                                  />
+                                </Tooltip>
+                              </Box>
                             </TableCell>
                             <TableCell align="right">
-                              <Button
-                                size="small"
-                                variant="text"
-                                onClick={() => navigate(`/nodes/${encodeURIComponent(peerEnd.name)}`)}
-                                sx={{ fontSize: "0.75rem", p: 0.5 }}
-                              >
-                                View Peer
-                              </Button>
+                              <Box sx={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 0.8 }}>
+                                <Button
+                                  size="small"
+                                  variant="text"
+                                  onClick={() => navigate(`/nodes/${encodeURIComponent(peerEnd.name)}`)}
+                                  sx={{ fontSize: "0.75rem", p: 0.5 }}
+                                >
+                                  View Peer
+                                </Button>
+                                <Button
+                                  size="small"
+                                  variant="outlined"
+                                  endIcon={<ChevronDown size={14} />}
+                                  onClick={(e) => {
+                                    setLinkMenuAnchor({
+                                      el: e.currentTarget,
+                                      link,
+                                      isWireGuard: isWg,
+                                      localKey,
+                                      peerKey,
+                                    });
+                                  }}
+                                  sx={{
+                                    fontSize: "0.75rem",
+                                    py: 0.3,
+                                    px: 1,
+                                    borderColor: "#CBD5E1",
+                                    color: "#475569",
+                                    textTransform: "none",
+                                    "&:hover": { borderColor: "#94A3B8", bgcolor: "#F8FAFC" },
+                                  }}
+                                >
+                                  More
+                                </Button>
+                              </Box>
                             </TableCell>
                           </TableRow>
                         );
@@ -2198,9 +2360,29 @@ export const NodeDetailPage: React.FC = () => {
                                 >
                                   Rx: {formatBytes(p.transfer_rx_bytes)} • Tx: {formatBytes(p.transfer_tx_bytes)}
                                 </Typography>
-                                <Typography variant="caption" sx={{ color: "#64748B" }}>
-                                  Handshake: {p.latest_handshake || "None"}
-                                </Typography>
+                                <Box sx={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 0.8, mt: 0.4 }}>
+                                  {(() => {
+                                    const hsRelative = getHandshakeRelativeLabel(p.latest_handshake);
+                                    return (
+                                      <Chip
+                                        label={hsRelative.text}
+                                        size="small"
+                                        sx={{
+                                          height: 18,
+                                          fontSize: "0.65rem",
+                                          fontWeight: 700,
+                                          bgcolor: hsRelative.isHealthy ? "#ECFDF5" : "#FEF2F2",
+                                          color: hsRelative.isHealthy ? "#059669" : "#DC2626",
+                                          border: `1px solid ${hsRelative.isHealthy ? "#A7F3D0" : "#FECDD3"}`,
+                                          px: 0.5,
+                                        }}
+                                      />
+                                    );
+                                  })()}
+                                  <Typography variant="caption" sx={{ color: "#64748B" }}>
+                                    Handshake: {p.latest_handshake || "None"}
+                                  </Typography>
+                                </Box>
                               </Box>
                             </Box>
                           ))}
@@ -3099,6 +3281,76 @@ export const NodeDetailPage: React.FC = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Link Actions Dropdown Menu */}
+      <Menu
+        anchorEl={linkMenuAnchor?.el}
+        open={Boolean(linkMenuAnchor)}
+        onClose={() => setLinkMenuAnchor(null)}
+        PaperProps={{
+          sx: {
+            borderRadius: 2,
+            boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)",
+            border: "1px solid #E2E8F0",
+            minWidth: 200,
+          },
+        }}
+      >
+        <MenuItem
+          onClick={() => {
+            if (linkMenuAnchor) {
+              setLinkToEdit(linkMenuAnchor.link);
+              setAddLinkOpen(true);
+            }
+            setLinkMenuAnchor(null);
+          }}
+          sx={{ fontSize: "0.85rem", gap: 1.2, py: 1 }}
+        >
+          <Edit2 size={15} color="#4F46E5" />
+          Edit Link
+        </MenuItem>
+
+        {linkMenuAnchor?.isWireGuard && (
+          <MenuItem
+            onClick={() => {
+              if (linkMenuAnchor?.localKey) {
+                navigator.clipboard.writeText(linkMenuAnchor.localKey);
+                setStateToast({ message: "Copied local WireGuard public key to clipboard", severity: "success" });
+              } else {
+                setStateToast({ message: "No local WireGuard public key available", severity: "warning" });
+              }
+              setLinkMenuAnchor(null);
+            }}
+            sx={{ fontSize: "0.85rem", gap: 1.2, py: 1 }}
+          >
+            <Key size={15} color="#0891B2" />
+            Copy Local wg public key
+          </MenuItem>
+        )}
+
+        <MenuItem
+          onClick={() => {
+            if (linkMenuAnchor?.peerKey) {
+              navigator.clipboard.writeText(linkMenuAnchor.peerKey);
+              setStateToast({ message: "Copied peer WireGuard public key to clipboard", severity: "success" });
+            } else {
+              setStateToast({ message: "No peer WireGuard public key available", severity: "warning" });
+            }
+            setLinkMenuAnchor(null);
+          }}
+          sx={{ fontSize: "0.85rem", gap: 1.2, py: 1 }}
+        >
+          <Key size={15} color="#64748B" />
+          Copy Peer wg public key
+        </MenuItem>
+      </Menu>
+
+      {/* View Network Policy Modal */}
+      <ViewNetworkPolicyModal
+        open={viewPolicyModalOpen}
+        onClose={() => setViewPolicyModalOpen(false)}
+        policy={policyToView}
+      />
     </Box>
   );
 };
