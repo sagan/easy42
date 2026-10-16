@@ -20,6 +20,7 @@ type AgentConnection struct {
 	agentVersion string
 	osInfo       string
 	hostname     string
+	hostsHash    string
 	ws           *websocket.Conn
 	hub          *Hub
 	sendMu       sync.Mutex
@@ -62,6 +63,11 @@ func (c *AgentConnection) Hostname() string {
 // OSInfo returns the reported operating system info
 func (c *AgentConnection) OSInfo() string {
 	return c.osInfo
+}
+
+// HostsHash returns the latest reported hosts easy42 block SHA-256 hash
+func (c *AgentConnection) HostsHash() string {
+	return c.hostsHash
 }
 
 // Close closes the WebSocket connection gracefully
@@ -179,6 +185,7 @@ func (c *AgentConnection) handleIncomingMessage(msg *agentpb.AgentMessage) {
 		c.agentVersion = req.AgentVersion
 		c.osInfo = req.OsInfo
 		c.hostname = req.Hostname
+		c.hostsHash = req.HostsHash
 
 		// Acknowledge registration
 		_ = c.SendMessage(&agentpb.AgentMessage{
@@ -192,6 +199,9 @@ func (c *AgentConnection) handleIncomingMessage(msg *agentpb.AgentMessage) {
 		c.hub.NotifyRegister(c)
 
 	case *agentpb.AgentMessage_Heartbeat:
+		if payload.Heartbeat.HostsHash != "" {
+			c.hostsHash = payload.Heartbeat.HostsHash
+		}
 		// Heartbeat response
 		_ = c.SendMessage(&agentpb.AgentMessage{
 			Payload: &agentpb.AgentMessage_HeartbeatAck{
@@ -203,6 +213,9 @@ func (c *AgentConnection) handleIncomingMessage(msg *agentpb.AgentMessage) {
 		c.hub.RecordHeartbeat(c.nodeName)
 
 	case *agentpb.AgentMessage_Telemetry:
+		if payload.Telemetry.HostsHash != "" {
+			c.hostsHash = payload.Telemetry.HostsHash
+		}
 		c.hub.UpdateTelemetry(c.nodeName, payload.Telemetry)
 
 	case *agentpb.AgentMessage_CommandResp:
@@ -224,6 +237,18 @@ func (c *AgentConnection) SyncCronTasks(tasks []*agentpb.CronTaskSpec) error {
 		Payload: &agentpb.AgentMessage_SyncCronTasks{
 			SyncCronTasks: &agentpb.SyncCronTasks{
 				Tasks: tasks,
+			},
+		},
+	}
+	return c.SendMessage(msg)
+}
+
+// SyncHosts sends the full set of cluster hosts to the connected agent
+func (c *AgentConnection) SyncHosts(hosts []*agentpb.HostRecord) error {
+	msg := &agentpb.AgentMessage{
+		Payload: &agentpb.AgentMessage_SyncHosts{
+			SyncHosts: &agentpb.SyncHosts{
+				Hosts: hosts,
 			},
 		},
 	}

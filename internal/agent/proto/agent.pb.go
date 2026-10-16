@@ -148,6 +148,7 @@ type AgentMessage struct {
 	//	*AgentMessage_HeartbeatAck
 	//	*AgentMessage_CommandReq
 	//	*AgentMessage_SyncCronTasks
+	//	*AgentMessage_SyncHosts
 	Payload       isAgentMessage_Payload `protobuf_oneof:"payload"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -294,6 +295,15 @@ func (x *AgentMessage) GetSyncCronTasks() *SyncCronTasks {
 	return nil
 }
 
+func (x *AgentMessage) GetSyncHosts() *SyncHosts {
+	if x != nil {
+		if x, ok := x.Payload.(*AgentMessage_SyncHosts); ok {
+			return x.SyncHosts
+		}
+	}
+	return nil
+}
+
 type isAgentMessage_Payload interface {
 	isAgentMessage_Payload()
 }
@@ -340,6 +350,10 @@ type AgentMessage_SyncCronTasks struct {
 	SyncCronTasks *SyncCronTasks `protobuf:"bytes,23,opt,name=sync_cron_tasks,json=syncCronTasks,proto3,oneof"`
 }
 
+type AgentMessage_SyncHosts struct {
+	SyncHosts *SyncHosts `protobuf:"bytes,24,opt,name=sync_hosts,json=syncHosts,proto3,oneof"`
+}
+
 func (*AgentMessage_RegisterReq) isAgentMessage_Payload() {}
 
 func (*AgentMessage_Heartbeat) isAgentMessage_Payload() {}
@@ -360,12 +374,15 @@ func (*AgentMessage_CommandReq) isAgentMessage_Payload() {}
 
 func (*AgentMessage_SyncCronTasks) isAgentMessage_Payload() {}
 
+func (*AgentMessage_SyncHosts) isAgentMessage_Payload() {}
+
 type RegisterRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	NodeName      string                 `protobuf:"bytes,1,opt,name=node_name,json=nodeName,proto3" json:"node_name,omitempty"`
 	AgentVersion  string                 `protobuf:"bytes,2,opt,name=agent_version,json=agentVersion,proto3" json:"agent_version,omitempty"`
 	OsInfo        string                 `protobuf:"bytes,3,opt,name=os_info,json=osInfo,proto3" json:"os_info,omitempty"`
 	Hostname      string                 `protobuf:"bytes,4,opt,name=hostname,proto3" json:"hostname,omitempty"`
+	HostsHash     string                 `protobuf:"bytes,5,opt,name=hosts_hash,json=hostsHash,proto3" json:"hosts_hash,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -424,6 +441,13 @@ func (x *RegisterRequest) GetOsInfo() string {
 func (x *RegisterRequest) GetHostname() string {
 	if x != nil {
 		return x.Hostname
+	}
+	return ""
+}
+
+func (x *RegisterRequest) GetHostsHash() string {
+	if x != nil {
+		return x.HostsHash
 	}
 	return ""
 }
@@ -491,6 +515,7 @@ func (x *RegisterResponse) GetTelemetryIntervalSecs() uint32 {
 type Heartbeat struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	ClientTime    int64                  `protobuf:"varint,1,opt,name=client_time,json=clientTime,proto3" json:"client_time,omitempty"`
+	HostsHash     string                 `protobuf:"bytes,2,opt,name=hosts_hash,json=hostsHash,proto3" json:"hosts_hash,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -530,6 +555,13 @@ func (x *Heartbeat) GetClientTime() int64 {
 		return x.ClientTime
 	}
 	return 0
+}
+
+func (x *Heartbeat) GetHostsHash() string {
+	if x != nil {
+		return x.HostsHash
+	}
+	return ""
 }
 
 type HeartbeatAck struct {
@@ -583,6 +615,7 @@ type TelemetryReport struct {
 	WgPeers       []*WgPeerMetrics       `protobuf:"bytes,3,rep,name=wg_peers,json=wgPeers,proto3" json:"wg_peers,omitempty"`
 	BirdProtocols []*BirdProtocolStatus  `protobuf:"bytes,4,rep,name=bird_protocols,json=birdProtocols,proto3" json:"bird_protocols,omitempty"`
 	Disks         []*DiskMetrics         `protobuf:"bytes,5,rep,name=disks,proto3" json:"disks,omitempty"`
+	HostsHash     string                 `protobuf:"bytes,6,opt,name=hosts_hash,json=hostsHash,proto3" json:"hosts_hash,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -650,6 +683,13 @@ func (x *TelemetryReport) GetDisks() []*DiskMetrics {
 		return x.Disks
 	}
 	return nil
+}
+
+func (x *TelemetryReport) GetHostsHash() string {
+	if x != nil {
+		return x.HostsHash
+	}
+	return ""
 }
 
 type DiskMetrics struct {
@@ -1085,6 +1125,7 @@ type CommandRequest struct {
 	//	*CommandRequest_ProbeSystem
 	//	*CommandRequest_RestartService
 	//	*CommandRequest_FlushCache
+	//	*CommandRequest_SyncHosts
 	Command       isCommandRequest_Command `protobuf_oneof:"command"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -1206,6 +1247,15 @@ func (x *CommandRequest) GetFlushCache() *FlushCacheCmd {
 	return nil
 }
 
+func (x *CommandRequest) GetSyncHosts() *SyncHostsCmd {
+	if x != nil {
+		if x, ok := x.Command.(*CommandRequest_SyncHosts); ok {
+			return x.SyncHosts
+		}
+	}
+	return nil
+}
+
 type isCommandRequest_Command interface {
 	isCommandRequest_Command()
 }
@@ -1242,6 +1292,10 @@ type CommandRequest_FlushCache struct {
 	FlushCache *FlushCacheCmd `protobuf:"bytes,17,opt,name=flush_cache,json=flushCache,proto3,oneof"`
 }
 
+type CommandRequest_SyncHosts struct {
+	SyncHosts *SyncHostsCmd `protobuf:"bytes,18,opt,name=sync_hosts,json=syncHosts,proto3,oneof"`
+}
+
 func (*CommandRequest_ApplyConfig) isCommandRequest_Command() {}
 
 func (*CommandRequest_ManageIface) isCommandRequest_Command() {}
@@ -1257,6 +1311,8 @@ func (*CommandRequest_ProbeSystem) isCommandRequest_Command() {}
 func (*CommandRequest_RestartService) isCommandRequest_Command() {}
 
 func (*CommandRequest_FlushCache) isCommandRequest_Command() {}
+
+func (*CommandRequest_SyncHosts) isCommandRequest_Command() {}
 
 type ApplyConfigFile struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -2046,11 +2102,151 @@ func (x *CronTaskReport) GetErrorMessage() string {
 	return ""
 }
 
+type HostRecord struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Ip            string                 `protobuf:"bytes,2,opt,name=ip,proto3" json:"ip,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *HostRecord) Reset() {
+	*x = HostRecord{}
+	mi := &file_proto_agent_proto_msgTypes[25]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *HostRecord) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*HostRecord) ProtoMessage() {}
+
+func (x *HostRecord) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_agent_proto_msgTypes[25]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use HostRecord.ProtoReflect.Descriptor instead.
+func (*HostRecord) Descriptor() ([]byte, []int) {
+	return file_proto_agent_proto_rawDescGZIP(), []int{25}
+}
+
+func (x *HostRecord) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *HostRecord) GetIp() string {
+	if x != nil {
+		return x.Ip
+	}
+	return ""
+}
+
+type SyncHosts struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Hosts         []*HostRecord          `protobuf:"bytes,1,rep,name=hosts,proto3" json:"hosts,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SyncHosts) Reset() {
+	*x = SyncHosts{}
+	mi := &file_proto_agent_proto_msgTypes[26]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SyncHosts) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SyncHosts) ProtoMessage() {}
+
+func (x *SyncHosts) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_agent_proto_msgTypes[26]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SyncHosts.ProtoReflect.Descriptor instead.
+func (*SyncHosts) Descriptor() ([]byte, []int) {
+	return file_proto_agent_proto_rawDescGZIP(), []int{26}
+}
+
+func (x *SyncHosts) GetHosts() []*HostRecord {
+	if x != nil {
+		return x.Hosts
+	}
+	return nil
+}
+
+type SyncHostsCmd struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Hosts         []*HostRecord          `protobuf:"bytes,1,rep,name=hosts,proto3" json:"hosts,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SyncHostsCmd) Reset() {
+	*x = SyncHostsCmd{}
+	mi := &file_proto_agent_proto_msgTypes[27]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SyncHostsCmd) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SyncHostsCmd) ProtoMessage() {}
+
+func (x *SyncHostsCmd) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_agent_proto_msgTypes[27]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SyncHostsCmd.ProtoReflect.Descriptor instead.
+func (*SyncHostsCmd) Descriptor() ([]byte, []int) {
+	return file_proto_agent_proto_rawDescGZIP(), []int{27}
+}
+
+func (x *SyncHostsCmd) GetHosts() []*HostRecord {
+	if x != nil {
+		return x.Hosts
+	}
+	return nil
+}
+
 var File_proto_agent_proto protoreflect.FileDescriptor
 
 const file_proto_agent_proto_rawDesc = "" +
 	"\n" +
-	"\x11proto/agent.proto\x12\x0feasy42.agent.v1\"\x81\x06\n" +
+	"\x11proto/agent.proto\x12\x0feasy42.agent.v1\"\xbe\x06\n" +
 	"\fAgentMessage\x12\x10\n" +
 	"\x03seq\x18\x01 \x01(\x04R\x03seq\x12\x1c\n" +
 	"\ttimestamp\x18\x02 \x01(\x03R\ttimestamp\x12E\n" +
@@ -2066,23 +2262,29 @@ const file_proto_agent_proto_rawDesc = "" +
 	"\rheartbeat_ack\x18\x15 \x01(\v2\x1d.easy42.agent.v1.HeartbeatAckH\x00R\fheartbeatAck\x12B\n" +
 	"\vcommand_req\x18\x16 \x01(\v2\x1f.easy42.agent.v1.CommandRequestH\x00R\n" +
 	"commandReq\x12H\n" +
-	"\x0fsync_cron_tasks\x18\x17 \x01(\v2\x1e.easy42.agent.v1.SyncCronTasksH\x00R\rsyncCronTasksB\t\n" +
-	"\apayload\"\x88\x01\n" +
+	"\x0fsync_cron_tasks\x18\x17 \x01(\v2\x1e.easy42.agent.v1.SyncCronTasksH\x00R\rsyncCronTasks\x12;\n" +
+	"\n" +
+	"sync_hosts\x18\x18 \x01(\v2\x1a.easy42.agent.v1.SyncHostsH\x00R\tsyncHostsB\t\n" +
+	"\apayload\"\xa7\x01\n" +
 	"\x0fRegisterRequest\x12\x1b\n" +
 	"\tnode_name\x18\x01 \x01(\tR\bnodeName\x12#\n" +
 	"\ragent_version\x18\x02 \x01(\tR\fagentVersion\x12\x17\n" +
 	"\aos_info\x18\x03 \x01(\tR\x06osInfo\x12\x1a\n" +
-	"\bhostname\x18\x04 \x01(\tR\bhostname\"\x89\x01\n" +
+	"\bhostname\x18\x04 \x01(\tR\bhostname\x12\x1d\n" +
+	"\n" +
+	"hosts_hash\x18\x05 \x01(\tR\thostsHash\"\x89\x01\n" +
 	"\x10RegisterResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12#\n" +
 	"\rerror_message\x18\x02 \x01(\tR\ferrorMessage\x126\n" +
-	"\x17telemetry_interval_secs\x18\x03 \x01(\rR\x15telemetryIntervalSecs\",\n" +
+	"\x17telemetry_interval_secs\x18\x03 \x01(\rR\x15telemetryIntervalSecs\"K\n" +
 	"\tHeartbeat\x12\x1f\n" +
 	"\vclient_time\x18\x01 \x01(\x03R\n" +
-	"clientTime\"/\n" +
+	"clientTime\x12\x1d\n" +
+	"\n" +
+	"hosts_hash\x18\x02 \x01(\tR\thostsHash\"/\n" +
 	"\fHeartbeatAck\x12\x1f\n" +
 	"\vserver_time\x18\x01 \x01(\x03R\n" +
-	"serverTime\"\xc7\x02\n" +
+	"serverTime\"\xe6\x02\n" +
 	"\x0fTelemetryReport\x126\n" +
 	"\x06system\x18\x01 \x01(\v2\x1e.easy42.agent.v1.SystemMetricsR\x06system\x12A\n" +
 	"\n" +
@@ -2090,7 +2292,9 @@ const file_proto_agent_proto_rawDesc = "" +
 	"interfaces\x129\n" +
 	"\bwg_peers\x18\x03 \x03(\v2\x1e.easy42.agent.v1.WgPeerMetricsR\awgPeers\x12J\n" +
 	"\x0ebird_protocols\x18\x04 \x03(\v2#.easy42.agent.v1.BirdProtocolStatusR\rbirdProtocols\x122\n" +
-	"\x05disks\x18\x05 \x03(\v2\x1c.easy42.agent.v1.DiskMetricsR\x05disks\"\x80\x01\n" +
+	"\x05disks\x18\x05 \x03(\v2\x1c.easy42.agent.v1.DiskMetricsR\x05disks\x12\x1d\n" +
+	"\n" +
+	"hosts_hash\x18\x06 \x01(\tR\thostsHash\"\x80\x01\n" +
 	"\vDiskMetrics\x12\x12\n" +
 	"\x04path\x18\x01 \x01(\tR\x04path\x12\x1f\n" +
 	"\vtotal_bytes\x18\x02 \x01(\x04R\n" +
@@ -2133,7 +2337,7 @@ const file_proto_agent_proto_rawDesc = "" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x14\n" +
 	"\x05proto\x18\x02 \x01(\tR\x05proto\x12\x14\n" +
 	"\x05state\x18\x03 \x01(\tR\x05state\x12\x12\n" +
-	"\x04info\x18\x04 \x01(\tR\x04info\"\xee\x04\n" +
+	"\x04info\x18\x04 \x01(\tR\x04info\"\xae\x05\n" +
 	"\x0eCommandRequest\x12\x1d\n" +
 	"\n" +
 	"request_id\x18\x01 \x01(\tR\trequestId\x12E\n" +
@@ -2147,7 +2351,9 @@ const file_proto_agent_proto_rawDesc = "" +
 	"\fprobe_system\x18\x0f \x01(\v2\x1f.easy42.agent.v1.ProbeSystemCmdH\x00R\vprobeSystem\x12M\n" +
 	"\x0frestart_service\x18\x10 \x01(\v2\".easy42.agent.v1.RestartServiceCmdH\x00R\x0erestartService\x12A\n" +
 	"\vflush_cache\x18\x11 \x01(\v2\x1e.easy42.agent.v1.FlushCacheCmdH\x00R\n" +
-	"flushCacheB\t\n" +
+	"flushCache\x12>\n" +
+	"\n" +
+	"sync_hosts\x18\x12 \x01(\v2\x1d.easy42.agent.v1.SyncHostsCmdH\x00R\tsyncHostsB\t\n" +
 	"\acommand\"}\n" +
 	"\x0fApplyConfigFile\x12\x12\n" +
 	"\x04path\x18\x01 \x01(\tR\x04path\x12\x18\n" +
@@ -2231,7 +2437,15 @@ const file_proto_agent_proto_rawDesc = "" +
 	"durationMs\x12\x1d\n" +
 	"\n" +
 	"raw_output\x18\x06 \x01(\tR\trawOutput\x12#\n" +
-	"\rerror_message\x18\a \x01(\tR\ferrorMessageB%Z#easy42/internal/agent/proto;agentpbb\x06proto3"
+	"\rerror_message\x18\a \x01(\tR\ferrorMessage\"0\n" +
+	"\n" +
+	"HostRecord\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\x0e\n" +
+	"\x02ip\x18\x02 \x01(\tR\x02ip\">\n" +
+	"\tSyncHosts\x121\n" +
+	"\x05hosts\x18\x01 \x03(\v2\x1b.easy42.agent.v1.HostRecordR\x05hosts\"A\n" +
+	"\fSyncHostsCmd\x121\n" +
+	"\x05hosts\x18\x01 \x03(\v2\x1b.easy42.agent.v1.HostRecordR\x05hostsB%Z#easy42/internal/agent/proto;agentpbb\x06proto3"
 
 var (
 	file_proto_agent_proto_rawDescOnce sync.Once
@@ -2246,7 +2460,7 @@ func file_proto_agent_proto_rawDescGZIP() []byte {
 }
 
 var file_proto_agent_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_proto_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 26)
+var file_proto_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 29)
 var file_proto_agent_proto_goTypes = []any{
 	(ManageInterface_Action)(0), // 0: easy42.agent.v1.ManageInterface.Action
 	(LookingGlassCmd_Tool)(0),   // 1: easy42.agent.v1.LookingGlassCmd.Tool
@@ -2275,7 +2489,10 @@ var file_proto_agent_proto_goTypes = []any{
 	(*SyncCronTasks)(nil),       // 24: easy42.agent.v1.SyncCronTasks
 	(*CronTaskSpec)(nil),        // 25: easy42.agent.v1.CronTaskSpec
 	(*CronTaskReport)(nil),      // 26: easy42.agent.v1.CronTaskReport
-	nil,                         // 27: easy42.agent.v1.CronTaskSpec.ParamsEntry
+	(*HostRecord)(nil),          // 27: easy42.agent.v1.HostRecord
+	(*SyncHosts)(nil),           // 28: easy42.agent.v1.SyncHosts
+	(*SyncHostsCmd)(nil),        // 29: easy42.agent.v1.SyncHostsCmd
+	nil,                         // 30: easy42.agent.v1.CronTaskSpec.ParamsEntry
 }
 var file_proto_agent_proto_depIdxs = []int32{
 	3,  // 0: easy42.agent.v1.AgentMessage.register_req:type_name -> easy42.agent.v1.RegisterRequest
@@ -2288,29 +2505,33 @@ var file_proto_agent_proto_depIdxs = []int32{
 	6,  // 7: easy42.agent.v1.AgentMessage.heartbeat_ack:type_name -> easy42.agent.v1.HeartbeatAck
 	13, // 8: easy42.agent.v1.AgentMessage.command_req:type_name -> easy42.agent.v1.CommandRequest
 	24, // 9: easy42.agent.v1.AgentMessage.sync_cron_tasks:type_name -> easy42.agent.v1.SyncCronTasks
-	9,  // 10: easy42.agent.v1.TelemetryReport.system:type_name -> easy42.agent.v1.SystemMetrics
-	10, // 11: easy42.agent.v1.TelemetryReport.interfaces:type_name -> easy42.agent.v1.InterfaceMetrics
-	11, // 12: easy42.agent.v1.TelemetryReport.wg_peers:type_name -> easy42.agent.v1.WgPeerMetrics
-	12, // 13: easy42.agent.v1.TelemetryReport.bird_protocols:type_name -> easy42.agent.v1.BirdProtocolStatus
-	8,  // 14: easy42.agent.v1.TelemetryReport.disks:type_name -> easy42.agent.v1.DiskMetrics
-	14, // 15: easy42.agent.v1.CommandRequest.apply_config:type_name -> easy42.agent.v1.ApplyConfigFile
-	15, // 16: easy42.agent.v1.CommandRequest.manage_iface:type_name -> easy42.agent.v1.ManageInterface
-	16, // 17: easy42.agent.v1.CommandRequest.reload_bird:type_name -> easy42.agent.v1.ReloadBirdCmd
-	17, // 18: easy42.agent.v1.CommandRequest.apply_nft:type_name -> easy42.agent.v1.ApplyNftablesCmd
-	18, // 19: easy42.agent.v1.CommandRequest.looking_glass:type_name -> easy42.agent.v1.LookingGlassCmd
-	19, // 20: easy42.agent.v1.CommandRequest.probe_system:type_name -> easy42.agent.v1.ProbeSystemCmd
-	21, // 21: easy42.agent.v1.CommandRequest.restart_service:type_name -> easy42.agent.v1.RestartServiceCmd
-	20, // 22: easy42.agent.v1.CommandRequest.flush_cache:type_name -> easy42.agent.v1.FlushCacheCmd
-	0,  // 23: easy42.agent.v1.ManageInterface.action:type_name -> easy42.agent.v1.ManageInterface.Action
-	1,  // 24: easy42.agent.v1.LookingGlassCmd.tool:type_name -> easy42.agent.v1.LookingGlassCmd.Tool
-	10, // 25: easy42.agent.v1.ProbeResponse.interfaces:type_name -> easy42.agent.v1.InterfaceMetrics
-	25, // 26: easy42.agent.v1.SyncCronTasks.tasks:type_name -> easy42.agent.v1.CronTaskSpec
-	27, // 27: easy42.agent.v1.CronTaskSpec.params:type_name -> easy42.agent.v1.CronTaskSpec.ParamsEntry
-	28, // [28:28] is the sub-list for method output_type
-	28, // [28:28] is the sub-list for method input_type
-	28, // [28:28] is the sub-list for extension type_name
-	28, // [28:28] is the sub-list for extension extendee
-	0,  // [0:28] is the sub-list for field type_name
+	28, // 10: easy42.agent.v1.AgentMessage.sync_hosts:type_name -> easy42.agent.v1.SyncHosts
+	9,  // 11: easy42.agent.v1.TelemetryReport.system:type_name -> easy42.agent.v1.SystemMetrics
+	10, // 12: easy42.agent.v1.TelemetryReport.interfaces:type_name -> easy42.agent.v1.InterfaceMetrics
+	11, // 13: easy42.agent.v1.TelemetryReport.wg_peers:type_name -> easy42.agent.v1.WgPeerMetrics
+	12, // 14: easy42.agent.v1.TelemetryReport.bird_protocols:type_name -> easy42.agent.v1.BirdProtocolStatus
+	8,  // 15: easy42.agent.v1.TelemetryReport.disks:type_name -> easy42.agent.v1.DiskMetrics
+	14, // 16: easy42.agent.v1.CommandRequest.apply_config:type_name -> easy42.agent.v1.ApplyConfigFile
+	15, // 17: easy42.agent.v1.CommandRequest.manage_iface:type_name -> easy42.agent.v1.ManageInterface
+	16, // 18: easy42.agent.v1.CommandRequest.reload_bird:type_name -> easy42.agent.v1.ReloadBirdCmd
+	17, // 19: easy42.agent.v1.CommandRequest.apply_nft:type_name -> easy42.agent.v1.ApplyNftablesCmd
+	18, // 20: easy42.agent.v1.CommandRequest.looking_glass:type_name -> easy42.agent.v1.LookingGlassCmd
+	19, // 21: easy42.agent.v1.CommandRequest.probe_system:type_name -> easy42.agent.v1.ProbeSystemCmd
+	21, // 22: easy42.agent.v1.CommandRequest.restart_service:type_name -> easy42.agent.v1.RestartServiceCmd
+	20, // 23: easy42.agent.v1.CommandRequest.flush_cache:type_name -> easy42.agent.v1.FlushCacheCmd
+	29, // 24: easy42.agent.v1.CommandRequest.sync_hosts:type_name -> easy42.agent.v1.SyncHostsCmd
+	0,  // 25: easy42.agent.v1.ManageInterface.action:type_name -> easy42.agent.v1.ManageInterface.Action
+	1,  // 26: easy42.agent.v1.LookingGlassCmd.tool:type_name -> easy42.agent.v1.LookingGlassCmd.Tool
+	10, // 27: easy42.agent.v1.ProbeResponse.interfaces:type_name -> easy42.agent.v1.InterfaceMetrics
+	25, // 28: easy42.agent.v1.SyncCronTasks.tasks:type_name -> easy42.agent.v1.CronTaskSpec
+	30, // 29: easy42.agent.v1.CronTaskSpec.params:type_name -> easy42.agent.v1.CronTaskSpec.ParamsEntry
+	27, // 30: easy42.agent.v1.SyncHosts.hosts:type_name -> easy42.agent.v1.HostRecord
+	27, // 31: easy42.agent.v1.SyncHostsCmd.hosts:type_name -> easy42.agent.v1.HostRecord
+	32, // [32:32] is the sub-list for method output_type
+	32, // [32:32] is the sub-list for method input_type
+	32, // [32:32] is the sub-list for extension type_name
+	32, // [32:32] is the sub-list for extension extendee
+	0,  // [0:32] is the sub-list for field type_name
 }
 
 func init() { file_proto_agent_proto_init() }
@@ -2329,6 +2550,7 @@ func file_proto_agent_proto_init() {
 		(*AgentMessage_HeartbeatAck)(nil),
 		(*AgentMessage_CommandReq)(nil),
 		(*AgentMessage_SyncCronTasks)(nil),
+		(*AgentMessage_SyncHosts)(nil),
 	}
 	file_proto_agent_proto_msgTypes[11].OneofWrappers = []any{
 		(*CommandRequest_ApplyConfig)(nil),
@@ -2339,6 +2561,7 @@ func file_proto_agent_proto_init() {
 		(*CommandRequest_ProbeSystem)(nil),
 		(*CommandRequest_RestartService)(nil),
 		(*CommandRequest_FlushCache)(nil),
+		(*CommandRequest_SyncHosts)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
@@ -2346,7 +2569,7 @@ func file_proto_agent_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_agent_proto_rawDesc), len(file_proto_agent_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   26,
+			NumMessages:   29,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

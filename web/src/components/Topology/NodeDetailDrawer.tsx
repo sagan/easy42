@@ -822,6 +822,35 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
               </Box>
             ) : null}
 
+            {node.update_hosts ? (
+              <Box
+                sx={{
+                  p: 1.2,
+                  borderRadius: 1.5,
+                  backgroundColor: "#F8FAFC",
+                  border: "1px solid #E2E8F0",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                }}
+              >
+                <Typography variant="caption" sx={{ color: "#64748B" }}>
+                  Update Hosts:
+                </Typography>
+                <Chip
+                  label="Enabled"
+                  size="small"
+                  sx={{
+                    height: 20,
+                    fontSize: "0.7rem",
+                    fontWeight: 600,
+                    backgroundColor: "rgba(79, 70, 229, 0.08)",
+                    color: "#4F46E5",
+                  }}
+                />
+              </Box>
+            ) : null}
+
             {/* Static Routes */}
             <Box sx={{ p: 1.2, borderRadius: 1.5, backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
               <Typography variant="caption" sx={{ color: "#64748B", display: "block", mb: 0.5 }}>

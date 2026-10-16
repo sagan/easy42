@@ -72,6 +72,7 @@ impl MetricsCollector {
             wg_peers: self.collect_wg_peers().await,
             bird_protocols: self.collect_bird_protocols().await,
             disks: self.collect_disks(),
+            hosts_hash: crate::hosts::get_current_hosts_hash(&crate::hosts::get_hosts_path()),
         }
     }
 

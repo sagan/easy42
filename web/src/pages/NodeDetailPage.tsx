@@ -2576,6 +2576,27 @@ export const NodeDetailPage: React.FC = () => {
                     </Box>
                   </Box>
                 </Grid>
+
+                <Grid item xs={12} sm={3}>
+                  <Box sx={{ p: 2, bgcolor: "#F8FAFC", borderRadius: 2, border: "1px solid #E2E8F0" }}>
+                    <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600 }}>
+                      Manage /etc/hosts
+                    </Typography>
+                    <Box sx={{ mt: 0.8 }}>
+                      <Chip
+                        label={node.update_hosts ? "Enabled" : "Disabled"}
+                        size="small"
+                        sx={{
+                          fontWeight: 700,
+                          fontSize: "0.75rem",
+                          bgcolor: node.update_hosts ? "#EEF2FF" : "#F1F5F9",
+                          color: node.update_hosts ? "#4F46E5" : "#64748B",
+                          border: node.update_hosts ? "1px solid rgba(79, 70, 229, 0.25)" : "1px solid #E2E8F0",
+                        }}
+                      />
+                    </Box>
+                  </Box>
+                </Grid>
               </Grid>
 
               {/* Kernel Route Imports */}

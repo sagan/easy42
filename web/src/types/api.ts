@@ -148,6 +148,7 @@ export interface Node {
   agent_version?: string;
   agent_last_seen?: string;
   enable_fa?: boolean;
+  update_hosts?: boolean;
 }
 
 export interface LinkEnd {

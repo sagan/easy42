@@ -66,6 +66,7 @@ func NewManager(store *config.Store) *Manager {
 	}
 	m.setupAgentMetricsListeners()
 	m.setupAgentCronTasksListeners()
+	m.setupAgentHostsListeners()
 	m.startRetentionWorker()
 	return m
 }
@@ -358,6 +359,7 @@ func (m *Manager) AddNode(node config.Node) error {
 		return err
 	}
 	m.triggerDNSUpdateForNode(cfg.DNS, node, "")
+	go m.SyncHostsToAgents()
 	return nil
 }
 
@@ -588,6 +590,8 @@ func (m *Manager) UpdateNode(name string, updated config.Node) error {
 	} else if ipChanged {
 		m.triggerDNSUpdateForNode(cfg.DNS, updated, "")
 	}
+
+	go m.SyncHostsToAgents()
 
 	return nil
 }
@@ -822,11 +826,13 @@ func (m *Manager) RenameNode(oldName, newName string) (*config.Node, error) {
 		if n.Name == newName {
 			cp := n
 			m.triggerDNSUpdateForNode(cfg.DNS, cp, oldName)
+			go m.SyncHostsToAgents()
 			return &cp, nil
 		}
 	}
 	retNode := cfg.Nodes[idx]
 	m.triggerDNSUpdateForNode(cfg.DNS, retNode, oldName)
+	go m.SyncHostsToAgents()
 	return &retNode, nil
 }
 
@@ -925,6 +931,7 @@ func (m *Manager) DeleteNode(name string) error {
 		return err
 	}
 	m.triggerDNSDeleteForNode(cfg.DNS, name)
+	go m.SyncHostsToAgents()
 	return nil
 }
 
@@ -3085,6 +3092,63 @@ func (m *Manager) PlanSyncWithScope(scope string, nodeNames ...string) ([]config
 		})
 	}
 
+	// 5. Node /etc/hosts configuration
+	hostsBlock, expectedHostsHash := m.ExpectedHostsBlock()
+	for _, n := range nodes {
+		if n.IsExternal {
+			continue
+		}
+		if isPartial && !targetMap[n.Name] {
+			continue
+		}
+		if !n.UpdateHosts || !n.IsAgentMode() {
+			continue
+		}
+		node := n
+
+		needsApply := true
+		status := "pending"
+		diffStatus := "create"
+
+		currentHash := ""
+		if m.agentHub != nil && m.agentHub.IsConnected(node.Name) {
+			currentHash = m.agentHub.GetHostsHash(node.Name)
+			if currentHash == "" {
+				if t := m.agentHub.GetTelemetry(node.Name); t != nil {
+					currentHash = t.HostsHash
+				}
+			}
+		}
+		if currentHash == "" {
+			if stNode, ok := currentState.Nodes[node.Name]; ok && stNode.HostsConfigHash != "" {
+				currentHash = stNode.HostsConfigHash
+			}
+		}
+
+		if currentHash != "" {
+			if currentHash == expectedHostsHash {
+				needsApply = false
+				status = "synced"
+				diffStatus = "synced"
+			} else {
+				diffStatus = "update"
+			}
+		}
+
+		actions = append(actions, config.SyncAction{
+			NodeName:    node.Name,
+			Host:        node.Host,
+			Type:        config.ActionSyncHosts,
+			Interface:   "hosts",
+			TargetFile:  "/etc/hosts",
+			FileContent: hostsBlock,
+			Description: fmt.Sprintf("Update cluster hosts mapping (/etc/hosts) on %s", node.Name),
+			NeedsApply:  needsApply,
+			Status:      status,
+			DiffStatus:  diffStatus,
+		})
+	}
+
 	// Sort actions: pending (NeedsApply == true) first, then synced.
 	// Within each group, order by actionPriority (clean/delete -> wireguard -> bird), then NodeName and Interface
 	sort.Slice(actions, func(i, j int) bool {
@@ -3381,8 +3445,9 @@ type agentProbeConfigFile struct {
 }
 
 type agentProbeResult struct {
-	Hostname string                          `json:"hostname"`
-	Configs  map[string]agentProbeConfigFile `json:"configs"`
+	Hostname  string                          `json:"hostname"`
+	Configs   map[string]agentProbeConfigFile `json:"configs"`
+	HostsHash string                          `json:"hosts_hash"`
 }
 
 type linkMetaInfo struct {
@@ -3408,6 +3473,9 @@ func (m *Manager) collectStateFromAgent(targetNode config.Node, meta map[string]
 	})
 	if err == nil && cmdResp.Success && cmdResp.Stdout != "" {
 		_ = json.Unmarshal([]byte(cmdResp.Stdout), &probeRes)
+		if probeRes.HostsHash != "" && m.stateStore != nil {
+			_ = m.stateStore.UpdateHostsState(targetNode.Name, targetNode.Host, probeRes.HostsHash, time.Now())
+		}
 	}
 
 	// 2. Fetch live node status and telemetry
@@ -4411,8 +4479,10 @@ func actionPriority(t config.ActionType) int {
 		return 4
 	case config.ActionSyncNftablesConfig:
 		return 5
-	default:
+	case config.ActionSyncHosts:
 		return 6
+	default:
+		return 7
 	}
 }
 
@@ -4701,6 +4771,33 @@ func (m *Manager) executeAgentSyncAction(act config.SyncAction, res *config.Sync
 		}
 		res.Success = true
 		_ = m.stateStore.RemoveInterface(act.NodeName, act.Interface)
+		return
+	}
+
+	// Hosts file update
+	if act.Type == config.ActionSyncHosts {
+		records := m.buildClusterHostRecords()
+		cmdResp, err := m.agentHub.SendCommand(ctx, act.NodeName, &agentpb.CommandRequest{
+			Command: &agentpb.CommandRequest_SyncHosts{
+				SyncHosts: &agentpb.SyncHostsCmd{
+					Hosts: records,
+				},
+			},
+		})
+		if err != nil {
+			res.Success = false
+			res.Error = fmt.Sprintf("Agent sync hosts failed: %v", err)
+			return
+		}
+		if !cmdResp.Success {
+			res.Success = false
+			res.Error = fmt.Sprintf("Failed to update hosts on %s: %s", act.NodeName, cmdResp.Stderr)
+			return
+		}
+		res.Success = true
+		res.Output = cmdResp.Stdout
+		hash := config.HashHostsBlock(act.FileContent)
+		_ = m.stateStore.UpdateHostsState(act.NodeName, act.Host, hash, time.Now())
 		return
 	}
 

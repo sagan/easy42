@@ -18,6 +18,7 @@ import {
   useMediaQuery,
   Switch,
   FormControlLabel,
+  Checkbox,
 } from "@mui/material";
 import {
   Search,
@@ -142,6 +143,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
   const [birdTemplate, setBirdTemplate] = useState<string>("");
   const [nftTemplate, setNftTemplate] = useState<string>("");
   const [enableFa, setEnableFa] = useState(false);
+  const [updateHosts, setUpdateHosts] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
@@ -179,6 +181,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
       setBirdTemplate(nodeToEdit.bird_template || "");
       setNftTemplate(nodeToEdit.nft_template || "");
       setEnableFa(Boolean(nodeToEdit.enable_fa));
+      setUpdateHosts(Boolean(nodeToEdit.update_hosts));
       if (nodeToEdit.routes && nodeToEdit.routes.length > 0) {
         setKernelRoutes(
           nodeToEdit.routes.map((r, idx) => ({
@@ -267,6 +270,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
       setBirdTemplate("");
       setNftTemplate("");
       setEnableFa(false);
+      setUpdateHosts(false);
       setEntrypoints([{ id: "nat-fallback", ip: "", portStr: "", tagStr: "nat", mtuStr: "", isNone: true }]);
       setDiscoveredIps([]);
       setProbeError(null);
@@ -598,6 +602,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
         bird_template: birdTemplate.trim() || undefined,
         nft_template: nftTemplate.trim() || undefined,
         enable_fa: enableFa,
+        update_hosts: updateHosts,
         description: description.trim() || undefined,
         note: note.trim() || undefined,
         x: nodeToEdit?.x,
@@ -1525,6 +1530,53 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                         <Typography variant="caption" sx={{ color: "#64748B" }}>
                           When enabled, adds the FlapAlerted BGP peering session to this node's generated bird.conf to
                           report route flapping.
+                        </Typography>
+                      </Box>
+                    }
+                  />
+                </Box>
+
+                {/* Manage /etc/hosts Checkbox */}
+                <Box
+                  sx={{
+                    p: 1.5,
+                    borderRadius: 2,
+                    bgcolor: updateHosts ? "rgba(79, 70, 229, 0.04)" : "#F8FAFC",
+                    border: updateHosts ? "1px solid rgba(79, 70, 229, 0.3)" : "1px solid #E2E8F0",
+                    transition: "all 0.2s ease",
+                    mt: 1.5,
+                  }}
+                >
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        id="update-hosts-checkbox"
+                        checked={updateHosts}
+                        onChange={(e) => setUpdateHosts(e.target.checked)}
+                        color="primary"
+                        disabled={saving}
+                      />
+                    }
+                    label={
+                      <Box>
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                          <Typography variant="body2" sx={{ fontWeight: 600, color: "#1E293B" }}>
+                            Update Hosts
+                          </Typography>
+                          <Chip
+                            label="Agent"
+                            size="small"
+                            sx={{
+                              height: 20,
+                              fontSize: "0.68rem",
+                              fontWeight: 600,
+                              bgcolor: updateHosts ? "#EEF2FF" : "#F1F5F9",
+                              color: updateHosts ? "#4F46E5" : "#64748B",
+                            }}
+                          />
+                        </Box>
+                        <Typography variant="caption" sx={{ color: "#64748B" }}>
+                          Dynamically manage node /etc/hosts file with cluster node name and IP mappings (only works in agent mode).
                         </Typography>
                       </Box>
                     }

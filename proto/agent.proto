@@ -23,6 +23,7 @@ message AgentMessage {
     HeartbeatAck heartbeat_ack = 21;
     CommandRequest command_req = 22;
     SyncCronTasks sync_cron_tasks = 23;
+    SyncHosts sync_hosts = 24;
   }
 }
 
@@ -33,6 +34,7 @@ message RegisterRequest {
   string agent_version = 2;
   string os_info = 3;
   string hostname = 4;
+  string hosts_hash = 5;
 }
 
 message RegisterResponse {
@@ -45,6 +47,7 @@ message RegisterResponse {
 
 message Heartbeat {
   int64 client_time = 1;
+  string hosts_hash = 2;
 }
 
 message HeartbeatAck {
@@ -59,6 +62,7 @@ message TelemetryReport {
   repeated WgPeerMetrics wg_peers = 3;
   repeated BirdProtocolStatus bird_protocols = 4;
   repeated DiskMetrics disks = 5;
+  string hosts_hash = 6;
 }
 
 message DiskMetrics {
@@ -120,6 +124,7 @@ message CommandRequest {
     ProbeSystemCmd probe_system = 15;
     RestartServiceCmd restart_service = 16;
     FlushCacheCmd flush_cache = 17;
+    SyncHostsCmd sync_hosts = 18;
   }
 }
 
@@ -217,4 +222,20 @@ message CronTaskReport {
   string raw_output = 6;
   string error_message = 7;
 }
+
+// ----------------- Host Management -----------------
+
+message HostRecord {
+  string name = 1;
+  string ip = 2;
+}
+
+message SyncHosts {
+  repeated HostRecord hosts = 1;
+}
+
+message SyncHostsCmd {
+  repeated HostRecord hosts = 1;
+}
+
 

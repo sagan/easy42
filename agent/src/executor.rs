@@ -82,6 +82,8 @@ fn is_valid_iface_name(iface: &str) -> bool {
 pub struct ProbeSystemResult {
     pub hostname: String,
     pub configs: HashMap<String, ProbeConfigFile>,
+    #[serde(default)]
+    pub hosts_hash: String,
 }
 
 pub struct CommandExecutor;
@@ -117,6 +119,9 @@ impl CommandExecutor {
             Some(proto::command_request::Command::ProbeSystem(_)) => self.probe_system(),
             Some(proto::command_request::Command::FlushCache(_)) => {
                 (true, 0, "interface cache flushed".to_string(), String::new())
+            }
+            Some(proto::command_request::Command::SyncHosts(sync)) => {
+                self.sync_hosts(sync)
             }
             None => (false, -1, String::new(), "unknown command".to_string()),
         };
@@ -482,7 +487,8 @@ done"#;
             }
         }
 
-        let result = ProbeSystemResult { hostname, configs };
+        let hosts_hash = crate::hosts::get_current_hosts_hash(&crate::hosts::get_hosts_path());
+        let result = ProbeSystemResult { hostname, configs, hosts_hash };
 
         match serde_json::to_string(&result) {
             Ok(json) => (true, 0, json, String::new()),
@@ -492,6 +498,31 @@ done"#;
                 String::new(),
                 format!("failed to serialize probe result: {}", e),
             ),
+        }
+    }
+
+    fn sync_hosts(&self, req: proto::SyncHostsCmd) -> (bool, i32, String, String) {
+        match crate::hosts::update_hosts_file(
+            &crate::hosts::get_hosts_path(),
+            &crate::hosts::get_hosts_tmp_path(),
+            req.hosts,
+        ) {
+            Ok((updated, hash)) => {
+                (
+                    true,
+                    0,
+                    format!("hosts updated: modified={}, hash={}", updated, hash),
+                    String::new(),
+                )
+            }
+            Err(e) => {
+                (
+                    false,
+                    1,
+                    String::new(),
+                    format!("failed to update /etc/hosts: {}", e),
+                )
+            }
         }
     }
 }

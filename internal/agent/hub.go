@@ -82,6 +82,24 @@ func (h *Hub) SyncCronTasks(nodeName string, tasks []*agentpb.CronTaskSpec) erro
 	return conn.SyncCronTasks(tasks)
 }
 
+// SyncHosts sends the latest cluster hosts to a specific node agent if connected
+func (h *Hub) SyncHosts(nodeName string, hosts []*agentpb.HostRecord) error {
+	conn, ok := h.GetConnection(nodeName)
+	if !ok {
+		return nil // Agent not connected; will receive on next connect
+	}
+	return conn.SyncHosts(hosts)
+}
+
+// GetHostsHash returns the latest reported hosts hash for a connected node agent
+func (h *Hub) GetHostsHash(nodeName string) string {
+	conn, ok := h.GetConnection(nodeName)
+	if !ok {
+		return ""
+	}
+	return conn.HostsHash()
+}
+
 // NotifyRegister triggers registered registration listeners
 func (h *Hub) NotifyRegister(conn *AgentConnection) {
 	h.mu.RLock()

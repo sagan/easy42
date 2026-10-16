@@ -63,7 +63,7 @@ impl AgentClient {
             .uri(&ws_url)
             .header("Authorization", format!("Bearer {}", self.config.token))
             .header("X-Easy42-Agent-Token", &self.config.token)
-            .header("User-Agent", "easy42-agent/0.1.0")
+            .header("User-Agent", format!("easy42-agent/{}", crate::AGENT_VERSION))
             .header("Host", get_host_from_url(&ws_url))
             .header("Connection", "Upgrade")
             .header("Upgrade", "websocket")
@@ -95,15 +95,17 @@ impl AgentClient {
             .clone()
             .unwrap_or_else(|| hostname.clone());
 
+        let hosts_hash = crate::hosts::get_current_hosts_hash(&crate::hosts::get_hosts_path());
         let reg_msg = proto::AgentMessage {
             seq: 1,
             timestamp: now_millis(),
             payload: Some(proto::agent_message::Payload::RegisterReq(
                 proto::RegisterRequest {
                     node_name: node_name.clone(),
-                    agent_version: "0.1.0".to_string(),
+                    agent_version: crate::AGENT_VERSION.to_string(),
                     os_info,
                     hostname,
+                    hosts_hash,
                 },
             )),
         };
@@ -155,11 +157,13 @@ impl AgentClient {
             let mut ticker = interval(Duration::from_secs(15));
             loop {
                 ticker.tick().await;
+                let hosts_hash = crate::hosts::get_current_hosts_hash(&crate::hosts::get_hosts_path());
                 let msg = proto::AgentMessage {
                     seq: 0,
                     timestamp: now_millis(),
                     payload: Some(proto::agent_message::Payload::Heartbeat(proto::Heartbeat {
                         client_time: now_millis(),
+                        hosts_hash,
                     })),
                 };
                 if tx_hb.send(OutgoingMessage::Proto(msg)).await.is_err() {
@@ -288,6 +292,21 @@ impl AgentClient {
                                 Some(proto::agent_message::Payload::SyncCronTasks(sync)) => {
                                     info!("Received cron tasks sync: {} task(s)", sync.tasks.len());
                                     cron_scheduler.update_tasks(sync.tasks).await;
+                                }
+                                Some(proto::agent_message::Payload::SyncHosts(sync)) => {
+                                    info!("Received hosts sync: {} record(s)", sync.hosts.len());
+                                    match crate::hosts::update_hosts_file(
+                                        &crate::hosts::get_hosts_path(),
+                                        &crate::hosts::get_hosts_tmp_path(),
+                                        sync.hosts,
+                                    ) {
+                                        Ok((updated, hash)) => {
+                                            info!("Hosts sync completed (modified={}, hash={})", updated, hash);
+                                        }
+                                        Err(e) => {
+                                            warn!("Hosts sync failed: {}", e);
+                                        }
+                                    }
                                 }
                                 _ => {}
                             }

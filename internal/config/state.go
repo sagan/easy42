@@ -50,6 +50,8 @@ type StateNode struct {
 	NftablesAppliedAt  *time.Time                `json:"nftables_applied_at,omitempty"`
 	RoaConfigHashes    map[string]string         `json:"roa_config_hashes,omitempty"` // key: targetFile, val: sha256 hash
 	RoaAppliedAt       map[string]time.Time      `json:"roa_applied_at,omitempty"`
+	HostsConfigHash    string                    `json:"hosts_config_hash,omitempty"`
+	HostsAppliedAt     *time.Time                `json:"hosts_applied_at,omitempty"`
 	Interfaces         map[string]StateInterface `json:"interfaces"` // key: interface name e.g. "wg42node2"
 }
 
@@ -251,6 +253,8 @@ func (s *StateStore) initDBLocked() error {
 		nftables_applied_at INTEGER,
 		roa_config_hashes TEXT NOT NULL DEFAULT '{}',
 		roa_applied_at TEXT NOT NULL DEFAULT '{}',
+		hosts_config_hash TEXT NOT NULL DEFAULT '',
+		hosts_applied_at INTEGER,
 		interfaces TEXT NOT NULL DEFAULT '{}'
 	);
 
@@ -353,6 +357,10 @@ func (s *StateStore) initDBLocked() error {
 		return fmt.Errorf("failed to initialize sqlite schema: %w", err)
 	}
 
+	// Schema migrations for new columns
+	_, _ = db.Exec("ALTER TABLE node_states ADD COLUMN hosts_config_hash TEXT NOT NULL DEFAULT ''")
+	_, _ = db.Exec("ALTER TABLE node_states ADD COLUMN hosts_applied_at INTEGER")
+
 	s.db = db
 
 	// Check if legacy state.json exists and migrate it
@@ -416,7 +424,7 @@ func (s *StateStore) Load() (*NetworkState, error) {
 	rows, err := s.db.Query(`
 		SELECT node_name, host, last_seen, bird_config_hash, bird_applied_at,
 		       nftables_config_hash, nftables_applied_at, roa_config_hashes,
-		       roa_applied_at, interfaces
+		       roa_applied_at, hosts_config_hash, hosts_applied_at, interfaces
 		FROM node_states
 	`)
 	if err != nil {
@@ -426,17 +434,19 @@ func (s *StateStore) Load() (*NetworkState, error) {
 
 	for rows.Next() {
 		var (
-			nodeName, host, birdHash, nftHash string
-			lastSeenUnix                      sql.NullInt64
-			birdAppliedUnix                   sql.NullInt64
-			nftAppliedUnix                    sql.NullInt64
-			roaHashesJSON, roaAppliedJSON     string
-			ifacesJSON                        string
+			nodeName, host, birdHash, nftHash, hostsHash string
+			lastSeenUnix                                 sql.NullInt64
+			birdAppliedUnix                              sql.NullInt64
+			nftAppliedUnix                               sql.NullInt64
+			hostsAppliedUnix                             sql.NullInt64
+			roaHashesJSON, roaAppliedJSON                string
+			ifacesJSON                                   string
 		)
 
 		if err := rows.Scan(
 			&nodeName, &host, &lastSeenUnix, &birdHash, &birdAppliedUnix,
-			&nftHash, &nftAppliedUnix, &roaHashesJSON, &roaAppliedJSON, &ifacesJSON,
+			&nftHash, &nftAppliedUnix, &roaHashesJSON, &roaAppliedJSON,
+			&hostsHash, &hostsAppliedUnix, &ifacesJSON,
 		); err != nil {
 			continue
 		}
@@ -446,6 +456,7 @@ func (s *StateStore) Load() (*NetworkState, error) {
 			Host:               host,
 			BirdConfigHash:     birdHash,
 			NftablesConfigHash: nftHash,
+			HostsConfigHash:    hostsHash,
 			RoaConfigHashes:    make(map[string]string),
 			RoaAppliedAt:       make(map[string]time.Time),
 			Interfaces:         make(map[string]StateInterface),
@@ -461,6 +472,10 @@ func (s *StateStore) Load() (*NetworkState, error) {
 		if nftAppliedUnix.Valid && nftAppliedUnix.Int64 > 0 {
 			t := time.Unix(nftAppliedUnix.Int64, 0)
 			node.NftablesAppliedAt = &t
+		}
+		if hostsAppliedUnix.Valid && hostsAppliedUnix.Int64 > 0 {
+			t := time.Unix(hostsAppliedUnix.Int64, 0)
+			node.HostsAppliedAt = &t
 		}
 
 		if roaHashesJSON != "" {
@@ -518,12 +533,18 @@ func (s *StateStore) saveNodeLocked(node StateNode) error {
 		nftUnix = &u
 	}
 
+	var hostsUnix *int64
+	if node.HostsAppliedAt != nil {
+		u := node.HostsAppliedAt.Unix()
+		hostsUnix = &u
+	}
+
 	query := `
 	INSERT INTO node_states (
 		node_name, host, last_seen, bird_config_hash, bird_applied_at,
 		nftables_config_hash, nftables_applied_at, roa_config_hashes,
-		roa_applied_at, interfaces
-	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		roa_applied_at, hosts_config_hash, hosts_applied_at, interfaces
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	ON CONFLICT(node_name) DO UPDATE SET
 		host=excluded.host,
 		last_seen=excluded.last_seen,
@@ -533,12 +554,15 @@ func (s *StateStore) saveNodeLocked(node StateNode) error {
 		nftables_applied_at=excluded.nftables_applied_at,
 		roa_config_hashes=excluded.roa_config_hashes,
 		roa_applied_at=excluded.roa_applied_at,
+		hosts_config_hash=excluded.hosts_config_hash,
+		hosts_applied_at=excluded.hosts_applied_at,
 		interfaces=excluded.interfaces;
 	`
 
 	_, err := s.db.Exec(query,
 		node.Name, node.Host, lastSeenUnix, node.BirdConfigHash, birdUnix,
-		node.NftablesConfigHash, nftUnix, string(roaHashesJSON), string(roaAppliedJSON), string(ifacesJSON),
+		node.NftablesConfigHash, nftUnix, string(roaHashesJSON), string(roaAppliedJSON),
+		node.HostsConfigHash, hostsUnix, string(ifacesJSON),
 	)
 	return err
 }
@@ -807,6 +831,45 @@ func (s *StateStore) UpdateNftablesState(nodeName, host, configHash string, appl
 	node.LastSeen = time.Now()
 	node.NftablesConfigHash = configHash
 	node.NftablesAppliedAt = &appliedAt
+	s.state.Nodes[nodeName] = node
+	s.state.UpdatedAt = time.Now()
+
+	return s.saveNodeLocked(node)
+}
+
+// UpdateHostsState records or updates the applied /etc/hosts easy42 config hash for a node
+func (s *StateStore) UpdateHostsState(nodeName, host, configHash string, appliedAt time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if err := s.initDBLocked(); err != nil {
+		return err
+	}
+
+	if s.state == nil {
+		s.state = &NetworkState{
+			Version:   1,
+			UpdatedAt: time.Now(),
+			Nodes:     make(map[string]StateNode),
+		}
+	}
+
+	node, exists := s.state.Nodes[nodeName]
+	if !exists {
+		node = StateNode{
+			Name:       nodeName,
+			Host:       host,
+			LastSeen:   time.Now(),
+			Interfaces: make(map[string]StateInterface),
+		}
+	}
+	if node.Interfaces == nil {
+		node.Interfaces = make(map[string]StateInterface)
+	}
+	node.Host = host
+	node.LastSeen = time.Now()
+	node.HostsConfigHash = configHash
+	node.HostsAppliedAt = &appliedAt
 	s.state.Nodes[nodeName] = node
 	s.state.UpdatedAt = time.Now()
 

@@ -320,6 +320,7 @@ type Node struct {
 	AgentVersion  string            `json:"agent_version,omitempty"`   // Reported agent version
 	AgentLastSeen time.Time         `json:"agent_last_seen,omitempty"` // Timestamp of last agent heartbeat/report
 	EnableFA      bool              `json:"enable_fa,omitempty"`       // Enable FlapAlerted BGP peering
+	UpdateHosts   bool              `json:"update_hosts,omitempty"`    // Enable managing /etc/hosts file of the node
 }
 
 // IsAgentMode returns true if the node is configured to use the agent
@@ -517,6 +518,7 @@ const (
 	ActionSyncBirdConfig     ActionType = "sync_bird"
 	ActionSyncNftablesConfig ActionType = "sync_nftables"
 	ActionSyncRoaConfig      ActionType = "sync_roa"
+	ActionSyncHosts          ActionType = "sync_hosts"
 )
 
 // SyncAction represents a planned action on a target node

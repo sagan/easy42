@@ -26,6 +26,9 @@ func TestRustAgentEndToEnd(t *testing.T) {
 		agentBin = filepath.Join("..", "..", "agent", "target", "x86_64-unknown-linux-musl", "release", "easy42-agent")
 	}
 	if _, err := os.Stat(agentBin); err != nil {
+		agentBin = filepath.Join("..", "..", "agent", "target", "debug", "easy42-agent")
+	}
+	if _, err := os.Stat(agentBin); err != nil {
 		t.Skipf("agent binary not found at %s, skipping e2e test", agentBin)
 	}
 
@@ -61,12 +64,19 @@ func TestRustAgentEndToEnd(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	tmpHostsFile := filepath.Join(t.TempDir(), "hosts")
+	initialHosts := "127.0.0.1 localhost\n# User custom entry\n10.0.0.99 myrouter\n"
+	if err := os.WriteFile(tmpHostsFile, []byte(initialHosts), 0644); err != nil {
+		t.Fatalf("failed to write initial hosts file: %v", err)
+	}
+
 	cmd := exec.CommandContext(ctx, agentBin,
 		"--server", server.URL,
 		"--token", testToken,
 		"--node-name", nodeName,
 		"--interval", "2",
 	)
+	cmd.Env = append(os.Environ(), "EASY42_HOSTS_PATH="+tmpHostsFile)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
@@ -187,5 +197,68 @@ func TestRustAgentEndToEnd(t *testing.T) {
 	}
 	if strings.TrimSpace(diagResp.Stdout) == "" && strings.TrimSpace(diagResp.Stderr) == "" {
 		t.Fatalf("expected non-empty output from ip route show")
+	}
+
+	// Test hosts file management via SyncHostsCmd
+	hostsCmdResp, err := hub.SendCommand(cmdCtx, nodeName, &agentpb.CommandRequest{
+		Command: &agentpb.CommandRequest_SyncHosts{
+			SyncHosts: &agentpb.SyncHostsCmd{
+				Hosts: []*agentpb.HostRecord{
+					{Name: "foo", Ip: "192.168.100.1"},
+					{Name: "bar", Ip: "192.168.100.2"},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("SyncHosts command failed: %v", err)
+	}
+	if !hostsCmdResp.Success {
+		t.Fatalf("expected SyncHosts command to succeed, got: %+v", hostsCmdResp)
+	}
+
+	// Verify /etc/hosts content preserved existing entries and sorted records
+	hostsBytes, err := os.ReadFile(tmpHostsFile)
+	if err != nil {
+		t.Fatalf("failed to read updated hosts file: %v", err)
+	}
+	hostsContent := string(hostsBytes)
+	if !strings.Contains(hostsContent, "127.0.0.1 localhost") || !strings.Contains(hostsContent, "10.0.0.99 myrouter") {
+		t.Fatalf("existing hosts content was wiped: %s", hostsContent)
+	}
+	expectedBlock := "### EASY42_START\n192.168.100.2 bar bar.internal\n192.168.100.1 foo foo.internal\n### EASY42_END\n"
+	if !strings.Contains(hostsContent, expectedBlock) {
+		t.Fatalf("hosts content missing expected block:\n%s\nGot:\n%s", expectedBlock, hostsContent)
+	}
+
+	// Verify atomic temp file is not left behind
+	tmpHostsPending := tmpHostsFile + "-easy42-tmp"
+	if _, err := os.Stat(tmpHostsPending); !os.IsNotExist(err) {
+		t.Fatalf("expected temporary hosts file to be cleaned up/renamed, but it exists: %s", tmpHostsPending)
+	}
+
+	// Test streaming SyncHosts AgentMessage push
+	err = hub.SyncHosts(nodeName, []*agentpb.HostRecord{
+		{Name: "foo", Ip: "192.168.100.1"},
+		{Name: "bar", Ip: "192.168.100.2"},
+		{Name: "zoo", Ip: "192.168.100.9"},
+	})
+	if err != nil {
+		t.Fatalf("hub.SyncHosts failed: %v", err)
+	}
+
+	// Wait up to 3 seconds for async update to apply
+	deadlineHosts := time.Now().Add(3 * time.Second)
+	updatedWithZoo := false
+	for time.Now().Before(deadlineHosts) {
+		content, err := os.ReadFile(tmpHostsFile)
+		if err == nil && strings.Contains(string(content), "192.168.100.9 zoo zoo.internal") {
+			updatedWithZoo = true
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	if !updatedWithZoo {
+		t.Fatalf("streaming hosts sync did not update hosts file in time")
 	}
 }

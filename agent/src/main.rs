@@ -3,6 +3,9 @@ mod collector;
 mod config;
 mod cron;
 mod executor;
+mod hosts;
+
+pub use collector::proto;
 
 use clap::Parser;
 use std::path::PathBuf;
@@ -12,8 +15,10 @@ use tracing_subscriber::EnvFilter;
 use crate::client::AgentClient;
 use crate::config::AgentConfig;
 
+pub const AGENT_VERSION: &str = env!("CARGO_PKG_VERSION");
+
 #[derive(Parser, Debug)]
-#[command(name = "easy42-agent", version = "0.1.0", about = "Easy42 Node Agent")]
+#[command(name = "easy42-agent", version, about = "Easy42 Node Agent")]
 struct Cli {
     /// Path to configuration file
     #[arg(short, long, default_value = "/etc/easy42/agent.json")]
@@ -88,7 +93,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(&config.log_level));
     tracing_subscriber::fmt().with_env_filter(filter).init();
 
-    info!("Starting Easy42 Agent v0.1.0");
+    info!("Starting Easy42 Agent v{}", AGENT_VERSION);
     info!("Target server: {}", config.server);
 
     let client = AgentClient::new(config);
