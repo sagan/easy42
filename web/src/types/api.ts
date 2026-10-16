@@ -716,6 +716,7 @@ export interface CronTaskResultRecord {
   mdev_rtt_ms: number;
   raw_output: string;
   parsed_json?: string;
+  runs_count?: number;
 }
 
 export interface CronTaskStatsSummary {
@@ -753,6 +754,7 @@ export interface ServerTask {
 
 export interface DatabaseInfo {
   retention_days: number;
+  raw_retention_days?: number;
   file_path: string;
   total_size_bytes: number;
   total_size_human: string;
@@ -761,8 +763,11 @@ export interface DatabaseInfo {
   freelist_count?: number;
   wal_size_bytes?: number;
   metrics_count?: number;
+  metrics_5m_count?: number;
   interface_metrics_count?: number;
+  interface_metrics_5m_count?: number;
   cron_results_count?: number;
+  cron_results_5m_count?: number;
 }
 
 

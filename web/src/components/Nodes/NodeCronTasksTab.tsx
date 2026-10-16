@@ -563,6 +563,19 @@ export const NodeCronTasksTab: React.FC<NodeCronTasksTabProps> = ({ nodeName }) 
                                   color: r.task_type === "tcp_ping" ? "#7C3AED" : "#2563EB",
                                 }}
                               />
+                              {Boolean(r.runs_count && r.runs_count > 1) && (
+                                <Chip
+                                  size="small"
+                                  label={`5m avg (${r.runs_count} runs)`}
+                                  sx={{
+                                    fontSize: "0.65rem",
+                                    height: 18,
+                                    bgcolor: "#F1F5F9",
+                                    color: "#475569",
+                                    fontWeight: 600,
+                                  }}
+                                />
+                              )}
                             </Box>
                           </TableCell>
                           <TableCell sx={{ fontFamily: "monospace", fontSize: "0.8rem", color: "#334155" }}>

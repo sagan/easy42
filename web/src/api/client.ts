@@ -321,7 +321,7 @@ export const api = {
 
   // Database Settings & Maintenance
   getDatabaseInfo: () => request<DatabaseInfo>("/settings/database"),
-  updateDatabaseSettings: (settings: { retention_days: number }) =>
+  updateDatabaseSettings: (settings: { retention_days: number; raw_retention_days?: number }) =>
     request<DatabaseInfo>("/settings/database", {
       method: "PUT",
       body: JSON.stringify(settings),

@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -350,6 +351,64 @@ func (s *StateStore) initDBLocked() error {
 		last_duration_ms INTEGER NOT NULL DEFAULT 0,
 		last_message TEXT NOT NULL DEFAULT ''
 	);
+
+	CREATE TABLE IF NOT EXISTS node_metrics_5m (
+		node_name TEXT NOT NULL,
+		timestamp INTEGER NOT NULL,
+		cpu_percent REAL NOT NULL DEFAULT 0,
+		memory_used_bytes INTEGER NOT NULL DEFAULT 0,
+		memory_total_bytes INTEGER NOT NULL DEFAULT 0,
+		uptime_seconds INTEGER NOT NULL DEFAULT 0,
+		load_1m REAL NOT NULL DEFAULT 0,
+		load_5m REAL NOT NULL DEFAULT 0,
+		load_15m REAL NOT NULL DEFAULT 0,
+		net_rx_bytes INTEGER NOT NULL DEFAULT 0,
+		net_tx_bytes INTEGER NOT NULL DEFAULT 0,
+		net_rx_rate REAL NOT NULL DEFAULT 0,
+		net_tx_rate REAL NOT NULL DEFAULT 0,
+		PRIMARY KEY (node_name, timestamp)
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_node_metrics_5m_node_time ON node_metrics_5m(node_name, timestamp);
+
+	CREATE TABLE IF NOT EXISTS node_interface_traffic_stats_5m (
+		node_name TEXT NOT NULL,
+		interface_name TEXT NOT NULL,
+		timestamp INTEGER NOT NULL,
+		raw_rx_bytes INTEGER NOT NULL DEFAULT 0,
+		raw_tx_bytes INTEGER NOT NULL DEFAULT 0,
+		accum_rx_bytes INTEGER NOT NULL DEFAULT 0,
+		accum_tx_bytes INTEGER NOT NULL DEFAULT 0,
+		rx_rate REAL NOT NULL DEFAULT 0,
+		tx_rate REAL NOT NULL DEFAULT 0,
+		reset_detected INTEGER NOT NULL DEFAULT 0,
+		PRIMARY KEY (node_name, interface_name, timestamp)
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_traffic_stats_5m_lookup ON node_interface_traffic_stats_5m(node_name, interface_name, timestamp);
+	CREATE INDEX IF NOT EXISTS idx_traffic_stats_5m_time ON node_interface_traffic_stats_5m(timestamp);
+
+	CREATE TABLE IF NOT EXISTS cron_task_results_5m (
+		task_id TEXT NOT NULL,
+		node_name TEXT NOT NULL,
+		timestamp INTEGER NOT NULL,
+		task_name TEXT NOT NULL DEFAULT '',
+		task_type TEXT NOT NULL DEFAULT '',
+		target TEXT NOT NULL DEFAULT '',
+		runs_count INTEGER NOT NULL DEFAULT 0,
+		success_count INTEGER NOT NULL DEFAULT 0,
+		failure_count INTEGER NOT NULL DEFAULT 0,
+		avg_rtt_ms REAL NOT NULL DEFAULT 0,
+		min_rtt_ms REAL NOT NULL DEFAULT 0,
+		max_rtt_ms REAL NOT NULL DEFAULT 0,
+		packet_loss_pct REAL NOT NULL DEFAULT 0,
+		packets_sent INTEGER NOT NULL DEFAULT 0,
+		packets_received INTEGER NOT NULL DEFAULT 0,
+		PRIMARY KEY (task_id, node_name, timestamp)
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_cron_task_5m_node_time ON cron_task_results_5m(node_name, timestamp);
+	CREATE INDEX IF NOT EXISTS idx_cron_task_5m_task_time ON cron_task_results_5m(task_id, timestamp);
 	`
 
 	if _, err := db.Exec(schema); err != nil {
@@ -1033,7 +1092,7 @@ func (s *StateStore) Reset() error {
 		return err
 	}
 
-	_, _ = s.db.Exec("DELETE FROM node_states; DELETE FROM node_metrics; DELETE FROM node_info; DELETE FROM meta; DELETE FROM node_interface_metrics; DELETE FROM node_interface_traffic_stats;")
+	_, _ = s.db.Exec("DELETE FROM node_states; DELETE FROM node_metrics; DELETE FROM node_metrics_5m; DELETE FROM node_info; DELETE FROM meta; DELETE FROM node_interface_metrics; DELETE FROM node_interface_traffic_stats; DELETE FROM node_interface_traffic_stats_5m; DELETE FROM cron_task_results; DELETE FROM cron_task_results_5m;")
 
 	s.state = &NetworkState{
 		Version:   1,
@@ -1533,11 +1592,12 @@ func (s *StateStore) GetNodeInterfaces(nodeName string) ([]string, error) {
 	}
 
 	rows, err := s.db.Query(`
-		SELECT DISTINCT interface_name
-		FROM node_interface_metrics
-		WHERE node_name = ?
-		ORDER BY interface_name ASC
-	`, nodeName)
+		SELECT DISTINCT interface_name FROM (
+			SELECT interface_name FROM node_interface_metrics WHERE node_name = ?
+			UNION
+			SELECT interface_name FROM node_interface_traffic_stats_5m WHERE node_name = ?
+		) ORDER BY interface_name ASC
+	`, nodeName, nodeName)
 	if err != nil {
 		return nil, err
 	}
@@ -1566,9 +1626,15 @@ func (s *StateStore) GetMetricsHistoryWithInterface(nodeName string, interfaceNa
 		maxPoints = 250
 	}
 
-	// Fetch available interfaces for this node from raw metrics
+	// Fetch available interfaces for this node from both raw metrics and 5m summaries
 	var availableIfaces []string
-	if ifRows, err := s.db.Query("SELECT DISTINCT interface_name FROM node_interface_metrics WHERE node_name = ? ORDER BY interface_name ASC", nodeName); err == nil {
+	if ifRows, err := s.db.Query(`
+		SELECT DISTINCT interface_name FROM (
+			SELECT interface_name FROM node_interface_metrics WHERE node_name = ?
+			UNION
+			SELECT interface_name FROM node_interface_traffic_stats_5m WHERE node_name = ?
+		) ORDER BY interface_name ASC
+	`, nodeName, nodeName); err == nil {
 		defer ifRows.Close()
 		for ifRows.Next() {
 			var ifn string
@@ -1590,12 +1656,59 @@ func (s *StateStore) GetMetricsHistoryWithInterface(nodeName string, interfaceNa
 		_ = s.updateInterfaceTrafficStatsLocked(nodeName, selectedIface)
 	}
 
+	var minRawTs int64
+	_ = s.db.QueryRow("SELECT COALESCE(MIN(timestamp), 0) FROM node_metrics WHERE node_name = ?", nodeName).Scan(&minRawTs)
+	if minRawTs == 0 {
+		minRawTs = math.MaxInt64
+	}
+
 	var (
 		points []NodeMetricPoint
 		err    error
 	)
 
 	if selectedIface != "" {
+		type pointWithAccum struct {
+			pt      NodeMetricPoint
+			accumRx uint64
+			accumTx uint64
+		}
+		var rawPts []pointWithAccum
+
+		// 1. Query 5m rollup data if requested start is older than available raw telemetry
+		if start.Unix() < minRawTs {
+			rows5m, qErr := s.db.Query(`
+				SELECT m.timestamp, m.cpu_percent, m.memory_used_bytes, m.memory_total_bytes,
+				       m.uptime_seconds, m.load_1m, m.load_5m, m.load_15m,
+				       COALESCE(t.raw_rx_bytes, m.net_rx_bytes),
+				       COALESCE(t.raw_tx_bytes, m.net_tx_bytes),
+				       COALESCE(t.rx_rate, m.net_rx_rate),
+				       COALESCE(t.tx_rate, m.net_tx_rate),
+				       COALESCE(t.accum_rx_bytes, 0),
+				       COALESCE(t.accum_tx_bytes, 0)
+				FROM node_metrics_5m m
+				LEFT JOIN node_interface_traffic_stats_5m t
+				  ON m.node_name = t.node_name AND m.timestamp = t.timestamp AND t.interface_name = ?
+				WHERE m.node_name = ? AND m.timestamp >= ? AND m.timestamp < ?
+				ORDER BY m.timestamp ASC
+			`, selectedIface, nodeName, start.Unix(), minRawTs)
+			if qErr == nil {
+				for rows5m.Next() {
+					var p pointWithAccum
+					if err := rows5m.Scan(
+						&p.pt.Timestamp, &p.pt.CPUPercent, &p.pt.MemoryUsedBytes, &p.pt.MemoryTotalBytes,
+						&p.pt.UptimeSeconds, &p.pt.Load1m, &p.pt.Load5m, &p.pt.Load15m,
+						&p.pt.NetRxBytes, &p.pt.NetTxBytes, &p.pt.NetRxRate, &p.pt.NetTxRate,
+						&p.accumRx, &p.accumTx,
+					); err == nil {
+						rawPts = append(rawPts, p)
+					}
+				}
+				rows5m.Close()
+			}
+		}
+
+		// 2. Query high-resolution raw telemetry
 		rows, qErr := s.db.Query(`
 			SELECT m.timestamp, m.cpu_percent, m.memory_used_bytes, m.memory_total_bytes,
 			       m.uptime_seconds, m.load_1m, m.load_5m, m.load_15m,
@@ -1611,29 +1724,23 @@ func (s *StateStore) GetMetricsHistoryWithInterface(nodeName string, interfaceNa
 			WHERE m.node_name = ? AND m.timestamp >= ?
 			ORDER BY m.timestamp ASC
 		`, selectedIface, nodeName, start.Unix())
-		if qErr != nil {
+		if qErr != nil && len(rawPts) == 0 {
 			return nil, availableIfaces, selectedIface, qErr
 		}
-		defer rows.Close()
-
-		type pointWithAccum struct {
-			pt      NodeMetricPoint
-			accumRx uint64
-			accumTx uint64
-		}
-		var rawPts []pointWithAccum
-		for rows.Next() {
-			var p pointWithAccum
-			if err := rows.Scan(
-				&p.pt.Timestamp, &p.pt.CPUPercent, &p.pt.MemoryUsedBytes, &p.pt.MemoryTotalBytes,
-				&p.pt.UptimeSeconds, &p.pt.Load1m, &p.pt.Load5m, &p.pt.Load15m,
-				&p.pt.NetRxBytes, &p.pt.NetTxBytes, &p.pt.NetRxRate, &p.pt.NetTxRate,
-				&p.accumRx, &p.accumTx,
-			); err == nil {
-				rawPts = append(rawPts, p)
+		if qErr == nil {
+			defer rows.Close()
+			for rows.Next() {
+				var p pointWithAccum
+				if err := rows.Scan(
+					&p.pt.Timestamp, &p.pt.CPUPercent, &p.pt.MemoryUsedBytes, &p.pt.MemoryTotalBytes,
+					&p.pt.UptimeSeconds, &p.pt.Load1m, &p.pt.Load5m, &p.pt.Load15m,
+					&p.pt.NetRxBytes, &p.pt.NetTxBytes, &p.pt.NetRxRate, &p.pt.NetTxRate,
+					&p.accumRx, &p.accumTx,
+				); err == nil {
+					rawPts = append(rawPts, p)
+				}
 			}
 		}
-		rows.Close()
 
 		if len(rawPts) > 0 {
 			// Find baseline offset at the start point of the queried timespan
@@ -1653,6 +1760,32 @@ func (s *StateStore) GetMetricsHistoryWithInterface(nodeName string, interfaceNa
 			}
 		}
 	} else {
+		// 1. Query 5m rollup data if requested start is older than raw data
+		if start.Unix() < minRawTs {
+			rows5m, qErr := s.db.Query(`
+				SELECT timestamp, cpu_percent, memory_used_bytes, memory_total_bytes,
+				       uptime_seconds, load_1m, load_5m, load_15m, net_rx_bytes, net_tx_bytes,
+				       net_rx_rate, net_tx_rate
+				FROM node_metrics_5m
+				WHERE node_name = ? AND timestamp >= ? AND timestamp < ?
+				ORDER BY timestamp ASC
+			`, nodeName, start.Unix(), minRawTs)
+			if qErr == nil {
+				for rows5m.Next() {
+					var pt NodeMetricPoint
+					if err := rows5m.Scan(
+						&pt.Timestamp, &pt.CPUPercent, &pt.MemoryUsedBytes, &pt.MemoryTotalBytes,
+						&pt.UptimeSeconds, &pt.Load1m, &pt.Load5m, &pt.Load15m,
+						&pt.NetRxBytes, &pt.NetTxBytes, &pt.NetRxRate, &pt.NetTxRate,
+					); err == nil {
+						points = append(points, pt)
+					}
+				}
+				rows5m.Close()
+			}
+		}
+
+		// 2. Query high-resolution raw telemetry
 		rows, qErr := s.db.Query(`
 			SELECT timestamp, cpu_percent, memory_used_bytes, memory_total_bytes,
 			       uptime_seconds, load_1m, load_5m, load_15m, net_rx_bytes, net_tx_bytes,
@@ -1661,22 +1794,22 @@ func (s *StateStore) GetMetricsHistoryWithInterface(nodeName string, interfaceNa
 			WHERE node_name = ? AND timestamp >= ?
 			ORDER BY timestamp ASC
 		`, nodeName, start.Unix())
-		if qErr != nil {
+		if qErr != nil && len(points) == 0 {
 			return nil, availableIfaces, selectedIface, qErr
 		}
-		defer rows.Close()
-
-		for rows.Next() {
-			var pt NodeMetricPoint
-			if err := rows.Scan(
-				&pt.Timestamp, &pt.CPUPercent, &pt.MemoryUsedBytes, &pt.MemoryTotalBytes,
-				&pt.UptimeSeconds, &pt.Load1m, &pt.Load5m, &pt.Load15m,
-				&pt.NetRxBytes, &pt.NetTxBytes, &pt.NetRxRate, &pt.NetTxRate,
-			); err == nil {
-				points = append(points, pt)
+		if qErr == nil {
+			defer rows.Close()
+			for rows.Next() {
+				var pt NodeMetricPoint
+				if err := rows.Scan(
+					&pt.Timestamp, &pt.CPUPercent, &pt.MemoryUsedBytes, &pt.MemoryTotalBytes,
+					&pt.UptimeSeconds, &pt.Load1m, &pt.Load5m, &pt.Load15m,
+					&pt.NetRxBytes, &pt.NetTxBytes, &pt.NetRxRate, &pt.NetTxRate,
+				); err == nil {
+					points = append(points, pt)
+				}
 			}
 		}
-		rows.Close()
 	}
 
 	if len(points) <= maxPoints {
@@ -1766,6 +1899,40 @@ func (s *StateStore) GetNodeInterfaceTraffic(nodeName, interfaceName string, sta
 		Points:        make([]InterfaceTrafficPoint, 0),
 	}
 
+	var minRawTs int64
+	_ = s.db.QueryRow("SELECT COALESCE(MIN(timestamp), 0) FROM node_interface_traffic_stats WHERE node_name = ? AND interface_name = ?", nodeName, interfaceName).Scan(&minRawTs)
+	if minRawTs == 0 {
+		minRawTs = math.MaxInt64
+	}
+
+	var rawPoints []InterfaceTrafficPoint
+
+	// 1. Query 5m rollup data if requested start is older than raw data
+	if start.Unix() < minRawTs {
+		rows5m, err5m := s.db.Query(`
+			SELECT timestamp, raw_rx_bytes, raw_tx_bytes, accum_rx_bytes, accum_tx_bytes,
+			       rx_rate, tx_rate, reset_detected
+			FROM node_interface_traffic_stats_5m
+			WHERE node_name = ? AND interface_name = ? AND timestamp >= ? AND timestamp < ? AND timestamp <= ?
+			ORDER BY timestamp ASC
+		`, nodeName, interfaceName, start.Unix(), minRawTs, end.Unix())
+		if err5m == nil {
+			for rows5m.Next() {
+				var pt InterfaceTrafficPoint
+				var resetInt int
+				if err := rows5m.Scan(
+					&pt.Timestamp, &pt.RawRxBytes, &pt.RawTxBytes, &pt.AccumRxBytes, &pt.AccumTxBytes,
+					&pt.RxRate, &pt.TxRate, &resetInt,
+				); err == nil {
+					pt.ResetDetected = (resetInt != 0)
+					rawPoints = append(rawPoints, pt)
+				}
+			}
+			rows5m.Close()
+		}
+	}
+
+	// 2. Query high-resolution raw traffic stats
 	rows, err := s.db.Query(`
 		SELECT timestamp, raw_rx_bytes, raw_tx_bytes, accum_rx_bytes, accum_tx_bytes,
 		       rx_rate, tx_rate, reset_detected
@@ -1773,24 +1940,23 @@ func (s *StateStore) GetNodeInterfaceTraffic(nodeName, interfaceName string, sta
 		WHERE node_name = ? AND interface_name = ? AND timestamp >= ? AND timestamp <= ?
 		ORDER BY timestamp ASC
 	`, nodeName, interfaceName, start.Unix(), end.Unix())
-	if err != nil {
+	if err != nil && len(rawPoints) == 0 {
 		return summary, err
 	}
-	defer rows.Close()
-
-	var rawPoints []InterfaceTrafficPoint
-	for rows.Next() {
-		var pt InterfaceTrafficPoint
-		var resetInt int
-		if err := rows.Scan(
-			&pt.Timestamp, &pt.RawRxBytes, &pt.RawTxBytes, &pt.AccumRxBytes, &pt.AccumTxBytes,
-			&pt.RxRate, &pt.TxRate, &resetInt,
-		); err == nil {
-			pt.ResetDetected = (resetInt != 0)
-			rawPoints = append(rawPoints, pt)
+	if err == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var pt InterfaceTrafficPoint
+			var resetInt int
+			if err := rows.Scan(
+				&pt.Timestamp, &pt.RawRxBytes, &pt.RawTxBytes, &pt.AccumRxBytes, &pt.AccumTxBytes,
+				&pt.RxRate, &pt.TxRate, &resetInt,
+			); err == nil {
+				pt.ResetDetected = (resetInt != 0)
+				rawPoints = append(rawPoints, pt)
+			}
 		}
 	}
-	rows.Close()
 
 	if len(rawPoints) == 0 {
 		return summary, nil
@@ -1860,8 +2026,9 @@ func (s *StateStore) GetNodeInterfaceTraffic(nodeName, interfaceName string, sta
 	return summary, nil
 }
 
-// CleanMetricsOlderThan deletes historical metrics older than the given retention period
-func (s *StateStore) CleanMetricsOlderThan(retention time.Duration) (int64, error) {
+// RollupAndCleanMetrics summarizes raw telemetry older than rawRetention into 5-minute statistical windows,
+// deletes raw telemetry older than rawRetention, and prunes 5m summaries older than overallRetention.
+func (s *StateStore) RollupAndCleanMetrics(rawRetention, overallRetention time.Duration) (int64, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -1869,14 +2036,108 @@ func (s *StateStore) CleanMetricsOlderThan(retention time.Duration) (int64, erro
 		return 0, err
 	}
 
-	cutoff := time.Now().Add(-retention).Unix()
-	res, err := s.db.Exec("DELETE FROM node_metrics WHERE timestamp < ?", cutoff)
+	if rawRetention > overallRetention {
+		rawRetention = overallRetention
+	}
+	rawCutoff := time.Now().Add(-rawRetention).Unix()
+	overallCutoff := time.Now().Add(-overallRetention).Unix()
+
+	// Update any uncalculated traffic stats before rolling up
+	_ = s.updateInterfaceTrafficStatsLocked("", "")
+
+	tx, err := s.db.Begin()
 	if err != nil {
 		return 0, err
 	}
-	_, _ = s.db.Exec("DELETE FROM node_interface_metrics WHERE timestamp < ?", cutoff)
-	_, _ = s.db.Exec("DELETE FROM node_interface_traffic_stats WHERE timestamp < ?", cutoff)
-	return res.RowsAffected()
+	defer func() {
+		if tx != nil {
+			_ = tx.Rollback()
+		}
+	}()
+
+	// 1. Rollup raw node_metrics older than rawCutoff into 5-minute buckets
+	_, err = tx.Exec(`
+		INSERT OR REPLACE INTO node_metrics_5m (
+			node_name, timestamp, cpu_percent, memory_used_bytes, memory_total_bytes,
+			uptime_seconds, load_1m, load_5m, load_15m, net_rx_bytes, net_tx_bytes,
+			net_rx_rate, net_tx_rate
+		)
+		SELECT
+			node_name,
+			(timestamp / 300) * 300 AS bucket_ts,
+			AVG(cpu_percent),
+			CAST(AVG(memory_used_bytes) AS INTEGER),
+			MAX(memory_total_bytes),
+			MAX(uptime_seconds),
+			AVG(load_1m),
+			AVG(load_5m),
+			AVG(load_15m),
+			MAX(net_rx_bytes),
+			MAX(net_tx_bytes),
+			AVG(net_rx_rate),
+			AVG(net_tx_rate)
+		FROM node_metrics
+		WHERE timestamp < ?
+		GROUP BY node_name, (timestamp / 300) * 300
+	`, rawCutoff)
+	if err != nil {
+		return 0, fmt.Errorf("failed to rollup node_metrics: %w", err)
+	}
+
+	// 2. Rollup raw node_interface_traffic_stats older than rawCutoff into 5-minute buckets
+	_, err = tx.Exec(`
+		INSERT OR REPLACE INTO node_interface_traffic_stats_5m (
+			node_name, interface_name, timestamp, raw_rx_bytes, raw_tx_bytes,
+			accum_rx_bytes, accum_tx_bytes, rx_rate, tx_rate, reset_detected
+		)
+		SELECT
+			node_name,
+			interface_name,
+			(timestamp / 300) * 300 AS bucket_ts,
+			MAX(raw_rx_bytes),
+			MAX(raw_tx_bytes),
+			MAX(accum_rx_bytes),
+			MAX(accum_tx_bytes),
+			AVG(rx_rate),
+			AVG(tx_rate),
+			MAX(reset_detected)
+		FROM node_interface_traffic_stats
+		WHERE timestamp < ?
+		GROUP BY node_name, interface_name, (timestamp / 300) * 300
+	`, rawCutoff)
+	if err != nil {
+		return 0, fmt.Errorf("failed to rollup node_interface_traffic_stats: %w", err)
+	}
+
+	// 3. Delete raw metrics older than rawCutoff
+	res, err := tx.Exec("DELETE FROM node_metrics WHERE timestamp < ?", rawCutoff)
+	if err != nil {
+		return 0, fmt.Errorf("failed to delete raw node_metrics: %w", err)
+	}
+	deletedRows, _ := res.RowsAffected()
+
+	_, _ = tx.Exec("DELETE FROM node_interface_metrics WHERE timestamp < ?", rawCutoff)
+	_, _ = tx.Exec("DELETE FROM node_interface_traffic_stats WHERE timestamp < ?", rawCutoff)
+
+	// 4. Prune 5m summaries older than overallCutoff
+	_, _ = tx.Exec("DELETE FROM node_metrics_5m WHERE timestamp < ?", overallCutoff)
+	_, _ = tx.Exec("DELETE FROM node_interface_traffic_stats_5m WHERE timestamp < ?", overallCutoff)
+
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+	tx = nil
+
+	return deletedRows, nil
+}
+
+// CleanMetricsOlderThan deletes historical metrics older than the given retention period
+func (s *StateStore) CleanMetricsOlderThan(retention time.Duration) (int64, error) {
+	rawRetention := time.Duration(DefaultRawRetentionDays) * 24 * time.Hour
+	if rawRetention > retention {
+		rawRetention = retention
+	}
+	return s.RollupAndCleanMetrics(rawRetention, retention)
 }
 
 // RecordCronTaskResult persists a parsed cron task execution report into SQLite
@@ -1923,12 +2184,12 @@ func (s *StateStore) GetNodeCronTaskResults(nodeName string, taskID string, star
 		limit = 1000
 	}
 
+	startTs := startTime.Unix()
+
 	var (
 		rows *sql.Rows
 		err  error
 	)
-
-	startTs := startTime.Unix()
 	if taskID != "" {
 		rows, err = s.db.Query(`
 			SELECT id, task_id, task_name, task_type, node_name, executed_at, duration_ms,
@@ -1964,15 +2225,99 @@ func (s *StateStore) GetNodeCronTaskResults(nodeName string, taskID string, star
 			&r.ExitCode, &r.Error, &r.Target, &r.PacketsSent, &r.PacketsReceived, &r.PacketLossPct,
 			&r.MinRTTMs, &r.AvgRTTMs, &r.MaxRTTMs, &r.MdevRTTMs, &r.RawOutput, &r.ParsedJSON,
 		); err == nil {
+			r.RunsCount = 1
 			records = append(records, r)
+		}
+	}
+	rows.Close()
+
+	if len(records) >= limit {
+		return records, nil
+	}
+
+	remaining := limit - len(records)
+	var minRawTs int64
+	if taskID != "" {
+		_ = s.db.QueryRow("SELECT COALESCE(MIN(executed_at), 0) FROM cron_task_results WHERE node_name = ? AND task_id = ?", nodeName, taskID).Scan(&minRawTs)
+	} else {
+		_ = s.db.QueryRow("SELECT COALESCE(MIN(executed_at), 0) FROM cron_task_results WHERE node_name = ?", nodeName).Scan(&minRawTs)
+	}
+	if minRawTs == 0 {
+		minRawTs = math.MaxInt64
+	}
+
+	if startTs < minRawTs {
+		var rows5m *sql.Rows
+		var err5m error
+		if taskID != "" {
+			rows5m, err5m = s.db.Query(`
+				SELECT task_id, node_name, timestamp, task_name, task_type, target,
+				       runs_count, success_count, failure_count, avg_rtt_ms, min_rtt_ms, max_rtt_ms,
+				       packet_loss_pct, packets_sent, packets_received
+				FROM cron_task_results_5m
+				WHERE node_name = ? AND task_id = ? AND timestamp >= ? AND timestamp < ?
+				ORDER BY timestamp DESC
+				LIMIT ?
+			`, nodeName, taskID, startTs, minRawTs, remaining)
+		} else {
+			rows5m, err5m = s.db.Query(`
+				SELECT task_id, node_name, timestamp, task_name, task_type, target,
+				       runs_count, success_count, failure_count, avg_rtt_ms, min_rtt_ms, max_rtt_ms,
+				       packet_loss_pct, packets_sent, packets_received
+				FROM cron_task_results_5m
+				WHERE node_name = ? AND timestamp >= ? AND timestamp < ?
+				ORDER BY timestamp DESC
+				LIMIT ?
+			`, nodeName, startTs, minRawTs, remaining)
+		}
+		if err5m == nil {
+			defer rows5m.Close()
+			for rows5m.Next() {
+				var (
+					tid, nname, tname, ttype, target string
+					ts                               int64
+					runs, succ, fail                 int
+					avgR, minR, maxR, loss           float64
+					sent, recvd                      int
+				)
+				if err := rows5m.Scan(
+					&tid, &nname, &ts, &tname, &ttype, &target,
+					&runs, &succ, &fail, &avgR, &minR, &maxR,
+					&loss, &sent, &recvd,
+				); err == nil {
+					exitCode := 0
+					if fail > 0 && succ == 0 {
+						exitCode = 1
+					}
+					summaryOutput := fmt.Sprintf("5-minute aggregate: %d probe runs (%d succeeded, %d failed). Avg RTT: %.2f ms, Loss: %.1f%%", runs, succ, fail, avgR, loss)
+					records = append(records, CronTaskResultRecord{
+						TaskID:          tid,
+						TaskName:        tname,
+						TaskType:        ttype,
+						NodeName:        nname,
+						ExecutedAt:      ts,
+						ExitCode:        exitCode,
+						Target:          target,
+						PacketsSent:     sent,
+						PacketsReceived: recvd,
+						PacketLossPct:   loss,
+						MinRTTMs:        minR,
+						AvgRTTMs:        avgR,
+						MaxRTTMs:        maxR,
+						RawOutput:       summaryOutput,
+						RunsCount:       runs,
+					})
+				}
+			}
 		}
 	}
 
 	return records, nil
 }
 
-// CleanCronResultsOlderThan deletes historical cron task results older than retention period
-func (s *StateStore) CleanCronResultsOlderThan(retention time.Duration) (int64, error) {
+// RollupAndCleanCronResults summarizes raw cron probe executions older than rawRetention into 5-minute statistical windows,
+// deletes raw execution records older than rawRetention, and prunes 5m summaries older than overallRetention.
+func (s *StateStore) RollupAndCleanCronResults(rawRetention, overallRetention time.Duration) (int64, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -1980,12 +2325,78 @@ func (s *StateStore) CleanCronResultsOlderThan(retention time.Duration) (int64, 
 		return 0, err
 	}
 
-	cutoff := time.Now().Add(-retention).Unix()
-	res, err := s.db.Exec("DELETE FROM cron_task_results WHERE executed_at < ?", cutoff)
+	if rawRetention > overallRetention {
+		rawRetention = overallRetention
+	}
+	rawCutoff := time.Now().Add(-rawRetention).Unix()
+	overallCutoff := time.Now().Add(-overallRetention).Unix()
+
+	tx, err := s.db.Begin()
 	if err != nil {
 		return 0, err
 	}
-	return res.RowsAffected()
+	defer func() {
+		if tx != nil {
+			_ = tx.Rollback()
+		}
+	}()
+
+	// 1. Rollup raw cron_task_results older than rawCutoff into 5-minute buckets
+	_, err = tx.Exec(`
+		INSERT OR REPLACE INTO cron_task_results_5m (
+			task_id, node_name, timestamp, task_name, task_type, target,
+			runs_count, success_count, failure_count, avg_rtt_ms, min_rtt_ms, max_rtt_ms,
+			packet_loss_pct, packets_sent, packets_received
+		)
+		SELECT
+			task_id,
+			node_name,
+			(executed_at / 300) * 300 AS bucket_ts,
+			MAX(task_name),
+			MAX(task_type),
+			MAX(target),
+			COUNT(*),
+			SUM(CASE WHEN exit_code = 0 AND packet_loss_pct < 100 THEN 1 ELSE 0 END),
+			SUM(CASE WHEN exit_code != 0 OR packet_loss_pct >= 100 THEN 1 ELSE 0 END),
+			AVG(avg_rtt_ms),
+			MIN(min_rtt_ms),
+			MAX(max_rtt_ms),
+			AVG(packet_loss_pct),
+			SUM(packets_sent),
+			SUM(packets_received)
+		FROM cron_task_results
+		WHERE executed_at < ?
+		GROUP BY task_id, node_name, (executed_at / 300) * 300
+	`, rawCutoff)
+	if err != nil {
+		return 0, fmt.Errorf("failed to rollup cron_task_results: %w", err)
+	}
+
+	// 2. Delete raw cron results older than rawCutoff
+	res, err := tx.Exec("DELETE FROM cron_task_results WHERE executed_at < ?", rawCutoff)
+	if err != nil {
+		return 0, fmt.Errorf("failed to delete raw cron_task_results: %w", err)
+	}
+	deletedRows, _ := res.RowsAffected()
+
+	// 3. Prune 5m summaries older than overallCutoff
+	_, _ = tx.Exec("DELETE FROM cron_task_results_5m WHERE timestamp < ?", overallCutoff)
+
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+	tx = nil
+
+	return deletedRows, nil
+}
+
+// CleanCronResultsOlderThan deletes historical cron task results older than retention period
+func (s *StateStore) CleanCronResultsOlderThan(retention time.Duration) (int64, error) {
+	rawRetention := time.Duration(DefaultRawRetentionDays) * 24 * time.Hour
+	if rawRetention > retention {
+		rawRetention = retention
+	}
+	return s.RollupAndCleanCronResults(rawRetention, retention)
 }
 
 // ServerTaskState represents the recorded state of a server background task
@@ -2075,16 +2486,19 @@ func (s *StateStore) GetServerTaskStates() (map[string]ServerTaskState, error) {
 
 // DatabaseStats represents size and storage metrics of the SQLite database
 type DatabaseStats struct {
-	FilePath              string `json:"file_path"`
-	TotalSizeBytes        int64  `json:"total_size_bytes"`
-	TotalSizeHuman        string `json:"total_size_human"`
-	PageSize              int64  `json:"page_size,omitempty"`
-	PageCount             int64  `json:"page_count,omitempty"`
-	FreelistCount         int64  `json:"freelist_count,omitempty"`
-	WALSizeBytes          int64  `json:"wal_size_bytes,omitempty"`
-	MetricsCount          int64  `json:"metrics_count"`
-	InterfaceMetricsCount int64  `json:"interface_metrics_count"`
-	CronResultsCount      int64  `json:"cron_results_count"`
+	FilePath                string `json:"file_path"`
+	TotalSizeBytes          int64  `json:"total_size_bytes"`
+	TotalSizeHuman          string `json:"total_size_human"`
+	PageSize                int64  `json:"page_size,omitempty"`
+	PageCount               int64  `json:"page_count,omitempty"`
+	FreelistCount           int64  `json:"freelist_count,omitempty"`
+	WALSizeBytes            int64  `json:"wal_size_bytes,omitempty"`
+	MetricsCount            int64  `json:"metrics_count"`
+	Metrics5mCount          int64  `json:"metrics_5m_count"`
+	InterfaceMetricsCount   int64  `json:"interface_metrics_count"`
+	InterfaceMetrics5mCount int64  `json:"interface_metrics_5m_count"`
+	CronResultsCount        int64  `json:"cron_results_count"`
+	CronResults5mCount      int64  `json:"cron_results_5m_count"`
 }
 
 func formatBytes(b int64) string {
@@ -2133,8 +2547,11 @@ func (s *StateStore) GetDatabaseStats() (DatabaseStats, error) {
 
 	// Table row counts
 	_ = s.db.QueryRow("SELECT COUNT(*) FROM node_metrics").Scan(&stats.MetricsCount)
+	_ = s.db.QueryRow("SELECT COUNT(*) FROM node_metrics_5m").Scan(&stats.Metrics5mCount)
 	_ = s.db.QueryRow("SELECT COUNT(*) FROM node_interface_metrics").Scan(&stats.InterfaceMetricsCount)
+	_ = s.db.QueryRow("SELECT COUNT(*) FROM node_interface_traffic_stats_5m").Scan(&stats.InterfaceMetrics5mCount)
 	_ = s.db.QueryRow("SELECT COUNT(*) FROM cron_task_results").Scan(&stats.CronResultsCount)
+	_ = s.db.QueryRow("SELECT COUNT(*) FROM cron_task_results_5m").Scan(&stats.CronResults5mCount)
 
 	return stats, nil
 }

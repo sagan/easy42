@@ -252,6 +252,19 @@ func (m *Manager) startRetentionWorker() {
 	ticker := time.NewTicker(1 * time.Hour)
 	trafficTicker := time.NewTicker(30 * time.Second)
 	go func() {
+		// Run initial cleanup pass shortly after server startup
+		select {
+		case <-m.stopCh:
+			ticker.Stop()
+			trafficTicker.Stop()
+			return
+		case <-time.After(15 * time.Second):
+			rawRetention := m.GetRawRetentionDuration()
+			retention := m.GetRetentionDuration()
+			_, _ = m.stateStore.RollupAndCleanMetrics(rawRetention, retention)
+			_, _ = m.stateStore.RollupAndCleanCronResults(rawRetention, retention)
+		}
+
 		for {
 			select {
 			case <-m.stopCh:
@@ -261,9 +274,10 @@ func (m *Manager) startRetentionWorker() {
 			case <-trafficTicker.C:
 				_ = m.stateStore.UpdateInterfaceTrafficStats("", "")
 			case <-ticker.C:
+				rawRetention := m.GetRawRetentionDuration()
 				retention := m.GetRetentionDuration()
-				_, _ = m.stateStore.CleanMetricsOlderThan(retention)
-				_, _ = m.stateStore.CleanCronResultsOlderThan(retention)
+				_, _ = m.stateStore.RollupAndCleanMetrics(rawRetention, retention)
+				_, _ = m.stateStore.RollupAndCleanCronResults(rawRetention, retention)
 			}
 		}
 	}()

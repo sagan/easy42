@@ -139,12 +139,16 @@ func (d DNSConfig) IsConfigured() bool {
 		strings.TrimSpace(d.BaseDomain) != ""
 }
 
-// DefaultRetentionDays defines the default data retention period in days for metrics and cron results
+// DefaultRetentionDays defines the default data retention period in days for summarized metrics and cron results
 const DefaultRetentionDays = 47
+
+// DefaultRawRetentionDays defines the default retention period in days for high-resolution raw telemetry and logs
+const DefaultRawRetentionDays = 2
 
 // DatabaseSettings represents user-configurable settings for data storage and retention
 type DatabaseSettings struct {
-	RetentionDays int `json:"retention_days,omitempty"`
+	RetentionDays    int `json:"retention_days,omitempty"`
+	RawRetentionDays int `json:"raw_retention_days,omitempty"`
 }
 
 // GetRetentionDays returns the retention days or DefaultRetentionDays if <= 0
@@ -153,6 +157,14 @@ func (d *DatabaseSettings) GetRetentionDays() int {
 		return DefaultRetentionDays
 	}
 	return d.RetentionDays
+}
+
+// GetRawRetentionDays returns the raw retention days or DefaultRawRetentionDays if <= 0
+func (d *DatabaseSettings) GetRawRetentionDays() int {
+	if d == nil || d.RawRetentionDays <= 0 {
+		return DefaultRawRetentionDays
+	}
+	return d.RawRetentionDays
 }
 
 // Config represents the top-level configuration stored in config.json
@@ -179,6 +191,14 @@ func (c *Config) GetRetentionDays() int {
 		return DefaultRetentionDays
 	}
 	return c.Database.GetRetentionDays()
+}
+
+// GetRawRetentionDays returns the configured raw retention days or DefaultRawRetentionDays
+func (c *Config) GetRawRetentionDays() int {
+	if c == nil {
+		return DefaultRawRetentionDays
+	}
+	return c.Database.GetRawRetentionDays()
 }
 
 // ServerTaskConfig represents user-configurable settings for a server background task

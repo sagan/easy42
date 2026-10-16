@@ -462,9 +462,13 @@ func (m *Manager) GetNodeCronTasksResults(nodeName string, taskID string, rangeS
 			ac = &accum{latest: r}
 			accumMap[r.TaskID] = ac
 		}
-		ac.totalRuns++
-		ac.sumRTT += r.AvgRTTMs
-		ac.sumLoss += r.PacketLossPct
+		runs := 1
+		if r.RunsCount > 0 {
+			runs = r.RunsCount
+		}
+		ac.totalRuns += runs
+		ac.sumRTT += r.AvgRTTMs * float64(runs)
+		ac.sumLoss += r.PacketLossPct * float64(runs)
 	}
 
 	for tid, ac := range accumMap {

@@ -43,6 +43,7 @@ type CronTaskResultRecord struct {
 	MdevRTTMs       float64 `json:"mdev_rtt_ms"`
 	RawOutput       string  `json:"raw_output"`
 	ParsedJSON      string  `json:"parsed_json,omitempty"`
+	RunsCount       int     `json:"runs_count,omitempty"`
 }
 
 // CronTaskStatsSummary aggregates execution statistics for a task on a node

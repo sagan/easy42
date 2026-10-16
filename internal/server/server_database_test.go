@@ -53,6 +53,9 @@ func TestDatabaseSettingsAPI(t *testing.T) {
 	if info.RetentionDays != config.DefaultRetentionDays {
 		t.Errorf("expected default retention days %d, got %d", config.DefaultRetentionDays, info.RetentionDays)
 	}
+	if info.RawRetentionDays != config.DefaultRawRetentionDays {
+		t.Errorf("expected default raw retention days %d, got %d", config.DefaultRawRetentionDays, info.RawRetentionDays)
+	}
 	if info.TotalSizeBytes <= 0 {
 		t.Errorf("expected positive total size bytes, got %d", info.TotalSizeBytes)
 	}
@@ -64,7 +67,7 @@ func TestDatabaseSettingsAPI(t *testing.T) {
 	}
 
 	// 3. Test PUT /api/settings/database
-	payload := []byte(`{"retention_days": 60}`)
+	payload := []byte(`{"retention_days": 60, "raw_retention_days": 3}`)
 	putReq := httptest.NewRequest("PUT", "/api/settings/database", bytes.NewReader(payload))
 	putReq.Header.Set("Content-Type", "application/json")
 	putW := httptest.NewRecorder()
@@ -80,6 +83,9 @@ func TestDatabaseSettingsAPI(t *testing.T) {
 	}
 	if updated.RetentionDays != 60 {
 		t.Errorf("expected retention days 60, got %d", updated.RetentionDays)
+	}
+	if updated.RawRetentionDays != 3 {
+		t.Errorf("expected raw retention days 3, got %d", updated.RawRetentionDays)
 	}
 
 	// 4. Test POST /api/settings/database/vacuum

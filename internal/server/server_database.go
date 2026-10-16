@@ -20,7 +20,8 @@ func (s *Server) handleGetDatabaseInfo(w http.ResponseWriter, r *http.Request) {
 // handleUpdateDatabaseSettings updates database retention days configuration
 func (s *Server) handleUpdateDatabaseSettings(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		RetentionDays int `json:"retention_days"`
+		RetentionDays    int `json:"retention_days"`
+		RawRetentionDays int `json:"raw_retention_days"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid request payload")
@@ -34,9 +35,20 @@ func (s *Server) handleUpdateDatabaseSettings(w http.ResponseWriter, r *http.Req
 		writeError(w, http.StatusBadRequest, "Retention days must be between 1 and 3650")
 		return
 	}
+	if req.RawRetentionDays <= 0 {
+		req.RawRetentionDays = config.DefaultRawRetentionDays
+	}
+	if req.RawRetentionDays > 30 {
+		writeError(w, http.StatusBadRequest, "Raw retention days must be between 1 and 30")
+		return
+	}
+	if req.RawRetentionDays > req.RetentionDays {
+		req.RawRetentionDays = req.RetentionDays
+	}
 
 	info, err := s.mgr.UpdateDatabaseSettings(config.DatabaseSettings{
-		RetentionDays: req.RetentionDays,
+		RetentionDays:    req.RetentionDays,
+		RawRetentionDays: req.RawRetentionDays,
 	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())

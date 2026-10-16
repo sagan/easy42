@@ -503,3 +503,187 @@ func TestStateStoreUpdateInterfacesTelemetry(t *testing.T) {
 	}
 }
 
+func TestRollupAndCleanMetrics(t *testing.T) {
+	tempDir := t.TempDir()
+	store := NewStateStore(tempDir)
+	defer store.Close()
+
+	now := time.Now()
+	// Insert 4 samples 3 days ago (older than 2-day raw retention) within the same 5-minute window
+	windowBase := now.Add(-3 * 24 * time.Hour).Truncate(5 * time.Minute)
+	for i := 0; i < 4; i++ {
+		ts := windowBase.Add(time.Duration(i*30) * time.Second)
+		err := store.RecordMetrics("node-rollup", NodeMetricInput{
+			Timestamp:        ts,
+			CPUPercent:       float32(10 + i*10), // 10, 20, 30, 40 -> avg 25
+			MemoryUsedBytes:  uint64(1000 + i*100),
+			MemoryTotalBytes: 8000,
+			NetRxBytes:       uint64(500 * (i + 1)),
+			NetTxBytes:       uint64(300 * (i + 1)),
+			Interfaces: []InterfaceMetricInput{
+				{Name: "eth0", RxBytes: uint64(500 * (i + 1)), TxBytes: uint64(300 * (i + 1))},
+			},
+		})
+		if err != nil {
+			t.Fatalf("RecordMetrics failed: %v", err)
+		}
+	}
+
+	// Insert 2 recent samples 1 hour ago (within 2-day raw retention)
+	recentBase := now.Add(-1 * time.Hour)
+	for i := 0; i < 2; i++ {
+		ts := recentBase.Add(time.Duration(i*30) * time.Second)
+		err := store.RecordMetrics("node-rollup", NodeMetricInput{
+			Timestamp:        ts,
+			CPUPercent:       50,
+			MemoryUsedBytes:  2000,
+			MemoryTotalBytes: 8000,
+			NetRxBytes:       uint64(3000 + i*100),
+			NetTxBytes:       uint64(2000 + i*100),
+			Interfaces: []InterfaceMetricInput{
+				{Name: "eth0", RxBytes: uint64(3000 + i*100), TxBytes: uint64(2000 + i*100)},
+			},
+		})
+		if err != nil {
+			t.Fatalf("RecordMetrics recent failed: %v", err)
+		}
+	}
+
+	// Pre-cleanup check: 6 raw samples in node_metrics
+	stats, err := store.GetDatabaseStats()
+	if err != nil {
+		t.Fatalf("GetDatabaseStats failed: %v", err)
+	}
+	if stats.MetricsCount != 6 {
+		t.Errorf("Expected 6 raw metrics, got %d", stats.MetricsCount)
+	}
+
+	// Execute rollup & clean: raw retention 2 days, overall retention 7 days
+	cleaned, err := store.RollupAndCleanMetrics(2*24*time.Hour, 7*24*time.Hour)
+	if err != nil {
+		t.Fatalf("RollupAndCleanMetrics failed: %v", err)
+	}
+	if cleaned != 4 {
+		t.Errorf("Expected 4 cleaned raw metrics, got %d", cleaned)
+	}
+
+	// Post-cleanup check: 2 raw metrics remaining, 1 5-minute summarized metric created
+	stats, err = store.GetDatabaseStats()
+	if err != nil {
+		t.Fatalf("GetDatabaseStats post failed: %v", err)
+	}
+	if stats.MetricsCount != 2 {
+		t.Errorf("Expected 2 raw metrics remaining, got %d", stats.MetricsCount)
+	}
+	if stats.Metrics5mCount != 1 {
+		t.Errorf("Expected 1 5m metric row, got %d", stats.Metrics5mCount)
+	}
+
+	// Query historical metrics covering the entire 4-day span: should retrieve 5m points + raw points seamlessly
+	points, ifaces, selIface, err := store.GetMetricsHistoryWithInterface("node-rollup", "eth0", now.Add(-4*24*time.Hour), 100)
+	if err != nil {
+		t.Fatalf("GetMetricsHistoryWithInterface failed: %v", err)
+	}
+	if len(points) != 3 { // 1 from 5m rollup + 2 from raw
+		t.Errorf("Expected 3 merged points (1 rollup + 2 raw), got %d", len(points))
+	}
+	if len(ifaces) == 0 || selIface != "eth0" {
+		t.Errorf("Expected iface eth0, got %v / %s", ifaces, selIface)
+	}
+	// Check that the rolled-up point CPU average is 25%
+	if len(points) >= 1 && points[0].CPUPercent != 25.0 {
+		t.Errorf("Expected rollup CPU to be 25.0, got %f", points[0].CPUPercent)
+	}
+}
+
+func TestRollupAndCleanCronResults(t *testing.T) {
+	tempDir := t.TempDir()
+	store := NewStateStore(tempDir)
+	defer store.Close()
+
+	now := time.Now()
+	// Insert 3 probe runs 3 days ago for task-1
+	oldBase := now.Add(-3 * 24 * time.Hour).Truncate(5 * time.Minute)
+	for i := 0; i < 3; i++ {
+		err := store.RecordCronTaskResult(CronTaskResultRecord{
+			TaskID:          "task-ping",
+			TaskName:        "Daily Ping",
+			TaskType:        "ping",
+			NodeName:        "node-cron",
+			ExecutedAt:      oldBase.Add(time.Duration(i*20) * time.Second).Unix(),
+			ExitCode:        0,
+			PacketsSent:     5,
+			PacketsReceived: 5,
+			PacketLossPct:   0.0,
+			AvgRTTMs:        10.0 + float64(i*5), // 10, 15, 20 -> avg 15
+			MinRTTMs:        8.0,
+			MaxRTTMs:        25.0,
+			RawOutput:       "PING 1.1.1.1 5 packets",
+		})
+		if err != nil {
+			t.Fatalf("RecordCronTaskResult failed: %v", err)
+		}
+	}
+
+	// Insert 1 recent probe run 1 hour ago
+	err := store.RecordCronTaskResult(CronTaskResultRecord{
+		TaskID:          "task-ping",
+		TaskName:        "Daily Ping",
+		TaskType:        "ping",
+		NodeName:        "node-cron",
+		ExecutedAt:      now.Add(-1 * time.Hour).Unix(),
+		ExitCode:        0,
+		PacketsSent:     5,
+		PacketsReceived: 5,
+		PacketLossPct:   0.0,
+		AvgRTTMs:        12.0,
+		MinRTTMs:        10.0,
+		MaxRTTMs:        14.0,
+		RawOutput:       "PING 1.1.1.1 recent",
+	})
+	if err != nil {
+		t.Fatalf("RecordCronTaskResult recent failed: %v", err)
+	}
+
+	// Execute rollup & clean: raw 2 days, overall 7 days
+	cleaned, err := store.RollupAndCleanCronResults(2*24*time.Hour, 7*24*time.Hour)
+	if err != nil {
+		t.Fatalf("RollupAndCleanCronResults failed: %v", err)
+	}
+	if cleaned != 3 {
+		t.Errorf("Expected 3 raw cron results cleaned, got %d", cleaned)
+	}
+
+	stats, err := store.GetDatabaseStats()
+	if err != nil {
+		t.Fatalf("GetDatabaseStats failed: %v", err)
+	}
+	if stats.CronResultsCount != 1 {
+		t.Errorf("Expected 1 raw cron result remaining, got %d", stats.CronResultsCount)
+	}
+	if stats.CronResults5mCount != 1 {
+		t.Errorf("Expected 1 5m cron rollup row, got %d", stats.CronResults5mCount)
+	}
+
+	// Query across 4 days: should return 2 records (1 recent raw + 1 older 5m aggregate with RunsCount=3)
+	results, err := store.GetNodeCronTaskResults("node-cron", "task-ping", now.Add(-4*24*time.Hour), 10)
+	if err != nil {
+		t.Fatalf("GetNodeCronTaskResults failed: %v", err)
+	}
+	if len(results) != 2 {
+		t.Fatalf("Expected 2 cron results, got %d", len(results))
+	}
+	// The results are sorted DESC by executed_at:
+	// First should be recent raw run (RunsCount=1)
+	if results[0].RunsCount != 1 {
+		t.Errorf("Expected recent run to have RunsCount=1, got %d", results[0].RunsCount)
+	}
+	// Second should be 5m summary (RunsCount=3, AvgRTTMs=15)
+	if results[1].RunsCount != 3 {
+		t.Errorf("Expected summary run to have RunsCount=3, got %d", results[1].RunsCount)
+	}
+	if results[1].AvgRTTMs != 15.0 {
+		t.Errorf("Expected summary AvgRTTMs=15.0, got %f", results[1].AvgRTTMs)
+	}
+}
+

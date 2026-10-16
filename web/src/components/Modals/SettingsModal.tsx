@@ -255,6 +255,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
   const [dbError, setDbError] = useState<string | null>(null);
   const [dbSuccess, setDbSuccess] = useState<string | null>(null);
   const [retentionDraft, setRetentionDraft] = useState<number | string>(47);
+  const [rawRetentionDraft, setRawRetentionDraft] = useState<number | string>(2);
 
   // About & Version state
   const [versionInfo, setVersionInfo] = useState<VersionInfo | null>(null);
@@ -656,6 +657,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
       const data = await api.getDatabaseInfo();
       setDbInfo(data);
       setRetentionDraft(data.retention_days);
+      setRawRetentionDraft(data.raw_retention_days || 2);
     } catch (err: unknown) {
       const e = err as Error;
       setDbError(e.message || "Failed to load database status.");
@@ -687,19 +689,29 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
 
   const handleSaveRetention = async () => {
     const days = parseInt(String(retentionDraft), 10);
+    const rawDays = parseInt(String(rawRetentionDraft), 10);
     if (isNaN(days) || days < 1 || days > 3650) {
-      setDbError("Retention must be between 1 and 3650 days (up to 10 years).");
+      setDbError("Long-term retention must be between 1 and 3650 days (up to 10 years).");
+      return;
+    }
+    if (isNaN(rawDays) || rawDays < 1 || rawDays > 30) {
+      setDbError("Raw retention must be between 1 and 30 days.");
+      return;
+    }
+    if (rawDays > days) {
+      setDbError("Raw retention cannot exceed long-term retention.");
       return;
     }
     setDbSaving(true);
     setDbError(null);
     setDbSuccess(null);
     try {
-      const updated = await api.updateDatabaseSettings({ retention_days: days });
+      const updated = await api.updateDatabaseSettings({ retention_days: days, raw_retention_days: rawDays });
       setDbInfo(updated);
       setRetentionDraft(updated.retention_days);
+      setRawRetentionDraft(updated.raw_retention_days || rawDays);
       setDbSuccess(
-        `Retention period successfully updated to ${updated.retention_days} days. Historical telemetry samples and cron results have been pruned.`,
+        `Retention policy updated: Raw telemetry kept for ${updated.raw_retention_days || rawDays} days; older data summarized into 5-minute statistical windows retained for ${updated.retention_days} days.`,
       );
     } catch (err: unknown) {
       const e = err as Error;
@@ -3628,11 +3640,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                         </Typography>
                         <Box sx={{ display: "flex", alignItems: "baseline", gap: 1, mt: 0.5 }}>
                           <Typography variant="h5" sx={{ fontWeight: 700, color: "#4F46E5" }}>
-                            {dbInfo.retention_days} Days
+                            {dbInfo.raw_retention_days || 2}d / {dbInfo.retention_days}d
                           </Typography>
                         </Box>
                         <Typography variant="caption" sx={{ color: "#64748B" }}>
-                          Unified metrics & cron results
+                          {dbInfo.raw_retention_days || 2}d raw, {dbInfo.retention_days}d 5m summary
                         </Typography>
                       </Box>
 
@@ -3650,12 +3662,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                         </Typography>
                         <Box sx={{ display: "flex", alignItems: "baseline", gap: 1, mt: 0.5 }}>
                           <Typography variant="h5" sx={{ fontWeight: 700, color: "#0F172A" }}>
-                            {((dbInfo.metrics_count || 0) + (dbInfo.interface_metrics_count || 0)).toLocaleString()}
+                            {((dbInfo.metrics_count || 0) + (dbInfo.metrics_5m_count || 0) + (dbInfo.interface_metrics_count || 0)).toLocaleString()}
                           </Typography>
                         </Box>
                         <Typography variant="caption" sx={{ color: "#64748B" }}>
-                          {(dbInfo.metrics_count || 0).toLocaleString()} system /{" "}
-                          {(dbInfo.interface_metrics_count || 0).toLocaleString()} iface
+                          {(dbInfo.metrics_count || 0).toLocaleString()} node raw
+                          {dbInfo.interface_metrics_count ? `, ${(dbInfo.interface_metrics_count).toLocaleString()} iface raw` : ""} / {(dbInfo.metrics_5m_count || 0).toLocaleString()} 5m summary
                         </Typography>
                       </Box>
 
@@ -3673,11 +3685,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                         </Typography>
                         <Box sx={{ display: "flex", alignItems: "baseline", gap: 1, mt: 0.5 }}>
                           <Typography variant="h5" sx={{ fontWeight: 700, color: "#0F172A" }}>
-                            {(dbInfo.cron_results_count || 0).toLocaleString()}
+                            {((dbInfo.cron_results_count || 0) + (dbInfo.cron_results_5m_count || 0)).toLocaleString()}
                           </Typography>
                         </Box>
                         <Typography variant="caption" sx={{ color: "#64748B" }}>
-                          Execution histories stored
+                          {(dbInfo.cron_results_count || 0).toLocaleString()} raw / {(dbInfo.cron_results_5m_count || 0).toLocaleString()} 5m summary
                         </Typography>
                       </Box>
                     </Box>
@@ -3809,9 +3821,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                       </Typography>
                     </Box>
                     <Typography variant="body2" sx={{ color: "#64748B", lineHeight: 1.5 }}>
-                      Configure how long easy42 retains node telemetry (CPU, memory, traffic metrics) and cron task
-                      execution logs. Records older than this period are purged automatically during background hourly
-                      maintenance.
+                      Configure easy42's tiered data retention strategy. High-resolution raw samples (1s–10s telemetry
+                      and full probe outputs) are kept for a short period to draw accurate 1h, 6h, and 24h charts. Older data
+                      is automatically summarized into compact 5-minute statistical windows (averages, min/max, run counts)
+                      and retained until long-term retention expires.
                     </Typography>
 
                     <Box
@@ -3822,28 +3835,126 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                         border: "1px solid #E2E8F0",
                         display: "flex",
                         flexDirection: "column",
-                        gap: 2,
+                        gap: 2.5,
                       }}
                     >
-                      <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 2 }}>
-                        <TextField
-                          label="Retention Days"
-                          type="number"
-                          size="small"
-                          value={retentionDraft}
-                          onChange={(e) => setRetentionDraft(e.target.value)}
-                          InputProps={{
-                            endAdornment: <InputAdornment position="end">days</InputAdornment>,
-                            inputProps: { min: 1, max: 3650 },
-                          }}
-                          sx={{ width: 170, bgcolor: "#FFFFFF" }}
-                        />
+                      {/* Setting 1: Raw Data Retention */}
+                      <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 600, color: "#1E293B" }}>
+                          1. Raw Data Retention (High Resolution)
+                        </Typography>
+                        <Typography variant="caption" sx={{ color: "#64748B" }}>
+                          Duration to retain granular raw telemetry metrics and raw probe outputs before summarizing into 5-minute windows.
+                        </Typography>
+                        <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 2, mt: 0.5 }}>
+                          <TextField
+                            label="Raw Retention"
+                            type="number"
+                            size="small"
+                            value={rawRetentionDraft}
+                            onChange={(e) => setRawRetentionDraft(e.target.value)}
+                            InputProps={{
+                              endAdornment: <InputAdornment position="end">days</InputAdornment>,
+                              inputProps: { min: 1, max: 30 },
+                            }}
+                            sx={{ width: 170, bgcolor: "#FFFFFF" }}
+                          />
+                          <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
+                            {[
+                              { days: 1, label: "1 Day" },
+                              { days: 2, label: "2 Days (Recommended)" },
+                              { days: 3, label: "3 Days" },
+                              { days: 7, label: "7 Days" },
+                            ].map((preset) => {
+                              const isSelected = Number(rawRetentionDraft) === preset.days;
+                              return (
+                                <Chip
+                                  key={preset.days}
+                                  size="small"
+                                  label={preset.label}
+                                  clickable
+                                  variant={isSelected ? "filled" : "outlined"}
+                                  onClick={() => setRawRetentionDraft(preset.days)}
+                                  sx={{
+                                    fontSize: "0.75rem",
+                                    fontWeight: 500,
+                                    bgcolor: isSelected ? "#4F46E5" : "transparent",
+                                    color: isSelected ? "#FFFFFF" : "#475569",
+                                    borderColor: "#CBD5E1",
+                                  }}
+                                />
+                              );
+                            })}
+                          </Box>
+                        </Box>
+                      </Box>
 
+                      <Divider sx={{ borderColor: "#E2E8F0" }} />
+
+                      {/* Setting 2: Long-Term Summary Retention */}
+                      <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 600, color: "#1E293B" }}>
+                          2. Long-Term Retention (5-Minute Summaries)
+                        </Typography>
+                        <Typography variant="caption" sx={{ color: "#64748B" }}>
+                          Duration to keep summarized 5-minute statistical windows for long-term historical trends.
+                        </Typography>
+                        <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 2, mt: 0.5 }}>
+                          <TextField
+                            label="Summary Retention"
+                            type="number"
+                            size="small"
+                            value={retentionDraft}
+                            onChange={(e) => setRetentionDraft(e.target.value)}
+                            InputProps={{
+                              endAdornment: <InputAdornment position="end">days</InputAdornment>,
+                              inputProps: { min: 1, max: 3650 },
+                            }}
+                            sx={{ width: 170, bgcolor: "#FFFFFF" }}
+                          />
+                          <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
+                            {[
+                              { days: 7, label: "7 Days" },
+                              { days: 14, label: "14 Days" },
+                              { days: 30, label: "30 Days" },
+                              { days: 47, label: "47 Days (Default)" },
+                              { days: 90, label: "90 Days" },
+                              { days: 180, label: "180 Days" },
+                            ].map((preset) => {
+                              const isSelected = Number(retentionDraft) === preset.days;
+                              return (
+                                <Chip
+                                  key={preset.days}
+                                  size="small"
+                                  label={preset.label}
+                                  clickable
+                                  variant={isSelected ? "filled" : "outlined"}
+                                  onClick={() => setRetentionDraft(preset.days)}
+                                  sx={{
+                                    fontSize: "0.75rem",
+                                    fontWeight: 500,
+                                    bgcolor: isSelected ? "#4F46E5" : "transparent",
+                                    color: isSelected ? "#FFFFFF" : "#475569",
+                                    borderColor: "#CBD5E1",
+                                  }}
+                                />
+                              );
+                            })}
+                          </Box>
+                        </Box>
+                      </Box>
+
+                      <Box sx={{ display: "flex", justifyContent: "flex-start", mt: 1 }}>
                         <Button
                           variant="contained"
                           startIcon={dbSaving ? <CircularProgress size={14} color="inherit" /> : <Check size={16} />}
                           onClick={handleSaveRetention}
-                          disabled={dbSaving || dbLoading || Number(retentionDraft) === dbInfo.retention_days}
+                          disabled={
+                            dbSaving ||
+                            dbLoading ||
+                            (Number(retentionDraft) === dbInfo?.retention_days &&
+                              Number(rawRetentionDraft) === (dbInfo?.raw_retention_days || 2))
+                          }
                           sx={{
                             textTransform: "none",
                             fontWeight: 600,
@@ -3851,41 +3962,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                             "&:hover": { bgcolor: "#4338CA" },
                           }}
                         >
-                          {dbSaving ? "Saving..." : "Save Retention"}
+                          {dbSaving ? "Saving..." : "Save Retention Policy"}
                         </Button>
-                      </Box>
-
-                      {/* Presets */}
-                      <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
-                        <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600 }}>
-                          Quick Presets:
-                        </Typography>
-                        {[
-                          { days: 7, label: "7 Days" },
-                          { days: 14, label: "14 Days" },
-                          { days: 30, label: "30 Days" },
-                          { days: 47, label: "47 Days (Default)" },
-                          { days: 90, label: "90 Days" },
-                        ].map((preset) => {
-                          const isSelected = Number(retentionDraft) === preset.days;
-                          return (
-                            <Chip
-                              key={preset.days}
-                              size="small"
-                              label={preset.label}
-                              clickable
-                              variant={isSelected ? "filled" : "outlined"}
-                              onClick={() => setRetentionDraft(preset.days)}
-                              sx={{
-                                fontSize: "0.75rem",
-                                fontWeight: 500,
-                                bgcolor: isSelected ? "#4F46E5" : "transparent",
-                                color: isSelected ? "#FFFFFF" : "#475569",
-                                borderColor: "#CBD5E1",
-                              }}
-                            />
-                          );
-                        })}
                       </Box>
                     </Box>
                   </Paper>
