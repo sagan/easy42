@@ -43,6 +43,7 @@ import {
 } from "lucide-react";
 import { useMesh } from "../context/MeshContext";
 import { NodeLiveStatus } from "../types/api";
+import { getLinkWorkingState } from "../components/Topology/TopologyGraph";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
 export type SortField = "name" | "status" | "block" | "host" | "uptime" | "cpu" | "memory" | "disk" | "network";
@@ -50,7 +51,9 @@ export type SortField = "name" | "status" | "block" | "host" | "uptime" | "cpu" 
 export const NodesPage: React.FC = () => {
   const {
     nodes,
+    links,
     nodeStatuses,
+    networkState,
     fleetLive,
     refreshFleetLive,
     selectedTag,
@@ -96,12 +99,12 @@ export const NodesPage: React.FC = () => {
     setSearchTerm(urlSearch);
   }, [urlSearch]);
 
-  // Synchronize selected tag in context if URL tag is provided
+  // Synchronize selected tag in context if URL tag is provided and not a special tag
   useEffect(() => {
-    if (urlTag && urlTag !== selectedTag) {
+    if (urlTag && urlTag !== selectedTag && !urlTag.startsWith("$")) {
       setSelectedTag(urlTag);
     }
-  }, [urlTag]);
+  }, [urlTag, selectedTag, setSelectedTag]);
 
   // Debounce search term updates to URL
   useEffect(() => {
@@ -159,7 +162,9 @@ export const NodesPage: React.FC = () => {
   );
 
   const handleSelectTag = (tag: string) => {
-    setSelectedTag(tag);
+    if (!tag.startsWith("$")) {
+      setSelectedTag(tag);
+    }
     updateQueryParam({ tag });
   };
 
@@ -226,37 +231,6 @@ export const NodesPage: React.FC = () => {
     return Array.from(set).sort();
   }, [blocks, managedNodes]);
 
-  // Unique tags from managed (non-external) nodes only, excluding "external"
-  const managedTags = useMemo(() => {
-    const set = new Set<string>();
-    managedNodes.forEach((n) => {
-      n.tags?.forEach((t) => {
-        const trimmed = t.trim();
-        if (trimmed && trimmed.toLowerCase() !== "external") {
-          set.add(trimmed);
-        }
-      });
-    });
-    return Array.from(set).sort();
-  }, [managedNodes]);
-
-  // Requirement 3: Filter nodes by tag, block, and search term
-  const filteredNodes = useMemo(() => {
-    return managedNodes.filter((n) => {
-      const matchTag = urlTag === "All" || !managedTags.includes(urlTag) || (n.tags && n.tags.includes(urlTag));
-      const nBlocks = nodeBlocksMap.get(n.name) || [];
-      const matchBlock = urlBlock === "All" || !managedBlocks.includes(urlBlock) || nBlocks.includes(urlBlock);
-      const q = searchTerm.toLowerCase().trim();
-      const matchSearch =
-        !q ||
-        n.name.toLowerCase().includes(q) ||
-        (n.host || "").toLowerCase().includes(q) ||
-        (n.tags && n.tags.some((t) => t.toLowerCase().includes(q))) ||
-        nBlocks.some((b) => b.toLowerCase().includes(q));
-      return matchTag && matchBlock && matchSearch;
-    });
-  }, [managedNodes, urlTag, urlBlock, searchTerm, nodeBlocksMap, managedTags, managedBlocks]);
-
   // Map node name to live telemetry status
   const liveMap = useMemo(() => {
     const map = new Map<string, NodeLiveStatus>();
@@ -289,9 +263,121 @@ export const NodesPage: React.FC = () => {
     return "#E11D48"; // red
   };
 
+  // Set of managed nodes where agent is installed but is currently offline
+  const offlineNodeNames = useMemo(() => {
+    const set = new Set<string>();
+    managedNodes.forEach((n) => {
+      const live = liveMap.get(n.name);
+      const status = nodeStatuses[n.name];
+      const isOnline = Boolean(live?.connected ?? status?.connected);
+      const agentInstalled = Boolean(
+        live?.agent_installed ??
+        (status?.connected ||
+          Boolean(status?.agent_version && status.agent_version.length > 0) ||
+          Boolean(status?.metrics && status.metrics.memory_total_bytes > 0)),
+      );
+      if (!isOnline && agentInstalled) {
+        set.add(n.name);
+      }
+    });
+    return set;
+  }, [managedNodes, liveMap, nodeStatuses]);
+
+  // Set of managed nodes which are not healthy (at least 1 link is down)
+  const unhealthyNodeNames = useMemo(() => {
+    const set = new Set<string>();
+    const managedNames = new Set(managedNodes.map((n) => n.name));
+    (links || []).forEach((l) => {
+      if (getLinkWorkingState(l, networkState, nodeStatuses) === "not_working") {
+        if (managedNames.has(l.from.name)) set.add(l.from.name);
+        if (managedNames.has(l.to.name)) set.add(l.to.name);
+      }
+    });
+    return set;
+  }, [links, networkState, nodeStatuses, managedNodes]);
+
+  // Unique tags from managed (non-external) nodes only, excluding "external" and special tags
+  const managedTags = useMemo(() => {
+    const set = new Set<string>();
+    managedNodes.forEach((n) => {
+      n.tags?.forEach((t) => {
+        const trimmed = t.trim();
+        if (trimmed && trimmed.toLowerCase() !== "external" && !trimmed.startsWith("$")) {
+          set.add(trimmed);
+        }
+      });
+    });
+    return Array.from(set).sort();
+  }, [managedNodes]);
+
+  // Filter items including All, special state tags ($offline, $unhealthy), and node tags with counts
+  const tagFilterItems = useMemo(() => {
+    const items: Array<{ id: string; label: string; count: number }> = [
+      {
+        id: "All",
+        label: "All",
+        count: managedNodes.length,
+      },
+      {
+        id: "$offline",
+        label: "Offline",
+        count: offlineNodeNames.size,
+      },
+      {
+        id: "$unhealthy",
+        label: "Unhealthy",
+        count: unhealthyNodeNames.size,
+      },
+    ];
+
+    managedTags.forEach((tag) => {
+      const count = managedNodes.filter((n) => n.tags && n.tags.includes(tag)).length;
+      items.push({
+        id: tag,
+        label: tag,
+        count,
+      });
+    });
+
+    return items;
+  }, [managedNodes, offlineNodeNames, unhealthyNodeNames, managedTags]);
+
+  // Requirement 3: Filter nodes by tag, block, and search term
+  const filteredNodes = useMemo(() => {
+    return managedNodes.filter((n) => {
+      let matchTag = true;
+      if (urlTag === "$offline") {
+        matchTag = offlineNodeNames.has(n.name);
+      } else if (urlTag === "$unhealthy") {
+        matchTag = unhealthyNodeNames.has(n.name);
+      } else if (urlTag !== "All" && managedTags.includes(urlTag)) {
+        matchTag = Boolean(n.tags && n.tags.includes(urlTag));
+      }
+
+      const nBlocks = nodeBlocksMap.get(n.name) || [];
+      const matchBlock = urlBlock === "All" || !managedBlocks.includes(urlBlock) || nBlocks.includes(urlBlock);
+      const q = searchTerm.toLowerCase().trim();
+      const matchSearch =
+        !q ||
+        n.name.toLowerCase().includes(q) ||
+        (n.host || "").toLowerCase().includes(q) ||
+        (n.tags && n.tags.some((t) => t.toLowerCase().includes(q))) ||
+        nBlocks.some((b) => b.toLowerCase().includes(q));
+      return matchTag && matchBlock && matchSearch;
+    });
+  }, [managedNodes, urlTag, urlBlock, searchTerm, nodeBlocksMap, managedTags, managedBlocks, offlineNodeNames, unhealthyNodeNames]);
+
+  const activeTag =
+    urlTag === "$offline" || urlTag === "$unhealthy" || managedTags.includes(urlTag)
+      ? urlTag
+      : "All";
+
+  const isSpecialTag = urlTag === "$offline" || urlTag === "$unhealthy";
+  const isValidTag = isSpecialTag || (urlTag !== "All" && managedTags.includes(urlTag));
+
   const isFiltering = Boolean(
     searchTerm.trim() ||
-    (urlTag !== "All" && managedTags.includes(urlTag)) ||
+    isValidTag ||
     (urlBlock !== "All" && managedBlocks.includes(urlBlock)),
   );
 
@@ -701,38 +787,80 @@ export const NodesPage: React.FC = () => {
           </FormControl>
         )}
 
-        {/* Tag Filters (rendered only if managed nodes have tags) */}
-        {managedTags.length > 0 && (
-          <Box
-            sx={{
-              display: "flex",
-              alignItems: "center",
-              gap: 0.8,
-              overflowX: "auto",
-              maxWidth: { xs: "100%", md: "420px" },
-              pb: { xs: 0.5, md: 0 },
-              "-webkit-overflow-scrolling": "touch",
-            }}
-          >
-            {["All", ...managedTags].map((tag) => (
+        {/* Tag Filters (Always displays All, Offline, Unhealthy, plus managed tags) */}
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            gap: 0.8,
+            overflowX: "auto",
+            maxWidth: { xs: "100%", md: "520px" },
+            pb: { xs: 0.5, md: 0 },
+            "-webkit-overflow-scrolling": "touch",
+          }}
+        >
+          {tagFilterItems.map((item) => {
+            const isSelected = activeTag === item.id;
+            const isOfflineTag = item.id === "$offline";
+            const isUnhealthyTag = item.id === "$unhealthy";
+
+            let bg = "#F1F5F9";
+            let color = "#475569";
+            let hoverBg = "#E2E8F0";
+
+            if (isSelected) {
+              if (isOfflineTag) {
+                bg = "#DC2626";
+                color = "#FFFFFF";
+                hoverBg = "#B91C1C";
+              } else if (isUnhealthyTag) {
+                bg = "#D97706";
+                color = "#FFFFFF";
+                hoverBg = "#B45309";
+              } else {
+                bg = "#4F46E5";
+                color = "#FFFFFF";
+                hoverBg = "#4338CA";
+              }
+            } else {
+              if (isOfflineTag && item.count > 0) {
+                bg = "#FEF2F2";
+                color = "#DC2626";
+                hoverBg = "#FEE2E2";
+              } else if (isUnhealthyTag && item.count > 0) {
+                bg = "#FFFBEB";
+                color = "#B45309";
+                hoverBg = "#FEF3C7";
+              }
+            }
+
+            return (
               <Chip
-                key={tag}
-                label={tag}
+                key={item.id}
+                label={`${item.label} (${item.count})`}
                 size="small"
-                onClick={() => handleSelectTag(tag)}
+                onClick={() => handleSelectTag(item.id)}
                 sx={{
-                  fontWeight: (managedTags.includes(urlTag) ? urlTag : "All") === tag ? 700 : 500,
-                  bgcolor: (managedTags.includes(urlTag) ? urlTag : "All") === tag ? "#4F46E5" : "#F1F5F9",
-                  color: (managedTags.includes(urlTag) ? urlTag : "All") === tag ? "#FFFFFF" : "#475569",
+                  fontWeight: isSelected ? 700 : 500,
+                  bgcolor: bg,
+                  color: color,
                   borderRadius: 1.5,
+                  cursor: "pointer",
+                  transition: "all 0.15s ease-in-out",
+                  border:
+                    !isSelected && ((isOfflineTag && item.count > 0) || (isUnhealthyTag && item.count > 0))
+                      ? isOfflineTag
+                        ? "1px solid #FECDD3"
+                        : "1px solid #FDE68A"
+                      : "1px solid transparent",
                   "&:hover": {
-                    bgcolor: (managedTags.includes(urlTag) ? urlTag : "All") === tag ? "#4338CA" : "#E2E8F0",
+                    bgcolor: hoverBg,
                   },
                 }}
               />
-            ))}
-          </Box>
-        )}
+            );
+          })}
+        </Box>
 
         {/* Clear filter indicator if filtering */}
         {isFiltering && (
