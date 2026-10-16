@@ -110,6 +110,9 @@ func New(cfg Config) *Server {
 
 	// API Routes
 	r.Route("/api", func(r chi.Router) {
+		// Version endpoint (public)
+		r.Get("/version", s.handleGetVersion)
+
 		// Auth routes (public)
 		r.Post("/auth/login", s.handleLogin)
 		r.Get("/auth/status", s.handleAuthStatus)

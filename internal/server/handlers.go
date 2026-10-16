@@ -12,8 +12,15 @@ import (
 	"easy42/internal/config"
 	"easy42/internal/crypto"
 	"easy42/internal/engine"
+	"easy42/internal/version"
 	"github.com/go-chi/chi/v5"
 )
+
+// Version Handler
+
+func (s *Server) handleGetVersion(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, version.GetInfo())
+}
 
 // Auth Handlers
 
@@ -26,9 +33,10 @@ type loginRequest struct {
 }
 
 type authStatusResponse struct {
-	Authenticated bool `json:"authenticated"`
-	Unlocked      bool `json:"unlocked"`
-	HasConfig     bool `json:"has_config"`
+	Authenticated bool   `json:"authenticated"`
+	Unlocked      bool   `json:"unlocked"`
+	HasConfig     bool   `json:"has_config"`
+	Version       string `json:"version"`
 }
 
 func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
@@ -74,6 +82,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		Authenticated: true,
 		Unlocked:      s.mgr.IsUnlocked(),
 		HasConfig:     true,
+		Version:       version.Version,
 	})
 }
 
@@ -84,6 +93,7 @@ func (s *Server) handleAuthStatus(w http.ResponseWriter, r *http.Request) {
 			Authenticated: false,
 			Unlocked:      false,
 			HasConfig:     false,
+			Version:       version.Version,
 		})
 		return
 	}
@@ -97,6 +107,7 @@ func (s *Server) handleAuthStatus(w http.ResponseWriter, r *http.Request) {
 				Authenticated: false,
 				Unlocked:      false,
 				HasConfig:     false,
+				Version:       version.Version,
 			})
 			return
 		}
@@ -112,6 +123,7 @@ func (s *Server) handleAuthStatus(w http.ResponseWriter, r *http.Request) {
 		Authenticated: authed,
 		Unlocked:      s.mgr.IsUnlocked(),
 		HasConfig:     true,
+		Version:       version.Version,
 	})
 }
 

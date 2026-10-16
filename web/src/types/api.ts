@@ -328,6 +328,18 @@ export interface AuthStatus {
   authenticated: boolean;
   unlocked: boolean;
   has_config: boolean;
+  version?: string;
+}
+
+export interface VersionInfo {
+  version: string;
+  commit?: string;
+  date?: string;
+  built_by?: string;
+  go_version: string;
+  platform: string;
+  agent_version: string;
+  github_url: string;
 }
 
 export interface SyncAction {

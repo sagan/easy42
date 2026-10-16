@@ -55,6 +55,10 @@ import {
   Database,
   HardDrive,
   Sparkles,
+  Info,
+  ExternalLink,
+  Cpu,
+  GitCommit,
 } from "lucide-react";
 import { api } from "../../api/client";
 import {
@@ -65,6 +69,7 @@ import {
   ConfigTemplate,
   ServerTask,
   DatabaseInfo,
+  VersionInfo,
 } from "../../types/api";
 import { ViewNetworkPolicyModal } from "./ViewNetworkPolicyModal";
 
@@ -160,7 +165,7 @@ export const EXPORT_FILTER_EXAMPLES = [
   },
 ];
 
-export type SettingsTab = "security" | "network" | "policies" | "templates" | "dns" | "tasks" | "database";
+export type SettingsTab = "security" | "network" | "policies" | "templates" | "dns" | "tasks" | "database" | "about";
 
 const VALID_TABS: Record<string, SettingsTab> = {
   security: "security",
@@ -172,6 +177,7 @@ const VALID_TABS: Record<string, SettingsTab> = {
   dns: "dns",
   tasks: "tasks",
   database: "database",
+  about: "about",
 };
 
 interface SettingsModalProps {
@@ -249,6 +255,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
   const [dbError, setDbError] = useState<string | null>(null);
   const [dbSuccess, setDbSuccess] = useState<string | null>(null);
   const [retentionDraft, setRetentionDraft] = useState<number | string>(47);
+
+  // About & Version state
+  const [versionInfo, setVersionInfo] = useState<VersionInfo | null>(null);
+  const [versionLoading, setVersionLoading] = useState(false);
+  const [versionError, setVersionError] = useState<string | null>(null);
+  const [versionCopied, setVersionCopied] = useState(false);
 
   // Password change state
   const [currentPassword, setCurrentPassword] = useState("");
@@ -649,6 +661,27 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
       setDbError(e.message || "Failed to load database status.");
     } finally {
       setDbLoading(false);
+    }
+  };
+
+  // Load Version Info when About tab is opened
+  React.useEffect(() => {
+    if (activeTab === "about") {
+      loadVersionInfo();
+    }
+  }, [activeTab]);
+
+  const loadVersionInfo = async () => {
+    setVersionLoading(true);
+    setVersionError(null);
+    try {
+      const data = await api.getVersion();
+      setVersionInfo(data);
+    } catch (err: unknown) {
+      const e = err as Error;
+      setVersionError(e.message || "Failed to load version details.");
+    } finally {
+      setVersionLoading(false);
     }
   };
 
@@ -1271,6 +1304,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
               iconPosition="start"
               label="Database"
               title="Database"
+            />
+            <Tab
+              value="about"
+              icon={<Info size={16} />}
+              iconPosition="start"
+              label="About"
+              title="About"
             />
           </Tabs>
         </Box>
@@ -3918,6 +3958,415 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                   </Paper>
                 </Box>
               ) : null}
+            </DialogContent>
+          </Box>
+        )}
+
+        {activeTab === "about" && (
+          <Box sx={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, overflow: "hidden" }}>
+            <DialogContent
+              sx={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 2.5,
+                py: 3,
+                px: 3,
+                flex: 1,
+                minHeight: 0,
+                overflowY: "auto",
+              }}
+            >
+              {/* Header Description & Logo Card */}
+              <Box
+                sx={{
+                  p: 2.5,
+                  borderRadius: 2,
+                  bgcolor: "#F8FAFC",
+                  border: "1px solid #E2E8F0",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 2,
+                  flexWrap: { xs: "wrap", sm: "nowrap" },
+                }}
+              >
+                <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+                  <Box
+                    sx={{
+                      width: 48,
+                      height: 48,
+                      borderRadius: 2.5,
+                      background: "linear-gradient(135deg, #4F46E5 0%, #0891B2 100%)",
+                      color: "#FFFFFF",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      boxShadow: "0 4px 14px rgba(79, 70, 229, 0.25)",
+                      flexShrink: 0,
+                    }}
+                  >
+                    <Info size={26} />
+                  </Box>
+                  <Box>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                      <Typography variant="h6" sx={{ fontWeight: 800, color: "#0F172A", letterSpacing: "-0.3px" }}>
+                        easy<span style={{ color: "#0891B2" }}>42</span>
+                      </Typography>
+                      <Chip
+                        label={versionInfo?.version || "v0.1"}
+                        size="small"
+                        sx={{
+                          height: 22,
+                          fontSize: "0.75rem",
+                          fontWeight: 700,
+                          bgcolor: "rgba(79, 70, 229, 0.08)",
+                          color: "#4F46E5",
+                          border: "1px solid rgba(79, 70, 229, 0.2)",
+                        }}
+                      />
+                    </Box>
+                    <Typography variant="body2" sx={{ color: "#64748B", fontSize: "0.85rem", mt: 0.2 }}>
+                      WireGuard Mesh Overlay Network Manager for DN42 and Private Networks
+                    </Typography>
+                  </Box>
+                </Box>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  startIcon={<RefreshCw size={14} className={versionLoading ? "spin" : ""} />}
+                  onClick={loadVersionInfo}
+                  disabled={versionLoading}
+                  sx={{
+                    textTransform: "none",
+                    fontWeight: 600,
+                    flexShrink: 0,
+                    borderColor: "#CBD5E1",
+                    color: "#475569",
+                    "&:hover": { borderColor: "#94A3B8", bgcolor: "#F1F5F9" },
+                  }}
+                >
+                  Refresh
+                </Button>
+              </Box>
+
+              {versionError && (
+                <Alert severity="error" sx={{ borderRadius: 2 }}>
+                  {versionError}
+                </Alert>
+              )}
+
+              {/* Section 1: easy42 Go Controller Server */}
+              <Paper
+                elevation={0}
+                sx={{
+                  p: 2.5,
+                  borderRadius: 2,
+                  border: "1px solid #E2E8F0",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 2,
+                }}
+              >
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                  <Cpu size={18} color="#4F46E5" />
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0F172A", fontSize: "0.95rem" }}>
+                    easy42 Go Server
+                  </Typography>
+                </Box>
+                <Typography variant="caption" sx={{ color: "#64748B", mt: -1 }}>
+                  Backend controller daemon responsible for mesh state synchronization, WireGuard endpoints, and BGP templates.
+                </Typography>
+
+                <Box
+                  sx={{
+                    display: "grid",
+                    gridTemplateColumns: { xs: "1fr", sm: "repeat(2, 1fr)", md: "repeat(3, 1fr)" },
+                    gap: 1.5,
+                  }}
+                >
+                  <Box sx={{ p: 1.5, borderRadius: 1.5, bgcolor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
+                    <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600, textTransform: "uppercase" }}>
+                      Program Version
+                    </Typography>
+                    <Typography variant="body1" sx={{ fontWeight: 700, color: "#0F172A", mt: 0.3 }}>
+                      {versionInfo?.version || "dev"}
+                    </Typography>
+                  </Box>
+
+                  <Box sx={{ p: 1.5, borderRadius: 1.5, bgcolor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                      <GitCommit size={12} color="#64748B" />
+                      <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600, textTransform: "uppercase" }}>
+                        Git Commit
+                      </Typography>
+                    </Box>
+                    <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mt: 0.3 }}>
+                      <Typography
+                        variant="body2"
+                        sx={{
+                          fontFamily: "monospace",
+                          fontWeight: 600,
+                          color: "#334155",
+                          bgcolor: "#E2E8F0",
+                          px: 0.8,
+                          py: 0.2,
+                          borderRadius: 1,
+                          fontSize: "0.8rem",
+                        }}
+                      >
+                        {versionInfo?.commit && versionInfo.commit !== "none"
+                          ? versionInfo.commit.substring(0, 10)
+                          : "none"}
+                      </Typography>
+                      {versionInfo?.commit && versionInfo.commit !== "none" && (
+                        <Tooltip title="Copy full commit SHA">
+                          <IconButton
+                            size="small"
+                            onClick={() => {
+                              navigator.clipboard.writeText(versionInfo.commit || "");
+                            }}
+                            sx={{ p: 0.5, color: "#64748B" }}
+                          >
+                            <Copy size={14} />
+                          </IconButton>
+                        </Tooltip>
+                      )}
+                    </Box>
+                  </Box>
+
+                  <Box sx={{ p: 1.5, borderRadius: 1.5, bgcolor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
+                    <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600, textTransform: "uppercase" }}>
+                      Build Date
+                    </Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 600, color: "#334155", mt: 0.3 }}>
+                      {versionInfo?.date || "unknown"}
+                    </Typography>
+                  </Box>
+
+                  <Box sx={{ p: 1.5, borderRadius: 1.5, bgcolor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
+                    <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600, textTransform: "uppercase" }}>
+                      Go Runtime
+                    </Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 600, color: "#334155", mt: 0.3 }}>
+                      {versionInfo?.go_version || "unknown"}
+                    </Typography>
+                  </Box>
+
+                  <Box sx={{ p: 1.5, borderRadius: 1.5, bgcolor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
+                    <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600, textTransform: "uppercase" }}>
+                      Platform / Arch
+                    </Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 600, color: "#334155", mt: 0.3 }}>
+                      {versionInfo?.platform || "unknown"}
+                    </Typography>
+                  </Box>
+
+                  <Box sx={{ p: 1.5, borderRadius: 1.5, bgcolor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
+                    <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600, textTransform: "uppercase" }}>
+                      Built By
+                    </Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 600, color: "#334155", mt: 0.3 }}>
+                      {versionInfo?.built_by || "unknown"}
+                    </Typography>
+                  </Box>
+                </Box>
+              </Paper>
+
+              {/* Section 2: easy42 Bundled Agent */}
+              <Paper
+                elevation={0}
+                sx={{
+                  p: 2.5,
+                  borderRadius: 2,
+                  border: "1px solid #E2E8F0",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 2,
+                }}
+              >
+                <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                    <Zap size={18} color="#0891B2" />
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0F172A", fontSize: "0.95rem" }}>
+                      Bundled easy42-agent
+                    </Typography>
+                  </Box>
+                  <Chip
+                    label={`v${versionInfo?.agent_version || "0.1.0"}`}
+                    size="small"
+                    sx={{
+                      height: 22,
+                      fontSize: "0.75rem",
+                      fontWeight: 700,
+                      bgcolor: "rgba(8, 145, 178, 0.08)",
+                      color: "#0891B2",
+                      border: "1px solid rgba(8, 145, 178, 0.2)",
+                    }}
+                  />
+                </Box>
+                <Typography variant="caption" sx={{ color: "#64748B", mt: -1 }}>
+                  High-performance Rust-based node daemon compiled statically with musl libc for zero runtime dependencies.
+                </Typography>
+
+                <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+                  <Typography variant="caption" sx={{ fontWeight: 600, color: "#475569" }}>
+                    Download Precompiled Binaries:
+                  </Typography>
+                  <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+                    {[
+                      { arch: "x86_64", label: "x86_64 (AMD64 Linux)" },
+                      { arch: "aarch64", label: "aarch64 (ARM64 Linux)" },
+                      { arch: "armv7", label: "armv7 (ARMv7 Linux)" },
+                      { arch: "mipsel", label: "mipsel (MIPS LE / OpenWrt)" },
+                    ].map((item) => (
+                      <Button
+                        key={item.arch}
+                        component="a"
+                        href={`/api/agent/bin/${item.arch}`}
+                        download={`easy42-agent-${item.arch}`}
+                        size="small"
+                        variant="outlined"
+                        sx={{
+                          textTransform: "none",
+                          fontSize: "0.8rem",
+                          fontWeight: 600,
+                          borderColor: "#E2E8F0",
+                          color: "#334155",
+                          bgcolor: "#F8FAFC",
+                          "&:hover": { bgcolor: "#EEF2FF", borderColor: "#4F46E5", color: "#4F46E5" },
+                        }}
+                      >
+                        {item.label}
+                      </Button>
+                    ))}
+                  </Box>
+
+                  {/* One-line Install Script helper */}
+                  <Box sx={{ mt: 1, p: 1.5, borderRadius: 1.5, bgcolor: "#F1F5F9", border: "1px solid #E2E8F0" }}>
+                    <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600, display: "block", mb: 0.5 }}>
+                      Automated Node Installation Script:
+                    </Typography>
+                    <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1 }}>
+                      <Typography
+                        variant="caption"
+                        sx={{
+                          fontFamily: "monospace",
+                          color: "#1E293B",
+                          wordBreak: "break-all",
+                          fontWeight: 500,
+                        }}
+                      >
+                        curl -sSL {window.location.origin}/api/agent/install.sh | sh
+                      </Typography>
+                      <Tooltip title="Copy command">
+                        <IconButton
+                          size="small"
+                          onClick={() => {
+                            navigator.clipboard.writeText(`curl -sSL ${window.location.origin}/api/agent/install.sh | sh`);
+                          }}
+                          sx={{ p: 0.5, color: "#64748B" }}
+                        >
+                          <Copy size={14} />
+                        </IconButton>
+                      </Tooltip>
+                    </Box>
+                  </Box>
+                </Box>
+              </Paper>
+
+              {/* Section 3: Project & GitHub Repository */}
+              <Paper
+                elevation={0}
+                sx={{
+                  p: 2.5,
+                  borderRadius: 2,
+                  border: "1px solid #E2E8F0",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 2,
+                }}
+              >
+                <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 1 }}>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                    <Globe size={18} color="#4F46E5" />
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0F172A", fontSize: "0.95rem" }}>
+                      Project & Source Code
+                    </Typography>
+                  </Box>
+                  <Button
+                    component="a"
+                    href={versionInfo?.github_url || "https://github.com/sagan/easy42"}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    variant="contained"
+                    size="small"
+                    endIcon={<ExternalLink size={14} />}
+                    sx={{
+                      textTransform: "none",
+                      fontWeight: 700,
+                      bgcolor: "#4F46E5",
+                      "&:hover": { bgcolor: "#4338CA" },
+                    }}
+                  >
+                    GitHub: sagan/easy42
+                  </Button>
+                </Box>
+
+                <Box
+                  sx={{
+                    p: 1.5,
+                    borderRadius: 1.5,
+                    bgcolor: "#F8FAFC",
+                    border: "1px solid #E2E8F0",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 1,
+                  }}
+                >
+                  <Box>
+                    <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600 }}>
+                      Official Repository URL
+                    </Typography>
+                    <Typography
+                      component="a"
+                      href={versionInfo?.github_url || "https://github.com/sagan/easy42"}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      variant="body2"
+                      sx={{
+                        color: "#4F46E5",
+                        fontWeight: 600,
+                        textDecoration: "none",
+                        display: "block",
+                        "&:hover": { textDecoration: "underline" },
+                      }}
+                    >
+                      {versionInfo?.github_url || "https://github.com/sagan/easy42"}
+                    </Typography>
+                  </Box>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    startIcon={versionCopied ? <Check size={14} color="#10B981" /> : <Copy size={14} />}
+                    onClick={() => {
+                      const text = JSON.stringify(versionInfo, null, 2);
+                      navigator.clipboard.writeText(text);
+                      setVersionCopied(true);
+                      setTimeout(() => setVersionCopied(false), 2000);
+                    }}
+                    sx={{
+                      textTransform: "none",
+                      fontWeight: 600,
+                      borderColor: "#CBD5E1",
+                      color: versionCopied ? "#10B981" : "#475569",
+                      "&:hover": { borderColor: "#94A3B8", bgcolor: "#F1F5F9" },
+                    }}
+                  >
+                    {versionCopied ? "Copied Info!" : "Copy Diagnostics"}
+                  </Button>
+                </Box>
+              </Paper>
             </DialogContent>
           </Box>
         )}

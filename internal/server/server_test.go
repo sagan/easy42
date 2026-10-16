@@ -2147,3 +2147,31 @@ func TestLinkPskAndPrivateKeyEndpoints(t *testing.T) {
 	}
 }
 
+func TestVersionEndpoint(t *testing.T) {
+	srv, tempDir, _ := setupTestServer(t)
+	defer os.RemoveAll(tempDir)
+
+	req := httptest.NewRequest("GET", "/api/version", nil)
+	w := httptest.NewRecorder()
+	srv.router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("Expected 200 from /api/version, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("Failed to parse /api/version response: %v", err)
+	}
+
+	if resp["version"] == nil || resp["version"] == "" {
+		t.Errorf("Expected non-empty version in response, got %+v", resp)
+	}
+	if resp["agent_version"] != "0.1.0" {
+		t.Errorf("Expected agent_version to be 0.1.0, got %v", resp["agent_version"])
+	}
+	if resp["github_url"] != "https://github.com/sagan/easy42" {
+		t.Errorf("Expected github_url to match, got %v", resp["github_url"])
+	}
+}
+

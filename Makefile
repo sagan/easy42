@@ -17,8 +17,12 @@ build-agent:
 	cross +nightly build --manifest-path agent/Cargo.toml --target-dir agent/target/mipsel --release --target mipsel-unknown-linux-musl
 	cp agent/target/mipsel/mipsel-unknown-linux-musl/release/easy42-agent internal/agent/embedded/easy42-agent-mipsel
 
+VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
+COMMIT  ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "none")
+DATE    ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
+
 build: build-agent
-	go build -trimpath -ldflags "-s -w" -o bin/easy42 main.go
+	go build -trimpath -ldflags "-s -w -X easy42/internal/version.Version=$(VERSION) -X easy42/internal/version.Commit=$(COMMIT) -X easy42/internal/version.Date=$(DATE) -X easy42/internal/version.BuiltBy=make" -o bin/easy42 main.go
 
 test:
 	go test -v ./internal/...

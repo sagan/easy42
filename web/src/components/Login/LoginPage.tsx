@@ -11,6 +11,20 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [appVersion, setAppVersion] = useState<string>("v0.1");
+
+  React.useEffect(() => {
+    api.getVersion()
+      .then((info) => {
+        if (info.version) {
+          const display = info.version.startsWith("v") ? info.version : `v${info.version}`;
+          setAppVersion(display);
+        }
+      })
+      .catch(() => {
+        // Fallback to default
+      });
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -89,7 +103,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
                 easy<span style={{ color: "#0891B2" }}>42</span>
               </Typography>
               <Chip
-                label="v0.1"
+                label={appVersion}
                 size="small"
                 sx={{
                   height: 20,
@@ -145,6 +159,27 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
               </Button>
             </Box>
           </form>
+
+          <Box sx={{ pt: 1, display: "flex", justifyContent: "center" }}>
+            <Typography
+              component="a"
+              href="https://github.com/sagan/easy42"
+              target="_blank"
+              rel="noopener noreferrer"
+              variant="caption"
+              sx={{
+                color: "#94A3B8",
+                textDecoration: "none",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 0.5,
+                transition: "color 0.2s",
+                "&:hover": { color: "#4F46E5" },
+              }}
+            >
+              GitHub: sagan/easy42
+            </Typography>
+          </Box>
         </CardContent>
       </Card>
     </Box>

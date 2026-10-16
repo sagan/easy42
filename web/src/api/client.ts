@@ -1,5 +1,6 @@
 import type {
   AuthStatus,
+  VersionInfo,
   Node,
   Link,
   ProbeResult,
@@ -65,6 +66,9 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  // Version
+  getVersion: () => request<VersionInfo>("/version"),
+
   // Auth
   getAuthStatus: () => request<AuthStatus>("/auth/status"),
   login: (password: string) =>
