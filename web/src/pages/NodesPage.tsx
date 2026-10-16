@@ -656,6 +656,7 @@ export const NodesPage: React.FC = () => {
         <Box sx={{ display: "flex", alignItems: "center", gap: 1, flex: { xs: "1 1 100%", sm: "0 1 240px" } }}>
           <TextField
             size="small"
+            type="search"
             placeholder="Search servers, IP, tags..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}

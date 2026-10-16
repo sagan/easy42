@@ -88,20 +88,12 @@ export const AppLayout: React.FC = () => {
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
 
   // Active page path
-  const currentPath = location.pathname.startsWith("/topology")
-    ? "/topology"
-    : location.pathname.startsWith("/looking-glass")
-      ? "/looking-glass"
-      : location.pathname.startsWith("/helper")
-        ? "/helper"
-        : location.pathname.startsWith("/settings")
-          ? "/settings"
-          : "/nodes";
+  const currentPath = location.pathname === "/" ? "/nodes" : "/" + location.pathname.slice(1).split("/").slice(0, 1);
 
   const navItems = [
     { label: "Nodes", path: "/nodes", icon: <Server size={18} /> },
     { label: "Topology", path: "/topology", icon: <Network size={18} /> },
-    { label: isMobile ? "LG" : "Looking Glass", path: "/looking-glass/presets", icon: <Compass size={18} /> },
+    { label: isMobile ? "LG" : "Looking Glass", path: "/looking-glass", icon: <Compass size={18} /> },
     { label: isMobile ? "Helper" : "Device Helper", path: "/helper", icon: <Wrench size={18} /> },
     { label: "Settings", path: "/settings", icon: <Settings size={18} /> },
   ];
@@ -194,7 +186,7 @@ export const AppLayout: React.FC = () => {
             {!isMobile && (
               <Box sx={{ display: "flex", alignItems: "center", gap: 0.8, ml: 3 }}>
                 {navItems.map((item) => {
-                  const isActive = currentPath === item.path;
+                  const isActive = currentPath === item.path || currentPath.startsWith(item.path + "/");
                   return (
                     <Button
                       key={item.path}
@@ -554,7 +546,7 @@ export const AppLayout: React.FC = () => {
 
           <List sx={{ p: 0 }}>
             {navItems.map((item) => {
-              const isActive = currentPath === item.path;
+              const isActive = currentPath === item.path || currentPath.startsWith(item.path + "/");
               return (
                 <ListItem key={item.path} disablePadding sx={{ mb: 0.5 }}>
                   <ListItemButton
