@@ -507,6 +507,7 @@ type addLinkRequest struct {
 	MTU            int             `json:"mtu,omitempty"`
 	Tags           []string        `json:"tags,omitempty"`
 	AssignIPv4     *bool           `json:"assign_ipv4,omitempty"`
+	Psk            *string         `json:"psk,omitempty"`
 	From           *config.LinkEnd `json:"from,omitempty"`
 	To             *config.LinkEnd `json:"to,omitempty"`
 }
@@ -529,6 +530,12 @@ func (s *Server) handleAddLink(w http.ResponseWriter, r *http.Request) {
 		}
 		req.From.Type = req.Type
 		req.To.Type = req.Type
+	}
+	if req.Psk != nil {
+		if req.From == nil {
+			req.From = &config.LinkEnd{}
+		}
+		req.From.Psk = *req.Psk
 	}
 	if fromNode == "" && req.From != nil {
 		fromNode = req.From.Name
@@ -725,6 +732,7 @@ type updateLinkRequest struct {
 	MTU            int             `json:"mtu,omitempty"`
 	Tags           []string        `json:"tags,omitempty"`
 	AssignIPv4     *bool           `json:"assign_ipv4,omitempty"`
+	Psk            *string         `json:"psk,omitempty"`
 	From           *config.LinkEnd `json:"from,omitempty"`
 	To             *config.LinkEnd `json:"to,omitempty"`
 }
@@ -747,6 +755,12 @@ func (s *Server) handleUpdateLink(w http.ResponseWriter, r *http.Request) {
 		}
 		req.From.Type = req.Type
 		req.To.Type = req.Type
+	}
+	if req.Psk != nil {
+		if req.From == nil {
+			req.From = &config.LinkEnd{}
+		}
+		req.From.Psk = *req.Psk
 	}
 	if fromNode == "" && req.From != nil {
 		fromNode = req.From.Name
@@ -1261,6 +1275,197 @@ func (s *Server) handleDeleteLink(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, map[string]bool{"deleted": true})
 }
+
+type revealLinkPskRequest struct {
+	From      string `json:"from"`
+	To        string `json:"to"`
+	Interface string `json:"interface,omitempty"`
+	Password  string `json:"password"`
+}
+
+func (s *Server) handleRevealLinkPsk(w http.ResponseWriter, r *http.Request) {
+	var req revealLinkPskRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid request payload")
+		return
+	}
+	if req.From == "" || req.To == "" {
+		writeError(w, http.StatusBadRequest, "Both from and to nodes are required")
+		return
+	}
+	if req.Password == "" {
+		writeError(w, http.StatusBadRequest, "Password is required to reveal PSK")
+		return
+	}
+
+	psk, err := s.mgr.RevealLinkPsk(req.From, req.To, req.Interface, req.Password)
+	if err != nil {
+		if err.Error() == "invalid password" {
+			writeError(w, http.StatusUnauthorized, "Invalid password")
+			return
+		}
+		if err == engine.ErrLinkNotFound {
+			writeError(w, http.StatusNotFound, "Link not found")
+			return
+		}
+		if err == crypto.ErrVaultLocked {
+			writeError(w, http.StatusLocked, "Vault is locked. Unlock with password first.")
+			return
+		}
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"from":      req.From,
+		"to":        req.To,
+		"interface": req.Interface,
+		"psk":       psk,
+	})
+}
+
+type resetLinkPskRequest struct {
+	From      string `json:"from"`
+	To        string `json:"to"`
+	Interface string `json:"interface,omitempty"`
+	Psk       string `json:"psk,omitempty"`
+}
+
+func (s *Server) handleResetLinkPsk(w http.ResponseWriter, r *http.Request) {
+	var req resetLinkPskRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid request payload")
+		return
+	}
+	if req.From == "" || req.To == "" {
+		writeError(w, http.StatusBadRequest, "Both from and to nodes are required")
+		return
+	}
+
+	newPsk, err := s.mgr.ResetLinkPsk(req.From, req.To, req.Interface, req.Psk)
+	if err != nil {
+		if err == engine.ErrLinkNotFound {
+			writeError(w, http.StatusNotFound, "Link not found")
+			return
+		}
+		if err == crypto.ErrVaultLocked {
+			writeError(w, http.StatusLocked, "Vault is locked. Unlock with password first.")
+			return
+		}
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"from":      req.From,
+		"to":        req.To,
+		"interface": req.Interface,
+		"psk":       newPsk,
+		"message":   "WireGuard PSK reset successfully",
+	})
+}
+
+type revealLinkPrivateKeyRequest struct {
+	From      string `json:"from"`
+	To        string `json:"to"`
+	Node      string `json:"node"`
+	Interface string `json:"interface,omitempty"`
+	Password  string `json:"password"`
+}
+
+func (s *Server) handleRevealLinkPrivateKey(w http.ResponseWriter, r *http.Request) {
+	var req revealLinkPrivateKeyRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid request payload")
+		return
+	}
+	if req.From == "" || req.To == "" {
+		writeError(w, http.StatusBadRequest, "Both from and to nodes are required")
+		return
+	}
+	if req.Node == "" {
+		req.Node = req.From
+	}
+	if req.Password == "" {
+		writeError(w, http.StatusBadRequest, "Password is required to reveal WireGuard private key")
+		return
+	}
+
+	privKey, pubKey, err := s.mgr.RevealLinkPrivateKey(req.From, req.To, req.Node, req.Interface, req.Password)
+	if err != nil {
+		if err.Error() == "invalid password" {
+			writeError(w, http.StatusUnauthorized, "Invalid password")
+			return
+		}
+		if err == engine.ErrLinkNotFound {
+			writeError(w, http.StatusNotFound, "Link not found")
+			return
+		}
+		if err == crypto.ErrVaultLocked {
+			writeError(w, http.StatusLocked, "Vault is locked. Unlock with password first.")
+			return
+		}
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"from":        req.From,
+		"to":          req.To,
+		"node":        req.Node,
+		"interface":   req.Interface,
+		"private_key": privKey,
+		"public_key":  pubKey,
+	})
+}
+
+type resetLinkPrivateKeyRequest struct {
+	From       string `json:"from"`
+	To         string `json:"to"`
+	Node       string `json:"node"`
+	Interface  string `json:"interface,omitempty"`
+	PrivateKey string `json:"private_key,omitempty"`
+}
+
+func (s *Server) handleResetLinkPrivateKey(w http.ResponseWriter, r *http.Request) {
+	var req resetLinkPrivateKeyRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid request payload")
+		return
+	}
+	if req.From == "" || req.To == "" {
+		writeError(w, http.StatusBadRequest, "Both from and to nodes are required")
+		return
+	}
+	if req.Node == "" {
+		req.Node = req.From
+	}
+
+	privKey, pubKey, err := s.mgr.ResetLinkPrivateKey(req.From, req.To, req.Node, req.Interface, req.PrivateKey)
+	if err != nil {
+		if err == engine.ErrLinkNotFound {
+			writeError(w, http.StatusNotFound, "Link not found")
+			return
+		}
+		if err == crypto.ErrVaultLocked {
+			writeError(w, http.StatusLocked, "Vault is locked. Unlock with password first.")
+			return
+		}
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"from":        req.From,
+		"to":          req.To,
+		"node":        req.Node,
+		"interface":   req.Interface,
+		"private_key": privKey,
+		"public_key":  pubKey,
+		"message":     "WireGuard private key reset successfully",
+	})
+}
+
 
 // Sync Handlers
 

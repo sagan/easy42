@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"fmt"
+	"strings"
 
 	"golang.org/x/crypto/curve25519"
 )
@@ -56,4 +57,29 @@ func GetWgPublicKey(privateKeyB64 string) (string, error) {
 	curve25519.ScalarBaseMult(&publicKey, &privateKey)
 
 	return base64.StdEncoding.EncodeToString(publicKey[:]), nil
+}
+
+// GenerateWgPsk generates a standard 32-byte WireGuard preshared key encoded as base64
+func GenerateWgPsk() (string, error) {
+	var psk [32]byte
+	if _, err := rand.Read(psk[:]); err != nil {
+		return "", fmt.Errorf("failed to generate random bytes for PSK: %w", err)
+	}
+	return base64.StdEncoding.EncodeToString(psk[:]), nil
+}
+
+// ValidateWgKey validates that a base64 encoded WireGuard key (private key or PSK) is exactly 32 bytes
+func ValidateWgKey(keyB64 string) error {
+	trimmed := strings.TrimSpace(keyB64)
+	if trimmed == "" {
+		return fmt.Errorf("key cannot be empty")
+	}
+	keyBytes, err := base64.StdEncoding.DecodeString(trimmed)
+	if err != nil {
+		return fmt.Errorf("invalid base64 key: %w", err)
+	}
+	if len(keyBytes) != 32 {
+		return fmt.Errorf("key must be 32 bytes, got %d", len(keyBytes))
+	}
+	return nil
 }

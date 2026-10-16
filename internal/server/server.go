@@ -164,6 +164,10 @@ func New(cfg Config) *Server {
 			r.Post("/links/mesh", s.handleCreateMeshLinks)
 			r.Put("/links", s.handleUpdateLink)
 			r.Delete("/links", s.handleDeleteLink)
+			r.Post("/links/psk/reveal", s.handleRevealLinkPsk)
+			r.Post("/links/psk/reset", s.handleResetLinkPsk)
+			r.Post("/links/private-key/reveal", s.handleRevealLinkPrivateKey)
+			r.Post("/links/private-key/reset", s.handleResetLinkPrivateKey)
 
 			// Blocks
 			r.Get("/blocks", s.handleGetBlocks)

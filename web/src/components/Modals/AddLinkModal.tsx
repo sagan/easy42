@@ -101,6 +101,8 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
   const [fromNoteTab, setFromNoteTab] = useState<"write" | "preview">("write");
   const [toNoteTab, setToNoteTab] = useState<"write" | "preview">("write");
   const [assignIPv4, setAssignIPv4] = useState<boolean>(false);
+  const [enablePsk, setEnablePsk] = useState<boolean>(true);
+  const [customPsk, setCustomPsk] = useState<string>("");
 
   // Manual link fields
   const [linkType, setLinkType] = useState<"wireguard" | "manual">("wireguard");
@@ -238,10 +240,14 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
       setFromNote(linkToEdit.from.note || "");
       setToNote(linkToEdit.to.note || "");
       setAssignIPv4(Boolean(linkToEdit.assign_ipv4));
+      setEnablePsk(Boolean(linkToEdit.psk || linkToEdit.from.psk || linkToEdit.to.psk));
+      setCustomPsk("");
       setError(null);
     } else {
       setLinkType("wireguard");
       setAssignIPv4(false);
+      setEnablePsk(true);
+      setCustomPsk("");
       setFromInterface("");
       setToInterface("");
       setFromAddress("");
@@ -572,6 +578,13 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
         const reqFrom = fromNode === managedNode ? managedEnd : externalEnd;
         const reqTo = toNode === managedNode ? managedEnd : externalEnd;
 
+        let pskVal: string | undefined = undefined;
+        if (!enablePsk) {
+          pskVal = "__NONE__";
+        } else if (customPsk.trim()) {
+          pskVal = customPsk.trim();
+        }
+
         if (linkToEdit) {
           const updated = await api.updateLink({
             from_node: fromNodeName,
@@ -595,6 +608,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
             from_note: reqFrom.note || "",
             to_note: reqTo.note || "",
             assign_ipv4: assignIPv4,
+            psk: pskVal,
           });
           onLinkUpdated?.(updated);
         } else {
@@ -620,10 +634,18 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
             from_note: reqFrom.note,
             to_note: reqTo.note,
             assign_ipv4: assignIPv4,
+            psk: pskVal,
           });
           onLinkAdded?.(link);
         }
       } else {
+        let pskVal: string | undefined = undefined;
+        if (!enablePsk) {
+          pskVal = "__NONE__";
+        } else if (customPsk.trim()) {
+          pskVal = customPsk.trim();
+        }
+
         if (linkToEdit) {
           const updated = await api.updateLink({
             from_node: fromNodeName,
@@ -679,6 +701,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
               note: toNote.trim() || undefined,
             },
             assign_ipv4: assignIPv4,
+            psk: pskVal,
           });
           onLinkUpdated?.(updated);
         } else {
@@ -706,6 +729,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
             from_note: fromNote.trim() || undefined,
             to_note: toNote.trim() || undefined,
             assign_ipv4: assignIPv4,
+            psk: pskVal,
             from: {
               use_ip: fromUseIp,
               policy: fromPolicy,
@@ -1025,6 +1049,82 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                   </Box>
                 }
                 sx={{ alignItems: "flex-start", ml: 0, m: 0 }}
+              />
+            </Box>
+          )}
+
+          {/* WireGuard PSK Toggle & Configuration */}
+          {linkType === "wireguard" && (
+            <Box
+              sx={{
+                p: 1.75,
+                borderRadius: 2,
+                backgroundColor: enablePsk ? "rgba(99, 102, 241, 0.05)" : "#F8FAFC",
+                border: "1px solid",
+                borderColor: enablePsk ? "rgba(99, 102, 241, 0.35)" : "#E2E8F0",
+                transition: "all 0.2s ease",
+              }}
+            >
+              <FormControlLabel
+                control={
+                  <Switch
+                    id="link-enable-psk-switch"
+                    size="small"
+                    checked={enablePsk}
+                    onChange={(e) => setEnablePsk(e.target.checked)}
+                    color="primary"
+                  />
+                }
+                label={
+                  <Box sx={{ width: "100%" }}>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                      <Typography variant="body2" sx={{ fontSize: "0.85rem", fontWeight: 700, color: "#1E293B" }}>
+                        WireGuard Pre-shared Key (PSK)
+                      </Typography>
+                      <Chip
+                        label={enablePsk ? "Enabled (Recommended)" : "Disabled"}
+                        size="small"
+                        sx={{
+                          height: 18,
+                          fontSize: "0.62rem",
+                          fontWeight: 800,
+                          bgcolor: enablePsk ? "rgba(99, 102, 241, 0.15)" : "#E2E8F0",
+                          color: enablePsk ? "#4F46E5" : "#64748B",
+                          borderRadius: "4px",
+                        }}
+                      />
+                    </Box>
+                    <Typography
+                      variant="caption"
+                      sx={{ color: "#64748B", display: "block", fontSize: "0.72rem", lineHeight: 1.4, mt: 0.3 }}
+                    >
+                      Enables a 256-bit symmetric key for post-quantum resistance. By default, easy42 generates and encrypts
+                      the PSK automatically. You can also specify a custom PSK below.
+                    </Typography>
+
+                    {enablePsk && (
+                      <Box sx={{ mt: 1.5 }}>
+                        <TextField
+                          id="link-custom-psk-input"
+                          fullWidth
+                          size="small"
+                          label="Custom PSK (Optional)"
+                          placeholder="Leave blank to auto-generate random 32-byte Base64 PSK"
+                          value={customPsk}
+                          onChange={(e) => setCustomPsk(e.target.value)}
+                          helperText={
+                            linkToEdit
+                              ? "Leave blank to keep existing PSK, or enter a new 32-byte Base64 key to overwrite."
+                              : "Leave blank to auto-generate a secure random 32-byte Base64 PSK."
+                          }
+                          FormHelperTextProps={{ sx: { fontSize: "0.68rem" } }}
+                          inputProps={{ style: { fontFamily: "monospace", fontSize: "0.8rem" } }}
+                        />
+                      </Box>
+                    )}
+                  </Box>
+                }
+                sx={{ alignItems: "flex-start", ml: 0, m: 0, width: "100%" }}
               />
             </Box>
           )}

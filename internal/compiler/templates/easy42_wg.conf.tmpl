@@ -27,6 +27,9 @@ Table = off
 
 [Peer]
 PublicKey = {{ .peer_public_key }}
+{{ if .psk -}}
+PresharedKey = {{ .psk }}
+{{ end -}}
 AllowedIPs = {{ .allowed_ips }}
 {{ if .endpoint -}}
 Endpoint = {{ .endpoint }}

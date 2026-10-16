@@ -24,6 +24,14 @@ import type {
   NodeCronTasksResultsResponse,
   ServerTask,
   DatabaseInfo,
+  RevealLinkPskRequest,
+  RevealLinkPskResponse,
+  ResetLinkPskRequest,
+  ResetLinkPskResponse,
+  RevealLinkPrivateKeyRequest,
+  RevealLinkPrivateKeyResponse,
+  ResetLinkPrivateKeyRequest,
+  ResetLinkPrivateKeyResponse,
 } from "../types/api";
 
 const API_BASE = "/api";
@@ -198,6 +206,7 @@ export const api = {
     mtu?: number;
     tags?: string[];
     assign_ipv4?: boolean;
+    psk?: string;
     from?: Partial<Link["from"]>;
     to?: Partial<Link["to"]>;
   }) =>
@@ -237,6 +246,7 @@ export const api = {
     mtu?: number;
     tags?: string[];
     assign_ipv4?: boolean;
+    psk?: string;
     from?: Partial<Link["from"]>;
     to?: Partial<Link["to"]>;
   }) =>
@@ -251,6 +261,26 @@ export const api = {
         method: "DELETE",
       },
     ),
+  revealLinkPsk: (data: RevealLinkPskRequest) =>
+    request<RevealLinkPskResponse>("/links/psk/reveal", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  resetLinkPsk: (data: ResetLinkPskRequest) =>
+    request<ResetLinkPskResponse>("/links/psk/reset", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  revealLinkPrivateKey: (data: RevealLinkPrivateKeyRequest) =>
+    request<RevealLinkPrivateKeyResponse>("/links/private-key/reveal", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  resetLinkPrivateKey: (data: ResetLinkPrivateKeyRequest) =>
+    request<ResetLinkPrivateKeyResponse>("/links/private-key/reset", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
 
   // Network Settings
   getNetworkSettings: () => request<import("../types/api").NetworkSettings>("/settings/network"),

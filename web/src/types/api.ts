@@ -162,6 +162,7 @@ export interface LinkEnd {
   endpoint?: string;
   private_key?: string;
   public_key: string;
+  psk?: string;
   persistent_keepalive: number;
   mtu?: number;
   use_ip?: boolean;
@@ -181,7 +182,72 @@ export interface Link {
   to: LinkEnd;
   tags?: string[];
   assign_ipv4?: boolean;
+  psk?: string;
   modified_at?: string;
+}
+
+export interface RevealLinkPskRequest {
+  from: string;
+  to: string;
+  interface?: string;
+  password: string;
+}
+
+export interface RevealLinkPskResponse {
+  from: string;
+  to: string;
+  interface?: string;
+  psk: string;
+}
+
+export interface ResetLinkPskRequest {
+  from: string;
+  to: string;
+  interface?: string;
+  psk?: string;
+}
+
+export interface ResetLinkPskResponse {
+  from: string;
+  to: string;
+  interface?: string;
+  psk: string;
+  message: string;
+}
+
+export interface RevealLinkPrivateKeyRequest {
+  from: string;
+  to: string;
+  node?: string;
+  interface?: string;
+  password: string;
+}
+
+export interface RevealLinkPrivateKeyResponse {
+  from: string;
+  to: string;
+  node: string;
+  interface?: string;
+  private_key: string;
+  public_key: string;
+}
+
+export interface ResetLinkPrivateKeyRequest {
+  from: string;
+  to: string;
+  node?: string;
+  interface?: string;
+  private_key?: string;
+}
+
+export interface ResetLinkPrivateKeyResponse {
+  from: string;
+  to: string;
+  node: string;
+  interface?: string;
+  private_key: string;
+  public_key: string;
+  message: string;
 }
 
 export interface InterfaceInfo {

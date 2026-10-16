@@ -1985,3 +1985,165 @@ func TestServerInvalidAddress(t *testing.T) {
 		t.Fatal("Expected error from invalid address, got nil")
 	}
 }
+
+func TestLinkPskAndPrivateKeyEndpoints(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "easy42-link-key-endpoints-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	store := config.NewStore(tempDir)
+	pass, err := store.Initialize()
+	if err != nil {
+		t.Fatalf("Failed to initialize store: %v", err)
+	}
+
+	mgr := engine.NewManager(store)
+	if err := mgr.Unlock(pass); err != nil {
+		t.Fatalf("Failed to unlock manager: %v", err)
+	}
+
+	srv := New(Config{
+		ListenAddr: "127.0.0.1:0",
+		Manager:    mgr,
+	})
+
+	loginBody, _ := json.Marshal(map[string]string{"password": pass})
+	reqLogin := httptest.NewRequest("POST", "/api/auth/login", bytes.NewReader(loginBody))
+	wLogin := httptest.NewRecorder()
+	srv.router.ServeHTTP(wLogin, reqLogin)
+	if wLogin.Code != http.StatusOK {
+		t.Fatalf("Login failed: %d %s", wLogin.Code, wLogin.Body.String())
+	}
+	cookie := wLogin.Result().Cookies()[0]
+
+	// Add 2 internal nodes and 1 external node
+	nodeA := config.Node{Name: "srv-a", Host: "1.1.1.1", IP: "10.0.0.1", Interface: "lo", ASN: 4224420001}
+	nodeB := config.Node{Name: "srv-b", Host: "2.2.2.2", IP: "10.0.0.2", Interface: "lo", ASN: 4224420002}
+	extNode := config.Node{Name: "srv-ext", IsExternal: true, ASN: 4224429999}
+	for _, n := range []config.Node{nodeA, nodeB, extNode} {
+		b, _ := json.Marshal(n)
+		req := httptest.NewRequest("POST", "/api/nodes", bytes.NewReader(b))
+		req.AddCookie(cookie)
+		w := httptest.NewRecorder()
+		srv.router.ServeHTTP(w, req)
+		if w.Code != http.StatusCreated {
+			t.Fatalf("AddNode %s failed: %d", n.Name, w.Code)
+		}
+	}
+
+	// Add link between srv-a and srv-b
+	addLinkReq := map[string]any{
+		"from_node": "srv-a",
+		"to_node":   "srv-b",
+	}
+	bLink, _ := json.Marshal(addLinkReq)
+	reqAddLink := httptest.NewRequest("POST", "/api/links", bytes.NewReader(bLink))
+	reqAddLink.AddCookie(cookie)
+	wAddLink := httptest.NewRecorder()
+	srv.router.ServeHTTP(wAddLink, reqAddLink)
+	if wAddLink.Code != http.StatusCreated {
+		t.Fatalf("AddLink failed: %d %s", wAddLink.Code, wAddLink.Body.String())
+	}
+
+	// 1. Reveal PSK with wrong password -> 401
+	revBadReq, _ := json.Marshal(map[string]string{
+		"from":     "srv-a",
+		"to":       "srv-b",
+		"password": "wrongpassword",
+	})
+	reqRevBad := httptest.NewRequest("POST", "/api/links/psk/reveal", bytes.NewReader(revBadReq))
+	reqRevBad.AddCookie(cookie)
+	wRevBad := httptest.NewRecorder()
+	srv.router.ServeHTTP(wRevBad, reqRevBad)
+	if wRevBad.Code != http.StatusUnauthorized {
+		t.Fatalf("Expected 401 for wrong password, got %d", wRevBad.Code)
+	}
+
+	// 2. Reveal PSK with correct password -> 200
+	revGoodReq, _ := json.Marshal(map[string]string{
+		"from":     "srv-a",
+		"to":       "srv-b",
+		"password": pass,
+	})
+	reqRevGood := httptest.NewRequest("POST", "/api/links/psk/reveal", bytes.NewReader(revGoodReq))
+	reqRevGood.AddCookie(cookie)
+	wRevGood := httptest.NewRecorder()
+	srv.router.ServeHTTP(wRevGood, reqRevGood)
+	if wRevGood.Code != http.StatusOK {
+		t.Fatalf("Expected 200 for correct password, got %d %s", wRevGood.Code, wRevGood.Body.String())
+	}
+	var revResp map[string]any
+	_ = json.Unmarshal(wRevGood.Body.Bytes(), &revResp)
+	origPsk, ok := revResp["psk"].(string)
+	if !ok || origPsk == "" {
+		t.Fatalf("Expected non-empty PSK in response, got %+v", revResp)
+	}
+
+	// 3. Reset PSK to random value -> 200
+	resetRandReq, _ := json.Marshal(map[string]string{
+		"from": "srv-a",
+		"to":   "srv-b",
+	})
+	reqResetRand := httptest.NewRequest("POST", "/api/links/psk/reset", bytes.NewReader(resetRandReq))
+	reqResetRand.AddCookie(cookie)
+	wResetRand := httptest.NewRecorder()
+	srv.router.ServeHTTP(wResetRand, reqResetRand)
+	if wResetRand.Code != http.StatusOK {
+		t.Fatalf("Expected 200 on reset PSK, got %d %s", wResetRand.Code, wResetRand.Body.String())
+	}
+	var resetResp map[string]any
+	_ = json.Unmarshal(wResetRand.Body.Bytes(), &resetResp)
+	newPsk := resetResp["psk"].(string)
+	if newPsk == "" || newPsk == origPsk {
+		t.Fatalf("Expected newly generated PSK to differ from original PSK, got %s", newPsk)
+	}
+
+	// 4. Reveal WireGuard private key with correct password -> 200
+	revPrivReq, _ := json.Marshal(map[string]string{
+		"from":     "srv-a",
+		"to":       "srv-b",
+		"node":     "srv-a",
+		"password": pass,
+	})
+	reqRevPriv := httptest.NewRequest("POST", "/api/links/private-key/reveal", bytes.NewReader(revPrivReq))
+	reqRevPriv.AddCookie(cookie)
+	wRevPriv := httptest.NewRecorder()
+	srv.router.ServeHTTP(wRevPriv, reqRevPriv)
+	if wRevPriv.Code != http.StatusOK {
+		t.Fatalf("Expected 200 on reveal private key, got %d %s", wRevPriv.Code, wRevPriv.Body.String())
+	}
+	var revPrivResp map[string]any
+	_ = json.Unmarshal(wRevPriv.Body.Bytes(), &revPrivResp)
+	privKey := revPrivResp["private_key"].(string)
+	pubKey := revPrivResp["public_key"].(string)
+	if privKey == "" || pubKey == "" {
+		t.Fatalf("Expected private_key and public_key, got %+v", revPrivResp)
+	}
+
+	// 5. Reset WireGuard private key -> 200
+	resetPrivReq, _ := json.Marshal(map[string]string{
+		"from": "srv-a",
+		"to":   "srv-b",
+		"node": "srv-a",
+	})
+	reqResetPriv := httptest.NewRequest("POST", "/api/links/private-key/reset", bytes.NewReader(resetPrivReq))
+	reqResetPriv.AddCookie(cookie)
+	wResetPriv := httptest.NewRecorder()
+	srv.router.ServeHTTP(wResetPriv, reqResetPriv)
+	if wResetPriv.Code != http.StatusOK {
+		t.Fatalf("Expected 200 on reset private key, got %d %s", wResetPriv.Code, wResetPriv.Body.String())
+	}
+	var resetPrivResp map[string]any
+	_ = json.Unmarshal(wResetPriv.Body.Bytes(), &resetPrivResp)
+	newPrivKey := resetPrivResp["private_key"].(string)
+	newPubKey := resetPrivResp["public_key"].(string)
+	if newPrivKey == "" || newPrivKey == privKey {
+		t.Fatalf("Expected different new private key, got %s", newPrivKey)
+	}
+	if newPubKey == "" || newPubKey == pubKey {
+		t.Fatalf("Expected different new public key, got %s", newPubKey)
+	}
+}
+

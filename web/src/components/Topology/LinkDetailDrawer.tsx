@@ -17,6 +17,7 @@ import {
   Trash2,
   Link as LinkIcon,
   Key,
+  KeyRound,
   ArrowRightLeft,
   Edit2,
   Activity,
@@ -36,6 +37,7 @@ import { Link, NetworkState, Node, NetworkPolicy, NodeStatus } from "../../types
 import { MarkdownView } from "../Common/MarkdownView";
 import { getEffectiveLinkCost } from "../../utils/cost";
 import { getLinkWorkingState } from "./TopologyGraph";
+import { LinkKeyActionModal, LinkKeyActionMode } from "../Modals/LinkKeyActionModal";
 
 interface LinkDetailDrawerProps {
   link: Link | null;
@@ -92,6 +94,16 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [copiedEndpoint, setCopiedEndpoint] = useState<string | null>(null);
+
+  const [keyModalOpen, setKeyModalOpen] = useState(false);
+  const [keyModalMode, setKeyModalMode] = useState<LinkKeyActionMode>("reveal_psk");
+  const [keyModalNode, setKeyModalNode] = useState<string | undefined>(undefined);
+
+  const handleOpenKeyModal = (mode: LinkKeyActionMode, node?: string) => {
+    setKeyModalMode(mode);
+    setKeyModalNode(node);
+    setKeyModalOpen(true);
+  };
 
   const [isEditingFromNote, setIsEditingFromNote] = useState(false);
   const [fromNoteDraft, setFromNoteDraft] = useState("");
@@ -487,6 +499,83 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
         );
       })()}
 
+      {/* WireGuard PSK Card */}
+      {!isManual && (
+        <Box
+          sx={{
+            p: 2,
+            borderRadius: 2,
+            backgroundColor: "#F8FAFC",
+            border: "1px solid #E2E8F0",
+          }}
+        >
+          <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 0.8 }}>
+            <Typography
+              variant="subtitle2"
+              sx={{ fontWeight: 700, color: "#1E293B", display: "flex", alignItems: "center", gap: 1 }}
+            >
+              <KeyRound size={16} color="#4F46E5" />
+              Pre-shared Key (PSK)
+            </Typography>
+            <Chip
+              label={Boolean(link.psk || link.from.psk || link.to.psk) ? "CONFIGURED" : "NOT SET"}
+              size="small"
+              sx={{
+                fontWeight: 700,
+                fontSize: "0.65rem",
+                bgcolor: Boolean(link.psk || link.from.psk || link.to.psk) ? "#4F46E5" : "#94A3B8",
+                color: "#FFFFFF",
+              }}
+            />
+          </Box>
+          <Typography variant="caption" sx={{ color: "#64748B", display: "block", mb: 1.5 }}>
+            Symmetric 256-bit PSK provides post-quantum security and peer authentication.
+          </Typography>
+          <Box sx={{ display: "flex", gap: 1 }}>
+            <Button
+              id="btn-reveal-psk"
+              size="small"
+              variant="outlined"
+              startIcon={<Shield size={13} />}
+              onClick={() => handleOpenKeyModal("reveal_psk")}
+              sx={{
+                fontSize: "0.75rem",
+                py: 0.4,
+                px: 1.2,
+                textTransform: "none",
+                fontWeight: 600,
+                borderRadius: 1.5,
+                borderColor: "#CBD5E1",
+                color: "#334155",
+                "&:hover": { borderColor: "#4F46E5", color: "#4F46E5", backgroundColor: "rgba(99, 102, 241, 0.04)" },
+              }}
+            >
+              Reveal PSK
+            </Button>
+            <Button
+              id="btn-reset-psk"
+              size="small"
+              variant="outlined"
+              startIcon={<RefreshCw size={13} />}
+              onClick={() => handleOpenKeyModal("reset_psk")}
+              sx={{
+                fontSize: "0.75rem",
+                py: 0.4,
+                px: 1.2,
+                textTransform: "none",
+                fontWeight: 600,
+                borderRadius: 1.5,
+                borderColor: "#CBD5E1",
+                color: "#D97706",
+                "&:hover": { borderColor: "#D97706", backgroundColor: "rgba(217, 119, 6, 0.05)" },
+              }}
+            >
+              Reset PSK
+            </Button>
+          </Box>
+        </Box>
+      )}
+
       {/* Specifications */}
       <Box sx={{ display: "flex", flexDirection: "column", gap: 2.5 }}>
         {/* End 1 */}
@@ -842,6 +931,57 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
                   }}
                 >
                   {link.from.public_key || "(None)"}
+                </Typography>
+              </Box>
+            )}
+
+            {!isManual && !isFromExternal && (
+              <Box sx={{ mt: 1 }}>
+                <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <Typography
+                    variant="caption"
+                    sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}
+                  >
+                    <Shield size={11} /> Private Key:
+                  </Typography>
+                  <Box sx={{ display: "flex", gap: 0.8 }}>
+                    <Button
+                      id={`reveal-privkey-${link.from.name}`}
+                      size="small"
+                      variant="text"
+                      onClick={() => handleOpenKeyModal("reveal_private_key", link.from.name)}
+                      sx={{ fontSize: "0.68rem", p: 0.2, minWidth: "auto", textTransform: "none", color: "#4F46E5", fontWeight: 600 }}
+                    >
+                      Reveal
+                    </Button>
+                    <Typography variant="caption" sx={{ color: "#CBD5E1", alignSelf: "center" }}>•</Typography>
+                    <Button
+                      id={`reset-privkey-${link.from.name}`}
+                      size="small"
+                      variant="text"
+                      onClick={() => handleOpenKeyModal("reset_private_key", link.from.name)}
+                      sx={{ fontSize: "0.68rem", p: 0.2, minWidth: "auto", textTransform: "none", color: "#D97706", fontWeight: 600 }}
+                    >
+                      Reset
+                    </Button>
+                  </Box>
+                </Box>
+                <Typography
+                  variant="caption"
+                  className="mono-font"
+                  sx={{
+                    display: "block",
+                    mt: 0.2,
+                    p: 0.8,
+                    backgroundColor: "#FFFFFF",
+                    border: "1px solid #CBD5E1",
+                    borderRadius: 1,
+                    fontSize: "0.68rem",
+                    wordBreak: "break-all",
+                    color: "#94A3B8",
+                  }}
+                >
+                  •••••••••••••••••••••••••••••••••••••••••• (Vault Encrypted)
                 </Typography>
               </Box>
             )}
@@ -1352,6 +1492,57 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
               </Box>
             )}
 
+            {!isManual && !isToExternal && (
+              <Box sx={{ mt: 1 }}>
+                <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <Typography
+                    variant="caption"
+                    sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}
+                  >
+                    <Shield size={11} /> Private Key:
+                  </Typography>
+                  <Box sx={{ display: "flex", gap: 0.8 }}>
+                    <Button
+                      id={`reveal-privkey-${link.to.name}`}
+                      size="small"
+                      variant="text"
+                      onClick={() => handleOpenKeyModal("reveal_private_key", link.to.name)}
+                      sx={{ fontSize: "0.68rem", p: 0.2, minWidth: "auto", textTransform: "none", color: "#0891B2", fontWeight: 600 }}
+                    >
+                      Reveal
+                    </Button>
+                    <Typography variant="caption" sx={{ color: "#CBD5E1", alignSelf: "center" }}>•</Typography>
+                    <Button
+                      id={`reset-privkey-${link.to.name}`}
+                      size="small"
+                      variant="text"
+                      onClick={() => handleOpenKeyModal("reset_private_key", link.to.name)}
+                      sx={{ fontSize: "0.68rem", p: 0.2, minWidth: "auto", textTransform: "none", color: "#D97706", fontWeight: 600 }}
+                    >
+                      Reset
+                    </Button>
+                  </Box>
+                </Box>
+                <Typography
+                  variant="caption"
+                  className="mono-font"
+                  sx={{
+                    display: "block",
+                    mt: 0.2,
+                    p: 0.8,
+                    backgroundColor: "#FFFFFF",
+                    border: "1px solid #CBD5E1",
+                    borderRadius: 1,
+                    fontSize: "0.68rem",
+                    wordBreak: "break-all",
+                    color: "#94A3B8",
+                  }}
+                >
+                  •••••••••••••••••••••••••••••••••••••••••• (Vault Encrypted)
+                </Typography>
+              </Box>
+            )}
+
             {/* Node 2 LinkEnd Note */}
             <Box sx={{ mt: 1.5, p: 1.5, borderRadius: 1.5, backgroundColor: "#FFFFFF", border: "1px solid #A5F3FC" }}>
               <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1 }}>
@@ -1547,6 +1738,19 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
           {deleting ? "Deleting..." : "Delete WireGuard Link"}
         </Button>
       </Box>
+
+      <LinkKeyActionModal
+        open={keyModalOpen}
+        onClose={() => setKeyModalOpen(false)}
+        mode={keyModalMode}
+        link={link}
+        nodeName={keyModalNode}
+        onSuccess={() => {
+          if (onRefreshLink && link) {
+            onRefreshLink(link);
+          }
+        }}
+      />
     </Drawer>
   );
 };

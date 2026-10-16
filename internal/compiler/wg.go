@@ -110,15 +110,42 @@ func BuildWgLinkContext(
 		assignIPv4 = true
 	}
 
+	var rawPsk string
+	if selfEnd != nil && selfEnd.Psk != "" {
+		rawPsk = selfEnd.Psk
+	} else if peerEnd != nil && peerEnd.Psk != "" {
+		rawPsk = peerEnd.Psk
+	}
+
 	for _, arg := range args {
 		switch v := arg.(type) {
 		case *config.Link:
-			if v != nil && v.AssignIPv4 {
-				assignIPv4 = true
+			if v != nil {
+				if v.AssignIPv4 {
+					assignIPv4 = true
+				}
+				if rawPsk == "" {
+					if v.Psk != "" {
+						rawPsk = v.Psk
+					} else if v.From.Psk != "" {
+						rawPsk = v.From.Psk
+					} else if v.To.Psk != "" {
+						rawPsk = v.To.Psk
+					}
+				}
 			}
 		case config.Link:
 			if v.AssignIPv4 {
 				assignIPv4 = true
+			}
+			if rawPsk == "" {
+				if v.Psk != "" {
+					rawPsk = v.Psk
+				} else if v.From.Psk != "" {
+					rawPsk = v.From.Psk
+				} else if v.To.Psk != "" {
+					rawPsk = v.To.Psk
+				}
 			}
 		case bool:
 			assignIPv4 = v
@@ -129,17 +156,24 @@ func BuildWgLinkContext(
 				for _, p := range allPolicies {
 					policyMap[p.ID] = p
 				}
-				if !assignIPv4 {
-					for _, l := range v.Links {
-						if (selfEnd != nil && (l.From.Interface == selfEnd.Interface || l.To.Interface == selfEnd.Interface)) ||
-							(selfNode != nil && peerNode != nil &&
-								((l.From.Name == selfNode.Name && l.To.Name == peerNode.Name) ||
-									(l.From.Name == peerNode.Name && l.To.Name == selfNode.Name))) {
-							if l.AssignIPv4 {
-								assignIPv4 = true
-							}
-							break
+				for _, l := range v.Links {
+					if (selfEnd != nil && (l.From.Interface == selfEnd.Interface || l.To.Interface == selfEnd.Interface)) ||
+						(selfNode != nil && peerNode != nil &&
+							((l.From.Name == selfNode.Name && l.To.Name == peerNode.Name) ||
+								(l.From.Name == peerNode.Name && l.To.Name == selfNode.Name))) {
+						if !assignIPv4 && l.AssignIPv4 {
+							assignIPv4 = true
 						}
+						if rawPsk == "" {
+							if l.Psk != "" {
+								rawPsk = l.Psk
+							} else if l.From.Psk != "" {
+								rawPsk = l.From.Psk
+							} else if l.To.Psk != "" {
+								rawPsk = l.To.Psk
+							}
+						}
+						break
 					}
 				}
 			}
@@ -149,17 +183,24 @@ func BuildWgLinkContext(
 			for _, p := range allPolicies {
 				policyMap[p.ID] = p
 			}
-			if !assignIPv4 {
-				for _, l := range v.Links {
-					if (selfEnd != nil && (l.From.Interface == selfEnd.Interface || l.To.Interface == selfEnd.Interface)) ||
-						(selfNode != nil && peerNode != nil &&
-							((l.From.Name == selfNode.Name && l.To.Name == peerNode.Name) ||
-								(l.From.Name == peerNode.Name && l.To.Name == selfNode.Name))) {
-						if l.AssignIPv4 {
-							assignIPv4 = true
-						}
-						break
+			for _, l := range v.Links {
+				if (selfEnd != nil && (l.From.Interface == selfEnd.Interface || l.To.Interface == selfEnd.Interface)) ||
+					(selfNode != nil && peerNode != nil &&
+						((l.From.Name == selfNode.Name && l.To.Name == peerNode.Name) ||
+							(l.From.Name == peerNode.Name && l.To.Name == selfNode.Name))) {
+					if !assignIPv4 && l.AssignIPv4 {
+						assignIPv4 = true
 					}
+					if rawPsk == "" {
+						if l.Psk != "" {
+							rawPsk = l.Psk
+						} else if l.From.Psk != "" {
+							rawPsk = l.From.Psk
+						} else if l.To.Psk != "" {
+							rawPsk = l.To.Psk
+						}
+					}
+					break
 				}
 			}
 		case []config.NetworkPolicy:
@@ -256,6 +297,23 @@ func BuildWgLinkContext(
 	}
 	fwmark := selfEnd.EffectiveFwmark(activePolicy)
 
+	var psk string
+	if rawPsk != "" {
+		if vault != nil {
+			decrypted, err := vault.DecryptField(rawPsk)
+			if err != nil {
+				nodeName := ""
+				if selfNode != nil {
+					nodeName = selfNode.Name
+				}
+				return nil, fmt.Errorf("failed to decrypt PSK for node %s: %w", nodeName, err)
+			}
+			psk = decrypted
+		} else {
+			psk = rawPsk
+		}
+	}
+
 	ctx := map[string]any{
 		"self_node":            selfNode,
 		"peer_node":            peerNode,
@@ -271,6 +329,11 @@ func BuildWgLinkContext(
 		"endpoint":             endpoint,
 		"persistent_keepalive": keepalive,
 		"assign_ipv4":          assignIPv4,
+	}
+
+	if psk != "" {
+		ctx["psk"] = psk
+		ctx["Psk"] = psk
 	}
 
 	if address4 != "" {

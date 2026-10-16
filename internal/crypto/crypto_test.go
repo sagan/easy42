@@ -1,6 +1,7 @@
 package crypto
 
 import (
+	"encoding/base64"
 	"testing"
 	"time"
 )
@@ -124,5 +125,42 @@ func TestWireguardKeyPair(t *testing.T) {
 
 	if pub != kp.PublicKey {
 		t.Fatalf("Calculated public key %s doesn't match generated %s", pub, kp.PublicKey)
+	}
+}
+
+func TestGenerateWgPsk(t *testing.T) {
+	psk, err := GenerateWgPsk()
+	if err != nil {
+		t.Fatalf("GenerateWgPsk failed: %v", err)
+	}
+	if err := ValidateWgKey(psk); err != nil {
+		t.Fatalf("Generated PSK is invalid: %v", err)
+	}
+
+	psk2, err := GenerateWgPsk()
+	if err != nil {
+		t.Fatalf("GenerateWgPsk (2) failed: %v", err)
+	}
+	if psk == psk2 {
+		t.Fatalf("Consecutive generated PSKs should not be equal")
+	}
+}
+
+func TestValidateWgKey(t *testing.T) {
+	if err := ValidateWgKey(""); err == nil {
+		t.Fatalf("expected error for empty key")
+	}
+	if err := ValidateWgKey("invalid-base64-???"); err == nil {
+		t.Fatalf("expected error for non-base64 key")
+	}
+	// 16 bytes base64
+	shortKey := base64.StdEncoding.EncodeToString(make([]byte, 16))
+	if err := ValidateWgKey(shortKey); err == nil {
+		t.Fatalf("expected error for short key")
+	}
+	// 32 bytes valid key
+	validKey := base64.StdEncoding.EncodeToString(make([]byte, 32))
+	if err := ValidateWgKey(validKey); err != nil {
+		t.Fatalf("expected valid key, got: %v", err)
 	}
 }

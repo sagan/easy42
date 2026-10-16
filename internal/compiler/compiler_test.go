@@ -329,6 +329,58 @@ func TestGenerateWgConfigContent(t *testing.T) {
 	}
 }
 
+func TestGenerateWgConfigContent_Psk(t *testing.T) {
+	vault := crypto.NewKeyVault()
+	dek, _ := crypto.GenerateRandomBytes(32)
+	_ = vault.Unlock(dek)
+
+	kpA, _ := crypto.GenerateWgKeyPair()
+	kpB, _ := crypto.GenerateWgKeyPair()
+	pskRaw, _ := crypto.GenerateWgPsk()
+
+	encPrivA, _ := vault.EncryptField(kpA.PrivateKey)
+	encPsk, _ := vault.EncryptField(pskRaw)
+
+	nodeA := &config.Node{Name: "node-a", IP: "10.0.0.1"}
+	nodeB := &config.Node{Name: "node-b", IP: "10.0.0.2"}
+
+	endA := &config.LinkEnd{Name: "node-a", PrivateKey: encPrivA}
+	endB := &config.LinkEnd{Name: "node-b", PublicKey: kpB.PublicKey}
+
+	// 1. Without PSK
+	confNoPsk, err := GenerateWgConfigContent(nodeA, nodeB, endA, endB, vault)
+	if err != nil {
+		t.Fatalf("GenerateWgConfigContent failed: %v", err)
+	}
+	if strings.Contains(confNoPsk, "PresharedKey") {
+		t.Fatalf("Expected no PresharedKey in config, got:\n%s", confNoPsk)
+	}
+
+	// 2. With PSK via Link
+	link := &config.Link{
+		From: *endA,
+		To:   *endB,
+		Psk:  encPsk,
+	}
+	confWithLinkPsk, err := GenerateWgConfigContent(nodeA, nodeB, endA, endB, vault, link)
+	if err != nil {
+		t.Fatalf("GenerateWgConfigContent with link failed: %v", err)
+	}
+	if !strings.Contains(confWithLinkPsk, fmt.Sprintf("PresharedKey = %s", pskRaw)) {
+		t.Fatalf("Expected PresharedKey = %s, got:\n%s", pskRaw, confWithLinkPsk)
+	}
+
+	// 3. With PSK via LinkEnd
+	endAWithPsk := &config.LinkEnd{Name: "node-a", PrivateKey: encPrivA, Psk: encPsk}
+	confWithEndPsk, err := GenerateWgConfigContent(nodeA, nodeB, endAWithPsk, endB, vault)
+	if err != nil {
+		t.Fatalf("GenerateWgConfigContent with LinkEnd PSK failed: %v", err)
+	}
+	if !strings.Contains(confWithEndPsk, fmt.Sprintf("PresharedKey = %s", pskRaw)) {
+		t.Fatalf("Expected PresharedKey = %s, got:\n%s", pskRaw, confWithEndPsk)
+	}
+}
+
 func TestResolveEndpointToIP(t *testing.T) {
 	origLookup := DefaultLookupIP
 	defer func() { DefaultLookupIP = origLookup }()

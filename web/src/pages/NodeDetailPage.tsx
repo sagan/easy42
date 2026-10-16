@@ -81,6 +81,7 @@ import { NodeCronTasksTab } from "../components/Nodes/NodeCronTasksTab";
 import { getLinkWorkingState, isManualLink } from "../components/Topology/TopologyGraph";
 import { extractPort } from "../utils/endpoint";
 import { ViewNetworkPolicyModal } from "../components/Modals/ViewNetworkPolicyModal";
+import { LinkKeyActionModal, LinkKeyActionMode } from "../components/Modals/LinkKeyActionModal";
 
 const getHandshakeRelativeLabel = (dateStr?: string): { text: string; isHealthy: boolean } => {
   if (!dateStr || dateStr === "None" || dateStr.trim() === "") {
@@ -276,6 +277,11 @@ export const NodeDetailPage: React.FC = () => {
     localKey: string;
     peerKey: string;
   } | null>(null);
+
+  const [linkKeyModalOpen, setLinkKeyModalOpen] = useState(false);
+  const [linkKeyModalMode, setLinkKeyModalMode] = useState<LinkKeyActionMode>("reveal_psk");
+  const [linkKeyModalLink, setLinkKeyModalLink] = useState<Link | null>(null);
+  const [linkKeyModalNode, setLinkKeyModalNode] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     if (node?.agent_token) {
@@ -3364,6 +3370,82 @@ export const NodeDetailPage: React.FC = () => {
           <Key size={15} color="#64748B" />
           Copy Peer wg public key
         </MenuItem>
+
+        {linkMenuAnchor?.isWireGuard && (
+          <>
+            <Divider sx={{ my: 0.5 }} />
+            <MenuItem
+              id="menu-reveal-psk"
+              onClick={() => {
+                if (linkMenuAnchor) {
+                  setLinkKeyModalLink(linkMenuAnchor.link);
+                  setLinkKeyModalMode("reveal_psk");
+                  setLinkKeyModalNode(undefined);
+                  setLinkKeyModalOpen(true);
+                }
+                setLinkMenuAnchor(null);
+              }}
+              sx={{ fontSize: "0.85rem", gap: 1.2, py: 1 }}
+            >
+              <Shield size={15} color="#4F46E5" />
+              Reveal WireGuard PSK
+            </MenuItem>
+            <MenuItem
+              id="menu-reset-psk"
+              onClick={() => {
+                if (linkMenuAnchor) {
+                  setLinkKeyModalLink(linkMenuAnchor.link);
+                  setLinkKeyModalMode("reset_psk");
+                  setLinkKeyModalNode(undefined);
+                  setLinkKeyModalOpen(true);
+                }
+                setLinkMenuAnchor(null);
+              }}
+              sx={{ fontSize: "0.85rem", gap: 1.2, py: 1 }}
+            >
+              <RefreshCw size={15} color="#D97706" />
+              Reset WireGuard PSK
+            </MenuItem>
+
+            {!node?.is_external && (
+              <>
+                <Divider sx={{ my: 0.5 }} />
+                <MenuItem
+                  id="menu-reveal-privkey"
+                  onClick={() => {
+                    if (linkMenuAnchor) {
+                      setLinkKeyModalLink(linkMenuAnchor.link);
+                      setLinkKeyModalMode("reveal_private_key");
+                      setLinkKeyModalNode(nodeName);
+                      setLinkKeyModalOpen(true);
+                    }
+                    setLinkMenuAnchor(null);
+                  }}
+                  sx={{ fontSize: "0.85rem", gap: 1.2, py: 1 }}
+                >
+                  <Key size={15} color="#4F46E5" />
+                  Reveal Local Private Key
+                </MenuItem>
+                <MenuItem
+                  id="menu-reset-privkey"
+                  onClick={() => {
+                    if (linkMenuAnchor) {
+                      setLinkKeyModalLink(linkMenuAnchor.link);
+                      setLinkKeyModalMode("reset_private_key");
+                      setLinkKeyModalNode(nodeName);
+                      setLinkKeyModalOpen(true);
+                    }
+                    setLinkMenuAnchor(null);
+                  }}
+                  sx={{ fontSize: "0.85rem", gap: 1.2, py: 1 }}
+                >
+                  <RefreshCw size={15} color="#D97706" />
+                  Reset Local Private Key
+                </MenuItem>
+              </>
+            )}
+          </>
+        )}
       </Menu>
 
       {/* View Network Policy Modal */}
@@ -3371,6 +3453,18 @@ export const NodeDetailPage: React.FC = () => {
         open={viewPolicyModalOpen}
         onClose={() => setViewPolicyModalOpen(false)}
         policy={policyToView}
+      />
+
+      {/* Link Key Action Modal */}
+      <LinkKeyActionModal
+        open={linkKeyModalOpen}
+        onClose={() => setLinkKeyModalOpen(false)}
+        mode={linkKeyModalMode}
+        link={linkKeyModalLink}
+        nodeName={linkKeyModalNode}
+        onSuccess={() => {
+          loadData();
+        }}
       />
     </Box>
   );

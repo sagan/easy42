@@ -1009,6 +1009,7 @@ func (m *Manager) buildLink(cfg *config.Config, n1, n2 *config.Node, listenPort1
 
 	var encPrivFrom, pubKeyFrom string
 	var encPrivTo, pubKeyTo string
+	var encPsk string
 
 	if !isManual {
 		if fromNode.IsExternal {
@@ -1043,6 +1044,49 @@ func (m *Manager) buildLink(cfg *config.Config, n1, n2 *config.Node, listenPort1
 			}
 			encPrivTo = encPriv
 			pubKeyTo = kpTo.PublicKey
+		}
+
+		var lp *config.Link
+		if len(linkParams) > 0 && linkParams[0] != nil {
+			lp = linkParams[0]
+		}
+
+		customPsk := ""
+		if lp != nil {
+			if lp.Psk != "" {
+				customPsk = strings.TrimSpace(lp.Psk)
+			} else if customFromEnd != nil && customFromEnd.Psk != "" {
+				customPsk = strings.TrimSpace(customFromEnd.Psk)
+			} else if customToEnd != nil && customToEnd.Psk != "" {
+				customPsk = strings.TrimSpace(customToEnd.Psk)
+			}
+		}
+
+		if customPsk == "__NONE__" || customPsk == "<none>" {
+			encPsk = ""
+		} else if customPsk != "" {
+			if dec, err := m.vault.DecryptField(customPsk); err == nil && crypto.ValidateWgKey(dec) == nil {
+				encPsk = customPsk
+			} else {
+				if err := crypto.ValidateWgKey(customPsk); err != nil {
+					return nil, fmt.Errorf("invalid custom PSK: %w", err)
+				}
+				encrypted, err := m.vault.EncryptField(customPsk)
+				if err != nil {
+					return nil, err
+				}
+				encPsk = encrypted
+			}
+		} else {
+			rawPsk, err := crypto.GenerateWgPsk()
+			if err != nil {
+				return nil, fmt.Errorf("failed to generate PSK: %w", err)
+			}
+			encrypted, err := m.vault.EncryptField(rawPsk)
+			if err != nil {
+				return nil, err
+			}
+			encPsk = encrypted
 		}
 	}
 
@@ -1404,6 +1448,7 @@ func (m *Manager) buildLink(cfg *config.Config, n1, n2 *config.Node, listenPort1
 	link := &config.Link{
 		Type:       linkType,
 		AssignIPv4: assignIPv4,
+		Psk:        encPsk,
 		From: config.LinkEnd{
 			Name:                fromNode.Name,
 			Type:                linkType,
@@ -1415,6 +1460,7 @@ func (m *Manager) buildLink(cfg *config.Config, n1, n2 *config.Node, listenPort1
 			Endpoint:            fromEP,
 			PrivateKey:          encPrivFrom,
 			PublicKey:           pubKeyFrom,
+			Psk:                 encPsk,
 			PersistentKeepalive: fromKeepalive,
 			MTU:                 fromMTU,
 			UseIp:               fromUseIP,
@@ -1437,6 +1483,7 @@ func (m *Manager) buildLink(cfg *config.Config, n1, n2 *config.Node, listenPort1
 			Endpoint:            toEP,
 			PrivateKey:          encPrivTo,
 			PublicKey:           pubKeyTo,
+			Psk:                 encPsk,
 			PersistentKeepalive: toKeepalive,
 			MTU:                 toMTU,
 			UseIp:               toUseIP,
@@ -1946,6 +1993,36 @@ func (m *Manager) UpdateLinkWithOptions(node1Name, node2Name string, customFrom,
 		}
 	}
 
+	pskCandidate := ""
+	if fromEnd != nil && fromEnd.Psk != "" {
+		pskCandidate = strings.TrimSpace(fromEnd.Psk)
+	} else if toEnd != nil && toEnd.Psk != "" {
+		pskCandidate = strings.TrimSpace(toEnd.Psk)
+	}
+
+	if pskCandidate != "" && pskCandidate != link.Psk && pskCandidate != link.From.Psk && pskCandidate != link.To.Psk {
+		if pskCandidate == "__CLEAR__" || pskCandidate == "<clear>" {
+			link.Psk = ""
+			link.From.Psk = ""
+			link.To.Psk = ""
+		} else if dec, err := m.vault.DecryptField(pskCandidate); err == nil && crypto.ValidateWgKey(dec) == nil {
+			link.Psk = pskCandidate
+			link.From.Psk = pskCandidate
+			link.To.Psk = pskCandidate
+		} else {
+			if err := crypto.ValidateWgKey(pskCandidate); err != nil {
+				return nil, fmt.Errorf("invalid PSK: %w", err)
+			}
+			encPsk, err := m.vault.EncryptField(pskCandidate)
+			if err != nil {
+				return nil, err
+			}
+			link.Psk = encPsk
+			link.From.Psk = encPsk
+			link.To.Psk = encPsk
+		}
+	}
+
 	if link.From.IsManual() || link.To.IsManual() {
 		link.Type = config.LinkTypeManual
 		link.From.Type = config.LinkTypeManual
@@ -2150,6 +2227,265 @@ func (m *Manager) DeleteLink(node1Name, node2Name string, ifaces ...string) erro
 
 	cfg.Links = newLinks
 	return m.store.Save(cfg)
+}
+
+func (m *Manager) findLinkIndexLocked(cfg *config.Config, node1Name, node2Name, matchIface string) int {
+	from, to := node1Name, node2Name
+	if strings.Compare(from, to) > 0 {
+		from, to = to, from
+	}
+	for i, l := range cfg.Links {
+		if (l.From.Name == from && l.To.Name == to) || (l.From.Name == to && l.To.Name == from) {
+			if matchIface != "" {
+				if l.From.Interface == matchIface || l.To.Interface == matchIface {
+					return i
+				}
+			} else {
+				return i
+			}
+		}
+	}
+	return -1
+}
+
+// RevealLinkPsk verifies the user password and returns the decrypted plaintext PSK for the link.
+func (m *Manager) RevealLinkPsk(node1Name, node2Name, iface, password string) (string, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	cfg := m.store.Get()
+	if cfg == nil {
+		return "", errors.New("configuration not loaded")
+	}
+
+	valid, err := crypto.VerifyPassword(password, cfg.PasswordHash)
+	if err != nil || !valid {
+		return "", errors.New("invalid password")
+	}
+
+	if !m.vault.IsUnlocked() {
+		dek, err := crypto.DecryptDEK(password, cfg.EncryptedDEK)
+		if err != nil {
+			return "", crypto.ErrVaultLocked
+		}
+		_ = m.vault.Unlock(dek)
+		crypto.Memzero(dek)
+	}
+
+	idx := m.findLinkIndexLocked(cfg, node1Name, node2Name, iface)
+	if idx == -1 {
+		return "", ErrLinkNotFound
+	}
+
+	link := &cfg.Links[idx]
+	rawPsk := link.Psk
+	if rawPsk == "" {
+		if link.From.Psk != "" {
+			rawPsk = link.From.Psk
+		} else if link.To.Psk != "" {
+			rawPsk = link.To.Psk
+		}
+	}
+
+	if rawPsk == "" {
+		return "", nil
+	}
+
+	decrypted, err := m.vault.DecryptField(rawPsk)
+	if err == nil {
+		return decrypted, nil
+	}
+	return rawPsk, nil
+}
+
+// ResetLinkPsk resets the link's PSK to a newly generated value or a custom provided value.
+func (m *Manager) ResetLinkPsk(node1Name, node2Name, iface, customPsk string) (string, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if !m.vault.IsUnlocked() {
+		return "", crypto.ErrVaultLocked
+	}
+
+	cfg := m.store.Get()
+	if cfg == nil {
+		return "", errors.New("configuration not loaded")
+	}
+
+	idx := m.findLinkIndexLocked(cfg, node1Name, node2Name, iface)
+	if idx == -1 {
+		return "", ErrLinkNotFound
+	}
+
+	link := &cfg.Links[idx]
+	if link.IsManual() {
+		return "", errors.New("cannot set WireGuard PSK on manual link")
+	}
+
+	trimmedCustom := strings.TrimSpace(customPsk)
+	var plaintext string
+	if trimmedCustom != "" {
+		if err := crypto.ValidateWgKey(trimmedCustom); err != nil {
+			return "", fmt.Errorf("invalid PSK: %w", err)
+		}
+		plaintext = trimmedCustom
+	} else {
+		gen, err := crypto.GenerateWgPsk()
+		if err != nil {
+			return "", fmt.Errorf("failed to generate PSK: %w", err)
+		}
+		plaintext = gen
+	}
+
+	encPsk, err := m.vault.EncryptField(plaintext)
+	if err != nil {
+		return "", fmt.Errorf("failed to encrypt PSK: %w", err)
+	}
+
+	link.Psk = encPsk
+	link.From.Psk = encPsk
+	link.To.Psk = encPsk
+	link.ModifiedAt = time.Now().UTC()
+
+	if err := m.store.Save(cfg); err != nil {
+		return "", err
+	}
+
+	return plaintext, nil
+}
+
+// RevealLinkPrivateKey verifies the user password and returns the decrypted plaintext WireGuard private key for the specified endpoint.
+func (m *Manager) RevealLinkPrivateKey(node1Name, node2Name, targetNode, iface, password string) (string, string, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	cfg := m.store.Get()
+	if cfg == nil {
+		return "", "", errors.New("configuration not loaded")
+	}
+
+	valid, err := crypto.VerifyPassword(password, cfg.PasswordHash)
+	if err != nil || !valid {
+		return "", "", errors.New("invalid password")
+	}
+
+	if !m.vault.IsUnlocked() {
+		dek, err := crypto.DecryptDEK(password, cfg.EncryptedDEK)
+		if err != nil {
+			return "", "", crypto.ErrVaultLocked
+		}
+		_ = m.vault.Unlock(dek)
+		crypto.Memzero(dek)
+	}
+
+	idx := m.findLinkIndexLocked(cfg, node1Name, node2Name, iface)
+	if idx == -1 {
+		return "", "", ErrLinkNotFound
+	}
+
+	link := &cfg.Links[idx]
+	var targetEnd *config.LinkEnd
+	if link.From.Name == targetNode {
+		targetEnd = &link.From
+	} else if link.To.Name == targetNode {
+		targetEnd = &link.To
+	} else {
+		return "", "", fmt.Errorf("node %s does not belong to link between %s and %s", targetNode, node1Name, node2Name)
+	}
+
+	for _, n := range cfg.Nodes {
+		if n.Name == targetNode && n.IsExternal {
+			return "", "", errors.New("external nodes do not have private keys stored in easy42")
+		}
+	}
+
+	if targetEnd.PrivateKey == "" {
+		return "", "", errors.New("no private key configured for this endpoint")
+	}
+
+	dec, err := m.vault.DecryptField(targetEnd.PrivateKey)
+	if err == nil {
+		return dec, targetEnd.PublicKey, nil
+	}
+	return targetEnd.PrivateKey, targetEnd.PublicKey, nil
+}
+
+// ResetLinkPrivateKey resets the WireGuard private key for the specified endpoint to a newly generated keypair or a custom private key.
+func (m *Manager) ResetLinkPrivateKey(node1Name, node2Name, targetNode, iface, customPrivateKey string) (string, string, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if !m.vault.IsUnlocked() {
+		return "", "", crypto.ErrVaultLocked
+	}
+
+	cfg := m.store.Get()
+	if cfg == nil {
+		return "", "", errors.New("configuration not loaded")
+	}
+
+	idx := m.findLinkIndexLocked(cfg, node1Name, node2Name, iface)
+	if idx == -1 {
+		return "", "", ErrLinkNotFound
+	}
+
+	link := &cfg.Links[idx]
+	if link.IsManual() {
+		return "", "", errors.New("cannot set WireGuard private key on manual link")
+	}
+
+	var targetEnd *config.LinkEnd
+	if link.From.Name == targetNode {
+		targetEnd = &link.From
+	} else if link.To.Name == targetNode {
+		targetEnd = &link.To
+	} else {
+		return "", "", fmt.Errorf("node %s does not belong to link between %s and %s", targetNode, node1Name, node2Name)
+	}
+
+	for _, n := range cfg.Nodes {
+		if n.Name == targetNode && n.IsExternal {
+			return "", "", errors.New("cannot set private key for external node")
+		}
+	}
+
+	trimmedCustom := strings.TrimSpace(customPrivateKey)
+	var privPlaintext string
+	var pubKey string
+
+	if trimmedCustom != "" {
+		if err := crypto.ValidateWgKey(trimmedCustom); err != nil {
+			return "", "", fmt.Errorf("invalid WireGuard private key: %w", err)
+		}
+		derivedPub, err := crypto.GetWgPublicKey(trimmedCustom)
+		if err != nil {
+			return "", "", fmt.Errorf("failed to derive public key: %w", err)
+		}
+		privPlaintext = trimmedCustom
+		pubKey = derivedPub
+	} else {
+		kp, err := crypto.GenerateWgKeyPair()
+		if err != nil {
+			return "", "", fmt.Errorf("failed to generate keypair: %w", err)
+		}
+		privPlaintext = kp.PrivateKey
+		pubKey = kp.PublicKey
+	}
+
+	encPriv, err := m.vault.EncryptField(privPlaintext)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to encrypt private key: %w", err)
+	}
+
+	targetEnd.PrivateKey = encPriv
+	targetEnd.PublicKey = pubKey
+	link.ModifiedAt = time.Now().UTC()
+
+	if err := m.store.Save(cfg); err != nil {
+		return "", "", err
+	}
+
+	return privPlaintext, pubKey, nil
 }
 
 // ProbeHost probes a remote node via SSH

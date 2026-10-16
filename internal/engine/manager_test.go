@@ -15,6 +15,7 @@ import (
 	agentpb "easy42/internal/agent/proto"
 	"easy42/internal/compiler"
 	"easy42/internal/config"
+	"easy42/internal/crypto"
 
 	"github.com/gorilla/websocket"
 	"google.golang.org/protobuf/proto"
@@ -2450,6 +2451,185 @@ func TestPlanSyncWhenVaultLocked(t *testing.T) {
 	}
 	if !hasWg {
 		t.Errorf("Expected WireGuard actions to be planned when vault is unlocked")
+	}
+}
+
+func TestRevealAndResetPsk(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "mgr-psk-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	store := config.NewStore(tmpDir)
+	pass, err := store.Initialize()
+	if err != nil {
+		t.Fatalf("Failed to initialize store: %v", err)
+	}
+	mgr := NewManager(store)
+	if err := mgr.Unlock(pass); err != nil {
+		t.Fatalf("Failed to unlock manager: %v", err)
+	}
+
+	nodeA := config.Node{Name: "psk-a", Host: "192.168.10.1", IP: "192.168.100.1", ASN: 4224420001}
+	nodeB := config.Node{Name: "psk-b", Host: "192.168.10.2", IP: "192.168.100.2", ASN: 4224420002}
+	if err := mgr.AddNode(nodeA); err != nil {
+		t.Fatalf("AddNode A failed: %v", err)
+	}
+	if err := mgr.AddNode(nodeB); err != nil {
+		t.Fatalf("AddNode B failed: %v", err)
+	}
+
+	link, err := mgr.AddLink("psk-a", "psk-b", 0, 0, nil)
+	if err != nil {
+		t.Fatalf("AddLink failed: %v", err)
+	}
+	if link.Psk == "" {
+		t.Fatalf("Expected new link to have auto-generated encrypted PSK")
+	}
+
+	// 1. Reveal with wrong password
+	if _, err := mgr.RevealLinkPsk("psk-a", "psk-b", "", "wrongpassword"); err == nil {
+		t.Fatalf("Expected error revealing PSK with wrong password")
+	}
+
+	// 2. Reveal with correct password
+	revealed1, err := mgr.RevealLinkPsk("psk-a", "psk-b", "", pass)
+	if err != nil {
+		t.Fatalf("RevealLinkPsk failed: %v", err)
+	}
+	if err := crypto.ValidateWgKey(revealed1); err != nil {
+		t.Fatalf("Revealed PSK is invalid: %v", err)
+	}
+
+	// 3. Reset PSK to random generated value
+	newPsk, err := mgr.ResetLinkPsk("psk-a", "psk-b", "", "")
+	if err != nil {
+		t.Fatalf("ResetLinkPsk (random) failed: %v", err)
+	}
+	if newPsk == revealed1 {
+		t.Fatalf("New PSK should be different from original PSK")
+	}
+	if err := crypto.ValidateWgKey(newPsk); err != nil {
+		t.Fatalf("New generated PSK is invalid: %v", err)
+	}
+
+	// Reveal to verify it matches
+	revealed2, err := mgr.RevealLinkPsk("psk-a", "psk-b", "", pass)
+	if err != nil {
+		t.Fatalf("RevealLinkPsk after reset failed: %v", err)
+	}
+	if revealed2 != newPsk {
+		t.Fatalf("Revealed PSK (%s) does not match newly reset PSK (%s)", revealed2, newPsk)
+	}
+
+	// 4. Reset PSK to custom provided value
+	customPsk, _ := crypto.GenerateWgPsk()
+	setResult, err := mgr.ResetLinkPsk("psk-a", "psk-b", "", customPsk)
+	if err != nil {
+		t.Fatalf("ResetLinkPsk (custom) failed: %v", err)
+	}
+	if setResult != customPsk {
+		t.Fatalf("ResetLinkPsk result (%s) != customPsk (%s)", setResult, customPsk)
+	}
+
+	revealed3, err := mgr.RevealLinkPsk("psk-a", "psk-b", "", pass)
+	if err != nil {
+		t.Fatalf("RevealLinkPsk after custom reset failed: %v", err)
+	}
+	if revealed3 != customPsk {
+		t.Fatalf("Revealed PSK (%s) does not match custom PSK (%s)", revealed3, customPsk)
+	}
+
+	// 5. Reset with invalid custom PSK
+	if _, err := mgr.ResetLinkPsk("psk-a", "psk-b", "", "not-valid-base64-???"); err == nil {
+		t.Fatalf("Expected error resetting PSK with invalid base64")
+	}
+}
+
+func TestRevealAndResetPrivateKey(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "mgr-privkey-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	store := config.NewStore(tmpDir)
+	pass, err := store.Initialize()
+	if err != nil {
+		t.Fatalf("Failed to initialize store: %v", err)
+	}
+	mgr := NewManager(store)
+	if err := mgr.Unlock(pass); err != nil {
+		t.Fatalf("Failed to unlock manager: %v", err)
+	}
+
+	nodeA := config.Node{Name: "priv-a", Host: "192.168.10.1", IP: "192.168.100.1", ASN: 4224420001}
+	nodeB := config.Node{Name: "priv-b", Host: "192.168.10.2", IP: "192.168.100.2", ASN: 4224420002}
+	extNode := config.Node{Name: "ext-peer", IsExternal: true, ASN: 4224429999}
+	_ = mgr.AddNode(nodeA)
+	_ = mgr.AddNode(nodeB)
+	_ = mgr.AddNode(extNode)
+
+	_, err = mgr.AddLink("priv-a", "priv-b", 0, 0, nil)
+	if err != nil {
+		t.Fatalf("AddLink internal failed: %v", err)
+	}
+
+	extEndA := config.LinkEnd{Name: "priv-a"}
+	extEndPeer := config.LinkEnd{Name: "ext-peer", PublicKey: "dummy-peer-public-key="}
+	_, err = mgr.AddLinkAdvanced("priv-a", "ext-peer", &extEndA, &extEndPeer, nil)
+	if err != nil {
+		t.Fatalf("AddLink external failed: %v", err)
+	}
+
+	// 1. Reveal with wrong password
+	if _, _, err := mgr.RevealLinkPrivateKey("priv-a", "priv-b", "priv-a", "", "badpass"); err == nil {
+		t.Fatalf("Expected error with wrong password")
+	}
+
+	// 2. Reveal with correct password
+	privKeyA, pubKeyA, err := mgr.RevealLinkPrivateKey("priv-a", "priv-b", "priv-a", "", pass)
+	if err != nil {
+		t.Fatalf("RevealLinkPrivateKey failed: %v", err)
+	}
+	if err := crypto.ValidateWgKey(privKeyA); err != nil {
+		t.Fatalf("Revealed private key invalid: %v", err)
+	}
+	derivedPub, err := crypto.GetWgPublicKey(privKeyA)
+	if err != nil || derivedPub != pubKeyA {
+		t.Fatalf("Derived public key %s does not match link pubKey %s", derivedPub, pubKeyA)
+	}
+
+	// 3. Reveal external peer's private key -> should fail
+	if _, _, err := mgr.RevealLinkPrivateKey("priv-a", "ext-peer", "ext-peer", "", pass); err == nil {
+		t.Fatalf("Expected error trying to reveal external peer's private key")
+	}
+
+	// 4. Reset private key to random keypair
+	newPriv, newPub, err := mgr.ResetLinkPrivateKey("priv-a", "priv-b", "priv-a", "", "")
+	if err != nil {
+		t.Fatalf("ResetLinkPrivateKey (random) failed: %v", err)
+	}
+	if newPriv == privKeyA {
+		t.Fatalf("New private key should differ from old private key")
+	}
+	derivedNewPub, _ := crypto.GetWgPublicKey(newPriv)
+	if derivedNewPub != newPub {
+		t.Fatalf("Derived new pubkey %s != returned pubkey %s", derivedNewPub, newPub)
+	}
+
+	// 5. Reset private key to custom private key
+	customKp, _ := crypto.GenerateWgKeyPair()
+	setPriv, setPub, err := mgr.ResetLinkPrivateKey("priv-a", "priv-b", "priv-a", "", customKp.PrivateKey)
+	if err != nil {
+		t.Fatalf("ResetLinkPrivateKey (custom) failed: %v", err)
+	}
+	if setPriv != customKp.PrivateKey {
+		t.Fatalf("Expected custom private key %s, got %s", customKp.PrivateKey, setPriv)
+	}
+	if setPub != customKp.PublicKey {
+		t.Fatalf("Expected custom public key %s, got %s", customKp.PublicKey, setPub)
 	}
 }
 
