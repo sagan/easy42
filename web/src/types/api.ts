@@ -766,4 +766,10 @@ export interface DatabaseInfo {
   cron_results_5m_count?: number;
 }
 
+export interface IntegrationsSettings {
+  prometheus_enabled: boolean;
+  prometheus_auth_token: string;
+  endpoint: string;
+}
+
 

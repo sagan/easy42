@@ -70,6 +70,7 @@ import {
   ServerTask,
   DatabaseInfo,
   VersionInfo,
+  IntegrationsSettings,
 } from "../../types/api";
 import { ViewNetworkPolicyModal } from "./ViewNetworkPolicyModal";
 
@@ -165,7 +166,8 @@ export const EXPORT_FILTER_EXAMPLES = [
   },
 ];
 
-export type SettingsTab = "security" | "network" | "policies" | "templates" | "dns" | "tasks" | "database" | "about";
+export type SettingsTab =
+  "security" | "network" | "policies" | "templates" | "dns" | "tasks" | "database" | "integrations" | "about";
 
 const VALID_TABS: Record<string, SettingsTab> = {
   security: "security",
@@ -177,6 +179,7 @@ const VALID_TABS: Record<string, SettingsTab> = {
   dns: "dns",
   tasks: "tasks",
   database: "database",
+  integrations: "integrations",
   about: "about",
 };
 
@@ -256,6 +259,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
   const [dbSuccess, setDbSuccess] = useState<string | null>(null);
   const [retentionDraft, setRetentionDraft] = useState<number | string>(47);
   const [rawRetentionDraft, setRawRetentionDraft] = useState<number | string>(2);
+
+  // Integrations & Prometheus state
+  const [integrations, setIntegrations] = useState<IntegrationsSettings | null>(null);
+  const [integrationsLoading, setIntegrationsLoading] = useState(false);
+  const [integrationsSaving, setIntegrationsSaving] = useState(false);
+  const [integrationsError, setIntegrationsError] = useState<string | null>(null);
+  const [integrationsSuccess, setIntegrationsSuccess] = useState<string | null>(null);
+  const [showAuthToken, setShowAuthToken] = useState(false);
+  const [resetTokenConfirmOpen, setResetTokenConfirmOpen] = useState(false);
+  const [resettingToken, setResettingToken] = useState(false);
+  const [copiedField, setCopiedField] = useState<string | null>(null);
 
   // About & Version state
   const [versionInfo, setVersionInfo] = useState<VersionInfo | null>(null);
@@ -735,6 +749,70 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
     } finally {
       setDbVacuuming(false);
     }
+  };
+
+  // Load Integrations Settings when Integrations tab is opened
+  React.useEffect(() => {
+    if (activeTab === "integrations") {
+      loadIntegrations();
+    }
+  }, [activeTab]);
+
+  const loadIntegrations = async () => {
+    setIntegrationsLoading(true);
+    setIntegrationsError(null);
+    try {
+      const data = await api.getIntegrationsSettings();
+      setIntegrations(data);
+    } catch (err: unknown) {
+      const e = err as Error;
+      setIntegrationsError(e.message || "Failed to load integrations settings.");
+    } finally {
+      setIntegrationsLoading(false);
+    }
+  };
+
+  const handleTogglePrometheus = async (enabled: boolean) => {
+    if (!integrations) return;
+    setIntegrationsSaving(true);
+    setIntegrationsError(null);
+    setIntegrationsSuccess(null);
+    try {
+      const updated = await api.updateIntegrationsSettings({ prometheus_enabled: enabled });
+      setIntegrations(updated);
+      setIntegrationsSuccess(enabled ? "Prometheus metrics export enabled." : "Prometheus metrics export disabled.");
+    } catch (err: unknown) {
+      const e = err as Error;
+      setIntegrationsError(e.message || "Failed to update Prometheus export setting.");
+    } finally {
+      setIntegrationsSaving(false);
+    }
+  };
+
+  const handleResetToken = async () => {
+    setResettingToken(true);
+    setIntegrationsError(null);
+    setIntegrationsSuccess(null);
+    try {
+      const updated = await api.resetPrometheusToken();
+      setIntegrations(updated);
+      setResetTokenConfirmOpen(false);
+      setIntegrationsSuccess("Prometheus auth token successfully reset. Remember to update your scrapers.");
+    } catch (err: unknown) {
+      const e = err as Error;
+      setIntegrationsError(e.message || "Failed to reset Prometheus auth token.");
+    } finally {
+      setResettingToken(false);
+    }
+  };
+
+  const handleCopyText = (text: string, fieldId: string) => {
+    if (!text) return;
+    navigator.clipboard.writeText(text);
+    setCopiedField(fieldId);
+    setTimeout(() => {
+      setCopiedField((prev) => (prev === fieldId ? null : prev));
+    }, 2000);
   };
 
   const handleSaveTaskConfig = async (taskId: string) => {
@@ -1310,12 +1388,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
               title="Database"
             />
             <Tab
-              value="about"
-              icon={<Info size={16} />}
+              value="integrations"
+              icon={<Zap size={16} />}
               iconPosition="start"
-              label="About"
-              title="About"
+              label="Integrations"
+              title="Integrations & Prometheus"
             />
+            <Tab value="about" icon={<Info size={16} />} iconPosition="start" label="About" title="About" />
           </Tabs>
         </Box>
 
@@ -3654,12 +3733,19 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                         </Typography>
                         <Box sx={{ display: "flex", alignItems: "baseline", gap: 1, mt: 0.5 }}>
                           <Typography variant="h5" sx={{ fontWeight: 700, color: "#0F172A" }}>
-                            {((dbInfo.metrics_count || 0) + (dbInfo.metrics_5m_count || 0) + (dbInfo.interface_metrics_count || 0)).toLocaleString()}
+                            {(
+                              (dbInfo.metrics_count || 0) +
+                              (dbInfo.metrics_5m_count || 0) +
+                              (dbInfo.interface_metrics_count || 0)
+                            ).toLocaleString()}
                           </Typography>
                         </Box>
                         <Typography variant="caption" sx={{ color: "#64748B" }}>
                           {(dbInfo.metrics_count || 0).toLocaleString()} node raw
-                          {dbInfo.interface_metrics_count ? `, ${(dbInfo.interface_metrics_count).toLocaleString()} iface raw` : ""} / {(dbInfo.metrics_5m_count || 0).toLocaleString()} 5m summary
+                          {dbInfo.interface_metrics_count
+                            ? `, ${dbInfo.interface_metrics_count.toLocaleString()} iface raw`
+                            : ""}{" "}
+                          / {(dbInfo.metrics_5m_count || 0).toLocaleString()} 5m summary
                         </Typography>
                       </Box>
 
@@ -3681,7 +3767,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                           </Typography>
                         </Box>
                         <Typography variant="caption" sx={{ color: "#64748B" }}>
-                          {(dbInfo.cron_results_count || 0).toLocaleString()} raw / {(dbInfo.cron_results_5m_count || 0).toLocaleString()} 5m summary
+                          {(dbInfo.cron_results_count || 0).toLocaleString()} raw /{" "}
+                          {(dbInfo.cron_results_5m_count || 0).toLocaleString()} 5m summary
                         </Typography>
                       </Box>
                     </Box>
@@ -3814,9 +3901,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                     </Box>
                     <Typography variant="body2" sx={{ color: "#64748B", lineHeight: 1.5 }}>
                       Configure easy42's tiered data retention strategy. High-resolution raw samples (1s–10s telemetry
-                      and full probe outputs) are kept for a short period to draw accurate 1h, 6h, and 24h charts. Older data
-                      is automatically summarized into compact 5-minute statistical windows (averages, min/max, run counts)
-                      and retained until long-term retention expires.
+                      and full probe outputs) are kept for a short period to draw accurate 1h, 6h, and 24h charts. Older
+                      data is automatically summarized into compact 5-minute statistical windows (averages, min/max, run
+                      counts) and retained until long-term retention expires.
                     </Typography>
 
                     <Box
@@ -3836,7 +3923,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                           1. Raw Data Retention (High Resolution)
                         </Typography>
                         <Typography variant="caption" sx={{ color: "#64748B" }}>
-                          Duration to retain granular raw telemetry metrics and raw probe outputs before summarizing into 5-minute windows.
+                          Duration to retain granular raw telemetry metrics and raw probe outputs before summarizing
+                          into 5-minute windows.
                         </Typography>
                         <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 2, mt: 0.5 }}>
                           <TextField
@@ -4032,6 +4120,610 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
           </Box>
         )}
 
+        {/* Tab: Integrations & Prometheus */}
+        {activeTab === "integrations" && (
+          <Box sx={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, overflow: "hidden" }}>
+            <DialogContent
+              sx={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 2.5,
+                py: 3,
+                px: 3,
+                flex: 1,
+                minHeight: 0,
+                overflowY: "auto",
+              }}
+            >
+              {/* Header description */}
+              <Box
+                sx={{
+                  p: 2,
+                  borderRadius: 2,
+                  bgcolor: "#F8FAFC",
+                  border: "1px solid #E2E8F0",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 2,
+                }}
+              >
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+                  <Box
+                    sx={{
+                      width: 40,
+                      height: 40,
+                      borderRadius: 2,
+                      bgcolor: "#EEF2FF",
+                      color: "#4F46E5",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      flexShrink: 0,
+                    }}
+                  >
+                    <Zap size={22} />
+                  </Box>
+                  <Box>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0F172A", fontSize: "0.95rem" }}>
+                      Prometheus & External Integrations
+                    </Typography>
+                    <Typography variant="body2" sx={{ color: "#64748B", fontSize: "0.85rem", lineHeight: 1.4 }}>
+                      Expose real-time fleet metrics (system health, WireGuard tunnels, BIRD routing protocols, and
+                      cluster state) to Prometheus, VictoriaMetrics, Grafana, or other external monitoring stacks.
+                    </Typography>
+                  </Box>
+                </Box>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  startIcon={<RefreshCw size={14} className={integrationsLoading ? "spin" : ""} />}
+                  onClick={loadIntegrations}
+                  disabled={integrationsLoading || integrationsSaving}
+                  sx={{
+                    textTransform: "none",
+                    fontWeight: 600,
+                    flexShrink: 0,
+                    borderColor: "#CBD5E1",
+                    color: "#334155",
+                    "&:hover": { borderColor: "#94A3B8", bgcolor: "#F1F5F9" },
+                  }}
+                >
+                  {integrationsLoading ? "Refreshing..." : "Refresh"}
+                </Button>
+              </Box>
+
+              {integrationsSuccess && (
+                <Alert icon={<CheckCircle2 size={18} />} severity="success" sx={{ borderRadius: 2 }}>
+                  {integrationsSuccess}
+                </Alert>
+              )}
+
+              {integrationsError && (
+                <Alert icon={<AlertCircle size={18} />} severity="error" sx={{ borderRadius: 2 }}>
+                  {integrationsError}
+                </Alert>
+              )}
+
+              {integrationsLoading && !integrations ? (
+                <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", py: 8 }}>
+                  <CircularProgress size={32} />
+                </Box>
+              ) : integrations ? (
+                <Box sx={{ display: "flex", flexDirection: "column", gap: 2.5 }}>
+                  {/* Card 1: Prometheus Metrics Endpoint */}
+                  <Paper
+                    elevation={0}
+                    sx={{
+                      p: 2.5,
+                      borderRadius: 2.5,
+                      border: "1px solid #E2E8F0",
+                      bgcolor: "#FFFFFF",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 2,
+                    }}
+                  >
+                    <Box
+                      sx={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        flexWrap: "wrap",
+                        gap: 1,
+                      }}
+                    >
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                        <Activity size={18} color="#4F46E5" />
+                        <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#0F172A" }}>
+                          Prometheus Metrics Endpoint
+                        </Typography>
+                      </Box>
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                        <Chip
+                          size="small"
+                          label="GET"
+                          sx={{ bgcolor: "#E0F2FE", color: "#0369A1", fontWeight: 700, fontSize: "0.75rem" }}
+                        />
+                        <Chip
+                          size="small"
+                          label="Text 0.0.4"
+                          sx={{ bgcolor: "#F1F5F9", color: "#475569", fontWeight: 600, fontSize: "0.75rem" }}
+                        />
+                        <FormControlLabel
+                          control={
+                            <Switch
+                              checked={integrations.prometheus_enabled}
+                              onChange={(e) => handleTogglePrometheus(e.target.checked)}
+                              disabled={integrationsSaving}
+                              size="small"
+                              color="primary"
+                            />
+                          }
+                          label={
+                            <Typography
+                              variant="body2"
+                              sx={{ fontWeight: 600, color: integrations.prometheus_enabled ? "#16A34A" : "#64748B" }}
+                            >
+                              {integrations.prometheus_enabled ? "Enabled" : "Disabled"}
+                            </Typography>
+                          }
+                          sx={{ m: 0 }}
+                        />
+                      </Box>
+                    </Box>
+
+                    <Typography variant="body2" sx={{ color: "#64748B", fontSize: "0.85rem" }}>
+                      easy42 serves live fleet metrics over HTTP. Metrics are rendered from an in-memory state cache for
+                      near-instant response times and zero disk overhead.
+                    </Typography>
+
+                    <Box sx={{ display: "flex", gap: 1 }}>
+                      <TextField
+                        fullWidth
+                        size="small"
+                        value={`${window.location.origin}${integrations.endpoint || "/metrics"}`}
+                        InputProps={{
+                          readOnly: true,
+                          sx: {
+                            fontFamily: "monospace",
+                            fontSize: "0.85rem",
+                            bgcolor: "#F8FAFC",
+                            "& fieldset": { borderColor: "#CBD5E1" },
+                          },
+                        }}
+                      />
+                      <Button
+                        variant="outlined"
+                        onClick={() =>
+                          handleCopyText(`${window.location.origin}${integrations.endpoint || "/metrics"}`, "endpoint")
+                        }
+                        startIcon={copiedField === "endpoint" ? <Check size={16} /> : <Copy size={16} />}
+                        sx={{
+                          textTransform: "none",
+                          fontWeight: 600,
+                          flexShrink: 0,
+                          borderColor: copiedField === "endpoint" ? "#10B981" : "#CBD5E1",
+                          color: copiedField === "endpoint" ? "#10B981" : "#334155",
+                        }}
+                      >
+                        {copiedField === "endpoint" ? "Copied" : "Copy URL"}
+                      </Button>
+                    </Box>
+                  </Paper>
+
+                  {/* Card 2: Bearer Authentication & Token Management */}
+                  <Paper
+                    elevation={0}
+                    sx={{
+                      p: 2.5,
+                      borderRadius: 2.5,
+                      border: "1px solid #E2E8F0",
+                      bgcolor: "#FFFFFF",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 2,
+                    }}
+                  >
+                    <Box
+                      sx={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        flexWrap: "wrap",
+                        gap: 1,
+                      }}
+                    >
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                        <Lock size={18} color="#4F46E5" />
+                        <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#0F172A" }}>
+                          Scraper Authorization Token
+                        </Typography>
+                      </Box>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        color="warning"
+                        startIcon={<RefreshCw size={14} />}
+                        onClick={() => setResetTokenConfirmOpen(true)}
+                        disabled={resettingToken || integrationsSaving}
+                        sx={{ textTransform: "none", fontWeight: 600 }}
+                      >
+                        Reset Token
+                      </Button>
+                    </Box>
+
+                    <Typography variant="body2" sx={{ color: "#64748B", fontSize: "0.85rem" }}>
+                      The <code>/metrics</code> endpoint requires authorization. External monitoring systems must supply
+                      this token either via the HTTP <code>Authorization: Bearer &lt;TOKEN&gt;</code> header or as a{" "}
+                      <code>?token=&lt;TOKEN&gt;</code> query parameter.
+                    </Typography>
+
+                    <Box sx={{ display: "flex", gap: 1 }}>
+                      <TextField
+                        fullWidth
+                        size="small"
+                        type={showAuthToken ? "text" : "password"}
+                        value={integrations.prometheus_auth_token || ""}
+                        InputProps={{
+                          readOnly: true,
+                          endAdornment: (
+                            <InputAdornment position="end">
+                              <IconButton size="small" onClick={() => setShowAuthToken(!showAuthToken)} edge="end">
+                                {showAuthToken ? <EyeOff size={16} /> : <Eye size={16} />}
+                              </IconButton>
+                            </InputAdornment>
+                          ),
+                          sx: {
+                            fontFamily: "monospace",
+                            fontSize: "0.85rem",
+                            bgcolor: "#F8FAFC",
+                            "& fieldset": { borderColor: "#CBD5E1" },
+                          },
+                        }}
+                      />
+                      <Button
+                        variant="outlined"
+                        onClick={() => handleCopyText(integrations.prometheus_auth_token || "", "token")}
+                        startIcon={copiedField === "token" ? <Check size={16} /> : <Copy size={16} />}
+                        sx={{
+                          textTransform: "none",
+                          fontWeight: 600,
+                          flexShrink: 0,
+                          borderColor: copiedField === "token" ? "#10B981" : "#CBD5E1",
+                          color: copiedField === "token" ? "#10B981" : "#334155",
+                        }}
+                      >
+                        {copiedField === "token" ? "Copied" : "Copy Token"}
+                      </Button>
+                    </Box>
+                  </Paper>
+
+                  {/* Card 3: Quick Start & Scraper Setup */}
+                  <Paper
+                    elevation={0}
+                    sx={{
+                      p: 2.5,
+                      borderRadius: 2.5,
+                      border: "1px solid #E2E8F0",
+                      bgcolor: "#FFFFFF",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 2,
+                    }}
+                  >
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                      <FileCode size={18} color="#4F46E5" />
+                      <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#0F172A" }}>
+                        Scraper Configuration Example
+                      </Typography>
+                    </Box>
+
+                    <Typography variant="body2" sx={{ color: "#64748B", fontSize: "0.85rem" }}>
+                      Add this job to your <code>prometheus.yml</code> or VictoriaMetrics scrape configuration:
+                    </Typography>
+
+                    <Box
+                      sx={{
+                        position: "relative",
+                        bgcolor: "#0F172A",
+                        borderRadius: 2,
+                        p: 2,
+                        fontFamily: "monospace",
+                        fontSize: "0.82rem",
+                        color: "#E2E8F0",
+                        overflowX: "auto",
+                      }}
+                    >
+                      <Button
+                        size="small"
+                        onClick={() =>
+                          handleCopyText(
+                            `scrape_configs:\n  - job_name: 'easy42'\n    scrape_interval: 15s\n    metrics_path: '/metrics'\n    bearer_token: '${integrations.prometheus_auth_token || "YOUR_TOKEN"}'\n    static_configs:\n      - targets: ['${window.location.host}']`,
+                            "yaml",
+                          )
+                        }
+                        startIcon={copiedField === "yaml" ? <Check size={14} /> : <Copy size={14} />}
+                        sx={{
+                          position: "absolute",
+                          top: 8,
+                          right: 8,
+                          textTransform: "none",
+                          fontSize: "0.75rem",
+                          bgcolor: "rgba(255,255,255,0.1)",
+                          color: copiedField === "yaml" ? "#34D399" : "#CBD5E1",
+                          "&:hover": { bgcolor: "rgba(255,255,255,0.2)" },
+                        }}
+                      >
+                        {copiedField === "yaml" ? "Copied" : "Copy YAML"}
+                      </Button>
+                      <pre style={{ margin: 0, whiteSpace: "pre" }}>
+                        {`scrape_configs:
+  - job_name: 'easy42'
+    scrape_interval: 15s
+    metrics_path: '/metrics'
+    bearer_token: '${integrations.prometheus_auth_token || "YOUR_TOKEN"}'
+    static_configs:
+      - targets: ['${window.location.host}']`}
+                      </pre>
+                    </Box>
+
+                    <Typography variant="body2" sx={{ color: "#64748B", fontSize: "0.85rem", mt: 0.5 }}>
+                      Or test with <code>curl</code> from the command line:
+                    </Typography>
+
+                    <Box
+                      sx={{
+                        position: "relative",
+                        bgcolor: "#0F172A",
+                        borderRadius: 2,
+                        p: 2,
+                        fontFamily: "monospace",
+                        fontSize: "0.82rem",
+                        color: "#E2E8F0",
+                        overflowX: "auto",
+                      }}
+                    >
+                      <Button
+                        size="small"
+                        onClick={() =>
+                          handleCopyText(
+                            `curl -H "Authorization: Bearer ${integrations.prometheus_auth_token || "YOUR_TOKEN"}" "${window.location.origin}${integrations.endpoint || "/metrics"}"`,
+                            "curl",
+                          )
+                        }
+                        startIcon={copiedField === "curl" ? <Check size={14} /> : <Copy size={14} />}
+                        sx={{
+                          position: "absolute",
+                          top: 8,
+                          right: 8,
+                          textTransform: "none",
+                          fontSize: "0.75rem",
+                          bgcolor: "rgba(255,255,255,0.1)",
+                          color: copiedField === "curl" ? "#34D399" : "#CBD5E1",
+                          "&:hover": { bgcolor: "rgba(255,255,255,0.2)" },
+                        }}
+                      >
+                        {copiedField === "curl" ? "Copied" : "Copy cURL"}
+                      </Button>
+                      <pre style={{ margin: 0, whiteSpace: "pre" }}>
+                        {`curl -H "Authorization: Bearer ${integrations.prometheus_auth_token || "YOUR_TOKEN"}" "${window.location.origin}${integrations.endpoint || "/metrics"}"`}
+                      </pre>
+                    </Box>
+                  </Paper>
+
+                  {/* Card 4: Exposed Metrics & Dashboard Ecosystem Compatibility */}
+                  <Paper
+                    elevation={0}
+                    sx={{
+                      p: 2.5,
+                      borderRadius: 2.5,
+                      border: "1px solid #E2E8F0",
+                      bgcolor: "#FFFFFF",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 2,
+                    }}
+                  >
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                      <Globe size={18} color="#4F46E5" />
+                      <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#0F172A" }}>
+                        Exposed Metrics & Dashboard Compatibility
+                      </Typography>
+                    </Box>
+
+                    <Typography variant="body2" sx={{ color: "#64748B", fontSize: "0.85rem" }}>
+                      Metric names, labels, and formats follow standard Prometheus conventions, ensuring seamless
+                      out-of-the-box compatibility with existing Grafana community dashboards.
+                    </Typography>
+
+                    <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" }, gap: 2 }}>
+                      {/* Subcard A: Linux System */}
+                      <Box sx={{ p: 2, borderRadius: 2, bgcolor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
+                          <Cpu size={16} color="#0284C7" />
+                          <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0F172A" }}>
+                            Linux System (node_exporter compatible)
+                          </Typography>
+                        </Box>
+                        <Typography variant="body2" sx={{ color: "#64748B", fontSize: "0.8rem", mb: 1 }}>
+                          Compatible with standard Node Exporter Grafana dashboards (e.g. Dashboard 1860).
+                        </Typography>
+                        <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
+                          {[
+                            "node_load1",
+                            "node_load5",
+                            "node_load15",
+                            "node_cpu_percent",
+                            "node_memory_MemTotal_bytes",
+                            "node_memory_used_bytes",
+                            "node_filesystem_*",
+                            "node_network_*",
+                          ].map((m) => (
+                            <Chip
+                              key={m}
+                              size="small"
+                              label={m}
+                              sx={{
+                                fontFamily: "monospace",
+                                fontSize: "0.72rem",
+                                bgcolor: "#E0F2FE",
+                                color: "#0369A1",
+                              }}
+                            />
+                          ))}
+                        </Box>
+                      </Box>
+
+                      {/* Subcard B: WireGuard */}
+                      <Box sx={{ p: 2, borderRadius: 2, bgcolor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
+                          <Shield size={16} color="#16A34A" />
+                          <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0F172A" }}>
+                            WireGuard (wireguard_exporter compatible)
+                          </Typography>
+                        </Box>
+                        <Typography variant="body2" sx={{ color: "#64748B", fontSize: "0.8rem", mb: 1 }}>
+                          Compatible with wireguard_exporter dashboards, enriched with <code>peer_node</code> labels.
+                        </Typography>
+                        <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
+                          {[
+                            "wireguard_latest_handshake_seconds",
+                            "wireguard_latest_handshake_delay_seconds",
+                            "wireguard_received_bytes_total",
+                            "wireguard_sent_bytes_total",
+                            "wireguard_interface_up",
+                          ].map((m) => (
+                            <Chip
+                              key={m}
+                              size="small"
+                              label={m}
+                              sx={{
+                                fontFamily: "monospace",
+                                fontSize: "0.72rem",
+                                bgcolor: "#DCFCE7",
+                                color: "#15803D",
+                              }}
+                            />
+                          ))}
+                        </Box>
+                      </Box>
+
+                      {/* Subcard C: BIRD & BGP */}
+                      <Box sx={{ p: 2, borderRadius: 2, bgcolor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
+                          <Zap size={16} color="#D97706" />
+                          <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0F172A" }}>
+                            BIRD / BGP (bird_exporter compatible)
+                          </Typography>
+                        </Box>
+                        <Typography variant="body2" sx={{ color: "#64748B", fontSize: "0.8rem", mb: 1 }}>
+                          Tracks protocol states and BGP session health, enriched with <code>peer_node</code> labels.
+                        </Typography>
+                        <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
+                          {["bird_protocol_up", "bird_protocol_state", "bird_bgp_session_established"].map((m) => (
+                            <Chip
+                              key={m}
+                              size="small"
+                              label={m}
+                              sx={{
+                                fontFamily: "monospace",
+                                fontSize: "0.72rem",
+                                bgcolor: "#FEF3C7",
+                                color: "#B45309",
+                              }}
+                            />
+                          ))}
+                        </Box>
+                      </Box>
+
+                      {/* Subcard D: easy42 Fleet */}
+                      <Box sx={{ p: 2, borderRadius: 2, bgcolor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
+                          <Activity size={16} color="#7C3AED" />
+                          <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0F172A" }}>
+                            easy42 Fleet Cluster State
+                          </Typography>
+                        </Box>
+                        <Typography variant="body2" sx={{ color: "#64748B", fontSize: "0.8rem", mb: 1 }}>
+                          Cluster-wide node topology, agent connection status, and link health monitoring.
+                        </Typography>
+                        <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
+                          {[
+                            "easy42_node_up",
+                            "easy42_node_info",
+                            "easy42_link_up",
+                            "easy42_total_nodes",
+                            "easy42_connected_nodes",
+                            "easy42_scrape_duration_seconds",
+                          ].map((m) => (
+                            <Chip
+                              key={m}
+                              size="small"
+                              label={m}
+                              sx={{
+                                fontFamily: "monospace",
+                                fontSize: "0.72rem",
+                                bgcolor: "#F3E8FF",
+                                color: "#6D28D9",
+                              }}
+                            />
+                          ))}
+                        </Box>
+                      </Box>
+                    </Box>
+                  </Paper>
+                </Box>
+              ) : null}
+            </DialogContent>
+          </Box>
+        )}
+
+        {/* Reset Token Confirmation Dialog */}
+        <Dialog
+          open={resetTokenConfirmOpen}
+          onClose={() => !resettingToken && setResetTokenConfirmOpen(false)}
+          maxWidth="xs"
+          fullWidth
+          PaperProps={{ sx: { borderRadius: 3, p: 1 } }}
+        >
+          <DialogTitle sx={{ fontWeight: 700, display: "flex", alignItems: "center", gap: 1, color: "#0F172A" }}>
+            <AlertCircle size={22} color="#D97706" />
+            Reset Prometheus Auth Token?
+          </DialogTitle>
+          <DialogContent>
+            <Typography variant="body2" sx={{ color: "#475569", lineHeight: 1.5 }}>
+              Are you sure you want to regenerate the Prometheus auth token?
+            </Typography>
+            <Alert severity="warning" sx={{ mt: 2, borderRadius: 2 }}>
+              <Typography variant="caption" sx={{ fontWeight: 600, display: "block" }}>
+                Important notice:
+              </Typography>
+              Existing scrapers or external monitoring systems using the current token will immediately receive HTTP 401
+              Unauthorized errors until you update them with the newly generated token.
+            </Alert>
+          </DialogContent>
+          <DialogActions sx={{ px: 3, pb: 2, pt: 1 }}>
+            <Button
+              onClick={() => setResetTokenConfirmOpen(false)}
+              disabled={resettingToken}
+              sx={{ textTransform: "none", color: "#64748B", fontWeight: 600 }}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="contained"
+              color="warning"
+              onClick={handleResetToken}
+              disabled={resettingToken}
+              startIcon={<RefreshCw size={14} className={resettingToken ? "spin" : ""} />}
+              sx={{ textTransform: "none", fontWeight: 700, borderRadius: 2 }}
+            >
+              {resettingToken ? "Resetting..." : "Yes, Reset Token"}
+            </Button>
+          </DialogActions>
+        </Dialog>
+
         {activeTab === "about" && (
           <Box sx={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, overflow: "hidden" }}>
             <DialogContent
@@ -4144,7 +4836,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                   </Typography>
                 </Box>
                 <Typography variant="caption" sx={{ color: "#64748B", mt: -1 }}>
-                  Backend controller daemon responsible for mesh state synchronization, WireGuard endpoints, and BGP templates.
+                  Backend controller daemon responsible for mesh state synchronization, WireGuard endpoints, and BGP
+                  templates.
                 </Typography>
 
                 <Box
@@ -4155,7 +4848,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                   }}
                 >
                   <Box sx={{ p: 1.5, borderRadius: 1.5, bgcolor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
-                    <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600, textTransform: "uppercase" }}>
+                    <Typography
+                      variant="caption"
+                      sx={{ color: "#64748B", fontWeight: 600, textTransform: "uppercase" }}
+                    >
                       Program Version
                     </Typography>
                     <Typography variant="body1" sx={{ fontWeight: 700, color: "#0F172A", mt: 0.3 }}>
@@ -4166,7 +4862,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                   <Box sx={{ p: 1.5, borderRadius: 1.5, bgcolor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
                     <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
                       <GitCommit size={12} color="#64748B" />
-                      <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600, textTransform: "uppercase" }}>
+                      <Typography
+                        variant="caption"
+                        sx={{ color: "#64748B", fontWeight: 600, textTransform: "uppercase" }}
+                      >
                         Git Commit
                       </Typography>
                     </Box>
@@ -4205,7 +4904,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                   </Box>
 
                   <Box sx={{ p: 1.5, borderRadius: 1.5, bgcolor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
-                    <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600, textTransform: "uppercase" }}>
+                    <Typography
+                      variant="caption"
+                      sx={{ color: "#64748B", fontWeight: 600, textTransform: "uppercase" }}
+                    >
                       Build Date
                     </Typography>
                     <Typography variant="body2" sx={{ fontWeight: 600, color: "#334155", mt: 0.3 }}>
@@ -4214,7 +4916,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                   </Box>
 
                   <Box sx={{ p: 1.5, borderRadius: 1.5, bgcolor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
-                    <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600, textTransform: "uppercase" }}>
+                    <Typography
+                      variant="caption"
+                      sx={{ color: "#64748B", fontWeight: 600, textTransform: "uppercase" }}
+                    >
                       Go Runtime
                     </Typography>
                     <Typography variant="body2" sx={{ fontWeight: 600, color: "#334155", mt: 0.3 }}>
@@ -4223,7 +4928,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                   </Box>
 
                   <Box sx={{ p: 1.5, borderRadius: 1.5, bgcolor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
-                    <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600, textTransform: "uppercase" }}>
+                    <Typography
+                      variant="caption"
+                      sx={{ color: "#64748B", fontWeight: 600, textTransform: "uppercase" }}
+                    >
                       Platform / Arch
                     </Typography>
                     <Typography variant="body2" sx={{ fontWeight: 600, color: "#334155", mt: 0.3 }}>
@@ -4232,7 +4940,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                   </Box>
 
                   <Box sx={{ p: 1.5, borderRadius: 1.5, bgcolor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
-                    <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600, textTransform: "uppercase" }}>
+                    <Typography
+                      variant="caption"
+                      sx={{ color: "#64748B", fontWeight: 600, textTransform: "uppercase" }}
+                    >
                       Built By
                     </Typography>
                     <Typography variant="body2" sx={{ fontWeight: 600, color: "#334155", mt: 0.3 }}>
@@ -4275,7 +4986,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                   />
                 </Box>
                 <Typography variant="caption" sx={{ color: "#64748B", mt: -1 }}>
-                  High-performance Rust-based node daemon compiled statically with musl libc for zero runtime dependencies.
+                  High-performance Rust-based node daemon compiled statically with musl libc for zero runtime
+                  dependencies.
                 </Typography>
 
                 <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
@@ -4332,7 +5044,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                         <IconButton
                           size="small"
                           onClick={() => {
-                            navigator.clipboard.writeText(`curl -sSL ${window.location.origin}/api/agent/install.sh | sh`);
+                            navigator.clipboard.writeText(
+                              `curl -sSL ${window.location.origin}/api/agent/install.sh | sh`,
+                            );
                           }}
                           sx={{ p: 0.5, color: "#64748B" }}
                         >
@@ -4356,7 +5070,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                   gap: 2,
                 }}
               >
-                <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 1 }}>
+                <Box
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    flexWrap: "wrap",
+                    gap: 1,
+                  }}
+                >
                   <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                     <Globe size={18} color="#4F46E5" />
                     <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0F172A", fontSize: "0.95rem" }}>

@@ -212,6 +212,28 @@ func (h *Hub) GetTelemetry(nodeName string) *agentpb.TelemetryReport {
 	return h.telemetry[nodeName]
 }
 
+// GetAllTelemetry returns a snapshot copy of all cached node telemetry reports
+func (h *Hub) GetAllTelemetry() map[string]*agentpb.TelemetryReport {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	res := make(map[string]*agentpb.TelemetryReport, len(h.telemetry))
+	for k, v := range h.telemetry {
+		res[k] = v
+	}
+	return res
+}
+
+// GetAllConnections returns a snapshot copy of all active agent connections
+func (h *Hub) GetAllConnections() map[string]*AgentConnection {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	res := make(map[string]*AgentConnection, len(h.connections))
+	for k, v := range h.connections {
+		res[k] = v
+	}
+	return res
+}
+
 // GetLastSeen returns the last time an agent sent telemetry or heartbeat
 func (h *Hub) GetLastSeen(nodeName string) time.Time {
 	h.mu.RLock()

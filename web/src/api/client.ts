@@ -25,6 +25,7 @@ import type {
   NodeCronTasksResultsResponse,
   ServerTask,
   DatabaseInfo,
+  IntegrationsSettings,
   RevealLinkPskRequest,
   RevealLinkPskResponse,
   ResetLinkPskRequest,
@@ -328,6 +329,18 @@ export const api = {
     }),
   reclaimDatabase: () =>
     request<DatabaseInfo>("/settings/database/vacuum", {
+      method: "POST",
+    }),
+
+  // Integrations & Prometheus
+  getIntegrationsSettings: () => request<IntegrationsSettings>("/settings/integrations"),
+  updateIntegrationsSettings: (settings: { prometheus_enabled?: boolean; prometheus_auth_token?: string }) =>
+    request<IntegrationsSettings>("/settings/integrations", {
+      method: "PUT",
+      body: JSON.stringify(settings),
+    }),
+  resetPrometheusToken: () =>
+    request<IntegrationsSettings>("/settings/integrations/reset-token", {
       method: "POST",
     }),
 

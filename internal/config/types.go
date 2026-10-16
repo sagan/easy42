@@ -161,6 +161,7 @@ type Config struct {
 	Templates         []ConfigTemplate   `json:"templates,omitempty"`
 	ServerTasks       []ServerTaskConfig `json:"server_tasks,omitempty"`
 	Database          DatabaseSettings   `json:"database,omitempty"`
+	Integrations      IntegrationsSettings `json:"integrations,omitempty"`
 }
 
 // GetRetentionDays returns the configured retention days or DefaultRetentionDays

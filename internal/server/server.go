@@ -195,6 +195,11 @@ func New(cfg Config) *Server {
 			r.Put("/settings/database", s.handleUpdateDatabaseSettings)
 			r.Post("/settings/database/vacuum", s.handleVacuumDatabase)
 
+			// Integrations & Prometheus Settings
+			r.Get("/settings/integrations", s.handleGetIntegrationsSettings)
+			r.Put("/settings/integrations", s.handleUpdateIntegrationsSettings)
+			r.Post("/settings/integrations/reset-token", s.handleResetPrometheusToken)
+
 			// Network Policies
 			r.Get("/network-policies", s.handleGetNetworkPolicies)
 			r.Post("/network-policies", s.handleCreateNetworkPolicy)
@@ -246,6 +251,9 @@ func New(cfg Config) *Server {
 			r.Get("/flaps/metrics", s.handleFlapAlertedMetrics)
 		})
 	})
+
+	// Prometheus compatible metrics endpoint (authorized via Bearer token)
+	r.Get("/metrics", s.handlePrometheusMetrics)
 
 	// Static frontend routing
 	if s.distFS != nil {

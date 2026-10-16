@@ -45,6 +45,7 @@ type Manager struct {
 	stopCh        chan struct{}
 	serverTasksMu sync.Mutex
 	runningTasks  map[string]bool
+	prometheusExporter *PrometheusExporter
 }
 
 // NewManager creates a new Manager instance
@@ -64,6 +65,7 @@ func NewManager(store *config.Store) *Manager {
 		stopCh:       make(chan struct{}),
 		runningTasks: make(map[string]bool),
 	}
+	m.prometheusExporter = NewPrometheusExporter(m)
 	m.setupAgentMetricsListeners()
 	m.setupAgentCronTasksListeners()
 	m.setupAgentHostsListeners()

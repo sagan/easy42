@@ -63,10 +63,16 @@ func (m *Manager) setupAgentMetricsListeners() {
 		}
 		_ = m.stateStore.RecordMetrics(nodeName, input)
 		m.handleAgentTelemetryInterfaces(nodeName, t)
+		if m.prometheusExporter != nil {
+			m.prometheusExporter.Invalidate()
+		}
 	})
 
 	m.agentHub.OnRegister(func(conn *agent.AgentConnection) {
 		_ = m.stateStore.RecordNodeInfo(conn.NodeName(), conn.AgentVersion(), conn.OSInfo(), conn.Hostname())
+		if m.prometheusExporter != nil {
+			m.prometheusExporter.Invalidate()
+		}
 	})
 }
 

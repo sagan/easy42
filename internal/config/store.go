@@ -115,6 +115,10 @@ func (s *Store) Initialize() (string, error) {
 		Database: DatabaseSettings{
 			RetentionDays: DefaultRetentionDays,
 		},
+		Integrations: IntegrationsSettings{
+			PrometheusEnabled:   true,
+			PrometheusAuthToken: GeneratePrometheusToken(),
+		},
 	}
 
 	data, err := json.MarshalIndent(cfg, "", "  ")
@@ -185,6 +189,12 @@ func (s *Store) Load() (*Config, error) {
 	}
 	if faURL := strings.TrimSpace(cfg.NetworkSettings.FlapAlertedURL); faURL != "" {
 		cfg.NetworkSettings.FlapAlertedURL = faURL
+	}
+
+	if cfg.Integrations.PrometheusAuthToken == "" {
+		cfg.Integrations.PrometheusAuthToken = GeneratePrometheusToken()
+		cfg.Integrations.PrometheusEnabled = true
+		needsSave = true
 	}
 
 	if needsSave {
