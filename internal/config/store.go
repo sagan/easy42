@@ -176,22 +176,15 @@ func (s *Store) Load() (*Config, error) {
 
 	if faAddr := cfg.NetworkSettings.GetFlapAlertedAddress(); faAddr != "" {
 		cfg.NetworkSettings.FlapAlertedAddress = faAddr
-		cfg.NetworkSettings.FAAddress = faAddr
-		if cfg.NetworkSettings.FlapAlertedPort == 0 && cfg.NetworkSettings.FAPort == 0 {
+		if cfg.NetworkSettings.FlapAlertedPort == 0 {
 			cfg.NetworkSettings.FlapAlertedPort = 1790
-			cfg.NetworkSettings.FAPort = 1790
 		}
-		if cfg.NetworkSettings.FlapAlertedASN == 0 && cfg.NetworkSettings.FAASN == 0 {
+		if cfg.NetworkSettings.FlapAlertedASN == 0 {
 			cfg.NetworkSettings.FlapAlertedASN = 4224420000
-			cfg.NetworkSettings.FAASN = 4224420000
 		}
 	}
 	if faURL := strings.TrimSpace(cfg.NetworkSettings.FlapAlertedURL); faURL != "" {
 		cfg.NetworkSettings.FlapAlertedURL = faURL
-		cfg.NetworkSettings.FAURL = faURL
-	} else if faURL := strings.TrimSpace(cfg.NetworkSettings.FAURL); faURL != "" {
-		cfg.NetworkSettings.FlapAlertedURL = faURL
-		cfg.NetworkSettings.FAURL = faURL
 	}
 
 	if needsSave {
@@ -231,22 +224,15 @@ func (s *Store) saveLocked(cfg *Config) error {
 	cfg.ServerTasks = NormalizeServerTasks(cfg.ServerTasks)
 	if faAddr := cfg.NetworkSettings.GetFlapAlertedAddress(); faAddr != "" {
 		cfg.NetworkSettings.FlapAlertedAddress = faAddr
-		cfg.NetworkSettings.FAAddress = faAddr
-		if cfg.NetworkSettings.FlapAlertedPort == 0 && cfg.NetworkSettings.FAPort == 0 {
+		if cfg.NetworkSettings.FlapAlertedPort == 0 {
 			cfg.NetworkSettings.FlapAlertedPort = 1790
-			cfg.NetworkSettings.FAPort = 1790
 		}
-		if cfg.NetworkSettings.FlapAlertedASN == 0 && cfg.NetworkSettings.FAASN == 0 {
+		if cfg.NetworkSettings.FlapAlertedASN == 0 {
 			cfg.NetworkSettings.FlapAlertedASN = 4224420000
-			cfg.NetworkSettings.FAASN = 4224420000
 		}
 	}
 	if faURL := strings.TrimSpace(cfg.NetworkSettings.FlapAlertedURL); faURL != "" {
 		cfg.NetworkSettings.FlapAlertedURL = faURL
-		cfg.NetworkSettings.FAURL = faURL
-	} else if faURL := strings.TrimSpace(cfg.NetworkSettings.FAURL); faURL != "" {
-		cfg.NetworkSettings.FlapAlertedURL = faURL
-		cfg.NetworkSettings.FAURL = faURL
 	}
 
 	data, err := json.MarshalIndent(cfg, "", "  ")

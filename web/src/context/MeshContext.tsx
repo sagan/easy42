@@ -254,14 +254,14 @@ export const MeshProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const flapAlertedUrl = useMemo(() => {
-    let customUrl = (networkSettings?.flapalerted_url || networkSettings?.fa_url || "").trim();
+    let customUrl = (networkSettings?.flapalerted_url || "").trim();
     if (customUrl) {
       if (!customUrl.startsWith("http://") && !customUrl.startsWith("https://")) {
         customUrl = `http://${customUrl}`;
       }
       return customUrl;
     }
-    const addr = (networkSettings?.flapalerted_address || networkSettings?.fa_address || "").trim();
+    const addr = (networkSettings?.flapalerted_address || "").trim();
     if (!addr) return null;
     return `http://${addr.includes(":") && !addr.startsWith("[") ? `[${addr}]` : addr}:8699`;
   }, [networkSettings]);

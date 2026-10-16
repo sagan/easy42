@@ -80,32 +80,15 @@ func TestFlapAlertedSettings(t *testing.T) {
 		t.Errorf("Expected default ASN 4224420000, got %d", emptyNS.GetFlapAlertedASN())
 	}
 
-	// Test alias fields
-	aliasJSON := `{
-		"fa_address": "10.0.0.5",
-		"fa_port": 2790,
-		"fa_asn": 4224420200
-	}`
-	var aliasNS NetworkSettings
-	if err := json.Unmarshal([]byte(aliasJSON), &aliasNS); err != nil {
-		t.Fatalf("json.Unmarshal failed: %v", err)
-	}
-	if aliasNS.GetFlapAlertedAddress() != "10.0.0.5" {
-		t.Errorf("Expected address 10.0.0.5, got %s", aliasNS.GetFlapAlertedAddress())
-	}
-	if aliasNS.GetFlapAlertedPort() != 2790 {
-		t.Errorf("Expected port 2790, got %d", aliasNS.GetFlapAlertedPort())
-	}
-	if aliasNS.GetFlapAlertedASN() != 4224420200 {
-		t.Errorf("Expected ASN 4224420200, got %d", aliasNS.GetFlapAlertedASN())
-	}
-
 	// Test URL derivation and custom URLs
 	if ns.GetFlapAlertedURL() != "http://[fd42:a159:f9f0:8000::c8]:8699" {
 		t.Errorf("Expected derived IPv6 URL http://[fd42:a159:f9f0:8000::c8]:8699, got %s", ns.GetFlapAlertedURL())
 	}
-	if aliasNS.GetFlapAlertedURL() != "http://10.0.0.5:8699" {
-		t.Errorf("Expected derived IPv4 URL http://10.0.0.5:8699, got %s", aliasNS.GetFlapAlertedURL())
+	ipv4NS := NetworkSettings{
+		FlapAlertedAddress: "10.0.0.5",
+	}
+	if ipv4NS.GetFlapAlertedURL() != "http://10.0.0.5:8699" {
+		t.Errorf("Expected derived IPv4 URL http://10.0.0.5:8699, got %s", ipv4NS.GetFlapAlertedURL())
 	}
 	if emptyNS.GetFlapAlertedURL() != "" {
 		t.Errorf("Expected empty URL when unconfigured, got %s", emptyNS.GetFlapAlertedURL())

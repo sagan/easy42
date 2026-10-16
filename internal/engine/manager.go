@@ -278,10 +278,6 @@ func (m *Manager) FindNode(name string) *config.Node {
 	return nil
 }
 
-// GetNode finds a node by name (alias to FindNode)
-func (m *Manager) GetNode(name string) *config.Node {
-	return m.FindNode(name)
-}
 
 // AddNode adds a new node to the topology
 func (m *Manager) AddNode(node config.Node) error {
@@ -4674,33 +4670,21 @@ func (m *Manager) UpdateNetworkSettings(settings config.NetworkSettings) error {
 	settings.DisallowedDN42CIDRs = settings.DisallowedDN42Networks
 	if faAddr := settings.GetFlapAlertedAddress(); faAddr != "" {
 		settings.FlapAlertedAddress = faAddr
-		settings.FAAddress = faAddr
-		if settings.FlapAlertedPort == 0 && settings.FAPort == 0 {
+		if settings.FlapAlertedPort == 0 {
 			settings.FlapAlertedPort = 1790
-			settings.FAPort = 1790
 		} else {
-			p := settings.GetFlapAlertedPort()
-			settings.FlapAlertedPort = p
-			settings.FAPort = p
+			settings.FlapAlertedPort = settings.GetFlapAlertedPort()
 		}
-		if settings.FlapAlertedASN == 0 && settings.FAASN == 0 {
+		if settings.FlapAlertedASN == 0 {
 			settings.FlapAlertedASN = 4224420000
-			settings.FAASN = 4224420000
 		} else {
-			a := settings.GetFlapAlertedASN()
-			settings.FlapAlertedASN = a
-			settings.FAASN = a
+			settings.FlapAlertedASN = settings.GetFlapAlertedASN()
 		}
 	}
 	if faURL := strings.TrimSpace(settings.FlapAlertedURL); faURL != "" {
 		settings.FlapAlertedURL = faURL
-		settings.FAURL = faURL
-	} else if faURL := strings.TrimSpace(settings.FAURL); faURL != "" {
-		settings.FlapAlertedURL = faURL
-		settings.FAURL = faURL
 	} else {
 		settings.FlapAlertedURL = ""
-		settings.FAURL = ""
 	}
 	cfg.NetworkSettings = settings
 	return m.store.Save(cfg)

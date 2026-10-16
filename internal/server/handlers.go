@@ -253,7 +253,7 @@ func (s *Server) handleAddNode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if saved := s.mgr.GetNode(node.Name); saved != nil {
+	if saved := s.mgr.FindNode(node.Name); saved != nil {
 		writeJSON(w, http.StatusCreated, saved)
 		return
 	}
@@ -277,7 +277,7 @@ func (s *Server) handleUpdateNode(w http.ResponseWriter, r *http.Request) {
 	if strings.TrimSpace(targetName) == "" {
 		targetName = name
 	}
-	if saved := s.mgr.GetNode(targetName); saved != nil {
+	if saved := s.mgr.FindNode(targetName); saved != nil {
 		writeJSON(w, http.StatusOK, saved)
 		return
 	}
@@ -343,7 +343,7 @@ func (s *Server) handleUpdateNodePosition(w http.ResponseWriter, r *http.Request
 		"x":       req.X,
 		"y":       req.Y,
 	}
-	if saved := s.mgr.GetNode(name); saved != nil && !saved.ModifiedAt.IsZero() {
+	if saved := s.mgr.FindNode(name); saved != nil && !saved.ModifiedAt.IsZero() {
 		resp["modified_at"] = saved.ModifiedAt
 	}
 	writeJSON(w, http.StatusOK, resp)

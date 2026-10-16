@@ -32,11 +32,7 @@ export interface NetworkSettings {
   flapalerted_address?: string;
   flapalerted_port?: number;
   flapalerted_asn?: number;
-  fa_address?: string;
-  fa_port?: number;
-  fa_asn?: number;
   flapalerted_url?: string;
-  fa_url?: string;
 }
 
 export interface FlapAlertedMetrics {

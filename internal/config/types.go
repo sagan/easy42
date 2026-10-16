@@ -17,50 +17,31 @@ type NetworkSettings struct {
 	FlapAlertedAddress     string   `json:"flapalerted_address,omitempty"`      // FlapAlerted instance IP address
 	FlapAlertedPort        int      `json:"flapalerted_port,omitempty"`         // FlapAlerted BGP port (default 1790)
 	FlapAlertedASN         uint64   `json:"flapalerted_asn,omitempty"`          // FlapAlerted BGP ASN (default 4224420000)
-	FAAddress              string   `json:"fa_address,omitempty"`               // Alias for flapalerted_address
-	FAPort                 int      `json:"fa_port,omitempty"`                  // Alias for flapalerted_port
-	FAASN                  uint64   `json:"fa_asn,omitempty"`                   // Alias for flapalerted_asn
 	FlapAlertedURL         string   `json:"flapalerted_url,omitempty"`          // FlapAlerted web/dashboard base URL
-	FAURL                  string   `json:"fa_url,omitempty"`                   // Alias for flapalerted_url
 }
 
-// GetFlapAlertedAddress returns the configured FlapAlerted IP address or alias
+// GetFlapAlertedAddress returns the configured FlapAlerted IP address
 func (s *NetworkSettings) GetFlapAlertedAddress() string {
 	if s == nil {
 		return ""
 	}
-	if strings.TrimSpace(s.FlapAlertedAddress) != "" {
-		return strings.TrimSpace(s.FlapAlertedAddress)
-	}
-	return strings.TrimSpace(s.FAAddress)
+	return strings.TrimSpace(s.FlapAlertedAddress)
 }
 
 // GetFlapAlertedPort returns the configured FlapAlerted BGP port (default 1790)
 func (s *NetworkSettings) GetFlapAlertedPort() int {
-	if s == nil {
+	if s == nil || s.FlapAlertedPort <= 0 {
 		return 1790
 	}
-	if s.FlapAlertedPort > 0 {
-		return s.FlapAlertedPort
-	}
-	if s.FAPort > 0 {
-		return s.FAPort
-	}
-	return 1790
+	return s.FlapAlertedPort
 }
 
 // GetFlapAlertedASN returns the configured FlapAlerted ASN (default 4224420000)
 func (s *NetworkSettings) GetFlapAlertedASN() uint64 {
-	if s == nil {
+	if s == nil || s.FlapAlertedASN <= 0 {
 		return 4224420000
 	}
-	if s.FlapAlertedASN > 0 {
-		return s.FlapAlertedASN
-	}
-	if s.FAASN > 0 {
-		return s.FAASN
-	}
-	return 4224420000
+	return s.FlapAlertedASN
 }
 
 // GetFlapAlertedURL returns the configured FlapAlerted URL or derives it from FlapAlertedAddress and port 8699
@@ -69,9 +50,6 @@ func (s *NetworkSettings) GetFlapAlertedURL() string {
 		return ""
 	}
 	raw := strings.TrimSpace(s.FlapAlertedURL)
-	if raw == "" {
-		raw = strings.TrimSpace(s.FAURL)
-	}
 	if raw != "" {
 		if !strings.HasPrefix(raw, "http://") && !strings.HasPrefix(raw, "https://") {
 			return "http://" + raw

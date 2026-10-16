@@ -699,7 +699,7 @@ func TestGenerateBirdConfig(t *testing.T) {
 	}
 
 	// Verify default table was set to 254
-	savedNodeA := mgr.GetNode("node-a")
+	savedNodeA := mgr.FindNode("node-a")
 	if savedNodeA.Table != 254 {
 		t.Fatalf("Expected table 254, got %d", savedNodeA.Table)
 	}
@@ -782,7 +782,7 @@ func TestExternalNodeAndPeering(t *testing.T) {
 	}
 
 	// External node should have no "none" entrypoint forced
-	savedExt := mgr.GetNode("peer-dn42")
+	savedExt := mgr.FindNode("peer-dn42")
 	if savedExt == nil || !savedExt.IsExternal {
 		t.Fatalf("Expected saved node to be external")
 	}
@@ -922,7 +922,7 @@ func TestExternalNodeAndPeering(t *testing.T) {
 	if err := mgr.AddNode(noHostExt); err != nil {
 		t.Fatalf("AddNode peer-nohost failed: %v", err)
 	}
-	savedNoHost := mgr.GetNode("peer-nohost")
+	savedNoHost := mgr.FindNode("peer-nohost")
 	if savedNoHost == nil || len(savedNoHost.Entrypoints) != 1 {
 		t.Fatalf("Expected saved external node to preserve entrypoint with empty host")
 	}
@@ -1400,7 +1400,7 @@ func TestNodeIP6(t *testing.T) {
 		t.Fatalf("Failed to add node1: %v", err)
 	}
 
-	saved := mgr.GetNode("node-1")
+	saved := mgr.FindNode("node-1")
 	if saved == nil || saved.IP6 != "fd42:a159:f9f0::1" {
 		t.Fatalf("Expected saved node1 to have IP6 fd42:a159:f9f0::1, got %+v", saved)
 	}
@@ -1425,7 +1425,7 @@ func TestNodeIP6(t *testing.T) {
 	}
 
 	// Updating node2 to collide with node1's IP6 should fail
-	node2Update := *mgr.GetNode("node-2")
+	node2Update := *mgr.FindNode("node-2")
 	node2Update.IP6 = "fd42:a159:f9f0::1"
 	if err := mgr.UpdateNode("node-2", node2Update); err == nil {
 		t.Fatalf("Expected error when updating to duplicate IP6, got nil")
@@ -1436,8 +1436,8 @@ func TestNodeIP6(t *testing.T) {
 	if err := mgr.UpdateNode("node-2", node2Update); err != nil {
 		t.Fatalf("Failed to update node2 IP6: %v", err)
 	}
-	if mgr.GetNode("node-2").IP6 != "fd42:a159:f9f0::22" {
-		t.Fatalf("Expected updated IP6 to be fd42:a159:f9f0::22, got %s", mgr.GetNode("node-2").IP6)
+	if mgr.FindNode("node-2").IP6 != "fd42:a159:f9f0::22" {
+		t.Fatalf("Expected updated IP6 to be fd42:a159:f9f0::22, got %s", mgr.FindNode("node-2").IP6)
 	}
 }
 
@@ -2333,9 +2333,9 @@ func TestUpdateNodePreservesAgentFields(t *testing.T) {
 		t.Fatalf("UpdateNode failed: %v", err)
 	}
 
-	saved := mgr.GetNode(initialNode.Name)
+	saved := mgr.FindNode(initialNode.Name)
 	if saved == nil {
-		t.Fatalf("GetNode returned nil")
+		t.Fatalf("FindNode returned nil")
 	}
 
 	if saved.AgentToken != "secret-agent-token-12345" {

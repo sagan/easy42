@@ -145,10 +145,10 @@ func TestManager_RenameNode(t *testing.T) {
 	}
 
 	// Verify in memory
-	if mgr.GetNode("node-a") != nil {
+	if mgr.FindNode("node-a") != nil {
 		t.Fatalf("Old node-a should not exist in manager")
 	}
-	nodeAlpha := mgr.GetNode("node-alpha")
+	nodeAlpha := mgr.FindNode("node-alpha")
 	if nodeAlpha == nil {
 		t.Fatalf("node-alpha should exist in manager")
 	}

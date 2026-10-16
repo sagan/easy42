@@ -866,22 +866,18 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
       setPublicAsn(settings.public_asn || "");
       setDisallowedDn42Networks((settings.disallowed_dn42_networks || settings.disallowed_dn42_cidrs || []).join("\n"));
       setNetworkPrefixes(settings.prefixes || []);
-      setFaAddress(settings.flapalerted_address || settings.fa_address || "");
+      setFaAddress(settings.flapalerted_address || "");
       setFaPort(
         settings.flapalerted_port !== undefined && settings.flapalerted_port !== null
           ? settings.flapalerted_port
-          : settings.fa_port !== undefined && settings.fa_port !== null
-            ? settings.fa_port
-            : 1790,
+          : 1790,
       );
       setFaAsn(
         settings.flapalerted_asn !== undefined && settings.flapalerted_asn !== null
           ? settings.flapalerted_asn
-          : settings.fa_asn !== undefined && settings.fa_asn !== null
-            ? settings.fa_asn
-            : 4224420000,
+          : 4224420000,
       );
-      setFaUrl(settings.flapalerted_url || settings.fa_url || "");
+      setFaUrl(settings.flapalerted_url || "");
     } catch (err: unknown) {
       const e = err as Error;
       setNetworkError(e.message || "Failed to load network settings.");
@@ -904,11 +900,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
       flapalerted_address: faAddress.trim() || undefined,
       flapalerted_port: faPort === "" ? 1790 : Number(faPort),
       flapalerted_asn: faAsn === "" ? 4224420000 : Number(faAsn),
-      fa_address: faAddress.trim() || undefined,
-      fa_port: faPort === "" ? 1790 : Number(faPort),
-      fa_asn: faAsn === "" ? 4224420000 : Number(faAsn),
       flapalerted_url: faUrl.trim() || undefined,
-      fa_url: faUrl.trim() || undefined,
     };
 
     try {
