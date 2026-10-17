@@ -5164,7 +5164,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
         )}
 
         {/* Sub-dialog: Policy Editor & Viewer */}
-        <Dialog open={policyDialogOpen} onClose={() => setPolicyDialogOpen(false)} maxWidth="sm" fullWidth>
+        <Dialog open={policyDialogOpen} onClose={() => setPolicyDialogOpen(false)} maxWidth="md" fullWidth>
           <form onSubmit={handleSavePolicy}>
             <DialogTitle
               sx={{

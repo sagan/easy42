@@ -113,7 +113,6 @@ impl CommandExecutor {
                     if let Ok(new_cfg) = serde_json::from_str::<AgentConfig>(&content) {
                         cfg.pre_sync = new_cfg.pre_sync;
                         cfg.post_sync = new_cfg.post_sync;
-                        cfg.hooks = new_cfg.hooks;
                         if new_cfg.node_name.is_some() {
                             cfg.node_name = new_cfg.node_name;
                         }

@@ -2129,10 +2129,15 @@ export const NodeDetailPage: React.FC = () => {
 
                         const rawPeerAddress = peerEnd.address || selfEnd.neighbor_address || peerEnd.address4 || "";
                         const cleanPeerAddress = rawPeerAddress ? rawPeerAddress.replace(/\/64$/, "") : "—";
-                        const peerPort = peerEnd.listen_port || extractPort(peerEnd.endpoint) || extractPort(peerEnd.resolved_endpoint) || "—";
+                        const peerPort =
+                          peerEnd.listen_port ||
+                          extractPort(peerEnd.endpoint) ||
+                          extractPort(peerEnd.resolved_endpoint) ||
+                          "—";
 
                         const policyId = selfEnd.policy || "default";
-                        const matchedPolicy = networkPolicies?.find((p) => p.id === policyId || p.name === policyId) || null;
+                        const matchedPolicy =
+                          networkPolicies?.find((p) => p.id === policyId || p.name === policyId) || null;
                         const fallbackPolicy: NetworkPolicy = {
                           id: policyId,
                           name: selfEnd.policy ? selfEnd.policy : "Default (Internal)",
@@ -2141,7 +2146,10 @@ export const NodeDetailPage: React.FC = () => {
                         };
 
                         const isWg = !isManualLink(link);
-                        const localKey = selfEnd.public_key || sortedWgInterfaces.find((w) => w.name === selfEnd.interface)?.public_key || "";
+                        const localKey =
+                          selfEnd.public_key ||
+                          sortedWgInterfaces.find((w) => w.name === selfEnd.interface)?.public_key ||
+                          "";
                         const peerKey = peerEnd.public_key || "";
 
                         return (
@@ -2211,7 +2219,11 @@ export const NodeDetailPage: React.FC = () => {
                             <TableCell>
                               <Box sx={{ display: "flex", alignItems: "center", gap: 0.8 }}>
                                 {selfEnd.cost !== undefined && selfEnd.cost !== null ? (
-                                  <Typography variant="caption" className="mono-font" sx={{ color: "#475569", fontWeight: 700 }}>
+                                  <Typography
+                                    variant="caption"
+                                    className="mono-font"
+                                    sx={{ color: "#475569", fontWeight: 700 }}
+                                  >
                                     {selfEnd.cost}
                                   </Typography>
                                 ) : matchedPolicy?.cost !== undefined ? (
@@ -2366,7 +2378,15 @@ export const NodeDetailPage: React.FC = () => {
                                 >
                                   Rx: {formatBytes(p.transfer_rx_bytes)} • Tx: {formatBytes(p.transfer_tx_bytes)}
                                 </Typography>
-                                <Box sx={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 0.8, mt: 0.4 }}>
+                                <Box
+                                  sx={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "flex-end",
+                                    gap: 0.8,
+                                    mt: 0.4,
+                                  }}
+                                >
                                   {(() => {
                                     const hsRelative = getHandshakeRelativeLabel(p.latest_handshake);
                                     return (
@@ -3261,7 +3281,7 @@ export const NodeDetailPage: React.FC = () => {
       <Dialog
         open={uninstallModalOpen}
         onClose={() => !uninstallingAgent && setUninstallModalOpen(false)}
-        maxWidth="sm"
+        maxWidth="md"
         fullWidth
       >
         <DialogTitle

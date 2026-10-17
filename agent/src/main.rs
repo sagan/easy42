@@ -66,7 +66,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             node_name: None,
             pre_sync: None,
             post_sync: None,
-            hooks: None,
             config_path: Some(cli.config.clone()),
         }
     } else {

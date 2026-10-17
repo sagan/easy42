@@ -2,14 +2,6 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
-pub struct AgentHooksConfig {
-    #[serde(default)]
-    pub pre_sync: Option<String>,
-    #[serde(default)]
-    pub post_sync: Option<String>,
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentConfig {
     pub server: String,
@@ -26,9 +18,6 @@ pub struct AgentConfig {
     /// Optional shell script snippet executed after Sync action
     #[serde(default)]
     pub post_sync: Option<String>,
-    /// Optional nested hooks block: {"hooks": {"pre_sync": "...", "post_sync": "..."}}
-    #[serde(default)]
-    pub hooks: Option<AgentHooksConfig>,
     /// Path to config file if loaded from disk
     #[serde(skip)]
     pub config_path: Option<PathBuf>,
@@ -52,7 +41,6 @@ impl Default for AgentConfig {
             node_name: None,
             pre_sync: None,
             post_sync: None,
-            hooks: None,
             config_path: None,
         }
     }
@@ -67,18 +55,14 @@ impl AgentConfig {
     }
 
     pub fn pre_sync_hook(&self) -> Option<&str> {
-        self.hooks
-            .as_ref()
-            .and_then(|h| h.pre_sync.as_deref())
-            .or(self.pre_sync.as_deref())
+        self.pre_sync
+            .as_deref()
             .filter(|s| !s.trim().is_empty())
     }
 
     pub fn post_sync_hook(&self) -> Option<&str> {
-        self.hooks
-            .as_ref()
-            .and_then(|h| h.post_sync.as_deref())
-            .or(self.post_sync.as_deref())
+        self.post_sync
+            .as_deref()
             .filter(|s| !s.trim().is_empty())
     }
 
@@ -114,7 +98,7 @@ mod tests {
     }
 
     #[test]
-    fn test_config_with_top_level_hooks() {
+    fn test_config_with_hooks() {
         let json = r#"{
             "server": "https://easy42.local",
             "token": "abc",
@@ -124,21 +108,6 @@ mod tests {
         let cfg: AgentConfig = serde_json::from_str(json).unwrap();
         assert_eq!(cfg.pre_sync_hook(), Some("echo pre >> /tmp/hook.log"));
         assert_eq!(cfg.post_sync_hook(), Some("echo post >> /tmp/hook.log"));
-    }
-
-    #[test]
-    fn test_config_with_nested_hooks() {
-        let json = r#"{
-            "server": "https://easy42.local",
-            "token": "abc",
-            "hooks": {
-                "pre_sync": "/usr/local/bin/pre.sh",
-                "post_sync": "/usr/local/bin/post.sh"
-            }
-        }"#;
-        let cfg: AgentConfig = serde_json::from_str(json).unwrap();
-        assert_eq!(cfg.pre_sync_hook(), Some("/usr/local/bin/pre.sh"));
-        assert_eq!(cfg.post_sync_hook(), Some("/usr/local/bin/post.sh"));
     }
 
     #[test]

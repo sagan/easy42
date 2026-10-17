@@ -16,24 +16,11 @@ import {
   IconButton,
   InputAdornment,
 } from "@mui/material";
-import {
-  Shield,
-  Copy,
-  Check,
-  Eye,
-  EyeOff,
-  RefreshCw,
-  Sparkles,
-  Lock,
-} from "lucide-react";
+import { Shield, Copy, Check, Eye, EyeOff, RefreshCw, Sparkles, Lock } from "lucide-react";
 import { api } from "../../api/client";
 import { Link } from "../../types/api";
 
-export type LinkKeyActionMode =
-  | "reveal_psk"
-  | "reset_psk"
-  | "reveal_private_key"
-  | "reset_private_key";
+export type LinkKeyActionMode = "reveal_psk" | "reset_psk" | "reveal_private_key" | "reset_private_key";
 
 interface LinkKeyActionModalProps {
   open: boolean;
@@ -215,7 +202,7 @@ export const LinkKeyActionModal: React.FC<LinkKeyActionModalProps> = ({
   };
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth sx={{ zIndex: 1400 }}>
+    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth sx={{ zIndex: 1400 }}>
       <DialogTitle sx={{ display: "flex", alignItems: "center", gap: 1.5, pb: 1.5, borderBottom: "1px solid #E2E8F0" }}>
         <Box
           sx={{
@@ -328,7 +315,8 @@ export const LinkKeyActionModal: React.FC<LinkKeyActionModalProps> = ({
               {isReveal && (
                 <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
                   <Typography variant="body2" sx={{ color: "#475569" }}>
-                    To decrypt and view this sensitive WireGuard secret, please authenticate with your easy42 administrator password:
+                    To decrypt and view this sensitive WireGuard secret, please authenticate with your easy42
+                    administrator password:
                   </Typography>
 
                   <TextField
@@ -345,11 +333,7 @@ export const LinkKeyActionModal: React.FC<LinkKeyActionModalProps> = ({
                     InputProps={{
                       endAdornment: (
                         <InputAdornment position="end">
-                          <IconButton
-                            size="small"
-                            onClick={() => setShowPassword(!showPassword)}
-                            edge="end"
-                          >
+                          <IconButton size="small" onClick={() => setShowPassword(!showPassword)} edge="end">
                             {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                           </IconButton>
                         </InputAdornment>
@@ -389,7 +373,16 @@ export const LinkKeyActionModal: React.FC<LinkKeyActionModalProps> = ({
                         control={<Radio size="small" />}
                         label={
                           <Box>
-                            <Typography variant="subtitle2" sx={{ fontWeight: 600, color: "#0F172A", display: "flex", alignItems: "center", gap: 0.8 }}>
+                            <Typography
+                              variant="subtitle2"
+                              sx={{
+                                fontWeight: 600,
+                                color: "#0F172A",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 0.8,
+                              }}
+                            >
                               <Sparkles size={16} color="#4F46E5" />
                               Generate Cryptographically Secure Random Key
                             </Typography>
@@ -420,7 +413,16 @@ export const LinkKeyActionModal: React.FC<LinkKeyActionModalProps> = ({
                         control={<Radio size="small" />}
                         label={
                           <Box>
-                            <Typography variant="subtitle2" sx={{ fontWeight: 600, color: "#0F172A", display: "flex", alignItems: "center", gap: 0.8 }}>
+                            <Typography
+                              variant="subtitle2"
+                              sx={{
+                                fontWeight: 600,
+                                color: "#0F172A",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 0.8,
+                              }}
+                            >
                               <Lock size={16} color="#D97706" />
                               Provide Custom Value
                             </Typography>
@@ -456,11 +458,7 @@ export const LinkKeyActionModal: React.FC<LinkKeyActionModalProps> = ({
 
         <DialogActions sx={{ px: 3, py: 2, borderTop: "1px solid #E2E8F0", backgroundColor: "#F8FAFC" }}>
           {isDone ? (
-            <Button
-              onClick={onClose}
-              variant="contained"
-              sx={{ fontWeight: 600, backgroundColor: "#4F46E5" }}
-            >
+            <Button onClick={onClose} variant="contained" sx={{ fontWeight: 600, backgroundColor: "#4F46E5" }}>
               Close
             </Button>
           ) : (
@@ -481,13 +479,7 @@ export const LinkKeyActionModal: React.FC<LinkKeyActionModalProps> = ({
                   },
                 }}
               >
-                {loading
-                  ? isReveal
-                    ? "Verifying..."
-                    : "Resetting..."
-                  : isReveal
-                  ? "Reveal Secret"
-                  : "Reset Secret"}
+                {loading ? (isReveal ? "Verifying..." : "Resetting...") : isReveal ? "Reveal Secret" : "Reset Secret"}
               </Button>
             </>
           )}
