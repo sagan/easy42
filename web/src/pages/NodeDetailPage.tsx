@@ -71,6 +71,7 @@ import {
   Clock,
   Key,
   ChevronDown,
+  FileCode2,
 } from "lucide-react";
 import { useMesh } from "../context/MeshContext";
 import { api } from "../api/client";
@@ -82,6 +83,7 @@ import { getLinkWorkingState, isManualLink } from "../components/Topology/Topolo
 import { extractPort } from "../utils/endpoint";
 import { ViewNetworkPolicyModal } from "../components/Modals/ViewNetworkPolicyModal";
 import { LinkKeyActionModal, LinkKeyActionMode } from "../components/Modals/LinkKeyActionModal";
+import { generateNodeApplySnippet } from "../components/Modals/ApplyConfigModal";
 
 const getHandshakeRelativeLabel = (dateStr?: string): { text: string; isHealthy: boolean } => {
   if (!dateStr || dateStr === "None" || dateStr.trim() === "") {
@@ -168,6 +170,7 @@ export const NodeDetailPage: React.FC = () => {
     setAddLinkOpen,
     setSyncTargetNode,
     setSyncOpen,
+    openApplyModal,
     setStateToast,
   } = useMesh();
 
@@ -1100,6 +1103,17 @@ export const NodeDetailPage: React.FC = () => {
                 sx={{ fontSize: "0.82rem", gap: 1.2, py: 1 }}
               >
                 <Edit2 size={16} color="#4F46E5" /> Edit Configuration
+              </MenuItem>
+              <MenuItem
+                onClick={() => {
+                  setMoreMenuAnchor(null);
+                  if (node) {
+                    openApplyModal(generateNodeApplySnippet(node));
+                  }
+                }}
+                sx={{ fontSize: "0.82rem", gap: 1.2, py: 1 }}
+              >
+                <FileCode2 size={16} color="#0891B2" /> Apply Config Snippet
               </MenuItem>
               <MenuItem
                 onClick={() => {

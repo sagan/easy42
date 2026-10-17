@@ -978,19 +978,19 @@ func TestUpdateStatePartialNodeFilter(t *testing.T) {
 	}
 
 	node1 := config.Node{
-		Name:      "node-a",
-		Host:      "none",
-		IP:        "172.20.1.1",
-		Interface: "eth0",
-		ASN:       4224420001,
+		Name:       "node-a",
+		Host:       "none",
+		IP:         "172.20.1.1",
+		Interface:  "eth0",
+		ASN:        4224420001,
 		IsExternal: true,
 	}
 	node2 := config.Node{
-		Name:      "node-b",
-		Host:      "none",
-		IP:        "172.20.1.2",
-		Interface: "eth0",
-		ASN:       4224420002,
+		Name:       "node-b",
+		Host:       "none",
+		IP:         "172.20.1.2",
+		Interface:  "eth0",
+		ASN:        4224420002,
 		IsExternal: true,
 	}
 
@@ -1541,15 +1541,15 @@ func TestSharedTagEmptyEntrypointLink(t *testing.T) {
 		t.Fatalf("Failed to unlock manager: %v", err)
 	}
 
-	ggyix := config.Node{
-		Name:      "ggyix",
-		Host:      "ggyix.s.sagan.me",
+	foobar := config.Node{
+		Name:      "foobar",
+		Host:      "foobar.s.sagan.me",
 		IP:        "192.168.110.202",
 		Interface: "wg0",
 		ASN:       4224420202,
 		Entrypoints: []config.Entrypoint{
 			{
-				IP:   "ggyix.s.sagan.me",
+				IP:   "foobar.s.sagan.me",
 				Tags: []string{"ix"},
 				MTU:  1500,
 			},
@@ -1558,8 +1558,8 @@ func TestSharedTagEmptyEntrypointLink(t *testing.T) {
 			},
 		},
 	}
-	if err := mgr.AddNode(ggyix); err != nil {
-		t.Fatalf("AddNode ggyix failed: %v", err)
+	if err := mgr.AddNode(foobar); err != nil {
+		t.Fatalf("AddNode foobar failed: %v", err)
 	}
 
 	linode := config.Node{
@@ -1583,22 +1583,22 @@ func TestSharedTagEmptyEntrypointLink(t *testing.T) {
 		t.Fatalf("AddNode linode failed: %v", err)
 	}
 
-	link, err := mgr.AddLink("ggyix", "linode", 26945, 21182, nil)
+	link, err := mgr.AddLink("foobar", "linode", 26945, 21182, nil)
 	if err != nil {
 		t.Fatalf("AddLink failed: %v", err)
 	}
 
-	var ggyixEnd, linodeEnd *config.LinkEnd
-	if link.From.Name == "ggyix" {
-		ggyixEnd = &link.From
+	var foobarEnd, linodeEnd *config.LinkEnd
+	if link.From.Name == "foobar" {
+		foobarEnd = &link.From
 		linodeEnd = &link.To
 	} else {
-		ggyixEnd = &link.To
+		foobarEnd = &link.To
 		linodeEnd = &link.From
 	}
 
-	// linode connects to ggyix: since they share "direct" tag and ggyix has no IP for "direct",
-	// linode must NOT have an endpoint (must NOT fall back to ggyix's "ix" endpoint!)
+	// linode connects to foobar: since they share "direct" tag and foobar has no IP for "direct",
+	// linode must NOT have an endpoint (must NOT fall back to foobar's "ix" endpoint!)
 	if linodeEnd.Endpoint != "" {
 		t.Errorf("Expected linode peer endpoint to be empty, got %s", linodeEnd.Endpoint)
 	}
@@ -1609,15 +1609,15 @@ func TestSharedTagEmptyEntrypointLink(t *testing.T) {
 		t.Errorf("Expected linode keepalive to be 0, got %d", linodeEnd.PersistentKeepalive)
 	}
 
-	// ggyix connects to linode: linode has IP on "direct" tag
-	if ggyixEnd.Endpoint != "linode.s.sagan.me:21182" {
-		t.Errorf("Expected ggyix peer endpoint to be linode.s.sagan.me:21182, got %s", ggyixEnd.Endpoint)
+	// foobar connects to linode: linode has IP on "direct" tag
+	if foobarEnd.Endpoint != "linode.s.sagan.me:21182" {
+		t.Errorf("Expected foobar peer endpoint to be linode.s.sagan.me:21182, got %s", foobarEnd.Endpoint)
 	}
-	if ggyixEnd.ResolvedEndpoint != "linode.s.sagan.me:21182" {
-		t.Errorf("Expected ggyix resolved endpoint to be linode.s.sagan.me:21182, got %s", ggyixEnd.ResolvedEndpoint)
+	if foobarEnd.ResolvedEndpoint != "linode.s.sagan.me:21182" {
+		t.Errorf("Expected foobar resolved endpoint to be linode.s.sagan.me:21182, got %s", foobarEnd.ResolvedEndpoint)
 	}
-	if ggyixEnd.PersistentKeepalive != 25 {
-		t.Errorf("Expected ggyix keepalive to be 25, got %d", ggyixEnd.PersistentKeepalive)
+	if foobarEnd.PersistentKeepalive != 25 {
+		t.Errorf("Expected foobar keepalive to be 25, got %d", foobarEnd.PersistentKeepalive)
 	}
 }
 
@@ -2632,12 +2632,3 @@ func TestRevealAndResetPrivateKey(t *testing.T) {
 		t.Fatalf("Expected custom public key %s, got %s", customKp.PublicKey, setPub)
 	}
 }
-
-
-
-
-
-
-
-
-

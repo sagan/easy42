@@ -336,7 +336,7 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
               variant="subtitle2"
               sx={{ fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, color: "text.secondary" }}
             >
-              Available Tasks
+              Device Helper Tasks
             </Typography>
           </Box>
 

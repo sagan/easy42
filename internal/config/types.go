@@ -162,6 +162,18 @@ type Config struct {
 	ServerTasks       []ServerTaskConfig `json:"server_tasks,omitempty"`
 	Database          DatabaseSettings   `json:"database,omitempty"`
 	Integrations      IntegrationsSettings `json:"integrations,omitempty"`
+	ConfigChanges     []ConfigChange     `json:"config_changes,omitempty"`
+}
+
+// ConfigChange represents a saved, named config patch snippet
+type ConfigChange struct {
+	ID          string    `json:"id"`
+	Name        string    `json:"name"`
+	Description string    `json:"description,omitempty"`
+	Content     string    `json:"content"`
+	Format      string    `json:"format,omitempty"` // "json" or "yaml"
+	CreatedAt   time.Time `json:"created_at,omitempty"`
+	ModifiedAt  time.Time `json:"modified_at,omitempty"`
 }
 
 // GetRetentionDays returns the configured retention days or DefaultRetentionDays

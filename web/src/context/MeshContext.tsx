@@ -83,6 +83,13 @@ interface MeshContextType {
   addBlockTrigger: number;
   setAddBlockTrigger: React.Dispatch<React.SetStateAction<number>>;
 
+  // Apply Config Modal
+  applyOpen: boolean;
+  setApplyOpen: (open: boolean) => void;
+  applyInitialContent: string;
+  setApplyInitialContent: (content: string) => void;
+  openApplyModal: (snippet?: string) => void;
+
   // Node position update
   updateNodePosition: (name: string, x: number, y: number) => void;
 
@@ -130,6 +137,19 @@ export const MeshProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [syncTargetNode, setSyncTargetNode] = useState<string | null>(null);
   const [updatingState, setUpdatingState] = useState(false);
   const [addBlockTrigger, setAddBlockTrigger] = useState(0);
+
+  // Apply Config Modal State
+  const [applyOpen, setApplyOpen] = useState(false);
+  const [applyInitialContent, setApplyInitialContent] = useState("");
+
+  const openApplyModal = useCallback((snippet?: string) => {
+    if (snippet) {
+      setApplyInitialContent(snippet);
+    } else {
+      setApplyInitialContent("");
+    }
+    setApplyOpen(true);
+  }, []);
 
   const [stateToast, setStateToast] = useState<{
     message: string;
@@ -497,6 +517,11 @@ export const MeshProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setSelectedLink,
     addBlockTrigger,
     setAddBlockTrigger,
+    applyOpen,
+    setApplyOpen,
+    applyInitialContent,
+    setApplyInitialContent,
+    openApplyModal,
     updateNodePosition,
     stateToast,
     setStateToast,

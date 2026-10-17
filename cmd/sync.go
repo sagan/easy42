@@ -53,7 +53,9 @@ func findRunningServerURL(dataDir string) string {
 			candidates = append(candidates, strings.TrimRight(u, "/"))
 		}
 	}
-	candidates = append(candidates, "http://127.0.0.1:4242", "http://localhost:4242")
+	if dataDir == config.DefaultDataDir() {
+		candidates = append(candidates, "http://127.0.0.1:4242", "http://localhost:4242")
+	}
 
 	client := &http.Client{Timeout: 500 * time.Millisecond}
 	seen := make(map[string]bool)

@@ -919,17 +919,16 @@ export const NodesPage: React.FC = () => {
         </Box>
 
         {/* Clear filter indicator if filtering */}
-        {isFiltering && (
-          <Button
-            size="small"
-            variant="text"
-            onClick={handleClearFilters}
-            startIcon={<X size={14} />}
-            sx={{ color: "#64748B", fontSize: "0.75rem", textTransform: "none", py: 0.4 }}
-          >
-            Clear ({filteredNodes.length}/{managedNodes.length})
-          </Button>
-        )}
+        <Button
+          size="small"
+          variant="text"
+          disabled={!isFiltering}
+          onClick={handleClearFilters}
+          startIcon={<X size={14} />}
+          sx={{ color: "#64748B", fontSize: "0.75rem", textTransform: "none", py: 0.4 }}
+        >
+          Clear ({filteredNodes.length}/{managedNodes.length})
+        </Button>
 
         {/* Actions & View Toggle */}
         <Box sx={{ display: "flex", alignItems: "center", gap: 1, ml: "auto", flexWrap: "wrap" }}>
@@ -963,9 +962,7 @@ export const NodesPage: React.FC = () => {
                 >
                   <Tooltip
                     title={
-                      sortOrder === "asc"
-                        ? "Sort ascending (click to reverse)"
-                        : "Sort descending (click to reverse)"
+                      sortOrder === "asc" ? "Sort ascending (click to reverse)" : "Sort descending (click to reverse)"
                     }
                   >
                     <Box sx={{ display: "flex", alignItems: "center" }}>

@@ -34,6 +34,10 @@ import type {
   RevealLinkPrivateKeyResponse,
   ResetLinkPrivateKeyRequest,
   ResetLinkPrivateKeyResponse,
+  ConfigChange,
+  ApplyPreviewResult,
+  ApplyResult,
+  ValidateApplyResponse,
 } from "../types/api";
 
 const API_BASE = "/api";
@@ -513,5 +517,39 @@ export const api = {
       `/nodes/${encodeURIComponent(nodeName)}/cron-tasks/results${qs ? `?${qs}` : ""}`,
     );
   },
+
+  // Config Apply & Changes
+  getConfigApplySchema: () => request<any>("/config/apply/schema"),
+  validateConfigApply: (content: string) =>
+    request<ValidateApplyResponse>("/config/apply/validate", {
+      method: "POST",
+      body: JSON.stringify({ content }),
+    }),
+  previewConfigApply: (content: string) =>
+    request<ApplyPreviewResult>("/config/apply/preview", {
+      method: "POST",
+      body: JSON.stringify({ content }),
+    }),
+  executeConfigApply: (content: string, autoSync: boolean = false) =>
+    request<ApplyResult>("/config/apply", {
+      method: "POST",
+      body: JSON.stringify({ content, auto_sync: autoSync }),
+    }),
+  listConfigChanges: () => request<ConfigChange[]>("/config/changes"),
+  getConfigChange: (id: string) => request<ConfigChange>(`/config/changes/${encodeURIComponent(id)}`),
+  saveConfigChange: (change: Partial<ConfigChange>) =>
+    request<ConfigChange>(change.id ? `/config/changes/${encodeURIComponent(change.id)}` : "/config/changes", {
+      method: change.id ? "PUT" : "POST",
+      body: JSON.stringify(change),
+    }),
+  deleteConfigChange: (id: string) =>
+    request<{ status: string }>(`/config/changes/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    }),
+  applySavedConfigChange: (id: string, autoSync: boolean = false) =>
+    request<ApplyResult>(`/config/changes/${encodeURIComponent(id)}/apply`, {
+      method: "POST",
+      body: JSON.stringify({ auto_sync: autoSync }),
+    }),
 };
 

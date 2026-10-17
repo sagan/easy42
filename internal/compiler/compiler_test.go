@@ -126,13 +126,13 @@ func TestResolvePeerEndpoint(t *testing.T) {
 	// Test connecting to a node that has multiple entrypoints (e.g. ix with IP, direct without IP)
 	// when nodeFrom has tag "direct" with IP. It must match tag "direct" and NOT fallback to "ix"
 	nodeMulti := &config.Node{
-		Name: "ggyix",
-		Host: "ggyix.s.sagan.me",
+		Name: "foobar",
+		Host: "foobar.s.sagan.me",
 		ASN:  4224420202,
 		IP:   "192.168.110.202",
 		Entrypoints: []config.Entrypoint{
 			{
-				IP:   "ggyix.s.sagan.me",
+				IP:   "foobar.s.sagan.me",
 				Tags: []string{"ix"},
 				MTU:  1500,
 			},
@@ -158,16 +158,16 @@ func TestResolvePeerEndpoint(t *testing.T) {
 		},
 	}
 
-	// linode connects to ggyix: matched on "direct" where ggyix has no IP -> empty endpoint!
-	epLinodeToGgyix, portLtoG := ResolvePeerEndpoint(nodeDirect, nodeMulti, nil)
-	if epLinodeToGgyix != "" || portLtoG != 0 {
-		t.Fatalf("Expected empty endpoint for linode -> ggyix on direct tag, got %s / %d", epLinodeToGgyix, portLtoG)
+	// linode connects to foobar: matched on "direct" where foobar has no IP -> empty endpoint!
+	epLinodeTofoobar, portLtoG := ResolvePeerEndpoint(nodeDirect, nodeMulti, nil)
+	if epLinodeTofoobar != "" || portLtoG != 0 {
+		t.Fatalf("Expected empty endpoint for linode -> foobar on direct tag, got %s / %d", epLinodeTofoobar, portLtoG)
 	}
 
-	// ggyix connects to linode: matched on "direct" where linode has IP -> linode endpoint!
-	epGgyixToLinode, _ := ResolvePeerEndpoint(nodeMulti, nodeDirect, nil, 21182)
-	if epGgyixToLinode != "linode.s.sagan.me:21182" {
-		t.Fatalf("Expected linode.s.sagan.me:21182 for ggyix -> linode, got %s", epGgyixToLinode)
+	// foobar connects to linode: matched on "direct" where linode has IP -> linode endpoint!
+	epfoobarToLinode, _ := ResolvePeerEndpoint(nodeMulti, nodeDirect, nil, 21182)
+	if epfoobarToLinode != "linode.s.sagan.me:21182" {
+		t.Fatalf("Expected linode.s.sagan.me:21182 for foobar -> linode, got %s", epfoobarToLinode)
 	}
 }
 
@@ -916,6 +916,3 @@ func TestBirdConfigWithAssignIPv4_UsesIPv6Exclusively(t *testing.T) {
 		t.Errorf("BIRD peering should never use 169.254.X.X, got:\n%s", conf)
 	}
 }
-
-
-

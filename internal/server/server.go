@@ -226,6 +226,18 @@ func New(cfg Config) *Server {
 			r.Post("/state/update", s.handleUpdateState)
 			r.Get("/state", s.handleGetState)
 
+			// Config Changes & Apply
+			r.Get("/config/apply/schema", s.handleGetConfigApplySchema)
+			r.Post("/config/apply/validate", s.handleValidateConfigChange)
+			r.Post("/config/apply/preview", s.handlePreviewConfigApply)
+			r.Post("/config/apply", s.handleExecuteConfigApply)
+			r.Get("/config/changes", s.handleListConfigChanges)
+			r.Post("/config/changes", s.handleSaveConfigChange)
+			r.Get("/config/changes/{id}", s.handleGetConfigChange)
+			r.Put("/config/changes/{id}", s.handleSaveConfigChange)
+			r.Delete("/config/changes/{id}", s.handleDeleteConfigChange)
+			r.Post("/config/changes/{id}/apply", s.handleApplySavedConfigChange)
+
 			// Device Helper Tasks
 			r.Get("/tasks", s.handleGetTasks)
 			r.Post("/tasks/{id}/status", s.handleTaskStatus)

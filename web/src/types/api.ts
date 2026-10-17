@@ -772,4 +772,74 @@ export interface IntegrationsSettings {
   endpoint: string;
 }
 
+export interface ConfigChange {
+  id: string;
+  name: string;
+  description?: string;
+  content: string;
+  format?: string;
+  created_at: string;
+  modified_at: string;
+}
+
+export interface ApplyFieldDiff {
+  field: string;
+  old_value: any;
+  new_value: any;
+}
+
+export interface ApplyNodeDiff {
+  name: string;
+  action: "create" | "update";
+  changes: ApplyFieldDiff[];
+}
+
+export interface ApplyLinkDiff {
+  from: string;
+  to: string;
+  action: "create" | "update";
+  changes: ApplyFieldDiff[];
+}
+
+export interface ApplySettingsDiff {
+  category: string;
+  changes: ApplyFieldDiff[];
+}
+
+export interface ApplySummary {
+  added_nodes: number;
+  modified_nodes: number;
+  added_links: number;
+  modified_links: number;
+  total_changes: number;
+}
+
+export interface ApplyPreviewResult {
+  valid: boolean;
+  format: string;
+  summary: ApplySummary;
+  nodes: ApplyNodeDiff[];
+  links: ApplyLinkDiff[];
+  settings: ApplySettingsDiff[];
+  unified_diff: string;
+  errors?: string[];
+  normalized_json?: string;
+}
+
+export interface ApplyResult {
+  success: boolean;
+  applied_at: string;
+  summary: ApplySummary;
+  affected_nodes: string[];
+  affected_links: string[];
+  backup_file?: string;
+  plan: ApplyPreviewResult;
+}
+
+export interface ValidateApplyResponse {
+  valid: boolean;
+  format?: string;
+  error?: string;
+}
+
 

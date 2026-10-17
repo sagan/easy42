@@ -39,6 +39,7 @@ import {
   Share2,
   Activity,
   ExternalLink,
+  FileCode2,
 } from "lucide-react";
 import { useMesh } from "../../context/MeshContext";
 import { api } from "../../api/client";
@@ -47,6 +48,7 @@ import { AddLinkModal } from "../Modals/AddLinkModal";
 import { RenameNodeModal } from "../Modals/RenameNodeModal";
 import { UnlockModal } from "../Modals/UnlockModal";
 import { SyncProgressModal } from "../Modals/SyncProgressModal";
+import { ApplyConfigModal } from "../Modals/ApplyConfigModal";
 
 export const AppLayout: React.FC = () => {
   const theme = useTheme();
@@ -56,6 +58,7 @@ export const AppLayout: React.FC = () => {
 
   const {
     nodes,
+    links,
     fleetLive,
     isUnlocked,
     setIsUnlocked,
@@ -81,6 +84,10 @@ export const AppLayout: React.FC = () => {
     syncOpen,
     setSyncOpen,
     syncTargetNode,
+    applyOpen,
+    setApplyOpen,
+    applyInitialContent,
+    openApplyModal,
     stateToast,
     setStateToast,
   } = useMesh();
@@ -91,11 +98,11 @@ export const AppLayout: React.FC = () => {
   const currentPath = location.pathname === "/" ? "/nodes" : "/" + location.pathname.slice(1).split("/").slice(0, 1);
 
   const navItems = [
-    { label: "Nodes", path: "/nodes", icon: <Server size={18} /> },
-    { label: "Topology", path: "/topology", icon: <Network size={18} /> },
-    { label: isMobile ? "LG" : "Looking Glass", path: "/looking-glass", icon: <Compass size={18} /> },
-    { label: isMobile ? "Helper" : "Device Helper", path: "/helper", icon: <Wrench size={18} /> },
-    { label: "Settings", path: "/settings", icon: <Settings size={18} /> },
+    { label: "Nodes", title: "Nodes", path: "/nodes", icon: <Server size={18} /> },
+    { label: "Topology", title: "Topology", path: "/topology", icon: <Network size={18} /> },
+    { label: "LG", title: "Looking Glass", path: "/looking-glass", icon: <Compass size={18} /> },
+    { label: "Helper", title: "Device Helper", path: "/helper", icon: <Wrench size={18} /> },
+    { label: "Settings", title: "Settings", path: "/settings", icon: <Settings size={18} /> },
   ];
 
   const handleUnlockToggle = async () => {
@@ -192,6 +199,7 @@ export const AppLayout: React.FC = () => {
                       key={item.path}
                       onClick={() => navigate(item.path)}
                       startIcon={item.icon}
+                      title={item.title}
                       sx={{
                         px: 1.8,
                         py: 0.8,
@@ -409,6 +417,32 @@ export const AppLayout: React.FC = () => {
               </Tooltip>
             )}
 
+            {/* Apply Config Button */}
+            <Tooltip title="Apply Config Changes (Declarative patch)">
+              <Button
+                size="small"
+                variant="outlined"
+                onClick={() => openApplyModal()}
+                startIcon={<FileCode2 size={14} />}
+                sx={{
+                  borderColor: "#CBD5E1",
+                  color: "#334155",
+                  fontWeight: 600,
+                  fontSize: "0.8rem",
+                  px: { xs: 1.2, sm: 1.8 },
+                  height: 32,
+                  textTransform: "none",
+                  "&:hover": {
+                    borderColor: "#4F46E5",
+                    bgcolor: "rgba(79, 70, 229, 0.05)",
+                    color: "#4F46E5",
+                  },
+                }}
+              >
+                Apply
+              </Button>
+            </Tooltip>
+
             {/* Sync Button */}
             <Button
               size="small"
@@ -548,7 +582,7 @@ export const AppLayout: React.FC = () => {
             {navItems.map((item) => {
               const isActive = currentPath === item.path || currentPath.startsWith(item.path + "/");
               return (
-                <ListItem key={item.path} disablePadding sx={{ mb: 0.5 }}>
+                <ListItem key={item.path} disablePadding sx={{ mb: 0.5 }} title={item.title}>
                   <ListItemButton
                     onClick={() => {
                       navigate(item.path);
@@ -682,6 +716,75 @@ export const AppLayout: React.FC = () => {
         }}
         targetNode={syncTargetNode}
         onNeedUnlock={() => setUnlockOpen(true)}
+      />
+
+      <ApplyConfigModal
+        open={applyOpen}
+        onClose={() => setApplyOpen(false)}
+        initialContent={applyInitialContent}
+        nodes={nodes}
+        links={links}
+        onApplied={(result, shouldSync) => {
+          loadData();
+          refreshFleetLive();
+
+          if (shouldSync) {
+            setStateToast({
+              message: `Config applied (${result.summary?.total_changes || 0} changes). Syncing network in background...`,
+              severity: "info",
+            });
+
+            const targetNodes =
+              result.affected_nodes && result.affected_nodes.length > 0
+                ? result.affected_nodes.join(",")
+                : undefined;
+
+            api
+              .executeSync(false, targetNodes)
+              .then((syncRes) => {
+                loadData();
+                refreshFleetLive();
+                const failed = (syncRes || []).filter((r) => !r.success);
+                if (failed.length > 0) {
+                  const errorMsgs = failed.map((f) => `${f.node_name}: ${f.error || "failed"}`).join("; ");
+                  setStateToast({
+                    message: `Sync finished with ${failed.length} failure(s): ${errorMsgs}`,
+                    severity: "warning",
+                  });
+                } else if ((syncRes || []).length > 0) {
+                  const nodeNames = Array.from(new Set(syncRes.map((r) => r.node_name))).join(", ");
+                  setStateToast({
+                    message: `Network synced successfully (${syncRes.length} action(s) on ${nodeNames}).`,
+                    severity: "success",
+                  });
+                } else {
+                  setStateToast({
+                    message: "Config applied. Network is already up to date.",
+                    severity: "success",
+                  });
+                }
+              })
+              .catch((err: any) => {
+                if (err?.status === 423 || err?.message?.includes("locked")) {
+                  setStateToast({
+                    message: "Key vault is locked. Please unlock vault to sync nodes.",
+                    severity: "warning",
+                  });
+                  setUnlockOpen(true);
+                } else {
+                  setStateToast({
+                    message: `Background sync failed: ${err.message || "Unknown error"}`,
+                    severity: "error",
+                  });
+                }
+              });
+          } else {
+            setStateToast({
+              message: `Config change applied successfully (${result.summary?.total_changes || 0} changes)`,
+              severity: "success",
+            });
+          }
+        }}
       />
 
       {/* Notification Toast */}
