@@ -635,7 +635,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth fullScreen={isMobile}>
+    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth fullScreen={isMobile}>
       <DialogTitle sx={{ display: "flex", alignItems: "center", gap: 1.5, pb: 1, borderBottom: "1px solid #E2E8F0" }}>
         <Box
           sx={{
@@ -1576,7 +1576,8 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                           />
                         </Box>
                         <Typography variant="caption" sx={{ color: "#64748B" }}>
-                          Dynamically manage node /etc/hosts file with cluster node name and IP mappings (only works in agent mode).
+                          Dynamically manage node /etc/hosts file with cluster node name and IP mappings (only works in
+                          agent mode).
                         </Typography>
                       </Box>
                     }

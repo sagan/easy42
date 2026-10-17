@@ -22,9 +22,9 @@ pub struct AgentClient {
 impl AgentClient {
     pub fn new(config: AgentConfig) -> Self {
         Self {
-            config,
-            executor: Arc::new(CommandExecutor::new()),
+            executor: Arc::new(CommandExecutor::new(config.clone())),
             collector: Arc::new(Mutex::new(MetricsCollector::new())),
+            config,
         }
     }
 

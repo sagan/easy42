@@ -772,7 +772,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth fullScreen={isMobile}>
+    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth fullScreen={isMobile}>
       <DialogTitle sx={{ display: "flex", alignItems: "center", gap: 1.5, pb: 1, borderBottom: "1px solid #E2E8F0" }}>
         <Box
           sx={{
@@ -1098,8 +1098,8 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                       variant="caption"
                       sx={{ color: "#64748B", display: "block", fontSize: "0.72rem", lineHeight: 1.4, mt: 0.3 }}
                     >
-                      Enables a 256-bit symmetric key for post-quantum resistance. By default, easy42 generates and encrypts
-                      the PSK automatically. You can also specify a custom PSK below.
+                      Enables a 256-bit symmetric key for post-quantum resistance. By default, easy42 generates and
+                      encrypts the PSK automatically. You can also specify a custom PSK below.
                     </Typography>
 
                     {enablePsk && (

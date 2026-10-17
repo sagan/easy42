@@ -48,6 +48,30 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 
 export type SortField = "name" | "status" | "block" | "host" | "uptime" | "cpu" | "memory" | "disk" | "network";
 
+export const SORT_OPTIONS: { value: SortField; label: string }[] = [
+  { value: "name", label: "Name" },
+  { value: "status", label: "Status" },
+  { value: "block", label: "Block" },
+  { value: "host", label: "Host IP" },
+  { value: "uptime", label: "Uptime" },
+  { value: "cpu", label: "CPU Usage" },
+  { value: "memory", label: "Memory Usage" },
+  { value: "disk", label: "Disk Usage" },
+  { value: "network", label: "Network Traffic" },
+];
+
+export const SORT_FIELD_LABELS: Record<SortField, string> = {
+  name: "Name",
+  status: "Status",
+  block: "Block",
+  host: "Host IP",
+  uptime: "Uptime",
+  cpu: "CPU",
+  memory: "Memory",
+  disk: "Disk",
+  network: "Network",
+};
+
 export const NodesPage: React.FC = () => {
   const {
     nodes,
@@ -71,7 +95,8 @@ export const NodesPage: React.FC = () => {
   const urlTag = searchParams.get("tag") || "All";
   const urlBlock = searchParams.get("block") || "All";
   const urlView = (searchParams.get("view") === "table" ? "table" : "cards") as "cards" | "table";
-  const sortField = (searchParams.get("sort") || "name") as SortField;
+  const rawSort = searchParams.get("sort");
+  const sortField = (SORT_OPTIONS.some((opt) => opt.value === rawSort) ? rawSort : "name") as SortField;
   const sortOrder = (searchParams.get("order") === "desc" ? "desc" : "asc") as "asc" | "desc";
 
   const handleRequestSort = useCallback(
@@ -90,6 +115,31 @@ export const NodesPage: React.FC = () => {
     },
     [sortField, sortOrder, setSearchParams],
   );
+
+  const handleSelectSortField = useCallback(
+    (field: SortField) => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.set("sort", field);
+          return next;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
+
+  const handleToggleSortOrder = useCallback(() => {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.set("order", sortOrder === "asc" ? "desc" : "asc");
+        return next;
+      },
+      { replace: true },
+    );
+  }, [sortOrder, setSearchParams]);
 
   // Local state for search term with instant UI feedback & URL synchronization
   const [searchTerm, setSearchTerm] = useState(urlSearch);
@@ -365,20 +415,25 @@ export const NodesPage: React.FC = () => {
         nBlocks.some((b) => b.toLowerCase().includes(q));
       return matchTag && matchBlock && matchSearch;
     });
-  }, [managedNodes, urlTag, urlBlock, searchTerm, nodeBlocksMap, managedTags, managedBlocks, offlineNodeNames, unhealthyNodeNames]);
+  }, [
+    managedNodes,
+    urlTag,
+    urlBlock,
+    searchTerm,
+    nodeBlocksMap,
+    managedTags,
+    managedBlocks,
+    offlineNodeNames,
+    unhealthyNodeNames,
+  ]);
 
-  const activeTag =
-    urlTag === "$offline" || urlTag === "$unhealthy" || managedTags.includes(urlTag)
-      ? urlTag
-      : "All";
+  const activeTag = urlTag === "$offline" || urlTag === "$unhealthy" || managedTags.includes(urlTag) ? urlTag : "All";
 
   const isSpecialTag = urlTag === "$offline" || urlTag === "$unhealthy";
   const isValidTag = isSpecialTag || (urlTag !== "All" && managedTags.includes(urlTag));
 
   const isFiltering = Boolean(
-    searchTerm.trim() ||
-    isValidTag ||
-    (urlBlock !== "All" && managedBlocks.includes(urlBlock)),
+    searchTerm.trim() || isValidTag || (urlBlock !== "All" && managedBlocks.includes(urlBlock)),
   );
 
   // Sort displayed nodes by active column and order
@@ -791,6 +846,7 @@ export const NodesPage: React.FC = () => {
         <Box
           sx={{
             display: "flex",
+            flexWrap: "wrap",
             alignItems: "center",
             gap: 0.8,
             overflowX: "auto",
@@ -876,7 +932,91 @@ export const NodesPage: React.FC = () => {
         )}
 
         {/* Actions & View Toggle */}
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1, ml: "auto" }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1, ml: "auto", flexWrap: "wrap" }}>
+          {/* Sort field dropdown */}
+          <FormControl size="small" sx={{ minWidth: { xs: 110, sm: 130 } }}>
+            <Select
+              value={sortField}
+              onChange={(e) => handleSelectSortField(e.target.value as SortField)}
+              size="small"
+              renderValue={(val) => SORT_FIELD_LABELS[val as SortField] || val}
+              sx={{
+                height: 32,
+                fontSize: "0.8rem",
+                borderRadius: 2,
+                bgcolor: "#F8FAFC",
+                "& .MuiSelect-select": {
+                  py: 0,
+                  display: "flex",
+                  alignItems: "center",
+                },
+              }}
+              startAdornment={
+                <InputAdornment
+                  position="start"
+                  sx={{ mr: 0.5, cursor: "pointer" }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleToggleSortOrder();
+                  }}
+                  onMouseDown={(e) => e.stopPropagation()}
+                >
+                  <Tooltip
+                    title={
+                      sortOrder === "asc"
+                        ? "Sort ascending (click to reverse)"
+                        : "Sort descending (click to reverse)"
+                    }
+                  >
+                    <Box sx={{ display: "flex", alignItems: "center" }}>
+                      {sortOrder === "asc" ? (
+                        <ArrowUp size={14} color="#64748B" />
+                      ) : (
+                        <ArrowDown size={14} color="#64748B" />
+                      )}
+                    </Box>
+                  </Tooltip>
+                </InputAdornment>
+              }
+            >
+              {SORT_OPTIONS.map((opt) => {
+                const isCurrent = opt.value === sortField;
+                return (
+                  <MenuItem
+                    key={opt.value}
+                    value={opt.value}
+                    onClick={() => {
+                      if (isCurrent) {
+                        handleToggleSortOrder();
+                      }
+                    }}
+                    sx={{
+                      fontSize: "0.85rem",
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                    }}
+                  >
+                    <span>{opt.label}</span>
+                    {isCurrent && (
+                      <Typography
+                        component="span"
+                        sx={{
+                          fontSize: "0.85rem",
+                          color: "#64748B",
+                          fontWeight: 700,
+                          ml: 1.5,
+                        }}
+                      >
+                        {sortOrder === "asc" ? "↑" : "↓"}
+                      </Typography>
+                    )}
+                  </MenuItem>
+                );
+              })}
+            </Select>
+          </FormControl>
+
           <ToggleButtonGroup
             value={urlView}
             exclusive

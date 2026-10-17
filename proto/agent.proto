@@ -125,7 +125,20 @@ message CommandRequest {
     RestartServiceCmd restart_service = 16;
     FlushCacheCmd flush_cache = 17;
     SyncHostsCmd sync_hosts = 18;
+    SyncActionCmd sync_action = 19;
   }
+}
+
+message SyncActionCmd {
+  string action_type = 1;        // e.g. "sync_wg", "sync_bird", "sync_nftables", "sync_roa", "sync_hosts", "delete_wg", "down_wg"
+  string interface_name = 2;     // Interface name (e.g. wg42peer)
+  string target_file = 3;        // Destination path (e.g. /etc/wireguard/wg42peer.conf)
+  bytes file_content = 4;        // Config file content to write
+  uint32 file_mode = 5;          // e.g. 0600, 0644, 0755
+  string sha256_hash = 6;        // Optional SHA-256 hash for verification
+  repeated HostRecord hosts = 7; // For sync_hosts
+  string description = 8;        // Action description
+  string diff_status = 9;        // "create" | "update" | "delete" | "synced"
 }
 
 message ApplyConfigFile {

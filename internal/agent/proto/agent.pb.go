@@ -73,7 +73,7 @@ func (x ManageInterface_Action) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use ManageInterface_Action.Descriptor instead.
 func (ManageInterface_Action) EnumDescriptor() ([]byte, []int) {
-	return file_proto_agent_proto_rawDescGZIP(), []int{13, 0}
+	return file_proto_agent_proto_rawDescGZIP(), []int{14, 0}
 }
 
 type LookingGlassCmd_Tool int32
@@ -128,7 +128,7 @@ func (x LookingGlassCmd_Tool) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use LookingGlassCmd_Tool.Descriptor instead.
 func (LookingGlassCmd_Tool) EnumDescriptor() ([]byte, []int) {
-	return file_proto_agent_proto_rawDescGZIP(), []int{16, 0}
+	return file_proto_agent_proto_rawDescGZIP(), []int{17, 0}
 }
 
 // AgentMessage is the top-level envelope for all WebSocket messages.
@@ -1126,6 +1126,7 @@ type CommandRequest struct {
 	//	*CommandRequest_RestartService
 	//	*CommandRequest_FlushCache
 	//	*CommandRequest_SyncHosts
+	//	*CommandRequest_SyncAction
 	Command       isCommandRequest_Command `protobuf_oneof:"command"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -1256,6 +1257,15 @@ func (x *CommandRequest) GetSyncHosts() *SyncHostsCmd {
 	return nil
 }
 
+func (x *CommandRequest) GetSyncAction() *SyncActionCmd {
+	if x != nil {
+		if x, ok := x.Command.(*CommandRequest_SyncAction); ok {
+			return x.SyncAction
+		}
+	}
+	return nil
+}
+
 type isCommandRequest_Command interface {
 	isCommandRequest_Command()
 }
@@ -1296,6 +1306,10 @@ type CommandRequest_SyncHosts struct {
 	SyncHosts *SyncHostsCmd `protobuf:"bytes,18,opt,name=sync_hosts,json=syncHosts,proto3,oneof"`
 }
 
+type CommandRequest_SyncAction struct {
+	SyncAction *SyncActionCmd `protobuf:"bytes,19,opt,name=sync_action,json=syncAction,proto3,oneof"`
+}
+
 func (*CommandRequest_ApplyConfig) isCommandRequest_Command() {}
 
 func (*CommandRequest_ManageIface) isCommandRequest_Command() {}
@@ -1314,6 +1328,116 @@ func (*CommandRequest_FlushCache) isCommandRequest_Command() {}
 
 func (*CommandRequest_SyncHosts) isCommandRequest_Command() {}
 
+func (*CommandRequest_SyncAction) isCommandRequest_Command() {}
+
+type SyncActionCmd struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ActionType    string                 `protobuf:"bytes,1,opt,name=action_type,json=actionType,proto3" json:"action_type,omitempty"`          // e.g. "sync_wg", "sync_bird", "sync_nftables", "sync_roa", "sync_hosts", "delete_wg", "down_wg"
+	InterfaceName string                 `protobuf:"bytes,2,opt,name=interface_name,json=interfaceName,proto3" json:"interface_name,omitempty"` // Interface name (e.g. wg42peer)
+	TargetFile    string                 `protobuf:"bytes,3,opt,name=target_file,json=targetFile,proto3" json:"target_file,omitempty"`          // Destination path (e.g. /etc/wireguard/wg42peer.conf)
+	FileContent   []byte                 `protobuf:"bytes,4,opt,name=file_content,json=fileContent,proto3" json:"file_content,omitempty"`       // Config file content to write
+	FileMode      uint32                 `protobuf:"varint,5,opt,name=file_mode,json=fileMode,proto3" json:"file_mode,omitempty"`               // e.g. 0600, 0644, 0755
+	Sha256Hash    string                 `protobuf:"bytes,6,opt,name=sha256_hash,json=sha256Hash,proto3" json:"sha256_hash,omitempty"`          // Optional SHA-256 hash for verification
+	Hosts         []*HostRecord          `protobuf:"bytes,7,rep,name=hosts,proto3" json:"hosts,omitempty"`                                      // For sync_hosts
+	Description   string                 `protobuf:"bytes,8,opt,name=description,proto3" json:"description,omitempty"`                          // Action description
+	DiffStatus    string                 `protobuf:"bytes,9,opt,name=diff_status,json=diffStatus,proto3" json:"diff_status,omitempty"`          // "create" | "update" | "delete" | "synced"
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SyncActionCmd) Reset() {
+	*x = SyncActionCmd{}
+	mi := &file_proto_agent_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SyncActionCmd) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SyncActionCmd) ProtoMessage() {}
+
+func (x *SyncActionCmd) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_agent_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SyncActionCmd.ProtoReflect.Descriptor instead.
+func (*SyncActionCmd) Descriptor() ([]byte, []int) {
+	return file_proto_agent_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *SyncActionCmd) GetActionType() string {
+	if x != nil {
+		return x.ActionType
+	}
+	return ""
+}
+
+func (x *SyncActionCmd) GetInterfaceName() string {
+	if x != nil {
+		return x.InterfaceName
+	}
+	return ""
+}
+
+func (x *SyncActionCmd) GetTargetFile() string {
+	if x != nil {
+		return x.TargetFile
+	}
+	return ""
+}
+
+func (x *SyncActionCmd) GetFileContent() []byte {
+	if x != nil {
+		return x.FileContent
+	}
+	return nil
+}
+
+func (x *SyncActionCmd) GetFileMode() uint32 {
+	if x != nil {
+		return x.FileMode
+	}
+	return 0
+}
+
+func (x *SyncActionCmd) GetSha256Hash() string {
+	if x != nil {
+		return x.Sha256Hash
+	}
+	return ""
+}
+
+func (x *SyncActionCmd) GetHosts() []*HostRecord {
+	if x != nil {
+		return x.Hosts
+	}
+	return nil
+}
+
+func (x *SyncActionCmd) GetDescription() string {
+	if x != nil {
+		return x.Description
+	}
+	return ""
+}
+
+func (x *SyncActionCmd) GetDiffStatus() string {
+	if x != nil {
+		return x.DiffStatus
+	}
+	return ""
+}
+
 type ApplyConfigFile struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Path          string                 `protobuf:"bytes,1,opt,name=path,proto3" json:"path,omitempty"`                               // Destination path (e.g. /etc/wireguard/wg42peer.conf)
@@ -1326,7 +1450,7 @@ type ApplyConfigFile struct {
 
 func (x *ApplyConfigFile) Reset() {
 	*x = ApplyConfigFile{}
-	mi := &file_proto_agent_proto_msgTypes[12]
+	mi := &file_proto_agent_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1338,7 +1462,7 @@ func (x *ApplyConfigFile) String() string {
 func (*ApplyConfigFile) ProtoMessage() {}
 
 func (x *ApplyConfigFile) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_agent_proto_msgTypes[12]
+	mi := &file_proto_agent_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1351,7 +1475,7 @@ func (x *ApplyConfigFile) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ApplyConfigFile.ProtoReflect.Descriptor instead.
 func (*ApplyConfigFile) Descriptor() ([]byte, []int) {
-	return file_proto_agent_proto_rawDescGZIP(), []int{12}
+	return file_proto_agent_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *ApplyConfigFile) GetPath() string {
@@ -1393,7 +1517,7 @@ type ManageInterface struct {
 
 func (x *ManageInterface) Reset() {
 	*x = ManageInterface{}
-	mi := &file_proto_agent_proto_msgTypes[13]
+	mi := &file_proto_agent_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1405,7 +1529,7 @@ func (x *ManageInterface) String() string {
 func (*ManageInterface) ProtoMessage() {}
 
 func (x *ManageInterface) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_agent_proto_msgTypes[13]
+	mi := &file_proto_agent_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1418,7 +1542,7 @@ func (x *ManageInterface) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ManageInterface.ProtoReflect.Descriptor instead.
 func (*ManageInterface) Descriptor() ([]byte, []int) {
-	return file_proto_agent_proto_rawDescGZIP(), []int{13}
+	return file_proto_agent_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *ManageInterface) GetInterfaceName() string {
@@ -1451,7 +1575,7 @@ type ReloadBirdCmd struct {
 
 func (x *ReloadBirdCmd) Reset() {
 	*x = ReloadBirdCmd{}
-	mi := &file_proto_agent_proto_msgTypes[14]
+	mi := &file_proto_agent_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1463,7 +1587,7 @@ func (x *ReloadBirdCmd) String() string {
 func (*ReloadBirdCmd) ProtoMessage() {}
 
 func (x *ReloadBirdCmd) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_agent_proto_msgTypes[14]
+	mi := &file_proto_agent_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1476,7 +1600,7 @@ func (x *ReloadBirdCmd) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReloadBirdCmd.ProtoReflect.Descriptor instead.
 func (*ReloadBirdCmd) Descriptor() ([]byte, []int) {
-	return file_proto_agent_proto_rawDescGZIP(), []int{14}
+	return file_proto_agent_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *ReloadBirdCmd) GetCheckOnly() bool {
@@ -1495,7 +1619,7 @@ type ApplyNftablesCmd struct {
 
 func (x *ApplyNftablesCmd) Reset() {
 	*x = ApplyNftablesCmd{}
-	mi := &file_proto_agent_proto_msgTypes[15]
+	mi := &file_proto_agent_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1507,7 +1631,7 @@ func (x *ApplyNftablesCmd) String() string {
 func (*ApplyNftablesCmd) ProtoMessage() {}
 
 func (x *ApplyNftablesCmd) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_agent_proto_msgTypes[15]
+	mi := &file_proto_agent_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1520,7 +1644,7 @@ func (x *ApplyNftablesCmd) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ApplyNftablesCmd.ProtoReflect.Descriptor instead.
 func (*ApplyNftablesCmd) Descriptor() ([]byte, []int) {
-	return file_proto_agent_proto_rawDescGZIP(), []int{15}
+	return file_proto_agent_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *ApplyNftablesCmd) GetScriptPath() string {
@@ -1543,7 +1667,7 @@ type LookingGlassCmd struct {
 
 func (x *LookingGlassCmd) Reset() {
 	*x = LookingGlassCmd{}
-	mi := &file_proto_agent_proto_msgTypes[16]
+	mi := &file_proto_agent_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1555,7 +1679,7 @@ func (x *LookingGlassCmd) String() string {
 func (*LookingGlassCmd) ProtoMessage() {}
 
 func (x *LookingGlassCmd) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_agent_proto_msgTypes[16]
+	mi := &file_proto_agent_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1568,7 +1692,7 @@ func (x *LookingGlassCmd) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LookingGlassCmd.ProtoReflect.Descriptor instead.
 func (*LookingGlassCmd) Descriptor() ([]byte, []int) {
-	return file_proto_agent_proto_rawDescGZIP(), []int{16}
+	return file_proto_agent_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *LookingGlassCmd) GetTool() LookingGlassCmd_Tool {
@@ -1614,7 +1738,7 @@ type ProbeSystemCmd struct {
 
 func (x *ProbeSystemCmd) Reset() {
 	*x = ProbeSystemCmd{}
-	mi := &file_proto_agent_proto_msgTypes[17]
+	mi := &file_proto_agent_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1626,7 +1750,7 @@ func (x *ProbeSystemCmd) String() string {
 func (*ProbeSystemCmd) ProtoMessage() {}
 
 func (x *ProbeSystemCmd) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_agent_proto_msgTypes[17]
+	mi := &file_proto_agent_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1639,7 +1763,7 @@ func (x *ProbeSystemCmd) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProbeSystemCmd.ProtoReflect.Descriptor instead.
 func (*ProbeSystemCmd) Descriptor() ([]byte, []int) {
-	return file_proto_agent_proto_rawDescGZIP(), []int{17}
+	return file_proto_agent_proto_rawDescGZIP(), []int{18}
 }
 
 type FlushCacheCmd struct {
@@ -1650,7 +1774,7 @@ type FlushCacheCmd struct {
 
 func (x *FlushCacheCmd) Reset() {
 	*x = FlushCacheCmd{}
-	mi := &file_proto_agent_proto_msgTypes[18]
+	mi := &file_proto_agent_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1662,7 +1786,7 @@ func (x *FlushCacheCmd) String() string {
 func (*FlushCacheCmd) ProtoMessage() {}
 
 func (x *FlushCacheCmd) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_agent_proto_msgTypes[18]
+	mi := &file_proto_agent_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1675,7 +1799,7 @@ func (x *FlushCacheCmd) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FlushCacheCmd.ProtoReflect.Descriptor instead.
 func (*FlushCacheCmd) Descriptor() ([]byte, []int) {
-	return file_proto_agent_proto_rawDescGZIP(), []int{18}
+	return file_proto_agent_proto_rawDescGZIP(), []int{19}
 }
 
 type RestartServiceCmd struct {
@@ -1687,7 +1811,7 @@ type RestartServiceCmd struct {
 
 func (x *RestartServiceCmd) Reset() {
 	*x = RestartServiceCmd{}
-	mi := &file_proto_agent_proto_msgTypes[19]
+	mi := &file_proto_agent_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1699,7 +1823,7 @@ func (x *RestartServiceCmd) String() string {
 func (*RestartServiceCmd) ProtoMessage() {}
 
 func (x *RestartServiceCmd) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_agent_proto_msgTypes[19]
+	mi := &file_proto_agent_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1712,7 +1836,7 @@ func (x *RestartServiceCmd) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RestartServiceCmd.ProtoReflect.Descriptor instead.
 func (*RestartServiceCmd) Descriptor() ([]byte, []int) {
-	return file_proto_agent_proto_rawDescGZIP(), []int{19}
+	return file_proto_agent_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *RestartServiceCmd) GetServiceName() string {
@@ -1736,7 +1860,7 @@ type CommandResponse struct {
 
 func (x *CommandResponse) Reset() {
 	*x = CommandResponse{}
-	mi := &file_proto_agent_proto_msgTypes[20]
+	mi := &file_proto_agent_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1748,7 +1872,7 @@ func (x *CommandResponse) String() string {
 func (*CommandResponse) ProtoMessage() {}
 
 func (x *CommandResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_agent_proto_msgTypes[20]
+	mi := &file_proto_agent_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1761,7 +1885,7 @@ func (x *CommandResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CommandResponse.ProtoReflect.Descriptor instead.
 func (*CommandResponse) Descriptor() ([]byte, []int) {
-	return file_proto_agent_proto_rawDescGZIP(), []int{20}
+	return file_proto_agent_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *CommandResponse) GetRequestId() string {
@@ -1817,7 +1941,7 @@ type ProbeResponse struct {
 
 func (x *ProbeResponse) Reset() {
 	*x = ProbeResponse{}
-	mi := &file_proto_agent_proto_msgTypes[21]
+	mi := &file_proto_agent_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1829,7 +1953,7 @@ func (x *ProbeResponse) String() string {
 func (*ProbeResponse) ProtoMessage() {}
 
 func (x *ProbeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_agent_proto_msgTypes[21]
+	mi := &file_proto_agent_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1842,7 +1966,7 @@ func (x *ProbeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProbeResponse.ProtoReflect.Descriptor instead.
 func (*ProbeResponse) Descriptor() ([]byte, []int) {
-	return file_proto_agent_proto_rawDescGZIP(), []int{21}
+	return file_proto_agent_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *ProbeResponse) GetRequestId() string {
@@ -1875,7 +1999,7 @@ type SyncCronTasks struct {
 
 func (x *SyncCronTasks) Reset() {
 	*x = SyncCronTasks{}
-	mi := &file_proto_agent_proto_msgTypes[22]
+	mi := &file_proto_agent_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1887,7 +2011,7 @@ func (x *SyncCronTasks) String() string {
 func (*SyncCronTasks) ProtoMessage() {}
 
 func (x *SyncCronTasks) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_agent_proto_msgTypes[22]
+	mi := &file_proto_agent_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1900,7 +2024,7 @@ func (x *SyncCronTasks) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SyncCronTasks.ProtoReflect.Descriptor instead.
 func (*SyncCronTasks) Descriptor() ([]byte, []int) {
-	return file_proto_agent_proto_rawDescGZIP(), []int{22}
+	return file_proto_agent_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *SyncCronTasks) GetTasks() []*CronTaskSpec {
@@ -1926,7 +2050,7 @@ type CronTaskSpec struct {
 
 func (x *CronTaskSpec) Reset() {
 	*x = CronTaskSpec{}
-	mi := &file_proto_agent_proto_msgTypes[23]
+	mi := &file_proto_agent_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1938,7 +2062,7 @@ func (x *CronTaskSpec) String() string {
 func (*CronTaskSpec) ProtoMessage() {}
 
 func (x *CronTaskSpec) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_agent_proto_msgTypes[23]
+	mi := &file_proto_agent_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1951,7 +2075,7 @@ func (x *CronTaskSpec) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CronTaskSpec.ProtoReflect.Descriptor instead.
 func (*CronTaskSpec) Descriptor() ([]byte, []int) {
-	return file_proto_agent_proto_rawDescGZIP(), []int{23}
+	return file_proto_agent_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *CronTaskSpec) GetTaskId() string {
@@ -2025,7 +2149,7 @@ type CronTaskReport struct {
 
 func (x *CronTaskReport) Reset() {
 	*x = CronTaskReport{}
-	mi := &file_proto_agent_proto_msgTypes[24]
+	mi := &file_proto_agent_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2037,7 +2161,7 @@ func (x *CronTaskReport) String() string {
 func (*CronTaskReport) ProtoMessage() {}
 
 func (x *CronTaskReport) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_agent_proto_msgTypes[24]
+	mi := &file_proto_agent_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2050,7 +2174,7 @@ func (x *CronTaskReport) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CronTaskReport.ProtoReflect.Descriptor instead.
 func (*CronTaskReport) Descriptor() ([]byte, []int) {
-	return file_proto_agent_proto_rawDescGZIP(), []int{24}
+	return file_proto_agent_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *CronTaskReport) GetTaskId() string {
@@ -2112,7 +2236,7 @@ type HostRecord struct {
 
 func (x *HostRecord) Reset() {
 	*x = HostRecord{}
-	mi := &file_proto_agent_proto_msgTypes[25]
+	mi := &file_proto_agent_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2124,7 +2248,7 @@ func (x *HostRecord) String() string {
 func (*HostRecord) ProtoMessage() {}
 
 func (x *HostRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_agent_proto_msgTypes[25]
+	mi := &file_proto_agent_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2137,7 +2261,7 @@ func (x *HostRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HostRecord.ProtoReflect.Descriptor instead.
 func (*HostRecord) Descriptor() ([]byte, []int) {
-	return file_proto_agent_proto_rawDescGZIP(), []int{25}
+	return file_proto_agent_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *HostRecord) GetName() string {
@@ -2163,7 +2287,7 @@ type SyncHosts struct {
 
 func (x *SyncHosts) Reset() {
 	*x = SyncHosts{}
-	mi := &file_proto_agent_proto_msgTypes[26]
+	mi := &file_proto_agent_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2175,7 +2299,7 @@ func (x *SyncHosts) String() string {
 func (*SyncHosts) ProtoMessage() {}
 
 func (x *SyncHosts) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_agent_proto_msgTypes[26]
+	mi := &file_proto_agent_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2188,7 +2312,7 @@ func (x *SyncHosts) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SyncHosts.ProtoReflect.Descriptor instead.
 func (*SyncHosts) Descriptor() ([]byte, []int) {
-	return file_proto_agent_proto_rawDescGZIP(), []int{26}
+	return file_proto_agent_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *SyncHosts) GetHosts() []*HostRecord {
@@ -2207,7 +2331,7 @@ type SyncHostsCmd struct {
 
 func (x *SyncHostsCmd) Reset() {
 	*x = SyncHostsCmd{}
-	mi := &file_proto_agent_proto_msgTypes[27]
+	mi := &file_proto_agent_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2219,7 +2343,7 @@ func (x *SyncHostsCmd) String() string {
 func (*SyncHostsCmd) ProtoMessage() {}
 
 func (x *SyncHostsCmd) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_agent_proto_msgTypes[27]
+	mi := &file_proto_agent_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2232,7 +2356,7 @@ func (x *SyncHostsCmd) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SyncHostsCmd.ProtoReflect.Descriptor instead.
 func (*SyncHostsCmd) Descriptor() ([]byte, []int) {
-	return file_proto_agent_proto_rawDescGZIP(), []int{27}
+	return file_proto_agent_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *SyncHostsCmd) GetHosts() []*HostRecord {
@@ -2337,7 +2461,7 @@ const file_proto_agent_proto_rawDesc = "" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x14\n" +
 	"\x05proto\x18\x02 \x01(\tR\x05proto\x12\x14\n" +
 	"\x05state\x18\x03 \x01(\tR\x05state\x12\x12\n" +
-	"\x04info\x18\x04 \x01(\tR\x04info\"\xae\x05\n" +
+	"\x04info\x18\x04 \x01(\tR\x04info\"\xf1\x05\n" +
 	"\x0eCommandRequest\x12\x1d\n" +
 	"\n" +
 	"request_id\x18\x01 \x01(\tR\trequestId\x12E\n" +
@@ -2353,8 +2477,24 @@ const file_proto_agent_proto_rawDesc = "" +
 	"\vflush_cache\x18\x11 \x01(\v2\x1e.easy42.agent.v1.FlushCacheCmdH\x00R\n" +
 	"flushCache\x12>\n" +
 	"\n" +
-	"sync_hosts\x18\x12 \x01(\v2\x1d.easy42.agent.v1.SyncHostsCmdH\x00R\tsyncHostsB\t\n" +
-	"\acommand\"}\n" +
+	"sync_hosts\x18\x12 \x01(\v2\x1d.easy42.agent.v1.SyncHostsCmdH\x00R\tsyncHosts\x12A\n" +
+	"\vsync_action\x18\x13 \x01(\v2\x1e.easy42.agent.v1.SyncActionCmdH\x00R\n" +
+	"syncActionB\t\n" +
+	"\acommand\"\xcf\x02\n" +
+	"\rSyncActionCmd\x12\x1f\n" +
+	"\vaction_type\x18\x01 \x01(\tR\n" +
+	"actionType\x12%\n" +
+	"\x0einterface_name\x18\x02 \x01(\tR\rinterfaceName\x12\x1f\n" +
+	"\vtarget_file\x18\x03 \x01(\tR\n" +
+	"targetFile\x12!\n" +
+	"\ffile_content\x18\x04 \x01(\fR\vfileContent\x12\x1b\n" +
+	"\tfile_mode\x18\x05 \x01(\rR\bfileMode\x12\x1f\n" +
+	"\vsha256_hash\x18\x06 \x01(\tR\n" +
+	"sha256Hash\x121\n" +
+	"\x05hosts\x18\a \x03(\v2\x1b.easy42.agent.v1.HostRecordR\x05hosts\x12 \n" +
+	"\vdescription\x18\b \x01(\tR\vdescription\x12\x1f\n" +
+	"\vdiff_status\x18\t \x01(\tR\n" +
+	"diffStatus\"}\n" +
 	"\x0fApplyConfigFile\x12\x12\n" +
 	"\x04path\x18\x01 \x01(\tR\x04path\x12\x18\n" +
 	"\acontent\x18\x02 \x01(\fR\acontent\x12\x1b\n" +
@@ -2460,7 +2600,7 @@ func file_proto_agent_proto_rawDescGZIP() []byte {
 }
 
 var file_proto_agent_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_proto_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 29)
+var file_proto_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 30)
 var file_proto_agent_proto_goTypes = []any{
 	(ManageInterface_Action)(0), // 0: easy42.agent.v1.ManageInterface.Action
 	(LookingGlassCmd_Tool)(0),   // 1: easy42.agent.v1.LookingGlassCmd.Tool
@@ -2476,62 +2616,65 @@ var file_proto_agent_proto_goTypes = []any{
 	(*WgPeerMetrics)(nil),       // 11: easy42.agent.v1.WgPeerMetrics
 	(*BirdProtocolStatus)(nil),  // 12: easy42.agent.v1.BirdProtocolStatus
 	(*CommandRequest)(nil),      // 13: easy42.agent.v1.CommandRequest
-	(*ApplyConfigFile)(nil),     // 14: easy42.agent.v1.ApplyConfigFile
-	(*ManageInterface)(nil),     // 15: easy42.agent.v1.ManageInterface
-	(*ReloadBirdCmd)(nil),       // 16: easy42.agent.v1.ReloadBirdCmd
-	(*ApplyNftablesCmd)(nil),    // 17: easy42.agent.v1.ApplyNftablesCmd
-	(*LookingGlassCmd)(nil),     // 18: easy42.agent.v1.LookingGlassCmd
-	(*ProbeSystemCmd)(nil),      // 19: easy42.agent.v1.ProbeSystemCmd
-	(*FlushCacheCmd)(nil),       // 20: easy42.agent.v1.FlushCacheCmd
-	(*RestartServiceCmd)(nil),   // 21: easy42.agent.v1.RestartServiceCmd
-	(*CommandResponse)(nil),     // 22: easy42.agent.v1.CommandResponse
-	(*ProbeResponse)(nil),       // 23: easy42.agent.v1.ProbeResponse
-	(*SyncCronTasks)(nil),       // 24: easy42.agent.v1.SyncCronTasks
-	(*CronTaskSpec)(nil),        // 25: easy42.agent.v1.CronTaskSpec
-	(*CronTaskReport)(nil),      // 26: easy42.agent.v1.CronTaskReport
-	(*HostRecord)(nil),          // 27: easy42.agent.v1.HostRecord
-	(*SyncHosts)(nil),           // 28: easy42.agent.v1.SyncHosts
-	(*SyncHostsCmd)(nil),        // 29: easy42.agent.v1.SyncHostsCmd
-	nil,                         // 30: easy42.agent.v1.CronTaskSpec.ParamsEntry
+	(*SyncActionCmd)(nil),       // 14: easy42.agent.v1.SyncActionCmd
+	(*ApplyConfigFile)(nil),     // 15: easy42.agent.v1.ApplyConfigFile
+	(*ManageInterface)(nil),     // 16: easy42.agent.v1.ManageInterface
+	(*ReloadBirdCmd)(nil),       // 17: easy42.agent.v1.ReloadBirdCmd
+	(*ApplyNftablesCmd)(nil),    // 18: easy42.agent.v1.ApplyNftablesCmd
+	(*LookingGlassCmd)(nil),     // 19: easy42.agent.v1.LookingGlassCmd
+	(*ProbeSystemCmd)(nil),      // 20: easy42.agent.v1.ProbeSystemCmd
+	(*FlushCacheCmd)(nil),       // 21: easy42.agent.v1.FlushCacheCmd
+	(*RestartServiceCmd)(nil),   // 22: easy42.agent.v1.RestartServiceCmd
+	(*CommandResponse)(nil),     // 23: easy42.agent.v1.CommandResponse
+	(*ProbeResponse)(nil),       // 24: easy42.agent.v1.ProbeResponse
+	(*SyncCronTasks)(nil),       // 25: easy42.agent.v1.SyncCronTasks
+	(*CronTaskSpec)(nil),        // 26: easy42.agent.v1.CronTaskSpec
+	(*CronTaskReport)(nil),      // 27: easy42.agent.v1.CronTaskReport
+	(*HostRecord)(nil),          // 28: easy42.agent.v1.HostRecord
+	(*SyncHosts)(nil),           // 29: easy42.agent.v1.SyncHosts
+	(*SyncHostsCmd)(nil),        // 30: easy42.agent.v1.SyncHostsCmd
+	nil,                         // 31: easy42.agent.v1.CronTaskSpec.ParamsEntry
 }
 var file_proto_agent_proto_depIdxs = []int32{
 	3,  // 0: easy42.agent.v1.AgentMessage.register_req:type_name -> easy42.agent.v1.RegisterRequest
 	5,  // 1: easy42.agent.v1.AgentMessage.heartbeat:type_name -> easy42.agent.v1.Heartbeat
 	7,  // 2: easy42.agent.v1.AgentMessage.telemetry:type_name -> easy42.agent.v1.TelemetryReport
-	22, // 3: easy42.agent.v1.AgentMessage.command_resp:type_name -> easy42.agent.v1.CommandResponse
-	23, // 4: easy42.agent.v1.AgentMessage.probe_resp:type_name -> easy42.agent.v1.ProbeResponse
-	26, // 5: easy42.agent.v1.AgentMessage.cron_task_report:type_name -> easy42.agent.v1.CronTaskReport
+	23, // 3: easy42.agent.v1.AgentMessage.command_resp:type_name -> easy42.agent.v1.CommandResponse
+	24, // 4: easy42.agent.v1.AgentMessage.probe_resp:type_name -> easy42.agent.v1.ProbeResponse
+	27, // 5: easy42.agent.v1.AgentMessage.cron_task_report:type_name -> easy42.agent.v1.CronTaskReport
 	4,  // 6: easy42.agent.v1.AgentMessage.register_resp:type_name -> easy42.agent.v1.RegisterResponse
 	6,  // 7: easy42.agent.v1.AgentMessage.heartbeat_ack:type_name -> easy42.agent.v1.HeartbeatAck
 	13, // 8: easy42.agent.v1.AgentMessage.command_req:type_name -> easy42.agent.v1.CommandRequest
-	24, // 9: easy42.agent.v1.AgentMessage.sync_cron_tasks:type_name -> easy42.agent.v1.SyncCronTasks
-	28, // 10: easy42.agent.v1.AgentMessage.sync_hosts:type_name -> easy42.agent.v1.SyncHosts
+	25, // 9: easy42.agent.v1.AgentMessage.sync_cron_tasks:type_name -> easy42.agent.v1.SyncCronTasks
+	29, // 10: easy42.agent.v1.AgentMessage.sync_hosts:type_name -> easy42.agent.v1.SyncHosts
 	9,  // 11: easy42.agent.v1.TelemetryReport.system:type_name -> easy42.agent.v1.SystemMetrics
 	10, // 12: easy42.agent.v1.TelemetryReport.interfaces:type_name -> easy42.agent.v1.InterfaceMetrics
 	11, // 13: easy42.agent.v1.TelemetryReport.wg_peers:type_name -> easy42.agent.v1.WgPeerMetrics
 	12, // 14: easy42.agent.v1.TelemetryReport.bird_protocols:type_name -> easy42.agent.v1.BirdProtocolStatus
 	8,  // 15: easy42.agent.v1.TelemetryReport.disks:type_name -> easy42.agent.v1.DiskMetrics
-	14, // 16: easy42.agent.v1.CommandRequest.apply_config:type_name -> easy42.agent.v1.ApplyConfigFile
-	15, // 17: easy42.agent.v1.CommandRequest.manage_iface:type_name -> easy42.agent.v1.ManageInterface
-	16, // 18: easy42.agent.v1.CommandRequest.reload_bird:type_name -> easy42.agent.v1.ReloadBirdCmd
-	17, // 19: easy42.agent.v1.CommandRequest.apply_nft:type_name -> easy42.agent.v1.ApplyNftablesCmd
-	18, // 20: easy42.agent.v1.CommandRequest.looking_glass:type_name -> easy42.agent.v1.LookingGlassCmd
-	19, // 21: easy42.agent.v1.CommandRequest.probe_system:type_name -> easy42.agent.v1.ProbeSystemCmd
-	21, // 22: easy42.agent.v1.CommandRequest.restart_service:type_name -> easy42.agent.v1.RestartServiceCmd
-	20, // 23: easy42.agent.v1.CommandRequest.flush_cache:type_name -> easy42.agent.v1.FlushCacheCmd
-	29, // 24: easy42.agent.v1.CommandRequest.sync_hosts:type_name -> easy42.agent.v1.SyncHostsCmd
-	0,  // 25: easy42.agent.v1.ManageInterface.action:type_name -> easy42.agent.v1.ManageInterface.Action
-	1,  // 26: easy42.agent.v1.LookingGlassCmd.tool:type_name -> easy42.agent.v1.LookingGlassCmd.Tool
-	10, // 27: easy42.agent.v1.ProbeResponse.interfaces:type_name -> easy42.agent.v1.InterfaceMetrics
-	25, // 28: easy42.agent.v1.SyncCronTasks.tasks:type_name -> easy42.agent.v1.CronTaskSpec
-	30, // 29: easy42.agent.v1.CronTaskSpec.params:type_name -> easy42.agent.v1.CronTaskSpec.ParamsEntry
-	27, // 30: easy42.agent.v1.SyncHosts.hosts:type_name -> easy42.agent.v1.HostRecord
-	27, // 31: easy42.agent.v1.SyncHostsCmd.hosts:type_name -> easy42.agent.v1.HostRecord
-	32, // [32:32] is the sub-list for method output_type
-	32, // [32:32] is the sub-list for method input_type
-	32, // [32:32] is the sub-list for extension type_name
-	32, // [32:32] is the sub-list for extension extendee
-	0,  // [0:32] is the sub-list for field type_name
+	15, // 16: easy42.agent.v1.CommandRequest.apply_config:type_name -> easy42.agent.v1.ApplyConfigFile
+	16, // 17: easy42.agent.v1.CommandRequest.manage_iface:type_name -> easy42.agent.v1.ManageInterface
+	17, // 18: easy42.agent.v1.CommandRequest.reload_bird:type_name -> easy42.agent.v1.ReloadBirdCmd
+	18, // 19: easy42.agent.v1.CommandRequest.apply_nft:type_name -> easy42.agent.v1.ApplyNftablesCmd
+	19, // 20: easy42.agent.v1.CommandRequest.looking_glass:type_name -> easy42.agent.v1.LookingGlassCmd
+	20, // 21: easy42.agent.v1.CommandRequest.probe_system:type_name -> easy42.agent.v1.ProbeSystemCmd
+	22, // 22: easy42.agent.v1.CommandRequest.restart_service:type_name -> easy42.agent.v1.RestartServiceCmd
+	21, // 23: easy42.agent.v1.CommandRequest.flush_cache:type_name -> easy42.agent.v1.FlushCacheCmd
+	30, // 24: easy42.agent.v1.CommandRequest.sync_hosts:type_name -> easy42.agent.v1.SyncHostsCmd
+	14, // 25: easy42.agent.v1.CommandRequest.sync_action:type_name -> easy42.agent.v1.SyncActionCmd
+	28, // 26: easy42.agent.v1.SyncActionCmd.hosts:type_name -> easy42.agent.v1.HostRecord
+	0,  // 27: easy42.agent.v1.ManageInterface.action:type_name -> easy42.agent.v1.ManageInterface.Action
+	1,  // 28: easy42.agent.v1.LookingGlassCmd.tool:type_name -> easy42.agent.v1.LookingGlassCmd.Tool
+	10, // 29: easy42.agent.v1.ProbeResponse.interfaces:type_name -> easy42.agent.v1.InterfaceMetrics
+	26, // 30: easy42.agent.v1.SyncCronTasks.tasks:type_name -> easy42.agent.v1.CronTaskSpec
+	31, // 31: easy42.agent.v1.CronTaskSpec.params:type_name -> easy42.agent.v1.CronTaskSpec.ParamsEntry
+	28, // 32: easy42.agent.v1.SyncHosts.hosts:type_name -> easy42.agent.v1.HostRecord
+	28, // 33: easy42.agent.v1.SyncHostsCmd.hosts:type_name -> easy42.agent.v1.HostRecord
+	34, // [34:34] is the sub-list for method output_type
+	34, // [34:34] is the sub-list for method input_type
+	34, // [34:34] is the sub-list for extension type_name
+	34, // [34:34] is the sub-list for extension extendee
+	0,  // [0:34] is the sub-list for field type_name
 }
 
 func init() { file_proto_agent_proto_init() }
@@ -2562,6 +2705,7 @@ func file_proto_agent_proto_init() {
 		(*CommandRequest_RestartService)(nil),
 		(*CommandRequest_FlushCache)(nil),
 		(*CommandRequest_SyncHosts)(nil),
+		(*CommandRequest_SyncAction)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
@@ -2569,7 +2713,7 @@ func file_proto_agent_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_agent_proto_rawDesc), len(file_proto_agent_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   29,
+			NumMessages:   30,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

@@ -5071,6 +5071,78 @@ func (m *Manager) executeAgentSyncAction(act config.SyncAction, res *config.Sync
 		return
 	}
 
+	fileMode := uint32(0644)
+	if act.Type == config.ActionSyncNftablesConfig || strings.HasSuffix(act.TargetFile, ".nft") || strings.HasSuffix(act.TargetFile, ".sh") {
+		fileMode = 0755
+	} else if act.Type == config.ActionSyncConfig {
+		fileMode = 0600
+	}
+
+	var hosts []*agentpb.HostRecord
+	if act.Type == config.ActionSyncHosts {
+		hosts = m.buildClusterHostRecords()
+	}
+
+	syncCmd := &agentpb.SyncActionCmd{
+		ActionType:    string(act.Type),
+		InterfaceName: act.Interface,
+		TargetFile:    act.TargetFile,
+		FileContent:   []byte(act.FileContent),
+		FileMode:      fileMode,
+		Hosts:         hosts,
+		Description:   act.Description,
+		DiffStatus:    act.DiffStatus,
+	}
+
+	cmdResp, err := m.agentHub.SendCommand(ctx, act.NodeName, &agentpb.CommandRequest{
+		Command: &agentpb.CommandRequest_SyncAction{
+			SyncAction: syncCmd,
+		},
+	})
+
+	// If agent supports SyncActionCmd (not returning "unknown command" error)
+	if err == nil && cmdResp != nil && (cmdResp.Success || !strings.Contains(cmdResp.Stderr, "unknown command")) {
+		if !cmdResp.Success {
+			res.Success = false
+			res.Error = cmdResp.Stderr
+			if res.Error == "" {
+				res.Error = cmdResp.Stdout
+			}
+			return
+		}
+
+		res.Success = true
+		res.Output = cmdResp.Stdout
+
+		switch act.Type {
+		case config.ActionDeleteConfig, config.ActionDownInterface:
+			_ = m.stateStore.RemoveInterface(act.NodeName, act.Interface)
+		case config.ActionSyncHosts:
+			hash := config.HashHostsBlock(act.FileContent)
+			_ = m.stateStore.UpdateHostsState(act.NodeName, act.Host, hash, time.Now())
+		case config.ActionSyncRoaConfig:
+			hash := config.HashConfig(compiler.NormalizeConfig(act.FileContent))
+			_ = m.stateStore.UpdateRoaState(act.NodeName, act.Host, act.TargetFile, hash, time.Now())
+		case config.ActionSyncBirdConfig:
+			hash := config.HashConfig(compiler.NormalizeConfig(act.FileContent))
+			_ = m.stateStore.UpdateBirdState(act.NodeName, act.Host, hash, time.Now())
+		case config.ActionSyncNftablesConfig:
+			hash := config.HashConfig(compiler.NormalizeConfig(act.FileContent))
+			_ = m.stateStore.UpdateNftablesState(act.NodeName, act.Host, hash, time.Now())
+		default:
+			hash := config.HashConfig(compiler.NormalizeConfig(act.FileContent))
+			_ = m.stateStore.UpdateInterface(act.NodeName, act.Host, config.StateInterface{
+				Name:       act.Interface,
+				TargetFile: act.TargetFile,
+				ConfigHash: hash,
+				Status:     "active",
+				AppliedAt:  time.Now(),
+			})
+		}
+		return
+	}
+
+	// Fallback for older agents that do not recognize SyncActionCmd
 	// 1. Delete / Down interface
 	if act.Type == config.ActionDeleteConfig || act.Type == config.ActionDownInterface {
 		cmdResp, err := m.agentHub.SendCommand(ctx, act.NodeName, &agentpb.CommandRequest{
@@ -5124,7 +5196,7 @@ func (m *Manager) executeAgentSyncAction(act config.SyncAction, res *config.Sync
 	}
 
 	// 2. Write file
-	fileMode := uint32(0644)
+	fileMode = uint32(0644)
 	if act.Type == config.ActionSyncNftablesConfig || strings.HasSuffix(act.TargetFile, ".nft") || strings.HasSuffix(act.TargetFile, ".sh") {
 		fileMode = 0755
 	} else if act.Type == config.ActionSyncConfig {

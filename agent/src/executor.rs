@@ -6,10 +6,12 @@ use std::io::Write;
 use std::net::{SocketAddr, TcpStream, ToSocketAddrs};
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
+use std::sync::RwLock;
 use std::time::{Duration, Instant};
 use tracing::info;
 
 use crate::collector::proto;
+use crate::config::AgentConfig;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ProbeConfigFile {
@@ -86,11 +88,45 @@ pub struct ProbeSystemResult {
     pub hosts_hash: String,
 }
 
-pub struct CommandExecutor;
+pub struct CommandExecutor {
+    config: RwLock<AgentConfig>,
+}
+
+impl Default for CommandExecutor {
+    fn default() -> Self {
+        Self::new(AgentConfig::default())
+    }
+}
 
 impl CommandExecutor {
-    pub fn new() -> Self {
-        Self
+    pub fn new(config: AgentConfig) -> Self {
+        Self {
+            config: RwLock::new(config),
+        }
+    }
+
+    /// Refresh hooks and node name from config file if available, returning (pre_sync, post_sync, node_name)
+    pub fn get_hooks_and_node(&self) -> (Option<String>, Option<String>, String) {
+        if let Ok(mut cfg) = self.config.write() {
+            if let Some(ref path) = cfg.config_path {
+                if let Ok(content) = fs::read_to_string(path) {
+                    if let Ok(new_cfg) = serde_json::from_str::<AgentConfig>(&content) {
+                        cfg.pre_sync = new_cfg.pre_sync;
+                        cfg.post_sync = new_cfg.post_sync;
+                        cfg.hooks = new_cfg.hooks;
+                        if new_cfg.node_name.is_some() {
+                            cfg.node_name = new_cfg.node_name;
+                        }
+                    }
+                }
+            }
+            let pre = cfg.pre_sync_hook().map(String::from);
+            let post = cfg.post_sync_hook().map(String::from);
+            let node = cfg.node_name.clone().unwrap_or_else(get_system_hostname);
+            (pre, post, node)
+        } else {
+            (None, None, get_system_hostname())
+        }
     }
 
     pub async fn execute(&self, cmd: proto::CommandRequest) -> proto::CommandResponse {
@@ -122,6 +158,9 @@ impl CommandExecutor {
             }
             Some(proto::command_request::Command::SyncHosts(sync)) => {
                 self.sync_hosts(sync)
+            }
+            Some(proto::command_request::Command::SyncAction(sync_act)) => {
+                self.execute_sync_action(sync_act).await
             }
             None => (false, -1, String::new(), "unknown command".to_string()),
         };
@@ -525,6 +564,163 @@ done"#;
             }
         }
     }
+
+    async fn execute_sync_action(&self, req: proto::SyncActionCmd) -> (bool, i32, String, String) {
+        let (pre_hook_opt, post_hook_opt, node_name) = self.get_hooks_and_node();
+
+        let mut envs = HashMap::new();
+        envs.insert("EASY42_SYNC_NODE".to_string(), node_name);
+        envs.insert("EASY42_SYNC_ACTION".to_string(), req.action_type.clone());
+        envs.insert("EASY42_SYNC_INTERFACE".to_string(), req.interface_name.clone());
+        envs.insert("EASY42_SYNC_TARGET_FILE".to_string(), req.target_file.clone());
+        envs.insert("EASY42_SYNC_DESCRIPTION".to_string(), req.description.clone());
+        envs.insert("EASY42_SYNC_DIFF_STATUS".to_string(), req.diff_status.clone());
+
+        // 1. Run pre_sync hook if defined
+        if let Some(ref hook) = pre_hook_opt {
+            let mut pre_envs = envs.clone();
+            pre_envs.insert("EASY42_SYNC_PHASE".to_string(), "pre".to_string());
+            pre_envs.insert("EASY42_HOOK".to_string(), "pre_sync".to_string());
+            info!("Executing pre_sync hook for action: {}", req.action_type);
+
+            let (hook_ok, hook_code, hook_out, hook_err) =
+                run_hook_script(hook, &pre_envs, Duration::from_secs(60)).await;
+
+            if !hook_ok {
+                let err_msg = if !hook_err.trim().is_empty() {
+                    format!("pre_sync hook failed (exit code {}): {}", hook_code, hook_err.trim())
+                } else if !hook_out.trim().is_empty() {
+                    format!("pre_sync hook failed (exit code {}): {}", hook_code, hook_out.trim())
+                } else {
+                    format!("pre_sync hook failed with exit code {}", hook_code)
+                };
+                return (false, hook_code, hook_out, err_msg);
+            }
+        }
+
+        // 2. Execute the sync action
+        let (action_ok, action_code, mut action_out, action_err) = match req.action_type.as_str() {
+            "delete_wg" | "down_wg" => {
+                self.manage_interface(proto::ManageInterface {
+                    interface_name: req.interface_name.clone(),
+                    action: proto::manage_interface::Action::Delete as i32,
+                    config_file: String::new(),
+                })
+                .await
+            }
+            "sync_hosts" => {
+                self.sync_hosts(proto::SyncHostsCmd {
+                    hosts: req.hosts,
+                })
+            }
+            "sync_bird" => {
+                let (write_ok, write_code, write_out, write_err) = self.apply_config_file(proto::ApplyConfigFile {
+                    path: req.target_file.clone(),
+                    content: req.file_content,
+                    file_mode: if req.file_mode != 0 { req.file_mode } else { 0o644 },
+                    sha256_hash: req.sha256_hash,
+                });
+                if !write_ok {
+                    (write_ok, write_code, write_out, write_err)
+                } else {
+                    self.reload_bird(proto::ReloadBirdCmd { check_only: false }).await
+                }
+            }
+            "sync_nftables" => {
+                let file_mode = if req.file_mode != 0 { req.file_mode } else { 0o755 };
+                let (write_ok, write_code, write_out, write_err) = self.apply_config_file(proto::ApplyConfigFile {
+                    path: req.target_file.clone(),
+                    content: req.file_content,
+                    file_mode,
+                    sha256_hash: req.sha256_hash,
+                });
+                if !write_ok {
+                    (write_ok, write_code, write_out, write_err)
+                } else {
+                    self.apply_nftables(proto::ApplyNftablesCmd {
+                        script_path: req.target_file.clone(),
+                    })
+                    .await
+                }
+            }
+            "sync_roa" => {
+                self.apply_config_file(proto::ApplyConfigFile {
+                    path: req.target_file.clone(),
+                    content: req.file_content,
+                    file_mode: if req.file_mode != 0 { req.file_mode } else { 0o644 },
+                    sha256_hash: req.sha256_hash,
+                })
+            }
+            _ => {
+                // Default: WireGuard sync (sync_wg)
+                let file_mode = if req.file_mode != 0 { req.file_mode } else { 0o600 };
+                let (write_ok, write_code, write_out, write_err) = self.apply_config_file(proto::ApplyConfigFile {
+                    path: req.target_file.clone(),
+                    content: req.file_content,
+                    file_mode,
+                    sha256_hash: req.sha256_hash,
+                });
+                if !write_ok {
+                    (write_ok, write_code, write_out, write_err)
+                } else {
+                    self.manage_interface(proto::ManageInterface {
+                        interface_name: req.interface_name.clone(),
+                        action: proto::manage_interface::Action::SyncWg as i32,
+                        config_file: req.target_file.clone(),
+                    })
+                    .await
+                }
+            }
+        };
+
+        // 3. Run post_sync hook if defined
+        if let Some(ref hook) = post_hook_opt {
+            let mut post_envs = envs;
+            post_envs.insert("EASY42_SYNC_PHASE".to_string(), "post".to_string());
+            post_envs.insert("EASY42_HOOK".to_string(), "post_sync".to_string());
+            post_envs.insert(
+                "EASY42_SYNC_SUCCESS".to_string(),
+                if action_ok { "true".to_string() } else { "false".to_string() },
+            );
+            post_envs.insert(
+                "EASY42_SYNC_STATUS".to_string(),
+                if action_ok { "success".to_string() } else { "failed".to_string() },
+            );
+            post_envs.insert("EASY42_SYNC_EXIT_CODE".to_string(), action_code.to_string());
+            post_envs.insert("EASY42_SYNC_ERROR".to_string(), action_err.clone());
+            info!("Executing post_sync hook for action: {}", req.action_type);
+
+            let (post_ok, post_code, post_out, post_err) =
+                run_hook_script(hook, &post_envs, Duration::from_secs(60)).await;
+
+            if !post_ok {
+                let err_msg = if !post_err.trim().is_empty() {
+                    format!("post_sync hook failed (exit code {}): {}", post_code, post_err.trim())
+                } else if !post_out.trim().is_empty() {
+                    format!("post_sync hook failed (exit code {}): {}", post_code, post_out.trim())
+                } else {
+                    format!("post_sync hook failed with exit code {}", post_code)
+                };
+                if action_ok {
+                    return (false, post_code, action_out, err_msg);
+                } else {
+                    return (
+                        false,
+                        action_code,
+                        action_out,
+                        format!("{}; {}", action_err, err_msg),
+                    );
+                }
+            } else if !post_out.trim().is_empty() {
+                if !action_out.is_empty() {
+                    action_out.push('\n');
+                }
+                action_out.push_str(&post_out);
+            }
+        }
+
+        (action_ok, action_code, action_out, action_err)
+    }
 }
 
 /// run_tcp_ping connects to `host:port` `count` times, measuring TCP handshake RTT each time.
@@ -667,6 +863,40 @@ async fn run_shell(cmd_str: &str) -> (bool, i32, String, String) {
     }
 }
 
+fn get_system_hostname() -> String {
+    std::fs::read_to_string("/proc/sys/kernel/hostname")
+        .map(|s| s.trim().to_string())
+        .unwrap_or_else(|_| "unknown".to_string())
+}
+
+async fn run_hook_script(
+    cmd_str: &str,
+    envs: &HashMap<String, String>,
+    timeout_duration: Duration,
+) -> (bool, i32, String, String) {
+    use tokio::process::Command;
+    let mut cmd = Command::new("sh");
+    cmd.arg("-c").arg(cmd_str);
+    for (k, v) in envs {
+        cmd.env(k, v);
+    }
+    match tokio::time::timeout(timeout_duration, cmd.output()).await {
+        Ok(Ok(output)) => {
+            let code = output.status.code().unwrap_or(-1);
+            let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+            let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+            (output.status.success(), code, stdout, stderr)
+        }
+        Ok(Err(e)) => (false, -1, String::new(), format!("failed to run hook: {}", e)),
+        Err(_) => (
+            false,
+            -1,
+            String::new(),
+            format!("hook timed out after {:?}", timeout_duration),
+        ),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -723,5 +953,138 @@ mod tests {
         assert!(!is_valid_iface_name("wg 42"));
         assert!(!is_valid_iface_name("wg$foo"));
     }
+
+    #[tokio::test]
+    async fn test_sync_action_hooks_success_and_env_vars() {
+        let tmp_dir = tempfile::tempdir().unwrap();
+        let pre_flag = tmp_dir.path().join("pre_ran.txt");
+        let post_flag = tmp_dir.path().join("post_ran.txt");
+        let target_file = tmp_dir.path().join("test_roa.conf");
+
+        let pre_hook = format!(
+            "echo $EASY42_SYNC_NODE:$EASY42_SYNC_ACTION:$EASY42_SYNC_TARGET_FILE:$EASY42_SYNC_PHASE > {}",
+            pre_flag.to_str().unwrap()
+        );
+        let post_hook = format!(
+            "echo $EASY42_SYNC_NODE:$EASY42_SYNC_SUCCESS:$EASY42_SYNC_STATUS:$EASY42_SYNC_PHASE > {}",
+            post_flag.to_str().unwrap()
+        );
+
+        let mut config = AgentConfig::default();
+        config.node_name = Some("node-test-1".to_string());
+        config.pre_sync = Some(pre_hook);
+        config.post_sync = Some(post_hook);
+
+        let executor = CommandExecutor::new(config);
+        let req = proto::SyncActionCmd {
+            action_type: "sync_roa".to_string(),
+            interface_name: String::new(),
+            target_file: target_file.to_str().unwrap().to_string(),
+            file_content: b"roa 10.0.0.0/24 max 24 as 4200000000;".to_vec(),
+            file_mode: 0o644,
+            sha256_hash: String::new(),
+            hosts: Vec::new(),
+            description: "Apply ROA test".to_string(),
+            diff_status: "update".to_string(),
+        };
+
+        let (success, code, _stdout, stderr) = executor.execute_sync_action(req).await;
+        assert!(success, "sync action should succeed, err: {}", stderr);
+        assert_eq!(code, 0);
+
+        // Verify pre hook ran with proper env vars
+        let pre_content = fs::read_to_string(&pre_flag).unwrap();
+        assert_eq!(
+            pre_content.trim(),
+            format!("node-test-1:sync_roa:{}:pre", target_file.to_str().unwrap())
+        );
+
+        // Verify post hook ran with proper env vars
+        let post_content = fs::read_to_string(&post_flag).unwrap();
+        assert_eq!(post_content.trim(), "node-test-1:true:success:post");
+
+        // Verify file was written
+        assert!(target_file.exists());
+        let file_content = fs::read_to_string(&target_file).unwrap();
+        assert_eq!(file_content, "roa 10.0.0.0/24 max 24 as 4200000000;");
+    }
+
+    #[tokio::test]
+    async fn test_sync_action_pre_hook_failure_blocks_sync() {
+        let tmp_dir = tempfile::tempdir().unwrap();
+        let target_file = tmp_dir.path().join("blocked_roa.conf");
+
+        let mut config = AgentConfig::default();
+        config.node_name = Some("node-test-2".to_string());
+        // pre hook intentionally exits with 42
+        config.pre_sync = Some("echo 'pre-check failed' >&2; exit 42".to_string());
+        config.post_sync = Some("echo 'post should not run' >> /tmp/should_not_exist".to_string());
+
+        let executor = CommandExecutor::new(config);
+        let req = proto::SyncActionCmd {
+            action_type: "sync_roa".to_string(),
+            interface_name: String::new(),
+            target_file: target_file.to_str().unwrap().to_string(),
+            file_content: b"should not be written".to_vec(),
+            file_mode: 0o644,
+            sha256_hash: String::new(),
+            hosts: Vec::new(),
+            description: "Apply blocked ROA".to_string(),
+            diff_status: "update".to_string(),
+        };
+
+        let (success, code, _stdout, stderr) = executor.execute_sync_action(req).await;
+        assert!(!success, "sync action should fail due to pre_sync hook");
+        assert_eq!(code, 42);
+        assert!(stderr.contains("pre_sync hook failed"));
+        assert!(stderr.contains("pre-check failed"));
+
+        // File must NOT have been written
+        assert!(!target_file.exists(), "Target file must not be created when pre_sync fails");
+    }
+
+    #[tokio::test]
+    async fn test_sync_action_dynamic_config_reload() {
+        let tmp_dir = tempfile::tempdir().unwrap();
+        let config_path = tmp_dir.path().join("agent.json");
+        let flag_file = tmp_dir.path().join("dynamic_hook.txt");
+        let target_file = tmp_dir.path().join("dynamic_test.conf");
+
+        // 1. Initially agent.json has no hooks
+        let initial_json = r#"{"server":"https://easy42.local","token":"abc"}"#;
+        fs::write(&config_path, initial_json).unwrap();
+
+        let config = AgentConfig::load_from_file(&config_path).unwrap();
+        let executor = CommandExecutor::new(config);
+
+        // 2. User modifies agent.json on disk to add hooks
+        let updated_json = format!(
+            r#"{{"server":"https://easy42.local","token":"abc","pre_sync":"echo reloaded > {}"}}"#,
+            flag_file.to_str().unwrap()
+        );
+        fs::write(&config_path, updated_json).unwrap();
+
+        // 3. Next sync action automatically picks up the updated hooks
+        let req = proto::SyncActionCmd {
+            action_type: "sync_roa".to_string(),
+            interface_name: String::new(),
+            target_file: target_file.to_str().unwrap().to_string(),
+            file_content: b"test content".to_vec(),
+            file_mode: 0o644,
+            sha256_hash: String::new(),
+            hosts: Vec::new(),
+            description: "Dynamic reload test".to_string(),
+            diff_status: "update".to_string(),
+        };
+
+        let (success, code, _, _) = executor.execute_sync_action(req).await;
+        assert!(success);
+        assert_eq!(code, 0);
+
+        // Verify the dynamically added pre_sync hook ran!
+        assert!(flag_file.exists(), "Dynamically reloaded pre_sync hook must run");
+        assert_eq!(fs::read_to_string(&flag_file).unwrap().trim(), "reloaded");
+    }
 }
+
 

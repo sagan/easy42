@@ -262,3 +262,240 @@ func TestRustAgentEndToEnd(t *testing.T) {
 		t.Fatalf("streaming hosts sync did not update hosts file in time")
 	}
 }
+
+func TestRustAgentSyncActionAndHooks(t *testing.T) {
+	agentBin := filepath.Join("..", "..", "bin", "easy42-agent")
+	if _, err := os.Stat(agentBin); err != nil {
+		agentBin = filepath.Join("..", "..", "agent", "target", "x86_64-unknown-linux-musl", "release", "easy42-agent")
+	}
+	if _, err := os.Stat(agentBin); err != nil {
+		agentBin = filepath.Join("..", "..", "agent", "target", "debug", "easy42-agent")
+	}
+	if _, err := os.Stat(agentBin); err != nil {
+		t.Skipf("agent binary not found at %s, skipping e2e test", agentBin)
+	}
+
+	hub := agent.NewHub()
+	testToken := "e42_hooks_token_99999"
+	nodeName := "e2e-hooks-node"
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/agent/ws" {
+			http.NotFound(w, r)
+			return
+		}
+		authHeader := r.Header.Get("Authorization")
+		if authHeader != "Bearer "+testToken {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		ws, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			return
+		}
+		conn := agent.NewConnection(nodeName, ws, hub)
+		hub.Register(conn)
+		go conn.ReadLoop()
+	}))
+	defer server.Close()
+
+	tmpDir := t.TempDir()
+	preFlag := filepath.Join(tmpDir, "pre.txt")
+	postFlag := filepath.Join(tmpDir, "post.txt")
+	configFile := filepath.Join(tmpDir, "agent.json")
+	targetFile := filepath.Join(tmpDir, "sync_test.conf")
+
+	agentCfgContent := `{
+		"server": "` + server.URL + `",
+		"token": "` + testToken + `",
+		"node_name": "` + nodeName + `",
+		"pre_sync": "echo $EASY42_SYNC_NODE:$EASY42_SYNC_ACTION:$EASY42_SYNC_TARGET_FILE:$EASY42_SYNC_PHASE > ` + preFlag + `",
+		"post_sync": "echo $EASY42_SYNC_NODE:$EASY42_SYNC_SUCCESS:$EASY42_SYNC_STATUS:$EASY42_SYNC_PHASE > ` + postFlag + `"
+	}`
+	if err := os.WriteFile(configFile, []byte(agentCfgContent), 0600); err != nil {
+		t.Fatalf("failed to write agent config: %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, agentBin, "--config", configFile)
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("failed to start agent: %v", err)
+	}
+	defer func() {
+		cancel()
+		_ = cmd.Wait()
+	}()
+
+	// Wait for agent to connect
+	deadline := time.Now().Add(5 * time.Second)
+	connected := false
+	for time.Now().Before(deadline) {
+		if hub.IsConnected(nodeName) {
+			connected = true
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if !connected {
+		t.Fatalf("agent did not connect within deadline")
+	}
+
+	cmdCtx, cmdCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cmdCancel()
+
+	// Send SyncActionCmd
+	cmdResp, err := hub.SendCommand(cmdCtx, nodeName, &agentpb.CommandRequest{
+		Command: &agentpb.CommandRequest_SyncAction{
+			SyncAction: &agentpb.SyncActionCmd{
+				ActionType:    "sync_roa",
+				InterfaceName: "testiface",
+				TargetFile:    targetFile,
+				FileContent:   []byte("roa table test;"),
+				FileMode:      0644,
+				Description:   "Test sync roa",
+				DiffStatus:    "create",
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("SyncAction failed: %v", err)
+	}
+	if !cmdResp.Success {
+		t.Fatalf("expected SyncAction to succeed, got: %+v", cmdResp)
+	}
+
+	// Verify target file was written
+	written, err := os.ReadFile(targetFile)
+	if err != nil {
+		t.Fatalf("target file not found: %v", err)
+	}
+	if string(written) != "roa table test;" {
+		t.Fatalf("unexpected content in target file: %s", string(written))
+	}
+
+	// Verify pre_sync hook output and env vars
+	preData, err := os.ReadFile(preFlag)
+	if err != nil {
+		t.Fatalf("pre hook flag not found: %v", err)
+	}
+	expectedPre := nodeName + ":sync_roa:" + targetFile + ":pre"
+	if strings.TrimSpace(string(preData)) != expectedPre {
+		t.Fatalf("unexpected pre hook output: %s, expected: %s", string(preData), expectedPre)
+	}
+
+	// Verify post_sync hook output and env vars
+	postData, err := os.ReadFile(postFlag)
+	if err != nil {
+		t.Fatalf("post hook flag not found: %v", err)
+	}
+	expectedPost := nodeName + ":true:success:post"
+	if strings.TrimSpace(string(postData)) != expectedPost {
+		t.Fatalf("unexpected post hook output: %s, expected: %s", string(postData), expectedPost)
+	}
+}
+
+func TestRustAgentSyncActionPreHookFailure(t *testing.T) {
+	agentBin := filepath.Join("..", "..", "bin", "easy42-agent")
+	if _, err := os.Stat(agentBin); err != nil {
+		agentBin = filepath.Join("..", "..", "agent", "target", "debug", "easy42-agent")
+	}
+	if _, err := os.Stat(agentBin); err != nil {
+		t.Skipf("agent binary not found at %s, skipping e2e test", agentBin)
+	}
+
+	hub := agent.NewHub()
+	testToken := "e42_hooks_fail_token_111"
+	nodeName := "e2e-hooks-fail-node"
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/agent/ws" {
+			http.NotFound(w, r)
+			return
+		}
+		ws, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			return
+		}
+		conn := agent.NewConnection(nodeName, ws, hub)
+		hub.Register(conn)
+		go conn.ReadLoop()
+	}))
+	defer server.Close()
+
+	tmpDir := t.TempDir()
+	configFile := filepath.Join(tmpDir, "agent.json")
+	targetFile := filepath.Join(tmpDir, "blocked_test.conf")
+
+	agentCfgContent := `{
+		"server": "` + server.URL + `",
+		"token": "` + testToken + `",
+		"node_name": "` + nodeName + `",
+		"pre_sync": "echo 'custom pre failure' >&2; exit 19"
+	}`
+	if err := os.WriteFile(configFile, []byte(agentCfgContent), 0600); err != nil {
+		t.Fatalf("failed to write agent config: %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, agentBin, "--config", configFile)
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("failed to start agent: %v", err)
+	}
+	defer func() {
+		cancel()
+		_ = cmd.Wait()
+	}()
+
+	deadline := time.Now().Add(5 * time.Second)
+	connected := false
+	for time.Now().Before(deadline) {
+		if hub.IsConnected(nodeName) {
+			connected = true
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if !connected {
+		t.Fatalf("agent did not connect within deadline")
+	}
+
+	cmdCtx, cmdCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cmdCancel()
+
+	cmdResp, err := hub.SendCommand(cmdCtx, nodeName, &agentpb.CommandRequest{
+		Command: &agentpb.CommandRequest_SyncAction{
+			SyncAction: &agentpb.SyncActionCmd{
+				ActionType:    "sync_roa",
+				InterfaceName: "testiface",
+				TargetFile:    targetFile,
+				FileContent:   []byte("should never be written"),
+				FileMode:      0644,
+				Description:   "Test blocked sync roa",
+				DiffStatus:    "create",
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("SendCommand error: %v", err)
+	}
+	if cmdResp.Success {
+		t.Fatalf("expected command to fail due to pre_sync exit code 19, but it succeeded")
+	}
+	if cmdResp.ExitCode != 19 {
+		t.Fatalf("expected exit code 19, got %d", cmdResp.ExitCode)
+	}
+	if !strings.Contains(cmdResp.Stderr, "pre_sync hook failed") || !strings.Contains(cmdResp.Stderr, "custom pre failure") {
+		t.Fatalf("expected pre_sync hook error message in stderr, got: %s", cmdResp.Stderr)
+	}
+
+	// File should NOT exist
+	if _, err := os.Stat(targetFile); !os.IsNotExist(err) {
+		t.Fatalf("target file should NOT have been created when pre_sync fails")
+	}
+}
+
+
