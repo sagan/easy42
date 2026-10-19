@@ -146,3 +146,116 @@ func TestPrometheusMetricsEndpointAuth(t *testing.T) {
 		t.Fatalf("expected 403 when disabled, got %d", rr9.Code)
 	}
 }
+
+func TestTelegramSettingsAndEndpoints(t *testing.T) {
+	srv, _, cleanup := setupTestServerWithIntegrations(t)
+	defer cleanup()
+
+	// 1. Initial GET /settings/integrations should have telegram_enabled: false
+	reqGet := httptest.NewRequest("GET", "/settings/integrations", nil)
+	rrGet := httptest.NewRecorder()
+	srv.handleGetIntegrationsSettings(rrGet, reqGet)
+	if rrGet.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rrGet.Code)
+	}
+	var getResp integrationsResponse
+	if err := json.Unmarshal(rrGet.Body.Bytes(), &getResp); err != nil {
+		t.Fatalf("failed to parse get response: %v", err)
+	}
+	if getResp.TelegramEnabled {
+		t.Errorf("expected telegram_enabled to be false by default")
+	}
+
+	// 2. PUT /settings/integrations to configure Telegram
+	tgEnabled := true
+	tgToken := "123456789:TEST_MOCK_TOKEN"
+	tgAdminID := int64(987654321)
+	serverURL := "https://easy42.example.com"
+
+	updatePayload, _ := json.Marshal(map[string]interface{}{
+		"telegram_enabled":   &tgEnabled,
+		"telegram_bot_token": &tgToken,
+		"telegram_admin_id":  tgAdminID,
+		"server_url":         &serverURL,
+	})
+	reqPut := httptest.NewRequest("PUT", "/settings/integrations", strings.NewReader(string(updatePayload)))
+	rrPut := httptest.NewRecorder()
+	srv.handleUpdateIntegrationsSettings(rrPut, reqPut)
+	if rrPut.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rrPut.Code, rrPut.Body.String())
+	}
+
+	var putResp integrationsResponse
+	if err := json.Unmarshal(rrPut.Body.Bytes(), &putResp); err != nil {
+		t.Fatalf("failed to parse put response: %v", err)
+	}
+	if !putResp.TelegramEnabled {
+		t.Errorf("expected TelegramEnabled to be true")
+	}
+	if putResp.TelegramBotToken != tgToken {
+		t.Errorf("expected bot token %s, got %s", tgToken, putResp.TelegramBotToken)
+	}
+	if putResp.TelegramAdminID != tgAdminID {
+		t.Errorf("expected admin ID %d, got %d", tgAdminID, putResp.TelegramAdminID)
+	}
+	if putResp.ServerURL != serverURL {
+		t.Errorf("expected server URL %s, got %s", serverURL, putResp.ServerURL)
+	}
+	if putResp.TelegramSecretToken == "" || !strings.HasPrefix(putResp.TelegramSecretToken, "e42_tg_") {
+		t.Fatalf("expected generated telegram secret token starting with e42_tg_, got %q", putResp.TelegramSecretToken)
+	}
+
+	// 3. Test Telegram Webhook public endpoint POST /api/telegram/webhook
+	webhookPayload := `{
+		"update_id": 1001,
+		"message": {
+			"message_id": 1,
+			"from": { "id": 111222, "is_bot": false, "first_name": "TestUser" },
+			"chat": { "id": 111222, "type": "private" },
+			"date": 1600000000,
+			"text": "/status"
+		}
+	}`
+
+	// 3a. Request without secret token header -> 401 Unauthorized
+	reqWhNoHeader := httptest.NewRequest("POST", "/api/telegram/webhook", strings.NewReader(webhookPayload))
+	rrWhNoHeader := httptest.NewRecorder()
+	srv.router.ServeHTTP(rrWhNoHeader, reqWhNoHeader)
+	if rrWhNoHeader.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 Unauthorized without secret token header, got %d", rrWhNoHeader.Code)
+	}
+
+	// 3b. Request with wrong secret token header -> 401 Unauthorized
+	reqWhWrongHeader := httptest.NewRequest("POST", "/api/telegram/webhook", strings.NewReader(webhookPayload))
+	reqWhWrongHeader.Header.Set("X-Telegram-Bot-Api-Secret-Token", "wrong-secret-token")
+	rrWhWrongHeader := httptest.NewRecorder()
+	srv.router.ServeHTTP(rrWhWrongHeader, reqWhWrongHeader)
+	if rrWhWrongHeader.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 Unauthorized with wrong secret token header, got %d", rrWhWrongHeader.Code)
+	}
+
+	// 3c. Request with correct secret token header -> 200 OK
+	reqWhValid := httptest.NewRequest("POST", "/api/telegram/webhook", strings.NewReader(webhookPayload))
+	reqWhValid.Header.Set("X-Telegram-Bot-Api-Secret-Token", putResp.TelegramSecretToken)
+	rrWhValid := httptest.NewRecorder()
+	srv.router.ServeHTTP(rrWhValid, reqWhValid)
+	if rrWhValid.Code != http.StatusOK {
+		t.Fatalf("expected webhook endpoint to return 200 OK with valid secret token, got %d: %s", rrWhValid.Code, rrWhValid.Body.String())
+	}
+	var whResp map[string]interface{}
+	if err := json.Unmarshal(rrWhValid.Body.Bytes(), &whResp); err != nil {
+		t.Fatalf("failed to parse webhook response: %v", err)
+	}
+	if whResp["ok"] != true {
+		t.Errorf("expected ok: true in webhook response, got %v", whResp["ok"])
+	}
+
+	// 4. Test Telegram Test Connection with missing/invalid credentials -> should return 400
+	testReqBad := httptest.NewRequest("POST", "/settings/integrations/telegram/test", strings.NewReader(`{"telegram_bot_token":"invalid","telegram_admin_id":0}`))
+	rrTestBad := httptest.NewRecorder()
+	srv.handleTestTelegramIntegration(rrTestBad, testReqBad)
+	if rrTestBad.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 Bad Request for invalid token/admin id, got %d", rrTestBad.Code)
+	}
+}
+

@@ -336,9 +336,16 @@ export const api = {
       method: "POST",
     }),
 
-  // Integrations & Prometheus
+  // Integrations & Prometheus / Telegram
   getIntegrationsSettings: () => request<IntegrationsSettings>("/settings/integrations"),
-  updateIntegrationsSettings: (settings: { prometheus_enabled?: boolean; prometheus_auth_token?: string }) =>
+  updateIntegrationsSettings: (settings: {
+    prometheus_enabled?: boolean;
+    prometheus_auth_token?: string;
+    telegram_enabled?: boolean;
+    telegram_bot_token?: string;
+    telegram_admin_id?: number | string;
+    server_url?: string;
+  }) =>
     request<IntegrationsSettings>("/settings/integrations", {
       method: "PUT",
       body: JSON.stringify(settings),
@@ -347,6 +354,18 @@ export const api = {
     request<IntegrationsSettings>("/settings/integrations/reset-token", {
       method: "POST",
     }),
+  testTelegramIntegration: (data: {
+    telegram_bot_token?: string;
+    telegram_admin_id?: number | string;
+    server_url?: string;
+  }) =>
+    request<{ success: boolean; bot_username?: string; message?: string }>(
+      "/settings/integrations/telegram/test",
+      {
+        method: "POST",
+        body: JSON.stringify(data),
+      }
+    ),
 
   // Network Policies
   getNetworkPolicies: () => request<import("../types/api").NetworkPolicy[]>("/network-policies"),

@@ -59,6 +59,10 @@ import {
   ExternalLink,
   Cpu,
   GitCommit,
+  Send,
+  Bot,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import { api } from "../../api/client";
 import {
@@ -273,6 +277,18 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
   const [resetTokenConfirmOpen, setResetTokenConfirmOpen] = useState(false);
   const [resettingToken, setResettingToken] = useState(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
+
+  // Telegram Bot integration state
+  const [tgEnabled, setTgEnabled] = useState(false);
+  const [tgBotToken, setTgBotToken] = useState("");
+  const [tgAdminID, setTgAdminID] = useState("");
+  const [tgServerURL, setTgServerURL] = useState("");
+  const [showTgToken, setShowTgToken] = useState(false);
+  const [tgSaving, setTgSaving] = useState(false);
+  const [tgTesting, setTgTesting] = useState(false);
+  const [tgTestSuccess, setTgTestSuccess] = useState<string | null>(null);
+  const [tgTestError, setTgTestError] = useState<string | null>(null);
+  const [tgGuideOpen, setTgGuideOpen] = useState(true);
 
   // About & Version state
   const [versionInfo, setVersionInfo] = useState<VersionInfo | null>(null);
@@ -767,11 +783,63 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
     try {
       const data = await api.getIntegrationsSettings();
       setIntegrations(data);
+      setTgEnabled(data.telegram_enabled ?? false);
+      setTgBotToken(data.telegram_bot_token || "");
+      setTgAdminID(data.telegram_admin_id ? String(data.telegram_admin_id) : "");
+      setTgServerURL(data.server_url || window.location.origin);
     } catch (err: unknown) {
       const e = err as Error;
       setIntegrationsError(e.message || "Failed to load integrations settings.");
     } finally {
       setIntegrationsLoading(false);
+    }
+  };
+
+  const handleSaveTelegram = async () => {
+    setTgSaving(true);
+    setIntegrationsError(null);
+    setIntegrationsSuccess(null);
+    setTgTestSuccess(null);
+    setTgTestError(null);
+    try {
+      const adminIdNum = tgAdminID.trim() ? parseInt(tgAdminID.trim(), 10) : 0;
+      const updated = await api.updateIntegrationsSettings({
+        telegram_enabled: tgEnabled,
+        telegram_bot_token: tgBotToken.trim(),
+        telegram_admin_id: isNaN(adminIdNum) ? 0 : adminIdNum,
+        server_url: tgServerURL.trim() || window.location.origin,
+      });
+      setIntegrations(updated);
+      setTgEnabled(updated.telegram_enabled ?? false);
+      setTgBotToken(updated.telegram_bot_token || "");
+      setTgAdminID(updated.telegram_admin_id ? String(updated.telegram_admin_id) : "");
+      setTgServerURL(updated.server_url || window.location.origin);
+      setIntegrationsSuccess("Telegram Bot settings saved successfully.");
+    } catch (err: unknown) {
+      const e = err as Error;
+      setIntegrationsError(e.message || "Failed to save Telegram Bot settings.");
+    } finally {
+      setTgSaving(false);
+    }
+  };
+
+  const handleTestTelegram = async () => {
+    setTgTesting(true);
+    setTgTestSuccess(null);
+    setTgTestError(null);
+    try {
+      const adminIdNum = tgAdminID.trim() ? parseInt(tgAdminID.trim(), 10) : 0;
+      const res = await api.testTelegramIntegration({
+        telegram_bot_token: tgBotToken.trim(),
+        telegram_admin_id: isNaN(adminIdNum) ? 0 : adminIdNum,
+        server_url: tgServerURL.trim() || window.location.origin,
+      });
+      setTgTestSuccess(res.message || `Test notification sent successfully to @${res.bot_username || "your bot"}`);
+    } catch (err: unknown) {
+      const e = err as Error;
+      setTgTestError(e.message || "Failed to test Telegram Bot connection.");
+    } finally {
+      setTgTesting(false);
     }
   };
 
@@ -4169,11 +4237,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                   </Box>
                   <Box>
                     <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0F172A", fontSize: "0.95rem" }}>
-                      Prometheus & External Integrations
+                      Telegram Bot & External Integrations
                     </Typography>
                     <Typography variant="body2" sx={{ color: "#64748B", fontSize: "0.85rem", lineHeight: 1.4 }}>
-                      Expose real-time fleet metrics (system health, WireGuard tunnels, BIRD routing protocols, and
-                      cluster state) to Prometheus, VictoriaMetrics, Grafana, or other external monitoring stacks.
+                      Configure the easy42 Telegram bot for real-time fleet notifications and chat queries, or export
+                      live metrics to Prometheus, VictoriaMetrics, and Grafana.
                     </Typography>
                   </Box>
                 </Box>
@@ -4182,7 +4250,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                   variant="outlined"
                   startIcon={<RefreshCw size={14} className={integrationsLoading ? "spin" : ""} />}
                   onClick={loadIntegrations}
-                  disabled={integrationsLoading || integrationsSaving}
+                  disabled={integrationsLoading || integrationsSaving || tgSaving || tgTesting}
                   sx={{
                     textTransform: "none",
                     fontWeight: 600,
@@ -4214,6 +4282,400 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                 </Box>
               ) : integrations ? (
                 <Box sx={{ display: "flex", flexDirection: "column", gap: 2.5 }}>
+                  {/* SECTION 1: Telegram Bot Integration */}
+                  <Paper
+                    elevation={0}
+                    sx={{
+                      p: 3,
+                      borderRadius: 2.5,
+                      border: "1px solid #E2E8F0",
+                      bgcolor: "#FFFFFF",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 2.5,
+                      boxShadow: "0 1px 3px rgba(0,0,0,0.02)",
+                    }}
+                  >
+                    {/* Header with Telegram styling */}
+                    <Box
+                      sx={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        flexWrap: "wrap",
+                        gap: 1.5,
+                        pb: 2,
+                        borderBottom: "1px solid #F1F5F9",
+                      }}
+                    >
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+                        <Box
+                          sx={{
+                            width: 42,
+                            height: 42,
+                            borderRadius: "12px",
+                            background: "linear-gradient(135deg, #0088cc 0%, #29b6f6 100%)",
+                            color: "#FFFFFF",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            boxShadow: "0 4px 10px rgba(0,136,204,0.3)",
+                            flexShrink: 0,
+                          }}
+                        >
+                          <Send size={22} style={{ transform: "translate(-1px, 1px)" }} />
+                        </Box>
+                        <Box>
+                          <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
+                            <Typography variant="h6" sx={{ fontWeight: 700, color: "#0F172A", fontSize: "1.05rem" }}>
+                              Telegram Bot Integration
+                            </Typography>
+                            {integrations.telegram_enabled ? (
+                              <Chip
+                                size="small"
+                                icon={<CheckCircle2 size={13} />}
+                                label={integrations.telegram_bot_username ? `@${integrations.telegram_bot_username}` : "Active"}
+                                sx={{
+                                  bgcolor: "#E0F2FE",
+                                  color: "#0284C7",
+                                  fontWeight: 700,
+                                  fontSize: "0.75rem",
+                                  height: 24,
+                                }}
+                              />
+                            ) : (
+                              <Chip
+                                size="small"
+                                label="Disabled"
+                                sx={{ bgcolor: "#F1F5F9", color: "#64748B", fontWeight: 600, fontSize: "0.75rem", height: 24 }}
+                              />
+                            )}
+                            {integrations.telegram_enabled && integrations.telegram_webhook_status === "registered" && (
+                              <Chip
+                                size="small"
+                                label="Webhook Active"
+                                sx={{ bgcolor: "#ECFDF5", color: "#059669", fontWeight: 600, fontSize: "0.72rem", height: 22 }}
+                              />
+                            )}
+                            {integrations.telegram_webhook_error && (
+                              <Tooltip title={integrations.telegram_webhook_error}>
+                                <Chip
+                                  size="small"
+                                  icon={<AlertCircle size={12} />}
+                                  label="Webhook Warning"
+                                  sx={{ bgcolor: "#FEF3C7", color: "#B45309", fontWeight: 600, fontSize: "0.72rem", height: 22 }}
+                                />
+                              </Tooltip>
+                            )}
+                          </Box>
+                          <Typography variant="body2" sx={{ color: "#64748B", fontSize: "0.85rem", mt: 0.3 }}>
+                            Receive automated node online/offline alerts and query cluster status directly from Telegram.
+                          </Typography>
+                        </Box>
+                      </Box>
+
+                      <FormControlLabel
+                        control={
+                          <Switch
+                            checked={tgEnabled}
+                            onChange={(e) => setTgEnabled(e.target.checked)}
+                            size="small"
+                            color="primary"
+                          />
+                        }
+                        label={
+                          <Typography
+                            variant="body2"
+                            sx={{ fontWeight: 600, color: tgEnabled ? "#0284C7" : "#64748B" }}
+                          >
+                            {tgEnabled ? "Bot Active" : "Bot Inactive"}
+                          </Typography>
+                        }
+                        sx={{ m: 0 }}
+                      />
+                    </Box>
+
+                    {/* Test alert feedback if present */}
+                    {tgTestSuccess && (
+                      <Alert icon={<CheckCircle2 size={18} />} severity="success" sx={{ borderRadius: 2 }}>
+                        {tgTestSuccess}
+                      </Alert>
+                    )}
+                    {tgTestError && (
+                      <Alert icon={<AlertCircle size={18} />} severity="error" sx={{ borderRadius: 2 }}>
+                        {tgTestError}
+                      </Alert>
+                    )}
+
+                    {/* Form Fields Grid */}
+                    <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                      {/* Field 1: Bot API Token */}
+                      <Box>
+                        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 0.75 }}>
+                          <Typography variant="caption" sx={{ fontWeight: 700, color: "#334155", textTransform: "uppercase", letterSpacing: 0.5, fontSize: "0.75rem" }}>
+                            Telegram Bot API Token <span style={{ color: "#EF4444" }}>*</span>
+                          </Typography>
+                          <Typography variant="caption" sx={{ color: "#64748B", fontSize: "0.75rem" }}>
+                            Provided by <code>@BotFather</code>
+                          </Typography>
+                        </Box>
+                        <TextField
+                          fullWidth
+                          size="small"
+                          placeholder="e.g. 123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ"
+                          type={showTgToken ? "text" : "password"}
+                          value={tgBotToken}
+                          onChange={(e) => setTgBotToken(e.target.value)}
+                          InputProps={{
+                            endAdornment: (
+                              <InputAdornment position="end">
+                                <IconButton size="small" onClick={() => setShowTgToken(!showTgToken)} edge="end">
+                                  {showTgToken ? <EyeOff size={16} /> : <Eye size={16} />}
+                                </IconButton>
+                              </InputAdornment>
+                            ),
+                            sx: {
+                              fontFamily: "monospace",
+                              fontSize: "0.85rem",
+                              bgcolor: "#F8FAFC",
+                              "& fieldset": { borderColor: "#CBD5E1" },
+                            },
+                          }}
+                        />
+                        <Typography variant="caption" sx={{ color: "#64748B", fontSize: "0.78rem", mt: 0.5, display: "block" }}>
+                          The secret HTTP API token for your bot created with Telegram's @BotFather.
+                        </Typography>
+                      </Box>
+
+                      {/* Field 2: Admin Telegram User ID */}
+                      <Box>
+                        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 0.75 }}>
+                          <Typography variant="caption" sx={{ fontWeight: 700, color: "#334155", textTransform: "uppercase", letterSpacing: 0.5, fontSize: "0.75rem" }}>
+                            Admin Telegram User ID (Implicit Authentication) <span style={{ color: "#EF4444" }}>*</span>
+                          </Typography>
+                          <Typography variant="caption" sx={{ color: "#64748B", fontSize: "0.75rem" }}>
+                            Numeric user ID
+                          </Typography>
+                        </Box>
+                        <TextField
+                          fullWidth
+                          size="small"
+                          placeholder="e.g. 123456789"
+                          value={tgAdminID}
+                          onChange={(e) => setTgAdminID(e.target.value.replace(/\D/g, ""))}
+                          InputProps={{
+                            sx: {
+                              fontFamily: "monospace",
+                              fontSize: "0.85rem",
+                              bgcolor: "#F8FAFC",
+                              "& fieldset": { borderColor: "#CBD5E1" },
+                            },
+                          }}
+                        />
+                        <Typography variant="caption" sx={{ color: "#64748B", fontSize: "0.78rem", mt: 0.5, display: "block" }}>
+                          Used as implicit authentication source. Only this single user is authorized to interact with the easy42 server via Telegram and receive node alerts.
+                        </Typography>
+                      </Box>
+
+                      {/* Field 3: easy42 Server URL */}
+                      <Box>
+                        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 0.75 }}>
+                          <Typography variant="caption" sx={{ fontWeight: 700, color: "#334155", textTransform: "uppercase", letterSpacing: 0.5, fontSize: "0.75rem" }}>
+                            easy42 Server URL (Webhook & Notification Links) <span style={{ color: "#EF4444" }}>*</span>
+                          </Typography>
+                          {tgServerURL !== window.location.origin && (
+                            <Button
+                              size="small"
+                              onClick={() => setTgServerURL(window.location.origin)}
+                              sx={{ textTransform: "none", p: 0, minWidth: "auto", fontSize: "0.75rem", color: "#0284C7" }}
+                            >
+                              Reset to current origin
+                            </Button>
+                          )}
+                        </Box>
+                        <TextField
+                          fullWidth
+                          size="small"
+                          placeholder="e.g. https://easy42.example.com"
+                          value={tgServerURL}
+                          onChange={(e) => setTgServerURL(e.target.value)}
+                          InputProps={{
+                            sx: {
+                              fontFamily: "monospace",
+                              fontSize: "0.85rem",
+                              bgcolor: "#F8FAFC",
+                              "& fieldset": { borderColor: "#CBD5E1" },
+                            },
+                          }}
+                        />
+                        <Typography variant="caption" sx={{ color: "#64748B", fontSize: "0.78rem", mt: 0.5, display: "block" }}>
+                          Derived from current browser origin (<code>{window.location.origin}</code>) and persisted on Save. Used by Telegram to deliver webhook updates to <code>/api/telegram/webhook</code> and as the base URL for alert links.
+                        </Typography>
+                      </Box>
+                    </Box>
+
+                    {/* Action Buttons: Save & Test */}
+                    <Box
+                      sx={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        flexWrap: "wrap",
+                        gap: 1.5,
+                        pt: 1.5,
+                        borderTop: "1px solid #F1F5F9",
+                      }}
+                    >
+                      <Button
+                        variant="outlined"
+                        onClick={() => setTgGuideOpen(!tgGuideOpen)}
+                        startIcon={tgGuideOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                        sx={{
+                          textTransform: "none",
+                          fontSize: "0.82rem",
+                          fontWeight: 600,
+                          borderColor: "#CBD5E1",
+                          color: "#475569",
+                          "&:hover": { borderColor: "#94A3B8", bgcolor: "#F8FAFC" },
+                        }}
+                      >
+                        {tgGuideOpen ? "Hide Setup Guide" : "Show Setup Guide"}
+                      </Button>
+
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+                        <Button
+                          variant="outlined"
+                          onClick={handleTestTelegram}
+                          disabled={tgTesting || tgSaving || !tgBotToken.trim() || !tgAdminID.trim()}
+                          startIcon={tgTesting ? <CircularProgress size={16} /> : <Send size={15} />}
+                          sx={{
+                            textTransform: "none",
+                            fontWeight: 600,
+                            borderColor: "#0284C7",
+                            color: "#0284C7",
+                            "&:hover": { borderColor: "#0369A1", bgcolor: "#F0F9FF" },
+                          }}
+                        >
+                          {tgTesting ? "Testing..." : "Test Connection"}
+                        </Button>
+
+                        <Button
+                          variant="contained"
+                          onClick={handleSaveTelegram}
+                          disabled={tgSaving || tgTesting}
+                          startIcon={tgSaving ? <CircularProgress size={16} color="inherit" /> : <Check size={16} />}
+                          sx={{
+                            textTransform: "none",
+                            fontWeight: 700,
+                            bgcolor: "#0284C7",
+                            boxShadow: "0 2px 8px rgba(2,132,199,0.3)",
+                            "&:hover": { bgcolor: "#0369A1", boxShadow: "0 4px 12px rgba(2,132,199,0.4)" },
+                          }}
+                        >
+                          {tgSaving ? "Saving..." : "Save Settings"}
+                        </Button>
+                      </Box>
+                    </Box>
+
+                    {/* Concise Setup Guide & Commands Collapsible */}
+                    {tgGuideOpen && (
+                      <Box
+                        sx={{
+                          bgcolor: "#F8FAFC",
+                          p: 2.5,
+                          borderRadius: 2,
+                          border: "1px solid #E2E8F0",
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: 2,
+                        }}
+                      >
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                          <Bot size={18} color="#0284C7" />
+                          <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0F172A", fontSize: "0.9rem" }}>
+                            Concise Setup Guide: How to create and configure your Telegram bot
+                          </Typography>
+                        </Box>
+
+                        <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" }, gap: 1.5 }}>
+                          {/* Step 1 */}
+                          <Box sx={{ p: 1.5, bgcolor: "#FFFFFF", borderRadius: 1.5, border: "1px solid #E2E8F0" }}>
+                            <Typography variant="caption" sx={{ fontWeight: 700, color: "#0284C7", display: "block", mb: 0.5 }}>
+                              1. CREATE BOT WITH @BotFather
+                            </Typography>
+                            <Typography variant="body2" sx={{ fontSize: "0.82rem", color: "#475569", lineHeight: 1.4 }}>
+                              Open Telegram and search for <b>@BotFather</b>. Send <code>/newbot</code>, follow instructions to set a display name and username (e.g. <code>my_easy42_bot</code>), then copy the API token.
+                            </Typography>
+                          </Box>
+
+                          {/* Step 2 */}
+                          <Box sx={{ p: 1.5, bgcolor: "#FFFFFF", borderRadius: 1.5, border: "1px solid #E2E8F0" }}>
+                            <Typography variant="caption" sx={{ fontWeight: 700, color: "#0284C7", display: "block", mb: 0.5 }}>
+                              2. FETCH YOUR TELEGRAM USER ID
+                            </Typography>
+                            <Typography variant="body2" sx={{ fontSize: "0.82rem", color: "#475569", lineHeight: 1.4 }}>
+                              Message <b>@userinfobot</b> on Telegram. It will instantly reply with your numeric <code>Id</code> (e.g. <code>123456789</code>). Copy this into the Admin User ID field.
+                            </Typography>
+                          </Box>
+
+                          {/* Step 3 */}
+                          <Box sx={{ p: 1.5, bgcolor: "#FFFFFF", borderRadius: 1.5, border: "1px solid #E2E8F0" }}>
+                            <Typography variant="caption" sx={{ fontWeight: 700, color: "#0284C7", display: "block", mb: 0.5 }}>
+                              3. START CHAT WITH YOUR BOT
+                            </Typography>
+                            <Typography variant="body2" sx={{ fontSize: "0.82rem", color: "#475569", lineHeight: 1.4 }}>
+                              Search for your newly created bot username in Telegram and press <b>Start</b>. Telegram requires you to initiate the conversation before bots can send messages.
+                            </Typography>
+                          </Box>
+
+                          {/* Step 4 */}
+                          <Box sx={{ p: 1.5, bgcolor: "#FFFFFF", borderRadius: 1.5, border: "1px solid #E2E8F0" }}>
+                            <Typography variant="caption" sx={{ fontWeight: 700, color: "#0284C7", display: "block", mb: 0.5 }}>
+                              4. SAVE & TEST CONNECTION
+                            </Typography>
+                            <Typography variant="body2" sx={{ fontSize: "0.82rem", color: "#475569", lineHeight: 1.4 }}>
+                              Paste the token and user ID above, click <b>Save Settings</b>, then click <b>Test Connection</b>. You will receive an immediate test notification in your Telegram app!
+                            </Typography>
+                          </Box>
+                        </Box>
+
+                        {/* Supported Bot Commands */}
+                        <Box sx={{ mt: 0.5 }}>
+                          <Typography variant="caption" sx={{ fontWeight: 700, color: "#334155", textTransform: "uppercase", fontSize: "0.75rem", display: "block", mb: 1 }}>
+                            Supported Bot Commands:
+                          </Typography>
+                          <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+                            <Chip size="small" label="/status" sx={{ fontFamily: "monospace", fontWeight: 700, bgcolor: "#E0F2FE", color: "#0369A1" }} />
+                            <Typography variant="caption" sx={{ color: "#64748B", alignSelf: "center", mr: 1.5 }}>
+                              Cluster overview, node online/offline counts, bandwidth
+                            </Typography>
+
+                            <Chip size="small" label="/nodes" sx={{ fontFamily: "monospace", fontWeight: 700, bgcolor: "#E0F2FE", color: "#0369A1" }} />
+                            <Typography variant="caption" sx={{ color: "#64748B", alignSelf: "center", mr: 1.5 }}>
+                              Detailed node health, CPU, memory, and uptime
+                            </Typography>
+
+                            <Chip size="small" label="/help" sx={{ fontFamily: "monospace", fontWeight: 700, bgcolor: "#F1F5F9", color: "#475569" }} />
+                            <Typography variant="caption" sx={{ color: "#64748B", alignSelf: "center" }}>
+                              Command usage instructions
+                            </Typography>
+                          </Box>
+                        </Box>
+                      </Box>
+                    )}
+                  </Paper>
+
+                  {/* Section Divider */}
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 2, my: 1 }}>
+                    <Divider sx={{ flex: 1 }} />
+                    <Chip
+                      size="small"
+                      label="Prometheus & Metrics Exporter"
+                      sx={{ bgcolor: "#F1F5F9", color: "#475569", fontWeight: 700, fontSize: "0.75rem" }}
+                    />
+                    <Divider sx={{ flex: 1 }} />
+                  </Box>
+
                   {/* Card 1: Prometheus Metrics Endpoint */}
                   <Paper
                     elevation={0}

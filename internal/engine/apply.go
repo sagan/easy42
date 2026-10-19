@@ -404,6 +404,18 @@ func (m *Manager) simulateApply(cfg *config.Config, patch *config.ConfigPatch) (
 		}
 	}
 
+	// 6. Apply Integrations
+	if patch.Integrations != nil {
+		diffs := mergeIntegrationsSettings(&cfg.Integrations, patch.Integrations)
+		if len(diffs) > 0 {
+			result.Settings = append(result.Settings, ApplySettingsDiff{
+				Category: "integrations",
+				Changes:  diffs,
+			})
+			result.Summary.TotalChanges += len(diffs)
+		}
+	}
+
 	// Check post-patch integrity
 	if err := validateMeshIntegrity(cfg); err != nil {
 		return nil, nil, fmt.Errorf("mesh integrity validation failed: %w", err)
@@ -909,6 +921,67 @@ func mergeDNSSettings(target *config.DNSConfig, patch *config.DNSPatch) []ApplyF
 			NewValue: *patch.PublishIPv6OwnName,
 		})
 		target.PublishIPv6OwnName = *patch.PublishIPv6OwnName
+	}
+	return diffs
+}
+
+func mergeIntegrationsSettings(target *config.IntegrationsSettings, patch *config.IntegrationsSettingsPatch) []ApplyFieldDiff {
+	var diffs []ApplyFieldDiff
+	if patch.PrometheusEnabled != nil && *patch.PrometheusEnabled != target.PrometheusEnabled {
+		diffs = append(diffs, ApplyFieldDiff{
+			Field:    "prometheus_enabled",
+			OldValue: target.PrometheusEnabled,
+			NewValue: *patch.PrometheusEnabled,
+		})
+		target.PrometheusEnabled = *patch.PrometheusEnabled
+	}
+	if patch.PrometheusAuthToken != nil && *patch.PrometheusAuthToken != target.PrometheusAuthToken {
+		diffs = append(diffs, ApplyFieldDiff{
+			Field:    "prometheus_auth_token",
+			OldValue: "***",
+			NewValue: "***",
+		})
+		target.PrometheusAuthToken = *patch.PrometheusAuthToken
+	}
+	if patch.TelegramEnabled != nil && *patch.TelegramEnabled != target.TelegramEnabled {
+		diffs = append(diffs, ApplyFieldDiff{
+			Field:    "telegram_enabled",
+			OldValue: target.TelegramEnabled,
+			NewValue: *patch.TelegramEnabled,
+		})
+		target.TelegramEnabled = *patch.TelegramEnabled
+	}
+	if patch.TelegramBotToken != nil && *patch.TelegramBotToken != target.TelegramBotToken {
+		diffs = append(diffs, ApplyFieldDiff{
+			Field:    "telegram_bot_token",
+			OldValue: "***",
+			NewValue: "***",
+		})
+		target.TelegramBotToken = *patch.TelegramBotToken
+	}
+	if patch.TelegramAdminID != nil && *patch.TelegramAdminID != target.TelegramAdminID {
+		diffs = append(diffs, ApplyFieldDiff{
+			Field:    "telegram_admin_id",
+			OldValue: target.TelegramAdminID,
+			NewValue: *patch.TelegramAdminID,
+		})
+		target.TelegramAdminID = *patch.TelegramAdminID
+	}
+	if patch.TelegramSecretToken != nil && *patch.TelegramSecretToken != target.TelegramSecretToken {
+		diffs = append(diffs, ApplyFieldDiff{
+			Field:    "telegram_secret_token",
+			OldValue: "***",
+			NewValue: "***",
+		})
+		target.TelegramSecretToken = *patch.TelegramSecretToken
+	}
+	if patch.ServerURL != nil && *patch.ServerURL != target.ServerURL {
+		diffs = append(diffs, ApplyFieldDiff{
+			Field:    "server_url",
+			OldValue: target.ServerURL,
+			NewValue: *patch.ServerURL,
+		})
+		target.ServerURL = *patch.ServerURL
 	}
 	return diffs
 }

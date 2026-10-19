@@ -21,6 +21,7 @@ import (
 	"easy42/internal/dns"
 	"easy42/internal/roa"
 	"easy42/internal/ssh"
+	"easy42/internal/telegram"
 )
 
 var (
@@ -47,6 +48,7 @@ type Manager struct {
 	serverTasksMu      sync.Mutex
 	runningTasks       map[string]bool
 	prometheusExporter *PrometheusExporter
+	telegramBot        *telegram.BotService
 }
 
 // NewManager creates a new Manager instance
@@ -67,6 +69,17 @@ func NewManager(store *config.Store) *Manager {
 		runningTasks: make(map[string]bool),
 	}
 	m.prometheusExporter = NewPrometheusExporter(m)
+	m.telegramBot = telegram.NewBotService(m)
+	m.telegramBot.SetOnSecretTokenGenerated(func(token string) {
+		m.mu.Lock()
+		defer m.mu.Unlock()
+		if cfg := m.store.Get(); cfg != nil {
+			cfg.Integrations.TelegramSecretToken = token
+			_ = m.store.Save(cfg)
+		}
+	})
+	intSettings := m.GetIntegrationsSettings()
+	_ = m.telegramBot.Start(intSettings)
 	m.setupAgentMetricsListeners()
 	m.setupAgentCronTasksListeners()
 	m.setupAgentHostsListeners()
@@ -83,6 +96,9 @@ func (m *Manager) Close() {
 			close(m.stopCh)
 		}
 	}
+	if m.telegramBot != nil {
+		m.telegramBot.Stop()
+	}
 	if m.stateStore != nil {
 		_ = m.stateStore.Close()
 	}
@@ -91,6 +107,11 @@ func (m *Manager) Close() {
 // AgentHub returns the agent hub
 func (m *Manager) AgentHub() *agent.Hub {
 	return m.agentHub
+}
+
+// TelegramBot returns the Telegram bot service
+func (m *Manager) TelegramBot() *telegram.BotService {
+	return m.telegramBot
 }
 
 // SetServerURL sets the base server URL for agent configuration

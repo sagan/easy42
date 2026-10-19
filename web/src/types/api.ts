@@ -770,6 +770,20 @@ export interface IntegrationsSettings {
   prometheus_enabled: boolean;
   prometheus_auth_token: string;
   endpoint: string;
+  telegram_enabled?: boolean;
+  telegram_bot_token?: string;
+  telegram_admin_id?: number | string;
+  telegram_secret_token?: string;
+  server_url?: string;
+  telegram_bot_username?: string;
+  telegram_webhook_status?: string;
+  telegram_webhook_error?: string;
+}
+
+export interface TelegramTestResponse {
+  success: boolean;
+  bot_username?: string;
+  message?: string;
 }
 
 export interface ConfigChange {

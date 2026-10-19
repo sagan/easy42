@@ -20,15 +20,25 @@ func (m *Manager) GetIntegrationsSettings() config.IntegrationsSettings {
 	}
 
 	settings := cfg.Integrations
-	if strings.TrimSpace(settings.PrometheusAuthToken) == "" {
+	if strings.TrimSpace(settings.PrometheusAuthToken) == "" || (settings.TelegramEnabled && strings.TrimSpace(settings.TelegramSecretToken) == "") {
 		m.mu.Lock()
 		defer m.mu.Unlock()
 		cfg = m.store.Get()
-		if cfg != nil && strings.TrimSpace(cfg.Integrations.PrometheusAuthToken) == "" {
-			cfg.Integrations.PrometheusAuthToken = config.GeneratePrometheusToken()
-			cfg.Integrations.PrometheusEnabled = true
-			_ = m.store.Save(cfg)
-			settings = cfg.Integrations
+		if cfg != nil {
+			modified := false
+			if strings.TrimSpace(cfg.Integrations.PrometheusAuthToken) == "" {
+				cfg.Integrations.PrometheusAuthToken = config.GeneratePrometheusToken()
+				cfg.Integrations.PrometheusEnabled = true
+				modified = true
+			}
+			if cfg.Integrations.TelegramEnabled && strings.TrimSpace(cfg.Integrations.TelegramSecretToken) == "" {
+				cfg.Integrations.TelegramSecretToken = config.GenerateTelegramSecretToken()
+				modified = true
+			}
+			if modified {
+				_ = m.store.Save(cfg)
+				settings = cfg.Integrations
+			}
 		}
 	}
 
@@ -49,6 +59,10 @@ func (m *Manager) UpdateIntegrationsSettings(settings config.IntegrationsSetting
 		settings.PrometheusAuthToken = config.GeneratePrometheusToken()
 	}
 
+	if strings.TrimSpace(settings.TelegramSecretToken) == "" {
+		settings.TelegramSecretToken = config.GenerateTelegramSecretToken()
+	}
+
 	cfg.Integrations = settings
 	if err := m.store.Save(cfg); err != nil {
 		return err
@@ -56,6 +70,9 @@ func (m *Manager) UpdateIntegrationsSettings(settings config.IntegrationsSetting
 
 	if m.prometheusExporter != nil {
 		m.prometheusExporter.Invalidate()
+	}
+	if m.telegramBot != nil {
+		_ = m.telegramBot.Reload(settings)
 	}
 	return nil
 }

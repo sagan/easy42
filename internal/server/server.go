@@ -123,6 +123,9 @@ func New(cfg Config) *Server {
 		r.Get("/agent/install.sh", s.handleAgentInstallScript)
 		r.Get("/agent/bin/{arch}", s.handleAgentBinary)
 
+		// Telegram Bot webhook route (public - called by Telegram servers)
+		r.Post("/telegram/webhook", s.handleTelegramWebhook)
+
 		// Protected routes
 		r.Group(func(r chi.Router) {
 			r.Use(s.authMiddleware)
@@ -195,10 +198,11 @@ func New(cfg Config) *Server {
 			r.Put("/settings/database", s.handleUpdateDatabaseSettings)
 			r.Post("/settings/database/vacuum", s.handleVacuumDatabase)
 
-			// Integrations & Prometheus Settings
+			// Integrations & Prometheus / Telegram Settings
 			r.Get("/settings/integrations", s.handleGetIntegrationsSettings)
 			r.Put("/settings/integrations", s.handleUpdateIntegrationsSettings)
 			r.Post("/settings/integrations/reset-token", s.handleResetPrometheusToken)
+			r.Post("/settings/integrations/telegram/test", s.handleTestTelegramIntegration)
 
 			// Network Policies
 			r.Get("/network-policies", s.handleGetNetworkPolicies)

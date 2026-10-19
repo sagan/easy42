@@ -189,7 +189,12 @@ const ConfigChangeJSONSchema = `{
       "additionalProperties": false,
       "properties": {
         "prometheus_enabled": { "type": "boolean" },
-        "prometheus_auth_token": { "type": "string" }
+        "prometheus_auth_token": { "type": "string" },
+        "telegram_enabled": { "type": "boolean" },
+        "telegram_bot_token": { "type": "string" },
+        "telegram_admin_id": { "type": "integer" },
+        "telegram_secret_token": { "type": "string" },
+        "server_url": { "type": "string" }
       }
     },
     "NetworkPolicy": { "type": "object" },
@@ -328,6 +333,11 @@ type DatabaseSettingsPatch struct {
 type IntegrationsSettingsPatch struct {
 	PrometheusEnabled   *bool   `json:"prometheus_enabled,omitempty" yaml:"prometheus_enabled,omitempty"`
 	PrometheusAuthToken *string `json:"prometheus_auth_token,omitempty" yaml:"prometheus_auth_token,omitempty"`
+	TelegramEnabled     *bool   `json:"telegram_enabled,omitempty" yaml:"telegram_enabled,omitempty"`
+	TelegramBotToken    *string `json:"telegram_bot_token,omitempty" yaml:"telegram_bot_token,omitempty"`
+	TelegramAdminID     *int64  `json:"telegram_admin_id,omitempty" yaml:"telegram_admin_id,omitempty"`
+	TelegramSecretToken *string `json:"telegram_secret_token,omitempty" yaml:"telegram_secret_token,omitempty"`
+	ServerURL           *string `json:"server_url,omitempty" yaml:"server_url,omitempty"`
 }
 
 // ForbiddenFieldErrors checks for prohibited or internal-only fields
