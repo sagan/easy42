@@ -1433,7 +1433,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                     disabled={saving}
                   />
 
-                  <TextField
+                  <TextFieldWithCopy
                     label="External IPv4 Address (DN42)"
                     size="small"
                     value={externalIp}
@@ -1443,7 +1443,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                     disabled={saving}
                   />
 
-                  <TextField
+                  <TextFieldWithCopy
                     label="External IPv6 Address (DN42)"
                     size="small"
                     value={externalIp6}

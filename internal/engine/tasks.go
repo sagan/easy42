@@ -76,7 +76,13 @@ func (m *Manager) CheckTaskStatus(ctx context.Context, taskID string, nodeNames 
 				return
 			}
 
-			res := tasks.CheckStatus(sshClient, sftpClient, taskID, n.Name)
+			var res tasks.TaskStatusResult
+			if taskID == "configure_ip" {
+				payload := buildConfigureIPPayload(n)
+				res = tasks.CheckStatusWithPayload(sshClient, sftpClient, taskID, n.Name, payload)
+			} else {
+				res = tasks.CheckStatus(sshClient, sftpClient, taskID, n.Name)
+			}
 			mu.Lock()
 			results[n.Name] = res
 			mu.Unlock()
@@ -206,6 +212,14 @@ func (m *Manager) RunTask(ctx context.Context, taskID string, nodeNames []string
 						_, _ = m.RefreshNodeStatus(n.Name)
 					}()
 				}
+			} else if taskID == "configure_ip" {
+				payload := buildConfigureIPPayload(n)
+				res = tasks.RunTaskWithPayload(sshClient, sftpClient, taskID, n.Name, payload)
+				if res.Success {
+					go func() {
+						_, _ = m.RefreshNodeStatus(n.Name)
+					}()
+				}
 			} else {
 				res = tasks.RunTask(sshClient, sftpClient, taskID, n.Name)
 			}
@@ -217,4 +231,58 @@ func (m *Manager) RunTask(ctx context.Context, taskID string, nodeNames []string
 
 	wg.Wait()
 	return results, nil
+}
+
+func cleanCIDR(ip string) string {
+	ip = strings.TrimSpace(ip)
+	if idx := strings.Index(ip, "/"); idx != -1 {
+		return strings.TrimSpace(ip[:idx])
+	}
+	return ip
+}
+
+func injectEnvIntoScript(baseScript []byte, envContent string) string {
+	content := string(baseScript)
+	if strings.HasPrefix(content, "#!/bin/sh") || strings.HasPrefix(content, "#!/bin/bash") {
+		idx := strings.Index(content, "\n")
+		if idx != -1 {
+			return content[:idx+1] + "\n# --- Dynamically generated node configuration ---\n" + envContent + "# ------------------------------------------------\n\n" + content[idx+1:]
+		}
+	}
+	return envContent + "\n" + content
+}
+
+func buildConfigureIPPayload(n config.Node) map[string][]byte {
+	nodeIP := cleanCIDR(n.IP)
+	nodeIP6 := cleanCIDR(n.IP6)
+	nodeExtIP := cleanCIDR(n.ExternalIP)
+	nodeExtIP6 := cleanCIDR(n.ExternalIP6)
+	iface := strings.TrimSpace(n.Interface)
+	name := strings.TrimSpace(n.Name)
+
+	var envBuf strings.Builder
+	fmt.Fprintf(&envBuf, "NODE_NAME=%q\n", name)
+	fmt.Fprintf(&envBuf, "NODE_INTERFACE=%q\n", iface)
+	fmt.Fprintf(&envBuf, "NODE_IP=%q\n", nodeIP)
+	fmt.Fprintf(&envBuf, "NODE_IP6=%q\n", nodeIP6)
+	fmt.Fprintf(&envBuf, "NODE_EXTERNAL_IP=%q\n", nodeExtIP)
+	fmt.Fprintf(&envBuf, "NODE_EXTERNAL_IP6=%q\n", nodeExtIP6)
+
+	envContent := envBuf.String()
+
+	payload := map[string][]byte{
+		"node_ip.env": []byte(envContent),
+	}
+
+	if baseStatus, err := tasks.ReadTaskScript("configure_ip", "status.sh"); err == nil {
+		dynamicStatus := injectEnvIntoScript(baseStatus, envContent)
+		payload["status.sh"] = []byte(dynamicStatus)
+	}
+
+	if baseRun, err := tasks.ReadTaskScript("configure_ip", "run.sh"); err == nil {
+		dynamicRun := injectEnvIntoScript(baseRun, envContent)
+		payload["run.sh"] = []byte(dynamicRun)
+	}
+
+	return payload
 }

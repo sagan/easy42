@@ -22,6 +22,7 @@ func TestGetTasks(t *testing.T) {
 		"config_nftables",
 		"sysctl_params",
 		"autostart_interfaces",
+		"configure_ip",
 	}
 
 	foundMap := make(map[string]bool)

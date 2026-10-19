@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -31,20 +32,20 @@ var (
 
 // Manager orchestrates all operations across config, crypto, ssh, and sync
 type Manager struct {
-	mu          sync.RWMutex
-	store       *config.Store
-	stateStore  *config.StateStore
-	vault       *crypto.KeyVault
-	pool        *ssh.ClientPool
-	roaManager  *roa.Manager
-	agentHub    *agent.Hub
-	serverURL   string
-	statuses      map[string]*config.NodeStatus
-	lastSync      time.Time
-	lastResults   []config.SyncResult
-	stopCh        chan struct{}
-	serverTasksMu sync.Mutex
-	runningTasks  map[string]bool
+	mu                 sync.RWMutex
+	store              *config.Store
+	stateStore         *config.StateStore
+	vault              *crypto.KeyVault
+	pool               *ssh.ClientPool
+	roaManager         *roa.Manager
+	agentHub           *agent.Hub
+	serverURL          string
+	statuses           map[string]*config.NodeStatus
+	lastSync           time.Time
+	lastResults        []config.SyncResult
+	stopCh             chan struct{}
+	serverTasksMu      sync.Mutex
+	runningTasks       map[string]bool
 	prometheusExporter *PrometheusExporter
 }
 
@@ -260,6 +261,9 @@ func (m *Manager) GetNodes() []config.Node {
 	}
 	res := make([]config.Node, len(cfg.Nodes))
 	copy(res, cfg.Nodes)
+	slices.SortFunc(res, func(a, b config.Node) int {
+		return strings.Compare(a.Name, b.Name)
+	})
 	return res
 }
 
@@ -279,7 +283,6 @@ func (m *Manager) FindNode(name string) *config.Node {
 	}
 	return nil
 }
-
 
 // AddNode adds a new node to the topology
 func (m *Manager) AddNode(node config.Node) error {

@@ -176,7 +176,7 @@ func executeScript(
 				_ = ef.Close()
 				perm := os.FileMode(0644)
 				switch fname {
-				case "easy42-agent":
+				case "easy42-agent", "status.sh", "run.sh":
 					perm = 0755
 				case "agent.json":
 					perm = 0600
@@ -194,6 +194,11 @@ func executeScript(
 	return stdout, stderr, exitCode, durationMs, runErr
 }
 
+// ReadTaskScript reads an embedded task script
+func ReadTaskScript(taskID string, scriptName string) ([]byte, error) {
+	return tasksEmbed.ReadFile(filepath.Join(taskID, scriptName))
+}
+
 // CheckStatus checks if a task is executable or already done on a remote host
 func CheckStatus(
 	sshClient *golangssh.Client,
@@ -201,12 +206,23 @@ func CheckStatus(
 	taskID string,
 	nodeName string,
 ) TaskStatusResult {
+	return CheckStatusWithPayload(sshClient, sftpClient, taskID, nodeName, nil)
+}
+
+// CheckStatusWithPayload checks if a task is executable or already done on a remote host with extra payload files uploaded
+func CheckStatusWithPayload(
+	sshClient *golangssh.Client,
+	sftpClient *sftp.Client,
+	taskID string,
+	nodeName string,
+	payload map[string][]byte,
+) TaskStatusResult {
 	res := TaskStatusResult{
 		TaskID:   taskID,
 		NodeName: nodeName,
 	}
 
-	stdout, stderr, exitCode, duration, err := executeScript(sshClient, sftpClient, taskID, "status.sh")
+	stdout, stderr, exitCode, duration, err := executeScript(sshClient, sftpClient, taskID, "status.sh", payload)
 	res.DurationMs = duration
 	res.ExitCode = exitCode
 
