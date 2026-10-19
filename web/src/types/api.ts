@@ -145,6 +145,7 @@ export interface Node {
   agent_last_seen?: string;
   enable_fa?: boolean;
   update_hosts?: boolean;
+  custom_network_script?: string;
 }
 
 export interface LinkEnd {

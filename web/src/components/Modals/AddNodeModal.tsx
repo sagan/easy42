@@ -145,6 +145,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
   const [nftTemplate, setNftTemplate] = useState<string>("");
   const [enableFa, setEnableFa] = useState(false);
   const [updateHosts, setUpdateHosts] = useState(false);
+  const [customNetworkScript, setCustomNetworkScript] = useState("");
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
@@ -183,6 +184,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
       setNftTemplate(nodeToEdit.nft_template || "");
       setEnableFa(Boolean(nodeToEdit.enable_fa));
       setUpdateHosts(Boolean(nodeToEdit.update_hosts));
+      setCustomNetworkScript(nodeToEdit.custom_network_script || "");
       if (nodeToEdit.routes && nodeToEdit.routes.length > 0) {
         setKernelRoutes(
           nodeToEdit.routes.map((r, idx) => ({
@@ -272,6 +274,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
       setNftTemplate("");
       setEnableFa(false);
       setUpdateHosts(false);
+      setCustomNetworkScript("");
       setEntrypoints([{ id: "nat-fallback", ip: "", portStr: "", tagStr: "nat", mtuStr: "", isNone: true }]);
       setDiscoveredIps([]);
       setProbeError(null);
@@ -604,6 +607,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
         nft_template: nftTemplate.trim() || undefined,
         enable_fa: enableFa,
         update_hosts: updateHosts,
+        custom_network_script: customNetworkScript.trim() || undefined,
         description: description.trim() || undefined,
         note: note.trim() || undefined,
         x: nodeToEdit?.x,
@@ -1461,6 +1465,45 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                     placeholder="e.g. 192.168.100.0/24"
                     helperText="Unconditionally advertised via BGP (comma-separated)"
                     disabled={saving}
+                  />
+                </Box>
+
+                {/* Custom Network Script (Policy Routing) */}
+                <Box sx={{ mt: 2 }}>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 0.8 }}>
+                    <Typography variant="body2" sx={{ fontWeight: 600, color: "#1E293B" }}>
+                      Custom Network Script
+                    </Typography>
+                    <Chip
+                      label="Policy Routing & Rules"
+                      size="small"
+                      sx={{
+                        height: 20,
+                        fontSize: "0.68rem",
+                        fontWeight: 600,
+                        bgcolor: "#F1F5F9",
+                        color: "#475569",
+                      }}
+                    />
+                  </Box>
+                  <TextField
+                    label="Custom Shell Script"
+                    multiline
+                    rows={4}
+                    size="small"
+                    fullWidth
+                    value={customNetworkScript}
+                    onChange={(e) => setCustomNetworkScript(e.target.value)}
+                    placeholder={"# Example idempotent policy routing rules:\nip rule del table 42 2>/dev/null || true\nip rule add table 42 prio 100"}
+                    helperText="Idempotent custom network script executed by the system network manager when the interface becomes routable (networkd-dispatcher on systemd or /etc/network/interfaces on Alpine)."
+                    disabled={saving}
+                    InputProps={{
+                      sx: {
+                        fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+                        fontSize: "0.82rem",
+                        bgcolor: "#F8FAFC",
+                      },
+                    }}
                   />
                 </Box>
 

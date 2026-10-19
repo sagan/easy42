@@ -92,8 +92,16 @@ func GetTasks() ([]TaskMeta, error) {
 	return tasks, nil
 }
 
+func normalizeTaskID(taskID string) string {
+	if taskID == "configure_ip" {
+		return "configure_network"
+	}
+	return taskID
+}
+
 // GetTaskMeta returns metadata for a single task
 func GetTaskMeta(taskID string) (*TaskMeta, error) {
+	taskID = normalizeTaskID(taskID)
 	tasks, err := GetTasks()
 	if err != nil {
 		return nil, err
@@ -121,6 +129,7 @@ func executeScript(
 	extraFiles ...map[string][]byte,
 ) (stdout string, stderr string, exitCode int, durationMs int64, err error) {
 	start := time.Now()
+	taskID = normalizeTaskID(taskID)
 
 	// Read common.sh if available
 	commonScript, _ := tasksEmbed.ReadFile("_common/common.sh")
@@ -196,6 +205,7 @@ func executeScript(
 
 // ReadTaskScript reads an embedded task script
 func ReadTaskScript(taskID string, scriptName string) ([]byte, error) {
+	taskID = normalizeTaskID(taskID)
 	return tasksEmbed.ReadFile(filepath.Join(taskID, scriptName))
 }
 

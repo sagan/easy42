@@ -330,8 +330,9 @@ type Node struct {
 	AgentToken    string            `json:"agent_token,omitempty"`     // Static shared token for agent authentication
 	AgentVersion  string            `json:"agent_version,omitempty"`   // Reported agent version
 	AgentLastSeen time.Time         `json:"agent_last_seen,omitempty"` // Timestamp of last agent heartbeat/report
-	EnableFA      bool              `json:"enable_fa,omitempty"`       // Enable FlapAlerted BGP peering
-	UpdateHosts   bool              `json:"update_hosts,omitempty"`    // Enable managing /etc/hosts file of the node
+	EnableFA            bool              `json:"enable_fa,omitempty"`       // Enable FlapAlerted BGP peering
+	UpdateHosts         bool              `json:"update_hosts,omitempty"`    // Enable managing /etc/hosts file of the node
+	CustomNetworkScript string            `json:"custom_network_script,omitempty"` // Custom shell script for node network manager (e.g. policy routing)
 }
 
 // IsAgentMode returns true if the node is configured to use the agent

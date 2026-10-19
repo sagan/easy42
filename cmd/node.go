@@ -18,8 +18,9 @@ var (
 	nodeIP6         string
 	nodeExternalIP  string
 	nodeExternalIP6 string
-	nodeIface       string
-	nodeASN         uint64
+	nodeIface               string
+	nodeASN                 uint64
+	nodeCustomNetworkScript string
 )
 
 var nodeCmd = &cobra.Command{
@@ -64,10 +65,11 @@ var nodeAddCmd = &cobra.Command{
 			IP:          nodeIP,
 			IP6:         nodeIP6,
 			ExternalIP:  nodeExternalIP,
-			ExternalIP6: nodeExternalIP6,
-			Interface:   nodeIface,
-			ASN:         nodeASN,
-			Entrypoints: make([]config.Entrypoint, 0),
+			ExternalIP6:         nodeExternalIP6,
+			Interface:           nodeIface,
+			ASN:                 nodeASN,
+			CustomNetworkScript: nodeCustomNetworkScript,
+			Entrypoints:         make([]config.Entrypoint, 0),
 		}
 
 		if node.Interface == "" {
@@ -204,6 +206,7 @@ func init() {
 	nodeAddCmd.Flags().StringVar(&nodeExternalIP6, "external-ip6", "", "External/DN42 IPv6 address")
 	nodeAddCmd.Flags().StringVar(&nodeIface, "iface", "lo", "Main IP interface name")
 	nodeAddCmd.Flags().Uint64VarP(&nodeASN, "asn", "a", 4224420001, "AS number")
+	nodeAddCmd.Flags().StringVar(&nodeCustomNetworkScript, "custom-network-script", "", "Custom network shell script")
 	_ = nodeAddCmd.MarkFlagRequired("name")
 	_ = nodeAddCmd.MarkFlagRequired("host")
 	_ = nodeAddCmd.MarkFlagRequired("ip")

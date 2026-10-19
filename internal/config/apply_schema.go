@@ -280,7 +280,8 @@ type NodePatch struct {
 	Y             *float64           `json:"y,omitempty" yaml:"y,omitempty"`
 	Mode          *string            `json:"mode,omitempty" yaml:"mode,omitempty"`
 	EnableFA      *bool              `json:"enable_fa,omitempty" yaml:"enable_fa,omitempty"`
-	UpdateHosts   *bool              `json:"update_hosts,omitempty" yaml:"update_hosts,omitempty"`
+	UpdateHosts         *bool              `json:"update_hosts,omitempty" yaml:"update_hosts,omitempty"`
+	CustomNetworkScript *string            `json:"custom_network_script,omitempty" yaml:"custom_network_script,omitempty"`
 }
 
 // LinkEndPatch holds partial changes to a link endpoint

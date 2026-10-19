@@ -77,8 +77,8 @@ func (m *Manager) CheckTaskStatus(ctx context.Context, taskID string, nodeNames 
 			}
 
 			var res tasks.TaskStatusResult
-			if taskID == "configure_ip" {
-				payload := buildConfigureIPPayload(n)
+			if taskID == "configure_network" || taskID == "configure_ip" {
+				payload := buildConfigureNetworkPayload(n)
 				res = tasks.CheckStatusWithPayload(sshClient, sftpClient, taskID, n.Name, payload)
 			} else {
 				res = tasks.CheckStatus(sshClient, sftpClient, taskID, n.Name)
@@ -212,8 +212,8 @@ func (m *Manager) RunTask(ctx context.Context, taskID string, nodeNames []string
 						_, _ = m.RefreshNodeStatus(n.Name)
 					}()
 				}
-			} else if taskID == "configure_ip" {
-				payload := buildConfigureIPPayload(n)
+			} else if taskID == "configure_network" || taskID == "configure_ip" {
+				payload := buildConfigureNetworkPayload(n)
 				res = tasks.RunTaskWithPayload(sshClient, sftpClient, taskID, n.Name, payload)
 				if res.Success {
 					go func() {
@@ -253,12 +253,17 @@ func injectEnvIntoScript(baseScript []byte, envContent string) string {
 }
 
 func buildConfigureIPPayload(n config.Node) map[string][]byte {
+	return buildConfigureNetworkPayload(n)
+}
+
+func buildConfigureNetworkPayload(n config.Node) map[string][]byte {
 	nodeIP := cleanCIDR(n.IP)
 	nodeIP6 := cleanCIDR(n.IP6)
 	nodeExtIP := cleanCIDR(n.ExternalIP)
 	nodeExtIP6 := cleanCIDR(n.ExternalIP6)
 	iface := strings.TrimSpace(n.Interface)
 	name := strings.TrimSpace(n.Name)
+	customScript := strings.TrimSpace(n.CustomNetworkScript)
 
 	var envBuf strings.Builder
 	fmt.Fprintf(&envBuf, "NODE_NAME=%q\n", name)
@@ -267,6 +272,11 @@ func buildConfigureIPPayload(n config.Node) map[string][]byte {
 	fmt.Fprintf(&envBuf, "NODE_IP6=%q\n", nodeIP6)
 	fmt.Fprintf(&envBuf, "NODE_EXTERNAL_IP=%q\n", nodeExtIP)
 	fmt.Fprintf(&envBuf, "NODE_EXTERNAL_IP6=%q\n", nodeExtIP6)
+	if customScript != "" {
+		fmt.Fprintf(&envBuf, "HAS_CUSTOM_SCRIPT=\"1\"\n")
+	} else {
+		fmt.Fprintf(&envBuf, "HAS_CUSTOM_SCRIPT=\"0\"\n")
+	}
 
 	envContent := envBuf.String()
 
@@ -274,12 +284,23 @@ func buildConfigureIPPayload(n config.Node) map[string][]byte {
 		"node_ip.env": []byte(envContent),
 	}
 
-	if baseStatus, err := tasks.ReadTaskScript("configure_ip", "status.sh"); err == nil {
+	if customScript != "" {
+		payload["custom_network.sh"] = []byte(customScript)
+	}
+
+	taskID := "configure_network"
+	if baseStatus, err := tasks.ReadTaskScript(taskID, "status.sh"); err == nil {
+		dynamicStatus := injectEnvIntoScript(baseStatus, envContent)
+		payload["status.sh"] = []byte(dynamicStatus)
+	} else if baseStatus, err := tasks.ReadTaskScript("configure_ip", "status.sh"); err == nil {
 		dynamicStatus := injectEnvIntoScript(baseStatus, envContent)
 		payload["status.sh"] = []byte(dynamicStatus)
 	}
 
-	if baseRun, err := tasks.ReadTaskScript("configure_ip", "run.sh"); err == nil {
+	if baseRun, err := tasks.ReadTaskScript(taskID, "run.sh"); err == nil {
+		dynamicRun := injectEnvIntoScript(baseRun, envContent)
+		payload["run.sh"] = []byte(dynamicRun)
+	} else if baseRun, err := tasks.ReadTaskScript("configure_ip", "run.sh"); err == nil {
 		dynamicRun := injectEnvIntoScript(baseRun, envContent)
 		payload["run.sh"] = []byte(dynamicRun)
 	}

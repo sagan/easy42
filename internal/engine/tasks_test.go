@@ -47,6 +47,10 @@ func TestBuildConfigureIPPayload(t *testing.T) {
 		t.Errorf("expected NODE_EXTERNAL_IP6 in env, got: %s", envStr)
 	}
 
+	if !strings.Contains(envStr, `HAS_CUSTOM_SCRIPT="0"`) {
+		t.Errorf("expected HAS_CUSTOM_SCRIPT=\"0\" in env, got: %s", envStr)
+	}
+
 	// Verify dynamic status.sh and run.sh
 	statusBytes, ok := payload["status.sh"]
 	if !ok || len(statusBytes) == 0 {
@@ -62,6 +66,36 @@ func TestBuildConfigureIPPayload(t *testing.T) {
 	}
 	if !strings.Contains(string(runBytes), `NODE_INTERFACE="dummy0"`) {
 		t.Errorf("expected dynamic run.sh to have NODE_INTERFACE embedded")
+	}
+}
+
+func TestBuildConfigureNetworkPayloadWithCustomScript(t *testing.T) {
+	node := config.Node{
+		Name:                "test-node",
+		Interface:           "eth0",
+		IP:                  "192.168.100.1",
+		CustomNetworkScript: "ip rule del table 42\nip rule add table 42 prio 100\n",
+	}
+
+	payload := buildConfigureNetworkPayload(node)
+	if payload == nil {
+		t.Fatalf("expected non-nil payload")
+	}
+
+	envBytes, ok := payload["node_ip.env"]
+	if !ok || len(envBytes) == 0 {
+		t.Fatalf("expected node_ip.env in payload")
+	}
+	if !strings.Contains(string(envBytes), `HAS_CUSTOM_SCRIPT="1"`) {
+		t.Errorf("expected HAS_CUSTOM_SCRIPT=\"1\" in env, got: %s", string(envBytes))
+	}
+
+	customBytes, ok := payload["custom_network.sh"]
+	if !ok || len(customBytes) == 0 {
+		t.Fatalf("expected custom_network.sh in payload")
+	}
+	if !strings.Contains(string(customBytes), "ip rule add table 42 prio 100") {
+		t.Errorf("unexpected custom_network.sh content: %s", string(customBytes))
 	}
 }
 

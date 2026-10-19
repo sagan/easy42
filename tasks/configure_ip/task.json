@@ -1,7 +1,0 @@
-{
-  "id": "configure_ip",
-  "title": "Configure IP",
-  "description": "Configures permanent node IP and IPv6 addresses on dummy or loopback interface using native network configuration (Netplan, /etc/network/interfaces).",
-  "category": "System & Network",
-  "weight": 42
-}

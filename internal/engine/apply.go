@@ -545,6 +545,10 @@ func mergeNode(target *config.Node, patch config.NodePatch, now time.Time) ([]Ap
 		checkField("update_hosts", target.UpdateHosts, *patch.UpdateHosts)
 		target.UpdateHosts = *patch.UpdateHosts
 	}
+	if patch.CustomNetworkScript != nil && *patch.CustomNetworkScript != target.CustomNetworkScript {
+		checkField("custom_network_script", target.CustomNetworkScript, *patch.CustomNetworkScript)
+		target.CustomNetworkScript = *patch.CustomNetworkScript
+	}
 
 	if len(diffs) > 0 {
 		target.ModifiedAt = now
@@ -640,6 +644,9 @@ func createNodeFromPatch(patch config.NodePatch, now time.Time) (*config.Node, [
 	}
 	if patch.UpdateHosts != nil {
 		node.UpdateHosts = *patch.UpdateHosts
+	}
+	if patch.CustomNetworkScript != nil {
+		node.CustomNetworkScript = *patch.CustomNetworkScript
 	}
 
 	var diffs []ApplyFieldDiff

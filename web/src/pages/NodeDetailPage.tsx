@@ -1668,6 +1668,59 @@ export const NodeDetailPage: React.FC = () => {
                       </Box>
                     </Box>
                   )}
+                  {/* Custom Network Script */}
+                  {node.custom_network_script && (
+                    <Box sx={{ mt: 2.5, p: 2, bgcolor: "#F8FAFC", borderRadius: 2, border: "1px solid #E2E8F0" }}>
+                      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                          <Typography variant="caption" sx={{ color: "#475569", fontWeight: 700 }}>
+                            CUSTOM NETWORK SCRIPT (POLICY ROUTING)
+                          </Typography>
+                          <Chip
+                            label="Auto-executes on routable"
+                            size="small"
+                            sx={{ height: 18, fontSize: "0.65rem", fontWeight: 600, bgcolor: "#EEF2FF", color: "#4F46E5" }}
+                          />
+                        </Box>
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                          <Tooltip title={copiedKey === "custom_net_script" ? "Copied!" : "Copy Script"}>
+                            <IconButton
+                              size="small"
+                              onClick={() => handleCopy("custom_net_script", node.custom_network_script!)}
+                              sx={{ p: 0.3, color: "#64748B" }}
+                            >
+                              {copiedKey === "custom_net_script" ? <Check size={14} color="#059669" /> : <Copy size={14} />}
+                            </IconButton>
+                          </Tooltip>
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            startIcon={<Wrench size={13} />}
+                            onClick={() => navigate(`/helper?node=${encodeURIComponent(node.name)}&task=configure_network`)}
+                            sx={{ fontSize: "0.72rem", py: 0.2, px: 1, borderColor: "#CBD5E1", color: "#334155" }}
+                          >
+                            Configure
+                          </Button>
+                        </Box>
+                      </Box>
+                      <Box
+                        component="pre"
+                        sx={{
+                          m: 0,
+                          p: 1.5,
+                          borderRadius: 1.5,
+                          bgcolor: "#0F172A",
+                          color: "#F8FAFC",
+                          fontSize: "0.75rem",
+                          fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+                          overflowX: "auto",
+                          maxHeight: 180,
+                        }}
+                      >
+                        {node.custom_network_script}
+                      </Box>
+                    </Box>
+                  )}
 
                   {/* Node Tags */}
                   <Box sx={{ mt: 3 }}>

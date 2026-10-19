@@ -20,12 +20,11 @@ esac
 export PATH
 
 # 1. Interface Whitelist Check
-# Hardcode whitelist to support only "lo" and "dummy*" interfaces to prevent mis-configuration
 case "$NODE_INTERFACE" in
-    lo|dummy*)
+    lo|dummy*|eth*|ens*|enp*|eno*|wl*|wlan*)
         ;;
     *)
-        echo "Error: interface '${NODE_INTERFACE:-<empty>}' is not supported (only 'lo' and 'dummy*' are permitted)" >&2
+        echo "Error: interface '${NODE_INTERFACE:-<empty>}' is not supported (permitted: 'lo', 'dummy*', 'eth*', etc.)" >&2
         exit 20
         ;;
 esac
@@ -36,8 +35,8 @@ CLEAN_IP6="${NODE_IP6%/*}"
 CLEAN_EXT_IP="${NODE_EXTERNAL_IP%/*}"
 CLEAN_EXT_IP6="${NODE_EXTERNAL_IP6%/*}"
 
-if [ -z "$CLEAN_IP" ] && [ -z "$CLEAN_IP6" ] && [ -z "$CLEAN_EXT_IP" ] && [ -z "$CLEAN_EXT_IP6" ]; then
-    echo "Error: no IP or IPv6 addresses configured for node" >&2
+if [ -z "$CLEAN_IP" ] && [ -z "$CLEAN_IP6" ] && [ -z "$CLEAN_EXT_IP" ] && [ -z "$CLEAN_EXT_IP6" ] && [ "$HAS_CUSTOM_SCRIPT" != "1" ]; then
+    echo "Error: no IP addresses or custom network script configured for node" >&2
     exit 20
 fi
 
@@ -124,7 +123,24 @@ fi
 
 ALL_DESIRED_IPS="$IPV4_LIST $IPV6_LIST"
 
-# 5. Check if all desired IPs are already configured on the node
+# Helper to resolve target interface for systemd networkd-dispatcher
+get_target_iface() {
+    local iface=""
+    if [ -n "$NODE_INTERFACE" ] && [ "$NODE_INTERFACE" != "lo" ]; then
+        iface="$NODE_INTERFACE"
+    else
+        iface=$(ip route show default 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="dev") {print $(i+1); exit}}')
+        if [ -z "$iface" ]; then
+            iface=$(ip -6 route show default 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="dev") {print $(i+1); exit}}')
+        fi
+        if [ -z "$iface" ]; then
+            iface=$(ip -o link show 2>/dev/null | awk -F': ' '$2 != "lo" {print $2; exit}' | cut -d'@' -f1)
+        fi
+    fi
+    echo "${iface:-eth0}"
+}
+
+# 5. Check if all desired IPs and custom scripts are already configured on the node
 ip_exists_on_host() {
     local ip="$1"
     [ -z "$ip" ] && return 0
@@ -151,8 +167,39 @@ if [ "$NODE_INTERFACE" = "lo" ]; then
     fi
 fi
 
-if [ "$ALL_PRESENT" -eq 1 ]; then
-    echo "Already configured: all desired IP addresses ($ALL_DESIRED_IPS) already exist on the node."
+# Check if custom network script is already configured
+CUSTOM_CONFIGURED=1
+if [ "$HAS_CUSTOM_SCRIPT" = "1" ] && [ -f "$SCRIPT_DIR/custom_network.sh" ]; then
+    TARGET_IFACE="$(get_target_iface)"
+    if has_systemd || [ -d /etc/systemd/system ] || (command -v systemctl >/dev/null 2>&1); then
+        DISPATCHER_SCRIPT="/etc/networkd-dispatcher/routable.d/99-easy42.sh"
+        OVERRIDE_FILE="/etc/systemd/system/networkd-dispatcher.service.d/override.conf"
+        if [ ! -x "$DISPATCHER_SCRIPT" ] || [ ! -f "$OVERRIDE_FILE" ]; then
+            CUSTOM_CONFIGURED=0
+        else
+            CURRENT_CUSTOM=$(sed -n '/### EASY42_CUSTOM_START/,/### EASY42_CUSTOM_END/p' "$DISPATCHER_SCRIPT" 2>/dev/null | sed '1d;$d')
+            DESIRED_CUSTOM=$(cat "$SCRIPT_DIR/custom_network.sh")
+            if [ "$CURRENT_CUSTOM" != "$DESIRED_CUSTOM" ] || ! grep -q "if \[ \"\$IFACE\" != \"$TARGET_IFACE\" \];" "$DISPATCHER_SCRIPT" 2>/dev/null; then
+                CUSTOM_CONFIGURED=0
+            fi
+        fi
+    elif [ "$OS_ID" = "alpine" ] || [ -f /etc/network/interfaces ]; then
+        EASY42_SH="/etc/network/easy42.sh"
+        IFACES_FILE="/etc/network/interfaces"
+        if [ ! -x "$EASY42_SH" ] || ! grep -q "up /etc/network/easy42.sh" "$IFACES_FILE" 2>/dev/null; then
+            CUSTOM_CONFIGURED=0
+        else
+            CURRENT_CUSTOM=$(sed -n '/### EASY42_CUSTOM_START/,/### EASY42_CUSTOM_END/p' "$EASY42_SH" 2>/dev/null | sed '1d;$d')
+            DESIRED_CUSTOM=$(cat "$SCRIPT_DIR/custom_network.sh")
+            if [ "$CURRENT_CUSTOM" != "$DESIRED_CUSTOM" ]; then
+                CUSTOM_CONFIGURED=0
+            fi
+        fi
+    fi
+fi
+
+if [ "$ALL_PRESENT" -eq 1 ] && [ "$CUSTOM_CONFIGURED" -eq 1 ]; then
+    echo "Already configured: all desired IP addresses and custom network rules are up to date."
     exit 0
 fi
 
@@ -181,12 +228,14 @@ elif [ -d /etc/systemd/network ] && (is_service_running systemd-networkd || is_s
     NET_MGR="networkd"
 elif [ -f /etc/config/network ] && command -v uci >/dev/null 2>&1; then
     NET_MGR="openwrt"
+elif has_systemd || command -v systemctl >/dev/null 2>&1; then
+    NET_MGR="networkd"
 else
     echo "Error: No supported native network manager found (checked: netplan, /etc/network/interfaces, systemd-networkd, openwrt)" >&2
     exit 1
 fi
 
-echo "Applying permanent IP configuration for '$NODE_INTERFACE' via $NET_MGR..."
+echo "Applying network configuration for '$NODE_INTERFACE' via $NET_MGR..."
 
 # 8. Configure based on native network manager
 case "$NET_MGR" in
@@ -235,7 +284,7 @@ case "$NET_MGR" in
                 exit 1
             fi
             echo "Applying Netplan configuration..."
-            $SUDO netplan apply
+            $SUDO netplan apply || true
         fi
         ;;
 
@@ -247,6 +296,28 @@ case "$NET_MGR" in
         fi
         backup_file "$IFACES_FILE"
 
+        # Write Alpine / interfaces custom script if configured
+        if [ "$HAS_CUSTOM_SCRIPT" = "1" ] && [ -f "$SCRIPT_DIR/custom_network.sh" ]; then
+            $SUDO mkdir -p /etc/network
+            TMP_SCRIPT="/tmp/easy42.sh.$$"
+            {
+                echo "#!/bin/sh"
+                echo "# easy42 custom network script"
+                echo "### EASY42_CUSTOM_START"
+                cat "$SCRIPT_DIR/custom_network.sh"
+                echo ""
+                echo "### EASY42_CUSTOM_END"
+            } > "$TMP_SCRIPT"
+            $SUDO cp -f "$TMP_SCRIPT" /etc/network/easy42.sh
+            $SUDO chmod 755 /etc/network/easy42.sh
+            $SUDO chown root:root /etc/network/easy42.sh 2>/dev/null || true
+            rm -f "$TMP_SCRIPT"
+        else
+            if [ -f /etc/network/easy42.sh ]; then
+                $SUDO rm -f /etc/network/easy42.sh
+            fi
+        fi
+
         TMP_BLOCK="/tmp/easy42_iface_block.$$"
         {
             echo "### EASY42_START"
@@ -255,6 +326,9 @@ case "$NET_MGR" in
                 echo "iface lo inet loopback"
                 echo "    address 127.0.0.1"
                 echo "    netmask 255.0.0.0"
+                if [ "$HAS_CUSTOM_SCRIPT" = "1" ] && [ -f "$SCRIPT_DIR/custom_network.sh" ]; then
+                    echo "    up /etc/network/easy42.sh"
+                fi
                 for ip in $IPV4_LIST; do
                     echo ""
                     echo "iface lo inet static"
@@ -269,14 +343,17 @@ case "$NET_MGR" in
                 done
             else
                 echo "auto $NODE_INTERFACE"
-                FIRST_V4=1
+                FIRST_IFACE=1
                 for ip in $IPV4_LIST; do
                     echo "iface $NODE_INTERFACE inet static"
                     echo "    address $ip"
                     echo "    netmask 255.255.255.255"
-                    if [ "$FIRST_V4" -eq 1 ]; then
+                    if [ "$FIRST_IFACE" -eq 1 ]; then
                         echo "    pre-up ip link add $NODE_INTERFACE type dummy || true"
-                        FIRST_V4=0
+                        if [ "$HAS_CUSTOM_SCRIPT" = "1" ] && [ -f "$SCRIPT_DIR/custom_network.sh" ]; then
+                            echo "    up /etc/network/easy42.sh"
+                        fi
+                        FIRST_IFACE=0
                     fi
                     echo ""
                 done
@@ -284,6 +361,15 @@ case "$NET_MGR" in
                     echo "iface $NODE_INTERFACE inet6 static"
                     echo "    address $ip"
                     echo "    netmask 128"
+                    if [ "$FIRST_IFACE" -eq 1 ]; then
+                        if [ "$NODE_INTERFACE" != "lo" ]; then
+                            echo "    pre-up ip link add $NODE_INTERFACE type dummy || true"
+                        fi
+                        if [ "$HAS_CUSTOM_SCRIPT" = "1" ] && [ -f "$SCRIPT_DIR/custom_network.sh" ]; then
+                            echo "    up /etc/network/easy42.sh"
+                        fi
+                        FIRST_IFACE=0
+                    fi
                     echo ""
                 done
             fi
@@ -385,8 +471,90 @@ EOF
         ;;
 esac
 
-# 9. Post-Apply Verification
-# Thoroughly check that the desired IPs are bound to the node
+# 9. Configure custom network script for systemd systems via networkd-dispatcher
+if has_systemd || [ -d /etc/systemd/system ] || (command -v systemctl >/dev/null 2>&1); then
+    ROUTABLE_DIR="/etc/networkd-dispatcher/routable.d"
+    OVERRIDE_DIR="/etc/systemd/system/networkd-dispatcher.service.d"
+
+    if [ "$HAS_CUSTOM_SCRIPT" = "1" ] && [ -f "$SCRIPT_DIR/custom_network.sh" ]; then
+        TARGET_IFACE="$(get_target_iface)"
+        echo "Configuring custom network script for interface '$TARGET_IFACE' via networkd-dispatcher..."
+
+        # Try to ensure networkd-dispatcher is installed
+        if ! command -v networkd-dispatcher >/dev/null 2>&1 && ! [ -d /etc/networkd-dispatcher ]; then
+            echo "Attempting to install networkd-dispatcher package..."
+            install_packages networkd-dispatcher 2>/dev/null || true
+        fi
+
+        # 1. Store script in /etc/networkd-dispatcher/routable.d/99-easy42.sh
+        $SUDO mkdir -p "$ROUTABLE_DIR"
+        TMP_DISPATCHER="/tmp/99-easy42.sh.$$"
+        {
+            echo "#!/bin/sh"
+            echo ""
+            echo "if [ \"\$IFACE\" != \"$TARGET_IFACE\" ]; then"
+            echo "  exit 0"
+            echo "fi"
+            echo ""
+            echo "# user defined scripts"
+            echo "### EASY42_CUSTOM_START"
+            cat "$SCRIPT_DIR/custom_network.sh"
+            echo ""
+            echo "### EASY42_CUSTOM_END"
+        } > "$TMP_DISPATCHER"
+        $SUDO cp -f "$TMP_DISPATCHER" "$ROUTABLE_DIR/99-easy42.sh"
+        $SUDO chmod 755 "$ROUTABLE_DIR/99-easy42.sh"
+        $SUDO chown root:root "$ROUTABLE_DIR/99-easy42.sh" 2>/dev/null || true
+        rm -f "$TMP_DISPATCHER"
+
+        # 2. Add override for networkd-dispatcher.service
+        $SUDO mkdir -p "$OVERRIDE_DIR"
+        OVERRIDE_FILE="$OVERRIDE_DIR/override.conf"
+        TMP_OVERRIDE="/tmp/networkd-dispatcher-override.conf.$$"
+        cat << 'EOF' > "$TMP_OVERRIDE"
+[Unit]
+PartOf=systemd-networkd.service
+After=systemd-networkd.service
+
+[Service]
+Restart=on-failure
+EOF
+        $SUDO cp -f "$TMP_OVERRIDE" "$OVERRIDE_FILE"
+        $SUDO chmod 644 "$OVERRIDE_FILE"
+        rm -f "$TMP_OVERRIDE"
+
+        # 3. Reload systemd daemon
+        echo "Reloading systemd manager configuration..."
+        $SUDO systemctl daemon-reload
+
+        # 4. Enable and start networkd-dispatcher
+        if is_service_installed networkd-dispatcher || command -v systemctl >/dev/null 2>&1; then
+            $SUDO systemctl enable networkd-dispatcher 2>/dev/null || true
+            $SUDO systemctl start networkd-dispatcher 2>/dev/null || true
+        fi
+    else
+        # Remove custom network script if no longer configured
+        if [ -f "$ROUTABLE_DIR/99-easy42.sh" ]; then
+            echo "Removing custom network script from $ROUTABLE_DIR/99-easy42.sh..."
+            $SUDO rm -f "$ROUTABLE_DIR/99-easy42.sh"
+        fi
+    fi
+fi
+
+# 10. Restart network manager to make all changes take effect
+echo "Restarting network services to apply all changes..."
+if has_systemd || command -v systemctl >/dev/null 2>&1; then
+    $SUDO systemctl restart systemd-networkd 2>/dev/null || true
+    if is_service_installed networkd-dispatcher || [ -d /etc/networkd-dispatcher ]; then
+        $SUDO systemctl restart networkd-dispatcher 2>/dev/null || true
+    fi
+elif [ "$OS_ID" = "alpine" ] || (command -v rc-service >/dev/null 2>&1 && [ -f /etc/init.d/networking ]); then
+    $SUDO rc-service networking restart 2>/dev/null || true
+elif is_service_installed networking; then
+    restart_service networking 2>/dev/null || true
+fi
+
+# 11. Post-Apply Verification
 FAILED_VERIFY=0
 for ip in $ALL_DESIRED_IPS; do
     if ! ip_exists_on_host "$ip"; then
@@ -397,7 +565,6 @@ done
 
 if [ "$NODE_INTERFACE" = "lo" ]; then
     if ! ip addr show dev lo 2>/dev/null | grep -q "127\.0\.0\.1"; then
-        # Ensure 127.0.0.1/8 is added to lo
         $SUDO ip addr add 127.0.0.1/8 dev lo 2>/dev/null || true
         if ! ip addr show dev lo 2>/dev/null | grep -q "127\.0\.0\.1"; then
             FAILED_VERIFY=1
@@ -411,5 +578,5 @@ if [ "$FAILED_VERIFY" -ne 0 ]; then
     exit 1
 fi
 
-echo "Successfully configured interface '$NODE_INTERFACE' with IP addresses ($ALL_DESIRED_IPS) via $NET_MGR"
+echo "Successfully configured network for node '$NODE_NAME' (interface: $NODE_INTERFACE, IPs: ${ALL_DESIRED_IPS:-none}) via $NET_MGR"
 exit 0
