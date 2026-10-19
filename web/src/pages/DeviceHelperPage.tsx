@@ -8,11 +8,13 @@ export const DeviceHelperPage: React.FC = () => {
   const { nodes } = useMesh();
 
   const initialNode = searchParams.get("node") || undefined;
+  const initialTaskId = searchParams.get("task") || searchParams.get("taskId") || undefined;
 
   return (
     <DeviceHelperModal
       nodes={nodes}
       initialNode={initialNode}
+      initialTaskId={initialTaskId}
     />
   );
 };

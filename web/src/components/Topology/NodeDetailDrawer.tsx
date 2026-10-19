@@ -15,6 +15,7 @@ import {
   DialogActions,
   TextField,
   LinearProgress,
+  Tooltip,
 } from "@mui/material";
 import {
   X,
@@ -35,6 +36,7 @@ import {
   RotateCcw,
   FileText,
   Check,
+  Copy,
   Cpu,
   Camera,
   AlertTriangle,
@@ -112,6 +114,15 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
   const [noteDraft, setNoteDraft] = useState("");
   const [savingNote, setSavingNote] = useState(false);
   const [noteTab, setNoteTab] = useState<"write" | "preview">("write");
+
+  // Copied text tooltip state
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+
+  const handleCopy = (key: string, text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedKey(key);
+    setTimeout(() => setCopiedKey(null), 2000);
+  };
 
   React.useEffect(() => {
     if (node) {
@@ -355,9 +366,18 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
 
         <Box sx={{ display: "grid", gridTemplateColumns: node.ip6 ? "1fr 1fr" : "1fr 1fr", gap: 1.5 }}>
           <Box sx={{ p: 1.5, borderRadius: 2, backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
-            <Typography variant="caption" sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}>
-              <Globe size={12} /> Main IPv4
-            </Typography>
+            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <Typography variant="caption" sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}>
+                <Globe size={12} /> Main IPv4
+              </Typography>
+              {node.ip && (
+                <Tooltip title={copiedKey === "ip4" ? "Copied!" : "Copy IPv4"}>
+                  <IconButton size="small" onClick={() => handleCopy("ip4", node.ip!)} sx={{ p: 0.2 }}>
+                    {copiedKey === "ip4" ? <Check size={13} color="#059669" /> : <Copy size={13} />}
+                  </IconButton>
+                </Tooltip>
+              )}
+            </Box>
             <Typography variant="body2" className="mono-font" sx={{ fontWeight: 600, color: "#0891B2", mt: 0.5 }}>
               {node.ip}
             </Typography>
@@ -375,9 +395,16 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
 
         {node.ip6 ? (
           <Box sx={{ p: 1.5, borderRadius: 2, backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
-            <Typography variant="caption" sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}>
-              <Globe size={12} /> Main IPv6
-            </Typography>
+            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <Typography variant="caption" sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}>
+                <Globe size={12} /> Main IPv6
+              </Typography>
+              <Tooltip title={copiedKey === "ip6" ? "Copied!" : "Copy IPv6"}>
+                <IconButton size="small" onClick={() => handleCopy("ip6", node.ip6!)} sx={{ p: 0.2 }}>
+                  {copiedKey === "ip6" ? <Check size={13} color="#059669" /> : <Copy size={13} />}
+                </IconButton>
+              </Tooltip>
+            </Box>
             <Typography variant="body2" className="mono-font" sx={{ fontWeight: 600, color: "#0891B2", mt: 0.5 }}>
               {node.ip6}
             </Typography>
@@ -386,9 +413,16 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
 
         {node.external_ip ? (
           <Box sx={{ p: 1.5, borderRadius: 2, backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
-            <Typography variant="caption" sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}>
-              <Globe size={12} /> External IPv4 (DN42)
-            </Typography>
+            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <Typography variant="caption" sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}>
+                <Globe size={12} /> External IPv4 (DN42)
+              </Typography>
+              <Tooltip title={copiedKey === "ext_ip4" ? "Copied!" : "Copy IPv4"}>
+                <IconButton size="small" onClick={() => handleCopy("ext_ip4", node.external_ip!)} sx={{ p: 0.2 }}>
+                  {copiedKey === "ext_ip4" ? <Check size={13} color="#059669" /> : <Copy size={13} />}
+                </IconButton>
+              </Tooltip>
+            </Box>
             <Typography variant="body2" className="mono-font" sx={{ fontWeight: 600, color: "#7C3AED", mt: 0.5 }}>
               {node.external_ip}
             </Typography>
@@ -397,9 +431,16 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
 
         {node.external_ip6 ? (
           <Box sx={{ p: 1.5, borderRadius: 2, backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
-            <Typography variant="caption" sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}>
-              <Globe size={12} /> External IPv6 (DN42)
-            </Typography>
+            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <Typography variant="caption" sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}>
+                <Globe size={12} /> External IPv6 (DN42)
+              </Typography>
+              <Tooltip title={copiedKey === "ext_ip6" ? "Copied!" : "Copy IPv6"}>
+                <IconButton size="small" onClick={() => handleCopy("ext_ip6", node.external_ip6!)} sx={{ p: 0.2 }}>
+                  {copiedKey === "ext_ip6" ? <Check size={13} color="#059669" /> : <Copy size={13} />}
+                </IconButton>
+              </Tooltip>
+            </Box>
             <Typography variant="body2" className="mono-font" sx={{ fontWeight: 600, color: "#7C3AED", mt: 0.5 }}>
               {node.external_ip6}
             </Typography>
@@ -407,9 +448,18 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
         ) : null}
 
         <Box sx={{ p: 1.5, borderRadius: 2, backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
-          <Typography variant="caption" sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}>
-            <Shield size={12} /> AS Number
-          </Typography>
+          <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <Typography variant="caption" sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}>
+              <Shield size={12} /> AS Number
+            </Typography>
+            {node.asn !== undefined && node.asn !== null && (
+              <Tooltip title={copiedKey === "asn" ? "Copied!" : "Copy ASN"}>
+                <IconButton size="small" onClick={() => handleCopy("asn", String(node.asn))} sx={{ p: 0.2 }}>
+                  {copiedKey === "asn" ? <Check size={13} color="#059669" /> : <Copy size={13} />}
+                </IconButton>
+              </Tooltip>
+            )}
+          </Box>
           <Typography variant="body2" className="mono-font" sx={{ fontWeight: 700, color: "#4F46E5", mt: 0.5 }}>
             AS{node.asn}
           </Typography>

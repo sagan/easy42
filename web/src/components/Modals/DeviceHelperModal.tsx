@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   Button,
   Box,
@@ -20,7 +21,7 @@ import {
   Select,
   MenuItem,
 } from "@mui/material";
-import { CheckCircle2, XCircle, Play, RotateCw, Terminal, Server, HelpCircle, Tag } from "lucide-react";
+import { CheckCircle2, XCircle, Play, RotateCw, Terminal, Server, HelpCircle, Tag, CheckCheck } from "lucide-react";
 import { api } from "../../api/client";
 import { Node, TaskMeta, TaskStatusResult, TaskRunResult } from "../../types/api";
 
@@ -29,12 +30,16 @@ interface DeviceHelperModalProps {
   onClose?: () => void;
   nodes: Node[];
   initialNode?: string;
+  initialTaskId?: string;
 }
 
-export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, initialNode }) => {
+export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, initialNode, initialTaskId }) => {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [tasks, setTasks] = useState<TaskMeta[]>([]);
   const [loadingTasks, setLoadingTasks] = useState(false);
-  const [selectedTaskId, setSelectedTaskId] = useState<string>("");
+  const [selectedTaskId, setSelectedTaskId] = useState<string>(() => {
+    return searchParams.get("task") || searchParams.get("taskId") || initialTaskId || "";
+  });
 
   // Tag filter state
   const [selectedTag, setSelectedTag] = useState<string>("All");
@@ -79,6 +84,9 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
   // Global error
   const [error, setError] = useState<string | null>(null);
 
+  // Track if status has been checked for current task
+  const [hasCheckedStatus, setHasCheckedStatus] = useState<boolean>(false);
+
   // Load tasks on mount
   useEffect(() => {
     setError(null);
@@ -88,6 +96,7 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
     setRunningNodes({});
     setActiveLogNode(null);
     setSelectedTag("All");
+    setHasCheckedStatus(false);
 
     // Default selected nodes: initialNode if provided and managed, otherwise all managed nodes
     if (initialNode && managedNodes.some((n) => n.name === initialNode)) {
@@ -99,13 +108,69 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
     loadTasks();
   }, [initialNode, managedNodes]);
 
+  const handleSelectTask = useCallback(
+    (taskId: string) => {
+      setSelectedTaskId(taskId);
+      setSearchParams(
+        (prev) => {
+          if (taskId) {
+            if (prev.has("taskId") && !prev.has("task")) {
+              if (prev.get("taskId") === taskId) return prev;
+              const next = new URLSearchParams(prev);
+              next.set("taskId", taskId);
+              return next;
+            }
+            if (prev.get("task") === taskId && !prev.has("taskId")) {
+              return prev;
+            }
+            const next = new URLSearchParams(prev);
+            next.set("task", taskId);
+            next.delete("taskId");
+            return next;
+          } else {
+            if (!prev.has("task") && !prev.has("taskId")) return prev;
+            const next = new URLSearchParams(prev);
+            next.delete("task");
+            next.delete("taskId");
+            return next;
+          }
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
+
+  // Sync selected task if URL query params change (e.g. browser back/forward or external navigation)
+  useEffect(() => {
+    const paramTask = searchParams.get("task") || searchParams.get("taskId") || "";
+    if (paramTask) {
+      if (paramTask !== selectedTaskId && (tasks.length === 0 || tasks.some((t) => t.id === paramTask))) {
+        setSelectedTaskId(paramTask);
+      }
+    } else if (tasks.length > 0 && selectedTaskId !== tasks[0].id) {
+      setSelectedTaskId(tasks[0].id);
+    }
+  }, [searchParams, tasks, selectedTaskId]);
+
   const loadTasks = async () => {
     setLoadingTasks(true);
     try {
       const data = await api.getTasks();
       setTasks(data);
-      if (data.length > 0 && !selectedTaskId) {
-        setSelectedTaskId(data[0].id);
+      if (data.length > 0) {
+        const urlTask = searchParams.get("task") || searchParams.get("taskId") || initialTaskId || "";
+        const matched = data.find((t) => t.id === urlTask);
+        if (matched) {
+          setSelectedTaskId(matched.id);
+          if (!searchParams.get("task") && !searchParams.get("taskId")) {
+            handleSelectTask(matched.id);
+          }
+        } else {
+          const firstTaskId = data[0].id;
+          setSelectedTaskId(firstTaskId);
+          handleSelectTask(firstTaskId);
+        }
       }
     } catch (err: unknown) {
       const e = err as Error;
@@ -125,6 +190,7 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
       setStatuses({});
       setRunResults({});
       setActiveLogNode(null);
+      setHasCheckedStatus(false);
     }
   }, [selectedTaskId]);
 
@@ -166,6 +232,9 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
     try {
       const res = await api.checkTaskStatus(selectedTask.id, target);
       setStatuses((prev) => ({ ...prev, ...res }));
+      if (res && Object.keys(res).length > 0) {
+        setHasCheckedStatus(true);
+      }
     } catch (err: unknown) {
       const e = err as Error;
       setError(e.message || "Status check failed");
@@ -217,6 +286,26 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
 
   const isAnyChecking = Object.values(checkingNodes).some(Boolean);
   const isAnyRunning = Object.values(runningNodes).some(Boolean);
+
+  const canAutoSelect =
+    hasCheckedStatus &&
+    Object.keys(statuses).length > 0 &&
+    !isAnyChecking &&
+    !isAnyRunning;
+
+  const needsExecutionCount = useMemo(() => {
+    const targetPool = selectedTag === "All" ? managedNodes : filteredNodes;
+    return targetPool.filter((n) => statuses[n.name]?.status === "ready").length;
+  }, [selectedTag, managedNodes, filteredNodes, statuses]);
+
+  // Auto-select nodes whose status is "ready" ("Needs Execution") and unselect other nodes
+  const handleAutoSelect = () => {
+    const targetPool = selectedTag === "All" ? managedNodes : filteredNodes;
+    const readyNodeNames = targetPool
+      .filter((n) => statuses[n.name]?.status === "ready")
+      .map((n) => n.name);
+    setSelectedNodes(readyNodeNames);
+  };
 
   const renderStatusBadge = (nodeName: string) => {
     if (runningNodes[nodeName]) {
@@ -355,7 +444,7 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
                 return (
                   <Box
                     key={task.id}
-                    onClick={() => setSelectedTaskId(task.id)}
+                    onClick={() => handleSelectTask(task.id)}
                     sx={{
                       p: 1.5,
                       mb: 1,
@@ -489,6 +578,25 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
                   >
                     Check Status
                   </Button>
+                  <Tooltip
+                    title={
+                      !hasCheckedStatus
+                        ? "Click 'Check Status' first to fetch task status"
+                        : `Auto-select ${needsExecutionCount} device(s) needing execution`
+                    }
+                  >
+                    <span>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        startIcon={<CheckCheck size={14} />}
+                        disabled={!canAutoSelect}
+                        onClick={handleAutoSelect}
+                      >
+                        Auto Select
+                      </Button>
+                    </span>
+                  </Tooltip>
                   <Button
                     size="small"
                     variant="contained"

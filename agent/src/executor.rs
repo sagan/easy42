@@ -643,12 +643,17 @@ done"#;
                 }
             }
             "sync_roa" => {
-                self.apply_config_file(proto::ApplyConfigFile {
+                let (write_ok, write_code, write_out, write_err) = self.apply_config_file(proto::ApplyConfigFile {
                     path: req.target_file.clone(),
                     content: req.file_content,
                     file_mode: if req.file_mode != 0 { req.file_mode } else { 0o644 },
                     sha256_hash: req.sha256_hash,
-                })
+                });
+                if !write_ok {
+                    (write_ok, write_code, write_out, write_err)
+                } else {
+                    self.reload_bird(proto::ReloadBirdCmd { check_only: false }).await
+                }
             }
             _ => {
                 // Default: WireGuard sync (sync_wg)

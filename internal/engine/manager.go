@@ -3247,7 +3247,6 @@ func (m *Manager) PlanSyncWithScope(scope string, nodeNames ...string) ([]config
 		}
 		sort.Strings(usedPolicyIDs)
 
-		nodeHasRoaUpdates := false
 		for _, pID := range usedPolicyIDs {
 			pol := usedPolicies[pID]
 			cleanID := compiler.SanitizeIdentifier(pol.ID)
@@ -3273,10 +3272,6 @@ func (m *Manager) PlanSyncWithScope(scope string, nodeNames ...string) ([]config
 					}
 				}
 
-				if needsApply {
-					nodeHasRoaUpdates = true
-				}
-
 				actions = append(actions, config.SyncAction{
 					NodeName:    node.Name,
 					Host:        node.Host,
@@ -3284,6 +3279,7 @@ func (m *Manager) PlanSyncWithScope(scope string, nodeNames ...string) ([]config
 					Interface:   cleanID + "_roa4",
 					TargetFile:  targetFile,
 					FileContent: content,
+					Command:     "birdc configure",
 					Description: fmt.Sprintf("Deploy ROA4 table (%s) for policy '%s' on %s", targetFile, pol.Name, node.Name),
 					NeedsApply:  needsApply,
 					Status:      status,
@@ -3312,10 +3308,6 @@ func (m *Manager) PlanSyncWithScope(scope string, nodeNames ...string) ([]config
 					}
 				}
 
-				if needsApply {
-					nodeHasRoaUpdates = true
-				}
-
 				actions = append(actions, config.SyncAction{
 					NodeName:    node.Name,
 					Host:        node.Host,
@@ -3323,6 +3315,7 @@ func (m *Manager) PlanSyncWithScope(scope string, nodeNames ...string) ([]config
 					Interface:   cleanID + "_roa6",
 					TargetFile:  targetFile,
 					FileContent: content,
+					Command:     "birdc configure",
 					Description: fmt.Sprintf("Deploy ROA6 table (%s) for policy '%s' on %s", targetFile, pol.Name, node.Name),
 					NeedsApply:  needsApply,
 					Status:      status,
@@ -3352,14 +3345,6 @@ func (m *Manager) PlanSyncWithScope(scope string, nodeNames ...string) ([]config
 				} else {
 					diffStatus = "update"
 				}
-			}
-		}
-
-		if nodeHasRoaUpdates {
-			needsApply = true
-			if diffStatus == "synced" {
-				diffStatus = "update"
-				status = "pending"
 			}
 		}
 
@@ -3584,6 +3569,21 @@ func (m *Manager) ExecuteSyncNodesWithScope(isForce bool, scope string, nodeName
 				if err := ssh.AtomicWriteFile(sftpClient, act.TargetFile, []byte(act.FileContent), 0644); err != nil {
 					res.Success = false
 					res.Error = fmt.Sprintf("Failed to write ROA config (%s): %v", act.TargetFile, err)
+					res.Duration = float64(time.Since(start).Milliseconds())
+					results = append(results, res)
+					continue
+				}
+
+				// Apply BIRD configuration on remote device
+				cmd := act.Command
+				if cmd == "" {
+					cmd = "birdc configure"
+				}
+				out, err := ssh.RunCommand(sshClient, cmd)
+				res.Output = strings.TrimSpace(out)
+				if err != nil {
+					res.Success = false
+					res.Error = fmt.Sprintf("Failed to apply BIRD config after ROA update (%s): %v", cmd, err)
 					res.Duration = float64(time.Since(start).Milliseconds())
 					results = append(results, res)
 					continue
@@ -5226,7 +5226,23 @@ func (m *Manager) executeAgentSyncAction(act config.SyncAction, res *config.Sync
 	// 3. Post-action service reload depending on type
 	switch act.Type {
 	case config.ActionSyncRoaConfig:
+		reloadResp, err := m.agentHub.SendCommand(ctx, act.NodeName, &agentpb.CommandRequest{
+			Command: &agentpb.CommandRequest_ReloadBird{
+				ReloadBird: &agentpb.ReloadBirdCmd{},
+			},
+		})
+		if err != nil {
+			res.Success = false
+			res.Error = fmt.Sprintf("Agent BIRD reload failed: %v", err)
+			return
+		}
+		if !reloadResp.Success {
+			res.Success = false
+			res.Error = fmt.Sprintf("BIRD reload failed: %s %s", reloadResp.Stderr, reloadResp.Stdout)
+			return
+		}
 		res.Success = true
+		res.Output = reloadResp.Stdout
 		hash := config.HashConfig(compiler.NormalizeConfig(act.FileContent))
 		_ = m.stateStore.UpdateRoaState(act.NodeName, act.Host, act.TargetFile, hash, time.Now())
 
@@ -5481,7 +5497,7 @@ if [ -x /etc/init.d/easy42-agent ]; then
     rm -f /etc/init.d/easy42-agent 2>/dev/null || true
 fi
 killall easy42-agent 2>/dev/null || true
-rm -f /usr/local/bin/easy42-agent 2>/dev/null || true
+rm -f /usr/local/bin/easy42-agent /usr/bin/easy42-agent 2>/dev/null || true
 rm -f /etc/easy42/agent.json 2>/dev/null || true
 '`
 			_, _ = ssh.RunCommand(client, cleanupCmd)

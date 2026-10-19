@@ -38,6 +38,7 @@ import { api } from "../../api/client";
 import { Node, Entrypoint, KernelRouteRule, ConfigHook, ConfigTemplate } from "../../types/api";
 import { MarkdownView } from "../Common/MarkdownView";
 import { getInterfaceName } from "../../utils/interface";
+import TextFieldWithCopy from "../Common/TextFieldWithCopy";
 
 const HOOK_TYPES = [
   { value: "bird", label: "BIRD: Global / Post (e.g. protocol direct)" },
@@ -983,7 +984,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                   STEP 1: SSH CONNECTION
                 </Typography>
                 <Box sx={{ display: "flex", gap: 1 }}>
-                  <TextField
+                  <TextFieldWithCopy
                     fullWidth
                     size="small"
                     placeholder="e.g. router-gw1, 192.168.1.1:22, or user@host:22"
@@ -1020,7 +1021,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                 </Typography>
 
                 <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
-                  <TextField
+                  <TextFieldWithCopy
                     label="Node Name"
                     size="small"
                     value={name}
@@ -1044,7 +1045,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                     disabled={saving}
                   />
 
-                  <TextField
+                  <TextFieldWithCopy
                     label="AS Number (ASN)"
                     type="number"
                     size="small"
@@ -1058,7 +1059,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
 
                 <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
                   {discoveredIps.length > 0 ? (
-                    <TextField
+                    <TextFieldWithCopy
                       select
                       label="Main IPv4 Address"
                       size="small"
@@ -1076,9 +1077,9 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                           {item.ip} ({item.iface})
                         </MenuItem>
                       ))}
-                    </TextField>
+                    </TextFieldWithCopy>
                   ) : (
-                    <TextField
+                    <TextFieldWithCopy
                       label="Main IPv4 Address"
                       size="small"
                       value={ip}
@@ -1089,7 +1090,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                     />
                   )}
 
-                  <TextField
+                  <TextFieldWithCopy
                     label="Main IPv6 Address (Optional)"
                     size="small"
                     value={ip6}
@@ -1101,7 +1102,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                 </Box>
 
                 <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
-                  <TextField
+                  <TextFieldWithCopy
                     label="Interface Name"
                     size="small"
                     value={iface}
@@ -1328,7 +1329,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                         </Box>
 
                         <Box sx={{ display: "grid", gridTemplateColumns: "1.2fr 0.9fr 1fr 0.7fr", gap: 1.2 }}>
-                          <TextField
+                          <TextFieldWithCopy
                             label="Public IP or Domain"
                             size="small"
                             placeholder="e.g. 1.2.3.4 or gw.domain.com"

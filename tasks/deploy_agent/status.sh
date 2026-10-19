@@ -4,6 +4,17 @@ if [ -f "$SCRIPT_DIR/common.sh" ]; then
     . "$SCRIPT_DIR/common.sh"
 fi
 
+# Ensure standard PATH includes /usr/local/bin and /usr/local/sbin
+case ":$PATH:" in
+    *:/usr/local/bin:*) ;;
+    *) PATH="/usr/local/bin:$PATH" ;;
+esac
+case ":$PATH:" in
+    *:/usr/local/sbin:*) ;;
+    *) PATH="/usr/local/sbin:$PATH" ;;
+esac
+export PATH
+
 case "$INIT_SYSTEM" in
     systemd|openrc|procd)
         ;;
@@ -15,8 +26,18 @@ esac
 
 SERVICE_NAME="easy42-agent"
 
+# Resolve easy42-agent binary location (PATH, /usr/local/bin, /usr/bin)
+AGENT_BIN=""
 if command -v easy42-agent >/dev/null 2>&1; then
-    VER="$(easy42-agent --version 2>&1 | head -n1)"
+    AGENT_BIN="$(command -v easy42-agent)"
+elif [ -x /usr/local/bin/easy42-agent ]; then
+    AGENT_BIN="/usr/local/bin/easy42-agent"
+elif [ -x /usr/bin/easy42-agent ]; then
+    AGENT_BIN="/usr/bin/easy42-agent"
+fi
+
+if [ -n "$AGENT_BIN" ]; then
+    VER="$("$AGENT_BIN" --version 2>&1 | head -n1)"
     if is_service_installed "$SERVICE_NAME"; then
         if is_service_running "$SERVICE_NAME"; then
             echo "Easy42 Agent is active and running ($VER, $INIT_SYSTEM)"

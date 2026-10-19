@@ -33,6 +33,11 @@ else
     exit 1
 fi
 
+# Ensure easy42-agent is accessible in standard system PATH (especially on OpenWrt where /usr/local/bin is omitted)
+if [ ! -e /usr/bin/easy42-agent ] || [ -L /usr/bin/easy42-agent ]; then
+    ln -sf /usr/local/bin/easy42-agent /usr/bin/easy42-agent 2>/dev/null || true
+fi
+
 # 2. Install agent configuration if provided
 if [ -f "$SCRIPT_DIR/agent.json" ]; then
     mkdir -p /etc/easy42

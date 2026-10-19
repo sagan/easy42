@@ -4,6 +4,17 @@
 # Ensure safe execution
 set -e
 
+# Ensure standard PATH includes /usr/local/bin and /usr/local/sbin (vital on OpenWrt and minimal distros)
+case ":$PATH:" in
+    *:/usr/local/bin:*) ;;
+    *) PATH="/usr/local/bin:$PATH" ;;
+esac
+case ":$PATH:" in
+    *:/usr/local/sbin:*) ;;
+    *) PATH="/usr/local/sbin:$PATH" ;;
+esac
+export PATH
+
 # Detect privilege
 SUDO=""
 if [ "$(id -u)" -ne 0 ]; then
@@ -185,11 +196,16 @@ is_service_running() {
             fi
             ;;
         procd)
-            if [ -x "/etc/init.d/${name}" ]; then
-                /etc/init.d/"$name" running >/dev/null 2>&1 || pgrep -f "$name" >/dev/null 2>&1
-            else
-                pgrep -f "$name" >/dev/null 2>&1
+            if [ -x "/etc/init.d/${name}" ] && /etc/init.d/"$name" running >/dev/null 2>&1; then
+                return 0
             fi
+            if command -v pgrep >/dev/null 2>&1 && pgrep -f "$name" >/dev/null 2>&1; then
+                return 0
+            fi
+            if command -v pidof >/dev/null 2>&1 && pidof "$name" >/dev/null 2>&1; then
+                return 0
+            fi
+            ps w 2>/dev/null | grep -v grep | grep -q "$name"
             ;;
         *)
             return 1

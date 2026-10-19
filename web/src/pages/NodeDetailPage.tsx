@@ -1542,7 +1542,7 @@ export const NodeDetailPage: React.FC = () => {
                     <Box sx={{ p: 1.8, bgcolor: "#F8FAFC", borderRadius: 2, border: "1px solid #E2E8F0" }}>
                       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                         <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600 }}>
-                          Main IPv4 Address
+                          Main IPv4
                         </Typography>
                         {node.ip && (
                           <Tooltip title={copiedKey === "ip4" ? "Copied!" : "Copy IP"}>
@@ -1564,7 +1564,7 @@ export const NodeDetailPage: React.FC = () => {
                     <Box sx={{ p: 1.8, bgcolor: "#F8FAFC", borderRadius: 2, border: "1px solid #E2E8F0" }}>
                       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                         <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600 }}>
-                          Main IPv6 Address
+                          Main IPv6
                         </Typography>
                         {node.ip6 && (
                           <Tooltip title={copiedKey === "ip6" ? "Copied!" : "Copy IP"}>
@@ -1591,9 +1591,18 @@ export const NodeDetailPage: React.FC = () => {
                     </Box>
 
                     <Box sx={{ p: 1.8, bgcolor: "#F8FAFC", borderRadius: 2, border: "1px solid #E2E8F0" }}>
-                      <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600 }}>
-                        Autonomous System Number (ASN)
-                      </Typography>
+                      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600 }}>
+                          ASN
+                        </Typography>
+                        {node.asn !== undefined && node.asn !== null && (
+                          <Tooltip title={copiedKey === "asn" ? "Copied!" : "Copy ASN"}>
+                            <IconButton size="small" onClick={() => handleCopy("asn", String(node.asn))}>
+                              {copiedKey === "asn" ? <Check size={14} color="#059669" /> : <Copy size={14} />}
+                            </IconButton>
+                          </Tooltip>
+                        )}
+                      </Box>
                       <Typography
                         variant="body1"
                         className="mono-font"
@@ -1623,16 +1632,38 @@ export const NodeDetailPage: React.FC = () => {
                       <Typography variant="caption" sx={{ color: "#B45309", fontWeight: 700, display: "block", mb: 1 }}>
                         EXTERNAL CLEARED IPS (PUBLIC INTERNET)
                       </Typography>
-                      <Box sx={{ display: "flex", gap: 3, flexWrap: "wrap" }}>
+                      <Box sx={{ display: "flex", gap: 3, flexWrap: "wrap", alignItems: "center" }}>
                         {node.external_ip && (
-                          <Typography variant="body2" className="mono-font" sx={{ color: "#92400E" }}>
-                            v4: <strong>{node.external_ip}</strong>
-                          </Typography>
+                          <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                            <Typography variant="body2" className="mono-font" sx={{ color: "#92400E" }}>
+                              v4: <strong>{node.external_ip}</strong>
+                            </Typography>
+                            <Tooltip title={copiedKey === "ext_ip4" ? "Copied!" : "Copy IPv4"}>
+                              <IconButton
+                                size="small"
+                                onClick={() => handleCopy("ext_ip4", node.external_ip!)}
+                                sx={{ p: 0.3, color: "#B45309", "&:hover": { color: "#78350F", bgcolor: "rgba(180, 83, 9, 0.08)" } }}
+                              >
+                                {copiedKey === "ext_ip4" ? <Check size={14} color="#059669" /> : <Copy size={14} />}
+                              </IconButton>
+                            </Tooltip>
+                          </Box>
                         )}
                         {node.external_ip6 && (
-                          <Typography variant="body2" className="mono-font" sx={{ color: "#92400E" }}>
-                            v6: <strong>{node.external_ip6}</strong>
-                          </Typography>
+                          <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                            <Typography variant="body2" className="mono-font" sx={{ color: "#92400E" }}>
+                              v6: <strong>{node.external_ip6}</strong>
+                            </Typography>
+                            <Tooltip title={copiedKey === "ext_ip6" ? "Copied!" : "Copy IPv6"}>
+                              <IconButton
+                                size="small"
+                                onClick={() => handleCopy("ext_ip6", node.external_ip6!)}
+                                sx={{ p: 0.3, color: "#B45309", "&:hover": { color: "#78350F", bgcolor: "rgba(180, 83, 9, 0.08)" } }}
+                              >
+                                {copiedKey === "ext_ip6" ? <Check size={14} color="#059669" /> : <Copy size={14} />}
+                              </IconButton>
+                            </Tooltip>
+                          </Box>
                         )}
                       </Box>
                     </Box>
@@ -1650,7 +1681,25 @@ export const NodeDetailPage: React.FC = () => {
                             key={t}
                             label={t}
                             size="small"
-                            sx={{ bgcolor: "#F1F5F9", color: "#334155", fontWeight: 600, fontSize: "0.75rem" }}
+                            component="a"
+                            href={`/nodes?tag=${encodeURIComponent(t)}`}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              navigate(`/nodes?tag=${encodeURIComponent(t)}`);
+                            }}
+                            sx={{
+                              bgcolor: "#F1F5F9",
+                              color: "#334155",
+                              fontWeight: 600,
+                              fontSize: "0.75rem",
+                              cursor: "pointer",
+                              textDecoration: "none",
+                              transition: "all 0.15s ease-in-out",
+                              "&:hover": {
+                                bgcolor: "#E2E8F0",
+                                color: "#0F172A",
+                              },
+                            }}
                           />
                         ))
                       ) : (

@@ -73,6 +73,7 @@ import {
   IntegrationsSettings,
 } from "../../types/api";
 import { ViewNetworkPolicyModal } from "./ViewNetworkPolicyModal";
+import TextFieldWithCopy from "../Common/TextFieldWithCopy";
 
 export const parsePrefixList = (input: string): string[] => {
   const result: string[] = [];
@@ -167,13 +168,13 @@ export const EXPORT_FILTER_EXAMPLES = [
 ];
 
 export type SettingsTab =
-  "security" | "network" | "policies" | "templates" | "dns" | "tasks" | "database" | "integrations" | "about";
+  "network" | "security" | "policies" | "templates" | "dns" | "tasks" | "database" | "integrations" | "about";
 
 const VALID_TABS: Record<string, SettingsTab> = {
+  network: "network",
   security: "security",
   password: "security",
   sessions: "security",
-  network: "network",
   policies: "policies",
   templates: "templates",
   dns: "dns",
@@ -194,11 +195,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
   const navigate = useNavigate();
   const { refreshNetworkSettings } = useMesh();
 
-  const activeTab: SettingsTab = (tab && VALID_TABS[tab]) || "security";
+  const activeTab: SettingsTab = (tab && VALID_TABS[tab]) || "network";
 
   useEffect(() => {
-    if (!tab || tab === "password" || tab === "sessions" || !VALID_TABS[tab]) {
+    if (tab === "password" || tab === "sessions") {
       navigate("/settings/security", { replace: true });
+    } else if (!tab || !VALID_TABS[tab]) {
+      navigate("/settings/network", { replace: true });
     }
   }, [tab, navigate]);
 
@@ -1351,18 +1354,18 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
             }}
           >
             <Tab
-              value="security"
-              icon={<KeyRound size={16} />}
-              iconPosition="start"
-              label="Security"
-              title="Password & Sessions"
-            />
-            <Tab
               value="network"
               icon={<Globe size={16} />}
               iconPosition="start"
               label="Network"
               title="Peering & BGP"
+            />
+            <Tab
+              value="security"
+              icon={<KeyRound size={16} />}
+              iconPosition="start"
+              label="Security"
+              title="Password & Sessions"
             />
             <Tab
               value="policies"
@@ -1701,7 +1704,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                     </Alert>
                   )}
 
-                  <TextField
+                  <TextFieldWithCopy
                     fullWidth
                     size="small"
                     label="Public / DN42 ASN"
@@ -1713,7 +1716,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                     disabled={networkSaving}
                   />
 
-                  <TextField
+                  <TextFieldWithCopy
                     fullWidth
                     size="small"
                     multiline
@@ -1795,7 +1798,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                     </Typography>
 
                     <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "2fr 1fr 1fr" }, gap: 2 }}>
-                      <TextField
+                      <TextFieldWithCopy
                         fullWidth
                         size="small"
                         label="FlapAlerted Address"
@@ -1805,7 +1808,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                         helperText="Private IPv4 or IPv6 routable inside easy42"
                         disabled={networkSaving}
                       />
-                      <TextField
+                      <TextFieldWithCopy
                         fullWidth
                         size="small"
                         label="FlapAlerted Port"
@@ -1816,7 +1819,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                         helperText="Default: 1790"
                         disabled={networkSaving}
                       />
-                      <TextField
+                      <TextFieldWithCopy
                         fullWidth
                         size="small"
                         label="FlapAlerted ASN"
@@ -1829,7 +1832,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                       />
                     </Box>
 
-                    <TextField
+                    <TextFieldWithCopy
                       fullWidth
                       size="small"
                       label="FlapAlerted URL"
@@ -2709,7 +2712,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                 </Box>
               ) : (
                 <>
-                  <TextField
+                  <TextFieldWithCopy
                     fullWidth
                     size="small"
                     label="Cloudflare Zone ID"
@@ -2748,7 +2751,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                     }}
                   />
 
-                  <TextField
+                  <TextFieldWithCopy
                     fullWidth
                     size="small"
                     label="Base Domain"

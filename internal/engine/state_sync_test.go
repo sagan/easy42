@@ -621,9 +621,15 @@ func TestRoaConfigStateSync(t *testing.T) {
 	if updatedROA4Action.DiffStatus != "update" {
 		t.Errorf("Expected diffStatus 'update', got %s", updatedROA4Action.DiffStatus)
 	}
-	// Crucial: BIRD must also be marked for reload when ROA content updates!
-	if updatedBirdAction == nil || !updatedBirdAction.NeedsApply {
-		t.Errorf("Expected BIRD action to require apply when ROA content changes")
+	if updatedROA4Action.Command != "birdc configure" {
+		t.Errorf("Expected ROA action command 'birdc configure', got %s", updatedROA4Action.Command)
+	}
+	// BIRD config (/etc/bird_easy42.conf) itself is unchanged, so it should NOT require apply or be updated
+	if updatedBirdAction != nil && updatedBirdAction.NeedsApply {
+		t.Errorf("Expected BIRD action on /etc/bird_easy42.conf to not require apply when bird config is unchanged")
+	}
+	if updatedBirdAction != nil && updatedBirdAction.DiffStatus != "synced" {
+		t.Errorf("Expected BIRD action diffStatus 'synced', got %s", updatedBirdAction.DiffStatus)
 	}
 }
 

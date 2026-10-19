@@ -148,6 +148,7 @@ Device Helper is integrated directly into the Easy42 Web UI:
 ### 1. Navigating to Device Helper
 - **Global Header**: Click **Device Helper** in the top navigation bar (route `/helper`).
 - **Node Detail Page**: Click the **Device Helper** button in the header actions bar of any managed node (`/helper?node=<node_name>`).
+- **Direct Task Links / URL Routing**: Each task in the list is fully routable via URL query parameters (`/helper?task=<task_id>` or `/helper?node=<node_name>&task=<task_id>`). Selecting any task dynamically syncs and persists the selected task ID in the address bar for shareable deep links.
 
 ### 2. Fleet Tag Filtering & Selection
 - **Tag Filter**: Use the tag selector dropdown to filter devices by node tags (`#core`, `#edge`, `#cloud`, `#eu`).
@@ -158,6 +159,7 @@ Device Helper is integrated directly into the Easy42 Web UI:
 - Click **Check Status** to inspect the selected task on all checked devices simultaneously.
 - Status badges update in real time (`Already Configured`, `Needs Execution`, `Not Applicable`, or `Check Failed`).
 - Hover over the **Details** column to view exact check messages, timestamps, and exit codes.
+- Click **Auto Select** (enabled once statuses are fetched) to automatically select only the nodes whose status is `Needs Execution` and deselect all others for targeted remediation.
 
 ### 4. Executing Tasks & Viewing Real-Time Logs
 - Click **Execute Task (N)** to run the task across all selected devices, or click the individual **Play** icon on a specific device row.

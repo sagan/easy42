@@ -333,18 +333,33 @@ export const NodesPage: React.FC = () => {
     return set;
   }, [managedNodes, liveMap, nodeStatuses]);
 
+  // Map of node name to count of links that are currently down
+  const nodeDownLinksCountMap = useMemo(() => {
+    const map = new Map<string, number>();
+    (links || []).forEach((l) => {
+      if (getLinkWorkingState(l, networkState, nodeStatuses) === "not_working") {
+        if (l.from?.name) {
+          map.set(l.from.name, (map.get(l.from.name) || 0) + 1);
+        }
+        if (l.to?.name && l.to.name !== l.from?.name) {
+          map.set(l.to.name, (map.get(l.to.name) || 0) + 1);
+        }
+      }
+    });
+    return map;
+  }, [links, networkState, nodeStatuses]);
+
   // Set of managed nodes which are not healthy (at least 1 link is down)
   const unhealthyNodeNames = useMemo(() => {
     const set = new Set<string>();
     const managedNames = new Set(managedNodes.map((n) => n.name));
-    (links || []).forEach((l) => {
-      if (getLinkWorkingState(l, networkState, nodeStatuses) === "not_working") {
-        if (managedNames.has(l.from.name)) set.add(l.from.name);
-        if (managedNames.has(l.to.name)) set.add(l.to.name);
+    nodeDownLinksCountMap.forEach((count, name) => {
+      if (count > 0 && managedNames.has(name)) {
+        set.add(name);
       }
     });
     return set;
-  }, [links, networkState, nodeStatuses, managedNodes]);
+  }, [managedNodes, nodeDownLinksCountMap]);
 
   // Unique tags from managed (non-external) nodes only, excluding "external" and special tags
   const managedTags = useMemo(() => {
@@ -1092,6 +1107,7 @@ export const NodesPage: React.FC = () => {
             const live = liveMap.get(n.name);
             const status = nodeStatuses[n.name];
             const isOnline = Boolean(live?.connected ?? status?.connected);
+            const downLinksCount = nodeDownLinksCountMap.get(n.name) || 0;
             const agentInstalled = Boolean(
               live?.agent_installed ??
               (status?.connected ||
@@ -1181,19 +1197,37 @@ export const NodesPage: React.FC = () => {
                     </Box>
 
                     {/* Requirement 2: Differentiated status chip */}
-                    <Box sx={{ textAlign: "right" }}>
-                      <Chip
-                        label={isOnline ? "Online" : agentInstalled ? "Offline" : "No Agent"}
-                        size="small"
-                        sx={{
-                          bgcolor: isOnline ? "#ECFDF5" : agentInstalled ? "#FEF2F2" : "#F1F5F9",
-                          color: isOnline ? "#059669" : agentInstalled ? "#E11D48" : "#64748B",
-                          fontWeight: 700,
-                          fontSize: "0.7rem",
-                          height: 22,
-                          border: !agentInstalled ? "1px solid #E2E8F0" : "none",
-                        }}
-                      />
+                    <Box sx={{ textAlign: "right", flexShrink: 0 }}>
+                      <Box sx={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 0.6 }}>
+                        <Chip
+                          label={isOnline ? "Online" : agentInstalled ? "Offline" : "No Agent"}
+                          size="small"
+                          sx={{
+                            bgcolor: isOnline ? "#ECFDF5" : agentInstalled ? "#FEF2F2" : "#F1F5F9",
+                            color: isOnline ? "#059669" : agentInstalled ? "#E11D48" : "#64748B",
+                            fontWeight: 700,
+                            fontSize: "0.7rem",
+                            height: 22,
+                            border: !agentInstalled ? "1px solid #E2E8F0" : "none",
+                          }}
+                        />
+                        {isOnline && downLinksCount > 0 && (
+                          <Tooltip title={`${downLinksCount} ${downLinksCount === 1 ? "link is" : "links are"} currently down`}>
+                            <Chip
+                              label={`${downLinksCount} down`}
+                              size="small"
+                              sx={{
+                                bgcolor: "#FEF2F2",
+                                color: "#DC2626",
+                                fontWeight: 700,
+                                fontSize: "0.7rem",
+                                height: 22,
+                                border: "1px solid #FECDD3",
+                              }}
+                            />
+                          </Tooltip>
+                        )}
+                      </Box>
                       <Typography
                         variant="caption"
                         sx={{ display: "block", color: "#94A3B8", mt: 0.3, fontSize: "0.7rem" }}
@@ -1597,6 +1631,7 @@ export const NodesPage: React.FC = () => {
                 const live = liveMap.get(n.name);
                 const status = nodeStatuses[n.name];
                 const isOnline = Boolean(live?.connected ?? status?.connected);
+                const downLinksCount = nodeDownLinksCountMap.get(n.name) || 0;
                 const agentInstalled = Boolean(
                   live?.agent_installed ??
                   (status?.connected ||
@@ -1648,18 +1683,36 @@ export const NodesPage: React.FC = () => {
                       </Box>
                     </TableCell>
                     <TableCell>
-                      <Chip
-                        label={isOnline ? "Online" : agentInstalled ? "Offline" : "No Agent"}
-                        size="small"
-                        sx={{
-                          bgcolor: isOnline ? "#ECFDF5" : agentInstalled ? "#FEF2F2" : "#F1F5F9",
-                          color: isOnline ? "#059669" : agentInstalled ? "#E11D48" : "#64748B",
-                          fontWeight: 700,
-                          fontSize: "0.7rem",
-                          height: 20,
-                          border: !agentInstalled ? "1px solid #E2E8F0" : "none",
-                        }}
-                      />
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 0.6, flexWrap: "nowrap" }}>
+                        <Chip
+                          label={isOnline ? "Online" : agentInstalled ? "Offline" : "No Agent"}
+                          size="small"
+                          sx={{
+                            bgcolor: isOnline ? "#ECFDF5" : agentInstalled ? "#FEF2F2" : "#F1F5F9",
+                            color: isOnline ? "#059669" : agentInstalled ? "#E11D48" : "#64748B",
+                            fontWeight: 700,
+                            fontSize: "0.7rem",
+                            height: 20,
+                            border: !agentInstalled ? "1px solid #E2E8F0" : "none",
+                          }}
+                        />
+                        {isOnline && downLinksCount > 0 && (
+                          <Tooltip title={`${downLinksCount} ${downLinksCount === 1 ? "link is" : "links are"} currently down`}>
+                            <Chip
+                              label={`${downLinksCount} down`}
+                              size="small"
+                              sx={{
+                                bgcolor: "#FEF2F2",
+                                color: "#DC2626",
+                                fontWeight: 700,
+                                fontSize: "0.7rem",
+                                height: 20,
+                                border: "1px solid #FECDD3",
+                              }}
+                            />
+                          </Tooltip>
+                        )}
+                      </Box>
                     </TableCell>
                     <TableCell>
                       {nodeBlocks.length > 0 ? (

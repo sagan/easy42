@@ -59,7 +59,7 @@ const AppContent: React.FC = () => {
           <Route path="looking-glass" element={<LookingGlassPage />} />
           <Route path="looking-glass/:tab" element={<LookingGlassPage />} />
           <Route path="helper" element={<DeviceHelperPage />} />
-          <Route path="settings" element={<Navigate to="/settings/security" replace />} />
+          <Route path="settings" element={<Navigate to="/settings/network" replace />} />
           <Route path="settings/:tab" element={<SettingsPage />} />
           <Route path="*" element={<Navigate to="/nodes" replace />} />
         </Route>
