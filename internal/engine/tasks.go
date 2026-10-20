@@ -30,6 +30,26 @@ func (m *Manager) GetTaskSources(taskID string) ([]tasks.TaskSourceFile, error) 
 	return tasks.GetTaskSources(taskID, m.customTasksDir())
 }
 
+// GetOnlineSources returns all online task repository source URLs
+func (m *Manager) GetOnlineSources() []string {
+	return tasks.GetOnlineSources(m.customTasksDir())
+}
+
+// GetOnlineManifest fetches manifest.json from the given source URL
+func (m *Manager) GetOnlineManifest(ctx context.Context, sourceURL string) (*tasks.OnlineManifest, error) {
+	return tasks.FetchOnlineManifest(ctx, sourceURL)
+}
+
+// InstallOnlineTask downloads and installs an online task into <data-dir>/tasks/<task-id>
+func (m *Manager) InstallOnlineTask(ctx context.Context, sourceURL string, taskID string, files []string) error {
+	return tasks.InstallOnlineTask(ctx, m.customTasksDir(), sourceURL, taskID, files)
+}
+
+// DeleteCustomTask deletes a custom task folder from <data-dir>/tasks/<task-id>
+func (m *Manager) DeleteCustomTask(ctx context.Context, taskID string) error {
+	return tasks.DeleteCustomTask(m.customTasksDir(), taskID)
+}
+
 // CheckTaskStatus checks the status of a task on specified nodes (or all nodes if nodeNames is empty)
 func (m *Manager) CheckTaskStatus(ctx context.Context, taskID string, nodeNames []string) (map[string]tasks.TaskStatusResult, error) {
 	// Verify task exists

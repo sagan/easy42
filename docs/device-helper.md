@@ -495,3 +495,115 @@ Custom tasks are stored in:
 ### Payload-based tasks
 
 Tasks that need controller-generated files can be supported by extending the execution engine, which already special-cases `deploy_agent` and `configure_network`. Uploaded payload files are written into the same temporary directory as the scripts; only `easy42-agent`, `status.sh`, and `run.sh` receive `0755`, `agent.json` receives `0600`, and other files default to `0644`. To generate dynamic status checks, override `status.sh` in the payload as the built-in payload tasks do.
+
+---
+
+## Online Tasks Repository
+
+The **Online Tasks Repository** allows operators to discover, download, install, and update custom tasks directly from online sources into their local Easy42 instance via the Web UI. Installed tasks are written directly into `<easy42-data-dir>/tasks/<task_id>/` and immediately become available in the Device Helper task list alongside built-in tasks.
+
+### Default Repository Source
+
+Easy42 includes a built-in default repository pointing to the official community tasks catalog:
+```
+https://raw.githubusercontent.com/sagan/easy42-tasks/refs/heads/master/
+```
+
+The Easy42 backend proxies all requests to online sources to bypass browser Cross-Origin Resource Sharing (CORS) restrictions.
+
+### Custom Online Sources (`sources.txt`)
+
+Operators can configure custom or private online task sources (e.g. internal GitHub/GitLab repositories, enterprise artifact mirrors, or raw HTTP file servers).
+
+To add custom sources, create a text file:
+```
+<easy42-data-dir>/tasks/sources.txt
+```
+*(Default: `~/.config/easy42/tasks/sources.txt`)*
+
+Add one base URL per line:
+```text
+# Internal company tasks repository
+https://raw.githubusercontent.com/my-org/easy42-internal-tasks/main/
+
+# Local network testing repository
+http://192.168.1.50:8080/easy42-tasks/
+```
+
+- Blank lines and lines starting with `#` are ignored.
+- The default official repository is always included at the top of the sources list.
+- Operators can switch between configured sources dynamically via the dropdown in the Web UI.
+
+### Repository Layout & Manifest Specification (`manifest.json`)
+
+An online tasks repository must host a `manifest.json` file at its root. Each task's files reside in a directory named after its `id`:
+
+```
+<repository-root>/
+├── manifest.json
+└── <task-id>/
+    ├── run.sh
+    ├── status.sh
+    └── task.json
+```
+
+#### Manifest Schema
+
+```json
+{
+  "name": "Community Tasks Catalog",
+  "description": "Curated collection of host automation tasks for Easy42",
+  "version": "1.0",
+  "tasks": [
+    {
+      "id": "install_bind",
+      "title": "Install BIND DNS server",
+      "description": "Installs and enables BIND 9 DNS server daemon across Linux distributions.",
+      "category": "Packages",
+      "weight": 20,
+      "files": ["run.sh", "status.sh", "task.json"]
+    },
+    {
+      "id": "setup_prometheus_node_exporter",
+      "title": "Setup Node Exporter",
+      "description": "Installs and enables Prometheus Node Exporter system service.",
+      "category": "Monitoring",
+      "weight": 80,
+      "files": ["run.sh", "status.sh"]
+    }
+  ]
+}
+```
+
+- `id`: Unique task identifier (alphanumeric, dashes, underscores). Path traversal characters (`..`, `/`, `\`) are strictly forbidden.
+- `title`: Human-readable task name displayed in the UI.
+- `description`: Detailed description of the task's actions.
+- `category`: Grouping category (e.g. `Packages`, `Configuration`, `System & Network`, `Monitoring`).
+- `weight`: Display order weight (lower numbers appear earlier).
+- `files`: Array of relative filenames to download into `<data-dir>/tasks/<task-id>/`. Must include `run.sh`.
+
+### Installation & Atomicity Guarantees
+
+When a user initiates task installation:
+1. **Validation**: Easy42 validates task identifiers and filenames to prevent path traversal attacks.
+2. **Atomic Staging**: Files are downloaded to an ephemeral temporary directory: `<data-dir>/tasks/.download-<task-id>-<randHex>/`.
+3. **Permissions**: Shell scripts (`.sh`) are automatically given executable permissions (`0755`), while configuration and manifest files receive `0644`.
+4. **Manifest Synchronization**: If `task.json` is not provided in the download file list, Easy42 generates one automatically using the manifest's `title`, `description`, `category`, and `weight`.
+5. **Atomic Promotion**: Once all files are downloaded successfully, any existing directory at `<data-dir>/tasks/<task-id>/` is cleanly replaced with the newly downloaded directory. If download fails, the temporary folder is deleted and the existing task remains intact.
+
+### Deleting Custom & Online-Installed Tasks
+
+Online-installed and custom filesystem tasks can be deleted directly from the Web UI:
+- In the task header, custom tasks feature a **Delete Task** button.
+- A confirmation dialog ensures accidental deletions are prevented.
+- Deletions are securely restricted to directories within `<data-dir>/tasks/`. Built-in embedded tasks cannot be deleted.
+
+### REST API Endpoints
+
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `GET` | `/api/tasks/online/sources` | Returns the list of available online sources (default + `sources.txt`). |
+| `GET` | `/api/tasks/online/manifest?source=<url>` | Fetches and returns the parsed `manifest.json` from the specified source. |
+| `POST` | `/api/tasks/online/install` | Downloads and installs a task. Body: `{"source": "<url>", "task": {...}}`. |
+| `DELETE` | `/api/tasks/custom/{id}` | Deletes a custom task directory from the server's filesystem. |
+

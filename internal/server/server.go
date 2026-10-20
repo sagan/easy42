@@ -244,6 +244,10 @@ func New(cfg Config) *Server {
 
 			// Device Helper Tasks
 			r.Get("/tasks", s.handleGetTasks)
+			r.Get("/tasks/online/sources", s.handleGetOnlineSources)
+			r.Get("/tasks/online/manifest", s.handleGetOnlineManifest)
+			r.Post("/tasks/online/install", s.handleInstallOnlineTask)
+			r.Delete("/tasks/custom/{id}", s.handleDeleteCustomTask)
 			r.Get("/tasks/{id}/source", s.handleGetTaskSources)
 			r.Get("/tasks/{id}/sources", s.handleGetTaskSources)
 			r.Post("/tasks/{id}/status", s.handleTaskStatus)

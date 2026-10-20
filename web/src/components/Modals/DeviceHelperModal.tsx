@@ -22,11 +22,16 @@ import {
   MenuItem,
   TextField,
   InputAdornment,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
 } from "@mui/material";
-import { CheckCircle2, XCircle, Play, RotateCw, Terminal, Server, HelpCircle, Tag, CheckCheck, Search, X, Code2, Plus } from "lucide-react";
+import { CheckCircle2, XCircle, Play, RotateCw, Terminal, Server, HelpCircle, Tag, CheckCheck, Search, X, Code2, Plus, DownloadCloud, Trash2 } from "lucide-react";
 import { api } from "../../api/client";
 import { Node, TaskMeta, TaskStatusResult, TaskRunResult } from "../../types/api";
 import { TaskSourceModal } from "./TaskSourceModal";
+import { InstallTaskModal } from "./InstallTaskModal";
 import { CustomTaskHelp } from "../DeviceHelper/CustomTaskHelp";
 
 export const CUSTOM_TASK_HELP_ID = "+task";
@@ -207,6 +212,28 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
   // Task search filter state and View Source modal state
   const [taskFilter, setTaskFilter] = useState<string>("");
   const [sourceModalOpen, setSourceModalOpen] = useState<boolean>(false);
+  const [installModalOpen, setInstallModalOpen] = useState<boolean>(false);
+  const [confirmDeleteTask, setConfirmDeleteTask] = useState<string | null>(null);
+  const [deletingTask, setDeletingTask] = useState<boolean>(false);
+
+  const handleDeleteCustomTask = async (taskId: string) => {
+    setDeletingTask(true);
+    setError(null);
+    try {
+      await api.deleteCustomTask(taskId);
+      setConfirmDeleteTask(null);
+      await loadTasks();
+      if (selectedTaskId === taskId) {
+        setSelectedTaskId(CUSTOM_TASK_HELP_ID);
+        handleSelectTask(CUSTOM_TASK_HELP_ID);
+      }
+    } catch (err: unknown) {
+      const e = err as Error;
+      setError(e.message || `Failed to delete task ${taskId}`);
+    } finally {
+      setDeletingTask(false);
+    }
+  };
 
   // Filter displayed tasks by name or description (or ID).
   // The current selected task should also always be displayed in the list even if the filter doesn't match it.
@@ -627,17 +654,27 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
                     >
                       Custom Tasks ({customTasks.length})
                     </Typography>
-                    <Chip
-                      size="small"
-                      label="Tasks Dir"
-                      sx={{
-                        height: 16,
-                        fontSize: "0.6rem",
-                        fontWeight: 700,
-                        bgcolor: "rgba(124, 58, 237, 0.08)",
-                        color: "#7c3aed",
-                      }}
-                    />
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
+                      <Button
+                        size="small"
+                        variant="text"
+                        onClick={() => setInstallModalOpen(true)}
+                        startIcon={<DownloadCloud size={13} />}
+                        sx={{
+                          fontSize: "0.68rem",
+                          fontWeight: 700,
+                          textTransform: "none",
+                          py: 0.2,
+                          px: 0.75,
+                          height: 22,
+                          color: "primary.main",
+                          bgcolor: "rgba(79, 70, 229, 0.08)",
+                          "&:hover": { bgcolor: "rgba(79, 70, 229, 0.16)" },
+                        }}
+                      >
+                        Install Task
+                      </Button>
+                    </Box>
                   </Box>
 
                   {customTasks.map((task) => {
@@ -749,6 +786,7 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
             <CustomTaskHelp
               onRefreshTasks={loadTasks}
               isRefreshing={loadingTasks}
+              onOpenInstallModal={() => setInstallModalOpen(true)}
             />
           ) : selectedTask ? (
             <Box sx={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", p: 2.5 }}>
@@ -776,20 +814,39 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
                       />
                     )}
                   </Box>
-                  <Button
-                    size="small"
-                    variant="outlined"
-                    startIcon={<Code2 size={14} />}
-                    onClick={() => setSourceModalOpen(true)}
-                    sx={{
-                      textTransform: "none",
-                      fontWeight: 600,
-                      fontSize: "0.78rem",
-                      bgcolor: "background.paper",
-                    }}
-                  >
-                    View Source
-                  </Button>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                    {selectedTask.custom && (
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        color="error"
+                        startIcon={<Trash2 size={14} />}
+                        onClick={() => setConfirmDeleteTask(selectedTask.id)}
+                        sx={{
+                          textTransform: "none",
+                          fontWeight: 600,
+                          fontSize: "0.78rem",
+                          bgcolor: "background.paper",
+                        }}
+                      >
+                        Delete Task
+                      </Button>
+                    )}
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      startIcon={<Code2 size={14} />}
+                      onClick={() => setSourceModalOpen(true)}
+                      sx={{
+                        textTransform: "none",
+                        fontWeight: 600,
+                        fontSize: "0.78rem",
+                        bgcolor: "background.paper",
+                      }}
+                    >
+                      View Source
+                    </Button>
+                  </Box>
                 </Box>
                 <Typography variant="body2" color="text.secondary">
                   {selectedTask.description}
@@ -1119,6 +1176,47 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
         onClose={() => setSourceModalOpen(false)}
         task={selectedTask || null}
       />
+
+      {/* Online Task Installer Modal */}
+      <InstallTaskModal
+        open={installModalOpen}
+        onClose={() => setInstallModalOpen(false)}
+        installedTasks={tasks}
+        onTaskInstalled={loadTasks}
+      />
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog
+        open={Boolean(confirmDeleteTask)}
+        onClose={() => !deletingTask && setConfirmDeleteTask(null)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle sx={{ fontWeight: 600 }}>Delete Custom Task?</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary">
+            Are you sure you want to delete custom task <strong>{confirmDeleteTask}</strong>? This will permanently delete the task directory and its scripts from the server.
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button
+            onClick={() => setConfirmDeleteTask(null)}
+            disabled={deletingTask}
+            color="inherit"
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            color="error"
+            onClick={() => confirmDeleteTask && handleDeleteCustomTask(confirmDeleteTask)}
+            disabled={deletingTask}
+            startIcon={deletingTask ? <CircularProgress size={16} color="inherit" /> : <Trash2 size={16} />}
+          >
+            {deletingTask ? "Deleting..." : "Delete"}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

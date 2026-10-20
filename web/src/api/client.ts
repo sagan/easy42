@@ -14,6 +14,8 @@ import type {
   TaskStatusResult,
   TaskRunResult,
   TaskSourceFile,
+  OnlineSourcesResponse,
+  OnlineManifest,
   TasksResponse,
   LookingGlassTask,
   LGRunRequest,
@@ -454,6 +456,18 @@ export const api = {
     request<Record<string, TaskRunResult>>(`/tasks/${encodeURIComponent(taskId)}/run`, {
       method: "POST",
       body: JSON.stringify({ nodes }),
+    }),
+  getOnlineSources: () => request<OnlineSourcesResponse>("/tasks/online/sources"),
+  getOnlineManifest: (source?: string) =>
+    request<OnlineManifest>(`/tasks/online/manifest${source ? `?source=${encodeURIComponent(source)}` : ""}`),
+  installOnlineTask: (source: string, taskId: string, files?: string[]) =>
+    request<{ success: boolean; message: string; task_id: string }>("/tasks/online/install", {
+      method: "POST",
+      body: JSON.stringify({ source, task_id: taskId, files: files || [] }),
+    }),
+  deleteCustomTask: (taskId: string) =>
+    request<{ success: boolean; message: string; task_id: string }>(`/tasks/custom/${encodeURIComponent(taskId)}`, {
+      method: "DELETE",
     }),
 
   // Looking Glass

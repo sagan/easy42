@@ -417,6 +417,26 @@ export interface TaskMeta {
   custom?: boolean;
 }
 
+export interface OnlineTask {
+  id: string;
+  title: string;
+  description: string;
+  category: string;
+  weight: number;
+  files?: string[];
+  author?: string;
+  version?: string;
+}
+
+export interface OnlineManifest {
+  tasks: OnlineTask[];
+}
+
+export interface OnlineSourcesResponse {
+  default_source: string;
+  sources: string[];
+}
+
 export type TaskCheckStatus = "ready" | "done" | "incompatible" | "error";
 
 export interface TaskStatusResult {

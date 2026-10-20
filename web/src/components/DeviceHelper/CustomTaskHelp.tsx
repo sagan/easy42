@@ -20,16 +20,19 @@ import {
   ShieldCheck,
   FileJson,
   Info,
+  Globe,
 } from "lucide-react";
 
 interface CustomTaskHelpProps {
   onRefreshTasks?: () => void;
   isRefreshing?: boolean;
+  onOpenInstallModal?: () => void;
 }
 
 export const CustomTaskHelp: React.FC<CustomTaskHelpProps> = ({
   onRefreshTasks,
   isRefreshing,
+  onOpenInstallModal,
 }) => {
   const [taskGoal, setTaskGoal] = useState<string>(
     "Install and configure chrony NTP client to synchronize time with pool.ntp.org",
@@ -188,28 +191,47 @@ chmod +x ~/.config/easy42/tasks/hello_world/*.sh`;
           </Typography>
         </Box>
 
-        {onRefreshTasks && (
-          <Button
-            variant="outlined"
-            size="small"
-            onClick={onRefreshTasks}
-            disabled={isRefreshing}
-            startIcon={
-              <RotateCw
-                size={14}
-                className={isRefreshing ? "animate-spin" : undefined}
-              />
-            }
-            sx={{
-              textTransform: "none",
-              fontWeight: 600,
-              bgcolor: "#ffffff",
-              whiteSpace: "nowrap",
-            }}
-          >
-            {isRefreshing ? "Scanning Tasks..." : "Refresh Task List"}
-          </Button>
-        )}
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
+          {onOpenInstallModal && (
+            <Button
+              variant="contained"
+              color="primary"
+              size="small"
+              onClick={onOpenInstallModal}
+              startIcon={<Globe size={14} />}
+              sx={{
+                textTransform: "none",
+                fontWeight: 700,
+                whiteSpace: "nowrap",
+              }}
+            >
+              Browse Online Tasks
+            </Button>
+          )}
+
+          {onRefreshTasks && (
+            <Button
+              variant="outlined"
+              size="small"
+              onClick={onRefreshTasks}
+              disabled={isRefreshing}
+              startIcon={
+                <RotateCw
+                  size={14}
+                  className={isRefreshing ? "animate-spin" : undefined}
+                />
+              }
+              sx={{
+                textTransform: "none",
+                fontWeight: 600,
+                bgcolor: "#ffffff",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {isRefreshing ? "Scanning Tasks..." : "Refresh Task List"}
+            </Button>
+          )}
+        </Box>
       </Paper>
 
       {/* How it Works / Directory Specification Card */}
