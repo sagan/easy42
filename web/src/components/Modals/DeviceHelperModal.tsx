@@ -20,10 +20,13 @@ import {
   FormControl,
   Select,
   MenuItem,
+  TextField,
+  InputAdornment,
 } from "@mui/material";
-import { CheckCircle2, XCircle, Play, RotateCw, Terminal, Server, HelpCircle, Tag, CheckCheck } from "lucide-react";
+import { CheckCircle2, XCircle, Play, RotateCw, Terminal, Server, HelpCircle, Tag, CheckCheck, Search, X, Code2 } from "lucide-react";
 import { api } from "../../api/client";
 import { Node, TaskMeta, TaskStatusResult, TaskRunResult } from "../../types/api";
+import { TaskSourceModal } from "./TaskSourceModal";
 
 interface DeviceHelperModalProps {
   open?: boolean;
@@ -183,6 +186,24 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
   const selectedTask = useMemo(() => {
     return tasks.find((t) => t.id === selectedTaskId) || tasks[0];
   }, [tasks, selectedTaskId]);
+
+  // Task search filter state and View Source modal state
+  const [taskFilter, setTaskFilter] = useState<string>("");
+  const [sourceModalOpen, setSourceModalOpen] = useState<boolean>(false);
+
+  // Filter displayed tasks by name or description (or ID).
+  // The current selected task should also always be displayed in the list even if the filter doesn't match it.
+  const filteredTasks = useMemo(() => {
+    const q = taskFilter.trim().toLowerCase();
+    if (!q) return tasks;
+    return tasks.filter((task) => {
+      if (selectedTask && task.id === selectedTask.id) return true;
+      const title = (task.title || "").toLowerCase();
+      const desc = (task.description || "").toLowerCase();
+      const id = (task.id || "").toLowerCase();
+      return title.includes(q) || desc.includes(q) || id.includes(q);
+    });
+  }, [tasks, taskFilter, selectedTask]);
 
   // When selected task changes, optionally clear old statuses or keep
   useEffect(() => {
@@ -410,7 +431,7 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
         <Box
           sx={{
             width: { xs: "100%", md: 300 },
-            maxHeight: { xs: 160, md: "none" },
+            maxHeight: { xs: 260, md: "none" },
             borderRight: { xs: 0, md: 1 },
             borderBottom: { xs: 1, md: 0 },
             borderColor: "divider",
@@ -420,13 +441,53 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
             flexShrink: 0,
           }}
         >
-          <Box sx={{ p: 2, borderBottom: 1, borderColor: "divider" }}>
-            <Typography
-              variant="subtitle2"
-              sx={{ fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, color: "text.secondary" }}
-            >
-              Device Helper Tasks
-            </Typography>
+          <Box sx={{ p: 1.5, pb: 1, borderBottom: 1, borderColor: "divider" }}>
+            <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1 }}>
+              <Typography
+                variant="subtitle2"
+                sx={{ fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, color: "text.secondary", fontSize: "0.75rem" }}
+              >
+                Device Helper Tasks
+              </Typography>
+              {taskFilter.trim() && (
+                <Chip
+                  size="small"
+                  label={`${filteredTasks.length}/${tasks.length}`}
+                  sx={{ height: 18, fontSize: "0.65rem", fontWeight: 600 }}
+                />
+              )}
+            </Box>
+            <TextField
+              size="small"
+              fullWidth
+              placeholder="Filter tasks..."
+              value={taskFilter}
+              onChange={(e) => setTaskFilter(e.target.value)}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start" sx={{ color: "text.secondary", mr: 0.5 }}>
+                    <Search size={14} />
+                  </InputAdornment>
+                ),
+                endAdornment: taskFilter ? (
+                  <InputAdornment position="end">
+                    <IconButton size="small" onClick={() => setTaskFilter("")} sx={{ p: 0.25, color: "text.secondary" }}>
+                      <X size={12} />
+                    </IconButton>
+                  </InputAdornment>
+                ) : null,
+                sx: {
+                  height: 32,
+                  fontSize: "0.8rem",
+                  bgcolor: "background.paper",
+                  borderRadius: 1.5,
+                  "& .MuiOutlinedInput-input": {
+                    py: 0.5,
+                    px: 0.5,
+                  },
+                },
+              }}
+            />
           </Box>
 
           <Box sx={{ flex: 1, overflowY: "auto", p: 1.5 }}>
@@ -438,8 +499,12 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
               <Typography variant="body2" color="text.secondary" sx={{ p: 2, textAlign: "center" }}>
                 No tasks available
               </Typography>
+            ) : filteredTasks.length === 0 ? (
+              <Typography variant="body2" color="text.secondary" sx={{ p: 2, textAlign: "center" }}>
+                No tasks match "{taskFilter}"
+              </Typography>
             ) : (
-              tasks.map((task) => {
+              filteredTasks.map((task) => {
                 const isSelected = selectedTask?.id === task.id;
                 return (
                   <Box
@@ -494,11 +559,27 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
               <Box
                 sx={{ mb: 2, p: 2, borderRadius: 2, bgcolor: "background.default", border: 1, borderColor: "divider" }}
               >
-                <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 0.5 }}>
-                  <Typography variant="h6" sx={{ fontWeight: 700 }}>
-                    {selectedTask.title}
-                  </Typography>
-                  <Chip size="small" label={selectedTask.category} color="primary" variant="outlined" />
+                <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 0.5 }}>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                    <Typography variant="h6" sx={{ fontWeight: 700 }}>
+                      {selectedTask.title}
+                    </Typography>
+                    <Chip size="small" label={selectedTask.category} color="primary" variant="outlined" />
+                  </Box>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    startIcon={<Code2 size={14} />}
+                    onClick={() => setSourceModalOpen(true)}
+                    sx={{
+                      textTransform: "none",
+                      fontWeight: 600,
+                      fontSize: "0.78rem",
+                      bgcolor: "background.paper",
+                    }}
+                  >
+                    View Source
+                  </Button>
                 </Box>
                 <Typography variant="body2" color="text.secondary">
                   {selectedTask.description}
@@ -821,6 +902,13 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
           )}
         </Box>
       </Paper>
+
+      {/* Task Source Modal */}
+      <TaskSourceModal
+        open={sourceModalOpen}
+        onClose={() => setSourceModalOpen(false)}
+        task={selectedTask || null}
+      />
     </Box>
   );
 };

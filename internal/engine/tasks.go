@@ -17,6 +17,11 @@ func (m *Manager) GetTasks() ([]tasks.TaskMeta, error) {
 	return tasks.GetTasks()
 }
 
+// GetTaskSources returns all script/source files for a specific task
+func (m *Manager) GetTaskSources(taskID string) ([]tasks.TaskSourceFile, error) {
+	return tasks.GetTaskSources(taskID)
+}
+
 // CheckTaskStatus checks the status of a task on specified nodes (or all nodes if nodeNames is empty)
 func (m *Manager) CheckTaskStatus(ctx context.Context, taskID string, nodeNames []string) (map[string]tasks.TaskStatusResult, error) {
 	// Verify task exists

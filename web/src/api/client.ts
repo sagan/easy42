@@ -13,6 +13,7 @@ import type {
   TaskMeta,
   TaskStatusResult,
   TaskRunResult,
+  TaskSourceFile,
   TasksResponse,
   LookingGlassTask,
   LGRunRequest,
@@ -442,6 +443,8 @@ export const api = {
 
   // Helper Tasks
   getTasks: () => request<TaskMeta[]>("/tasks").then((res) => res || []),
+  getTaskSources: (taskId: string) =>
+    request<TaskSourceFile[]>(`/tasks/${encodeURIComponent(taskId)}/source`).then((res) => res || []),
   checkTaskStatus: (taskId: string, nodes?: string[]) =>
     request<Record<string, TaskStatusResult>>(`/tasks/${encodeURIComponent(taskId)}/status`, {
       method: "POST",

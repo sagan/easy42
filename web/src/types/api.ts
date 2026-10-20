@@ -436,6 +436,13 @@ export interface TaskRunResult {
   duration_ms: number;
 }
 
+export interface TaskSourceFile {
+  name: string;
+  path: string;
+  content: string;
+  shared?: boolean;
+}
+
 // Looking Glass Types
 export type ParameterType = "string" | "ip_or_cidr" | "number" | "select" | "boolean" | "host_port";
 

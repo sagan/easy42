@@ -92,16 +92,8 @@ func GetTasks() ([]TaskMeta, error) {
 	return tasks, nil
 }
 
-func normalizeTaskID(taskID string) string {
-	if taskID == "configure_ip" {
-		return "configure_network"
-	}
-	return taskID
-}
-
 // GetTaskMeta returns metadata for a single task
 func GetTaskMeta(taskID string) (*TaskMeta, error) {
-	taskID = normalizeTaskID(taskID)
 	tasks, err := GetTasks()
 	if err != nil {
 		return nil, err
@@ -112,6 +104,98 @@ func GetTaskMeta(taskID string) (*TaskMeta, error) {
 		}
 	}
 	return nil, fmt.Errorf("task '%s' not found", taskID)
+}
+
+// TaskSourceFile represents a source script or configuration file belonging to a task or shared across tasks
+type TaskSourceFile struct {
+	Name    string `json:"name"`
+	Path    string `json:"path"`
+	Content string `json:"content"`
+	Shared  bool   `json:"shared"`
+}
+
+// GetTaskSources returns all script/source files for a specific task, plus shared files like common.sh
+func GetTaskSources(taskID string) ([]TaskSourceFile, error) {
+	if _, err := GetTaskMeta(taskID); err != nil {
+		return nil, err
+	}
+
+	var files []TaskSourceFile
+
+	entries, err := fs.ReadDir(tasksEmbed, taskID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read task dir %s: %w", taskID, err)
+	}
+
+	var taskFiles []TaskSourceFile
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		filePath := filepath.Join(taskID, entry.Name())
+		content, err := tasksEmbed.ReadFile(filePath)
+		if err != nil {
+			continue
+		}
+		taskFiles = append(taskFiles, TaskSourceFile{
+			Name:    entry.Name(),
+			Path:    filePath,
+			Content: string(content),
+			Shared:  false,
+		})
+	}
+
+	filePriority := func(name string) int {
+		switch name {
+		case "run.sh":
+			return 1
+		case "status.sh":
+			return 2
+		case "source.sh":
+			return 3
+		default:
+			if strings.HasSuffix(name, ".sh") {
+				return 4
+			}
+			return 5
+		}
+	}
+	sort.Slice(taskFiles, func(i, j int) bool {
+		pI, pJ := filePriority(taskFiles[i].Name), filePriority(taskFiles[j].Name)
+		if pI != pJ {
+			return pI < pJ
+		}
+		return taskFiles[i].Name < taskFiles[j].Name
+	})
+
+	files = append(files, taskFiles...)
+
+	commonEntries, err := fs.ReadDir(tasksEmbed, "_common")
+	if err == nil {
+		var commonFiles []TaskSourceFile
+		for _, entry := range commonEntries {
+			if entry.IsDir() {
+				continue
+			}
+			commonPath := filepath.Join("_common", entry.Name())
+			content, err := tasksEmbed.ReadFile(commonPath)
+			if err != nil {
+				continue
+			}
+			commonFiles = append(commonFiles, TaskSourceFile{
+				Name:    entry.Name(),
+				Path:    commonPath,
+				Content: string(content),
+				Shared:  true,
+			})
+		}
+		sort.Slice(commonFiles, func(i, j int) bool {
+			return commonFiles[i].Name < commonFiles[j].Name
+		})
+		files = append(files, commonFiles...)
+	}
+
+	return files, nil
 }
 
 func randomHex(n int) string {
@@ -129,7 +213,6 @@ func executeScript(
 	extraFiles ...map[string][]byte,
 ) (stdout string, stderr string, exitCode int, durationMs int64, err error) {
 	start := time.Now()
-	taskID = normalizeTaskID(taskID)
 
 	// Read common.sh if available
 	commonScript, _ := tasksEmbed.ReadFile("_common/common.sh")
@@ -205,7 +288,6 @@ func executeScript(
 
 // ReadTaskScript reads an embedded task script
 func ReadTaskScript(taskID string, scriptName string) ([]byte, error) {
-	taskID = normalizeTaskID(taskID)
 	return tasksEmbed.ReadFile(filepath.Join(taskID, scriptName))
 }
 

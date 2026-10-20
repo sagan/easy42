@@ -1,4 +1,49 @@
 {
+  "__inputs": [],
+  "__requires": [
+    {
+      "type": "grafana",
+      "id": "grafana",
+      "name": "Grafana",
+      "version": "10.0.0"
+    },
+    {
+      "type": "datasource",
+      "id": "prometheus",
+      "name": "Prometheus",
+      "version": "1.0.0"
+    },
+    {
+      "type": "panel",
+      "id": "gauge",
+      "name": "Gauge",
+      "version": ""
+    },
+    {
+      "type": "panel",
+      "id": "stat",
+      "name": "Stat",
+      "version": ""
+    },
+    {
+      "type": "panel",
+      "id": "state-timeline",
+      "name": "State timeline",
+      "version": ""
+    },
+    {
+      "type": "panel",
+      "id": "table",
+      "name": "Table",
+      "version": ""
+    },
+    {
+      "type": "panel",
+      "id": "timeseries",
+      "name": "Time series",
+      "version": ""
+    }
+  ],
   "annotations": {
     "list": [
       {
@@ -90,7 +135,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "easy42_connected_nodes",
+          "expr": "sum(easy42_node_info{node=~\"$node\", is_external=\"0\"} * on(node) easy42_node_up{node=~\"$node\"})",
           "instant": true,
           "legendFormat": "Agents Connected",
           "range": false,
@@ -102,7 +147,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "easy42_total_nodes",
+          "expr": "count(easy42_node_info{node=~\"$node\", is_external=\"0\"})",
           "instant": true,
           "legendFormat": "Total Configured",
           "range": false,
@@ -174,7 +219,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "(easy42_connected_nodes / clamp_min(easy42_total_nodes, 1)) * 100",
+          "expr": "(sum(easy42_node_info{node=~\"$node\", is_external=\"0\"} * on(node) easy42_node_up{node=~\"$node\"}) / clamp_min(count(easy42_node_info{node=~\"$node\", is_external=\"0\"}), 1)) * 100",
           "instant": true,
           "legendFormat": "Connectivity Rate",
           "range": false,
@@ -672,7 +717,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "easy42_node_info{node=~\"$node\"} * on(node) group_left() easy42_node_up{node=~\"$node\"}",
+          "expr": "easy42_node_info{node=~\"$node\", is_external=\"0\"} * on(node) group_left() easy42_node_up{node=~\"$node\"}",
           "format": "table",
           "instant": true,
           "legendFormat": "",
@@ -784,7 +829,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "easy42_node_up{node=~\"$node\"}",
+          "expr": "easy42_node_up{node=~\"$node\"} and on(node) easy42_node_info{node=~\"$node\", is_external=\"0\"}",
           "instant": false,
           "legendFormat": "{{node}}",
           "range": true,
@@ -2180,7 +2225,7 @@
           "type": "prometheus",
           "uid": "${datasource}"
         },
-        "definition": "label_values(easy42_node_info, node)",
+        "definition": "label_values(easy42_node_info{is_external=\"0\"}, node)",
         "hide": 0,
         "includeAll": true,
         "label": "Node",
@@ -2188,7 +2233,7 @@
         "name": "node",
         "options": [],
         "query": {
-          "query": "label_values(easy42_node_info, node)",
+          "query": "label_values(easy42_node_info{is_external=\"0\"}, node)",
           "refId": "StandardVariableQuery"
         },
         "refresh": 2,

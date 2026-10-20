@@ -85,15 +85,16 @@ done
 ### 1. easy42 Cluster Overview (`easy42-cluster-overview.json`)
 
 - **Header KPIs**:
-  - Total Configured Nodes vs. Connected Agents.
-  - Overall Agent Connectivity Health Ratio (%).
+  - Total Configured Managed Nodes vs. Connected Agents (external peers are excluded).
+  - Overall Agent Connectivity Health Ratio (%) for managed nodes only.
   - Configured Mesh Links vs. Operational Links.
   - Active WireGuard Peers & Established BGP Sessions count.
   - Real-time Total Mesh Bandwidth (sum of WireGuard Rx and Tx rates).
 - **Fleet Inventory & Status Table**:
+  - Managed nodes only; external peers are omitted to avoid reporting them as offline agents.
   - Node Name, Connection State (Online / Offline badge), Overlay IPv4, Overlay IPv6, ASN, Mode, Agent Version, OS, and Host FQDN.
 - **Node Connectivity Timeline**:
-  - Historical state-timeline visualizing connection uptime and disconnect events per node.
+  - Historical state-timeline visualizing connection uptime and disconnect events per managed node.
 - **Mesh Links Status**:
   - Table of configured mesh links showing source node, destination node, interfaces, and operational UP/DOWN status.
 - **WireGuard Peer Traffic & Handshakes**:

@@ -610,6 +610,34 @@ func TestTasksAPI(t *testing.T) {
 	if wBadTask.Code != http.StatusBadRequest {
 		t.Fatalf("Expected 400 for unknown task, got %d", wBadTask.Code)
 	}
+
+	// 3. GET /api/tasks/configure_network/source
+	reqSource := httptest.NewRequest("GET", "/api/tasks/configure_network/source", nil)
+	reqSource.AddCookie(cookie)
+	wSource := httptest.NewRecorder()
+	srv.router.ServeHTTP(wSource, reqSource)
+
+	if wSource.Code != http.StatusOK {
+		t.Fatalf("GetTaskSource failed: %d %s", wSource.Code, wSource.Body.String())
+	}
+
+	var sourceFiles []map[string]any
+	if err := json.Unmarshal(wSource.Body.Bytes(), &sourceFiles); err != nil {
+		t.Fatalf("Failed to parse task source response: %v", err)
+	}
+	if len(sourceFiles) < 3 {
+		t.Fatalf("Expected at least 3 source files, got %d", len(sourceFiles))
+	}
+
+	// 4. Test unknown task source
+	reqBadSource := httptest.NewRequest("GET", "/api/tasks/unknown_task_123/source", nil)
+	reqBadSource.AddCookie(cookie)
+	wBadSource := httptest.NewRecorder()
+	srv.router.ServeHTTP(wBadSource, reqBadSource)
+
+	if wBadSource.Code != http.StatusBadRequest {
+		t.Fatalf("Expected 400 for unknown task source, got %d", wBadSource.Code)
+	}
 }
 
 func TestNetworkSettingsAndExternalPeeringAPI(t *testing.T) {

@@ -22,6 +22,22 @@ func (s *Server) handleGetTasks(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, tasksList)
 }
 
+func (s *Server) handleGetTaskSources(w http.ResponseWriter, r *http.Request) {
+	taskID := chi.URLParam(r, "id")
+	if taskID == "" {
+		writeError(w, http.StatusBadRequest, "Task ID is required")
+		return
+	}
+
+	sources, err := s.mgr.GetTaskSources(taskID)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, sources)
+}
+
 func (s *Server) handleTaskStatus(w http.ResponseWriter, r *http.Request) {
 	taskID := chi.URLParam(r, "id")
 	if taskID == "" {
