@@ -454,6 +454,44 @@ exit 0
 
 `common.sh` provides `$SUDO`, OS/init detection (`OS_ID`, `INIT_SYSTEM`, `has_systemd`, `has_openrc`, `has_procd`), service helpers (`is_service_installed`, `is_service_enabled`, `is_service_running`, `enable_service`, `start_service`, `restart_service`, `reload_service`), `install_packages`, and timestamped `backup_file`. Note that it enables `set -e`, so custom scripts should handle expected non-zero commands explicitly.
 
+---
+
+## Filesystem Custom Tasks
+
+In addition to built-in embedded tasks, Easy42 allows operators to define **custom tasks** directly on the server's filesystem without rebuilding the binary.
+
+Custom tasks are stored in:
+```
+<easy42-data-dir>/tasks/<task_id>/
+```
+*(Default: `~/.config/easy42/tasks/<task_id>/`, or overridden by the `--data-dir` flag)*
+
+### Directory Structure & File Specifications
+
+```
+~/.config/easy42/tasks/
+└── <task_id>/
+    ├── run.sh          # [Required, mode 0755] The execution script
+    ├── status.sh       # [Optional, mode 0755] Probe script (0=Ready, 10=Done, 20=Incompatible)
+    └── task.json       # [Optional] Metadata (title, description, category, weight)
+```
+
+1. **`run.sh`** (*Required*): Executable shell script run natively on target nodes as root or with sudo. Must exit `0` on success or non-zero on error.
+2. **`status.sh`** (*Optional*): Probes remote node state. If omitted, Device Helper automatically marks the task as **Ready to Execute** (`0`).
+3. **`task.json`** (*Optional*): Metadata defining `title`, `description`, `category`, and `weight`. If omitted, the title is automatically derived from the directory name (e.g. `install_bird` becomes `"Install Bird"`), category defaults to `"Custom"`, and weight defaults to `500`.
+4. **Access to `common.sh`**:
+   Custom tasks automatically have access to Easy42's shared `common.sh` helper library in their working directory:
+   ```sh
+   SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+   [ -f "$SCRIPT_DIR/common.sh" ] && . "$SCRIPT_DIR/common.sh"
+   ```
+
+### UI Integration
+
+- **Separated Sidebar Section**: In the Device Helper Web UI, custom tasks are grouped in their own **Custom Tasks** section below the built-in tasks.
+- **"+ Task" Guide & AI Prompt Page**: A dedicated "+ Task" item provides step-by-step instructions and an interactive **Ready-to-Use AI Prompt Generator** that can be copied into any LLM (ChatGPT, Claude, Gemini, DeepSeek) to generate production-ready `run.sh` and `status.sh` scripts.
+- **View Source**: Operators can click "View Source" on any custom task to inspect its scripts and the shared `common.sh`.
+
 ### Payload-based tasks
 
 Tasks that need controller-generated files can be supported by extending the execution engine, which already special-cases `deploy_agent` and `configure_network`. Uploaded payload files are written into the same temporary directory as the scripts; only `easy42-agent`, `status.sh`, and `run.sh` receive `0755`, `agent.json` receives `0600`, and other files default to `0644`. To generate dynamic status checks, override `status.sh` in the payload as the built-in payload tasks do.

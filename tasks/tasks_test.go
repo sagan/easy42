@@ -1,6 +1,8 @@
 package tasks
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -96,6 +98,140 @@ func TestGetTaskSources(t *testing.T) {
 	// Verify error for unknown task
 	if _, err := GetTaskSources("nonexistent_task_123"); err == nil {
 		t.Errorf("expected error for nonexistent task, got nil")
+	}
+}
+
+func TestCustomTasks(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// 1. Task with run.sh only (auto title/category/weight)
+	birdDir := filepath.Join(tmpDir, "install_bird")
+	if err := os.MkdirAll(birdDir, 0755); err != nil {
+		t.Fatalf("failed to create birdDir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(birdDir, "run.sh"), []byte("#!/bin/sh\necho 'hello'\n"), 0755); err != nil {
+		t.Fatalf("failed to write run.sh: %v", err)
+	}
+
+	// 2. Task with task.json, run.sh, and status.sh
+	backupDir := filepath.Join(tmpDir, "custom_backup")
+	if err := os.MkdirAll(backupDir, 0755); err != nil {
+		t.Fatalf("failed to create backupDir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(backupDir, "run.sh"), []byte("#!/bin/sh\necho 'backup'\n"), 0755); err != nil {
+		t.Fatalf("failed to write run.sh: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(backupDir, "status.sh"), []byte("#!/bin/sh\nexit 0\n"), 0755); err != nil {
+		t.Fatalf("failed to write status.sh: %v", err)
+	}
+	metaJSON := `{
+		"id": "custom_backup",
+		"title": "Node Backup Routine",
+		"description": "Performs system backup",
+		"category": "Maintenance",
+		"weight": 99
+	}`
+	if err := os.WriteFile(filepath.Join(backupDir, "task.json"), []byte(metaJSON), 0644); err != nil {
+		t.Fatalf("failed to write task.json: %v", err)
+	}
+
+	// 3. Ignored directory without run.sh
+	ignoredDir := filepath.Join(tmpDir, "not_a_task")
+	if err := os.MkdirAll(ignoredDir, 0755); err != nil {
+		t.Fatalf("failed to create ignoredDir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(ignoredDir, "notes.txt"), []byte("just a note"), 0644); err != nil {
+		t.Fatalf("failed to write notes.txt: %v", err)
+	}
+
+	// Test GetTasks with custom dir
+	taskList, err := GetTasks(tmpDir)
+	if err != nil {
+		t.Fatalf("GetTasks with customDir failed: %v", err)
+	}
+
+	var foundBird, foundBackup, foundIgnored bool
+	for _, task := range taskList {
+		if task.ID == "install_bird" {
+			foundBird = true
+			if !task.Custom {
+				t.Errorf("expected install_bird to have Custom=true")
+			}
+			if task.Title != "Install Bird" {
+				t.Errorf("expected title 'Install Bird', got '%s'", task.Title)
+			}
+			if task.Category != "Custom" {
+				t.Errorf("expected category 'Custom', got '%s'", task.Category)
+			}
+		}
+		if task.ID == "custom_backup" {
+			foundBackup = true
+			if !task.Custom {
+				t.Errorf("expected custom_backup to have Custom=true")
+			}
+			if task.Title != "Node Backup Routine" {
+				t.Errorf("expected title 'Node Backup Routine', got '%s'", task.Title)
+			}
+			if task.Category != "Maintenance" {
+				t.Errorf("expected category 'Maintenance', got '%s'", task.Category)
+			}
+			if task.Weight != 99 {
+				t.Errorf("expected weight 99, got %d", task.Weight)
+			}
+		}
+		if task.ID == "not_a_task" {
+			foundIgnored = true
+		}
+	}
+
+	if !foundBird {
+		t.Errorf("install_bird task was not found")
+	}
+	if !foundBackup {
+		t.Errorf("custom_backup task was not found")
+	}
+	if foundIgnored {
+		t.Errorf("not_a_task directory without run.sh should have been ignored")
+	}
+
+	// Test GetTaskMeta
+	meta, err := GetTaskMeta("custom_backup", tmpDir)
+	if err != nil {
+		t.Fatalf("GetTaskMeta failed: %v", err)
+	}
+	if meta.Title != "Node Backup Routine" {
+		t.Errorf("expected title 'Node Backup Routine', got '%s'", meta.Title)
+	}
+
+	// Test GetTaskSources for custom task
+	sources, err := GetTaskSources("custom_backup", tmpDir)
+	if err != nil {
+		t.Fatalf("GetTaskSources failed: %v", err)
+	}
+	srcMap := make(map[string]TaskSourceFile)
+	for _, s := range sources {
+		srcMap[s.Name] = s
+	}
+	if _, ok := srcMap["run.sh"]; !ok {
+		t.Errorf("missing run.sh in custom task sources")
+	}
+	if _, ok := srcMap["status.sh"]; !ok {
+		t.Errorf("missing status.sh in custom task sources")
+	}
+	if _, ok := srcMap["task.json"]; !ok {
+		t.Errorf("missing task.json in custom task sources")
+	}
+	if common, ok := srcMap["common.sh"]; !ok || !common.Shared {
+		t.Errorf("missing shared common.sh in custom task sources")
+	}
+
+	// Test CheckStatus on task without status.sh
+	statusRes := CheckStatus(nil, nil, "install_bird", "node1", tmpDir)
+	if statusRes.Status != "ready" {
+		t.Errorf("expected status 'ready' for task without status.sh, got '%s'", statusRes.Status)
+	}
+	if statusRes.ExitCode != 0 {
+		t.Errorf("expected exit code 0, got %d", statusRes.ExitCode)
 	}
 }
 

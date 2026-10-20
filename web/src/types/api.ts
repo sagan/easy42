@@ -414,6 +414,7 @@ export interface TaskMeta {
   description: string;
   category: string;
   weight: number;
+  custom?: boolean;
 }
 
 export type TaskCheckStatus = "ready" | "done" | "incompatible" | "error";

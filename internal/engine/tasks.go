@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"strings"
 	"sync"
 
@@ -12,20 +13,27 @@ import (
 	"easy42/tasks"
 )
 
-// GetTasks returns all available embedded helper tasks
+func (m *Manager) customTasksDir() string {
+	if m.store != nil && m.store.DataDir() != "" {
+		return filepath.Join(m.store.DataDir(), "tasks")
+	}
+	return tasks.GetCustomTasksDir()
+}
+
+// GetTasks returns all available helper tasks (embedded and custom)
 func (m *Manager) GetTasks() ([]tasks.TaskMeta, error) {
-	return tasks.GetTasks()
+	return tasks.GetTasks(m.customTasksDir())
 }
 
 // GetTaskSources returns all script/source files for a specific task
 func (m *Manager) GetTaskSources(taskID string) ([]tasks.TaskSourceFile, error) {
-	return tasks.GetTaskSources(taskID)
+	return tasks.GetTaskSources(taskID, m.customTasksDir())
 }
 
 // CheckTaskStatus checks the status of a task on specified nodes (or all nodes if nodeNames is empty)
 func (m *Manager) CheckTaskStatus(ctx context.Context, taskID string, nodeNames []string) (map[string]tasks.TaskStatusResult, error) {
 	// Verify task exists
-	if _, err := tasks.GetTaskMeta(taskID); err != nil {
+	if _, err := tasks.GetTaskMeta(taskID, m.customTasksDir()); err != nil {
 		return nil, err
 	}
 
@@ -84,9 +92,9 @@ func (m *Manager) CheckTaskStatus(ctx context.Context, taskID string, nodeNames 
 			var res tasks.TaskStatusResult
 			if taskID == "configure_network" || taskID == "configure_ip" {
 				payload := buildConfigureNetworkPayload(n)
-				res = tasks.CheckStatusWithPayload(sshClient, sftpClient, taskID, n.Name, payload)
+				res = tasks.CheckStatusWithPayload(sshClient, sftpClient, taskID, n.Name, payload, m.customTasksDir())
 			} else {
-				res = tasks.CheckStatus(sshClient, sftpClient, taskID, n.Name)
+				res = tasks.CheckStatus(sshClient, sftpClient, taskID, n.Name, m.customTasksDir())
 			}
 			mu.Lock()
 			results[n.Name] = res
@@ -101,7 +109,7 @@ func (m *Manager) CheckTaskStatus(ctx context.Context, taskID string, nodeNames 
 // RunTask executes a task on specified nodes
 func (m *Manager) RunTask(ctx context.Context, taskID string, nodeNames []string) (map[string]tasks.TaskRunResult, error) {
 	// Verify task exists
-	if _, err := tasks.GetTaskMeta(taskID); err != nil {
+	if _, err := tasks.GetTaskMeta(taskID, m.customTasksDir()); err != nil {
 		return nil, err
 	}
 
@@ -226,7 +234,7 @@ func (m *Manager) RunTask(ctx context.Context, taskID string, nodeNames []string
 					}()
 				}
 			} else {
-				res = tasks.RunTask(sshClient, sftpClient, taskID, n.Name)
+				res = tasks.RunTask(sshClient, sftpClient, taskID, n.Name, m.customTasksDir())
 			}
 			mu.Lock()
 			results[n.Name] = res

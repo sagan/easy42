@@ -23,10 +23,13 @@ import {
   TextField,
   InputAdornment,
 } from "@mui/material";
-import { CheckCircle2, XCircle, Play, RotateCw, Terminal, Server, HelpCircle, Tag, CheckCheck, Search, X, Code2 } from "lucide-react";
+import { CheckCircle2, XCircle, Play, RotateCw, Terminal, Server, HelpCircle, Tag, CheckCheck, Search, X, Code2, Plus } from "lucide-react";
 import { api } from "../../api/client";
 import { Node, TaskMeta, TaskStatusResult, TaskRunResult } from "../../types/api";
 import { TaskSourceModal } from "./TaskSourceModal";
+import { CustomTaskHelp } from "../DeviceHelper/CustomTaskHelp";
+
+export const CUSTOM_TASK_HELP_ID = "+task";
 
 interface DeviceHelperModalProps {
   open?: boolean;
@@ -148,10 +151,14 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
   useEffect(() => {
     const paramTask = searchParams.get("task") || searchParams.get("taskId") || "";
     if (paramTask) {
-      if (paramTask !== selectedTaskId && (tasks.length === 0 || tasks.some((t) => t.id === paramTask))) {
+      if (paramTask === CUSTOM_TASK_HELP_ID || paramTask === "+task") {
+        if (selectedTaskId !== CUSTOM_TASK_HELP_ID) {
+          setSelectedTaskId(CUSTOM_TASK_HELP_ID);
+        }
+      } else if (paramTask !== selectedTaskId && (tasks.length === 0 || tasks.some((t) => t.id === paramTask))) {
         setSelectedTaskId(paramTask);
       }
-    } else if (tasks.length > 0 && selectedTaskId !== tasks[0].id) {
+    } else if (tasks.length > 0 && selectedTaskId !== tasks[0].id && selectedTaskId !== CUSTOM_TASK_HELP_ID) {
       setSelectedTaskId(tasks[0].id);
     }
   }, [searchParams, tasks, selectedTaskId]);
@@ -163,16 +170,23 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
       setTasks(data);
       if (data.length > 0) {
         const urlTask = searchParams.get("task") || searchParams.get("taskId") || initialTaskId || "";
-        const matched = data.find((t) => t.id === urlTask);
-        if (matched) {
-          setSelectedTaskId(matched.id);
+        if (urlTask === CUSTOM_TASK_HELP_ID || urlTask === "+task") {
+          setSelectedTaskId(CUSTOM_TASK_HELP_ID);
           if (!searchParams.get("task") && !searchParams.get("taskId")) {
-            handleSelectTask(matched.id);
+            handleSelectTask(CUSTOM_TASK_HELP_ID);
           }
         } else {
-          const firstTaskId = data[0].id;
-          setSelectedTaskId(firstTaskId);
-          handleSelectTask(firstTaskId);
+          const matched = data.find((t) => t.id === urlTask);
+          if (matched) {
+            setSelectedTaskId(matched.id);
+            if (!searchParams.get("task") && !searchParams.get("taskId")) {
+              handleSelectTask(matched.id);
+            }
+          } else {
+            const firstTaskId = data[0].id;
+            setSelectedTaskId(firstTaskId);
+            handleSelectTask(firstTaskId);
+          }
         }
       }
     } catch (err: unknown) {
@@ -183,9 +197,12 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
     }
   };
 
+  const isCustomTaskHelp = selectedTaskId === CUSTOM_TASK_HELP_ID;
+
   const selectedTask = useMemo(() => {
-    return tasks.find((t) => t.id === selectedTaskId) || tasks[0];
-  }, [tasks, selectedTaskId]);
+    if (isCustomTaskHelp) return null;
+    return tasks.find((t) => t.id === selectedTaskId) || tasks[0] || null;
+  }, [tasks, selectedTaskId, isCustomTaskHelp]);
 
   // Task search filter state and View Source modal state
   const [taskFilter, setTaskFilter] = useState<string>("");
@@ -204,6 +221,29 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
       return title.includes(q) || desc.includes(q) || id.includes(q);
     });
   }, [tasks, taskFilter, selectedTask]);
+
+  const builtInTasks = useMemo(() => {
+    return filteredTasks.filter((t) => !t.custom);
+  }, [filteredTasks]);
+
+  const customTasks = useMemo(() => {
+    return filteredTasks.filter((t) => t.custom);
+  }, [filteredTasks]);
+
+  const matchesHelpFilter = useMemo(() => {
+    const q = taskFilter.trim().toLowerCase();
+    if (!q) return true;
+    if (isCustomTaskHelp) return true;
+    return (
+      "+task".includes(q) ||
+      "+ task".includes(q) ||
+      "custom".includes(q) ||
+      "add".includes(q) ||
+      "help".includes(q) ||
+      "guide".includes(q) ||
+      "prompt".includes(q)
+    );
+  }, [taskFilter, isCustomTaskHelp]);
 
   // When selected task changes, optionally clear old statuses or keep
   useEffect(() => {
@@ -495,65 +535,222 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
               <Box sx={{ display: "flex", justifyContent: "center", p: 4 }}>
                 <CircularProgress size={24} />
               </Box>
-            ) : tasks.length === 0 ? (
+            ) : tasks.length === 0 && !matchesHelpFilter ? (
               <Typography variant="body2" color="text.secondary" sx={{ p: 2, textAlign: "center" }}>
                 No tasks available
               </Typography>
-            ) : filteredTasks.length === 0 ? (
+            ) : filteredTasks.length === 0 && !matchesHelpFilter ? (
               <Typography variant="body2" color="text.secondary" sx={{ p: 2, textAlign: "center" }}>
                 No tasks match "{taskFilter}"
               </Typography>
             ) : (
-              filteredTasks.map((task) => {
-                const isSelected = selectedTask?.id === task.id;
-                return (
-                  <Box
-                    key={task.id}
-                    onClick={() => handleSelectTask(task.id)}
-                    sx={{
-                      p: 1.5,
-                      mb: 1,
-                      borderRadius: 1.5,
-                      cursor: "pointer",
-                      border: 1,
-                      borderColor: isSelected ? "primary.main" : "divider",
-                      bgcolor: isSelected ? "action.selected" : "background.paper",
-                      transition: "all 0.15s ease",
-                      "&:hover": {
-                        borderColor: "primary.light",
-                        bgcolor: "action.hover",
-                      },
-                    }}
-                  >
-                    <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 0.5 }}>
-                      <Typography variant="subtitle2" sx={{ fontWeight: isSelected ? 700 : 600 }}>
-                        {task.title}
-                      </Typography>
-                      <Chip size="small" label={task.category} sx={{ fontSize: "0.65rem", height: 18 }} />
-                    </Box>
+              <>
+                {/* Built-in Tasks Section */}
+                <Box sx={{ mb: 2 }}>
+                  <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", px: 0.5, mb: 1 }}>
                     <Typography
                       variant="caption"
-                      color="text.secondary"
                       sx={{
-                        display: "-webkit-box",
-                        WebkitLineClamp: 2,
-                        WebkitBoxOrient: "vertical",
-                        overflow: "hidden",
-                        lineHeight: 1.3,
+                        fontWeight: 700,
+                        textTransform: "uppercase",
+                        letterSpacing: 0.5,
+                        color: "text.secondary",
+                        fontSize: "0.68rem",
                       }}
                     >
-                      {task.description}
+                      Built-in Tasks ({builtInTasks.length})
                     </Typography>
                   </Box>
-                );
-              })
+                  {builtInTasks.length === 0 ? (
+                    <Typography variant="caption" sx={{ color: "text.disabled", px: 1, display: "block" }}>
+                      No matching built-in tasks
+                    </Typography>
+                  ) : (
+                    builtInTasks.map((task) => {
+                      const isSelected = !isCustomTaskHelp && selectedTask?.id === task.id;
+                      return (
+                        <Box
+                          key={task.id}
+                          onClick={() => handleSelectTask(task.id)}
+                          sx={{
+                            p: 1.5,
+                            mb: 1,
+                            borderRadius: 1.5,
+                            cursor: "pointer",
+                            border: 1,
+                            borderColor: isSelected ? "primary.main" : "divider",
+                            bgcolor: isSelected ? "action.selected" : "background.paper",
+                            transition: "all 0.15s ease",
+                            "&:hover": {
+                              borderColor: "primary.light",
+                              bgcolor: "action.hover",
+                            },
+                          }}
+                        >
+                          <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 0.5 }}>
+                            <Typography variant="subtitle2" sx={{ fontWeight: isSelected ? 700 : 600 }}>
+                              {task.title}
+                            </Typography>
+                            <Chip size="small" label={task.category} sx={{ fontSize: "0.65rem", height: 18 }} />
+                          </Box>
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            sx={{
+                              display: "-webkit-box",
+                              WebkitLineClamp: 2,
+                              WebkitBoxOrient: "vertical",
+                              overflow: "hidden",
+                              lineHeight: 1.3,
+                            }}
+                          >
+                            {task.description}
+                          </Typography>
+                        </Box>
+                      );
+                    })
+                  )}
+                </Box>
+
+                {/* Custom Tasks Section */}
+                <Box sx={{ mt: 1 }}>
+                  <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", px: 0.5, mb: 1 }}>
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        fontWeight: 700,
+                        textTransform: "uppercase",
+                        letterSpacing: 0.5,
+                        color: "text.secondary",
+                        fontSize: "0.68rem",
+                      }}
+                    >
+                      Custom Tasks ({customTasks.length})
+                    </Typography>
+                    <Chip
+                      size="small"
+                      label="Tasks Dir"
+                      sx={{
+                        height: 16,
+                        fontSize: "0.6rem",
+                        fontWeight: 700,
+                        bgcolor: "rgba(124, 58, 237, 0.08)",
+                        color: "#7c3aed",
+                      }}
+                    />
+                  </Box>
+
+                  {customTasks.map((task) => {
+                    const isSelected = !isCustomTaskHelp && selectedTask?.id === task.id;
+                    return (
+                      <Box
+                        key={task.id}
+                        onClick={() => handleSelectTask(task.id)}
+                        sx={{
+                          p: 1.5,
+                          mb: 1,
+                          borderRadius: 1.5,
+                          cursor: "pointer",
+                          border: 1,
+                          borderColor: isSelected ? "primary.main" : "divider",
+                          bgcolor: isSelected ? "action.selected" : "background.paper",
+                          transition: "all 0.15s ease",
+                          "&:hover": {
+                            borderColor: "primary.light",
+                            bgcolor: "action.hover",
+                          },
+                        }}
+                      >
+                        <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 0.5 }}>
+                          <Typography variant="subtitle2" sx={{ fontWeight: isSelected ? 700 : 600, color: "#1e1b4b" }}>
+                            {task.title}
+                          </Typography>
+                          <Chip
+                            size="small"
+                            label={task.category || "Custom"}
+                            sx={{ fontSize: "0.65rem", height: 18, bgcolor: "rgba(124, 58, 237, 0.1)", color: "#7c3aed" }}
+                          />
+                        </Box>
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          sx={{
+                            display: "-webkit-box",
+                            WebkitLineClamp: 2,
+                            WebkitBoxOrient: "vertical",
+                            overflow: "hidden",
+                            lineHeight: 1.3,
+                          }}
+                        >
+                          {task.description}
+                        </Typography>
+                      </Box>
+                    );
+                  })}
+
+                  {/* Placeholder "+ task" Help Item */}
+                  {matchesHelpFilter && (
+                    <Box
+                      onClick={() => handleSelectTask(CUSTOM_TASK_HELP_ID)}
+                      sx={{
+                        p: 1.5,
+                        mb: 1,
+                        borderRadius: 1.5,
+                        cursor: "pointer",
+                        border: "1.5px dashed",
+                        borderColor: isCustomTaskHelp ? "primary.main" : "#cbd5e1",
+                        bgcolor: isCustomTaskHelp ? "action.selected" : "background.paper",
+                        transition: "all 0.15s ease",
+                        "&:hover": {
+                          borderColor: "primary.main",
+                          bgcolor: "rgba(79, 70, 229, 0.04)",
+                        },
+                      }}
+                    >
+                      <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 0.5 }}>
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
+                          <Plus size={15} color="#4f46e5" />
+                          <Typography
+                            variant="subtitle2"
+                            sx={{ fontWeight: isCustomTaskHelp ? 800 : 700, color: "primary.main" }}
+                          >
+                            + Task
+                          </Typography>
+                        </Box>
+                        <Chip
+                          size="small"
+                          label="Help & Guide"
+                          color="primary"
+                          variant="outlined"
+                          sx={{ fontSize: "0.62rem", height: 18, fontWeight: 700 }}
+                        />
+                      </Box>
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        sx={{
+                          display: "block",
+                          lineHeight: 1.3,
+                        }}
+                      >
+                        How to write &amp; add custom tasks &amp; AI prompt generator
+                      </Typography>
+                    </Box>
+                  )}
+                </Box>
+              </>
             )}
           </Box>
         </Box>
 
         {/* Right Main Area: Task Details, Node Selection & Status Matrix */}
         <Box sx={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-          {selectedTask ? (
+          {isCustomTaskHelp ? (
+            <CustomTaskHelp
+              onRefreshTasks={loadTasks}
+              isRefreshing={loadingTasks}
+            />
+          ) : selectedTask ? (
             <Box sx={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", p: 2.5 }}>
               {/* Task Header */}
               <Box
@@ -565,6 +762,19 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
                       {selectedTask.title}
                     </Typography>
                     <Chip size="small" label={selectedTask.category} color="primary" variant="outlined" />
+                    {selectedTask.custom && (
+                      <Chip
+                        size="small"
+                        label="Custom Task"
+                        sx={{
+                          fontWeight: 700,
+                          fontSize: "0.68rem",
+                          bgcolor: "rgba(124, 58, 237, 0.1)",
+                          color: "#7c3aed",
+                          border: "1px solid rgba(124, 58, 237, 0.25)",
+                        }}
+                      />
+                    )}
                   </Box>
                   <Button
                     size="small"
