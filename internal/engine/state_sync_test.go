@@ -31,14 +31,14 @@ func TestPlanSyncDiffingWithState(t *testing.T) {
 
 	nodeA := config.Node{
 		Name:      "node-a",
-		Host:      "127.0.0.1",
+		Host:      "127.0.0.1:1",
 		IP:        "192.168.100.1",
 		Interface: "lo",
 		ASN:       4224420001,
 	}
 	nodeB := config.Node{
 		Name:      "node-b",
-		Host:      "127.0.0.1",
+		Host:      "127.0.0.1:1",
 		IP:        "192.168.100.2",
 		Interface: "lo",
 		ASN:       4224420002,
@@ -77,7 +77,7 @@ func TestPlanSyncDiffingWithState(t *testing.T) {
 	fromConf, _ := compiler.GenerateWgConfigContent(&nodeA, &nodeB, &link.From, &link.To, mgr.Vault())
 	fromHash := config.HashConfig(compiler.NormalizeConfig(fromConf))
 
-	err = mgr.StateStore().UpdateInterface("node-a", "127.0.0.1", config.StateInterface{
+	err = mgr.StateStore().UpdateInterface("node-a", nodeA.Host, config.StateInterface{
 		Name:       link.From.Interface,
 		TargetFile: "/etc/wireguard/" + link.From.Interface + ".conf",
 		ConfigHash: fromHash,
@@ -129,7 +129,7 @@ func TestPlanSyncDiffingWithState(t *testing.T) {
 	// 3. Mark node-b WG interface also synced, as well as both BIRD configs
 	toConf, _ := compiler.GenerateWgConfigContent(&nodeB, &nodeA, &link.To, &link.From, mgr.Vault())
 	toHash := config.HashConfig(compiler.NormalizeConfig(toConf))
-	_ = mgr.StateStore().UpdateInterface("node-b", "127.0.0.1", config.StateInterface{
+	_ = mgr.StateStore().UpdateInterface("node-b", nodeB.Host, config.StateInterface{
 		Name:       link.To.Interface,
 		TargetFile: "/etc/wireguard/" + link.To.Interface + ".conf",
 		ConfigHash: toHash,
@@ -138,16 +138,16 @@ func TestPlanSyncDiffingWithState(t *testing.T) {
 	})
 
 	birdA, _ := compiler.GenerateBirdConfig(&nodeA, []config.Node{nodeA, nodeB}, []config.Link{*link}, &mgr.store.Get().NetworkSettings)
-	_ = mgr.StateStore().UpdateBirdState("node-a", "127.0.0.1", config.HashConfig(compiler.NormalizeConfig(birdA)), time.Now())
+	_ = mgr.StateStore().UpdateBirdState("node-a", nodeA.Host, config.HashConfig(compiler.NormalizeConfig(birdA)), time.Now())
 
 	birdB, _ := compiler.GenerateBirdConfig(&nodeB, []config.Node{nodeA, nodeB}, []config.Link{*link}, &mgr.store.Get().NetworkSettings)
-	_ = mgr.StateStore().UpdateBirdState("node-b", "127.0.0.1", config.HashConfig(compiler.NormalizeConfig(birdB)), time.Now())
+	_ = mgr.StateStore().UpdateBirdState("node-b", nodeB.Host, config.HashConfig(compiler.NormalizeConfig(birdB)), time.Now())
 
 	nftA, _ := compiler.GenerateNftablesConfig(&nodeA, []config.Node{nodeA, nodeB}, []config.Link{*link}, &mgr.store.Get().NetworkSettings)
-	_ = mgr.StateStore().UpdateNftablesState("node-a", "127.0.0.1", config.HashConfig(compiler.NormalizeConfig(nftA)), time.Now())
+	_ = mgr.StateStore().UpdateNftablesState("node-a", nodeA.Host, config.HashConfig(compiler.NormalizeConfig(nftA)), time.Now())
 
 	nftB, _ := compiler.GenerateNftablesConfig(&nodeB, []config.Node{nodeA, nodeB}, []config.Link{*link}, &mgr.store.Get().NetworkSettings)
-	_ = mgr.StateStore().UpdateNftablesState("node-b", "127.0.0.1", config.HashConfig(compiler.NormalizeConfig(nftB)), time.Now())
+	_ = mgr.StateStore().UpdateNftablesState("node-b", nodeB.Host, config.HashConfig(compiler.NormalizeConfig(nftB)), time.Now())
 
 	actions3, err := mgr.PlanSync()
 	if err != nil {

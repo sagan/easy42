@@ -11,9 +11,9 @@ The **Easy42 Agent** (`easy42-agent`) is a high-performance, lightweight backgro
   - `aarch64-unknown-linux-musl`
   - `armv7-unknown-linux-musleabihf`
   - `mipsel-unknown-linux-musl` (for MIPS OpenWrt routers)
-- **Persistent WebSocket Tunnel**: Connects outbound to the controller's `/api/agent/ws` endpoint using TLS (`wss://`). This eliminates the requirement for open inbound firewall ports or public IP addresses on managed nodes.
+- **Persistent WebSocket Tunnel**: Connects outbound to the controller's `/api/agent/ws` endpoint, using `wss://` for HTTPS servers and `ws://` for plain-HTTP servers. This eliminates the requirement for open inbound firewall ports or public IP addresses on managed nodes.
 - **Protocol Buffers (Protobuf)**: All messages, telemetry reports, and remote commands are serialized via Protobuf (`proto/agent.proto`) for minimal bandwidth and CPU overhead.
-- **Mutual Authentication**: The agent authenticates during WebSocket registration using a pre-shared cryptographic token configured in `agent.json`.
+- **Token Authentication**: The agent authenticates during WebSocket registration using a pre-shared bearer token configured in `agent.json`. Use `wss://` in production so the connection is also protected by TLS.
 
 ---
 
@@ -23,7 +23,7 @@ Instead of manually compiling binaries and configuring service units, Easy42 pro
 
 1. **Auto-Architecture Detection**: Queries the remote host (`uname -m`) to identify CPU architecture (`x86_64`, `aarch64`, etc.).
 2. **Token Provisioning**: Generates a secure cryptographic agent authentication token if one has not already been assigned.
-3. **Payload Injection**: Automatically uploads the corresponding bundled `easy42-agent` binary and generated `agent.json` to the target host.
+3. **Payload Injection**: Uploads the corresponding bundled `easy42-agent` binary. A generated `agent.json` is written only when `/etc/easy42/agent.json` does not already exist; redeploying preserves an existing agent configuration.
 4. **Service Installation**: Detects the host's active init system (`systemd`, `openrc`, or `procd`), installs the service unit, and starts `easy42-agent`.
 5. **Status Verification**: Refreshes node state on the controller once the agent connects over WebSockets.
 
@@ -39,7 +39,7 @@ Every 10 seconds (configurable via `telemetry_interval_secs`), the agent samples
    - Physical memory usage (`memory_used_bytes` / `memory_total_bytes`).
    - System uptime (`uptime_seconds`).
 2. **Disk Utilization**:
-   - Total, used, and free storage bytes per mounted filesystem partition.
+   - Total, used, and free storage bytes for the root filesystem (`/`). The protocol carries a list for future mount points, but the current agent collects only `/`.
 3. **Interface Traffic & Throughput**:
    - Link operational state (`is_up`).
    - Cumulative Rx and Tx bytes and packets.
@@ -58,9 +58,10 @@ Every 10 seconds (configurable via `telemetry_interval_secs`), the agent samples
 
 The agent executes scheduled network latency and connectivity probes directly from the edge host:
 
-- **ICMP Ping**: Sends ICMP echo requests to target IPs and measures packet loss, min/avg/max/mdev RTT.
-- **TCP Handshake Ping**: Establishes TCP handshakes to `host:port` to measure latency without needing ICMP permissions.
-- **Reporting**: Metrics are buffered, converted into structured JSON, and streamed back to the controller for SQLite persistence and chart rendering.
+- **ICMP Ping** (default task type): Runs `ping -c <count> -W <timeout>` and records the raw output.
+- **TCP Handshake Ping** (`task_type: "tcp_ping"`): Establishes TCP connections to `host:port` to measure latency without needing ICMP permissions.
+- **Scheduling**: Supports standard 5-field cron expressions and 6-field expressions with a seconds field. The scheduler ticks every second and pushes new task lists from the controller without an agent restart.
+- **Reporting**: Each run returns a Protobuf `CronTaskReport` containing the task ID, node name, execution timestamp, exit code, duration, raw stdout/stderr, and an error message. The controller persists results in SQLite for the UI and API.
 
 ---
 

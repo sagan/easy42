@@ -68,9 +68,10 @@ Easy42 includes an embedded task execution engine to bootstrap prerequisites, in
 | Task ID | Category | Description |
 | :--- | :--- | :--- |
 | `deploy_agent` | Services | Automatically detects remote architecture, deploys/upgrades the bundled `easy42-agent` binary, provisions token configs, and starts the system service unit (`systemd`, `openrc`, `procd`). |
+| `configure_network` | System & Network | Persists the node's main/external IPv4 and IPv6 addresses (and optional custom network script) through netplan, `/etc/network/interfaces`, systemd-networkd, or OpenWrt UCI. |
 | `install_wireguard` | Packages | Installs `wireguard` and `wireguard-tools` across all supported Linux distributions (Debian, Ubuntu, Alpine, Arch, RHEL/CentOS, OpenWrt). |
 | `install_bird` | Packages | Installs BIRD 2 and enables the system service. |
-| `config_bird` | Configuration | Backs up `/etc/bird/bird.conf`, inserts `include "/etc/bird_easy42.conf";`, validates syntax with `bird -p`, and reloads `birdc`. |
+| `config_bird` | Configuration | Finds `/etc/bird/bird.conf`, `/etc/bird.conf`, or `/etc/bird2/bird.conf` (creating `/etc/bird/bird.conf` when none exists), backs it up, inserts `include "/etc/bird_easy42.conf";`, validates syntax with `bird -p`, and reloads BIRD. |
 | `config_nftables` | Configuration | Configures `/etc/nftables.conf` (or OpenWrt / Alpine init systems) to include `/etc/easy42.nft` and enables the service. |
 | `sysctl_params` | System & Network | Deploys `/etc/sysctl.d/99-easy42.conf` enabling IPv4/IPv6 forwarding and setting `rp_filter=0`. |
 | `autostart_interfaces` | System & Network | Installs systemd, OpenRC, or procd units to bring up `wg42*` interfaces on boot. |
@@ -78,6 +79,56 @@ Easy42 includes an embedded task execution engine to bootstrap prerequisites, in
 Inspect, verify, and execute these tasks directly from the **Device Helper** page (`/helper`) in the top navigation bar, or via the **Device Helper** button in any node's detail view. You can filter devices by tag (`#core`, `#edge`), batch check prerequisites, run tasks, and view live execution logs.
 
 For comprehensive task details, state machine exit codes, and REST API usage, see **[Device Helper & Remote Host Automation](device-helper.md)**.
+
+### Configure Network Failures
+
+- **`Not Supported: interface '<name>' is not supported`**: `configure_network` only accepts `lo`, `dummy*`, `eth*`, `ens*`, `enp*`, `eno*`, `wl*`, or `wlan*`. Rename the interface or choose a supported name in the node configuration.
+- **`Not Supported: no IP addresses or custom network script configured`**: The node has no `ip`, `ip6`, `external_ip`, or `external_ip6`, and no `custom_network_script`. Add an address or script.
+- **`No supported native network manager found`**: The task checked `netplan`, `/etc/network/interfaces`, systemd-networkd, and OpenWrt UCI. Install/enable a supported network manager on the host.
+- **Addresses work until reboot**: The task must have completed successfully. A status of `Needs Execution` means the persistent configuration is missing even if the address is currently live. Re-run the task and confirm the backend file was written:
+  ```bash
+  # netplan
+  cat /etc/netplan/99-easy42.yaml
+  # Debian ifupdown
+  sed -n '/### EASY42_START/,/### EASY42_END/p' /etc/network/interfaces
+  # systemd-networkd
+  cat /etc/systemd/network/99-easy42-*.network
+  # OpenWrt
+  uci show network.easy42_node
+  ```
+- **Custom script does not run**: On systemd hosts verify both `/etc/networkd-dispatcher/routable.d/99-easy42.sh` and `/etc/systemd/system/networkd-dispatcher.service.d/override.conf` exist and the script matches the configured interface. On ifupdown hosts verify the interface block contains `up /etc/network/easy42.sh`.
+
+---
+
+## Config Apply & Change History Recovery
+
+`easy42 apply` and the Web UI apply flow parse and validate the patch against the apply schema before touching the stored configuration. The in-memory simulation runs first; if validation or mesh integrity checks fail, no config is written.
+
+Before saving a successful apply, Easy42 copies the current `config.json` to:
+
+```
+<data-dir>/config.json.bak.<unix-timestamp>
+<data-dir>/config.json.bak
+```
+
+The default data directory is `~/.config/easy42` (override with the global `--data-dir` flag). The overwritten `.bak` (most recent apply) plus the timestamped copies allow rollback.
+
+**Recovery procedure**
+
+1. Stop the Easy42 service or process.
+2. Inspect the backups and choose the desired version. The timestamped file's suffix is a Unix timestamp.
+3. Replace the live config:
+   ```bash
+   cp ~/.config/easy42/config.json.bak.1700000000 ~/.config/easy42/config.json
+   ```
+4. Restart Easy42. If the vault was unlocked when the backup was taken, encrypted secrets remain readable with the same master password.
+
+**Notes and limitations**
+
+- Apply currently merges `nodes`, `links`, `network_settings`, `database`, `dns`, and `integrations`. The schema also accepts `network_policies`, `blocks`, `templates`, `server_tasks`, and `cron_tasks`, but those sections are **not applied** by the apply engine yet; use their dedicated UI/API endpoints instead.
+- Saved config-change snippets (`/api/config/changes`) do not modify the configuration until applied. Applying a snippet re-runs the full validation/simulation and creates the same backups.
+- New links created through apply receive generated WireGuard keys and a PSK only while the vault is unlocked. Applying with a locked vault leaves those fields empty.
+- After a successful apply the controller triggers a background host sync (`SyncHostsToAgents`), so nodes may take a moment to receive regenerated configurations.
 
 ---
 
