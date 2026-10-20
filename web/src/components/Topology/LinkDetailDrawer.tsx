@@ -94,6 +94,7 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [copiedEndpoint, setCopiedEndpoint] = useState<string | null>(null);
+  const [copiedField, setCopiedField] = useState<string | null>(null);
 
   const [keyModalOpen, setKeyModalOpen] = useState(false);
   const [keyModalMode, setKeyModalMode] = useState<LinkKeyActionMode>("reveal_psk");
@@ -225,6 +226,18 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
     navigator.clipboard.writeText(text);
     setCopiedEndpoint(id);
     setTimeout(() => setCopiedEndpoint(null), 2000);
+  };
+
+  const copyFieldToClipboard = (text: string, id: string) => {
+    if (!text) return;
+    navigator.clipboard.writeText(text);
+    setCopiedField(id);
+    setTimeout(() => setCopiedField(null), 2000);
+  };
+
+  const getLinkLocalIpv6CopyText = (addr?: string) => {
+    if (!addr) return "";
+    return addr.trim().replace(/\/64$/, "");
   };
 
   const handleDelete = async () => {
@@ -641,13 +654,26 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
               </Typography>
             </Box>
 
-            <Box sx={{ display: "flex", justifyContent: "space-between" }}>
+            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <Typography variant="caption" sx={{ color: "#64748B" }}>
                 {isManual ? "Local Address:" : "Link-Local IPv6:"}
               </Typography>
-              <Typography variant="caption" className="mono-font" sx={{ color: "#0891B2", fontWeight: 600 }}>
-                {link.from.address}
-              </Typography>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                <Typography variant="caption" className="mono-font" sx={{ color: "#0891B2", fontWeight: 600 }}>
+                  {link.from.address}
+                </Typography>
+                {link.from.address && (
+                  <Tooltip title={copiedField === "from_ipv6" ? "Copied!" : "Copy Link-Local IPv6"}>
+                    <IconButton
+                      size="small"
+                      onClick={() => copyFieldToClipboard(getLinkLocalIpv6CopyText(link.from.address), "from_ipv6")}
+                      sx={{ p: 0.3, color: copiedField === "from_ipv6" ? "#10B981" : "#64748B" }}
+                    >
+                      {copiedField === "from_ipv6" ? <Check size={13} /> : <Copy size={13} />}
+                    </IconButton>
+                  </Tooltip>
+                )}
+              </Box>
             </Box>
 
             {link.assign_ipv4 && (
@@ -674,22 +700,46 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
 
             {!isManual && (
               <>
-                <Box sx={{ display: "flex", justifyContent: "space-between" }}>
+                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <Typography variant="caption" sx={{ color: "#64748B" }}>
                     Listen Port:
                   </Typography>
-                  <Typography variant="caption" className="mono-font" sx={{ color: "#0F172A", fontWeight: 600 }}>
-                    {link.from.listen_port}
-                  </Typography>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                    <Typography variant="caption" className="mono-font" sx={{ color: "#0F172A", fontWeight: 600 }}>
+                      {link.from.listen_port}
+                    </Typography>
+                    {Boolean(link.from.listen_port) && (
+                      <Tooltip title={copiedField === "from_port" ? "Copied!" : "Copy Listen Port"}>
+                        <IconButton
+                          size="small"
+                          onClick={() => copyFieldToClipboard(String(link.from.listen_port), "from_port")}
+                          sx={{ p: 0.3, color: copiedField === "from_port" ? "#10B981" : "#64748B" }}
+                        >
+                          {copiedField === "from_port" ? <Check size={13} /> : <Copy size={13} />}
+                        </IconButton>
+                      </Tooltip>
+                    )}
+                  </Box>
                 </Box>
 
-                <Box sx={{ display: "flex", justifyContent: "space-between" }}>
+                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <Typography variant="caption" sx={{ color: "#64748B" }}>
                     MTU:
                   </Typography>
-                  <Typography variant="caption" className="mono-font" sx={{ color: "#0F172A", fontWeight: 600 }}>
-                    {link.from.mtu || 1420}
-                  </Typography>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                    <Typography variant="caption" className="mono-font" sx={{ color: "#0F172A", fontWeight: 600 }}>
+                      {link.from.mtu || 1420}
+                    </Typography>
+                    <Tooltip title={copiedField === "from_mtu" ? "Copied!" : "Copy MTU"}>
+                      <IconButton
+                        size="small"
+                        onClick={() => copyFieldToClipboard(String(link.from.mtu || 1420), "from_mtu")}
+                        sx={{ p: 0.3, color: copiedField === "from_mtu" ? "#10B981" : "#64748B" }}
+                      >
+                        {copiedField === "from_mtu" ? <Check size={13} /> : <Copy size={13} />}
+                      </IconButton>
+                    </Tooltip>
+                  </Box>
                 </Box>
 
                 <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -1199,13 +1249,26 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
               </Typography>
             </Box>
 
-            <Box sx={{ display: "flex", justifyContent: "space-between" }}>
+            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <Typography variant="caption" sx={{ color: "#64748B" }}>
                 {isManual ? "Local Address:" : "Link-Local IPv6:"}
               </Typography>
-              <Typography variant="caption" className="mono-font" sx={{ color: "#0891B2", fontWeight: 600 }}>
-                {link.to.address}
-              </Typography>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                <Typography variant="caption" className="mono-font" sx={{ color: "#0891B2", fontWeight: 600 }}>
+                  {link.to.address}
+                </Typography>
+                {link.to.address && (
+                  <Tooltip title={copiedField === "to_ipv6" ? "Copied!" : "Copy Link-Local IPv6"}>
+                    <IconButton
+                      size="small"
+                      onClick={() => copyFieldToClipboard(getLinkLocalIpv6CopyText(link.to.address), "to_ipv6")}
+                      sx={{ p: 0.3, color: copiedField === "to_ipv6" ? "#10B981" : "#64748B" }}
+                    >
+                      {copiedField === "to_ipv6" ? <Check size={13} /> : <Copy size={13} />}
+                    </IconButton>
+                  </Tooltip>
+                )}
+              </Box>
             </Box>
 
             {link.assign_ipv4 && (
@@ -1232,22 +1295,46 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
 
             {!isManual && (
               <>
-                <Box sx={{ display: "flex", justifyContent: "space-between" }}>
+                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <Typography variant="caption" sx={{ color: "#64748B" }}>
                     Listen Port:
                   </Typography>
-                  <Typography variant="caption" className="mono-font" sx={{ color: "#0F172A", fontWeight: 600 }}>
-                    {link.to.listen_port}
-                  </Typography>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                    <Typography variant="caption" className="mono-font" sx={{ color: "#0F172A", fontWeight: 600 }}>
+                      {link.to.listen_port}
+                    </Typography>
+                    {Boolean(link.to.listen_port) && (
+                      <Tooltip title={copiedField === "to_port" ? "Copied!" : "Copy Listen Port"}>
+                        <IconButton
+                          size="small"
+                          onClick={() => copyFieldToClipboard(String(link.to.listen_port), "to_port")}
+                          sx={{ p: 0.3, color: copiedField === "to_port" ? "#10B981" : "#64748B" }}
+                        >
+                          {copiedField === "to_port" ? <Check size={13} /> : <Copy size={13} />}
+                        </IconButton>
+                      </Tooltip>
+                    )}
+                  </Box>
                 </Box>
 
-                <Box sx={{ display: "flex", justifyContent: "space-between" }}>
+                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <Typography variant="caption" sx={{ color: "#64748B" }}>
                     MTU:
                   </Typography>
-                  <Typography variant="caption" className="mono-font" sx={{ color: "#0F172A", fontWeight: 600 }}>
-                    {link.to.mtu || 1420}
-                  </Typography>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                    <Typography variant="caption" className="mono-font" sx={{ color: "#0F172A", fontWeight: 600 }}>
+                      {link.to.mtu || 1420}
+                    </Typography>
+                    <Tooltip title={copiedField === "to_mtu" ? "Copied!" : "Copy MTU"}>
+                      <IconButton
+                        size="small"
+                        onClick={() => copyFieldToClipboard(String(link.to.mtu || 1420), "to_mtu")}
+                        sx={{ p: 0.3, color: copiedField === "to_mtu" ? "#10B981" : "#64748B" }}
+                      >
+                        {copiedField === "to_mtu" ? <Check size={13} /> : <Copy size={13} />}
+                      </IconButton>
+                    </Tooltip>
+                  </Box>
                 </Box>
 
                 <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>

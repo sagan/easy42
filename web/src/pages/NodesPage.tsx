@@ -40,19 +40,41 @@ import {
   Zap,
   Layers,
   X,
+  Network,
+  Copy,
+  Check,
 } from "lucide-react";
 import { useMesh } from "../context/MeshContext";
 import { NodeLiveStatus } from "../types/api";
 import { getLinkWorkingState } from "../components/Topology/TopologyGraph";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
-export type SortField = "name" | "status" | "block" | "host" | "uptime" | "cpu" | "memory" | "disk" | "network";
+export type SortField =
+  | "name"
+  | "status"
+  | "block"
+  | "host"
+  | "asn"
+  | "ip"
+  | "ip6"
+  | "external_ip"
+  | "external_ip6"
+  | "uptime"
+  | "cpu"
+  | "memory"
+  | "disk"
+  | "network";
 
 export const SORT_OPTIONS: { value: SortField; label: string }[] = [
   { value: "name", label: "Name" },
   { value: "status", label: "Status" },
   { value: "block", label: "Block" },
   { value: "host", label: "Host IP" },
+  { value: "asn", label: "ASN" },
+  { value: "ip", label: "IPv4" },
+  { value: "ip6", label: "IPv6" },
+  { value: "external_ip", label: "External IPv4" },
+  { value: "external_ip6", label: "External IPv6" },
   { value: "uptime", label: "Uptime" },
   { value: "cpu", label: "CPU Usage" },
   { value: "memory", label: "Memory Usage" },
@@ -65,6 +87,11 @@ export const SORT_FIELD_LABELS: Record<SortField, string> = {
   status: "Status",
   block: "Block",
   host: "Host IP",
+  asn: "ASN",
+  ip: "IPv4",
+  ip6: "IPv6",
+  external_ip: "External IPv4",
+  external_ip6: "External IPv6",
   uptime: "Uptime",
   cpu: "CPU",
   memory: "Memory",
@@ -95,9 +122,37 @@ export const NodesPage: React.FC = () => {
   const urlTag = searchParams.get("tag") || "All";
   const urlBlock = searchParams.get("block") || "All";
   const urlView = (searchParams.get("view") === "table" ? "table" : "cards") as "cards" | "table";
+  const subView = (searchParams.get("subview") === "network" ? "network" : "general") as "general" | "network";
   const rawSort = searchParams.get("sort");
   const sortField = (SORT_OPTIONS.some((opt) => opt.value === rawSort) ? rawSort : "name") as SortField;
   const sortOrder = (searchParams.get("order") === "desc" ? "desc" : "asc") as "asc" | "desc";
+
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const handleCopy = useCallback((id: string, text: string) => {
+    if (!text) return;
+    navigator.clipboard.writeText(text);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 2000);
+  }, []);
+
+  const handleSelectSubView = useCallback(
+    (newSubView: "general" | "network") => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          if (newSubView === "network") {
+            next.set("subview", "network");
+          } else {
+            next.delete("subview");
+          }
+          return next;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
 
   const handleRequestSort = useCallback(
     (field: SortField) => {
@@ -427,7 +482,12 @@ export const NodesPage: React.FC = () => {
         n.name.toLowerCase().includes(q) ||
         (n.host || "").toLowerCase().includes(q) ||
         (n.tags && n.tags.some((t) => t.toLowerCase().includes(q))) ||
-        nBlocks.some((b) => b.toLowerCase().includes(q));
+        nBlocks.some((b) => b.toLowerCase().includes(q)) ||
+        (n.ip || "").toLowerCase().includes(q) ||
+        (n.ip6 || "").toLowerCase().includes(q) ||
+        (n.external_ip || "").toLowerCase().includes(q) ||
+        (n.external_ip6 || "").toLowerCase().includes(q) ||
+        String(n.asn || "").includes(q);
       return matchTag && matchBlock && matchSearch;
     });
   }, [
@@ -508,6 +568,26 @@ export const NodesPage: React.FC = () => {
           comparison = hostA.localeCompare(hostB, undefined, { numeric: true });
           break;
         }
+
+        case "asn":
+          comparison = (a.asn || 0) - (b.asn || 0);
+          break;
+
+        case "ip":
+          comparison = (a.ip || "").localeCompare(b.ip || "", undefined, { numeric: true });
+          break;
+
+        case "ip6":
+          comparison = (a.ip6 || "").localeCompare(b.ip6 || "");
+          break;
+
+        case "external_ip":
+          comparison = (a.external_ip || "").localeCompare(b.external_ip || "", undefined, { numeric: true });
+          break;
+
+        case "external_ip6":
+          comparison = (a.external_ip6 || "").localeCompare(b.external_ip6 || "");
+          break;
 
         case "uptime": {
           const uptimeA = isOnlineA ? (liveA?.uptime_seconds ?? statusA?.metrics?.uptime_seconds ?? 0) : 0;
@@ -1507,15 +1587,63 @@ export const NodesPage: React.FC = () => {
               <TableRow>
                 <TableCell
                   sortDirection={sortField === "name" ? sortOrder : false}
-                  sx={{ fontWeight: 700, color: "#475569" }}
+                  sx={{ fontWeight: 700, color: "#475569", minWidth: 220 }}
                 >
-                  <TableSortLabel
-                    active={sortField === "name"}
-                    direction={sortField === "name" ? sortOrder : "asc"}
-                    onClick={() => handleRequestSort("name")}
-                  >
-                    Node
-                  </TableSortLabel>
+                  <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1 }}>
+                    <TableSortLabel
+                      active={sortField === "name"}
+                      direction={sortField === "name" ? sortOrder : "asc"}
+                      onClick={() => handleRequestSort("name")}
+                    >
+                      Node
+                    </TableSortLabel>
+
+                    <FormControl size="small" variant="standard" sx={{ m: 0 }}>
+                      <Select
+                        value={subView}
+                        onChange={(e) => handleSelectSubView(e.target.value as "general" | "network")}
+                        onClick={(e) => e.stopPropagation()}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        disableUnderline
+                        sx={{
+                          fontSize: "0.75rem",
+                          fontWeight: 700,
+                          color: subView === "network" ? "#0891B2" : "#4F46E5",
+                          bgcolor: subView === "network" ? "#ECFEFF" : "#EEF2FF",
+                          border: "1px solid",
+                          borderColor: subView === "network" ? "#A5F3FC" : "#C7D2FE",
+                          borderRadius: 1.5,
+                          px: 1,
+                          py: 0.2,
+                          "& .MuiSelect-select": {
+                            py: 0,
+                            pr: "20px !important",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 0.5,
+                          },
+                          "& .MuiSelect-icon": {
+                            color: subView === "network" ? "#0891B2" : "#4F46E5",
+                            fontSize: "1.1rem",
+                            right: 2,
+                          },
+                        }}
+                      >
+                        <MenuItem value="general" sx={{ fontSize: "0.8rem", fontWeight: 600 }}>
+                          <Box sx={{ display: "flex", alignItems: "center", gap: 0.8 }}>
+                            <Server size={14} color="#4F46E5" />
+                            General View
+                          </Box>
+                        </MenuItem>
+                        <MenuItem value="network" sx={{ fontSize: "0.8rem", fontWeight: 600 }}>
+                          <Box sx={{ display: "flex", alignItems: "center", gap: 0.8 }}>
+                            <Network size={14} color="#0891B2" />
+                            Network View
+                          </Box>
+                        </MenuItem>
+                      </Select>
+                    </FormControl>
+                  </Box>
                 </TableCell>
                 <TableCell
                   sortDirection={sortField === "status" ? sortOrder : false}
@@ -1529,90 +1657,159 @@ export const NodesPage: React.FC = () => {
                     Status
                   </TableSortLabel>
                 </TableCell>
-                <TableCell
-                  sortDirection={sortField === "block" ? sortOrder : false}
-                  sx={{ fontWeight: 700, color: "#475569" }}
-                >
-                  <TableSortLabel
-                    active={sortField === "block"}
-                    direction={sortField === "block" ? sortOrder : "asc"}
-                    onClick={() => handleRequestSort("block")}
-                  >
-                    Block
-                  </TableSortLabel>
-                </TableCell>
-                <TableCell
-                  sortDirection={sortField === "host" ? sortOrder : false}
-                  sx={{ fontWeight: 700, color: "#475569" }}
-                >
-                  <TableSortLabel
-                    active={sortField === "host"}
-                    direction={sortField === "host" ? sortOrder : "asc"}
-                    onClick={() => handleRequestSort("host")}
-                  >
-                    Host IP
-                  </TableSortLabel>
-                </TableCell>
-                <TableCell
-                  sortDirection={sortField === "uptime" ? sortOrder : false}
-                  sx={{ fontWeight: 700, color: "#475569" }}
-                >
-                  <TableSortLabel
-                    active={sortField === "uptime"}
-                    direction={sortField === "uptime" ? sortOrder : "asc"}
-                    onClick={() => handleRequestSort("uptime")}
-                  >
-                    Uptime
-                  </TableSortLabel>
-                </TableCell>
-                <TableCell
-                  sortDirection={sortField === "cpu" ? sortOrder : false}
-                  sx={{ fontWeight: 700, color: "#475569" }}
-                >
-                  <TableSortLabel
-                    active={sortField === "cpu"}
-                    direction={sortField === "cpu" ? sortOrder : "asc"}
-                    onClick={() => handleRequestSort("cpu")}
-                  >
-                    CPU
-                  </TableSortLabel>
-                </TableCell>
-                <TableCell
-                  sortDirection={sortField === "memory" ? sortOrder : false}
-                  sx={{ fontWeight: 700, color: "#475569" }}
-                >
-                  <TableSortLabel
-                    active={sortField === "memory"}
-                    direction={sortField === "memory" ? sortOrder : "asc"}
-                    onClick={() => handleRequestSort("memory")}
-                  >
-                    Memory
-                  </TableSortLabel>
-                </TableCell>
-                <TableCell
-                  sortDirection={sortField === "disk" ? sortOrder : false}
-                  sx={{ fontWeight: 700, color: "#475569" }}
-                >
-                  <TableSortLabel
-                    active={sortField === "disk"}
-                    direction={sortField === "disk" ? sortOrder : "asc"}
-                    onClick={() => handleRequestSort("disk")}
-                  >
-                    Disk
-                  </TableSortLabel>
-                </TableCell>
-                <TableCell
-                  sortDirection={sortField === "network" ? sortOrder : false}
-                  sx={{ fontWeight: 700, color: "#475569" }}
-                >
-                  <TableSortLabel
-                    active={sortField === "network"}
-                    direction={sortField === "network" ? sortOrder : "asc"}
-                    onClick={() => handleRequestSort("network")}
-                  >
-                    Network Rx / Tx
-                  </TableSortLabel>
-                </TableCell>
+
+                {subView === "general" ? (
+                  <>
+                    <TableCell
+                      sortDirection={sortField === "block" ? sortOrder : false}
+                      sx={{ fontWeight: 700, color: "#475569" }}
+                    >
+                      <TableSortLabel
+                        active={sortField === "block"}
+                        direction={sortField === "block" ? sortOrder : "asc"}
+                        onClick={() => handleRequestSort("block")}
+                      >
+                        Block
+                      </TableSortLabel>
+                    </TableCell>
+                    <TableCell
+                      sortDirection={sortField === "host" ? sortOrder : false}
+                      sx={{ fontWeight: 700, color: "#475569" }}
+                    >
+                      <TableSortLabel
+                        active={sortField === "host"}
+                        direction={sortField === "host" ? sortOrder : "asc"}
+                        onClick={() => handleRequestSort("host")}
+                      >
+                        Host IP
+                      </TableSortLabel>
+                    </TableCell>
+                    <TableCell
+                      sortDirection={sortField === "uptime" ? sortOrder : false}
+                      sx={{ fontWeight: 700, color: "#475569" }}
+                    >
+                      <TableSortLabel
+                        active={sortField === "uptime"}
+                        direction={sortField === "uptime" ? sortOrder : "asc"}
+                        onClick={() => handleRequestSort("uptime")}
+                      >
+                        Uptime
+                      </TableSortLabel>
+                    </TableCell>
+                    <TableCell
+                      sortDirection={sortField === "cpu" ? sortOrder : false}
+                      sx={{ fontWeight: 700, color: "#475569" }}
+                    >
+                      <TableSortLabel
+                        active={sortField === "cpu"}
+                        direction={sortField === "cpu" ? sortOrder : "asc"}
+                        onClick={() => handleRequestSort("cpu")}
+                      >
+                        CPU
+                      </TableSortLabel>
+                    </TableCell>
+                    <TableCell
+                      sortDirection={sortField === "memory" ? sortOrder : false}
+                      sx={{ fontWeight: 700, color: "#475569" }}
+                    >
+                      <TableSortLabel
+                        active={sortField === "memory"}
+                        direction={sortField === "memory" ? sortOrder : "asc"}
+                        onClick={() => handleRequestSort("memory")}
+                      >
+                        Memory
+                      </TableSortLabel>
+                    </TableCell>
+                    <TableCell
+                      sortDirection={sortField === "disk" ? sortOrder : false}
+                      sx={{ fontWeight: 700, color: "#475569" }}
+                    >
+                      <TableSortLabel
+                        active={sortField === "disk"}
+                        direction={sortField === "disk" ? sortOrder : "asc"}
+                        onClick={() => handleRequestSort("disk")}
+                      >
+                        Disk
+                      </TableSortLabel>
+                    </TableCell>
+                    <TableCell
+                      sortDirection={sortField === "network" ? sortOrder : false}
+                      sx={{ fontWeight: 700, color: "#475569" }}
+                    >
+                      <TableSortLabel
+                        active={sortField === "network"}
+                        direction={sortField === "network" ? sortOrder : "asc"}
+                        onClick={() => handleRequestSort("network")}
+                      >
+                        Network Rx / Tx
+                      </TableSortLabel>
+                    </TableCell>
+                  </>
+                ) : (
+                  <>
+                    <TableCell
+                      sortDirection={sortField === "asn" ? sortOrder : false}
+                      sx={{ fontWeight: 700, color: "#475569" }}
+                    >
+                      <TableSortLabel
+                        active={sortField === "asn"}
+                        direction={sortField === "asn" ? sortOrder : "asc"}
+                        onClick={() => handleRequestSort("asn")}
+                      >
+                        ASN
+                      </TableSortLabel>
+                    </TableCell>
+                    <TableCell
+                      sortDirection={sortField === "ip" ? sortOrder : false}
+                      sx={{ fontWeight: 700, color: "#475569" }}
+                    >
+                      <TableSortLabel
+                        active={sortField === "ip"}
+                        direction={sortField === "ip" ? sortOrder : "asc"}
+                        onClick={() => handleRequestSort("ip")}
+                      >
+                        IPv4
+                      </TableSortLabel>
+                    </TableCell>
+                    <TableCell
+                      sortDirection={sortField === "ip6" ? sortOrder : false}
+                      sx={{ fontWeight: 700, color: "#475569" }}
+                    >
+                      <TableSortLabel
+                        active={sortField === "ip6"}
+                        direction={sortField === "ip6" ? sortOrder : "asc"}
+                        onClick={() => handleRequestSort("ip6")}
+                      >
+                        IPv6
+                      </TableSortLabel>
+                    </TableCell>
+                    <TableCell
+                      sortDirection={sortField === "external_ip" ? sortOrder : false}
+                      sx={{ fontWeight: 700, color: "#475569" }}
+                    >
+                      <TableSortLabel
+                        active={sortField === "external_ip"}
+                        direction={sortField === "external_ip" ? sortOrder : "asc"}
+                        onClick={() => handleRequestSort("external_ip")}
+                      >
+                        External IPv4
+                      </TableSortLabel>
+                    </TableCell>
+                    <TableCell
+                      sortDirection={sortField === "external_ip6" ? sortOrder : false}
+                      sx={{ fontWeight: 700, color: "#475569" }}
+                    >
+                      <TableSortLabel
+                        active={sortField === "external_ip6"}
+                        direction={sortField === "external_ip6" ? sortOrder : "asc"}
+                        onClick={() => handleRequestSort("external_ip6")}
+                      >
+                        External IPv6
+                      </TableSortLabel>
+                    </TableCell>
+                  </>
+                )}
+
                 <TableCell sx={{ fontWeight: 700, color: "#475569" }} align="right">
                   Actions
                 </TableCell>
@@ -1621,7 +1818,7 @@ export const NodesPage: React.FC = () => {
             <TableBody>
               {sortedNodes.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={10} align="center" sx={{ py: 4, color: "#64748B" }}>
+                  <TableCell colSpan={subView === "general" ? 10 : 8} align="center" sx={{ py: 4, color: "#64748B" }}>
                     No servers match the selected filters.
                   </TableCell>
                 </TableRow>
@@ -1714,125 +1911,273 @@ export const NodesPage: React.FC = () => {
                         )}
                       </Box>
                     </TableCell>
-                    <TableCell>
-                      {nodeBlocks.length > 0 ? (
-                        nodeBlocks.map((b) => (
-                          <Chip
-                            key={b}
-                            label={b}
-                            size="small"
-                            sx={{
-                              height: 20,
-                              fontSize: "0.65rem",
-                              fontWeight: 600,
-                              bgcolor: "#EEF2FF",
-                              color: "#4F46E5",
-                              mr: 0.5,
-                            }}
-                          />
-                        ))
-                      ) : (
-                        <Typography variant="caption" sx={{ color: "#94A3B8" }}>
-                          —
-                        </Typography>
-                      )}
-                    </TableCell>
-                    <TableCell sx={{ color: "#64748B", fontSize: "0.85rem" }}>{n.host}</TableCell>
-                    <TableCell sx={{ color: "#64748B", fontSize: "0.85rem" }}>
-                      {isOnline
-                        ? formatUptime(live?.uptime_seconds ?? metrics?.uptime_seconds)
-                        : agentInstalled
-                          ? "Offline"
-                          : "—"}
-                    </TableCell>
-                    <TableCell>
-                      {agentInstalled ? (
-                        <Typography variant="body2" sx={{ fontWeight: 700, color: getCpuColor(cpuPercent) }}>
-                          {cpuPercent.toFixed(1)}%
-                        </Typography>
-                      ) : (
-                        <Typography variant="body2" sx={{ color: "#94A3B8" }}>
-                          —
-                        </Typography>
-                      )}
-                    </TableCell>
-                    <TableCell sx={{ color: "#334155", fontSize: "0.85rem" }}>
-                      {agentInstalled && memTotalGB > 0 ? (
-                        `${memUsedGB.toFixed(1)} / ${memTotalGB.toFixed(1)} GB`
-                      ) : (
-                        <Typography variant="body2" sx={{ color: "#94A3B8" }}>
-                          —
-                        </Typography>
-                      )}
-                    </TableCell>
-                    <TableCell sx={{ color: "#334155", fontSize: "0.85rem" }}>
-                      {agentInstalled && primaryDisk && diskTotalGB > 0 ? (
-                        <Box sx={{ display: "flex", flexDirection: "column", gap: 0.3, minWidth: 95 }}>
-                          <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                            <Typography
-                              variant="caption"
-                              sx={{ fontWeight: 600, color: "#334155", fontSize: "0.75rem" }}
-                            >
-                              {diskUsedGB.toFixed(1)} / {diskTotalGB.toFixed(1)} GB
-                            </Typography>
-                            <Typography
-                              variant="caption"
-                              sx={{
-                                fontWeight: 700,
-                                fontSize: "0.7rem",
-                                color: diskPercent > 85 ? "#E11D48" : diskPercent > 70 ? "#F59E0B" : "#059669",
-                              }}
-                            >
-                              {diskPercent.toFixed(0)}%
-                            </Typography>
-                          </Box>
-                          <LinearProgress
-                            variant="determinate"
-                            value={Math.min(100, Math.max(0, diskPercent))}
-                            sx={{
-                              height: 4,
-                              borderRadius: 2,
-                              bgcolor: "#F1F5F9",
-                              "& .MuiLinearProgress-bar": {
-                                bgcolor: diskPercent > 85 ? "#E11D48" : diskPercent > 70 ? "#F59E0B" : "#10B981",
-                                borderRadius: 2,
-                              },
-                            }}
-                          />
-                        </Box>
-                      ) : (
-                        <Typography variant="body2" sx={{ color: "#94A3B8" }}>
-                          —
-                        </Typography>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {agentInstalled ? (
-                        <Box sx={{ display: "flex", flexDirection: "column", gap: 0.3 }}>
-                          <Box sx={{ display: "flex", alignItems: "center", gap: 0.8 }}>
-                            <Typography variant="caption" sx={{ color: "#059669", fontWeight: 700 }}>
-                              ↓ {formatNetRate(rxRate)}
-                            </Typography>
-                            <Typography variant="caption" sx={{ color: "#0891B2", fontWeight: 700 }}>
-                              ↑ {formatNetRate(txRate)}
-                            </Typography>
-                          </Box>
-                          {primaryIface && (
-                            <Typography
-                              variant="caption"
-                              className="mono-font"
-                              sx={{ color: "#64748B", fontSize: "0.68rem" }}
-                            >
-                              {primaryIface} (primary)
+
+                    {subView === "general" ? (
+                      <>
+                        <TableCell>
+                          {nodeBlocks.length > 0 ? (
+                            nodeBlocks.map((b) => (
+                              <Chip
+                                key={b}
+                                label={b}
+                                size="small"
+                                sx={{
+                                  height: 20,
+                                  fontSize: "0.65rem",
+                                  fontWeight: 600,
+                                  bgcolor: "#EEF2FF",
+                                  color: "#4F46E5",
+                                  mr: 0.5,
+                                }}
+                              />
+                            ))
+                          ) : (
+                            <Typography variant="caption" sx={{ color: "#94A3B8" }}>
+                              —
                             </Typography>
                           )}
-                        </Box>
-                      ) : (
-                        <Typography variant="body2" sx={{ color: "#94A3B8" }}>
-                          —
-                        </Typography>
-                      )}
-                    </TableCell>
+                        </TableCell>
+                        <TableCell sx={{ color: "#64748B", fontSize: "0.85rem" }}>{n.host}</TableCell>
+                        <TableCell sx={{ color: "#64748B", fontSize: "0.85rem" }}>
+                          {isOnline
+                            ? formatUptime(live?.uptime_seconds ?? metrics?.uptime_seconds)
+                            : agentInstalled
+                              ? "Offline"
+                              : "—"}
+                        </TableCell>
+                        <TableCell>
+                          {agentInstalled ? (
+                            <Typography variant="body2" sx={{ fontWeight: 700, color: getCpuColor(cpuPercent) }}>
+                              {cpuPercent.toFixed(1)}%
+                            </Typography>
+                          ) : (
+                            <Typography variant="body2" sx={{ color: "#94A3B8" }}>
+                              —
+                            </Typography>
+                          )}
+                        </TableCell>
+                        <TableCell sx={{ color: "#334155", fontSize: "0.85rem" }}>
+                          {agentInstalled && memTotalGB > 0 ? (
+                            `${memUsedGB.toFixed(1)} / ${memTotalGB.toFixed(1)} GB`
+                          ) : (
+                            <Typography variant="body2" sx={{ color: "#94A3B8" }}>
+                              —
+                            </Typography>
+                          )}
+                        </TableCell>
+                        <TableCell sx={{ color: "#334155", fontSize: "0.85rem" }}>
+                          {agentInstalled && primaryDisk && diskTotalGB > 0 ? (
+                            <Box sx={{ display: "flex", flexDirection: "column", gap: 0.3, minWidth: 95 }}>
+                              <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                                <Typography
+                                  variant="caption"
+                                  sx={{ fontWeight: 600, color: "#334155", fontSize: "0.75rem" }}
+                                >
+                                  {diskUsedGB.toFixed(1)} / {diskTotalGB.toFixed(1)} GB
+                                </Typography>
+                                <Typography
+                                  variant="caption"
+                                  sx={{
+                                    fontWeight: 700,
+                                    fontSize: "0.7rem",
+                                    color: diskPercent > 85 ? "#E11D48" : diskPercent > 70 ? "#F59E0B" : "#059669",
+                                  }}
+                                >
+                                  {diskPercent.toFixed(0)}%
+                                </Typography>
+                              </Box>
+                              <LinearProgress
+                                variant="determinate"
+                                value={Math.min(100, Math.max(0, diskPercent))}
+                                sx={{
+                                  height: 4,
+                                  borderRadius: 2,
+                                  bgcolor: "#F1F5F9",
+                                  "& .MuiLinearProgress-bar": {
+                                    bgcolor: diskPercent > 85 ? "#E11D48" : diskPercent > 70 ? "#F59E0B" : "#10B981",
+                                    borderRadius: 2,
+                                  },
+                                }}
+                              />
+                            </Box>
+                          ) : (
+                            <Typography variant="body2" sx={{ color: "#94A3B8" }}>
+                              —
+                            </Typography>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {agentInstalled ? (
+                            <Box sx={{ display: "flex", flexDirection: "column", gap: 0.3 }}>
+                              <Box sx={{ display: "flex", alignItems: "center", gap: 0.8 }}>
+                                <Typography variant="caption" sx={{ color: "#059669", fontWeight: 700 }}>
+                                  ↓ {formatNetRate(rxRate)}
+                                </Typography>
+                                <Typography variant="caption" sx={{ color: "#0891B2", fontWeight: 700 }}>
+                                  ↑ {formatNetRate(txRate)}
+                                </Typography>
+                              </Box>
+                              {primaryIface && (
+                                <Typography
+                                  variant="caption"
+                                  className="mono-font"
+                                  sx={{ color: "#64748B", fontSize: "0.68rem" }}
+                                >
+                                  {primaryIface} (primary)
+                                </Typography>
+                              )}
+                            </Box>
+                          ) : (
+                            <Typography variant="body2" sx={{ color: "#94A3B8" }}>
+                              —
+                            </Typography>
+                          )}
+                        </TableCell>
+                      </>
+                    ) : (
+                      <>
+                        {/* ASN */}
+                        <TableCell>
+                          {n.asn ? (
+                            <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                              <Typography
+                                variant="body2"
+                                className="mono-font"
+                                sx={{ fontWeight: 600, color: "#4F46E5", fontSize: "0.82rem" }}
+                              >
+                                AS{n.asn}
+                              </Typography>
+                              <Tooltip title={copiedId === `${n.name}-asn` ? "Copied!" : "Copy ASN"}>
+                                <IconButton
+                                  size="small"
+                                  onClick={() => handleCopy(`${n.name}-asn`, String(n.asn))}
+                                  sx={{ p: 0.2, color: copiedId === `${n.name}-asn` ? "#059669" : "#94A3B8" }}
+                                >
+                                  {copiedId === `${n.name}-asn` ? <Check size={12} /> : <Copy size={12} />}
+                                </IconButton>
+                              </Tooltip>
+                            </Box>
+                          ) : (
+                            <Typography variant="caption" sx={{ color: "#94A3B8" }}>
+                              —
+                            </Typography>
+                          )}
+                        </TableCell>
+
+                        {/* IPv4 (ip) */}
+                        <TableCell>
+                          {n.ip ? (
+                            <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                              <Typography
+                                variant="body2"
+                                className="mono-font"
+                                sx={{ fontWeight: 600, color: "#0F172A", fontSize: "0.82rem" }}
+                              >
+                                {n.ip}
+                              </Typography>
+                              <Tooltip title={copiedId === `${n.name}-ip` ? "Copied!" : "Copy IPv4"}>
+                                <IconButton
+                                  size="small"
+                                  onClick={() => handleCopy(`${n.name}-ip`, n.ip!)}
+                                  sx={{ p: 0.2, color: copiedId === `${n.name}-ip` ? "#059669" : "#94A3B8" }}
+                                >
+                                  {copiedId === `${n.name}-ip` ? <Check size={12} /> : <Copy size={12} />}
+                                </IconButton>
+                              </Tooltip>
+                            </Box>
+                          ) : (
+                            <Typography variant="caption" sx={{ color: "#94A3B8" }}>
+                              —
+                            </Typography>
+                          )}
+                        </TableCell>
+
+                        {/* IPv6 (ip6) */}
+                        <TableCell>
+                          {n.ip6 ? (
+                            <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                              <Typography
+                                variant="body2"
+                                className="mono-font"
+                                sx={{ fontWeight: 600, color: "#0891B2", fontSize: "0.82rem" }}
+                              >
+                                {n.ip6}
+                              </Typography>
+                              <Tooltip title={copiedId === `${n.name}-ip6` ? "Copied!" : "Copy IPv6"}>
+                                <IconButton
+                                  size="small"
+                                  onClick={() => handleCopy(`${n.name}-ip6`, n.ip6!)}
+                                  sx={{ p: 0.2, color: copiedId === `${n.name}-ip6` ? "#059669" : "#94A3B8" }}
+                                >
+                                  {copiedId === `${n.name}-ip6` ? <Check size={12} /> : <Copy size={12} />}
+                                </IconButton>
+                              </Tooltip>
+                            </Box>
+                          ) : (
+                            <Typography variant="caption" sx={{ color: "#94A3B8" }}>
+                              —
+                            </Typography>
+                          )}
+                        </TableCell>
+
+                        {/* External IPv4 (external_ip) */}
+                        <TableCell>
+                          {n.external_ip ? (
+                            <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                              <Typography
+                                variant="body2"
+                                className="mono-font"
+                                sx={{ fontWeight: 600, color: "#7C3AED", fontSize: "0.82rem" }}
+                              >
+                                {n.external_ip}
+                              </Typography>
+                              <Tooltip title={copiedId === `${n.name}-ext-ip` ? "Copied!" : "Copy External IPv4"}>
+                                <IconButton
+                                  size="small"
+                                  onClick={() => handleCopy(`${n.name}-ext-ip`, n.external_ip!)}
+                                  sx={{ p: 0.2, color: copiedId === `${n.name}-ext-ip` ? "#059669" : "#94A3B8" }}
+                                >
+                                  {copiedId === `${n.name}-ext-ip` ? <Check size={12} /> : <Copy size={12} />}
+                                </IconButton>
+                              </Tooltip>
+                            </Box>
+                          ) : (
+                            <Typography variant="caption" sx={{ color: "#94A3B8" }}>
+                              —
+                            </Typography>
+                          )}
+                        </TableCell>
+
+                        {/* External IPv6 (external_ip6) */}
+                        <TableCell>
+                          {n.external_ip6 ? (
+                            <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                              <Typography
+                                variant="body2"
+                                className="mono-font"
+                                sx={{ fontWeight: 600, color: "#7C3AED", fontSize: "0.82rem" }}
+                              >
+                                {n.external_ip6}
+                              </Typography>
+                              <Tooltip title={copiedId === `${n.name}-ext-ip6` ? "Copied!" : "Copy External IPv6"}>
+                                <IconButton
+                                  size="small"
+                                  onClick={() => handleCopy(`${n.name}-ext-ip6`, n.external_ip6!)}
+                                  sx={{ p: 0.2, color: copiedId === `${n.name}-ext-ip6` ? "#059669" : "#94A3B8" }}
+                                >
+                                  {copiedId === `${n.name}-ext-ip6` ? <Check size={12} /> : <Copy size={12} />}
+                                </IconButton>
+                              </Tooltip>
+                            </Box>
+                          ) : (
+                            <Typography variant="caption" sx={{ color: "#94A3B8" }}>
+                              —
+                            </Typography>
+                          )}
+                        </TableCell>
+                      </>
+                    )}
+
                     <TableCell align="right">
                       <Tooltip title={agentInstalled ? "Historical Charts & Telemetry" : "Agent not installed"}>
                         <span>
