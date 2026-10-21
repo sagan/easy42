@@ -361,10 +361,11 @@ table inet easy42 {
     iifname @pol_{{ .id }}_ifname oifname != @pol_{{ .id }}_ifname masquerade
     {{- else }}
       {{- if .forward_snat_target_v4 }}
-    iifname @pol_{{ .id }}_ifname oifname != @pol_{{ .id }}_ifname meta nfproto ipv4 snat to {{ .forward_snat_target_v4 }}
+    # Important: the "fib saddr type != local" is necessary because kernel WireGuard generated local egress udp packet has iifname = wgXXX interface and oifname = physical egress interface
+    fib saddr type != local iifname @pol_{{ .id }}_ifname oifname != @pol_{{ .id }}_ifname meta nfproto ipv4 snat to {{ .forward_snat_target_v4 }}
       {{- end }}
       {{- if .forward_snat_target_v6 }}
-    iifname @pol_{{ .id }}_ifname oifname != @pol_{{ .id }}_ifname meta nfproto ipv6 snat to {{ .forward_snat_target_v6 }}
+    fib saddr type != local iifname @pol_{{ .id }}_ifname oifname != @pol_{{ .id }}_ifname meta nfproto ipv6 snat to {{ .forward_snat_target_v6 }}
       {{- end }}
     {{- end }}
   {{- end }}
