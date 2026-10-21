@@ -114,7 +114,10 @@ func (m *Manager) CheckTaskStatus(ctx context.Context, taskID string, nodeNames 
 				payload := buildConfigureNetworkPayload(n)
 				res = tasks.CheckStatusWithPayload(sshClient, sftpClient, taskID, n.Name, payload, m.customTasksDir())
 			} else {
-				res = tasks.CheckStatus(sshClient, sftpClient, taskID, n.Name, m.customTasksDir())
+				payload := map[string][]byte{
+					"node_ip.env": []byte(buildNodeEnv(n)),
+				}
+				res = tasks.CheckStatusWithPayload(sshClient, sftpClient, taskID, n.Name, payload, m.customTasksDir())
 			}
 			mu.Lock()
 			results[n.Name] = res
@@ -238,8 +241,9 @@ func (m *Manager) RunTask(ctx context.Context, taskID string, nodeNames []string
 				payload := map[string][]byte{
 					"easy42-agent": binData,
 					"agent.json":   []byte(agentJSON),
+					"node_ip.env":  []byte(buildNodeEnv(n)),
 				}
-				res = tasks.RunTaskWithPayload(sshClient, sftpClient, taskID, n.Name, payload)
+				res = tasks.RunTaskWithPayload(sshClient, sftpClient, taskID, n.Name, payload, m.customTasksDir())
 				if res.Success {
 					go func() {
 						_, _ = m.RefreshNodeStatus(n.Name)
@@ -247,14 +251,17 @@ func (m *Manager) RunTask(ctx context.Context, taskID string, nodeNames []string
 				}
 			} else if taskID == "configure_network" || taskID == "configure_ip" {
 				payload := buildConfigureNetworkPayload(n)
-				res = tasks.RunTaskWithPayload(sshClient, sftpClient, taskID, n.Name, payload)
+				res = tasks.RunTaskWithPayload(sshClient, sftpClient, taskID, n.Name, payload, m.customTasksDir())
 				if res.Success {
 					go func() {
 						_, _ = m.RefreshNodeStatus(n.Name)
 					}()
 				}
 			} else {
-				res = tasks.RunTask(sshClient, sftpClient, taskID, n.Name, m.customTasksDir())
+				payload := map[string][]byte{
+					"node_ip.env": []byte(buildNodeEnv(n)),
+				}
+				res = tasks.RunTaskWithPayload(sshClient, sftpClient, taskID, n.Name, payload, m.customTasksDir())
 			}
 			mu.Lock()
 			results[n.Name] = res
@@ -289,7 +296,7 @@ func buildConfigureIPPayload(n config.Node) map[string][]byte {
 	return buildConfigureNetworkPayload(n)
 }
 
-func buildConfigureNetworkPayload(n config.Node) map[string][]byte {
+func buildNodeEnv(n config.Node) string {
 	nodeIP := cleanCIDR(n.IP)
 	nodeIP6 := cleanCIDR(n.IP6)
 	nodeExtIP := cleanCIDR(n.ExternalIP)
@@ -311,7 +318,12 @@ func buildConfigureNetworkPayload(n config.Node) map[string][]byte {
 		fmt.Fprintf(&envBuf, "HAS_CUSTOM_SCRIPT=\"0\"\n")
 	}
 
-	envContent := envBuf.String()
+	return envBuf.String()
+}
+
+func buildConfigureNetworkPayload(n config.Node) map[string][]byte {
+	envContent := buildNodeEnv(n)
+	customScript := strings.TrimSpace(n.CustomNetworkScript)
 
 	payload := map[string][]byte{
 		"node_ip.env": []byte(envContent),

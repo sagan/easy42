@@ -19,17 +19,7 @@ import {
   Paper,
   Tooltip,
 } from "@mui/material";
-import {
-  DownloadCloud,
-  Globe,
-  Search,
-  X,
-  RotateCw,
-  CheckCircle2,
-  Trash2,
-  FileCode,
-  Sparkles,
-} from "lucide-react";
+import { DownloadCloud, Globe, Search, X, RotateCw, CheckCircle2, Trash2, FileCode, Sparkles } from "lucide-react";
 import { api } from "../../api/client";
 import { OnlineTask, TaskMeta } from "../../types/api";
 
@@ -96,10 +86,7 @@ export const InstallTaskModal: React.FC<InstallTaskModalProps> = ({
       setTasks(manifest.tasks || []);
     } catch (err: unknown) {
       const e = err as Error;
-      setError(
-        e.message ||
-          "Failed to load repository manifest. Ensure manifest.json exists in the repository root.",
-      );
+      setError(e.message || "Failed to load repository manifest. Ensure manifest.json exists in the repository root.");
     } finally {
       setLoadingManifest(false);
     }
@@ -258,7 +245,16 @@ export const InstallTaskModal: React.FC<InstallTaskModalProps> = ({
                 variant="caption"
                 sx={{ fontWeight: 700, textTransform: "uppercase", color: "text.secondary", display: "block", mb: 0.5 }}
               >
-                Repository Source URL
+                Repository Source URL (&nbsp;
+                <a
+                  href={selectedSource + "manifest.json"}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ color: "#4F46E5", textDecoration: "none" }}
+                >
+                  Open Manifest
+                </a>
+                )
               </Typography>
               <FormControl size="small" fullWidth>
                 <Select
@@ -302,7 +298,8 @@ export const InstallTaskModal: React.FC<InstallTaskModalProps> = ({
 
           {/* Sources customization tip */}
           <Typography variant="caption" sx={{ color: "text.secondary", px: 0.5 }}>
-            Tip: You can add custom online repository sources by creating <code>&lt;data-dir&gt;/tasks/sources.txt</code> and adding URLs line-by-line.
+            Tip: You can add custom online repository sources by creating{" "}
+            <code>&lt;data-dir&gt;/tasks/sources.txt</code> and adding URLs line-by-line.
           </Typography>
 
           {/* Alerts */}
@@ -348,7 +345,9 @@ export const InstallTaskModal: React.FC<InstallTaskModalProps> = ({
           {/* Tasks List Content */}
           <Box sx={{ flex: 1, minHeight: 250, overflowY: "auto" }}>
             {loadingManifest ? (
-              <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", py: 8 }}>
+              <Box
+                sx={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", py: 8 }}
+              >
                 <CircularProgress size={32} sx={{ mb: 1.5 }} />
                 <Typography variant="body2" color="text.secondary">
                   Loading repository manifest...
@@ -370,7 +369,11 @@ export const InstallTaskModal: React.FC<InstallTaskModalProps> = ({
                 <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.5 }}>
                   No Tasks Found in Repository
                 </Typography>
-                <Typography variant="caption" color="text.secondary" sx={{ display: "block", maxWidth: 450, mx: "auto" }}>
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ display: "block", maxWidth: 450, mx: "auto" }}
+                >
                   The source repository may be empty or its <code>manifest.json</code> is still being set up.
                 </Typography>
               </Box>
@@ -459,7 +462,14 @@ export const InstallTaskModal: React.FC<InstallTaskModalProps> = ({
                       </Box>
 
                       {/* Action buttons */}
-                      <Box sx={{ display: "flex", alignItems: "center", gap: 1, alignSelf: { xs: "flex-end", sm: "center" } }}>
+                      <Box
+                        sx={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 1,
+                          alignSelf: { xs: "flex-end", sm: "center" },
+                        }}
+                      >
                         {isInstalled && (
                           <Tooltip title="Delete this installed task from server filesystem">
                             <span>
@@ -502,8 +512,8 @@ export const InstallTaskModal: React.FC<InstallTaskModalProps> = ({
                           {isActioning && actionType === "install"
                             ? "Installing..."
                             : isInstalled
-                            ? "Update / Reinstall"
-                            : "Install Task"}
+                              ? "Update / Reinstall"
+                              : "Install Task"}
                         </Button>
                       </Box>
                     </Paper>
@@ -540,8 +550,8 @@ export const InstallTaskModal: React.FC<InstallTaskModalProps> = ({
         <DialogTitle sx={{ fontWeight: 700 }}>Delete Custom Task?</DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="text.secondary">
-            Are you sure you want to delete custom task <strong>"{confirmDeleteTask}"</strong>?
-            This will permanently remove the task directory from your server's filesystem.
+            Are you sure you want to delete custom task <strong>"{confirmDeleteTask}"</strong>? This will permanently
+            remove the task directory from your server's filesystem.
           </Typography>
         </DialogContent>
         <DialogActions sx={{ p: 2 }}>

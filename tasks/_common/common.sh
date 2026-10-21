@@ -15,6 +15,12 @@ case ":$PATH:" in
 esac
 export PATH
 
+# Load node environment if injected by easy42 controller
+COMMON_DIR="$(cd "$(dirname "$0")" && pwd)"
+if [ -f "$COMMON_DIR/node_ip.env" ]; then
+    . "$COMMON_DIR/node_ip.env"
+fi
+
 # Detect privilege
 SUDO=""
 if [ "$(id -u)" -ne 0 ]; then

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   Button,
@@ -48,9 +48,9 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
   const [searchParams, setSearchParams] = useSearchParams();
   const [tasks, setTasks] = useState<TaskMeta[]>([]);
   const [loadingTasks, setLoadingTasks] = useState(false);
-  const [selectedTaskId, setSelectedTaskId] = useState<string>(() => {
-    return searchParams.get("task") || searchParams.get("taskId") || initialTaskId || "";
-  });
+  const initialTaskVal = searchParams.get("task") || searchParams.get("taskId") || initialTaskId || "";
+  const [selectedTaskId, setSelectedTaskId] = useState<string>(initialTaskVal);
+  const lastSetTaskIdRef = useRef<string>(initialTaskVal);
 
   // Tag filter state
   const [selectedTag, setSelectedTag] = useState<string>("All");
@@ -122,6 +122,7 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
   const handleSelectTask = useCallback(
     (taskId: string) => {
       setSelectedTaskId(taskId);
+      lastSetTaskIdRef.current = taskId;
       setSearchParams(
         (prev) => {
           if (taskId) {
@@ -156,17 +157,17 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
   useEffect(() => {
     const paramTask = searchParams.get("task") || searchParams.get("taskId") || "";
     if (paramTask) {
+      if (paramTask === lastSetTaskIdRef.current) {
+        return;
+      }
+      lastSetTaskIdRef.current = paramTask;
       if (paramTask === CUSTOM_TASK_HELP_ID || paramTask === "+task") {
-        if (selectedTaskId !== CUSTOM_TASK_HELP_ID) {
-          setSelectedTaskId(CUSTOM_TASK_HELP_ID);
-        }
-      } else if (paramTask !== selectedTaskId && (tasks.length === 0 || tasks.some((t) => t.id === paramTask))) {
+        setSelectedTaskId(CUSTOM_TASK_HELP_ID);
+      } else if (tasks.length === 0 || tasks.some((t) => t.id === paramTask)) {
         setSelectedTaskId(paramTask);
       }
-    } else if (tasks.length > 0 && selectedTaskId !== tasks[0].id && selectedTaskId !== CUSTOM_TASK_HELP_ID) {
-      setSelectedTaskId(tasks[0].id);
     }
-  }, [searchParams, tasks, selectedTaskId]);
+  }, [searchParams, tasks]);
 
   const loadTasks = async () => {
     setLoadingTasks(true);
@@ -177,6 +178,7 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
         const urlTask = searchParams.get("task") || searchParams.get("taskId") || initialTaskId || "";
         if (urlTask === CUSTOM_TASK_HELP_ID || urlTask === "+task") {
           setSelectedTaskId(CUSTOM_TASK_HELP_ID);
+          lastSetTaskIdRef.current = CUSTOM_TASK_HELP_ID;
           if (!searchParams.get("task") && !searchParams.get("taskId")) {
             handleSelectTask(CUSTOM_TASK_HELP_ID);
           }
@@ -184,12 +186,14 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
           const matched = data.find((t) => t.id === urlTask);
           if (matched) {
             setSelectedTaskId(matched.id);
+            lastSetTaskIdRef.current = matched.id;
             if (!searchParams.get("task") && !searchParams.get("taskId")) {
               handleSelectTask(matched.id);
             }
           } else {
             const firstTaskId = data[0].id;
             setSelectedTaskId(firstTaskId);
+            lastSetTaskIdRef.current = firstTaskId;
             handleSelectTask(firstTaskId);
           }
         }
@@ -235,19 +239,27 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
     }
   };
 
+  // Track currently selected task in a ref so the displayed filtered task list is a memoized value
+  // that only recalculates when taskFilter or tasks changes.
+  // Selecting another task in the sidebar does not re-trigger filtering, preventing layout shifts.
+  const selectedTaskIdRef = useRef(selectedTaskId);
+  selectedTaskIdRef.current = selectedTaskId;
+
   // Filter displayed tasks by name or description (or ID).
-  // The current selected task should also always be displayed in the list even if the filter doesn't match it.
+  // The active task at the time of typing/changing the filter is retained in the list so current selection remains visible.
+  // Re-calculated ONLY when taskFilter or tasks changes.
   const filteredTasks = useMemo(() => {
     const q = taskFilter.trim().toLowerCase();
     if (!q) return tasks;
+    const activeId = selectedTaskIdRef.current;
     return tasks.filter((task) => {
-      if (selectedTask && task.id === selectedTask.id) return true;
+      if (activeId && task.id === activeId) return true;
       const title = (task.title || "").toLowerCase();
       const desc = (task.description || "").toLowerCase();
       const id = (task.id || "").toLowerCase();
       return title.includes(q) || desc.includes(q) || id.includes(q);
     });
-  }, [tasks, taskFilter, selectedTask]);
+  }, [tasks, taskFilter]);
 
   const builtInTasks = useMemo(() => {
     return filteredTasks.filter((t) => !t.custom);
@@ -260,7 +272,7 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
   const matchesHelpFilter = useMemo(() => {
     const q = taskFilter.trim().toLowerCase();
     if (!q) return true;
-    if (isCustomTaskHelp) return true;
+    if (selectedTaskIdRef.current === CUSTOM_TASK_HELP_ID) return true;
     return (
       "+task".includes(q) ||
       "+ task".includes(q) ||
@@ -270,7 +282,7 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
       "guide".includes(q) ||
       "prompt".includes(q)
     );
-  }, [taskFilter, isCustomTaskHelp]);
+  }, [taskFilter]);
 
   // When selected task changes, optionally clear old statuses or keep
   useEffect(() => {
