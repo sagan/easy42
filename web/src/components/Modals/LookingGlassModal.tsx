@@ -159,7 +159,7 @@ export const LookingGlassModal: React.FC<LookingGlassModalProps> = ({ nodes, ini
           return;
         }
       }
-      setSelectedNodes([managedNodes[0].name]);
+      setSelectedNodes([]); // don't auto select any node
     } else if (currentParamKey && currentParamKey !== lastParamNodesRef.current) {
       lastParamNodesRef.current = currentParamKey;
       let queryNodes: string[] = [];

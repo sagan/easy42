@@ -1494,8 +1494,10 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                     fullWidth
                     value={customNetworkScript}
                     onChange={(e) => setCustomNetworkScript(e.target.value)}
-                    placeholder={"# Example idempotent policy routing rules:\nip rule del table 42 2>/dev/null || true\nip rule add table 42 prio 100"}
-                    helperText="Idempotent custom network script executed by the system network manager when the interface becomes routable (networkd-dispatcher on systemd or /etc/network/interfaces on Alpine)."
+                    placeholder={
+                      "# Example idempotent policy routing rules:\nip rule del table 42 2>/dev/null || true\nip rule add table 42 prio 100"
+                    }
+                    helperText="Idempotent custom network script executed by the system network manager when the interface becomes routable (networkd-dispatcher on systemd or /etc/network/interfaces on Alpine). Use 'Configure Network' Device Helper task to apply this config to nodes."
                     disabled={saving}
                     InputProps={{
                       sx: {
