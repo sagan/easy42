@@ -27,7 +27,7 @@ import {
   DialogContent,
   DialogActions,
 } from "@mui/material";
-import { CheckCircle2, XCircle, Play, RotateCw, Terminal, Server, HelpCircle, Tag, CheckCheck, Search, X, Code2, Plus, DownloadCloud, Trash2 } from "lucide-react";
+import { CheckCircle2, XCircle, Play, RotateCw, Terminal, Server, HelpCircle, Tag, CheckCheck, Search, X, Code2, Plus, DownloadCloud, Trash2, ChevronDown, ChevronUp } from "lucide-react";
 import { api } from "../../api/client";
 import { Node, TaskMeta, TaskStatusResult, TaskRunResult } from "../../types/api";
 import { TaskSourceModal } from "./TaskSourceModal";
@@ -215,6 +215,7 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
 
   // Task search filter state and View Source modal state
   const [taskFilter, setTaskFilter] = useState<string>("");
+  const [mobileTasksOpen, setMobileTasksOpen] = useState<boolean>(false);
   const [sourceModalOpen, setSourceModalOpen] = useState<boolean>(false);
   const [installModalOpen, setInstallModalOpen] = useState<boolean>(false);
   const [confirmDeleteTask, setConfirmDeleteTask] = useState<string | null>(null);
@@ -484,10 +485,10 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
   return (
     <Box
       sx={{
-        p: { xs: 1.5, sm: 2.5, md: 3 },
-        height: "100%",
+        p: { xs: 1, sm: 2, md: 3 },
+        height: { xs: "auto", md: "100%" },
         minHeight: 0,
-        overflowY: "auto",
+        overflowY: { xs: "visible", md: "auto" },
         display: "flex",
         flexDirection: "column",
       }}
@@ -497,11 +498,11 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
         elevation={0}
         sx={{
           flex: 1,
-          minHeight: { xs: 550, md: 600 },
-          borderRadius: 3,
+          minHeight: { xs: "auto", md: 600 },
+          borderRadius: { xs: 2, md: 3 },
           border: "1px solid #E2E8F0",
           bgcolor: "#FFFFFF",
-          overflow: "hidden",
+          overflow: { xs: "visible", md: "hidden" },
           display: "flex",
           flexDirection: { xs: "column", md: "row" },
         }}
@@ -510,7 +511,6 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
         <Box
           sx={{
             width: { xs: "100%", md: 300 },
-            maxHeight: { xs: 260, md: "none" },
             borderRight: { xs: 0, md: 1 },
             borderBottom: { xs: 1, md: 0 },
             borderColor: "divider",
@@ -520,56 +520,125 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
             flexShrink: 0,
           }}
         >
-          <Box sx={{ p: 1.5, pb: 1, borderBottom: 1, borderColor: "divider" }}>
-            <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1 }}>
-              <Typography
-                variant="subtitle2"
-                sx={{ fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, color: "text.secondary", fontSize: "0.75rem" }}
-              >
-                Device Helper Tasks
-              </Typography>
-              {taskFilter.trim() && (
-                <Chip
-                  size="small"
-                  label={`${filteredTasks.length}/${tasks.length}`}
-                  sx={{ height: 18, fontSize: "0.65rem", fontWeight: 600 }}
-                />
-              )}
-            </Box>
-            <TextField
-              size="small"
-              fullWidth
-              placeholder="Filter tasks..."
-              value={taskFilter}
-              onChange={(e) => setTaskFilter(e.target.value)}
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start" sx={{ color: "text.secondary", mr: 0.5 }}>
-                    <Search size={14} />
-                  </InputAdornment>
-                ),
-                endAdornment: taskFilter ? (
-                  <InputAdornment position="end">
-                    <IconButton size="small" onClick={() => setTaskFilter("")} sx={{ p: 0.25, color: "text.secondary" }}>
-                      <X size={12} />
-                    </IconButton>
-                  </InputAdornment>
-                ) : null,
-                sx: {
-                  height: 32,
-                  fontSize: "0.8rem",
-                  bgcolor: "background.paper",
-                  borderRadius: 1.5,
-                  "& .MuiOutlinedInput-input": {
-                    py: 0.5,
-                    px: 0.5,
-                  },
-                },
+          <Box sx={{ p: 1.5, pb: { xs: mobileTasksOpen ? 1 : 1.5, md: 1 }, borderBottom: { xs: mobileTasksOpen ? 1 : 0, md: 1 }, borderColor: "divider" }}>
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                mb: { xs: mobileTasksOpen ? 1 : 0, md: 1 },
+                cursor: { xs: "pointer", md: "default" },
               }}
-            />
+              onClick={() => setMobileTasksOpen((prev) => !prev)}
+            >
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap", flex: 1, minWidth: 0, mr: 1 }}>
+                <Typography
+                  variant="subtitle2"
+                  sx={{ fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, color: "text.secondary", fontSize: "0.75rem", whiteSpace: "nowrap" }}
+                >
+                  Tasks
+                </Typography>
+                {/* On mobile when collapsed, display current task title */}
+                <Box sx={{ display: { xs: "flex", md: "none" }, alignItems: "center", gap: 0.5, minWidth: 0 }}>
+                  <Chip
+                    size="small"
+                    label={isCustomTaskHelp ? "+ Task Guide" : selectedTask?.title || "Select Task"}
+                    color="primary"
+                    variant="outlined"
+                    sx={{
+                      height: 22,
+                      fontSize: "0.72rem",
+                      fontWeight: 600,
+                      maxWidth: { xs: 160, sm: 240 },
+                      "& .MuiChip-label": { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
+                    }}
+                  />
+                </Box>
+                {taskFilter.trim() && (
+                  <Chip
+                    size="small"
+                    label={`${filteredTasks.length}/${tasks.length}`}
+                    sx={{ height: 18, fontSize: "0.65rem", fontWeight: 600 }}
+                  />
+                )}
+              </Box>
+
+              <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, flexShrink: 0 }}>
+                <Button
+                  size="small"
+                  variant="text"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setInstallModalOpen(true);
+                  }}
+                  startIcon={<DownloadCloud size={13} />}
+                  sx={{
+                    fontSize: "0.72rem",
+                    py: 0.25,
+                    px: 0.75,
+                    textTransform: "none",
+                    fontWeight: 600,
+                  }}
+                >
+                  Install
+                </Button>
+
+                {/* Mobile Expand / Collapse Chevron */}
+                <IconButton
+                  size="small"
+                  sx={{ display: { xs: "inline-flex", md: "none" }, p: 0.25, color: "text.secondary" }}
+                  aria-label="Toggle task list"
+                >
+                  {mobileTasksOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                </IconButton>
+              </Box>
+            </Box>
+
+            {/* Filter Search Input (visible on desktop, or on mobile when expanded) */}
+            <Box sx={{ display: { xs: mobileTasksOpen ? "block" : "none", md: "block" } }}>
+              <TextField
+                size="small"
+                fullWidth
+                placeholder="Filter tasks..."
+                value={taskFilter}
+                onChange={(e) => setTaskFilter(e.target.value)}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start" sx={{ color: "text.secondary", mr: 0.5 }}>
+                      <Search size={14} />
+                    </InputAdornment>
+                  ),
+                  endAdornment: taskFilter ? (
+                    <InputAdornment position="end">
+                      <IconButton size="small" onClick={() => setTaskFilter("")} sx={{ p: 0.25, color: "text.secondary" }}>
+                        <X size={12} />
+                      </IconButton>
+                    </InputAdornment>
+                  ) : null,
+                  sx: {
+                    height: 32,
+                    fontSize: "0.8rem",
+                    bgcolor: "background.paper",
+                    borderRadius: 1.5,
+                    "& .MuiOutlinedInput-input": {
+                      py: 0.5,
+                      px: 0.5,
+                    },
+                  },
+                }}
+              />
+            </Box>
           </Box>
 
-          <Box sx={{ flex: 1, overflowY: "auto", p: 1.5 }}>
+          <Box
+            sx={{
+              flex: 1,
+              overflowY: "auto",
+              p: 1.5,
+              display: { xs: mobileTasksOpen ? "block" : "none", md: "block" },
+              maxHeight: { xs: 260, md: "none" },
+            }}
+          >
             {loadingTasks ? (
               <Box sx={{ display: "flex", justifyContent: "center", p: 4 }}>
                 <CircularProgress size={24} />
@@ -610,7 +679,10 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
                       return (
                         <Box
                           key={task.id}
-                          onClick={() => handleSelectTask(task.id)}
+                          onClick={() => {
+                            handleSelectTask(task.id);
+                            setMobileTasksOpen(false);
+                          }}
                           sx={{
                             p: 1.5,
                             mb: 1,
@@ -694,7 +766,10 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
                     return (
                       <Box
                         key={task.id}
-                        onClick={() => handleSelectTask(task.id)}
+                        onClick={() => {
+                          handleSelectTask(task.id);
+                          setMobileTasksOpen(false);
+                        }}
                         sx={{
                           p: 1.5,
                           mb: 1,
@@ -740,7 +815,10 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
                   {/* Placeholder "+ task" Help Item */}
                   {matchesHelpFilter && (
                     <Box
-                      onClick={() => handleSelectTask(CUSTOM_TASK_HELP_ID)}
+                      onClick={() => {
+                        handleSelectTask(CUSTOM_TASK_HELP_ID);
+                        setMobileTasksOpen(false);
+                      }}
                       sx={{
                         p: 1.5,
                         mb: 1,
@@ -793,7 +871,7 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
         </Box>
 
         {/* Right Main Area: Task Details, Node Selection & Status Matrix */}
-        <Box sx={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+        <Box sx={{ flex: 1, display: "flex", flexDirection: "column", overflow: { xs: "visible", md: "hidden" }, minHeight: 0 }}>
           {isCustomTaskHelp ? (
             <CustomTaskHelp
               onRefreshTasks={loadTasks}
@@ -801,14 +879,31 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
               onOpenInstallModal={() => setInstallModalOpen(true)}
             />
           ) : selectedTask ? (
-            <Box sx={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", p: 2.5 }}>
+            <Box
+              sx={{
+                flex: 1,
+                display: "flex",
+                flexDirection: "column",
+                overflowY: { xs: "visible", md: "auto" },
+                p: { xs: 1.5, sm: 2, md: 2.5 },
+              }}
+            >
               {/* Task Header */}
               <Box
                 sx={{ mb: 2, p: 2, borderRadius: 2, bgcolor: "background.default", border: 1, borderColor: "divider" }}
               >
-                <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 0.5 }}>
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                    <Typography variant="h6" sx={{ fontWeight: 700 }}>
+                <Box
+                  sx={{
+                    display: "flex",
+                    flexDirection: { xs: "column", sm: "row" },
+                    alignItems: { xs: "flex-start", sm: "center" },
+                    justifyContent: "space-between",
+                    gap: 1.5,
+                    mb: 1,
+                  }}
+                >
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
+                    <Typography variant="h6" sx={{ fontWeight: 700, fontSize: { xs: "1.1rem", sm: "1.25rem" } }}>
                       {selectedTask.title}
                     </Typography>
                     <Chip size="small" label={selectedTask.category} color="primary" variant="outlined" />
@@ -826,7 +921,7 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
                       />
                     )}
                   </Box>
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1, alignSelf: { xs: "flex-end", sm: "center" } }}>
                     {selectedTask.custom && (
                       <Button
                         size="small"
@@ -872,9 +967,26 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
               )}
 
               {/* Action Toolbar */}
-              <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1.5 }}>
-                <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+              <Box
+                sx={{
+                  display: "flex",
+                  flexDirection: { xs: "column", sm: "row" },
+                  alignItems: { xs: "stretch", sm: "center" },
+                  justifyContent: "space-between",
+                  gap: 1.5,
+                  mb: 1.5,
+                }}
+              >
+                <Box
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 1.5,
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, fontSize: { xs: "0.8rem", sm: "0.875rem" } }}>
                     Target Devices ({selectedNodes.length} / {managedNodes.length} selected)
                   </Typography>
 
@@ -928,13 +1040,23 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
                     </FormControl>
                   )}
                 </Box>
-                <Box sx={{ display: "flex", gap: 1 }}>
+
+                <Box
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 1,
+                    flexWrap: "wrap",
+                    width: { xs: "100%", sm: "auto" },
+                  }}
+                >
                   <Button
                     size="small"
                     variant="outlined"
                     startIcon={isAnyChecking ? <CircularProgress size={14} /> : <RotateCw size={14} />}
                     disabled={isAnyChecking || isAnyRunning || selectedNodes.length === 0}
                     onClick={() => handleCheckStatus()}
+                    sx={{ flex: { xs: "1 1 45%", sm: "none" }, whiteSpace: "nowrap" }}
                   >
                     Check Status
                   </Button>
@@ -945,13 +1067,15 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
                         : `Auto-select ${needsExecutionCount} device(s) needing execution`
                     }
                   >
-                    <span>
+                    <span style={{ display: "inline-flex", flex: 1 }}>
                       <Button
                         size="small"
                         variant="outlined"
+                        fullWidth
                         startIcon={<CheckCheck size={14} />}
                         disabled={!canAutoSelect}
                         onClick={handleAutoSelect}
+                        sx={{ whiteSpace: "nowrap" }}
                       >
                         Auto Select
                       </Button>
@@ -964,6 +1088,11 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
                     startIcon={isAnyRunning ? <CircularProgress size={14} color="inherit" /> : <Play size={14} />}
                     disabled={isAnyChecking || isAnyRunning || selectedNodes.length === 0}
                     onClick={() => handleRunTask()}
+                    sx={{
+                      fontWeight: 700,
+                      flex: { xs: "1 1 100%", sm: "none" },
+                      whiteSpace: "nowrap",
+                    }}
                   >
                     Execute Task ({selectedNodes.length})
                   </Button>
@@ -971,8 +1100,19 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
               </Box>
 
               {/* Node Table */}
-              <TableContainer component={Paper} variant="outlined" sx={{ flex: 1, overflowY: "auto", mb: 2 }}>
-                <Table size="small" stickyHeader>
+              <TableContainer
+                component={Paper}
+                variant="outlined"
+                sx={{
+                  flex: 1,
+                  minHeight: { xs: 260, md: 200 },
+                  maxHeight: { xs: 450, md: "none" },
+                  overflowY: "auto",
+                  overflowX: "auto",
+                  mb: 2,
+                }}
+              >
+                <Table size="small" stickyHeader sx={{ minWidth: 480 }}>
                   <TableHead>
                     <TableRow>
                       <TableCell padding="checkbox">
@@ -1097,16 +1237,26 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
                     maxHeight: 220,
                     display: "flex",
                     flexDirection: "column",
+                    mb: { xs: 2, md: 0 },
                   }}
                 >
-                  <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1 }}>
+                  <Box
+                    sx={{
+                      display: "flex",
+                      flexDirection: { xs: "column", sm: "row" },
+                      alignItems: { xs: "flex-start", sm: "center" },
+                      justifyContent: "space-between",
+                      gap: 1,
+                      mb: 1,
+                    }}
+                  >
                     <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                       <Terminal size={16} />
                       <Typography variant="subtitle2" sx={{ fontWeight: 700, fontFamily: "monospace" }}>
                         Execution Output
                       </Typography>
                     </Box>
-                    <Box sx={{ display: "flex", gap: 0.5 }}>
+                    <Box sx={{ display: "flex", gap: 0.5, flexWrap: "wrap" }}>
                       {Object.keys(runResults).map((n) => {
                         const r = runResults[n];
                         return (

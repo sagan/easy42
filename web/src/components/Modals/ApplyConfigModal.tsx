@@ -20,6 +20,7 @@ import {
   FormControl,
   InputLabel,
   Table,
+  TableContainer,
   TableHead,
   TableRow,
   TableCell,
@@ -28,6 +29,8 @@ import {
   IconButton,
   ToggleButton,
   ToggleButtonGroup,
+  useTheme,
+  useMediaQuery,
 } from "@mui/material";
 import {
   FileCode2,
@@ -41,6 +44,7 @@ import {
   Eye,
   FolderOpen,
   Sparkles,
+  X,
 } from "lucide-react";
 import { api } from "../../api/client";
 import { ApplyPreviewResult, ApplyResult, ConfigChange, Node, Link, LinkEnd } from "../../types/api";
@@ -231,6 +235,9 @@ export const ApplyConfigModal: React.FC<ApplyConfigModalProps> = ({
   nodes = [],
   links = [],
 }) => {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
+
   const [activeTab, setActiveTab] = useState<number>(0);
   const [content, setContent] = useState<string>("");
   const [autoSync, setAutoSync] = useState<boolean>(true);
@@ -475,22 +482,84 @@ export const ApplyConfigModal: React.FC<ApplyConfigModalProps> = ({
       onClose={onClose}
       maxWidth="lg"
       fullWidth
-      PaperProps={{ sx: { borderRadius: 2, height: "85vh" } }}
+      fullScreen={isMobile}
+      PaperProps={{
+        sx: {
+          borderRadius: { xs: 0, sm: 2 },
+          height: { xs: "100%", sm: "85vh" },
+          m: { xs: 0, sm: 2 },
+        },
+      }}
     >
-      <DialogTitle sx={{ pb: 1, borderBottom: "1px solid #E2E8F0" }}>
-        <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
-            <FileCode2 size={24} color="#2563EB" />
-            <Box>
-              <Typography variant="h6" sx={{ fontWeight: 600, color: "#0F172A" }}>
-                Apply Config Changes
-              </Typography>
-              <Typography variant="caption" sx={{ color: "#64748B" }}>
+      <DialogTitle
+        sx={{
+          p: { xs: 2, sm: 2.5 },
+          pb: 1.5,
+          borderBottom: "1px solid #E2E8F0",
+        }}
+      >
+        <Box
+          sx={{
+            display: "flex",
+            flexDirection: { xs: "column", sm: "row" },
+            alignItems: { xs: "flex-start", sm: "center" },
+            justifyContent: "space-between",
+            gap: 1.5,
+          }}
+        >
+          <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1.5, width: "100%" }}>
+            <Box
+              sx={{
+                width: 38,
+                height: 38,
+                borderRadius: 2,
+                bgcolor: "rgba(37, 99, 235, 0.1)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "#2563EB",
+                flexShrink: 0,
+                mt: 0.25,
+              }}
+            >
+              <FileCode2 size={22} />
+            </Box>
+            <Box sx={{ flex: 1, minWidth: 0 }}>
+              <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1 }}>
+                <Typography
+                  variant="h6"
+                  sx={{
+                    fontWeight: 700,
+                    color: "#0F172A",
+                    fontSize: { xs: "1.05rem", sm: "1.25rem" },
+                    lineHeight: 1.3,
+                  }}
+                >
+                  Apply Config Changes
+                </Typography>
+                <IconButton
+                  size="small"
+                  onClick={onClose}
+                  sx={{ display: { xs: "inline-flex", sm: "none" }, color: "text.secondary", p: 0.5 }}
+                >
+                  <X size={20} />
+                </IconButton>
+              </Box>
+              <Typography variant="caption" sx={{ color: "#64748B", display: "block", mt: 0.25 }}>
                 Declaratively patch nodes, links, and network settings with strict schema verification
               </Typography>
             </Box>
           </Box>
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+
+          <Box
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: { xs: "space-between", sm: "flex-end" },
+              width: { xs: "100%", sm: "auto" },
+              gap: 1,
+            }}
+          >
             {validating ? (
               <Chip size="small" icon={<RotateCw className="animate-spin" size={14} />} label="Validating..." />
             ) : validationResult?.valid ? (
@@ -503,12 +572,25 @@ export const ApplyConfigModal: React.FC<ApplyConfigModalProps> = ({
             ) : validationResult?.error ? (
               <Chip size="small" color="error" icon={<AlertTriangle size={14} />} label="Schema Violation" />
             ) : null}
+            <IconButton
+              size="small"
+              onClick={onClose}
+              sx={{ display: { xs: "none", sm: "inline-flex" }, color: "text.secondary", ml: 1 }}
+            >
+              <X size={20} />
+            </IconButton>
           </Box>
         </Box>
       </DialogTitle>
 
-      <Box sx={{ borderBottom: 1, borderColor: "divider", px: 3, pt: 1 }}>
-        <Tabs value={activeTab} onChange={(_, val) => setActiveTab(val)}>
+      <Box sx={{ borderBottom: 1, borderColor: "divider", px: { xs: 1.5, sm: 3 }, pt: 1 }}>
+        <Tabs
+          value={activeTab}
+          onChange={(_, val) => setActiveTab(val)}
+          variant="scrollable"
+          scrollButtons="auto"
+          allowScrollButtonsMobile
+        >
           <Tab label="Editor & Schema" icon={<FileCode2 size={16} />} iconPosition="start" />
           <Tab
             label={
@@ -535,7 +617,7 @@ export const ApplyConfigModal: React.FC<ApplyConfigModalProps> = ({
         </Tabs>
       </Box>
 
-      <DialogContent sx={{ p: 3, display: "flex", flexDirection: "column", gap: 2, overflowY: "auto" }}>
+      <DialogContent sx={{ p: { xs: 1.5, sm: 3 }, display: "flex", flexDirection: "column", gap: 2, overflowY: "auto" }}>
         {applyError && (
           <Alert severity="error" onClose={() => setApplyError(null)}>
             {applyError}
@@ -564,8 +646,16 @@ export const ApplyConfigModal: React.FC<ApplyConfigModalProps> = ({
         {activeTab === 0 && (
           <Box sx={{ display: "flex", flexDirection: "column", gap: 2, flex: 1 }}>
             {/* Top Toolbar: Preset Templates & Format Actions */}
-            <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 2, flexWrap: "wrap" }}>
-              <FormControl size="small" sx={{ minWidth: 260 }}>
+            <Box
+              sx={{
+                display: "flex",
+                flexDirection: { xs: "column", sm: "row" },
+                alignItems: { xs: "stretch", sm: "center" },
+                justifyContent: "space-between",
+                gap: 1.5,
+              }}
+            >
+              <FormControl size="small" sx={{ minWidth: { xs: "100%", sm: 260 } }}>
                 <InputLabel>Preset Templates</InputLabel>
                 <Select
                   label="Preset Templates"
@@ -583,8 +673,13 @@ export const ApplyConfigModal: React.FC<ApplyConfigModalProps> = ({
                 </Select>
               </FormControl>
 
-              <Box sx={{ display: "flex", gap: 1 }}>
-                <Button size="small" variant="outlined" onClick={handleFormat}>
+              <Box sx={{ display: "flex", gap: 1, width: { xs: "100%", sm: "auto" } }}>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  onClick={handleFormat}
+                  sx={{ flex: { xs: 1, sm: "none" }, whiteSpace: "nowrap" }}
+                >
                   Format JSON
                 </Button>
                 <Button
@@ -594,6 +689,7 @@ export const ApplyConfigModal: React.FC<ApplyConfigModalProps> = ({
                     navigator.clipboard.writeText(content);
                   }}
                   startIcon={<Copy size={14} />}
+                  sx={{ flex: { xs: 1, sm: "none" }, whiteSpace: "nowrap" }}
                 >
                   Copy
                 </Button>
@@ -607,9 +703,9 @@ export const ApplyConfigModal: React.FC<ApplyConfigModalProps> = ({
                 p: 1.5,
                 backgroundColor: "#F8FAFC",
                 display: "flex",
-                alignItems: "center",
+                flexDirection: { xs: "column", sm: "row" },
+                alignItems: { xs: "stretch", sm: "center" },
                 justifyContent: "space-between",
-                flexWrap: "wrap",
                 gap: 1.5,
               }}
             >
@@ -620,64 +716,75 @@ export const ApplyConfigModal: React.FC<ApplyConfigModalProps> = ({
                 </Typography>
               </Box>
 
-              <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, flexWrap: "wrap", flex: 1, justifyContent: "flex-end" }}>
-                <ToggleButtonGroup
-                  size="small"
-                  value={genType}
-                  exclusive
-                  onChange={(_, val) => {
-                    if (val) setGenType(val);
-                  }}
-                  sx={{ height: 32 }}
-                >
-                  <ToggleButton value="node" sx={{ textTransform: "none", px: 1.5, py: 0.5, fontSize: 13 }}>
-                    Node
-                  </ToggleButton>
-                  <ToggleButton value="link" sx={{ textTransform: "none", px: 1.5, py: 0.5, fontSize: 13 }}>
-                    Link
-                  </ToggleButton>
-                </ToggleButtonGroup>
+              <Box
+                sx={{
+                  display: "flex",
+                  alignItems: { xs: "stretch", sm: "center" },
+                  flexDirection: { xs: "column", sm: "row" },
+                  gap: 1.5,
+                  flex: 1,
+                  justifyContent: "flex-end",
+                }}
+              >
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+                  <ToggleButtonGroup
+                    size="small"
+                    value={genType}
+                    exclusive
+                    onChange={(_, val) => {
+                      if (val) setGenType(val);
+                    }}
+                    sx={{ height: 32 }}
+                  >
+                    <ToggleButton value="node" sx={{ textTransform: "none", px: 1.5, py: 0.5, fontSize: 13 }}>
+                      Node
+                    </ToggleButton>
+                    <ToggleButton value="link" sx={{ textTransform: "none", px: 1.5, py: 0.5, fontSize: 13 }}>
+                      Link
+                    </ToggleButton>
+                  </ToggleButtonGroup>
 
-                {genType === "node" ? (
-                  <FormControl size="small" sx={{ minWidth: 220 }}>
-                    <Select
-                      displayEmpty
-                      value={selectedGenNode}
-                      onChange={(e) => setSelectedGenNode(e.target.value)}
-                      sx={{ height: 32, fontSize: 13, backgroundColor: "#FFFFFF" }}
-                    >
-                      <MenuItem value="" disabled>
-                        <em>Select a node...</em>
-                      </MenuItem>
-                      {availableNodes.map((n) => (
-                        <MenuItem key={n.name} value={n.name}>
-                          {n.name} {n.ip ? `(${n.ip})` : ""}
+                  {genType === "node" ? (
+                    <FormControl size="small" sx={{ minWidth: { xs: 140, sm: 200 }, flex: 1 }}>
+                      <Select
+                        displayEmpty
+                        value={selectedGenNode}
+                        onChange={(e) => setSelectedGenNode(e.target.value)}
+                        sx={{ height: 32, fontSize: 13, backgroundColor: "#FFFFFF" }}
+                      >
+                        <MenuItem value="" disabled>
+                          <em>Select a node...</em>
                         </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                ) : (
-                  <FormControl size="small" sx={{ minWidth: 260 }}>
-                    <Select
-                      displayEmpty
-                      value={selectedGenLink}
-                      onChange={(e) => setSelectedGenLink(e.target.value)}
-                      sx={{ height: 32, fontSize: 13, backgroundColor: "#FFFFFF" }}
-                    >
-                      <MenuItem value="" disabled>
-                        <em>Select a link...</em>
-                      </MenuItem>
-                      {availableLinks.map((l, idx) => {
-                        const linkKey = `${l.from.name}<->${l.to.name}-${idx}`;
-                        return (
-                          <MenuItem key={linkKey} value={linkKey}>
-                            {l.from.name} ↔ {l.to.name} ({l.from.interface || "wg42"})
+                        {availableNodes.map((n) => (
+                          <MenuItem key={n.name} value={n.name}>
+                            {n.name} {n.ip ? `(${n.ip})` : ""}
                           </MenuItem>
-                        );
-                      })}
-                    </Select>
-                  </FormControl>
-                )}
+                        ))}
+                      </Select>
+                    </FormControl>
+                  ) : (
+                    <FormControl size="small" sx={{ minWidth: { xs: 140, sm: 220 }, flex: 1 }}>
+                      <Select
+                        displayEmpty
+                        value={selectedGenLink}
+                        onChange={(e) => setSelectedGenLink(e.target.value)}
+                        sx={{ height: 32, fontSize: 13, backgroundColor: "#FFFFFF" }}
+                      >
+                        <MenuItem value="" disabled>
+                          <em>Select a link...</em>
+                        </MenuItem>
+                        {availableLinks.map((l, idx) => {
+                          const linkKey = `${l.from.name}<->${l.to.name}-${idx}`;
+                          return (
+                            <MenuItem key={linkKey} value={linkKey}>
+                              {l.from.name} ↔ {l.to.name} ({l.from.interface || "wg42"})
+                            </MenuItem>
+                          );
+                        })}
+                      </Select>
+                    </FormControl>
+                  )}
+                </Box>
 
                 <Button
                   variant="contained"
@@ -685,7 +792,7 @@ export const ApplyConfigModal: React.FC<ApplyConfigModalProps> = ({
                   disabled={genType === "node" ? !selectedGenNode : !selectedGenLink}
                   onClick={handleGenerateFromState}
                   startIcon={<Sparkles size={14} />}
-                  sx={{ textTransform: "none", height: 32 }}
+                  sx={{ textTransform: "none", height: 32, whiteSpace: "nowrap" }}
                 >
                   Insert Snippet
                 </Button>
@@ -702,7 +809,7 @@ export const ApplyConfigModal: React.FC<ApplyConfigModalProps> = ({
 
             <TextField
               multiline
-              rows={15}
+              rows={isMobile ? 10 : 15}
               fullWidth
               value={content}
               onChange={(e) => setContent(e.target.value)}
@@ -721,15 +828,16 @@ export const ApplyConfigModal: React.FC<ApplyConfigModalProps> = ({
             {/* Quick Save Snippet Bar */}
             <Box
               sx={{
-                p: 2,
+                p: { xs: 1.5, sm: 2 },
                 backgroundColor: "#F1F5F9",
                 borderRadius: 1.5,
                 display: "flex",
-                alignItems: "center",
-                gap: 2,
+                flexDirection: { xs: "column", sm: "row" },
+                alignItems: { xs: "stretch", sm: "center" },
+                gap: 1.5,
               }}
             >
-              <Typography variant="body2" sx={{ fontWeight: 600, color: "#334155", minWidth: 120 }}>
+              <Typography variant="body2" sx={{ fontWeight: 600, color: "#334155", minWidth: { xs: "auto", sm: 100 } }}>
                 Save Snippet:
               </Typography>
               <TextField
@@ -752,6 +860,7 @@ export const ApplyConfigModal: React.FC<ApplyConfigModalProps> = ({
                 startIcon={<Save size={16} />}
                 onClick={handleSaveSnippet}
                 disabled={!snippetName.trim() || savingSnippet || !validationResult?.valid}
+                sx={{ width: { xs: "100%", sm: "auto" }, whiteSpace: "nowrap" }}
               >
                 Save
               </Button>
@@ -805,40 +914,42 @@ export const ApplyConfigModal: React.FC<ApplyConfigModalProps> = ({
                     <Typography variant="subtitle2" sx={{ p: 1.5, backgroundColor: "#F8FAFC", fontWeight: 600 }}>
                       Node Modifications
                     </Typography>
-                    <Table size="small">
-                      <TableHead>
-                        <TableRow>
-                          <TableCell sx={{ fontWeight: 600 }}>Node</TableCell>
-                          <TableCell sx={{ fontWeight: 600 }}>Action</TableCell>
-                          <TableCell sx={{ fontWeight: 600 }}>Field</TableCell>
-                          <TableCell sx={{ fontWeight: 600 }}>Old Value</TableCell>
-                          <TableCell sx={{ fontWeight: 600 }}>New Value</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {(previewResult.nodes || []).map((n) =>
-                          (n.changes || []).map((c, idx) => (
-                            <TableRow key={`${n.name}-${c.field}-${idx}`}>
-                              <TableCell sx={{ fontFamily: "monospace" }}>{n.name}</TableCell>
-                              <TableCell>
-                                <Chip
-                                  size="small"
-                                  label={n.action}
-                                  color={n.action === "create" ? "success" : "info"}
-                                />
-                              </TableCell>
-                              <TableCell sx={{ fontFamily: "monospace" }}>{c.field}</TableCell>
-                              <TableCell sx={{ color: "#991B1B", fontFamily: "monospace", fontSize: 12 }}>
-                                {JSON.stringify(c.old_value) || "null"}
-                              </TableCell>
-                              <TableCell sx={{ color: "#166534", fontFamily: "monospace", fontSize: 12 }}>
-                                {JSON.stringify(c.new_value)}
-                              </TableCell>
-                            </TableRow>
-                          )),
-                        )}
-                      </TableBody>
-                    </Table>
+                    <TableContainer sx={{ overflowX: "auto" }}>
+                      <Table size="small" sx={{ minWidth: 480 }}>
+                        <TableHead>
+                          <TableRow>
+                            <TableCell sx={{ fontWeight: 600 }}>Node</TableCell>
+                            <TableCell sx={{ fontWeight: 600 }}>Action</TableCell>
+                            <TableCell sx={{ fontWeight: 600 }}>Field</TableCell>
+                            <TableCell sx={{ fontWeight: 600 }}>Old Value</TableCell>
+                            <TableCell sx={{ fontWeight: 600 }}>New Value</TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {(previewResult.nodes || []).map((n) =>
+                            (n.changes || []).map((c, idx) => (
+                              <TableRow key={`${n.name}-${c.field}-${idx}`}>
+                                <TableCell sx={{ fontFamily: "monospace" }}>{n.name}</TableCell>
+                                <TableCell>
+                                  <Chip
+                                    size="small"
+                                    label={n.action}
+                                    color={n.action === "create" ? "success" : "info"}
+                                  />
+                                </TableCell>
+                                <TableCell sx={{ fontFamily: "monospace" }}>{c.field}</TableCell>
+                                <TableCell sx={{ color: "#991B1B", fontFamily: "monospace", fontSize: 12 }}>
+                                  {JSON.stringify(c.old_value) || "null"}
+                                </TableCell>
+                                <TableCell sx={{ color: "#166534", fontFamily: "monospace", fontSize: 12 }}>
+                                  {JSON.stringify(c.new_value)}
+                                </TableCell>
+                              </TableRow>
+                            )),
+                          )}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
                   </Paper>
                 )}
 
@@ -847,42 +958,44 @@ export const ApplyConfigModal: React.FC<ApplyConfigModalProps> = ({
                     <Typography variant="subtitle2" sx={{ p: 1.5, backgroundColor: "#F8FAFC", fontWeight: 600 }}>
                       Link Modifications
                     </Typography>
-                    <Table size="small">
-                      <TableHead>
-                        <TableRow>
-                          <TableCell sx={{ fontWeight: 600 }}>Link</TableCell>
-                          <TableCell sx={{ fontWeight: 600 }}>Action</TableCell>
-                          <TableCell sx={{ fontWeight: 600 }}>Field</TableCell>
-                          <TableCell sx={{ fontWeight: 600 }}>Old Value</TableCell>
-                          <TableCell sx={{ fontWeight: 600 }}>New Value</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {(previewResult.links || []).map((l) =>
-                          (l.changes || []).map((c, idx) => (
-                            <TableRow key={`${l.from}-${l.to}-${c.field}-${idx}`}>
-                              <TableCell sx={{ fontFamily: "monospace" }}>
-                                {l.from} &lt;-&gt; {l.to}
-                              </TableCell>
-                              <TableCell>
-                                <Chip
-                                  size="small"
-                                  label={l.action}
-                                  color={l.action === "create" ? "success" : "info"}
-                                />
-                              </TableCell>
-                              <TableCell sx={{ fontFamily: "monospace" }}>{c.field}</TableCell>
-                              <TableCell sx={{ color: "#991B1B", fontFamily: "monospace", fontSize: 12 }}>
-                                {JSON.stringify(c.old_value) || "null"}
-                              </TableCell>
-                              <TableCell sx={{ color: "#166534", fontFamily: "monospace", fontSize: 12 }}>
-                                {JSON.stringify(c.new_value)}
-                              </TableCell>
-                            </TableRow>
-                          )),
-                        )}
-                      </TableBody>
-                    </Table>
+                    <TableContainer sx={{ overflowX: "auto" }}>
+                      <Table size="small" sx={{ minWidth: 480 }}>
+                        <TableHead>
+                          <TableRow>
+                            <TableCell sx={{ fontWeight: 600 }}>Link</TableCell>
+                            <TableCell sx={{ fontWeight: 600 }}>Action</TableCell>
+                            <TableCell sx={{ fontWeight: 600 }}>Field</TableCell>
+                            <TableCell sx={{ fontWeight: 600 }}>Old Value</TableCell>
+                            <TableCell sx={{ fontWeight: 600 }}>New Value</TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {(previewResult.links || []).map((l) =>
+                            (l.changes || []).map((c, idx) => (
+                              <TableRow key={`${l.from}-${l.to}-${c.field}-${idx}`}>
+                                <TableCell sx={{ fontFamily: "monospace" }}>
+                                  {l.from} &lt;-&gt; {l.to}
+                                </TableCell>
+                                <TableCell>
+                                  <Chip
+                                    size="small"
+                                    label={l.action}
+                                    color={l.action === "create" ? "success" : "info"}
+                                  />
+                                </TableCell>
+                                <TableCell sx={{ fontFamily: "monospace" }}>{c.field}</TableCell>
+                                <TableCell sx={{ color: "#991B1B", fontFamily: "monospace", fontSize: 12 }}>
+                                  {JSON.stringify(c.old_value) || "null"}
+                                </TableCell>
+                                <TableCell sx={{ color: "#166534", fontFamily: "monospace", fontSize: 12 }}>
+                                  {JSON.stringify(c.new_value)}
+                                </TableCell>
+                              </TableRow>
+                            )),
+                          )}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
                   </Paper>
                 )}
 
@@ -891,32 +1004,34 @@ export const ApplyConfigModal: React.FC<ApplyConfigModalProps> = ({
                     <Typography variant="subtitle2" sx={{ p: 1.5, backgroundColor: "#F8FAFC", fontWeight: 600 }}>
                       Settings Modifications
                     </Typography>
-                    <Table size="small">
-                      <TableHead>
-                        <TableRow>
-                          <TableCell sx={{ fontWeight: 600 }}>Category</TableCell>
-                          <TableCell sx={{ fontWeight: 600 }}>Field</TableCell>
-                          <TableCell sx={{ fontWeight: 600 }}>Old Value</TableCell>
-                          <TableCell sx={{ fontWeight: 600 }}>New Value</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {(previewResult.settings || []).map((s) =>
-                          (s.changes || []).map((c, idx) => (
-                            <TableRow key={`${s.category}-${c.field}-${idx}`}>
-                              <TableCell sx={{ fontFamily: "monospace" }}>{s.category}</TableCell>
-                              <TableCell sx={{ fontFamily: "monospace" }}>{c.field}</TableCell>
-                              <TableCell sx={{ color: "#991B1B", fontFamily: "monospace", fontSize: 12 }}>
-                                {JSON.stringify(c.old_value) || "null"}
-                              </TableCell>
-                              <TableCell sx={{ color: "#166534", fontFamily: "monospace", fontSize: 12 }}>
-                                {JSON.stringify(c.new_value)}
-                              </TableCell>
-                            </TableRow>
-                          )),
-                        )}
-                      </TableBody>
-                    </Table>
+                    <TableContainer sx={{ overflowX: "auto" }}>
+                      <Table size="small" sx={{ minWidth: 420 }}>
+                        <TableHead>
+                          <TableRow>
+                            <TableCell sx={{ fontWeight: 600 }}>Category</TableCell>
+                            <TableCell sx={{ fontWeight: 600 }}>Field</TableCell>
+                            <TableCell sx={{ fontWeight: 600 }}>Old Value</TableCell>
+                            <TableCell sx={{ fontWeight: 600 }}>New Value</TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {(previewResult.settings || []).map((s) =>
+                            (s.changes || []).map((c, idx) => (
+                              <TableRow key={`${s.category}-${c.field}-${idx}`}>
+                                <TableCell sx={{ fontFamily: "monospace" }}>{s.category}</TableCell>
+                                <TableCell sx={{ fontFamily: "monospace" }}>{c.field}</TableCell>
+                                <TableCell sx={{ color: "#991B1B", fontFamily: "monospace", fontSize: 12 }}>
+                                  {JSON.stringify(c.old_value) || "null"}
+                                </TableCell>
+                                <TableCell sx={{ color: "#166534", fontFamily: "monospace", fontSize: 12 }}>
+                                  {JSON.stringify(c.new_value)}
+                                </TableCell>
+                              </TableRow>
+                            )),
+                          )}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
                   </Paper>
                 )}
 
@@ -934,6 +1049,7 @@ export const ApplyConfigModal: React.FC<ApplyConfigModalProps> = ({
                         lineHeight: 1.6,
                         maxHeight: 280,
                         overflowY: "auto",
+                        overflowX: "auto",
                       }}
                     >
                       {previewResult.unified_diff.split("\n").map((line, i) => {
@@ -976,13 +1092,15 @@ export const ApplyConfigModal: React.FC<ApplyConfigModalProps> = ({
                     sx={{
                       p: 2,
                       display: "flex",
-                      alignItems: "center",
+                      flexDirection: { xs: "column", sm: "row" },
+                      alignItems: { xs: "flex-start", sm: "center" },
                       justifyContent: "space-between",
+                      gap: 1.5,
                       "&:hover": { backgroundColor: "#F8FAFC" },
                     }}
                   >
                     <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
-                      <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
                         <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
                           {s.name}
                         </Typography>
@@ -997,7 +1115,16 @@ export const ApplyConfigModal: React.FC<ApplyConfigModalProps> = ({
                       )}
                     </Box>
 
-                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                    <Box
+                      sx={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 1,
+                        width: { xs: "100%", sm: "auto" },
+                        justifyContent: { xs: "flex-end", sm: "flex-start" },
+                        flexWrap: "wrap",
+                      }}
+                    >
                       <Button
                         size="small"
                         variant="contained"
@@ -1035,14 +1162,42 @@ export const ApplyConfigModal: React.FC<ApplyConfigModalProps> = ({
         )}
       </DialogContent>
 
-      <DialogActions sx={{ px: 3, py: 2, borderTop: "1px solid #E2E8F0", justifyContent: "space-between" }}>
+      <DialogActions
+        sx={{
+          px: { xs: 2, sm: 3 },
+          py: 2,
+          borderTop: "1px solid #E2E8F0",
+          display: "flex",
+          flexDirection: { xs: "column", sm: "row" },
+          alignItems: { xs: "stretch", sm: "center" },
+          justifyContent: "space-between",
+          gap: 1.5,
+        }}
+      >
         <FormControlLabel
           control={<Checkbox checked={autoSync} onChange={(e) => setAutoSync(e.target.checked)} />}
-          label={<Typography variant="body2">Sync network immediately after applying</Typography>}
+          label={
+            <Typography variant="body2" sx={{ fontSize: { xs: "0.825rem", sm: "0.875rem" } }}>
+              Sync network immediately after applying
+            </Typography>
+          }
+          sx={{ mr: 0 }}
         />
 
-        <Box sx={{ display: "flex", gap: 1.5 }}>
-          <Button variant="outlined" onClick={onClose}>
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            gap: 1,
+            width: { xs: "100%", sm: "auto" },
+            flexWrap: { xs: "wrap", sm: "nowrap" },
+          }}
+        >
+          <Button
+            variant="outlined"
+            onClick={onClose}
+            sx={{ flex: { xs: "1 1 30%", sm: "none" } }}
+          >
             Cancel
           </Button>
           <Button
@@ -1050,6 +1205,7 @@ export const ApplyConfigModal: React.FC<ApplyConfigModalProps> = ({
             onClick={handlePreview}
             disabled={previewing || !validationResult?.valid}
             startIcon={previewing ? <RotateCw className="animate-spin" size={16} /> : <Eye size={16} />}
+            sx={{ flex: { xs: "1 1 55%", sm: "none" }, whiteSpace: "nowrap" }}
           >
             {previewing ? "Previewing..." : "Preview Changes"}
           </Button>
@@ -1059,6 +1215,11 @@ export const ApplyConfigModal: React.FC<ApplyConfigModalProps> = ({
             onClick={handleApply}
             disabled={applying || !validationResult?.valid}
             startIcon={applying ? <CircularProgress size={16} color="inherit" /> : <Play size={16} />}
+            sx={{
+              fontWeight: 700,
+              flex: { xs: "1 1 100%", sm: "none" },
+              whiteSpace: "nowrap",
+            }}
           >
             {applying ? "Applying..." : "Apply Changes"}
           </Button>
