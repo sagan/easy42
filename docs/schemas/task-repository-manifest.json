@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/community-tasks-catalog.schema.json",
+  "title": "Community Tasks Catalog",
+  "description": "Schema for Easy42 host automation tasks catalog",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "The name of the tasks catalog."
+    },
+    "description": {
+      "type": "string",
+      "description": "A brief summary of the catalog's purpose."
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+(\\.[0-9]+)?$",
+      "description": "Catalog version string."
+    },
+    "tasks": {
+      "type": "array",
+      "description": "List of available automation tasks.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9_]+$",
+            "description": "Unique identifier for the task."
+          },
+          "title": {
+            "type": "string",
+            "description": "Human-readable name of the task."
+          },
+          "description": {
+            "type": "string",
+            "description": "Detailed explanation of what the task does."
+          },
+          "category": {
+            "type": "string",
+            "description": "Classification group for the task (e.g., Packages, Monitoring)."
+          },
+          "weight": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Execution or sorting priority weight."
+          },
+          "files": {
+            "type": "array",
+            "description": "List of script or configuration filenames associated with the task.",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "description",
+          "category",
+          "weight",
+          "files"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "name",
+    "description",
+    "version",
+    "tasks"
+  ],
+  "additionalProperties": false
+}
