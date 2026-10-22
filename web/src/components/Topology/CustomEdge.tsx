@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { BaseEdge, EdgeLabelRenderer, EdgeProps, getBezierPath } from "@xyflow/react";
 import { Box, Typography } from "@mui/material";
 import { Link } from "../../types/api";
@@ -16,6 +16,14 @@ export interface CustomEdgeData {
   fromCost?: number;
   toCost?: number;
   onSelect: (link: Link) => void;
+  isIntraBlock?: boolean;
+  isInterBlock?: boolean;
+  isExpandedInterBlock?: boolean;
+  isSubtle?: boolean;
+  isGhostDrag?: boolean;
+  isHighlighted?: boolean;
+  isDimmed?: boolean;
+  zoomLevel?: number;
   [key: string]: unknown;
 }
 
@@ -52,23 +60,21 @@ export const CustomEdge: React.FC<EdgeProps> = ({
   const totalLinksInPair = (edgeData?.totalLinksInPair as number) || 1;
   const linkIndexInPair = (edgeData?.linkIndexInPair as number) || 0;
 
+  const isSubtle = Boolean(edgeData?.isSubtle);
+  const isGhostDrag = Boolean(edgeData?.isGhostDrag);
+  const isHighlighted = Boolean(edgeData?.isHighlighted);
+  const isDimmed = Boolean(edgeData?.isDimmed);
+  const zoomLevel = edgeData?.zoomLevel ?? 1;
+
+  const [isHovered, setIsHovered] = useState(false);
+
   const fromCost =
-    typeof edgeData?.fromCost === "number"
-      ? edgeData.fromCost
-      : getEffectiveLinkCost(link?.from, isExternal);
-  const toCost =
-    typeof edgeData?.toCost === "number"
-      ? edgeData.toCost
-      : getEffectiveLinkCost(link?.to, isExternal);
+    typeof edgeData?.fromCost === "number" ? edgeData.fromCost : getEffectiveLinkCost(link?.from, isExternal);
+  const toCost = typeof edgeData?.toCost === "number" ? edgeData.toCost : getEffectiveLinkCost(link?.to, isExternal);
 
   const isFromCostOverridden = Boolean(link?.from?.cost && link.from.cost !== 0);
   const isToCostOverridden = Boolean(link?.to?.cost && link.to.cost !== 0);
 
-  // In WireGuard links, interface names are named after the peer (wg42<peer>),
-  // so link.from.interface (e.g. wg42foo) is on node bar pointing to node foo,
-  // which users associate with the "foo" end of the link.
-  // The egress cost from the node represented on the left towards the right node is leftCost (pointing →),
-  // and the egress cost from the node represented on the right towards the left node is rightCost (pointing ←).
   const fromIface = (link?.from?.interface || "").toLowerCase();
   const toName = (link?.to?.name || "").toLowerCase();
   const fromName = (link?.from?.name || "").toLowerCase();
@@ -81,8 +87,11 @@ export const CustomEdge: React.FC<EdgeProps> = ({
   const rightCost = leftRepresentsTo ? fromCost : toCost;
   const isLeftCostOverridden = leftRepresentsTo ? isToCostOverridden : isFromCostOverridden;
   const isRightCostOverridden = leftRepresentsTo ? isFromCostOverridden : isToCostOverridden;
-  const leftNodeName = leftRepresentsTo ? (link?.to?.name || "Left") : (link?.from?.name || "Left");
-  const rightNodeName = leftRepresentsTo ? (link?.from?.name || "Right") : (link?.to?.name || "Right");
+  const leftNodeName = leftRepresentsTo ? link?.to?.name || "Left" : link?.from?.name || "Left";
+  const rightNodeName = leftRepresentsTo ? link?.from?.name || "Right" : link?.to?.name || "Right";
+
+  // Distance calculation for distance-based fading of long crossing links
+  const euclideanDist = Math.hypot(targetX - sourceX, targetY - sourceY);
 
   let edgePath: string;
   let labelX: number;
@@ -118,7 +127,7 @@ export const CustomEdge: React.FC<EdgeProps> = ({
     labelY = bLabelY;
   }
 
-  // Determine styles according to derived working state and link type
+  // Determine base styles according to derived working state and link type
   let strokeColor = "#94A3B8";
   let strokeWidth = 2;
   let strokeDasharray: string | undefined = isExternal ? "6 4" : "4 4";
@@ -126,6 +135,7 @@ export const CustomEdge: React.FC<EdgeProps> = ({
   let pillBgColor = "#FFFFFF";
   let dotColor = "#94A3B8";
   let statusText = isExternal ? "External" : "Idle";
+  let edgeOpacity = 1.0;
 
   if (isManual) {
     strokeColor = "#7C3AED";
@@ -174,6 +184,60 @@ export const CustomEdge: React.FC<EdgeProps> = ({
     statusText = "Down";
   }
 
+  // Visual Hierarchy Overrides:
+  if (isGhostDrag) {
+    // Rubber-band ghost cable while dragging node
+    strokeColor = "#6366F1";
+    strokeWidth = 2.8;
+    strokeDasharray = "5 4";
+    edgeOpacity = 1.0;
+  } else if (isHighlighted || isHovered) {
+    // Focused or hovered: high-contrast, thick, fully visible
+    strokeWidth = 2.8;
+    edgeOpacity = 1.0;
+  } else if (isDimmed) {
+    // Dimmed canvas elements when another node/block is focused
+    edgeOpacity = 0.05;
+    strokeWidth = 1;
+  } else if (isSubtle) {
+    // Default displayed intra-group & expanded inter-group links:
+    // Retain semantic health status color (emerald for active, red for down, violet for manual),
+    // rendered with clean, distinct visibility rather than a faint dingy gray.
+    let baseSubtleOpacity = 0.40;
+    if (euclideanDist > 350) {
+      baseSubtleOpacity = Math.max(0.24, 0.40 - ((euclideanDist - 350) / 600) * 0.16);
+    }
+    // In Micro zoom (zoom > 1.0), increase clarity of intra-group links
+    if (zoomLevel > 1.0) {
+      baseSubtleOpacity = Math.min(0.75, baseSubtleOpacity * 1.8);
+    }
+    edgeOpacity = baseSubtleOpacity;
+
+    if (workingState === "working") {
+      strokeColor = "#10B981"; // Vibrant Emerald (Active WireGuard mesh)
+      strokeWidth = 1.6;
+      strokeDasharray = undefined;
+    } else if (workingState === "not_working") {
+      strokeColor = "#EF4444"; // Vivid Red (Down / Broken link)
+      strokeWidth = 1.8;
+      strokeDasharray = "5 3";
+    } else if (isManual) {
+      strokeColor = "#8B5CF6"; // Distinct Violet (Manual / BGP link)
+      strokeWidth = 1.6;
+      strokeDasharray = "5 3";
+    } else if (isExternal) {
+      strokeColor = "#8B5CF6"; // External Link
+      strokeWidth = 1.6;
+      strokeDasharray = "6 4";
+    } else {
+      strokeColor = "#6366F1"; // Crisp Indigo for Idle / Configured
+      strokeWidth = 1.5;
+      strokeDasharray = "4 4";
+    }
+  }
+
+  const shouldRenderPill = (!isSubtle || isHighlighted || isHovered || isGhostDrag) && !isDimmed;
+
   return (
     <>
       <BaseEdge
@@ -185,198 +249,225 @@ export const CustomEdge: React.FC<EdgeProps> = ({
           strokeWidth,
           stroke: strokeColor,
           strokeDasharray,
+          strokeLinecap: "round",
+          strokeOpacity: edgeOpacity,
           cursor: "pointer",
           pointerEvents: "all",
-          transition: "stroke 0.2s ease, stroke-width 0.2s ease",
+          transition: "stroke 0.2s ease, stroke-width 0.2s ease, stroke-opacity 0.2s ease",
         }}
       />
-      <EdgeLabelRenderer>
-        <Box
+
+      {/* Invisible wider stroke for easy hover detection on subtle edges */}
+      {isSubtle && !shouldRenderPill && (
+        <path
+          d={edgePath}
+          fill="none"
+          stroke="transparent"
+          strokeWidth={14}
+          style={{ cursor: "pointer", pointerEvents: "stroke" }}
+          onMouseEnter={() => setIsHovered(true)}
+          onMouseLeave={() => setIsHovered(false)}
           onClick={(e) => {
             e.stopPropagation();
             if (link && edgeData.onSelect) {
               edgeData.onSelect(link);
             }
           }}
-          style={{
-            position: "absolute",
-            transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
-            pointerEvents: "all",
-            zIndex: 1000,
-          }}
-          sx={{
-            cursor: "pointer",
-            backgroundColor: pillBgColor,
-            border: "1px solid",
-            borderColor: pillBorderColor,
-            borderRadius: 2,
-            px: 1.2,
-            py: 0.4,
-            boxShadow: "0 2px 5px rgba(0, 0, 0, 0.06)",
-            transition: "all 0.15s ease",
-            display: "flex",
-            alignItems: "center",
-            gap: 1,
-            "&:hover": {
-              borderColor: strokeColor,
-              transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px) scale(1.06)`,
-              boxShadow: "0 4px 10px rgba(0, 0, 0, 0.12)",
-            },
-          }}
-        >
-          {link ? (
-            <>
-              {/* Working State Status Dot */}
-              <Box
-                sx={{
-                  width: 7,
-                  height: 7,
-                  borderRadius: "50%",
-                  backgroundColor: dotColor,
-                  boxShadow: workingState === "working" ? "0 0 6px #10B981" : undefined,
-                  flexShrink: 0,
-                }}
-              />
+        />
+      )}
 
-              <Box
-                sx={{
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                {/* Interface names: wg42foo <-> wg42bar */}
-                <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, lineHeight: 1.2 }}>
-                  <Typography
-                    variant="caption"
-                    className="mono-font"
-                    sx={{ fontSize: "0.66rem", fontWeight: 600, color: "#1E293B", lineHeight: 1.2 }}
-                  >
-                    {link.from.interface}
-                  </Typography>
-                  <Typography variant="caption" sx={{ color: "#94A3B8", fontSize: "0.55rem", lineHeight: 1.2 }}>
-                    ↔
-                  </Typography>
-                  <Typography
-                    variant="caption"
-                    className="mono-font"
-                    sx={{ fontSize: "0.66rem", fontWeight: 600, color: "#1E293B", lineHeight: 1.2 }}
-                  >
-                    {link.to.interface}
-                  </Typography>
-                </Box>
-
-                {/* Link Cost display below the wg42foo <-> wg42bar label */}
+      {shouldRenderPill && (
+        <EdgeLabelRenderer>
+          <Box
+            onClick={(e) => {
+              e.stopPropagation();
+              if (link && edgeData.onSelect) {
+                edgeData.onSelect(link);
+              }
+            }}
+            onMouseEnter={() => setIsHovered(true)}
+            onMouseLeave={() => setIsHovered(false)}
+            style={{
+              position: "absolute",
+              transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
+              pointerEvents: "all",
+              zIndex: isHighlighted || isHovered ? 1200 : 900,
+            }}
+            sx={{
+              cursor: "pointer",
+              backgroundColor: pillBgColor,
+              border: "1px solid",
+              borderColor: isHighlighted || isHovered ? strokeColor : pillBorderColor,
+              borderRadius: 2,
+              px: 1.2,
+              py: 0.4,
+              boxShadow: isHighlighted || isHovered ? `0 4px 14px ${strokeColor}40` : "0 2px 5px rgba(0, 0, 0, 0.06)",
+              transition: "all 0.15s ease",
+              display: "flex",
+              alignItems: "center",
+              gap: 1,
+              opacity: isDimmed ? 0.2 : 1,
+              "&:hover": {
+                borderColor: strokeColor,
+                transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px) scale(1.06)`,
+                boxShadow: "0 4px 12px rgba(0, 0, 0, 0.14)",
+              },
+            }}
+          >
+            {link ? (
+              <>
+                {/* Working State Status Dot */}
                 <Box
-                  data-testid="link-cost"
+                  sx={{
+                    width: 7,
+                    height: 7,
+                    borderRadius: "50%",
+                    backgroundColor: dotColor,
+                    boxShadow: workingState === "working" ? "0 0 6px #10B981" : undefined,
+                    flexShrink: 0,
+                  }}
+                />
+
+                <Box
                   sx={{
                     display: "flex",
+                    flexDirection: "column",
                     alignItems: "center",
-                    gap: 0.35,
-                    mt: 0.15,
-                    lineHeight: 1,
+                    justifyContent: "center",
                   }}
-                  title={
-                    leftCost === rightCost
-                      ? `Cost: ${leftCost}`
-                      : `Cost: ${leftNodeName} → ${rightNodeName}: ${leftCost}, ${rightNodeName} → ${leftNodeName}: ${rightCost}`
-                  }
                 >
-                  {leftCost === rightCost ? (
+                  {/* Interface names: wg42foo <-> wg42bar */}
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, lineHeight: 1.2 }}>
                     <Typography
                       variant="caption"
                       className="mono-font"
-                      sx={{
-                        fontSize: "0.60rem",
-                        fontWeight: 600,
-                        color: isLeftCostOverridden || isRightCostOverridden ? "#D97706" : "#64748B",
-                        lineHeight: 1,
-                      }}
+                      sx={{ fontSize: "0.66rem", fontWeight: 600, color: "#1E293B", lineHeight: 1.2 }}
                     >
-                      {leftCost}
+                      {link.from.interface}
                     </Typography>
-                  ) : (
-                    <>
+                    <Typography variant="caption" sx={{ color: "#94A3B8", fontSize: "0.55rem", lineHeight: 1.2 }}>
+                      ↔
+                    </Typography>
+                    <Typography
+                      variant="caption"
+                      className="mono-font"
+                      sx={{ fontSize: "0.66rem", fontWeight: 600, color: "#1E293B", lineHeight: 1.2 }}
+                    >
+                      {link.to.interface}
+                    </Typography>
+                  </Box>
+
+                  {/* Link Cost display below the wg42foo <-> wg42bar label */}
+                  <Box
+                    data-testid="link-cost"
+                    sx={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 0.35,
+                      mt: 0.15,
+                      lineHeight: 1,
+                    }}
+                    title={
+                      leftCost === rightCost
+                        ? `Cost: ${leftCost}`
+                        : `Cost: ${leftNodeName} → ${rightNodeName}: ${leftCost}, ${rightNodeName} → ${leftNodeName}: ${rightCost}`
+                    }
+                  >
+                    {leftCost === rightCost ? (
                       <Typography
                         variant="caption"
                         className="mono-font"
                         sx={{
                           fontSize: "0.60rem",
                           fontWeight: 600,
-                          color: isLeftCostOverridden ? "#D97706" : "#64748B",
+                          color: isLeftCostOverridden || isRightCostOverridden ? "#D97706" : "#64748B",
                           lineHeight: 1,
                         }}
                       >
                         {leftCost}
                       </Typography>
-                      <Typography
-                        variant="caption"
-                        sx={{
-                          fontSize: "0.55rem",
-                          fontWeight: 700,
-                          color: "#94A3B8",
-                          lineHeight: 1,
-                          userSelect: "none",
-                        }}
-                      >
-                        →
-                      </Typography>
-                      <Typography
-                        variant="caption"
-                        sx={{
-                          fontSize: "0.55rem",
-                          fontWeight: 700,
-                          color: "#94A3B8",
-                          lineHeight: 1,
-                          userSelect: "none",
-                        }}
-                      >
-                        ←
-                      </Typography>
-                      <Typography
-                        variant="caption"
-                        className="mono-font"
-                        sx={{
-                          fontSize: "0.60rem",
-                          fontWeight: 600,
-                          color: isRightCostOverridden ? "#D97706" : "#64748B",
-                          lineHeight: 1,
-                        }}
-                      >
-                        {rightCost}
-                      </Typography>
-                    </>
-                  )}
+                    ) : (
+                      <>
+                        <Typography
+                          variant="caption"
+                          className="mono-font"
+                          sx={{
+                            fontSize: "0.60rem",
+                            fontWeight: 600,
+                            color: isLeftCostOverridden ? "#D97706" : "#64748B",
+                            lineHeight: 1,
+                          }}
+                        >
+                          {leftCost}
+                        </Typography>
+                        <Typography
+                          variant="caption"
+                          sx={{
+                            fontSize: "0.55rem",
+                            fontWeight: 700,
+                            color: "#94A3B8",
+                            lineHeight: 1,
+                            userSelect: "none",
+                          }}
+                        >
+                          →
+                        </Typography>
+                        <Typography
+                          variant="caption"
+                          sx={{
+                            fontSize: "0.55rem",
+                            fontWeight: 700,
+                            color: "#94A3B8",
+                            lineHeight: 1,
+                            userSelect: "none",
+                          }}
+                        >
+                          ←
+                        </Typography>
+                        <Typography
+                          variant="caption"
+                          className="mono-font"
+                          sx={{
+                            fontSize: "0.60rem",
+                            fontWeight: 600,
+                            color: isRightCostOverridden ? "#D97706" : "#64748B",
+                            lineHeight: 1,
+                          }}
+                        >
+                          {rightCost}
+                        </Typography>
+                      </>
+                    )}
+                  </Box>
                 </Box>
-              </Box>
 
-              {/* Status Badge */}
-              <Box
-                sx={{
-                  fontSize: "0.62rem",
-                  fontWeight: 700,
-                  color: dotColor,
-                  borderRadius: 1,
-                  px: 0.5,
-                  py: 0.1,
-                  backgroundColor: "rgba(0,0,0,0.03)",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 0.3,
-                }}
-              >
-                {workingState === "working" && !isManual && "⚡"}
-                {statusText}
-              </Box>
-            </>
-          ) : (
-            <Typography variant="caption" sx={{ fontSize: "0.7rem", color: "#64748B" }}>
-              WG Link
-            </Typography>
-          )}
-        </Box>
-      </EdgeLabelRenderer>
+                {/* Status Badge */}
+                <Box
+                  sx={{
+                    fontSize: "0.62rem",
+                    fontWeight: 700,
+                    color: dotColor,
+                    borderRadius: 1,
+                    px: 0.5,
+                    py: 0.1,
+                    backgroundColor: "rgba(0,0,0,0.03)",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 0.3,
+                  }}
+                >
+                  {workingState === "working" && !isManual && "⚡"}
+                  {statusText}
+                </Box>
+              </>
+            ) : (
+              <Typography variant="caption" sx={{ fontSize: "0.7rem", color: "#64748B" }}>
+                WG Link
+              </Typography>
+            )}
+          </Box>
+        </EdgeLabelRenderer>
+      )}
     </>
   );
 };

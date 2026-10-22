@@ -51,6 +51,12 @@ export interface NodeData {
     reason?: string;
   };
   isFocused?: boolean;
+  isDimmed?: boolean;
+  isHighlighted?: boolean;
+  lodMode?: "macro" | "meso" | "micro";
+  totalLinksCount?: number;
+  intraBlockLinksCount?: number;
+  interBlockLinksCount?: number;
   onSelect?: (node: Node) => void;
   onRefreshNode?: (nodeName: string) => void;
   refreshingNodeName?: string | null;
@@ -69,6 +75,12 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
     isHealthy = true,
     healthDetails,
     isFocused,
+    isDimmed = false,
+    isHighlighted = false,
+    lodMode = "meso",
+    totalLinksCount = 0,
+    intraBlockLinksCount = 0,
+    interBlockLinksCount = 0,
     onRefreshNode,
     refreshingNodeName,
   } = nodeData;
@@ -78,6 +90,76 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
   const isAgentConfigured = node.mode === "agent" || Boolean(node.agent_token);
   const isAgentMode = status?.mode === "agent" || isAgentConfigured;
   const isAgentWorking = isAgentMode && isOnline && !isExternal;
+
+  // Macro View: Simplified compact node representation
+  if (lodMode === "macro") {
+    return (
+      <Box
+        sx={{
+          width: 155,
+          height: 44,
+          backgroundColor: !isOnline ? "#FEF2F2" : "#FFFFFF",
+          border: isFocused || isHighlighted
+            ? "2px solid #4F46E5"
+            : isExternal
+              ? "2px dashed #8B5CF6"
+              : !isOnline
+                ? "1.5px solid #EF4444"
+                : "1.5px solid #CBD5E1",
+          borderRadius: 2,
+          boxShadow: isFocused || isHighlighted
+            ? "0 0 0 3px rgba(79, 70, 229, 0.25)"
+            : "0 2px 6px rgba(0,0,0,0.06)",
+          display: "flex",
+          alignItems: "center",
+          px: 1,
+          gap: 0.75,
+          cursor: "pointer",
+          opacity: isDimmed ? 0.3 : 1,
+          transition: "all 0.2s ease",
+        }}
+      >
+        <Handle
+          type="target"
+          position={Position.Left}
+          id="target"
+          style={{ width: 6, height: 6, backgroundColor: "#4F46E5" }}
+        />
+        <Handle
+          type="source"
+          position={Position.Right}
+          id="source"
+          style={{ width: 6, height: 6, backgroundColor: "#0891B2" }}
+        />
+        <Box
+          sx={{
+            width: 8,
+            height: 8,
+            borderRadius: "50%",
+            backgroundColor: isExternal ? "#8B5CF6" : isOnline ? "#10B981" : "#EF4444",
+            flexShrink: 0,
+          }}
+        />
+        <Typography variant="caption" noWrap sx={{ fontWeight: 700, color: "#0F172A", fontSize: "0.75rem", flex: 1 }}>
+          {node.name}
+        </Typography>
+        {totalLinksCount > 0 && (
+          <Chip
+            label={totalLinksCount}
+            size="small"
+            sx={{
+              height: 18,
+              fontSize: "0.62rem",
+              fontWeight: 700,
+              backgroundColor: "#EEF2FF",
+              color: "#4338CA",
+              borderRadius: 0.75,
+            }}
+          />
+        )}
+      </Box>
+    );
+  }
 
   return (
     <Box
@@ -91,7 +173,7 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
               : inBlock && !isBlockFullMesh
                 ? "#FAFBFD"
                 : "#FFFFFF",
-        border: isFocused
+        border: isFocused || isHighlighted
           ? "2px solid #4F46E5"
           : isExternal
             ? "2px dashed #8B5CF6"
@@ -110,12 +192,14 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
                   : "1.5px solid #E2E8F0",
         borderTop:
           inBlock && isBlockFullMesh
-            ? `4px solid ${isFocused ? "#4F46E5" : !isHealthy ? "#EF4444" : blockColor || "#6366F1"}`
+            ? `4px solid ${isFocused || isHighlighted ? "#4F46E5" : !isHealthy ? "#EF4444" : blockColor || "#6366F1"}`
             : isAgentWorking && (!inBlock || !isBlockFullMesh)
               ? "3px solid #10B981"
               : undefined,
         borderRadius: 2.5,
-        boxShadow: isFocused
+        opacity: isDimmed ? 0.3 : 1,
+        filter: isDimmed ? "grayscale(40%)" : "none",
+        boxShadow: isFocused || isHighlighted
           ? "0 0 0 3px rgba(79, 70, 229, 0.25), 0 12px 28px rgba(79, 70, 229, 0.2)"
           : inBlock && isBlockFullMesh && isHealthy
             ? `0 4px 14px ${blockColor || "#6366F1"}25, 0 1px 3px rgba(0, 0, 0, 0.05)`
@@ -446,7 +530,29 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
           </Box>
         </Box>
 
-        <Box sx={{ display: "flex", alignItems: "center", gap: 0.25 }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+          {totalLinksCount > 0 && (
+            <Tooltip
+              title={`${totalLinksCount} connection(s): ${intraBlockLinksCount} intra-group, ${interBlockLinksCount} inter-group`}
+              arrow
+            >
+              <Chip
+                icon={<Share2 size={10} color="#4F46E5" style={{ marginLeft: 3 }} />}
+                label={totalLinksCount}
+                size="small"
+                sx={{
+                  height: 18,
+                  fontSize: "0.62rem",
+                  fontWeight: 700,
+                  backgroundColor: "#EEF2FF",
+                  color: "#4338CA",
+                  border: "1px solid #C7D2FE",
+                  borderRadius: 1,
+                  px: 0.2,
+                }}
+              />
+            </Tooltip>
+          )}
           {onRefreshNode && !isExternal && (
             <Tooltip title={`Refresh state & links for ${node.name}`}>
               <IconButton

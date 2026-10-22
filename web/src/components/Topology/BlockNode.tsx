@@ -1,7 +1,20 @@
 import React, { memo, useState } from "react";
 import { NodeProps, NodeResizer, Handle, Position } from "@xyflow/react";
 import { Box, Typography, IconButton, Tooltip, TextField, Chip, Menu, MenuItem, Button } from "@mui/material";
-import { Layers, Trash2, Edit3, Check, EyeOff, AlertTriangle, Palette, Share2, CheckCircle2 } from "lucide-react";
+import {
+  Layers,
+  Trash2,
+  Edit3,
+  Check,
+  AlertTriangle,
+  Palette,
+  Share2,
+  CheckCircle2,
+  Sparkles,
+  Minimize2,
+  Maximize2,
+  Focus,
+} from "lucide-react";
 import { GraphBlock } from "../../types/api";
 
 export const BLOCK_PALETTE = [
@@ -21,10 +34,15 @@ export interface BlockNodeData {
   isFullMesh?: boolean;
   fullMeshCount?: number;
   healthyCount?: number;
+  isCollapsed?: boolean;
+  isGroupFocused?: boolean;
   onRenameBlock: (id: string, newName: string) => void;
   onDeleteBlock: (id: string) => void;
   onChangeColor: (id: string, color: string) => void;
   onCreateBlockFullMesh?: (id: string) => void;
+  onToggleCollapse?: (id: string) => void;
+  onTidyBlock?: (id: string) => void;
+  onFocusBlock?: (id: string) => void;
   [key: string]: unknown;
 }
 
@@ -37,10 +55,15 @@ export const BlockNode: React.FC<NodeProps> = memo(({ data, selected }) => {
     brokenLinkCount = 0,
     isFullMesh = false,
     healthyCount = 0,
+    isCollapsed = false,
+    isGroupFocused = false,
     onRenameBlock,
     onDeleteBlock,
     onChangeColor,
     onCreateBlockFullMesh,
+    onToggleCollapse,
+    onTidyBlock,
+    onFocusBlock,
   } = nodeData;
 
   const [isEditing, setIsEditing] = useState(false);
@@ -74,8 +97,187 @@ export const BlockNode: React.FC<NodeProps> = memo(({ data, selected }) => {
     }
   };
 
+  // If this group is collapsed into a Super-Node:
+  if (isCollapsed) {
+    return (
+      <Box
+        onClick={(e) => {
+          e.stopPropagation();
+          onFocusBlock?.(block.id);
+        }}
+        sx={{
+          width: 310,
+          height: 76,
+          position: "relative",
+          borderRadius: 2.5,
+          border: `2px solid ${blockColor}`,
+          backgroundColor: "#FFFFFF",
+          boxShadow: isGroupFocused
+            ? `0 0 0 3px ${blockColor}40, 0 12px 28px rgba(0, 0, 0, 0.12)`
+            : "0 6px 18px rgba(0, 0, 0, 0.08)",
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "space-between",
+          p: 1.25,
+          cursor: "pointer",
+          userSelect: "none",
+          transition: "all 0.2s ease",
+          "&:hover": {
+            boxShadow: `0 8px 24px ${blockColor}30`,
+          },
+        }}
+      >
+        {/* Invisible Handles for connections */}
+        <Handle
+          type="source"
+          position={Position.Top}
+          id="block-source"
+          isConnectable={false}
+          style={{ top: "50%", left: "50%", transform: "translate(-50%, -50%)", opacity: 0 }}
+        />
+        <Handle
+          type="target"
+          position={Position.Top}
+          id="block-target"
+          isConnectable={false}
+          style={{ top: "50%", left: "50%", transform: "translate(-50%, -50%)", opacity: 0 }}
+        />
+
+        {/* Top row: Icon, Name, Expand Button */}
+        <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+            <Box
+              sx={{
+                width: 24,
+                height: 24,
+                borderRadius: 1,
+                backgroundColor: `${blockColor}20`,
+                color: blockColor,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Layers size={14} />
+            </Box>
+            <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0F172A", fontSize: "0.875rem" }}>
+              {block.name}
+            </Typography>
+            <Chip
+              label="Super-Node"
+              size="small"
+              sx={{
+                height: 18,
+                fontSize: "0.62rem",
+                fontWeight: 700,
+                backgroundColor: `${blockColor}15`,
+                color: blockColor,
+                borderRadius: 0.75,
+              }}
+            />
+          </Box>
+
+          <Tooltip title="Expand group container to show member nodes">
+            <IconButton
+              size="small"
+              className="nodrag"
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleCollapse?.(block.id);
+              }}
+              sx={{
+                width: 24,
+                height: 24,
+                color: "#64748B",
+                backgroundColor: "#F1F5F9",
+                "&:hover": { color: blockColor, backgroundColor: `${blockColor}20` },
+              }}
+            >
+              <Maximize2 size={13} />
+            </IconButton>
+          </Tooltip>
+        </Box>
+
+        {/* Bottom row: Statistics Chips */}
+        <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
+          <Chip
+            label={`${memberCount} nodes`}
+            size="small"
+            sx={{
+              height: 20,
+              fontSize: "0.68rem",
+              fontWeight: 700,
+              backgroundColor: "#F8FAFC",
+              color: "#334155",
+              border: "1px solid #E2E8F0",
+              borderRadius: 1,
+            }}
+          />
+
+          <Chip
+            icon={
+              healthyCount === memberCount && brokenLinkCount === 0 ? (
+                <CheckCircle2 size={10} color="#059669" style={{ marginLeft: 4 }} />
+              ) : (
+                <AlertTriangle size={10} color="#DC2626" style={{ marginLeft: 4 }} />
+              )
+            }
+            label={
+              healthyCount === memberCount && brokenLinkCount === 0
+                ? "All Healthy"
+                : `${memberCount - healthyCount} Degraded`
+            }
+            size="small"
+            sx={{
+              height: 20,
+              fontSize: "0.68rem",
+              fontWeight: 700,
+              backgroundColor: healthyCount === memberCount && brokenLinkCount === 0 ? "#ECFDF5" : "#FEF2F2",
+              color: healthyCount === memberCount && brokenLinkCount === 0 ? "#059669" : "#DC2626",
+              borderRadius: 1,
+            }}
+          />
+
+          {isFullMesh ? (
+            <Chip
+              label="Full-Mesh"
+              size="small"
+              sx={{
+                height: 20,
+                fontSize: "0.68rem",
+                fontWeight: 700,
+                backgroundColor: `${blockColor}15`,
+                color: blockColor,
+                borderRadius: 1,
+              }}
+            />
+          ) : hiddenLinkCount > 0 ? (
+            <Chip
+              label={`${hiddenLinkCount} links`}
+              size="small"
+              sx={{
+                height: 20,
+                fontSize: "0.68rem",
+                fontWeight: 600,
+                backgroundColor: "#F1F5F9",
+                color: "#64748B",
+                borderRadius: 1,
+              }}
+            />
+          ) : null}
+        </Box>
+      </Box>
+    );
+  }
+
   return (
     <Box
+      onClick={(e) => {
+        // Group-level focus when clicking background or header
+        if (e.target === e.currentTarget) {
+          onFocusBlock?.(block.id);
+        }
+      }}
       sx={{
         width: "100%",
         height: "100%",
@@ -83,12 +285,18 @@ export const BlockNode: React.FC<NodeProps> = memo(({ data, selected }) => {
         minHeight: 180,
         position: "relative",
         borderRadius: 3,
-        border: selected ? `2px solid ${blockColor}` : `2px dashed ${blockColor}`,
-        backgroundColor: paletteMatch.bg,
-        boxShadow: selected
-          ? `0 0 0 1px ${blockColor}, 0 10px 25px -5px rgba(0, 0, 0, 0.08)`
-          : "0 4px 12px rgba(0, 0, 0, 0.02)",
-        transition: "border-color 0.2s, box-shadow 0.2s",
+        border: isGroupFocused
+          ? `2.5px solid ${blockColor}`
+          : selected
+            ? `2px solid ${blockColor}`
+            : `2px dashed ${blockColor}`,
+        backgroundColor: isGroupFocused ? `${blockColor}0A` : paletteMatch.bg,
+        boxShadow: isGroupFocused
+          ? `0 0 0 3px ${blockColor}30, 0 12px 28px rgba(0, 0, 0, 0.08)`
+          : selected
+            ? `0 0 0 1px ${blockColor}, 0 10px 25px -5px rgba(0, 0, 0, 0.08)`
+            : "0 4px 12px rgba(0, 0, 0, 0.02)",
+        transition: "border-color 0.2s, box-shadow 0.2s, background-color 0.2s",
         display: "flex",
         flexDirection: "column",
         userSelect: "none",
@@ -143,11 +351,12 @@ export const BlockNode: React.FC<NodeProps> = memo(({ data, selected }) => {
       {/* Block Header */}
       <Box
         className="block-header"
+        onClick={() => onFocusBlock?.(block.id)}
         sx={{
           px: 1.75,
           py: 1.25,
           borderBottom: `1px solid ${blockColor}25`,
-          backgroundColor: `${blockColor}12`,
+          backgroundColor: isGroupFocused ? `${blockColor}22` : `${blockColor}12`,
           borderTopLeftRadius: 10,
           borderTopRightRadius: 10,
           display: "flex",
@@ -216,7 +425,7 @@ export const BlockNode: React.FC<NodeProps> = memo(({ data, selected }) => {
                   fontWeight: 700,
                   color: "#0F172A",
                   fontSize: "0.875rem",
-                  maxWidth: 180,
+                  maxWidth: 160,
                 }}
               >
                 {block.name}
@@ -227,6 +436,22 @@ export const BlockNode: React.FC<NodeProps> = memo(({ data, selected }) => {
                 style={{ opacity: 0.3, transition: "opacity 0.15s", color: "#64748B" }}
               />
             </Box>
+          )}
+
+          {isGroupFocused && (
+            <Chip
+              label="Focused"
+              size="small"
+              icon={<Focus size={11} color={blockColor} />}
+              sx={{
+                height: 18,
+                fontSize: "0.62rem",
+                fontWeight: 700,
+                backgroundColor: `${blockColor}25`,
+                color: blockColor,
+                borderRadius: 0.75,
+              }}
+            />
           )}
         </Box>
 
@@ -296,7 +521,7 @@ export const BlockNode: React.FC<NodeProps> = memo(({ data, selected }) => {
                   },
                 }}
               >
-                + Full Mesh
+                +FM
               </Button>
             </Tooltip>
           )}
@@ -337,45 +562,49 @@ export const BlockNode: React.FC<NodeProps> = memo(({ data, selected }) => {
             </Tooltip>
           )}
 
-          {/* Hidden Links Badge */}
-          {hiddenLinkCount > 0 && (
-            <Tooltip
-              title={`${hiddenLinkCount} intra-block mesh link(s) hidden to keep graph clean. Click any node to focus & inspect its links.`}
-            >
-              <Chip
-                icon={<EyeOff size={11} color="#64748B" style={{ marginLeft: 4 }} />}
-                label={`${hiddenLinkCount} hidden`}
+          {/* Tidy Group Button (Local Auto-Layout) */}
+          {memberCount > 1 && onTidyBlock && (
+            <Tooltip title="Tidy Group (arrange member nodes in a clean, neat grid)">
+              <IconButton
                 size="small"
-                sx={{
-                  height: 20,
-                  fontSize: "0.68rem",
-                  fontWeight: 600,
-                  backgroundColor: "#F1F5F9",
-                  color: "#64748B",
-                  borderRadius: 1,
-                  border: "1px solid #E2E8F0",
+                className="nodrag"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onTidyBlock(block.id);
                 }}
-              />
+                sx={{
+                  width: 22,
+                  height: 22,
+                  p: 0,
+                  color: "#64748B",
+                  "&:hover": { color: blockColor, backgroundColor: `${blockColor}20` },
+                }}
+              >
+                <Sparkles size={13} />
+              </IconButton>
             </Tooltip>
           )}
 
-          {/* Broken Links Alert */}
-          {brokenLinkCount > 0 && (
-            <Tooltip title={`${brokenLinkCount} intra-block link(s) down or unreachable!`}>
-              <Chip
-                icon={<AlertTriangle size={11} color="#DC2626" style={{ marginLeft: 4 }} />}
-                label={`${brokenLinkCount} down`}
+          {/* Collapse Super-Node Button */}
+          {onToggleCollapse && (
+            <Tooltip title="Collapse into compact Super-Node">
+              <IconButton
                 size="small"
-                sx={{
-                  height: 20,
-                  fontSize: "0.68rem",
-                  fontWeight: 700,
-                  backgroundColor: "#FEE2E2",
-                  color: "#DC2626",
-                  borderRadius: 1,
-                  border: "1px solid #FECDD3",
+                className="nodrag"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggleCollapse(block.id);
                 }}
-              />
+                sx={{
+                  width: 22,
+                  height: 22,
+                  p: 0,
+                  color: "#64748B",
+                  "&:hover": { color: blockColor, backgroundColor: `${blockColor}20` },
+                }}
+              >
+                <Minimize2 size={13} />
+              </IconButton>
             </Tooltip>
           )}
 
@@ -405,11 +634,13 @@ export const BlockNode: React.FC<NodeProps> = memo(({ data, selected }) => {
             open={Boolean(paletteAnchor)}
             onClose={() => setPaletteAnchor(null)}
             className="nodrag"
-            PaperProps={{
-              sx: {
-                p: 0.5,
-                borderRadius: 2,
-                boxShadow: "0 8px 16px rgba(0,0,0,0.1)",
+            slotProps={{
+              paper: {
+                sx: {
+                  p: 0.5,
+                  borderRadius: 2,
+                  boxShadow: "0 8px 16px rgba(0,0,0,0.1)",
+                },
               },
             }}
           >
@@ -494,7 +725,7 @@ export const BlockNode: React.FC<NodeProps> = memo(({ data, selected }) => {
               Drag and drop nodes here to group
             </Typography>
             <Typography variant="caption" sx={{ color: "#94A3B8", fontSize: "0.68rem" }}>
-              Mesh links inside this block will be auto-hidden
+              Intra-group links render as subtle background texture
             </Typography>
           </Box>
         )}

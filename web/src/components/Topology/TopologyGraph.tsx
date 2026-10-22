@@ -18,8 +18,37 @@ import {
   OnMoveEnd,
   NodeChange,
 } from "@xyflow/react";
-import { Box, Typography, Button, Chip, Tooltip, Divider, FormControl, Select, MenuItem, Menu, Autocomplete, TextField } from "@mui/material";
-import { Network, Layers, EyeOff, X, Eye, Maximize2, Plus, Link as LinkIcon, Share2, ChevronDown, Search } from "lucide-react";
+import {
+  Box,
+  Typography,
+  Button,
+  Chip,
+  Tooltip,
+  Divider,
+  FormControl,
+  Select,
+  MenuItem,
+  Menu,
+  Autocomplete,
+  TextField,
+} from "@mui/material";
+import {
+  Network,
+  Layers,
+  EyeOff,
+  X,
+  Maximize2,
+  Minimize2,
+  Plus,
+  Link as LinkIcon,
+  Share2,
+  ChevronDown,
+  Search,
+  Focus,
+  UnfoldVertical,
+  FoldVertical,
+  Check,
+} from "lucide-react";
 import { NodeCard } from "./NodeCard";
 import { CustomEdge } from "./CustomEdge";
 import { BlockNode, BLOCK_PALETTE } from "./BlockNode";
@@ -32,6 +61,22 @@ const STORAGE_KEY_VIEWPORT = "easy42_graph_viewport";
 const STORAGE_KEY_ZOOM = "easy42_graph_zoom";
 const STORAGE_KEY_BLOCKS = "easy42_graph_blocks_v1";
 const STORAGE_KEY_NODE_BLOCKS = "easy42_node_blocks_v1";
+const STORAGE_KEY_EXPANDED_PAIRS = "easy42_expanded_virtual_edge_pairs_v1";
+
+const getStoredExpandedPairs = (): Set<string> => {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_EXPANDED_PAIRS);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        return new Set(parsed);
+      }
+    }
+  } catch (e) {
+    console.error("Failed to load expanded virtual edge pairs from localStorage", e);
+  }
+  return new Set();
+};
 
 const getStoredViewport = (): Viewport | undefined => {
   try {
@@ -380,10 +425,18 @@ interface FloatingToolbarProps {
   selectedTag?: string;
   onSelectTag?: (tag: string) => void;
   uniqueTags?: string[];
-  focusedNodeName: string | null;
+  pinnedNodeNames: Set<string>;
+  focusedBlockName: string | null;
+  hopDepth: 1 | 2 | 3;
+  onSetHopDepth: (depth: 1 | 2 | 3) => void;
   onClearFocus: () => void;
   blocksCount: number;
   hiddenLinksCount: number;
+  lodMode: "macro" | "meso" | "micro";
+  onExpandAllBundles?: () => void;
+  onCollapseAllBundles?: () => void;
+  onExpandAllGroups?: () => void;
+  onCollapseAllGroups?: () => void;
 }
 
 const FloatingToolbar: React.FC<FloatingToolbarProps> = ({
@@ -399,14 +452,23 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = ({
   selectedTag,
   onSelectTag,
   uniqueTags = [],
-  focusedNodeName,
+  pinnedNodeNames,
+  focusedBlockName,
+  hopDepth,
+  onSetHopDepth,
   onClearFocus,
   blocksCount,
   hiddenLinksCount,
+  lodMode,
+  onExpandAllBundles,
+  onCollapseAllBundles,
+  onExpandAllGroups,
+  onCollapseAllGroups,
 }) => {
-  const { fitView } = useReactFlow();
+  const { fitView, zoomTo } = useReactFlow();
   const [addMenuAnchor, setAddMenuAnchor] = useState<null | HTMLElement>(null);
   const [fitMenuAnchor, setFitMenuAnchor] = useState<null | HTMLElement>(null);
+  const [lodMenuAnchor, setLodMenuAnchor] = useState<null | HTMLElement>(null);
   const [locateInputValue, setLocateInputValue] = useState("");
 
   const MAX_RECENT_COUNT = 5;
@@ -434,9 +496,7 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = ({
     }
 
     const recentSet = new Set(recent.map((n) => n.name));
-    const remaining = nodes
-      .filter((n) => !recentSet.has(n.name))
-      .sort((a, b) => a.name.localeCompare(b.name));
+    const remaining = nodes.filter((n) => !recentSet.has(n.name)).sort((a, b) => a.name.localeCompare(b.name));
 
     return {
       sortedNodes: [...recent, ...remaining],
@@ -463,7 +523,7 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = ({
         onSelectNode(targetNode);
       }
     },
-    [fitView, onFocusNode, onSelectNode]
+    [fitView, onFocusNode, onSelectNode],
   );
 
   return (
@@ -763,10 +823,7 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = ({
                 for (const n of options) {
                   if (n.name.toLowerCase().startsWith(q)) {
                     prefixMatches.push(n);
-                  } else if (
-                    n.name.toLowerCase().includes(q) ||
-                    (n.ip && n.ip.toLowerCase().includes(q))
-                  ) {
+                  } else if (n.name.toLowerCase().includes(q) || (n.ip && n.ip.toLowerCase().includes(q))) {
                     otherMatches.push(n);
                   }
                 }
@@ -932,29 +989,70 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = ({
         )}
 
         {/* Node Focus & Collapsed Stats */}
-        {(focusedNodeName || blocksCount > 0) && (
+        {(pinnedNodeNames.size > 0 || focusedBlockName || blocksCount > 0 || lodMode) && (
           <Divider orientation="vertical" flexItem sx={{ mx: 0.5, my: 0.5, borderColor: "#E2E8F0" }} />
         )}
 
-        {/* Focused Node Banner */}
-        {focusedNodeName && (
+        {/* Pinned Nodes with N-Hop Depth Slider */}
+        {pinnedNodeNames.size > 0 && (
           <Box
             sx={{
               display: "flex",
               alignItems: "center",
-              gap: 0.75,
+              gap: 1,
               backgroundColor: "#EEF2FF",
               border: "1px solid #C7D2FE",
-              borderRadius: 1.75,
-              px: 1.2,
+              borderRadius: 2,
+              px: 1.25,
               py: 0.35,
             }}
           >
-            <Eye size={13} color="#4F46E5" />
+            <Focus size={13} color="#4F46E5" />
             <Typography variant="caption" sx={{ fontWeight: 700, color: "#3730A3" }}>
-              Focus: {focusedNodeName}
+              Pinned: {Array.from(pinnedNodeNames).join(", ")}
             </Typography>
-            <Tooltip title="Clear node focus (or press Escape)">
+
+            <Divider orientation="vertical" flexItem sx={{ mx: 0.5, borderColor: "#C7D2FE" }} />
+
+            {/* N-Hop Depth Slider / Button Group */}
+            <Box sx={{ display: "flex", alignItems: "center", gap: 0.25 }}>
+              <Typography variant="caption" sx={{ fontSize: "0.65rem", fontWeight: 700, color: "#6366F1", mr: 0.25 }}>
+                Depth:
+              </Typography>
+              {([1, 2, 3] as const).map((depth) => {
+                const label = depth === 1 ? "1 Hop" : depth === 2 ? "2 Hops" : "Full Path";
+                const isSelected = hopDepth === depth;
+                return (
+                  <Button
+                    key={depth}
+                    size="small"
+                    variant={isSelected ? "contained" : "text"}
+                    onClick={() => onSetHopDepth(depth)}
+                    sx={{
+                      height: 20,
+                      minWidth: "auto",
+                      px: 0.75,
+                      py: 0,
+                      fontSize: "0.65rem",
+                      fontWeight: 700,
+                      textTransform: "none",
+                      borderRadius: 1,
+                      backgroundColor: isSelected ? "#4F46E5" : "transparent",
+                      color: isSelected ? "#FFFFFF" : "#6366F1",
+                      boxShadow: "none",
+                      "&:hover": {
+                        backgroundColor: isSelected ? "#4338CA" : "rgba(79, 70, 229, 0.08)",
+                        boxShadow: "none",
+                      },
+                    }}
+                  >
+                    {label}
+                  </Button>
+                );
+              })}
+            </Box>
+
+            <Tooltip title="Clear pin & focus (Esc)">
               <Box
                 onClick={onClearFocus}
                 sx={{
@@ -962,6 +1060,7 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = ({
                   display: "flex",
                   alignItems: "center",
                   color: "#6366F1",
+                  ml: 0.5,
                   "&:hover": { color: "#312E81" },
                 }}
               >
@@ -971,14 +1070,323 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = ({
           </Box>
         )}
 
+        {/* Group-Level Focus Banner */}
+        {focusedBlockName && (
+          <Box
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              gap: 0.75,
+              backgroundColor: "#FAF5FF",
+              border: "1px solid #E9D5FF",
+              borderRadius: 2,
+              px: 1.25,
+              py: 0.35,
+            }}
+          >
+            <Layers size={13} color="#9333EA" />
+            <Typography variant="caption" sx={{ fontWeight: 700, color: "#6B21A8" }}>
+              Group: {focusedBlockName}
+            </Typography>
+            <Tooltip title="Clear group focus (Esc)">
+              <Box
+                onClick={onClearFocus}
+                sx={{
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  color: "#A855F7",
+                  "&:hover": { color: "#581C87" },
+                }}
+              >
+                <X size={13} />
+              </Box>
+            </Tooltip>
+          </Box>
+        )}
+
+        {/* Semantic Zoom LOD Dropdown Menu */}
+        <Button
+          size="small"
+          variant="outlined"
+          onClick={(e) => setLodMenuAnchor(e.currentTarget)}
+          endIcon={<ChevronDown size={12} />}
+          sx={{
+            height: 28,
+            fontSize: "0.72rem",
+            fontWeight: 700,
+            textTransform: "none",
+            borderRadius: 1.75,
+            px: 1,
+            py: 0.25,
+            backgroundColor: lodMode === "micro" ? "#EFF6FF" : lodMode === "macro" ? "#F5F3FF" : "#F8FAFC",
+            color: lodMode === "micro" ? "#2563EB" : lodMode === "macro" ? "#7C3AED" : "#475569",
+            border: "1px solid",
+            borderColor: lodMode === "micro" ? "#BFDBFE" : lodMode === "macro" ? "#DDD6FE" : "#CBD5E1",
+            "&:hover": {
+              backgroundColor: lodMode === "micro" ? "#DBEAFE" : lodMode === "macro" ? "#EDE9FE" : "#F1F5F9",
+              borderColor: lodMode === "micro" ? "#93C5FD" : lodMode === "macro" ? "#C4B5FD" : "#94A3B8",
+            },
+          }}
+        >
+          LOD: {lodMode === "macro" ? "Macro" : lodMode === "micro" ? "Micro" : "Meso"}
+        </Button>
+
+        <Menu
+          anchorEl={lodMenuAnchor}
+          open={Boolean(lodMenuAnchor)}
+          onClose={() => setLodMenuAnchor(null)}
+          PaperProps={{
+            sx: {
+              mt: 0.75,
+              minWidth: 230,
+              borderRadius: 2,
+              boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05)",
+              border: "1px solid #E2E8F0",
+              p: 0.75,
+            },
+          }}
+        >
+          <Box sx={{ px: 1, py: 0.5 }}>
+            <Typography
+              variant="caption"
+              sx={{
+                fontSize: "0.65rem",
+                fontWeight: 700,
+                color: "#94A3B8",
+                textTransform: "uppercase",
+                letterSpacing: "0.05em",
+              }}
+            >
+              Zoom Level of Detail
+            </Typography>
+          </Box>
+
+          <MenuItem
+            onClick={() => {
+              setLodMenuAnchor(null);
+              zoomTo(0.42, { duration: 400 });
+            }}
+            sx={{
+              borderRadius: 1.25,
+              py: 0.75,
+              px: 1,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              fontSize: "0.82rem",
+              fontWeight: lodMode === "macro" ? 700 : 500,
+              color: lodMode === "macro" ? "#7C3AED" : "#1E293B",
+              backgroundColor: lodMode === "macro" ? "rgba(124, 58, 237, 0.08)" : "transparent",
+              "&:hover": { bgcolor: "#F5F3FF" },
+            }}
+          >
+            <Box>
+              <Typography sx={{ fontSize: "0.82rem", fontWeight: lodMode === "macro" ? 700 : 600 }}>
+                Macro (&lt;0.5x)
+              </Typography>
+              <Typography variant="caption" sx={{ fontSize: "0.7rem", color: "#64748B", display: "block" }}>
+                Group blocks &amp; bundled links
+              </Typography>
+            </Box>
+            {lodMode === "macro" && <Check size={15} color="#7C3AED" />}
+          </MenuItem>
+
+          <MenuItem
+            onClick={() => {
+              setLodMenuAnchor(null);
+              zoomTo(0.85, { duration: 400 });
+            }}
+            sx={{
+              borderRadius: 1.25,
+              py: 0.75,
+              px: 1,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              fontSize: "0.82rem",
+              fontWeight: lodMode === "meso" ? 700 : 500,
+              color: lodMode === "meso" ? "#4F46E5" : "#1E293B",
+              backgroundColor: lodMode === "meso" ? "rgba(79, 70, 229, 0.08)" : "transparent",
+              "&:hover": { bgcolor: "#EEF2FF" },
+            }}
+          >
+            <Box>
+              <Typography sx={{ fontSize: "0.82rem", fontWeight: lodMode === "meso" ? 700 : 600 }}>
+                Meso (0.5x–1.0x)
+              </Typography>
+              <Typography variant="caption" sx={{ fontSize: "0.7rem", color: "#64748B", display: "block" }}>
+                Balanced view with subtle mesh
+              </Typography>
+            </Box>
+            {lodMode === "meso" && <Check size={15} color="#4F46E5" />}
+          </MenuItem>
+
+          <MenuItem
+            onClick={() => {
+              setLodMenuAnchor(null);
+              zoomTo(1.25, { duration: 400 });
+            }}
+            sx={{
+              borderRadius: 1.25,
+              py: 0.75,
+              px: 1,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              fontSize: "0.82rem",
+              fontWeight: lodMode === "micro" ? 700 : 500,
+              color: lodMode === "micro" ? "#2563EB" : "#1E293B",
+              backgroundColor: lodMode === "micro" ? "rgba(37, 99, 235, 0.08)" : "transparent",
+              "&:hover": { bgcolor: "#EFF6FF" },
+            }}
+          >
+            <Box>
+              <Typography sx={{ fontSize: "0.82rem", fontWeight: lodMode === "micro" ? 700 : 600 }}>
+                Micro (&gt;1.0x)
+              </Typography>
+              <Typography variant="caption" sx={{ fontSize: "0.7rem", color: "#64748B", display: "block" }}>
+                Individual node telemetry &amp; clarity
+              </Typography>
+            </Box>
+            {lodMode === "micro" && <Check size={15} color="#2563EB" />}
+          </MenuItem>
+
+          <Divider sx={{ my: 0.75, borderColor: "#E2E8F0" }} />
+
+          <Box sx={{ px: 1, py: 0.5 }}>
+            <Typography
+              variant="caption"
+              sx={{
+                fontSize: "0.65rem",
+                fontWeight: 700,
+                color: "#94A3B8",
+                textTransform: "uppercase",
+                letterSpacing: "0.05em",
+              }}
+            >
+              Inter-Group Links
+            </Typography>
+          </Box>
+
+          <MenuItem
+            onClick={() => {
+              setLodMenuAnchor(null);
+              onExpandAllBundles?.();
+            }}
+            sx={{
+              borderRadius: 1.25,
+              py: 0.75,
+              px: 1,
+              display: "flex",
+              alignItems: "center",
+              gap: 1.25,
+              fontSize: "0.82rem",
+              fontWeight: 600,
+              color: "#1E293B",
+              "&:hover": { bgcolor: "#F1F5F9" },
+            }}
+          >
+            <UnfoldVertical size={15} color="#4F46E5" />
+            Expand All Lines
+          </MenuItem>
+
+          <MenuItem
+            onClick={() => {
+              setLodMenuAnchor(null);
+              onCollapseAllBundles?.();
+            }}
+            sx={{
+              borderRadius: 1.25,
+              py: 0.75,
+              px: 1,
+              display: "flex",
+              alignItems: "center",
+              gap: 1.25,
+              fontSize: "0.82rem",
+              fontWeight: 600,
+              color: "#1E293B",
+              "&:hover": { bgcolor: "#F1F5F9" },
+            }}
+          >
+            <FoldVertical size={15} color="#4F46E5" />
+            Collapse All to Bundles
+          </MenuItem>
+
+          {blocksCount > 0 && (
+            <>
+              <Divider sx={{ my: 0.75, borderColor: "#E2E8F0" }} />
+
+              <Box sx={{ px: 1, py: 0.5 }}>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    fontSize: "0.65rem",
+                    fontWeight: 700,
+                    color: "#94A3B8",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.05em",
+                  }}
+                >
+                  Group Containers
+                </Typography>
+              </Box>
+
+              <MenuItem
+                onClick={() => {
+                  setLodMenuAnchor(null);
+                  onExpandAllGroups?.();
+                }}
+                sx={{
+                  borderRadius: 1.25,
+                  py: 0.75,
+                  px: 1,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 1.25,
+                  fontSize: "0.82rem",
+                  fontWeight: 600,
+                  color: "#1E293B",
+                  "&:hover": { bgcolor: "#F1F5F9" },
+                }}
+              >
+                <Maximize2 size={15} color="#4F46E5" />
+                Expand All Groups
+              </MenuItem>
+
+              <MenuItem
+                onClick={() => {
+                  setLodMenuAnchor(null);
+                  onCollapseAllGroups?.();
+                }}
+                sx={{
+                  borderRadius: 1.25,
+                  py: 0.75,
+                  px: 1,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 1.25,
+                  fontSize: "0.82rem",
+                  fontWeight: 600,
+                  color: "#1E293B",
+                  "&:hover": { bgcolor: "#F1F5F9" },
+                }}
+              >
+                <Minimize2 size={15} color="#4F46E5" />
+                Collapse All to Super-Nodes
+              </MenuItem>
+            </>
+          )}
+        </Menu>
+
         {/* Stats Indicator */}
-        {blocksCount > 0 && (
+        {hiddenLinksCount > 0 && (
           <Tooltip
-            title={`${blocksCount} block(s) configured. Intra-block and inter-block links collapsed by default; click any node to view its links.`}
+            title={`${hiddenLinksCount} cross-group link(s) bundled into virtual edges. Click any virtual edge badge or node to inspect.`}
           >
             <Chip
               icon={<EyeOff size={13} color="#64748B" style={{ marginLeft: 6 }} />}
-              label={`${hiddenLinksCount} links collapsed`}
+              label={`${hiddenLinksCount} links bundled`}
               size="small"
               sx={{
                 height: 28,
@@ -1021,10 +1429,36 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
   displayedInternalNodesCount,
   onCreateBlockFullMesh,
 }) => {
-  // Block state
+  // Block state & Advanced Interaction States
   const [blocks, setBlocks] = useState<GraphBlock[]>(getStoredBlocks);
   const [nodeBlockMap, setNodeBlockMap] = useState<Record<string, string>>(getStoredNodeBlocks);
-  const [focusedNodeName, setFocusedNodeName] = useState<string | null>(null);
+  const [pinnedNodeNames, setPinnedNodeNames] = useState<Set<string>>(new Set());
+  const [hoveredNodeName, setHoveredNodeName] = useState<string | null>(null);
+  const [focusedBlockId, setFocusedBlockId] = useState<string | null>(null);
+  const [hopDepth, setHopDepth] = useState<1 | 2 | 3>(1);
+  const [draggingNodeId, setDraggingNodeId] = useState<string | null>(null);
+  const [currentZoom, setCurrentZoom] = useState<number>(() => getStoredViewport()?.zoom ?? 1);
+  const [collapsedBlockIds, setCollapsedBlockIds] = useState<Set<string>>(() => {
+    try {
+      const raw = localStorage.getItem("easy42_collapsed_blocks");
+      return raw ? new Set(JSON.parse(raw)) : new Set();
+    } catch {
+      return new Set();
+    }
+  });
+  const [expandedVirtualEdgePairs, setExpandedVirtualEdgePairs] = useState<Set<string>>(getStoredExpandedPairs);
+
+  // Automatically synchronize expanded virtual edge pairs to browser localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY_EXPANDED_PAIRS, JSON.stringify(Array.from(expandedVirtualEdgePairs)));
+    } catch (e) {
+      console.error("Failed to persist expanded virtual edge pairs to localStorage", e);
+    }
+  }, [expandedVirtualEdgePairs]);
+
+  // Semantic Zoom LOD mode
+  const lodMode: "macro" | "meso" | "micro" = currentZoom < 0.5 ? "macro" : currentZoom > 1.0 ? "micro" : "meso";
 
   // Drag tracking ref for moving member nodes alongside a block
   const blockDragState = useRef<{
@@ -1118,16 +1552,23 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
     return () => clearTimeout(timer);
   }, [blocks, nodeBlockMap]);
 
+  // Focus clearing helper
+  const handleClearFocus = useCallback(() => {
+    setPinnedNodeNames(new Set());
+    setFocusedBlockId(null);
+    setHoveredNodeName(null);
+  }, []);
+
   // Escape key to reset focus
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        setFocusedNodeName(null);
+        handleClearFocus();
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
+  }, [handleClearFocus]);
 
   // Block management actions
   const handleAddBlock = useCallback(() => {
@@ -1146,6 +1587,42 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
       };
       return [...prev, newBlock];
     });
+  }, []);
+
+  // Toggle collapsing of a block into a compact super-node
+  const handleToggleCollapseBlock = useCallback((blockId: string) => {
+    setCollapsedBlockIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(blockId)) {
+        next.delete(blockId);
+      } else {
+        next.add(blockId);
+      }
+      try {
+        localStorage.setItem("easy42_collapsed_blocks", JSON.stringify(Array.from(next)));
+      } catch (e) {
+        console.warn("Failed to persist collapsed blocks", e);
+      }
+      return next;
+    });
+  }, []);
+
+  // Toggle expanding a virtual edge bundle into individual lines
+  const handleToggleExpandBundle = useCallback((pairKey: string) => {
+    setExpandedVirtualEdgePairs((prev) => {
+      const next = new Set(prev);
+      if (next.has(pairKey)) {
+        next.delete(pairKey);
+      } else {
+        next.add(pairKey);
+      }
+      return next;
+    });
+  }, []);
+
+  // Group-level focus
+  const handleFocusBlock = useCallback((blockId: string) => {
+    setFocusedBlockId((prev) => (prev === blockId ? null : blockId));
   }, []);
 
   // Listen for trigger from parent (e.g. Navbar menu)
@@ -1211,7 +1688,6 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
         return;
       }
       if (explicitId === "") {
-        // Explicitly unassigned from any block (global canvas area)
         return;
       }
       const pos = posMap.get(node.name);
@@ -1228,6 +1704,92 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
     return { nodePosMap: posMap, effectiveNodeBlockMap: effMap };
   }, [nodes, blocks, nodeBlockMap]);
 
+  // Expand all cross-group bundles into individual line pairs
+  const handleExpandAllBundles = useCallback(() => {
+    const keys = new Set<string>();
+    links.forEach((l) => {
+      const bFrom = effectiveNodeBlockMap[l.from.name];
+      const bTo = effectiveNodeBlockMap[l.to.name];
+      if (bFrom && bTo && bFrom !== bTo) {
+        const [b1, b2] = [bFrom, bTo].sort();
+        keys.add(`${b1}---${b2}`);
+      }
+    });
+    setExpandedVirtualEdgePairs(keys);
+  }, [links, effectiveNodeBlockMap]);
+
+  // Collapse all cross-group lines back into bundled virtual edges
+  const handleCollapseAllBundles = useCallback(() => {
+    setExpandedVirtualEdgePairs(new Set());
+  }, []);
+
+  // Expand all groups to show internal nodes
+  const handleExpandAllGroups = useCallback(() => {
+    setCollapsedBlockIds(new Set());
+    try {
+      localStorage.setItem("easy42_collapsed_blocks", JSON.stringify([]));
+    } catch (e) {
+      console.warn("Failed to persist collapsed blocks", e);
+    }
+  }, []);
+
+  // Collapse all groups into compact super-nodes
+  const handleCollapseAllGroups = useCallback(() => {
+    const allBlockIds = new Set(blocks.map((b) => b.id));
+    setCollapsedBlockIds(allBlockIds);
+    try {
+      localStorage.setItem("easy42_collapsed_blocks", JSON.stringify(Array.from(allBlockIds)));
+    } catch (e) {
+      console.warn("Failed to persist collapsed blocks", e);
+    }
+  }, [blocks]);
+
+  // Local Auto-Layout ("Tidy Group") action: arranges member nodes in a clean, balanced grid
+  const handleTidyBlock = useCallback(
+    (blockId: string) => {
+      const targetBlock = blocks.find((b) => b.id === blockId);
+      if (!targetBlock) return;
+      const memberNames = nodes.filter((n) => effectiveNodeBlockMap[n.name] === blockId).map((n) => n.name);
+      if (memberNames.length === 0) return;
+
+      const count = memberNames.length;
+      const cols = Math.max(1, Math.ceil(Math.sqrt(count)));
+      const rows = Math.ceil(count / cols);
+
+      const cardW = 260;
+      const cardH = 180;
+      const padX = 40;
+      const padTop = 65;
+      const padBottom = 40;
+      const gapX = 40;
+      const gapY = 30;
+
+      const neededW = padX * 2 + cols * cardW + (cols - 1) * gapX;
+      const neededH = padTop + padBottom + rows * cardH + (rows - 1) * gapY;
+
+      const newW = Math.max(targetBlock.width, neededW);
+      const newH = Math.max(targetBlock.height, neededH);
+
+      if (newW !== targetBlock.width || newH !== targetBlock.height) {
+        setBlocks((prev) => prev.map((b) => (b.id === blockId ? { ...b, width: newW, height: newH } : b)));
+      }
+
+      const posMap = new Map<string, { x: number; y: number }>();
+      memberNames.forEach((name, idx) => {
+        const col = idx % cols;
+        const row = Math.floor(idx / cols);
+        const nx = Math.round(targetBlock.x + padX + col * (cardW + gapX));
+        const ny = Math.round(targetBlock.y + padTop + row * (cardH + gapY));
+        posMap.set(name, { x: nx, y: ny });
+        onNodePositionChange?.(name, nx, ny);
+      });
+
+      // Update flow node positions
+      // setNodes will be invoked by React Flow nodes state
+    },
+    [blocks, nodes, effectiveNodeBlockMap, onNodePositionChange],
+  );
+
   const handleCreateBlockFullMesh = useCallback(
     (blockId: string) => {
       const targetBlock = blocks.find((b) => b.id === blockId);
@@ -1240,6 +1802,107 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
     },
     [blocks, nodes, effectiveNodeBlockMap, onCreateBlockFullMesh],
   );
+
+  // Compute N-hop focus sets using graph traversal (BFS)
+  const { activeFocusNodeSet, activeFocusEdgeSet } = useMemo(() => {
+    const nodeSet = new Set<string>();
+    const edgeIdSet = new Set<string>();
+
+    if (pinnedNodeNames.size > 0) {
+      const visitedNodes = new Set<string>(pinnedNodeNames);
+      let currentLevel = Array.from(pinnedNodeNames);
+      pinnedNodeNames.forEach((n) => nodeSet.add(n));
+
+      const maxHops = hopDepth === 3 ? 999 : hopDepth;
+
+      for (let hop = 0; hop < maxHops; hop++) {
+        if (currentLevel.length === 0) break;
+        const nextLevel: string[] = [];
+
+        currentLevel.forEach((nodeName) => {
+          links.forEach((l) => {
+            const edgeId = `link-${l.from.name}-${l.from.interface}-${l.to.name}-${l.to.interface}`;
+            if (l.from.name === nodeName) {
+              edgeIdSet.add(edgeId);
+              if (!visitedNodes.has(l.to.name)) {
+                visitedNodes.add(l.to.name);
+                nodeSet.add(l.to.name);
+                nextLevel.push(l.to.name);
+              }
+            } else if (l.to.name === nodeName) {
+              edgeIdSet.add(edgeId);
+              if (!visitedNodes.has(l.from.name)) {
+                visitedNodes.add(l.from.name);
+                nodeSet.add(l.from.name);
+                nextLevel.push(l.from.name);
+              }
+            }
+          });
+        });
+
+        currentLevel = nextLevel;
+      }
+
+      return { activeFocusNodeSet: nodeSet, activeFocusEdgeSet: edgeIdSet };
+    }
+
+    if (hoveredNodeName) {
+      nodeSet.add(hoveredNodeName);
+      links.forEach((l) => {
+        const edgeId = `link-${l.from.name}-${l.from.interface}-${l.to.name}-${l.to.interface}`;
+        if (l.from.name === hoveredNodeName) {
+          nodeSet.add(l.to.name);
+          edgeIdSet.add(edgeId);
+        } else if (l.to.name === hoveredNodeName) {
+          nodeSet.add(l.from.name);
+          edgeIdSet.add(edgeId);
+        }
+      });
+      return { activeFocusNodeSet: nodeSet, activeFocusEdgeSet: edgeIdSet };
+    }
+
+    if (focusedBlockId) {
+      nodes.forEach((n) => {
+        if (effectiveNodeBlockMap[n.name] === focusedBlockId) {
+          nodeSet.add(n.name);
+        }
+      });
+      links.forEach((l) => {
+        const edgeId = `link-${l.from.name}-${l.from.interface}-${l.to.name}-${l.to.interface}`;
+        if (nodeSet.has(l.from.name) && nodeSet.has(l.to.name)) {
+          edgeIdSet.add(edgeId);
+        }
+      });
+      return { activeFocusNodeSet: nodeSet, activeFocusEdgeSet: edgeIdSet };
+    }
+
+    return { activeFocusNodeSet: null, activeFocusEdgeSet: null };
+  }, [pinnedNodeNames, hopDepth, hoveredNodeName, focusedBlockId, links, nodes, effectiveNodeBlockMap]);
+
+  // Compute node link statistics for stub indicators
+  const nodeLinksCountMap = useMemo(() => {
+    const countMap = new Map<string, { total: number; intra: number; inter: number }>();
+    nodes.forEach((n) => {
+      const nBlock = effectiveNodeBlockMap[n.name];
+      let total = 0;
+      let intra = 0;
+      let inter = 0;
+      links.forEach((l) => {
+        if (l.from.name === n.name || l.to.name === n.name) {
+          total++;
+          const otherName = l.from.name === n.name ? l.to.name : l.from.name;
+          const otherBlock = effectiveNodeBlockMap[otherName];
+          if (nBlock && otherBlock && nBlock === otherBlock) {
+            intra++;
+          } else {
+            inter++;
+          }
+        }
+      });
+      countMap.set(n.name, { total, intra, inter });
+    });
+    return countMap;
+  }, [nodes, links, effectiveNodeBlockMap]);
 
   // Initial nodes: combine background Block nodes and NodeCard custom nodes
   const initialNodes: FlowNode[] = useMemo(() => {
@@ -1300,9 +1963,6 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
     });
 
     // 1. Compute full-mesh status for each block
-    // A block is full-mesh IF AND ONLY IF:
-    // - It has at least 2 member nodes.
-    // - Every pair of distinct member nodes (u, v) in the block has a direct WireGuard link (non-manual).
     const blockFullMeshStatusMap = new Map<string, boolean>();
     blocks.forEach((block) => {
       const memberNames = nodes.filter((n) => effectiveNodeBlockMap[n.name] === block.id).map((n) => n.name);
@@ -1312,7 +1972,6 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
         return;
       }
 
-      // Check if every pair (u, v) of nodes inside this block has a direct link (WireGuard or manual)
       const hasIntraLink = (u: string, v: string) => {
         const uClean = u.trim().toLowerCase();
         const vClean = v.trim().toLowerCase();
@@ -1324,7 +1983,6 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
       };
 
       const isFullMesh = memberNames.every((u, i) => memberNames.slice(i + 1).every((v) => hasIntraLink(u, v)));
-
       blockFullMeshStatusMap.set(block.id, isFullMesh);
     });
 
@@ -1340,16 +1998,20 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
       const isFullMesh = blockFullMeshStatusMap.get(block.id) ?? false;
       const fullMeshCount = isFullMesh ? memberNodes.length : 0;
       const healthyCount = memberNodes.filter((n) => nodeHealthMap[n.name]?.isHealthy).length;
+      const isCollapsed = collapsedBlockIds.has(block.id);
+      const isGroupFocused = focusedBlockId === block.id;
 
       return {
         id: block.id,
         type: "blockGroup",
         position: { x: block.x, y: block.y },
-        style: { width: block.width, height: block.height, zIndex: 0 },
-        initialWidth: block.width,
-        initialHeight: block.height,
-        width: block.width,
-        height: block.height,
+        style: isCollapsed
+          ? { width: 310, height: 76, zIndex: 0 }
+          : { width: block.width, height: block.height, zIndex: 0 },
+        initialWidth: isCollapsed ? 310 : block.width,
+        initialHeight: isCollapsed ? 76 : block.height,
+        width: isCollapsed ? 310 : block.width,
+        height: isCollapsed ? 76 : block.height,
         selectable: true,
         draggable: true,
         dragHandle: ".block-header",
@@ -1361,10 +2023,15 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
           isFullMesh,
           fullMeshCount,
           healthyCount,
+          isCollapsed,
+          isGroupFocused,
           onRenameBlock: handleRenameBlock,
           onDeleteBlock: handleDeleteBlock,
           onChangeColor: handleChangeBlockColor,
           onCreateBlockFullMesh: handleCreateBlockFullMesh,
+          onToggleCollapse: handleToggleCollapseBlock,
+          onTidyBlock: handleTidyBlock,
+          onFocusBlock: handleFocusBlock,
         } as unknown as Record<string, unknown>,
       };
     });
@@ -1377,16 +2044,24 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
       const inBlock = Boolean(assignedBlock);
       const isBlockFullMesh = inBlock && Boolean(blockFullMeshStatusMap.get(assignedBlockId!));
       const health = nodeHealthMap[node.name];
+      const isBlockCollapsed = Boolean(assignedBlockId && collapsedBlockIds.has(assignedBlockId));
+      const linkCounts = nodeLinksCountMap.get(node.name) || { total: 0, intra: 0, inter: 0 };
+      const isHighlighted = activeFocusNodeSet ? activeFocusNodeSet.has(node.name) : false;
+      const isDimmed = activeFocusNodeSet ? !activeFocusNodeSet.has(node.name) : false;
 
       return {
         id: node.name,
         type: "customNode",
         position: pos,
-        style: { zIndex: 10, width: 260 },
-        initialWidth: 260,
-        initialHeight: 180,
-        width: 260,
-        height: 180,
+        hidden: isBlockCollapsed,
+        style: {
+          zIndex: isHighlighted ? 30 : 10,
+          width: lodMode === "macro" ? 155 : 260,
+        },
+        initialWidth: lodMode === "macro" ? 155 : 260,
+        initialHeight: lodMode === "macro" ? 44 : 180,
+        width: lodMode === "macro" ? 155 : 260,
+        height: lodMode === "macro" ? 44 : 180,
         data: {
           node,
           status: nodeStatuses[node.name],
@@ -1396,7 +2071,13 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
           isBlockFullMesh,
           isHealthy: health?.isHealthy ?? false,
           healthDetails: health,
-          isFocused: focusedNodeName === node.name,
+          isFocused: pinnedNodeNames.has(node.name),
+          isHighlighted,
+          isDimmed,
+          lodMode,
+          totalLinksCount: linkCounts.total,
+          intraBlockLinksCount: linkCounts.intra,
+          interBlockLinksCount: linkCounts.inter,
           onSelect: onSelectNode,
           onRefreshNode,
           refreshingNodeName,
@@ -1413,21 +2094,25 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
     nodePosMap,
     nodeStatuses,
     networkState,
-    focusedNodeName,
+    collapsedBlockIds,
+    focusedBlockId,
+    pinnedNodeNames,
+    activeFocusNodeSet,
+    lodMode,
+    nodeLinksCountMap,
     onSelectNode,
     onRefreshNode,
     refreshingNodeName,
     handleRenameBlock,
     handleDeleteBlock,
     handleChangeBlockColor,
+    handleCreateBlockFullMesh,
+    handleToggleCollapseBlock,
+    handleTidyBlock,
+    handleFocusBlock,
   ]);
 
-  // Convert links to React Flow edges with filtering rules:
-  // 1. By default, don't display links between two nodes of different blocks.
-  //    Display ONLY ONE virtual line between two blocks instead, no matter how many node links exist.
-  // 2. Intra-block links (two nodes of the same block) are hidden by default.
-  // 3. When user clicks a node to focus it, ALWAYS display the node's all links.
-  // 4. The global scope node (doesn't belong to any block) STILL ALWAYS displays all links.
+  // Convert links to React Flow edges with filtering rules
   const initialEdges: Edge[] = useMemo(() => {
     // 1. Group links between distinct block pairs to render one virtual line per pair
     const blockPairLinksMap = new Map<string, { block1Id: string; block2Id: string; links: Link[] }>();
@@ -1467,6 +2152,8 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
         }
       });
 
+      const isExpanded = expandedVirtualEdgePairs.has(pairKey);
+
       blockVirtualEdges.push({
         id: `block-edge-${pairKey}`,
         source: b1.id,
@@ -1476,27 +2163,41 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
         type: "blockVirtualEdge",
         zIndex: 1,
         data: {
+          pairKey,
           sourceBlock: b1,
           targetBlock: b2,
           links: pairLinks,
           workingCount,
           downCount,
           unknownCount,
+          isExpanded,
+          onToggleExpandBundle: handleToggleExpandBundle,
+          onSelectLink,
         } as unknown as Record<string, unknown>,
       });
     });
 
-    // 2. Filter node-to-node links according to requirements
+    // 2. Filter node-to-node links
     const visibleLinks = links.filter((link) => {
-      // Focus rule: when user clicks a node to focus it, always display the node's all links
-      if (focusedNodeName) {
-        if (link.from.name === focusedNodeName || link.to.name === focusedNodeName) {
-          return true;
-        }
-      }
-
       const fromBlock = effectiveNodeBlockMap[link.from.name];
       const toBlock = effectiveNodeBlockMap[link.to.name];
+
+      // If either block is collapsed, intra-links within it are hidden
+      if (fromBlock && collapsedBlockIds.has(fromBlock) && fromBlock === toBlock) {
+        return false;
+      }
+
+      // Ghost link when dragging: always show
+      if (draggingNodeId && (link.from.name === draggingNodeId || link.to.name === draggingNodeId)) {
+        return true;
+      }
+
+      const edgeId = `link-${link.from.name}-${link.from.interface}-${link.to.name}-${link.to.interface}`;
+
+      // If in active focus, show it!
+      if (activeFocusEdgeSet && activeFocusEdgeSet.has(edgeId)) {
+        return true;
+      }
 
       // Global scope node (doesn't belong to any block) still always displays all links
       const isGlobalInvolved = !fromBlock || !toBlock;
@@ -1504,12 +2205,19 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
         return true;
       }
 
-      // Intra-block links (same block): hidden by default unless focused
+      // Intra-block links (same block): RENDERED BY DEFAULT as subtle background texture!
       if (fromBlock === toBlock) {
-        return false;
+        return true;
       }
 
-      // Inter-block links (different blocks): don't display by default (virtual line displayed instead)
+      // Inter-block links (different blocks):
+      const [b1, b2] = [fromBlock, toBlock].sort();
+      const pairKey = `${b1}---${b2}`;
+      if (expandedVirtualEdgePairs.has(pairKey)) {
+        return true;
+      }
+
+      // Otherwise, virtual edge is displayed instead
       return false;
     });
 
@@ -1553,11 +2261,25 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
       const fromCost = getEffectiveLinkCost(link.from, fromIsRemoteExternal, networkPolicies);
       const toCost = getEffectiveLinkCost(link.to, toIsRemoteExternal, networkPolicies);
 
+      const fromBlock = effectiveNodeBlockMap[link.from.name];
+      const toBlock = effectiveNodeBlockMap[link.to.name];
+      const isIntraBlock = Boolean(fromBlock && toBlock && fromBlock === toBlock);
+      const isInterBlock = Boolean(fromBlock && toBlock && fromBlock !== toBlock);
+      const pairBlockKey = isInterBlock ? [fromBlock, toBlock].sort().join("---") : "";
+      const isExpandedInterBlock = Boolean(isInterBlock && expandedVirtualEdgePairs.has(pairBlockKey));
+      const isGhostDrag = Boolean(
+        draggingNodeId && (link.from.name === draggingNodeId || link.to.name === draggingNodeId),
+      );
+      const isHighlighted = Boolean(activeFocusEdgeSet?.has(edgeId) || isGhostDrag);
+      const isDimmed = Boolean(activeFocusEdgeSet && !activeFocusEdgeSet.has(edgeId) && !isGhostDrag);
+      const isSubtle = Boolean((isIntraBlock || isExpandedInterBlock) && !isHighlighted && !isGhostDrag);
+
       return {
         id: edgeId,
         source: link.from.name,
         target: link.to.name,
         type: "customEdge",
+        zIndex: isHighlighted || isGhostDrag ? 100 : isSubtle ? 2 : 5,
         data: {
           link,
           workingState,
@@ -1569,6 +2291,14 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
           totalLinksInPair,
           fromCost,
           toCost,
+          isIntraBlock,
+          isInterBlock,
+          isExpandedInterBlock,
+          isSubtle,
+          isGhostDrag,
+          isHighlighted,
+          isDimmed,
+          zoomLevel: currentZoom,
           onSelect: onSelectLink,
         } as unknown as Record<string, unknown>,
       };
@@ -1583,7 +2313,12 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
     networkPolicies,
     onSelectLink,
     effectiveNodeBlockMap,
-    focusedNodeName,
+    collapsedBlockIds,
+    expandedVirtualEdgePairs,
+    activeFocusEdgeSet,
+    draggingNodeId,
+    currentZoom,
+    handleToggleExpandBundle,
     nodeStatuses,
   ]);
 
@@ -1596,7 +2331,6 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
       const currentMap = new Map(currentNodes.map((n) => [n.id, n]));
       return initialNodes.map((n) => {
         const existing = currentMap.get(n.id);
-        // Preserve current active position on canvas if already rendered
         const pos = existing?.position ?? n.position;
 
         return {
@@ -1642,7 +2376,9 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
   // Drag start: record initial positions of block and its member nodes
   const handleNodeDragStart: OnNodeDrag = useCallback(
     (_event, node) => {
-      if (node.type === "blockGroup") {
+      if (node.type === "customNode") {
+        setDraggingNodeId(node.id);
+      } else if (node.type === "blockGroup") {
         const memberPositions = new Map<string, { x: number; y: number }>();
         for (const fn of flowNodes) {
           if (nodeBlockMap[fn.id] === node.id) {
@@ -1692,6 +2428,8 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
   // Drag stop: assign dropped nodes to blocks, or save block positions and member coordinates
   const handleNodeDragStop: OnNodeDrag = useCallback(
     (_event, node, draggedNodes) => {
+      setDraggingNodeId(null);
+
       if (node.type === "blockGroup") {
         const finalX = Math.round(node.position.x);
         const finalY = Math.round(node.position.y);
@@ -1770,6 +2508,7 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
   const initialViewport = useMemo(() => getStoredViewport(), []);
 
   const handleMoveEnd: OnMoveEnd = useCallback((_event, viewport) => {
+    setCurrentZoom(viewport.zoom);
     try {
       localStorage.setItem(STORAGE_KEY_VIEWPORT, JSON.stringify(viewport));
       localStorage.setItem(STORAGE_KEY_ZOOM, JSON.stringify(viewport.zoom));
@@ -1808,27 +2547,76 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
     [nodes, onConnectNodes, setEdges],
   );
 
-  // Hidden links count (both intra-block links and collapsed inter-block links)
+  // Hidden/bundled links count
   const hiddenLinksCount = useMemo(() => {
     return links.filter((link) => {
-      // If node is focused, all its connected links are visible
-      if (focusedNodeName) {
-        if (link.from.name === focusedNodeName || link.to.name === focusedNodeName) {
-          return false;
-        }
-      }
       const fromBlock = effectiveNodeBlockMap[link.from.name];
       const toBlock = effectiveNodeBlockMap[link.to.name];
 
-      // Global scope node links are always displayed
-      if (!fromBlock || !toBlock) {
-        return false;
+      // If either node is not in a block, it's global and always shown
+      if (!fromBlock || !toBlock) return false;
+
+      // If in collapsed block, intra-links are hidden
+      if (fromBlock === toBlock) {
+        return collapsedBlockIds.has(fromBlock);
       }
 
-      // Both belong to blocks (same block or different blocks): collapsed by default
-      return true;
+      // Inter-block link: bundled into virtual edge unless expanded
+      const [b1, b2] = [fromBlock, toBlock].sort();
+      const pairKey = `${b1}---${b2}`;
+      return !expandedVirtualEdgePairs.has(pairKey);
     }).length;
-  }, [links, effectiveNodeBlockMap, focusedNodeName]);
+  }, [links, effectiveNodeBlockMap, collapsedBlockIds, expandedVirtualEdgePairs]);
+
+  const focusedBlock = blocks.find((b) => b.id === focusedBlockId);
+  const focusedBlockName = focusedBlock?.name ?? null;
+
+  const handleNodeMouseEnter = useCallback((_event: React.MouseEvent, flowNode: FlowNode) => {
+    if (flowNode.type === "customNode") {
+      setHoveredNodeName(flowNode.id);
+    }
+  }, []);
+
+  const handleNodeMouseLeave = useCallback((_event: React.MouseEvent, flowNode: FlowNode) => {
+    if (flowNode.type === "customNode") {
+      setHoveredNodeName((prev) => (prev === flowNode.id ? null : prev));
+    }
+  }, []);
+
+  const handleNodeClick = useCallback(
+    (event: React.MouseEvent, flowNode: FlowNode) => {
+      if (flowNode.type === "customNode") {
+        if (event.shiftKey) {
+          setPinnedNodeNames((prev) => {
+            const next = new Set(prev);
+            if (next.has(flowNode.id)) {
+              next.delete(flowNode.id);
+            } else {
+              next.add(flowNode.id);
+            }
+            return next;
+          });
+        } else {
+          setPinnedNodeNames((prev) => {
+            if (prev.size === 1 && prev.has(flowNode.id)) {
+              return new Set();
+            }
+            return new Set([flowNode.id]);
+          });
+        }
+
+        const n = (flowNode.data as any)?.node;
+        if (n) {
+          onSelectNode(n);
+        }
+      }
+    },
+    [onSelectNode],
+  );
+
+  const handlePaneClick = useCallback(() => {
+    handleClearFocus();
+  }, [handleClearFocus]);
 
   return (
     <Box sx={{ width: "100%", height: "calc(100vh - 64px)", position: "relative", backgroundColor: "#F8FAFC" }}>
@@ -1872,6 +2660,8 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
       ) : null}
 
       <ReactFlow
+        minZoom={0.1} // Allows zooming out significantly further than the default 0.5
+        maxZoom={3.0} // Allows zooming in closer than the default 2.0
         nodes={flowNodes}
         edges={flowEdges}
         onNodesChange={handleNodesChange}
@@ -1879,16 +2669,10 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
         onNodeDragStart={handleNodeDragStart}
         onNodeDrag={handleNodeDrag}
         onNodeDragStop={handleNodeDragStop}
-        onPaneClick={() => setFocusedNodeName(null)}
-        onNodeClick={(_event, flowNode) => {
-          if (flowNode.type === "customNode") {
-            setFocusedNodeName((prev) => (prev === flowNode.id ? null : flowNode.id));
-            const n = (flowNode.data as any)?.node;
-            if (n) {
-              onSelectNode(n);
-            }
-          }
-        }}
+        onNodeMouseEnter={handleNodeMouseEnter}
+        onNodeMouseLeave={handleNodeMouseLeave}
+        onNodeClick={handleNodeClick}
+        onPaneClick={handlePaneClick}
         onEdgeClick={(_event, edge) => {
           const edgeData = edge.data as unknown as { link?: Link };
           if (edgeData?.link) {
@@ -1908,7 +2692,7 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
         <FloatingToolbar
           nodes={nodes}
           onSelectNode={onSelectNode}
-          onFocusNode={(nodeName) => setFocusedNodeName(nodeName)}
+          onFocusNode={(nodeName) => setPinnedNodeNames(new Set([nodeName]))}
           onAddNode={onAddNode}
           onAddLink={onAddLink}
           onAddBlock={handleToolbarAddBlock}
@@ -1918,10 +2702,18 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
           selectedTag={selectedTag}
           onSelectTag={onSelectTag}
           uniqueTags={uniqueTags}
-          focusedNodeName={focusedNodeName}
-          onClearFocus={() => setFocusedNodeName(null)}
+          pinnedNodeNames={pinnedNodeNames}
+          focusedBlockName={focusedBlockName}
+          hopDepth={hopDepth}
+          onSetHopDepth={setHopDepth}
+          onClearFocus={handleClearFocus}
           blocksCount={blocks.length}
           hiddenLinksCount={hiddenLinksCount}
+          lodMode={lodMode}
+          onExpandAllBundles={handleExpandAllBundles}
+          onCollapseAllBundles={handleCollapseAllBundles}
+          onExpandAllGroups={handleExpandAllGroups}
+          onCollapseAllGroups={handleCollapseAllGroups}
         />
 
         <Background variant={BackgroundVariant.Dots} gap={20} size={1.2} color="#CBD5E1" />
