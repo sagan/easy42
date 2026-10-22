@@ -78,6 +78,8 @@ import {
 } from "../../types/api";
 import { ViewNetworkPolicyModal } from "./ViewNetworkPolicyModal";
 import TextFieldWithCopy from "../Common/TextFieldWithCopy";
+import { Easy42Logo } from "../Logo/Easy42Logo";
+import { flushCacheAndServiceWorker } from "../../utils/pwa";
 
 export const parsePrefixList = (input: string): string[] => {
   const result: string[] = [];
@@ -295,6 +297,37 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
   const [versionLoading, setVersionLoading] = useState(false);
   const [versionError, setVersionError] = useState<string | null>(null);
   const [versionCopied, setVersionCopied] = useState(false);
+  const [swFlushLoading, setSwFlushLoading] = useState(false);
+  const [swFlushResult, setSwFlushResult] = useState<{ text: string; severity: "success" | "error" } | null>(null);
+
+  const handleFlushCacheAndSw = async () => {
+    setSwFlushLoading(true);
+    setSwFlushResult(null);
+    try {
+      const res = await flushCacheAndServiceWorker();
+      if (res.success) {
+        setSwFlushResult({
+          text: `Service worker uninstalled (${res.uninstalled}) and cache storage cleared (${res.cachesDeleted} bucket(s)). Reloading page...`,
+          severity: "success",
+        });
+        setTimeout(() => {
+          window.location.reload();
+        }, 1200);
+      } else {
+        setSwFlushResult({
+          text: res.error || "Failed to flush cache & service worker",
+          severity: "error",
+        });
+      }
+    } catch (err: unknown) {
+      setSwFlushResult({
+        text: (err as Error).message || "Failed to flush cache & service worker",
+        severity: "error",
+      });
+    } finally {
+      setSwFlushLoading(false);
+    }
+  };
 
   // Password change state
   const [currentPassword, setCurrentPassword] = useState("");
@@ -5218,22 +5251,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                 }}
               >
                 <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-                  <Box
+                  <Easy42Logo
+                    size={48}
                     sx={{
-                      width: 48,
-                      height: 48,
-                      borderRadius: 2.5,
-                      background: "linear-gradient(135deg, #4F46E5 0%, #0891B2 100%)",
-                      color: "#FFFFFF",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
+                      borderRadius: "12px",
                       boxShadow: "0 4px 14px rgba(79, 70, 229, 0.25)",
                       flexShrink: 0,
                     }}
-                  >
-                    <Info size={26} />
-                  </Box>
+                  />
                   <Box>
                     <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                       <Typography variant="h6" sx={{ fontWeight: 800, color: "#0F172A", letterSpacing: "-0.3px" }}>
@@ -5623,6 +5648,60 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                     {versionCopied ? "Copied Info!" : "Copy Diagnostics"}
                   </Button>
                 </Box>
+              </Paper>
+
+              {/* Section 4: Progressive Web App & Service Worker Cache */}
+              <Paper
+                elevation={0}
+                sx={{
+                  p: 2.5,
+                  borderRadius: 2,
+                  border: "1px solid #E2E8F0",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 2,
+                }}
+              >
+                <Box
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    flexWrap: "wrap",
+                    gap: 1,
+                  }}
+                >
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                    <HardDrive size={18} color="#0891B2" />
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0F172A", fontSize: "0.95rem" }}>
+                      PWA & Service Worker Cache
+                    </Typography>
+                  </Box>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    color="error"
+                    disabled={swFlushLoading}
+                    startIcon={swFlushLoading ? <CircularProgress size={14} color="inherit" /> : <Trash2 size={14} />}
+                    onClick={handleFlushCacheAndSw}
+                    sx={{
+                      textTransform: "none",
+                      fontWeight: 700,
+                    }}
+                  >
+                    {swFlushLoading ? "Flushing..." : "Flush cache & service worker"}
+                  </Button>
+                </Box>
+
+                <Typography variant="caption" sx={{ color: "#64748B", mt: -1 }}>
+                  Clears local browser CacheStorage assets and unregisters active service workers to ensure fresh bundles are pulled from the server.
+                </Typography>
+
+                {swFlushResult && (
+                  <Alert severity={swFlushResult.severity} sx={{ borderRadius: 1.5, py: 0.5, fontSize: "0.8rem" }}>
+                    {swFlushResult.text}
+                  </Alert>
+                )}
               </Paper>
             </DialogContent>
           </Box>

@@ -56,7 +56,7 @@ func DefaultLookingGlassTasks() []LookingGlassTask {
 					Type:         ParamTypeIPOrCIDR,
 					Description:  "IPv4 / IPv6 address or hostname",
 					Required:     true,
-					DefaultValue: "172.20.0.1",
+					DefaultValue: "172.20.0.53",
 				},
 				{
 					Key:          "count",
@@ -112,7 +112,7 @@ func DefaultLookingGlassTasks() []LookingGlassTask {
 					Type:         ParamTypeIPOrCIDR,
 					Description:  "IPv4 / IPv6 address or hostname",
 					Required:     true,
-					DefaultValue: "172.20.0.1",
+					DefaultValue: "172.20.0.53",
 				},
 				{
 					Key:          "max_ttl",
@@ -140,7 +140,7 @@ func DefaultLookingGlassTasks() []LookingGlassTask {
 					Type:         ParamTypeIPOrCIDR,
 					Description:  "IPv4 / IPv6 address or hostname",
 					Required:     true,
-					DefaultValue: "172.20.0.1",
+					DefaultValue: "172.20.0.53",
 				},
 				{
 					Key:          "cycles",
@@ -186,9 +186,9 @@ func DefaultLookingGlassTasks() []LookingGlassTask {
 					Key:          "target",
 					Label:        "Target IP or Prefix",
 					Type:         ParamTypeIPOrCIDR,
-					Description:  "IPv4 or IPv6 address/prefix (e.g. 172.20.0.1 or 172.20.0.0/14)",
+					Description:  "IPv4 or IPv6 address/prefix (e.g. 172.20.0.53 or 172.20.0.0/14)",
 					Required:     true,
-					DefaultValue: "172.20.0.1",
+					DefaultValue: "172.20.0.53",
 				},
 				{
 					Key:          "scope",

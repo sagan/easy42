@@ -101,7 +101,12 @@ export const LookingGlassModal: React.FC<LookingGlassModalProps> = ({ nodes, ini
 
   const handleTabChange = (val: number) => {
     const nextTab = INDEX_TO_TAB[val] || "presets";
-    navigate(`/looking-glass/${nextTab}`);
+    const nextParams = new URLSearchParams();
+    if ((nextTab === "presets" || nextTab === "adhoc") && selectedNodes.length > 0) {
+      nextParams.set("node", [...selectedNodes].sort().join(","));
+    }
+    const searchStr = nextParams.toString();
+    navigate(`/looking-glass/${nextTab}${searchStr ? `?${searchStr}` : ""}`);
   };
 
   // Managed nodes (exclude external)
@@ -136,47 +141,67 @@ export const LookingGlassModal: React.FC<LookingGlassModalProps> = ({ nodes, ini
   useEffect(() => {
     if (managedNodes.length === 0) return;
 
-    const nodesParam = searchParams.get("nodes");
-    const nodeParam = searchParams.get("node") || initialNode;
-    const currentParamKey = nodesParam ? `nodes:${nodesParam}` : nodeParam ? `node:${nodeParam}` : null;
+    const rawParams = [
+      ...searchParams.getAll("node"),
+      ...searchParams.getAll("nodes"),
+      ...(initialNode ? [initialNode] : []),
+    ];
+    let queryNodes: string[] = [];
+    for (const p of rawParams) {
+      if (p) {
+        queryNodes.push(...p.split(",").map((s) => s.trim()).filter(Boolean));
+      }
+    }
+
+    const valid = Array.from(
+      new Set(queryNodes.filter((q) => managedNodes.some((m) => m.name === q)))
+    ).sort();
+
+    const currentParamKey = valid.length > 0 ? `node:${valid.join(",")}` : null;
 
     if (!hasInitializedNodes.current) {
       hasInitializedNodes.current = true;
       lastParamNodesRef.current = currentParamKey;
-      let queryNodes: string[] = [];
-      if (nodesParam) {
-        queryNodes = nodesParam
-          .split(",")
-          .map((s) => s.trim())
-          .filter(Boolean);
-      } else if (nodeParam) {
-        queryNodes = [nodeParam.trim()].filter(Boolean);
-      }
-      if (queryNodes.length > 0) {
-        const valid = queryNodes.filter((q) => managedNodes.some((m) => m.name === q));
-        if (valid.length > 0) {
-          setSelectedNodes(valid);
-          return;
-        }
-      }
-      setSelectedNodes([]); // don't auto select any node
-    } else if (currentParamKey && currentParamKey !== lastParamNodesRef.current) {
+      setSelectedNodes(valid);
+    } else if (currentParamKey !== lastParamNodesRef.current) {
       lastParamNodesRef.current = currentParamKey;
-      let queryNodes: string[] = [];
-      if (nodesParam) {
-        queryNodes = nodesParam
-          .split(",")
-          .map((s) => s.trim())
-          .filter(Boolean);
-      } else if (nodeParam) {
-        queryNodes = [nodeParam.trim()].filter(Boolean);
-      }
-      const valid = queryNodes.filter((q) => managedNodes.some((m) => m.name === q));
-      if (valid.length > 0) {
-        setSelectedNodes(valid);
-      }
+      setSelectedNodes(valid);
     }
   }, [managedNodes, searchParams, initialNode]);
+
+  // Synchronize selectedNodes to the current URL "node" query variable on presets & adhoc tabs
+  useEffect(() => {
+    if (!hasInitializedNodes.current) return;
+    if (currentTab !== "presets" && currentTab !== "adhoc") return;
+
+    const sortedNodes = [...selectedNodes].sort();
+    const nodeParamValue = sortedNodes.join(",");
+
+    const currentNodeParam = searchParams.get("node") || "";
+    const hasLegacyNodes = searchParams.has("nodes");
+
+    // Skip if URL is already in sync and there is no legacy 'nodes' parameter to clean up
+    if (currentNodeParam === nodeParamValue && !hasLegacyNodes) {
+      return;
+    }
+
+    const nextParams = new URLSearchParams(searchParams);
+    if (sortedNodes.length > 0) {
+      nextParams.set("node", nodeParamValue);
+    } else {
+      nextParams.delete("node");
+    }
+    nextParams.delete("nodes");
+
+    lastParamNodesRef.current = nodeParamValue ? `node:${nodeParamValue}` : null;
+    navigate(
+      {
+        pathname: location.pathname,
+        search: nextParams.toString() ? `?${nextParams.toString()}` : "",
+      },
+      { replace: true },
+    );
+  }, [selectedNodes, currentTab, searchParams, location.pathname, navigate]);
 
   // Task Catalog
   const [builtinTasks, setBuiltinTasks] = useState<LookingGlassTask[]>([]);
@@ -196,7 +221,7 @@ export const LookingGlassModal: React.FC<LookingGlassModalProps> = ({ nodes, ini
   // Ad-Hoc command state (initialized from URL if present)
   const [adHocTool, setAdHocTool] = useState<string>(() => searchParams.get("tool") || "ping");
   const [adHocCommand, setAdHocCommand] = useState<string>(
-    () => searchParams.get("cmd") || searchParams.get("command") || "ping -c 4 172.20.0.1",
+    () => searchParams.get("cmd") || searchParams.get("command") || "ping -c 4 172.20.0.53",
   );
   const [adHocParser, setAdHocParser] = useState<string>(
     () => searchParams.get("parser") || searchParams.get("visualizer") || "ping",
@@ -264,7 +289,7 @@ export const LookingGlassModal: React.FC<LookingGlassModalProps> = ({ nodes, ini
     setAdHocTool(tool);
     switch (tool) {
       case "ping":
-        setAdHocCommand("ping -c 4 172.20.0.1");
+        setAdHocCommand("ping -c 4 172.20.0.53");
         setAdHocParser("ping");
         break;
       case "tcp_ping":
@@ -272,11 +297,11 @@ export const LookingGlassModal: React.FC<LookingGlassModalProps> = ({ nodes, ini
         setAdHocParser("tcp_ping");
         break;
       case "traceroute":
-        setAdHocCommand("traceroute -m 30 -w 2 172.20.0.1");
+        setAdHocCommand("traceroute -m 30 -w 2 172.20.0.53");
         setAdHocParser("traceroute");
         break;
       case "mtr":
-        setAdHocCommand("mtr --report --report-cycles 5 --no-dns 172.20.0.1");
+        setAdHocCommand("mtr --report --report-cycles 5 --no-dns 172.20.0.53");
         setAdHocParser("mtr");
         break;
       case "bird_protocols":
@@ -284,7 +309,7 @@ export const LookingGlassModal: React.FC<LookingGlassModalProps> = ({ nodes, ini
         setAdHocParser("bird_protocols");
         break;
       case "bird_route":
-        setAdHocCommand("birdc show route for 172.20.0.1 all");
+        setAdHocCommand("birdc show route for 172.20.0.53 all");
         setAdHocParser("bird_route");
         break;
       case "ip_route":
@@ -302,15 +327,16 @@ export const LookingGlassModal: React.FC<LookingGlassModalProps> = ({ nodes, ini
 
   // Node selection toggles
   const handleToggleNode = (nodeName: string) => {
-    if (selectedNodes.includes(nodeName)) {
-      setSelectedNodes(selectedNodes.filter((n) => n !== nodeName));
-    } else {
-      setSelectedNodes([...selectedNodes, nodeName]);
-    }
+    setSelectedNodes((prev) => {
+      const next = prev.includes(nodeName)
+        ? prev.filter((n) => n !== nodeName)
+        : [...prev, nodeName];
+      return [...next].sort();
+    });
   };
 
   const handleSelectAllFiltered = () => {
-    setSelectedNodes(selectedNodes.length === filteredNodes.length ? [] : filteredNodes.map((n) => n.name));
+    setSelectedNodes(filteredNodes.map((n) => n.name).sort());
   };
 
   // Execute Looking Glass
@@ -322,10 +348,8 @@ export const LookingGlassModal: React.FC<LookingGlassModalProps> = ({ nodes, ini
 
     // Sync current tab form values to URL query variables ONLY on Run Looking Glass
     const newParams = new URLSearchParams();
-    if (selectedNodes.length > 1) {
-      newParams.set("nodes", selectedNodes.join(","));
-    } else if (selectedNodes.length === 1) {
-      newParams.set("node", selectedNodes[0]);
+    if (selectedNodes.length > 0) {
+      newParams.set("node", [...selectedNodes].sort().join(","));
     }
 
     if (activeTab === 0) {
@@ -338,9 +362,9 @@ export const LookingGlassModal: React.FC<LookingGlassModalProps> = ({ nodes, ini
           }
         });
       }
-      lastParamNodesRef.current = newParams.has("nodes")
-        ? `nodes:${newParams.get("nodes")}`
-        : `node:${newParams.get("node")}`;
+      lastParamNodesRef.current = newParams.has("node")
+        ? `node:${newParams.get("node")}`
+        : null;
       navigate({ pathname: "/looking-glass/presets", search: newParams.toString() }, { replace: true });
     } else if (activeTab === 1) {
       if (adHocTool) {
@@ -352,9 +376,9 @@ export const LookingGlassModal: React.FC<LookingGlassModalProps> = ({ nodes, ini
       if (adHocParser) {
         newParams.set("parser", adHocParser);
       }
-      lastParamNodesRef.current = newParams.has("nodes")
-        ? `nodes:${newParams.get("nodes")}`
-        : `node:${newParams.get("node")}`;
+      lastParamNodesRef.current = newParams.has("node")
+        ? `node:${newParams.get("node")}`
+        : null;
       navigate({ pathname: "/looking-glass/adhoc", search: newParams.toString() }, { replace: true });
     }
 
@@ -552,14 +576,24 @@ export const LookingGlassModal: React.FC<LookingGlassModalProps> = ({ nodes, ini
                       sx={{ fontSize: "0.72rem", height: 24, cursor: "pointer" }}
                     />
                   ))}
-                  <Button
-                    size="small"
-                    variant="text"
-                    onClick={handleSelectAllFiltered}
-                    sx={{ fontSize: "0.75rem", textTransform: "none", ml: 1, py: 0 }}
-                  >
-                    {selectedNodes.length === filteredNodes.length ? "Deselect All" : "Select All"}
-                  </Button>
+                  <span>
+                    <Button
+                      size="small"
+                      variant="text"
+                      onClick={handleSelectAllFiltered}
+                      sx={{ fontSize: "0.75rem", textTransform: "none", ml: 1, p: 0 }}
+                    >
+                      Select All
+                    </Button>
+                    <Button
+                      size="small"
+                      variant="text"
+                      onClick={() => setSelectedNodes([])}
+                      sx={{ fontSize: "0.75rem", textTransform: "none", ml: 1, p: 0 }}
+                    >
+                      Select None
+                    </Button>
+                  </span>
                 </Box>
               </Box>
 
@@ -746,7 +780,7 @@ export const LookingGlassModal: React.FC<LookingGlassModalProps> = ({ nodes, ini
                     fullWidth
                     value={adHocCommand}
                     onChange={(e) => setAdHocCommand(e.target.value)}
-                    placeholder="e.g. ping -c 4 172.20.0.1"
+                    placeholder="e.g. ping -c 4 172.20.0.53"
                     InputProps={{
                       sx: { fontFamily: "monospace", fontSize: "0.85rem", backgroundColor: "#F8FAFC" },
                     }}
@@ -882,7 +916,8 @@ export const LookingGlassModal: React.FC<LookingGlassModalProps> = ({ nodes, ini
                             setAdHocTool("whois");
                             setAdHocCommand(`whois -h whois.dn42 ${asn}`);
                             setAdHocParser("raw");
-                            navigate("/looking-glass/adhoc");
+                            const nodeSearch = selectedNodes.length > 0 ? `?node=${encodeURIComponent([...selectedNodes].sort().join(","))}` : "";
+                            navigate(`/looking-glass/adhoc${nodeSearch}`);
                           }}
                         />
                       ) : activeResult.parser === "ping" ? (
@@ -1126,7 +1161,7 @@ export const LookingGlassModal: React.FC<LookingGlassModalProps> = ({ nodes, ini
             nodes={managedNodes}
             onExecuteNow={(task) => {
               setSelectedTaskId(task.task_type === "tcp_ping" ? "tcp_ping" : "ping");
-              setSelectedNodes(task.nodes);
+              setSelectedNodes([...task.nodes].sort());
               setParamValues(task.params || {});
               navigate("/looking-glass/presets");
             }}

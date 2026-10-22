@@ -36,11 +36,11 @@ import {
   LogOut,
   Menu,
   X,
-  Share2,
   Activity,
   ExternalLink,
   FileCode2,
 } from "lucide-react";
+import { Easy42Logo } from "../Logo/Easy42Logo";
 import { useMesh } from "../../context/MeshContext";
 import { api } from "../../api/client";
 import { AddNodeModal } from "../Modals/AddNodeModal";
@@ -90,6 +90,9 @@ export const AppLayout: React.FC = () => {
     openApplyModal,
     stateToast,
     setStateToast,
+    selectedNode,
+    setSelectedNode,
+    setSelectedLink,
   } = useMesh();
 
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
@@ -147,7 +150,7 @@ export const AppLayout: React.FC = () => {
       >
         <Toolbar sx={{ px: { xs: 1.5, sm: 2.5 }, minHeight: { xs: 56, sm: 62 }, justifyContent: "space-between" }}>
           {/* Brand Logo & Title */}
-          <Box sx={{ display: "flex", alignItems: "center", gap: { xs: 1, sm: 2 } }}>
+          <Box sx={{ display: "flex", alignItems: "center" }}>
             {isMobile && (
               <IconButton size="small" onClick={() => setMobileDrawerOpen(true)} sx={{ color: "#334155" }}>
                 <Menu size={22} />
@@ -164,21 +167,13 @@ export const AppLayout: React.FC = () => {
                 userSelect: "none",
               }}
             >
-              <Box
+              <Easy42Logo
+                size={32}
                 sx={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: 2,
-                  bgcolor: "#4F46E5",
-                  color: "#FFFFFF",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
+                  borderRadius: "8px",
                   boxShadow: "0 4px 10px rgba(79, 70, 229, 0.25)",
                 }}
-              >
-                <Share2 size={18} />
-              </Box>
+              />
               <Box>
                 <Typography variant="subtitle1" sx={{ fontWeight: 800, color: "#0F172A", lineHeight: 1.1 }}>
                   easy42
@@ -191,7 +186,7 @@ export const AppLayout: React.FC = () => {
 
             {/* Desktop Navigation Tabs */}
             {!isMobile && (
-              <Box sx={{ display: "flex", alignItems: "center", gap: 0.8, ml: 3 }}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 0.8, ml: 2 }}>
                 {navItems.map((item) => {
                   const isActive = currentPath === item.path || currentPath.startsWith(item.path + "/");
                   return (
@@ -221,169 +216,146 @@ export const AppLayout: React.FC = () => {
 
                 {flapAlertedUrl && (
                   <Box sx={{ display: "flex", alignItems: "center", gap: 0.8 }}>
-                    <Tooltip title="Open FlapAlerted Dashboard">
-                      <Button
-                        component="a"
-                        href={flapAlertedUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        endIcon={<ExternalLink size={13} />}
+                    <Tooltip
+                      arrow
+                      componentsProps={{
+                        tooltip: {
+                          sx: {
+                            bgcolor: "#0F172A",
+                            color: "#F8FAFC",
+                            boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.3), 0 8px 10px -6px rgba(0, 0, 0, 0.3)",
+                            p: 1.5,
+                            borderRadius: 2,
+                            border: "1px solid rgba(255, 255, 255, 0.1)",
+                            maxWidth: 280,
+                          },
+                        },
+                        arrow: {
+                          sx: { color: "#0F172A" },
+                        },
+                      }}
+                      title={
+                        <Box sx={{ display: "flex", flexDirection: "column", gap: 0.8 }}>
+                          <Box
+                            sx={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 1,
+                              pb: 0.8,
+                              borderBottom: "1px solid rgba(255, 255, 255, 0.1)",
+                            }}
+                          >
+                            <Activity size={15} color="#38BDF8" />
+                            <Typography
+                              variant="subtitle2"
+                              sx={{ fontWeight: 700, fontSize: "0.82rem", color: "#F8FAFC" }}
+                            >
+                              FlapAlerted Metrics
+                            </Typography>
+                          </Box>
+                          <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5, fontSize: "0.78rem" }}>
+                            <Box sx={{ display: "flex", justifyContent: "space-between", gap: 2 }}>
+                              <Typography variant="caption" sx={{ color: "#94A3B8" }}>
+                                Avg Route Changes (90m):
+                              </Typography>
+                              <Typography variant="caption" sx={{ fontWeight: 700, color: "#38BDF8" }}>
+                                {flapAlertedMetrics?.AverageRouteChanges90}
+                              </Typography>
+                            </Box>
+                            <Box sx={{ display: "flex", justifyContent: "space-between", gap: 2 }}>
+                              <Typography variant="caption" sx={{ color: "#94A3B8" }}>
+                                Active Flaps:
+                              </Typography>
+                              <Typography
+                                variant="caption"
+                                sx={{
+                                  fontWeight: 700,
+                                  color: (flapAlertedMetrics?.ActiveFlapCount ?? 0) > 0 ? "#F87171" : "#4ADE80",
+                                }}
+                              >
+                                {flapAlertedMetrics?.ActiveFlapCount ?? 0}
+                              </Typography>
+                            </Box>
+                            <Box sx={{ display: "flex", justifyContent: "space-between", gap: 2 }}>
+                              <Typography variant="caption" sx={{ color: "#94A3B8" }}>
+                                Active Flap Path Changes:
+                              </Typography>
+                              <Typography variant="caption" sx={{ fontWeight: 600, color: "#F1F5F9" }}>
+                                {flapAlertedMetrics?.ActiveFlapTotalPathChangeCount ?? 0}
+                              </Typography>
+                            </Box>
+                            <Box sx={{ display: "flex", justifyContent: "space-between", gap: 2 }}>
+                              <Typography variant="caption" sx={{ color: "#94A3B8" }}>
+                                Total Path Changes:
+                              </Typography>
+                              <Typography variant="caption" sx={{ fontWeight: 600, color: "#F1F5F9" }}>
+                                {flapAlertedMetrics?.TotalPathChangeCount ?? 0}
+                              </Typography>
+                            </Box>
+                            <Box sx={{ display: "flex", justifyContent: "space-between", gap: 2 }}>
+                              <Typography variant="caption" sx={{ color: "#94A3B8" }}>
+                                Sessions:
+                              </Typography>
+                              <Typography variant="caption" sx={{ fontWeight: 600, color: "#F1F5F9" }}>
+                                {flapAlertedMetrics?.Sessions ?? 0}
+                              </Typography>
+                            </Box>
+                          </Box>
+                        </Box>
+                      }
+                    >
+                      <Box
                         sx={{
-                          px: 1.6,
-                          py: 0.8,
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 0.5,
+                          px: 1.2,
+                          py: 0.7,
                           borderRadius: 2,
-                          fontSize: "0.85rem",
-                          fontWeight: 700,
-                          color: "#0891B2",
                           bgcolor: "rgba(8, 145, 178, 0.08)",
                           border: "1px solid rgba(8, 145, 178, 0.25)",
                           textDecoration: "none",
+                          cursor: "pointer",
+                          transition: "all 0.15s ease",
                           "&:hover": {
                             bgcolor: "rgba(8, 145, 178, 0.16)",
-                            color: "#0e7490",
                             borderColor: "#0891B2",
                           },
                         }}
                       >
-                        FA
-                      </Button>
-                    </Tooltip>
-
-                    {flapAlertedMetrics && flapAlertedMetrics.AverageRouteChanges90 !== undefined && (
-                      <Tooltip
-                        arrow
-                        componentsProps={{
-                          tooltip: {
-                            sx: {
-                              bgcolor: "#0F172A",
-                              color: "#F8FAFC",
-                              boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.3), 0 8px 10px -6px rgba(0, 0, 0, 0.3)",
-                              p: 1.5,
-                              borderRadius: 2,
-                              border: "1px solid rgba(255, 255, 255, 0.1)",
-                              maxWidth: 280,
-                            },
-                          },
-                          arrow: {
-                            sx: { color: "#0F172A" },
-                          },
-                        }}
-                        title={
-                          <Box sx={{ display: "flex", flexDirection: "column", gap: 0.8 }}>
-                            <Box
-                              sx={{
-                                display: "flex",
-                                alignItems: "center",
-                                gap: 1,
-                                pb: 0.8,
-                                borderBottom: "1px solid rgba(255, 255, 255, 0.1)",
-                              }}
-                            >
-                              <Activity size={15} color="#38BDF8" />
-                              <Typography
-                                variant="subtitle2"
-                                sx={{ fontWeight: 700, fontSize: "0.82rem", color: "#F8FAFC" }}
-                              >
-                                FlapAlerted Metrics
-                              </Typography>
-                            </Box>
-                            <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5, fontSize: "0.78rem" }}>
-                              <Box sx={{ display: "flex", justifyContent: "space-between", gap: 2 }}>
-                                <Typography variant="caption" sx={{ color: "#94A3B8" }}>
-                                  Avg Route Changes (90m):
-                                </Typography>
-                                <Typography variant="caption" sx={{ fontWeight: 700, color: "#38BDF8" }}>
-                                  {flapAlertedMetrics.AverageRouteChanges90}
-                                </Typography>
-                              </Box>
-                              <Box sx={{ display: "flex", justifyContent: "space-between", gap: 2 }}>
-                                <Typography variant="caption" sx={{ color: "#94A3B8" }}>
-                                  Active Flaps:
-                                </Typography>
-                                <Typography
-                                  variant="caption"
-                                  sx={{
-                                    fontWeight: 700,
-                                    color: (flapAlertedMetrics.ActiveFlapCount ?? 0) > 0 ? "#F87171" : "#4ADE80",
-                                  }}
-                                >
-                                  {flapAlertedMetrics.ActiveFlapCount ?? 0}
-                                </Typography>
-                              </Box>
-                              <Box sx={{ display: "flex", justifyContent: "space-between", gap: 2 }}>
-                                <Typography variant="caption" sx={{ color: "#94A3B8" }}>
-                                  Active Flap Path Changes:
-                                </Typography>
-                                <Typography variant="caption" sx={{ fontWeight: 600, color: "#F1F5F9" }}>
-                                  {flapAlertedMetrics.ActiveFlapTotalPathChangeCount ?? 0}
-                                </Typography>
-                              </Box>
-                              <Box sx={{ display: "flex", justifyContent: "space-between", gap: 2 }}>
-                                <Typography variant="caption" sx={{ color: "#94A3B8" }}>
-                                  Total Path Changes:
-                                </Typography>
-                                <Typography variant="caption" sx={{ fontWeight: 600, color: "#F1F5F9" }}>
-                                  {flapAlertedMetrics.TotalPathChangeCount ?? 0}
-                                </Typography>
-                              </Box>
-                              <Box sx={{ display: "flex", justifyContent: "space-between", gap: 2 }}>
-                                <Typography variant="caption" sx={{ color: "#94A3B8" }}>
-                                  Sessions:
-                                </Typography>
-                                <Typography variant="caption" sx={{ fontWeight: 600, color: "#F1F5F9" }}>
-                                  {flapAlertedMetrics.Sessions ?? 0}
-                                </Typography>
-                              </Box>
-                            </Box>
-                          </Box>
-                        }
-                      >
                         <Box
                           sx={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: 0.5,
-                            px: 1.2,
-                            py: 0.7,
-                            borderRadius: 2,
-                            bgcolor: "rgba(8, 145, 178, 0.08)",
-                            border: "1px solid rgba(8, 145, 178, 0.25)",
-                            textDecoration: "none",
-                            cursor: "pointer",
-                            transition: "all 0.15s ease",
-                            "&:hover": {
-                              bgcolor: "rgba(8, 145, 178, 0.16)",
-                              borderColor: "#0891B2",
-                            },
+                            width: 6,
+                            height: 6,
+                            borderRadius: "50%",
+                            bgcolor: (flapAlertedMetrics?.ActiveFlapCount ?? 0) > 0 ? "#EF4444" : "#10B981",
+                            boxShadow:
+                              (flapAlertedMetrics?.ActiveFlapCount ?? 0) > 0
+                                ? "0 0 6px rgba(239, 68, 68, 0.6)"
+                                : "0 0 6px rgba(16, 185, 129, 0.6)",
+                          }}
+                        />
+                        <Typography
+                          component="span"
+                          sx={{
+                            fontSize: "0.85rem",
+                            fontWeight: 700,
+                            fontVariantNumeric: "tabular-nums",
+                            color: "#0891B2",
+                            lineHeight: 1,
                           }}
                         >
-                          <Box
-                            sx={{
-                              width: 6,
-                              height: 6,
-                              borderRadius: "50%",
-                              bgcolor: (flapAlertedMetrics.ActiveFlapCount ?? 0) > 0 ? "#EF4444" : "#10B981",
-                              boxShadow:
-                                (flapAlertedMetrics.ActiveFlapCount ?? 0) > 0
-                                  ? "0 0 6px rgba(239, 68, 68, 0.6)"
-                                  : "0 0 6px rgba(16, 185, 129, 0.6)",
-                            }}
-                          />
-                          <Typography
-                            component="span"
-                            sx={{
-                              fontSize: "0.85rem",
-                              fontWeight: 700,
-                              fontVariantNumeric: "tabular-nums",
-                              color: "#0891B2",
-                              lineHeight: 1,
-                            }}
+                          <a
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            href={flapAlertedUrl}
+                            style={{ textDecoration: "none" }}
                           >
-                            {flapAlertedMetrics.AverageRouteChanges90}
-                          </Typography>
-                        </Box>
-                      </Tooltip>
-                    )}
+                            FA {(parseFloat(flapAlertedMetrics?.AverageRouteChanges90 as string) || 0).toFixed(1)}
+                          </a>
+                        </Typography>
+                      </Box>
+                    </Tooltip>
                   </Box>
                 )}
               </Box>
@@ -553,20 +525,7 @@ export const AppLayout: React.FC = () => {
         <Box sx={{ width: 260, p: 2, display: "flex", flexDirection: "column", height: "100%" }}>
           <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
             <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-              <Box
-                sx={{
-                  width: 30,
-                  height: 30,
-                  borderRadius: 1.5,
-                  bgcolor: "#4F46E5",
-                  color: "#FFFFFF",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <Share2 size={16} />
-              </Box>
+              <Easy42Logo size={30} sx={{ borderRadius: "7px" }} />
               <Typography variant="h6" sx={{ fontWeight: 800, color: "#0F172A" }}>
                 easy42
               </Typography>
@@ -675,7 +634,10 @@ export const AppLayout: React.FC = () => {
         onClose={() => setAddNodeOpen(false)}
         nodeToEdit={nodeToEdit}
         onNodeAdded={() => loadData()}
-        onNodeUpdated={() => loadData()}
+        onNodeUpdated={(updated) => {
+          setSelectedNode(updated);
+          loadData();
+        }}
       />
 
       <RenameNodeModal
@@ -683,7 +645,12 @@ export const AppLayout: React.FC = () => {
         onClose={() => setRenameModalOpen(false)}
         node={nodeToRename}
         existingNodes={nodes}
-        onNodeRenamed={() => loadData()}
+        onNodeRenamed={(oldName, updated) => {
+          if (selectedNode?.name === oldName) {
+            setSelectedNode(updated);
+          }
+          loadData();
+        }}
       />
 
       <AddLinkModal
@@ -694,7 +661,10 @@ export const AppLayout: React.FC = () => {
         initialTo={connectTo}
         nodes={nodes}
         onLinkAdded={() => loadData()}
-        onLinkUpdated={() => loadData()}
+        onLinkUpdated={(updated) => {
+          setSelectedLink(updated);
+          loadData();
+        }}
       />
 
       <UnlockModal
@@ -735,9 +705,7 @@ export const AppLayout: React.FC = () => {
             });
 
             const targetNodes =
-              result.affected_nodes && result.affected_nodes.length > 0
-                ? result.affected_nodes.join(",")
-                : undefined;
+              result.affected_nodes && result.affected_nodes.length > 0 ? result.affected_nodes.join(",") : undefined;
 
             api
               .executeSync(false, targetNodes)

@@ -11,6 +11,7 @@ import {
   GraphBlock,
   FlapAlertedMetrics,
 } from "../types/api";
+import { isSameLink } from "../utils/link";
 
 interface MeshContextType {
   // Auth state
@@ -122,6 +123,23 @@ export const MeshProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Selected for drawers
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
   const [selectedLink, setSelectedLink] = useState<Link | null>(null);
+
+  // Synchronize selectedNode and selectedLink when nodes or links are updated
+  useEffect(() => {
+    setSelectedNode((prev) => {
+      if (!prev) return null;
+      const fresh = nodes.find((n) => n.name === prev.name);
+      return fresh || null;
+    });
+  }, [nodes]);
+
+  useEffect(() => {
+    setSelectedLink((prev) => {
+      if (!prev) return null;
+      const fresh = links.find((l) => isSameLink(l, prev));
+      return fresh || null;
+    });
+  }, [links]);
 
   // Modals
   const [addNodeOpen, setAddNodeOpen] = useState(false);
@@ -240,6 +258,14 @@ export const MeshProvider: React.FC<{ children: React.ReactNode }> = ({ children
         ]);
       setNodes(nodesData || []);
       setLinks(linksData || []);
+      setSelectedNode((prev) => {
+        if (!prev) return null;
+        return (nodesData || []).find((n) => n.name === prev.name) || null;
+      });
+      setSelectedLink((prev) => {
+        if (!prev) return null;
+        return (linksData || []).find((l) => isSameLink(l, prev)) || null;
+      });
       setNodeStatuses(statusesData || {});
       setNetworkState(stateData);
       setNetworkPolicies(policiesData || []);

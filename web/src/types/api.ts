@@ -116,6 +116,7 @@ export interface Node {
   name: string;
   host?: string;
   is_external?: boolean;
+  caption?: string;
   description?: string;
   note?: string;
   ip?: string;

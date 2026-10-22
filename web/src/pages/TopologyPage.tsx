@@ -7,9 +7,12 @@ import { LinkDetailDrawer } from "../components/Topology/LinkDetailDrawer";
 import { Node, Link } from "../types/api";
 import { api } from "../api/client";
 import { useNavigate } from "react-router-dom";
+import { isSameLink } from "../utils/link";
 
 export const TopologyPage: React.FC = () => {
   const {
+    nodes,
+    links,
     displayedNodes,
     displayedLinks,
     displayedInternalNodes,
@@ -85,17 +88,20 @@ export const TopologyPage: React.FC = () => {
   );
 
   const handleEditNode = (node: Node) => {
-    setNodeToEdit(node);
+    const latest = nodes.find((n) => n.name === node.name) || node;
+    setNodeToEdit(latest);
     setAddNodeOpen(true);
   };
 
   const handleOpenRenameNode = (node: Node) => {
-    setNodeToRename(node);
+    const latest = nodes.find((n) => n.name === node.name) || node;
+    setNodeToRename(latest);
     setRenameModalOpen(true);
   };
 
   const handleEditLink = (link: Link) => {
-    setLinkToEdit(link);
+    const latest = links.find((l) => isSameLink(l, link)) || link;
+    setLinkToEdit(latest);
     setAddLinkOpen(true);
   };
 
@@ -236,7 +242,10 @@ export const TopologyPage: React.FC = () => {
           setSyncTargetNode(name);
           setSyncOpen(true);
         }}
-        onNodeUpdated={() => loadData()}
+        onNodeUpdated={(updated) => {
+          setSelectedNode(updated);
+          loadData();
+        }}
       />
 
       <LinkDetailDrawer
@@ -246,6 +255,13 @@ export const TopologyPage: React.FC = () => {
         onEditLink={handleEditLink}
         onLinkDeleted={() => {
           setSelectedLink(null);
+          loadData();
+        }}
+        onRefreshLink={async () => {
+          await loadData();
+        }}
+        onLinkUpdated={(updated) => {
+          setSelectedLink(updated);
           loadData();
         }}
         networkState={networkState}

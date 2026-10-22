@@ -686,6 +686,9 @@ func formatNodeDetail(node *config.Node, live *config.NodeLiveStatus, links []co
 	if len(node.Tags) > 0 {
 		sb.WriteString(fmt.Sprintf("• Tags: %s\n", html.EscapeString(strings.Join(node.Tags, ", "))))
 	}
+	if node.Caption != "" {
+		sb.WriteString(fmt.Sprintf("• Caption: <i>%s</i>\n", html.EscapeString(node.Caption)))
+	}
 	if node.Description != "" {
 		sb.WriteString(fmt.Sprintf("• Description: <i>%s</i>\n", html.EscapeString(node.Description)))
 	}

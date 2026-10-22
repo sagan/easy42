@@ -441,7 +441,7 @@ func TestFormatNodeDetail(t *testing.T) {
 	node := &config.Node{
 		Name:         "node1",
 		Host:         "198.51.100.1",
-		IP:           "172.20.0.1",
+		IP:           "172.20.0.53",
 		IP6:          "fd42:a159:f9f0::1",
 		ASN:          4224420001,
 		Description:  "Main Gateway",
@@ -540,7 +540,7 @@ func TestFormatNodeDetail(t *testing.T) {
 	if !strings.Contains(text, "4224420001") {
 		t.Errorf("expected ASN in formatted text")
 	}
-	if !strings.Contains(text, "172.20.0.1") {
+	if !strings.Contains(text, "172.20.0.53") {
 		t.Errorf("expected IPv4 in formatted text")
 	}
 	if !strings.Contains(text, "fd42:a159:f9f0::1") {
@@ -732,7 +732,7 @@ func TestWebhookCommandRouting(t *testing.T) {
 			OnlineNodes: 2,
 		},
 		configNodes: []config.Node{
-			{Name: "foobar", IP: "172.20.0.1", Mode: "agent"},
+			{Name: "foobar", IP: "172.20.0.53", Mode: "agent"},
 			{Name: "foobaz", IP: "172.20.0.2", Mode: "ssh"},
 			{Name: "london-gw", IP: "172.20.0.3", Mode: "agent"},
 			{Name: "external-peer", IP: "172.20.0.99", IsExternal: true},

@@ -616,6 +616,26 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
             ))}
           </Box>
         )}
+
+        {/* Node Caption */}
+        {node.caption && node.caption.trim() !== "" && (
+          <Typography
+            variant="caption"
+            sx={{
+              display: "block",
+              color: "#64748B",
+              fontSize: "0.68rem",
+              lineHeight: 1.3,
+              mt: 0.6,
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+            }}
+            title={node.caption}
+          >
+            {node.caption}
+          </Typography>
+        )}
       </Box>
 
       {/* Live State Bottom Line (Present when agent is working) */}

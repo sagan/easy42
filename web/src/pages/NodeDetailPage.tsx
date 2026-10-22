@@ -42,6 +42,7 @@ import {
   ArrowLeft,
   RefreshCw,
   Activity,
+  Info,
   Network,
   Shield,
   FileText,
@@ -192,8 +193,25 @@ export const NodeDetailPage: React.FC = () => {
 
   // Tabs state synced with query params
   const tabParam = searchParams.get("tab") || "overview";
-  const validTabs = ["overview", "metrics", "telemetry", "networking", "routing", "firewall", "agent", "cron_tasks"];
+  const validTabs = node?.is_external
+    ? ["overview", "networking"]
+    : ["overview", "metrics", "telemetry", "networking", "routing", "firewall", "agent", "cron_tasks"];
   const currentTab = validTabs.includes(tabParam) ? (tabParam === "telemetry" ? "metrics" : tabParam) : "overview";
+
+  useEffect(() => {
+    if (node?.is_external && tabParam !== "overview" && tabParam !== "networking") {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.set("tab", "overview");
+          next.delete("task");
+          next.delete("taskId");
+          return next;
+        },
+        { replace: true },
+      );
+    }
+  }, [node?.is_external, tabParam, setSearchParams]);
 
   const handleTabChange = (_: React.SyntheticEvent, newValue: string) => {
     setSearchParams(
@@ -294,7 +312,7 @@ export const NodeDetailPage: React.FC = () => {
 
   // When visiting the agent tab, query existing token from server if not yet loaded
   useEffect(() => {
-    if (currentTab === "agent" && node && !node.agent_token && !agentToken) {
+    if (currentTab === "agent" && node && !node.is_external && !node.agent_token && !agentToken) {
       api
         .getNodeAgent(node.name)
         .then((res) => {
@@ -304,7 +322,7 @@ export const NodeDetailPage: React.FC = () => {
         })
         .catch(() => {});
     }
-  }, [currentTab, node?.name, node?.agent_token, agentToken]);
+  }, [currentTab, node?.name, node?.agent_token, node?.is_external, agentToken]);
 
   const handleRotateAgentToken = async () => {
     if (!node) return;
@@ -1163,24 +1181,28 @@ export const NodeDetailPage: React.FC = () => {
                   <RotateCcw size={16} color="#D97706" /> Restart BIRD Service
                 </MenuItem>
               )}
-              <MenuItem
-                onClick={() => {
-                  setMoreMenuAnchor(null);
-                  navigate(`/looking-glass/presets?node=${encodeURIComponent(node?.name || "")}`);
-                }}
-                sx={{ fontSize: "0.82rem", gap: 1.2, py: 1 }}
-              >
-                <Compass size={16} color="#0891B2" /> Looking Glass
-              </MenuItem>
-              <MenuItem
-                onClick={() => {
-                  setMoreMenuAnchor(null);
-                  navigate(`/helper?node=${encodeURIComponent(node?.name || "")}`);
-                }}
-                sx={{ fontSize: "0.82rem", gap: 1.2, py: 1 }}
-              >
-                <Wrench size={16} color="#475569" /> Device Config Helper
-              </MenuItem>
+              {!node?.is_external && (
+                <MenuItem
+                  onClick={() => {
+                    setMoreMenuAnchor(null);
+                    navigate(`/looking-glass/presets?node=${encodeURIComponent(node?.name || "")}`);
+                  }}
+                  sx={{ fontSize: "0.82rem", gap: 1.2, py: 1 }}
+                >
+                  <Compass size={16} color="#0891B2" /> Looking Glass
+                </MenuItem>
+              )}
+              {!node?.is_external && (
+                <MenuItem
+                  onClick={() => {
+                    setMoreMenuAnchor(null);
+                    navigate(`/helper?node=${encodeURIComponent(node?.name || "")}`);
+                  }}
+                  sx={{ fontSize: "0.82rem", gap: 1.2, py: 1 }}
+                >
+                  <Wrench size={16} color="#475569" /> Device Config Helper
+                </MenuItem>
+              )}
               <Divider sx={{ my: 0.5 }} />
               <MenuItem
                 onClick={() => {
@@ -1244,19 +1266,21 @@ export const NodeDetailPage: React.FC = () => {
                   </Typography>
 
                   {/* Status chip */}
-                  <Chip
-                    label={isOnline ? "Online" : agentInstalled ? "Offline" : "No Agent"}
-                    size="small"
-                    sx={{
-                      bgcolor: isOnline ? "#ECFDF5" : agentInstalled ? "#FEF2F2" : "#F1F5F9",
-                      color: isOnline ? "#059669" : agentInstalled ? "#E11D48" : "#64748B",
-                      fontWeight: 700,
-                      fontSize: "0.75rem",
-                      height: 24,
-                      px: 0.5,
-                      border: !agentInstalled ? "1px solid #E2E8F0" : "none",
-                    }}
-                  />
+                  {!node?.is_external && (
+                    <Chip
+                      label={isOnline ? "Online" : agentInstalled ? "Offline" : "No Agent"}
+                      size="small"
+                      sx={{
+                        bgcolor: isOnline ? "#ECFDF5" : agentInstalled ? "#FEF2F2" : "#F1F5F9",
+                        color: isOnline ? "#059669" : agentInstalled ? "#E11D48" : "#64748B",
+                        fontWeight: 700,
+                        fontSize: "0.75rem",
+                        height: 24,
+                        px: 0.5,
+                        border: !agentInstalled ? "1px solid #E2E8F0" : "none",
+                      }}
+                    />
+                  )}
 
                   {/* Belonging block chips */}
                   {currentNodeBlocks.map((b) => (
@@ -1265,6 +1289,12 @@ export const NodeDetailPage: React.FC = () => {
                       icon={<Layers size={13} style={{ color: b.color || "#4F46E5" }} />}
                       label={b.name}
                       size="small"
+                      component="a"
+                      href={`/nodes?block=${encodeURIComponent(b.name)}`}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        navigate(`/nodes?block=${encodeURIComponent(b.name)}`);
+                      }}
                       sx={{
                         height: 24,
                         fontSize: "0.72rem",
@@ -1305,58 +1335,64 @@ export const NodeDetailPage: React.FC = () => {
                   <Typography variant="body2" sx={{ color: "#64748B" }}>
                     ASN: <strong style={{ color: "#0F172A" }}>{node?.asn || 424242}</strong>
                   </Typography>
-                  <Typography variant="caption" sx={{ color: "#CBD5E1" }}>
-                    •
-                  </Typography>
-                  <Typography variant="body2" sx={{ color: "#64748B" }}>
-                    Uptime:{" "}
-                    <strong style={{ color: isOnline ? "#059669" : "#64748B" }}>
-                      {formatUptime(live?.uptime_seconds ?? status?.metrics?.uptime_seconds)}
-                    </strong>
-                  </Typography>
+                  {!node?.is_external && (
+                    <>
+                      <Typography variant="caption" sx={{ color: "#CBD5E1" }}>
+                        •
+                      </Typography>
+                      <Typography variant="body2" sx={{ color: "#64748B" }}>
+                        Uptime:{" "}
+                        <strong style={{ color: isOnline ? "#059669" : "#64748B" }}>
+                          {formatUptime(live?.uptime_seconds ?? status?.metrics?.uptime_seconds)}
+                        </strong>
+                      </Typography>
+                    </>
+                  )}
                 </Box>
               </Box>
             </Box>
 
             {/* Quick action buttons row */}
-            <Box sx={{ display: "flex", gap: 1 }}>
-              <Button
-                variant="outlined"
-                size="small"
-                startIcon={<Compass size={15} />}
-                onClick={() => navigate(`/looking-glass/presets?node=${encodeURIComponent(node?.name || "")}`)}
-                sx={{
-                  color: "#0891B2",
-                  borderColor: "#CFFAFE",
-                  bgcolor: "#ECFEFF",
-                  fontWeight: 600,
-                  fontSize: "0.78rem",
-                  "&:hover": { bgcolor: "#CFFAFE", borderColor: "#A5F3FC" },
-                }}
-              >
-                Looking Glass
-              </Button>
-              <Button
-                variant="outlined"
-                size="small"
-                startIcon={<Wrench size={15} />}
-                onClick={() => navigate(`/helper?node=${encodeURIComponent(node?.name || "")}`)}
-                sx={{
-                  color: "#475569",
-                  borderColor: "#E2E8F0",
-                  bgcolor: "#F8FAFC",
-                  fontWeight: 600,
-                  fontSize: "0.78rem",
-                  "&:hover": { bgcolor: "#F1F5F9", borderColor: "#CBD5E1" },
-                }}
-              >
-                Device Helper
-              </Button>
-            </Box>
+            {!node?.is_external && (
+              <Box sx={{ display: "flex", gap: 1 }}>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  startIcon={<Compass size={15} />}
+                  onClick={() => navigate(`/looking-glass/presets?node=${encodeURIComponent(node?.name || "")}`)}
+                  sx={{
+                    color: "#0891B2",
+                    borderColor: "#CFFAFE",
+                    bgcolor: "#ECFEFF",
+                    fontWeight: 600,
+                    fontSize: "0.78rem",
+                    "&:hover": { bgcolor: "#CFFAFE", borderColor: "#A5F3FC" },
+                  }}
+                >
+                  Looking Glass
+                </Button>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  startIcon={<Wrench size={15} />}
+                  onClick={() => navigate(`/helper?node=${encodeURIComponent(node?.name || "")}`)}
+                  sx={{
+                    color: "#475569",
+                    borderColor: "#E2E8F0",
+                    bgcolor: "#F8FAFC",
+                    fontWeight: 600,
+                    fontSize: "0.78rem",
+                    "&:hover": { bgcolor: "#F1F5F9", borderColor: "#CBD5E1" },
+                  }}
+                >
+                  Device Helper
+                </Button>
+              </Box>
+            )}
           </Box>
 
           {/* Quick Realtime Metrics Bar */}
-          {agentInstalled && (
+          {!node?.is_external && agentInstalled && (
             <Box
               sx={{
                 display: "grid",
@@ -1491,13 +1527,15 @@ export const NodeDetailPage: React.FC = () => {
               label="Overview"
               title="Overview & Specs"
             />
-            <Tab
-              value="metrics"
-              icon={<Activity size={16} />}
-              iconPosition="start"
-              label="Metrics"
-              title="Telemetry & Historical Charts"
-            />
+            {!node?.is_external && (
+              <Tab
+                value="metrics"
+                icon={<Activity size={16} />}
+                iconPosition="start"
+                label="Metrics"
+                title="Telemetry & Historical Charts"
+              />
+            )}
             <Tab
               value="networking"
               icon={<Network size={16} />}
@@ -1505,28 +1543,73 @@ export const NodeDetailPage: React.FC = () => {
               label="Network"
               title={`Network & Links (${nodeLinks.length})`}
             />
-            <Tab
-              value="routing"
-              icon={<Radio size={16} />}
-              iconPosition="start"
-              label="Routing"
-              title="Routing & BIRD"
-            />
-            <Tab
-              value="firewall"
-              icon={<Shield size={16} />}
-              iconPosition="start"
-              label="Firewall"
-              title="Firewall & Security"
-            />
-            <Tab value="agent" icon={<Zap size={16} />} iconPosition="start" label="Agent" title="Agent" />
-            <Tab value="cron_tasks" icon={<Clock size={16} />} iconPosition="start" label="Tasks" title="Cron Tasks" />
+            {!node?.is_external && (
+              <Tab
+                value="routing"
+                icon={<Radio size={16} />}
+                iconPosition="start"
+                label="Routing"
+                title="Routing & BIRD"
+              />
+            )}
+            {!node?.is_external && (
+              <Tab
+                value="firewall"
+                icon={<Shield size={16} />}
+                iconPosition="start"
+                label="Firewall"
+                title="Firewall & Security"
+              />
+            )}
+            {!node?.is_external && (
+              <Tab value="agent" icon={<Zap size={16} />} iconPosition="start" label="Agent" title="Agent" />
+            )}
+            {!node?.is_external && (
+              <Tab value="cron_tasks" icon={<Clock size={16} />} iconPosition="start" label="Tasks" title="Cron Tasks" />
+            )}
           </Tabs>
         </Box>
 
         {/* Tab 1: Overview & Specs */}
         {currentTab === "overview" && node && (
           <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
+            {node.caption && node.caption.trim() !== "" && (
+              <Paper
+                elevation={0}
+                sx={{
+                  p: 2,
+                  px: 2.5,
+                  borderRadius: 2.5,
+                  bgcolor: "#FFFFFF",
+                  border: "1px solid #E2E8F0",
+                  borderLeft: "4px solid #4F46E5",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 1.5,
+                }}
+              >
+                <Info size={18} color="#4F46E5" style={{ flexShrink: 0 }} />
+                <Box sx={{ minWidth: 0 }}>
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      color: "#64748B",
+                      fontWeight: 700,
+                      textTransform: "uppercase",
+                      letterSpacing: "0.5px",
+                      display: "block",
+                      fontSize: "0.68rem",
+                    }}
+                  >
+                    Node Caption
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: "#0F172A", fontWeight: 600, mt: 0.2 }}>
+                    {node.caption}
+                  </Typography>
+                </Box>
+              </Paper>
+            )}
+
             <Grid container spacing={3}>
               {/* Configuration Specifications */}
               <Grid item xs={12} md={7}>
@@ -1642,7 +1725,11 @@ export const NodeDetailPage: React.FC = () => {
                               <IconButton
                                 size="small"
                                 onClick={() => handleCopy("ext_ip4", node.external_ip!)}
-                                sx={{ p: 0.3, color: "#B45309", "&:hover": { color: "#78350F", bgcolor: "rgba(180, 83, 9, 0.08)" } }}
+                                sx={{
+                                  p: 0.3,
+                                  color: "#B45309",
+                                  "&:hover": { color: "#78350F", bgcolor: "rgba(180, 83, 9, 0.08)" },
+                                }}
                               >
                                 {copiedKey === "ext_ip4" ? <Check size={14} color="#059669" /> : <Copy size={14} />}
                               </IconButton>
@@ -1658,7 +1745,11 @@ export const NodeDetailPage: React.FC = () => {
                               <IconButton
                                 size="small"
                                 onClick={() => handleCopy("ext_ip6", node.external_ip6!)}
-                                sx={{ p: 0.3, color: "#B45309", "&:hover": { color: "#78350F", bgcolor: "rgba(180, 83, 9, 0.08)" } }}
+                                sx={{
+                                  p: 0.3,
+                                  color: "#B45309",
+                                  "&:hover": { color: "#78350F", bgcolor: "rgba(180, 83, 9, 0.08)" },
+                                }}
                               >
                                 {copiedKey === "ext_ip6" ? <Check size={14} color="#059669" /> : <Copy size={14} />}
                               </IconButton>
@@ -1679,7 +1770,13 @@ export const NodeDetailPage: React.FC = () => {
                           <Chip
                             label="Auto-executes on routable"
                             size="small"
-                            sx={{ height: 18, fontSize: "0.65rem", fontWeight: 600, bgcolor: "#EEF2FF", color: "#4F46E5" }}
+                            sx={{
+                              height: 18,
+                              fontSize: "0.65rem",
+                              fontWeight: 600,
+                              bgcolor: "#EEF2FF",
+                              color: "#4F46E5",
+                            }}
                           />
                         </Box>
                         <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
@@ -1689,18 +1786,26 @@ export const NodeDetailPage: React.FC = () => {
                               onClick={() => handleCopy("custom_net_script", node.custom_network_script!)}
                               sx={{ p: 0.3, color: "#64748B" }}
                             >
-                              {copiedKey === "custom_net_script" ? <Check size={14} color="#059669" /> : <Copy size={14} />}
+                              {copiedKey === "custom_net_script" ? (
+                                <Check size={14} color="#059669" />
+                              ) : (
+                                <Copy size={14} />
+                              )}
                             </IconButton>
                           </Tooltip>
-                          <Button
-                            size="small"
-                            variant="outlined"
-                            startIcon={<Wrench size={13} />}
-                            onClick={() => navigate(`/helper?node=${encodeURIComponent(node.name)}&task=configure_network`)}
-                            sx={{ fontSize: "0.72rem", py: 0.2, px: 1, borderColor: "#CBD5E1", color: "#334155" }}
-                          >
-                            Configure
-                          </Button>
+                          {!node.is_external && (
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              startIcon={<Wrench size={13} />}
+                              onClick={() =>
+                                navigate(`/helper?node=${encodeURIComponent(node.name)}&task=configure_network`)
+                              }
+                              sx={{ fontSize: "0.72rem", py: 0.2, px: 1, borderColor: "#CBD5E1", color: "#334155" }}
+                            >
+                              Configure
+                            </Button>
+                          )}
                         </Box>
                       </Box>
                       <Box
@@ -1776,6 +1881,20 @@ export const NodeDetailPage: React.FC = () => {
                   </Typography>
 
                   <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+                    {node.caption && node.caption.trim() !== "" && (
+                      <>
+                        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 2 }}>
+                          <Typography variant="body2" sx={{ color: "#64748B", flexShrink: 0 }}>
+                            Caption:
+                          </Typography>
+                          <Typography variant="body2" sx={{ fontWeight: 600, color: "#0F172A", textAlign: "right" }}>
+                            {node.caption}
+                          </Typography>
+                        </Box>
+                        <Divider />
+                      </>
+                    )}
+
                     <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                       <Typography variant="body2" sx={{ color: "#64748B" }}>
                         Node Hostname:
@@ -1801,39 +1920,43 @@ export const NodeDetailPage: React.FC = () => {
                         Management Mode:
                       </Typography>
                       <Chip
-                        label={node.mode ? node.mode.toUpperCase() : "AGENT"}
+                        label={node.is_external ? "EXTERNAL" : node.mode ? node.mode.toUpperCase() : "AGENT"}
                         size="small"
                         sx={{
                           height: 20,
                           fontSize: "0.68rem",
                           fontWeight: 700,
-                          bgcolor: node.mode === "ssh" ? "#F1F5F9" : "#EEF2FF",
-                          color: node.mode === "ssh" ? "#475569" : "#4F46E5",
+                          bgcolor: node.is_external ? "#FEF3C7" : node.mode === "ssh" ? "#F1F5F9" : "#EEF2FF",
+                          color: node.is_external ? "#92400E" : node.mode === "ssh" ? "#475569" : "#4F46E5",
                         }}
                       />
                     </Box>
                     <Divider />
 
-                    <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <Typography variant="body2" sx={{ color: "#64748B" }}>
-                        easy42 Agent Version:
-                      </Typography>
-                      <Typography variant="body2" className="mono-font" sx={{ fontWeight: 600, color: "#0F172A" }}>
-                        {live?.agent_version || status?.agent_version
-                          ? `v${live?.agent_version || status?.agent_version}`
-                          : "Not reported"}
-                      </Typography>
-                    </Box>
-                    <Divider />
+                    {!node.is_external && (
+                      <>
+                        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <Typography variant="body2" sx={{ color: "#64748B" }}>
+                            easy42 Agent Version:
+                          </Typography>
+                          <Typography variant="body2" className="mono-font" sx={{ fontWeight: 600, color: "#0F172A" }}>
+                            {live?.agent_version || status?.agent_version
+                              ? `v${live?.agent_version || status?.agent_version}`
+                              : "Not reported"}
+                          </Typography>
+                        </Box>
+                        <Divider />
 
-                    <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <Typography variant="body2" sx={{ color: "#64748B" }}>
-                        Last Communication:
-                      </Typography>
-                      <Typography variant="body2" sx={{ color: "#64748B", fontSize: "0.8rem" }}>
-                        {live?.last_seen || status?.last_seen || "Unknown"}
-                      </Typography>
-                    </Box>
+                        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <Typography variant="body2" sx={{ color: "#64748B" }}>
+                            Last Communication:
+                          </Typography>
+                          <Typography variant="body2" sx={{ color: "#64748B", fontSize: "0.8rem" }}>
+                            {live?.last_seen || status?.last_seen || "Unknown"}
+                          </Typography>
+                        </Box>
+                      </>
+                    )}
                   </Box>
 
                   {/* Primary Disk info */}
@@ -1994,7 +2117,7 @@ export const NodeDetailPage: React.FC = () => {
         )}
 
         {/* Tab 2: Telemetry & Historical Charts */}
-        {currentTab === "metrics" && (
+        {currentTab === "metrics" && !node?.is_external && (
           <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
             {/* Range and controls */}
             <Paper
@@ -2427,16 +2550,18 @@ export const NodeDetailPage: React.FC = () => {
                   <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0F172A" }}>
                     WireGuard Kernel Interfaces Status
                   </Typography>
-                  <Button
-                    size="small"
-                    variant="outlined"
-                    startIcon={<RotateCcw size={13} />}
-                    onClick={handleRestartAllWg}
-                    disabled={restartingWg}
-                    sx={{ fontSize: "0.75rem", color: "#0284C7", borderColor: "#BAE6FD" }}
-                  >
-                    Restart WireGuard
-                  </Button>
+                  {!node?.is_external && (
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      startIcon={<RotateCcw size={13} />}
+                      onClick={handleRestartAllWg}
+                      disabled={restartingWg}
+                      sx={{ fontSize: "0.75rem", color: "#0284C7", borderColor: "#BAE6FD" }}
+                    >
+                      Restart WireGuard
+                    </Button>
+                  )}
                 </Box>
 
                 <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
@@ -2629,7 +2754,7 @@ export const NodeDetailPage: React.FC = () => {
         )}
 
         {/* Tab 4: Routing & BIRD */}
-        {currentTab === "routing" && node && (
+        {currentTab === "routing" && node && !node.is_external && (
           <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
             <Paper elevation={0} sx={{ p: 3, borderRadius: 3, bgcolor: "#FFFFFF", border: "1px solid #E2E8F0" }}>
               <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2.5 }}>
@@ -2816,7 +2941,7 @@ export const NodeDetailPage: React.FC = () => {
         )}
 
         {/* Tab 5: Firewall & Security */}
-        {currentTab === "firewall" && node && (
+        {currentTab === "firewall" && node && !node.is_external && (
           <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
             <Paper elevation={0} sx={{ p: 3, borderRadius: 3, bgcolor: "#FFFFFF", border: "1px solid #E2E8F0" }}>
               <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2.5 }}>
@@ -2918,7 +3043,7 @@ export const NodeDetailPage: React.FC = () => {
         )}
 
         {/* Tab 6: Agent Management */}
-        {currentTab === "agent" && node && (
+        {currentTab === "agent" && node && !node.is_external && (
           <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
             {/* Status Hero Card */}
             <Paper
@@ -3250,7 +3375,7 @@ export const NodeDetailPage: React.FC = () => {
         )}
 
         {/* Tab 7: Cron Tasks */}
-        {currentTab === "cron_tasks" && node && <NodeCronTasksTab nodeName={node.name} />}
+        {currentTab === "cron_tasks" && node && !node.is_external && <NodeCronTasksTab nodeName={node.name} />}
       </Box>
 
       {/* BIRD Config Dialog */}

@@ -303,6 +303,7 @@ type Node struct {
 	Name          string            `json:"name"`                   // Node name / hostname (WireGuard interface wg42* is truncated to 15 chars)
 	Host          string            `json:"host,omitempty"`         // SSH host / alias / IP (omitted for external peers)
 	IsExternal    bool              `json:"is_external,omitempty"`  // True if external unmanaged peer (e.g. DN42)
+	Caption       string            `json:"caption,omitempty"`      // Optional short description (plain text, one short sentence) of the node
 	Description   string            `json:"description,omitempty"`  // Optional description / contact info
 	Note          string            `json:"note,omitempty"`         // Markdown format text note
 	IP            string            `json:"ip,omitempty"`           // Main IPv4 (e.g. 192.168.100.1)

@@ -445,6 +445,10 @@ func mergeNode(target *config.Node, patch config.NodePatch, now time.Time) ([]Ap
 		checkField("is_external", target.IsExternal, *patch.IsExternal)
 		target.IsExternal = *patch.IsExternal
 	}
+	if patch.Caption != nil && *patch.Caption != target.Caption {
+		checkField("caption", target.Caption, *patch.Caption)
+		target.Caption = *patch.Caption
+	}
 	if patch.Description != nil && *patch.Description != target.Description {
 		checkField("description", target.Description, *patch.Description)
 		target.Description = *patch.Description
@@ -569,6 +573,9 @@ func createNodeFromPatch(patch config.NodePatch, now time.Time) (*config.Node, [
 	}
 	if patch.IsExternal != nil {
 		node.IsExternal = *patch.IsExternal
+	}
+	if patch.Caption != nil {
+		node.Caption = *patch.Caption
 	}
 	if patch.Description != nil {
 		node.Description = *patch.Description

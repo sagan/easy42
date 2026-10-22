@@ -82,6 +82,7 @@ const ConfigChangeJSONSchema = `{
         "name": { "type": "string", "pattern": "^[a-zA-Z0-9_-]+$", "minLength": 1, "maxLength": 64 },
         "host": { "type": "string" },
         "is_external": { "type": "boolean" },
+        "caption": { "type": "string" },
         "description": { "type": "string" },
         "note": { "type": "string" },
         "ip": { "type": "string" },
@@ -256,6 +257,7 @@ type NodePatch struct {
 	Name          string             `json:"name" yaml:"name"`
 	Host          *string            `json:"host,omitempty" yaml:"host,omitempty"`
 	IsExternal    *bool              `json:"is_external,omitempty" yaml:"is_external,omitempty"`
+	Caption       *string            `json:"caption,omitempty" yaml:"caption,omitempty"`
 	Description   *string            `json:"description,omitempty" yaml:"description,omitempty"`
 	Note          *string            `json:"note,omitempty" yaml:"note,omitempty"`
 	IP            *string            `json:"ip,omitempty" yaml:"ip,omitempty"`

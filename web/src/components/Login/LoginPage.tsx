@@ -1,7 +1,9 @@
 import React, { useState } from "react";
 import { Box, Card, CardContent, Typography, TextField, Button, CircularProgress, Alert, Chip } from "@mui/material";
-import { Network, ArrowRight } from "lucide-react";
+import { ArrowRight, RefreshCw } from "lucide-react";
 import { api } from "../../api/client";
+import { Easy42Logo } from "../Logo/Easy42Logo";
+import { flushCacheAndServiceWorker } from "../../utils/pwa";
 
 interface LoginPageProps {
   onLoginSuccess: () => void;
@@ -12,6 +14,8 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [appVersion, setAppVersion] = useState<string>("v0.1");
+  const [flushLoading, setFlushLoading] = useState(false);
+  const [flushMsg, setFlushMsg] = useState<{ text: string; severity: "success" | "error" } | null>(null);
 
   React.useEffect(() => {
     api.getVersion()
@@ -41,6 +45,29 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
       setError(e.message || "Invalid password");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleFlushCache = async () => {
+    setFlushLoading(true);
+    setFlushMsg(null);
+    try {
+      const res = await flushCacheAndServiceWorker();
+      if (res.success) {
+        setFlushMsg({
+          text: `Cache flushed & service worker uninstalled (${res.uninstalled} worker(s), ${res.cachesDeleted} cache(s)). Reloading...`,
+          severity: "success",
+        });
+        setTimeout(() => {
+          window.location.reload();
+        }, 1000);
+      } else {
+        setFlushMsg({ text: res.error || "Failed to flush cache", severity: "error" });
+      }
+    } catch (err: unknown) {
+      setFlushMsg({ text: (err as Error).message || "Failed to flush cache", severity: "error" });
+    } finally {
+      setFlushLoading(false);
     }
   };
 
@@ -82,21 +109,14 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
         <CardContent sx={{ p: 4, display: "flex", flexDirection: "column", gap: 3 }}>
           {/* Header */}
           <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", gap: 1 }}>
-            <Box
+            <Easy42Logo
+              size={52}
               sx={{
-                width: 52,
-                height: 52,
-                borderRadius: 3,
-                background: "linear-gradient(135deg, #4F46E5 0%, #0891B2 100%)",
-                boxShadow: "0 4px 14px rgba(79, 70, 229, 0.3)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
                 mb: 1,
+                borderRadius: "14px",
+                boxShadow: "0 4px 14px rgba(79, 70, 229, 0.3)",
               }}
-            >
-              <Network size={28} color="#FFFFFF" />
-            </Box>
+            />
 
             <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
               <Typography variant="h5" sx={{ fontWeight: 800, letterSpacing: "-0.5px", color: "#0F172A" }}>
@@ -160,7 +180,30 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
             </Box>
           </form>
 
-          <Box sx={{ pt: 1, display: "flex", justifyContent: "center" }}>
+          <Box sx={{ pt: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 1.5 }}>
+            {flushMsg && (
+              <Alert severity={flushMsg.severity} sx={{ width: "100%", borderRadius: 2, fontSize: "0.75rem", py: 0.5 }}>
+                {flushMsg.text}
+              </Alert>
+            )}
+
+            <Button
+              size="small"
+              variant="text"
+              onClick={handleFlushCache}
+              disabled={flushLoading}
+              startIcon={flushLoading ? <CircularProgress size={12} color="inherit" /> : <RefreshCw size={13} />}
+              sx={{
+                color: "#64748B",
+                fontSize: "0.75rem",
+                textTransform: "none",
+                fontWeight: 600,
+                "&:hover": { color: "#4F46E5", bgcolor: "rgba(79, 70, 229, 0.04)" },
+              }}
+            >
+              {flushLoading ? "Flushing cache..." : "Flush cache & service worker"}
+            </Button>
+
             <Typography
               component="a"
               href="https://github.com/sagan/easy42"

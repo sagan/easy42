@@ -481,6 +481,7 @@ export const NodesPage: React.FC = () => {
         !q ||
         n.name.toLowerCase().includes(q) ||
         (n.host || "").toLowerCase().includes(q) ||
+        (n.caption || "").toLowerCase().includes(q) ||
         (n.tags && n.tags.some((t) => t.toLowerCase().includes(q))) ||
         nBlocks.some((b) => b.toLowerCase().includes(q)) ||
         (n.ip || "").toLowerCase().includes(q) ||
@@ -1237,7 +1238,7 @@ export const NodesPage: React.FC = () => {
                 >
                   {/* Card Header */}
                   <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                    <Box sx={{ display: "flex", alignItems: "center", gap: 1.2 }}>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1.2, minWidth: 0, flex: 1, mr: 1 }}>
                       {/* Pulse Status Dot */}
                       <Box
                         sx={{
@@ -1246,9 +1247,10 @@ export const NodesPage: React.FC = () => {
                           borderRadius: "50%",
                           bgcolor: isOnline ? "#10B981" : agentInstalled ? "#EF4444" : "#94A3B8",
                           boxShadow: isOnline ? "0 0 0 3px rgba(16, 185, 129, 0.2)" : "none",
+                          flexShrink: 0,
                         }}
                       />
-                      <Box>
+                      <Box sx={{ minWidth: 0, flex: 1 }}>
                         <Box sx={{ display: "flex", alignItems: "center", gap: 0.8, flexWrap: "wrap" }}>
                           <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#0F172A", lineHeight: 1.2 }}>
                             {n.name}
@@ -1270,9 +1272,28 @@ export const NodesPage: React.FC = () => {
                             />
                           ))}
                         </Box>
-                        <Typography variant="caption" sx={{ color: "#64748B", display: "block" }}>
-                          {n.host}
-                        </Typography>
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 1, minWidth: 0 }}>
+                          {n.host && (
+                            <Typography variant="caption" sx={{ color: "#64748B", flexShrink: 0 }}>
+                              {n.host}
+                            </Typography>
+                          )}
+                          {n.caption && n.caption.trim() !== "" && (
+                            <Typography
+                              variant="caption"
+                              sx={{
+                                color: "#94A3B8",
+                                whiteSpace: "nowrap",
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                                minWidth: 0,
+                              }}
+                              title={n.caption}
+                            >
+                              {n.caption}
+                            </Typography>
+                          )}
+                        </Box>
                       </Box>
                     </Box>
 

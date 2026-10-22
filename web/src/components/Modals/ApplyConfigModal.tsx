@@ -201,7 +201,7 @@ const PRESET_SNIPPETS: { label: string; description: string; content: string }[]
       "172.20.0.0/14{21,29}",
       "fd00::/8{44,64}"
     ],
-    "flapalerted_address": "172.20.0.1",
+    "flapalerted_address": "172.20.0.53",
     "flapalerted_port": 1790
   }
 }`,
@@ -280,13 +280,19 @@ export const ApplyConfigModal: React.FC<ApplyConfigModalProps> = ({
       if (nodes && nodes.length > 0) {
         setAvailableNodes(nodes);
       } else {
-        api.getNodes().then((res) => setAvailableNodes(res || [])).catch(() => {});
+        api
+          .getNodes()
+          .then((res) => setAvailableNodes(res || []))
+          .catch(() => {});
       }
 
       if (links && links.length > 0) {
         setAvailableLinks(links);
       } else {
-        api.getLinks().then((res) => setAvailableLinks(res || [])).catch(() => {});
+        api
+          .getLinks()
+          .then((res) => setAvailableLinks(res || []))
+          .catch(() => {});
       }
     }
   }, [open, nodes, links]);
@@ -617,7 +623,9 @@ export const ApplyConfigModal: React.FC<ApplyConfigModalProps> = ({
         </Tabs>
       </Box>
 
-      <DialogContent sx={{ p: { xs: 1.5, sm: 3 }, display: "flex", flexDirection: "column", gap: 2, overflowY: "auto" }}>
+      <DialogContent
+        sx={{ p: { xs: 1.5, sm: 3 }, display: "flex", flexDirection: "column", gap: 2, overflowY: "auto" }}
+      >
         {applyError && (
           <Alert severity="error" onClose={() => setApplyError(null)}>
             {applyError}
@@ -1193,11 +1201,7 @@ export const ApplyConfigModal: React.FC<ApplyConfigModalProps> = ({
             flexWrap: { xs: "wrap", sm: "nowrap" },
           }}
         >
-          <Button
-            variant="outlined"
-            onClick={onClose}
-            sx={{ flex: { xs: "1 1 30%", sm: "none" } }}
-          >
+          <Button variant="outlined" onClick={onClose} sx={{ flex: { xs: "1 1 30%", sm: "none" } }}>
             Cancel
           </Button>
           <Button

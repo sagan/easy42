@@ -61,7 +61,7 @@ export const CustomTaskEditorModal: React.FC<CustomTaskEditorModalProps> = ({ op
           label: "Target Host or IP",
           type: "ip_or_cidr",
           required: true,
-          default_value: "172.20.0.1",
+          default_value: "172.20.0.53",
         },
         {
           key: "count",

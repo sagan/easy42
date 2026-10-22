@@ -15,7 +15,7 @@ func TestSanitizeParam(t *testing.T) {
 		Required: true,
 	}
 
-	validIPs := []string{"1.1.1.1", "172.20.0.1", "2001:4860:4860::8888", "172.20.0.0/14", "example.com", "dn42.us"}
+	validIPs := []string{"1.1.1.1", "172.20.0.53", "2001:4860:4860::8888", "172.20.0.0/14", "example.com", "dn42.us"}
 	for _, ip := range validIPs {
 		res, err := SanitizeParam(ipParam, ip)
 		if err != nil {
@@ -101,7 +101,7 @@ func TestBuildCommand(t *testing.T) {
 			Label:        "Target",
 			Type:         config.ParamTypeIPOrCIDR,
 			Required:     true,
-			DefaultValue: "172.20.0.1",
+			DefaultValue: "172.20.0.53",
 		},
 		{
 			Key:          "count",
@@ -153,4 +153,3 @@ func TestValidateAdHocCommand(t *testing.T) {
 		}
 	}
 }
-

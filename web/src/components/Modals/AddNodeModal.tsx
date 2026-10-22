@@ -116,6 +116,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
   const [asn, setAsn] = useState<number>(4224420001);
   const [nodeTags, setNodeTags] = useState("");
   const [isExternal, setIsExternal] = useState(false);
+  const [caption, setCaption] = useState("");
   const [description, setDescription] = useState("");
   const [note, setNote] = useState("");
   const [noteTab, setNoteTab] = useState<"write" | "preview">("write");
@@ -169,6 +170,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
       setIface(nodeToEdit.interface || "lo");
       setAsn(nodeToEdit.asn);
       setIsExternal(Boolean(nodeToEdit.is_external));
+      setCaption(nodeToEdit.caption || "");
       setDescription(nodeToEdit.description || "");
       setNote(nodeToEdit.note || "");
       setNodeTags(nodeToEdit.tags?.join(", ") || "");
@@ -257,6 +259,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
       setIface("lo");
       setAsn(4224420001);
       setIsExternal(false);
+      setCaption("");
       setDescription("");
       setNote("");
       setNodeTags("");
@@ -551,6 +554,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
         ip6: ip6.trim() || undefined,
         is_external: true,
         entrypoints: finalEntrypoints.length > 0 ? finalEntrypoints : undefined,
+        caption: caption.trim() || undefined,
         description: description.trim() || undefined,
         note: note.trim() || undefined,
         tags: parsedTags.length > 0 ? parsedTags : undefined,
@@ -608,6 +612,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
         enable_fa: enableFa,
         update_hosts: updateHosts,
         custom_network_script: customNetworkScript.trim() || undefined,
+        caption: caption.trim() || undefined,
         description: description.trim() || undefined,
         note: note.trim() || undefined,
         x: nodeToEdit?.x,
@@ -775,6 +780,17 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
               <TextField
                 fullWidth
                 size="small"
+                label="Caption"
+                placeholder="e.g. Frankfurt edge gateway router"
+                value={caption}
+                onChange={(e) => setCaption(e.target.value)}
+                helperText="Optional short description (one short sentence) of the node"
+                disabled={saving}
+              />
+
+              <TextField
+                fullWidth
+                size="small"
                 label="Description / Peering Partner"
                 placeholder="e.g. DN42 peer with AS4242421234 in Frankfurt"
                 value={description}
@@ -851,7 +867,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                   size="small"
                   value={ip}
                   onChange={(e) => setIp(e.target.value)}
-                  placeholder="e.g. 172.20.0.1"
+                  placeholder="e.g. 172.20.0.53"
                   helperText="Remote peer router or loopback IPv4"
                   disabled={saving}
                 />
@@ -1153,6 +1169,17 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                       ))}
                   </Box>
                 )}
+
+                <TextField
+                  fullWidth
+                  size="small"
+                  label="Caption"
+                  placeholder="e.g. Frankfurt edge gateway router"
+                  value={caption}
+                  onChange={(e) => setCaption(e.target.value)}
+                  helperText="Optional short description (one short sentence) of the node"
+                  disabled={saving}
+                />
 
                 {/* Managed Node Markdown Note */}
                 <Box sx={{ p: 1.5, borderRadius: 2, backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0" }}>

@@ -1756,6 +1756,83 @@ func TestNodeAndLinkEndNotes(t *testing.T) {
 	}
 }
 
+func TestNodeCaptionAPI(t *testing.T) {
+	srv, tempDir, initPass := setupTestServer(t)
+	defer os.RemoveAll(tempDir)
+
+	// Login
+	loginBody, _ := json.Marshal(map[string]string{"password": initPass})
+	req := httptest.NewRequest("POST", "/api/auth/login", bytes.NewReader(loginBody))
+	w := httptest.NewRecorder()
+	srv.router.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("Login failed: %d %s", w.Code, w.Body.String())
+	}
+	cookie := w.Result().Cookies()[0]
+
+	// 1. Add node with caption
+	node := config.Node{
+		Name:        "router-fra",
+		Host:        "192.168.1.50",
+		IP:          "192.168.100.50",
+		ASN:         4224420050,
+		Caption:     "Frankfurt core border gateway",
+		Description: "Colo datacenter rack 4",
+	}
+	body, _ := json.Marshal(node)
+	reqNode := httptest.NewRequest("POST", "/api/nodes", bytes.NewReader(body))
+	reqNode.AddCookie(cookie)
+	wNode := httptest.NewRecorder()
+	srv.router.ServeHTTP(wNode, reqNode)
+	if wNode.Code != http.StatusCreated {
+		t.Fatalf("Add node failed: %d %s", wNode.Code, wNode.Body.String())
+	}
+
+	var createdNode config.Node
+	_ = json.Unmarshal(wNode.Body.Bytes(), &createdNode)
+	if createdNode.Caption != "Frankfurt core border gateway" {
+		t.Fatalf("Expected caption %q, got %q", "Frankfurt core border gateway", createdNode.Caption)
+	}
+
+	// 2. Fetch via GET /api/nodes
+	reqGet := httptest.NewRequest("GET", "/api/nodes", nil)
+	reqGet.AddCookie(cookie)
+	wGet := httptest.NewRecorder()
+	srv.router.ServeHTTP(wGet, reqGet)
+	if wGet.Code != http.StatusOK {
+		t.Fatalf("Get nodes failed: %d %s", wGet.Code, wGet.Body.String())
+	}
+	var nodes []config.Node
+	_ = json.Unmarshal(wGet.Body.Bytes(), &nodes)
+	var found *config.Node
+	for i := range nodes {
+		if nodes[i].Name == "router-fra" {
+			found = &nodes[i]
+			break
+		}
+	}
+	if found == nil || found.Caption != "Frankfurt core border gateway" {
+		t.Fatalf("Expected found node to have caption 'Frankfurt core border gateway', got %+v", found)
+	}
+
+	// 3. Update caption
+	found.Caption = "Updated EU border router"
+	bodyUpdate, _ := json.Marshal(found)
+	reqUpdate := httptest.NewRequest("PUT", "/api/nodes/router-fra", bytes.NewReader(bodyUpdate))
+	reqUpdate.AddCookie(cookie)
+	wUpdate := httptest.NewRecorder()
+	srv.router.ServeHTTP(wUpdate, reqUpdate)
+	if wUpdate.Code != http.StatusOK {
+		t.Fatalf("Update node failed: %d %s", wUpdate.Code, wUpdate.Body.String())
+	}
+
+	var updatedNode config.Node
+	_ = json.Unmarshal(wUpdate.Body.Bytes(), &updatedNode)
+	if updatedNode.Caption != "Updated EU border router" {
+		t.Fatalf("Expected updated caption 'Updated EU border router', got %q", updatedNode.Caption)
+	}
+}
+
 func TestDNSConfigEndpoints(t *testing.T) {
 	srv, tempDir, initPass := setupTestServer(t)
 	defer os.RemoveAll(tempDir)

@@ -314,6 +314,11 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
             <Typography variant="caption" className="mono-font" sx={{ color: "#64748B" }}>
               {node.host}
             </Typography>
+            {node.caption && node.caption.trim() !== "" && (
+              <Typography variant="caption" sx={{ color: "#94A3B8", display: "block", mt: 0.2 }}>
+                {node.caption}
+              </Typography>
+            )}
           </Box>
         </Box>
 

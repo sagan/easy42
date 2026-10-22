@@ -232,3 +232,48 @@ func TestApply_SavedConfigChanges(t *testing.T) {
 		t.Errorf("expected 0 saved changes after delete")
 	}
 }
+
+func TestApply_NodeCaption(t *testing.T) {
+	mgr, tmpDir := setupTestManager(t)
+	defer os.RemoveAll(tmpDir)
+	defer mgr.Close()
+
+	patch := `{
+		"nodes": [
+			{
+				"name": "foobar",
+				"caption": "Frankfurt Edge Node"
+			}
+		]
+	}`
+
+	preview, err := mgr.PreviewApply(patch)
+	if err != nil {
+		t.Fatalf("unexpected error previewing caption patch: %v", err)
+	}
+	if !preview.Valid {
+		t.Fatalf("expected preview to be valid")
+	}
+	if len(preview.Nodes) != 1 || len(preview.Nodes[0].Changes) != 1 {
+		t.Fatalf("expected 1 change on foobar, got %+v", preview.Nodes)
+	}
+	if preview.Nodes[0].Changes[0].Field != "caption" || preview.Nodes[0].Changes[0].NewValue != "Frankfurt Edge Node" {
+		t.Fatalf("unexpected diff: %+v", preview.Nodes[0].Changes)
+	}
+
+	res, err := mgr.ApplyConfigChange(patch)
+	if err != nil {
+		t.Fatalf("unexpected error executing caption patch: %v", err)
+	}
+	if !res.Success {
+		t.Fatalf("apply failed: %+v", res)
+	}
+
+	node, err := mgr.GetNode("foobar")
+	if err != nil {
+		t.Fatalf("failed to get node: %v", err)
+	}
+	if node.Caption != "Frankfurt Edge Node" {
+		t.Errorf("expected node caption 'Frankfurt Edge Node', got %q", node.Caption)
+	}
+}

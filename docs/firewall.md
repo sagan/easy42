@@ -135,7 +135,7 @@ chain filter_prerouting {
 
 - `block_ingress_new: "all"` drops new/invalid connections arriving on the policy interfaces, regardless of whether the destination is local.
 - `block_ingress_new: "forward"` only drops new/invalid connections that are **not** destined to a local address (`fib daddr type != local`), leaving local input available.
-- `ingress_new_whitelist` adds exceptions. Entries are normalized to `address:port` or `address:port/proto` (for example `172.20.0.1:80` or `[fd42::1]:443/tcp`) and compiled into a concatenated set matched against `ip daddr . meta l4proto . th dport`. Whitelisting is only active while `block_ingress_new` is enabled.
+- `ingress_new_whitelist` adds exceptions. Entries are normalized to `address:port` or `address:port/proto` (for example `172.20.0.53:80` or `[fd42::1]:443/tcp`) and compiled into a concatenated set matched against `ip daddr . meta l4proto . th dport`. Whitelisting is only active while `block_ingress_new` is enabled.
 
 Accepted values and aliases are normalized by the configuration layer; unrecognized values disable the feature.
 
@@ -191,10 +191,10 @@ Marks apply to packets arriving from the listed interfaces and can be consumed b
 
 Node `config_hooks` with nft targets are injected at three points:
 
-| Hook type | Placement |
-| :--- | :--- |
-| `nft.pre` | Before `destroy table inet easy42` (global context). |
-| `nft.table` | Inside `table inet easy42`, after built-in chains. |
-| `nft` (aliases `nft.post`, `nft.global`) | After the closing brace of `table inet easy42`. |
+| Hook type                                | Placement                                            |
+| :--------------------------------------- | :--------------------------------------------------- |
+| `nft.pre`                                | Before `destroy table inet easy42` (global context). |
+| `nft.table`                              | Inside `table inet easy42`, after built-in chains.   |
+| `nft` (aliases `nft.post`, `nft.global`) | After the closing brace of `table inet easy42`.      |
 
 Use pre/post hooks for independent tables or global definitions, and table hooks for additional chains inside the Easy42 table.
