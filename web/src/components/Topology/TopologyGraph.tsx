@@ -48,11 +48,13 @@ import {
   UnfoldVertical,
   FoldVertical,
   Check,
+  Download,
 } from "lucide-react";
 import { NodeCard } from "./NodeCard";
 import { CustomEdge } from "./CustomEdge";
 import { BlockNode, BLOCK_PALETTE } from "./BlockNode";
 import { BlockVirtualEdge } from "./BlockVirtualEdge";
+import { ExportDiagramModal } from "./ExportDiagramModal";
 import { Node, Link, NodeStatus, NetworkState, GraphBlock, NetworkPolicy } from "../../types/api";
 import { api } from "../../api/client";
 import { getEffectiveLinkCost } from "../../utils/cost";
@@ -437,6 +439,7 @@ interface FloatingToolbarProps {
   onCollapseAllBundles?: () => void;
   onExpandAllGroups?: () => void;
   onCollapseAllGroups?: () => void;
+  onOpenExportDiagram?: () => void;
 }
 
 const FloatingToolbar: React.FC<FloatingToolbarProps> = ({
@@ -464,6 +467,7 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = ({
   onCollapseAllBundles,
   onExpandAllGroups,
   onCollapseAllGroups,
+  onOpenExportDiagram,
 }) => {
   const { fitView, zoomTo } = useReactFlow();
   const [addMenuAnchor, setAddMenuAnchor] = useState<null | HTMLElement>(null);
@@ -1377,6 +1381,30 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = ({
               </MenuItem>
             </>
           )}
+
+          <Divider sx={{ my: 0.75, borderColor: "#E2E8F0" }} />
+
+          <MenuItem
+            onClick={() => {
+              setLodMenuAnchor(null);
+              onOpenExportDiagram?.();
+            }}
+            sx={{
+              borderRadius: 1.25,
+              py: 0.75,
+              px: 1,
+              display: "flex",
+              alignItems: "center",
+              gap: 1.25,
+              fontSize: "0.82rem",
+              fontWeight: 600,
+              color: "#1E293B",
+              "&:hover": { bgcolor: "#F1F5F9" },
+            }}
+          >
+            <Download size={15} color="#4F46E5" />
+            Export Diagram
+          </MenuItem>
         </Menu>
 
         {/* Stats Indicator */}
@@ -1447,6 +1475,7 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
     }
   });
   const [expandedVirtualEdgePairs, setExpandedVirtualEdgePairs] = useState<Set<string>>(getStoredExpandedPairs);
+  const [exportDiagramOpen, setExportDiagramOpen] = useState(false);
 
   // Automatically synchronize expanded virtual edge pairs to browser localStorage
   useEffect(() => {
@@ -2255,9 +2284,11 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
 
       const fromNode = nodes.find((n) => n.name === link.from.name);
       const toNode = nodes.find((n) => n.name === link.to.name);
-      const isExternal = Boolean(fromNode?.is_external || toNode?.is_external);
-      const fromIsRemoteExternal = Boolean(toNode?.is_external);
-      const toIsRemoteExternal = Boolean(fromNode?.is_external);
+      const fromIsExternal = Boolean(fromNode?.is_external);
+      const toIsExternal = Boolean(toNode?.is_external);
+      const isExternal = Boolean(fromIsExternal || toIsExternal);
+      const fromIsRemoteExternal = toIsExternal;
+      const toIsRemoteExternal = fromIsExternal;
       const fromCost = getEffectiveLinkCost(link.from, fromIsRemoteExternal, networkPolicies);
       const toCost = getEffectiveLinkCost(link.to, toIsRemoteExternal, networkPolicies);
 
@@ -2287,6 +2318,8 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
           transferRxBytes: rxBytes,
           transferTxBytes: txBytes,
           isExternal,
+          fromIsExternal,
+          toIsExternal,
           linkIndexInPair,
           totalLinksInPair,
           fromCost,
@@ -2714,6 +2747,7 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
           onCollapseAllBundles={handleCollapseAllBundles}
           onExpandAllGroups={handleExpandAllGroups}
           onCollapseAllGroups={handleCollapseAllGroups}
+          onOpenExportDiagram={() => setExportDiagramOpen(true)}
         />
 
         <Background variant={BackgroundVariant.Dots} gap={20} size={1.2} color="#CBD5E1" />
@@ -2727,6 +2761,17 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
           zoomable
         />
       </ReactFlow>
+
+      {/* Standalone Export Diagram Modal */}
+      <ExportDiagramModal
+        open={exportDiagramOpen}
+        onClose={() => setExportDiagramOpen(false)}
+        nodes={nodes}
+        links={links}
+        blocks={blocks}
+        nodeBlockMap={effectiveNodeBlockMap}
+        networkPolicies={networkPolicies}
+      />
     </Box>
   );
 };

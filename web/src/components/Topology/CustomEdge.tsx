@@ -13,6 +13,8 @@ export interface CustomEdgeData {
   transferRxBytes?: number;
   transferTxBytes?: number;
   isExternal?: boolean;
+  fromIsExternal?: boolean;
+  toIsExternal?: boolean;
   fromCost?: number;
   toCost?: number;
   onSelect: (link: Link) => void;
@@ -56,6 +58,8 @@ export const CustomEdge: React.FC<EdgeProps> = ({
   const workingState: LinkWorkingState = edgeData?.workingState || "unknown";
   const latestHandshake = edgeData?.latestHandshake;
   const isExternal = Boolean(edgeData?.isExternal);
+  const fromIsExternal = Boolean(edgeData?.fromIsExternal);
+  const toIsExternal = Boolean(edgeData?.toIsExternal);
   const isManual = link?.type === "manual" || link?.from?.type === "manual" || link?.to?.type === "manual";
   const totalLinksInPair = (edgeData?.totalLinksInPair as number) || 1;
   const linkIndexInPair = (edgeData?.linkIndexInPair as number) || 0;
@@ -89,6 +93,9 @@ export const CustomEdge: React.FC<EdgeProps> = ({
   const isRightCostOverridden = leftRepresentsTo ? isFromCostOverridden : isToCostOverridden;
   const leftNodeName = leftRepresentsTo ? link?.to?.name || "Left" : link?.from?.name || "Left";
   const rightNodeName = leftRepresentsTo ? link?.from?.name || "Right" : link?.to?.name || "Right";
+
+  const internalCost = fromIsExternal ? toCost : toIsExternal ? fromCost : fromCost;
+  const isInternalCostOverridden = fromIsExternal ? isToCostOverridden : toIsExternal ? isFromCostOverridden : isFromCostOverridden;
 
   // Distance calculation for distance-based fading of long crossing links
   const euclideanDist = Math.hypot(targetX - sourceX, targetY - sourceY);
@@ -368,12 +375,27 @@ export const CustomEdge: React.FC<EdgeProps> = ({
                       lineHeight: 1,
                     }}
                     title={
-                      leftCost === rightCost
-                        ? `Cost: ${leftCost}`
-                        : `Cost: ${leftNodeName} → ${rightNodeName}: ${leftCost}, ${rightNodeName} → ${leftNodeName}: ${rightCost}`
+                      isExternal
+                        ? `Cost: ${internalCost} (Internal egress)`
+                        : leftCost === rightCost
+                          ? `Cost: ${leftCost}`
+                          : `Cost: ${leftNodeName} → ${rightNodeName}: ${leftCost}, ${rightNodeName} → ${leftNodeName}: ${rightCost}`
                     }
                   >
-                    {leftCost === rightCost ? (
+                    {isExternal ? (
+                      <Typography
+                        variant="caption"
+                        className="mono-font"
+                        sx={{
+                          fontSize: "0.60rem",
+                          fontWeight: 600,
+                          color: isInternalCostOverridden ? "#D97706" : "#64748B",
+                          lineHeight: 1,
+                        }}
+                      >
+                        {internalCost}
+                      </Typography>
+                    ) : leftCost === rightCost ? (
                       <Typography
                         variant="caption"
                         className="mono-font"
