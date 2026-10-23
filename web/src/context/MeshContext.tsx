@@ -77,6 +77,8 @@ interface MeshContextType {
   setSyncOpen: (open: boolean) => void;
   syncTargetNode: string | null;
   setSyncTargetNode: (node: string | null) => void;
+  openSyncModal: (node?: string | null) => void;
+  closeSyncModal: () => void;
   selectedNode: Node | null;
   setSelectedNode: (node: Node | null) => void;
   selectedLink: Link | null;
@@ -151,8 +153,26 @@ export const MeshProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [connectFrom, setConnectFrom] = useState<string>("");
   const [connectTo, setConnectTo] = useState<string>("");
   const [unlockOpen, setUnlockOpen] = useState(false);
-  const [syncOpen, setSyncOpen] = useState(false);
+  const [syncOpen, setSyncOpenState] = useState(false);
   const [syncTargetNode, setSyncTargetNode] = useState<string | null>(null);
+
+  const setSyncOpen = useCallback((open: boolean) => {
+    setSyncOpenState(open);
+    if (!open) {
+      setSyncTargetNode(null);
+    }
+  }, []);
+
+  const openSyncModal = useCallback((node?: string | null) => {
+    setSyncTargetNode(node || null);
+    setSyncOpenState(true);
+  }, []);
+
+  const closeSyncModal = useCallback(() => {
+    setSyncOpenState(false);
+    setSyncTargetNode(null);
+  }, []);
+
   const [updatingState, setUpdatingState] = useState(false);
   const [addBlockTrigger, setAddBlockTrigger] = useState(0);
 
@@ -537,6 +557,8 @@ export const MeshProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setSyncOpen,
     syncTargetNode,
     setSyncTargetNode,
+    openSyncModal,
+    closeSyncModal,
     selectedNode,
     setSelectedNode,
     selectedLink,

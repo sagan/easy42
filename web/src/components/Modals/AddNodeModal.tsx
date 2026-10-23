@@ -1702,8 +1702,8 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                           />
                         </Box>
                         <Typography variant="caption" sx={{ color: "#64748B" }}>
-                          When enabled, appends &quot;rr client;&quot; to each internal BGP peer block in bird.conf,
-                          allowing this node to act as an iBGP Route Reflector without needing full mesh peering.
+                          When enabled, appends &quot;rr client;&quot; to internal iBGP peer blocks that share the same ASN in bird.conf,
+                          allowing this node to act as a Route Reflector without needing full mesh peering.
                         </Typography>
                       </Box>
                     }

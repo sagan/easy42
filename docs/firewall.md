@@ -4,6 +4,17 @@ This document details the packet filtering, connection tracking, DSCP/mark handl
 
 ---
 
+- [nftables Firewall, NAT \& MSS Clamping](#nftables-firewall-nat--mss-clamping)
+  - [Dedicated nftables Table Architecture](#dedicated-nftables-table-architecture)
+  - [Detailed Rule Explanations](#detailed-rule-explanations)
+    - [1. Path MTU Discovery \& TCP MSS Clamping](#1-path-mtu-discovery--tcp-mss-clamping)
+    - [2. Policy-Based Forwarding \& Input Filters](#2-policy-based-forwarding--input-filters)
+    - [3. Block Ingress New Connections \& Whitelisting](#3-block-ingress-new-connections--whitelisting)
+    - [4. NAT \& SNAT Translations](#4-nat--snat-translations)
+    - [5. DSCP Rewriting](#5-dscp-rewriting)
+    - [6. Netfilter Marks](#6-netfilter-marks)
+    - [7. Custom Hooks](#7-custom-hooks)
+
 ## Dedicated nftables Table Architecture
 
 Easy42 maintains an atomic ruleset under the isolated table `table inet easy42`. This keeps Easy42 rules separate from Docker, Podman, libvirt, or host distribution firewalls such as UFW or firewalld.

@@ -40,8 +40,7 @@ export const TopologyPage: React.FC = () => {
     setSelectedNode,
     selectedLink,
     setSelectedLink,
-    setSyncTargetNode,
-    setSyncOpen,
+    openSyncModal,
     addBlockTrigger,
     setAddBlockTrigger,
     updateNodePosition,
@@ -239,8 +238,7 @@ export const TopologyPage: React.FC = () => {
         onOpenLookingGlass={(name) => navigate(`/looking-glass/presets?node=${encodeURIComponent(name)}`)}
         onUpdateNodeState={(name) => handleUpdateState(name)}
         onSyncNode={(name) => {
-          setSyncTargetNode(name);
-          setSyncOpen(true);
+          openSyncModal(name);
         }}
         onNodeUpdated={(updated) => {
           setSelectedNode(updated);

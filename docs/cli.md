@@ -4,6 +4,31 @@ Easy42 includes a comprehensive command-line interface built with [Cobra](https:
 
 ---
 
+- [Command-Line Interface (CLI) Reference](#command-line-interface-cli-reference)
+  - [Cheat Sheet](#cheat-sheet)
+  - [Global Flags](#global-flags)
+  - [Command Reference](#command-reference)
+    - [1. `easy42 serve`](#1-easy42-serve)
+    - [2. `easy42 node`](#2-easy42-node)
+      - [`easy42 node list`](#easy42-node-list)
+      - [`easy42 node probe <host>`](#easy42-node-probe-host)
+      - [`easy42 node add`](#easy42-node-add)
+      - [`easy42 node rename <old-name> <new-name>`](#easy42-node-rename-old-name-new-name)
+      - [`easy42 node remove <name>`](#easy42-node-remove-name)
+      - [`easy42 node bird <name>`](#easy42-node-bird-name)
+      - [`easy42 node nft <name>`](#easy42-node-nft-name)
+    - [3. `easy42 link`](#3-easy42-link)
+      - [`easy42 link list`](#easy42-link-list)
+      - [`easy42 link add <from-node> <to-node>`](#easy42-link-add-from-node-to-node)
+      - [`easy42 link remove <from-node> <to-node>`](#easy42-link-remove-from-node-to-node)
+    - [4. `easy42 status`](#4-easy42-status)
+    - [5. `easy42 sync`](#5-easy42-sync)
+    - [6. `easy42 apply`](#6-easy42-apply)
+    - [7. `easy42 version`](#7-easy42-version)
+  - [Common Workflows](#common-workflows)
+    - [Bootstrap an SSH-managed mesh](#bootstrap-an-ssh-managed-mesh)
+    - [Apply a declarative patch in CI](#apply-a-declarative-patch-in-ci)
+
 ## Cheat Sheet
 
 Easy42 includes a full CLI for scripting and head-less environments:
@@ -42,11 +67,11 @@ All commands accept the following persistent flag:
 
 The data directory contains:
 
-| File | Description |
-| :--- | :--- |
-| `config.json` | Main configuration, encrypted secrets, and session secret (mode `0600`). |
-| `data.db` | SQLite database for telemetry history, interface traffic, cron results, and applied-state hashes. |
-| `server.url` | Transient URL file written by `easy42 serve` so CLI commands can locate the running server. Removed on shutdown. |
+| File          | Description                                                                                                      |
+| :------------ | :--------------------------------------------------------------------------------------------------------------- |
+| `config.json` | Main configuration, encrypted secrets, and session secret (mode `0600`).                                         |
+| `data.db`     | SQLite database for telemetry history, interface traffic, cron results, and applied-state hashes.                |
+| `server.url`  | Transient URL file written by `easy42 serve` so CLI commands can locate the running server. Removed on shutdown. |
 
 ---
 
@@ -71,8 +96,8 @@ easy42 serve --listen 127.0.0.1:4242 --listen [::1]:4242
 easy42 serve --data-dir /var/lib/easy42
 ```
 
-| Flag | Default | Description |
-| :--- | :--- | :--- |
+| Flag           | Default          | Description                                             |
+| :------------- | :--------------- | :------------------------------------------------------ |
 | `-l, --listen` | `127.0.0.1:4242` | Listen address(es). May be comma-separated or repeated. |
 
 `serve` also starts the built-in server background-task scheduler and the hourly ROA cache refresher.
@@ -115,17 +140,17 @@ easy42 node add \
   --asn 4224420001
 ```
 
-| Flag | Default | Required | Description |
-| :--- | :--- | :---: | :--- |
-| `-n, --name` | — | Yes | Unique node name. |
-| `-H, --host` | — | Yes | SSH host, alias, or IP. |
-| `-i, --ip` | — | Yes | Primary overlay IPv4 address. |
-| `--ip6` | — | No | Primary overlay IPv6 address. |
-| `--external-ip` | — | No | External/DN42 IPv4 address. |
-| `--external-ip6` | — | No | External/DN42 IPv6 address. |
-| `--iface` | `lo` | No | Interface holding the primary IP. |
-| `-a, --asn` | `4224420001` | No | Private or external AS number. |
-| `--custom-network-script` | — | No | Shell script persisted by the `configure_network` helper task. |
+| Flag                      | Default      | Required | Description                                                    |
+| :------------------------ | :----------- | :------: | :------------------------------------------------------------- |
+| `-n, --name`              | —            |   Yes    | Unique node name.                                              |
+| `-H, --host`              | —            |   Yes    | SSH host, alias, or IP.                                        |
+| `-i, --ip`                | —            |   Yes    | Primary overlay IPv4 address.                                  |
+| `--ip6`                   | —            |    No    | Primary overlay IPv6 address.                                  |
+| `--external-ip`           | —            |    No    | External/DN42 IPv4 address.                                    |
+| `--external-ip6`          | —            |    No    | External/DN42 IPv6 address.                                    |
+| `--iface`                 | `lo`         |    No    | Interface holding the primary IP.                              |
+| `-a, --asn`               | `4224420001` |    No    | Private or external AS number.                                 |
+| `--custom-network-script` | —            |    No    | Shell script persisted by the `configure_network` helper task. |
 
 The CLI creates SSH-mode nodes. To use agent mode, generate an agent token and deploy the agent from the Web UI or API; the node then reports its mode as `agent`.
 
@@ -195,17 +220,17 @@ easy42 link add node-fra node-ext \
   --to-addr "172.20.1.2"
 ```
 
-| Flag | Default | Description |
-| :--- | :--- | :--- |
-| `-t, --type` | `wireguard` | Link type: `wireguard` or `manual`. |
-| `-p, --password` | — | easy42 admin password for WireGuard key encryption. |
-| `--from-port` | derived | Custom WireGuard listen port on the first node. |
-| `--to-port` | derived | Custom WireGuard listen port on the second node. |
-| `--assign-ipv4` | `false` | Assign a deterministic IPv4 link-local (`169.254.X.X/32`) pair. |
-| `--from-iface` | — | Interface on the first node (required for manual links). |
-| `--to-iface` | — | Interface on the second node (required for manual links). |
-| `--from-addr` | — | Local address on the first node (required for manual links). |
-| `--to-addr` | — | Local address on the second node (required for manual links). |
+| Flag             | Default     | Description                                                     |
+| :--------------- | :---------- | :-------------------------------------------------------------- |
+| `-t, --type`     | `wireguard` | Link type: `wireguard` or `manual`.                             |
+| `-p, --password` | —           | easy42 admin password for WireGuard key encryption.             |
+| `--from-port`    | derived     | Custom WireGuard listen port on the first node.                 |
+| `--to-port`      | derived     | Custom WireGuard listen port on the second node.                |
+| `--assign-ipv4`  | `false`     | Assign a deterministic IPv4 link-local (`169.254.X.X/32`) pair. |
+| `--from-iface`   | —           | Interface on the first node (required for manual links).        |
+| `--to-iface`     | —           | Interface on the second node (required for manual links).       |
+| `--from-addr`    | —           | Local address on the first node (required for manual links).    |
+| `--to-addr`      | —           | Local address on the second node (required for manual links).   |
 
 > **Note:** There is no `--psk` flag on `link add`. Preshared keys are generated and rotated through the Web UI, the `/api/links/psk/*` endpoints, or declarative config (`links[].psk`).
 
@@ -232,8 +257,8 @@ easy42 status
 easy42 status --live
 ```
 
-| Flag | Default | Description |
-| :--- | :--- | :--- |
+| Flag         | Default | Description                                                  |
+| :----------- | :------ | :----------------------------------------------------------- |
 | `-r, --live` | `false` | Query live node status instead of showing local config only. |
 
 ---
@@ -259,12 +284,12 @@ easy42 sync --node node-frankfurt
 easy42 sync --scope public
 ```
 
-| Flag | Default | Description |
-| :--- | :--- | :--- |
-| `-s, --scope` | `auto` | `auto`, `public`, or `full`. `auto` resolves to `full` on an interactive TTY and `public` otherwise. |
-| `-n, --dry-run` | `false` | Preview planned actions without applying changes. |
-| `--node` | all nodes | Restrict synchronization to one node. |
-| `-p, --password` | — | Admin password for `full` scope (also reads `EASY42_PASSWORD`). |
+| Flag             | Default   | Description                                                                                          |
+| :--------------- | :-------- | :--------------------------------------------------------------------------------------------------- |
+| `-s, --scope`    | `auto`    | `auto`, `public`, or `full`. `auto` resolves to `full` on an interactive TTY and `public` otherwise. |
+| `-n, --dry-run`  | `false`   | Preview planned actions without applying changes.                                                    |
+| `--node`         | all nodes | Restrict synchronization to one node.                                                                |
+| `-p, --password` | —         | Admin password for `full` scope (also reads `EASY42_PASSWORD`).                                      |
 
 **Scope semantics:**
 
@@ -294,12 +319,12 @@ cat patch.yaml | easy42 apply - --sync
 easy42 apply --dry-run --format json patch.yaml
 ```
 
-| Flag | Default | Description |
-| :--- | :--- | :--- |
-| `-f, --file` | — | Path to a config change file (alternative to the positional argument). |
-| `--dry-run` | `false` | Validate and preview the planned changes without writing. |
-| `-s, --sync` | `false` | Trigger a sync of affected nodes after a successful apply. |
-| `--format` | `text` | Preview format: `text` or `json`. |
+| Flag         | Default | Description                                                            |
+| :----------- | :------ | :--------------------------------------------------------------------- |
+| `-f, --file` | —       | Path to a config change file (alternative to the positional argument). |
+| `--dry-run`  | `false` | Validate and preview the planned changes without writing.              |
+| `-s, --sync` | `false` | Trigger a sync of affected nodes after a successful apply.             |
+| `--format`   | `text`  | Preview format: `text` or `json`.                                      |
 
 The patch may contain `network_settings`, `network_policies`, `nodes`, `links`, `blocks`, `dns`, `templates`, `server_tasks`, `cron_tasks`, `database`, and `integrations`. Unknown fields are rejected. See [Configuration Specification](configuration.md#declarative-config-apply) for details and examples.
 

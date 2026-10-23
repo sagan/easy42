@@ -660,6 +660,7 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 
 		pref := rl.localEnd.EffectivePreference(&rl.pol)
 		mark := rl.localEnd.EffectiveMark(&rl.pol)
+		isSameASN := rl.remoteNode != nil && node.ASN != 0 && rl.remoteNode.ASN == node.ASN
 		nodeLink := map[string]any{
 			"type":           rl.link.LinkType(),
 			"is_manual":      rl.link.IsManual(),
@@ -669,6 +670,8 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 			"remote_node":    remoteNodeMap,
 			"is_external":    rl.isExternal,
 			"is_dn42":        rl.isDN42,
+			"is_same_asn":    isSameASN,
+			"is_ibgp":        isSameASN,
 			"policy_id":      rl.policyID,
 			"bgp_template":   bgpTemplate,
 			"local_as":       localAS,

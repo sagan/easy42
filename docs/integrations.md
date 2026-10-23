@@ -4,6 +4,37 @@ This document describes Easy42's third-party integrations and advanced managemen
 
 ---
 
+- [Integrations \& Extended Features](#integrations--extended-features)
+  - [1. Prometheus Metrics Exporter](#1-prometheus-metrics-exporter)
+    - [Endpoint \& Authentication](#endpoint--authentication)
+    - [Prometheus Configuration Example](#prometheus-configuration-example)
+    - [Sample Grafana Dashboards](#sample-grafana-dashboards)
+    - [Exported Metrics Catalog](#exported-metrics-catalog)
+      - [A. Easy42 Cluster State \& Topology](#a-easy42-cluster-state--topology)
+      - [B. WireGuard Telemetry (MindFlavor Compatible)](#b-wireguard-telemetry-mindflavor-compatible)
+      - [C. BIRD / BGP Dynamic Routing (bird\_exporter Compatible)](#c-bird--bgp-dynamic-routing-bird_exporter-compatible)
+      - [D. Linux Host System (node\_exporter Compatible)](#d-linux-host-system-node_exporter-compatible)
+  - [2. `/etc/hosts` Automatic Management](#2-etchosts-automatic-management)
+    - [How It Works](#how-it-works)
+  - [3. WireGuard PSK (Preshared Key) Support](#3-wireguard-psk-preshared-key-support)
+    - [Key Capabilities](#key-capabilities)
+  - [4. Database Management \& Data Retention](#4-database-management--data-retention)
+    - [Retention Settings](#retention-settings)
+    - [Cleanup \& Rollups](#cleanup--rollups)
+    - [Maintenance](#maintenance)
+  - [5. Cloudflare DNS Automation](#5-cloudflare-dns-automation)
+    - [Configuration](#configuration)
+    - [Generated DNS Records](#generated-dns-records)
+    - [Sync Modes](#sync-modes)
+  - [6. Telegram Bot](#6-telegram-bot)
+    - [Configuration](#configuration-1)
+    - [Commands](#commands)
+  - [7. Config Templates Engine \& Hooks](#7-config-templates-engine--hooks)
+    - [Node config hooks](#node-config-hooks)
+  - [8. Scheduled Tasks](#8-scheduled-tasks)
+    - [Server tasks (`server_tasks`)](#server-tasks-server_tasks)
+    - [Cron probes (`cron_tasks`)](#cron-probes-cron_tasks)
+
 ## 1. Prometheus Metrics Exporter
 
 Easy42 exposes cluster telemetry in Prometheus text format (`text/plain; version=0.0.4`).
@@ -20,15 +51,15 @@ Easy42 exposes cluster telemetry in Prometheus text format (`text/plain; version
 
 ```yaml
 scrape_configs:
-  - job_name: 'easy42'
+  - job_name: "easy42"
     scrape_interval: 15s
-    metrics_path: '/metrics'
-    scheme: 'http' # or https
+    metrics_path: "/metrics"
+    scheme: "http" # or https
     static_configs:
-      - targets: ['127.0.0.1:4242']
+      - targets: ["127.0.0.1:4242"]
     authorization:
       type: Bearer
-      credentials: 'e42_prom_your_auth_token_here'
+      credentials: "e42_prom_your_auth_token_here"
 ```
 
 The token can be rotated from the UI or `POST /api/settings/integrations/reset-token`.
@@ -49,66 +80,66 @@ Only nodes running `easy42-agent` report telemetry. SSH-only nodes still appear 
 
 #### A. Easy42 Cluster State & Topology
 
-| Metric Name | Type | Description | Labels |
-| :--- | :---: | :--- | :--- |
-| `easy42_exporter_build_info` | Gauge | Build and version information | `version`, `commit` |
-| `easy42_scrape_duration_seconds` | Gauge | Metrics collection duration | — |
-| `easy42_total_nodes` | Gauge | Configured nodes | — |
-| `easy42_connected_nodes` | Gauge | Nodes with a connected agent | — |
-| `easy42_total_links` | Gauge | Configured links | — |
-| `easy42_node_info` | Gauge | Static node metadata | `node`, `hostname`, `agent_version`, `os`, `asn`, `ip`, `ip6`, `mode`, `is_external` |
-| `easy42_node_up` | Gauge | Agent connection status (`1` connected, `0` offline) | `node` |
-| `easy42_node_last_seen_timestamp_seconds` | Gauge | Unix timestamp of last agent contact | `node` |
-| `easy42_link_up` | Gauge | `1` if either endpoint reported a WireGuard handshake within 180s | `from_node`, `to_node`, `from_interface`, `to_interface` |
+| Metric Name                               | Type  | Description                                                       | Labels                                                                               |
+| :---------------------------------------- | :---: | :---------------------------------------------------------------- | :----------------------------------------------------------------------------------- |
+| `easy42_exporter_build_info`              | Gauge | Build and version information                                     | `version`, `commit`                                                                  |
+| `easy42_scrape_duration_seconds`          | Gauge | Metrics collection duration                                       | —                                                                                    |
+| `easy42_total_nodes`                      | Gauge | Configured nodes                                                  | —                                                                                    |
+| `easy42_connected_nodes`                  | Gauge | Nodes with a connected agent                                      | —                                                                                    |
+| `easy42_total_links`                      | Gauge | Configured links                                                  | —                                                                                    |
+| `easy42_node_info`                        | Gauge | Static node metadata                                              | `node`, `hostname`, `agent_version`, `os`, `asn`, `ip`, `ip6`, `mode`, `is_external` |
+| `easy42_node_up`                          | Gauge | Agent connection status (`1` connected, `0` offline)              | `node`                                                                               |
+| `easy42_node_last_seen_timestamp_seconds` | Gauge | Unix timestamp of last agent contact                              | `node`                                                                               |
+| `easy42_link_up`                          | Gauge | `1` if either endpoint reported a WireGuard handshake within 180s | `from_node`, `to_node`, `from_interface`, `to_interface`                             |
 
 `is_external` is rendered as `0` or `1`. `easy42_link_up` is derived from agent WireGuard peer state, not from BGP session state.
 
 #### B. WireGuard Telemetry (MindFlavor Compatible)
 
-| Metric Name | Type | Description | Labels |
-| :--- | :---: | :--- | :--- |
-| `wireguard_peer_connected` | Gauge | `1` if the peer handshaked within 180s | `node`, `interface`, `public_key`, `peer_node`, `friendly_name` |
-| `wireguard_latest_handshake_seconds` | Gauge | Unix timestamp of the latest handshake | `node`, `interface`, `public_key`, `endpoint`, `peer_node`, `friendly_name` |
-| `wireguard_latest_handshake_delay_seconds` | Gauge | Seconds since the latest handshake | `node`, `interface`, `public_key`, `endpoint`, `peer_node`, `friendly_name` |
-| `wireguard_received_bytes_total` | Counter | Bytes received from the peer | `node`, `interface`, `public_key`, `endpoint`, `peer_node`, `friendly_name` |
-| `wireguard_sent_bytes_total` | Counter | Bytes sent to the peer | `node`, `interface`, `public_key`, `endpoint`, `peer_node`, `friendly_name` |
-| `wireguard_interface_up` | Gauge | `1` if a `wg*` interface is up | `node`, `interface` |
-| `wireguard_peer_persistent_keepalive_interval_seconds` | Gauge | Keepalive interval, emitted only when greater than `0` | `node`, `interface`, `public_key`, `peer_node`, `friendly_name` |
+| Metric Name                                            |  Type   | Description                                            | Labels                                                                      |
+| :----------------------------------------------------- | :-----: | :----------------------------------------------------- | :-------------------------------------------------------------------------- |
+| `wireguard_peer_connected`                             |  Gauge  | `1` if the peer handshaked within 180s                 | `node`, `interface`, `public_key`, `peer_node`, `friendly_name`             |
+| `wireguard_latest_handshake_seconds`                   |  Gauge  | Unix timestamp of the latest handshake                 | `node`, `interface`, `public_key`, `endpoint`, `peer_node`, `friendly_name` |
+| `wireguard_latest_handshake_delay_seconds`             |  Gauge  | Seconds since the latest handshake                     | `node`, `interface`, `public_key`, `endpoint`, `peer_node`, `friendly_name` |
+| `wireguard_received_bytes_total`                       | Counter | Bytes received from the peer                           | `node`, `interface`, `public_key`, `endpoint`, `peer_node`, `friendly_name` |
+| `wireguard_sent_bytes_total`                           | Counter | Bytes sent to the peer                                 | `node`, `interface`, `public_key`, `endpoint`, `peer_node`, `friendly_name` |
+| `wireguard_interface_up`                               |  Gauge  | `1` if a `wg*` interface is up                         | `node`, `interface`                                                         |
+| `wireguard_peer_persistent_keepalive_interval_seconds` |  Gauge  | Keepalive interval, emitted only when greater than `0` | `node`, `interface`, `public_key`, `peer_node`, `friendly_name`             |
 
 `peer_node` and `friendly_name` are resolved from configured links by peer public key or interface name. Both are empty for unmanaged peers.
 
 #### C. BIRD / BGP Dynamic Routing (bird_exporter Compatible)
 
-| Metric Name | Type | Description | Labels |
-| :--- | :---: | :--- | :--- |
-| `bird_protocol_up` | Gauge | `1` if the protocol state is `up` | `node`, `name`, `proto`, `peer_node` |
-| `bird_protocol_state` | Gauge | Value `1` for the current state | `node`, `name`, `proto`, `state` |
-| `bird_bgp_session_established` | Gauge | `1` if the BGP protocol reports `established` | `node`, `name`, `peer_node` |
+| Metric Name                    | Type  | Description                                   | Labels                               |
+| :----------------------------- | :---: | :-------------------------------------------- | :----------------------------------- |
+| `bird_protocol_up`             | Gauge | `1` if the protocol state is `up`             | `node`, `name`, `proto`, `peer_node` |
+| `bird_protocol_state`          | Gauge | Value `1` for the current state               | `node`, `name`, `proto`, `state`     |
+| `bird_bgp_session_established` | Gauge | `1` if the BGP protocol reports `established` | `node`, `name`, `peer_node`          |
 
 #### D. Linux Host System (node_exporter Compatible)
 
-| Metric Name | Type | Description | Labels |
-| :--- | :---: | :--- | :--- |
-| `node_cpu_percent` | Gauge | CPU utilization percentage (0-100) | `node` |
-| `node_cpu_utilization_ratio` | Gauge | CPU utilization ratio (0-1) | `node` |
-| `node_load1`, `node_load5`, `node_load15` | Gauge | Load averages | `node` |
-| `node_memory_MemTotal_bytes` | Gauge | Total memory | `node` |
-| `node_memory_used_bytes` | Gauge | Used memory | `node` |
-| `node_memory_MemAvailable_bytes` | Gauge | Currently rendered as `total - used` | `node` |
-| `node_memory_MemFree_bytes` | Gauge | Currently rendered as `total - used` | `node` |
-| `node_uptime_seconds` | Gauge | Host uptime | `node` |
-| `node_boot_time_seconds` | Gauge | Boot time (now minus uptime) | `node` |
-| `node_filesystem_size_bytes` | Gauge | Filesystem total size | `node`, `mountpoint` |
-| `node_filesystem_used_bytes` | Gauge | Used space | `node`, `mountpoint` |
-| `node_filesystem_free_bytes` | Gauge | Free space | `node`, `mountpoint` |
-| `node_filesystem_avail_bytes` | Gauge | Currently rendered as free bytes (not non-root available) | `node`, `mountpoint` |
-| `node_network_receive_bytes_total` | Counter | Received bytes | `node`, `device` |
-| `node_network_transmit_bytes_total` | Counter | Transmitted bytes | `node`, `device` |
-| `node_network_receive_packets_total` | Counter | Received packets | `node`, `device` |
-| `node_network_transmit_packets_total` | Counter | Transmitted packets | `node`, `device` |
-| `node_network_receive_errs_total` | Counter | Receive errors | `node`, `device` |
-| `node_network_transmit_errs_total` | Counter | Transmit errors | `node`, `device` |
-| `node_network_up` | Gauge | `1` if the device is up | `node`, `device` |
+| Metric Name                               |  Type   | Description                                               | Labels               |
+| :---------------------------------------- | :-----: | :-------------------------------------------------------- | :------------------- |
+| `node_cpu_percent`                        |  Gauge  | CPU utilization percentage (0-100)                        | `node`               |
+| `node_cpu_utilization_ratio`              |  Gauge  | CPU utilization ratio (0-1)                               | `node`               |
+| `node_load1`, `node_load5`, `node_load15` |  Gauge  | Load averages                                             | `node`               |
+| `node_memory_MemTotal_bytes`              |  Gauge  | Total memory                                              | `node`               |
+| `node_memory_used_bytes`                  |  Gauge  | Used memory                                               | `node`               |
+| `node_memory_MemAvailable_bytes`          |  Gauge  | Currently rendered as `total - used`                      | `node`               |
+| `node_memory_MemFree_bytes`               |  Gauge  | Currently rendered as `total - used`                      | `node`               |
+| `node_uptime_seconds`                     |  Gauge  | Host uptime                                               | `node`               |
+| `node_boot_time_seconds`                  |  Gauge  | Boot time (now minus uptime)                              | `node`               |
+| `node_filesystem_size_bytes`              |  Gauge  | Filesystem total size                                     | `node`, `mountpoint` |
+| `node_filesystem_used_bytes`              |  Gauge  | Used space                                                | `node`, `mountpoint` |
+| `node_filesystem_free_bytes`              |  Gauge  | Free space                                                | `node`, `mountpoint` |
+| `node_filesystem_avail_bytes`             |  Gauge  | Currently rendered as free bytes (not non-root available) | `node`, `mountpoint` |
+| `node_network_receive_bytes_total`        | Counter | Received bytes                                            | `node`, `device`     |
+| `node_network_transmit_bytes_total`       | Counter | Transmitted bytes                                         | `node`, `device`     |
+| `node_network_receive_packets_total`      | Counter | Received packets                                          | `node`, `device`     |
+| `node_network_transmit_packets_total`     | Counter | Transmitted packets                                       | `node`, `device`     |
+| `node_network_receive_errs_total`         | Counter | Receive errors                                            | `node`, `device`     |
+| `node_network_transmit_errs_total`        | Counter | Transmit errors                                           | `node`, `device`     |
+| `node_network_up`                         |  Gauge  | `1` if the device is up                                   | `node`, `device`     |
 
 ---
 
@@ -224,27 +255,27 @@ The Telegram integration provides read-only cluster queries and on-demand probes
 
 Set these under `integrations` (or **Settings -> Integrations**):
 
-| Field | Description |
-| :--- | :--- |
-| `telegram_enabled` | Starts the bot and accepts webhook updates. |
-| `telegram_bot_token` | Token from @BotFather. |
-| `telegram_admin_id` | Numeric Telegram user ID allowed to use the bot. |
+| Field                   | Description                                                                          |
+| :---------------------- | :----------------------------------------------------------------------------------- |
+| `telegram_enabled`      | Starts the bot and accepts webhook updates.                                          |
+| `telegram_bot_token`    | Token from @BotFather.                                                               |
+| `telegram_admin_id`     | Numeric Telegram user ID allowed to use the bot.                                     |
 | `telegram_secret_token` | Secret validated against `X-Telegram-Bot-Api-Secret-Token`. Auto-generated if empty. |
-| `server_url` | Public HTTPS URL; the webhook is registered at `<server_url>/api/telegram/webhook`. |
+| `server_url`            | Public HTTPS URL; the webhook is registered at `<server_url>/api/telegram/webhook`.  |
 
 Use `POST /api/settings/integrations/telegram/test` to verify the token and send a test message. The webhook route itself is public but requires the secret header; all commands are restricted to `telegram_admin_id`.
 
 ### Commands
 
-| Command | Description |
-| :--- | :--- |
-| `/start` | Welcome message and dashboard link. |
-| `/help` | List commands. |
-| `/status` | Cluster status summary. |
-| `/nodes` | List managed nodes and connection state. |
-| `/node [name-or-prefix]` | Node details; without an argument shows a selection keyboard. |
-| `/ping [node] <target> [count]` | ICMP ping from a node (count 1-20, default 4). |
-| `/tcp_ping [node] <host:port> [count]` | TCP handshake probe (agent required). |
+| Command                                | Description                                                   |
+| :------------------------------------- | :------------------------------------------------------------ |
+| `/start`                               | Welcome message and dashboard link.                           |
+| `/help`                                | List commands.                                                |
+| `/status`                              | Cluster status summary.                                       |
+| `/nodes`                               | List managed nodes and connection state.                      |
+| `/node [name-or-prefix]`               | Node details; without an argument shows a selection keyboard. |
+| `/ping [node] <target> [count]`        | ICMP ping from a node (count 1-20, default 4).                |
+| `/tcp_ping [node] <host:port> [count]` | TCP handshake probe (agent required).                         |
 
 If no node is given, Easy42 uses the first available managed node (`tcp_ping` requires an active agent). Node names may be abbreviated when unambiguous.
 
@@ -262,16 +293,16 @@ Easy42 compiles WireGuard, BIRD, and nftables configuration with Go's `text/temp
 
 `nodes[].config_hooks` injects snippets into generated files:
 
-| Hook type | Injection point |
-| :--- | :--- |
-| `bird.pre` | Before BIRD protocol declarations. |
-| `bird` (aliases `bird.post`, `bird.global`) | End of the BIRD configuration. |
-| `wg.interface` | Inside the `[Interface]` section. |
-| `wg.peer` | Inside each `[Peer]` section. |
-| `wg.post` (alias `wg`) | End of the WireGuard interface file. |
-| `nft.pre` | Before nftables table declarations. |
-| `nft.table` | Inside `table inet easy42 { ... }`. |
-| `nft` (aliases `nft.post`, `nft.global`) | End of the nftables file. |
+| Hook type                                   | Injection point                      |
+| :------------------------------------------ | :----------------------------------- |
+| `bird.pre`                                  | Before BIRD protocol declarations.   |
+| `bird` (aliases `bird.post`, `bird.global`) | End of the BIRD configuration.       |
+| `wg.interface`                              | Inside the `[Interface]` section.    |
+| `wg.peer`                                   | Inside each `[Peer]` section.        |
+| `wg.post` (alias `wg`)                      | End of the WireGuard interface file. |
+| `nft.pre`                                   | Before nftables table declarations.  |
+| `nft.table`                                 | Inside `table inet easy42 { ... }`.  |
+| `nft` (aliases `nft.post`, `nft.global`)    | End of the nftables file.            |
 
 For `wg.peer`, an optional `target` limits the snippet to a named peer. Hooks are compiled from the server; malformed snippets produce invalid node configuration and should be validated with `easy42 node bird <name>` or `easy42 node nft <name>` before syncing.
 
@@ -285,11 +316,11 @@ Easy42 has two scheduler layers.
 
 Three fixed tasks run on the Easy42 server:
 
-| Task | Default schedule | Purpose |
-| :--- | :--- | :--- |
-| `update_roa` | `0 0 * * *` | Refresh policy ROA files. |
-| `sync` | `30 0 * * *` | Push compiled configuration to all nodes. |
-| `sync_dns` | `0 1 * * *` | Reconcile Cloudflare DNS records. |
+| Task         | Default schedule | Purpose                                   |
+| :----------- | :--------------- | :---------------------------------------- |
+| `update_roa` | `0 0 * * *`      | Refresh policy ROA files.                 |
+| `sync`       | `30 0 * * *`     | Push compiled configuration to all nodes. |
+| `sync_dns`   | `0 1 * * *`      | Reconcile Cloudflare DNS records.         |
 
 Schedules use 5- or 6-field cron syntax and can be changed from **Settings -> Tasks** or `PUT /api/settings/tasks/{id}`. `POST /api/settings/tasks/{id}/run` executes one immediately. The apply schema accepts a `server_tasks` section, but the current apply engine does not merge it.
 

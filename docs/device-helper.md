@@ -4,9 +4,53 @@
 
 ---
 
+- [Device Helper \& Remote Host Automation](#device-helper--remote-host-automation)
+  - [Overview \& Architecture](#overview--architecture)
+    - [Key Architectural Characteristics](#key-architectural-characteristics)
+    - [SSH Authentication \& Host Key Verification](#ssh-authentication--host-key-verification)
+  - [Embedded Task Catalog](#embedded-task-catalog)
+  - [Network Configuration Task](#network-configuration-task)
+    - [Inputs](#inputs)
+    - [Interface whitelist](#interface-whitelist)
+    - [Address handling](#address-handling)
+    - [Network manager selection](#network-manager-selection)
+    - [Custom network script](#custom-network-script)
+    - [Status semantics](#status-semantics)
+  - [Status Protocol \& State Machine](#status-protocol--state-machine)
+  - [Multi-Platform Support](#multi-platform-support)
+    - [Supported Operating Systems](#supported-operating-systems)
+    - [Supported Init Systems](#supported-init-systems)
+  - [Using Device Helper in the Web UI](#using-device-helper-in-the-web-ui)
+    - [1. Navigating to Device Helper](#1-navigating-to-device-helper)
+    - [2. Fleet Tag Filtering \& Selection](#2-fleet-tag-filtering--selection)
+    - [3. Checking Prerequisites \& Drift Detection](#3-checking-prerequisites--drift-detection)
+    - [4. Executing Tasks \& Viewing Real-Time Logs](#4-executing-tasks--viewing-real-time-logs)
+  - [REST API Reference](#rest-api-reference)
+    - [1. List Available Tasks](#1-list-available-tasks)
+    - [2. Read Task Source Files](#2-read-task-source-files)
+    - [3. Check Task Status on Nodes](#3-check-task-status-on-nodes)
+    - [4. Execute Task on Nodes](#4-execute-task-on-nodes)
+  - [Authoring Custom Tasks](#authoring-custom-tasks)
+    - [1. Task Manifest (`task.json`)](#1-task-manifest-taskjson)
+    - [2. Status Script (`status.sh`)](#2-status-script-statussh)
+    - [3. Execution Script (`run.sh`)](#3-execution-script-runsh)
+  - [Filesystem Custom Tasks](#filesystem-custom-tasks)
+    - [Directory Structure \& File Specifications](#directory-structure--file-specifications)
+    - [UI Integration](#ui-integration)
+    - [Payload-based tasks](#payload-based-tasks)
+  - [Online Tasks Repository](#online-tasks-repository)
+    - [Default Repository Source](#default-repository-source)
+    - [Custom Online Sources (`sources.txt`)](#custom-online-sources-sourcestxt)
+    - [Repository Layout \& Manifest Specification (`manifest.json`)](#repository-layout--manifest-specification-manifestjson)
+      - [Manifest Schema](#manifest-schema)
+    - [Installation \& Atomicity Guarantees](#installation--atomicity-guarantees)
+    - [Deleting Custom \& Online-Installed Tasks](#deleting-custom--online-installed-tasks)
+    - [REST API Endpoints](#rest-api-endpoints)
+
 ## Overview & Architecture
 
 When deploying dynamic WireGuard overlay networks with BIRD 2 routing, target Linux hosts typically require foundational system preparation:
+
 - Installing the WireGuard kernel module/tools and the BIRD 2 routing daemon.
 - Enabling IPv4/IPv6 packet forwarding and configuring reverse path filtering (`rp_filter`) to prevent asymmetric routing drops.
 - Persisting node overlay/external IPv4 and IPv6 addresses (including dummy interfaces) through the host's native network manager.
@@ -62,6 +106,7 @@ Device Helper communicates with remote managed nodes strictly over SSH and SFTP.
 - **Host Configuration (`~/.ssh/config`)**: Transparently respects `HostName`, `User`, `Port`, `IdentityFile`, and `HostKeyAlgorithms` directives defined in the user's `~/.ssh/config`.
 
 **Setup for Target Nodes**:
+
 1. Copy the controller host user's public key (`~/.ssh/id_ed25519.pub`) to target nodes:
    ```bash
    ssh-copy-id -i ~/.ssh/id_ed25519.pub root@<node-host>
@@ -77,17 +122,17 @@ Device Helper communicates with remote managed nodes strictly over SSH and SFTP.
 
 Tasks are sorted by weight and categorized into logical operational domains:
 
-| Task ID | Category | Title | Weight | Actions Performed |
-| :--- | :--- | :--- | :---: | :--- |
-| `deploy_agent` | Services | **Deploy Agent** | `5` | Detects remote CPU architecture, obtains or reuses the node agent token, uploads the bundled `easy42-agent` binary, writes `agent.json` only when none exists, creates and enables a system service (`systemd`, `openrc`, or `procd`), and refreshes node status. |
-| `configure_network` | System & Network | **Configure Network** | `6` | Persists the node's main/external IPv4 and IPv6 addresses (and optional custom network script) through netplan, `/etc/network/interfaces`, systemd-networkd, or OpenWrt UCI. See [Network Configuration Task](#network-configuration-task). |
-| `install_wireguard` | Packages | **Install WireGuard** | `10` | Installs WireGuard and `wireguard-tools` using native package managers (`apt`, `apk`, `pacman`, `dnf`/`yum`, `opkg`). |
-| `install_wgquick_openwrt` | Packages | **Install wg-quick (OpenWrt)** | `12` | Downloads and installs the third-party Golang `wg-quick` implementation (`wg-quick-op`) into `/usr/bin/wg-quick` for OpenWrt or other systems where package managers do not supply `wg-quick`. |
-| `install_bird` | Packages | **Install BIRD** | `20` | Installs BIRD 2 (`bird2` or `bird`) via the native package manager and enables the system service. |
-| `config_bird` | Configuration | **Configure BIRD Main Config** | `30` | Finds `/etc/bird/bird.conf`, `/etc/bird.conf`, or `/etc/bird2/bird.conf` (creating `/etc/bird/bird.conf` when none exists), creates a fallback placeholder `/etc/bird_easy42.conf`, appends `include "/etc/bird_easy42.conf";`, validates syntax with `bird -p`, and issues `birdc configure` if the daemon is active. |
-| `config_nftables` | Configuration | **Configure Nftables Autostart** | `35` | Creates placeholder `/etc/easy42.nft`, hooks `include "/etc/easy42.nft"` into `/etc/nftables.conf`, or installs the standalone `easy42-nftables` service unit on systems without standard nftables loaders. |
-| `sysctl_params` | System & Network | **Configure Sysctl Parameters** | `40` | Deploys `/etc/sysctl.d/99-easy42.conf` enabling `net.ipv4.ip_forward=1`, `net.ipv6.conf.all.forwarding=1`, and loose reverse path filtering (`net.ipv4.conf.all.rp_filter=0`, `net.ipv4.conf.default.rp_filter=0`) so asymmetric dynamic routing works without kernel packet drops. |
-| `autostart_interfaces` | System & Network | **WireGuard Autostart Service** | `50` | Generates and enables an autostart daemon (`easy42-autostart`) under `systemd`, `openrc`, or `procd` to bring up all `wg42*` interfaces automatically on boot. |
+| Task ID                   | Category         | Title                            | Weight | Actions Performed                                                                                                                                                                                                                                                                                                      |
+| :------------------------ | :--------------- | :------------------------------- | :----: | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `deploy_agent`            | Services         | **Deploy Agent**                 |  `5`   | Detects remote CPU architecture, obtains or reuses the node agent token, uploads the bundled `easy42-agent` binary, writes `agent.json` only when none exists, creates and enables a system service (`systemd`, `openrc`, or `procd`), and refreshes node status.                                                      |
+| `configure_network`       | System & Network | **Configure Network**            |  `6`   | Persists the node's main/external IPv4 and IPv6 addresses (and optional custom network script) through netplan, `/etc/network/interfaces`, systemd-networkd, or OpenWrt UCI. See [Network Configuration Task](#network-configuration-task).                                                                            |
+| `install_wireguard`       | Packages         | **Install WireGuard**            |  `10`  | Installs WireGuard and `wireguard-tools` using native package managers (`apt`, `apk`, `pacman`, `dnf`/`yum`, `opkg`).                                                                                                                                                                                                  |
+| `install_wgquick_openwrt` | Packages         | **Install wg-quick (OpenWrt)**   |  `12`  | Downloads and installs the third-party Golang `wg-quick` implementation (`wg-quick-op`) into `/usr/bin/wg-quick` for OpenWrt or other systems where package managers do not supply `wg-quick`.                                                                                                                         |
+| `install_bird`            | Packages         | **Install BIRD**                 |  `20`  | Installs BIRD 2 (`bird2` or `bird`) via the native package manager and enables the system service.                                                                                                                                                                                                                     |
+| `config_bird`             | Configuration    | **Configure BIRD Main Config**   |  `30`  | Finds `/etc/bird/bird.conf`, `/etc/bird.conf`, or `/etc/bird2/bird.conf` (creating `/etc/bird/bird.conf` when none exists), creates a fallback placeholder `/etc/bird_easy42.conf`, appends `include "/etc/bird_easy42.conf";`, validates syntax with `bird -p`, and issues `birdc configure` if the daemon is active. |
+| `config_nftables`         | Configuration    | **Configure Nftables Autostart** |  `35`  | Creates placeholder `/etc/easy42.nft`, hooks `include "/etc/easy42.nft"` into `/etc/nftables.conf`, or installs the standalone `easy42-nftables` service unit on systems without standard nftables loaders.                                                                                                            |
+| `sysctl_params`           | System & Network | **Configure Sysctl Parameters**  |  `40`  | Deploys `/etc/sysctl.d/99-easy42.conf` enabling `net.ipv4.ip_forward=1`, `net.ipv6.conf.all.forwarding=1`, and loose reverse path filtering (`net.ipv4.conf.all.rp_filter=0`, `net.ipv4.conf.default.rp_filter=0`) so asymmetric dynamic routing works without kernel packet drops.                                    |
+| `autostart_interfaces`    | System & Network | **WireGuard Autostart Service**  |  `50`  | Generates and enables an autostart daemon (`easy42-autostart`) under `systemd`, `openrc`, or `procd` to bring up all `wg42*` interfaces automatically on boot.                                                                                                                                                         |
 
 The task list API returns the manifest fields exactly as stored in each `task.json`, sorted by ascending weight and then by task ID.
 
@@ -103,14 +148,14 @@ The task list API returns the manifest fields exactly as stored in each `task.js
 
 The controller generates a `node_ip.env` file from the node configuration and injects it into both `status.sh` and `run.sh`:
 
-| Variable | Source | Notes |
-| :--- | :--- | :--- |
-| `NODE_NAME` | `node.name` | Used in messages only. |
-| `NODE_INTERFACE` | `node.interface` | Must match the interface whitelist. |
-| `NODE_IP` | `node.ip` | CIDR suffixes are stripped before use. |
-| `NODE_IP6` | `node.ip6` | CIDR suffixes are stripped before use. |
-| `NODE_EXTERNAL_IP` | `node.external_ip` | Added only when different from `NODE_IP`. |
-| `NODE_EXTERNAL_IP6` | `node.external_ip6` | Added only when different from `NODE_IP6`. |
+| Variable            | Source                       | Notes                                                            |
+| :------------------ | :--------------------------- | :--------------------------------------------------------------- |
+| `NODE_NAME`         | `node.name`                  | Used in messages only.                                           |
+| `NODE_INTERFACE`    | `node.interface`             | Must match the interface whitelist.                              |
+| `NODE_IP`           | `node.ip`                    | CIDR suffixes are stripped before use.                           |
+| `NODE_IP6`          | `node.ip6`                   | CIDR suffixes are stripped before use.                           |
+| `NODE_EXTERNAL_IP`  | `node.external_ip`           | Added only when different from `NODE_IP`.                        |
+| `NODE_EXTERNAL_IP6` | `node.external_ip6`          | Added only when different from `NODE_IP6`.                       |
 | `HAS_CUSTOM_SCRIPT` | `node.custom_network_script` | `1` when a non-empty custom script is configured, otherwise `0`. |
 
 If a custom script is configured, it is uploaded as `custom_network.sh` and embedded into the generated network hook.
@@ -146,12 +191,12 @@ The task probes native network managers in this order:
 
 Persistence by backend:
 
-| Backend | Persistent configuration |
-| :--- | :--- |
-| netplan | `/etc/netplan/99-easy42.yaml` (`renderer: networkd`), validated with `netplan generate`, then `netplan apply`. |
-| interfaces | `### EASY42_START` / `### EASY42_END` block in `/etc/network/interfaces`, replacing any previous Easy42 block. |
+| Backend          | Persistent configuration                                                                                                                 |
+| :--------------- | :--------------------------------------------------------------------------------------------------------------------------------------- |
+| netplan          | `/etc/netplan/99-easy42.yaml` (`renderer: networkd`), validated with `netplan generate`, then `netplan apply`.                           |
+| interfaces       | `### EASY42_START` / `### EASY42_END` block in `/etc/network/interfaces`, replacing any previous Easy42 block.                           |
 | systemd-networkd | `99-easy42-<iface>.netdev` (dummy, non-`lo`) and `99-easy42-<iface>.network` in `/etc/systemd/network`, followed by `networkctl reload`. |
-| OpenWrt | `network.easy42_node` UCI interface with `proto=static`, committed and applied via `/etc/init.d/network restart`. |
+| OpenWrt          | `network.easy42_node` UCI interface with `proto=static`, committed and applied via `/etc/init.d/network restart`.                        |
 
 Existing managed files are backed up first with a timestamped suffix:
 
@@ -200,12 +245,12 @@ Each task's `status.sh` script executes a series of non-destructive checks and t
 └──────────────────┘
 ```
 
-| Exit Code | Status Code | UI Badge | Description |
-| :---: | :--- | :--- | :--- |
-| **`0`** | `ready` | **Needs Execution** | The target host is compatible and missing the configuration or package. Ready to run. |
-| **`10`** | `done` | **Already Configured** | The package, file include, service, sysctl tuning, addresses, or custom network script are already present and active. |
-| **`20`** | `incompatible` | **Not Applicable** | The OS distribution, init system, interface name, or node configuration does not match the task prerequisites. |
-| **`Other`** | `error` | **Check Failed** | Script execution failed, SSH connection dropped, or root elevation failed. |
+|  Exit Code  | Status Code    | UI Badge               | Description                                                                                                            |
+| :---------: | :------------- | :--------------------- | :--------------------------------------------------------------------------------------------------------------------- |
+|   **`0`**   | `ready`        | **Needs Execution**    | The target host is compatible and missing the configuration or package. Ready to run.                                  |
+|  **`10`**   | `done`         | **Already Configured** | The package, file include, service, sysctl tuning, addresses, or custom network script are already present and active. |
+|  **`20`**   | `incompatible` | **Not Applicable**     | The OS distribution, init system, interface name, or node configuration does not match the task prerequisites.         |
+| **`Other`** | `error`        | **Check Failed**       | Script execution failed, SSH connection dropped, or root elevation failed.                                             |
 
 When a task is executed (`run.sh`), an exit code of `0` denotes success, while any non-zero exit code denotes failure. The full stdout and stderr output stream is captured, returned in the API response, and displayed in the UI terminal log viewer. For `deploy_agent` and `configure_network`, a successful run also triggers an asynchronous node status refresh.
 
@@ -216,6 +261,7 @@ When a task is executed (`run.sh`), an exit code of `0` denotes success, while a
 All helper tasks leverage a unified POSIX-compliant helper library (`tasks/_common/common.sh`), supporting heterogeneous Linux environments:
 
 ### Supported Operating Systems
+
 - **Debian / Ubuntu / Raspbian / Armbian**: `apt-get` with `DEBIAN_FRONTEND=noninteractive`.
 - **Alpine Linux**: `apk update && apk add`.
 - **Arch Linux / Manjaro**: `pacman -Sy --noconfirm`.
@@ -223,6 +269,7 @@ All helper tasks leverage a unified POSIX-compliant helper library (`tasks/_comm
 - **OpenWrt**: `opkg update && opkg install`.
 
 ### Supported Init Systems
+
 - **systemd**: Detected via `/run/systemd/system` (or a `systemctl` fallback). Supports unit generation under `/etc/systemd/system/`, `systemctl daemon-reload`, enable/start/restart, and `networkctl reload`.
 - **OpenRC**: Detected via `/run/openrc`, `/run/openrc/softlevel`, or `rc-service`/`rc-update`. Supports `/etc/init.d/` scripts and runlevel management via `rc-update add <service> default`.
 - **procd (OpenWrt)**: Detected via `/etc/rc.common`, `/sbin/procd`, or `OS_ID=openwrt`. Generates procd-compliant `/etc/init.d/` startup scripts and calls `/etc/init.d/<service> enable`.
@@ -234,22 +281,26 @@ All helper tasks leverage a unified POSIX-compliant helper library (`tasks/_comm
 Device Helper is integrated directly into the Easy42 Web UI:
 
 ### 1. Navigating to Device Helper
+
 - **Global Header**: Click **Helper** in the top navigation bar (route `/helper`).
 - **Node Detail Page**: Click the **Device Helper** button in the header actions bar of any managed node (`/helper?node=<node_name>`).
 - **Direct Task Links / URL Routing**: Each task is routable via URL query parameters (`/helper?task=<task_id>` or `/helper?node=<node_name>&task=<task_id>`). Selecting a task syncs the selected task ID in the address bar for shareable deep links.
 
 ### 2. Fleet Tag Filtering & Selection
+
 - **Tag Filter**: Use the tag selector dropdown to filter devices by node tags (`#core`, `#edge`, `#cloud`, `#eu`).
 - **Batch Selection**: Use the table header checkbox to select or deselect all nodes matching the active tag filter.
 - **Individual Selection**: Toggle specific devices using row checkboxes.
 
 ### 3. Checking Prerequisites & Drift Detection
+
 - Click **Check Status** to inspect the selected task on all checked devices simultaneously.
 - Status badges update in real time (`Already Configured`, `Needs Execution`, `Not Applicable`, or `Check Failed`).
 - Hover over the **Details** column to view exact check messages, timestamps, and exit codes.
 - Click **Auto Select** (enabled once statuses are fetched) to automatically select only the nodes whose status is `Needs Execution` and deselect all others for targeted remediation.
 
 ### 4. Executing Tasks & Viewing Real-Time Logs
+
 - Click **Execute Task (N)** to run the task across all selected devices, or click the individual **Play** icon on a specific device row.
 - Device Helper automatically opens the **Execution Output** terminal view at the bottom of the page.
 - Select device tabs (`node-lon`, `node-fra`) to review full console stdout/stderr logs and execution durations.
@@ -262,10 +313,13 @@ Device Helper is integrated directly into the Easy42 Web UI:
 All Device Helper actions are available under the authenticated `/api` router. Unless a reverse proxy or the API client library adds a prefix, the paths below are relative to the Easy42 server root.
 
 ### 1. List Available Tasks
+
 ```http
 GET /api/tasks
 ```
+
 **Response** (`200 OK`):
+
 ```json
 [
   {
@@ -293,13 +347,16 @@ GET /api/tasks
 ```
 
 ### 2. Read Task Source Files
+
 ```http
 GET /api/tasks/{id}/source
 GET /api/tasks/{id}/sources
 ```
+
 Both routes return the same payload: the task's own embedded files followed by shared files from `tasks/_common`.
 
 **Response** (`200 OK`):
+
 ```json
 [
   {
@@ -332,6 +389,7 @@ Both routes return the same payload: the task's own embedded files followed by s
 Task files are ordered as `run.sh`, `status.sh`, `source.sh`, other `.sh` files, then remaining files. Shared files are appended and marked with `"shared": true`. An unknown task ID returns `400 Bad Request`.
 
 ### 3. Check Task Status on Nodes
+
 ```http
 POST /api/tasks/{id}/status
 Content-Type: application/json
@@ -340,9 +398,11 @@ Content-Type: application/json
   "nodes": ["node-fra", "node-lon"]
 }
 ```
-*Note: If `"nodes"` is empty or omitted, status is checked on all managed nodes. External nodes are always excluded.*
+
+_Note: If `"nodes"` is empty or omitted, status is checked on all managed nodes. External nodes are always excluded._
 
 **Response** (`200 OK`):
+
 ```json
 {
   "node-fra": {
@@ -367,6 +427,7 @@ Content-Type: application/json
 `status` is one of `ready`, `done`, `incompatible`, or `error`. `exit_code` is `-1` when the SSH connection itself failed.
 
 ### 4. Execute Task on Nodes
+
 ```http
 POST /api/tasks/{id}/run
 Content-Type: application/json
@@ -375,11 +436,13 @@ Content-Type: application/json
   "nodes": ["node-lon"]
 }
 ```
+
 The `nodes` array is **required** for execution; an empty list returns `400 Bad Request` (`no valid target nodes specified`). External nodes and unknown node names are ignored.
 
 Before running, the controller derives the agent callback URL from the request (`X-Forwarded-Proto` is honored, and the host must pass the server's safe-host check). This URL is embedded in `agent.json` for `deploy_agent`.
 
 **Response** (`200 OK`):
+
 ```json
 {
   "node-lon": {
@@ -412,6 +475,7 @@ tasks/
 Directories whose names begin with `_` are skipped. Directories without a valid `task.json` are ignored.
 
 ### 1. Task Manifest (`task.json`)
+
 ```json
 {
   "id": "my_custom_task",
@@ -425,6 +489,7 @@ Directories whose names begin with `_` are skipped. Directories without a valid 
 `id` is used in API paths and must be unique. `weight` controls ordering (lower runs earlier in the UI).
 
 ### 2. Status Script (`status.sh`)
+
 ```bash
 #!/bin/sh
 . "$(dirname "$0")/common.sh"
@@ -439,6 +504,7 @@ exit 0  # ready
 ```
 
 ### 3. Execution Script (`run.sh`)
+
 ```bash
 #!/bin/sh
 . "$(dirname "$0")/common.sh"
@@ -462,10 +528,12 @@ exit 0
 In addition to built-in embedded tasks, Easy42 allows operators to define **custom tasks** directly on the server's filesystem without rebuilding the binary.
 
 Custom tasks are stored in:
+
 ```
 <easy42-data-dir>/tasks/<task_id>/
 ```
-*(Default: `~/.config/easy42/tasks/<task_id>/`, or overridden by the `--data-dir` flag)*
+
+_(Default: `~/.config/easy42/tasks/<task_id>/`, or overridden by the `--data-dir` flag)_
 
 ### Directory Structure & File Specifications
 
@@ -477,9 +545,9 @@ Custom tasks are stored in:
     └── task.json       # [Optional] Metadata (title, description, category, weight)
 ```
 
-1. **`run.sh`** (*Required*): Executable shell script run natively on target nodes as root or with sudo. Must exit `0` on success or non-zero on error.
-2. **`status.sh`** (*Optional*): Probes remote node state. If omitted, Device Helper automatically marks the task as **Ready to Execute** (`0`).
-3. **`task.json`** (*Optional*): Metadata defining `title`, `description`, `category`, and `weight`. If omitted, the title is automatically derived from the directory name (e.g. `install_bird` becomes `"Install Bird"`), category defaults to `"Custom"`, and weight defaults to `500`.
+1. **`run.sh`** (_Required_): Executable shell script run natively on target nodes as root or with sudo. Must exit `0` on success or non-zero on error.
+2. **`status.sh`** (_Optional_): Probes remote node state. If omitted, Device Helper automatically marks the task as **Ready to Execute** (`0`).
+3. **`task.json`** (_Optional_): Metadata defining `title`, `description`, `category`, and `weight`. If omitted, the title is automatically derived from the directory name (e.g. `install_bird` becomes `"Install Bird"`), category defaults to `"Custom"`, and weight defaults to `500`.
 4. **Access to `common.sh`**:
    Custom tasks automatically have access to Easy42's shared `common.sh` helper library in their working directory:
    ```sh
@@ -506,6 +574,7 @@ The **Online Tasks Repository** allows operators to discover, download, install,
 ### Default Repository Source
 
 Easy42 includes a built-in default repository pointing to the official community tasks catalog:
+
 ```
 https://raw.githubusercontent.com/sagan/easy42-tasks/refs/heads/master/
 ```
@@ -517,12 +586,15 @@ The Easy42 backend proxies all requests to online sources to bypass browser Cros
 Operators can configure custom or private online task sources (e.g. internal GitHub/GitLab repositories, enterprise artifact mirrors, or raw HTTP file servers).
 
 To add custom sources, create a text file:
+
 ```
 <easy42-data-dir>/tasks/sources.txt
 ```
-*(Default: `~/.config/easy42/tasks/sources.txt`)*
+
+_(Default: `~/.config/easy42/tasks/sources.txt`)_
 
 Add one base URL per line:
+
 ```text
 # Internal company tasks repository
 https://raw.githubusercontent.com/my-org/easy42-internal-tasks/main/
@@ -586,6 +658,7 @@ An online tasks repository must host a `manifest.json` file at its root. Each ta
 ### Installation & Atomicity Guarantees
 
 When a user initiates task installation:
+
 1. **Validation**: Easy42 validates task identifiers and filenames to prevent path traversal attacks.
 2. **Atomic Staging**: Files are downloaded to an ephemeral temporary directory: `<data-dir>/tasks/.download-<task-id>-<randHex>/`.
 3. **Permissions**: Shell scripts (`.sh`) are automatically given executable permissions (`0755`), while configuration and manifest files receive `0644`.
@@ -595,16 +668,16 @@ When a user initiates task installation:
 ### Deleting Custom & Online-Installed Tasks
 
 Online-installed and custom filesystem tasks can be deleted directly from the Web UI:
+
 - In the task header, custom tasks feature a **Delete Task** button.
 - A confirmation dialog ensures accidental deletions are prevented.
 - Deletions are securely restricted to directories within `<data-dir>/tasks/`. Built-in embedded tasks cannot be deleted.
 
 ### REST API Endpoints
 
-| Method | Endpoint | Description |
-| :--- | :--- | :--- |
-| `GET` | `/api/tasks/online/sources` | Returns the list of available online sources (default + `sources.txt`). |
-| `GET` | `/api/tasks/online/manifest?source=<url>` | Fetches and returns the parsed `manifest.json` from the specified source. |
-| `POST` | `/api/tasks/online/install` | Downloads and installs a task. Body: `{"source": "<url>", "task": {...}}`. |
-| `DELETE` | `/api/tasks/custom/{id}` | Deletes a custom task directory from the server's filesystem. |
-
+| Method   | Endpoint                                  | Description                                                                |
+| :------- | :---------------------------------------- | :------------------------------------------------------------------------- |
+| `GET`    | `/api/tasks/online/sources`               | Returns the list of available online sources (default + `sources.txt`).    |
+| `GET`    | `/api/tasks/online/manifest?source=<url>` | Fetches and returns the parsed `manifest.json` from the specified source.  |
+| `POST`   | `/api/tasks/online/install`               | Downloads and installs a task. Body: `{"source": "<url>", "task": {...}}`. |
+| `DELETE` | `/api/tasks/custom/{id}`                  | Deletes a custom task directory from the server's filesystem.              |

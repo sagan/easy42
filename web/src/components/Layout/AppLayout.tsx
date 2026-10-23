@@ -82,8 +82,9 @@ export const AppLayout: React.FC = () => {
     unlockOpen,
     setUnlockOpen,
     syncOpen,
-    setSyncOpen,
     syncTargetNode,
+    openSyncModal,
+    closeSyncModal,
     applyOpen,
     setApplyOpen,
     applyInitialContent,
@@ -419,7 +420,7 @@ export const AppLayout: React.FC = () => {
             <Button
               size="small"
               variant="contained"
-              onClick={() => setSyncOpen(true)}
+              onClick={() => openSyncModal()}
               startIcon={<RefreshCw size={14} className={updatingState ? "spin" : ""} />}
               sx={{
                 bgcolor: "#4F46E5",
@@ -679,7 +680,7 @@ export const AppLayout: React.FC = () => {
 
       <SyncProgressModal
         open={syncOpen}
-        onClose={() => setSyncOpen(false)}
+        onClose={closeSyncModal}
         onSyncComplete={() => {
           loadData();
           refreshFleetLive();

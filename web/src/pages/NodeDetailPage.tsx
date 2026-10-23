@@ -169,8 +169,7 @@ export const NodeDetailPage: React.FC = () => {
     setRenameModalOpen,
     setLinkToEdit,
     setAddLinkOpen,
-    setSyncTargetNode,
-    setSyncOpen,
+    openSyncModal,
     openApplyModal,
     setStateToast,
   } = useMesh();
@@ -1079,8 +1078,7 @@ export const NodeDetailPage: React.FC = () => {
                 startIcon={<Zap size={14} />}
                 onClick={() => {
                   if (node) {
-                    setSyncTargetNode(node.name);
-                    setSyncOpen(true);
+                    openSyncModal(node.name);
                   }
                 }}
                 sx={{

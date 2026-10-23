@@ -4,6 +4,22 @@ The **Easy42 Agent** (`easy42-agent`) is a high-performance, lightweight backgro
 
 ---
 
+- [Node Agent (`easy42-agent`) \& Telemetry](#node-agent-easy42-agent--telemetry)
+  - [Agent Architecture](#agent-architecture)
+  - [Automated Deployment via Device Helper](#automated-deployment-via-device-helper)
+  - [Live Telemetry \& Monitoring](#live-telemetry--monitoring)
+  - [Edge-Scheduled Cron Probes](#edge-scheduled-cron-probes)
+  - [Agent Sync Hooks](#agent-sync-hooks)
+    - [1. Configuration in `agent.json`](#1-configuration-in-agentjson)
+    - [2. Dynamic Reloading](#2-dynamic-reloading)
+    - [3. Execution Environment \& Variables](#3-execution-environment--variables)
+    - [4. Safety \& Failure Semantics](#4-safety--failure-semantics)
+    - [5. Example Hook Scripts](#5-example-hook-scripts)
+  - [Service Management \& Troubleshooting](#service-management--troubleshooting)
+    - [Systemd (Debian, Ubuntu, CentOS, Arch)](#systemd-debian-ubuntu-centos-arch)
+    - [OpenRC (Alpine Linux)](#openrc-alpine-linux)
+    - [Procd (OpenWrt)](#procd-openwrt)
+
 ## Agent Architecture
 
 - **Static Binary**: Compiled against `musl libc` with zero external runtime dependencies. Binary sizes are typically under 3 MB. Supported targets include:
@@ -104,20 +120,20 @@ The agent automatically reloads `agent.json` from disk whenever a sync action is
 
 Hooks are executed with `sh -c "<command>"` under a 60-second timeout. The agent injects structured environment variables describing the sync action:
 
-| Environment Variable | Available In | Description |
-| :--- | :---: | :--- |
-| `EASY42_SYNC_NODE` | Both | The name of the node undergoing sync (e.g. `node-frankfurt`). |
-| `EASY42_SYNC_ACTION` | Both | Action type: `sync_wg`, `sync_bird`, `sync_nftables`, `sync_roa`, `sync_hosts`, `delete_wg`, `down_wg`. |
-| `EASY42_SYNC_INTERFACE` | Both | Name of the network interface involved (e.g. `wg42lon`), if applicable. |
-| `EASY42_SYNC_TARGET_FILE` | Both | Target file path on disk (e.g. `/etc/wireguard/wg42lon.conf`). |
-| `EASY42_SYNC_DESCRIPTION` | Both | Human-readable description of the sync step. |
-| `EASY42_SYNC_DIFF_STATUS` | Both | Status diff: `create`, `update`, `delete`, or `synced`. |
-| `EASY42_SYNC_PHASE` | Both | Current lifecycle phase: `pre` or `post`. |
-| `EASY42_HOOK` | Both | Name of the executing hook: `pre_sync` or `post_sync`. |
-| `EASY42_SYNC_SUCCESS` | `post_sync` only | `true` if the sync action succeeded, `false` otherwise. |
-| `EASY42_SYNC_STATUS` | `post_sync` only | `success` or `failed`. |
-| `EASY42_SYNC_EXIT_CODE` | `post_sync` only | Exit code of the sync action command (e.g. `0`). |
-| `EASY42_SYNC_ERROR` | `post_sync` only | Error message or stderr string if the sync action failed. |
+| Environment Variable      |   Available In   | Description                                                                                             |
+| :------------------------ | :--------------: | :------------------------------------------------------------------------------------------------------ |
+| `EASY42_SYNC_NODE`        |       Both       | The name of the node undergoing sync (e.g. `node-frankfurt`).                                           |
+| `EASY42_SYNC_ACTION`      |       Both       | Action type: `sync_wg`, `sync_bird`, `sync_nftables`, `sync_roa`, `sync_hosts`, `delete_wg`, `down_wg`. |
+| `EASY42_SYNC_INTERFACE`   |       Both       | Name of the network interface involved (e.g. `wg42lon`), if applicable.                                 |
+| `EASY42_SYNC_TARGET_FILE` |       Both       | Target file path on disk (e.g. `/etc/wireguard/wg42lon.conf`).                                          |
+| `EASY42_SYNC_DESCRIPTION` |       Both       | Human-readable description of the sync step.                                                            |
+| `EASY42_SYNC_DIFF_STATUS` |       Both       | Status diff: `create`, `update`, `delete`, or `synced`.                                                 |
+| `EASY42_SYNC_PHASE`       |       Both       | Current lifecycle phase: `pre` or `post`.                                                               |
+| `EASY42_HOOK`             |       Both       | Name of the executing hook: `pre_sync` or `post_sync`.                                                  |
+| `EASY42_SYNC_SUCCESS`     | `post_sync` only | `true` if the sync action succeeded, `false` otherwise.                                                 |
+| `EASY42_SYNC_STATUS`      | `post_sync` only | `success` or `failed`.                                                                                  |
+| `EASY42_SYNC_EXIT_CODE`   | `post_sync` only | Exit code of the sync action command (e.g. `0`).                                                        |
+| `EASY42_SYNC_ERROR`       | `post_sync` only | Error message or stderr string if the sync action failed.                                               |
 
 ### 4. Safety & Failure Semantics
 
@@ -127,6 +143,7 @@ Hooks are executed with `sh -c "<command>"` under a 60-second timeout. The agent
 ### 5. Example Hook Scripts
 
 **Pre-sync backup script (`/usr/local/bin/easy42-pre-sync.sh`)**:
+
 ```bash
 #!/bin/sh
 set -e
@@ -145,6 +162,7 @@ exit 0
 ```
 
 **Post-sync notification script (`/usr/local/bin/easy42-post-sync.sh`)**:
+
 ```bash
 #!/bin/sh
 if [ "$EASY42_SYNC_STATUS" = "success" ]; then

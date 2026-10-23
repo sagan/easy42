@@ -693,7 +693,7 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
               }}
             />
             {isRouteReflector && (
-              <Tooltip title="BGP Route Reflector: Adds 'rr client;' to internal peer sessions">
+              <Tooltip title="BGP Route Reflector: Adds 'rr client;' to internal iBGP peer sessions sharing the same ASN">
                 <Chip
                   icon={<Radio size={9} style={{ color: "#4338CA", marginLeft: 4 }} />}
                   label="RR Active"

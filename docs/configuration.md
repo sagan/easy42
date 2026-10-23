@@ -6,6 +6,36 @@ This document is the reference for Easy42's state file, stored in `<data-dir>/co
 
 ---
 
+- [Configuration Specification (`config.json`)](#configuration-specification-configjson)
+  - [Top-Level Structure](#top-level-structure)
+  - [Annotated Example](#annotated-example)
+  - [Schema Reference](#schema-reference)
+    - [Security Fields](#security-fields)
+    - [`network_settings`](#network_settings)
+    - [`network_policies`](#network_policies)
+    - [`nodes`](#nodes)
+      - [Entrypoints](#entrypoints)
+      - [Kernel route rules (`routes`)](#kernel-route-rules-routes)
+      - [Config hooks (`config_hooks`)](#config-hooks-config_hooks)
+    - [`links`](#links)
+    - [`blocks`](#blocks)
+    - [`dns`](#dns)
+    - [`templates`](#templates)
+    - [`looking_glass_tasks`](#looking_glass_tasks)
+    - [`cron_tasks`](#cron_tasks)
+    - [`server_tasks`](#server_tasks)
+    - [`database`](#database)
+    - [`integrations`](#integrations)
+    - [`config_changes`](#config_changes)
+  - [Declarative Config Apply](#declarative-config-apply)
+    - [Allowed patch sections](#allowed-patch-sections)
+    - [Forbidden fields](#forbidden-fields)
+    - [Merge and validation rules](#merge-and-validation-rules)
+    - [Side effects](#side-effects)
+    - [Example patch](#example-patch)
+    - [Related API endpoints](#related-api-endpoints)
+  - [Data Files](#data-files)
+
 ## Top-Level Structure
 
 | Field                 | Type       | Description                                                                                                           |
@@ -291,40 +321,41 @@ User-defined policies with the same ID as a built-in override that built-in at l
 
 ### `nodes`
 
-| Field                   | Type            | Description                                                                                                                                   |
-| :---------------------- | :-------------- | :-------------------------------------------------------------------------------------------------------------------------------------------- |
-| `name`                  | `string`        | Unique node name and hostname. Alphanumeric, `-`, and `_` only. WireGuard interface names are derived from it and truncated to 15 characters. |
-| `host`                  | `string`        | SSH host, alias, or IP. Omitted for external peers.                                                                                           |
-| `is_external`           | `boolean`       | Marks an unmanaged external peer (for example DN42).                                                                                          |
-| `description`           | `string`        | Short description or contact info.                                                                                                            |
-| `note`                  | `string`        | Markdown note shown in the UI.                                                                                                                |
-| `ip`                    | `string`        | Primary overlay IPv4 address (normally bound to `interface`).                                                                                 |
-| `ip6`                   | `string`        | Primary overlay IPv6 address.                                                                                                                 |
-| `external_ip`           | `string`        | External/DN42 IPv4. Falls back to `ip` when empty.                                                                                            |
-| `external_ip6`          | `string`        | External/DN42 IPv6. Falls back to `ip6` when empty.                                                                                           |
-| `interface`             | `string`        | Interface holding the primary IP. Default `lo`.                                                                                               |
-| `asn`                   | `integer`       | Private BGP ASN (`4224420000`-`4224429999`) or external ASN.                                                                                  |
-| `entrypoints`           | `object[]`      | Public reachable endpoints (see below).                                                                                                       |
-| `tags`                  | `string[]`      | Free-form tags used by the UI and endpoint matching.                                                                                          |
-| `table`                 | `integer`       | Kernel FIB table for BIRD-exported routes. Default `254`.                                                                                     |
-| `external_table`        | `integer`       | Optional table for routes learned from external peers.                                                                                        |
-| `internet_table`        | `integer`       | Optional table for Internet routes learned from peers.                                                                                        |
-| `metric`                | `integer\|null` | Optional kernel route metric. When `null`, the template/OS default applies.                                                                   |
-| `static_routes`         | `string[]`      | Prefixes unconditionally advertised into BGP.                                                                                                 |
-| `routes`                | `object[]`      | Kernel routes imported into BGP (see below).                                                                                                  |
-| `config_hooks`          | `object[]`      | Custom config snippets injected into generated files (see below).                                                                             |
-| `wg_template`           | `string`        | Custom WireGuard template ID or name. Empty uses `default_wg`.                                                                                |
-| `bird_template`         | `string`        | Custom BIRD template ID or name. Empty uses `default_bird`.                                                                                   |
-| `nft_template`          | `string`        | Custom nftables template ID or name. Empty uses `default_nft`.                                                                                |
-| `x`, `y`                | `number\|null`  | Topology graph coordinates.                                                                                                                   |
-| `modified_at`           | `timestamp`     | System-managed last modification time.                                                                                                        |
-| `mode`                  | `string`        | `ssh` (default) or `agent`. A non-empty `agent_token` also implies agent mode.                                                                |
-| `agent_token`           | `string`        | Static shared token used by `easy42-agent`.                                                                                                   |
-| `agent_version`         | `string`        | Agent version reported at runtime.                                                                                                            |
-| `agent_last_seen`       | `timestamp`     | Last agent heartbeat/report.                                                                                                                  |
-| `enable_fa`             | `boolean`       | Enable the FlapAlerted BGP telemetry session.                                                                                                 |
-| `update_hosts`          | `boolean`       | Manage the `/etc/hosts` Easy42 block on this node (agent mode only).                                                                          |
-| `custom_network_script` | `string`        | Shell script persisted and applied by the `configure_network` Device Helper task (for example policy-routing rules).                          |
+| Field                   | Type            | Description                                                                                                                                                            |
+| :---------------------- | :-------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`                  | `string`        | Unique node name and hostname. Alphanumeric, `-`, and `_` only. WireGuard interface names are derived from it and truncated to 15 characters.                          |
+| `host`                  | `string`        | SSH host, alias, or IP. Omitted for external peers.                                                                                                                    |
+| `is_external`           | `boolean`       | Marks an unmanaged external peer (for example DN42).                                                                                                                   |
+| `description`           | `string`        | Short description or contact info.                                                                                                                                     |
+| `note`                  | `string`        | Markdown note shown in the UI.                                                                                                                                         |
+| `ip`                    | `string`        | Primary overlay IPv4 address (normally bound to `interface`).                                                                                                          |
+| `ip6`                   | `string`        | Primary overlay IPv6 address.                                                                                                                                          |
+| `external_ip`           | `string`        | External/DN42 IPv4. Falls back to `ip` when empty.                                                                                                                     |
+| `external_ip6`          | `string`        | External/DN42 IPv6. Falls back to `ip6` when empty.                                                                                                                    |
+| `interface`             | `string`        | Interface holding the primary IP. Default `lo`.                                                                                                                        |
+| `asn`                   | `integer`       | Private BGP ASN (`4224420000`-`4224429999`) or external ASN.                                                                                                           |
+| `entrypoints`           | `object[]`      | Public reachable endpoints (see below).                                                                                                                                |
+| `tags`                  | `string[]`      | Free-form tags used by the UI and endpoint matching.                                                                                                                   |
+| `table`                 | `integer`       | Kernel FIB table for BIRD-exported routes. Default `254`.                                                                                                              |
+| `external_table`        | `integer`       | Optional table for routes learned from external peers.                                                                                                                 |
+| `internet_table`        | `integer`       | Optional table for Internet routes learned from peers.                                                                                                                 |
+| `metric`                | `integer\|null` | Optional kernel route metric. When `null`, the template/OS default applies.                                                                                            |
+| `static_routes`         | `string[]`      | Prefixes unconditionally advertised into BGP.                                                                                                                          |
+| `routes`                | `object[]`      | Kernel routes imported into BGP (see below).                                                                                                                           |
+| `config_hooks`          | `object[]`      | Custom config snippets injected into generated files (see below).                                                                                                      |
+| `wg_template`           | `string`        | Custom WireGuard template ID or name. Empty uses `default_wg`.                                                                                                         |
+| `bird_template`         | `string`        | Custom BIRD template ID or name. Empty uses `default_bird`.                                                                                                            |
+| `nft_template`          | `string`        | Custom nftables template ID or name. Empty uses `default_nft`.                                                                                                         |
+| `x`, `y`                | `number\|null`  | Topology graph coordinates.                                                                                                                                            |
+| `modified_at`           | `timestamp`     | System-managed last modification time.                                                                                                                                 |
+| `mode`                  | `string`        | `ssh` (default) or `agent`. A non-empty `agent_token` also implies agent mode.                                                                                         |
+| `agent_token`           | `string`        | Static shared token used by `easy42-agent`.                                                                                                                            |
+| `agent_version`         | `string`        | Agent version reported at runtime.                                                                                                                                     |
+| `agent_last_seen`       | `timestamp`     | Last agent heartbeat/report.                                                                                                                                           |
+| `enable_fa`             | `boolean`       | Enable the FlapAlerted BGP telemetry session.                                                                                                                          |
+| `update_hosts`          | `boolean`       | Manage the `/etc/hosts` Easy42 block on this node (agent mode only).                                                                                                   |
+| `custom_network_script` | `string`        | Shell script persisted and applied by the `configure_network` Device Helper task (for example policy-routing rules).                                                   |
+| `route_reflector`       | `boolean`       | When true, marks the node as a BGP Route Reflector for internal iBGP peers, appending `rr client;` to internal BGP peer blocks that share the same ASN in `bird.conf`. |
 
 #### Entrypoints
 

@@ -2580,6 +2580,18 @@ func TestBGPRouteReflector(t *testing.T) {
 		IP6:  "fd42:4242:1::3",
 		ASN:  4224420001,
 	}
+	nodeClientDiffASN := config.Node{
+		Name: "client-diff-asn",
+		IP:   "192.168.1.4",
+		IP6:  "fd42:4242:1::4",
+		ASN:  4224420002, // Different ASN, internal node
+	}
+	nodeClientDiffASNCustom := config.Node{
+		Name: "client-diff-asn-custom",
+		IP:   "192.168.1.5",
+		IP6:  "fd42:4242:1::5",
+		ASN:  4224420003, // Different ASN, internal node with custom policy
+	}
 	nodeExt := config.Node{
 		Name:        "ext-peer",
 		IP:          "172.20.10.1",
@@ -2606,12 +2618,20 @@ func TestBGPRouteReflector(t *testing.T) {
 			To:   config.LinkEnd{Name: "client-custom", Interface: "wg42_rr", Policy: "custom-policy"},
 		},
 		{
+			From: config.LinkEnd{Name: "rr-node", Interface: "wg42_client3"},
+			To:   config.LinkEnd{Name: "client-diff-asn", Interface: "wg42_rr"},
+		},
+		{
+			From: config.LinkEnd{Name: "rr-node", Interface: "wg42_client4", Policy: "custom-policy"},
+			To:   config.LinkEnd{Name: "client-diff-asn-custom", Interface: "wg42_rr", Policy: "custom-policy"},
+		},
+		{
 			From: config.LinkEnd{Name: "rr-node", Interface: "wg42_ext"},
 			To:   config.LinkEnd{Name: "ext-peer", Interface: "wg42_rr"},
 		},
 	}
 
-	allNodes := []config.Node{nodeRR, nodeClientDefault, nodeClientCustom, nodeExt}
+	allNodes := []config.Node{nodeRR, nodeClientDefault, nodeClientCustom, nodeClientDiffASN, nodeClientDiffASNCustom, nodeExt}
 
 	// 1. Generate config for Route Reflector node
 	confRR, err := GenerateBirdConfig(&nodeRR, allNodes, links, []config.NetworkPolicy{customPolicy})
@@ -2619,22 +2639,40 @@ func TestBGPRouteReflector(t *testing.T) {
 		t.Fatalf("GenerateBirdConfig for RR node failed: %v", err)
 	}
 
-	// Verify internal default peer has rr client;
+	// Verify internal default peer with same ASN has rr client;
 	defaultPeerBlock := extractBlock(confRR, "protocol bgp 'easy42_peer_client-default' from easy42_peer {", "}")
 	if defaultPeerBlock == "" {
 		t.Fatalf("Missing easy42_peer_client-default block in:\n%s", confRR)
 	}
 	if !strings.Contains(defaultPeerBlock, "rr client;") {
-		t.Errorf("Expected 'rr client;' in internal default peer block, got:\n%s", defaultPeerBlock)
+		t.Errorf("Expected 'rr client;' in internal default peer block with matching ASN, got:\n%s", defaultPeerBlock)
 	}
 
-	// Verify internal custom policy peer has rr client;
+	// Verify internal custom policy peer with same ASN has rr client;
 	customPeerBlock := extractBlock(confRR, "protocol bgp 'peer_client-custom' from pol_peer_custom_policy {", "}")
 	if customPeerBlock == "" {
 		t.Fatalf("Missing peer_client-custom block in:\n%s", confRR)
 	}
 	if !strings.Contains(customPeerBlock, "rr client;") {
-		t.Errorf("Expected 'rr client;' in internal custom policy peer block, got:\n%s", customPeerBlock)
+		t.Errorf("Expected 'rr client;' in internal custom policy peer block with matching ASN, got:\n%s", customPeerBlock)
+	}
+
+	// Verify internal peer with DIFFERENT ASN does NOT have rr client;
+	diffASNPeerBlock := extractBlock(confRR, "protocol bgp 'easy42_peer_client-diff-asn' from easy42_peer {", "}")
+	if diffASNPeerBlock == "" {
+		t.Fatalf("Missing easy42_peer_client-diff-asn block in:\n%s", confRR)
+	}
+	if strings.Contains(diffASNPeerBlock, "rr client;") {
+		t.Errorf("Internal peer block with different ASN must NOT have 'rr client;', got:\n%s", diffASNPeerBlock)
+	}
+
+	// Verify internal custom policy peer with DIFFERENT ASN does NOT have rr client;
+	diffASNCustomPeerBlock := extractBlock(confRR, "protocol bgp 'peer_client-diff-asn-custom' from pol_peer_custom_policy {", "}")
+	if diffASNCustomPeerBlock == "" {
+		t.Fatalf("Missing peer_client-diff-asn-custom block in:\n%s", confRR)
+	}
+	if strings.Contains(diffASNCustomPeerBlock, "rr client;") {
+		t.Errorf("Internal custom policy peer block with different ASN must NOT have 'rr client;', got:\n%s", diffASNCustomPeerBlock)
 	}
 
 	// Verify external peer does NOT have rr client;

@@ -4,6 +4,19 @@ This document details the internal architecture, link-local addressing schemes, 
 
 ---
 
+- [System Architecture \& Technical Design](#system-architecture--technical-design)
+  - [High-Level Architecture](#high-level-architecture)
+  - [Data Plane \& Dual-Stack Link-Local Addressing](#data-plane--dual-stack-link-local-addressing)
+    - [1. Deterministic IPv6 Link-Local (`fe80::/64`)](#1-deterministic-ipv6-link-local-fe8064)
+    - [2. Deterministic IPv4 Link-Local (`169.254.X.X/32`, RFC 3927)](#2-deterministic-ipv4-link-local-169254xx32-rfc-3927)
+    - [3. Multiprotocol BGP over IPv6 Link-Local (RFC 8950 / RFC 5549)](#3-multiprotocol-bgp-over-ipv6-link-local-rfc-8950--rfc-5549)
+    - [4. Safe Interface Naming (`IFNAMSIZ` 15-Character Compliance)](#4-safe-interface-naming-ifnamsiz-15-character-compliance)
+  - [WireGuard \& Manual Links](#wireguard--manual-links)
+    - [Parameter Rationale](#parameter-rationale)
+    - [Manual Links (Non-WireGuard Tunnels \& Existing Interfaces)](#manual-links-non-wireguard-tunnels--existing-interfaces)
+  - [Entrypoint Selection Algorithm](#entrypoint-selection-algorithm)
+  - [Security \& Encryption Architecture](#security--encryption-architecture)
+
 ## High-Level Architecture
 
 Easy42 is structured around a central orchestrator controller (providing both a modern Web UI and a scriptable CLI) that configures managed nodes either **agent-lessly** over SSH/SFTP or **agent-powered** via `easy42-agent` over persistent WebSockets.

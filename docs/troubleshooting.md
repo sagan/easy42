@@ -4,6 +4,22 @@ This document covers operational verification, troubleshooting tools, device boo
 
 ---
 
+- [Operations, Bootstrap Tasks \& Troubleshooting](#operations-bootstrap-tasks--troubleshooting)
+  - [Operational Verification](#operational-verification)
+    - [1. Verifying WireGuard Interfaces](#1-verifying-wireguard-interfaces)
+    - [2. Inspecting BIRD 2 Dynamic Routing](#2-inspecting-bird-2-dynamic-routing)
+    - [3. Debugging nftables Rules](#3-debugging-nftables-rules)
+    - [4. Inspecting Node Agent Logs](#4-inspecting-node-agent-logs)
+  - [Device Helper (Bootstrap \& Host Automation)](#device-helper-bootstrap--host-automation)
+    - [Configure Network Failures](#configure-network-failures)
+  - [Config Apply \& Change History Recovery](#config-apply--change-history-recovery)
+  - [Common Gotchas \& Fixes](#common-gotchas--fixes)
+    - [1. Asymmetric Routing Packet Drops](#1-asymmetric-routing-packet-drops)
+    - [2. Missing IPv6 Packet Forwarding](#2-missing-ipv6-packet-forwarding)
+    - [3. SSH Authentication \& Host Key Verification Failures](#3-ssh-authentication--host-key-verification-failures)
+    - [4. Agent WebSocket Disconnections Behind Reverse Proxies](#4-agent-websocket-disconnections-behind-reverse-proxies)
+    - [5. MTU Blackholing on External Transit](#5-mtu-blackholing-on-external-transit)
+
 ## Operational Verification
 
 ### 1. Verifying WireGuard Interfaces
@@ -65,17 +81,17 @@ logread -e easy42-agent
 
 Easy42 includes an embedded task execution engine to bootstrap prerequisites, install software packages, tune kernel sysctl parameters, and configure daemons on remote nodes over SSH without requiring external automation tools (such as Ansible or Terraform):
 
-| Task ID | Category | Description |
-| :--- | :--- | :--- |
-| `deploy_agent` | Services | Automatically detects remote architecture, deploys/upgrades the bundled `easy42-agent` binary, provisions token configs, and starts the system service unit (`systemd`, `openrc`, `procd`). |
-| `configure_network` | System & Network | Persists the node's main/external IPv4 and IPv6 addresses (and optional custom network script) through netplan, `/etc/network/interfaces`, systemd-networkd, or OpenWrt UCI. |
-| `install_wireguard` | Packages | Installs `wireguard` and `wireguard-tools` across all supported Linux distributions (Debian, Ubuntu, Alpine, Arch, RHEL/CentOS, OpenWrt). |
-| `install_wgquick_openwrt` | Packages | Installs `wg-quick` (`wg-quick-op`) for OpenWrt or minimal systems lacking `wg-quick` in their native package repositories. |
-| `install_bird` | Packages | Installs BIRD 2 and enables the system service. |
-| `config_bird` | Configuration | Finds `/etc/bird/bird.conf`, `/etc/bird.conf`, or `/etc/bird2/bird.conf` (creating `/etc/bird/bird.conf` when none exists), backs it up, inserts `include "/etc/bird_easy42.conf";`, validates syntax with `bird -p`, and reloads BIRD. |
-| `config_nftables` | Configuration | Configures `/etc/nftables.conf` (or OpenWrt / Alpine init systems) to include `/etc/easy42.nft` and enables the service. |
-| `sysctl_params` | System & Network | Deploys `/etc/sysctl.d/99-easy42.conf` enabling IPv4/IPv6 forwarding and setting `rp_filter=0`. |
-| `autostart_interfaces` | System & Network | Installs systemd, OpenRC, or procd units to bring up `wg42*` interfaces on boot. |
+| Task ID                   | Category         | Description                                                                                                                                                                                                                             |
+| :------------------------ | :--------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `deploy_agent`            | Services         | Automatically detects remote architecture, deploys/upgrades the bundled `easy42-agent` binary, provisions token configs, and starts the system service unit (`systemd`, `openrc`, `procd`).                                             |
+| `configure_network`       | System & Network | Persists the node's main/external IPv4 and IPv6 addresses (and optional custom network script) through netplan, `/etc/network/interfaces`, systemd-networkd, or OpenWrt UCI.                                                            |
+| `install_wireguard`       | Packages         | Installs `wireguard` and `wireguard-tools` across all supported Linux distributions (Debian, Ubuntu, Alpine, Arch, RHEL/CentOS, OpenWrt).                                                                                               |
+| `install_wgquick_openwrt` | Packages         | Installs `wg-quick` (`wg-quick-op`) for OpenWrt or minimal systems lacking `wg-quick` in their native package repositories.                                                                                                             |
+| `install_bird`            | Packages         | Installs BIRD 2 and enables the system service.                                                                                                                                                                                         |
+| `config_bird`             | Configuration    | Finds `/etc/bird/bird.conf`, `/etc/bird.conf`, or `/etc/bird2/bird.conf` (creating `/etc/bird/bird.conf` when none exists), backs it up, inserts `include "/etc/bird_easy42.conf";`, validates syntax with `bird -p`, and reloads BIRD. |
+| `config_nftables`         | Configuration    | Configures `/etc/nftables.conf` (or OpenWrt / Alpine init systems) to include `/etc/easy42.nft` and enables the service.                                                                                                                |
+| `sysctl_params`           | System & Network | Deploys `/etc/sysctl.d/99-easy42.conf` enabling IPv4/IPv6 forwarding and setting `rp_filter=0`.                                                                                                                                         |
+| `autostart_interfaces`    | System & Network | Installs systemd, OpenRC, or procd units to bring up `wg42*` interfaces on boot.                                                                                                                                                        |
 
 Inspect, verify, and execute these tasks directly from the **Device Helper** page (`/helper`) in the top navigation bar, or via the **Device Helper** button in any node's detail view. You can filter devices by tag (`#core`, `#edge`), batch check prerequisites, run tasks, and view live execution logs.
 
