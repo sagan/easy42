@@ -284,6 +284,7 @@ type NodePatch struct {
 	EnableFA      *bool              `json:"enable_fa,omitempty" yaml:"enable_fa,omitempty"`
 	UpdateHosts         *bool              `json:"update_hosts,omitempty" yaml:"update_hosts,omitempty"`
 	CustomNetworkScript *string            `json:"custom_network_script,omitempty" yaml:"custom_network_script,omitempty"`
+	RouteReflector      *bool              `json:"route_reflector,omitempty" yaml:"route_reflector,omitempty"`
 }
 
 // LinkEndPatch holds partial changes to a link endpoint

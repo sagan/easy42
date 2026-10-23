@@ -253,9 +253,10 @@ export function generateTopologySvg(
         isFullMesh = memberNodes.every((u, i) => memberNodes.slice(i + 1).every((v) => hasIntraLink(u.name, v.name)));
       }
 
+      const blockName = block.name.trim();
       computedBlocks.push({
         id: block.id,
-        name: block.name || "Group",
+        name: blockName && !blockName.startsWith("!") ? blockName : "Group",
         color: resolveBlockColor(block.color),
         x: Math.round(bx),
         y: Math.round(by),
@@ -457,10 +458,11 @@ export function generateTopologySvg(
     const nameText = formatExportNodeName(node, options.nodeNameSource);
     const ipText = formatExportNodeIp(node, options.nodeIpSource);
     const isExternal = Boolean(node.is_external);
+    const isRR = Boolean(node.route_reflector);
 
-    const borderColor = isExternal ? "#A855F7" : "#CBD5E1";
+    const borderColor = isExternal ? "#A855F7" : isRR ? "#6366F1" : "#CBD5E1";
     const borderDash = isExternal ? 'stroke-dasharray="5 3"' : "";
-    const dotColor = isExternal ? "#A855F7" : "#10B981";
+    const dotColor = isExternal ? "#A855F7" : isRR ? "#6366F1" : "#10B981";
 
     let extBadgeSvg = "";
     if (isExternal) {
@@ -468,9 +470,16 @@ export function generateTopologySvg(
       <text x="${pos.cardX + pos.width - 26}" y="${pos.cardY + 21.5}" font-size="8.5" font-family="ui-monospace, monospace" font-weight="700" fill="#7C3AED" text-anchor="middle">EXT</text>\n`;
     }
 
+    let rrBadgeSvg = "";
+    if (isRR) {
+      const rrOffset = isExternal ? 74 : 38;
+      rrBadgeSvg = `      <rect x="${pos.cardX + pos.width - rrOffset}" y="${pos.cardY + 10}" width="26" height="16" rx="4" fill="#EEF2FF" stroke="#C7D2FE" stroke-width="1" />
+      <text x="${pos.cardX + pos.width - rrOffset + 13}" y="${pos.cardY + 21.5}" font-size="8.5" font-family="ui-monospace, monospace" font-weight="800" fill="#4338CA" text-anchor="middle">RR</text>\n`;
+    }
+
     nodesSvg += `    <g class="node-card" id="node-${escapeXml(node.name)}">
       <!-- Card background -->
-      <rect x="${pos.cardX}" y="${pos.cardY}" width="${pos.width}" height="${pos.height}" rx="10" fill="#FFFFFF" stroke="${borderColor}" stroke-width="1.5" ${borderDash} filter="url(#card-shadow)" />
+      <rect x="${pos.cardX}" y="${pos.cardY}" width="${pos.width}" height="${pos.height}" rx="10" fill="#FFFFFF" stroke="${borderColor}" stroke-width="${isRR ? 2 : 1.5}" ${borderDash} filter="url(#card-shadow)" />
       
       <!-- Status indicator dot -->
       <circle cx="${pos.cardX + 16}" cy="${pos.cardY + 22}" r="4.5" fill="${dotColor}" />
@@ -478,6 +487,7 @@ export function generateTopologySvg(
       <!-- Node Name -->
       <text x="${pos.cardX + 27}" y="${pos.cardY + 26}" font-size="12.5" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-weight="700" fill="#0F172A">${escapeXml(nameText)}</text>
       ${extBadgeSvg}
+      ${rrBadgeSvg}
       <!-- Divider -->
       <line x1="${pos.cardX + 12}" y1="${pos.cardY + 36}" x2="${pos.cardX + pos.width - 12}" y2="${pos.cardY + 36}" stroke="#F1F5F9" stroke-width="1" />
 
@@ -491,6 +501,7 @@ export function generateTopologySvg(
   const headerY = viewBoxY + PADDING / 2 + 18;
   const legendRight = viewBoxX + viewBoxW - PADDING;
   const hasExternalNodes = effectiveNodes.some((n) => n.is_external);
+  const hasRRNodes = effectiveNodes.some((n) => n.route_reflector);
 
   const legendItems: string[] = [];
   let curOffset = 0;
@@ -505,6 +516,14 @@ export function generateTopologySvg(
     legendItems.push(`<circle cx="${curOffset + 6}" cy="6" r="4" fill="#A855F7" />
       <text x="${curOffset + 15}" y="9.5" font-size="10" font-family="sans-serif" font-weight="600" fill="#475569">External</text>`);
     curOffset += 70;
+  }
+
+  // Route Reflector (only if present in diagram)
+  if (hasRRNodes) {
+    legendItems.push(`<rect x="${curOffset + 4}" y="0" width="18" height="12" rx="3" fill="#EEF2FF" stroke="#C7D2FE" stroke-width="1" />
+      <text x="${curOffset + 13}" y="9" font-size="7.5" font-family="monospace" font-weight="800" fill="#4338CA" text-anchor="middle">RR</text>
+      <text x="${curOffset + 28}" y="9.5" font-size="10" font-family="sans-serif" font-weight="600" fill="#475569">Route Reflector</text>`);
+    curOffset += 115;
   }
 
   // WireGuard

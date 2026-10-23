@@ -231,6 +231,9 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 		ctx["enable_fa"] = false
 	}
 
+	ctx["route_reflector"] = node.RouteReflector
+	ctx["is_route_reflector"] = node.RouteReflector
+
 	dn42Pol, hasDN42 := policyMap[config.PolicyDN42]
 	var dn42ImportV4, dn42ImportV6, dn42ExportV4, dn42ExportV6 string
 	var dn42DisallowedImportV4, dn42DisallowedImportV6 string

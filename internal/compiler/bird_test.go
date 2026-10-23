@@ -2560,6 +2560,109 @@ func TestCustomBirdFilters(t *testing.T) {
 	validateBirdSyntax(t, conf)
 }
 
+func TestBGPRouteReflector(t *testing.T) {
+	nodeRR := config.Node{
+		Name:           "rr-node",
+		IP:             "192.168.1.1",
+		IP6:            "fd42:4242:1::1",
+		ASN:            4224420001,
+		RouteReflector: true,
+	}
+	nodeClientDefault := config.Node{
+		Name: "client-default",
+		IP:   "192.168.1.2",
+		IP6:  "fd42:4242:1::2",
+		ASN:  4224420001,
+	}
+	nodeClientCustom := config.Node{
+		Name: "client-custom",
+		IP:   "192.168.1.3",
+		IP6:  "fd42:4242:1::3",
+		ASN:  4224420001,
+	}
+	nodeExt := config.Node{
+		Name:        "ext-peer",
+		IP:          "172.20.10.1",
+		IP6:         "fd00::1",
+		ASN:         4242429999,
+		IsExternal:  true,
+		ExternalIP:  "172.20.10.1",
+		ExternalIP6: "fd00::1",
+	}
+
+	customPolicy := config.NetworkPolicy{
+		ID:   "custom-policy",
+		Name: "Custom Policy",
+		Cost: 10,
+	}
+
+	links := []config.Link{
+		{
+			From: config.LinkEnd{Name: "rr-node", Interface: "wg42_client1"},
+			To:   config.LinkEnd{Name: "client-default", Interface: "wg42_rr"},
+		},
+		{
+			From: config.LinkEnd{Name: "rr-node", Interface: "wg42_client2", Policy: "custom-policy"},
+			To:   config.LinkEnd{Name: "client-custom", Interface: "wg42_rr", Policy: "custom-policy"},
+		},
+		{
+			From: config.LinkEnd{Name: "rr-node", Interface: "wg42_ext"},
+			To:   config.LinkEnd{Name: "ext-peer", Interface: "wg42_rr"},
+		},
+	}
+
+	allNodes := []config.Node{nodeRR, nodeClientDefault, nodeClientCustom, nodeExt}
+
+	// 1. Generate config for Route Reflector node
+	confRR, err := GenerateBirdConfig(&nodeRR, allNodes, links, []config.NetworkPolicy{customPolicy})
+	if err != nil {
+		t.Fatalf("GenerateBirdConfig for RR node failed: %v", err)
+	}
+
+	// Verify internal default peer has rr client;
+	defaultPeerBlock := extractBlock(confRR, "protocol bgp 'easy42_peer_client-default' from easy42_peer {", "}")
+	if defaultPeerBlock == "" {
+		t.Fatalf("Missing easy42_peer_client-default block in:\n%s", confRR)
+	}
+	if !strings.Contains(defaultPeerBlock, "rr client;") {
+		t.Errorf("Expected 'rr client;' in internal default peer block, got:\n%s", defaultPeerBlock)
+	}
+
+	// Verify internal custom policy peer has rr client;
+	customPeerBlock := extractBlock(confRR, "protocol bgp 'peer_client-custom' from pol_peer_custom_policy {", "}")
+	if customPeerBlock == "" {
+		t.Fatalf("Missing peer_client-custom block in:\n%s", confRR)
+	}
+	if !strings.Contains(customPeerBlock, "rr client;") {
+		t.Errorf("Expected 'rr client;' in internal custom policy peer block, got:\n%s", customPeerBlock)
+	}
+
+	// Verify external peer does NOT have rr client;
+	extPeerBlock := extractBlock(confRR, "protocol bgp 'ext_peer_ext-peer' from external_peer {", "}")
+	if extPeerBlock == "" {
+		t.Fatalf("Missing ext_peer_ext-peer block in:\n%s", confRR)
+	}
+	if strings.Contains(extPeerBlock, "rr client;") {
+		t.Errorf("External peer block must NOT have 'rr client;', got:\n%s", extPeerBlock)
+	}
+
+	validateBirdSyntax(t, confRR)
+
+	// 2. Generate config for non-RR node
+	nodeNonRR := nodeRR
+	nodeNonRR.RouteReflector = false
+	confNonRR, err := GenerateBirdConfig(&nodeNonRR, allNodes, links, []config.NetworkPolicy{customPolicy})
+	if err != nil {
+		t.Fatalf("GenerateBirdConfig for non-RR node failed: %v", err)
+	}
+	if strings.Contains(confNonRR, "rr client;") {
+		t.Errorf("Non-RR node config must NOT have 'rr client;', got:\n%s", confNonRR)
+	}
+
+	validateBirdSyntax(t, confNonRR)
+}
+
+
 
 
 

@@ -15,6 +15,7 @@ import {
   Cpu,
   Activity,
   Camera,
+  Radio,
 } from "lucide-react";
 import { Node, NodeStatus } from "../../types/api";
 
@@ -90,6 +91,7 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
   const isAgentConfigured = node.mode === "agent" || Boolean(node.agent_token);
   const isAgentMode = status?.mode === "agent" || isAgentConfigured;
   const isAgentWorking = isAgentMode && isOnline && !isExternal;
+  const isRouteReflector = Boolean(node.route_reflector);
 
   // Macro View: Simplified compact node representation
   if (lodMode === "macro") {
@@ -105,11 +107,15 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
               ? "2px dashed #8B5CF6"
               : !isOnline
                 ? "1.5px solid #EF4444"
-                : "1.5px solid #CBD5E1",
+                : isRouteReflector
+                  ? "1.5px solid #6366F1"
+                  : "1.5px solid #CBD5E1",
           borderRadius: 2,
           boxShadow: isFocused || isHighlighted
             ? "0 0 0 3px rgba(79, 70, 229, 0.25)"
-            : "0 2px 6px rgba(0,0,0,0.06)",
+            : isRouteReflector
+              ? "0 0 0 1px rgba(99, 102, 241, 0.3), 0 2px 6px rgba(99, 102, 241, 0.15)"
+              : "0 2px 6px rgba(0,0,0,0.06)",
           display: "flex",
           alignItems: "center",
           px: 1,
@@ -143,6 +149,25 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
         <Typography variant="caption" noWrap sx={{ fontWeight: 700, color: "#0F172A", fontSize: "0.75rem", flex: 1 }}>
           {node.name}
         </Typography>
+        {isRouteReflector && (
+          <Tooltip title="BGP Route Reflector">
+            <Chip
+              label="RR"
+              size="small"
+              sx={{
+                height: 17,
+                fontSize: "0.58rem",
+                fontWeight: 800,
+                backgroundColor: "#EEF2FF",
+                color: "#4338CA",
+                border: "1px solid #C7D2FE",
+                borderRadius: 0.75,
+                px: 0,
+                "& .MuiChip-label": { px: 0.4 },
+              }}
+            />
+          </Tooltip>
+        )}
         {totalLinksCount > 0 && (
           <Chip
             label={totalLinksCount}
@@ -187,15 +212,19 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
                   : "2px dashed #EF4444"
               : !isOnline
                 ? "1.5px solid #EF4444"
-                : isAgentWorking
-                  ? "1.5px solid #10B981"
-                  : "1.5px solid #E2E8F0",
+                : isRouteReflector
+                  ? "1.5px solid #6366F1"
+                  : isAgentWorking
+                    ? "1.5px solid #10B981"
+                    : "1.5px solid #E2E8F0",
         borderTop:
           inBlock && isBlockFullMesh
             ? `4px solid ${isFocused || isHighlighted ? "#4F46E5" : !isHealthy ? "#EF4444" : blockColor || "#6366F1"}`
-            : isAgentWorking && (!inBlock || !isBlockFullMesh)
-              ? "3px solid #10B981"
-              : undefined,
+            : isRouteReflector
+              ? "3.5px solid #4F46E5"
+              : isAgentWorking && (!inBlock || !isBlockFullMesh)
+                ? "3px solid #10B981"
+                : undefined,
         borderRadius: 2.5,
         opacity: isDimmed ? 0.3 : 1,
         filter: isDimmed ? "grayscale(40%)" : "none",
@@ -209,9 +238,11 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
                 ? "0 4px 6px -1px rgba(139, 92, 246, 0.08), 0 2px 4px -2px rgba(139, 92, 246, 0.05)"
                 : !isOnline
                   ? "0 4px 10px rgba(239, 68, 68, 0.15), 0 2px 4px rgba(239, 68, 68, 0.1)"
-                  : isAgentWorking
-                    ? "0 4px 12px -1px rgba(16, 185, 129, 0.12), 0 2px 4px -2px rgba(16, 185, 129, 0.08)"
-                    : "0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05)",
+                  : isRouteReflector
+                    ? "0 4px 14px rgba(79, 70, 229, 0.15), 0 2px 5px rgba(79, 70, 229, 0.08)"
+                    : isAgentWorking
+                      ? "0 4px 12px -1px rgba(16, 185, 129, 0.12), 0 2px 4px -2px rgba(16, 185, 129, 0.08)"
+                      : "0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05)",
         overflow: "hidden",
         cursor: "pointer",
         transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
@@ -318,10 +349,30 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
             )}
           </Box>
           <Box sx={{ minWidth: 0 }}>
-            <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, flexWrap: "wrap" }}>
               <Typography variant="subtitle2" sx={{ fontWeight: 700, lineHeight: 1.2, color: "#0F172A" }}>
                 {node.name}
               </Typography>
+              {isRouteReflector && (
+                <Tooltip title="BGP Route Reflector (RR): Central reflector for internal iBGP peers; injects 'rr client;' to eliminate full-mesh requirements.">
+                  <Chip
+                    icon={<Radio size={10} style={{ color: "#4338CA", marginLeft: 4 }} />}
+                    label="BGP RR"
+                    size="small"
+                    sx={{
+                      height: 18,
+                      fontSize: "0.62rem",
+                      fontWeight: 800,
+                      backgroundColor: "#EEF2FF",
+                      color: "#4338CA",
+                      border: "1.5px solid #A5B4FC",
+                      letterSpacing: "0.3px",
+                      boxShadow: "0 1px 3px rgba(79, 70, 229, 0.15)",
+                      "& .MuiChip-label": { px: 0.5 },
+                    }}
+                  />
+                </Tooltip>
+              )}
               {blockName && (
                 <Chip
                   label={blockName}
@@ -628,7 +679,7 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
 
         {/* ASN & Entrypoints */}
         <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mt: 0.5 }}>
-          <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, flexWrap: "wrap" }}>
             <Chip
               label={`AS${node.asn}`}
               size="small"
@@ -641,6 +692,24 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
                 border: isExternal ? "1px solid rgba(139, 92, 246, 0.3)" : "1px solid rgba(79, 70, 229, 0.2)",
               }}
             />
+            {isRouteReflector && (
+              <Tooltip title="BGP Route Reflector: Adds 'rr client;' to internal peer sessions">
+                <Chip
+                  icon={<Radio size={9} style={{ color: "#4338CA", marginLeft: 4 }} />}
+                  label="RR Active"
+                  size="small"
+                  sx={{
+                    height: 22,
+                    fontSize: "0.65rem",
+                    fontWeight: 700,
+                    backgroundColor: "#EEF2FF",
+                    color: "#4338CA",
+                    border: "1px solid #C7D2FE",
+                    "& .MuiChip-label": { px: 0.5 },
+                  }}
+                />
+              </Tooltip>
+            )}
             {node.external_table && node.external_table !== (node.table ?? 254) ? (
               <Tooltip title={`External Table: ${node.external_table}`}>
                 <Chip

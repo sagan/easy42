@@ -308,9 +308,27 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
             <Server size={20} />
           </Box>
           <Box>
-            <Typography variant="h6" sx={{ fontWeight: 700, lineHeight: 1.2, color: "#0F172A" }}>
-              {node.name}
-            </Typography>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
+              <Typography variant="h6" sx={{ fontWeight: 700, lineHeight: 1.2, color: "#0F172A" }}>
+                {node.name}
+              </Typography>
+              {node.route_reflector && (
+                <Chip
+                  icon={<Radio size={10} style={{ color: "#4338CA", marginLeft: 4 }} />}
+                  label="BGP RR"
+                  size="small"
+                  sx={{
+                    height: 18,
+                    fontSize: "0.62rem",
+                    fontWeight: 800,
+                    backgroundColor: "#EEF2FF",
+                    color: "#4338CA",
+                    border: "1px solid #A5B4FC",
+                    "& .MuiChip-label": { px: 0.5 },
+                  }}
+                />
+              )}
+            </Box>
             <Typography variant="caption" className="mono-font" sx={{ color: "#64748B" }}>
               {node.host}
             </Typography>
@@ -901,6 +919,38 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
                     fontWeight: 600,
                     backgroundColor: "rgba(79, 70, 229, 0.08)",
                     color: "#4F46E5",
+                  }}
+                />
+              </Box>
+            ) : null}
+
+            {node.route_reflector ? (
+              <Box
+                sx={{
+                  p: 1.2,
+                  borderRadius: 1.5,
+                  backgroundColor: "#EEF2FF",
+                  border: "1px solid #C7D2FE",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                }}
+              >
+                <Box sx={{ display: "flex", alignItems: "center", gap: 0.8 }}>
+                  <Radio size={14} color="#4F46E5" />
+                  <Typography variant="caption" sx={{ color: "#312E81", fontWeight: 700 }}>
+                    BGP Route Reflector:
+                  </Typography>
+                </Box>
+                <Chip
+                  label="Enabled (rr client)"
+                  size="small"
+                  sx={{
+                    height: 20,
+                    fontSize: "0.7rem",
+                    fontWeight: 700,
+                    backgroundColor: "#4F46E5",
+                    color: "#FFFFFF",
                   }}
                 />
               </Box>

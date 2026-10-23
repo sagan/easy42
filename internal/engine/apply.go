@@ -553,6 +553,10 @@ func mergeNode(target *config.Node, patch config.NodePatch, now time.Time) ([]Ap
 		checkField("custom_network_script", target.CustomNetworkScript, *patch.CustomNetworkScript)
 		target.CustomNetworkScript = *patch.CustomNetworkScript
 	}
+	if patch.RouteReflector != nil && *patch.RouteReflector != target.RouteReflector {
+		checkField("route_reflector", target.RouteReflector, *patch.RouteReflector)
+		target.RouteReflector = *patch.RouteReflector
+	}
 
 	if len(diffs) > 0 {
 		target.ModifiedAt = now
@@ -654,6 +658,9 @@ func createNodeFromPatch(patch config.NodePatch, now time.Time) (*config.Node, [
 	}
 	if patch.CustomNetworkScript != nil {
 		node.CustomNetworkScript = *patch.CustomNetworkScript
+	}
+	if patch.RouteReflector != nil {
+		node.RouteReflector = *patch.RouteReflector
 	}
 
 	var diffs []ApplyFieldDiff

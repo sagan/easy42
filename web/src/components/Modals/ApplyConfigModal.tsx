@@ -94,6 +94,7 @@ export function generateNodeApplySnippet(node: Node): string {
   if (node.mode !== undefined && node.mode !== "") p.mode = node.mode;
   if (node.enable_fa !== undefined) p.enable_fa = node.enable_fa;
   if (node.update_hosts !== undefined) p.update_hosts = node.update_hosts;
+  if (node.route_reflector !== undefined) p.route_reflector = node.route_reflector;
 
   return JSON.stringify({ nodes: [p] }, null, 2);
 }

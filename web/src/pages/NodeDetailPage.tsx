@@ -1319,6 +1319,22 @@ export const NodeDetailPage: React.FC = () => {
                       }}
                     />
                   )}
+
+                  {node?.route_reflector && (
+                    <Chip
+                      icon={<Radio size={12} style={{ color: "#4338CA" }} />}
+                      label="BGP Route Reflector"
+                      size="small"
+                      sx={{
+                        height: 24,
+                        fontSize: "0.72rem",
+                        fontWeight: 700,
+                        bgcolor: "#EEF2FF",
+                        color: "#4338CA",
+                        border: "1px solid #C7D2FE",
+                      }}
+                    />
+                  )}
                 </Box>
 
                 <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, flexWrap: "wrap" }}>
@@ -2859,6 +2875,34 @@ export const NodeDetailPage: React.FC = () => {
                           bgcolor: node.update_hosts ? "#EEF2FF" : "#F1F5F9",
                           color: node.update_hosts ? "#4F46E5" : "#64748B",
                           border: node.update_hosts ? "1px solid rgba(79, 70, 229, 0.25)" : "1px solid #E2E8F0",
+                        }}
+                      />
+                    </Box>
+                  </Box>
+                </Grid>
+
+                <Grid item xs={12} sm={3}>
+                  <Box
+                    sx={{
+                      p: 2,
+                      bgcolor: node.route_reflector ? "#EEF2FF" : "#F8FAFC",
+                      borderRadius: 2,
+                      border: node.route_reflector ? "1px solid #C7D2FE" : "1px solid #E2E8F0",
+                    }}
+                  >
+                    <Typography variant="caption" sx={{ color: node.route_reflector ? "#312E81" : "#64748B", fontWeight: 600 }}>
+                      BGP Route Reflector
+                    </Typography>
+                    <Box sx={{ mt: 0.8 }}>
+                      <Chip
+                        label={node.route_reflector ? "Enabled (rr client)" : "Disabled"}
+                        size="small"
+                        sx={{
+                          fontWeight: 700,
+                          fontSize: "0.75rem",
+                          bgcolor: node.route_reflector ? "#4F46E5" : "#F1F5F9",
+                          color: node.route_reflector ? "#FFFFFF" : "#64748B",
+                          border: node.route_reflector ? "none" : "1px solid #E2E8F0",
                         }}
                       />
                     </Box>

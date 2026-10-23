@@ -147,6 +147,7 @@ export interface Node {
   enable_fa?: boolean;
   update_hosts?: boolean;
   custom_network_script?: string;
+  route_reflector?: boolean;
 }
 
 export interface LinkEnd {

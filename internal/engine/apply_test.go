@@ -277,3 +277,49 @@ func TestApply_NodeCaption(t *testing.T) {
 		t.Errorf("expected node caption 'Frankfurt Edge Node', got %q", node.Caption)
 	}
 }
+
+func TestApply_NodeRouteReflector(t *testing.T) {
+	mgr, tmpDir := setupTestManager(t)
+	defer os.RemoveAll(tmpDir)
+	defer mgr.Close()
+
+	patch := `{
+		"nodes": [
+			{
+				"name": "foobar",
+				"route_reflector": true
+			}
+		]
+	}`
+
+	preview, err := mgr.PreviewApply(patch)
+	if err != nil {
+		t.Fatalf("unexpected error previewing route_reflector patch: %v", err)
+	}
+	if !preview.Valid {
+		t.Fatalf("expected preview to be valid")
+	}
+	if len(preview.Nodes) != 1 || len(preview.Nodes[0].Changes) != 1 {
+		t.Fatalf("expected 1 change on foobar, got %+v", preview.Nodes)
+	}
+	if preview.Nodes[0].Changes[0].Field != "route_reflector" || preview.Nodes[0].Changes[0].NewValue != true {
+		t.Fatalf("unexpected diff: %+v", preview.Nodes[0].Changes)
+	}
+
+	res, err := mgr.ApplyConfigChange(patch)
+	if err != nil {
+		t.Fatalf("unexpected error executing route_reflector patch: %v", err)
+	}
+	if !res.Success {
+		t.Fatalf("apply failed: %+v", res)
+	}
+
+	node, err := mgr.GetNode("foobar")
+	if err != nil {
+		t.Fatalf("failed to get node: %v", err)
+	}
+	if !node.RouteReflector {
+		t.Errorf("expected node route_reflector to be true, got %v", node.RouteReflector)
+	}
+}
+

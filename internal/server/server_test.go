@@ -1833,6 +1833,83 @@ func TestNodeCaptionAPI(t *testing.T) {
 	}
 }
 
+func TestNodeRouteReflectorAPI(t *testing.T) {
+	srv, tempDir, initPass := setupTestServer(t)
+	defer os.RemoveAll(tempDir)
+
+	// Login
+	loginBody, _ := json.Marshal(map[string]string{"password": initPass})
+	req := httptest.NewRequest("POST", "/api/auth/login", bytes.NewReader(loginBody))
+	w := httptest.NewRecorder()
+	srv.router.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("Login failed: %d %s", w.Code, w.Body.String())
+	}
+	cookie := w.Result().Cookies()[0]
+
+	// 1. Add node with RouteReflector: true
+	node := config.Node{
+		Name:           "rr-berlin",
+		Host:           "192.168.1.60",
+		IP:             "192.168.100.60",
+		ASN:            4224420060,
+		RouteReflector: true,
+	}
+	body, _ := json.Marshal(node)
+	reqNode := httptest.NewRequest("POST", "/api/nodes", bytes.NewReader(body))
+	reqNode.AddCookie(cookie)
+	wNode := httptest.NewRecorder()
+	srv.router.ServeHTTP(wNode, reqNode)
+	if wNode.Code != http.StatusCreated {
+		t.Fatalf("Add node failed: %d %s", wNode.Code, wNode.Body.String())
+	}
+
+	var createdNode config.Node
+	_ = json.Unmarshal(wNode.Body.Bytes(), &createdNode)
+	if !createdNode.RouteReflector {
+		t.Fatalf("Expected route_reflector to be true, got %v", createdNode.RouteReflector)
+	}
+
+	// 2. Fetch via GET /api/nodes
+	reqGet := httptest.NewRequest("GET", "/api/nodes", nil)
+	reqGet.AddCookie(cookie)
+	wGet := httptest.NewRecorder()
+	srv.router.ServeHTTP(wGet, reqGet)
+	if wGet.Code != http.StatusOK {
+		t.Fatalf("Get nodes failed: %d %s", wGet.Code, wGet.Body.String())
+	}
+	var nodes []config.Node
+	_ = json.Unmarshal(wGet.Body.Bytes(), &nodes)
+	var found *config.Node
+	for i := range nodes {
+		if nodes[i].Name == "rr-berlin" {
+			found = &nodes[i]
+			break
+		}
+	}
+	if found == nil || !found.RouteReflector {
+		t.Fatalf("Expected found node to have route_reflector true, got %+v", found)
+	}
+
+	// 3. Update route_reflector to false
+	found.RouteReflector = false
+	bodyUpdate, _ := json.Marshal(found)
+	reqUpdate := httptest.NewRequest("PUT", "/api/nodes/rr-berlin", bytes.NewReader(bodyUpdate))
+	reqUpdate.AddCookie(cookie)
+	wUpdate := httptest.NewRecorder()
+	srv.router.ServeHTTP(wUpdate, reqUpdate)
+	if wUpdate.Code != http.StatusOK {
+		t.Fatalf("Update node failed: %d %s", wUpdate.Code, wUpdate.Body.String())
+	}
+
+	var updatedNode config.Node
+	_ = json.Unmarshal(wUpdate.Body.Bytes(), &updatedNode)
+	if updatedNode.RouteReflector {
+		t.Fatalf("Expected updated route_reflector to be false, got %v", updatedNode.RouteReflector)
+	}
+}
+
+
 func TestDNSConfigEndpoints(t *testing.T) {
 	srv, tempDir, initPass := setupTestServer(t)
 	defer os.RemoveAll(tempDir)

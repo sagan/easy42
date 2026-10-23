@@ -1502,6 +1502,9 @@ protocol bgp 'easy42_peer_{{.remote.name}}' from {{.bgp_template}} {
     {{else}}
     neighbor {{ .remote.address }} as {{ .remote_node.asn }};
     {{end}}
+    {{- if $.route_reflector}}
+    rr client;
+    {{- end}}
 }
 {{else}}
 protocol bgp 'peer_{{.remote.name}}' from {{.bgp_template}} {
@@ -1516,6 +1519,9 @@ protocol bgp 'peer_{{.remote.name}}' from {{.bgp_template}} {
     {{else}}
     neighbor {{ .remote.address }} as {{ .remote_node.asn }};
     {{end}}
+    {{- if $.route_reflector}}
+    rr client;
+    {{- end}}
 }
 {{end}}
 {{end}}

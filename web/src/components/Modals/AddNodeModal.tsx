@@ -146,6 +146,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
   const [nftTemplate, setNftTemplate] = useState<string>("");
   const [enableFa, setEnableFa] = useState(false);
   const [updateHosts, setUpdateHosts] = useState(false);
+  const [routeReflector, setRouteReflector] = useState(false);
   const [customNetworkScript, setCustomNetworkScript] = useState("");
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -186,6 +187,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
       setNftTemplate(nodeToEdit.nft_template || "");
       setEnableFa(Boolean(nodeToEdit.enable_fa));
       setUpdateHosts(Boolean(nodeToEdit.update_hosts));
+      setRouteReflector(Boolean(nodeToEdit.route_reflector));
       setCustomNetworkScript(nodeToEdit.custom_network_script || "");
       if (nodeToEdit.routes && nodeToEdit.routes.length > 0) {
         setKernelRoutes(
@@ -277,6 +279,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
       setNftTemplate("");
       setEnableFa(false);
       setUpdateHosts(false);
+      setRouteReflector(false);
       setCustomNetworkScript("");
       setEntrypoints([{ id: "nat-fallback", ip: "", portStr: "", tagStr: "nat", mtuStr: "", isNone: true }]);
       setDiscoveredIps([]);
@@ -611,6 +614,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
         nft_template: nftTemplate.trim() || undefined,
         enable_fa: enableFa,
         update_hosts: updateHosts,
+        route_reflector: routeReflector,
         custom_network_script: customNetworkScript.trim() || undefined,
         caption: caption.trim() || undefined,
         description: description.trim() || undefined,
@@ -1651,6 +1655,55 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                         <Typography variant="caption" sx={{ color: "#64748B" }}>
                           Dynamically manage node /etc/hosts file with cluster node name and IP mappings (only works in
                           agent mode).
+                        </Typography>
+                      </Box>
+                    }
+                  />
+                </Box>
+
+                {/* BGP Route Reflector Checkbox */}
+                <Box
+                  sx={{
+                    p: 1.5,
+                    borderRadius: 2,
+                    bgcolor: routeReflector ? "rgba(79, 70, 229, 0.05)" : "#F8FAFC",
+                    border: routeReflector ? "1px solid rgba(79, 70, 229, 0.35)" : "1px solid #E2E8F0",
+                    transition: "all 0.2s ease",
+                    mt: 1.5,
+                  }}
+                >
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        id="route-reflector-checkbox"
+                        checked={routeReflector}
+                        onChange={(e) => setRouteReflector(e.target.checked)}
+                        color="primary"
+                        disabled={saving}
+                      />
+                    }
+                    label={
+                      <Box>
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                          <Typography variant="body2" sx={{ fontWeight: 600, color: "#1E293B" }}>
+                            BGP Route Reflector (route_reflector)
+                          </Typography>
+                          <Chip
+                            label="BGP RR"
+                            size="small"
+                            sx={{
+                              height: 20,
+                              fontSize: "0.68rem",
+                              fontWeight: 700,
+                              bgcolor: routeReflector ? "#EEF2FF" : "#F1F5F9",
+                              color: routeReflector ? "#4F46E5" : "#64748B",
+                              border: routeReflector ? "1px solid rgba(79, 70, 229, 0.3)" : "1px solid #CBD5E1",
+                            }}
+                          />
+                        </Box>
+                        <Typography variant="caption" sx={{ color: "#64748B" }}>
+                          When enabled, appends &quot;rr client;&quot; to each internal BGP peer block in bird.conf,
+                          allowing this node to act as an iBGP Route Reflector without needing full mesh peering.
                         </Typography>
                       </Box>
                     }

@@ -43,6 +43,7 @@ import {
   Network,
   Copy,
   Check,
+  Radio,
 } from "lucide-react";
 import { useMesh } from "../context/MeshContext";
 import { NodeLiveStatus } from "../types/api";
@@ -1255,6 +1256,22 @@ export const NodesPage: React.FC = () => {
                           <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#0F172A", lineHeight: 1.2 }}>
                             {n.name}
                           </Typography>
+                          {n.route_reflector && (
+                            <Chip
+                              icon={<Radio size={10} style={{ color: "#4338CA", marginLeft: 4 }} />}
+                              label="BGP RR"
+                              size="small"
+                              sx={{
+                                height: 18,
+                                fontSize: "0.62rem",
+                                fontWeight: 800,
+                                bgcolor: "#EEF2FF",
+                                color: "#4338CA",
+                                border: "1px solid #A5B4FC",
+                                "& .MuiChip-label": { px: 0.5 },
+                              }}
+                            />
+                          )}
                           {nodeBlocks.map((bName) => (
                             <Chip
                               key={bName}
@@ -1894,9 +1911,28 @@ export const NodesPage: React.FC = () => {
                             color: "#0F172A",
                             cursor: "pointer",
                             "&:hover": { color: "#4F46E5", textDecoration: "underline" },
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 0.6,
                           }}
                         >
                           {n.name}
+                          {n.route_reflector && (
+                            <Chip
+                              label="RR"
+                              size="small"
+                              sx={{
+                                height: 16,
+                                fontSize: "0.58rem",
+                                fontWeight: 800,
+                                bgcolor: "#EEF2FF",
+                                color: "#4338CA",
+                                border: "1px solid #C7D2FE",
+                                px: 0,
+                                "& .MuiChip-label": { px: 0.4 },
+                              }}
+                            />
+                          )}
                         </Typography>
                       </Box>
                     </TableCell>

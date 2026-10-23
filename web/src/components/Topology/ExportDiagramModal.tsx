@@ -231,24 +231,20 @@ export const ExportDiagramModal: React.FC<ExportDiagramModalProps> = ({
 
           {/* Option: Node Name */}
           <Box>
-            <Typography sx={{ fontSize: "0.82rem", fontWeight: 700, color: "#1E293B", mb: 0.25 }}>
-              Node Name
-            </Typography>
+            <Typography sx={{ fontSize: "0.82rem", fontWeight: 700, color: "#1E293B", mb: 0.25 }}>Node Name</Typography>
             <Typography variant="caption" sx={{ fontSize: "0.71rem", color: "#64748B", display: "block", mb: 0.75 }}>
               Displayed node name label source
             </Typography>
             <FormControl component="fieldset" size="small">
-              <RadioGroup
-                value={nodeNameSource}
-                onChange={(e) => setNodeNameSource(e.target.value as NodeNameSource)}
-              >
+              <RadioGroup value={nodeNameSource} onChange={(e) => setNodeNameSource(e.target.value as NodeNameSource)}>
                 <FormControlLabel
                   value="name"
                   control={<Radio size="small" sx={{ color: "#4F46E5", "&.Mui-checked": { color: "#4F46E5" } }} />}
                   label={
                     <Box>
                       <Typography sx={{ fontSize: "0.82rem", fontWeight: 600, color: "#1E293B" }}>
-                        Node name <span style={{ color: "#4F46E5", fontSize: "0.72rem", fontWeight: 700 }}>(Default)</span>
+                        Node name{" "}
+                        <span style={{ color: "#4F46E5", fontSize: "0.72rem", fontWeight: 700 }}>(Default)</span>
                       </Typography>
                       <Typography variant="caption" sx={{ fontSize: "0.7rem", color: "#64748B" }}>
                         Easy42 node name
@@ -266,7 +262,7 @@ export const ExportDiagramModal: React.FC<ExportDiagramModalProps> = ({
                         Node caption
                       </Typography>
                       <Typography variant="caption" sx={{ fontSize: "0.7rem", color: "#64748B" }}>
-                        Node &quot;caption&quot; field (or *** if empty)
+                        Node &quot;caption&quot; field (or *** if it's empty or starts with !)
                       </Typography>
                     </Box>
                   }
@@ -277,9 +273,7 @@ export const ExportDiagramModal: React.FC<ExportDiagramModalProps> = ({
                   control={<Radio size="small" sx={{ color: "#4F46E5", "&.Mui-checked": { color: "#4F46E5" } }} />}
                   label={
                     <Box>
-                      <Typography sx={{ fontSize: "0.82rem", fontWeight: 600, color: "#1E293B" }}>
-                        None
-                      </Typography>
+                      <Typography sx={{ fontSize: "0.82rem", fontWeight: 600, color: "#1E293B" }}>None</Typography>
                       <Typography variant="caption" sx={{ fontSize: "0.7rem", color: "#64748B" }}>
                         Display node name as &quot;***&quot;
                       </Typography>
@@ -294,24 +288,20 @@ export const ExportDiagramModal: React.FC<ExportDiagramModalProps> = ({
 
           {/* Option: Node IP */}
           <Box>
-            <Typography sx={{ fontSize: "0.82rem", fontWeight: 700, color: "#1E293B", mb: 0.25 }}>
-              Node IP
-            </Typography>
+            <Typography sx={{ fontSize: "0.82rem", fontWeight: 700, color: "#1E293B", mb: 0.25 }}>Node IP</Typography>
             <Typography variant="caption" sx={{ fontSize: "0.71rem", color: "#64748B", display: "block", mb: 0.75 }}>
               Displayed node IP source (IPv4 preferred over IPv6)
             </Typography>
             <FormControl component="fieldset" size="small">
-              <RadioGroup
-                value={nodeIpSource}
-                onChange={(e) => setNodeIpSource(e.target.value as NodeIpSource)}
-              >
+              <RadioGroup value={nodeIpSource} onChange={(e) => setNodeIpSource(e.target.value as NodeIpSource)}>
                 <FormControlLabel
                   value="main"
                   control={<Radio size="small" sx={{ color: "#4F46E5", "&.Mui-checked": { color: "#4F46E5" } }} />}
                   label={
                     <Box>
                       <Typography sx={{ fontSize: "0.82rem", fontWeight: 600, color: "#1E293B" }}>
-                        Main IP <span style={{ color: "#4F46E5", fontSize: "0.72rem", fontWeight: 700 }}>(Default)</span>
+                        Main IP{" "}
+                        <span style={{ color: "#4F46E5", fontSize: "0.72rem", fontWeight: 700 }}>(Default)</span>
                       </Typography>
                       <Typography variant="caption" sx={{ fontSize: "0.7rem", color: "#64748B" }}>
                         Main IP or Main IPv6
@@ -340,9 +330,7 @@ export const ExportDiagramModal: React.FC<ExportDiagramModalProps> = ({
                   control={<Radio size="small" sx={{ color: "#4F46E5", "&.Mui-checked": { color: "#4F46E5" } }} />}
                   label={
                     <Box>
-                      <Typography sx={{ fontSize: "0.82rem", fontWeight: 600, color: "#1E293B" }}>
-                        None
-                      </Typography>
+                      <Typography sx={{ fontSize: "0.82rem", fontWeight: 600, color: "#1E293B" }}>None</Typography>
                       <Typography variant="caption" sx={{ fontSize: "0.7rem", color: "#64748B" }}>
                         Display node IP as &quot;***&quot;
                       </Typography>
@@ -358,9 +346,7 @@ export const ExportDiagramModal: React.FC<ExportDiagramModalProps> = ({
           {/* Option: Link Cost */}
           <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <Box>
-              <Typography sx={{ fontSize: "0.82rem", fontWeight: 700, color: "#1E293B" }}>
-                Link Cost
-              </Typography>
+              <Typography sx={{ fontSize: "0.82rem", fontWeight: 700, color: "#1E293B" }}>Link Cost</Typography>
               <Typography variant="caption" sx={{ fontSize: "0.7rem", color: "#64748B", display: "block" }}>
                 1 number if symmetric, 2 if asymmetric
               </Typography>
@@ -428,7 +414,7 @@ export const ExportDiagramModal: React.FC<ExportDiagramModalProps> = ({
                   color: displayBlocks ? "#334155" : "#94A3B8",
                 }}
               >
-                Display group name
+                Display group name (unless it starts with !)
               </Typography>
               <Typography variant="caption" sx={{ fontSize: "0.68rem", color: "#64748B", display: "block" }}>
                 Replace with &quot;***&quot; if toggled off
@@ -596,7 +582,8 @@ export const ExportDiagramModal: React.FC<ExportDiagramModalProps> = ({
               </Typography>
             </Box>
             <Typography variant="caption" sx={{ fontSize: "0.7rem", color: "#94A3B8" }}>
-              {nodes.length} nodes · {links.length} links{blocks.length > 0 && displayBlocks ? ` · ${blocks.length} groups` : ""}
+              {nodes.length} nodes · {links.length} links
+              {blocks.length > 0 && displayBlocks ? ` · ${blocks.length} groups` : ""}
             </Typography>
           </Box>
 

@@ -689,6 +689,9 @@ func formatNodeDetail(node *config.Node, live *config.NodeLiveStatus, links []co
 	if node.Caption != "" {
 		sb.WriteString(fmt.Sprintf("• Caption: <i>%s</i>\n", html.EscapeString(node.Caption)))
 	}
+	if node.RouteReflector {
+		sb.WriteString("• BGP Route Reflector: <code>Enabled (rr client)</code>\n")
+	}
 	if node.Description != "" {
 		sb.WriteString(fmt.Sprintf("• Description: <i>%s</i>\n", html.EscapeString(node.Description)))
 	}
