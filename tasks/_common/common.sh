@@ -58,6 +58,63 @@ detect_os() {
 
 detect_os
 
+# Detect machine architecture and normalize
+detect_arch() {
+    ARCH="$(uname -m)"
+    case "$ARCH" in
+        x86_64|amd64)
+            SYSTEM_ARCH="x86_64"
+            ;;
+        i386|i686)
+            SYSTEM_ARCH="i386"
+            ;;
+        aarch64|arm64)
+            SYSTEM_ARCH="arm64"
+            ;;
+        armv7*|armhf)
+            SYSTEM_ARCH="armv7"
+            ;;
+        armv6*)
+            SYSTEM_ARCH="armv6"
+            ;;
+        arm*)
+            SYSTEM_ARCH="arm"
+            ;;
+        mips*el|mipsel|mipsle)
+            SYSTEM_ARCH="mipsle"
+            ;;
+        mips64*el|mips64el|mips64le)
+            SYSTEM_ARCH="mips64le"
+            ;;
+        mips64*)
+            SYSTEM_ARCH="mips64"
+            ;;
+        mips*)
+            if (printf '\001\000' 2>/dev/null || echo -n -e '\x01\x00' 2>/dev/null) | hexdump -x 2>/dev/null | grep -q "0001"; then
+                SYSTEM_ARCH="mipsle"
+            elif printf '\001\000' 2>/dev/null | od -An -t x2 2>/dev/null | grep -q "0001"; then
+                SYSTEM_ARCH="mipsle"
+            elif [ -f /etc/openwrt_release ] && grep -qi "mipsel" /etc/openwrt_release; then
+                SYSTEM_ARCH="mipsle"
+            elif [ -f /etc/os-release ] && grep -qi "mipsel" /etc/os-release; then
+                SYSTEM_ARCH="mipsle"
+            elif od -j 5 -N 1 -An -t x1 /bin/sh 2>/dev/null | grep -q "01"; then
+                SYSTEM_ARCH="mipsle"
+            elif command -v lscpu >/dev/null 2>&1 && lscpu 2>/dev/null | grep -qi "Little Endian"; then
+                SYSTEM_ARCH="mipsle"
+            else
+                SYSTEM_ARCH="mips"
+            fi
+            ;;
+        *)
+            SYSTEM_ARCH="$ARCH"
+            ;;
+    esac
+    export SYSTEM_ARCH
+}
+
+detect_arch
+
 # Detect Init System (systemd, openrc, procd, or unknown)
 detect_init_system() {
     if [ -n "${INIT_SYSTEM:-}" ]; then
@@ -351,6 +408,9 @@ reload_service() {
 # Install packages across various distros
 install_packages() {
     case "$OS_ID" in
+        openwrt)
+            $SUDO opkg update && $SUDO opkg install "$@"
+            ;;
         ubuntu|debian|raspbian|armbian)
             export DEBIAN_FRONTEND=noninteractive
             $SUDO apt-get update -qq && $SUDO apt-get install -y -qq "$@"
@@ -402,4 +462,36 @@ backup_file() {
         ts="$(date +%Y%m%d%H%M%S)"
         $SUDO cp -p "$target" "${target}.easy42.bak.${ts}"
     fi
+}
+
+# Package management convenience aliases
+pkg_install() {
+    install_packages "$@"
+}
+
+pkg_update() {
+    case "$OS_ID" in
+        openwrt)
+            $SUDO opkg update
+            ;;
+        ubuntu|debian|raspbian|armbian)
+            export DEBIAN_FRONTEND=noninteractive
+            $SUDO apt-get update -qq
+            ;;
+        centos|rhel|rocky|almalinux|fedora)
+            if command -v dnf >/dev/null 2>&1; then
+                $SUDO dnf check-update -q || true
+            else
+                $SUDO yum check-update -q || true
+            fi
+            ;;
+        alpine)
+            $SUDO apk update
+            ;;
+        arch|manjaro)
+            $SUDO pacman -Sy
+            ;;
+        *)
+            ;;
+    esac
 }

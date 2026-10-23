@@ -70,6 +70,7 @@ Easy42 includes an embedded task execution engine to bootstrap prerequisites, in
 | `deploy_agent` | Services | Automatically detects remote architecture, deploys/upgrades the bundled `easy42-agent` binary, provisions token configs, and starts the system service unit (`systemd`, `openrc`, `procd`). |
 | `configure_network` | System & Network | Persists the node's main/external IPv4 and IPv6 addresses (and optional custom network script) through netplan, `/etc/network/interfaces`, systemd-networkd, or OpenWrt UCI. |
 | `install_wireguard` | Packages | Installs `wireguard` and `wireguard-tools` across all supported Linux distributions (Debian, Ubuntu, Alpine, Arch, RHEL/CentOS, OpenWrt). |
+| `install_wgquick_openwrt` | Packages | Installs `wg-quick` (`wg-quick-op`) for OpenWrt or minimal systems lacking `wg-quick` in their native package repositories. |
 | `install_bird` | Packages | Installs BIRD 2 and enables the system service. |
 | `config_bird` | Configuration | Finds `/etc/bird/bird.conf`, `/etc/bird.conf`, or `/etc/bird2/bird.conf` (creating `/etc/bird/bird.conf` when none exists), backs it up, inserts `include "/etc/bird_easy42.conf";`, validates syntax with `bird -p`, and reloads BIRD. |
 | `config_nftables` | Configuration | Configures `/etc/nftables.conf` (or OpenWrt / Alpine init systems) to include `/etc/easy42.nft` and enables the service. |

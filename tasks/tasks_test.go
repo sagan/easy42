@@ -19,6 +19,7 @@ func TestGetTasks(t *testing.T) {
 	expectedIDs := []string{
 		"deploy_agent",
 		"install_wireguard",
+		"install_wgquick_openwrt",
 		"install_bird",
 		"config_bird",
 		"config_nftables",

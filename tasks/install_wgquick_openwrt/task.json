@@ -1,0 +1,7 @@
+{
+  "id": "install_wgquick_openwrt",
+  "title": "Install wg-quick (OpenWrt)",
+  "description": "Installs wg-quick (wg-quick-op) for OpenWrt or other systems missing wg-quick.",
+  "category": "Packages",
+  "weight": 12
+}
