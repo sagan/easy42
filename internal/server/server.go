@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"net"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -451,9 +452,50 @@ func writeError(w http.ResponseWriter, status int, message string) {
 	writeJSON(w, status, map[string]string{"error": message})
 }
 
+func isAllowedOrigin(originStr, reqHost string) bool {
+	u, err := url.Parse(originStr)
+	if err != nil || u.Host == "" {
+		return false
+	}
+	// Direct match with request Host
+	if strings.EqualFold(u.Host, reqHost) {
+		return true
+	}
+	// Strip ports and compare hosts if ports differ (e.g. reverse proxy)
+	reqHostname := reqHost
+	if h, _, err := net.SplitHostPort(reqHost); err == nil {
+		reqHostname = h
+	}
+	uHostname := u.Hostname()
+	if strings.EqualFold(uHostname, reqHostname) {
+		return true
+	}
+	// Local development origins
+	if uHostname == "localhost" || uHostname == "127.0.0.1" || uHostname == "::1" {
+		return true
+	}
+	return false
+}
+
 // Auth Middleware
 func (s *Server) authMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// CSRF defense-in-depth for state-changing requests
+		if r.Method == http.MethodPost || r.Method == http.MethodPut || r.Method == http.MethodDelete || r.Method == http.MethodPatch {
+			origin := r.Header.Get("Origin")
+			if origin != "" {
+				if !isAllowedOrigin(origin, r.Host) {
+					writeError(w, http.StatusForbidden, "Cross-origin request rejected")
+					return
+				}
+			} else if ref := r.Header.Get("Referer"); ref != "" {
+				if !isAllowedOrigin(ref, r.Host) {
+					writeError(w, http.StatusForbidden, "Cross-origin request rejected")
+					return
+				}
+			}
+		}
+
 		cookie, err := r.Cookie("easy42_session")
 		if err != nil || cookie.Value == "" {
 			writeError(w, http.StatusUnauthorized, "Authentication required")

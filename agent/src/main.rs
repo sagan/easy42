@@ -4,6 +4,7 @@ mod config;
 mod cron;
 mod executor;
 mod hosts;
+pub mod validation;
 
 pub use collector::proto;
 

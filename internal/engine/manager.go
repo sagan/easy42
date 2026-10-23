@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -310,22 +311,8 @@ func (m *Manager) AddNode(node config.Node) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	node.Name = strings.TrimSpace(node.Name)
-	if node.Name == "" {
-		if node.IsExternal {
-			return errors.New("external peer name cannot be empty")
-		}
-		return errors.New("node name cannot be empty")
-	}
-
-	for _, ch := range node.Name {
-		if !((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '-' || ch == '_') {
-			return errors.New("node name may only contain alphanumeric characters, hyphens, and underscores")
-		}
-	}
-
-	if !node.IsExternal && (node.Host == "" || node.IP == "") {
-		return errors.New("host and IP are required for managed nodes")
+	if err := config.ValidateNode(&node); err != nil {
+		return err
 	}
 
 	node.IP = strings.TrimSpace(node.IP)
@@ -402,18 +389,16 @@ func (m *Manager) UpdateNode(name string, updated config.Node) error {
 		return ErrNodeNotFound
 	}
 
-	updated.Name = strings.TrimSpace(updated.Name)
-	if updated.Name == "" {
-		if updated.IsExternal {
-			return errors.New("external peer name cannot be empty")
-		}
-		return errors.New("node name cannot be empty")
+	oldNode := cfg.Nodes[idx]
+	if updated.Host == "" && !updated.IsExternal {
+		updated.Host = oldNode.Host
+	}
+	if updated.IP == "" && !updated.IsExternal {
+		updated.IP = oldNode.IP
 	}
 
-	for _, ch := range updated.Name {
-		if !((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '-' || ch == '_') {
-			return errors.New("node name may only contain alphanumeric characters, hyphens, and underscores")
-		}
+	if err := config.ValidateNode(&updated); err != nil {
+		return err
 	}
 
 	// Check name uniqueness and interface uniqueness if changed
@@ -469,7 +454,6 @@ func (m *Manager) UpdateNode(name string, updated config.Node) error {
 	now := time.Now().UTC()
 	updated.ModifiedAt = now
 
-	oldNode := cfg.Nodes[idx]
 	nameChanged := updated.Name != name
 	ipChanged := updated.IP != oldNode.IP || updated.IP6 != oldNode.IP6
 	if updated.Name != name {
@@ -2761,6 +2745,9 @@ func (m *Manager) RestartNodeInterface(nodeName string, iface string) (string, e
 	if iface == "" {
 		return "", fmt.Errorf("interface name is required")
 	}
+	if !config.IsValidInterfaceName(iface) {
+		return "", fmt.Errorf("invalid interface name: %q", iface)
+	}
 	node := m.FindNode(nodeName)
 	if node == nil {
 		return "", ErrNodeNotFound
@@ -4687,6 +4674,9 @@ func (m *Manager) UpdateNetworkSettings(settings config.NetworkSettings) error {
 	if cfg == nil {
 		return config.ErrConfigNotFound
 	}
+	if err := config.ValidateNetworkSettings(&settings); err != nil {
+		return err
+	}
 	settings.Prefixes = config.CleanPrefixes(settings.Prefixes)
 	if len(settings.DisallowedDN42Networks) == 0 && len(settings.DisallowedDN42CIDRs) > 0 {
 		settings.DisallowedDN42Networks = config.CleanPrefixes(settings.DisallowedDN42CIDRs)
@@ -4851,6 +4841,9 @@ func (m *Manager) UpdateDNSConfig(dnsCfg config.DNSConfig) error {
 	cfg := m.store.Get()
 	if cfg == nil {
 		return config.ErrConfigNotFound
+	}
+	if err := config.ValidateDNSConfig(&dnsCfg); err != nil {
+		return err
 	}
 	dnsCfg.ZoneID = strings.TrimSpace(dnsCfg.ZoneID)
 	dnsCfg.APIToken = strings.TrimSpace(dnsCfg.APIToken)
@@ -5405,7 +5398,8 @@ func (m *Manager) SetNodeMode(nodeName string, mode string) error {
 
 // FindNodeByAgentToken finds a node matching the provided agent token
 func (m *Manager) FindNodeByAgentToken(token string) *config.Node {
-	if strings.TrimSpace(token) == "" {
+	token = strings.TrimSpace(token)
+	if token == "" {
 		return nil
 	}
 	m.mu.RLock()
@@ -5415,8 +5409,9 @@ func (m *Manager) FindNodeByAgentToken(token string) *config.Node {
 	if cfg == nil {
 		return nil
 	}
+	tokenBytes := []byte(token)
 	for _, n := range cfg.Nodes {
-		if n.AgentToken != "" && n.AgentToken == token {
+		if n.AgentToken != "" && subtle.ConstantTimeCompare([]byte(n.AgentToken), tokenBytes) == 1 {
 			copyNode := n
 			return &copyNode
 		}
@@ -5426,7 +5421,8 @@ func (m *Manager) FindNodeByAgentToken(token string) *config.Node {
 
 // ValidateAgentToken checks if the token is valid for a given node
 func (m *Manager) ValidateAgentToken(nodeName, token string) bool {
-	if strings.TrimSpace(token) == "" {
+	token = strings.TrimSpace(token)
+	if token == "" {
 		return false
 	}
 	m.mu.RLock()
@@ -5436,9 +5432,10 @@ func (m *Manager) ValidateAgentToken(nodeName, token string) bool {
 	if cfg == nil {
 		return false
 	}
+	tokenBytes := []byte(token)
 	for _, n := range cfg.Nodes {
 		if n.Name == nodeName {
-			return n.AgentToken != "" && n.AgentToken == token
+			return n.AgentToken != "" && subtle.ConstantTimeCompare([]byte(n.AgentToken), tokenBytes) == 1
 		}
 	}
 	return false

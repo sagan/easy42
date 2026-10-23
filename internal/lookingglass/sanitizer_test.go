@@ -146,6 +146,17 @@ func TestValidateAdHocCommand(t *testing.T) {
 		"ping 1.1.1.1; ls",
 		"birdc show protocols | grep bgp",
 		"whois `id`",
+		"birdc down",
+		"birdc configure",
+		"ip route del default",
+		"ip route flush table main",
+		"ip link set dev eth0 down",
+		"dig -f /etc/shadow @localhost",
+		"dig -b 1.2.3.4 example.com",
+		"ping -f 1.1.1.1",
+		"ping -c 50 1.1.1.1",
+		"ping '1.1.1.1'",
+		"ping \\1.1.1.1",
 	}
 	for _, c := range invalid {
 		if err := ValidateAdHocCommand(c); err == nil {

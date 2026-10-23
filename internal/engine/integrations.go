@@ -55,6 +55,10 @@ func (m *Manager) UpdateIntegrationsSettings(settings config.IntegrationsSetting
 		return config.ErrConfigNotFound
 	}
 
+	if err := config.ValidateIntegrationsSettings(&settings); err != nil {
+		return err
+	}
+
 	if strings.TrimSpace(settings.PrometheusAuthToken) == "" {
 		settings.PrometheusAuthToken = config.GeneratePrometheusToken()
 	}

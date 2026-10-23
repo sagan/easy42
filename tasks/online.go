@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -82,21 +83,147 @@ func GetOnlineSources(customDirs ...string) []string {
 	return sources
 }
 
-// normalizeSourceURL ensures the source URL is valid and ends with a slash
-func normalizeSourceURL(rawURL string) string {
-	rawURL = strings.TrimSpace(rawURL)
-	if rawURL == "" {
-		return DefaultOnlineSource
+var allowPrivateSources = false
+
+// SetAllowPrivateSourcesForTest enables or disables private network sources during testing
+func SetAllowPrivateSourcesForTest(allow bool) {
+	allowPrivateSources = allow
+}
+
+// isPrivateOrReservedIP checks if an IP is loopback, private, link-local, multicast, or cloud metadata
+func isPrivateOrReservedIP(ip net.IP) bool {
+	if ip == nil {
+		return true
 	}
-	if !strings.HasSuffix(rawURL, "/") {
-		rawURL += "/"
+	if ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsInterfaceLocalMulticast() || ip.IsMulticast() || ip.IsUnspecified() {
+		return true
 	}
-	return rawURL
+
+	// IPv4 checks
+	if ip4 := ip.To4(); ip4 != nil {
+		// RFC 1918 (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16)
+		// RFC 6598 (100.64.0.0/10)
+		// RFC 3927 (169.254.0.0/16 link-local / cloud metadata)
+		// RFC 5737 (192.0.2.0/24, 198.51.100.0/24, 203.0.113.0/24)
+		// RFC 2544 (198.18.0.0/15)
+		if ip4[0] == 10 ||
+			(ip4[0] == 172 && ip4[1] >= 16 && ip4[1] <= 31) ||
+			(ip4[0] == 192 && ip4[1] == 168) ||
+			(ip4[0] == 100 && ip4[1] >= 64 && ip4[1] <= 127) ||
+			(ip4[0] == 169 && ip4[1] == 254) ||
+			(ip4[0] == 192 && ip4[1] == 0 && ip4[2] == 2) ||
+			(ip4[0] == 198 && (ip4[1] == 51 || ip4[1] == 18 || ip4[1] == 19)) ||
+			(ip4[0] == 203 && ip4[1] == 0 && ip4[2] == 113) ||
+			ip4[0] >= 224 {
+			return true
+		}
+		return false
+	}
+
+	// IPv6 checks
+	// Unique Local Address fc00::/7
+	if len(ip) == net.IPv6len && (ip[0]&0xfe) == 0xfc {
+		return true
+	}
+	// Cloud IPv6 metadata (e.g. AWS fd00:ec2::254)
+	if len(ip) == net.IPv6len && ip[0] == 0xfd && ip[1] == 0x00 {
+		return true
+	}
+
+	return false
+}
+
+// newSafeHTTPClient creates an HTTP client that prevents SSRF attacks
+func newSafeHTTPClient(timeout time.Duration) *http.Client {
+	dialer := &net.Dialer{
+		Timeout:   10 * time.Second,
+		KeepAlive: 30 * time.Second,
+	}
+
+	transport := &http.Transport{
+		Proxy: http.ProxyFromEnvironment,
+		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+			host, port, err := net.SplitHostPort(addr)
+			if err != nil {
+				return nil, fmt.Errorf("invalid address %s: %w", addr, err)
+			}
+
+			// If allowed in tests, dial directly
+			if allowPrivateSources {
+				return dialer.DialContext(ctx, network, addr)
+			}
+
+			// Resolve host to IPs
+			ips, err := net.DefaultResolver.LookupIPAddr(ctx, host)
+			if err != nil {
+				return nil, fmt.Errorf("failed to resolve host %s: %w", host, err)
+			}
+
+			var safeIP net.IP
+			for _, ipAddr := range ips {
+				if !isPrivateOrReservedIP(ipAddr.IP) {
+					safeIP = ipAddr.IP
+					break
+				}
+			}
+
+			if safeIP == nil {
+				return nil, fmt.Errorf("access to host %s (%v) is blocked for security (private or reserved IP address)", host, ips)
+			}
+
+			targetAddr := net.JoinHostPort(safeIP.String(), port)
+			return dialer.DialContext(ctx, network, targetAddr)
+		},
+		ForceAttemptHTTP2:     true,
+		MaxIdleConns:          10,
+		IdleConnTimeout:       30 * time.Second,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+	}
+
+	return &http.Client{
+		Transport: transport,
+		Timeout:   timeout,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if len(via) >= 5 {
+				return fmt.Errorf("too many redirects")
+			}
+			if req.URL.Scheme != "http" && req.URL.Scheme != "https" {
+				return fmt.Errorf("unsupported redirect scheme: %s", req.URL.Scheme)
+			}
+			return nil
+		},
+	}
+}
+
+// validateSourceURL validates that the source URL is valid, uses http/https, and ends with a slash
+func validateSourceURL(rawURL string) (string, error) {
+	s := strings.TrimSpace(rawURL)
+	if s == "" {
+		return DefaultOnlineSource, nil
+	}
+	u, err := url.ParseRequestURI(s)
+	if err != nil {
+		return "", fmt.Errorf("invalid source URL: %w", err)
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return "", fmt.Errorf("source URL must use http or https scheme")
+	}
+	if u.Host == "" {
+		return "", fmt.Errorf("source URL missing host")
+	}
+	if !strings.HasSuffix(s, "/") {
+		s += "/"
+	}
+	return s, nil
 }
 
 // FetchOnlineManifest fetches and parses manifest.json from the given source URL
 func FetchOnlineManifest(ctx context.Context, sourceURL string) (*OnlineManifest, error) {
-	normURL := normalizeSourceURL(sourceURL)
+	normURL, err := validateSourceURL(sourceURL)
+	if err != nil {
+		return nil, err
+	}
 	manifestURL := normURL + "manifest.json"
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, manifestURL, nil)
@@ -104,7 +231,7 @@ func FetchOnlineManifest(ctx context.Context, sourceURL string) (*OnlineManifest
 		return nil, fmt.Errorf("failed to create request for %s: %w", manifestURL, err)
 	}
 
-	client := &http.Client{Timeout: 15 * time.Second}
+	client := newSafeHTTPClient(15 * time.Second)
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch manifest from %s: %w", manifestURL, err)
@@ -145,7 +272,10 @@ func InstallOnlineTask(ctx context.Context, customDir string, sourceURL string, 
 		return fmt.Errorf("failed to create tasks directory %s: %w", customDir, err)
 	}
 
-	normURL := normalizeSourceURL(sourceURL)
+	normURL, err := validateSourceURL(sourceURL)
+	if err != nil {
+		return err
+	}
 
 	// Default files if none provided
 	if len(files) == 0 {
@@ -180,7 +310,7 @@ func InstallOnlineTask(ctx context.Context, customDir string, sourceURL string, 
 		}
 	}()
 
-	client := &http.Client{Timeout: 30 * time.Second}
+	client := newSafeHTTPClient(30 * time.Second)
 	downloadedCount := 0
 
 	for _, fname := range files {

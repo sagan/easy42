@@ -20,18 +20,21 @@ var (
 
 	// Whitelisted commands for ad-hoc execution
 	whitelistedAdHocPrefixes = []string{
-		"ping",
-		"traceroute",
-		"mtr",
-		"birdc",
-		"ip route",
-		"ip -4 route",
-		"ip -6 route",
+		"ping ",
+		"traceroute ",
+		"mtr ",
+		"birdc show ",
+		"ip route show",
+		"ip route get ",
+		"ip -4 route show",
+		"ip -4 route get ",
+		"ip -6 route show",
+		"ip -6 route get ",
 		"ip link show",
 		"ip addr show",
-		"whois",
-		"dig",
-		"tcp_ping",
+		"whois ",
+		"dig ",
+		"tcp_ping ",
 	}
 )
 
@@ -183,15 +186,15 @@ func ValidateAdHocCommand(cmd string) error {
 		return fmt.Errorf("command cannot be empty")
 	}
 
-	// Must not contain shell metacharacters
-	if dangerousCharsRegex.MatchString(cmd) {
+	// Must not contain shell metacharacters, quotes, or backslashes
+	if dangerousCharsRegex.MatchString(cmd) || strings.ContainsAny(cmd, `'"`+"\\") {
 		return fmt.Errorf("command contains dangerous shell metacharacters")
 	}
 
 	// Check whitelist prefixes
 	matched := false
 	for _, prefix := range whitelistedAdHocPrefixes {
-		if strings.HasPrefix(cmd, prefix) {
+		if strings.HasPrefix(cmd, prefix) || cmd == strings.TrimSpace(prefix) {
 			matched = true
 			break
 		}
@@ -199,6 +202,46 @@ func ValidateAdHocCommand(cmd string) error {
 
 	if !matched {
 		return fmt.Errorf("command must start with one of: %s", strings.Join(whitelistedAdHocPrefixes, ", "))
+	}
+
+	fields := strings.Fields(cmd)
+	if len(fields) == 0 {
+		return fmt.Errorf("command cannot be empty")
+	}
+
+	prog := fields[0]
+	switch prog {
+	case "dig":
+		// Disallow batch file flags (-f, -b, -k, -y)
+		for _, arg := range fields[1:] {
+			if strings.HasPrefix(arg, "-f") || strings.HasPrefix(arg, "-b") || strings.HasPrefix(arg, "-k") || strings.HasPrefix(arg, "-y") {
+				return fmt.Errorf("flag '%s' is not allowed in dig", arg)
+			}
+		}
+	case "ping":
+		// Disallow flood ping (-f) and cap packet counts
+		for i, arg := range fields[1:] {
+			if arg == "-f" || strings.HasPrefix(arg, "-f") {
+				return fmt.Errorf("flood ping flag is not allowed")
+			}
+			if arg == "-c" && i+1 < len(fields[1:]) {
+				if count, err := strconv.Atoi(fields[1:][i+1]); err == nil && count > 30 {
+					return fmt.Errorf("ping count exceeds maximum allowed limit of 30")
+				}
+			}
+		}
+	case "ip":
+		// Ensure only read-only subcommands
+		for _, arg := range fields[1:] {
+			switch strings.ToLower(arg) {
+			case "del", "delete", "add", "flush", "replace", "change", "set":
+				return fmt.Errorf("subcommand '%s' is not permitted in ip", arg)
+			}
+		}
+	case "birdc":
+		if len(fields) < 2 || fields[1] != "show" {
+			return fmt.Errorf("only 'birdc show' subcommands are permitted")
+		}
 	}
 
 	return nil

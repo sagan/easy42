@@ -470,6 +470,10 @@ func (s *Server) handleRestartNodeInterface(w http.ResponseWriter, r *http.Reque
 		writeError(w, http.StatusBadRequest, "Interface name parameter required")
 		return
 	}
+	if !config.IsValidInterfaceName(iface) {
+		writeError(w, http.StatusBadRequest, "Invalid interface name")
+		return
+	}
 	out, err := s.mgr.RestartNodeInterface(name, iface)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())

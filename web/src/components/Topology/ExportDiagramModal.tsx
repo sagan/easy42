@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from "react";
+import DOMPurify from "dompurify";
 import {
   Dialog,
   DialogTitle,
@@ -620,7 +621,11 @@ export const ExportDiagramModal: React.FC<ExportDiagramModalProps> = ({
             {previewSvg ? (
               <Box
                 component="div"
-                dangerouslySetInnerHTML={{ __html: previewSvg }}
+                dangerouslySetInnerHTML={{
+                  __html: DOMPurify.sanitize(previewSvg, {
+                    USE_PROFILES: { svg: true, svgFilters: true },
+                  }),
+                }}
                 sx={{
                   maxWidth: "100%",
                   maxHeight: "100%",

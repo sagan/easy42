@@ -75,9 +75,7 @@ fn is_allowed_config_path(path: &Path) -> bool {
 }
 
 fn is_valid_iface_name(iface: &str) -> bool {
-    !iface.is_empty()
-        && iface.len() <= 15
-        && iface.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+    crate::validation::is_valid_iface_name(iface)
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -214,13 +212,14 @@ impl CommandExecutor {
                     format!("failed to create dir {:?}: {}", parent, e),
                 );
             }
-            // Ensure parent directories have 0755 permissions
+            // Ensure parent directories have appropriate permissions (0700 for wireguard, 0755 otherwise)
             let mut curr = Some(parent);
             while let Some(dir) = curr {
                 if dir == Path::new("/") || dir == Path::new("/etc") || dir.as_os_str().is_empty() {
                     break;
                 }
-                let _ = fs::set_permissions(dir, fs::Permissions::from_mode(0o755));
+                let perm_mode = if dir.starts_with("/etc/wireguard") { 0o700 } else { 0o755 };
+                let _ = fs::set_permissions(dir, fs::Permissions::from_mode(perm_mode));
                 curr = dir.parent();
             }
         }
@@ -228,6 +227,8 @@ impl CommandExecutor {
         let tmp_path = format!("{}.tmp.{}", req.path, std::process::id());
         let mode = if req.path.ends_with(".nft") || req.path.ends_with(".sh") {
             0o755
+        } else if req.path.starts_with("/etc/wireguard") {
+            0o600
         } else if req.file_mode != 0 {
             req.file_mode
         } else {
@@ -431,13 +432,28 @@ done"#;
 
         match tool {
             proto::looking_glass_cmd::Tool::Ping => {
-                let count = req.args.first().cloned().unwrap_or_else(|| "4".to_string());
-                run_cmd("ping", &["-c", &count, &req.target]).await
+                if !crate::validation::is_valid_host(&req.target) {
+                    return (false, -1, String::new(), format!("invalid target host: {}", req.target));
+                }
+                let count_num: u32 = req.args.first()
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or(4)
+                    .clamp(1, 30);
+                run_cmd("ping", &["-c", &count_num.to_string(), &req.target]).await
             }
             proto::looking_glass_cmd::Tool::Traceroute => {
+                if !crate::validation::is_valid_host(&req.target) {
+                    return (false, -1, String::new(), format!("invalid target host: {}", req.target));
+                }
                 run_cmd("traceroute", &[&req.target]).await
             }
             proto::looking_glass_cmd::Tool::Birdc => {
+                for arg in &req.args {
+                    let a = arg.trim();
+                    if a.is_empty() || a.contains(';') || a.contains('&') || a.contains('|') || a.contains('`') || a.contains('$') {
+                        return (false, -1, String::new(), "invalid character in birdc arguments".to_string());
+                    }
+                }
                 let mut full_args = vec!["show"];
                 let args_ref: Vec<&str> = req.args.iter().map(|s| s.as_str()).collect();
                 full_args.extend(args_ref);
@@ -447,14 +463,8 @@ done"#;
                 if req.command.is_empty() {
                     return (false, -1, String::new(), "empty custom command".to_string());
                 }
-                // Reject dangerous shell metacharacters
-                if req.command.chars().any(|c| matches!(c, ';' | '&' | '|' | '`' | '$' | '\n' | '\r' | '>' | '<')) {
-                    return (
-                        false,
-                        -1,
-                        String::new(),
-                        "command contains disallowed characters".to_string(),
-                    );
+                if let Err(e) = crate::validation::validate_adhoc_command(&req.command) {
+                    return (false, -1, String::new(), e);
                 }
                 let words: Vec<&str> = req.command.split_whitespace().collect();
                 if words.is_empty() {
@@ -477,14 +487,17 @@ done"#;
                 }
             }
             proto::looking_glass_cmd::Tool::TcpPing => {
+                if !crate::validation::is_valid_host_port(&req.target) {
+                    return (false, -1, String::new(), format!("invalid target host:port: {}", req.target));
+                }
                 // Native TCP ping: dial target, measure RTT, return JSON
                 let target = req.target.clone();
-                let timeout_secs = if req.timeout_seconds > 0 { req.timeout_seconds } else { 10 };
+                let timeout_secs = if req.timeout_seconds > 0 { req.timeout_seconds.min(30) } else { 10 };
                 // Repeat count from args[0], default 4
                 let count: u32 = req.args.first()
                     .and_then(|s| s.parse().ok())
                     .unwrap_or(4)
-                    .min(20);
+                    .clamp(1, 20);
 
                 run_tcp_ping(&target, count, timeout_secs).await
             }

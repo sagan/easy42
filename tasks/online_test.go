@@ -80,6 +80,15 @@ func TestFetchOnlineManifestAndInstall(t *testing.T) {
 
 	ctx := context.Background()
 
+	// 0. Verify SSRF protection blocks loopback by default
+	_, err := FetchOnlineManifest(ctx, server.URL)
+	if err == nil {
+		t.Fatalf("expected FetchOnlineManifest to fail due to SSRF protection against loopback")
+	}
+
+	SetAllowPrivateSourcesForTest(true)
+	defer SetAllowPrivateSourcesForTest(false)
+
 	// 1. Fetch Manifest
 	fetched, err := FetchOnlineManifest(ctx, server.URL)
 	if err != nil {

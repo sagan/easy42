@@ -37,7 +37,11 @@ pub fn build_hosts_block(mut records: Vec<HostRecord>) -> String {
     for r in records {
         let ip = r.ip.trim();
         let name = r.name.trim();
-        if !ip.is_empty() && !name.is_empty() {
+        if !ip.is_empty()
+            && !name.is_empty()
+            && crate::validation::is_valid_ip(ip)
+            && crate::validation::is_valid_node_name(name)
+        {
             out.push_str(&format!("{} {} {}.internal\n", ip, name, name));
         }
     }

@@ -9,9 +9,14 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"easy42/tasks"
 )
 
 func TestOnlineTasksAPI(t *testing.T) {
+	tasks.SetAllowPrivateSourcesForTest(true)
+	defer tasks.SetAllowPrivateSourcesForTest(false)
+
 	srv, tempDir, pass := setupTestServer(t)
 	defer os.RemoveAll(tempDir)
 

@@ -103,6 +103,9 @@ func RunCommandWithExitCodeTimeout(client *ssh.Client, command string, timeout t
 
 // IsInterfaceUp checks if a network interface is present and UP
 func IsInterfaceUp(client *ssh.Client, iface string) bool {
+	if !config.IsValidInterfaceName(iface) {
+		return false
+	}
 	out, err := RunCommand(client, fmt.Sprintf("ip link show %s", iface))
 	if err != nil {
 		return false
@@ -112,24 +115,36 @@ func IsInterfaceUp(client *ssh.Client, iface string) bool {
 
 // InterfaceExists checks if a network interface exists
 func InterfaceExists(client *ssh.Client, iface string) bool {
+	if !config.IsValidInterfaceName(iface) {
+		return false
+	}
 	_, err := RunCommand(client, fmt.Sprintf("ip link show %s", iface))
 	return err == nil
 }
 
 // UpWireGuard starts an interface using wg-quick up
 func UpWireGuard(client *ssh.Client, iface string) error {
+	if !config.IsValidInterfaceName(iface) {
+		return fmt.Errorf("invalid interface name: %q", iface)
+	}
 	_, err := RunCommand(client, fmt.Sprintf("wg-quick up %s", iface))
 	return err
 }
 
 // DownWireGuard stops an interface using wg-quick down
 func DownWireGuard(client *ssh.Client, iface string) error {
+	if !config.IsValidInterfaceName(iface) {
+		return fmt.Errorf("invalid interface name: %q", iface)
+	}
 	_, err := RunCommand(client, fmt.Sprintf("wg-quick down %s", iface))
 	return err
 }
 
 // RestartWireGuard restarts a WireGuard interface using wg-quick down and wg-quick up
 func RestartWireGuard(client *ssh.Client, iface string) error {
+	if !config.IsValidInterfaceName(iface) {
+		return fmt.Errorf("invalid interface name: %q", iface)
+	}
 	cmd := fmt.Sprintf("sh -l -c 'wg-quick down %s 2>/dev/null || ip link del dev %s 2>/dev/null ; wg-quick up %s'", iface, iface, iface)
 	_, err := RunCommand(client, cmd)
 	return err
@@ -137,6 +152,9 @@ func RestartWireGuard(client *ssh.Client, iface string) error {
 
 // GetInterfaceMTU returns the MTU of a network interface from /sys/class/net/<iface>/mtu
 func GetInterfaceMTU(client *ssh.Client, iface string) (int, error) {
+	if !config.IsValidInterfaceName(iface) {
+		return 0, fmt.Errorf("invalid interface name: %q", iface)
+	}
 	out, err := RunCommand(client, fmt.Sprintf("cat /sys/class/net/%s/mtu 2>/dev/null", iface))
 	if err != nil {
 		return 0, err
@@ -223,6 +241,9 @@ func GetRunningWgInterfaces(client *ssh.Client) ([]string, error) {
 
 // CleanWireGuardInterface brings down the interface using wg-quick down and removes /etc/wireguard/<interface>.conf
 func CleanWireGuardInterface(client *ssh.Client, sftpClient *sftp.Client, iface string) error {
+	if !config.IsValidInterfaceName(iface) {
+		return fmt.Errorf("invalid interface name: %q", iface)
+	}
 	confPath := fmt.Sprintf("/etc/wireguard/%s.conf", iface)
 
 	// 1. Run wg-quick down <interface>
@@ -249,6 +270,9 @@ func CleanWireGuardInterface(client *ssh.Client, sftpClient *sftp.Client, iface 
 
 // SyncWireGuard syncs wireguard config dynamically without dropping existing connection
 func SyncWireGuard(client *ssh.Client, iface string, confPath string) error {
+	if !config.IsValidInterfaceName(iface) {
+		return fmt.Errorf("invalid interface name: %q", iface)
+	}
 	// If interface is not up yet, bring it up
 	if !InterfaceExists(client, iface) {
 		return UpWireGuard(client, iface)
