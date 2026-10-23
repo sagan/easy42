@@ -28,7 +28,7 @@ test:
 	go test -v ./internal/...
 
 dev-backend:
-	go run main.go serve --listen 127.0.0.1:4242
+	go run main.go serve --listen 0.0.0.0:4242
 
 dev-frontend:
 	cd web && npm run dev

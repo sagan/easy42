@@ -1,8 +1,9 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { BaseEdge, EdgeLabelRenderer, EdgeProps, getBezierPath } from "@xyflow/react";
 import { Box, Typography } from "@mui/material";
 import { Link } from "../../types/api";
 import { getEffectiveLinkCost } from "../../utils/cost";
+import { isManualLink } from "../../utils/link";
 
 export type LinkWorkingState = "working" | "not_working" | "unknown";
 
@@ -60,7 +61,7 @@ export const CustomEdge: React.FC<EdgeProps> = ({
   const isExternal = Boolean(edgeData?.isExternal);
   const fromIsExternal = Boolean(edgeData?.fromIsExternal);
   const toIsExternal = Boolean(edgeData?.toIsExternal);
-  const isManual = link?.type === "manual" || link?.from?.type === "manual" || link?.to?.type === "manual";
+  const isManual = isManualLink(link);
   const totalLinksInPair = (edgeData?.totalLinksInPair as number) || 1;
   const linkIndexInPair = (edgeData?.linkIndexInPair as number) || 0;
 
@@ -71,6 +72,43 @@ export const CustomEdge: React.FC<EdgeProps> = ({
   const zoomLevel = edgeData?.zoomLevel ?? 1;
 
   const [isHovered, setIsHovered] = useState(false);
+  const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleMouseEnter = useCallback(() => {
+    if (hoverTimeoutRef.current) {
+      clearTimeout(hoverTimeoutRef.current);
+      hoverTimeoutRef.current = null;
+    }
+    setIsHovered(true);
+  }, []);
+
+  const handleMouseLeave = useCallback(() => {
+    if (hoverTimeoutRef.current) {
+      clearTimeout(hoverTimeoutRef.current);
+    }
+    hoverTimeoutRef.current = setTimeout(() => {
+      setIsHovered(false);
+    }, 60);
+  }, []);
+
+  // When edge is dimmed or when focus highlight clears, immediately reset hover state
+  useEffect(() => {
+    if (!isHighlighted || isDimmed) {
+      setIsHovered(false);
+      if (hoverTimeoutRef.current) {
+        clearTimeout(hoverTimeoutRef.current);
+        hoverTimeoutRef.current = null;
+      }
+    }
+  }, [isHighlighted, isDimmed]);
+
+  useEffect(() => {
+    return () => {
+      if (hoverTimeoutRef.current) {
+        clearTimeout(hoverTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const fromCost =
     typeof edgeData?.fromCost === "number" ? edgeData.fromCost : getEffectiveLinkCost(link?.from, isExternal);
@@ -145,13 +183,13 @@ export const CustomEdge: React.FC<EdgeProps> = ({
   let edgeOpacity = 1.0;
 
   if (isManual) {
-    strokeColor = "#7C3AED";
+    strokeColor = workingState === "not_working" ? "#EF4444" : "#7C3AED";
     strokeDasharray = "5 3";
     strokeWidth = 2.2;
-    pillBorderColor = "#DDD6FE";
-    pillBgColor = "#FAF5FF";
-    dotColor = "#7C3AED";
-    statusText = "Manual";
+    pillBorderColor = workingState === "not_working" ? "#FCA5A5" : "#DDD6FE";
+    pillBgColor = workingState === "not_working" ? "#FEF2F2" : "#FAF5FF";
+    dotColor = workingState === "not_working" ? "#EF4444" : "#7C3AED";
+    statusText = workingState === "not_working" ? "Down (Manual)" : "Manual";
   } else if (isExternal) {
     strokeColor = "#8B5CF6";
     strokeDasharray = "6 4";
@@ -220,7 +258,15 @@ export const CustomEdge: React.FC<EdgeProps> = ({
     }
     edgeOpacity = baseSubtleOpacity;
 
-    if (workingState === "working") {
+    if (isManual) {
+      strokeColor = workingState === "not_working" ? "#EF4444" : "#7C3AED"; // Consistent Violet for manual links
+      strokeWidth = 1.6;
+      strokeDasharray = "5 3";
+    } else if (isExternal) {
+      strokeColor = "#8B5CF6"; // External Link
+      strokeWidth = 1.6;
+      strokeDasharray = "6 4";
+    } else if (workingState === "working") {
       strokeColor = "#10B981"; // Vibrant Emerald (Active WireGuard mesh)
       strokeWidth = 1.6;
       strokeDasharray = undefined;
@@ -228,14 +274,6 @@ export const CustomEdge: React.FC<EdgeProps> = ({
       strokeColor = "#EF4444"; // Vivid Red (Down / Broken link)
       strokeWidth = 1.8;
       strokeDasharray = "5 3";
-    } else if (isManual) {
-      strokeColor = "#8B5CF6"; // Distinct Violet (Manual / BGP link)
-      strokeWidth = 1.6;
-      strokeDasharray = "5 3";
-    } else if (isExternal) {
-      strokeColor = "#8B5CF6"; // External Link
-      strokeWidth = 1.6;
-      strokeDasharray = "6 4";
     } else {
       strokeColor = "#6366F1"; // Crisp Indigo for Idle / Configured
       strokeWidth = 1.5;
@@ -259,29 +297,28 @@ export const CustomEdge: React.FC<EdgeProps> = ({
           strokeLinecap: "round",
           strokeOpacity: edgeOpacity,
           cursor: "pointer",
-          pointerEvents: "all",
+          pointerEvents: "none",
           transition: "stroke 0.2s ease, stroke-width 0.2s ease, stroke-opacity 0.2s ease",
         }}
       />
 
-      {/* Invisible wider stroke for easy hover detection on subtle edges */}
-      {isSubtle && !shouldRenderPill && (
-        <path
-          d={edgePath}
-          fill="none"
-          stroke="transparent"
-          strokeWidth={14}
-          style={{ cursor: "pointer", pointerEvents: "stroke" }}
-          onMouseEnter={() => setIsHovered(true)}
-          onMouseLeave={() => setIsHovered(false)}
-          onClick={(e) => {
-            e.stopPropagation();
-            if (link && edgeData.onSelect) {
-              edgeData.onSelect(link);
-            }
-          }}
-        />
-      )}
+      {/* Invisible wider stroke for reliable hover detection and click interaction along the edge */}
+      <path
+        d={edgePath}
+        fill="none"
+        stroke="transparent"
+        strokeWidth={18}
+        strokeLinecap="round"
+        style={{ cursor: "pointer", pointerEvents: isDimmed ? "none" : "stroke" }}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
+        onClick={(e) => {
+          e.stopPropagation();
+          if (link && edgeData.onSelect) {
+            edgeData.onSelect(link);
+          }
+        }}
+      />
 
       {shouldRenderPill && (
         <EdgeLabelRenderer>
@@ -292,12 +329,12 @@ export const CustomEdge: React.FC<EdgeProps> = ({
                 edgeData.onSelect(link);
               }
             }}
-            onMouseEnter={() => setIsHovered(true)}
-            onMouseLeave={() => setIsHovered(false)}
+            onMouseEnter={handleMouseEnter}
+            onMouseLeave={handleMouseLeave}
             style={{
               position: "absolute",
               transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
-              pointerEvents: "all",
+              pointerEvents: isDimmed ? "none" : "all",
               zIndex: isHighlighted || isHovered ? 1200 : 900,
             }}
             sx={{

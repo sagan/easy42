@@ -551,7 +551,15 @@ func (s *Server) handleAddLink(w http.ResponseWriter, r *http.Request) {
 		if req.From == nil {
 			req.From = &config.LinkEnd{}
 		}
-		req.From.Psk = *req.Psk
+		if req.To == nil {
+			req.To = &config.LinkEnd{}
+		}
+		val := strings.TrimSpace(*req.Psk)
+		if val == "" {
+			val = "__NONE__"
+		}
+		req.From.Psk = val
+		req.To.Psk = val
 	}
 	if fromNode == "" && req.From != nil {
 		fromNode = req.From.Name
@@ -776,7 +784,15 @@ func (s *Server) handleUpdateLink(w http.ResponseWriter, r *http.Request) {
 		if req.From == nil {
 			req.From = &config.LinkEnd{}
 		}
-		req.From.Psk = *req.Psk
+		if req.To == nil {
+			req.To = &config.LinkEnd{}
+		}
+		val := strings.TrimSpace(*req.Psk)
+		if val == "" {
+			val = "__NONE__"
+		}
+		req.From.Psk = val
+		req.To.Psk = val
 	}
 	if fromNode == "" && req.From != nil {
 		fromNode = req.From.Name

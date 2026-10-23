@@ -1,5 +1,6 @@
 import { Node, Link, NetworkPolicy, GraphBlock } from "../types/api";
 import { getEffectiveLinkCost } from "./cost";
+import { isManualLink } from "./link";
 
 export type NodeNameSource = "name" | "caption" | "none";
 export type NodeIpSource = "main" | "external" | "none";
@@ -46,8 +47,11 @@ export function formatExportNodeName(node: Node, source: NodeNameSource): string
   switch (source) {
     case "name":
       return node.name || "***";
-    case "caption":
-      return node.caption?.trim() || "***";
+    case "caption": {
+      const caption = node.caption?.trim() || "";
+      // a special prefix is recognized specially and treated as private (secret) value
+      return caption && !caption.startsWith("!") ? caption : "***";
+    }
     case "none":
       return "***";
     default:
@@ -246,9 +250,7 @@ export function generateTopologySvg(
             return (fromName === uClean && toName === vClean) || (fromName === vClean && toName === uClean);
           });
         };
-        isFullMesh = memberNodes.every((u, i) =>
-          memberNodes.slice(i + 1).every((v) => hasIntraLink(u.name, v.name)),
-        );
+        isFullMesh = memberNodes.every((u, i) => memberNodes.slice(i + 1).every((v) => hasIntraLink(u.name, v.name)));
       }
 
       computedBlocks.push({
@@ -363,12 +365,12 @@ export function generateTopologySvg(
       const nodeFrom = nodeMap.get(link.from.name);
       const nodeTo = nodeMap.get(link.to.name);
       const isExternal = Boolean(nodeFrom?.is_external || nodeTo?.is_external);
-      const isManual = link.type === "manual" || link.from?.type === "manual" || link.to?.type === "manual";
+      const isManual = isManualLink(link);
 
       let strokeColor = "#10B981"; // Emerald
       let strokeDash = "";
       if (isManual) {
-        strokeColor = "#8B5CF6"; // Violet
+        strokeColor = "#7C3AED"; // Consistent Violet
         strokeDash = 'stroke-dasharray="5 3"';
       } else if (isExternal) {
         strokeColor = "#8B5CF6"; // Violet
@@ -519,7 +521,8 @@ export function generateTopologySvg(
 
   const titleText = options.diagramTitle?.trim() || "easy42 Network Topology";
 
-  const groupText = computedBlocks.length > 0 ? ` · ${computedBlocks.length} group${computedBlocks.length === 1 ? "" : "s"}` : "";
+  const groupText =
+    computedBlocks.length > 0 ? ` · ${computedBlocks.length} group${computedBlocks.length === 1 ? "" : "s"}` : "";
   const mainStatsText = `${internalNodes.length} nodes · ${internalLinks.length} links${groupText}`;
 
   let externalStatsSvg = "";

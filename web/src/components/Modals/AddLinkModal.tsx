@@ -103,6 +103,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
   const [assignIPv4, setAssignIPv4] = useState<boolean>(false);
   const [enablePsk, setEnablePsk] = useState<boolean>(true);
   const [customPsk, setCustomPsk] = useState<string>("");
+  const linkHadPsk = Boolean(linkToEdit?.psk || linkToEdit?.from?.psk || linkToEdit?.to?.psk);
 
   // Manual link fields
   const [linkType, setLinkType] = useState<"wireguard" | "manual">("wireguard");
@@ -578,19 +579,28 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
         const reqFrom = fromNode === managedNode ? managedEnd : externalEnd;
         const reqTo = toNode === managedNode ? managedEnd : externalEnd;
 
+        const hadPsk = Boolean(linkToEdit?.psk || linkToEdit?.from?.psk || linkToEdit?.to?.psk);
         let pskVal: string | undefined = undefined;
         if (!enablePsk) {
           pskVal = "__NONE__";
         } else if (customPsk.trim()) {
           pskVal = customPsk.trim();
+        } else if (linkToEdit && !hadPsk && enablePsk) {
+          pskVal = "__GENERATE__";
         }
 
         if (linkToEdit) {
           const updated = await api.updateLink({
             from_node: fromNodeName,
             to_node: toNodeName,
-            from: reqFrom,
-            to: reqTo,
+            from: {
+              ...reqFrom,
+              psk: pskVal !== undefined ? pskVal : (linkToEdit.from?.psk || undefined),
+            },
+            to: {
+              ...reqTo,
+              psk: pskVal !== undefined ? pskVal : (linkToEdit.to?.psk || undefined),
+            },
             from_use_ip: fromUseIp,
             to_use_ip: toUseIp,
             from_policy: reqFrom.policy,
@@ -639,11 +649,14 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
           onLinkAdded?.(link);
         }
       } else {
+        const hadPsk = Boolean(linkToEdit?.psk || linkToEdit?.from?.psk || linkToEdit?.to?.psk);
         let pskVal: string | undefined = undefined;
         if (!enablePsk) {
           pskVal = "__NONE__";
         } else if (customPsk.trim()) {
           pskVal = customPsk.trim();
+        } else if (linkToEdit && !hadPsk && enablePsk) {
+          pskVal = "__GENERATE__";
         }
 
         if (linkToEdit) {
@@ -684,6 +697,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
               endpoint: undefined,
               resolved_endpoint: undefined,
               note: fromNote.trim() || undefined,
+              psk: pskVal !== undefined ? pskVal : (linkToEdit.from?.psk || undefined),
             },
             to: {
               ...linkToEdit.to,
@@ -699,6 +713,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
               endpoint: undefined,
               resolved_endpoint: undefined,
               note: toNote.trim() || undefined,
+              psk: pskVal !== undefined ? pskVal : (linkToEdit.to?.psk || undefined),
             },
             assign_ipv4: assignIPv4,
             psk: pskVal,
@@ -1113,7 +1128,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                           value={customPsk}
                           onChange={(e) => setCustomPsk(e.target.value)}
                           helperText={
-                            linkToEdit
+                            linkToEdit && linkHadPsk
                               ? "Leave blank to keep existing PSK, or enter a new 32-byte Base64 key to overwrite."
                               : "Leave blank to auto-generate a secure random 32-byte Base64 PSK."
                           }

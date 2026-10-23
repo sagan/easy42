@@ -137,64 +137,8 @@ const getStoredNodeBlocks = (): Record<string, string> => {
   return {};
 };
 
-/**
- * Helper to determine whether a link is manual (BGP-only / non-WireGuard data plane).
- */
-export function isManualLink(
-  link?: {
-    type?: string;
-    from?: { type?: string; interface?: string };
-    to?: { type?: string; interface?: string };
-    tags?: string[];
-  } | null,
-): boolean {
-  if (!link) return false;
-  // 1. Explicit link type
-  const lType = link.type?.toLowerCase().trim();
-  if (lType === "manual") return true;
-  if (lType === "wireguard") return false;
-
-  // 2. Explicit endpoint type
-  const fromType = link.from?.type?.toLowerCase().trim();
-  const toType = link.to?.type?.toLowerCase().trim();
-  if (fromType === "manual" || toType === "manual") return true;
-  if (fromType === "wireguard" && toType === "wireguard") return false;
-
-  // 3. Tags containing "manual"
-  if (link.tags && link.tags.some((t) => t.toLowerCase().trim() === "manual")) return true;
-
-  // 4. In easy42, all managed WireGuard interfaces start with "wg".
-  // If interface is specified and explicitly doesn't start with "wg", treat as manual only when type is unspecified.
-  const fromIface = link.from?.interface?.toLowerCase().trim();
-  const toIface = link.to?.interface?.toLowerCase().trim();
-  if (fromIface && !fromIface.startsWith("wg")) return true;
-  if (toIface && !toIface.startsWith("wg")) return true;
-
-  return false;
-}
-
-/**
- * Helper to determine whether a link is a WireGuard link (managed data plane).
- * Manual links and non-WireGuard links are excluded.
- */
-export function isWireGuardLink(
-  link?: {
-    type?: string;
-    from?: { type?: string; interface?: string };
-    to?: { type?: string; interface?: string };
-    tags?: string[];
-  } | null,
-): boolean {
-  if (!link) return false;
-  if (isManualLink(link)) return false;
-  const lType = link.type?.toLowerCase().trim();
-  if (lType && lType !== "wireguard") return false;
-  const fromType = link.from?.type?.toLowerCase().trim();
-  if (fromType && fromType !== "wireguard") return false;
-  const toType = link.to?.type?.toLowerCase().trim();
-  if (toType && toType !== "wireguard") return false;
-  return true;
-}
+import { isManualLink, isWireGuardLink } from "../../utils/link";
+export { isManualLink, isWireGuardLink };
 
 export interface MaximumCliqueResult {
   cliqueNodes: Set<string>;
@@ -547,6 +491,103 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = ({
           maxWidth: "calc(100vw - 32px)",
         }}
       >
+        {/* Pinned Nodes with N-Hop Depth Slider */}
+        {pinnedNodeNames.size > 0 && (
+          <Box
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              gap: 1,
+              backgroundColor: "#EEF2FF",
+              border: "1px solid #C7D2FE",
+              borderRadius: 2,
+              px: 1.25,
+              py: 0.35,
+            }}
+          >
+            <Focus size={13} color="#4F46E5" />
+            <Typography variant="caption" sx={{ fontWeight: 700, color: "#3730A3" }}>
+              Pinned: {Array.from(pinnedNodeNames).join(", ")}
+            </Typography>
+
+            {/* N-Hop Depth Slider / Button Group */}
+            <Box sx={{ display: "flex", alignItems: "center", gap: 0.25 }}>
+              <Typography variant="caption" sx={{ fontSize: "0.65rem", fontWeight: 700, color: "#6366F1", mr: 0.25 }}>
+                Depth:
+              </Typography>
+              {([1, 2, 3] as const).map((depth) => {
+                const label = depth === 1 ? "1 Hop" : depth === 2 ? "2 Hops" : "Full Path";
+                const isSelected = hopDepth === depth;
+                return (
+                  <Button
+                    key={depth}
+                    size="small"
+                    variant={isSelected ? "contained" : "text"}
+                    onClick={() => onSetHopDepth(depth)}
+                    sx={{
+                      height: 20,
+                      minWidth: "auto",
+                      px: 0.75,
+                      py: 0,
+                      fontSize: "0.65rem",
+                      fontWeight: 700,
+                      textTransform: "none",
+                      borderRadius: 1,
+                      backgroundColor: isSelected ? "#4F46E5" : "transparent",
+                      color: isSelected ? "#FFFFFF" : "#6366F1",
+                      boxShadow: "none",
+                      "&:hover": {
+                        backgroundColor: isSelected ? "#4338CA" : "rgba(79, 70, 229, 0.08)",
+                        boxShadow: "none",
+                      },
+                    }}
+                  >
+                    {label}
+                  </Button>
+                );
+              })}
+            </Box>
+
+            <Tooltip title="Clear pin & focus (Esc)">
+              <Box
+                onClick={onClearFocus}
+                sx={{
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  color: "#6366F1",
+                  ml: 0.5,
+                  "&:hover": { color: "#312E81" },
+                }}
+              >
+                <X size={13} />
+              </Box>
+            </Tooltip>
+          </Box>
+        )}
+
+        {/* Stats Indicator */}
+        {hiddenLinksCount > 0 && (
+          <Tooltip
+            title={`${hiddenLinksCount} cross-group link(s) bundled into virtual edges. Click any virtual edge badge or node to inspect.`}
+          >
+            <Chip
+              icon={<EyeOff size={13} color="#64748B" style={{ marginLeft: 6 }} />}
+              label={`${hiddenLinksCount} links bundled`}
+              size="small"
+              sx={{
+                height: 28,
+                fontSize: "0.72rem",
+                fontWeight: 600,
+                backgroundColor: "#F1F5F9",
+                color: "#475569",
+                borderRadius: 1.5,
+                border: "1px solid #E2E8F0",
+              }}
+            />
+          </Tooltip>
+        )}
+
         {/* Single "+" Dropdown Menu Button */}
         <Button
           size="small"
@@ -961,117 +1002,32 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = ({
 
         {/* Tag filter dropdown */}
         {onSelectTag && (
-          <>
-            <Divider orientation="vertical" flexItem sx={{ mx: 0.5, my: 0.5, borderColor: "#E2E8F0" }} />
-            <FormControl size="small" sx={{ minWidth: 100 }}>
-              <Select
-                value={selectedTag || "All"}
-                onChange={(e) => onSelectTag(e.target.value)}
-                sx={{
-                  height: 31,
-                  fontSize: "0.8rem",
-                  fontWeight: 500,
-                  borderRadius: 1.75,
-                  bgcolor: "#FFFFFF",
-                  "& .MuiSelect-select": {
-                    py: 0.5,
-                    px: 1.25,
-                  },
-                }}
-              >
-                <MenuItem value="All" sx={{ fontSize: "0.8rem" }}>
-                  All Tags
+          <FormControl size="small" sx={{ minWidth: 100 }}>
+            <Select
+              value={selectedTag || "All"}
+              onChange={(e) => onSelectTag(e.target.value)}
+              sx={{
+                height: 31,
+                fontSize: "0.8rem",
+                fontWeight: 500,
+                borderRadius: 1.75,
+                bgcolor: "#FFFFFF",
+                "& .MuiSelect-select": {
+                  py: 0.5,
+                  px: 1.25,
+                },
+              }}
+            >
+              <MenuItem value="All" sx={{ fontSize: "0.8rem" }}>
+                All Tags
+              </MenuItem>
+              {uniqueTags.map((t) => (
+                <MenuItem key={t} value={t} sx={{ fontSize: "0.8rem" }}>
+                  {t}
                 </MenuItem>
-                {uniqueTags.map((t) => (
-                  <MenuItem key={t} value={t} sx={{ fontSize: "0.8rem" }}>
-                    {t}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          </>
-        )}
-
-        {/* Node Focus & Collapsed Stats */}
-        {(pinnedNodeNames.size > 0 || focusedBlockName || blocksCount > 0 || lodMode) && (
-          <Divider orientation="vertical" flexItem sx={{ mx: 0.5, my: 0.5, borderColor: "#E2E8F0" }} />
-        )}
-
-        {/* Pinned Nodes with N-Hop Depth Slider */}
-        {pinnedNodeNames.size > 0 && (
-          <Box
-            sx={{
-              display: "flex",
-              alignItems: "center",
-              gap: 1,
-              backgroundColor: "#EEF2FF",
-              border: "1px solid #C7D2FE",
-              borderRadius: 2,
-              px: 1.25,
-              py: 0.35,
-            }}
-          >
-            <Focus size={13} color="#4F46E5" />
-            <Typography variant="caption" sx={{ fontWeight: 700, color: "#3730A3" }}>
-              Pinned: {Array.from(pinnedNodeNames).join(", ")}
-            </Typography>
-
-            <Divider orientation="vertical" flexItem sx={{ mx: 0.5, borderColor: "#C7D2FE" }} />
-
-            {/* N-Hop Depth Slider / Button Group */}
-            <Box sx={{ display: "flex", alignItems: "center", gap: 0.25 }}>
-              <Typography variant="caption" sx={{ fontSize: "0.65rem", fontWeight: 700, color: "#6366F1", mr: 0.25 }}>
-                Depth:
-              </Typography>
-              {([1, 2, 3] as const).map((depth) => {
-                const label = depth === 1 ? "1 Hop" : depth === 2 ? "2 Hops" : "Full Path";
-                const isSelected = hopDepth === depth;
-                return (
-                  <Button
-                    key={depth}
-                    size="small"
-                    variant={isSelected ? "contained" : "text"}
-                    onClick={() => onSetHopDepth(depth)}
-                    sx={{
-                      height: 20,
-                      minWidth: "auto",
-                      px: 0.75,
-                      py: 0,
-                      fontSize: "0.65rem",
-                      fontWeight: 700,
-                      textTransform: "none",
-                      borderRadius: 1,
-                      backgroundColor: isSelected ? "#4F46E5" : "transparent",
-                      color: isSelected ? "#FFFFFF" : "#6366F1",
-                      boxShadow: "none",
-                      "&:hover": {
-                        backgroundColor: isSelected ? "#4338CA" : "rgba(79, 70, 229, 0.08)",
-                        boxShadow: "none",
-                      },
-                    }}
-                  >
-                    {label}
-                  </Button>
-                );
-              })}
-            </Box>
-
-            <Tooltip title="Clear pin & focus (Esc)">
-              <Box
-                onClick={onClearFocus}
-                sx={{
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  color: "#6366F1",
-                  ml: 0.5,
-                  "&:hover": { color: "#312E81" },
-                }}
-              >
-                <X size={13} />
-              </Box>
-            </Tooltip>
-          </Box>
+              ))}
+            </Select>
+          </FormControl>
         )}
 
         {/* Group-Level Focus Banner */}
@@ -1109,7 +1065,7 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = ({
           </Box>
         )}
 
-        {/* Semantic Zoom LOD Dropdown Menu */}
+        {/* More options dropdown */}
         <Button
           size="small"
           variant="outlined"
@@ -1123,17 +1079,17 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = ({
             borderRadius: 1.75,
             px: 1,
             py: 0.25,
-            backgroundColor: lodMode === "micro" ? "#EFF6FF" : lodMode === "macro" ? "#F5F3FF" : "#F8FAFC",
-            color: lodMode === "micro" ? "#2563EB" : lodMode === "macro" ? "#7C3AED" : "#475569",
+            backgroundColor: "#F8FAFC",
+            color: "#475569",
             border: "1px solid",
-            borderColor: lodMode === "micro" ? "#BFDBFE" : lodMode === "macro" ? "#DDD6FE" : "#CBD5E1",
+            borderColor: "#CBD5E1",
             "&:hover": {
-              backgroundColor: lodMode === "micro" ? "#DBEAFE" : lodMode === "macro" ? "#EDE9FE" : "#F1F5F9",
-              borderColor: lodMode === "micro" ? "#93C5FD" : lodMode === "macro" ? "#C4B5FD" : "#94A3B8",
+              backgroundColor: "#F1F5F9",
+              borderColor: "#94A3B8",
             },
           }}
         >
-          LOD: {lodMode === "macro" ? "Macro" : lodMode === "micro" ? "Micro" : "Meso"}
+          More
         </Button>
 
         <Menu
@@ -1406,28 +1362,6 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = ({
             Export Diagram
           </MenuItem>
         </Menu>
-
-        {/* Stats Indicator */}
-        {hiddenLinksCount > 0 && (
-          <Tooltip
-            title={`${hiddenLinksCount} cross-group link(s) bundled into virtual edges. Click any virtual edge badge or node to inspect.`}
-          >
-            <Chip
-              icon={<EyeOff size={13} color="#64748B" style={{ marginLeft: 6 }} />}
-              label={`${hiddenLinksCount} links bundled`}
-              size="small"
-              sx={{
-                height: 28,
-                fontSize: "0.72rem",
-                fontWeight: 600,
-                backgroundColor: "#F1F5F9",
-                color: "#475569",
-                borderRadius: 1.5,
-                border: "1px solid #E2E8F0",
-              }}
-            />
-          </Tooltip>
-        )}
       </Box>
     </Panel>
   );

@@ -1058,18 +1058,26 @@ func (m *Manager) buildLink(cfg *config.Config, n1, n2 *config.Node, listenPort1
 		}
 
 		customPsk := ""
-		if lp != nil {
-			if lp.Psk != "" {
-				customPsk = strings.TrimSpace(lp.Psk)
-			} else if customFromEnd != nil && customFromEnd.Psk != "" {
-				customPsk = strings.TrimSpace(customFromEnd.Psk)
-			} else if customToEnd != nil && customToEnd.Psk != "" {
-				customPsk = strings.TrimSpace(customToEnd.Psk)
-			}
+		if lp != nil && lp.Psk != "" {
+			customPsk = strings.TrimSpace(lp.Psk)
+		} else if customFromEnd != nil && customFromEnd.Psk != "" {
+			customPsk = strings.TrimSpace(customFromEnd.Psk)
+		} else if customToEnd != nil && customToEnd.Psk != "" {
+			customPsk = strings.TrimSpace(customToEnd.Psk)
 		}
 
-		if customPsk == "__NONE__" || customPsk == "<none>" {
+		if isClearPsk(customPsk) {
 			encPsk = ""
+		} else if isGeneratePsk(customPsk) {
+			rawPsk, err := crypto.GenerateWgPsk()
+			if err != nil {
+				return nil, fmt.Errorf("failed to generate PSK: %w", err)
+			}
+			encrypted, err := m.vault.EncryptField(rawPsk)
+			if err != nil {
+				return nil, err
+			}
+			encPsk = encrypted
 		} else if customPsk != "" {
 			if dec, err := m.vault.DecryptField(customPsk); err == nil && crypto.ValidateWgKey(dec) == nil {
 				encPsk = customPsk
@@ -1999,33 +2007,47 @@ func (m *Manager) UpdateLinkWithOptions(node1Name, node2Name string, customFrom,
 		}
 	}
 
-	pskCandidate := ""
-	if fromEnd != nil && fromEnd.Psk != "" {
-		pskCandidate = strings.TrimSpace(fromEnd.Psk)
-	} else if toEnd != nil && toEnd.Psk != "" {
-		pskCandidate = strings.TrimSpace(toEnd.Psk)
-	}
+	if (fromEnd != nil && isClearPsk(fromEnd.Psk)) || (toEnd != nil && isClearPsk(toEnd.Psk)) {
+		link.Psk = ""
+		link.From.Psk = ""
+		link.To.Psk = ""
+	} else if (fromEnd != nil && isGeneratePsk(fromEnd.Psk)) || (toEnd != nil && isGeneratePsk(toEnd.Psk)) {
+		rawPsk, err := crypto.GenerateWgPsk()
+		if err != nil {
+			return nil, fmt.Errorf("failed to generate PSK: %w", err)
+		}
+		encPsk, err := m.vault.EncryptField(rawPsk)
+		if err != nil {
+			return nil, err
+		}
+		link.Psk = encPsk
+		link.From.Psk = encPsk
+		link.To.Psk = encPsk
+	} else {
+		pskCandidate := ""
+		if fromEnd != nil && fromEnd.Psk != "" && fromEnd.Psk != link.Psk && fromEnd.Psk != link.From.Psk && fromEnd.Psk != link.To.Psk {
+			pskCandidate = strings.TrimSpace(fromEnd.Psk)
+		} else if toEnd != nil && toEnd.Psk != "" && toEnd.Psk != link.Psk && toEnd.Psk != link.From.Psk && toEnd.Psk != link.To.Psk {
+			pskCandidate = strings.TrimSpace(toEnd.Psk)
+		}
 
-	if pskCandidate != "" && pskCandidate != link.Psk && pskCandidate != link.From.Psk && pskCandidate != link.To.Psk {
-		if pskCandidate == "__CLEAR__" || pskCandidate == "<clear>" {
-			link.Psk = ""
-			link.From.Psk = ""
-			link.To.Psk = ""
-		} else if dec, err := m.vault.DecryptField(pskCandidate); err == nil && crypto.ValidateWgKey(dec) == nil {
-			link.Psk = pskCandidate
-			link.From.Psk = pskCandidate
-			link.To.Psk = pskCandidate
-		} else {
-			if err := crypto.ValidateWgKey(pskCandidate); err != nil {
-				return nil, fmt.Errorf("invalid PSK: %w", err)
+		if pskCandidate != "" {
+			if dec, err := m.vault.DecryptField(pskCandidate); err == nil && crypto.ValidateWgKey(dec) == nil {
+				link.Psk = pskCandidate
+				link.From.Psk = pskCandidate
+				link.To.Psk = pskCandidate
+			} else {
+				if err := crypto.ValidateWgKey(pskCandidate); err != nil {
+					return nil, fmt.Errorf("invalid PSK: %w", err)
+				}
+				encPsk, err := m.vault.EncryptField(pskCandidate)
+				if err != nil {
+					return nil, err
+				}
+				link.Psk = encPsk
+				link.From.Psk = encPsk
+				link.To.Psk = encPsk
 			}
-			encPsk, err := m.vault.EncryptField(pskCandidate)
-			if err != nil {
-				return nil, err
-			}
-			link.Psk = encPsk
-			link.From.Psk = encPsk
-			link.To.Psk = encPsk
 		}
 	}
 
@@ -2304,6 +2326,16 @@ func (m *Manager) RevealLinkPsk(node1Name, node2Name, iface, password string) (s
 	return rawPsk, nil
 }
 
+func isClearPsk(s string) bool {
+	trimmed := strings.TrimSpace(s)
+	return trimmed == "__CLEAR__" || trimmed == "<clear>" || trimmed == "__NONE__" || trimmed == "<none>" || strings.EqualFold(trimmed, "none") || strings.EqualFold(trimmed, "clear")
+}
+
+func isGeneratePsk(s string) bool {
+	trimmed := strings.TrimSpace(s)
+	return trimmed == "__GENERATE__" || trimmed == "<generate>" || trimmed == "__AUTO__" || trimmed == "<auto>" || strings.EqualFold(trimmed, "generate") || strings.EqualFold(trimmed, "auto")
+}
+
 // ResetLinkPsk resets the link's PSK to a newly generated value or a custom provided value.
 func (m *Manager) ResetLinkPsk(node1Name, node2Name, iface, customPsk string) (string, error) {
 	m.mu.Lock()
@@ -2330,7 +2362,16 @@ func (m *Manager) ResetLinkPsk(node1Name, node2Name, iface, customPsk string) (s
 
 	trimmedCustom := strings.TrimSpace(customPsk)
 	var plaintext string
-	if trimmedCustom != "" {
+	if isClearPsk(trimmedCustom) {
+		link.Psk = ""
+		link.From.Psk = ""
+		link.To.Psk = ""
+		link.ModifiedAt = time.Now().UTC()
+		if err := m.store.Save(cfg); err != nil {
+			return "", err
+		}
+		return "", nil
+	} else if trimmedCustom != "" && !isGeneratePsk(trimmedCustom) {
 		if err := crypto.ValidateWgKey(trimmedCustom); err != nil {
 			return "", fmt.Errorf("invalid PSK: %w", err)
 		}

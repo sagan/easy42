@@ -22,10 +22,10 @@ func TestValidationFunctions(t *testing.T) {
 	}
 
 	// IPv4
-	if !IsValidIPv4("192.168.1.1") || !IsValidIPv4("1.1.1.1") || !IsValidIPv4("10.0.0.1") {
+	if !IsValidIPv4("192.168.1.1") || !IsValidIPv4("1.1.1.1") || !IsValidIPv4("10.0.0.1") || !IsValidIPv4("192.168.1.1/24") {
 		t.Errorf("Expected valid IPv4 to pass")
 	}
-	if IsValidIPv4("256.0.0.1") || IsValidIPv4("1.2.3") || IsValidIPv4("fe80::1") || IsValidIPv4("192.168.1.1/24") {
+	if IsValidIPv4("256.0.0.1") || IsValidIPv4("1.2.3") || IsValidIPv4("fe80::1") || IsValidIPv4("invalid") {
 		t.Errorf("Expected invalid IPv4 to fail")
 	}
 

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -2544,6 +2545,33 @@ func TestRevealAndResetPsk(t *testing.T) {
 	// 5. Reset with invalid custom PSK
 	if _, err := mgr.ResetLinkPsk("psk-a", "psk-b", "", "not-valid-base64-???"); err == nil {
 		t.Fatalf("Expected error resetting PSK with invalid base64")
+	}
+
+	// 6. Disable PSK via UpdateLinkWithOptions using __NONE__
+	updated, err := mgr.UpdateLinkWithOptions("psk-a", "psk-b", &config.LinkEnd{Psk: "__NONE__"}, &config.LinkEnd{Psk: "__NONE__"}, nil, nil)
+	if err != nil {
+		t.Fatalf("UpdateLinkWithOptions to disable PSK failed: %v", err)
+	}
+	if updated.Psk != "" || updated.From.Psk != "" || updated.To.Psk != "" {
+		t.Fatalf("Expected empty PSK on updated link, got link.Psk=%q from.Psk=%q to.Psk=%q", updated.Psk, updated.From.Psk, updated.To.Psk)
+	}
+
+	// Verify config.json on disk does not contain psk
+	rawCfg, err := os.ReadFile(filepath.Join(tmpDir, "config.json"))
+	if err != nil {
+		t.Fatalf("Failed to read config.json: %v", err)
+	}
+	if strings.Contains(string(rawCfg), `"psk"`) {
+		t.Fatalf("Expected config.json not to contain psk field after disabling PSK, but found it in: %s", string(rawCfg))
+	}
+
+	// 7. Re-enable PSK via __GENERATE__
+	updatedGen, err := mgr.UpdateLinkWithOptions("psk-a", "psk-b", &config.LinkEnd{Psk: "__GENERATE__"}, &config.LinkEnd{Psk: "__GENERATE__"}, nil, nil)
+	if err != nil {
+		t.Fatalf("UpdateLinkWithOptions with __GENERATE__ failed: %v", err)
+	}
+	if updatedGen.Psk == "" || updatedGen.From.Psk == "" || updatedGen.To.Psk == "" {
+		t.Fatalf("Expected newly generated PSK on link, got empty")
 	}
 }
 

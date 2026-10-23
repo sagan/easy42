@@ -548,6 +548,7 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
             <Button
               id="btn-reveal-psk"
               size="small"
+              disabled={!Boolean(link.psk || link.from.psk || link.to.psk)}
               variant="outlined"
               startIcon={<Shield size={13} />}
               onClick={() => handleOpenKeyModal("reveal_psk")}
@@ -1000,17 +1001,33 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
                       size="small"
                       variant="text"
                       onClick={() => handleOpenKeyModal("reveal_private_key", link.from.name)}
-                      sx={{ fontSize: "0.68rem", p: 0.2, minWidth: "auto", textTransform: "none", color: "#4F46E5", fontWeight: 600 }}
+                      sx={{
+                        fontSize: "0.68rem",
+                        p: 0.2,
+                        minWidth: "auto",
+                        textTransform: "none",
+                        color: "#4F46E5",
+                        fontWeight: 600,
+                      }}
                     >
                       Reveal
                     </Button>
-                    <Typography variant="caption" sx={{ color: "#CBD5E1", alignSelf: "center" }}>•</Typography>
+                    <Typography variant="caption" sx={{ color: "#CBD5E1", alignSelf: "center" }}>
+                      •
+                    </Typography>
                     <Button
                       id={`reset-privkey-${link.from.name}`}
                       size="small"
                       variant="text"
                       onClick={() => handleOpenKeyModal("reset_private_key", link.from.name)}
-                      sx={{ fontSize: "0.68rem", p: 0.2, minWidth: "auto", textTransform: "none", color: "#D97706", fontWeight: 600 }}
+                      sx={{
+                        fontSize: "0.68rem",
+                        p: 0.2,
+                        minWidth: "auto",
+                        textTransform: "none",
+                        color: "#D97706",
+                        fontWeight: 600,
+                      }}
                     >
                       Reset
                     </Button>
@@ -1594,17 +1611,33 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
                       size="small"
                       variant="text"
                       onClick={() => handleOpenKeyModal("reveal_private_key", link.to.name)}
-                      sx={{ fontSize: "0.68rem", p: 0.2, minWidth: "auto", textTransform: "none", color: "#0891B2", fontWeight: 600 }}
+                      sx={{
+                        fontSize: "0.68rem",
+                        p: 0.2,
+                        minWidth: "auto",
+                        textTransform: "none",
+                        color: "#0891B2",
+                        fontWeight: 600,
+                      }}
                     >
                       Reveal
                     </Button>
-                    <Typography variant="caption" sx={{ color: "#CBD5E1", alignSelf: "center" }}>•</Typography>
+                    <Typography variant="caption" sx={{ color: "#CBD5E1", alignSelf: "center" }}>
+                      •
+                    </Typography>
                     <Button
                       id={`reset-privkey-${link.to.name}`}
                       size="small"
                       variant="text"
                       onClick={() => handleOpenKeyModal("reset_private_key", link.to.name)}
-                      sx={{ fontSize: "0.68rem", p: 0.2, minWidth: "auto", textTransform: "none", color: "#D97706", fontWeight: 600 }}
+                      sx={{
+                        fontSize: "0.68rem",
+                        p: 0.2,
+                        minWidth: "auto",
+                        textTransform: "none",
+                        color: "#D97706",
+                        fontWeight: 600,
+                      }}
                     >
                       Reset
                     </Button>

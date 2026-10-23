@@ -149,13 +149,16 @@ export const LookingGlassModal: React.FC<LookingGlassModalProps> = ({ nodes, ini
     let queryNodes: string[] = [];
     for (const p of rawParams) {
       if (p) {
-        queryNodes.push(...p.split(",").map((s) => s.trim()).filter(Boolean));
+        queryNodes.push(
+          ...p
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean),
+        );
       }
     }
 
-    const valid = Array.from(
-      new Set(queryNodes.filter((q) => managedNodes.some((m) => m.name === q)))
-    ).sort();
+    const valid = Array.from(new Set(queryNodes.filter((q) => managedNodes.some((m) => m.name === q)))).sort();
 
     const currentParamKey = valid.length > 0 ? `node:${valid.join(",")}` : null;
 
@@ -328,9 +331,7 @@ export const LookingGlassModal: React.FC<LookingGlassModalProps> = ({ nodes, ini
   // Node selection toggles
   const handleToggleNode = (nodeName: string) => {
     setSelectedNodes((prev) => {
-      const next = prev.includes(nodeName)
-        ? prev.filter((n) => n !== nodeName)
-        : [...prev, nodeName];
+      const next = prev.includes(nodeName) ? prev.filter((n) => n !== nodeName) : [...prev, nodeName];
       return [...next].sort();
     });
   };
@@ -362,9 +363,7 @@ export const LookingGlassModal: React.FC<LookingGlassModalProps> = ({ nodes, ini
           }
         });
       }
-      lastParamNodesRef.current = newParams.has("node")
-        ? `node:${newParams.get("node")}`
-        : null;
+      lastParamNodesRef.current = newParams.has("node") ? `node:${newParams.get("node")}` : null;
       navigate({ pathname: "/looking-glass/presets", search: newParams.toString() }, { replace: true });
     } else if (activeTab === 1) {
       if (adHocTool) {
@@ -376,9 +375,7 @@ export const LookingGlassModal: React.FC<LookingGlassModalProps> = ({ nodes, ini
       if (adHocParser) {
         newParams.set("parser", adHocParser);
       }
-      lastParamNodesRef.current = newParams.has("node")
-        ? `node:${newParams.get("node")}`
-        : null;
+      lastParamNodesRef.current = newParams.has("node") ? `node:${newParams.get("node")}` : null;
       navigate({ pathname: "/looking-glass/adhoc", search: newParams.toString() }, { replace: true });
     }
 
@@ -608,9 +605,9 @@ export const LookingGlassModal: React.FC<LookingGlassModalProps> = ({ nodes, ini
                       size="small"
                       onClick={() => handleToggleNode(n.name)}
                       color={isSelected ? "primary" : "default"}
-                      variant={isSelected ? "filled" : "outlined"}
+                      variant={"filled"}
                       sx={{
-                        fontWeight: isSelected ? 600 : 400,
+                        fontWeight: 400,
                         fontSize: "0.8rem",
                         cursor: "pointer",
                         backgroundColor: isSelected ? "#4F46E5" : "#FFFFFF",
@@ -916,7 +913,10 @@ export const LookingGlassModal: React.FC<LookingGlassModalProps> = ({ nodes, ini
                             setAdHocTool("whois");
                             setAdHocCommand(`whois -h whois.dn42 ${asn}`);
                             setAdHocParser("raw");
-                            const nodeSearch = selectedNodes.length > 0 ? `?node=${encodeURIComponent([...selectedNodes].sort().join(","))}` : "";
+                            const nodeSearch =
+                              selectedNodes.length > 0
+                                ? `?node=${encodeURIComponent([...selectedNodes].sort().join(","))}`
+                                : "";
                             navigate(`/looking-glass/adhoc${nodeSearch}`);
                           }}
                         />

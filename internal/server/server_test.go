@@ -2280,3 +2280,91 @@ func TestVersionEndpoint(t *testing.T) {
 	}
 }
 
+func TestUpdateLinkPSKDisableAndRemove(t *testing.T) {
+	srv, tempDir, initPass := setupTestServer(t)
+	defer os.RemoveAll(tempDir)
+
+	// Login
+	loginBody, _ := json.Marshal(map[string]string{"password": initPass})
+	req := httptest.NewRequest("POST", "/api/auth/login", bytes.NewReader(loginBody))
+	w := httptest.NewRecorder()
+	srv.router.ServeHTTP(w, req)
+	cookie := w.Result().Cookies()[0]
+
+	// Add two nodes
+	nodeA := config.Node{Name: "n1", Host: "1.1.1.1", IP: "10.0.0.1", Interface: "lo", ASN: 4224420001}
+	nodeB := config.Node{Name: "n2", Host: "2.2.2.2", IP: "10.0.0.2", Interface: "lo", ASN: 4224420002}
+	for _, n := range []config.Node{nodeA, nodeB} {
+		b, _ := json.Marshal(n)
+		r := httptest.NewRequest("POST", "/api/nodes", bytes.NewReader(b))
+		r.AddCookie(cookie)
+		rec := httptest.NewRecorder()
+		srv.router.ServeHTTP(rec, r)
+	}
+
+	// Add WireGuard link (has auto-generated PSK)
+	addLinkReq := map[string]any{
+		"from_node": "n1",
+		"to_node":   "n2",
+		"from_port": 50001,
+		"to_port":   50002,
+	}
+	bodyAdd, _ := json.Marshal(addLinkReq)
+	reqAdd := httptest.NewRequest("POST", "/api/links", bytes.NewReader(bodyAdd))
+	reqAdd.AddCookie(cookie)
+	wAdd := httptest.NewRecorder()
+	srv.router.ServeHTTP(wAdd, reqAdd)
+	if wAdd.Code != http.StatusCreated {
+		t.Fatalf("AddLink failed: %d %s", wAdd.Code, wAdd.Body.String())
+	}
+
+	var addedLink config.Link
+	_ = json.Unmarshal(wAdd.Body.Bytes(), &addedLink)
+	if addedLink.Psk == "" {
+		t.Fatalf("Expected new WireGuard link to have PSK")
+	}
+
+	// Verify config.json has psk initially
+	cfgPath := filepath.Join(tempDir, "config.json")
+	initialCfg, err := os.ReadFile(cfgPath)
+	if err != nil {
+		t.Fatalf("Failed to read config.json: %v", err)
+	}
+	if !strings.Contains(string(initialCfg), `"psk"`) {
+		t.Fatalf("Expected config.json to contain psk initially")
+	}
+
+	// Update link to disable PSK with psk = "__NONE__" (like frontend does when unchecking PSK)
+	updateReq := map[string]any{
+		"from_node": "n1",
+		"to_node":   "n2",
+		"from":      addedLink.From,
+		"to":        addedLink.To,
+		"psk":       "__NONE__",
+	}
+	bodyUpdate, _ := json.Marshal(updateReq)
+	reqUpdate := httptest.NewRequest("PUT", "/api/links", bytes.NewReader(bodyUpdate))
+	reqUpdate.AddCookie(cookie)
+	wUpdate := httptest.NewRecorder()
+	srv.router.ServeHTTP(wUpdate, reqUpdate)
+
+	if wUpdate.Code != http.StatusOK {
+		t.Fatalf("UpdateLink to disable PSK failed: %d %s", wUpdate.Code, wUpdate.Body.String())
+	}
+
+	var updatedLink config.Link
+	_ = json.Unmarshal(wUpdate.Body.Bytes(), &updatedLink)
+	if updatedLink.Psk != "" || updatedLink.From.Psk != "" || updatedLink.To.Psk != "" {
+		t.Fatalf("Expected empty PSK on link, got link=%q from=%q to=%q", updatedLink.Psk, updatedLink.From.Psk, updatedLink.To.Psk)
+	}
+
+	// Verify config.json on disk no longer contains "psk"
+	afterCfg, err := os.ReadFile(cfgPath)
+	if err != nil {
+		t.Fatalf("Failed to read config.json after update: %v", err)
+	}
+	if strings.Contains(string(afterCfg), `"psk"`) {
+		t.Fatalf("Expected config.json not to contain psk after disabling, got:\n%s", string(afterCfg))
+	}
+}
+
