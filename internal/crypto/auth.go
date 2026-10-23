@@ -19,12 +19,12 @@ const (
 	argonSaltLength  = 16
 )
 
-// GenerateRandomPassword generates a strong random password of [a-zA-Z0-9]{22}
-func GenerateRandomPassword() (string, error) {
+// GenerateRandomPassword generates a random password of [a-zA-Z0-9]{length}
+func GenerateRandomPassword(length int) (string, error) {
 	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-	result := make([]byte, 22)
+	result := make([]byte, length)
 	maxIdx := big.NewInt(int64(len(charset)))
-	for i := 0; i < 22; i++ {
+	for i := range length {
 		num, err := rand.Int(rand.Reader, maxIdx)
 		if err != nil {
 			return "", fmt.Errorf("failed to generate random byte: %w", err)

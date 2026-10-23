@@ -7,12 +7,13 @@ import (
 )
 
 func TestPasswordHashingAndVerification(t *testing.T) {
-	password, err := GenerateRandomPassword()
+	const length = 32
+	password, err := GenerateRandomPassword(length)
 	if err != nil {
 		t.Fatalf("GenerateRandomPassword failed: %v", err)
 	}
-	if len(password) != 22 {
-		t.Fatalf("Expected password len 22, got %d", len(password))
+	if len(password) != length {
+		t.Fatalf("Expected password len %d, got %d", length, len(password))
 	}
 
 	hash, err := HashPassword(password)

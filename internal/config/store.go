@@ -64,7 +64,7 @@ func (s *Store) Initialize() (string, error) {
 		return "", fmt.Errorf("failed to create data dir: %w", err)
 	}
 
-	rawPassword, err := crypto.GenerateRandomPassword()
+	rawPassword, err := crypto.GenerateRandomPassword(32)
 	if err != nil {
 		return "", fmt.Errorf("failed to generate random password: %w", err)
 	}
