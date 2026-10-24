@@ -4,6 +4,7 @@ import { Box, Typography } from "@mui/material";
 import { Link } from "../../types/api";
 import { getEffectiveLinkCost } from "../../utils/cost";
 import { isManualLink } from "../../utils/link";
+import { LinkCentralityInfo } from "../../utils/graphCentrality";
 
 export type LinkWorkingState = "working" | "not_working" | "unknown";
 
@@ -27,6 +28,8 @@ export interface CustomEdgeData {
   isHighlighted?: boolean;
   isDimmed?: boolean;
   zoomLevel?: number;
+  centralityInfo?: LinkCentralityInfo;
+  isCentralityActive?: boolean;
   [key: string]: unknown;
 }
 
@@ -281,7 +284,21 @@ export const CustomEdge: React.FC<EdgeProps> = ({
     }
   }
 
-  const shouldRenderPill = (!isSubtle || isHighlighted || isHovered || isGhostDrag) && !isDimmed;
+  const centralityInfo = edgeData?.centralityInfo;
+  const isCentralityActive = Boolean(edgeData?.isCentralityActive);
+  const isCoreLink = Boolean(isCentralityActive && centralityInfo?.isCore);
+
+  if (isCentralityActive && centralityInfo && !isDimmed && !isGhostDrag) {
+    strokeWidth = Math.max(strokeWidth, centralityInfo.strokeWidth);
+    if (isCoreLink) {
+      if (!isExternal && !isManual && workingState !== "not_working") {
+        strokeColor = "#059669";
+      }
+      edgeOpacity = Math.max(edgeOpacity, 0.95);
+    }
+  }
+
+  const shouldRenderPill = (!isSubtle || isHighlighted || isHovered || isGhostDrag || (isCentralityActive && isCoreLink)) && !isDimmed;
 
   return (
     <>
@@ -518,6 +535,27 @@ export const CustomEdge: React.FC<EdgeProps> = ({
                   {workingState === "working" && !isManual && "⚡"}
                   {statusText}
                 </Box>
+
+                {isCentralityActive && centralityInfo && (
+                  <Box
+                    sx={{
+                      fontSize: "0.58rem",
+                      fontWeight: 800,
+                      color: isCoreLink ? "#047857" : "#64748B",
+                      borderRadius: 0.75,
+                      px: 0.45,
+                      py: 0.1,
+                      backgroundColor: isCoreLink ? "#ECFDF5" : "#F1F5F9",
+                      border: isCoreLink ? "1px solid #A7F3D0" : "1px solid #E2E8F0",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 0.2,
+                    }}
+                    title={`Transit Shortest-Path Rank #${centralityInfo.rank} (Centrality: ${(centralityInfo.normalizedScore * 100).toFixed(0)}%)`}
+                  >
+                    {isCoreLink ? "CORE" : `#${centralityInfo.rank}`}
+                  </Box>
+                )}
               </>
             ) : (
               <Typography variant="caption" sx={{ fontSize: "0.7rem", color: "#64748B" }}>

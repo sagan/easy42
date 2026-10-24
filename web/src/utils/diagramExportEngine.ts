@@ -1,6 +1,7 @@
 import { Node, Link, NetworkPolicy, GraphBlock } from "../types/api";
 import { getEffectiveLinkCost } from "./cost";
 import { isManualLink } from "./link";
+import { calculateGraphCentrality, getLinkId, CentralityMetric, WeightingMode } from "./graphCentrality";
 
 export type NodeNameSource = "name" | "caption" | "none";
 export type NodeIpSource = "main" | "external" | "none";
@@ -16,6 +17,9 @@ export interface DiagramExportOptions {
   displayExternalNodes: boolean;
   diagramTitle?: string;
   format: ExportFormat;
+  emphasizeCentrality?: boolean;
+  centralityMetric?: CentralityMetric;
+  centralityWeighting?: WeightingMode;
 }
 
 const BLOCK_PALETTE: Record<string, string> = {
@@ -98,6 +102,7 @@ export function computeDeterministicNodePositions(
   nodes: Node[],
   cardWidth: number = 180,
   cardHeight: number = 64,
+  nodeScales?: Map<string, number>,
 ): Map<string, NodePosition> {
   const sorted = [...nodes].sort((a, b) => a.name.localeCompare(b.name));
   const total = sorted.length;
@@ -120,16 +125,20 @@ export function computeDeterministicNodePositions(
       cy = total === 1 ? centerY : Math.round(centerY + radius * Math.sin(angle));
     }
 
-    const cardX = Math.round(cx - cardWidth / 2);
-    const cardY = Math.round(cy - cardHeight / 2);
+    const scale = nodeScales?.get(node.name) ?? 1.0;
+    const w = Math.round(cardWidth * scale);
+    const h = Math.round(cardHeight * scale);
+
+    const cardX = Math.round(cx - w / 2);
+    const cardY = Math.round(cy - h / 2);
 
     positions.set(node.name, {
       cardX,
       cardY,
       centerX: cx,
       centerY: cy,
-      width: cardWidth,
-      height: cardHeight,
+      width: w,
+      height: h,
     });
   });
 
@@ -167,7 +176,22 @@ export function generateTopologySvg(
   const effectiveNodeNames = new Set(effectiveNodes.map((n) => n.name));
   const effectiveLinks = links.filter((l) => effectiveNodeNames.has(l.from.name) && effectiveNodeNames.has(l.to.name));
 
-  const nodePositions = computeDeterministicNodePositions(effectiveNodes, CARD_W, CARD_H);
+  // Compute graph centrality metrics for nodes and links
+  const centralityResult = calculateGraphCentrality(effectiveNodes, effectiveLinks, {
+    metric: options.centralityMetric || "betweenness",
+    weighting: options.centralityWeighting || "weighted",
+    networkPolicies,
+  });
+
+  const nodeScales = new Map<string, number>();
+  if (options.emphasizeCentrality !== false) {
+    effectiveNodes.forEach((n) => {
+      const c = centralityResult.nodes.get(n.name);
+      if (c) nodeScales.set(n.name, c.scale);
+    });
+  }
+
+  const nodePositions = computeDeterministicNodePositions(effectiveNodes, CARD_W, CARD_H, nodeScales);
   const nodeMap = new Map<string, Node>();
   effectiveNodes.forEach((n) => nodeMap.set(n.name, n));
 
@@ -368,6 +392,14 @@ export function generateTopologySvg(
       const isExternal = Boolean(nodeFrom?.is_external || nodeTo?.is_external);
       const isManual = isManualLink(link);
 
+      const linkId = getLinkId(link);
+      const linkCentrality = centralityResult.links.get(linkId);
+      const isCoreLink = Boolean(options.emphasizeCentrality !== false && linkCentrality?.isCore);
+      const strokeWidth =
+        options.emphasizeCentrality !== false && linkCentrality ? linkCentrality.strokeWidth : 2;
+      const strokeOpacity =
+        options.emphasizeCentrality !== false && linkCentrality ? linkCentrality.opacity : 0.85;
+
       let strokeColor = "#10B981"; // Emerald
       let strokeDash = "";
       if (isManual) {
@@ -376,6 +408,8 @@ export function generateTopologySvg(
       } else if (isExternal) {
         strokeColor = "#8B5CF6"; // Violet
         strokeDash = 'stroke-dasharray="6 4"';
+      } else if (isCoreLink) {
+        strokeColor = "#059669"; // Deeper rich emerald for backbone transit links
       }
 
       let pathD = "";
@@ -404,7 +438,7 @@ export function generateTopologySvg(
         labelY = Math.round((ay + by) / 2);
       }
 
-      linksSvg += `    <path d="${pathD}" fill="none" stroke="${strokeColor}" stroke-width="2" stroke-linecap="round" stroke-opacity="0.85" ${strokeDash} />\n`;
+      linksSvg += `    <path d="${pathD}" fill="none" stroke="${strokeColor}" stroke-width="${strokeWidth.toFixed(1)}" stroke-linecap="round" stroke-opacity="${strokeOpacity.toFixed(2)}" ${strokeDash} />\n`;
 
       if (options.displayLinkCost) {
         const fromIsRemoteExternal = Boolean(nodeTo?.is_external);
@@ -460,26 +494,49 @@ export function generateTopologySvg(
     const isExternal = Boolean(node.is_external);
     const isRR = Boolean(node.route_reflector);
 
-    const borderColor = isExternal ? "#A855F7" : isRR ? "#6366F1" : "#CBD5E1";
-    const borderDash = isExternal ? 'stroke-dasharray="5 3"' : "";
-    const dotColor = isExternal ? "#A855F7" : isRR ? "#6366F1" : "#10B981";
+    const nodeCentrality = centralityResult.nodes.get(node.name);
+    const isCoreNode = Boolean(options.emphasizeCentrality !== false && nodeCentrality?.isCore);
+    const borderWidth =
+      options.emphasizeCentrality !== false && nodeCentrality
+        ? Math.max(isRR ? 2.5 : 1.5, nodeCentrality.borderWidth)
+        : isRR
+          ? 2
+          : 1.5;
 
+    let borderColor = isExternal ? "#A855F7" : isRR ? "#6366F1" : "#CBD5E1";
+    if (isCoreNode && !isExternal && !isRR) {
+      borderColor = "#059669";
+    }
+    const borderDash = isExternal ? 'stroke-dasharray="5 3"' : "";
+    const dotColor = isExternal ? "#A855F7" : isRR ? "#6366F1" : isCoreNode ? "#059669" : "#10B981";
+
+    let rightOffset = 10;
     let extBadgeSvg = "";
     if (isExternal) {
-      extBadgeSvg = `      <rect x="${pos.cardX + pos.width - 42}" y="${pos.cardY + 10}" width="32" height="16" rx="4" fill="#FAF5FF" stroke="#DDD6FE" stroke-width="1" />
-      <text x="${pos.cardX + pos.width - 26}" y="${pos.cardY + 21.5}" font-size="8.5" font-family="ui-monospace, monospace" font-weight="700" fill="#7C3AED" text-anchor="middle">EXT</text>\n`;
+      rightOffset += 32;
+      extBadgeSvg = `      <rect x="${pos.cardX + pos.width - rightOffset}" y="${pos.cardY + 10}" width="32" height="16" rx="4" fill="#FAF5FF" stroke="#DDD6FE" stroke-width="1" />
+      <text x="${pos.cardX + pos.width - rightOffset + 16}" y="${pos.cardY + 21.5}" font-size="8.5" font-family="ui-monospace, monospace" font-weight="700" fill="#7C3AED" text-anchor="middle">EXT</text>\n`;
+      rightOffset += 6;
     }
 
     let rrBadgeSvg = "";
     if (isRR) {
-      const rrOffset = isExternal ? 74 : 38;
-      rrBadgeSvg = `      <rect x="${pos.cardX + pos.width - rrOffset}" y="${pos.cardY + 10}" width="26" height="16" rx="4" fill="#EEF2FF" stroke="#C7D2FE" stroke-width="1" />
-      <text x="${pos.cardX + pos.width - rrOffset + 13}" y="${pos.cardY + 21.5}" font-size="8.5" font-family="ui-monospace, monospace" font-weight="800" fill="#4338CA" text-anchor="middle">RR</text>\n`;
+      rightOffset += 26;
+      rrBadgeSvg = `      <rect x="${pos.cardX + pos.width - rightOffset}" y="${pos.cardY + 10}" width="26" height="16" rx="4" fill="#EEF2FF" stroke="#C7D2FE" stroke-width="1" />
+      <text x="${pos.cardX + pos.width - rightOffset + 13}" y="${pos.cardY + 21.5}" font-size="8.5" font-family="ui-monospace, monospace" font-weight="800" fill="#4338CA" text-anchor="middle">RR</text>\n`;
+      rightOffset += 6;
+    }
+
+    let coreBadgeSvg = "";
+    if (isCoreNode) {
+      rightOffset += 40;
+      coreBadgeSvg = `      <rect x="${pos.cardX + pos.width - rightOffset}" y="${pos.cardY + 10}" width="40" height="16" rx="4" fill="#ECFDF5" stroke="#A7F3D0" stroke-width="1" />
+      <text x="${pos.cardX + pos.width - rightOffset + 20}" y="${pos.cardY + 21.5}" font-size="8.5" font-family="ui-monospace, monospace" font-weight="800" fill="#047857" text-anchor="middle">CORE</text>\n`;
     }
 
     nodesSvg += `    <g class="node-card" id="node-${escapeXml(node.name)}">
       <!-- Card background -->
-      <rect x="${pos.cardX}" y="${pos.cardY}" width="${pos.width}" height="${pos.height}" rx="10" fill="#FFFFFF" stroke="${borderColor}" stroke-width="${isRR ? 2 : 1.5}" ${borderDash} filter="url(#card-shadow)" />
+      <rect x="${pos.cardX}" y="${pos.cardY}" width="${pos.width}" height="${pos.height}" rx="10" fill="#FFFFFF" stroke="${borderColor}" stroke-width="${borderWidth.toFixed(1)}" ${borderDash} filter="url(#card-shadow)" />
       
       <!-- Status indicator dot -->
       <circle cx="${pos.cardX + 16}" cy="${pos.cardY + 22}" r="4.5" fill="${dotColor}" />
@@ -488,6 +545,7 @@ export function generateTopologySvg(
       <text x="${pos.cardX + 27}" y="${pos.cardY + 26}" font-size="12.5" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-weight="700" fill="#0F172A">${escapeXml(nameText)}</text>
       ${extBadgeSvg}
       ${rrBadgeSvg}
+      ${coreBadgeSvg}
       <!-- Divider -->
       <line x1="${pos.cardX + 12}" y1="${pos.cardY + 36}" x2="${pos.cardX + pos.width - 12}" y2="${pos.cardY + 36}" stroke="#F1F5F9" stroke-width="1" />
 
@@ -502,6 +560,12 @@ export function generateTopologySvg(
   const legendRight = viewBoxX + viewBoxW - PADDING;
   const hasExternalNodes = effectiveNodes.some((n) => n.is_external);
   const hasRRNodes = effectiveNodes.some((n) => n.route_reflector);
+  const hasCoreNodes =
+    options.emphasizeCentrality !== false &&
+    Array.from(centralityResult.nodes.values()).some((n) => n.isCore);
+  const hasCoreLinks =
+    options.emphasizeCentrality !== false &&
+    Array.from(centralityResult.links.values()).some((l) => l.isCore);
 
   const legendItems: string[] = [];
   let curOffset = 0;
@@ -510,6 +574,14 @@ export function generateTopologySvg(
   legendItems.push(`<circle cx="${curOffset + 6}" cy="6" r="4" fill="#10B981" />
       <text x="${curOffset + 15}" y="9.5" font-size="10" font-family="sans-serif" font-weight="600" fill="#475569">Internal</text>`);
   curOffset += 68;
+
+  // Core Node (only if emphasizeCentrality and core nodes present)
+  if (hasCoreNodes) {
+    legendItems.push(`<rect x="${curOffset + 4}" y="0" width="28" height="12" rx="3" fill="#ECFDF5" stroke="#A7F3D0" stroke-width="1" />
+      <text x="${curOffset + 18}" y="9" font-size="7" font-family="monospace" font-weight="800" fill="#047857" text-anchor="middle">CORE</text>
+      <text x="${curOffset + 38}" y="9.5" font-size="10" font-family="sans-serif" font-weight="600" fill="#475569">Core Node</text>`);
+    curOffset += 96;
+  }
 
   // External (only if present in diagram)
   if (hasExternalNodes) {
@@ -531,6 +603,13 @@ export function generateTopologySvg(
       <text x="${curOffset + 31}" y="9.5" font-size="10" font-family="sans-serif" font-weight="600" fill="#475569">WireGuard</text>`);
   curOffset += 94;
 
+  // Backbone link
+  if (hasCoreLinks) {
+    legendItems.push(`<line x1="${curOffset + 6}" y1="6" x2="${curOffset + 24}" y2="6" stroke="#059669" stroke-width="4.5" stroke-linecap="round" />
+      <text x="${curOffset + 31}" y="9.5" font-size="10" font-family="sans-serif" font-weight="600" fill="#475569">Backbone</text>`);
+    curOffset += 92;
+  }
+
   // Group
   if (computedBlocks.length > 0) {
     legendItems.push(`<rect x="${curOffset + 6}" y="0" width="16" height="12" rx="3" fill="#6366F1" fill-opacity="0.1" stroke="#6366F1" stroke-width="1.2" stroke-dasharray="3 2" />
@@ -542,7 +621,11 @@ export function generateTopologySvg(
 
   const groupText =
     computedBlocks.length > 0 ? ` · ${computedBlocks.length} group${computedBlocks.length === 1 ? "" : "s"}` : "";
-  const mainStatsText = `${internalNodes.length} nodes · ${internalLinks.length} links${groupText}`;
+  const centralityLabel =
+    options.emphasizeCentrality !== false
+      ? ` · ${options.centralityMetric === "degree" ? "Degree Centrality" : "Betweenness Centrality"}`
+      : "";
+  const mainStatsText = `${internalNodes.length} nodes · ${internalLinks.length} links${groupText}${centralityLabel}`;
 
   let externalStatsSvg = "";
   if (hasExternalElements) {

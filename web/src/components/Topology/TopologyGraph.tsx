@@ -49,6 +49,7 @@ import {
   FoldVertical,
   Check,
   Download,
+  Activity,
 } from "lucide-react";
 import { NodeCard } from "./NodeCard";
 import { CustomEdge } from "./CustomEdge";
@@ -58,12 +59,14 @@ import { ExportDiagramModal } from "./ExportDiagramModal";
 import { Node, Link, NodeStatus, NetworkState, GraphBlock, NetworkPolicy } from "../../types/api";
 import { api } from "../../api/client";
 import { getEffectiveLinkCost } from "../../utils/cost";
+import { calculateGraphCentrality } from "../../utils/graphCentrality";
 
 const STORAGE_KEY_VIEWPORT = "easy42_graph_viewport";
 const STORAGE_KEY_ZOOM = "easy42_graph_zoom";
 const STORAGE_KEY_BLOCKS = "easy42_graph_blocks_v1";
 const STORAGE_KEY_NODE_BLOCKS = "easy42_node_blocks_v1";
 const STORAGE_KEY_EXPANDED_PAIRS = "easy42_expanded_virtual_edge_pairs_v1";
+const STORAGE_KEY_CENTRALITY_VIEW = "easy42_topology_centrality_view";
 
 const getStoredExpandedPairs = (): Set<string> => {
   try {
@@ -384,6 +387,8 @@ interface FloatingToolbarProps {
   onExpandAllGroups?: () => void;
   onCollapseAllGroups?: () => void;
   onOpenExportDiagram?: () => void;
+  centralityViewEnabled?: boolean;
+  onToggleCentralityView?: () => void;
 }
 
 const FloatingToolbar: React.FC<FloatingToolbarProps> = ({
@@ -412,6 +417,8 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = ({
   onExpandAllGroups,
   onCollapseAllGroups,
   onOpenExportDiagram,
+  centralityViewEnabled = false,
+  onToggleCentralityView,
 }) => {
   const { fitView, zoomTo } = useReactFlow();
   const [addMenuAnchor, setAddMenuAnchor] = useState<null | HTMLElement>(null);
@@ -1065,6 +1072,41 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = ({
           </Box>
         )}
 
+        {/* Core Elements / Centrality Toggle */}
+        <Tooltip
+          title={
+            centralityViewEnabled
+              ? "Disable Centrality View"
+              : "Enable Centrality View (highlight core transit nodes & backbone links)"
+          }
+        >
+          <Button
+            size="small"
+            variant={centralityViewEnabled ? "contained" : "outlined"}
+            onClick={onToggleCentralityView}
+            startIcon={<Activity size={13} />}
+            sx={{
+              height: 28,
+              fontSize: "0.72rem",
+              fontWeight: 700,
+              textTransform: "none",
+              borderRadius: 1.75,
+              px: 1,
+              py: 0.25,
+              backgroundColor: centralityViewEnabled ? "#059669" : "#F8FAFC",
+              color: centralityViewEnabled ? "#FFFFFF" : "#334155",
+              borderColor: centralityViewEnabled ? "#059669" : "#CBD5E1",
+              boxShadow: centralityViewEnabled ? "0 2px 4px rgba(5, 150, 105, 0.2)" : "none",
+              "&:hover": {
+                backgroundColor: centralityViewEnabled ? "#047857" : "#F1F5F9",
+                borderColor: centralityViewEnabled ? "#047857" : "#94A3B8",
+              },
+            }}
+          >
+            Core View
+          </Button>
+        </Tooltip>
+
         {/* More options dropdown */}
         <Button
           size="small"
@@ -1338,6 +1380,39 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = ({
             </>
           )}
 
+          <MenuItem
+            onClick={() => {
+              setLodMenuAnchor(null);
+              onToggleCentralityView?.();
+            }}
+            sx={{
+              borderRadius: 1.25,
+              py: 0.75,
+              px: 1,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              fontSize: "0.82rem",
+              fontWeight: centralityViewEnabled ? 700 : 500,
+              color: centralityViewEnabled ? "#047857" : "#1E293B",
+              backgroundColor: centralityViewEnabled ? "rgba(16, 185, 129, 0.08)" : "transparent",
+              "&:hover": { bgcolor: "#ECFDF5" },
+            }}
+          >
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1.25 }}>
+              <Activity size={15} color={centralityViewEnabled ? "#047857" : "#64748B"} />
+              <Box>
+                <Typography sx={{ fontSize: "0.82rem", fontWeight: centralityViewEnabled ? 700 : 600 }}>
+                  Centrality View
+                </Typography>
+                <Typography variant="caption" sx={{ fontSize: "0.7rem", color: "#64748B", display: "block" }}>
+                  Highlight core transit nodes &amp; links
+                </Typography>
+              </Box>
+            </Box>
+            {centralityViewEnabled && <Check size={15} color="#047857" />}
+          </MenuItem>
+
           <Divider sx={{ my: 0.75, borderColor: "#E2E8F0" }} />
 
           <MenuItem
@@ -1410,6 +1485,32 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
   });
   const [expandedVirtualEdgePairs, setExpandedVirtualEdgePairs] = useState<Set<string>>(getStoredExpandedPairs);
   const [exportDiagramOpen, setExportDiagramOpen] = useState(false);
+  const [centralityViewEnabled, setCentralityViewEnabled] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(STORAGE_KEY_CENTRALITY_VIEW) === "true";
+    } catch {
+      return false;
+    }
+  });
+
+  // Automatically synchronize centrality view state to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY_CENTRALITY_VIEW, String(centralityViewEnabled));
+    } catch (e) {
+      console.error("Failed to persist centralityViewEnabled to localStorage", e);
+    }
+  }, [centralityViewEnabled]);
+
+  // Compute graph theory centrality metrics when centrality view is enabled
+  const centralityResult = useMemo(() => {
+    if (!centralityViewEnabled) return null;
+    return calculateGraphCentrality(nodes, links, {
+      metric: "betweenness",
+      weighting: "weighted",
+      networkPolicies,
+    });
+  }, [nodes, links, networkPolicies, centralityViewEnabled]);
 
   // Automatically synchronize expanded virtual edge pairs to browser localStorage
   useEffect(() => {
@@ -2041,6 +2142,8 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
           totalLinksCount: linkCounts.total,
           intraBlockLinksCount: linkCounts.intra,
           interBlockLinksCount: linkCounts.inter,
+          centralityInfo: centralityResult?.nodes.get(node.name),
+          isCentralityActive: centralityViewEnabled,
           onSelect: onSelectNode,
           onRefreshNode,
           refreshingNodeName,
@@ -2063,6 +2166,8 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
     activeFocusNodeSet,
     lodMode,
     nodeLinksCountMap,
+    centralityResult,
+    centralityViewEnabled,
     onSelectNode,
     onRefreshNode,
     refreshingNodeName,
@@ -2238,13 +2343,15 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
       const isHighlighted = Boolean(activeFocusEdgeSet?.has(edgeId) || isGhostDrag);
       const isDimmed = Boolean(activeFocusEdgeSet && !activeFocusEdgeSet.has(edgeId) && !isGhostDrag);
       const isSubtle = Boolean((isIntraBlock || isExpandedInterBlock) && !isHighlighted && !isGhostDrag);
+      const linkCentrality = centralityResult?.links.get(edgeId);
+      const isCoreLink = Boolean(centralityViewEnabled && linkCentrality?.isCore);
 
       return {
         id: edgeId,
         source: link.from.name,
         target: link.to.name,
         type: "customEdge",
-        zIndex: isHighlighted || isGhostDrag ? 100 : isSubtle ? 2 : 5,
+        zIndex: isHighlighted || isGhostDrag ? 100 : isCoreLink ? 20 : isSubtle ? 2 : 5,
         data: {
           link,
           workingState,
@@ -2266,6 +2373,8 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
           isHighlighted,
           isDimmed,
           zoomLevel: currentZoom,
+          centralityInfo: linkCentrality,
+          isCentralityActive: centralityViewEnabled,
           onSelect: onSelectLink,
         } as unknown as Record<string, unknown>,
       };
@@ -2285,6 +2394,8 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
     activeFocusEdgeSet,
     draggingNodeId,
     currentZoom,
+    centralityResult,
+    centralityViewEnabled,
     handleToggleExpandBundle,
     nodeStatuses,
   ]);
@@ -2682,6 +2793,8 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
           onExpandAllGroups={handleExpandAllGroups}
           onCollapseAllGroups={handleCollapseAllGroups}
           onOpenExportDiagram={() => setExportDiagramOpen(true)}
+          centralityViewEnabled={centralityViewEnabled}
+          onToggleCentralityView={() => setCentralityViewEnabled((v) => !v)}
         />
 
         <Background variant={BackgroundVariant.Dots} gap={20} size={1.2} color="#CBD5E1" />

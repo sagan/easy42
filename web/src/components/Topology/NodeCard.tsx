@@ -18,6 +18,7 @@ import {
   Radio,
 } from "lucide-react";
 import { Node, NodeStatus } from "../../types/api";
+import { NodeCentralityInfo } from "../../utils/graphCentrality";
 
 const formatBytes = (bytes?: number): string => {
   if (!bytes || isNaN(bytes) || bytes <= 0) return "0B";
@@ -58,6 +59,8 @@ export interface NodeData {
   totalLinksCount?: number;
   intraBlockLinksCount?: number;
   interBlockLinksCount?: number;
+  centralityInfo?: NodeCentralityInfo;
+  isCentralityActive?: boolean;
   onSelect?: (node: Node) => void;
   onRefreshNode?: (nodeName: string) => void;
   refreshingNodeName?: string | null;
@@ -82,6 +85,8 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
     totalLinksCount = 0,
     intraBlockLinksCount = 0,
     interBlockLinksCount = 0,
+    centralityInfo,
+    isCentralityActive = false,
     onRefreshNode,
     refreshingNodeName,
   } = nodeData;
@@ -92,6 +97,7 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
   const isAgentMode = status?.mode === "agent" || isAgentConfigured;
   const isAgentWorking = isAgentMode && isOnline && !isExternal;
   const isRouteReflector = Boolean(node.route_reflector);
+  const isCore = Boolean(isCentralityActive && centralityInfo?.isCore);
 
   // Macro View: Simplified compact node representation
   if (lodMode === "macro") {
@@ -109,13 +115,17 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
                 ? "1.5px solid #EF4444"
                 : isRouteReflector
                   ? "1.5px solid #6366F1"
-                  : "1.5px solid #CBD5E1",
+                  : isCore
+                    ? "2px solid #059669"
+                    : "1.5px solid #CBD5E1",
           borderRadius: 2,
           boxShadow: isFocused || isHighlighted
             ? "0 0 0 3px rgba(79, 70, 229, 0.25)"
-            : isRouteReflector
-              ? "0 0 0 1px rgba(99, 102, 241, 0.3), 0 2px 6px rgba(99, 102, 241, 0.15)"
-              : "0 2px 6px rgba(0,0,0,0.06)",
+            : isCore
+              ? "0 0 0 2px rgba(16, 185, 129, 0.25), 0 2px 6px rgba(16, 185, 129, 0.15)"
+              : isRouteReflector
+                ? "0 0 0 1px rgba(99, 102, 241, 0.3), 0 2px 6px rgba(99, 102, 241, 0.15)"
+                : "0 2px 6px rgba(0,0,0,0.06)",
           display: "flex",
           alignItems: "center",
           px: 1,
@@ -142,13 +152,32 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
             width: 8,
             height: 8,
             borderRadius: "50%",
-            backgroundColor: isExternal ? "#8B5CF6" : isOnline ? "#10B981" : "#EF4444",
+            backgroundColor: isExternal ? "#8B5CF6" : isOnline ? (isCore ? "#059669" : "#10B981") : "#EF4444",
             flexShrink: 0,
           }}
         />
         <Typography variant="caption" noWrap sx={{ fontWeight: 700, color: "#0F172A", fontSize: "0.75rem", flex: 1 }}>
           {node.name}
         </Typography>
+        {isCore && (
+          <Tooltip title={`Transit Core Router (#${centralityInfo?.rank})`}>
+            <Chip
+              label="CORE"
+              size="small"
+              sx={{
+                height: 17,
+                fontSize: "0.58rem",
+                fontWeight: 800,
+                backgroundColor: "#ECFDF5",
+                color: "#047857",
+                border: "1px solid #A7F3D0",
+                borderRadius: 0.75,
+                px: 0,
+                "& .MuiChip-label": { px: 0.4 },
+              }}
+            />
+          </Tooltip>
+        )}
         {isRouteReflector && (
           <Tooltip title="BGP Route Reflector">
             <Chip
@@ -205,44 +234,54 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
             : inBlock
               ? isBlockFullMesh
                 ? isHealthy
-                  ? `2px solid ${blockColor || "#6366F1"}`
+                  ? isCore
+                    ? `2.5px solid ${blockColor || "#059669"}`
+                    : `2px solid ${blockColor || "#6366F1"}`
                   : "2px solid #EF4444"
                 : isHealthy
-                  ? "2px dashed #94A3B8"
+                  ? isCore
+                    ? "2.5px solid #059669"
+                    : "2px dashed #94A3B8"
                   : "2px dashed #EF4444"
               : !isOnline
                 ? "1.5px solid #EF4444"
                 : isRouteReflector
-                  ? "1.5px solid #6366F1"
-                  : isAgentWorking
-                    ? "1.5px solid #10B981"
-                    : "1.5px solid #E2E8F0",
+                  ? "2px solid #6366F1"
+                  : isCore
+                    ? "2.5px solid #059669"
+                    : isAgentWorking
+                      ? "1.5px solid #10B981"
+                      : "1.5px solid #E2E8F0",
         borderTop:
           inBlock && isBlockFullMesh
             ? `4px solid ${isFocused || isHighlighted ? "#4F46E5" : !isHealthy ? "#EF4444" : blockColor || "#6366F1"}`
             : isRouteReflector
               ? "3.5px solid #4F46E5"
-              : isAgentWorking && (!inBlock || !isBlockFullMesh)
-                ? "3px solid #10B981"
-                : undefined,
+              : isCore
+                ? "3.5px solid #059669"
+                : isAgentWorking && (!inBlock || !isBlockFullMesh)
+                  ? "3px solid #10B981"
+                  : undefined,
         borderRadius: 2.5,
         opacity: isDimmed ? 0.3 : 1,
         filter: isDimmed ? "grayscale(40%)" : "none",
         boxShadow: isFocused || isHighlighted
           ? "0 0 0 3px rgba(79, 70, 229, 0.25), 0 12px 28px rgba(79, 70, 229, 0.2)"
-          : inBlock && isBlockFullMesh && isHealthy
-            ? `0 4px 14px ${blockColor || "#6366F1"}25, 0 1px 3px rgba(0, 0, 0, 0.05)`
-            : inBlock && !isHealthy
-              ? "0 4px 14px rgba(239, 68, 68, 0.15), 0 1px 3px rgba(239, 68, 68, 0.08)"
-              : isExternal
-                ? "0 4px 6px -1px rgba(139, 92, 246, 0.08), 0 2px 4px -2px rgba(139, 92, 246, 0.05)"
-                : !isOnline
-                  ? "0 4px 10px rgba(239, 68, 68, 0.15), 0 2px 4px rgba(239, 68, 68, 0.1)"
-                  : isRouteReflector
-                    ? "0 4px 14px rgba(79, 70, 229, 0.15), 0 2px 5px rgba(79, 70, 229, 0.08)"
-                    : isAgentWorking
-                      ? "0 4px 12px -1px rgba(16, 185, 129, 0.12), 0 2px 4px -2px rgba(16, 185, 129, 0.08)"
-                      : "0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05)",
+          : isCore
+            ? "0 0 0 2px rgba(16, 185, 129, 0.25), 0 8px 20px rgba(16, 185, 129, 0.15)"
+            : inBlock && isBlockFullMesh && isHealthy
+              ? `0 4px 14px ${blockColor || "#6366F1"}25, 0 1px 3px rgba(0, 0, 0, 0.05)`
+              : inBlock && !isHealthy
+                ? "0 4px 14px rgba(239, 68, 68, 0.15), 0 1px 3px rgba(239, 68, 68, 0.08)"
+                : isExternal
+                  ? "0 4px 6px -1px rgba(139, 92, 246, 0.08), 0 2px 4px -2px rgba(139, 92, 246, 0.05)"
+                  : !isOnline
+                    ? "0 4px 10px rgba(239, 68, 68, 0.15), 0 2px 4px rgba(239, 68, 68, 0.1)"
+                    : isRouteReflector
+                      ? "0 4px 14px rgba(79, 70, 229, 0.15), 0 2px 5px rgba(79, 70, 229, 0.08)"
+                      : isAgentWorking
+                        ? "0 4px 12px -1px rgba(16, 185, 129, 0.12), 0 2px 4px -2px rgba(16, 185, 129, 0.08)"
+                        : "0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05)",
         overflow: "hidden",
         cursor: "pointer",
         transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
@@ -353,6 +392,28 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
               <Typography variant="subtitle2" sx={{ fontWeight: 700, lineHeight: 1.2, color: "#0F172A" }}>
                 {node.name}
               </Typography>
+              {isCore && (
+                <Tooltip
+                  title={`Transit Core Router (Betweenness Rank #${centralityInfo?.rank}, Centrality Score: ${((centralityInfo?.normalizedScore ?? 0) * 100).toFixed(0)}%)`}
+                >
+                  <Chip
+                    icon={<Activity size={10} style={{ color: "#047857", marginLeft: 4 }} />}
+                    label="CORE"
+                    size="small"
+                    sx={{
+                      height: 18,
+                      fontSize: "0.62rem",
+                      fontWeight: 800,
+                      backgroundColor: "#ECFDF5",
+                      color: "#047857",
+                      border: "1.5px solid #6EE7B7",
+                      letterSpacing: "0.3px",
+                      boxShadow: "0 1px 3px rgba(16, 185, 129, 0.15)",
+                      "& .MuiChip-label": { px: 0.5 },
+                    }}
+                  />
+                </Tooltip>
+              )}
               {isRouteReflector && (
                 <Tooltip title="BGP Route Reflector (RR): Central reflector for internal iBGP peers; injects 'rr client;' to eliminate full-mesh requirements.">
                   <Chip

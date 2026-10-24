@@ -24,7 +24,7 @@ import {
   useTheme,
   useMediaQuery,
 } from "@mui/material";
-import { X, Download, ExternalLink, Image as ImageIcon, FileCode, CheckCircle2 } from "lucide-react";
+import { X, Download, ExternalLink, Image as ImageIcon, FileCode, CheckCircle2, Activity } from "lucide-react";
 import { Node, Link, NetworkPolicy, GraphBlock } from "../../types/api";
 import {
   NodeNameSource,
@@ -35,6 +35,7 @@ import {
   generateTopologySvg,
   exportDiagramFile,
 } from "../../utils/diagramExportEngine";
+import { CentralityMetric, WeightingMode } from "../../utils/graphCentrality";
 
 export interface ExportDiagramModalProps {
   open: boolean;
@@ -66,6 +67,9 @@ export const ExportDiagramModal: React.FC<ExportDiagramModalProps> = ({
   const [displayExternalNodes, setDisplayExternalNodes] = useState<boolean>(true);
   const [diagramTitle, setDiagramTitle] = useState<string>("easy42 Network Topology");
   const [format, setFormat] = useState<ExportFormat>("svg");
+  const [emphasizeCentrality, setEmphasizeCentrality] = useState<boolean>(true);
+  const [centralityMetric, setCentralityMetric] = useState<CentralityMetric>("betweenness");
+  const [centralityWeighting, setCentralityWeighting] = useState<WeightingMode>("weighted");
   const [isExporting, setIsExporting] = useState<boolean>(false);
   const [exportSuccess, setExportSuccess] = useState<boolean>(false);
 
@@ -79,6 +83,9 @@ export const ExportDiagramModal: React.FC<ExportDiagramModalProps> = ({
       displayExternalNodes,
       diagramTitle,
       format,
+      emphasizeCentrality,
+      centralityMetric,
+      centralityWeighting,
     }),
     [
       nodeNameSource,
@@ -89,6 +96,9 @@ export const ExportDiagramModal: React.FC<ExportDiagramModalProps> = ({
       displayExternalNodes,
       diagramTitle,
       format,
+      emphasizeCentrality,
+      centralityMetric,
+      centralityWeighting,
     ],
   );
 
@@ -463,6 +473,159 @@ export const ExportDiagramModal: React.FC<ExportDiagramModalProps> = ({
                 },
               }}
             />
+          </Box>
+
+          <Divider sx={{ borderColor: "#F1F5F9" }} />
+
+          {/* Option: Graph Centrality & Importance Emphasis */}
+          <Box
+            sx={{
+              p: 1.5,
+              borderRadius: 2,
+              bgcolor: emphasizeCentrality ? "#F8FAFC" : "transparent",
+              border: emphasizeCentrality ? "1px solid #E2E8F0" : "1px dashed #E2E8F0",
+              transition: "all 0.2s ease",
+            }}
+          >
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                mb: emphasizeCentrality ? 1.5 : 0,
+              }}
+            >
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                <Box
+                  sx={{
+                    width: 26,
+                    height: 26,
+                    borderRadius: 1,
+                    bgcolor: emphasizeCentrality ? "#ECFDF5" : "#F1F5F9",
+                    color: emphasizeCentrality ? "#059669" : "#64748B",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <Activity size={14} />
+                </Box>
+                <Box>
+                  <Typography sx={{ fontSize: "0.82rem", fontWeight: 700, color: "#1E293B" }}>
+                    Emphasize Core Elements
+                  </Typography>
+                  <Typography variant="caption" sx={{ fontSize: "0.7rem", color: "#64748B", display: "block" }}>
+                    Highlight core nodes &amp; backbone links
+                  </Typography>
+                </Box>
+              </Box>
+              <Switch
+                checked={emphasizeCentrality}
+                onChange={(e) => setEmphasizeCentrality(e.target.checked)}
+                color="primary"
+                size="small"
+                sx={{
+                  "& .MuiSwitch-switchBase.Mui-checked": {
+                    color: "#059669",
+                    "& + .MuiSwitch-track": {
+                      backgroundColor: "#059669",
+                    },
+                  },
+                }}
+              />
+            </Box>
+
+            {emphasizeCentrality && (
+              <Box sx={{ display: "flex", flexDirection: "column", gap: 1.25, pt: 0.5 }}>
+                {/* Metric Selector */}
+                <Box>
+                  <Typography
+                    sx={{
+                      fontSize: "0.72rem",
+                      fontWeight: 700,
+                      color: "#475569",
+                      mb: 0.5,
+                      textTransform: "uppercase",
+                      letterSpacing: "0.03em",
+                    }}
+                  >
+                    Centrality Metric
+                  </Typography>
+                  <ToggleButtonGroup
+                    value={centralityMetric}
+                    exclusive
+                    onChange={(_, val) => val && setCentralityMetric(val as CentralityMetric)}
+                    fullWidth
+                    size="small"
+                    sx={{
+                      "& .MuiToggleButton-root": {
+                        py: 0.5,
+                        px: 1,
+                        fontSize: "0.75rem",
+                        fontWeight: 600,
+                        textTransform: "none",
+                        border: "1px solid #CBD5E1",
+                        "&.Mui-selected": {
+                          backgroundColor: "#ECFDF5",
+                          color: "#047857",
+                          borderColor: "#10B981",
+                          "&:hover": {
+                            backgroundColor: "#D1FAE5",
+                          },
+                        },
+                      },
+                    }}
+                  >
+                    <ToggleButton value="betweenness">Betweenness (Transit)</ToggleButton>
+                    <ToggleButton value="degree">Degree (Hub)</ToggleButton>
+                  </ToggleButtonGroup>
+                </Box>
+
+                {/* Weighting Selector */}
+                <Box>
+                  <Typography
+                    sx={{
+                      fontSize: "0.72rem",
+                      fontWeight: 700,
+                      color: "#475569",
+                      mb: 0.5,
+                      textTransform: "uppercase",
+                      letterSpacing: "0.03em",
+                    }}
+                  >
+                    Shortest Path Weighting
+                  </Typography>
+                  <ToggleButtonGroup
+                    value={centralityWeighting}
+                    exclusive
+                    onChange={(_, val) => val && setCentralityWeighting(val as WeightingMode)}
+                    fullWidth
+                    size="small"
+                    sx={{
+                      "& .MuiToggleButton-root": {
+                        py: 0.5,
+                        px: 1,
+                        fontSize: "0.75rem",
+                        fontWeight: 600,
+                        textTransform: "none",
+                        border: "1px solid #CBD5E1",
+                        "&.Mui-selected": {
+                          backgroundColor: "#ECFDF5",
+                          color: "#047857",
+                          borderColor: "#10B981",
+                          "&:hover": {
+                            backgroundColor: "#D1FAE5",
+                          },
+                        },
+                      },
+                    }}
+                  >
+                    <ToggleButton value="weighted">Cost Weighted (Routing)</ToggleButton>
+                    <ToggleButton value="unweighted">Hop Count (Physical)</ToggleButton>
+                  </ToggleButtonGroup>
+                </Box>
+              </Box>
+            )}
           </Box>
 
           <Divider sx={{ borderColor: "#F1F5F9" }} />
