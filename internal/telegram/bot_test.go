@@ -665,6 +665,8 @@ func TestFormatTCPPingResult(t *testing.T) {
 			MinRTT:          10.12,
 			AvgRTT:          11.34,
 			MaxRTT:          13.45,
+			LocalMSS:        1448,
+			RemoteMSS:       1340,
 		},
 	}
 
@@ -674,6 +676,9 @@ func TestFormatTCPPingResult(t *testing.T) {
 	}
 	if !strings.Contains(res, "11.34ms") {
 		t.Errorf("expected avg RTT in tcp ping result, got: %s", res)
+	}
+	if !strings.Contains(res, "1448 B") || !strings.Contains(res, "1340 B") {
+		t.Errorf("expected MSS values in tcp ping result, got: %s", res)
 	}
 
 	// Error formatting

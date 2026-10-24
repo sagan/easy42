@@ -568,6 +568,9 @@ export interface TcpPingResult {
   max_rtt_ms: number;
   mdev_rtt_ms: number;
   rtts: number[];
+  local_mss?: number;
+  remote_mss?: number;
+  tcp_timestamps?: boolean;
 }
 
 export interface TracerouteHop {

@@ -740,6 +740,50 @@ done"#;
     }
 }
 
+#[cfg(target_os = "linux")]
+fn get_tcp_mss(stream: &TcpStream) -> (Option<u32>, Option<u32>, bool) {
+    use std::mem::MaybeUninit;
+    use std::os::unix::io::AsRawFd;
+
+    let fd = stream.as_raw_fd();
+    let mut info = MaybeUninit::<libc::tcp_info>::zeroed();
+    let mut len = std::mem::size_of::<libc::tcp_info>() as libc::socklen_t;
+
+    let ret = unsafe {
+        libc::getsockopt(
+            fd,
+            libc::IPPROTO_TCP,
+            libc::TCP_INFO,
+            info.as_mut_ptr() as *mut libc::c_void,
+            &mut len,
+        )
+    };
+
+    if ret == 0 {
+        let info = unsafe { info.assume_init() };
+        let local_mss = if info.tcpi_advmss > 0 {
+            Some(info.tcpi_advmss as u32)
+        } else {
+            None
+        };
+        let remote_mss = if info.tcpi_snd_mss > 0 {
+            Some(info.tcpi_snd_mss as u32)
+        } else {
+            None
+        };
+        // TCPI_OPT_TIMESTAMPS = 1 in linux/tcp.h
+        let ts = (info.tcpi_options & 1) != 0;
+        (local_mss, remote_mss, ts)
+    } else {
+        (None, None, false)
+    }
+}
+
+#[cfg(not(target_os = "linux"))]
+fn get_tcp_mss(_stream: &TcpStream) -> (Option<u32>, Option<u32>, bool) {
+    (None, None, false)
+}
+
 /// run_tcp_ping connects to `host:port` `count` times, measuring TCP handshake RTT each time.
 /// Returns JSON-encoded TCPPingResult on stdout, or an error message on stderr.
 pub(crate) async fn run_tcp_ping(target: &str, count: u32, timeout_secs: u32) -> (bool, i32, String, String) {
@@ -768,20 +812,32 @@ pub(crate) async fn run_tcp_ping(target: &str, count: u32, timeout_secs: u32) ->
 
     let mut rtts: Vec<f64> = Vec::new();
     let mut failures: u32 = 0;
+    let mut local_mss: Option<u32> = None;
+    let mut remote_mss: Option<u32> = None;
+    let mut tcp_timestamps = false;
 
     for _ in 0..count {
         let addr_clone = addr;
         let timeout_clone = timeout;
         let probe_start = Instant::now();
         let result = tokio::task::spawn_blocking(move || {
-            TcpStream::connect_timeout(&addr_clone, timeout_clone)
+            let stream = TcpStream::connect_timeout(&addr_clone, timeout_clone)?;
+            let mss = get_tcp_mss(&stream);
+            Ok::<_, std::io::Error>(mss)
         })
         .await;
 
         match result {
-            Ok(Ok(_stream)) => {
+            Ok(Ok((lm, rm, ts))) => {
                 let rtt_ms = probe_start.elapsed().as_secs_f64() * 1000.0;
                 rtts.push(rtt_ms);
+                if local_mss.is_none() && lm.is_some() {
+                    local_mss = lm;
+                }
+                if remote_mss.is_none() && rm.is_some() {
+                    remote_mss = rm;
+                }
+                tcp_timestamps = ts;
             }
             _ => {
                 failures += 1;
@@ -814,8 +870,8 @@ pub(crate) async fn run_tcp_ping(target: &str, count: u32, timeout_secs: u32) ->
     };
 
     // Build structured JSON output matching TCPPingResult on the server side
-    let json = format!(
-        r#"{{"target":"{target}","resolved_addr":"{addr}","packets_sent":{ps},"packets_received":{pr},"packet_loss_pct":{loss:.2},"min_rtt_ms":{min:.3},"avg_rtt_ms":{avg:.3},"max_rtt_ms":{max:.3},"mdev_rtt_ms":{mdev:.3},"rtts":[{rtts_json}]}}"#,
+    let mut json = format!(
+        r#"{{"target":"{target}","resolved_addr":"{addr}","packets_sent":{ps},"packets_received":{pr},"packet_loss_pct":{loss:.2},"min_rtt_ms":{min:.3},"avg_rtt_ms":{avg:.3},"max_rtt_ms":{max:.3},"mdev_rtt_ms":{mdev:.3},"rtts":[{rtts_json}]"#,
         target = target,
         addr = addr,
         ps = packets_sent,
@@ -827,6 +883,16 @@ pub(crate) async fn run_tcp_ping(target: &str, count: u32, timeout_secs: u32) ->
         mdev = mdev_rtt,
         rtts_json = rtts.iter().map(|r| format!("{:.3}", r)).collect::<Vec<_>>().join(","),
     );
+    if let Some(lm) = local_mss {
+        json.push_str(&format!(r#","local_mss":{}"#, lm));
+    }
+    if let Some(rm) = remote_mss {
+        json.push_str(&format!(r#","remote_mss":{}"#, rm));
+    }
+    if tcp_timestamps {
+        json.push_str(r#","tcp_timestamps":true"#);
+    }
+    json.push('}');
 
     let success = packets_received > 0;
     let exit_code = if success { 0 } else { 1 };
@@ -1102,6 +1168,41 @@ mod tests {
         assert!(flag_file.exists(), "Dynamically reloaded pre_sync hook must run");
         assert_eq!(fs::read_to_string(&flag_file).unwrap().trim(), "reloaded");
     }
+
+    #[tokio::test]
+    async fn test_run_tcp_ping_with_mss() {
+        use std::net::TcpListener;
+
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+
+        // Spawn a background thread to accept incoming connections
+        let handle = std::thread::spawn(move || {
+            for _ in 0..2 {
+                if let Ok((mut stream, _)) = listener.accept() {
+                    let _ = stream.write_all(b"OK");
+                }
+            }
+        });
+
+        let target = format!("127.0.0.1:{}", port);
+        let (success, code, stdout, stderr) = run_tcp_ping(&target, 2, 2).await;
+
+        let _ = handle.join();
+
+        assert!(success);
+        assert_eq!(code, 0);
+        assert!(stderr.is_empty());
+        assert!(stdout.contains(r#""packets_sent":2"#));
+        assert!(stdout.contains(r#""packets_received":2"#));
+
+        #[cfg(target_os = "linux")]
+        {
+            assert!(stdout.contains(r#""local_mss":"#), "stdout should contain local_mss: {}", stdout);
+            assert!(stdout.contains(r#""remote_mss":"#), "stdout should contain remote_mss: {}", stdout);
+        }
+    }
 }
+
 
 

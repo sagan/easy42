@@ -153,13 +153,15 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
       <DialogTitle
         sx={{
           display: "flex",
+          flexWrap: "wrap",
           alignItems: "center",
           justifyContent: "space-between",
-          pb: 1,
+          gap: 1.5,
+          pb: 1.5,
           borderBottom: "1px solid #E2E8F0",
         }}
       >
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, minWidth: 0, flex: "1 1 auto" }}>
           <Box
             sx={{
               width: 34,
@@ -170,16 +172,20 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
               alignItems: "center",
               justifyContent: "center",
               color: "#4F46E5",
+              flexShrink: 0,
             }}
           >
             <RefreshCw size={18} />
           </Box>
-          <Box>
-            <Typography variant="h6" sx={{ fontWeight: 700, color: "#0F172A", lineHeight: 1.2 }}>
+          <Box sx={{ minWidth: 0 }}>
+            <Typography
+              variant="h6"
+              sx={{ fontWeight: 700, color: "#0F172A", lineHeight: 1.2, fontSize: { xs: "1.05rem", sm: "1.25rem" } }}
+            >
               {targetNode ? `Synchronize Node: ${targetNode}` : "Synchronize Mesh Topology"}
             </Typography>
             {targetNode && (
-              <Typography variant="caption" sx={{ color: "#64748B" }}>
+              <Typography variant="caption" sx={{ color: "#64748B", display: "block" }}>
                 Calculating and applying configurations exclusively for <strong>{targetNode}</strong>
               </Typography>
             )}
@@ -206,6 +212,8 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
                 fontSize: "0.75rem",
                 textTransform: "none",
                 fontWeight: 600,
+                whiteSpace: "nowrap",
+                flexShrink: 0,
                 "&:hover": {
                   borderColor: "#0284C7",
                   backgroundColor: "rgba(2, 132, 199, 0.05)",
@@ -225,7 +233,7 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
         )}
       </DialogTitle>
 
-      <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2, pt: 2.5 }}>
+      <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2, pt: 2.5, px: { xs: 2, sm: 3 } }}>
         {stateMessage && (
           <Alert severity="info" onClose={() => setStateMessage(null)} sx={{ borderRadius: 2 }}>
             {stateMessage}
@@ -321,7 +329,36 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
               <Alert
                 severity="warning"
                 icon={<Lock size={20} color="#D97706" />}
-                action={
+                sx={{
+                  borderRadius: 2,
+                  backgroundColor: "#FFFBEB",
+                  border: "1px solid #FDE68A",
+                  "& .MuiAlert-message": { width: "100%", pr: 0 },
+                }}
+              >
+                <Box
+                  sx={{
+                    display: "flex",
+                    flexDirection: { xs: "column", sm: "row" },
+                    alignItems: { xs: "flex-start", sm: "flex-start" },
+                    justifyContent: "space-between",
+                    gap: { xs: 1.5, sm: 2 },
+                  }}
+                >
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <Typography variant="body2" sx={{ fontWeight: 700, color: "#92400E" }}>
+                      Key Vault is Locked — WireGuard tasks are skipped
+                    </Typography>
+                    <Typography
+                      variant="caption"
+                      sx={{ color: "#B45309", display: "block", mt: 0.5, lineHeight: 1.45 }}
+                    >
+                      WireGuard private keys cannot be decrypted while the vault is locked. WireGuard interface
+                      creation, updates, and interface cleanup are skipped. Only BIRD routing, ROA tables, and firewall
+                      (nftables) configurations are planned and will be synced. Click <strong>Unlock Vault</strong> to
+                      decrypt private keys and configure WireGuard interfaces.
+                    </Typography>
+                  </Box>
                   <Button
                     color="inherit"
                     size="small"
@@ -335,6 +372,9 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
                       color: "#92400E",
                       bgcolor: "rgba(255, 255, 255, 0.8)",
                       whiteSpace: "nowrap",
+                      flexShrink: 0,
+                      alignSelf: { xs: "flex-start", sm: "flex-start" },
+                      mt: { xs: 0.25, sm: 0 },
                       "&:hover": {
                         borderColor: "#92400E",
                         backgroundColor: "#FEF3C7",
@@ -343,23 +383,7 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
                   >
                     Unlock Vault
                   </Button>
-                }
-                sx={{
-                  borderRadius: 2,
-                  backgroundColor: "#FFFBEB",
-                  border: "1px solid #FDE68A",
-                  "& .MuiAlert-message": { width: "100%", pr: 1 },
-                }}
-              >
-                <Typography variant="body2" sx={{ fontWeight: 700, color: "#92400E" }}>
-                  Key Vault is Locked — WireGuard tasks are skipped
-                </Typography>
-                <Typography variant="caption" sx={{ color: "#B45309", display: "block", mt: 0.25, lineHeight: 1.4 }}>
-                  WireGuard private keys cannot be decrypted while the vault is locked. WireGuard interface creation,
-                  updates, and interface cleanup are skipped. Only BIRD routing, ROA tables, and firewall (nftables)
-                  configurations are planned and will be synced. Click <strong>Unlock Vault</strong> to decrypt private
-                  keys and configure WireGuard interfaces.
-                </Typography>
+                </Box>
               </Alert>
             )}
 
@@ -393,8 +417,10 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
             <Box
               sx={{
                 display: "flex",
-                alignItems: "center",
+                flexDirection: { xs: "column", sm: "row" },
+                alignItems: { xs: "flex-start", sm: "center" },
                 justifyContent: "space-between",
+                gap: { xs: 1.25, sm: 1.5 },
                 backgroundColor: "#F8FAFC",
                 p: 1.5,
                 borderRadius: 2,
@@ -411,7 +437,7 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
                     : "Diff calculated against recorded state and live device interfaces"}
                 </Typography>
               </Box>
-              <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
+              <Box sx={{ display: "flex", gap: 1, alignItems: "center", flexWrap: "wrap" }}>
                 {!isUnlocked ? (
                   <Tooltip title="Master key vault is locked. WireGuard tasks are skipped. Click to unlock vault.">
                     <Chip
@@ -738,11 +764,14 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
 
       <DialogActions
         sx={{
-          px: 3,
+          px: { xs: 2, sm: 3 },
           py: 2,
           borderTop: "1px solid #E2E8F0",
           backgroundColor: "#F8FAFC",
+          display: "flex",
+          flexWrap: "wrap",
           justifyContent: "space-between",
+          gap: 1.5,
         }}
       >
         <Button onClick={onClose} disabled={syncing || updatingState} sx={{ color: "#64748B" }}>
@@ -750,7 +779,7 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
         </Button>
 
         {!safeResults && (
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, flexWrap: "wrap" }}>
             {/* Force Apply Button */}
             {safeActions.length > 0 && (
               <Tooltip
@@ -770,8 +799,10 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
                     borderColor: "#F59E0B",
                     color: "#D97706",
                     fontWeight: 600,
-                    fontSize: "0.82rem",
+                    fontSize: { xs: "0.75rem", sm: "0.82rem" },
                     textTransform: "none",
+                    whiteSpace: "nowrap",
+                    px: { xs: 1.5, sm: 2 },
                     "&:hover": {
                       borderColor: "#D97706",
                       backgroundColor: "rgba(245, 158, 11, 0.08)",
@@ -793,9 +824,10 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
               sx={{
                 background: pendingActions.length > 0 ? "linear-gradient(135deg, #4F46E5 0%, #3730A3 100%)" : undefined,
                 fontWeight: 700,
-                fontSize: "0.82rem",
+                fontSize: { xs: "0.75rem", sm: "0.82rem" },
                 textTransform: "none",
-                px: 2.5,
+                whiteSpace: "nowrap",
+                px: { xs: 1.5, sm: 2.5 },
               }}
             >
               {syncing

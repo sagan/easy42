@@ -12,6 +12,8 @@ import {
   Chip,
   IconButton,
   Tooltip,
+  useTheme,
+  useMediaQuery,
 } from "@mui/material";
 import {
   Code2,
@@ -99,8 +101,24 @@ export const TaskSourceModal: React.FC<TaskSourceModalProps> = ({ open, onClose,
   const sharedFiles = sources.filter((f) => f.shared);
   const configFiles = sources.filter((f) => f.name.endsWith(".json"));
 
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
+
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth PaperProps={{ sx: { borderRadius: 3, height: "85vh", maxHeight: 850 } }}>
+    <Dialog
+      open={open}
+      onClose={onClose}
+      maxWidth="lg"
+      fullWidth
+      fullScreen={isMobile}
+      PaperProps={{
+        sx: {
+          borderRadius: { xs: 0, sm: 3 },
+          height: { xs: "100%", sm: "85vh" },
+          maxHeight: { xs: "100%", sm: 850 },
+        },
+      }}
+    >
       {/* Dialog Header */}
       <DialogTitle
         sx={{
@@ -108,12 +126,12 @@ export const TaskSourceModal: React.FC<TaskSourceModalProps> = ({ open, onClose,
           alignItems: "center",
           justifyContent: "space-between",
           py: 1.5,
-          px: 2.5,
+          px: { xs: 2, sm: 2.5 },
           borderBottom: "1px solid #E2E8F0",
           bgcolor: "background.paper",
         }}
       >
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, minWidth: 0 }}>
           <Box
             sx={{
               width: 36,
@@ -124,39 +142,54 @@ export const TaskSourceModal: React.FC<TaskSourceModalProps> = ({ open, onClose,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
+              flexShrink: 0,
             }}
           >
             <Code2 size={20} />
           </Box>
-          <Box>
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-              <Typography variant="subtitle1" sx={{ fontWeight: 700, lineHeight: 1.2 }}>
+          <Box sx={{ minWidth: 0 }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
+              <Typography
+                variant="subtitle1"
+                sx={{
+                  fontWeight: 700,
+                  lineHeight: 1.2,
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                }}
+              >
                 {task?.title || "Task Source"}
               </Typography>
               {task?.category && (
-                <Chip size="small" label={task.category} color="primary" variant="outlined" sx={{ height: 20, fontSize: "0.7rem" }} />
+                <Chip
+                  size="small"
+                  label={task.category}
+                  color="primary"
+                  variant="outlined"
+                  sx={{ height: 20, fontSize: "0.7rem" }}
+                />
               )}
             </Box>
-            <Typography variant="caption" sx={{ color: "text.secondary", fontFamily: "monospace" }}>
+            <Typography variant="caption" sx={{ color: "text.secondary", fontFamily: "monospace", display: "block" }}>
               Task ID: {task?.id}
             </Typography>
           </Box>
         </Box>
-        <IconButton size="small" onClick={onClose} sx={{ color: "text.secondary" }}>
+        <IconButton size="small" onClick={onClose} sx={{ color: "text.secondary", ml: 1 }}>
           <X size={18} />
         </IconButton>
       </DialogTitle>
 
       {/* Dialog Body */}
       <DialogContent sx={{ p: 0, display: "flex", flexDirection: { xs: "column", md: "row" }, overflow: "hidden", flex: 1 }}>
-        {/* Left Sidebar: File List */}
+        {/* Left Sidebar: File List (Desktop) */}
         <Box
           sx={{
-            width: { xs: "100%", md: 240 },
-            borderRight: { xs: "none", md: "1px solid #E2E8F0" },
-            borderBottom: { xs: "1px solid #E2E8F0", md: "none" },
+            display: { xs: "none", md: "flex" },
+            width: 240,
+            borderRight: "1px solid #E2E8F0",
             bgcolor: "#F8FAFC",
-            display: "flex",
             flexDirection: "column",
             flexShrink: 0,
             overflowY: "auto",
@@ -353,6 +386,85 @@ export const TaskSourceModal: React.FC<TaskSourceModalProps> = ({ open, onClose,
 
         {/* Right Main Area: Code Viewer */}
         <Box sx={{ flex: 1, display: "flex", flexDirection: "column", bgcolor: "#0B0F19", minWidth: 0, overflow: "hidden" }}>
+          {/* Mobile Horizontal File Switcher */}
+          {sources.length > 0 && (
+            <Box
+              sx={{
+                display: { xs: "flex", md: "none" },
+                alignItems: "center",
+                overflowX: "auto",
+                py: 1,
+                px: 1.5,
+                gap: 1,
+                bgcolor: "#F8FAFC",
+                borderBottom: "1px solid #E2E8F0",
+                flexShrink: 0,
+                "&::-webkit-scrollbar": { height: 4 },
+                "&::-webkit-scrollbar-thumb": { backgroundColor: "#CBD5E1", borderRadius: 2 },
+              }}
+            >
+              {sources.map((f) => {
+                const isSelected = activeFile?.name === f.name;
+                return (
+                  <Box
+                    key={f.name}
+                    onClick={() => setSelectedFileName(f.name)}
+                    sx={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 0.75,
+                      px: 1.25,
+                      py: 0.6,
+                      borderRadius: 1.5,
+                      cursor: "pointer",
+                      whiteSpace: "nowrap",
+                      flexShrink: 0,
+                      bgcolor: isSelected ? "rgba(79, 70, 229, 0.1)" : "#FFFFFF",
+                      color: isSelected ? "primary.main" : "#334155",
+                      border: "1px solid",
+                      borderColor: isSelected ? "primary.light" : "#E2E8F0",
+                      transition: "all 0.15s ease",
+                      "&:active": {
+                        transform: "scale(0.97)",
+                      },
+                    }}
+                  >
+                    {f.shared ? (
+                      <Layers size={14} color={isSelected ? "#4F46E5" : "#0284C7"} />
+                    ) : f.name.endsWith(".json") ? (
+                      <FileText size={14} color={isSelected ? "#4F46E5" : "#64748B"} />
+                    ) : (
+                      <FileCode size={14} color={isSelected ? "#4F46E5" : "#64748B"} />
+                    )}
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        fontWeight: isSelected ? 700 : 500,
+                        fontSize: "0.78rem",
+                        fontFamily: "monospace",
+                      }}
+                    >
+                      {f.name}
+                    </Typography>
+                    {f.shared && (
+                      <Chip
+                        size="small"
+                        label="shared"
+                        sx={{
+                          height: 16,
+                          fontSize: "0.6rem",
+                          fontWeight: 600,
+                          bgcolor: isSelected ? "primary.main" : "#E2E8F0",
+                          color: isSelected ? "#fff" : "#475569",
+                        }}
+                      />
+                    )}
+                  </Box>
+                );
+              })}
+            </Box>
+          )}
+
           {error && (
             <Alert severity="error" sx={{ m: 2 }} onClose={() => setError(null)}>
               {error}
@@ -374,31 +486,43 @@ export const TaskSourceModal: React.FC<TaskSourceModalProps> = ({ open, onClose,
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "space-between",
-                  px: 2,
+                  px: { xs: 1.5, sm: 2 },
                   py: 1,
                   bgcolor: "#111827",
                   borderBottom: "1px solid #1F2937",
+                  gap: 1,
                 }}
               >
-                <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, minWidth: 0 }}>
-                  <Typography variant="body2" sx={{ color: "#F3F4F6", fontFamily: "monospace", fontWeight: 600 }}>
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1, minWidth: 0, flexWrap: "wrap", flex: 1 }}>
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      color: "#F3F4F6",
+                      fontFamily: "monospace",
+                      fontWeight: 600,
+                      fontSize: { xs: "0.78rem", sm: "0.85rem" },
+                      whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                    }}
+                  >
                     {activeFile.path}
                   </Typography>
                   {activeFile.shared && (
                     <Chip
                       size="small"
                       icon={<Sparkles size={11} />}
-                      label="Shared across all tasks"
+                      label="Shared"
                       sx={{
-                        height: 20,
-                        fontSize: "0.68rem",
+                        height: 18,
+                        fontSize: "0.65rem",
                         bgcolor: "rgba(14, 165, 233, 0.15)",
                         color: "#38BDF8",
                         border: "1px solid rgba(14, 165, 233, 0.3)",
                       }}
                     />
                   )}
-                  <Typography variant="caption" sx={{ color: "#9CA3AF" }}>
+                  <Typography variant="caption" sx={{ color: "#9CA3AF", fontSize: "0.72rem", whiteSpace: "nowrap" }}>
                     {lineCount} lines • {formatFileSize(charCount)}
                   </Typography>
                 </Box>
@@ -415,6 +539,8 @@ export const TaskSourceModal: React.FC<TaskSourceModalProps> = ({ open, onClose,
                       textTransform: "none",
                       color: copied ? "#4ADE80" : "#D1D5DB",
                       borderColor: copied ? "#4ADE80" : "#374151",
+                      whiteSpace: "nowrap",
+                      flexShrink: 0,
                       "&:hover": {
                         borderColor: copied ? "#4ADE80" : "#9CA3AF",
                         bgcolor: "rgba(255, 255, 255, 0.05)",
@@ -432,9 +558,9 @@ export const TaskSourceModal: React.FC<TaskSourceModalProps> = ({ open, onClose,
                   flex: 1,
                   overflow: "auto",
                   display: "flex",
-                  p: 2,
+                  p: { xs: 1.5, sm: 2 },
                   fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
-                  fontSize: "0.82rem",
+                  fontSize: { xs: "0.75rem", sm: "0.82rem" },
                   lineHeight: "1.55",
                 }}
               >
@@ -442,12 +568,12 @@ export const TaskSourceModal: React.FC<TaskSourceModalProps> = ({ open, onClose,
                 <Box
                   sx={{
                     userSelect: "none",
-                    pr: 2,
-                    mr: 2,
+                    pr: { xs: 1.25, sm: 2 },
+                    mr: { xs: 1.25, sm: 2 },
                     borderRight: "1px solid #1E293B",
                     color: "#475569",
                     textAlign: "right",
-                    minWidth: "2.5rem",
+                    minWidth: { xs: "2rem", sm: "2.5rem" },
                     flexShrink: 0,
                   }}
                 >
@@ -483,7 +609,7 @@ export const TaskSourceModal: React.FC<TaskSourceModalProps> = ({ open, onClose,
       </DialogContent>
 
       {/* Dialog Footer */}
-      <DialogActions sx={{ px: 2.5, py: 1.5, borderTop: "1px solid #E2E8F0", bgcolor: "background.paper" }}>
+      <DialogActions sx={{ px: { xs: 2, sm: 2.5 }, py: 1.25, borderTop: "1px solid #E2E8F0", bgcolor: "background.paper" }}>
         <Button onClick={onClose} variant="outlined" sx={{ color: "text.secondary", borderColor: "divider" }}>
           Close
         </Button>

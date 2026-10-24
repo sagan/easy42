@@ -2529,7 +2529,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                         clickable
                         onClick={() => setTemplateTypeFilter(filterType)}
                         sx={{
-                          fontWeight: isSelected ? 700 : 500,
+                          fontWeight: 500,
                           bgcolor: isSelected ? "#4F46E5" : "#F1F5F9",
                           color: isSelected ? "#FFFFFF" : "#475569",
                           "&:hover": {
@@ -3441,7 +3441,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                                       size="small"
                                       label={preset.label}
                                       clickable
-                                      variant={isSelected ? "filled" : "outlined"}
+                                      variant={"outlined"}
                                       onClick={() => setTaskCronDraft((prev) => ({ ...prev, [task.id]: preset.value }))}
                                       sx={{
                                         fontSize: "0.75rem",

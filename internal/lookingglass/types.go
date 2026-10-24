@@ -143,5 +143,8 @@ type TCPPingResult struct {
 	MaxRTT          float64   `json:"max_rtt_ms"`
 	MdevRTT         float64   `json:"mdev_rtt_ms"`
 	RTTs            []float64 `json:"rtts"`
+	LocalMSS        int       `json:"local_mss,omitempty"`
+	RemoteMSS       int       `json:"remote_mss,omitempty"`
+	TCPTimestamps   bool      `json:"tcp_timestamps,omitempty"`
 }
 

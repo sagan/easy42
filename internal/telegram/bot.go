@@ -960,6 +960,16 @@ func formatTCPPingResult(nodeName string, target string, nr lookingglass.NodeRes
 			}
 			sb.WriteString("\n")
 		}
+		if tr.LocalMSS > 0 || tr.RemoteMSS > 0 {
+			var mssParts []string
+			if tr.LocalMSS > 0 {
+				mssParts = append(mssParts, fmt.Sprintf("local <b>%d B</b> (SYN)", tr.LocalMSS))
+			}
+			if tr.RemoteMSS > 0 {
+				mssParts = append(mssParts, fmt.Sprintf("remote <b>%d B</b> (SYN+ACK)", tr.RemoteMSS))
+			}
+			sb.WriteString(fmt.Sprintf("• TCP MSS: %s\n", strings.Join(mssParts, " | ")))
+		}
 	} else if nr.RawOutput != "" {
 		sb.WriteString(fmt.Sprintf("<pre><code>%s</code></pre>", html.EscapeString(strings.TrimSpace(nr.RawOutput))))
 	} else {
