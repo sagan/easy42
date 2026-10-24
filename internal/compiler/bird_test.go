@@ -1417,7 +1417,7 @@ func TestExternalLinkCostOverrideBIRD(t *testing.T) {
 
 	expectedMulti := []string{
 		"template bgp external_peer {",
-		"bgp_local_pref = DEFAULT_LOCAL_PREF;",
+		"if DEFAULT_LOCAL_PREF > 100 then bgp_local_pref = DEFAULT_LOCAL_PREF - 100; else bgp_local_pref = 1;",
 		"template bgp external_peer_cost_2000 {",
 		"if DEFAULT_LOCAL_PREF > 2000 then bgp_local_pref = DEFAULT_LOCAL_PREF - 2000; else bgp_local_pref = 1;",
 		"protocol bgp 'ext_peer_hexpcn' from external_peer {",
@@ -1429,6 +1429,30 @@ func TestExternalLinkCostOverrideBIRD(t *testing.T) {
 		}
 	}
 	validateBirdSyntax(t, confMulti)
+
+	// 3. External link inheriting cost from DN42 network policy
+	dn42Pol := []config.NetworkPolicy{
+		{
+			ID:   "dn42",
+			Name: "DN42 Policy",
+			Cost: 50,
+		},
+	}
+	confPolicyCost, err := GenerateBirdConfig(&nodeManaged, []config.Node{nodeManaged, ext1}, []config.Link{multiExtLinks[0]}, netSettings, dn42Pol)
+	if err != nil {
+		t.Fatalf("GenerateBirdConfig dn42 policy cost failed: %v", err)
+	}
+	expectedPolicyCost := []string{
+		"template bgp external_peer {",
+		"if DEFAULT_LOCAL_PREF > 50 then bgp_local_pref = DEFAULT_LOCAL_PREF - 50; else bgp_local_pref = 1;",
+		"protocol bgp 'ext_peer_hexpcn' from external_peer {",
+	}
+	for _, s := range expectedPolicyCost {
+		if !strings.Contains(confPolicyCost, s) {
+			t.Errorf("Expected dn42 policy cost snippet %q in config:\n%s", s, confPolicyCost)
+		}
+	}
+	validateBirdSyntax(t, confPolicyCost)
 }
 
 func TestGenerateBirdConfigWithIP6(t *testing.T) {

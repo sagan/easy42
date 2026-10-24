@@ -456,16 +456,7 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 			hasNonePolicy = true
 		}
 
-		var linkCost int
-		if isRemoteExternal && policyID == config.PolicyDN42 {
-			if localEnd != nil && localEnd.Cost != 0 {
-				linkCost = localEnd.Cost
-			} else {
-				linkCost = 0
-			}
-		} else {
-			linkCost = localEnd.EffectiveCostWithPolicy(&pol)
-		}
+		linkCost := localEnd.EffectiveCostWithPolicy(&pol)
 		routingPolicy := localEnd.EffectiveRoutingPolicy(&pol)
 
 		if isRemoteExternal && policyID == config.PolicyDN42 {
@@ -526,9 +517,9 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 		}
 	}
 
-	extCost := 0
-	if hasDN42 && dn42Pol.ID != config.PolicyDN42 && dn42Pol.Cost != 0 {
-		extCost = dn42Pol.Cost
+	extCost := 100
+	if hasDN42 {
+		extCost = dn42Pol.EffectiveCost()
 	}
 	extRoutingPolicy := config.RoutingPolicyFull
 	extImportFilter := ""
