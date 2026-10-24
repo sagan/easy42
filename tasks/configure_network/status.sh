@@ -131,13 +131,20 @@ if [ "$HAS_CUSTOM_SCRIPT" = "1" ] && [ -f "$SCRIPT_DIR/custom_network.sh" ]; the
 
     if has_systemd || [ -d /etc/systemd/system ] || (command -v systemctl >/dev/null 2>&1); then
         DISPATCHER_SCRIPT="/etc/networkd-dispatcher/routable.d/99-easy42.sh"
-        OVERRIDE_FILE="/etc/systemd/system/networkd-dispatcher.service.d/override.conf"
+        OVERRIDE_FILE="/etc/systemd/system/networkd-dispatcher.service.d/90-easy42.conf"
+        NETWORKD_OVERRIDE_FILE="/etc/systemd/system/systemd-networkd.service.d/90-easy42.conf"
         if [ ! -x "$DISPATCHER_SCRIPT" ]; then
             CUSTOM_SCRIPT_CONFIGURED=0
             CUSTOM_MISSING_REASONS="missing $DISPATCHER_SCRIPT"
         elif [ ! -f "$OVERRIDE_FILE" ]; then
             CUSTOM_SCRIPT_CONFIGURED=0
             CUSTOM_MISSING_REASONS="missing $OVERRIDE_FILE"
+        elif [ ! -f "$NETWORKD_OVERRIDE_FILE" ]; then
+            CUSTOM_SCRIPT_CONFIGURED=0
+            CUSTOM_MISSING_REASONS="missing $NETWORKD_OVERRIDE_FILE"
+        elif ! grep -q "ManageForeignRoutingPolicyRules=no" "$NETWORKD_OVERRIDE_FILE" 2>/dev/null; then
+            CUSTOM_SCRIPT_CONFIGURED=0
+            CUSTOM_MISSING_REASONS="foreign rule management not disabled in $NETWORKD_OVERRIDE_FILE"
         else
             CURRENT_CUSTOM=$(sed -n '/### EASY42_CUSTOM_START/,/### EASY42_CUSTOM_END/p' "$DISPATCHER_SCRIPT" 2>/dev/null | sed '1d;$d')
             DESIRED_CUSTOM=$(cat "$SCRIPT_DIR/custom_network.sh")

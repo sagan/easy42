@@ -113,7 +113,7 @@ For comprehensive task details, state machine exit codes, and REST API usage, se
   # OpenWrt
   uci show network.easy42_node
   ```
-- **Custom script does not run**: On systemd hosts verify both `/etc/networkd-dispatcher/routable.d/99-easy42.sh` and `/etc/systemd/system/networkd-dispatcher.service.d/override.conf` exist and the script matches the configured interface. On ifupdown hosts verify the interface block contains `up /etc/network/easy42.sh`.
+- **Custom script does not run**: On systemd hosts verify `/etc/networkd-dispatcher/routable.d/99-easy42.sh`, `/etc/systemd/system/networkd-dispatcher.service.d/90-easy42.conf`, and `/etc/systemd/system/systemd-networkd.service.d/90-easy42.conf` exist and the script matches the configured interface. On ifupdown hosts verify the interface block contains `up /etc/network/easy42.sh`.
 
 ---
 

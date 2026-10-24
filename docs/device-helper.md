@@ -208,7 +208,7 @@ Existing managed files are backed up first with a timestamped suffix:
 
 `node.custom_network_script` lets operators append arbitrary commands (for example policy-routing or mark rules) that run when the target interface becomes routable.
 
-- **systemd hosts**: written to `/etc/networkd-dispatcher/routable.d/99-easy42.sh`, guarded by an interface match, plus a `networkd-dispatcher.service` drop-in at `/etc/systemd/system/networkd-dispatcher.service.d/override.conf`. The package is installed automatically when possible.
+- **systemd hosts**: written to `/etc/networkd-dispatcher/routable.d/99-easy42.sh`, guarded by an interface match, plus a `networkd-dispatcher.service` drop-in at `/etc/systemd/system/networkd-dispatcher.service.d/90-easy42.conf`. Additionally, a `systemd-networkd` override drop-in is written to `/etc/systemd/system/systemd-networkd.service.d/90-easy42.conf` to prevent `systemd-networkd` from clearing foreign routing policy rules, routes, and next hops (`ManageForeignRoutingPolicyRules=no`, `ManageForeignRoutes=no`, `ManageForeignNextHops=no`). The `networkd-dispatcher` package is installed automatically when possible.
 - **interfaces-based hosts / Alpine**: written to `/etc/network/easy42.sh` and referenced from the generated interface block with `up /etc/network/easy42.sh`.
 - Scripts are wrapped in `### EASY42_CUSTOM_START` / `### EASY42_CUSTOM_END` markers. Removing the custom script from the node configuration removes the generated dispatcher/hook on the next run.
 - Status checks compare the marker contents with the desired script and report drift instead of silently accepting an outdated script.

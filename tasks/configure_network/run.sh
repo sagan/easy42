@@ -173,8 +173,11 @@ if [ "$HAS_CUSTOM_SCRIPT" = "1" ] && [ -f "$SCRIPT_DIR/custom_network.sh" ]; the
     TARGET_IFACE="$(get_target_iface)"
     if has_systemd || [ -d /etc/systemd/system ] || (command -v systemctl >/dev/null 2>&1); then
         DISPATCHER_SCRIPT="/etc/networkd-dispatcher/routable.d/99-easy42.sh"
-        OVERRIDE_FILE="/etc/systemd/system/networkd-dispatcher.service.d/override.conf"
-        if [ ! -x "$DISPATCHER_SCRIPT" ] || [ ! -f "$OVERRIDE_FILE" ]; then
+        OVERRIDE_FILE="/etc/systemd/system/networkd-dispatcher.service.d/90-easy42.conf"
+        NETWORKD_OVERRIDE_FILE="/etc/systemd/system/systemd-networkd.service.d/90-easy42.conf"
+        if [ ! -x "$DISPATCHER_SCRIPT" ] || [ ! -f "$OVERRIDE_FILE" ] || [ ! -f "$NETWORKD_OVERRIDE_FILE" ]; then
+            CUSTOM_CONFIGURED=0
+        elif ! grep -q "ManageForeignRoutingPolicyRules=no" "$NETWORKD_OVERRIDE_FILE" 2>/dev/null; then
             CUSTOM_CONFIGURED=0
         else
             CURRENT_CUSTOM=$(sed -n '/### EASY42_CUSTOM_START/,/### EASY42_CUSTOM_END/p' "$DISPATCHER_SCRIPT" 2>/dev/null | sed '1d;$d')
@@ -449,6 +452,17 @@ EOF
             done
         } | $SUDO tee "$NETWORK_FILE" >/dev/null
 
+        # Add override for systemd-networkd to prevent clearing foreign network rules
+        NETWORKD_CONF_DIR="/etc/systemd/system/systemd-networkd.service.d"
+        $SUDO mkdir -p "$NETWORKD_CONF_DIR"
+        cat << 'EOF' | $SUDO tee "$NETWORKD_CONF_DIR/90-easy42.conf" >/dev/null
+[Network]
+ManageForeignRoutingPolicyRules=no
+ManageForeignRoutes=no
+ManageForeignNextHops=no
+EOF
+        $SUDO chmod 644 "$NETWORKD_CONF_DIR/90-easy42.conf"
+
         echo "Reloading systemd-networkd..."
         $SUDO networkctl reload 2>/dev/null || restart_service systemd-networkd || true
         $SUDO ip link set "$NODE_INTERFACE" up 2>/dev/null || true
@@ -475,6 +489,7 @@ esac
 if has_systemd || [ -d /etc/systemd/system ] || (command -v systemctl >/dev/null 2>&1); then
     ROUTABLE_DIR="/etc/networkd-dispatcher/routable.d"
     OVERRIDE_DIR="/etc/systemd/system/networkd-dispatcher.service.d"
+    NETWORKD_OVERRIDE_DIR="/etc/systemd/system/systemd-networkd.service.d"
 
     if [ "$HAS_CUSTOM_SCRIPT" = "1" ] && [ -f "$SCRIPT_DIR/custom_network.sh" ]; then
         TARGET_IFACE="$(get_target_iface)"
@@ -509,7 +524,7 @@ if has_systemd || [ -d /etc/systemd/system ] || (command -v systemctl >/dev/null
 
         # 2. Add override for networkd-dispatcher.service
         $SUDO mkdir -p "$OVERRIDE_DIR"
-        OVERRIDE_FILE="$OVERRIDE_DIR/override.conf"
+        OVERRIDE_FILE="$OVERRIDE_DIR/90-easy42.conf"
         TMP_OVERRIDE="/tmp/networkd-dispatcher-override.conf.$$"
         cat << 'EOF' > "$TMP_OVERRIDE"
 [Unit]
@@ -523,11 +538,25 @@ EOF
         $SUDO chmod 644 "$OVERRIDE_FILE"
         rm -f "$TMP_OVERRIDE"
 
-        # 3. Reload systemd daemon
+        # 3. Add override for systemd-networkd to prevent clearing foreign network rules
+        $SUDO mkdir -p "$NETWORKD_OVERRIDE_DIR"
+        NETWORKD_OVERRIDE_FILE="$NETWORKD_OVERRIDE_DIR/90-easy42.conf"
+        TMP_NETWORKD_OVERRIDE="/tmp/systemd-networkd-override.conf.$$"
+        cat << 'EOF' > "$TMP_NETWORKD_OVERRIDE"
+[Network]
+ManageForeignRoutingPolicyRules=no
+ManageForeignRoutes=no
+ManageForeignNextHops=no
+EOF
+        $SUDO cp -f "$TMP_NETWORKD_OVERRIDE" "$NETWORKD_OVERRIDE_FILE"
+        $SUDO chmod 644 "$NETWORKD_OVERRIDE_FILE"
+        rm -f "$TMP_NETWORKD_OVERRIDE"
+
+        # 4. Reload systemd daemon
         echo "Reloading systemd manager configuration..."
         $SUDO systemctl daemon-reload
 
-        # 4. Enable and start networkd-dispatcher
+        # 5. Enable and start networkd-dispatcher
         if is_service_installed networkd-dispatcher || command -v systemctl >/dev/null 2>&1; then
             $SUDO systemctl enable networkd-dispatcher 2>/dev/null || true
             $SUDO systemctl start networkd-dispatcher 2>/dev/null || true
@@ -537,6 +566,12 @@ EOF
         if [ -f "$ROUTABLE_DIR/99-easy42.sh" ]; then
             echo "Removing custom network script from $ROUTABLE_DIR/99-easy42.sh..."
             $SUDO rm -f "$ROUTABLE_DIR/99-easy42.sh"
+        fi
+        if [ -f "$OVERRIDE_DIR/90-easy42.conf" ]; then
+            $SUDO rm -f "$OVERRIDE_DIR/90-easy42.conf"
+        fi
+        if [ -f "$NETWORKD_OVERRIDE_DIR/90-easy42.conf" ]; then
+            $SUDO rm -f "$NETWORKD_OVERRIDE_DIR/90-easy42.conf"
         fi
     fi
 fi
