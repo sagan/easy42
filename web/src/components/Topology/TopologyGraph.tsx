@@ -1082,7 +1082,7 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = ({
         >
           <Button
             size="small"
-            variant={centralityViewEnabled ? "contained" : "outlined"}
+            variant={"outlined"}
             onClick={onToggleCentralityView}
             startIcon={<Activity size={13} />}
             sx={{
@@ -1096,7 +1096,7 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = ({
               backgroundColor: centralityViewEnabled ? "#059669" : "#F8FAFC",
               color: centralityViewEnabled ? "#FFFFFF" : "#334155",
               borderColor: centralityViewEnabled ? "#059669" : "#CBD5E1",
-              boxShadow: centralityViewEnabled ? "0 2px 4px rgba(5, 150, 105, 0.2)" : "none",
+              // boxShadow: centralityViewEnabled ? "0 2px 4px rgba(5, 150, 105, 0.2)" : "none",
               "&:hover": {
                 backgroundColor: centralityViewEnabled ? "#047857" : "#F1F5F9",
                 borderColor: centralityViewEnabled ? "#047857" : "#94A3B8",
