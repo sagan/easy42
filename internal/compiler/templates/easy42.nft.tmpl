@@ -292,6 +292,10 @@ table inet easy42 {
   {{- end }}
 {{- end }}
   }
+  chain mangle_output {
+    type filter hook output priority mangle; policy accept;
+    tcp flags syn tcp option maxseg size set rt mtu
+  }
   chain mangle_postrouting {
     type filter hook postrouting priority mangle; policy accept;
     tcp flags syn tcp option maxseg size set rt mtu
