@@ -342,7 +342,7 @@ table inet easy42 {
     ip6 saddr @pol_{{ .id }}_disallowed_dst_v6 oifname @pol_{{ .id }}_ifname meta nfproto ipv6 snat to {{ .snat_target_v6 }}
           {{- end }}
           {{- if .allowed_dst_v6 }}
-    ip6 saddr != @pol_{{ .id }}_dst_v6 oifname @pol_{{ .id }}_ifname meta nfproto ipv6 snat to {{ .snat_target_v6 }}
+    ip6 saddr != fe80::/10 ip6 saddr != @pol_{{ .id }}_dst_v6 oifname @pol_{{ .id }}_ifname meta nfproto ipv6 snat to {{ .snat_target_v6 }}
           {{- end }}
           {{- if and (not .allowed_dst_v6) (not .disallowed_dst_v6) }}
     oifname @pol_{{ .id }}_ifname meta nfproto ipv6 snat to {{ .snat_target_v6 }}
