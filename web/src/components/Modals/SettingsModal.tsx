@@ -2463,7 +2463,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                   <Typography variant="body2" sx={{ color: "#475569", lineHeight: 1.5 }}>
                     Customize the Go text templates used to generate WireGuard, BIRD 2, and nftables configuration
                     files. System default templates are listed below and can be viewed (read-only) or cloned to create
-                    custom templates for nodes.
+                    custom templates for nodes. You can use{" "}
+                    <a href="https://github.com/go-sprout/sprout" target="_blank" rel="noopener noreferrer">
+                      Sprout functions
+                    </a>{" "}
+                    in custom template.
                   </Typography>
                 </Box>
                 <Button
@@ -4367,7 +4371,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                               <Chip
                                 size="small"
                                 icon={<CheckCircle2 size={13} />}
-                                label={integrations.telegram_bot_username ? `@${integrations.telegram_bot_username}` : "Active"}
+                                label={
+                                  integrations.telegram_bot_username
+                                    ? `@${integrations.telegram_bot_username}`
+                                    : "Active"
+                                }
                                 sx={{
                                   bgcolor: "#E0F2FE",
                                   color: "#0284C7",
@@ -4380,14 +4388,26 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                               <Chip
                                 size="small"
                                 label="Disabled"
-                                sx={{ bgcolor: "#F1F5F9", color: "#64748B", fontWeight: 600, fontSize: "0.75rem", height: 24 }}
+                                sx={{
+                                  bgcolor: "#F1F5F9",
+                                  color: "#64748B",
+                                  fontWeight: 600,
+                                  fontSize: "0.75rem",
+                                  height: 24,
+                                }}
                               />
                             )}
                             {integrations.telegram_enabled && integrations.telegram_webhook_status === "registered" && (
                               <Chip
                                 size="small"
                                 label="Webhook Active"
-                                sx={{ bgcolor: "#ECFDF5", color: "#059669", fontWeight: 600, fontSize: "0.72rem", height: 22 }}
+                                sx={{
+                                  bgcolor: "#ECFDF5",
+                                  color: "#059669",
+                                  fontWeight: 600,
+                                  fontSize: "0.72rem",
+                                  height: 22,
+                                }}
                               />
                             )}
                             {integrations.telegram_webhook_error && (
@@ -4396,13 +4416,20 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                                   size="small"
                                   icon={<AlertCircle size={12} />}
                                   label="Webhook Warning"
-                                  sx={{ bgcolor: "#FEF3C7", color: "#B45309", fontWeight: 600, fontSize: "0.72rem", height: 22 }}
+                                  sx={{
+                                    bgcolor: "#FEF3C7",
+                                    color: "#B45309",
+                                    fontWeight: 600,
+                                    fontSize: "0.72rem",
+                                    height: 22,
+                                  }}
                                 />
                               </Tooltip>
                             )}
                           </Box>
                           <Typography variant="body2" sx={{ color: "#64748B", fontSize: "0.85rem", mt: 0.3 }}>
-                            Receive automated node online/offline alerts and query cluster status directly from Telegram.
+                            Receive automated node online/offline alerts and query cluster status directly from
+                            Telegram.
                           </Typography>
                         </Box>
                       </Box>
@@ -4445,7 +4472,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                       {/* Field 1: Bot API Token */}
                       <Box>
                         <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 0.75 }}>
-                          <Typography variant="caption" sx={{ fontWeight: 700, color: "#334155", textTransform: "uppercase", letterSpacing: 0.5, fontSize: "0.75rem" }}>
+                          <Typography
+                            variant="caption"
+                            sx={{
+                              fontWeight: 700,
+                              color: "#334155",
+                              textTransform: "uppercase",
+                              letterSpacing: 0.5,
+                              fontSize: "0.75rem",
+                            }}
+                          >
                             Telegram Bot API Token <span style={{ color: "#EF4444" }}>*</span>
                           </Typography>
                           <Typography variant="caption" sx={{ color: "#64748B", fontSize: "0.75rem" }}>
@@ -4475,7 +4511,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                             },
                           }}
                         />
-                        <Typography variant="caption" sx={{ color: "#64748B", fontSize: "0.78rem", mt: 0.5, display: "block" }}>
+                        <Typography
+                          variant="caption"
+                          sx={{ color: "#64748B", fontSize: "0.78rem", mt: 0.5, display: "block" }}
+                        >
                           The secret HTTP API token for your bot created with Telegram's @BotFather.
                         </Typography>
                       </Box>
@@ -4483,7 +4522,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                       {/* Field 2: Admin Telegram User ID */}
                       <Box>
                         <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 0.75 }}>
-                          <Typography variant="caption" sx={{ fontWeight: 700, color: "#334155", textTransform: "uppercase", letterSpacing: 0.5, fontSize: "0.75rem" }}>
+                          <Typography
+                            variant="caption"
+                            sx={{
+                              fontWeight: 700,
+                              color: "#334155",
+                              textTransform: "uppercase",
+                              letterSpacing: 0.5,
+                              fontSize: "0.75rem",
+                            }}
+                          >
                             Admin Telegram User ID (Implicit Authentication) <span style={{ color: "#EF4444" }}>*</span>
                           </Typography>
                           <Typography variant="caption" sx={{ color: "#64748B", fontSize: "0.75rem" }}>
@@ -4505,22 +4553,41 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                             },
                           }}
                         />
-                        <Typography variant="caption" sx={{ color: "#64748B", fontSize: "0.78rem", mt: 0.5, display: "block" }}>
-                          Used as implicit authentication source. Only this single user is authorized to interact with the easy42 server via Telegram and receive node alerts.
+                        <Typography
+                          variant="caption"
+                          sx={{ color: "#64748B", fontSize: "0.78rem", mt: 0.5, display: "block" }}
+                        >
+                          Used as implicit authentication source. Only this single user is authorized to interact with
+                          the easy42 server via Telegram and receive node alerts.
                         </Typography>
                       </Box>
 
                       {/* Field 3: easy42 Server URL */}
                       <Box>
                         <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 0.75 }}>
-                          <Typography variant="caption" sx={{ fontWeight: 700, color: "#334155", textTransform: "uppercase", letterSpacing: 0.5, fontSize: "0.75rem" }}>
+                          <Typography
+                            variant="caption"
+                            sx={{
+                              fontWeight: 700,
+                              color: "#334155",
+                              textTransform: "uppercase",
+                              letterSpacing: 0.5,
+                              fontSize: "0.75rem",
+                            }}
+                          >
                             easy42 Server URL (Webhook & Notification Links) <span style={{ color: "#EF4444" }}>*</span>
                           </Typography>
                           {tgServerURL !== window.location.origin && (
                             <Button
                               size="small"
                               onClick={() => setTgServerURL(window.location.origin)}
-                              sx={{ textTransform: "none", p: 0, minWidth: "auto", fontSize: "0.75rem", color: "#0284C7" }}
+                              sx={{
+                                textTransform: "none",
+                                p: 0,
+                                minWidth: "auto",
+                                fontSize: "0.75rem",
+                                color: "#0284C7",
+                              }}
                             >
                               Reset to current origin
                             </Button>
@@ -4541,8 +4608,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                             },
                           }}
                         />
-                        <Typography variant="caption" sx={{ color: "#64748B", fontSize: "0.78rem", mt: 0.5, display: "block" }}>
-                          Derived from current browser origin (<code>{window.location.origin}</code>) and persisted on Save. Used by Telegram to deliver webhook updates to <code>/api/telegram/webhook</code> and as the base URL for alert links.
+                        <Typography
+                          variant="caption"
+                          sx={{ color: "#64748B", fontSize: "0.78rem", mt: 0.5, display: "block" }}
+                        >
+                          Derived from current browser origin (<code>{window.location.origin}</code>) and persisted on
+                          Save. Used by Telegram to deliver webhook updates to <code>/api/telegram/webhook</code> and as
+                          the base URL for alert links.
                         </Typography>
                       </Box>
                     </Box>
@@ -4625,7 +4697,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                       >
                         <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                           <Bot size={18} color="#0284C7" />
-                          <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0F172A", fontSize: "0.9rem" }}>
+                          <Typography
+                            variant="subtitle2"
+                            sx={{ fontWeight: 700, color: "#0F172A", fontSize: "0.9rem" }}
+                          >
                             Concise Setup Guide: How to create and configure your Telegram bot
                           </Typography>
                         </Box>
@@ -4633,62 +4708,102 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                         <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" }, gap: 1.5 }}>
                           {/* Step 1 */}
                           <Box sx={{ p: 1.5, bgcolor: "#FFFFFF", borderRadius: 1.5, border: "1px solid #E2E8F0" }}>
-                            <Typography variant="caption" sx={{ fontWeight: 700, color: "#0284C7", display: "block", mb: 0.5 }}>
+                            <Typography
+                              variant="caption"
+                              sx={{ fontWeight: 700, color: "#0284C7", display: "block", mb: 0.5 }}
+                            >
                               1. CREATE BOT WITH @BotFather
                             </Typography>
                             <Typography variant="body2" sx={{ fontSize: "0.82rem", color: "#475569", lineHeight: 1.4 }}>
-                              Open Telegram and search for <b>@BotFather</b>. Send <code>/newbot</code>, follow instructions to set a display name and username (e.g. <code>my_easy42_bot</code>), then copy the API token.
+                              Open Telegram and search for <b>@BotFather</b>. Send <code>/newbot</code>, follow
+                              instructions to set a display name and username (e.g. <code>my_easy42_bot</code>), then
+                              copy the API token.
                             </Typography>
                           </Box>
 
                           {/* Step 2 */}
                           <Box sx={{ p: 1.5, bgcolor: "#FFFFFF", borderRadius: 1.5, border: "1px solid #E2E8F0" }}>
-                            <Typography variant="caption" sx={{ fontWeight: 700, color: "#0284C7", display: "block", mb: 0.5 }}>
+                            <Typography
+                              variant="caption"
+                              sx={{ fontWeight: 700, color: "#0284C7", display: "block", mb: 0.5 }}
+                            >
                               2. FETCH YOUR TELEGRAM USER ID
                             </Typography>
                             <Typography variant="body2" sx={{ fontSize: "0.82rem", color: "#475569", lineHeight: 1.4 }}>
-                              Message <b>@userinfobot</b> on Telegram. It will instantly reply with your numeric <code>Id</code> (e.g. <code>123456789</code>). Copy this into the Admin User ID field.
+                              Message <b>@userinfobot</b> on Telegram. It will instantly reply with your numeric{" "}
+                              <code>Id</code> (e.g. <code>123456789</code>). Copy this into the Admin User ID field.
                             </Typography>
                           </Box>
 
                           {/* Step 3 */}
                           <Box sx={{ p: 1.5, bgcolor: "#FFFFFF", borderRadius: 1.5, border: "1px solid #E2E8F0" }}>
-                            <Typography variant="caption" sx={{ fontWeight: 700, color: "#0284C7", display: "block", mb: 0.5 }}>
+                            <Typography
+                              variant="caption"
+                              sx={{ fontWeight: 700, color: "#0284C7", display: "block", mb: 0.5 }}
+                            >
                               3. START CHAT WITH YOUR BOT
                             </Typography>
                             <Typography variant="body2" sx={{ fontSize: "0.82rem", color: "#475569", lineHeight: 1.4 }}>
-                              Search for your newly created bot username in Telegram and press <b>Start</b>. Telegram requires you to initiate the conversation before bots can send messages.
+                              Search for your newly created bot username in Telegram and press <b>Start</b>. Telegram
+                              requires you to initiate the conversation before bots can send messages.
                             </Typography>
                           </Box>
 
                           {/* Step 4 */}
                           <Box sx={{ p: 1.5, bgcolor: "#FFFFFF", borderRadius: 1.5, border: "1px solid #E2E8F0" }}>
-                            <Typography variant="caption" sx={{ fontWeight: 700, color: "#0284C7", display: "block", mb: 0.5 }}>
+                            <Typography
+                              variant="caption"
+                              sx={{ fontWeight: 700, color: "#0284C7", display: "block", mb: 0.5 }}
+                            >
                               4. SAVE & TEST CONNECTION
                             </Typography>
                             <Typography variant="body2" sx={{ fontSize: "0.82rem", color: "#475569", lineHeight: 1.4 }}>
-                              Paste the token and user ID above, click <b>Save Settings</b>, then click <b>Test Connection</b>. You will receive an immediate test notification in your Telegram app!
+                              Paste the token and user ID above, click <b>Save Settings</b>, then click{" "}
+                              <b>Test Connection</b>. You will receive an immediate test notification in your Telegram
+                              app!
                             </Typography>
                           </Box>
                         </Box>
 
                         {/* Supported Bot Commands */}
                         <Box sx={{ mt: 0.5 }}>
-                          <Typography variant="caption" sx={{ fontWeight: 700, color: "#334155", textTransform: "uppercase", fontSize: "0.75rem", display: "block", mb: 1 }}>
+                          <Typography
+                            variant="caption"
+                            sx={{
+                              fontWeight: 700,
+                              color: "#334155",
+                              textTransform: "uppercase",
+                              fontSize: "0.75rem",
+                              display: "block",
+                              mb: 1,
+                            }}
+                          >
                             Supported Bot Commands:
                           </Typography>
                           <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
-                            <Chip size="small" label="/status" sx={{ fontFamily: "monospace", fontWeight: 700, bgcolor: "#E0F2FE", color: "#0369A1" }} />
+                            <Chip
+                              size="small"
+                              label="/status"
+                              sx={{ fontFamily: "monospace", fontWeight: 700, bgcolor: "#E0F2FE", color: "#0369A1" }}
+                            />
                             <Typography variant="caption" sx={{ color: "#64748B", alignSelf: "center", mr: 1.5 }}>
                               Cluster overview, node online/offline counts, bandwidth
                             </Typography>
 
-                            <Chip size="small" label="/nodes" sx={{ fontFamily: "monospace", fontWeight: 700, bgcolor: "#E0F2FE", color: "#0369A1" }} />
+                            <Chip
+                              size="small"
+                              label="/nodes"
+                              sx={{ fontFamily: "monospace", fontWeight: 700, bgcolor: "#E0F2FE", color: "#0369A1" }}
+                            />
                             <Typography variant="caption" sx={{ color: "#64748B", alignSelf: "center", mr: 1.5 }}>
                               Detailed node health, CPU, memory, and uptime
                             </Typography>
 
-                            <Chip size="small" label="/help" sx={{ fontFamily: "monospace", fontWeight: 700, bgcolor: "#F1F5F9", color: "#475569" }} />
+                            <Chip
+                              size="small"
+                              label="/help"
+                              sx={{ fontFamily: "monospace", fontWeight: 700, bgcolor: "#F1F5F9", color: "#475569" }}
+                            />
                             <Typography variant="caption" sx={{ color: "#64748B", alignSelf: "center" }}>
                               Command usage instructions
                             </Typography>
@@ -5694,7 +5809,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                 </Box>
 
                 <Typography variant="caption" sx={{ color: "#64748B", mt: -1 }}>
-                  Clears local browser CacheStorage assets and unregisters active service workers to ensure fresh bundles are pulled from the server.
+                  Clears local browser CacheStorage assets and unregisters active service workers to ensure fresh
+                  bundles are pulled from the server.
                 </Typography>
 
                 {swFlushResult && (
@@ -6683,7 +6799,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                   }}
                 />
                 <Typography variant="caption" sx={{ color: "#94A3B8" }}>
-                  Supports standard Go text/template syntax, sprout functions, and easy42 context objects.
+                  Supports standard Go text/template syntax,{" "}
+                  <a href="https://github.com/go-sprout/sprout" target="_blank" rel="noreferrer">
+                    sprout functions
+                  </a>
+                  , easy42 context objects, and some custom functions: <b>eval</b>: execute a JavaScript snippet (using{" "}
+                  <a href="https://github.com/dop251/goja" target="_blank" rel="noreferrer">
+                    goja
+                  </a>
+                  ) and return result.
+                  <br />
                 </Typography>
               </Box>
             </DialogContent>

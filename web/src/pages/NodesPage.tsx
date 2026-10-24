@@ -994,7 +994,7 @@ export const NodesPage: React.FC = () => {
                 size="small"
                 onClick={() => handleSelectTag(item.id)}
                 sx={{
-                  fontWeight: isSelected ? 700 : 500,
+                  fontWeight: 500,
                   bgcolor: bg,
                   color: color,
                   borderRadius: 1.5,
@@ -1330,7 +1330,9 @@ export const NodesPage: React.FC = () => {
                           }}
                         />
                         {isOnline && downLinksCount > 0 && (
-                          <Tooltip title={`${downLinksCount} ${downLinksCount === 1 ? "link is" : "links are"} currently down`}>
+                          <Tooltip
+                            title={`${downLinksCount} ${downLinksCount === 1 ? "link is" : "links are"} currently down`}
+                          >
                             <Chip
                               label={`${downLinksCount} down`}
                               size="small"
@@ -1951,7 +1953,9 @@ export const NodesPage: React.FC = () => {
                           }}
                         />
                         {isOnline && downLinksCount > 0 && (
-                          <Tooltip title={`${downLinksCount} ${downLinksCount === 1 ? "link is" : "links are"} currently down`}>
+                          <Tooltip
+                            title={`${downLinksCount} ${downLinksCount === 1 ? "link is" : "links are"} currently down`}
+                          >
                             <Chip
                               label={`${downLinksCount} down`}
                               size="small"

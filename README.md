@@ -1,3 +1,5 @@
+![Easy42 Logo](web/public/favicon-48x48.png)
+
 # Easy42
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -100,7 +102,7 @@ Easy42 combines an intuitive, visual **Web UI** with a scriptable **CLI**, suppo
 
 ## Why Easy42?
 
-- **Unified Control Plane**: A single tool to manage `wireguard`, `bird`, `nft` configurations of every node in the cluster from a central place. It is the only tool you need to bootstrap your cluster, make it work and ensure observability.
+- **Unified Control Plane**: A single tool to manage `wireguard`, `bird`, `nft` configurations of every node in the cluster from a central place. It is the only tool you need to bootstrap your cluster, make everything work and ensure observability.
 - **Pure Linux Kernel Line Rate**: Unlike userspace overlay networks (Tailscale, ZeroTier) that incur userspace context-switch overhead, Easy42 uses native Linux kernel WireGuard interfaces (`wg42*`).
 - **Standard Dynamic Routing**: Powered by **BIRD 2** running Multiprotocol BGP over IPv6 link-local addresses (RFC 8950 / RFC 5549) with **BFD** failure detection. Supports BGP Confederations (RFC 5065), BGP Route Reflectors (RR), and iBGP meshes. Easy42 exclusively uses BGP for all intra- and inter-network routing—avoiding the route attribute loss (e.g., BGP communities) and mutual redistribution complexity of standalone IGPs (such as Babel or OSPF).
 - **Zero Tunnel IPAM Headaches**: Overlay tunnels use deterministic IPv6 link-local (`fe80::/64`) and optional deterministic IPv4 link-local (`169.254.X.X/32`) addressing, saving your routable IP prefixes for actual workloads.
@@ -115,7 +117,7 @@ Easy42 combines an intuitive, visual **Web UI** with a scriptable **CLI**, suppo
 - **Automated Dynamic Routing**: Single-protocol BGP architecture powered by BIRD 2 (eliminating standalone IGP complexity like OSPF/Babel while preserving full BGP community fidelity), supporting three intra-networking topologies (recommended BGP Confederation RFC 5065, iBGP with BGP Route Reflectors, and iBGP mesh), BFD-based failure detection, multi-table kernel FIB synchronization, dynamic link-cost latency steering, and automatic Route Origin Authorization (ROA) validation.
 - **Stateful Security & nftables**: Automatic `/etc/easy42.nft` ruleset generation featuring path-MTU MSS clamping, cross-tunnel transit SNAT, and incoming connection filtering (`block_ingress_new` with port whitelisting).
 - **Device Helper & Remote Host Automation**: Integrated host preparation engine to install WireGuard/BIRD, configure `/etc/sysctl.d/99-easy42.conf`, persist node and external IPs through the host's native network manager, inject BIRD/nftables includes, run custom network scripts, configure interface autostart on boot, and deploy `easy42-agent` binaries with real-time web terminal output.
-- **Post-Quantum WireGuard PSK Support**: Add optional Preshared Keys (PSK) to any WireGuard link for defense-in-depth against quantum cryptanalysis. PSKs are generated, revealed, and rotated from the Web UI/API, or supplied as encrypted values through declarative config.
+- **Post-Quantum WireGuard PSK Support**: Add Preshared Keys (PSK) to all WireGuard links by default for defense-in-depth against quantum cryptanalysis. PSKs are generated, revealed, and rotated from the Web UI/API, or supplied as encrypted values through declarative config.
 - **Agent Sync Hooks**: Execute pre-sync and post-sync shell scripts on agent-managed nodes with rich execution context and safety abort semantics.
 - **Real-Time Telemetry & Traffic History**: Live CPU, memory, load average, disk usage, interface throughput (Rx/Tx B/s), and WireGuard handshake tracking, persisted in SQLite with configurable raw and summarized retention.
 - **Prometheus Metrics Integration**: Built-in `/metrics` endpoint exposing cluster-wide telemetry, agent statuses, node resource usage, and tunnel traffic counters, with bundled Grafana dashboards.
@@ -135,7 +137,8 @@ Easy42 combines an intuitive, visual **Web UI** with a scriptable **CLI**, suppo
 
 - **Controller**: Linux amd64 or arm64. The Easy42 is a pure-Go program so it should also work on other systems but we only provide pre-built binaries for Linux at this time.
 - **Managed Nodes**: Modern Linux distribution (Debian, Ubuntu, CentOS/RHEL/Rocky, Alpine, Arch, OpenWrt) with root / sudo access.
-  - Note for `OpenWrt`: `easy42` requires `wg` & `wg-quick` installed on managed node to work. You can install `wireguard` normally on OpenWrt but the native `wg-quick` is not available in OpenWrt at this time. However you can easily install a compatible third-party wg-quick implementation on OpenWrt such as [wg-quick-op](https://github.com/dn-11/wg-quick-op), just download the binary and put it to `/usr/bin/wg-quick` and it's done.
+  - Easy42 requires `nftables >= 1.0.3` (introduced in Linux `kernel 5.18+`) on the managed node so the minium supported distribution is `Ubuntu 22.04+`, `Debian 12+`, `CentOS 10+`, `Alpine 3.17+`, `OpenWrt 24.10+`. Older system could still work but would require extra manual work to override the default Easy42 nft template.
+  - Note for `OpenWrt`: Easy42 requires `wg` & `wg-quick` installed on managed node to work. You can install `wireguard` normally on OpenWrt but the native `wg-quick` is not provided in OpenWrt `wireguard-tools` package at this time. However you can easily install a compatible third-party wg-quick implementation on OpenWrt such as [wg-quick-op](https://github.com/dn-11/wg-quick-op). The Easy42 built-in "Install wg-quick (OpenWrt)" Device Helper task can help you do it in one-click.
 - **SSH Credentials (for SSH-Managed Nodes & Device Helper)**: Easy42 directly and exclusively uses the current OS user's OpenSSH files (`~/.ssh/id_ed25519` for authentication and `~/.ssh/known_hosts` for strict server host key verification). Ensure your public key (`id_ed25519.pub`) is authorized on target nodes and their host keys exist in `~/.ssh/known_hosts`. Standard `~/.ssh/config` aliases, custom ports, and identities are also respected.
 
 ### 2. Download easy42
@@ -197,17 +200,17 @@ In production environment you need to run easy42 behind a TLS enabled reverse pr
 
 Detailed technical guides and architectural deep dives have been separated into dedicated documentation files:
 
-| Document                                                     | Description                                                                                                                                                   |
-| :----------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **[Architecture & Data Plane](docs/architecture.md)**        | Deep dive into link-local addressing, WireGuard interface design, entrypoint selection, and the cryptographic security model.                                 |
+| Document                                                     | Description                                                                                                                                                                                |
+| :----------------------------------------------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **[Architecture & Data Plane](docs/architecture.md)**        | Deep dive into link-local addressing, WireGuard interface design, entrypoint selection, and the cryptographic security model.                                                              |
 | **[Dynamic Routing with BIRD 2](docs/routing.md)**           | Three intra-networking strategies (Confederation vs Route Reflector vs Mesh), BFD failure detection, loopback route origination, network policies, dynamic link costs, and ROA validation. |
-| **[nftables Firewall & NAT](docs/firewall.md)**              | Stateful packet filtering, TCP MSS clamping, transit SNAT, DSCP/mark handling, and policy-based ingress protection.                                           |
-| **[Node Agent (`easy42-agent`) & Hooks](docs/agent.md)**     | Rust agent architecture, real-time telemetry streaming, edge cron probes, and lifecycle sync hooks (`pre_sync` / `post_sync`).                                |
-| **[Device Helper & Node Automation](docs/device-helper.md)** | Remote host provisioning, embedded bootstrap tasks, persistent network/IP configuration, tag-based fleet execution, and REST API.                              |
-| **[Integrations & Extended Features](docs/integrations.md)** | Prometheus metrics, Grafana dashboards, `/etc/hosts` sync, WireGuard PSK, database retention, templates, scheduled tasks, Telegram, and Cloudflare DNS.        |
-| **[Configuration Specification](docs/configuration.md)**     | Complete reference schema, annotated example for `config.json`, and declarative JSON/YAML config apply.                                                       |
-| **[CLI Reference](docs/cli.md)**                             | Complete command-line manual for `serve`, `node`, `link`, `status`, `sync`, `apply`, and `version`.                                                           |
-| **[Operations & Troubleshooting](docs/troubleshooting.md)**  | Interface verification, BIRD diagnostics, live health checks, config apply recovery, and common gotchas.                                                      |
+| **[nftables Firewall & NAT](docs/firewall.md)**              | Stateful packet filtering, TCP MSS clamping, transit SNAT, DSCP/mark handling, and policy-based ingress protection.                                                                        |
+| **[Node Agent (`easy42-agent`) & Hooks](docs/agent.md)**     | Rust agent architecture, real-time telemetry streaming, edge cron probes, and lifecycle sync hooks (`pre_sync` / `post_sync`).                                                             |
+| **[Device Helper & Node Automation](docs/device-helper.md)** | Remote host provisioning, embedded bootstrap tasks, persistent network/IP configuration, tag-based fleet execution, and REST API.                                                          |
+| **[Integrations & Extended Features](docs/integrations.md)** | Prometheus metrics, Grafana dashboards, `/etc/hosts` sync, WireGuard PSK, database retention, templates, scheduled tasks, Telegram, and Cloudflare DNS.                                    |
+| **[Configuration Specification](docs/configuration.md)**     | Complete reference schema, annotated example for `config.json`, and declarative JSON/YAML config apply.                                                                                    |
+| **[CLI Reference](docs/cli.md)**                             | Complete command-line manual for `serve`, `node`, `link`, `status`, `sync`, `apply`, and `version`.                                                                                        |
+| **[Operations & Troubleshooting](docs/troubleshooting.md)**  | Interface verification, BIRD diagnostics, live health checks, config apply recovery, and common gotchas.                                                                                   |
 
 ---
 
