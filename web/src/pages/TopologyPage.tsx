@@ -20,6 +20,7 @@ export const TopologyPage: React.FC = () => {
     nodeStatuses,
     networkState,
     networkPolicies,
+    networkSettings,
     selectedTag,
     setSelectedTag,
     uniqueTags,
@@ -262,6 +263,9 @@ export const TopologyPage: React.FC = () => {
           setSelectedLink(updated);
           loadData();
         }}
+        nodes={nodes}
+        networkPolicies={networkPolicies}
+        networkSettings={networkSettings}
         networkState={networkState}
         nodeStatuses={nodeStatuses}
       />

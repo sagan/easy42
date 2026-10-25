@@ -11,6 +11,11 @@ import {
   Tooltip,
   Chip,
   TextField,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  InputAdornment,
 } from "@mui/material";
 import {
   X,
@@ -31,13 +36,18 @@ import {
   RotateCcw,
   FileText,
   Network,
+  Share2,
+  Lock,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import { api } from "../../api/client";
-import { Link, NetworkState, Node, NetworkPolicy, NodeStatus } from "../../types/api";
+import { Link, NetworkState, Node, NetworkPolicy, NodeStatus, NetworkSettings } from "../../types/api";
 import { MarkdownView } from "../Common/MarkdownView";
 import { getEffectiveLinkCost } from "../../utils/cost";
 import { getLinkWorkingState } from "./TopologyGraph";
 import { LinkKeyActionModal, LinkKeyActionMode } from "../Modals/LinkKeyActionModal";
+import { MeshContext } from "../../context/MeshContext";
 
 interface LinkDetailDrawerProps {
   link: Link | null;
@@ -45,6 +55,7 @@ interface LinkDetailDrawerProps {
   nodeStatuses?: Record<string, NodeStatus>;
   nodes?: Node[];
   networkPolicies?: NetworkPolicy[];
+  networkSettings?: NetworkSettings | null;
   open: boolean;
   onClose: () => void;
   onEditLink: (link: Link) => void;
@@ -79,6 +90,7 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
   nodeStatuses,
   nodes,
   networkPolicies,
+  networkSettings,
   open,
   onClose,
   onEditLink,
@@ -86,6 +98,10 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
   onRefreshLink,
   onLinkUpdated,
 }) => {
+  const mesh = React.useContext(MeshContext);
+  const effectiveNodes = nodes || mesh?.nodes || [];
+  const effectivePolicies = networkPolicies || mesh?.networkPolicies;
+  const effectiveNetworkSettings = networkSettings !== undefined ? networkSettings : mesh?.networkSettings;
   const [deleting, setDeleting] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [restartingFrom, setRestartingFrom] = useState(false);
@@ -99,6 +115,14 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
   const [keyModalOpen, setKeyModalOpen] = useState(false);
   const [keyModalMode, setKeyModalMode] = useState<LinkKeyActionMode>("reveal_psk");
   const [keyModalNode, setKeyModalNode] = useState<string | undefined>(undefined);
+
+  const [copiedPeeringInfo, setCopiedPeeringInfo] = useState(false);
+  const [peeringAuthModalOpen, setPeeringAuthModalOpen] = useState(false);
+  const [peeringPassword, setPeeringPassword] = useState("");
+  const [showPeeringPassword, setShowPeeringPassword] = useState(false);
+  const [peeringAuthLoading, setPeeringAuthLoading] = useState(false);
+  const [peeringAuthError, setPeeringAuthError] = useState<string | null>(null);
+  const [peeringPreviewText, setPeeringPreviewText] = useState<string | null>(null);
 
   const handleOpenKeyModal = (mode: LinkKeyActionMode, node?: string) => {
     setKeyModalMode(mode);
@@ -129,9 +153,158 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
 
   if (!link) return null;
 
-  const isFromExternal = nodes?.find((n) => n.name === link.from.name)?.is_external;
-  const isToExternal = nodes?.find((n) => n.name === link.to.name)?.is_external;
+  const fromNode = effectiveNodes.find((n) => n.name === link.from.name);
+  const toNode = effectiveNodes.find((n) => n.name === link.to.name);
+  const isFromExternal = fromNode?.is_external;
+  const isToExternal = toNode?.is_external;
   const isManual = link.type === "manual" || link.from.type === "manual" || link.to.type === "manual";
+
+  const isExternalLink = Boolean(isFromExternal || isToExternal);
+  const globalAsn =
+    effectiveNetworkSettings?.public_asn && effectiveNetworkSettings.public_asn > 0
+      ? effectiveNetworkSettings.public_asn
+      : undefined;
+
+  const fromIsGlobalAsn = Boolean(isExternalLink && !isFromExternal && globalAsn);
+  const fromDisplayedAsn = fromIsGlobalAsn ? globalAsn : fromNode?.asn;
+
+  const toIsGlobalAsn = Boolean(isExternalLink && !isToExternal && globalAsn);
+  const toDisplayedAsn = toIsGlobalAsn ? globalAsn : toNode?.asn;
+
+  const hasPsk = Boolean(link.psk || link.from.psk || link.to.psk);
+
+  const getPeeringInfoData = (pskValue?: string) => {
+    if (!link) return "";
+    const isFromExt = Boolean(isFromExternal);
+
+    const ourLinkEnd = isFromExt ? link.to : link.from;
+    const theirLinkEnd = isFromExt ? link.from : link.to;
+
+    const ourNode = effectiveNodes.find((n) => n.name === ourLinkEnd.name);
+    const theirNode = effectiveNodes.find((n) => n.name === theirLinkEnd.name);
+
+    // Our side ASN: global settings public_asn if configured, else ourNode.asn
+    const ourAsn =
+      (effectiveNetworkSettings?.public_asn && effectiveNetworkSettings.public_asn > 0
+        ? effectiveNetworkSettings.public_asn
+        : ourNode?.asn) ?? "";
+    const theirAsn = theirNode?.asn ?? "";
+
+    // Endpoints
+    let ourEndpoint =
+      (isFromExt ? link.from.resolved_endpoint || link.from.endpoint : link.to.resolved_endpoint || link.to.endpoint) ||
+      "";
+    if (!ourEndpoint || ourEndpoint === "Dynamic / Automatic") {
+      const ep = ourNode?.entrypoints?.find((e) => e.ip);
+      const host = ep?.ip || ourNode?.host || "";
+      if (host && ourLinkEnd.listen_port) {
+        ourEndpoint = `${host}:${ourLinkEnd.listen_port}`;
+      } else {
+        ourEndpoint = ourEndpoint === "Dynamic / Automatic" ? "" : ourEndpoint;
+      }
+    }
+
+    let theirEndpoint =
+      (isFromExt ? link.to.resolved_endpoint || link.to.endpoint : link.from.resolved_endpoint || link.from.endpoint) ||
+      "";
+    if ((!theirEndpoint || theirEndpoint === "Dynamic / Automatic") && theirNode?.host && theirLinkEnd.listen_port) {
+      theirEndpoint = `${theirNode.host}:${theirLinkEnd.listen_port}`;
+    } else if (theirEndpoint === "Dynamic / Automatic") {
+      theirEndpoint = "";
+    }
+
+    const ourPublicKey = ourLinkEnd.public_key || "";
+    const theirPublicKey = theirLinkEnd.public_key || "";
+
+    const ourAddress = getLinkLocalIpv6CopyText(ourLinkEnd.address);
+    const theirAddress = getLinkLocalIpv6CopyText(theirLinkEnd.address || ourLinkEnd.neighbor_address);
+
+    const ourLines = [
+      "Our side:",
+      `ASN: ${ourAsn}`,
+      `WireGuard Endpoint: ${ourEndpoint}`,
+      `WireGuard Public Key: ${ourPublicKey}`,
+    ];
+    if (pskValue) {
+      ourLines.push(`WireGuard PSK: ${pskValue}`);
+    }
+    ourLines.push(`BGP Peering Address (ipv6 link local): ${ourAddress}`);
+    ourLines.push("Configurations: ROA, MP-BGP, Extended Next-hop");
+
+    const theirLines = [
+      "Your side:",
+      `ASN: ${theirAsn}`,
+      `WireGuard Endpoint: ${theirEndpoint}`,
+      `WireGuard Public Key: ${theirPublicKey}`,
+    ];
+    if (pskValue) {
+      theirLines.push(`WireGuard PSK: ${pskValue}`);
+    }
+    theirLines.push(`BGP Peering Address (ipv6 link local): ${theirAddress}`);
+
+    return `${ourLines.join("\n")}\n\n${theirLines.join("\n")}\n`;
+  };
+
+  const handleCopyPeeringInfo = async () => {
+    if (!isExternalLink) return;
+
+    if (hasPsk) {
+      setPeeringPassword("");
+      setShowPeeringPassword(false);
+      setPeeringAuthLoading(false);
+      setPeeringAuthError(null);
+      setPeeringPreviewText(null);
+      setPeeringAuthModalOpen(true);
+    } else {
+      const text = getPeeringInfoData();
+      try {
+        await navigator.clipboard.writeText(text);
+        setCopiedPeeringInfo(true);
+        setActionSuccess("Peering info copied to clipboard");
+        setTimeout(() => {
+          setCopiedPeeringInfo(false);
+          setActionSuccess(null);
+        }, 3000);
+      } catch {
+        setError("Failed to copy peering info to clipboard");
+      }
+    }
+  };
+
+  const handleVerifyAndCopyPeeringInfo = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!link) return;
+    if (!peeringPassword) {
+      setPeeringAuthError("Please enter your administrator password");
+      return;
+    }
+    setPeeringAuthLoading(true);
+    setPeeringAuthError(null);
+
+    try {
+      const res = await api.revealLinkPsk({
+        from: link.from.name,
+        to: link.to.name,
+        interface: link.from.interface,
+        password: peeringPassword,
+      });
+      const decryptedPsk = res.psk || "";
+      const text = getPeeringInfoData(decryptedPsk);
+      setPeeringPreviewText(text);
+      await navigator.clipboard.writeText(text);
+      setCopiedPeeringInfo(true);
+      setActionSuccess("Peering info with PSK copied to clipboard");
+      setTimeout(() => {
+        setCopiedPeeringInfo(false);
+        setActionSuccess(null);
+      }, 4000);
+    } catch (err: unknown) {
+      const e = err as Error;
+      setPeeringAuthError(e.message || "Failed to verify password and decrypt PSK");
+    } finally {
+      setPeeringAuthLoading(false);
+    }
+  };
 
   const handleSaveFromNote = async () => {
     if (!link) return;
@@ -349,6 +522,24 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
         </Box>
 
         <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+          {isExternalLink && (
+            <Tooltip title={copiedPeeringInfo ? "Peering Info Copied!" : "Copy Peering Info"}>
+              <IconButton
+                id="btn-header-copy-peering-info"
+                size="small"
+                onClick={handleCopyPeeringInfo}
+                sx={{
+                  color: copiedPeeringInfo ? "#059669" : "#4F46E5",
+                  backgroundColor: copiedPeeringInfo ? "rgba(16, 185, 129, 0.1)" : "rgba(99, 102, 241, 0.08)",
+                  "&:hover": {
+                    backgroundColor: copiedPeeringInfo ? "rgba(16, 185, 129, 0.15)" : "rgba(99, 102, 241, 0.15)",
+                  },
+                }}
+              >
+                {copiedPeeringInfo ? <Check size={18} /> : <Share2 size={18} />}
+              </IconButton>
+            </Tooltip>
+          )}
           <Tooltip title="Edit Link">
             <IconButton
               size="small"
@@ -657,6 +848,43 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
 
             <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <Typography variant="caption" sx={{ color: "#64748B" }}>
+                ASN:
+              </Typography>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                <Typography variant="caption" className="mono-font" sx={{ color: "#0F172A", fontWeight: 600 }}>
+                  {fromDisplayedAsn !== undefined && fromDisplayedAsn !== null ? `AS${fromDisplayedAsn}` : "—"}
+                </Typography>
+                {fromIsGlobalAsn && (
+                  <Chip
+                    label="Global ASN"
+                    size="small"
+                    sx={{
+                      height: 18,
+                      fontSize: "0.62rem",
+                      fontWeight: 700,
+                      bgcolor: "rgba(79, 70, 229, 0.12)",
+                      color: "#4F46E5",
+                      border: "1px solid rgba(79, 70, 229, 0.25)",
+                      borderRadius: "4px",
+                    }}
+                  />
+                )}
+                {fromDisplayedAsn !== undefined && fromDisplayedAsn !== null && (
+                  <Tooltip title={copiedField === "from_asn" ? "Copied!" : "Copy ASN"}>
+                    <IconButton
+                      size="small"
+                      onClick={() => copyFieldToClipboard(String(fromDisplayedAsn), "from_asn")}
+                      sx={{ p: 0.3, color: copiedField === "from_asn" ? "#10B981" : "#64748B" }}
+                    >
+                      {copiedField === "from_asn" ? <Check size={13} /> : <Copy size={13} />}
+                    </IconButton>
+                  </Tooltip>
+                )}
+              </Box>
+            </Box>
+
+            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <Typography variant="caption" sx={{ color: "#64748B" }}>
                 {isManual ? "Local Address:" : "Link-Local IPv6:"}
               </Typography>
               <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
@@ -745,13 +973,13 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
 
                 <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <Typography variant="caption" sx={{ color: "#64748B" }}>
-                    Peer Endpoint:
+                    Endpoint:
                   </Typography>
                   <Box sx={{ display: "flex", alignItems: "center", gap: 0.8 }}>
                     <Typography variant="caption" className="mono-font" sx={{ color: "#0F172A", fontWeight: 700 }}>
-                      {link.from.resolved_endpoint || link.from.endpoint || "Dynamic / Automatic"}
+                      {link.to.resolved_endpoint || link.to.endpoint || "Dynamic / Automatic"}
                     </Typography>
-                    {link.from.use_ip && (
+                    {link.to.use_ip && (
                       <Chip
                         label="IP Resolved"
                         size="small"
@@ -765,13 +993,13 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
                         }}
                       />
                     )}
-                    {(link.from.resolved_endpoint || link.from.endpoint) &&
-                      (link.from.resolved_endpoint || link.from.endpoint) !== "Dynamic / Automatic" && (
-                        <Tooltip title={copiedEndpoint === "from" ? "Copied!" : "Copy Peer Endpoint"}>
+                    {(link.to.resolved_endpoint || link.to.endpoint) &&
+                      (link.to.resolved_endpoint || link.to.endpoint) !== "Dynamic / Automatic" && (
+                        <Tooltip title={copiedEndpoint === "from" ? "Copied!" : "Copy Endpoint"}>
                           <IconButton
                             size="small"
                             onClick={() =>
-                              copyEndpointToClipboard(link.from.resolved_endpoint || link.from.endpoint || "", "from")
+                              copyEndpointToClipboard(link.to.resolved_endpoint || link.to.endpoint || "", "from")
                             }
                             sx={{ p: 0.3, color: copiedEndpoint === "from" ? "#10B981" : "#64748B" }}
                           >
@@ -869,7 +1097,7 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
                 label={
                   link.from.cost && link.from.cost !== 0
                     ? `${link.from.cost} (Override)`
-                    : `Policy default (${getEffectiveLinkCost(link.from, Boolean(isToExternal), networkPolicies)})`
+                    : `Policy default (${getEffectiveLinkCost(link.from, Boolean(isToExternal), effectivePolicies)})`
                 }
                 size="small"
                 sx={{
@@ -1268,6 +1496,43 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
 
             <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <Typography variant="caption" sx={{ color: "#64748B" }}>
+                ASN:
+              </Typography>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                <Typography variant="caption" className="mono-font" sx={{ color: "#0F172A", fontWeight: 600 }}>
+                  {toDisplayedAsn !== undefined && toDisplayedAsn !== null ? `AS${toDisplayedAsn}` : "—"}
+                </Typography>
+                {toIsGlobalAsn && (
+                  <Chip
+                    label="Global ASN"
+                    size="small"
+                    sx={{
+                      height: 18,
+                      fontSize: "0.62rem",
+                      fontWeight: 700,
+                      bgcolor: "rgba(79, 70, 229, 0.12)",
+                      color: "#4F46E5",
+                      border: "1px solid rgba(79, 70, 229, 0.25)",
+                      borderRadius: "4px",
+                    }}
+                  />
+                )}
+                {toDisplayedAsn !== undefined && toDisplayedAsn !== null && (
+                  <Tooltip title={copiedField === "to_asn" ? "Copied!" : "Copy ASN"}>
+                    <IconButton
+                      size="small"
+                      onClick={() => copyFieldToClipboard(String(toDisplayedAsn), "to_asn")}
+                      sx={{ p: 0.3, color: copiedField === "to_asn" ? "#10B981" : "#64748B" }}
+                    >
+                      {copiedField === "to_asn" ? <Check size={13} /> : <Copy size={13} />}
+                    </IconButton>
+                  </Tooltip>
+                )}
+              </Box>
+            </Box>
+
+            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <Typography variant="caption" sx={{ color: "#64748B" }}>
                 {isManual ? "Local Address:" : "Link-Local IPv6:"}
               </Typography>
               <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
@@ -1356,13 +1621,13 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
 
                 <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <Typography variant="caption" sx={{ color: "#64748B" }}>
-                    Peer Endpoint:
+                    Endpoint:
                   </Typography>
                   <Box sx={{ display: "flex", alignItems: "center", gap: 0.8 }}>
                     <Typography variant="caption" className="mono-font" sx={{ color: "#0F172A", fontWeight: 700 }}>
-                      {link.to.resolved_endpoint || link.to.endpoint || "Dynamic / Automatic"}
+                      {link.from.resolved_endpoint || link.from.endpoint || "Dynamic / Automatic"}
                     </Typography>
-                    {link.to.use_ip && (
+                    {link.from.use_ip && (
                       <Chip
                         label="IP Resolved"
                         size="small"
@@ -1376,13 +1641,13 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
                         }}
                       />
                     )}
-                    {(link.to.resolved_endpoint || link.to.endpoint) &&
-                      (link.to.resolved_endpoint || link.to.endpoint) !== "Dynamic / Automatic" && (
-                        <Tooltip title={copiedEndpoint === "to" ? "Copied!" : "Copy Peer Endpoint"}>
+                    {(link.from.resolved_endpoint || link.from.endpoint) &&
+                      (link.from.resolved_endpoint || link.from.endpoint) !== "Dynamic / Automatic" && (
+                        <Tooltip title={copiedEndpoint === "to" ? "Copied!" : "Copy Endpoint"}>
                           <IconButton
                             size="small"
                             onClick={() =>
-                              copyEndpointToClipboard(link.to.resolved_endpoint || link.to.endpoint || "", "to")
+                              copyEndpointToClipboard(link.from.resolved_endpoint || link.from.endpoint || "", "to")
                             }
                             sx={{ p: 0.3, color: copiedEndpoint === "to" ? "#10B981" : "#64748B" }}
                           >
@@ -1480,7 +1745,7 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
                 label={
                   link.to.cost && link.to.cost !== 0
                     ? `${link.to.cost} (Override)`
-                    : `Policy default (${getEffectiveLinkCost(link.to, Boolean(isFromExternal), networkPolicies)})`
+                    : `Policy default (${getEffectiveLinkCost(link.to, Boolean(isFromExternal), effectivePolicies)})`
                 }
                 size="small"
                 sx={{
@@ -1815,6 +2080,31 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
 
       {/* Actions */}
       <Box sx={{ mt: "auto", pt: 3, display: "flex", flexDirection: "column", gap: 1.5 }}>
+        {isExternalLink && (
+          <Button
+            id="btn-copy-peering-info"
+            fullWidth
+            variant="outlined"
+            startIcon={copiedPeeringInfo ? <Check size={16} /> : <Share2 size={16} />}
+            onClick={handleCopyPeeringInfo}
+            disabled={deleting}
+            sx={{
+              borderColor: copiedPeeringInfo ? "#10B981" : "#818CF8",
+              color: copiedPeeringInfo ? "#059669" : "#4F46E5",
+              backgroundColor: copiedPeeringInfo ? "rgba(16, 185, 129, 0.08)" : "rgba(99, 102, 241, 0.05)",
+              fontWeight: 700,
+              textTransform: "none",
+              py: 0.9,
+              borderRadius: 1.5,
+              "&:hover": {
+                borderColor: copiedPeeringInfo ? "#059669" : "#4F46E5",
+                backgroundColor: copiedPeeringInfo ? "rgba(16, 185, 129, 0.12)" : "rgba(99, 102, 241, 0.1)",
+              },
+            }}
+          >
+            {copiedPeeringInfo ? "Peering Info Copied!" : "Copy Peering Info"}
+          </Button>
+        )}
         {onRefreshLink && (
           <Button
             fullWidth
@@ -1871,6 +2161,152 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
           }
         }}
       />
+
+      {/* Peering Info PSK Verification Dialog */}
+      <Dialog
+        open={peeringAuthModalOpen}
+        onClose={() => setPeeringAuthModalOpen(false)}
+        maxWidth="sm"
+        fullWidth
+        sx={{ zIndex: 1400 }}
+      >
+        <DialogTitle
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            gap: 1.5,
+            pb: 1.5,
+            borderBottom: "1px solid #E2E8F0",
+          }}
+        >
+          <Box
+            sx={{
+              width: 38,
+              height: 38,
+              borderRadius: 2,
+              backgroundColor: "rgba(99, 102, 241, 0.1)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: "#4F46E5",
+            }}
+          >
+            <Lock size={20} />
+          </Box>
+          <Box>
+            <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#0F172A", lineHeight: 1.2 }}>
+              Copy Peering Info
+            </Typography>
+            <Typography variant="caption" sx={{ color: "#64748B" }}>
+              Administrator password verification required to decrypt Pre-shared Key (PSK).
+            </Typography>
+          </Box>
+        </DialogTitle>
+
+        {peeringPreviewText ? (
+          <Box sx={{ p: 2.5, display: "flex", flexDirection: "column", gap: 2 }}>
+            <Alert severity="success" sx={{ borderRadius: 2 }}>
+              Peering info copied to clipboard successfully!
+            </Alert>
+            <Box
+              sx={{
+                p: 2,
+                borderRadius: 2,
+                backgroundColor: "#F8FAFC",
+                border: "1px solid #E2E8F0",
+                maxHeight: 280,
+                overflowY: "auto",
+              }}
+            >
+              <Typography
+                variant="body2"
+                className="mono-font"
+                sx={{
+                  whiteSpace: "pre-wrap",
+                  fontSize: "0.78rem",
+                  color: "#0F172A",
+                  lineHeight: 1.6,
+                }}
+              >
+                {peeringPreviewText}
+              </Typography>
+            </Box>
+            <DialogActions sx={{ px: 0, pb: 0 }}>
+              <Button
+                variant="outlined"
+                startIcon={<Copy size={15} />}
+                onClick={() => {
+                  navigator.clipboard.writeText(peeringPreviewText);
+                  setActionSuccess("Peering info copied to clipboard");
+                }}
+                sx={{ textTransform: "none", fontWeight: 600 }}
+              >
+                Copy Again
+              </Button>
+              <Button
+                variant="contained"
+                onClick={() => setPeeringAuthModalOpen(false)}
+                sx={{ textTransform: "none", fontWeight: 600 }}
+              >
+                Done
+              </Button>
+            </DialogActions>
+          </Box>
+        ) : (
+          <form onSubmit={handleVerifyAndCopyPeeringInfo}>
+            <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2, pt: 2.5 }}>
+              {peeringAuthError && (
+                <Alert severity="error" sx={{ borderRadius: 2 }}>
+                  {peeringAuthError}
+                </Alert>
+              )}
+              <Typography variant="body2" sx={{ color: "#475569" }}>
+                This link has a WireGuard Pre-shared Key (PSK) configured. Please authenticate with your easy42
+                administrator password to decrypt the PSK and copy the peering info:
+              </Typography>
+              <TextField
+                id="peering-info-admin-password-input"
+                fullWidth
+                type={showPeeringPassword ? "text" : "password"}
+                label="Administrator Password"
+                size="small"
+                value={peeringPassword}
+                onChange={(e) => setPeeringPassword(e.target.value)}
+                autoFocus
+                required
+                disabled={peeringAuthLoading}
+                InputProps={{
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      <IconButton size="small" onClick={() => setShowPeeringPassword(!showPeeringPassword)} edge="end">
+                        {showPeeringPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </IconButton>
+                    </InputAdornment>
+                  ),
+                }}
+              />
+            </DialogContent>
+            <DialogActions sx={{ px: 3, pb: 2.5 }}>
+              <Button
+                onClick={() => setPeeringAuthModalOpen(false)}
+                disabled={peeringAuthLoading}
+                sx={{ textTransform: "none", color: "#64748B" }}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                variant="contained"
+                disabled={peeringAuthLoading}
+                startIcon={peeringAuthLoading ? <CircularProgress size={14} color="inherit" /> : <Copy size={14} />}
+                sx={{ textTransform: "none", fontWeight: 600 }}
+              >
+                {peeringAuthLoading ? "Verifying..." : "Verify & Copy"}
+              </Button>
+            </DialogActions>
+          </form>
+        )}
+      </Dialog>
     </Drawer>
   );
 };
