@@ -36,6 +36,7 @@ export interface BlockNodeData {
   healthyCount?: number;
   isCollapsed?: boolean;
   isGroupFocused?: boolean;
+  isLocked?: boolean;
   onRenameBlock: (id: string, newName: string) => void;
   onDeleteBlock: (id: string) => void;
   onChangeColor: (id: string, color: string) => void;
@@ -57,6 +58,7 @@ export const BlockNode: React.FC<NodeProps> = memo(({ data, selected }) => {
     healthyCount = 0,
     isCollapsed = false,
     isGroupFocused = false,
+    isLocked = false,
     onRenameBlock,
     onDeleteBlock,
     onChangeColor,
@@ -305,11 +307,11 @@ export const BlockNode: React.FC<NodeProps> = memo(({ data, selected }) => {
     >
       <NodeResizer
         color={blockColor}
-        isVisible={Boolean(selected)}
+        isVisible={Boolean(selected) && !isLocked}
         minWidth={260}
         minHeight={180}
-        handleStyle={{ width: 8, height: 8, borderRadius: 2, pointerEvents: "all" }}
-        lineStyle={{ borderColor: blockColor, pointerEvents: "all" }}
+        handleStyle={{ width: 8, height: 8, borderRadius: 2, pointerEvents: isLocked ? "none" : "all" }}
+        lineStyle={{ borderColor: blockColor, pointerEvents: isLocked ? "none" : "all" }}
       />
 
       {/* Invisible Handles for React Flow Edge Attachment */}
@@ -350,7 +352,7 @@ export const BlockNode: React.FC<NodeProps> = memo(({ data, selected }) => {
 
       {/* Block Header */}
       <Box
-        className="block-header"
+        className={isLocked ? "nodrag block-header" : "block-header"}
         onClick={() => onFocusBlock?.(block.id)}
         sx={{
           px: 1.75,
@@ -362,9 +364,9 @@ export const BlockNode: React.FC<NodeProps> = memo(({ data, selected }) => {
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          cursor: "grab",
+          cursor: isLocked ? "default" : "grab",
           pointerEvents: "all",
-          "&:active": { cursor: "grabbing" },
+          "&:active": { cursor: isLocked ? "default" : "grabbing" },
         }}
       >
         {/* Left: Icon & Title */}
@@ -563,7 +565,7 @@ export const BlockNode: React.FC<NodeProps> = memo(({ data, selected }) => {
           )}
 
           {/* Tidy Group Button (Local Auto-Layout) */}
-          {memberCount > 1 && onTidyBlock && (
+          {memberCount > 1 && onTidyBlock && !isLocked && (
             <Tooltip title="Tidy Group (arrange member nodes in a clean, neat grid)">
               <IconButton
                 size="small"

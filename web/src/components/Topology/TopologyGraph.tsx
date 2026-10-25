@@ -50,6 +50,8 @@ import {
   Check,
   Download,
   Activity,
+  Lock,
+  Unlock,
 } from "lucide-react";
 import { NodeCard } from "./NodeCard";
 import { CustomEdge } from "./CustomEdge";
@@ -67,6 +69,7 @@ const STORAGE_KEY_BLOCKS = "easy42_graph_blocks_v1";
 const STORAGE_KEY_NODE_BLOCKS = "easy42_node_blocks_v1";
 const STORAGE_KEY_EXPANDED_PAIRS = "easy42_expanded_virtual_edge_pairs_v1";
 const STORAGE_KEY_CENTRALITY_VIEW = "easy42_topology_centrality_view";
+const STORAGE_KEY_DIAGRAM_LOCKED = "easy42_topology_diagram_locked";
 
 const getStoredExpandedPairs = (): Set<string> => {
   try {
@@ -389,6 +392,8 @@ interface FloatingToolbarProps {
   onOpenExportDiagram?: () => void;
   centralityViewEnabled?: boolean;
   onToggleCentralityView?: () => void;
+  isLocked?: boolean;
+  onToggleLock?: () => void;
 }
 
 const FloatingToolbar: React.FC<FloatingToolbarProps> = ({
@@ -419,6 +424,8 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = ({
   onOpenExportDiagram,
   centralityViewEnabled = false,
   onToggleCentralityView,
+  isLocked = false,
+  onToggleLock,
 }) => {
   const { fitView, zoomTo } = useReactFlow();
   const [addMenuAnchor, setAddMenuAnchor] = useState<null | HTMLElement>(null);
@@ -1107,11 +1114,42 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = ({
           </Button>
         </Tooltip>
 
+        {/* Locked status indicator badge */}
+        {isLocked && (
+          <Tooltip title="Diagram is locked: node & group positions and sizes cannot be modified. Click to unlock.">
+            <Chip
+              icon={<Lock size={12} color="#B45309" />}
+              label="Locked"
+              size="small"
+              onClick={onToggleLock}
+              onDelete={onToggleLock}
+              deleteIcon={<X size={12} color="#B45309" />}
+              sx={{
+                height: 28,
+                fontSize: "0.72rem",
+                fontWeight: 700,
+                backgroundColor: "#FEF3C7",
+                color: "#92400E",
+                border: "1px solid #FCD34D",
+                cursor: "pointer",
+                "& .MuiChip-deleteIcon": {
+                  color: "#B45309",
+                  "&:hover": { color: "#78350F" },
+                },
+                "&:hover": {
+                  backgroundColor: "#FDE68A",
+                },
+              }}
+            />
+          </Tooltip>
+        )}
+
         {/* More options dropdown */}
         <Button
           size="small"
           variant="outlined"
           onClick={(e) => setLodMenuAnchor(e.currentTarget)}
+          startIcon={isLocked ? <Lock size={12} color="#D97706" /> : undefined}
           endIcon={<ChevronDown size={12} />}
           sx={{
             height: 28,
@@ -1121,13 +1159,13 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = ({
             borderRadius: 1.75,
             px: 1,
             py: 0.25,
-            backgroundColor: "#F8FAFC",
-            color: "#475569",
+            backgroundColor: isLocked ? "#FFFBEB" : "#F8FAFC",
+            color: isLocked ? "#B45309" : "#475569",
             border: "1px solid",
-            borderColor: "#CBD5E1",
+            borderColor: isLocked ? "#FCD34D" : "#CBD5E1",
             "&:hover": {
-              backgroundColor: "#F1F5F9",
-              borderColor: "#94A3B8",
+              backgroundColor: isLocked ? "#FEF3C7" : "#F1F5F9",
+              borderColor: isLocked ? "#F59E0B" : "#94A3B8",
             },
           }}
         >
@@ -1413,6 +1451,39 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = ({
             {centralityViewEnabled && <Check size={15} color="#047857" />}
           </MenuItem>
 
+          <MenuItem
+            onClick={() => {
+              setLodMenuAnchor(null);
+              onToggleLock?.();
+            }}
+            sx={{
+              borderRadius: 1.25,
+              py: 0.75,
+              px: 1,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              fontSize: "0.82rem",
+              fontWeight: isLocked ? 700 : 500,
+              color: isLocked ? "#B45309" : "#1E293B",
+              backgroundColor: isLocked ? "rgba(245, 158, 11, 0.08)" : "transparent",
+              "&:hover": { bgcolor: isLocked ? "#FEF3C7" : "#F1F5F9" },
+            }}
+          >
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1.25 }}>
+              {isLocked ? <Lock size={15} color="#D97706" /> : <Unlock size={15} color="#64748B" />}
+              <Box>
+                <Typography sx={{ fontSize: "0.82rem", fontWeight: isLocked ? 700 : 600 }}>
+                  {isLocked ? "Unlock Diagram" : "Lock Diagram"}
+                </Typography>
+                <Typography variant="caption" sx={{ fontSize: "0.7rem", color: "#64748B", display: "block" }}>
+                  {isLocked ? "Positions & sizes locked" : "Prevent node & group moving/resizing"}
+                </Typography>
+              </Box>
+            </Box>
+            {isLocked && <Check size={15} color="#D97706" />}
+          </MenuItem>
+
           <Divider sx={{ my: 0.75, borderColor: "#E2E8F0" }} />
 
           <MenuItem
@@ -1501,6 +1572,23 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
       console.error("Failed to persist centralityViewEnabled to localStorage", e);
     }
   }, [centralityViewEnabled]);
+
+  const [isDiagramLocked, setIsDiagramLocked] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(STORAGE_KEY_DIAGRAM_LOCKED) === "true";
+    } catch {
+      return false;
+    }
+  });
+
+  // Automatically synchronize diagram lock state to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY_DIAGRAM_LOCKED, String(isDiagramLocked));
+    } catch (e) {
+      console.error("Failed to persist isDiagramLocked to localStorage", e);
+    }
+  }, [isDiagramLocked]);
 
   // Compute graph theory centrality metrics when centrality view is enabled
   const centralityResult = useMemo(() => {
@@ -1811,6 +1899,7 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
   // Local Auto-Layout ("Tidy Group") action: arranges member nodes in a clean, balanced grid
   const handleTidyBlock = useCallback(
     (blockId: string) => {
+      if (isDiagramLocked) return;
       const targetBlock = blocks.find((b) => b.id === blockId);
       if (!targetBlock) return;
       const memberNames = nodes.filter((n) => effectiveNodeBlockMap[n.name] === blockId).map((n) => n.name);
@@ -1851,7 +1940,7 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
       // Update flow node positions
       // setNodes will be invoked by React Flow nodes state
     },
-    [blocks, nodes, effectiveNodeBlockMap, onNodePositionChange],
+    [blocks, nodes, effectiveNodeBlockMap, onNodePositionChange, isDiagramLocked],
   );
 
   const handleCreateBlockFullMesh = useCallback(
@@ -2077,8 +2166,8 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
         width: isCollapsed ? 310 : block.width,
         height: isCollapsed ? 76 : block.height,
         selectable: true,
-        draggable: true,
-        dragHandle: ".block-header",
+        draggable: !isDiagramLocked,
+        dragHandle: isDiagramLocked ? undefined : ".block-header",
         data: {
           block,
           memberCount: memberNodes.length,
@@ -2089,6 +2178,7 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
           healthyCount,
           isCollapsed,
           isGroupFocused,
+          isLocked: isDiagramLocked,
           onRenameBlock: handleRenameBlock,
           onDeleteBlock: handleDeleteBlock,
           onChangeColor: handleChangeBlockColor,
@@ -2118,6 +2208,7 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
         type: "customNode",
         position: pos,
         hidden: isBlockCollapsed,
+        draggable: !isDiagramLocked,
         style: {
           zIndex: isHighlighted ? 30 : 10,
           width: lodMode === "macro" ? 155 : 260,
@@ -2178,6 +2269,7 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
     handleToggleCollapseBlock,
     handleTidyBlock,
     handleFocusBlock,
+    isDiagramLocked,
   ]);
 
   // Convert links to React Flow edges with filtering rules
@@ -2429,6 +2521,14 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
   // Handle dimensions change when resizing blocks
   const handleNodesChange = useCallback(
     (changes: NodeChange[]) => {
+      if (isDiagramLocked) {
+        const filtered = changes.filter((c) => c.type !== "position" && c.type !== "dimensions");
+        if (filtered.length > 0) {
+          onNodesChange(filtered);
+        }
+        return;
+      }
+
       onNodesChange(changes);
 
       for (const c of changes) {
@@ -2448,12 +2548,13 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
         }
       }
     },
-    [onNodesChange],
+    [onNodesChange, isDiagramLocked],
   );
 
   // Drag start: record initial positions of block and its member nodes
   const handleNodeDragStart: OnNodeDrag = useCallback(
     (_event, node) => {
+      if (isDiagramLocked) return;
       if (node.type === "customNode") {
         setDraggingNodeId(node.id);
       } else if (node.type === "blockGroup") {
@@ -2470,12 +2571,13 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
         };
       }
     },
-    [flowNodes, nodeBlockMap],
+    [flowNodes, nodeBlockMap, isDiagramLocked],
   );
 
   // Live drag: move member nodes together with their parent block
   const handleNodeDrag: OnNodeDrag = useCallback(
     (_event, node) => {
+      if (isDiagramLocked) return;
       if (node.type === "blockGroup" && blockDragState.current && blockDragState.current.blockId === node.id) {
         const dx = node.position.x - blockDragState.current.startBlockPos.x;
         const dy = node.position.y - blockDragState.current.startBlockPos.y;
@@ -2500,12 +2602,13 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
         }
       }
     },
-    [setNodes],
+    [setNodes, isDiagramLocked],
   );
 
   // Drag stop: assign dropped nodes to blocks, or save block positions and member coordinates
   const handleNodeDragStop: OnNodeDrag = useCallback(
     (_event, node, draggedNodes) => {
+      if (isDiagramLocked) return;
       setDraggingNodeId(null);
 
       if (node.type === "blockGroup") {
@@ -2580,7 +2683,7 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
         });
       }
     },
-    [blocks, flowNodes, onNodePositionChange],
+    [blocks, flowNodes, onNodePositionChange, isDiagramLocked],
   );
 
   const initialViewport = useMemo(() => getStoredViewport(), []);
@@ -2765,6 +2868,7 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
         fitView={!initialViewport}
         onMoveEnd={handleMoveEnd}
         attributionPosition="bottom-left"
+        nodesDraggable={!isDiagramLocked}
       >
         {/* Consolidated Floating Toolbar */}
         <FloatingToolbar
@@ -2795,6 +2899,8 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
           onOpenExportDiagram={() => setExportDiagramOpen(true)}
           centralityViewEnabled={centralityViewEnabled}
           onToggleCentralityView={() => setCentralityViewEnabled((v) => !v)}
+          isLocked={isDiagramLocked}
+          onToggleLock={() => setIsDiagramLocked((v) => !v)}
         />
 
         <Background variant={BackgroundVariant.Dots} gap={20} size={1.2} color="#CBD5E1" />
