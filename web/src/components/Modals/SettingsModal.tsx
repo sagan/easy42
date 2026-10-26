@@ -341,6 +341,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
   const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null);
 
   // Network / Peering state
+  const [networkNameInput, setNetworkNameInput] = useState("Easy42");
   const [publicAsn, setPublicAsn] = useState<number | "">("");
   const [disallowedDn42Networks, setDisallowedDn42Networks] = useState("");
   const [networkPrefixes, setNetworkPrefixes] = useState<string[]>([]);
@@ -1045,6 +1046,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
     setNetworkError(null);
     try {
       const settings = await api.getNetworkSettings();
+      setNetworkNameInput(settings.name || "Easy42");
       setPublicAsn(settings.public_asn || "");
       setDisallowedDn42Networks((settings.disallowed_dn42_networks || settings.disallowed_dn42_cidrs || []).join("\n"));
       setNetworkPrefixes(settings.prefixes || []);
@@ -1075,6 +1077,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
     setNetworkSuccess(null);
 
     const payload: NetworkSettings = {
+      name: networkNameInput.trim() || "Easy42",
       public_asn: publicAsn === "" ? 0 : Number(publicAsn),
       prefixes: networkPrefixes,
       disallowed_dn42_networks: parsePrefixList(disallowedDn42Networks),
@@ -1804,6 +1807,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                       {networkError}
                     </Alert>
                   )}
+
+                  <TextFieldWithCopy
+                    fullWidth
+                    size="small"
+                    label="Network Name"
+                    placeholder="Easy42"
+                    value={networkNameInput}
+                    onChange={(e) => setNetworkNameInput(e.target.value)}
+                    helperText="Optional custom name for your overlay network. Defaults to Easy42."
+                    disabled={networkSaving}
+                  />
 
                   <TextFieldWithCopy
                     fullWidth

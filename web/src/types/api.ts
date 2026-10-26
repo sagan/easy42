@@ -23,6 +23,7 @@ export interface ConfigHook {
 }
 
 export interface NetworkSettings {
+  name?: string;
   public_asn?: number;
   confed_members?: string;
   prefixes?: string[];
@@ -328,6 +329,7 @@ export interface AuthStatus {
   unlocked: boolean;
   has_config: boolean;
   version?: string;
+  network_name?: string;
 }
 
 export interface VersionInfo {

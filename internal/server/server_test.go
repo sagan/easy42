@@ -659,9 +659,15 @@ func TestNetworkSettingsAndExternalPeeringAPI(t *testing.T) {
 	if wGetSettings.Code != http.StatusOK {
 		t.Fatalf("GetNetworkSettings failed: %d %s", wGetSettings.Code, wGetSettings.Body.String())
 	}
+	var initialSettings config.NetworkSettings
+	_ = json.Unmarshal(wGetSettings.Body.Bytes(), &initialSettings)
+	if initialSettings.GetName() != "Easy42" {
+		t.Errorf("Expected initial network name 'Easy42', got '%s'", initialSettings.GetName())
+	}
 
 	// 2. PUT /api/settings/network
 	settingsUpdate := config.NetworkSettings{
+		Name:                   "DN42-TestNet",
 		PublicASN:              4242421234,
 		Prefixes:               []string{"172.20.10.0/24", "172.20.0.0/14{21,29}"},
 		DisallowedDN42Networks: []string{"fd42:1234:5678::/48", "172.20.99.0/24"},
@@ -680,6 +686,9 @@ func TestNetworkSettingsAndExternalPeeringAPI(t *testing.T) {
 
 	var savedSettings config.NetworkSettings
 	_ = json.Unmarshal(wPutSettings.Body.Bytes(), &savedSettings)
+	if savedSettings.Name != "DN42-TestNet" {
+		t.Errorf("Expected Name 'DN42-TestNet', got '%s'", savedSettings.Name)
+	}
 	if savedSettings.PublicASN != 4242421234 {
 		t.Errorf("Expected PublicASN 4242421234, got %d", savedSettings.PublicASN)
 	}

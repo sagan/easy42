@@ -136,3 +136,21 @@ func TestNodeEnableFA(t *testing.T) {
 	}
 }
 
+func TestNetworkSettingsName(t *testing.T) {
+	var emptyNS NetworkSettings
+	if emptyNS.GetName() != "Easy42" {
+		t.Errorf("Expected 'Easy42', got '%s'", emptyNS.GetName())
+	}
+
+	customNS := NetworkSettings{Name: "NeoMesh"}
+	if customNS.GetName() != "NeoMesh" {
+		t.Errorf("Expected 'NeoMesh', got '%s'", customNS.GetName())
+	}
+
+	whitespaceNS := NetworkSettings{Name: "   "}
+	if whitespaceNS.GetName() != "Easy42" {
+		t.Errorf("Expected 'Easy42', got '%s'", whitespaceNS.GetName())
+	}
+}
+
+

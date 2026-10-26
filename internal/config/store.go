@@ -106,6 +106,7 @@ func (s *Store) Initialize() (string, error) {
 		EncryptedDEK:  encryptedDEK,
 		SessionSecret: sessionSecret,
 		NetworkSettings: NetworkSettings{
+			Name:      "Easy42",
 			PublicASN: 4242420001,
 			Prefixes:  prefixes,
 		},
@@ -159,6 +160,9 @@ func (s *Store) Load() (*Config, error) {
 		cfg.Links = make([]Link, 0)
 	}
 
+	if strings.TrimSpace(cfg.NetworkSettings.Name) == "" {
+		cfg.NetworkSettings.Name = "Easy42"
+	}
 	cfg.NetworkSettings.Prefixes = CleanPrefixes(cfg.NetworkSettings.Prefixes)
 	if len(cfg.NetworkSettings.DisallowedDN42Networks) == 0 && len(cfg.NetworkSettings.DisallowedDN42CIDRs) > 0 {
 		cfg.NetworkSettings.DisallowedDN42Networks = CleanPrefixes(cfg.NetworkSettings.DisallowedDN42CIDRs)
@@ -224,6 +228,9 @@ func (s *Store) saveLocked(cfg *Config) error {
 		return fmt.Errorf("failed to create data dir: %w", err)
 	}
 
+	if strings.TrimSpace(cfg.NetworkSettings.Name) == "" {
+		cfg.NetworkSettings.Name = "Easy42"
+	}
 	cfg.NetworkSettings.Prefixes = CleanPrefixes(cfg.NetworkSettings.Prefixes)
 	if len(cfg.NetworkSettings.DisallowedDN42Networks) == 0 && len(cfg.NetworkSettings.DisallowedDN42CIDRs) > 0 {
 		cfg.NetworkSettings.DisallowedDN42Networks = CleanPrefixes(cfg.NetworkSettings.DisallowedDN42CIDRs)

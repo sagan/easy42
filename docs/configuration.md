@@ -252,6 +252,7 @@ Other credentials are **not** vault-encrypted: `nodes[].agent_token`, `dns.api_t
 
 | Field                      | Type       | Description                                                                                                                                          |
 | :------------------------- | :--------- | :--------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`                     | `string`   | Optional network name. Defaults to `Easy42`.                                                                                                          |
 | `public_asn`               | `integer`  | Your public or DN42 ASN (for example `4242421234`).                                                                                                  |
 | `prefixes`                 | `string[]` | DN42/mesh prefix space used for peering filters and the built-in `dn42` policy allow-lists. Supports BIRD-style sets such as `172.20.0.0/14{21,29}`. |
 | `disallowed_dn42_networks` | `string[]` | CIDRs excluded from the built-in DN42 policy's import/export and firewall allow-lists.                                                               |

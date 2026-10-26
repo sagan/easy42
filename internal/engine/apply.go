@@ -853,6 +853,10 @@ func mergeNetworkSettings(target *config.NetworkSettings, patch *config.NetworkS
 		}
 	}
 
+	if patch.Name != nil && *patch.Name != target.Name {
+		checkField("name", target.Name, *patch.Name)
+		target.Name = *patch.Name
+	}
 	if patch.PublicASN != nil && *patch.PublicASN != target.PublicASN {
 		checkField("public_asn", target.PublicASN, *patch.PublicASN)
 		target.PublicASN = *patch.PublicASN
@@ -1108,7 +1112,7 @@ func findNodeInSlice(nodes []config.Node, name string) *config.Node {
 
 func filterDiffConfig(c *config.Config) map[string]interface{} {
 	m := make(map[string]interface{})
-	if c.NetworkSettings.PublicASN > 0 || len(c.NetworkSettings.Prefixes) > 0 {
+	if c.NetworkSettings.PublicASN > 0 || len(c.NetworkSettings.Prefixes) > 0 || c.NetworkSettings.Name != "" {
 		m["network_settings"] = c.NetworkSettings
 	}
 	if len(c.Nodes) > 0 {

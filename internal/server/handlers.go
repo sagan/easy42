@@ -37,6 +37,7 @@ type authStatusResponse struct {
 	Unlocked      bool   `json:"unlocked"`
 	HasConfig     bool   `json:"has_config"`
 	Version       string `json:"version"`
+	NetworkName   string `json:"network_name,omitempty"`
 }
 
 func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
@@ -78,11 +79,17 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		SameSite: http.SameSiteLaxMode,
 	})
 
+	netName := "Easy42"
+	if cfg != nil {
+		netName = cfg.NetworkSettings.GetName()
+	}
+
 	writeJSON(w, http.StatusOK, authStatusResponse{
 		Authenticated: true,
 		Unlocked:      s.mgr.IsUnlocked(),
 		HasConfig:     true,
 		Version:       version.Version,
+		NetworkName:   netName,
 	})
 }
 
@@ -94,6 +101,7 @@ func (s *Server) handleAuthStatus(w http.ResponseWriter, r *http.Request) {
 			Unlocked:      false,
 			HasConfig:     false,
 			Version:       version.Version,
+			NetworkName:   "Easy42",
 		})
 		return
 	}
@@ -108,6 +116,7 @@ func (s *Server) handleAuthStatus(w http.ResponseWriter, r *http.Request) {
 				Unlocked:      false,
 				HasConfig:     false,
 				Version:       version.Version,
+				NetworkName:   "Easy42",
 			})
 			return
 		}
@@ -119,11 +128,17 @@ func (s *Server) handleAuthStatus(w http.ResponseWriter, r *http.Request) {
 		authed = crypto.VerifySessionToken(cookie.Value, cfg.SessionSecret, cfg.PasswordHash)
 	}
 
+	netName := "Easy42"
+	if cfg != nil {
+		netName = cfg.NetworkSettings.GetName()
+	}
+
 	writeJSON(w, http.StatusOK, authStatusResponse{
 		Authenticated: authed,
 		Unlocked:      s.mgr.IsUnlocked(),
 		HasConfig:     true,
 		Version:       version.Version,
+		NetworkName:   netName,
 	})
 }
 

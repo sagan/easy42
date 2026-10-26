@@ -10,6 +10,7 @@ import (
 
 // NetworkSettings represents global network-wide peering and routing configurations
 type NetworkSettings struct {
+	Name                   string   `json:"name,omitempty"`                     // Network name (default Easy42)
 	PublicASN              uint64   `json:"public_asn,omitempty"`               // Public / DN42 ASN (e.g. 4242421234)
 	Prefixes               []string `json:"prefixes,omitempty"`                 // Prefixes permitted for peering (export and import)
 	DisallowedDN42Networks []string `json:"disallowed_dn42_networks,omitempty"` // Disallowed CIDRs for dn42 (used by built-in dn42 policy)
@@ -18,6 +19,14 @@ type NetworkSettings struct {
 	FlapAlertedPort        int      `json:"flapalerted_port,omitempty"`         // FlapAlerted BGP port (default 1790)
 	FlapAlertedASN         uint64   `json:"flapalerted_asn,omitempty"`          // FlapAlerted BGP ASN (default 4224420000)
 	FlapAlertedURL         string   `json:"flapalerted_url,omitempty"`          // FlapAlerted web/dashboard base URL
+}
+
+// GetName returns the configured network name or "Easy42" if empty
+func (s *NetworkSettings) GetName() string {
+	if s == nil || strings.TrimSpace(s.Name) == "" {
+		return "Easy42"
+	}
+	return strings.TrimSpace(s.Name)
 }
 
 // GetFlapAlertedAddress returns the configured FlapAlerted IP address

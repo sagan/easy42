@@ -64,6 +64,7 @@ const ConfigChangeJSONSchema = `{
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "name": { "type": "string" },
         "public_asn": { "type": "integer", "minimum": 1, "maximum": 4294967295 },
         "prefixes": { "type": "array", "items": { "type": "string" } },
         "disallowed_dn42_networks": { "type": "array", "items": { "type": "string" } },
@@ -242,6 +243,7 @@ type ConfigPatch struct {
 
 // NetworkSettingsPatch holds partial changes to global network settings
 type NetworkSettingsPatch struct {
+	Name                   *string   `json:"name,omitempty" yaml:"name,omitempty"`
 	PublicASN              *uint64   `json:"public_asn,omitempty" yaml:"public_asn,omitempty"`
 	Prefixes               *[]string `json:"prefixes,omitempty" yaml:"prefixes,omitempty"`
 	DisallowedDN42Networks *[]string `json:"disallowed_dn42_networks,omitempty" yaml:"disallowed_dn42_networks,omitempty"`

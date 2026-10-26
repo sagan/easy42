@@ -4693,9 +4693,12 @@ func (m *Manager) GetNetworkSettings() config.NetworkSettings {
 	defer m.mu.RUnlock()
 	cfg := m.store.Get()
 	if cfg == nil {
-		return config.NetworkSettings{}
+		return config.NetworkSettings{Name: "Easy42"}
 	}
 	ns := cfg.NetworkSettings
+	if strings.TrimSpace(ns.Name) == "" {
+		ns.Name = "Easy42"
+	}
 	ns.Prefixes = config.CleanPrefixes(ns.Prefixes)
 	if len(ns.DisallowedDN42Networks) == 0 && len(ns.DisallowedDN42CIDRs) > 0 {
 		ns.DisallowedDN42Networks = config.CleanPrefixes(ns.DisallowedDN42CIDRs)
@@ -4714,6 +4717,11 @@ func (m *Manager) UpdateNetworkSettings(settings config.NetworkSettings) error {
 	cfg := m.store.Get()
 	if cfg == nil {
 		return config.ErrConfigNotFound
+	}
+	if strings.TrimSpace(settings.Name) == "" {
+		settings.Name = "Easy42"
+	} else {
+		settings.Name = strings.TrimSpace(settings.Name)
 	}
 	if err := config.ValidateNetworkSettings(&settings); err != nil {
 		return err

@@ -421,6 +421,8 @@ func GetBuiltinPolicies(netSettings *NetworkSettings) []NetworkPolicy {
 			FilterInput:        true,
 			InputAllowICMP:     true,
 			InputAllowICMP6:    true,
+			DSCPIngress:        new(0),
+			DSCPEgress:         new(0),
 			InputUDPPorts:      []string{"53"},
 			SNAT: &SNATConfig{
 				Enabled:   true,

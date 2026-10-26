@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import DOMPurify from "dompurify";
 import {
   Dialog,
@@ -36,6 +36,7 @@ import {
   exportDiagramFile,
 } from "../../utils/diagramExportEngine";
 import { CentralityMetric, WeightingMode } from "../../utils/graphCentrality";
+import { useMesh } from "../../context/MeshContext";
 
 export interface ExportDiagramModalProps {
   open: boolean;
@@ -65,7 +66,16 @@ export const ExportDiagramModal: React.FC<ExportDiagramModalProps> = ({
   const [displayBlocks, setDisplayBlocks] = useState<boolean>(true);
   const [displayGroupName, setDisplayGroupName] = useState<boolean>(true);
   const [displayExternalNodes, setDisplayExternalNodes] = useState<boolean>(true);
-  const [diagramTitle, setDiagramTitle] = useState<string>("easy42 Network Topology");
+  const { networkName } = useMesh();
+  const defaultDiagramTitle = `${networkName || "Easy42"} Topology`;
+  const [diagramTitle, setDiagramTitle] = useState<string>(defaultDiagramTitle);
+
+  useEffect(() => {
+    if (open) {
+      setDiagramTitle(defaultDiagramTitle);
+    }
+  }, [open, defaultDiagramTitle]);
+
   const [format, setFormat] = useState<ExportFormat>("svg");
   const [emphasizeCentrality, setEmphasizeCentrality] = useState<boolean>(true);
   const [centralityMetric, setCentralityMetric] = useState<CentralityMetric>("betweenness");
@@ -86,6 +96,7 @@ export const ExportDiagramModal: React.FC<ExportDiagramModalProps> = ({
       emphasizeCentrality,
       centralityMetric,
       centralityWeighting,
+      networkName: networkName || "Easy42",
     }),
     [
       nodeNameSource,
@@ -99,6 +110,7 @@ export const ExportDiagramModal: React.FC<ExportDiagramModalProps> = ({
       emphasizeCentrality,
       centralityMetric,
       centralityWeighting,
+      networkName,
     ],
   );
 
@@ -223,7 +235,7 @@ export const ExportDiagramModal: React.FC<ExportDiagramModalProps> = ({
               fullWidth
               value={diagramTitle}
               onChange={(e) => setDiagramTitle(e.target.value)}
-              placeholder="easy42 Network Topology"
+              placeholder={defaultDiagramTitle}
               slotProps={{
                 input: {
                   sx: {

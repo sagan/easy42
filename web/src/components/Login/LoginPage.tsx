@@ -4,12 +4,15 @@ import { ArrowRight, RefreshCw } from "lucide-react";
 import { api } from "../../api/client";
 import { Easy42Logo } from "../Logo/Easy42Logo";
 import { flushCacheAndServiceWorker } from "../../utils/pwa";
+import { useMesh } from "../../context/MeshContext";
 
 interface LoginPageProps {
   onLoginSuccess: () => void;
 }
 
 export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
+  const { networkName } = useMesh();
+  const displayName = networkName || "Easy42";
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -18,7 +21,8 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
   const [flushMsg, setFlushMsg] = useState<{ text: string; severity: "success" | "error" } | null>(null);
 
   React.useEffect(() => {
-    api.getVersion()
+    api
+      .getVersion()
       .then((info) => {
         if (info.version) {
           const display = info.version.startsWith("v") ? info.version : `v${info.version}`;
@@ -118,9 +122,9 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
               }}
             />
 
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1, width: "100%", justifyContent: "space-between" }}>
               <Typography variant="h5" sx={{ fontWeight: 800, letterSpacing: "-0.5px", color: "#0F172A" }}>
-                easy<span style={{ color: "#0891B2" }}>42</span>
+                {displayName}
               </Typography>
               <Chip
                 label={appVersion}
@@ -135,7 +139,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
               />
             </Box>
 
-            <Typography variant="body2" sx={{ color: "#64748B" }}>
+            <Typography variant="body2" sx={{ color: "#64748B", width: "100%", textAlign: "left" }}>
               WireGuard Mesh Overlay Network Manager
             </Typography>
           </Box>

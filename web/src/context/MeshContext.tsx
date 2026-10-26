@@ -32,6 +32,7 @@ interface MeshContextType {
   networkPolicies: NetworkPolicy[];
   networkSettings: NetworkSettings | null;
   refreshNetworkSettings: () => Promise<void>;
+  networkName: string;
   flapAlertedUrl: string | null;
   flapAlertedMetrics: FlapAlertedMetrics | null;
   fleetLive: FleetLiveResponse | null;
@@ -119,6 +120,7 @@ export const MeshProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [networkState, setNetworkState] = useState<NetworkState | null>(null);
   const [networkPolicies, setNetworkPolicies] = useState<NetworkPolicy[]>([]);
   const [networkSettings, setNetworkSettings] = useState<NetworkSettings | null>(null);
+  const [networkName, setNetworkName] = useState<string>("Easy42");
   const [fleetLive, setFleetLive] = useState<FleetLiveResponse | null>(null);
   const [loadingData, setLoadingData] = useState(false);
 
@@ -254,6 +256,9 @@ export const MeshProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const res = await api.getAuthStatus();
       setAuthenticated(res.authenticated);
       setIsUnlocked(res.unlocked);
+      if (res.network_name) {
+        setNetworkName(res.network_name);
+      }
     } catch {
       setAuthenticated(false);
       setIsUnlocked(false);
@@ -289,7 +294,12 @@ export const MeshProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setNodeStatuses(statusesData || {});
       setNetworkState(stateData);
       setNetworkPolicies(policiesData || []);
-      if (settingsData) setNetworkSettings(settingsData);
+      if (settingsData) {
+        setNetworkSettings(settingsData);
+        if (settingsData.name) {
+          setNetworkName(settingsData.name);
+        }
+      }
       if (liveData) setFleetLive(liveData);
       if (blocksData && blocksData.length > 0) {
         setBlocks(blocksData);
@@ -314,6 +324,9 @@ export const MeshProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const data = await api.getNetworkSettings();
       setNetworkSettings(data);
+      if (data?.name) {
+        setNetworkName(data.name);
+      }
     } catch {
       // Ignore background refresh errors
     }
@@ -518,6 +531,7 @@ export const MeshProvider: React.FC<{ children: React.ReactNode }> = ({ children
     networkPolicies,
     networkSettings,
     refreshNetworkSettings,
+    networkName,
     flapAlertedUrl,
     flapAlertedMetrics,
     fleetLive,

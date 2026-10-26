@@ -20,6 +20,7 @@ export interface DiagramExportOptions {
   emphasizeCentrality?: boolean;
   centralityMetric?: CentralityMetric;
   centralityWeighting?: WeightingMode;
+  networkName?: string;
 }
 
 const BLOCK_PALETTE: Record<string, string> = {
@@ -617,7 +618,8 @@ export function generateTopologySvg(
     curOffset += 68;
   }
 
-  const titleText = options.diagramTitle?.trim() || "easy42 Network Topology";
+  const defaultTitle = `${options.networkName?.trim() || "Easy42"} Topology`;
+  const titleText = options.diagramTitle?.trim() || defaultTitle;
 
   const groupText =
     computedBlocks.length > 0 ? ` · ${computedBlocks.length} group${computedBlocks.length === 1 ? "" : "s"}` : "";
@@ -751,7 +753,8 @@ export async function exportDiagramFile(
   action: ExportAction = "download",
 ): Promise<void> {
   const dateStr = new Date().toISOString().slice(0, 10);
-  const baseFilename = `easy42-topology-${dateStr}`;
+  const netName = options.networkName?.trim() || "Easy42";
+  const baseFilename = `${netName}-topology-${dateStr}`;
 
   // If opening in a new tab, open the tab immediately during the user gesture to avoid popup blockers
   const newTab = action === "new_tab" ? window.open("about:blank", "_blank") : null;

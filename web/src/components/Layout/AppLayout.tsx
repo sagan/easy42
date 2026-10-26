@@ -94,6 +94,7 @@ export const AppLayout: React.FC = () => {
     selectedNode,
     setSelectedNode,
     setSelectedLink,
+    networkName,
   } = useMesh();
 
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
@@ -177,7 +178,7 @@ export const AppLayout: React.FC = () => {
               />
               <Box>
                 <Typography variant="subtitle1" sx={{ fontWeight: 800, color: "#0F172A", lineHeight: 1.1 }}>
-                  easy42
+                  {networkName || "Easy42"}
                 </Typography>
                 <Typography variant="caption" sx={{ color: "#64748B", fontSize: "0.65rem", fontWeight: 600 }}>
                   FLEET & MESH
@@ -528,7 +529,7 @@ export const AppLayout: React.FC = () => {
             <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
               <Easy42Logo size={30} sx={{ borderRadius: "7px" }} />
               <Typography variant="h6" sx={{ fontWeight: 800, color: "#0F172A" }}>
-                easy42
+                {networkName || "Easy42"}
               </Typography>
             </Box>
             <IconButton size="small" onClick={() => setMobileDrawerOpen(false)}>
