@@ -191,6 +191,8 @@ type StateStore struct {
 	prevNetMu    sync.Mutex
 	prevNet      map[string]prevNetSample
 	prevIfaceNet map[string]prevNetSample
+
+	listeners []func()
 }
 
 // NewStateStore creates a new StateStore pointing to the given data directory
@@ -517,7 +519,25 @@ func (s *StateStore) Save(st *NetworkState) error {
 	}
 
 	s.state = st
+	s.notifyChange()
 	return nil
+}
+
+// OnChange registers a listener callback invoked whenever the network state changes
+func (s *StateStore) OnChange(cb func()) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.listeners = append(s.listeners, cb)
+}
+
+func (s *StateStore) notifyChange() {
+	s.mu.RLock()
+	cbs := make([]func(), len(s.listeners))
+	copy(cbs, s.listeners)
+	s.mu.RUnlock()
+	for _, cb := range cbs {
+		go cb()
+	}
 }
 
 // UpdateInterface records or updates an interface state for a node

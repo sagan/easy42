@@ -1,6 +1,8 @@
 package config
 
 import (
+	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -8,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"easy42/internal/crypto"
 )
@@ -18,10 +21,14 @@ var (
 
 // Store handles thread-safe loading and persisting of easy42 config
 type Store struct {
-	mu       sync.RWMutex
-	dataDir  string
-	filePath string
-	config   *Config
+	mu           sync.RWMutex
+	dataDir      string
+	filePath     string
+	config       *Config
+	lastModTime  time.Time
+	lastFileSize int64
+	lastHash     [32]byte
+	listeners    []func()
 }
 
 // DefaultDataDir returns the default ~/.config/easy42 directory
@@ -148,6 +155,13 @@ func (s *Store) Load() (*Config, error) {
 		return nil, fmt.Errorf("failed to read config.json: %w", err)
 	}
 
+	h := sha256.Sum256(data)
+	s.lastHash = h
+	if stat, err := os.Stat(s.filePath); err == nil {
+		s.lastModTime = stat.ModTime()
+		s.lastFileSize = stat.Size()
+	}
+
 	var cfg Config
 	if err := json.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("failed to parse config.json: %w", err)
@@ -216,11 +230,15 @@ func (s *Store) Get() *Config {
 	return s.config
 }
 
-// Save persists the config to disk atomically
+// Save persists the config to disk atomically and notifies listeners
 func (s *Store) Save(cfg *Config) error {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.saveLocked(cfg)
+	err := s.saveLocked(cfg)
+	s.mu.Unlock()
+	if err == nil {
+		s.notifyChange()
+	}
+	return err
 }
 
 func (s *Store) saveLocked(cfg *Config) error {
@@ -267,5 +285,88 @@ func (s *Store) saveLocked(cfg *Config) error {
 	}
 
 	s.config = cfg
+	s.lastHash = sha256.Sum256(data)
+	if stat, err := os.Stat(s.filePath); err == nil {
+		s.lastModTime = stat.ModTime()
+		s.lastFileSize = stat.Size()
+	}
 	return nil
+}
+
+// OnChange registers a listener callback invoked whenever the configuration changes
+func (s *Store) OnChange(cb func()) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.listeners = append(s.listeners, cb)
+}
+
+func (s *Store) notifyChange() {
+	s.mu.RLock()
+	cbs := make([]func(), len(s.listeners))
+	copy(cbs, s.listeners)
+	s.mu.RUnlock()
+	for _, cb := range cbs {
+		go cb()
+	}
+}
+
+// CheckFileModified checks if config.json on disk has been modified externally
+func (s *Store) CheckFileModified() (bool, error) {
+	stat, err := os.Stat(s.filePath)
+	if err != nil {
+		return false, err
+	}
+
+	s.mu.RLock()
+	modTime := s.lastModTime
+	fileSize := s.lastFileSize
+	s.mu.RUnlock()
+
+	if !modTime.IsZero() && stat.ModTime().Equal(modTime) && stat.Size() == fileSize {
+		return false, nil
+	}
+
+	data, err := os.ReadFile(s.filePath)
+	if err != nil {
+		return false, err
+	}
+	h := sha256.Sum256(data)
+
+	s.mu.RLock()
+	sameHash := (h == s.lastHash)
+	s.mu.RUnlock()
+
+	if sameHash {
+		s.mu.Lock()
+		s.lastModTime = stat.ModTime()
+		s.lastFileSize = stat.Size()
+		s.mu.Unlock()
+		return false, nil
+	}
+
+	_, err = s.Load()
+	if err != nil {
+		return false, err
+	}
+	s.notifyChange()
+	return true, nil
+}
+
+// StartWatcher starts a background polling watcher that checks for external modifications to config.json
+func (s *Store) StartWatcher(ctx context.Context, interval time.Duration) {
+	if interval <= 0 {
+		interval = 500 * time.Millisecond
+	}
+	go func() {
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				_, _ = s.CheckFileModified()
+			}
+		}
+	}()
 }

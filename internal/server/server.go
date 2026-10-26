@@ -30,6 +30,9 @@ type Server struct {
 	httpSrv     *http.Server
 	listeners   []net.Listener
 	closed      bool
+	wsHub       *ClientHub
+	ctx         context.Context
+	cancel      context.CancelFunc
 	mu          sync.Mutex
 }
 
@@ -83,11 +86,32 @@ func New(cfg Config) *Server {
 		finalAddrs = []string{"127.0.0.1:4242"}
 	}
 
+	ctx, cancel := context.WithCancel(context.Background())
 	s := &Server{
 		mgr:         cfg.Manager,
 		distFS:      cfg.DistFS,
 		listen:      strings.Join(finalAddrs, ","),
 		listenAddrs: finalAddrs,
+		wsHub:       NewClientHub(),
+		ctx:         ctx,
+		cancel:      cancel,
+	}
+
+	if s.wsHub != nil {
+		s.wsHub.Start()
+	}
+
+	if s.mgr != nil && s.mgr.Store() != nil {
+		s.mgr.Store().OnChange(func() {
+			s.broadcastClusterChange("config_changed")
+		})
+		s.mgr.Store().StartWatcher(ctx, 500*time.Millisecond)
+	}
+
+	if s.mgr != nil && s.mgr.StateStore() != nil {
+		s.mgr.StateStore().OnChange(func() {
+			s.broadcastClusterChange("state_changed")
+		})
 	}
 
 	r := chi.NewRouter()
@@ -130,6 +154,9 @@ func New(cfg Config) *Server {
 		// Protected routes
 		r.Group(func(r chi.Router) {
 			r.Use(s.authMiddleware)
+
+			// Real-time synchronization WebSocket for browser clients
+			r.HandleFunc("/ws", s.handleClientWebSocket)
 
 			r.Post("/auth/unlock", s.handleUnlock)
 			r.Post("/auth/lock", s.handleLock)
@@ -402,6 +429,13 @@ func (s *Server) Shutdown(ctx context.Context) error {
 
 	s.closed = true
 
+	if s.cancel != nil {
+		s.cancel()
+	}
+	if s.wsHub != nil {
+		s.wsHub.Stop()
+	}
+
 	if s.mgr != nil {
 		s.mgr.Close()
 	}
@@ -424,6 +458,13 @@ func (s *Server) Close() error {
 	defer s.mu.Unlock()
 
 	s.closed = true
+
+	if s.cancel != nil {
+		s.cancel()
+	}
+	if s.wsHub != nil {
+		s.wsHub.Stop()
+	}
 
 	if s.mgr != nil {
 		s.mgr.Close()
@@ -496,8 +537,16 @@ func (s *Server) authMiddleware(next http.Handler) http.Handler {
 			}
 		}
 
-		cookie, err := r.Cookie("easy42_session")
-		if err != nil || cookie.Value == "" {
+		var sessionToken string
+		if cookie, err := r.Cookie("easy42_session"); err == nil && cookie.Value != "" {
+			sessionToken = cookie.Value
+		} else if authHeader := r.Header.Get("Authorization"); strings.HasPrefix(authHeader, "Bearer ") {
+			sessionToken = strings.TrimPrefix(authHeader, "Bearer ")
+		} else if qToken := r.URL.Query().Get("token"); qToken != "" {
+			sessionToken = qToken
+		}
+
+		if sessionToken == "" {
 			writeError(w, http.StatusUnauthorized, "Authentication required")
 			return
 		}
@@ -512,7 +561,7 @@ func (s *Server) authMiddleware(next http.Handler) http.Handler {
 			}
 		}
 
-		if !crypto.VerifySessionToken(cookie.Value, cfg.SessionSecret, cfg.PasswordHash) {
+		if !crypto.VerifySessionToken(sessionToken, cfg.SessionSecret, cfg.PasswordHash) {
 			writeError(w, http.StatusUnauthorized, "Invalid or expired session")
 			return
 		}

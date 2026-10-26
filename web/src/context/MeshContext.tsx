@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { api } from "../api/client";
 import {
   Node,
@@ -427,6 +427,113 @@ export const MeshProvider: React.FC<{ children: React.ReactNode }> = ({ children
       loadData();
     }
   }, [authenticated, loadData]);
+
+  const reloadDebounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isReloadingRef = useRef(false);
+  const pendingReloadRef = useRef(false);
+
+  const scheduleReload = useCallback(() => {
+    if (reloadDebounceTimer.current) {
+      clearTimeout(reloadDebounceTimer.current);
+    }
+    reloadDebounceTimer.current = setTimeout(() => {
+      if (isReloadingRef.current) {
+        pendingReloadRef.current = true;
+        return;
+      }
+      isReloadingRef.current = true;
+      loadData().finally(() => {
+        isReloadingRef.current = false;
+        if (pendingReloadRef.current) {
+          pendingReloadRef.current = false;
+          loadData();
+        }
+      });
+    }, 100);
+  }, [loadData]);
+
+  // Real-time WebSocket connection to keep frontend state in sync with backend and other instances
+  useEffect(() => {
+    if (!authenticated) {
+      return;
+    }
+
+    let ws: WebSocket | null = null;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    let isCancelled = false;
+    let reconnectAttempts = 0;
+
+    const connect = () => {
+      if (isCancelled) return;
+
+      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      const wsUrl = `${protocol}//${window.location.host}/api/ws`;
+
+      try {
+        ws = new WebSocket(wsUrl);
+
+        ws.onopen = () => {
+          if (isCancelled) {
+            ws?.close();
+            return;
+          }
+          reconnectAttempts = 0;
+          scheduleReload();
+        };
+
+        ws.onmessage = (event) => {
+          if (isCancelled) return;
+          try {
+            const data = JSON.parse(event.data);
+            if (data?.type === "cluster_updated") {
+              scheduleReload();
+            }
+          } catch {
+            // Ignore non-json messages
+          }
+        };
+
+        ws.onclose = () => {
+          if (isCancelled) return;
+          const delay = Math.min(1000 * Math.pow(1.5, reconnectAttempts), 10000);
+          reconnectAttempts++;
+          reconnectTimer = setTimeout(connect, delay);
+        };
+
+        ws.onerror = () => {
+          if (ws) {
+            try {
+              ws.close();
+            } catch {
+              // Ignore close error
+            }
+          }
+        };
+      } catch {
+        if (!isCancelled) {
+          const delay = Math.min(1000 * Math.pow(1.5, reconnectAttempts), 10000);
+          reconnectAttempts++;
+          reconnectTimer = setTimeout(connect, delay);
+        }
+      }
+    };
+
+    connect();
+
+    return () => {
+      isCancelled = true;
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+      }
+      if (ws) {
+        try {
+          ws.close();
+        } catch {
+          // Ignore close error
+        }
+      }
+    };
+  }, [authenticated, scheduleReload]);
 
   // Periodic poll for live monitoring metrics
   useEffect(() => {
