@@ -1496,8 +1496,36 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                     placeholder="e.g. 192.168.100.0/24"
                     helperText="Unconditionally advertised via BGP (comma-separated)"
                     disabled={saving}
+                    sx={{ gridColumn: "1 / -1" }}
                   />
                 </Box>
+
+                {staticRoutesStr
+                  .split(/[\n,]+/)
+                  .map((s) => s.trim())
+                  .filter(Boolean).length > 0 && (
+                  <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
+                    {staticRoutesStr
+                      .split(/[\n,]+/)
+                      .map((s) => s.trim())
+                      .filter(Boolean)
+                      .map((prefix) => (
+                        <Chip
+                          key={prefix}
+                          label={prefix}
+                          size="small"
+                          sx={{
+                            height: 22,
+                            fontSize: "0.7rem",
+                            fontWeight: 600,
+                            backgroundColor: "rgba(79, 70, 229, 0.08)",
+                            color: "#4F46E5",
+                            border: "1px solid rgba(79, 70, 229, 0.25)",
+                          }}
+                        />
+                      ))}
+                  </Box>
+                )}
 
                 {/* Custom Network Script (Policy Routing) */}
                 <Box sx={{ mt: 2 }}>
@@ -1539,33 +1567,6 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                     }}
                   />
                 </Box>
-
-                {staticRoutesStr
-                  .split(/[\n,]+/)
-                  .map((s) => s.trim())
-                  .filter(Boolean).length > 0 && (
-                  <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
-                    {staticRoutesStr
-                      .split(/[\n,]+/)
-                      .map((s) => s.trim())
-                      .filter(Boolean)
-                      .map((prefix) => (
-                        <Chip
-                          key={prefix}
-                          label={prefix}
-                          size="small"
-                          sx={{
-                            height: 22,
-                            fontSize: "0.7rem",
-                            fontWeight: 600,
-                            backgroundColor: "rgba(79, 70, 229, 0.08)",
-                            color: "#4F46E5",
-                            border: "1px solid rgba(79, 70, 229, 0.25)",
-                          }}
-                        />
-                      ))}
-                  </Box>
-                )}
 
                 {/* FlapAlerted BGP Peering Switch */}
                 <Box
@@ -1702,8 +1703,9 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                           />
                         </Box>
                         <Typography variant="caption" sx={{ color: "#64748B" }}>
-                          When enabled, appends &quot;rr client;&quot; to internal iBGP peer blocks that share the same ASN in bird.conf,
-                          allowing this node to act as a Route Reflector without needing full mesh peering.
+                          When enabled, appends &quot;rr client;&quot; to internal iBGP peer blocks that share the same
+                          ASN in bird.conf, allowing this node to act as a Route Reflector without needing full mesh
+                          peering.
                         </Typography>
                       </Box>
                     }

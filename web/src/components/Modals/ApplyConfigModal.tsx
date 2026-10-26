@@ -293,6 +293,13 @@ export const ApplyConfigModal: React.FC<ApplyConfigModalProps> = ({
   const [savingSnippet, setSavingSnippet] = useState<boolean>(false);
   const [applyingSnippetId, setApplyingSnippetId] = useState<string | null>(null);
 
+  const existingSnippet = snippetName.trim()
+    ? savedSnippets.find(
+        (s) => s.name.trim().toLowerCase() === snippetName.trim().toLowerCase()
+      )
+    : undefined;
+  const isExistingSnippet = Boolean(existingSnippet);
+
   // Sync available nodes & links on open
   useEffect(() => {
     if (open) {
@@ -437,12 +444,13 @@ export const ApplyConfigModal: React.FC<ApplyConfigModalProps> = ({
     }
   };
 
-  // Save current snippet
+  // Save current snippet (overrides existing snippet of the same name if present)
   const handleSaveSnippet = async () => {
     if (!snippetName.trim() || !content.trim()) return;
     setSavingSnippet(true);
     try {
       await api.saveConfigChange({
+        id: existingSnippet?.id,
         name: snippetName.trim(),
         description: snippetDesc.trim(),
         content: content,
@@ -468,13 +476,15 @@ export const ApplyConfigModal: React.FC<ApplyConfigModalProps> = ({
   };
 
   // Load saved snippet into editor and immediately activate Preview & Diff tab
-  const handleLoadSnippetAndPreview = async (snippetContent: string) => {
-    setContent(snippetContent);
+  const handleLoadSnippetAndPreview = async (snippet: ConfigChange) => {
+    setContent(snippet.content);
+    setSnippetName(snippet.name);
+    setSnippetDesc(snippet.description || "");
     setActiveTab(1); // Switch to Preview & Diff tab
     setPreviewing(true);
     setApplyError(null);
     try {
-      const res = await api.previewConfigApply(snippetContent);
+      const res = await api.previewConfigApply(snippet.content);
       setPreviewResult(res);
     } catch (err: any) {
       setApplyError(err.message || "Failed to generate preview");
@@ -873,6 +883,8 @@ export const ApplyConfigModal: React.FC<ApplyConfigModalProps> = ({
                 value={snippetName}
                 onChange={(e) => setSnippetName(e.target.value)}
                 sx={{ flex: 1, backgroundColor: "#FFFFFF" }}
+                helperText={isExistingSnippet ? "Will overwrite existing snippet with this name" : undefined}
+                FormHelperTextProps={{ sx: { color: "#D97706", fontWeight: 500 } }}
               />
               <TextField
                 size="small"
@@ -882,14 +894,15 @@ export const ApplyConfigModal: React.FC<ApplyConfigModalProps> = ({
                 sx={{ flex: 1, backgroundColor: "#FFFFFF" }}
               />
               <Button
-                variant="outlined"
+                variant={isExistingSnippet ? "contained" : "outlined"}
+                color={isExistingSnippet ? "warning" : "primary"}
                 size="medium"
                 startIcon={<Save size={16} />}
                 onClick={handleSaveSnippet}
                 disabled={!snippetName.trim() || savingSnippet || !validationResult?.valid}
                 sx={{ width: { xs: "100%", sm: "auto" }, whiteSpace: "nowrap" }}
               >
-                Save
+                {isExistingSnippet ? "Overwrite" : "Save"}
               </Button>
             </Box>
           </Box>
@@ -1172,7 +1185,7 @@ export const ApplyConfigModal: React.FC<ApplyConfigModalProps> = ({
                       <Button
                         size="small"
                         variant="outlined"
-                        onClick={() => handleLoadSnippetAndPreview(s.content)}
+                        onClick={() => handleLoadSnippetAndPreview(s)}
                         sx={{ textTransform: "none" }}
                       >
                         Load into Editor

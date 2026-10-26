@@ -188,7 +188,27 @@ func TestServer_ConfigChangesCRUD(t *testing.T) {
 		t.Fatalf("unexpected saved snippet: %+v", saved)
 	}
 
-	// 2. List changes
+	// 1b. Create saved change with same name (should overwrite)
+	createBody2, _ := json.Marshal(map[string]string{
+		"name":    "preset 1",
+		"content": `{"nodes": [{"name": "foobar", "tags": ["edge"]}]}`,
+	})
+	reqCreate2 := httptest.NewRequest("POST", "/api/config/changes", bytes.NewReader(createBody2))
+	reqCreate2.Header.Set("Content-Type", "application/json")
+	reqCreate2.AddCookie(&http.Cookie{Name: "easy42_session", Value: token})
+	wCreate2 := httptest.NewRecorder()
+
+	srv.router.ServeHTTP(wCreate2, reqCreate2)
+	if wCreate2.Code != http.StatusOK {
+		t.Fatalf("create overwrite failed (%d): %s", wCreate2.Code, wCreate2.Body.String())
+	}
+	var saved2 config.ConfigChange
+	_ = json.Unmarshal(wCreate2.Body.Bytes(), &saved2)
+	if saved2.ID != saved.ID {
+		t.Fatalf("expected overwritten snippet ID %s, got %s", saved.ID, saved2.ID)
+	}
+
+	// 2. List changes (still exactly 1)
 	reqList := httptest.NewRequest("GET", "/api/config/changes", nil)
 	reqList.AddCookie(&http.Cookie{Name: "easy42_session", Value: token})
 	wList := httptest.NewRecorder()
@@ -216,8 +236,8 @@ func TestServer_ConfigChangesCRUD(t *testing.T) {
 	}
 
 	node, _ := srv.mgr.GetNode("foobar")
-	if len(node.Tags) != 2 || node.Tags[0] != "core" {
-		t.Errorf("tags not updated: %v", node.Tags)
+	if len(node.Tags) != 1 || node.Tags[0] != "edge" {
+		t.Errorf("tags not updated to edge: %v", node.Tags)
 	}
 
 	// 4. Delete saved change

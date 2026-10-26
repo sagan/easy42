@@ -210,6 +210,29 @@ func TestApply_SavedConfigChanges(t *testing.T) {
 		t.Fatalf("expected 1 saved change, got %d", len(list))
 	}
 
+	// 3b. Overwrite snippet with same name (case-insensitive, no ID passed)
+	updatedSnippet := `{
+		"nodes": [
+			{
+				"name": "foobar",
+				"static_routes": ["2.2.2.2/32"]
+			}
+		]
+	}`
+	saved2, err := mgr.SaveConfigChange(config.ConfigChange{
+		Name:    "update foobar dns route",
+		Content: updatedSnippet,
+	})
+	if err != nil {
+		t.Fatalf("failed to overwrite config change with same name: %v", err)
+	}
+	if saved2.ID != saved.ID {
+		t.Fatalf("expected overwritten snippet to retain ID %s, got %s", saved.ID, saved2.ID)
+	}
+	if len(mgr.ListConfigChanges()) != 1 {
+		t.Fatalf("expected still exactly 1 snippet after overwrite, got %d", len(mgr.ListConfigChanges()))
+	}
+
 	// 4. Apply saved change
 	res, err := mgr.ApplySavedConfigChange(saved.ID)
 	if err != nil {
@@ -220,8 +243,8 @@ func TestApply_SavedConfigChanges(t *testing.T) {
 	}
 
 	node, _ := mgr.GetNode("foobar")
-	if len(node.StaticRoutes) != 1 || node.StaticRoutes[0] != "1.1.1.1/32" {
-		t.Errorf("expected route 1.1.1.1/32, got %v", node.StaticRoutes)
+	if len(node.StaticRoutes) != 1 || node.StaticRoutes[0] != "2.2.2.2/32" {
+		t.Errorf("expected route 2.2.2.2/32, got %v", node.StaticRoutes)
 	}
 
 	// 5. Delete saved change

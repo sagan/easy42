@@ -317,14 +317,18 @@ cat patch.yaml | easy42 apply - --sync
 
 # Machine-readable preview
 easy42 apply --dry-run --format json patch.yaml
+
+# Apply a saved snippet by name from config.json
+easy42 apply --name "Add Static Route"
 ```
 
-| Flag         | Default | Description                                                            |
-| :----------- | :------ | :--------------------------------------------------------------------- |
-| `-f, --file` | —       | Path to a config change file (alternative to the positional argument). |
-| `--dry-run`  | `false` | Validate and preview the planned changes without writing.              |
-| `-s, --sync` | `false` | Trigger a sync of affected nodes after a successful apply.             |
-| `--format`   | `text`  | Preview format: `text` or `json`.                                      |
+| Flag         | Default | Description                                                                |
+| :----------- | :------ | :------------------------------------------------------------------------- |
+| `-f, --file` | —       | Path to a config change file (alternative to the positional argument).     |
+| `--name`     | —       | Name of a saved config change snippet from `config.json`'s `config_changes`. |
+| `--dry-run`  | `false` | Validate and preview the planned changes without writing.                  |
+| `-s, --sync` | `false` | Trigger a sync of affected nodes after a successful apply.                 |
+| `--format`   | `text`  | Preview format: `text` or `json`.                                          |
 
 The patch may contain `network_settings`, `network_policies`, `nodes`, `links`, `blocks`, `dns`, `templates`, `server_tasks`, `cron_tasks`, `database`, and `integrations`. Unknown fields are rejected. See [Configuration Specification](configuration.md#declarative-config-apply) for details and examples.
 

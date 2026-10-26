@@ -20,6 +20,7 @@ import (
 
 var (
 	applyFilePath string
+	applyName     string
 	applyDryRun   bool
 	applySync     bool
 	applyFormat   string
@@ -30,48 +31,82 @@ var applyCmd = &cobra.Command{
 	Short: "Apply a partial config change snippet (JSON or YAML) to easy42",
 	Long: `Applies a declarative config change snippet to easy42 configuration.
 Supports partial node patches, link overrides, and network settings.
-Performs strict JSON Schema verification before previewing or applying changes.`,
+Performs strict JSON Schema verification before previewing or applying changes.
+Snippets can be loaded from a file, standard input, or a saved snippet name with --name.`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		defer func() {
 			applyDryRun = false
 			applyFilePath = ""
+			applyName = ""
 			applySync = false
 			applyFormat = "text"
 		}()
 
-		var targetSource string
-		if len(args) > 0 {
-			targetSource = args[0]
-		} else if applyFilePath != "" {
-			targetSource = applyFilePath
-		} else {
-			return fmt.Errorf("specify a file path or '-' to read from stdin (e.g. easy42 apply -f patch.yaml)")
+		if cmd.Flags().Changed("name") && strings.TrimSpace(applyName) == "" {
+			return fmt.Errorf("config change name cannot be empty")
 		}
 
-		var rawBytes []byte
-		var err error
-		if targetSource == "-" {
-			rawBytes, err = io.ReadAll(os.Stdin)
-			if err != nil {
-				return fmt.Errorf("failed to read from stdin: %w", err)
-			}
-		} else {
-			rawBytes, err = os.ReadFile(targetSource)
-			if err != nil {
-				return fmt.Errorf("failed to read file '%s': %w", targetSource, err)
-			}
+		if applyName != "" && (len(args) > 0 || applyFilePath != "") {
+			return fmt.Errorf("cannot specify both a file/stdin and --name")
 		}
 
-		content := string(rawBytes)
-		if strings.TrimSpace(content) == "" {
-			return fmt.Errorf("config change content is empty")
+		if applyName == "" && len(args) == 0 && applyFilePath == "" {
+			return fmt.Errorf("specify a file path, '-' to read from stdin, or --name <name> (e.g. easy42 apply -f patch.yaml or easy42 apply --name my-snippet)")
 		}
 
 		store := config.NewStore(GetDataDir())
 		cfg, err := store.Load()
 		if err != nil {
 			return fmt.Errorf("failed to load easy42 config: %w", err)
+		}
+
+		var content string
+		if applyName != "" {
+			var foundSnippet *config.ConfigChange
+			for _, cc := range cfg.ConfigChanges {
+				if cc.Name == applyName {
+					foundSnippet = &cc
+					break
+				}
+			}
+			if foundSnippet == nil {
+				for _, cc := range cfg.ConfigChanges {
+					if strings.EqualFold(cc.Name, applyName) {
+						foundSnippet = &cc
+						break
+					}
+				}
+			}
+			if foundSnippet == nil {
+				return fmt.Errorf("saved config change '%s' not found in config.json", applyName)
+			}
+			content = foundSnippet.Content
+		} else {
+			var targetSource string
+			if len(args) > 0 {
+				targetSource = args[0]
+			} else {
+				targetSource = applyFilePath
+			}
+
+			var rawBytes []byte
+			if targetSource == "-" {
+				rawBytes, err = io.ReadAll(os.Stdin)
+				if err != nil {
+					return fmt.Errorf("failed to read from stdin: %w", err)
+				}
+			} else {
+				rawBytes, err = os.ReadFile(targetSource)
+				if err != nil {
+					return fmt.Errorf("failed to read file '%s': %w", targetSource, err)
+				}
+			}
+			content = string(rawBytes)
+		}
+
+		if strings.TrimSpace(content) == "" {
+			return fmt.Errorf("config change content is empty")
 		}
 
 		serverURL := findRunningServerURL(GetDataDir())
@@ -272,6 +307,7 @@ func requestServerApplyExecute(serverURL string, cfg *config.Config, content str
 
 func init() {
 	applyCmd.Flags().StringVarP(&applyFilePath, "file", "f", "", "Path to config change file (JSON or YAML)")
+	applyCmd.Flags().StringVar(&applyName, "name", "", "Name of saved config change snippet in config.json to apply")
 	applyCmd.Flags().BoolVar(&applyDryRun, "dry-run", false, "Preview planned changes without writing to config")
 	applyCmd.Flags().BoolVarP(&applySync, "sync", "s", false, "Automatically trigger network sync after apply")
 	applyCmd.Flags().StringVar(&applyFormat, "format", "text", "Output format for preview (text or json)")

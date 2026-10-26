@@ -1350,27 +1350,57 @@ func (m *Manager) SaveConfigChange(cc config.ConfigChange) (*config.ConfigChange
 	}
 
 	now := time.Now().UTC()
-	if cc.ID == "" {
-		cc.ID = uuid.New().String()
-		cc.CreatedAt = now
-		cc.ModifiedAt = now
-	} else {
-		cc.ModifiedAt = now
-	}
-
+	cc.Name = strings.TrimSpace(cc.Name)
 	if cc.Name == "" {
 		cc.Name = "Snippet " + now.Format("2006-01-02 15:04:05")
 	}
 
-	found := false
-	for i := range cfg.ConfigChanges {
-		if cfg.ConfigChanges[i].ID == cc.ID {
-			cfg.ConfigChanges[i] = cc
-			found = true
-			break
+	matchIdx := -1
+	// Priority 1: Match by ID if ID is provided
+	if cc.ID != "" {
+		for i := range cfg.ConfigChanges {
+			if cfg.ConfigChanges[i].ID == cc.ID {
+				matchIdx = i
+				break
+			}
 		}
 	}
-	if !found {
+
+	// Priority 2: Match by name (case-insensitive) if not already matched
+	if matchIdx == -1 {
+		for i := range cfg.ConfigChanges {
+			if strings.EqualFold(strings.TrimSpace(cfg.ConfigChanges[i].Name), cc.Name) {
+				matchIdx = i
+				break
+			}
+		}
+	}
+
+	if matchIdx != -1 {
+		existing := cfg.ConfigChanges[matchIdx]
+		if cc.ID == "" {
+			cc.ID = existing.ID
+		}
+		if cc.CreatedAt.IsZero() {
+			cc.CreatedAt = existing.CreatedAt
+		}
+		cc.ModifiedAt = now
+		cfg.ConfigChanges[matchIdx] = cc
+
+		// Remove any other duplicates with the same name
+		for i := len(cfg.ConfigChanges) - 1; i >= 0; i-- {
+			if i != matchIdx && strings.EqualFold(strings.TrimSpace(cfg.ConfigChanges[i].Name), cc.Name) {
+				cfg.ConfigChanges = append(cfg.ConfigChanges[:i], cfg.ConfigChanges[i+1:]...)
+			}
+		}
+	} else {
+		if cc.ID == "" {
+			cc.ID = uuid.New().String()
+		}
+		if cc.CreatedAt.IsZero() {
+			cc.CreatedAt = now
+		}
+		cc.ModifiedAt = now
 		cfg.ConfigChanges = append(cfg.ConfigChanges, cc)
 	}
 
