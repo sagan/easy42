@@ -577,3 +577,32 @@ func TestEffectiveBirdFilters(t *testing.T) {
 		t.Errorf("expected trimmed alias export rule, got %q", aliasPol.EffectiveBirdExportFilter())
 	}
 }
+
+func TestEffectiveBirdSnippets(t *testing.T) {
+	var nilPol *NetworkPolicy
+	if nilPol.EffectiveBirdPreSnippet() != "" {
+		t.Errorf("expected empty string for nil policy pre snippet")
+	}
+	if nilPol.EffectiveBirdPostSnippet() != "" {
+		t.Errorf("expected empty string for nil policy post snippet")
+	}
+
+	emptyPol := &NetworkPolicy{}
+	if emptyPol.EffectiveBirdPreSnippet() != "" {
+		t.Errorf("expected empty string for unset pre snippet")
+	}
+	if emptyPol.EffectiveBirdPostSnippet() != "" {
+		t.Errorf("expected empty string for unset post snippet")
+	}
+
+	pol := &NetworkPolicy{
+		BirdPreSnippet:  "  define FOO = 1;  ",
+		BirdPostSnippet: "  protocol direct { };  ",
+	}
+	if pol.EffectiveBirdPreSnippet() != "define FOO = 1;" {
+		t.Errorf("expected trimmed pre snippet, got %q", pol.EffectiveBirdPreSnippet())
+	}
+	if pol.EffectiveBirdPostSnippet() != "protocol direct { };" {
+		t.Errorf("expected trimmed post snippet, got %q", pol.EffectiveBirdPostSnippet())
+	}
+}

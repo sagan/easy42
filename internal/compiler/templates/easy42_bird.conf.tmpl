@@ -43,6 +43,16 @@ define DEFAULT_LOCAL_PREF = 10000;
 
 router id SELF_IP;
 
+{{if .policy_bird_snippets_pre}}
+# ==============================================================================
+# Network Policy BIRD Pre Snippets
+# ==============================================================================
+{{range .policy_bird_snippets_pre}}
+{{.}}
+
+{{end}}
+{{end}}
+
 {{if .bird_hooks_pre}}
 # ==============================================================================
 # Custom BIRD Pre Hooks
@@ -1549,6 +1559,16 @@ protocol bgp flapalerted {
         extended next hop on;
     };
 }
+{{end}}
+
+{{if .policy_bird_snippets_post}}
+# ==============================================================================
+# Network Policy BIRD Post Snippets
+# ==============================================================================
+{{range .policy_bird_snippets_post}}
+{{.}}
+
+{{end}}
 {{end}}
 
 {{if .bird_hooks}}

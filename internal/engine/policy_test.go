@@ -53,6 +53,8 @@ func TestNetworkPolicyManagerCRUD(t *testing.T) {
 		BlockIngressNew:    "forwarding", // test normalization to "forward"
 		BirdImportFilter:   "bgp_local_pref = 150;",
 		BirdExportFilter:   "bgp_path.prepend(SELF_AS);",
+		BirdPreSnippet:     "  define PRE_CONST = 1;  ",
+		BirdPostSnippet:    "  protocol device { };  ",
 	})
 	if err != nil {
 		t.Fatalf("CreateNetworkPolicy failed: %v", err)
@@ -65,6 +67,12 @@ func TestNetworkPolicyManagerCRUD(t *testing.T) {
 	}
 	if custom.BirdExportFilter != "bgp_path.prepend(SELF_AS);" {
 		t.Errorf("expected BirdExportFilter 'bgp_path.prepend(SELF_AS);', got %q", custom.BirdExportFilter)
+	}
+	if custom.BirdPreSnippet != "define PRE_CONST = 1;" {
+		t.Errorf("expected trimmed BirdPreSnippet, got %q", custom.BirdPreSnippet)
+	}
+	if custom.BirdPostSnippet != "protocol device { };" {
+		t.Errorf("expected trimmed BirdPostSnippet, got %q", custom.BirdPostSnippet)
 	}
 	if custom.BlockIngressNew != config.BlockIngressNewForward {
 		t.Errorf("expected BlockIngressNew 'forward', got %q", custom.BlockIngressNew)
@@ -104,6 +112,8 @@ func TestNetworkPolicyManagerCRUD(t *testing.T) {
 		BlockIngressNew:    "all",
 		BirdImportFilter:   "bgp_local_pref = 200;",
 		BirdExportFillter:  "bgp_community.delete([(64512, *)]);", // test alias
+		BirdPreSnippet:     "  define PRE_CONST = 2;  ",
+		BirdPostSnippet:    "  protocol bfd { };  ",
 	})
 	if err != nil {
 		t.Fatalf("UpdateNetworkPolicy failed: %v", err)
@@ -116,6 +126,12 @@ func TestNetworkPolicyManagerCRUD(t *testing.T) {
 	}
 	if updated.BirdExportFilter != "bgp_community.delete([(64512, *)]);" {
 		t.Errorf("expected updated BirdExportFilter from alias, got %q", updated.BirdExportFilter)
+	}
+	if updated.BirdPreSnippet != "define PRE_CONST = 2;" {
+		t.Errorf("expected updated BirdPreSnippet, got %q", updated.BirdPreSnippet)
+	}
+	if updated.BirdPostSnippet != "protocol bfd { };" {
+		t.Errorf("expected updated BirdPostSnippet, got %q", updated.BirdPostSnippet)
 	}
 	if updated.BlockIngressNew != config.BlockIngressNewAll {
 		t.Errorf("expected updated BlockIngressNew 'all', got %q", updated.BlockIngressNew)

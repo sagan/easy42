@@ -946,6 +946,24 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 		}
 	}
 
+	var policyBirdSnippetsPre []string
+	var policyBirdSnippetsPost []string
+	for _, id := range usedPolicyIDs {
+		pol := usedPolicyMap[id]
+		if pre := pol.EffectiveBirdPreSnippet(); pre != "" {
+			policyBirdSnippetsPre = append(policyBirdSnippetsPre, pre)
+		}
+		if post := pol.EffectiveBirdPostSnippet(); post != "" {
+			policyBirdSnippetsPost = append(policyBirdSnippetsPost, post)
+		}
+	}
+	if len(policyBirdSnippetsPre) > 0 {
+		ctx["policy_bird_snippets_pre"] = policyBirdSnippetsPre
+	}
+	if len(policyBirdSnippetsPost) > 0 {
+		ctx["policy_bird_snippets_post"] = policyBirdSnippetsPost
+	}
+
 	ctx["links"] = nodeLinks
 	ctx["default_cost"] = defaultCost
 	ctx["default_routing_policy"] = defaultRoutingPolicy

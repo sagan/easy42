@@ -2724,6 +2724,157 @@ func TestBGPRouteReflector(t *testing.T) {
 	validateBirdSyntax(t, confNonRR)
 }
 
+func TestBirdNetworkPolicySnippets(t *testing.T) {
+	node1 := config.Node{
+		Name: "node1",
+		ASN:  4242420001,
+		IP:   "172.20.1.1",
+		IP6:  "fd00::1",
+		ConfigHooks: []config.ConfigHook{
+			{
+				Type:    "bird.pre",
+				Content: "define NODE_PRE_HOOK = 100;",
+			},
+			{
+				Type:    "bird.post",
+				Content: "define NODE_POST_HOOK = 200;",
+			},
+		},
+	}
+	node2 := config.Node{
+		Name: "node2",
+		ASN:  4242420002,
+		IP:   "172.20.1.2",
+		IP6:  "fd00::2",
+	}
+	node3 := config.Node{
+		Name: "node3",
+		ASN:  4242420003,
+		IP:   "172.20.1.3",
+		IP6:  "fd00::3",
+	}
+	node4 := config.Node{
+		Name: "node4",
+		ASN:  4242420004,
+		IP:   "172.20.1.4",
+		IP6:  "fd00::4",
+	}
+	allNodes := []config.Node{node1, node2, node3, node4}
+
+	policyAlpha := config.NetworkPolicy{
+		ID:              "policy-alpha",
+		Name:            "Policy Alpha",
+		Cost:            50,
+		BirdPreSnippet:  "define ALPHA_PRE = 10;",
+		BirdPostSnippet: "define ALPHA_POST = 20;",
+	}
+	policyBeta := config.NetworkPolicy{
+		ID:              "policy-beta",
+		Name:            "Policy Beta",
+		Cost:            60,
+		BirdPreSnippet:  "define BETA_PRE = 30;",
+		BirdPostSnippet: "define BETA_POST = 40;",
+	}
+	policyUnused := config.NetworkPolicy{
+		ID:              "policy-unused",
+		Name:            "Policy Unused",
+		Cost:            70,
+		BirdPreSnippet:  "define UNUSED_PRE = 999;",
+		BirdPostSnippet: "define UNUSED_POST = 999;",
+	}
+
+	links := []config.Link{
+		{
+			From: config.LinkEnd{Name: "node1", Policy: "policy-alpha"},
+			To:   config.LinkEnd{Name: "node2", Policy: "policy-alpha"},
+		},
+		{
+			From: config.LinkEnd{Name: "node1", Policy: "policy-alpha"},
+			To:   config.LinkEnd{Name: "node3", Policy: "policy-alpha"},
+		},
+		{
+			From: config.LinkEnd{Name: "node1", Policy: "policy-beta"},
+			To:   config.LinkEnd{Name: "node4", Policy: "policy-beta"},
+		},
+	}
+
+	policies := []config.NetworkPolicy{policyAlpha, policyBeta, policyUnused}
+
+	conf, err := GenerateBirdConfig(&node1, allNodes, links, policies)
+	if err != nil {
+		t.Fatalf("GenerateBirdConfig failed: %v", err)
+	}
+
+	// 1. Verify policy-alpha snippets appear exactly ONCE despite 2 links using policy-alpha
+	if c := strings.Count(conf, "define ALPHA_PRE = 10;"); c != 1 {
+		t.Errorf("Expected ALPHA_PRE to appear exactly once, got %d in:\n%s", c, conf)
+	}
+	if c := strings.Count(conf, "define ALPHA_POST = 20;"); c != 1 {
+		t.Errorf("Expected ALPHA_POST to appear exactly once, got %d in:\n%s", c, conf)
+	}
+
+	// 2. Verify policy-beta snippets appear
+	if c := strings.Count(conf, "define BETA_PRE = 30;"); c != 1 {
+		t.Errorf("Expected BETA_PRE to appear exactly once, got %d in:\n%s", c, conf)
+	}
+	if c := strings.Count(conf, "define BETA_POST = 40;"); c != 1 {
+		t.Errorf("Expected BETA_POST to appear exactly once, got %d in:\n%s", c, conf)
+	}
+
+	// 3. Verify unused policy snippet is NOT present
+	if strings.Contains(conf, "UNUSED_PRE") || strings.Contains(conf, "UNUSED_POST") {
+		t.Errorf("Unused policy snippets must not be inserted in:\n%s", conf)
+	}
+
+	// 4. Verify ordering:
+	// Pre snippets must be inserted in the early position before node scope bird_hooks_pre
+	idxAlphaPre := strings.Index(conf, "define ALPHA_PRE = 10;")
+	idxBetaPre := strings.Index(conf, "define BETA_PRE = 30;")
+	idxNodePre := strings.Index(conf, "define NODE_PRE_HOOK = 100;")
+
+	if idxAlphaPre == -1 || idxBetaPre == -1 || idxNodePre == -1 {
+		t.Fatalf("Pre snippets or node pre hook missing from conf")
+	}
+	if idxAlphaPre >= idxNodePre {
+		t.Errorf("ALPHA_PRE (%d) must appear before NODE_PRE_HOOK (%d)", idxAlphaPre, idxNodePre)
+	}
+	if idxBetaPre >= idxNodePre {
+		t.Errorf("BETA_PRE (%d) must appear before NODE_PRE_HOOK (%d)", idxBetaPre, idxNodePre)
+	}
+
+	// Post snippets must be appended in the end before node scope bird_hooks
+	idxAlphaPost := strings.Index(conf, "define ALPHA_POST = 20;")
+	idxBetaPost := strings.Index(conf, "define BETA_POST = 40;")
+	idxNodePost := strings.Index(conf, "define NODE_POST_HOOK = 200;")
+
+	if idxAlphaPost == -1 || idxBetaPost == -1 || idxNodePost == -1 {
+		t.Fatalf("Post snippets or node post hook missing from conf")
+	}
+	if idxAlphaPost >= idxNodePost {
+		t.Errorf("ALPHA_POST (%d) must appear before NODE_POST_HOOK (%d)", idxAlphaPost, idxNodePost)
+	}
+	if idxBetaPost >= idxNodePost {
+		t.Errorf("BETA_POST (%d) must appear before NODE_POST_HOOK (%d)", idxBetaPost, idxNodePost)
+	}
+
+	validateBirdSyntax(t, conf)
+
+	// 5. Node 2 only uses policy-alpha, so beta snippets must not appear on node 2
+	confNode2, err := GenerateBirdConfig(&node2, allNodes, links, policies)
+	if err != nil {
+		t.Fatalf("GenerateBirdConfig for node2 failed: %v", err)
+	}
+	if !strings.Contains(confNode2, "define ALPHA_PRE = 10;") || !strings.Contains(confNode2, "define ALPHA_POST = 20;") {
+		t.Errorf("Expected node2 to contain ALPHA snippets in:\n%s", confNode2)
+	}
+	if strings.Contains(confNode2, "BETA_PRE") || strings.Contains(confNode2, "BETA_POST") {
+		t.Errorf("Expected node2 NOT to contain BETA snippets in:\n%s", confNode2)
+	}
+
+	validateBirdSyntax(t, confNode2)
+}
+
+
 
 
 

@@ -558,8 +558,8 @@ export const ViewNetworkPolicyModal: React.FC<ViewNetworkPolicyModalProps> = ({
           </Box>
         )}
 
-        {/* Section 6: Custom BIRD Filters */}
-        {(policy.bird_import_filter || exportFilter) && (
+        {/* Section 6: Custom BIRD Filters & Snippets */}
+        {(policy.bird_import_filter || exportFilter || policy.bird_pre_snippet || policy.bird_post_snippet) && (
           <Box
             sx={{
               display: "flex",
@@ -575,8 +575,32 @@ export const ViewNetworkPolicyModal: React.FC<ViewNetworkPolicyModalProps> = ({
               variant="subtitle2"
               sx={{ fontWeight: 700, color: "#1E293B", display: "flex", alignItems: "center", gap: 0.8 }}
             >
-              <FileCode size={16} color="#4F46E5" /> Custom BIRD Route Filter Snippets
+              <FileCode size={16} color="#4F46E5" /> Custom BIRD Route Filters &amp; Snippets
             </Typography>
+
+            {policy.bird_pre_snippet && (
+              <Box>
+                <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600 }}>
+                  BIRD PRE SNIPPET (EARLY POSITION)
+                </Typography>
+                <Box
+                  component="pre"
+                  sx={{
+                    p: 1.5,
+                    m: 0,
+                    mt: 0.5,
+                    bgcolor: "#F8FAFC",
+                    border: "1px solid #E2E8F0",
+                    borderRadius: 1.5,
+                    fontFamily: "monospace",
+                    fontSize: "0.8rem",
+                    overflowX: "auto",
+                  }}
+                >
+                  {policy.bird_pre_snippet}
+                </Box>
+              </Box>
+            )}
 
             {policy.bird_import_filter && (
               <Box>
@@ -622,6 +646,30 @@ export const ViewNetworkPolicyModal: React.FC<ViewNetworkPolicyModalProps> = ({
                   }}
                 >
                   {exportFilter}
+                </Box>
+              </Box>
+            )}
+
+            {policy.bird_post_snippet && (
+              <Box>
+                <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600 }}>
+                  BIRD POST SNIPPET (END POSITION)
+                </Typography>
+                <Box
+                  component="pre"
+                  sx={{
+                    p: 1.5,
+                    m: 0,
+                    mt: 0.5,
+                    bgcolor: "#F8FAFC",
+                    border: "1px solid #E2E8F0",
+                    borderRadius: 1.5,
+                    fontFamily: "monospace",
+                    fontSize: "0.8rem",
+                    overflowX: "auto",
+                  }}
+                >
+                  {policy.bird_post_snippet}
                 </Box>
               </Box>
             )}

@@ -125,6 +125,8 @@ type NetworkPolicy struct {
 	BirdImportFilter    string      `json:"bird_import_filter,omitempty"`  // Custom BIRD snippet appended to import filter block end
 	BirdExportFilter    string      `json:"bird_export_filter,omitempty"`  // Custom BIRD snippet appended to export filter block end
 	BirdExportFillter   string      `json:"bird_export_fillter,omitempty"` // Alias for export filter
+	BirdPreSnippet      string      `json:"bird_pre_snippet,omitempty"`    // Custom BIRD snippet inserted in early position of bird_easy42.conf (before bird_hooks_pre)
+	BirdPostSnippet     string      `json:"bird_post_snippet,omitempty"`   // Custom BIRD snippet appended at end of bird_easy42.conf (before bird_hooks)
 }
 
 // EffectiveBirdImportFilter returns the configured BIRD import filter snippet or empty string if unset
@@ -142,6 +144,22 @@ func (p *NetworkPolicy) EffectiveBirdExportFilter() string {
 			return s
 		}
 		return strings.TrimSpace(p.BirdExportFillter)
+	}
+	return ""
+}
+
+// EffectiveBirdPreSnippet returns the configured BIRD pre snippet or empty string if unset
+func (p *NetworkPolicy) EffectiveBirdPreSnippet() string {
+	if p != nil {
+		return strings.TrimSpace(p.BirdPreSnippet)
+	}
+	return ""
+}
+
+// EffectiveBirdPostSnippet returns the configured BIRD post snippet or empty string if unset
+func (p *NetworkPolicy) EffectiveBirdPostSnippet() string {
+	if p != nil {
+		return strings.TrimSpace(p.BirdPostSnippet)
 	}
 	return ""
 }

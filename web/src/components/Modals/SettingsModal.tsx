@@ -404,6 +404,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
   const [policyIngressNewWhitelist, setPolicyIngressNewWhitelist] = useState<string>("");
   const [policyBirdImportFilter, setPolicyBirdImportFilter] = useState<string>("");
   const [policyBirdExportFilter, setPolicyBirdExportFilter] = useState<string>("");
+  const [policyBirdPreSnippet, setPolicyBirdPreSnippet] = useState<string>("");
+  const [policyBirdPostSnippet, setPolicyBirdPostSnippet] = useState<string>("");
 
   const handleAppendImportExample = (snippet: string) => {
     setPolicyBirdImportFilter((prev) => {
@@ -1138,6 +1140,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
     setPolicyIngressNewWhitelist("");
     setPolicyBirdImportFilter("");
     setPolicyBirdExportFilter("");
+    setPolicyBirdPreSnippet("");
+    setPolicyBirdPostSnippet("");
     setPolicyDialogError(null);
     setPolicyDialogOpen(true);
   };
@@ -1183,6 +1187,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
     setPolicyIngressNewWhitelist((p.ingress_new_whitelist || []).join("\n"));
     setPolicyBirdImportFilter(p.bird_import_filter || "");
     setPolicyBirdExportFilter(p.bird_export_filter || p.bird_export_fillter || "");
+    setPolicyBirdPreSnippet(p.bird_pre_snippet || "");
+    setPolicyBirdPostSnippet(p.bird_post_snippet || "");
     setPolicyDialogError(null);
     setPolicyDialogOpen(true);
   };
@@ -1272,6 +1278,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
         bird_import_filter: policyBirdImportFilter.trim() || undefined,
         bird_export_filter: policyBirdExportFilter.trim() || undefined,
         bird_export_fillter: policyBirdExportFilter.trim() || undefined,
+        bird_pre_snippet: policyBirdPreSnippet.trim() || undefined,
+        bird_post_snippet: policyBirdPostSnippet.trim() || undefined,
       };
 
       if (policyDialogMode === "create") {
@@ -1341,6 +1349,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
     setPolicyIngressNewWhitelist((p.ingress_new_whitelist || []).join("\n"));
     setPolicyBirdImportFilter(p.bird_import_filter || "");
     setPolicyBirdExportFilter(p.bird_export_filter || p.bird_export_fillter || "");
+    setPolicyBirdPreSnippet(p.bird_pre_snippet || "");
+    setPolicyBirdPostSnippet(p.bird_post_snippet || "");
     setPolicyDialogError(null);
     setPolicyDialogOpen(true);
   };
@@ -2012,7 +2022,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                     "&:hover": { bgcolor: "#4338CA" },
                   }}
                 >
-                  Create Policy
+                  New Policy
                 </Button>
               </Box>
 
@@ -6471,7 +6481,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                 </Box>
               </Box>
 
-              {/* Custom BIRD Route Filters */}
+              {/* Custom BIRD Config */}
               <Box
                 sx={{
                   display: "flex",
@@ -6488,7 +6498,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                     variant="subtitle2"
                     sx={{ fontWeight: 700, color: "#1E293B", display: "flex", alignItems: "center", gap: 0.8 }}
                   >
-                    <FileCode size={16} /> Custom BIRD Route Filters
+                    <FileCode size={16} /> Custom BIRD Config
                   </Typography>
                   <Typography variant="caption" sx={{ color: "#64748B" }}>
                     Append custom BIRD routing daemon configuration snippets to the peer's IPv4 &amp; IPv6 import and
@@ -6496,6 +6506,33 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                     AS-path prepending).
                   </Typography>
                 </Box>
+
+                {/* Bird Pre Snippet */}
+                <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                  <Typography variant="body2" sx={{ fontWeight: 600, color: "#334155" }}>
+                    Bird Pre Snippet
+                  </Typography>
+                  <TextField
+                    fullWidth
+                    size="small"
+                    multiline
+                    rows={4}
+                    placeholder={`# Snippet inserted in the early position of bird_easy42.conf (before node scope bird_hooks_pre)\n# e.g.\ndefine CUSTOM_PRE_VAR = 1;`}
+                    value={policyBirdPreSnippet}
+                    onChange={(e) => setPolicyBirdPreSnippet(e.target.value)}
+                    disabled={policyDialogMode === "view" || policyDialogSaving}
+                    InputProps={{
+                      sx: {
+                        fontFamily: "monospace",
+                        fontSize: "0.82rem",
+                        bgcolor: "#FFFFFF",
+                      },
+                    }}
+                    helperText="Inserted into the early position of bird_easy42.conf (before node-scope bird_hooks_pre) on nodes that have links using this policy."
+                  />
+                </Box>
+
+                <Divider sx={{ my: 0.5 }} />
 
                 {/* Import Filter */}
                 <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
@@ -6626,6 +6663,33 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                       },
                     }}
                     helperText="Executed before exporting routes to the peer. Can strip private communities, add export tags, or prepend AS path."
+                  />
+                </Box>
+
+                <Divider sx={{ my: 0.5 }} />
+
+                {/* Bird Post Snippet */}
+                <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                  <Typography variant="body2" sx={{ fontWeight: 600, color: "#334155" }}>
+                    Bird Post Snippet
+                  </Typography>
+                  <TextField
+                    fullWidth
+                    size="small"
+                    multiline
+                    rows={4}
+                    placeholder={`# Snippet appended at the end of bird_easy42.conf (before node scope bird_hooks)\n# e.g.\nprotocol direct custom_direct {\n    ipv4;\n    ipv6;\n}`}
+                    value={policyBirdPostSnippet}
+                    onChange={(e) => setPolicyBirdPostSnippet(e.target.value)}
+                    disabled={policyDialogMode === "view" || policyDialogSaving}
+                    InputProps={{
+                      sx: {
+                        fontFamily: "monospace",
+                        fontSize: "0.82rem",
+                        bgcolor: "#FFFFFF",
+                      },
+                    }}
+                    helperText="Appended at the end of bird_easy42.conf (before node-scope bird_hooks) on nodes that have links using this policy."
                   />
                 </Box>
               </Box>

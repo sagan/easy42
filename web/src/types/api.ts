@@ -101,6 +101,8 @@ export interface NetworkPolicy {
   bird_import_filter?: string;
   bird_export_filter?: string;
   bird_export_fillter?: string;
+  bird_pre_snippet?: string;
+  bird_post_snippet?: string;
 }
 
 export interface ConfigTemplate {

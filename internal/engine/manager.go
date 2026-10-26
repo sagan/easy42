@@ -4565,6 +4565,8 @@ func (m *Manager) CreateNetworkPolicy(p config.NetworkPolicy) (*config.NetworkPo
 		p.BirdExportFilter = strings.TrimSpace(p.BirdExportFilter)
 	}
 	p.BirdExportFillter = p.BirdExportFilter
+	p.BirdPreSnippet = strings.TrimSpace(p.BirdPreSnippet)
+	p.BirdPostSnippet = strings.TrimSpace(p.BirdPostSnippet)
 
 	cfg.NetworkPolicies = append(cfg.NetworkPolicies, p)
 	if err := m.store.Save(cfg); err != nil {
@@ -4643,6 +4645,8 @@ func (m *Manager) UpdateNetworkPolicy(id string, p config.NetworkPolicy) (*confi
 		cfg.NetworkPolicies[idx].BirdExportFilter = strings.TrimSpace(p.BirdExportFilter)
 	}
 	cfg.NetworkPolicies[idx].BirdExportFillter = cfg.NetworkPolicies[idx].BirdExportFilter
+	cfg.NetworkPolicies[idx].BirdPreSnippet = strings.TrimSpace(p.BirdPreSnippet)
+	cfg.NetworkPolicies[idx].BirdPostSnippet = strings.TrimSpace(p.BirdPostSnippet)
 
 	if err := m.store.Save(cfg); err != nil {
 		return nil, err
