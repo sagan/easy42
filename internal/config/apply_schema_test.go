@@ -166,6 +166,8 @@ func TestParseAndValidateConfigChange_InvalidValues(t *testing.T) {
 		{"negative table", `{"nodes": [{"name": "n1", "table": -5}]}`},
 		{"same link endpoints", `{"links": [{"from": {"name": "same"}, "to": {"name": "same"}}]}`},
 		{"invalid port", `{"links": [{"from": {"name": "n1", "listen_port": 999999}, "to": {"name": "n2"}}]}`},
+		{"invalid static_routes_add CIDR", `{"nodes": [{"name": "n1", "static_routes_add": ["invalid-cidr"]}]}`},
+		{"invalid static_routes_del CIDR", `{"nodes": [{"name": "n1", "static_routes_del": ["invalid-cidr"]}]}`},
 	}
 
 	for _, tt := range tests {
@@ -176,3 +178,61 @@ func TestParseAndValidateConfigChange_InvalidValues(t *testing.T) {
 		})
 	}
 }
+
+func TestParseAndValidateConfigChange_DeltaFields(t *testing.T) {
+	snippet := `{
+		"nodes": [
+			{
+				"name": "foobar",
+				"static_routes_add": ["0.0.0.0/0", "::/0"],
+				"static_routes_del": ["1.2.3.4"],
+				"tags_add": ["edge"],
+				"tags_del": ["old-tag"]
+			}
+		],
+		"links": [
+			{
+				"from": {"name": "node-a"},
+				"to": {"name": "node-b"},
+				"tags_add": ["fast"],
+				"tags_del": ["slow"]
+			}
+		]
+	}`
+
+	patch, format, err := ParseAndValidateConfigChange([]byte(snippet))
+	if err != nil {
+		t.Fatalf("unexpected error parsing delta fields: %v", err)
+	}
+	if format != "json" {
+		t.Errorf("expected json format, got %s", format)
+	}
+	if patch.Nodes == nil || len(*patch.Nodes) != 1 {
+		t.Fatalf("expected 1 node, got %v", patch.Nodes)
+	}
+	n := (*patch.Nodes)[0]
+	if n.StaticRoutesAdd == nil || len(*n.StaticRoutesAdd) != 2 {
+		t.Errorf("expected 2 static_routes_add, got %v", n.StaticRoutesAdd)
+	}
+	if n.StaticRoutesDel == nil || len(*n.StaticRoutesDel) != 1 {
+		t.Errorf("expected 1 static_routes_del, got %v", n.StaticRoutesDel)
+	}
+	if n.TagsAdd == nil || len(*n.TagsAdd) != 1 || (*n.TagsAdd)[0] != "edge" {
+		t.Errorf("expected tags_add ['edge'], got %v", n.TagsAdd)
+	}
+	if n.TagsDel == nil || len(*n.TagsDel) != 1 || (*n.TagsDel)[0] != "old-tag" {
+		t.Errorf("expected tags_del ['old-tag'], got %v", n.TagsDel)
+	}
+
+	if patch.Links == nil || len(*patch.Links) != 1 {
+		t.Fatalf("expected 1 link, got %v", patch.Links)
+	}
+	l := (*patch.Links)[0]
+	if l.TagsAdd == nil || len(*l.TagsAdd) != 1 || (*l.TagsAdd)[0] != "fast" {
+		t.Errorf("expected link tags_add ['fast'], got %v", l.TagsAdd)
+	}
+	if l.TagsDel == nil || len(*l.TagsDel) != 1 || (*l.TagsDel)[0] != "slow" {
+		t.Errorf("expected link tags_del ['slow'], got %v", l.TagsDel)
+	}
+}
+

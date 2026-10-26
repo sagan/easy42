@@ -157,6 +157,24 @@ const PRESET_SNIPPETS: { label: string; description: string; content: string }[]
 }`,
   },
   {
+    label: "Delta Add/Remove Static Routes",
+    description: "Add or remove static routes incrementally without overwriting existing routes",
+    content: `{
+  "nodes": [
+    {
+      "name": "foobar",
+      "static_routes_add": [
+        "0.0.0.0/0",
+        "::/0"
+      ],
+      "static_routes_del": [
+        "1.2.3.4"
+      ]
+    }
+  ]
+}`,
+  },
+  {
     label: "Override Link Cost & Policy",
     description: "Set custom link metric and routing policy override between two nodes",
     content: `{

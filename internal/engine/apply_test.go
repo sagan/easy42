@@ -323,3 +323,175 @@ func TestApply_NodeRouteReflector(t *testing.T) {
 	}
 }
 
+func TestApply_StaticRoutesDelta(t *testing.T) {
+	mgr, tmpDir := setupTestManager(t)
+	defer os.RemoveAll(tmpDir)
+	defer mgr.Close()
+
+	// Initial node has static_routes: ["0.0.0.0/0", "::/0"] (from setupTestManager)
+
+	// 1. Add new routes using static_routes_add
+	patchAdd := `{
+		"nodes": [
+			{
+				"name": "foobar",
+				"static_routes_add": [
+					"1.2.3.4",
+					"192.168.100.0/24"
+				]
+			}
+		]
+	}`
+
+	preview, err := mgr.PreviewApply(patchAdd)
+	if err != nil {
+		t.Fatalf("unexpected error previewing static_routes_add: %v", err)
+	}
+	if !preview.Valid {
+		t.Fatalf("expected preview to be valid")
+	}
+	if preview.Summary.ModifiedNodes != 1 {
+		t.Fatalf("expected 1 modified node, got %d", preview.Summary.ModifiedNodes)
+	}
+	if len(preview.Nodes[0].Changes) != 1 || preview.Nodes[0].Changes[0].Field != "static_routes" {
+		t.Fatalf("expected 1 change on static_routes, got %+v", preview.Nodes[0].Changes)
+	}
+
+	res, err := mgr.ApplyConfigChange(patchAdd)
+	if err != nil {
+		t.Fatalf("unexpected error applying static_routes_add: %v", err)
+	}
+	if !res.Success {
+		t.Fatalf("apply failed")
+	}
+
+	node, err := mgr.GetNode("foobar")
+	if err != nil {
+		t.Fatalf("failed to get node: %v", err)
+	}
+	expected := []string{"0.0.0.0/0", "::/0", "1.2.3.4", "192.168.100.0/24"}
+	if len(node.StaticRoutes) != len(expected) {
+		t.Fatalf("expected %d routes, got %d: %v", len(expected), len(node.StaticRoutes), node.StaticRoutes)
+	}
+	for i, r := range expected {
+		if node.StaticRoutes[i] != r {
+			t.Errorf("expected route [%d]=%s, got %s", i, r, node.StaticRoutes[i])
+		}
+	}
+
+	// 2. Idempotency: applying the exact same static_routes_add when node already includes them must do nothing
+	previewIdempotent, err := mgr.PreviewApply(patchAdd)
+	if err != nil {
+		t.Fatalf("unexpected error previewing idempotent patch: %v", err)
+	}
+	if !previewIdempotent.Valid {
+		t.Fatalf("expected preview to be valid")
+	}
+	if previewIdempotent.Summary.ModifiedNodes != 0 || previewIdempotent.Summary.TotalChanges != 0 {
+		t.Fatalf("expected 0 modified nodes and 0 changes when routes already present, got %d nodes / %d changes",
+			previewIdempotent.Summary.ModifiedNodes, previewIdempotent.Summary.TotalChanges)
+	}
+	if len(previewIdempotent.Nodes) != 0 {
+		t.Fatalf("expected empty nodes diff for no-op change, got %+v", previewIdempotent.Nodes)
+	}
+
+	resIdempotent, err := mgr.ApplyConfigChange(patchAdd)
+	if err != nil {
+		t.Fatalf("unexpected error applying idempotent patch: %v", err)
+	}
+	if len(resIdempotent.AffectedNodes) != 0 {
+		t.Errorf("expected 0 affected nodes for idempotent apply, got %v", resIdempotent.AffectedNodes)
+	}
+
+	// 3. Delete routes using static_routes_del
+	patchDel := `{
+		"nodes": [
+			{
+				"name": "foobar",
+				"static_routes_del": [
+					"1.2.3.4"
+				]
+			}
+		]
+	}`
+
+	resDel, err := mgr.ApplyConfigChange(patchDel)
+	if err != nil {
+		t.Fatalf("unexpected error applying static_routes_del: %v", err)
+	}
+	if len(resDel.AffectedNodes) != 1 {
+		t.Errorf("expected 1 affected node, got %d", len(resDel.AffectedNodes))
+	}
+
+	nodeAfterDel, _ := mgr.GetNode("foobar")
+	expectedAfterDel := []string{"0.0.0.0/0", "::/0", "192.168.100.0/24"}
+	if len(nodeAfterDel.StaticRoutes) != len(expectedAfterDel) {
+		t.Fatalf("expected %d routes after del, got %d: %v", len(expectedAfterDel), len(nodeAfterDel.StaticRoutes), nodeAfterDel.StaticRoutes)
+	}
+	for i, r := range expectedAfterDel {
+		if nodeAfterDel.StaticRoutes[i] != r {
+			t.Errorf("expected route [%d]=%s, got %s", i, r, nodeAfterDel.StaticRoutes[i])
+		}
+	}
+
+	// 4. Deleting a route that doesn't exist is a no-op
+	patchDelNonExistent := `{
+		"nodes": [
+			{
+				"name": "foobar",
+				"static_routes_del": [
+					"10.0.0.0/8"
+				]
+			}
+		]
+	}`
+	previewNonExistent, err := mgr.PreviewApply(patchDelNonExistent)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if previewNonExistent.Summary.TotalChanges != 0 || len(previewNonExistent.Nodes) != 0 {
+		t.Errorf("expected 0 changes for deleting non-existent route, got %d", previewNonExistent.Summary.TotalChanges)
+	}
+}
+
+func TestApply_TagsDelta(t *testing.T) {
+	mgr, tmpDir := setupTestManager(t)
+	defer os.RemoveAll(tmpDir)
+	defer mgr.Close()
+
+	// Give foobar an initial tag
+	patchInit := `{
+		"nodes": [
+			{
+				"name": "foobar",
+				"tags": ["core", "gateway"]
+			}
+		]
+	}`
+	_, _ = mgr.ApplyConfigChange(patchInit)
+
+	// Add tag "edge" and delete tag "gateway"
+	patchDelta := `{
+		"nodes": [
+			{
+				"name": "foobar",
+				"tags_add": ["edge"],
+				"tags_del": ["gateway"]
+			}
+		]
+	}`
+	res, err := mgr.ApplyConfigChange(patchDelta)
+	if err != nil {
+		t.Fatalf("failed to apply tags delta: %v", err)
+	}
+	if len(res.AffectedNodes) != 1 {
+		t.Fatalf("expected 1 affected node, got %d", len(res.AffectedNodes))
+	}
+
+	node, _ := mgr.GetNode("foobar")
+	if len(node.Tags) != 2 || node.Tags[0] != "core" || node.Tags[1] != "edge" {
+		t.Errorf("unexpected tags after delta: %v", node.Tags)
+	}
+}
+
+

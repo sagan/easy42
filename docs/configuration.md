@@ -569,6 +569,17 @@ Saved snippets shown in the Config Apply UI. They are validated before being sto
 
 For a section that is merged, omitted fields are left unchanged. To clear an optional string or list field, set it to an empty string or an empty list. A JSON `null` is treated like an omitted field by the patch decoder. Lists such as `entrypoints`, `routes`, and `config_hooks` are replaced wholesale when present.
 
+### Delta operations
+
+For `static_routes` and `tags`, apply patches also support incremental delta operations:
+- **`nodes[].static_routes_add`**: Append static routes to the node's existing routes. If the route already exists, it is ignored (idempotent).
+- **`nodes[].static_routes_del`**: Remove specified static routes from the node. If a route does not exist, it is ignored.
+- **`nodes[].tags_add` / `nodes[].tags_del`**: Add or remove tags from nodes incrementally.
+- **`links[].tags_add` / `links[].tags_del`**: Add or remove tags from links incrementally.
+
+If an attribute already contains the added items or does not contain the deleted items, applying the delta results in a no-op with 0 changes recorded.
+
+
 ### Forbidden fields
 
 The following fields are rejected even though they exist in `config.json`:

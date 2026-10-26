@@ -97,11 +97,15 @@ const ConfigChangeJSONSchema = `{
           "items": { "$ref": "#/definitions/EntrypointPatch" }
         },
         "tags": { "type": "array", "items": { "type": "string" } },
+        "tags_add": { "type": "array", "items": { "type": "string" } },
+        "tags_del": { "type": "array", "items": { "type": "string" } },
         "table": { "type": "integer", "minimum": 0, "maximum": 65535 },
         "external_table": { "type": "integer", "minimum": 0, "maximum": 65535 },
         "internet_table": { "type": "integer", "minimum": 0, "maximum": 65535 },
         "metric": { "type": ["integer", "null"] },
         "static_routes": { "type": "array", "items": { "type": "string" } },
+        "static_routes_add": { "type": "array", "items": { "type": "string" } },
+        "static_routes_del": { "type": "array", "items": { "type": "string" } },
         "routes": {
           "type": "array",
           "items": { "$ref": "#/definitions/KernelRouteRule" }
@@ -139,6 +143,8 @@ const ConfigChangeJSONSchema = `{
         "from": { "$ref": "#/definitions/LinkEndPatch" },
         "to": { "$ref": "#/definitions/LinkEndPatch" },
         "tags": { "type": "array", "items": { "type": "string" } },
+        "tags_add": { "type": "array", "items": { "type": "string" } },
+        "tags_del": { "type": "array", "items": { "type": "string" } },
         "assign_ipv4": { "type": "boolean" },
         "psk": { "type": "string" }
       }
@@ -269,21 +275,25 @@ type NodePatch struct {
 	Interface     *string            `json:"interface,omitempty" yaml:"interface,omitempty"`
 	ASN           *uint64            `json:"asn,omitempty" yaml:"asn,omitempty"`
 	Entrypoints   *[]Entrypoint      `json:"entrypoints,omitempty" yaml:"entrypoints,omitempty"`
-	Tags          *[]string          `json:"tags,omitempty" yaml:"tags,omitempty"`
-	Table         *int               `json:"table,omitempty" yaml:"table,omitempty"`
-	ExternalTable *int               `json:"external_table,omitempty" yaml:"external_table,omitempty"`
-	InternetTable *int               `json:"internet_table,omitempty" yaml:"internet_table,omitempty"`
-	Metric        *int               `json:"metric,omitempty" yaml:"metric,omitempty"`
-	StaticRoutes  *[]string          `json:"static_routes,omitempty" yaml:"static_routes,omitempty"`
-	Routes        *[]KernelRouteRule `json:"routes,omitempty" yaml:"routes,omitempty"`
-	ConfigHooks   *[]ConfigHook      `json:"config_hooks,omitempty" yaml:"config_hooks,omitempty"`
-	WgTemplate    *string            `json:"wg_template,omitempty" yaml:"wg_template,omitempty"`
-	BirdTemplate  *string            `json:"bird_template,omitempty" yaml:"bird_template,omitempty"`
-	NftTemplate   *string            `json:"nft_template,omitempty" yaml:"nft_template,omitempty"`
-	X             *float64           `json:"x,omitempty" yaml:"x,omitempty"`
-	Y             *float64           `json:"y,omitempty" yaml:"y,omitempty"`
-	Mode          *string            `json:"mode,omitempty" yaml:"mode,omitempty"`
-	EnableFA      *bool              `json:"enable_fa,omitempty" yaml:"enable_fa,omitempty"`
+	Tags                *[]string          `json:"tags,omitempty" yaml:"tags,omitempty"`
+	TagsAdd             *[]string          `json:"tags_add,omitempty" yaml:"tags_add,omitempty"`
+	TagsDel             *[]string          `json:"tags_del,omitempty" yaml:"tags_del,omitempty"`
+	Table               *int               `json:"table,omitempty" yaml:"table,omitempty"`
+	ExternalTable       *int               `json:"external_table,omitempty" yaml:"external_table,omitempty"`
+	InternetTable       *int               `json:"internet_table,omitempty" yaml:"internet_table,omitempty"`
+	Metric              *int               `json:"metric,omitempty" yaml:"metric,omitempty"`
+	StaticRoutes        *[]string          `json:"static_routes,omitempty" yaml:"static_routes,omitempty"`
+	StaticRoutesAdd     *[]string          `json:"static_routes_add,omitempty" yaml:"static_routes_add,omitempty"`
+	StaticRoutesDel     *[]string          `json:"static_routes_del,omitempty" yaml:"static_routes_del,omitempty"`
+	Routes              *[]KernelRouteRule `json:"routes,omitempty" yaml:"routes,omitempty"`
+	ConfigHooks         *[]ConfigHook      `json:"config_hooks,omitempty" yaml:"config_hooks,omitempty"`
+	WgTemplate          *string            `json:"wg_template,omitempty" yaml:"wg_template,omitempty"`
+	BirdTemplate        *string            `json:"bird_template,omitempty" yaml:"bird_template,omitempty"`
+	NftTemplate         *string            `json:"nft_template,omitempty" yaml:"nft_template,omitempty"`
+	X                   *float64           `json:"x,omitempty" yaml:"x,omitempty"`
+	Y                   *float64           `json:"y,omitempty" yaml:"y,omitempty"`
+	Mode                *string            `json:"mode,omitempty" yaml:"mode,omitempty"`
+	EnableFA            *bool              `json:"enable_fa,omitempty" yaml:"enable_fa,omitempty"`
 	UpdateHosts         *bool              `json:"update_hosts,omitempty" yaml:"update_hosts,omitempty"`
 	CustomNetworkScript *string            `json:"custom_network_script,omitempty" yaml:"custom_network_script,omitempty"`
 	RouteReflector      *bool              `json:"route_reflector,omitempty" yaml:"route_reflector,omitempty"`
@@ -317,6 +327,8 @@ type LinkPatch struct {
 	From       *LinkEndPatch `json:"from,omitempty" yaml:"from,omitempty"`
 	To         *LinkEndPatch `json:"to,omitempty" yaml:"to,omitempty"`
 	Tags       *[]string     `json:"tags,omitempty" yaml:"tags,omitempty"`
+	TagsAdd    *[]string     `json:"tags_add,omitempty" yaml:"tags_add,omitempty"`
+	TagsDel    *[]string     `json:"tags_del,omitempty" yaml:"tags_del,omitempty"`
 	AssignIPv4 *bool         `json:"assign_ipv4,omitempty" yaml:"assign_ipv4,omitempty"`
 	Psk        *string       `json:"psk,omitempty" yaml:"psk,omitempty"`
 }
@@ -529,17 +541,34 @@ func validateNodePatch(n *NodePatch) error {
 		return fmt.Errorf("ASN must be > 0 for node %s", n.Name)
 	}
 
-	if n.StaticRoutes != nil {
-		for _, r := range *n.StaticRoutes {
+	validateRouteList := func(routes []string, fieldName string) error {
+		for _, r := range routes {
 			trimmed := strings.TrimSpace(r)
 			if trimmed == "" {
 				continue
 			}
 			if _, _, err := net.ParseCIDR(trimmed); err != nil {
 				if parsed := net.ParseIP(trimmed); parsed == nil {
-					return fmt.Errorf("invalid static route '%s' for node %s: must be a valid CIDR or IP", r, n.Name)
+					return fmt.Errorf("invalid static route '%s' in %s for node %s: must be a valid CIDR or IP", r, fieldName, n.Name)
 				}
 			}
+		}
+		return nil
+	}
+
+	if n.StaticRoutes != nil {
+		if err := validateRouteList(*n.StaticRoutes, "static_routes"); err != nil {
+			return err
+		}
+	}
+	if n.StaticRoutesAdd != nil {
+		if err := validateRouteList(*n.StaticRoutesAdd, "static_routes_add"); err != nil {
+			return err
+		}
+	}
+	if n.StaticRoutesDel != nil {
+		if err := validateRouteList(*n.StaticRoutesDel, "static_routes_del"); err != nil {
+			return err
 		}
 	}
 

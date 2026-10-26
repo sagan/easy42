@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -424,6 +425,85 @@ func (m *Manager) simulateApply(cfg *config.Config, patch *config.ConfigPatch) (
 	return result, affectedNodes, nil
 }
 
+func routeEqual(a, b string) bool {
+	aTrim := strings.TrimSpace(a)
+	bTrim := strings.TrimSpace(b)
+	if strings.EqualFold(aTrim, bTrim) {
+		return true
+	}
+	_, ipNetA, errA := net.ParseCIDR(aTrim)
+	_, ipNetB, errB := net.ParseCIDR(bTrim)
+	if errA == nil && errB == nil {
+		return ipNetA.String() == ipNetB.String()
+	}
+	ipA := net.ParseIP(aTrim)
+	ipB := net.ParseIP(bTrim)
+	if ipA != nil && ipB != nil {
+		return ipA.Equal(ipB)
+	}
+	return false
+}
+
+func tagEqual(a, b string) bool {
+	return strings.EqualFold(strings.TrimSpace(a), strings.TrimSpace(b))
+}
+
+func sliceEqual(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func applyStringSliceDelta(base []string, toDel, toAdd *[]string, equalFn func(string, string) bool) []string {
+	res := make([]string, 0, len(base))
+	res = append(res, base...)
+
+	// Apply deletions first
+	if toDel != nil {
+		for _, itemToDel := range *toDel {
+			trimmedDel := strings.TrimSpace(itemToDel)
+			if trimmedDel == "" {
+				continue
+			}
+			var filtered []string
+			for _, existing := range res {
+				if !equalFn(existing, trimmedDel) {
+					filtered = append(filtered, existing)
+				}
+			}
+			res = filtered
+		}
+	}
+
+	// Apply additions
+	if toAdd != nil {
+		for _, itemToAdd := range *toAdd {
+			trimmedAdd := strings.TrimSpace(itemToAdd)
+			if trimmedAdd == "" {
+				continue
+			}
+			alreadyExists := false
+			for _, existing := range res {
+				if equalFn(existing, trimmedAdd) {
+					alreadyExists = true
+					break
+				}
+			}
+			if !alreadyExists {
+				res = append(res, trimmedAdd)
+			}
+		}
+	}
+
+	return res
+}
+
 func mergeNode(target *config.Node, patch config.NodePatch, now time.Time) ([]ApplyFieldDiff, error) {
 	var diffs []ApplyFieldDiff
 
@@ -485,9 +565,20 @@ func mergeNode(target *config.Node, patch config.NodePatch, now time.Time) ([]Ap
 		checkField("entrypoints", target.Entrypoints, *patch.Entrypoints)
 		target.Entrypoints = *patch.Entrypoints
 	}
-	if patch.Tags != nil {
-		checkField("tags", target.Tags, *patch.Tags)
-		target.Tags = *patch.Tags
+	if patch.Tags != nil || patch.TagsAdd != nil || patch.TagsDel != nil {
+		base := target.Tags
+		if patch.Tags != nil {
+			base = *patch.Tags
+		}
+		newTags := applyStringSliceDelta(base, patch.TagsDel, patch.TagsAdd, tagEqual)
+		if !sliceEqual(target.Tags, newTags) {
+			diffs = append(diffs, ApplyFieldDiff{
+				Field:    "tags",
+				OldValue: target.Tags,
+				NewValue: newTags,
+			})
+			target.Tags = newTags
+		}
 	}
 	if patch.Table != nil && *patch.Table != target.Table {
 		checkField("table", target.Table, *patch.Table)
@@ -505,9 +596,20 @@ func mergeNode(target *config.Node, patch config.NodePatch, now time.Time) ([]Ap
 		checkField("metric", target.Metric, patch.Metric)
 		target.Metric = patch.Metric
 	}
-	if patch.StaticRoutes != nil {
-		checkField("static_routes", target.StaticRoutes, *patch.StaticRoutes)
-		target.StaticRoutes = *patch.StaticRoutes
+	if patch.StaticRoutes != nil || patch.StaticRoutesAdd != nil || patch.StaticRoutesDel != nil {
+		base := target.StaticRoutes
+		if patch.StaticRoutes != nil {
+			base = *patch.StaticRoutes
+		}
+		newRoutes := applyStringSliceDelta(base, patch.StaticRoutesDel, patch.StaticRoutesAdd, routeEqual)
+		if !sliceEqual(target.StaticRoutes, newRoutes) {
+			diffs = append(diffs, ApplyFieldDiff{
+				Field:    "static_routes",
+				OldValue: target.StaticRoutes,
+				NewValue: newRoutes,
+			})
+			target.StaticRoutes = newRoutes
+		}
 	}
 	if patch.Routes != nil {
 		checkField("routes", target.Routes, *patch.Routes)
@@ -608,9 +710,14 @@ func createNodeFromPatch(patch config.NodePatch, now time.Time) (*config.Node, [
 	if patch.Entrypoints != nil {
 		node.Entrypoints = *patch.Entrypoints
 	}
+	var baseTags []string
 	if patch.Tags != nil {
-		node.Tags = *patch.Tags
+		baseTags = *patch.Tags
 	}
+	if patch.TagsAdd != nil || patch.TagsDel != nil {
+		baseTags = applyStringSliceDelta(baseTags, patch.TagsDel, patch.TagsAdd, tagEqual)
+	}
+	node.Tags = baseTags
 	if patch.Table != nil {
 		node.Table = *patch.Table
 	}
@@ -623,9 +730,14 @@ func createNodeFromPatch(patch config.NodePatch, now time.Time) (*config.Node, [
 	if patch.Metric != nil {
 		node.Metric = patch.Metric
 	}
+	var baseRoutes []string
 	if patch.StaticRoutes != nil {
-		node.StaticRoutes = *patch.StaticRoutes
+		baseRoutes = *patch.StaticRoutes
 	}
+	if patch.StaticRoutesAdd != nil || patch.StaticRoutesDel != nil {
+		baseRoutes = applyStringSliceDelta(baseRoutes, patch.StaticRoutesDel, patch.StaticRoutesAdd, routeEqual)
+	}
+	node.StaticRoutes = baseRoutes
 	if patch.Routes != nil {
 		node.Routes = *patch.Routes
 	}
@@ -698,9 +810,20 @@ func mergeLink(target *config.Link, patch config.LinkPatch, now time.Time) ([]Ap
 		checkField("type", target.Type, *patch.Type)
 		target.Type = *patch.Type
 	}
-	if patch.Tags != nil {
-		checkField("tags", target.Tags, *patch.Tags)
-		target.Tags = *patch.Tags
+	if patch.Tags != nil || patch.TagsAdd != nil || patch.TagsDel != nil {
+		base := target.Tags
+		if patch.Tags != nil {
+			base = *patch.Tags
+		}
+		newTags := applyStringSliceDelta(base, patch.TagsDel, patch.TagsAdd, tagEqual)
+		if !sliceEqual(target.Tags, newTags) {
+			diffs = append(diffs, ApplyFieldDiff{
+				Field:    "tags",
+				OldValue: target.Tags,
+				NewValue: newTags,
+			})
+			target.Tags = newTags
+		}
 	}
 	if patch.AssignIPv4 != nil && *patch.AssignIPv4 != target.AssignIPv4 {
 		checkField("assign_ipv4", target.AssignIPv4, *patch.AssignIPv4)
@@ -817,9 +940,14 @@ func createLinkFromPatch(patch config.LinkPatch, now time.Time) (*config.Link, [
 	if patch.Type != nil {
 		link.Type = *patch.Type
 	}
+	var baseTags []string
 	if patch.Tags != nil {
-		link.Tags = *patch.Tags
+		baseTags = *patch.Tags
 	}
+	if patch.TagsAdd != nil || patch.TagsDel != nil {
+		baseTags = applyStringSliceDelta(baseTags, patch.TagsDel, patch.TagsAdd, tagEqual)
+	}
+	link.Tags = baseTags
 	if patch.AssignIPv4 != nil {
 		link.AssignIPv4 = *patch.AssignIPv4
 	}
