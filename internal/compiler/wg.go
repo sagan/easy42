@@ -117,91 +117,38 @@ func BuildWgLinkContext(
 		rawPsk = peerEnd.Psk
 	}
 
+	// The link this config is generated for. An explicitly passed link always takes
+	// precedence over a lookup in the full config, regardless of argument order.
+	var explicitLink *config.Link
+	var fullCfg *config.Config
+
 	for _, arg := range args {
 		switch v := arg.(type) {
 		case *config.Link:
 			if v != nil {
-				if v.AssignIPv4 {
-					assignIPv4 = true
-				}
-				if rawPsk == "" {
-					if v.Psk != "" {
-						rawPsk = v.Psk
-					} else if v.From.Psk != "" {
-						rawPsk = v.From.Psk
-					} else if v.To.Psk != "" {
-						rawPsk = v.To.Psk
-					}
-				}
+				explicitLink = v
 			}
 		case config.Link:
-			if v.AssignIPv4 {
-				assignIPv4 = true
-			}
-			if rawPsk == "" {
-				if v.Psk != "" {
-					rawPsk = v.Psk
-				} else if v.From.Psk != "" {
-					rawPsk = v.From.Psk
-				} else if v.To.Psk != "" {
-					rawPsk = v.To.Psk
-				}
-			}
+			l := v
+			explicitLink = &l
 		case bool:
 			assignIPv4 = v
 		case *config.Config:
 			if v != nil {
+				fullCfg = v
 				allPolicies := v.GetAllPolicies()
 				policyMap = make(map[string]config.NetworkPolicy, len(allPolicies))
 				for _, p := range allPolicies {
 					policyMap[p.ID] = p
 				}
-				for _, l := range v.Links {
-					if (selfEnd != nil && (l.From.Interface == selfEnd.Interface || l.To.Interface == selfEnd.Interface)) ||
-						(selfNode != nil && peerNode != nil &&
-							((l.From.Name == selfNode.Name && l.To.Name == peerNode.Name) ||
-								(l.From.Name == peerNode.Name && l.To.Name == selfNode.Name))) {
-						if !assignIPv4 && l.AssignIPv4 {
-							assignIPv4 = true
-						}
-						if rawPsk == "" {
-							if l.Psk != "" {
-								rawPsk = l.Psk
-							} else if l.From.Psk != "" {
-								rawPsk = l.From.Psk
-							} else if l.To.Psk != "" {
-								rawPsk = l.To.Psk
-							}
-						}
-						break
-					}
-				}
 			}
 		case config.Config:
+			c := v
+			fullCfg = &c
 			allPolicies := v.GetAllPolicies()
 			policyMap = make(map[string]config.NetworkPolicy, len(allPolicies))
 			for _, p := range allPolicies {
 				policyMap[p.ID] = p
-			}
-			for _, l := range v.Links {
-				if (selfEnd != nil && (l.From.Interface == selfEnd.Interface || l.To.Interface == selfEnd.Interface)) ||
-					(selfNode != nil && peerNode != nil &&
-						((l.From.Name == selfNode.Name && l.To.Name == peerNode.Name) ||
-							(l.From.Name == peerNode.Name && l.To.Name == selfNode.Name))) {
-					if !assignIPv4 && l.AssignIPv4 {
-						assignIPv4 = true
-					}
-					if rawPsk == "" {
-						if l.Psk != "" {
-							rawPsk = l.Psk
-						} else if l.From.Psk != "" {
-							rawPsk = l.From.Psk
-						} else if l.To.Psk != "" {
-							rawPsk = l.To.Psk
-						}
-					}
-					break
-				}
 			}
 		case []config.NetworkPolicy:
 			cfgPolicies := &config.Config{NetworkPolicies: v}
@@ -224,6 +171,19 @@ func BuildWgLinkContext(
 			policyMap[v.ID] = v
 		case map[string]config.NetworkPolicy:
 			policyMap = v
+		}
+	}
+
+	linkForEnd := explicitLink
+	if linkForEnd == nil && fullCfg != nil {
+		linkForEnd = findLinkForEnd(fullCfg.Links, selfNode, peerNode, selfEnd, peerEnd)
+	}
+	if linkForEnd != nil {
+		if linkForEnd.AssignIPv4 {
+			assignIPv4 = true
+		}
+		if rawPsk == "" {
+			rawPsk = linkPsk(linkForEnd)
 		}
 	}
 	if policyMap == nil {
@@ -392,6 +352,62 @@ func BuildWgLinkContext(
 	}
 
 	return ctx, nil
+}
+
+// findLinkForEnd locates the exact link a WireGuard config is generated for.
+// A link only matches when it connects the same two nodes AND the self side uses
+// the same local interface. Interface names alone are NOT unique across nodes
+// (e.g. both A and C have "wg42B" toward B), so they must never be matched in isolation.
+func findLinkForEnd(links []config.Link, selfNode, peerNode *config.Node, selfEnd, peerEnd *config.LinkEnd) *config.Link {
+	selfName, peerName := "", ""
+	if selfNode != nil {
+		selfName = selfNode.Name
+	} else if selfEnd != nil {
+		selfName = selfEnd.Name
+	}
+	if peerNode != nil {
+		peerName = peerNode.Name
+	} else if peerEnd != nil {
+		peerName = peerEnd.Name
+	}
+	if selfName == "" || peerName == "" {
+		return nil
+	}
+	selfIface := ""
+	if selfEnd != nil {
+		selfIface = selfEnd.Interface
+	}
+
+	for i := range links {
+		l := &links[i]
+		var localEnd *config.LinkEnd
+		switch {
+		case l.From.Name == selfName && l.To.Name == peerName:
+			localEnd = &l.From
+		case l.To.Name == selfName && l.From.Name == peerName:
+			localEnd = &l.To
+		default:
+			continue
+		}
+		if selfIface == "" || localEnd.Interface == selfIface {
+			return l
+		}
+	}
+	return nil
+}
+
+// linkPsk returns the (encrypted) PSK stored on a link, preferring the link-level value.
+func linkPsk(l *config.Link) string {
+	if l == nil {
+		return ""
+	}
+	if l.Psk != "" {
+		return l.Psk
+	}
+	if l.From.Psk != "" {
+		return l.From.Psk
+	}
+	return l.To.Psk
 }
 
 // MatchWgHookTarget checks if a hook's target matches the given interface or peer name.

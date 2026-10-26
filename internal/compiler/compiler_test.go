@@ -381,6 +381,68 @@ func TestGenerateWgConfigContent_Psk(t *testing.T) {
 	}
 }
 
+func TestGenerateWgConfigContent_PskDoesNotLeakAcrossLinks(t *testing.T) {
+	vault := crypto.NewKeyVault()
+	dek, _ := crypto.GenerateRandomBytes(32)
+	_ = vault.Unlock(dek)
+
+	kpA, _ := crypto.GenerateWgKeyPair()
+	kpB, _ := crypto.GenerateWgKeyPair()
+	kpC, _ := crypto.GenerateWgKeyPair()
+	pskRaw, _ := crypto.GenerateWgPsk()
+	encPsk, _ := vault.EncryptField(pskRaw)
+	encPrivA, _ := vault.EncryptField(kpA.PrivateKey)
+	encPrivB, _ := vault.EncryptField(kpB.PrivateKey)
+	encPrivC, _ := vault.EncryptField(kpC.PrivateKey)
+
+	nodeA := config.Node{Name: "node-a", IP: "10.0.0.1"}
+	nodeB := config.Node{Name: "node-b", IP: "10.0.0.2"}
+	nodeC := config.Node{Name: "node-c", IP: "10.0.0.3"}
+
+	// A <-> B has PSK; A's end interface is named after B.
+	linkAB := config.Link{
+		From: config.LinkEnd{Name: "node-a", Interface: GetInterfaceName("node-b"), PrivateKey: encPrivA, PublicKey: kpA.PublicKey, Psk: encPsk},
+		To:   config.LinkEnd{Name: "node-b", Interface: GetInterfaceName("node-a"), PrivateKey: encPrivB, PublicKey: kpB.PublicKey, Psk: encPsk},
+		Psk:  encPsk,
+	}
+	// B <-> C has NO PSK; C's end interface is ALSO named after B (same as A's).
+	linkBC := config.Link{
+		From: config.LinkEnd{Name: "node-b", Interface: GetInterfaceName("node-c"), PrivateKey: encPrivB, PublicKey: kpB.PublicKey},
+		To:   config.LinkEnd{Name: "node-c", Interface: GetInterfaceName("node-b"), PrivateKey: encPrivC, PublicKey: kpC.PublicKey},
+	}
+	cfg := &config.Config{
+		Nodes: []config.Node{nodeA, nodeB, nodeC},
+		Links: []config.Link{linkAB, linkBC},
+	}
+
+	// Same argument order as the engine: cfg first, then the link.
+	confC, err := GenerateWgConfigContent(&nodeC, &nodeB, &linkBC.To, &linkBC.From, vault, cfg, &linkBC)
+	if err != nil {
+		t.Fatalf("GenerateWgConfigContent failed: %v", err)
+	}
+	if strings.Contains(confC, "PresharedKey") {
+		t.Fatalf("PSK from link A-B leaked into C's config for link B-C:\n%s", confC)
+	}
+
+	// Config-only lookup (no explicit link) must also resolve the correct link.
+	confCNoLink, err := GenerateWgConfigContent(&nodeC, &nodeB, &linkBC.To, &linkBC.From, vault, cfg)
+	if err != nil {
+		t.Fatalf("GenerateWgConfigContent failed: %v", err)
+	}
+	if strings.Contains(confCNoLink, "PresharedKey") {
+		t.Fatalf("PSK from link A-B leaked into C's config (config lookup):\n%s", confCNoLink)
+	}
+
+	// The real PSK link still gets its key.
+	confA, err := GenerateWgConfigContent(&nodeA, &nodeB, &linkAB.From, &linkAB.To, vault, cfg, &linkAB)
+	if err != nil {
+		t.Fatalf("GenerateWgConfigContent failed: %v", err)
+	}
+	if !strings.Contains(confA, fmt.Sprintf("PresharedKey = %s", pskRaw)) {
+		t.Fatalf("Expected PresharedKey on link A-B, got:\n%s", confA)
+	}
+}
+
 func TestResolveEndpointToIP(t *testing.T) {
 	origLookup := DefaultLookupIP
 	defer func() { DefaultLookupIP = origLookup }()
