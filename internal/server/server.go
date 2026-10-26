@@ -310,19 +310,29 @@ func New(cfg Config) *Server {
 		fileServer := http.FileServer(http.FS(s.distFS))
 		r.Get("/*", func(w http.ResponseWriter, r *http.Request) {
 			path := strings.TrimPrefix(r.URL.Path, "/")
-			if path != "" {
+			// Do not let fileServer handle "index.html" directly.
+			// Go's http.FileServer sends a 301 redirect to "./" for index.html, which
+			// produces a redirected response in Service Worker fetchEvent.respondWith(),
+			// causing Chrome to fail navigation requests with net::ERR_FAILED.
+			if path != "" && path != "index.html" {
 				if _, err := fs.Stat(s.distFS, path); err == nil {
+					if path == "sw.js" || strings.HasPrefix(path, "workbox-") {
+						w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+					} else if strings.HasPrefix(path, "assets/") {
+						w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+					}
 					fileServer.ServeHTTP(w, r)
 					return
 				}
 			}
-			// Fallback to index.html for SPA routing
+			// Fallback to index.html for SPA routing and direct /index.html requests
 			indexData, err := fs.ReadFile(s.distFS, "index.html")
 			if err != nil {
 				http.NotFound(w, r)
 				return
 			}
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			w.Header().Set("Cache-Control", "no-cache, must-revalidate")
 			_, _ = w.Write(indexData)
 		})
 	}

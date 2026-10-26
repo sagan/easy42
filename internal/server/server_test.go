@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"testing/fstest"
 	"time"
 
 	"easy42/internal/config"
@@ -2451,6 +2452,64 @@ func TestUpdateLinkPSKDisableAndRemove(t *testing.T) {
 	}
 	if strings.Contains(string(afterCfg), `"psk"`) {
 		t.Fatalf("Expected config.json not to contain psk after disabling, got:\n%s", string(afterCfg))
+	}
+}
+
+func TestStaticFrontendRouting(t *testing.T) {
+	mockFS := fstest.MapFS{
+		"index.html":          &fstest.MapFile{Data: []byte("<html>Mock Index</html>")},
+		"sw.js":               &fstest.MapFile{Data: []byte("// sw.js")},
+		"assets/index-123.js": &fstest.MapFile{Data: []byte("// js asset")},
+	}
+	srv := New(Config{
+		DistFS: mockFS,
+	})
+
+	// Test 1: Direct /index.html must return 200 OK without 301 redirect
+	req := httptest.NewRequest("GET", "/index.html", nil)
+	w := httptest.NewRecorder()
+	srv.router.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected /index.html to return 200, got %d", w.Code)
+	}
+	if !strings.Contains(w.Body.String(), "Mock Index") {
+		t.Fatalf("expected /index.html to return index content, got %s", w.Body.String())
+	}
+	if w.Header().Get("Cache-Control") != "no-cache, must-revalidate" {
+		t.Fatalf("expected /index.html Cache-Control, got %s", w.Header().Get("Cache-Control"))
+	}
+
+	// Test 2: SPA Route /topology must return 200 OK with index.html
+	req = httptest.NewRequest("GET", "/topology", nil)
+	w = httptest.NewRecorder()
+	srv.router.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected /topology to return 200, got %d", w.Code)
+	}
+	if !strings.Contains(w.Body.String(), "Mock Index") {
+		t.Fatalf("expected /topology to return index content, got %s", w.Body.String())
+	}
+
+	// Test 3: /sw.js must have no-cache, no-store headers
+	req = httptest.NewRequest("GET", "/sw.js", nil)
+	w = httptest.NewRecorder()
+	srv.router.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected /sw.js to return 200, got %d", w.Code)
+	}
+	if w.Header().Get("Cache-Control") != "no-cache, no-store, must-revalidate" {
+		t.Fatalf("expected /sw.js Cache-Control, got %s", w.Header().Get("Cache-Control"))
+	}
+
+	// Test 4: /assets/index-123.js must have immutable caching header
+	req = httptest.NewRequest("GET", "/assets/index-123.js", nil)
+	w = httptest.NewRecorder()
+	srv.router.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected /assets/index-123.js to return 200, got %d", w.Code)
+	}
+	if w.Header().Get("Cache-Control") != "public, max-age=31536000, immutable" {
+		t.Fatalf("expected assets Cache-Control, got %s", w.Header().Get("Cache-Control"))
 	}
 }
 
