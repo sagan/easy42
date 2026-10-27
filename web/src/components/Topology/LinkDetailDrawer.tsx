@@ -190,7 +190,7 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
         : ourNode?.asn) ?? "";
     const theirAsn = theirNode?.asn ?? "";
 
-    let ourMtu = (isFromExt ? link.from.mtu : link.to.mtu) || 1420;
+    let ourMtu = (isFromExt ? link.to.mtu : link.from.mtu) || 1420;
     // Endpoints
     let ourEndpoint =
       (isFromExt ? link.from.resolved_endpoint || link.from.endpoint : link.to.resolved_endpoint || link.to.endpoint) ||
@@ -1103,7 +1103,10 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
             {!isFromExternal && (
               <>
                 <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <Typography variant="caption" sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}>
+                  <Typography
+                    variant="caption"
+                    sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}
+                  >
                     <Shield size={12} /> Network Policy:
                   </Typography>
                   <Chip
@@ -1119,7 +1122,8 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
                           : link.from.policy === "dn42"
                             ? "rgba(109, 40, 217, 0.12)"
                             : "rgba(79, 70, 229, 0.12)",
-                      color: link.from.policy === "none" ? "#64748B" : link.from.policy === "dn42" ? "#6D28D9" : "#4F46E5",
+                      color:
+                        link.from.policy === "none" ? "#64748B" : link.from.policy === "dn42" ? "#6D28D9" : "#4F46E5",
                       border: "1px solid",
                       borderColor:
                         link.from.policy === "none"
@@ -1132,7 +1136,10 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
                 </Box>
 
                 <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <Typography variant="caption" sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}>
+                  <Typography
+                    variant="caption"
+                    sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}
+                  >
                     <Route size={12} /> Routing Policy:
                   </Typography>
                   <Chip
@@ -1161,7 +1168,10 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
                 </Box>
 
                 <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <Typography variant="caption" sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}>
+                  <Typography
+                    variant="caption"
+                    sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}
+                  >
                     <Gauge size={12} /> Link Cost:
                   </Typography>
                   <Chip
@@ -1176,7 +1186,9 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
                       fontSize: "0.65rem",
                       fontWeight: 700,
                       bgcolor:
-                        link.from.cost && link.from.cost !== 0 ? "rgba(245, 158, 11, 0.12)" : "rgba(148, 163, 184, 0.15)",
+                        link.from.cost && link.from.cost !== 0
+                          ? "rgba(245, 158, 11, 0.12)"
+                          : "rgba(148, 163, 184, 0.15)",
                       color: link.from.cost && link.from.cost !== 0 ? "#D97706" : "#64748B",
                       border: "1px solid",
                       borderColor:
@@ -1186,7 +1198,10 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
                 </Box>
 
                 <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <Typography variant="caption" sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}>
+                  <Typography
+                    variant="caption"
+                    sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}
+                  >
                     <Shield size={12} /> FwMark:
                   </Typography>
                   <Chip
@@ -1205,7 +1220,10 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
                 </Box>
 
                 <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <Typography variant="caption" sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}>
+                  <Typography
+                    variant="caption"
+                    sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}
+                  >
                     <Zap size={12} /> BGP Preference:
                   </Typography>
                   <Chip
@@ -1226,7 +1244,10 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
                 </Box>
 
                 <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <Typography variant="caption" sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}>
+                  <Typography
+                    variant="caption"
+                    sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}
+                  >
                     <Shield size={12} /> Netfilter Mark:
                   </Typography>
                   <Chip
@@ -1776,7 +1797,10 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
             {!isToExternal && (
               <>
                 <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <Typography variant="caption" sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}>
+                  <Typography
+                    variant="caption"
+                    sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}
+                  >
                     <Shield size={12} /> Network Policy:
                   </Typography>
                   <Chip
@@ -1805,7 +1829,10 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
                 </Box>
 
                 <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <Typography variant="caption" sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}>
+                  <Typography
+                    variant="caption"
+                    sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}
+                  >
                     <Route size={12} /> Routing Policy:
                   </Typography>
                   <Chip
@@ -1834,7 +1861,10 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
                 </Box>
 
                 <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <Typography variant="caption" sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}>
+                  <Typography
+                    variant="caption"
+                    sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}
+                  >
                     <Gauge size={12} /> Link Cost:
                   </Typography>
                   <Chip
@@ -1859,7 +1889,10 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
                 </Box>
 
                 <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <Typography variant="caption" sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}>
+                  <Typography
+                    variant="caption"
+                    sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}
+                  >
                     <Shield size={12} /> FwMark:
                   </Typography>
                   <Chip
@@ -1878,7 +1911,10 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
                 </Box>
 
                 <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <Typography variant="caption" sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}>
+                  <Typography
+                    variant="caption"
+                    sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}
+                  >
                     <Zap size={12} /> BGP Preference:
                   </Typography>
                   <Chip
@@ -1888,7 +1924,8 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
                       height: 20,
                       fontSize: "0.65rem",
                       fontWeight: 700,
-                      bgcolor: link.to.preference !== undefined ? "rgba(16, 185, 129, 0.12)" : "rgba(148, 163, 184, 0.15)",
+                      bgcolor:
+                        link.to.preference !== undefined ? "rgba(16, 185, 129, 0.12)" : "rgba(148, 163, 184, 0.15)",
                       color: link.to.preference !== undefined ? "#059669" : "#64748B",
                       border: "1px solid",
                       borderColor:
@@ -1898,7 +1935,10 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
                 </Box>
 
                 <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <Typography variant="caption" sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}>
+                  <Typography
+                    variant="caption"
+                    sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}
+                  >
                     <Shield size={12} /> Netfilter Mark:
                   </Typography>
                   <Chip
