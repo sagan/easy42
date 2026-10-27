@@ -80,10 +80,10 @@ if ! command -v curl >/dev/null 2>&1 && ! command -v wget >/dev/null 2>&1; then
 fi
 
 # 4. Download wg-quick-op release
-VERSION="${WG_QUICK_OP_VERSION:-0.5.0}"
+VERSION="${WG_QUICK_OP_VERSION:-0.5.1}"
 VERSION="${VERSION#v}"
 
-DOWNLOAD_URL="https://github.com/sagan/wg-quick-op/releases/download/v${VERSION}/wg-quick-op_Linux_${WG_OP_ARCH}.tar.gz"
+DOWNLOAD_URL="https://github.com/dn-11/wg-quick-op/releases/download/v${VERSION}/wg-quick-op_Linux_${WG_OP_ARCH}.tar.gz"
 echo "Downloading wg-quick-op v${VERSION} (${WG_OP_ARCH}) from ${DOWNLOAD_URL}..."
 
 if command -v mktemp >/dev/null 2>&1; then
