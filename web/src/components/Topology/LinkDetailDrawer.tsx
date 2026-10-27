@@ -190,6 +190,7 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
         : ourNode?.asn) ?? "";
     const theirAsn = theirNode?.asn ?? "";
 
+    let ourMtu = (isFromExt ? link.from.mtu : link.to.mtu) || 1420;
     // Endpoints
     let ourEndpoint =
       (isFromExt ? link.from.resolved_endpoint || link.from.endpoint : link.to.resolved_endpoint || link.to.endpoint) ||
@@ -224,6 +225,7 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
       `ASN: ${ourAsn}`,
       `WireGuard Endpoint: ${ourEndpoint}`,
       `WireGuard Public Key: ${ourPublicKey}`,
+      `WireGuard MTU: ${ourMtu}`,
     ];
     if (pskValue) {
       ourLines.push(`WireGuard PSK: ${pskValue}`);
@@ -515,9 +517,55 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
                 />
               )}
             </Box>
-            <Typography variant="caption" className="mono-font" sx={{ color: "#64748B" }}>
-              {link.from.name} ↔ {link.to.name}
-            </Typography>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, flexWrap: "wrap", mt: 0.25 }}>
+              <Typography
+                variant="caption"
+                className="mono-font"
+                sx={{ color: "#64748B", display: "inline-flex", alignItems: "center", gap: 0.5 }}
+              >
+                {link.from.name}
+              </Typography>
+              {isFromExternal && (
+                <Chip
+                  label="External"
+                  size="small"
+                  sx={{
+                    height: 16,
+                    fontSize: "0.6rem",
+                    fontWeight: 700,
+                    bgcolor: "#FEF3C7",
+                    color: "#92400E",
+                    border: "1px solid rgba(217, 119, 6, 0.25)",
+                    borderRadius: "4px",
+                  }}
+                />
+              )}
+              <Typography variant="caption" className="mono-font" sx={{ color: "#64748B" }}>
+                ↔
+              </Typography>
+              <Typography
+                variant="caption"
+                className="mono-font"
+                sx={{ color: "#64748B", display: "inline-flex", alignItems: "center", gap: 0.5 }}
+              >
+                {link.to.name}
+              </Typography>
+              {isToExternal && (
+                <Chip
+                  label="External"
+                  size="small"
+                  sx={{
+                    height: 16,
+                    fontSize: "0.6rem",
+                    fontWeight: 700,
+                    bgcolor: "#FEF3C7",
+                    color: "#92400E",
+                    border: "1px solid rgba(217, 119, 6, 0.25)",
+                    borderRadius: "4px",
+                  }}
+                />
+              )}
+            </Box>
           </Box>
         </Box>
 
@@ -793,9 +841,26 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
           }}
         >
           <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1.5 }}>
-            <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#3730A3" }}>
-              Node 1: {link.from.name}
-            </Typography>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#3730A3" }}>
+                Node 1: {link.from.name}
+              </Typography>
+              {isFromExternal && (
+                <Chip
+                  label="External"
+                  size="small"
+                  sx={{
+                    height: 18,
+                    fontSize: "0.62rem",
+                    fontWeight: 700,
+                    bgcolor: "#FEF3C7",
+                    color: "#92400E",
+                    border: "1px solid rgba(217, 119, 6, 0.25)",
+                    borderRadius: "4px",
+                  }}
+                />
+              )}
+            </Box>
             {!isManual && (
               <Tooltip
                 title={
@@ -951,25 +1016,27 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
                   </Box>
                 </Box>
 
-                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <Typography variant="caption" sx={{ color: "#64748B" }}>
-                    MTU:
-                  </Typography>
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-                    <Typography variant="caption" className="mono-font" sx={{ color: "#0F172A", fontWeight: 600 }}>
-                      {link.from.mtu || 1420}
+                {!isFromExternal && (
+                  <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <Typography variant="caption" sx={{ color: "#64748B" }}>
+                      MTU:
                     </Typography>
-                    <Tooltip title={copiedField === "from_mtu" ? "Copied!" : "Copy MTU"}>
-                      <IconButton
-                        size="small"
-                        onClick={() => copyFieldToClipboard(String(link.from.mtu || 1420), "from_mtu")}
-                        sx={{ p: 0.3, color: copiedField === "from_mtu" ? "#10B981" : "#64748B" }}
-                      >
-                        {copiedField === "from_mtu" ? <Check size={13} /> : <Copy size={13} />}
-                      </IconButton>
-                    </Tooltip>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                      <Typography variant="caption" className="mono-font" sx={{ color: "#0F172A", fontWeight: 600 }}>
+                        {link.from.mtu || 1420}
+                      </Typography>
+                      <Tooltip title={copiedField === "from_mtu" ? "Copied!" : "Copy MTU"}>
+                        <IconButton
+                          size="small"
+                          onClick={() => copyFieldToClipboard(String(link.from.mtu || 1420), "from_mtu")}
+                          sx={{ p: 0.3, color: copiedField === "from_mtu" ? "#10B981" : "#64748B" }}
+                        >
+                          {copiedField === "from_mtu" ? <Check size={13} /> : <Copy size={13} />}
+                        </IconButton>
+                      </Tooltip>
+                    </Box>
                   </Box>
-                </Box>
+                )}
 
                 <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <Typography variant="caption" sx={{ color: "#64748B" }}>
@@ -1010,168 +1077,174 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
                   </Box>
                 </Box>
 
+                {!isFromExternal && (
+                  <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <Typography variant="caption" sx={{ color: "#64748B" }}>
+                      Use IP (DNS Resolve):
+                    </Typography>
+                    <Chip
+                      label={link.from.use_ip ? "Enabled" : "Disabled"}
+                      size="small"
+                      sx={{
+                        height: 20,
+                        fontSize: "0.65rem",
+                        fontWeight: 700,
+                        bgcolor: link.from.use_ip ? "rgba(16, 185, 129, 0.12)" : "rgba(148, 163, 184, 0.15)",
+                        color: link.from.use_ip ? "#059669" : "#64748B",
+                        border: "1px solid",
+                        borderColor: link.from.use_ip ? "rgba(16, 185, 129, 0.3)" : "rgba(148, 163, 184, 0.2)",
+                      }}
+                    />
+                  </Box>
+                )}
+              </>
+            )}
+
+            {!isFromExternal && (
+              <>
                 <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <Typography variant="caption" sx={{ color: "#64748B" }}>
-                    Use IP (DNS Resolve):
+                  <Typography variant="caption" sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}>
+                    <Shield size={12} /> Network Policy:
                   </Typography>
                   <Chip
-                    label={link.from.use_ip ? "Enabled" : "Disabled"}
+                    label={link.from.policy || "default"}
                     size="small"
                     sx={{
                       height: 20,
                       fontSize: "0.65rem",
                       fontWeight: 700,
-                      bgcolor: link.from.use_ip ? "rgba(16, 185, 129, 0.12)" : "rgba(148, 163, 184, 0.15)",
-                      color: link.from.use_ip ? "#059669" : "#64748B",
+                      bgcolor:
+                        link.from.policy === "none"
+                          ? "rgba(148, 163, 184, 0.15)"
+                          : link.from.policy === "dn42"
+                            ? "rgba(109, 40, 217, 0.12)"
+                            : "rgba(79, 70, 229, 0.12)",
+                      color: link.from.policy === "none" ? "#64748B" : link.from.policy === "dn42" ? "#6D28D9" : "#4F46E5",
                       border: "1px solid",
-                      borderColor: link.from.use_ip ? "rgba(16, 185, 129, 0.3)" : "rgba(148, 163, 184, 0.2)",
+                      borderColor:
+                        link.from.policy === "none"
+                          ? "rgba(148, 163, 184, 0.2)"
+                          : link.from.policy === "dn42"
+                            ? "rgba(109, 40, 217, 0.25)"
+                            : "rgba(79, 70, 229, 0.25)",
+                    }}
+                  />
+                </Box>
+
+                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <Typography variant="caption" sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}>
+                    <Route size={12} /> Routing Policy:
+                  </Typography>
+                  <Chip
+                    label={
+                      link.from.routing_policy
+                        ? link.from.routing_policy === "stub"
+                          ? "Stub (Override)"
+                          : link.from.routing_policy === "receive_only"
+                            ? "Receive Only (Override)"
+                            : link.from.routing_policy === "advertise_only"
+                              ? "Advertise Only (Override)"
+                              : `${link.from.routing_policy} (Override)`
+                        : "Inherited"
+                    }
+                    size="small"
+                    sx={{
+                      height: 20,
+                      fontSize: "0.65rem",
+                      fontWeight: 700,
+                      bgcolor: link.from.routing_policy ? "rgba(245, 158, 11, 0.12)" : "rgba(148, 163, 184, 0.15)",
+                      color: link.from.routing_policy ? "#D97706" : "#64748B",
+                      border: "1px solid",
+                      borderColor: link.from.routing_policy ? "rgba(245, 158, 11, 0.3)" : "rgba(148, 163, 184, 0.2)",
+                    }}
+                  />
+                </Box>
+
+                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <Typography variant="caption" sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}>
+                    <Gauge size={12} /> Link Cost:
+                  </Typography>
+                  <Chip
+                    label={
+                      link.from.cost && link.from.cost !== 0
+                        ? `${link.from.cost} (Override)`
+                        : `Policy default (${getEffectiveLinkCost(link.from, Boolean(isToExternal), effectivePolicies)})`
+                    }
+                    size="small"
+                    sx={{
+                      height: 20,
+                      fontSize: "0.65rem",
+                      fontWeight: 700,
+                      bgcolor:
+                        link.from.cost && link.from.cost !== 0 ? "rgba(245, 158, 11, 0.12)" : "rgba(148, 163, 184, 0.15)",
+                      color: link.from.cost && link.from.cost !== 0 ? "#D97706" : "#64748B",
+                      border: "1px solid",
+                      borderColor:
+                        link.from.cost && link.from.cost !== 0 ? "rgba(245, 158, 11, 0.3)" : "rgba(148, 163, 184, 0.2)",
+                    }}
+                  />
+                </Box>
+
+                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <Typography variant="caption" sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}>
+                    <Shield size={12} /> FwMark:
+                  </Typography>
+                  <Chip
+                    label={link.from.fwmark ? `${link.from.fwmark} (Override)` : "Policy default"}
+                    size="small"
+                    sx={{
+                      height: 20,
+                      fontSize: "0.65rem",
+                      fontWeight: 700,
+                      bgcolor: link.from.fwmark ? "rgba(109, 40, 217, 0.12)" : "rgba(148, 163, 184, 0.15)",
+                      color: link.from.fwmark ? "#6D28D9" : "#64748B",
+                      border: "1px solid",
+                      borderColor: link.from.fwmark ? "rgba(109, 40, 217, 0.3)" : "rgba(148, 163, 184, 0.2)",
+                    }}
+                  />
+                </Box>
+
+                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <Typography variant="caption" sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}>
+                    <Zap size={12} /> BGP Preference:
+                  </Typography>
+                  <Chip
+                    label={link.from.preference !== undefined ? `${link.from.preference} (Override)` : "Policy default"}
+                    size="small"
+                    sx={{
+                      height: 20,
+                      fontSize: "0.65rem",
+                      fontWeight: 700,
+                      bgcolor:
+                        link.from.preference !== undefined ? "rgba(16, 185, 129, 0.12)" : "rgba(148, 163, 184, 0.15)",
+                      color: link.from.preference !== undefined ? "#059669" : "#64748B",
+                      border: "1px solid",
+                      borderColor:
+                        link.from.preference !== undefined ? "rgba(16, 185, 129, 0.3)" : "rgba(148, 163, 184, 0.2)",
+                    }}
+                  />
+                </Box>
+
+                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <Typography variant="caption" sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}>
+                    <Shield size={12} /> Netfilter Mark:
+                  </Typography>
+                  <Chip
+                    label={link.from.mark ? `${link.from.mark} (Override)` : "Policy default"}
+                    size="small"
+                    sx={{
+                      height: 20,
+                      fontSize: "0.65rem",
+                      fontWeight: 700,
+                      bgcolor: link.from.mark ? "rgba(109, 40, 217, 0.12)" : "rgba(148, 163, 184, 0.15)",
+                      color: link.from.mark ? "#6D28D9" : "#64748B",
+                      border: "1px solid",
+                      borderColor: link.from.mark ? "rgba(109, 40, 217, 0.3)" : "rgba(148, 163, 184, 0.2)",
                     }}
                   />
                 </Box>
               </>
             )}
-
-            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <Typography variant="caption" sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}>
-                <Shield size={12} /> Network Policy:
-              </Typography>
-              <Chip
-                label={link.from.policy || "default"}
-                size="small"
-                sx={{
-                  height: 20,
-                  fontSize: "0.65rem",
-                  fontWeight: 700,
-                  bgcolor:
-                    link.from.policy === "none"
-                      ? "rgba(148, 163, 184, 0.15)"
-                      : link.from.policy === "dn42"
-                        ? "rgba(109, 40, 217, 0.12)"
-                        : "rgba(79, 70, 229, 0.12)",
-                  color: link.from.policy === "none" ? "#64748B" : link.from.policy === "dn42" ? "#6D28D9" : "#4F46E5",
-                  border: "1px solid",
-                  borderColor:
-                    link.from.policy === "none"
-                      ? "rgba(148, 163, 184, 0.2)"
-                      : link.from.policy === "dn42"
-                        ? "rgba(109, 40, 217, 0.25)"
-                        : "rgba(79, 70, 229, 0.25)",
-                }}
-              />
-            </Box>
-
-            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <Typography variant="caption" sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}>
-                <Route size={12} /> Routing Policy:
-              </Typography>
-              <Chip
-                label={
-                  link.from.routing_policy
-                    ? link.from.routing_policy === "stub"
-                      ? "Stub (Override)"
-                      : link.from.routing_policy === "receive_only"
-                        ? "Receive Only (Override)"
-                        : link.from.routing_policy === "advertise_only"
-                          ? "Advertise Only (Override)"
-                          : `${link.from.routing_policy} (Override)`
-                    : "Inherited"
-                }
-                size="small"
-                sx={{
-                  height: 20,
-                  fontSize: "0.65rem",
-                  fontWeight: 700,
-                  bgcolor: link.from.routing_policy ? "rgba(245, 158, 11, 0.12)" : "rgba(148, 163, 184, 0.15)",
-                  color: link.from.routing_policy ? "#D97706" : "#64748B",
-                  border: "1px solid",
-                  borderColor: link.from.routing_policy ? "rgba(245, 158, 11, 0.3)" : "rgba(148, 163, 184, 0.2)",
-                }}
-              />
-            </Box>
-
-            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <Typography variant="caption" sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}>
-                <Gauge size={12} /> Link Cost:
-              </Typography>
-              <Chip
-                label={
-                  link.from.cost && link.from.cost !== 0
-                    ? `${link.from.cost} (Override)`
-                    : `Policy default (${getEffectiveLinkCost(link.from, Boolean(isToExternal), effectivePolicies)})`
-                }
-                size="small"
-                sx={{
-                  height: 20,
-                  fontSize: "0.65rem",
-                  fontWeight: 700,
-                  bgcolor:
-                    link.from.cost && link.from.cost !== 0 ? "rgba(245, 158, 11, 0.12)" : "rgba(148, 163, 184, 0.15)",
-                  color: link.from.cost && link.from.cost !== 0 ? "#D97706" : "#64748B",
-                  border: "1px solid",
-                  borderColor:
-                    link.from.cost && link.from.cost !== 0 ? "rgba(245, 158, 11, 0.3)" : "rgba(148, 163, 184, 0.2)",
-                }}
-              />
-            </Box>
-
-            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <Typography variant="caption" sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}>
-                <Shield size={12} /> FwMark:
-              </Typography>
-              <Chip
-                label={link.from.fwmark ? `${link.from.fwmark} (Override)` : "Policy default"}
-                size="small"
-                sx={{
-                  height: 20,
-                  fontSize: "0.65rem",
-                  fontWeight: 700,
-                  bgcolor: link.from.fwmark ? "rgba(109, 40, 217, 0.12)" : "rgba(148, 163, 184, 0.15)",
-                  color: link.from.fwmark ? "#6D28D9" : "#64748B",
-                  border: "1px solid",
-                  borderColor: link.from.fwmark ? "rgba(109, 40, 217, 0.3)" : "rgba(148, 163, 184, 0.2)",
-                }}
-              />
-            </Box>
-
-            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <Typography variant="caption" sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}>
-                <Zap size={12} /> BGP Preference:
-              </Typography>
-              <Chip
-                label={link.from.preference !== undefined ? `${link.from.preference} (Override)` : "Policy default"}
-                size="small"
-                sx={{
-                  height: 20,
-                  fontSize: "0.65rem",
-                  fontWeight: 700,
-                  bgcolor:
-                    link.from.preference !== undefined ? "rgba(16, 185, 129, 0.12)" : "rgba(148, 163, 184, 0.15)",
-                  color: link.from.preference !== undefined ? "#059669" : "#64748B",
-                  border: "1px solid",
-                  borderColor:
-                    link.from.preference !== undefined ? "rgba(16, 185, 129, 0.3)" : "rgba(148, 163, 184, 0.2)",
-                }}
-              />
-            </Box>
-
-            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <Typography variant="caption" sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}>
-                <Shield size={12} /> Netfilter Mark:
-              </Typography>
-              <Chip
-                label={link.from.mark ? `${link.from.mark} (Override)` : "Policy default"}
-                size="small"
-                sx={{
-                  height: 20,
-                  fontSize: "0.65rem",
-                  fontWeight: 700,
-                  bgcolor: link.from.mark ? "rgba(109, 40, 217, 0.12)" : "rgba(148, 163, 184, 0.15)",
-                  color: link.from.mark ? "#6D28D9" : "#64748B",
-                  border: "1px solid",
-                  borderColor: link.from.mark ? "rgba(109, 40, 217, 0.3)" : "rgba(148, 163, 184, 0.2)",
-                }}
-              />
-            </Box>
 
             {!isManual && (
               <Box sx={{ mt: 0.5 }}>
@@ -1443,9 +1516,26 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
           }}
         >
           <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1.5 }}>
-            <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0E7490" }}>
-              Node 2: {link.to.name}
-            </Typography>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0E7490" }}>
+                Node 2: {link.to.name}
+              </Typography>
+              {isToExternal && (
+                <Chip
+                  label="External"
+                  size="small"
+                  sx={{
+                    height: 18,
+                    fontSize: "0.62rem",
+                    fontWeight: 700,
+                    bgcolor: "#FEF3C7",
+                    color: "#92400E",
+                    border: "1px solid rgba(217, 119, 6, 0.25)",
+                    borderRadius: "4px",
+                  }}
+                />
+              )}
+            </Box>
             {!isManual && (
               <Tooltip
                 title={
@@ -1599,25 +1689,27 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
                   </Box>
                 </Box>
 
-                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <Typography variant="caption" sx={{ color: "#64748B" }}>
-                    MTU:
-                  </Typography>
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-                    <Typography variant="caption" className="mono-font" sx={{ color: "#0F172A", fontWeight: 600 }}>
-                      {link.to.mtu || 1420}
+                {!isToExternal && (
+                  <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <Typography variant="caption" sx={{ color: "#64748B" }}>
+                      MTU:
                     </Typography>
-                    <Tooltip title={copiedField === "to_mtu" ? "Copied!" : "Copy MTU"}>
-                      <IconButton
-                        size="small"
-                        onClick={() => copyFieldToClipboard(String(link.to.mtu || 1420), "to_mtu")}
-                        sx={{ p: 0.3, color: copiedField === "to_mtu" ? "#10B981" : "#64748B" }}
-                      >
-                        {copiedField === "to_mtu" ? <Check size={13} /> : <Copy size={13} />}
-                      </IconButton>
-                    </Tooltip>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                      <Typography variant="caption" className="mono-font" sx={{ color: "#0F172A", fontWeight: 600 }}>
+                        {link.to.mtu || 1420}
+                      </Typography>
+                      <Tooltip title={copiedField === "to_mtu" ? "Copied!" : "Copy MTU"}>
+                        <IconButton
+                          size="small"
+                          onClick={() => copyFieldToClipboard(String(link.to.mtu || 1420), "to_mtu")}
+                          sx={{ p: 0.3, color: copiedField === "to_mtu" ? "#10B981" : "#64748B" }}
+                        >
+                          {copiedField === "to_mtu" ? <Check size={13} /> : <Copy size={13} />}
+                        </IconButton>
+                      </Tooltip>
+                    </Box>
                   </Box>
-                </Box>
+                )}
 
                 <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <Typography variant="caption" sx={{ color: "#64748B" }}>
@@ -1658,167 +1750,173 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
                   </Box>
                 </Box>
 
+                {!isToExternal && (
+                  <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <Typography variant="caption" sx={{ color: "#64748B" }}>
+                      Use IP (DNS Resolve):
+                    </Typography>
+                    <Chip
+                      label={link.to.use_ip ? "Enabled" : "Disabled"}
+                      size="small"
+                      sx={{
+                        height: 20,
+                        fontSize: "0.65rem",
+                        fontWeight: 700,
+                        bgcolor: link.to.use_ip ? "rgba(16, 185, 129, 0.12)" : "rgba(148, 163, 184, 0.15)",
+                        color: link.to.use_ip ? "#059669" : "#64748B",
+                        border: "1px solid",
+                        borderColor: link.to.use_ip ? "rgba(16, 185, 129, 0.3)" : "rgba(148, 163, 184, 0.2)",
+                      }}
+                    />
+                  </Box>
+                )}
+              </>
+            )}
+
+            {!isToExternal && (
+              <>
                 <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <Typography variant="caption" sx={{ color: "#64748B" }}>
-                    Use IP (DNS Resolve):
+                  <Typography variant="caption" sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}>
+                    <Shield size={12} /> Network Policy:
                   </Typography>
                   <Chip
-                    label={link.to.use_ip ? "Enabled" : "Disabled"}
+                    label={link.to.policy || "default"}
                     size="small"
                     sx={{
                       height: 20,
                       fontSize: "0.65rem",
                       fontWeight: 700,
-                      bgcolor: link.to.use_ip ? "rgba(16, 185, 129, 0.12)" : "rgba(148, 163, 184, 0.15)",
-                      color: link.to.use_ip ? "#059669" : "#64748B",
+                      bgcolor:
+                        link.to.policy === "none"
+                          ? "rgba(148, 163, 184, 0.15)"
+                          : link.to.policy === "dn42"
+                            ? "rgba(109, 40, 217, 0.12)"
+                            : "rgba(79, 70, 229, 0.12)",
+                      color: link.to.policy === "none" ? "#64748B" : link.to.policy === "dn42" ? "#6D28D9" : "#4F46E5",
                       border: "1px solid",
-                      borderColor: link.to.use_ip ? "rgba(16, 185, 129, 0.3)" : "rgba(148, 163, 184, 0.2)",
+                      borderColor:
+                        link.to.policy === "none"
+                          ? "rgba(148, 163, 184, 0.2)"
+                          : link.to.policy === "dn42"
+                            ? "rgba(109, 40, 217, 0.25)"
+                            : "rgba(79, 70, 229, 0.25)",
+                    }}
+                  />
+                </Box>
+
+                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <Typography variant="caption" sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}>
+                    <Route size={12} /> Routing Policy:
+                  </Typography>
+                  <Chip
+                    label={
+                      link.to.routing_policy
+                        ? link.to.routing_policy === "stub"
+                          ? "Stub (Override)"
+                          : link.to.routing_policy === "receive_only"
+                            ? "Receive Only (Override)"
+                            : link.to.routing_policy === "advertise_only"
+                              ? "Advertise Only (Override)"
+                              : `${link.to.routing_policy} (Override)`
+                        : "Inherited"
+                    }
+                    size="small"
+                    sx={{
+                      height: 20,
+                      fontSize: "0.65rem",
+                      fontWeight: 700,
+                      bgcolor: link.to.routing_policy ? "rgba(245, 158, 11, 0.12)" : "rgba(148, 163, 184, 0.15)",
+                      color: link.to.routing_policy ? "#D97706" : "#64748B",
+                      border: "1px solid",
+                      borderColor: link.to.routing_policy ? "rgba(245, 158, 11, 0.3)" : "rgba(148, 163, 184, 0.2)",
+                    }}
+                  />
+                </Box>
+
+                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <Typography variant="caption" sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}>
+                    <Gauge size={12} /> Link Cost:
+                  </Typography>
+                  <Chip
+                    label={
+                      link.to.cost && link.to.cost !== 0
+                        ? `${link.to.cost} (Override)`
+                        : `Policy default (${getEffectiveLinkCost(link.to, Boolean(isFromExternal), effectivePolicies)})`
+                    }
+                    size="small"
+                    sx={{
+                      height: 20,
+                      fontSize: "0.65rem",
+                      fontWeight: 700,
+                      bgcolor:
+                        link.to.cost && link.to.cost !== 0 ? "rgba(245, 158, 11, 0.12)" : "rgba(148, 163, 184, 0.15)",
+                      color: link.to.cost && link.to.cost !== 0 ? "#D97706" : "#64748B",
+                      border: "1px solid",
+                      borderColor:
+                        link.to.cost && link.to.cost !== 0 ? "rgba(245, 158, 11, 0.3)" : "rgba(148, 163, 184, 0.2)",
+                    }}
+                  />
+                </Box>
+
+                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <Typography variant="caption" sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}>
+                    <Shield size={12} /> FwMark:
+                  </Typography>
+                  <Chip
+                    label={link.to.fwmark ? `${link.to.fwmark} (Override)` : "Policy default"}
+                    size="small"
+                    sx={{
+                      height: 20,
+                      fontSize: "0.65rem",
+                      fontWeight: 700,
+                      bgcolor: link.to.fwmark ? "rgba(109, 40, 217, 0.12)" : "rgba(148, 163, 184, 0.15)",
+                      color: link.to.fwmark ? "#6D28D9" : "#64748B",
+                      border: "1px solid",
+                      borderColor: link.to.fwmark ? "rgba(109, 40, 217, 0.3)" : "rgba(148, 163, 184, 0.2)",
+                    }}
+                  />
+                </Box>
+
+                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <Typography variant="caption" sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}>
+                    <Zap size={12} /> BGP Preference:
+                  </Typography>
+                  <Chip
+                    label={link.to.preference !== undefined ? `${link.to.preference} (Override)` : "Policy default"}
+                    size="small"
+                    sx={{
+                      height: 20,
+                      fontSize: "0.65rem",
+                      fontWeight: 700,
+                      bgcolor: link.to.preference !== undefined ? "rgba(16, 185, 129, 0.12)" : "rgba(148, 163, 184, 0.15)",
+                      color: link.to.preference !== undefined ? "#059669" : "#64748B",
+                      border: "1px solid",
+                      borderColor:
+                        link.to.preference !== undefined ? "rgba(16, 185, 129, 0.3)" : "rgba(148, 163, 184, 0.2)",
+                    }}
+                  />
+                </Box>
+
+                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <Typography variant="caption" sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}>
+                    <Shield size={12} /> Netfilter Mark:
+                  </Typography>
+                  <Chip
+                    label={link.to.mark ? `${link.to.mark} (Override)` : "Policy default"}
+                    size="small"
+                    sx={{
+                      height: 20,
+                      fontSize: "0.65rem",
+                      fontWeight: 700,
+                      bgcolor: link.to.mark ? "rgba(109, 40, 217, 0.12)" : "rgba(148, 163, 184, 0.15)",
+                      color: link.to.mark ? "#6D28D9" : "#64748B",
+                      border: "1px solid",
+                      borderColor: link.to.mark ? "rgba(109, 40, 217, 0.3)" : "rgba(148, 163, 184, 0.2)",
                     }}
                   />
                 </Box>
               </>
             )}
-
-            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <Typography variant="caption" sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}>
-                <Shield size={12} /> Network Policy:
-              </Typography>
-              <Chip
-                label={link.to.policy || "default"}
-                size="small"
-                sx={{
-                  height: 20,
-                  fontSize: "0.65rem",
-                  fontWeight: 700,
-                  bgcolor:
-                    link.to.policy === "none"
-                      ? "rgba(148, 163, 184, 0.15)"
-                      : link.to.policy === "dn42"
-                        ? "rgba(109, 40, 217, 0.12)"
-                        : "rgba(79, 70, 229, 0.12)",
-                  color: link.to.policy === "none" ? "#64748B" : link.to.policy === "dn42" ? "#6D28D9" : "#4F46E5",
-                  border: "1px solid",
-                  borderColor:
-                    link.to.policy === "none"
-                      ? "rgba(148, 163, 184, 0.2)"
-                      : link.to.policy === "dn42"
-                        ? "rgba(109, 40, 217, 0.25)"
-                        : "rgba(79, 70, 229, 0.25)",
-                }}
-              />
-            </Box>
-
-            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <Typography variant="caption" sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}>
-                <Route size={12} /> Routing Policy:
-              </Typography>
-              <Chip
-                label={
-                  link.to.routing_policy
-                    ? link.to.routing_policy === "stub"
-                      ? "Stub (Override)"
-                      : link.to.routing_policy === "receive_only"
-                        ? "Receive Only (Override)"
-                        : link.to.routing_policy === "advertise_only"
-                          ? "Advertise Only (Override)"
-                          : `${link.to.routing_policy} (Override)`
-                    : "Inherited"
-                }
-                size="small"
-                sx={{
-                  height: 20,
-                  fontSize: "0.65rem",
-                  fontWeight: 700,
-                  bgcolor: link.to.routing_policy ? "rgba(245, 158, 11, 0.12)" : "rgba(148, 163, 184, 0.15)",
-                  color: link.to.routing_policy ? "#D97706" : "#64748B",
-                  border: "1px solid",
-                  borderColor: link.to.routing_policy ? "rgba(245, 158, 11, 0.3)" : "rgba(148, 163, 184, 0.2)",
-                }}
-              />
-            </Box>
-
-            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <Typography variant="caption" sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}>
-                <Gauge size={12} /> Link Cost:
-              </Typography>
-              <Chip
-                label={
-                  link.to.cost && link.to.cost !== 0
-                    ? `${link.to.cost} (Override)`
-                    : `Policy default (${getEffectiveLinkCost(link.to, Boolean(isFromExternal), effectivePolicies)})`
-                }
-                size="small"
-                sx={{
-                  height: 20,
-                  fontSize: "0.65rem",
-                  fontWeight: 700,
-                  bgcolor:
-                    link.to.cost && link.to.cost !== 0 ? "rgba(245, 158, 11, 0.12)" : "rgba(148, 163, 184, 0.15)",
-                  color: link.to.cost && link.to.cost !== 0 ? "#D97706" : "#64748B",
-                  border: "1px solid",
-                  borderColor:
-                    link.to.cost && link.to.cost !== 0 ? "rgba(245, 158, 11, 0.3)" : "rgba(148, 163, 184, 0.2)",
-                }}
-              />
-            </Box>
-
-            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <Typography variant="caption" sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}>
-                <Shield size={12} /> FwMark:
-              </Typography>
-              <Chip
-                label={link.to.fwmark ? `${link.to.fwmark} (Override)` : "Policy default"}
-                size="small"
-                sx={{
-                  height: 20,
-                  fontSize: "0.65rem",
-                  fontWeight: 700,
-                  bgcolor: link.to.fwmark ? "rgba(109, 40, 217, 0.12)" : "rgba(148, 163, 184, 0.15)",
-                  color: link.to.fwmark ? "#6D28D9" : "#64748B",
-                  border: "1px solid",
-                  borderColor: link.to.fwmark ? "rgba(109, 40, 217, 0.3)" : "rgba(148, 163, 184, 0.2)",
-                }}
-              />
-            </Box>
-
-            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <Typography variant="caption" sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}>
-                <Zap size={12} /> BGP Preference:
-              </Typography>
-              <Chip
-                label={link.to.preference !== undefined ? `${link.to.preference} (Override)` : "Policy default"}
-                size="small"
-                sx={{
-                  height: 20,
-                  fontSize: "0.65rem",
-                  fontWeight: 700,
-                  bgcolor: link.to.preference !== undefined ? "rgba(16, 185, 129, 0.12)" : "rgba(148, 163, 184, 0.15)",
-                  color: link.to.preference !== undefined ? "#059669" : "#64748B",
-                  border: "1px solid",
-                  borderColor:
-                    link.to.preference !== undefined ? "rgba(16, 185, 129, 0.3)" : "rgba(148, 163, 184, 0.2)",
-                }}
-              />
-            </Box>
-
-            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <Typography variant="caption" sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}>
-                <Shield size={12} /> Netfilter Mark:
-              </Typography>
-              <Chip
-                label={link.to.mark ? `${link.to.mark} (Override)` : "Policy default"}
-                size="small"
-                sx={{
-                  height: 20,
-                  fontSize: "0.65rem",
-                  fontWeight: 700,
-                  bgcolor: link.to.mark ? "rgba(109, 40, 217, 0.12)" : "rgba(148, 163, 184, 0.15)",
-                  color: link.to.mark ? "#6D28D9" : "#64748B",
-                  border: "1px solid",
-                  borderColor: link.to.mark ? "rgba(109, 40, 217, 0.3)" : "rgba(148, 163, 184, 0.2)",
-                }}
-              />
-            </Box>
 
             {!isManual && (
               <Box sx={{ mt: 0.5 }}>
