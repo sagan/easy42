@@ -15,6 +15,11 @@ func registerLinkTools(s *server.MCPServer, mgr *engine.Manager) {
 	// 1. list_links
 	s.AddTool(mcp.NewTool("list_links",
 		mcp.WithDescription("List all peer connection links (WireGuard / manual) between nodes in the mesh"),
+		mcp.WithTitleAnnotation("List Links"),
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(false),
 		mcp.WithString("node", mcp.Description("Optional filter: return only links connected to this node name")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		links := mgr.GetLinks()
@@ -34,6 +39,11 @@ func registerLinkTools(s *server.MCPServer, mgr *engine.Manager) {
 	// 2. get_link
 	s.AddTool(mcp.NewTool("get_link",
 		mcp.WithDescription("Get connection details for a link between two specific nodes"),
+		mcp.WithTitleAnnotation("Get Link"),
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(false),
 		mcp.WithString("from", mcp.Required(), mcp.Description("First node name")),
 		mcp.WithString("to", mcp.Required(), mcp.Description("Second node name")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -59,6 +69,11 @@ func registerLinkTools(s *server.MCPServer, mgr *engine.Manager) {
 	// 3. add_link
 	s.AddTool(mcp.NewTool("add_link",
 		mcp.WithDescription("Create a point-to-point WireGuard link between two nodes. Generates cryptographic keys and IP addresses. Requires full-control token."),
+		mcp.WithTitleAnnotation("Add Link"),
+		mcp.WithReadOnlyHintAnnotation(false),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(false),
+		mcp.WithOpenWorldHintAnnotation(false),
 		mcp.WithString("from", mcp.Required(), mcp.Description("First node name")),
 		mcp.WithString("to", mcp.Required(), mcp.Description("Second node name")),
 		mcp.WithInteger("from_port", mcp.Description("Listen port on the first node")),
@@ -110,6 +125,11 @@ func registerLinkTools(s *server.MCPServer, mgr *engine.Manager) {
 	// 4. create_mesh_links
 	s.AddTool(mcp.NewTool("create_mesh_links",
 		mcp.WithDescription("Create a full-mesh topology interconnecting all specified nodes (or all cluster nodes if empty). Requires full-control token."),
+		mcp.WithTitleAnnotation("Create Mesh Links"),
+		mcp.WithReadOnlyHintAnnotation(false),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(false),
 		mcp.WithArray("nodes", mcp.WithStringItems(), mcp.Description("List of node names to interconnect. If empty, meshes all cluster nodes")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		if err := RequireFullControl(ctx); err != nil {
@@ -129,6 +149,11 @@ func registerLinkTools(s *server.MCPServer, mgr *engine.Manager) {
 	// 5. update_link
 	s.AddTool(mcp.NewTool("update_link",
 		mcp.WithDescription("Update link parameters (MTU, routing cost, tags, policy) between two nodes. Requires full-control token."),
+		mcp.WithTitleAnnotation("Update Link"),
+		mcp.WithReadOnlyHintAnnotation(false),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(false),
 		mcp.WithString("from", mcp.Required(), mcp.Description("First node name")),
 		mcp.WithString("to", mcp.Required(), mcp.Description("Second node name")),
 		mcp.WithInteger("mtu", mcp.Description("MTU override")),
@@ -172,6 +197,11 @@ func registerLinkTools(s *server.MCPServer, mgr *engine.Manager) {
 	// 6. delete_link
 	s.AddTool(mcp.NewTool("delete_link",
 		mcp.WithDescription("Delete the link between two nodes. Requires full-control token."),
+		mcp.WithTitleAnnotation("Delete Link"),
+		mcp.WithReadOnlyHintAnnotation(false),
+		mcp.WithDestructiveHintAnnotation(true),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(false),
 		mcp.WithString("from", mcp.Required(), mcp.Description("First node name")),
 		mcp.WithString("to", mcp.Required(), mcp.Description("Second node name")),
 		mcp.WithString("interface", mcp.Description("Optional specific interface name if multiple links exist")),
@@ -198,6 +228,11 @@ func registerLinkTools(s *server.MCPServer, mgr *engine.Manager) {
 	// 7. reset_link_psk
 	s.AddTool(mcp.NewTool("reset_link_psk",
 		mcp.WithDescription("Rotate or set the WireGuard Pre-Shared Key (PSK) for a link. Requires full-control token."),
+		mcp.WithTitleAnnotation("Reset Link PSK"),
+		mcp.WithReadOnlyHintAnnotation(false),
+		mcp.WithDestructiveHintAnnotation(true),
+		mcp.WithIdempotentHintAnnotation(false),
+		mcp.WithOpenWorldHintAnnotation(false),
 		mcp.WithString("from", mcp.Required(), mcp.Description("First node name")),
 		mcp.WithString("to", mcp.Required(), mcp.Description("Second node name")),
 		mcp.WithString("psk", mcp.Description("Custom base64 PSK. If omitted, a fresh secure random key is generated")),
@@ -232,6 +267,11 @@ func registerLinkTools(s *server.MCPServer, mgr *engine.Manager) {
 	// 8. reset_link_private_key
 	s.AddTool(mcp.NewTool("reset_link_private_key",
 		mcp.WithDescription("Rotate or regenerate the WireGuard private key for a link endpoint. Requires full-control token."),
+		mcp.WithTitleAnnotation("Reset Link Private Key"),
+		mcp.WithReadOnlyHintAnnotation(false),
+		mcp.WithDestructiveHintAnnotation(true),
+		mcp.WithIdempotentHintAnnotation(false),
+		mcp.WithOpenWorldHintAnnotation(false),
 		mcp.WithString("from", mcp.Required(), mcp.Description("First node name")),
 		mcp.WithString("to", mcp.Required(), mcp.Description("Second node name")),
 		mcp.WithString("node", mcp.Required(), mcp.Description("Which node endpoint's key to reset")),

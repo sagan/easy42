@@ -40,6 +40,11 @@ func NewServer(mgr *engine.Manager) *Server {
 	// Top-level cluster info tool
 	mcpServer.AddTool(mcp.NewTool("get_cluster_info",
 		mcp.WithDescription("Get high-level Easy42 cluster information (network name, version, total nodes, total links, policies count, templates count)"),
+		mcp.WithTitleAnnotation("Get Cluster Info"),
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(false),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		cfg := mgr.Store().Get()
 		netName := "Easy42"
@@ -54,14 +59,27 @@ func NewServer(mgr *engine.Manager) *Server {
 		templates := mgr.GetTemplates()
 
 		info := map[string]any{
-			"network_name":    netName,
-			"public_asn":      asn,
-			"version":         version.Version,
-			"node_count":      len(nodes),
-			"link_count":      len(links),
-			"policy_count":    len(policies),
-			"template_count":  len(templates),
-			"role":            GetRole(ctx),
+			"network_name":   netName,
+			"public_asn":     asn,
+			"version":        version.Version,
+			"node_count":     len(nodes),
+			"link_count":     len(links),
+			"policy_count":   len(policies),
+			"template_count": len(templates),
+			"role":           GetRole(ctx),
+			"nodes": func() []map[string]any {
+				summaries := make([]map[string]any, 0, len(nodes))
+				for _, n := range nodes {
+					summaries = append(summaries, map[string]any{
+						"name": n.Name,
+						"ip":   n.IP,
+						"ip6":  n.IP6,
+						"asn":  n.ASN,
+					})
+				}
+				return summaries
+			}(),
+			"hint": "To inspect full runtime health or BGP WireGuard status, call 'get_cluster_state', 'get_fleet_live_status', or 'list_links'.",
 		}
 		return jsonResult(info)
 	})
@@ -181,6 +199,7 @@ func NewServer(mgr *engine.Manager) *Server {
 	s.streamableServer = server.NewStreamableHTTPServer(mcpServer,
 		server.WithEndpointPath("/mcp"),
 		server.WithDisableLocalhostProtection(true),
+		server.WithStateLess(true),
 		server.WithHTTPContextFunc(func(ctx context.Context, r *http.Request) context.Context {
 			return s.authenticateContext(ctx, r)
 		}),
@@ -261,8 +280,8 @@ func (s *Server) AuthMiddleware(next http.Handler) http.Handler {
 		// Allow CORS preflight and headers for web-based AI clients (e.g. Gemini Web)
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS, HEAD")
-		w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Accept, X-MCP-Token, X-Requested-With")
-		w.Header().Set("Access-Control-Expose-Headers", "WWW-Authenticate, Authorization")
+		w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Accept, X-MCP-Token, X-Requested-With, Mcp-Session-Id, Mcp-Protocol-Version")
+		w.Header().Set("Access-Control-Expose-Headers", "WWW-Authenticate, Authorization, Mcp-Session-Id, Mcp-Protocol-Version")
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusOK)
 			return

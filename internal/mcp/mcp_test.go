@@ -127,6 +127,44 @@ func TestMCPServerToolsRegistration(t *testing.T) {
 	if len(tools) < len(expectedTools) {
 		t.Errorf("expected at least %d tools registered, got %d", len(expectedTools), len(tools))
 	}
+
+	// Verify annotations on every registered tool
+	for name, tool := range tools {
+		ann := tool.Tool.Annotations
+		if ann.Title == "" {
+			t.Errorf("tool %q missing Title annotation", name)
+		}
+		if ann.ReadOnlyHint == nil {
+			t.Errorf("tool %q missing ReadOnlyHint annotation", name)
+		}
+		if ann.DestructiveHint == nil {
+			t.Errorf("tool %q missing DestructiveHint annotation", name)
+		}
+		if ann.IdempotentHint == nil {
+			t.Errorf("tool %q missing IdempotentHint annotation", name)
+		}
+		if ann.OpenWorldHint == nil {
+			t.Errorf("tool %q missing OpenWorldHint annotation", name)
+		}
+	}
+
+	// Specifically verify read-only tools have ReadOnlyHint = true and DestructiveHint = false
+	clusterInfo := tools["get_cluster_info"].Tool
+	if clusterInfo.Annotations.ReadOnlyHint == nil || !*clusterInfo.Annotations.ReadOnlyHint {
+		t.Errorf("expected get_cluster_info to have ReadOnlyHint=true")
+	}
+	if clusterInfo.Annotations.DestructiveHint == nil || *clusterInfo.Annotations.DestructiveHint {
+		t.Errorf("expected get_cluster_info to have DestructiveHint=false")
+	}
+
+	// Specifically verify destructive tool has DestructiveHint = true and ReadOnlyHint = false
+	deleteNode := tools["delete_node"].Tool
+	if deleteNode.Annotations.DestructiveHint == nil || !*deleteNode.Annotations.DestructiveHint {
+		t.Errorf("expected delete_node to have DestructiveHint=true")
+	}
+	if deleteNode.Annotations.ReadOnlyHint == nil || *deleteNode.Annotations.ReadOnlyHint {
+		t.Errorf("expected delete_node to have ReadOnlyHint=false")
+	}
 }
 
 func TestMCPServerPermissions(t *testing.T) {

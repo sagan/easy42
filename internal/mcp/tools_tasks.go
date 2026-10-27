@@ -13,6 +13,11 @@ func registerDeviceHelperTaskTools(s *server.MCPServer, mgr *engine.Manager) {
 	// 1. list_tasks
 	s.AddTool(mcp.NewTool("list_tasks",
 		mcp.WithDescription("List all installed device helper tasks (scripts for system tuning, service installs, and management)"),
+		mcp.WithTitleAnnotation("List Tasks"),
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(false),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		tasksList, err := mgr.GetTasks()
 		if err != nil {
@@ -24,6 +29,11 @@ func registerDeviceHelperTaskTools(s *server.MCPServer, mgr *engine.Manager) {
 	// 2. get_task_sources
 	s.AddTool(mcp.NewTool("get_task_sources",
 		mcp.WithDescription("Get script source code and files for a device helper task"),
+		mcp.WithTitleAnnotation("Get Task Sources"),
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(false),
 		mcp.WithString("id", mcp.Required(), mcp.Description("Task identifier")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		taskID, err := req.RequireString("id")
@@ -40,6 +50,11 @@ func registerDeviceHelperTaskTools(s *server.MCPServer, mgr *engine.Manager) {
 	// 3. check_task_status
 	s.AddTool(mcp.NewTool("check_task_status",
 		mcp.WithDescription("Query the status/readiness of a device helper task across specific nodes"),
+		mcp.WithTitleAnnotation("Check Task Status"),
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithString("id", mcp.Required(), mcp.Description("Task identifier")),
 		mcp.WithArray("nodes", mcp.WithStringItems(), mcp.Description("Target node names. If empty, checks all nodes")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -58,6 +73,11 @@ func registerDeviceHelperTaskTools(s *server.MCPServer, mgr *engine.Manager) {
 	// 4. run_task
 	s.AddTool(mcp.NewTool("run_task",
 		mcp.WithDescription("Execute a device helper task on one or more remote nodes. Requires full-control token."),
+		mcp.WithTitleAnnotation("Run Task"),
+		mcp.WithReadOnlyHintAnnotation(false),
+		mcp.WithDestructiveHintAnnotation(true),
+		mcp.WithIdempotentHintAnnotation(false),
+		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithString("id", mcp.Required(), mcp.Description("Task identifier to execute")),
 		mcp.WithArray("nodes", mcp.WithStringItems(), mcp.Description("Target node names")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -79,6 +99,11 @@ func registerDeviceHelperTaskTools(s *server.MCPServer, mgr *engine.Manager) {
 	// 5. get_online_tasks_manifest
 	s.AddTool(mcp.NewTool("get_online_tasks_manifest",
 		mcp.WithDescription("Fetch available tasks from the online Easy42 task repository"),
+		mcp.WithTitleAnnotation("Get Online Tasks Manifest"),
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithString("source_url", mcp.Description("Optional custom repository URL")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		sourceURL := req.GetString("source_url", "")
@@ -92,6 +117,11 @@ func registerDeviceHelperTaskTools(s *server.MCPServer, mgr *engine.Manager) {
 	// 6. install_online_task
 	s.AddTool(mcp.NewTool("install_online_task",
 		mcp.WithDescription("Download and install a task from the online task repository. Requires full-control token."),
+		mcp.WithTitleAnnotation("Install Online Task"),
+		mcp.WithReadOnlyHintAnnotation(false),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithString("task_id", mcp.Required(), mcp.Description("Task ID from manifest")),
 		mcp.WithString("source_url", mcp.Description("Optional custom repository source URL")),
 		mcp.WithArray("files", mcp.WithStringItems(), mcp.Description("Files to install")),
@@ -115,6 +145,11 @@ func registerDeviceHelperTaskTools(s *server.MCPServer, mgr *engine.Manager) {
 	// 7. delete_custom_task
 	s.AddTool(mcp.NewTool("delete_custom_task",
 		mcp.WithDescription("Delete an installed custom task. Requires full-control token."),
+		mcp.WithTitleAnnotation("Delete Custom Task"),
+		mcp.WithReadOnlyHintAnnotation(false),
+		mcp.WithDestructiveHintAnnotation(true),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(false),
 		mcp.WithString("id", mcp.Required(), mcp.Description("Task ID")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		if err := RequireFullControl(ctx); err != nil {

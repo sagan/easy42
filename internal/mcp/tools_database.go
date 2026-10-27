@@ -13,6 +13,11 @@ func registerDatabaseAndIntegrationsTools(s *server.MCPServer, mgr *engine.Manag
 	// 1. get_database_info
 	s.AddTool(mcp.NewTool("get_database_info",
 		mcp.WithDescription("Get SQLite database status, file size, table row counts, and data retention settings"),
+		mcp.WithTitleAnnotation("Get Database Info"),
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(false),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		info, err := mgr.GetDatabaseInfo()
 		if err != nil {
@@ -24,6 +29,11 @@ func registerDatabaseAndIntegrationsTools(s *server.MCPServer, mgr *engine.Manag
 	// 2. update_database_settings
 	s.AddTool(mcp.NewTool("update_database_settings",
 		mcp.WithDescription("Update database data retention days for historical metrics. Requires full-control token."),
+		mcp.WithTitleAnnotation("Update Database Settings"),
+		mcp.WithReadOnlyHintAnnotation(false),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(false),
 		mcp.WithInteger("retention_days", mcp.Description("Retention days for summarized metrics (default 47)")),
 		mcp.WithInteger("raw_retention_days", mcp.Description("Retention days for raw high-resolution metrics (default 2)")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -46,6 +56,11 @@ func registerDatabaseAndIntegrationsTools(s *server.MCPServer, mgr *engine.Manag
 	// 3. reclaim_database
 	s.AddTool(mcp.NewTool("reclaim_database",
 		mcp.WithDescription("Run SQLite VACUUM operation to reclaim unused disk space and optimize database performance. Requires full-control token."),
+		mcp.WithTitleAnnotation("Reclaim Database"),
+		mcp.WithReadOnlyHintAnnotation(false),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(false),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		if err := RequireFullControl(ctx); err != nil {
 			return errorResult(err)
@@ -63,6 +78,11 @@ func registerDatabaseAndIntegrationsTools(s *server.MCPServer, mgr *engine.Manag
 	// 4. get_integrations_settings
 	s.AddTool(mcp.NewTool("get_integrations_settings",
 		mcp.WithDescription("Get configuration for external integrations (Prometheus / VictoriaMetrics scraping, Telegram notifications)"),
+		mcp.WithTitleAnnotation("Get Integrations Settings"),
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(false),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		settings := mgr.GetIntegrationsSettings()
 		display := settings
@@ -78,6 +98,11 @@ func registerDatabaseAndIntegrationsTools(s *server.MCPServer, mgr *engine.Manag
 	// 5. update_integrations_settings
 	s.AddTool(mcp.NewTool("update_integrations_settings",
 		mcp.WithDescription("Update external integrations settings. Requires full-control token."),
+		mcp.WithTitleAnnotation("Update Integrations Settings"),
+		mcp.WithReadOnlyHintAnnotation(false),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(false),
 		mcp.WithBoolean("prometheus_enabled", mcp.Description("Enable Prometheus metrics export at /metrics")),
 		mcp.WithBoolean("telegram_enabled", mcp.Description("Enable Telegram Bot notifications")),
 		mcp.WithString("telegram_bot_token", mcp.Description("Telegram Bot API token")),
@@ -116,6 +141,11 @@ func registerDatabaseAndIntegrationsTools(s *server.MCPServer, mgr *engine.Manag
 	// 6. reset_prometheus_token
 	s.AddTool(mcp.NewTool("reset_prometheus_token",
 		mcp.WithDescription("Regenerate the Bearer authentication token for Prometheus scraping. Requires full-control token."),
+		mcp.WithTitleAnnotation("Reset Prometheus Token"),
+		mcp.WithReadOnlyHintAnnotation(false),
+		mcp.WithDestructiveHintAnnotation(true),
+		mcp.WithIdempotentHintAnnotation(false),
+		mcp.WithOpenWorldHintAnnotation(false),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		if err := RequireFullControl(ctx); err != nil {
 			return errorResult(err)

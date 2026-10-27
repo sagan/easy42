@@ -59,83 +59,406 @@ interface ToolInfo {
 
 const MCP_TOOLS: ToolInfo[] = [
   // Cluster
-  { name: "get_cluster_info", category: "Cluster", desc: "Get high-level mesh network summary, ASN, node count, link count", isWrite: false },
-  { name: "get_cluster_state", category: "Cluster", desc: "Get runtime cluster state, active sessions, and WireGuard interfaces", isWrite: false },
-  { name: "get_fleet_live_status", category: "Cluster", desc: "Live ping reachability and agent metrics across all nodes", isWrite: false },
+  {
+    name: "get_cluster_info",
+    category: "Cluster",
+    desc: "Get high-level mesh network summary, ASN, node count, link count",
+    isWrite: false,
+  },
+  {
+    name: "get_cluster_state",
+    category: "Cluster",
+    desc: "Get runtime cluster state, active sessions, and WireGuard interfaces",
+    isWrite: false,
+  },
+  {
+    name: "get_fleet_live_status",
+    category: "Cluster",
+    desc: "Live ping reachability and agent metrics across all nodes",
+    isWrite: false,
+  },
 
   // Nodes
-  { name: "list_nodes", category: "Nodes", desc: "List all nodes with IP allocations, tags, listen ports, and status", isWrite: false, args: "tag?: string" },
-  { name: "get_node", category: "Nodes", desc: "Get node details, WireGuard config, BIRD BGP routing config, nftables rules", isWrite: false, args: "name: string, include_bird?: bool, include_nftables?: bool" },
-  { name: "add_node", category: "Nodes", desc: "Add a new node to the cluster control plane", isWrite: true, args: "name: string, host?: string, ip?: string, ip6?: string, asn?: int, tags?: string[]" },
-  { name: "update_node", category: "Nodes", desc: "Update existing node properties, tags, and routing options", isWrite: true, args: "name: string, host?: string, ip?: string, tags?: string[]" },
-  { name: "rename_node", category: "Nodes", desc: "Rename node safely across all links, policies, and tasks", isWrite: true, args: "old_name: string, new_name: string" },
-  { name: "delete_node", category: "Nodes", desc: "Remove node and tear down its peer link connections", isWrite: true, args: "name: string" },
-  { name: "probe_node", category: "Nodes", desc: "Probe host latency and reachability before adding", isWrite: false, args: "host: string, node_name?: string" },
-  { name: "refresh_node_status", category: "Nodes", desc: "Trigger active ping / reachability probe for a node", isWrite: true, args: "name: string" },
-  { name: "restart_node_service", category: "Nodes", desc: "Restart WireGuard, BIRD BGP, or interface on node", isWrite: true, args: "name: string, service: 'wireguard'|'bird'|'interface'" },
-  { name: "get_node_telemetry", category: "Nodes", desc: "Get recent CPU, memory, load, and interface traffic", isWrite: false, args: "name: string" },
+  {
+    name: "list_nodes",
+    category: "Nodes",
+    desc: "List all nodes with IP allocations, tags, listen ports, and status",
+    isWrite: false,
+    args: "tag?: string",
+  },
+  {
+    name: "get_node",
+    category: "Nodes",
+    desc: "Get node details, WireGuard config, BIRD BGP routing config, nftables rules",
+    isWrite: false,
+    args: "name: string, include_bird?: bool, include_nftables?: bool",
+  },
+  {
+    name: "add_node",
+    category: "Nodes",
+    desc: "Add a new node to the cluster control plane",
+    isWrite: true,
+    args: "name: string, host?: string, ip?: string, ip6?: string, asn?: int, tags?: string[]",
+  },
+  {
+    name: "update_node",
+    category: "Nodes",
+    desc: "Update existing node properties, tags, and routing options",
+    isWrite: true,
+    args: "name: string, host?: string, ip?: string, tags?: string[]",
+  },
+  {
+    name: "rename_node",
+    category: "Nodes",
+    desc: "Rename node safely across all links, policies, and tasks",
+    isWrite: true,
+    args: "old_name: string, new_name: string",
+  },
+  {
+    name: "delete_node",
+    category: "Nodes",
+    desc: "Remove node and tear down its peer link connections",
+    isWrite: true,
+    args: "name: string",
+  },
+  {
+    name: "probe_node",
+    category: "Nodes",
+    desc: "Probe host latency and reachability before adding",
+    isWrite: false,
+    args: "host: string, node_name?: string",
+  },
+  {
+    name: "refresh_node_status",
+    category: "Nodes",
+    desc: "Trigger active ping / reachability probe for a node",
+    isWrite: true,
+    args: "name: string",
+  },
+  {
+    name: "restart_node_service",
+    category: "Nodes",
+    desc: "Restart WireGuard, BIRD BGP, or interface on node",
+    isWrite: true,
+    args: "name: string, service: 'wireguard'|'bird'|'interface'",
+  },
+  {
+    name: "get_node_telemetry",
+    category: "Nodes",
+    desc: "Get recent CPU, memory, load, and interface traffic",
+    isWrite: false,
+    args: "name: string",
+  },
 
   // Links
-  { name: "list_links", category: "Links", desc: "List all WireGuard peer links with interfaces, addresses, and costs", isWrite: false, args: "node?: string" },
-  { name: "get_link", category: "Links", desc: "Get connection details for link between two specific nodes", isWrite: false, args: "from: string, to: string" },
-  { name: "add_link", category: "Links", desc: "Create WireGuard point-to-point link with key generation", isWrite: true, args: "from: string, to: string, from_port?: int, to_port?: int, cost?: int, mtu?: int" },
-  { name: "create_mesh_links", category: "Links", desc: "Generate full mesh links among specified nodes", isWrite: true, args: "nodes?: string[]" },
-  { name: "update_link", category: "Links", desc: "Update MTU, routing cost, or policy for an existing link", isWrite: true, args: "from: string, to: string, cost?: int, mtu?: int, policy?: string" },
-  { name: "delete_link", category: "Links", desc: "Remove link between two nodes", isWrite: true, args: "from: string, to: string, interface?: string" },
-  { name: "reset_link_psk", category: "Links", desc: "Rotate or set WireGuard pre-shared key (PSK)", isWrite: true, args: "from: string, to: string, psk?: string" },
-  { name: "reset_link_private_key", category: "Links", desc: "Regenerate WireGuard private/public keypair on link endpoint", isWrite: true, args: "from: string, to: string, node: string" },
+  {
+    name: "list_links",
+    category: "Links",
+    desc: "List all WireGuard peer links with interfaces, addresses, and costs",
+    isWrite: false,
+    args: "node?: string",
+  },
+  {
+    name: "get_link",
+    category: "Links",
+    desc: "Get connection details for link between two specific nodes",
+    isWrite: false,
+    args: "from: string, to: string",
+  },
+  {
+    name: "add_link",
+    category: "Links",
+    desc: "Create WireGuard point-to-point link with key generation",
+    isWrite: true,
+    args: "from: string, to: string, from_port?: int, to_port?: int, cost?: int, mtu?: int",
+  },
+  {
+    name: "create_mesh_links",
+    category: "Links",
+    desc: "Generate full mesh links among specified nodes",
+    isWrite: true,
+    args: "nodes?: string[]",
+  },
+  {
+    name: "update_link",
+    category: "Links",
+    desc: "Update MTU, routing cost, or policy for an existing link",
+    isWrite: true,
+    args: "from: string, to: string, cost?: int, mtu?: int, policy?: string",
+  },
+  {
+    name: "delete_link",
+    category: "Links",
+    desc: "Remove link between two nodes",
+    isWrite: true,
+    args: "from: string, to: string, interface?: string",
+  },
+  {
+    name: "reset_link_psk",
+    category: "Links",
+    desc: "Rotate or set WireGuard pre-shared key (PSK)",
+    isWrite: true,
+    args: "from: string, to: string, psk?: string",
+  },
+  {
+    name: "reset_link_private_key",
+    category: "Links",
+    desc: "Regenerate WireGuard private/public keypair on link endpoint",
+    isWrite: true,
+    args: "from: string, to: string, node: string",
+  },
 
   // Network & DNS
-  { name: "get_network_settings", category: "Network", desc: "Get network name, public ASN, permitted IP prefixes, and FlapAlerted config", isWrite: false },
-  { name: "update_network_settings", category: "Network", desc: "Update global cluster network parameters", isWrite: true, args: "name?: string, public_asn?: int, prefixes?: string[]" },
+  {
+    name: "get_network_settings",
+    category: "Network",
+    desc: "Get network name, public ASN, permitted IP prefixes, and FlapAlerted config",
+    isWrite: false,
+  },
+  {
+    name: "update_network_settings",
+    category: "Network",
+    desc: "Update global cluster network parameters",
+    isWrite: true,
+    args: "name?: string, public_asn?: int, prefixes?: string[]",
+  },
   { name: "get_ip_blocks", category: "Network", desc: "Get visual topology groupings on graph", isWrite: false },
-  { name: "update_ip_blocks", category: "Network", desc: "Update visual topology grouping blocks", isWrite: true, args: "blocks_json: string" },
+  {
+    name: "update_ip_blocks",
+    category: "Network",
+    desc: "Update visual topology grouping blocks",
+    isWrite: true,
+    args: "blocks_json: string",
+  },
   { name: "get_dns_config", category: "DNS", desc: "Get Cloudflare DNS integration configuration", isWrite: false },
-  { name: "update_dns_config", category: "DNS", desc: "Update Cloudflare DNS zone, base domain, or tokens", isWrite: true, args: "zone_id?: string, api_token?: string, base_domain?: string" },
-  { name: "sync_dns", category: "DNS", desc: "Synchronize all node IP records to Cloudflare DNS", isWrite: true, args: "force?: bool" },
+  {
+    name: "update_dns_config",
+    category: "DNS",
+    desc: "Update Cloudflare DNS zone, base domain, or tokens",
+    isWrite: true,
+    args: "zone_id?: string, api_token?: string, base_domain?: string",
+  },
+  {
+    name: "sync_dns",
+    category: "DNS",
+    desc: "Synchronize all node IP records to Cloudflare DNS",
+    isWrite: true,
+    args: "force?: bool",
+  },
 
   // Policies & Templates
-  { name: "list_network_policies", category: "Policies", desc: "List BGP routing, firewall, and ROA validation policies", isWrite: false },
-  { name: "get_network_policy", category: "Policies", desc: "Get policy details by ID", isWrite: false, args: "id: string" },
-  { name: "create_network_policy", category: "Policies", desc: "Create a network policy for routing, firewall rules, and ROA", isWrite: true, args: "id: string, name: string, cost?: int, policy_json?: string" },
-  { name: "update_network_policy", category: "Policies", desc: "Update an existing network policy", isWrite: true, args: "id: string, name?: string, policy_json?: string" },
-  { name: "delete_network_policy", category: "Policies", desc: "Delete a custom network policy", isWrite: true, args: "id: string" },
-  { name: "refresh_policy_roa", category: "Policies", desc: "Refresh Route Origin Authorization (ROA) tables", isWrite: true, args: "policy_id?: string" },
-  { name: "list_templates", category: "Templates", desc: "List configuration templates for WireGuard, BIRD, nftables", isWrite: false },
-  { name: "get_template", category: "Templates", desc: "Get template source code by ID", isWrite: false, args: "id: string" },
-  { name: "create_template", category: "Templates", desc: "Create a custom configuration template", isWrite: true, args: "id: string, name: string, type: 'bird'|'wg'|'nft', content: string" },
-  { name: "update_template", category: "Templates", desc: "Update custom template source code", isWrite: true, args: "id: string, content?: string" },
+  {
+    name: "list_network_policies",
+    category: "Policies",
+    desc: "List BGP routing, firewall, and ROA validation policies",
+    isWrite: false,
+  },
+  {
+    name: "get_network_policy",
+    category: "Policies",
+    desc: "Get policy details by ID",
+    isWrite: false,
+    args: "id: string",
+  },
+  {
+    name: "create_network_policy",
+    category: "Policies",
+    desc: "Create a network policy for routing, firewall rules, and ROA",
+    isWrite: true,
+    args: "id: string, name: string, cost?: int, policy_json?: string",
+  },
+  {
+    name: "update_network_policy",
+    category: "Policies",
+    desc: "Update an existing network policy",
+    isWrite: true,
+    args: "id: string, name?: string, policy_json?: string",
+  },
+  {
+    name: "delete_network_policy",
+    category: "Policies",
+    desc: "Delete a custom network policy",
+    isWrite: true,
+    args: "id: string",
+  },
+  {
+    name: "refresh_policy_roa",
+    category: "Policies",
+    desc: "Refresh Route Origin Authorization (ROA) tables",
+    isWrite: true,
+    args: "policy_id?: string",
+  },
+  {
+    name: "list_templates",
+    category: "Templates",
+    desc: "List configuration templates for WireGuard, BIRD, nftables",
+    isWrite: false,
+  },
+  {
+    name: "get_template",
+    category: "Templates",
+    desc: "Get template source code by ID",
+    isWrite: false,
+    args: "id: string",
+  },
+  {
+    name: "create_template",
+    category: "Templates",
+    desc: "Create a custom configuration template",
+    isWrite: true,
+    args: "id: string, name: string, type: 'bird'|'wg'|'nft', content: string",
+  },
+  {
+    name: "update_template",
+    category: "Templates",
+    desc: "Update custom template source code",
+    isWrite: true,
+    args: "id: string, content?: string",
+  },
   { name: "delete_template", category: "Templates", desc: "Delete custom template", isWrite: true, args: "id: string" },
 
   // Config Apply & Changes
-  { name: "preview_config_apply", category: "Config Apply", desc: "Dry-run declarative configuration changes (YAML/JSON) computing diff", isWrite: false, args: "content: string" },
-  { name: "execute_config_apply", category: "Config Apply", desc: "Atomically apply declarative configuration patch to cluster", isWrite: true, args: "content: string, auto_sync?: bool" },
-  { name: "list_config_changes", category: "Config Apply", desc: "List saved configuration change patches", isWrite: false },
-  { name: "save_config_change", category: "Config Apply", desc: "Save or update a named configuration change snippet", isWrite: true, args: "name: string, content: string" },
-  { name: "apply_saved_config_change", category: "Config Apply", desc: "Execute a saved configuration change snippet by ID", isWrite: true, args: "id: string, auto_sync?: bool" },
-  { name: "delete_config_change", category: "Config Apply", desc: "Delete a saved configuration snippet", isWrite: true, args: "id: string" },
+  {
+    name: "preview_config_apply",
+    category: "Config Apply",
+    desc: "Dry-run declarative configuration changes (YAML/JSON) computing diff",
+    isWrite: false,
+    args: "content: string",
+  },
+  {
+    name: "execute_config_apply",
+    category: "Config Apply",
+    desc: "Atomically apply declarative configuration patch to cluster",
+    isWrite: true,
+    args: "content: string, auto_sync?: bool",
+  },
+  {
+    name: "list_config_changes",
+    category: "Config Apply",
+    desc: "List saved configuration change patches",
+    isWrite: false,
+  },
+  {
+    name: "save_config_change",
+    category: "Config Apply",
+    desc: "Save or update a named configuration change snippet",
+    isWrite: true,
+    args: "name: string, content: string",
+  },
+  {
+    name: "apply_saved_config_change",
+    category: "Config Apply",
+    desc: "Execute a saved configuration change snippet by ID",
+    isWrite: true,
+    args: "id: string, auto_sync?: bool",
+  },
+  {
+    name: "delete_config_change",
+    category: "Config Apply",
+    desc: "Delete a saved configuration snippet",
+    isWrite: true,
+    args: "id: string",
+  },
 
   // Sync & Tasks
-  { name: "preview_sync", category: "Sync", desc: "Preview planned WireGuard, BIRD, and firewall push diff across nodes", isWrite: false, args: "nodes?: string[], scope?: 'all'|'wireguard'|'bird'" },
-  { name: "execute_sync", category: "Sync", desc: "Deploy WireGuard, BIRD, nftables, and hosts configs to remote nodes", isWrite: true, args: "nodes?: string[], scope?: string, force?: bool" },
-  { name: "get_sync_status", category: "Sync", desc: "Get synchronization status and check for out-of-sync nodes", isWrite: false },
+  {
+    name: "preview_sync",
+    category: "Sync",
+    desc: "Preview planned WireGuard, BIRD, and firewall push diff across nodes",
+    isWrite: false,
+    args: "nodes?: string[], scope?: 'all'|'wireguard'|'bird'",
+  },
+  {
+    name: "execute_sync",
+    category: "Sync",
+    desc: "Deploy WireGuard, BIRD, nftables, and hosts configs to remote nodes",
+    isWrite: true,
+    args: "nodes?: string[], scope?: string, force?: bool",
+  },
+  {
+    name: "get_sync_status",
+    category: "Sync",
+    desc: "Get synchronization status and check for out-of-sync nodes",
+    isWrite: false,
+  },
   { name: "list_tasks", category: "Tasks", desc: "List device helper automation scripts", isWrite: false },
-  { name: "run_task", category: "Tasks", desc: "Execute a device helper task on target nodes", isWrite: true, args: "id: string, nodes?: string[]" },
-  { name: "check_task_status", category: "Tasks", desc: "Query task readiness and results on nodes", isWrite: false, args: "id: string, nodes?: string[]" },
+  {
+    name: "run_task",
+    category: "Tasks",
+    desc: "Execute a device helper task on target nodes",
+    isWrite: true,
+    args: "id: string, nodes?: string[]",
+  },
+  {
+    name: "check_task_status",
+    category: "Tasks",
+    desc: "Query task readiness and results on nodes",
+    isWrite: false,
+    args: "id: string, nodes?: string[]",
+  },
 
   // Diagnostics & Cron
-  { name: "list_looking_glass_tasks", category: "Looking Glass", desc: "List diagnostic commands (ping, traceroute, BIRD show route, mtr)", isWrite: false },
-  { name: "run_looking_glass", category: "Looking Glass", desc: "Execute Looking Glass diagnosis from nodes to target", isWrite: true, args: "nodes: string[], task_id?: string, target?: string" },
+  {
+    name: "list_looking_glass_tasks",
+    category: "Looking Glass",
+    desc: "List diagnostic commands (ping, traceroute, BIRD show route, mtr)",
+    isWrite: false,
+  },
+  {
+    name: "run_looking_glass",
+    category: "Looking Glass",
+    desc: "Execute Looking Glass diagnosis from nodes to target",
+    isWrite: true,
+    args: "nodes: string[], task_id?: string, target?: string",
+  },
   { name: "list_cron_tasks", category: "Cron", desc: "List scheduled automated tasks across nodes", isWrite: false },
-  { name: "create_cron_task", category: "Cron", desc: "Schedule recurring latency or ping task on nodes", isWrite: true, args: "id: string, name: string, task_type: 'ping'|'tcp_ping', cron_expr: string, nodes: string[], target: string" },
-  { name: "toggle_cron_task", category: "Cron", desc: "Enable or disable a scheduled cron task", isWrite: true, args: "id: string" },
-  { name: "get_node_cron_task_results", category: "Cron", desc: "Get latency metrics and history records for a node", isWrite: false, args: "node: string, task_id?: string, range?: string" },
+  {
+    name: "create_cron_task",
+    category: "Cron",
+    desc: "Schedule recurring latency or ping task on nodes",
+    isWrite: true,
+    args: "id: string, name: string, task_type: 'ping'|'tcp_ping', cron_expr: string, nodes: string[], target: string",
+  },
+  {
+    name: "toggle_cron_task",
+    category: "Cron",
+    desc: "Enable or disable a scheduled cron task",
+    isWrite: true,
+    args: "id: string",
+  },
+  {
+    name: "get_node_cron_task_results",
+    category: "Cron",
+    desc: "Get latency metrics and history records for a node",
+    isWrite: false,
+    args: "node: string, task_id?: string, range?: string",
+  },
 
   // Maintenance & Integrations
-  { name: "get_database_info", category: "Database", desc: "Get SQLite database size and retention configuration", isWrite: false },
-  { name: "reclaim_database", category: "Database", desc: "Run VACUUM to reclaim disk space and optimize DB", isWrite: true },
-  { name: "get_integrations_settings", category: "Integrations", desc: "Get Prometheus scraping and Telegram Bot settings", isWrite: false },
-  { name: "reset_prometheus_token", category: "Integrations", desc: "Rotate Prometheus scraping Bearer token", isWrite: true },
+  {
+    name: "get_database_info",
+    category: "Database",
+    desc: "Get SQLite database size and retention configuration",
+    isWrite: false,
+  },
+  {
+    name: "reclaim_database",
+    category: "Database",
+    desc: "Run VACUUM to reclaim disk space and optimize DB",
+    isWrite: true,
+  },
+  {
+    name: "get_integrations_settings",
+    category: "Integrations",
+    desc: "Get Prometheus scraping and Telegram Bot settings",
+    isWrite: false,
+  },
+  {
+    name: "reset_prometheus_token",
+    category: "Integrations",
+    desc: "Rotate Prometheus scraping Bearer token",
+    isWrite: true,
+  },
 ];
 
 export const MCPSettingsTab: React.FC = () => {
@@ -223,8 +546,8 @@ export const MCPSettingsTab: React.FC = () => {
         tokenToReset === "full_control"
           ? "Full-Control token rotated successfully!"
           : tokenToReset === "read_only"
-          ? "Read-Only token rotated successfully!"
-          : "Both MCP tokens rotated successfully!"
+            ? "Read-Only token rotated successfully!"
+            : "Both MCP tokens rotated successfully!",
       );
       setTimeout(() => setSuccess(null), 4000);
     } catch (err: any) {
@@ -235,7 +558,9 @@ export const MCPSettingsTab: React.FC = () => {
   };
 
   const activeTokenValue =
-    selectedToken === "full" ? data?.full_control_token || "YOUR_FULL_CONTROL_TOKEN" : data?.read_only_token || "YOUR_READ_ONLY_TOKEN";
+    selectedToken === "full"
+      ? data?.full_control_token || "YOUR_FULL_CONTROL_TOKEN"
+      : data?.read_only_token || "YOUR_READ_ONLY_TOKEN";
 
   const getSnippets = () => {
     const url = data?.server_url || "http://127.0.0.1:4242/mcp";
@@ -260,7 +585,7 @@ export const MCPSettingsTab: React.FC = () => {
               },
             },
             null,
-            2
+            2,
           ),
         };
       case "cursor":
@@ -280,7 +605,7 @@ export const MCPSettingsTab: React.FC = () => {
               },
             },
             null,
-            2
+            2,
           ),
         };
       case "cline":
@@ -299,14 +624,14 @@ export const MCPSettingsTab: React.FC = () => {
               },
             },
             null,
-            2
+            2,
           ),
         };
       case "gemini":
         return {
-          filename: "Google Gemini Web App (Settings > Personal Intelligence > Connect to an MCP server)",
+          filename: "Google Gemini Web App (Settings > Personal Intelligence > Connected apps > + Custom)",
           pathNote:
-            "1. Open gemini.google.com > Settings > Personal Intelligence > Connect to an MCP server\n2. Fill in the MCP Server URL, OAuth Client ID, and OAuth Client Secret shown below\n3. Click Connect to authorize Easy42 MCP with Gemini",
+            "1. Open gemini.google.com > Settings > Personal Intelligence > Connected apps > + Custom, open Connect to an MCP server\n2. Fill in the MCP Server URL, OAuth Client ID, and OAuth Client Secret shown below\n3. Click Connect to authorize Easy42 MCP with Gemini",
           code: JSON.stringify(
             {
               mcp_server_url: url,
@@ -316,7 +641,7 @@ export const MCPSettingsTab: React.FC = () => {
               token_endpoint: data?.token_url || `${url.replace(/\/mcp$/, "")}/oauth/token`,
             },
             null,
-            2
+            2,
           ),
         };
       case "windsurf":
@@ -335,7 +660,7 @@ export const MCPSettingsTab: React.FC = () => {
               },
             },
             null,
-            2
+            2,
           ),
         };
       case "stdio":
@@ -352,7 +677,7 @@ export const MCPSettingsTab: React.FC = () => {
               },
             },
             null,
-            2
+            2,
           ),
         };
       case "curl":
@@ -430,14 +755,18 @@ export const MCPSettingsTab: React.FC = () => {
                 />
               </Box>
               <Typography variant="body2" sx={{ color: "#64748B", fontSize: "0.85rem", mt: 0.25 }}>
-                Allow AI agents (Claude, Cursor, Cline, Windsurf, Roo Code) to query, configure, and operate the entire Easy42 mesh control plane.
+                Allow AI agents (Claude, Cursor, Cline, Windsurf, Roo Code) to query, configure, and operate the entire
+                Easy42 mesh control plane.
               </Typography>
             </Box>
           </Box>
 
           <Box sx={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0 }}>
             <Box sx={{ textAlign: "right" }}>
-              <Typography variant="caption" sx={{ color: "#64748B", display: "block", fontWeight: 600, fontSize: "0.75rem" }}>
+              <Typography
+                variant="caption"
+                sx={{ color: "#64748B", display: "block", fontWeight: 600, fontSize: "0.75rem" }}
+              >
                 MCP Service
               </Typography>
               <Chip
@@ -509,7 +838,10 @@ export const MCPSettingsTab: React.FC = () => {
                 boxShadow: "0 1px 3px rgba(0, 0, 0, 0.05)",
               }}
             >
-              <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#0F172A", display: "flex", alignItems: "center", gap: 1 }}>
+              <Typography
+                variant="subtitle1"
+                sx={{ fontWeight: 700, color: "#0F172A", display: "flex", alignItems: "center", gap: 1 }}
+              >
                 <Globe size={18} color="#4F46E5" /> Connection Endpoints
               </Typography>
               <Typography variant="body2" sx={{ color: "#64748B", fontSize: "0.85rem", mt: 0.5, mb: 2 }}>
@@ -527,10 +859,18 @@ export const MCPSettingsTab: React.FC = () => {
                   }}
                 >
                   <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
-                    <Typography variant="caption" sx={{ fontWeight: 700, color: "#334155", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                    <Typography
+                      variant="caption"
+                      sx={{ fontWeight: 700, color: "#334155", textTransform: "uppercase", letterSpacing: "0.04em" }}
+                    >
                       Streamable HTTP URL (Standard)
                     </Typography>
-                    <Chip size="small" label="Recommended" color="primary" sx={{ height: 20, fontSize: "0.68rem", fontWeight: 700 }} />
+                    <Chip
+                      size="small"
+                      label="Recommended"
+                      color="primary"
+                      sx={{ height: 20, fontSize: "0.68rem", fontWeight: 700 }}
+                    />
                   </Box>
                   <Box sx={{ display: "flex", gap: 1 }}>
                     <TextField
@@ -571,7 +911,10 @@ export const MCPSettingsTab: React.FC = () => {
                   }}
                 >
                   <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
-                    <Typography variant="caption" sx={{ fontWeight: 700, color: "#334155", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                    <Typography
+                      variant="caption"
+                      sx={{ fontWeight: 700, color: "#334155", textTransform: "uppercase", letterSpacing: "0.04em" }}
+                    >
                       Classic SSE Endpoint
                     </Typography>
                     <Chip size="small" label="SSE Stream" sx={{ height: 20, fontSize: "0.68rem", fontWeight: 700 }} />
@@ -618,12 +961,15 @@ export const MCPSettingsTab: React.FC = () => {
                 boxShadow: "0 1px 3px rgba(0, 0, 0, 0.05)",
               }}
             >
-              <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#0F172A", display: "flex", alignItems: "center", gap: 1 }}>
+              <Typography
+                variant="subtitle1"
+                sx={{ fontWeight: 700, color: "#0F172A", display: "flex", alignItems: "center", gap: 1 }}
+              >
                 <Shield size={18} color="#4F46E5" /> Access Tokens & Credentials
               </Typography>
               <Typography variant="body2" sx={{ color: "#64748B", fontSize: "0.85rem", mt: 0.5, mb: 2 }}>
-                Easy42 enforces role-based security with two distinct token tiers. Pass via Bearer Authorization header or{" "}
-                <code>?token=</code> query parameter.
+                Easy42 enforces role-based security with two distinct token tiers. Pass via Bearer Authorization header
+                or <code>?token=</code> query parameter.
               </Typography>
 
               <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" }, gap: 2.5 }}>
@@ -664,12 +1010,17 @@ export const MCPSettingsTab: React.FC = () => {
                         </Typography>
                       </Box>
                     </Box>
-                    <Chip size="small" label="Admin" color="error" sx={{ height: 20, fontSize: "0.68rem", fontWeight: 700 }} />
+                    <Chip
+                      size="small"
+                      label="Admin"
+                      color="error"
+                      sx={{ height: 20, fontSize: "0.68rem", fontWeight: 700 }}
+                    />
                   </Box>
 
                   <Typography variant="body2" sx={{ color: "#7F1D1D", fontSize: "0.82rem", lineHeight: 1.4 }}>
-                    Allows the AI agent to mutate cluster state: add/remove nodes, create wireguard links, restart BIRD/WireGuard,
-                    apply declarative config, and run device tasks.
+                    Allows the AI agent to mutate cluster state: add/remove nodes, create wireguard links, restart
+                    BIRD/WireGuard, apply declarative config, and run device tasks.
                   </Typography>
 
                   <TextField
@@ -715,7 +1066,13 @@ export const MCPSettingsTab: React.FC = () => {
                       color="inherit"
                       size="small"
                       onClick={() => handleOpenResetDialog("full_control")}
-                      sx={{ textTransform: "none", fontWeight: 600, borderRadius: 1.5, borderColor: "#FCA5A5", color: "#B91C1C" }}
+                      sx={{
+                        textTransform: "none",
+                        fontWeight: 600,
+                        borderRadius: 1.5,
+                        borderColor: "#FCA5A5",
+                        color: "#B91C1C",
+                      }}
                     >
                       Rotate
                     </Button>
@@ -759,12 +1116,17 @@ export const MCPSettingsTab: React.FC = () => {
                         </Typography>
                       </Box>
                     </Box>
-                    <Chip size="small" label="Safe / Read-Only" color="info" sx={{ height: 20, fontSize: "0.68rem", fontWeight: 700 }} />
+                    <Chip
+                      size="small"
+                      label="Safe / Read-Only"
+                      color="info"
+                      sx={{ height: 20, fontSize: "0.68rem", fontWeight: 700 }}
+                    />
                   </Box>
 
                   <Typography variant="body2" sx={{ color: "#075985", fontSize: "0.82rem", lineHeight: 1.4 }}>
-                    Allows the AI agent to inspect nodes, links, policies, and health metrics. Any mutation attempts return an
-                    explicit permission-denied error.
+                    Allows the AI agent to inspect nodes, links, policies, and health metrics. Any mutation attempts
+                    return an explicit permission-denied error.
                   </Typography>
 
                   <TextField
@@ -810,7 +1172,13 @@ export const MCPSettingsTab: React.FC = () => {
                       color="inherit"
                       size="small"
                       onClick={() => handleOpenResetDialog("read_only")}
-                      sx={{ textTransform: "none", fontWeight: 600, borderRadius: 1.5, borderColor: "#7DD3FC", color: "#0369A1" }}
+                      sx={{
+                        textTransform: "none",
+                        fontWeight: 600,
+                        borderRadius: 1.5,
+                        borderColor: "#7DD3FC",
+                        color: "#0369A1",
+                      }}
                     >
                       Rotate
                     </Button>
@@ -830,13 +1198,26 @@ export const MCPSettingsTab: React.FC = () => {
                 boxShadow: "0 1px 3px rgba(0, 0, 0, 0.05)",
               }}
             >
-              <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 1.5 }}>
+              <Box
+                sx={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "flex-start",
+                  flexWrap: "wrap",
+                  gap: 1.5,
+                }}
+              >
                 <Box>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#0F172A", display: "flex", alignItems: "center", gap: 1 }}>
+                  <Typography
+                    variant="subtitle1"
+                    sx={{ fontWeight: 700, color: "#0F172A", display: "flex", alignItems: "center", gap: 1 }}
+                  >
                     <KeyRound size={18} color="#4F46E5" /> OAuth 2.0 Client Credentials
                   </Typography>
                   <Typography variant="body2" sx={{ color: "#64748B", fontSize: "0.85rem", mt: 0.5, mb: 2 }}>
-                    Used by AI platforms requiring standard OAuth 2.0 authentication such as <strong>Google Gemini Web App</strong> (Settings &gt; Personal Intelligence &gt; Connect to an MCP server).
+                    Used by AI platforms requiring standard OAuth 2.0 authentication such as{" "}
+                    <strong>Google Gemini Web App</strong> (Settings &gt; Personal Intelligence &gt; Connect to an MCP
+                    server).
                   </Typography>
                 </Box>
                 <Chip
@@ -849,7 +1230,17 @@ export const MCPSettingsTab: React.FC = () => {
               <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" }, gap: 2 }}>
                 {/* OAuth Client ID */}
                 <Box sx={{ p: 2, borderRadius: 2, bgcolor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
-                  <Typography variant="caption" sx={{ fontWeight: 700, color: "#334155", textTransform: "uppercase", letterSpacing: "0.04em", display: "block", mb: 1 }}>
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      fontWeight: 700,
+                      color: "#334155",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.04em",
+                      display: "block",
+                      mb: 1,
+                    }}
+                  >
                     OAuth Client ID
                   </Typography>
                   <Box sx={{ display: "flex", gap: 1 }}>
@@ -858,7 +1249,9 @@ export const MCPSettingsTab: React.FC = () => {
                       size="small"
                       value={data?.oauth_client_id || "easy42-mcp"}
                       slotProps={{ input: { readOnly: true } }}
-                      sx={{ "& .MuiInputBase-input": { fontFamily: "monospace", fontSize: "0.82rem", bgcolor: "#FFFFFF" } }}
+                      sx={{
+                        "& .MuiInputBase-input": { fontFamily: "monospace", fontSize: "0.82rem", bgcolor: "#FFFFFF" },
+                      }}
                     />
                     <Tooltip title={copiedKey === "oauth_cid" ? "Copied!" : "Copy Client ID"}>
                       <Button
@@ -878,7 +1271,10 @@ export const MCPSettingsTab: React.FC = () => {
                 {/* OAuth Client Secret */}
                 <Box sx={{ p: 2, borderRadius: 2, bgcolor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
                   <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
-                    <Typography variant="caption" sx={{ fontWeight: 700, color: "#334155", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                    <Typography
+                      variant="caption"
+                      sx={{ fontWeight: 700, color: "#334155", textTransform: "uppercase", letterSpacing: "0.04em" }}
+                    >
                       OAuth Client Secret
                     </Typography>
                     <Button
@@ -907,7 +1303,9 @@ export const MCPSettingsTab: React.FC = () => {
                           ),
                         },
                       }}
-                      sx={{ "& .MuiInputBase-input": { fontFamily: "monospace", fontSize: "0.82rem", bgcolor: "#FFFFFF" } }}
+                      sx={{
+                        "& .MuiInputBase-input": { fontFamily: "monospace", fontSize: "0.82rem", bgcolor: "#FFFFFF" },
+                      }}
                     />
                     <Tooltip title={copiedKey === "oauth_sec" ? "Copied!" : "Copy Client Secret"}>
                       <Button
@@ -937,9 +1335,21 @@ export const MCPSettingsTab: React.FC = () => {
                 boxShadow: "0 1px 3px rgba(0, 0, 0, 0.05)",
               }}
             >
-              <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 2, mb: 2 }}>
+              <Box
+                sx={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "flex-start",
+                  flexWrap: "wrap",
+                  gap: 2,
+                  mb: 2,
+                }}
+              >
                 <Box>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#0F172A", display: "flex", alignItems: "center", gap: 1 }}>
+                  <Typography
+                    variant="subtitle1"
+                    sx={{ fontWeight: 700, color: "#0F172A", display: "flex", alignItems: "center", gap: 1 }}
+                  >
                     <Code size={18} color="#4F46E5" /> AI Agent Setup Guides & Snippets
                   </Typography>
                   <Typography variant="body2" sx={{ color: "#64748B", fontSize: "0.85rem", mt: 0.5 }}>
@@ -967,7 +1377,14 @@ export const MCPSettingsTab: React.FC = () => {
                     variant={selectedToken === "full" ? "contained" : "text"}
                     color="error"
                     onClick={() => setSelectedToken("full")}
-                    sx={{ textTransform: "none", fontWeight: 700, fontSize: "0.75rem", py: 0.4, px: 1.2, borderRadius: 1.5 }}
+                    sx={{
+                      textTransform: "none",
+                      fontWeight: 700,
+                      fontSize: "0.75rem",
+                      py: 0.4,
+                      px: 1.2,
+                      borderRadius: 1.5,
+                    }}
                   >
                     Full Control
                   </Button>
@@ -976,7 +1393,14 @@ export const MCPSettingsTab: React.FC = () => {
                     variant={selectedToken === "ro" ? "contained" : "text"}
                     color="info"
                     onClick={() => setSelectedToken("ro")}
-                    sx={{ textTransform: "none", fontWeight: 700, fontSize: "0.75rem", py: 0.4, px: 1.2, borderRadius: 1.5 }}
+                    sx={{
+                      textTransform: "none",
+                      fontWeight: 700,
+                      fontSize: "0.75rem",
+                      py: 0.4,
+                      px: 1.2,
+                      borderRadius: 1.5,
+                    }}
                   >
                     Read Only
                   </Button>
@@ -1035,14 +1459,18 @@ export const MCPSettingsTab: React.FC = () => {
                         Connect to Google Gemini Web App
                       </Typography>
                       <Typography variant="caption" sx={{ color: "#4338CA" }}>
-                        In Gemini Web, open <strong>Settings</strong> &gt; <strong>Personal Intelligence</strong> &gt; <strong>Connect to an MCP server</strong> and paste these credentials:
+                        In Gemini Web, open <strong>Settings</strong> &gt; <strong>Personal Intelligence</strong> &gt;{" "}
+                        <strong>Connect to an MCP server</strong> and paste these credentials:
                       </Typography>
                     </Box>
                   </Box>
 
                   <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr 1fr" }, gap: 1.5 }}>
                     <Box>
-                      <Typography variant="caption" sx={{ fontWeight: 700, color: "#312E81", display: "block", mb: 0.5 }}>
+                      <Typography
+                        variant="caption"
+                        sx={{ fontWeight: 700, color: "#312E81", display: "block", mb: 0.5 }}
+                      >
                         1. MCP Server URL
                       </Typography>
                       <Box sx={{ display: "flex", gap: 0.5 }}>
@@ -1051,10 +1479,21 @@ export const MCPSettingsTab: React.FC = () => {
                           size="small"
                           value={data?.server_url || ""}
                           slotProps={{ input: { readOnly: true } }}
-                          sx={{ "& .MuiInputBase-input": { fontFamily: "monospace", fontSize: "0.78rem", bgcolor: "#FFFFFF" } }}
+                          sx={{
+                            "& .MuiInputBase-input": {
+                              fontFamily: "monospace",
+                              fontSize: "0.78rem",
+                              bgcolor: "#FFFFFF",
+                            },
+                          }}
                         />
                         <Tooltip title={copiedKey === "gem_url" ? "Copied!" : "Copy"}>
-                          <Button variant="outlined" size="small" onClick={() => handleCopy(data?.server_url || "", "gem_url")} sx={{ minWidth: 36, px: 0.5, borderColor: "#CBD5E1" }}>
+                          <Button
+                            variant="outlined"
+                            size="small"
+                            onClick={() => handleCopy(data?.server_url || "", "gem_url")}
+                            sx={{ minWidth: 36, px: 0.5, borderColor: "#CBD5E1" }}
+                          >
                             {copiedKey === "gem_url" ? <Check size={14} color="#16A34A" /> : <Copy size={14} />}
                           </Button>
                         </Tooltip>
@@ -1062,7 +1501,10 @@ export const MCPSettingsTab: React.FC = () => {
                     </Box>
 
                     <Box>
-                      <Typography variant="caption" sx={{ fontWeight: 700, color: "#312E81", display: "block", mb: 0.5 }}>
+                      <Typography
+                        variant="caption"
+                        sx={{ fontWeight: 700, color: "#312E81", display: "block", mb: 0.5 }}
+                      >
                         2. OAuth Client ID
                       </Typography>
                       <Box sx={{ display: "flex", gap: 0.5 }}>
@@ -1071,10 +1513,21 @@ export const MCPSettingsTab: React.FC = () => {
                           size="small"
                           value={data?.oauth_client_id || "easy42-mcp"}
                           slotProps={{ input: { readOnly: true } }}
-                          sx={{ "& .MuiInputBase-input": { fontFamily: "monospace", fontSize: "0.78rem", bgcolor: "#FFFFFF" } }}
+                          sx={{
+                            "& .MuiInputBase-input": {
+                              fontFamily: "monospace",
+                              fontSize: "0.78rem",
+                              bgcolor: "#FFFFFF",
+                            },
+                          }}
                         />
                         <Tooltip title={copiedKey === "gem_cid" ? "Copied!" : "Copy"}>
-                          <Button variant="outlined" size="small" onClick={() => handleCopy(data?.oauth_client_id || "easy42-mcp", "gem_cid")} sx={{ minWidth: 36, px: 0.5, borderColor: "#CBD5E1" }}>
+                          <Button
+                            variant="outlined"
+                            size="small"
+                            onClick={() => handleCopy(data?.oauth_client_id || "easy42-mcp", "gem_cid")}
+                            sx={{ minWidth: 36, px: 0.5, borderColor: "#CBD5E1" }}
+                          >
                             {copiedKey === "gem_cid" ? <Check size={14} color="#16A34A" /> : <Copy size={14} />}
                           </Button>
                         </Tooltip>
@@ -1082,7 +1535,10 @@ export const MCPSettingsTab: React.FC = () => {
                     </Box>
 
                     <Box>
-                      <Typography variant="caption" sx={{ fontWeight: 700, color: "#312E81", display: "block", mb: 0.5 }}>
+                      <Typography
+                        variant="caption"
+                        sx={{ fontWeight: 700, color: "#312E81", display: "block", mb: 0.5 }}
+                      >
                         3. OAuth Client Secret
                       </Typography>
                       <Box sx={{ display: "flex", gap: 0.5 }}>
@@ -1103,10 +1559,21 @@ export const MCPSettingsTab: React.FC = () => {
                               ),
                             },
                           }}
-                          sx={{ "& .MuiInputBase-input": { fontFamily: "monospace", fontSize: "0.78rem", bgcolor: "#FFFFFF" } }}
+                          sx={{
+                            "& .MuiInputBase-input": {
+                              fontFamily: "monospace",
+                              fontSize: "0.78rem",
+                              bgcolor: "#FFFFFF",
+                            },
+                          }}
                         />
                         <Tooltip title={copiedKey === "gem_sec" ? "Copied!" : "Copy"}>
-                          <Button variant="outlined" size="small" onClick={() => handleCopy(data?.oauth_client_secret || "", "gem_sec")} sx={{ minWidth: 36, px: 0.5, borderColor: "#CBD5E1" }}>
+                          <Button
+                            variant="outlined"
+                            size="small"
+                            onClick={() => handleCopy(data?.oauth_client_secret || "", "gem_sec")}
+                            sx={{ minWidth: 36, px: 0.5, borderColor: "#CBD5E1" }}
+                          >
                             {copiedKey === "gem_sec" ? <Check size={14} color="#16A34A" /> : <Copy size={14} />}
                           </Button>
                         </Tooltip>
@@ -1332,19 +1799,24 @@ export const MCPSettingsTab: React.FC = () => {
               {tokenToReset === "full_control"
                 ? "Full-Control"
                 : tokenToReset === "read_only"
-                ? "Read-Only"
-                : tokenToReset === "oauth_secret"
-                ? "OAuth Client Secret"
-                : "both"}
+                  ? "Read-Only"
+                  : tokenToReset === "oauth_secret"
+                    ? "OAuth Client Secret"
+                    : "both"}
             </strong>{" "}
             credential?
           </Typography>
           <Alert severity="warning" sx={{ mt: 2, borderRadius: 2, fontSize: "0.82rem" }}>
-            Any AI tools or background agents currently using this token will lose access until updated with the new token.
+            Any AI tools or background agents currently using this token will lose access until updated with the new
+            token.
           </Alert>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2.5 }}>
-          <Button onClick={() => setResetDialogOpen(false)} disabled={resetting} sx={{ textTransform: "none", fontWeight: 600 }}>
+          <Button
+            onClick={() => setResetDialogOpen(false)}
+            disabled={resetting}
+            sx={{ textTransform: "none", fontWeight: 600 }}
+          >
             Cancel
           </Button>
           <Button

@@ -15,6 +15,11 @@ func registerNodeTools(s *server.MCPServer, mgr *engine.Manager) {
 	// 1. list_nodes
 	s.AddTool(mcp.NewTool("list_nodes",
 		mcp.WithDescription("List all nodes in the Easy42 mesh network with their configuration, IP addresses, tags, ASN, and status"),
+		mcp.WithTitleAnnotation("List Nodes"),
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(false),
 		mcp.WithString("tag", mcp.Description("Optional tag filter (e.g. 'edge', 'gateway')")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		nodes := mgr.GetNodes()
@@ -37,6 +42,11 @@ func registerNodeTools(s *server.MCPServer, mgr *engine.Manager) {
 	// 2. get_node
 	s.AddTool(mcp.NewTool("get_node",
 		mcp.WithDescription("Get detailed configuration, generated BIRD BGP config, nftables firewall rules, and status for a specific node"),
+		mcp.WithTitleAnnotation("Get Node"),
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(false),
 		mcp.WithString("name", mcp.Required(), mcp.Description("The name of the node")),
 		mcp.WithBoolean("include_bird", mcp.Description("Include rendered BIRD BGP routing daemon configuration")),
 		mcp.WithBoolean("include_nftables", mcp.Description("Include rendered nftables firewall configuration")),
@@ -78,6 +88,11 @@ func registerNodeTools(s *server.MCPServer, mgr *engine.Manager) {
 	// 3. add_node
 	s.AddTool(mcp.NewTool("add_node",
 		mcp.WithDescription("Add a new node to the Easy42 cluster control plane. Requires full-control token."),
+		mcp.WithTitleAnnotation("Add Node"),
+		mcp.WithReadOnlyHintAnnotation(false),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(false),
+		mcp.WithOpenWorldHintAnnotation(false),
 		mcp.WithString("name", mcp.Required(), mcp.Description("Unique node identifier/hostname")),
 		mcp.WithString("host", mcp.Description("SSH host / alias / IP address for remote management")),
 		mcp.WithString("ip", mcp.Description("Mesh IPv4 address (e.g. 192.168.100.1)")),
@@ -121,6 +136,11 @@ func registerNodeTools(s *server.MCPServer, mgr *engine.Manager) {
 	// 4. update_node
 	s.AddTool(mcp.NewTool("update_node",
 		mcp.WithDescription("Update an existing node configuration. Requires full-control token."),
+		mcp.WithTitleAnnotation("Update Node"),
+		mcp.WithReadOnlyHintAnnotation(false),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(false),
 		mcp.WithString("name", mcp.Required(), mcp.Description("Name of the node to update")),
 		mcp.WithString("host", mcp.Description("SSH host / alias / IP address")),
 		mcp.WithString("ip", mcp.Description("Mesh IPv4 address")),
@@ -183,6 +203,11 @@ func registerNodeTools(s *server.MCPServer, mgr *engine.Manager) {
 	// 5. rename_node
 	s.AddTool(mcp.NewTool("rename_node",
 		mcp.WithDescription("Rename a node across the entire cluster, updating all link connections, policies, and tasks. Requires full-control token."),
+		mcp.WithTitleAnnotation("Rename Node"),
+		mcp.WithReadOnlyHintAnnotation(false),
+		mcp.WithDestructiveHintAnnotation(true),
+		mcp.WithIdempotentHintAnnotation(false),
+		mcp.WithOpenWorldHintAnnotation(false),
 		mcp.WithString("old_name", mcp.Required(), mcp.Description("Current name of the node")),
 		mcp.WithString("new_name", mcp.Required(), mcp.Description("New unique name for the node")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -211,6 +236,11 @@ func registerNodeTools(s *server.MCPServer, mgr *engine.Manager) {
 	// 6. delete_node
 	s.AddTool(mcp.NewTool("delete_node",
 		mcp.WithDescription("Delete a node from the cluster and tear down all associated peer links. Requires full-control token."),
+		mcp.WithTitleAnnotation("Delete Node"),
+		mcp.WithReadOnlyHintAnnotation(false),
+		mcp.WithDestructiveHintAnnotation(true),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(false),
 		mcp.WithString("name", mcp.Required(), mcp.Description("Name of the node to remove")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		if err := RequireFullControl(ctx); err != nil {
@@ -229,6 +259,11 @@ func registerNodeTools(s *server.MCPServer, mgr *engine.Manager) {
 	// 7. probe_node
 	s.AddTool(mcp.NewTool("probe_node",
 		mcp.WithDescription("Probe an endpoint or host for reachability, ping round-trip time, and SSH connectivity"),
+		mcp.WithTitleAnnotation("Probe Node"),
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithString("host", mcp.Required(), mcp.Description("Host, domain, or IP address to test")),
 		mcp.WithString("node_name", mcp.Description("Optional node name to test SSH key alias")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -247,6 +282,11 @@ func registerNodeTools(s *server.MCPServer, mgr *engine.Manager) {
 	// 8. refresh_node_status
 	s.AddTool(mcp.NewTool("refresh_node_status",
 		mcp.WithDescription("Trigger an active ping/reachability check for a node and update cached status. Requires full-control token."),
+		mcp.WithTitleAnnotation("Refresh Node Status"),
+		mcp.WithReadOnlyHintAnnotation(false),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithString("name", mcp.Required(), mcp.Description("Node name")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		if err := RequireFullControl(ctx); err != nil {
@@ -266,6 +306,11 @@ func registerNodeTools(s *server.MCPServer, mgr *engine.Manager) {
 	// 9. restart_node_service
 	s.AddTool(mcp.NewTool("restart_node_service",
 		mcp.WithDescription("Restart WireGuard interfaces, BIRD routing daemon, or a specific interface on a node. Requires full-control token."),
+		mcp.WithTitleAnnotation("Restart Node Service"),
+		mcp.WithReadOnlyHintAnnotation(false),
+		mcp.WithDestructiveHintAnnotation(true),
+		mcp.WithIdempotentHintAnnotation(false),
+		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithString("name", mcp.Required(), mcp.Description("Node name")),
 		mcp.WithString("service", mcp.Required(), mcp.Description("Service to restart: 'wireguard', 'bird', or 'interface'")),
 		mcp.WithString("interface", mcp.Description("Interface name (required when service is 'interface')")),
@@ -310,6 +355,11 @@ func registerNodeTools(s *server.MCPServer, mgr *engine.Manager) {
 	// 10. get_node_telemetry
 	s.AddTool(mcp.NewTool("get_node_telemetry",
 		mcp.WithDescription("Get recent CPU, memory, load, and interface traffic telemetry collected by Easy42 agent for a node"),
+		mcp.WithTitleAnnotation("Get Node Telemetry"),
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(false),
 		mcp.WithString("name", mcp.Required(), mcp.Description("Node name")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		name, err := req.RequireString("name")
@@ -341,6 +391,11 @@ func registerNodeTools(s *server.MCPServer, mgr *engine.Manager) {
 	// 11. get_fleet_live_status
 	s.AddTool(mcp.NewTool("get_fleet_live_status",
 		mcp.WithDescription("Get real-time fleet metrics summary and online/reachability status for all nodes in the mesh"),
+		mcp.WithTitleAnnotation("Get Fleet Live Status"),
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(false),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		summary, nodes, err := mgr.GetFleetLiveStatus()
 		if err != nil {

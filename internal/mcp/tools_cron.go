@@ -14,6 +14,11 @@ func registerCronTaskTools(s *server.MCPServer, mgr *engine.Manager) {
 	// 1. list_cron_tasks
 	s.AddTool(mcp.NewTool("list_cron_tasks",
 		mcp.WithDescription("List all scheduled automated cron tasks (e.g. periodic ping, latency monitoring) configured across nodes"),
+		mcp.WithTitleAnnotation("List Cron Tasks"),
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(false),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		tasks, err := mgr.GetCronTasks()
 		if err != nil {
@@ -25,6 +30,11 @@ func registerCronTaskTools(s *server.MCPServer, mgr *engine.Manager) {
 	// 2. create_cron_task
 	s.AddTool(mcp.NewTool("create_cron_task",
 		mcp.WithDescription("Schedule a new recurring automated task on one or more nodes. Requires full-control token."),
+		mcp.WithTitleAnnotation("Create Cron Task"),
+		mcp.WithReadOnlyHintAnnotation(false),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(false),
+		mcp.WithOpenWorldHintAnnotation(false),
 		mcp.WithString("id", mcp.Required(), mcp.Description("Unique cron task ID")),
 		mcp.WithString("name", mcp.Required(), mcp.Description("Descriptive name")),
 		mcp.WithString("task_type", mcp.Required(), mcp.Description("Task type: 'ping' or 'tcp_ping'")),
@@ -95,6 +105,11 @@ func registerCronTaskTools(s *server.MCPServer, mgr *engine.Manager) {
 	// 3. update_cron_task
 	s.AddTool(mcp.NewTool("update_cron_task",
 		mcp.WithDescription("Update an existing cron task schedule, targets, or parameters. Requires full-control token."),
+		mcp.WithTitleAnnotation("Update Cron Task"),
+		mcp.WithReadOnlyHintAnnotation(false),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(false),
 		mcp.WithString("id", mcp.Required(), mcp.Description("Cron task ID")),
 		mcp.WithString("name", mcp.Description("Updated name")),
 		mcp.WithString("cron_expr", mcp.Description("Updated cron expression")),
@@ -161,6 +176,11 @@ func registerCronTaskTools(s *server.MCPServer, mgr *engine.Manager) {
 	// 4. toggle_cron_task
 	s.AddTool(mcp.NewTool("toggle_cron_task",
 		mcp.WithDescription("Toggle the active/disabled status of a scheduled cron task. Requires full-control token."),
+		mcp.WithTitleAnnotation("Toggle Cron Task"),
+		mcp.WithReadOnlyHintAnnotation(false),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(false),
+		mcp.WithOpenWorldHintAnnotation(false),
 		mcp.WithString("id", mcp.Required(), mcp.Description("Cron task ID")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		if err := RequireFullControl(ctx); err != nil {
@@ -183,6 +203,11 @@ func registerCronTaskTools(s *server.MCPServer, mgr *engine.Manager) {
 	// 5. delete_cron_task
 	s.AddTool(mcp.NewTool("delete_cron_task",
 		mcp.WithDescription("Delete a scheduled cron task. Requires full-control token."),
+		mcp.WithTitleAnnotation("Delete Cron Task"),
+		mcp.WithReadOnlyHintAnnotation(false),
+		mcp.WithDestructiveHintAnnotation(true),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(false),
 		mcp.WithString("id", mcp.Required(), mcp.Description("Cron task ID")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		if err := RequireFullControl(ctx); err != nil {
@@ -201,6 +226,11 @@ func registerCronTaskTools(s *server.MCPServer, mgr *engine.Manager) {
 	// 6. get_node_cron_task_results
 	s.AddTool(mcp.NewTool("get_node_cron_task_results",
 		mcp.WithDescription("Retrieve execution history, metrics (latency, packet loss), and logs for cron tasks executed on a node"),
+		mcp.WithTitleAnnotation("Get Node Cron Task Results"),
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(false),
 		mcp.WithString("node", mcp.Required(), mcp.Description("Node name")),
 		mcp.WithString("task_id", mcp.Description("Optional specific cron task ID")),
 		mcp.WithString("range", mcp.Description("Time range (e.g. '1h', '24h', '7d'). Default '24h'")),

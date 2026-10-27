@@ -15,6 +15,11 @@ func registerLookingGlassTools(s *server.MCPServer, mgr *engine.Manager) {
 	// 1. list_looking_glass_tasks
 	s.AddTool(mcp.NewTool("list_looking_glass_tasks",
 		mcp.WithDescription("List available Looking Glass diagnostic tasks (ping, traceroute, BIRD show route, BIRD show protocols, etc.)"),
+		mcp.WithTitleAnnotation("List Looking Glass Tasks"),
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(false),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		tasks, err := mgr.GetLookingGlassTasks()
 		if err != nil {
@@ -26,6 +31,11 @@ func registerLookingGlassTools(s *server.MCPServer, mgr *engine.Manager) {
 	// 2. run_looking_glass
 	s.AddTool(mcp.NewTool("run_looking_glass",
 		mcp.WithDescription("Execute diagnostic commands (ping, traceroute, bird route show, mtr) on one or more nodes. Requires full-control token."),
+		mcp.WithTitleAnnotation("Run Looking Glass"),
+		mcp.WithReadOnlyHintAnnotation(false),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithArray("nodes", mcp.WithStringItems(), mcp.Required(), mcp.Description("Node names to execute the diagnostic from")),
 		mcp.WithString("task_id", mcp.Description("Task template ID (e.g. 'ping', 'traceroute', 'bird_route')")),
 		mcp.WithString("target", mcp.Description("Target host or IP address to diagnose")),
@@ -70,6 +80,11 @@ func registerLookingGlassTools(s *server.MCPServer, mgr *engine.Manager) {
 	// 3. save_looking_glass_task
 	s.AddTool(mcp.NewTool("save_looking_glass_task",
 		mcp.WithDescription("Save or update a Looking Glass task template. Requires full-control token."),
+		mcp.WithTitleAnnotation("Save Looking Glass Task"),
+		mcp.WithReadOnlyHintAnnotation(false),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(false),
 		mcp.WithString("id", mcp.Required(), mcp.Description("Unique task ID")),
 		mcp.WithString("name", mcp.Required(), mcp.Description("Human-readable task name")),
 		mcp.WithString("command", mcp.Required(), mcp.Description("CLI command template")),
@@ -113,6 +128,11 @@ func registerLookingGlassTools(s *server.MCPServer, mgr *engine.Manager) {
 	// 4. delete_looking_glass_task
 	s.AddTool(mcp.NewTool("delete_looking_glass_task",
 		mcp.WithDescription("Delete a Looking Glass task template. Requires full-control token."),
+		mcp.WithTitleAnnotation("Delete Looking Glass Task"),
+		mcp.WithReadOnlyHintAnnotation(false),
+		mcp.WithDestructiveHintAnnotation(true),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(false),
 		mcp.WithString("id", mcp.Required(), mcp.Description("Task template ID to delete")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		if err := RequireFullControl(ctx); err != nil {

@@ -16,6 +16,11 @@ func registerNetworkTools(s *server.MCPServer, mgr *engine.Manager) {
 	// 1. get_network_settings
 	s.AddTool(mcp.NewTool("get_network_settings",
 		mcp.WithDescription("Get global cluster network settings (Network Name, ASN, permitted prefixes, disallowed networks, FlapAlerted configuration)"),
+		mcp.WithTitleAnnotation("Get Network Settings"),
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(false),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		settings := mgr.GetNetworkSettings()
 		return jsonResult(settings)
@@ -24,6 +29,11 @@ func registerNetworkTools(s *server.MCPServer, mgr *engine.Manager) {
 	// 2. update_network_settings
 	s.AddTool(mcp.NewTool("update_network_settings",
 		mcp.WithDescription("Update global cluster network settings. Requires full-control token."),
+		mcp.WithTitleAnnotation("Update Network Settings"),
+		mcp.WithReadOnlyHintAnnotation(false),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(false),
 		mcp.WithString("name", mcp.Description("Network name (e.g. 'DN42 Mesh')")),
 		mcp.WithInteger("public_asn", mcp.Description("Public / Network Autonomous System Number (ASN)")),
 		mcp.WithArray("prefixes", mcp.WithStringItems(), mcp.Description("IP prefixes assigned to the mesh")),
@@ -75,6 +85,11 @@ func registerNetworkTools(s *server.MCPServer, mgr *engine.Manager) {
 	// 3. get_ip_blocks
 	s.AddTool(mcp.NewTool("get_ip_blocks",
 		mcp.WithDescription("Get visual grouping blocks on the network topology diagram"),
+		mcp.WithTitleAnnotation("Get IP Blocks"),
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(false),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		blocks := mgr.GetBlocks()
 		return jsonResult(blocks)
@@ -83,6 +98,11 @@ func registerNetworkTools(s *server.MCPServer, mgr *engine.Manager) {
 	// 4. update_ip_blocks
 	s.AddTool(mcp.NewTool("update_ip_blocks",
 		mcp.WithDescription("Update visual topology grouping blocks. Requires full-control token."),
+		mcp.WithTitleAnnotation("Update IP Blocks"),
+		mcp.WithReadOnlyHintAnnotation(false),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(false),
 		mcp.WithString("blocks_json", mcp.Required(), mcp.Description("JSON array of Block objects")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		if err := RequireFullControl(ctx); err != nil {
@@ -110,6 +130,11 @@ func registerNetworkTools(s *server.MCPServer, mgr *engine.Manager) {
 	// 5. get_dns_config
 	s.AddTool(mcp.NewTool("get_dns_config",
 		mcp.WithDescription("Get Cloudflare DNS integration settings (Zone ID, Base Domain, automatic sync preferences)"),
+		mcp.WithTitleAnnotation("Get DNS Config"),
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(false),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		cfg := mgr.GetDNSConfig()
 		display := cfg
@@ -122,6 +147,11 @@ func registerNetworkTools(s *server.MCPServer, mgr *engine.Manager) {
 	// 6. update_dns_config
 	s.AddTool(mcp.NewTool("update_dns_config",
 		mcp.WithDescription("Update Cloudflare DNS integration settings. Requires full-control token."),
+		mcp.WithTitleAnnotation("Update DNS Config"),
+		mcp.WithReadOnlyHintAnnotation(false),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(false),
 		mcp.WithString("zone_id", mcp.Description("Cloudflare DNS Zone ID")),
 		mcp.WithString("api_token", mcp.Description("Cloudflare API Token")),
 		mcp.WithString("base_domain", mcp.Description("Base domain (e.g. dn42.example.com)")),
@@ -156,6 +186,11 @@ func registerNetworkTools(s *server.MCPServer, mgr *engine.Manager) {
 	// 7. sync_dns
 	s.AddTool(mcp.NewTool("sync_dns",
 		mcp.WithDescription("Synchronize all cluster node IP addresses to Cloudflare DNS records. Requires full-control token."),
+		mcp.WithTitleAnnotation("Sync DNS"),
+		mcp.WithReadOnlyHintAnnotation(false),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithBoolean("force", mcp.Description("Force overwrite existing remote DNS records")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		if err := RequireFullControl(ctx); err != nil {

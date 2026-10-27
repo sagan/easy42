@@ -199,7 +199,21 @@ func TestMCPSettingsEndpoints(t *testing.T) {
 	if oauthMcpRr.Code != http.StatusOK {
 		t.Fatalf("expected 200 from /mcp with OAuth access_token, got %d: %s", oauthMcpRr.Code, oauthMcpRr.Body.String())
 	}
+
+	// 9. Test Gemini calling tools/call directly without Mcp-Session-Id header (stateless HTTP tool call)
+	toolCallReq := httptest.NewRequest("POST", "/mcp", bytes.NewReader([]byte(`{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"get_cluster_info","arguments":{}}}`)))
+	toolCallReq.Header.Set("Authorization", "Bearer "+oauthTokenResp.AccessToken)
+	toolCallReq.Header.Set("Content-Type", "application/json")
+	toolCallRr := httptest.NewRecorder()
+	srv.router.ServeHTTP(toolCallRr, toolCallReq)
+	if toolCallRr.Code != http.StatusOK {
+		t.Fatalf("expected 200 from /mcp stateless tools/call, got %d: %s", toolCallRr.Code, toolCallRr.Body.String())
+	}
+	if !bytes.Contains(toolCallRr.Body.Bytes(), []byte("network_name")) {
+		t.Fatalf("expected tool call result to contain 'network_name', got %s", toolCallRr.Body.String())
+	}
 }
+
 
 func TestMCPOAuthAuthorizationCodeFlow(t *testing.T) {
 	srv, cleanup, sessionToken := setupTestServerForMCP(t)

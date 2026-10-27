@@ -16,6 +16,11 @@ func registerPolicyTools(s *server.MCPServer, mgr *engine.Manager) {
 	// 1. list_network_policies
 	s.AddTool(mcp.NewTool("list_network_policies",
 		mcp.WithDescription("List all BGP routing and firewall network policies defined in Easy42"),
+		mcp.WithTitleAnnotation("List Network Policies"),
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(false),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		policies := mgr.GetNetworkPolicies()
 		return jsonResult(policies)
@@ -24,6 +29,11 @@ func registerPolicyTools(s *server.MCPServer, mgr *engine.Manager) {
 	// 2. get_network_policy
 	s.AddTool(mcp.NewTool("get_network_policy",
 		mcp.WithDescription("Get a specific network policy by its ID"),
+		mcp.WithTitleAnnotation("Get Network Policy"),
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(false),
 		mcp.WithString("id", mcp.Required(), mcp.Description("Policy ID (e.g. 'default', 'dn42', or custom ID)")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		id, err := req.RequireString("id")
@@ -40,6 +50,11 @@ func registerPolicyTools(s *server.MCPServer, mgr *engine.Manager) {
 	// 3. create_network_policy
 	s.AddTool(mcp.NewTool("create_network_policy",
 		mcp.WithDescription("Create a new network policy for BGP route filtering, firewall rules, and ROA validation. Requires full-control token."),
+		mcp.WithTitleAnnotation("Create Network Policy"),
+		mcp.WithReadOnlyHintAnnotation(false),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(false),
+		mcp.WithOpenWorldHintAnnotation(false),
 		mcp.WithString("id", mcp.Required(), mcp.Description("Unique policy identifier (alphanumeric/hyphen)")),
 		mcp.WithString("name", mcp.Required(), mcp.Description("Human-readable policy name")),
 		mcp.WithString("description", mcp.Description("Optional description of the policy")),
@@ -88,6 +103,11 @@ func registerPolicyTools(s *server.MCPServer, mgr *engine.Manager) {
 	// 4. update_network_policy
 	s.AddTool(mcp.NewTool("update_network_policy",
 		mcp.WithDescription("Update an existing network policy. Requires full-control token."),
+		mcp.WithTitleAnnotation("Update Network Policy"),
+		mcp.WithReadOnlyHintAnnotation(false),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(false),
 		mcp.WithString("id", mcp.Required(), mcp.Description("Policy ID to update")),
 		mcp.WithString("name", mcp.Description("Updated human-readable name")),
 		mcp.WithString("description", mcp.Description("Updated description")),
@@ -141,6 +161,11 @@ func registerPolicyTools(s *server.MCPServer, mgr *engine.Manager) {
 	// 5. delete_network_policy
 	s.AddTool(mcp.NewTool("delete_network_policy",
 		mcp.WithDescription("Delete a custom network policy. Requires full-control token."),
+		mcp.WithTitleAnnotation("Delete Network Policy"),
+		mcp.WithReadOnlyHintAnnotation(false),
+		mcp.WithDestructiveHintAnnotation(true),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(false),
 		mcp.WithString("id", mcp.Required(), mcp.Description("Policy ID to delete")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		if err := RequireFullControl(ctx); err != nil {
@@ -159,6 +184,11 @@ func registerPolicyTools(s *server.MCPServer, mgr *engine.Manager) {
 	// 6. refresh_policy_roa
 	s.AddTool(mcp.NewTool("refresh_policy_roa",
 		mcp.WithDescription("Refresh Route Origin Authorization (ROA) tables for a specific policy or all policies. Requires full-control token."),
+		mcp.WithTitleAnnotation("Refresh Policy ROA"),
+		mcp.WithReadOnlyHintAnnotation(false),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithString("policy_id", mcp.Description("Optional specific policy ID. If omitted, refreshes all policies")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		if err := RequireFullControl(ctx); err != nil {

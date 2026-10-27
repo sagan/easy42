@@ -14,6 +14,11 @@ func registerTemplateTools(s *server.MCPServer, mgr *engine.Manager) {
 	// 1. list_templates
 	s.AddTool(mcp.NewTool("list_templates",
 		mcp.WithDescription("List all custom and built-in configuration templates (for WireGuard, BIRD BGP, and nftables)"),
+		mcp.WithTitleAnnotation("List Templates"),
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(false),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		templates := mgr.GetTemplates()
 		return jsonResult(templates)
@@ -22,6 +27,11 @@ func registerTemplateTools(s *server.MCPServer, mgr *engine.Manager) {
 	// 2. get_template
 	s.AddTool(mcp.NewTool("get_template",
 		mcp.WithDescription("Get the source code and metadata of a configuration template"),
+		mcp.WithTitleAnnotation("Get Template"),
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(false),
 		mcp.WithString("id", mcp.Required(), mcp.Description("Template ID (e.g. 'default_bird', 'default_wg', or custom ID)")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		id, err := req.RequireString("id")
@@ -38,6 +48,11 @@ func registerTemplateTools(s *server.MCPServer, mgr *engine.Manager) {
 	// 3. create_template
 	s.AddTool(mcp.NewTool("create_template",
 		mcp.WithDescription("Create a custom configuration template. Requires full-control token."),
+		mcp.WithTitleAnnotation("Create Template"),
+		mcp.WithReadOnlyHintAnnotation(false),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(false),
+		mcp.WithOpenWorldHintAnnotation(false),
 		mcp.WithString("id", mcp.Required(), mcp.Description("Unique template identifier")),
 		mcp.WithString("name", mcp.Required(), mcp.Description("Template name")),
 		mcp.WithString("type", mcp.Required(), mcp.Description("Template type: 'bird', 'wg', or 'nft'")),
@@ -85,6 +100,11 @@ func registerTemplateTools(s *server.MCPServer, mgr *engine.Manager) {
 	// 4. update_template
 	s.AddTool(mcp.NewTool("update_template",
 		mcp.WithDescription("Update an existing custom template. Requires full-control token."),
+		mcp.WithTitleAnnotation("Update Template"),
+		mcp.WithReadOnlyHintAnnotation(false),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(false),
 		mcp.WithString("id", mcp.Required(), mcp.Description("Template ID")),
 		mcp.WithString("name", mcp.Description("Updated template name")),
 		mcp.WithString("type", mcp.Description("Updated template type: 'bird', 'wg', or 'nft'")),
@@ -130,6 +150,11 @@ func registerTemplateTools(s *server.MCPServer, mgr *engine.Manager) {
 	// 5. delete_template
 	s.AddTool(mcp.NewTool("delete_template",
 		mcp.WithDescription("Delete a custom configuration template. Requires full-control token."),
+		mcp.WithTitleAnnotation("Delete Template"),
+		mcp.WithReadOnlyHintAnnotation(false),
+		mcp.WithDestructiveHintAnnotation(true),
+		mcp.WithIdempotentHintAnnotation(true),
+		mcp.WithOpenWorldHintAnnotation(false),
 		mcp.WithString("id", mcp.Required(), mcp.Description("Template ID to delete")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		if err := RequireFullControl(ctx); err != nil {
