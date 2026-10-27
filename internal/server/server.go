@@ -15,6 +15,7 @@ import (
 
 	"easy42/internal/crypto"
 	"easy42/internal/engine"
+	"easy42/internal/mcp"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
@@ -31,6 +32,7 @@ type Server struct {
 	listeners   []net.Listener
 	closed      bool
 	wsHub       *ClientHub
+	mcpServer   *mcp.Server
 	ctx         context.Context
 	cancel      context.CancelFunc
 	mu          sync.Mutex
@@ -95,6 +97,10 @@ func New(cfg Config) *Server {
 		wsHub:       NewClientHub(),
 		ctx:         ctx,
 		cancel:      cancel,
+	}
+
+	if s.mgr != nil {
+		s.mcpServer = mcp.NewServer(s.mgr)
 	}
 
 	if s.wsHub != nil {
@@ -232,6 +238,11 @@ func New(cfg Config) *Server {
 			r.Post("/settings/integrations/reset-token", s.handleResetPrometheusToken)
 			r.Post("/settings/integrations/telegram/test", s.handleTestTelegramIntegration)
 
+			// MCP Settings
+			r.Get("/settings/mcp", s.handleGetMCPSettings)
+			r.Put("/settings/mcp", s.handleUpdateMCPSettings)
+			r.Post("/settings/mcp/reset-token", s.handleResetMCPToken)
+
 			// Network Policies
 			r.Get("/network-policies", s.handleGetNetworkPolicies)
 			r.Post("/network-policies", s.handleCreateNetworkPolicy)
@@ -304,6 +315,16 @@ func New(cfg Config) *Server {
 
 	// Prometheus compatible metrics endpoint (authorized via Bearer token)
 	r.Get("/metrics", s.handlePrometheusMetrics)
+
+	// Model Context Protocol (MCP) endpoints
+	if s.mcpServer != nil {
+		r.Handle("/mcp", s.mcpServer.StreamableHandler())
+		r.Handle("/api/mcp", s.mcpServer.StreamableHandler())
+		r.Handle("/mcp/sse", s.mcpServer.SSEHandler())
+		r.Handle("/mcp/message", s.mcpServer.MessageHandler())
+		r.Handle("/api/mcp/sse", s.mcpServer.SSEHandler())
+		r.Handle("/api/mcp/message", s.mcpServer.MessageHandler())
+	}
 
 	// Static frontend routing
 	if s.distFS != nil {

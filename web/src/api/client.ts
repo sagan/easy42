@@ -41,6 +41,9 @@ import type {
   ApplyPreviewResult,
   ApplyResult,
   ValidateApplyResponse,
+  MCPSettingsResponse,
+  UpdateMCPSettingsRequest,
+  ResetMCPTokenRequest,
 } from "../types/api";
 
 const API_BASE = "/api";
@@ -586,6 +589,19 @@ export const api = {
     request<ApplyResult>(`/config/changes/${encodeURIComponent(id)}/apply`, {
       method: "POST",
       body: JSON.stringify({ auto_sync: autoSync }),
+    }),
+
+  // MCP Settings
+  getMCPSettings: () => request<MCPSettingsResponse>("/settings/mcp"),
+  updateMCPSettings: (settings: UpdateMCPSettingsRequest) =>
+    request<MCPSettingsResponse>("/settings/mcp", {
+      method: "PUT",
+      body: JSON.stringify(settings),
+    }),
+  resetMCPToken: (tokenType: ResetMCPTokenRequest["token_type"]) =>
+    request<MCPSettingsResponse>("/settings/mcp/reset-token", {
+      method: "POST",
+      body: JSON.stringify({ token_type: tokenType }),
     }),
 };
 

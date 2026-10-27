@@ -894,4 +894,24 @@ export interface ValidateApplyResponse {
   error?: string;
 }
 
+export interface MCPSettingsResponse {
+  enabled: boolean;
+  read_only_token: string;
+  full_control_token: string;
+  server_url: string;
+  sse_url: string;
+  endpoint: string;
+}
+
+export interface UpdateMCPSettingsRequest {
+  enabled?: boolean;
+  read_only_token?: string;
+  full_control_token?: string;
+}
+
+export interface ResetMCPTokenRequest {
+  token_type: "read_only" | "full_control" | "both";
+}
+
+
 

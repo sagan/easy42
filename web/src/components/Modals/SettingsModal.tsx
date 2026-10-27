@@ -80,6 +80,7 @@ import { ViewNetworkPolicyModal } from "./ViewNetworkPolicyModal";
 import TextFieldWithCopy from "../Common/TextFieldWithCopy";
 import { Easy42Logo } from "../Logo/Easy42Logo";
 import { flushCacheAndServiceWorker } from "../../utils/pwa";
+import { MCPSettingsTab } from "../Settings/MCPSettingsTab";
 
 export const parsePrefixList = (input: string): string[] => {
   const result: string[] = [];
@@ -174,7 +175,16 @@ export const EXPORT_FILTER_EXAMPLES = [
 ];
 
 export type SettingsTab =
-  "network" | "security" | "policies" | "templates" | "dns" | "tasks" | "database" | "integrations" | "about";
+  | "network"
+  | "security"
+  | "policies"
+  | "templates"
+  | "dns"
+  | "tasks"
+  | "database"
+  | "integrations"
+  | "mcp"
+  | "about";
 
 const VALID_TABS: Record<string, SettingsTab> = {
   network: "network",
@@ -187,6 +197,7 @@ const VALID_TABS: Record<string, SettingsTab> = {
   tasks: "tasks",
   database: "database",
   integrations: "integrations",
+  mcp: "mcp",
   about: "about",
 };
 
@@ -1510,6 +1521,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
               iconPosition="start"
               label="Integrations"
               title="Integrations & Prometheus"
+            />
+            <Tab
+              value="mcp"
+              icon={<Bot size={16} />}
+              iconPosition="start"
+              label="MCP"
+              title="Model Context Protocol (AI Agent)"
             />
             <Tab value="about" icon={<Info size={16} />} iconPosition="start" label="About" title="About" />
           </Tabs>
@@ -5360,6 +5378,26 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
             </Button>
           </DialogActions>
         </Dialog>
+
+        {/* Tab: MCP (Model Context Protocol) */}
+        {activeTab === "mcp" && (
+          <Box sx={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, overflow: "hidden" }}>
+            <DialogContent
+              sx={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 3.5,
+                py: 3,
+                px: 3,
+                flex: 1,
+                minHeight: 0,
+                overflowY: "auto",
+              }}
+            >
+              <MCPSettingsTab />
+            </DialogContent>
+          </Box>
+        )}
 
         {activeTab === "about" && (
           <Box sx={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, overflow: "hidden" }}>

@@ -171,8 +171,29 @@ type Config struct {
 	ServerTasks       []ServerTaskConfig `json:"server_tasks,omitempty"`
 	Database          DatabaseSettings   `json:"database,omitempty"`
 	Integrations      IntegrationsSettings `json:"integrations,omitempty"`
-	ConfigChanges     []ConfigChange     `json:"config_changes,omitempty"`
+	MCP               MCPSettings          `json:"mcp,omitempty"`
+	ConfigChanges     []ConfigChange       `json:"config_changes,omitempty"`
 }
+
+// GetMCPSettings returns current MCP settings or defaults if not configured
+func (c *Config) GetMCPSettings() MCPSettings {
+	if c == nil {
+		return MCPSettings{
+			Enabled:          true,
+			ReadOnlyToken:    GenerateMCPToken("ro"),
+			FullControlToken: GenerateMCPToken("full"),
+		}
+	}
+	s := c.MCP
+	if s.ReadOnlyToken == "" {
+		s.ReadOnlyToken = GenerateMCPToken("ro")
+	}
+	if s.FullControlToken == "" {
+		s.FullControlToken = GenerateMCPToken("full")
+	}
+	return s
+}
+
 
 // ConfigChange represents a saved, named config patch snippet
 type ConfigChange struct {

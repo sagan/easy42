@@ -127,6 +127,11 @@ func (s *Store) Initialize() (string, error) {
 			PrometheusEnabled:   true,
 			PrometheusAuthToken: GeneratePrometheusToken(),
 		},
+		MCP: MCPSettings{
+			Enabled:          true,
+			ReadOnlyToken:    GenerateMCPToken("ro"),
+			FullControlToken: GenerateMCPToken("full"),
+		},
 	}
 
 	data, err := json.MarshalIndent(cfg, "", "  ")
