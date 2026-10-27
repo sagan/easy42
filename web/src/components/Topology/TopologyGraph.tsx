@@ -6,12 +6,12 @@ import {
   MiniMap,
   Panel,
   useNodesState,
-  useEdgesState,
   useReactFlow,
-  addEdge,
+  useUpdateNodeInternals,
   Connection,
   Edge,
   Node as FlowNode,
+  Position,
   BackgroundVariant,
   OnNodeDrag,
   Viewport,
@@ -1513,6 +1513,28 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = ({
   );
 };
 
+const NodeInternalsSync: React.FC<{ nodes: FlowNode[] }> = ({ nodes }) => {
+  const updateNodeInternals = useUpdateNodeInternals();
+  const prevHiddenMap = useRef<Map<string, boolean>>(new Map());
+
+  useEffect(() => {
+    const nodeIdsToUpdate: string[] = [];
+    nodes.forEach((n) => {
+      const wasHidden = prevHiddenMap.current.get(n.id);
+      if (wasHidden === true && !n.hidden) {
+        nodeIdsToUpdate.push(n.id);
+      }
+      prevHiddenMap.current.set(n.id, Boolean(n.hidden));
+    });
+
+    if (nodeIdsToUpdate.length > 0) {
+      updateNodeInternals(nodeIdsToUpdate);
+    }
+  }, [nodes, updateNodeInternals]);
+
+  return null;
+};
+
 export const TopologyGraph: React.FC<TopologyGraphProps> = ({
   nodes,
   links,
@@ -1827,8 +1849,8 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
       const angle = (i / (total || 1)) * 2 * Math.PI - Math.PI / 2;
       const defaultX = total === 1 ? centerX : centerX + radius * Math.cos(angle);
       const defaultY = total === 1 ? centerY : centerY + radius * Math.sin(angle);
-      const x = typeof node.x === "number" ? node.x : defaultX;
-      const y = typeof node.y === "number" ? node.y : defaultY;
+      const x = typeof node.x === "number" && !isNaN(node.x) ? node.x : defaultX;
+      const y = typeof node.y === "number" && !isNaN(node.y) ? node.y : defaultY;
       posMap.set(node.name, { x, y });
     });
 
@@ -2154,20 +2176,28 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
       const isCollapsed = collapsedBlockIds.has(block.id);
       const isGroupFocused = focusedBlockId === block.id;
 
-      return {
-        id: block.id,
-        type: "blockGroup",
-        position: { x: block.x, y: block.y },
-        style: isCollapsed
-          ? { width: 310, height: 76, zIndex: 0 }
-          : { width: block.width, height: block.height, zIndex: 0 },
-        initialWidth: isCollapsed ? 310 : block.width,
-        initialHeight: isCollapsed ? 76 : block.height,
-        width: isCollapsed ? 310 : block.width,
-        height: isCollapsed ? 76 : block.height,
-        selectable: true,
-        draggable: !isDiagramLocked,
-        dragHandle: isDiagramLocked ? undefined : ".block-header",
+        const bW = isCollapsed ? 310 : block.width;
+        const bH = isCollapsed ? 76 : block.height;
+
+        return {
+          id: block.id,
+          type: "blockGroup",
+          position: { x: block.x, y: block.y },
+          style: isCollapsed
+            ? { width: 310, height: 76, zIndex: 0 }
+            : { width: block.width, height: block.height, zIndex: 0 },
+          initialWidth: bW,
+          initialHeight: bH,
+          width: bW,
+          height: bH,
+          measured: { width: bW, height: bH },
+          handles: [
+            { type: "source" as const, id: "block-source", position: Position.Top, x: bW / 2, y: bH / 2 },
+            { type: "target" as const, id: "block-target", position: Position.Top, x: bW / 2, y: bH / 2 },
+          ],
+          selectable: true,
+          draggable: !isDiagramLocked,
+          dragHandle: isDiagramLocked ? undefined : ".block-header",
         data: {
           block,
           memberCount: memberNodes.length,
@@ -2203,6 +2233,9 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
       const isHighlighted = activeFocusNodeSet ? activeFocusNodeSet.has(node.name) : false;
       const isDimmed = activeFocusNodeSet ? !activeFocusNodeSet.has(node.name) : false;
 
+      const cardW = lodMode === "macro" ? 155 : 260;
+      const cardH = lodMode === "macro" ? 44 : 180;
+
       return {
         id: node.name,
         type: "customNode",
@@ -2211,12 +2244,17 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
         draggable: !isDiagramLocked,
         style: {
           zIndex: isHighlighted ? 30 : 10,
-          width: lodMode === "macro" ? 155 : 260,
+          width: cardW,
         },
-        initialWidth: lodMode === "macro" ? 155 : 260,
-        initialHeight: lodMode === "macro" ? 44 : 180,
-        width: lodMode === "macro" ? 155 : 260,
-        height: lodMode === "macro" ? 44 : 180,
+        initialWidth: cardW,
+        initialHeight: cardH,
+        width: cardW,
+        height: cardH,
+        measured: { width: cardW, height: cardH },
+        handles: [
+          { type: "target" as const, id: "target", position: Position.Left, x: 0, y: cardH / 2 },
+          { type: "source" as const, id: "source", position: Position.Right, x: cardW, y: cardH / 2 },
+        ],
         data: {
           node,
           status: nodeStatuses[node.name],
@@ -2442,6 +2480,8 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
         id: edgeId,
         source: link.from.name,
         target: link.to.name,
+        sourceHandle: "source",
+        targetHandle: "target",
         type: "customEdge",
         zIndex: isHighlighted || isGhostDrag ? 100 : isCoreLink ? 20 : isSubtle ? 2 : 5,
         data: {
@@ -2493,7 +2533,6 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
   ]);
 
   const [flowNodes, setNodes, onNodesChange] = useNodesState(initialNodes);
-  const [flowEdges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
 
   // Sync state when props change while preserving current node positions and dimensions
   React.useEffect(() => {
@@ -2506,17 +2545,13 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
         return {
           ...n,
           position: pos,
-          measured: (existing as any)?.measured || (n as any).measured,
+          measured: (existing as any)?.measured || n.measured || (n.width && n.height ? { width: n.width, height: n.height } : undefined),
           width: (existing as any)?.width ?? n.width,
           height: (existing as any)?.height ?? n.height,
         };
       });
     });
   }, [initialNodes, setNodes]);
-
-  React.useEffect(() => {
-    setEdges(initialEdges);
-  }, [initialEdges, setEdges]);
 
   // Handle dimensions change when resizing blocks
   const handleNodesChange = useCallback(
@@ -2723,9 +2758,8 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
         }
         onConnectNodes(connection.source, connection.target);
       }
-      setEdges((eds) => addEdge(connection, eds));
     },
-    [nodes, onConnectNodes, setEdges],
+    [nodes, onConnectNodes],
   );
 
   // Hidden/bundled links count
@@ -2844,9 +2878,9 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
         minZoom={0.1} // Allows zooming out significantly further than the default 0.5
         maxZoom={3.0} // Allows zooming in closer than the default 2.0
         nodes={flowNodes}
-        edges={flowEdges}
+        edges={initialEdges}
         onNodesChange={handleNodesChange}
-        onEdgesChange={onEdgesChange}
+        deleteKeyCode={null}
         onNodeDragStart={handleNodeDragStart}
         onNodeDrag={handleNodeDrag}
         onNodeDragStop={handleNodeDragStop}
@@ -2902,6 +2936,8 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
           isLocked={isDiagramLocked}
           onToggleLock={() => setIsDiagramLocked((v) => !v)}
         />
+
+        <NodeInternalsSync nodes={flowNodes} />
 
         <Background variant={BackgroundVariant.Dots} gap={20} size={1.2} color="#CBD5E1" />
         <Controls />
