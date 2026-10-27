@@ -898,19 +898,25 @@ export interface MCPSettingsResponse {
   enabled: boolean;
   read_only_token: string;
   full_control_token: string;
+  oauth_client_id: string;
+  oauth_client_secret: string;
   server_url: string;
   sse_url: string;
   endpoint: string;
+  token_url: string;
+  authorize_url: string;
 }
 
 export interface UpdateMCPSettingsRequest {
   enabled?: boolean;
   read_only_token?: string;
   full_control_token?: string;
+  oauth_client_id?: string;
+  oauth_client_secret?: string;
 }
 
 export interface ResetMCPTokenRequest {
-  token_type: "read_only" | "full_control" | "both";
+  token_type: "read_only" | "full_control" | "oauth_secret" | "both";
 }
 
 

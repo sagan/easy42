@@ -11,9 +11,11 @@ import (
 
 // MCPSettings holds configuration and credentials for the Model Context Protocol server
 type MCPSettings struct {
-	Enabled          bool   `json:"enabled"`
-	ReadOnlyToken    string `json:"read_only_token"`
-	FullControlToken string `json:"full_control_token"`
+	Enabled           bool   `json:"enabled"`
+	ReadOnlyToken     string `json:"read_only_token"`
+	FullControlToken  string `json:"full_control_token"`
+	OAuthClientID     string `json:"oauth_client_id,omitempty"`
+	OAuthClientSecret string `json:"oauth_client_secret,omitempty"`
 }
 
 // GenerateMCPToken creates a cryptographically secure random token for MCP authentication
@@ -28,6 +30,15 @@ func GenerateMCPToken(tokenType string) string {
 		prefix = "full"
 	}
 	return fmt.Sprintf("e42_mcp_%s_%s", prefix, hex.EncodeToString(b))
+}
+
+// GenerateOAuthSecret creates a cryptographically secure secret for OAuth 2.0 client authentication
+func GenerateOAuthSecret() string {
+	b := make([]byte, 28)
+	if _, err := rand.Read(b); err != nil {
+		return fmt.Sprintf("e42_sec_%d", time.Now().UnixNano())
+	}
+	return fmt.Sprintf("e42_sec_%s", hex.EncodeToString(b))
 }
 
 // ValidateMCPSettings validates the MCP configuration

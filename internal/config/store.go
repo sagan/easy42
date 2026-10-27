@@ -128,9 +128,11 @@ func (s *Store) Initialize() (string, error) {
 			PrometheusAuthToken: GeneratePrometheusToken(),
 		},
 		MCP: MCPSettings{
-			Enabled:          true,
-			ReadOnlyToken:    GenerateMCPToken("ro"),
-			FullControlToken: GenerateMCPToken("full"),
+			Enabled:           true,
+			ReadOnlyToken:     GenerateMCPToken("ro"),
+			FullControlToken:  GenerateMCPToken("full"),
+			OAuthClientID:     "easy42-mcp",
+			OAuthClientSecret: GenerateOAuthSecret(),
 		},
 	}
 

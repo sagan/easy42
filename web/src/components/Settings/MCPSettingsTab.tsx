@@ -41,11 +41,12 @@ import {
   Globe,
   Radio,
   FileCode,
+  KeyRound,
 } from "lucide-react";
 import { api } from "../../api/client";
 import type { MCPSettingsResponse, ResetMCPTokenRequest } from "../../types/api";
 
-type ClientType = "claude" | "cursor" | "cline" | "windsurf" | "stdio" | "curl";
+type ClientType = "claude" | "cursor" | "cline" | "windsurf" | "gemini" | "stdio" | "curl";
 type TokenSelect = "full" | "ro";
 
 interface ToolInfo {
@@ -147,6 +148,7 @@ export const MCPSettingsTab: React.FC = () => {
   // Visibility toggles for credentials
   const [showFullToken, setShowFullToken] = useState(false);
   const [showRoToken, setShowRoToken] = useState(false);
+  const [showOAuthSecret, setShowOAuthSecret] = useState(false);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
   // Client guide selection
@@ -295,6 +297,23 @@ export const MCPSettingsTab: React.FC = () => {
                   },
                 },
               },
+            },
+            null,
+            2
+          ),
+        };
+      case "gemini":
+        return {
+          filename: "Google Gemini Web App (Settings > Personal Intelligence > Connect to an MCP server)",
+          pathNote:
+            "1. Open gemini.google.com > Settings > Personal Intelligence > Connect to an MCP server\n2. Fill in the MCP Server URL, OAuth Client ID, and OAuth Client Secret shown below\n3. Click Connect to authorize Easy42 MCP with Gemini",
+          code: JSON.stringify(
+            {
+              mcp_server_url: url,
+              oauth_client_id: data?.oauth_client_id || "easy42-mcp",
+              oauth_client_secret: data?.oauth_client_secret || "",
+              authorization_endpoint: data?.authorize_url || `${url.replace(/\/mcp$/, "")}/oauth/authorize`,
+              token_endpoint: data?.token_url || `${url.replace(/\/mcp$/, "")}/oauth/token`,
             },
             null,
             2
@@ -800,6 +819,113 @@ export const MCPSettingsTab: React.FC = () => {
               </Box>
             </Paper>
 
+            {/* OAUTH 2.0 CREDENTIALS (GOOGLE GEMINI & ENTERPRISE) */}
+            <Paper
+              elevation={0}
+              sx={{
+                p: 3,
+                borderRadius: 2.5,
+                bgcolor: "#FFFFFF",
+                border: "1px solid #E2E8F0",
+                boxShadow: "0 1px 3px rgba(0, 0, 0, 0.05)",
+              }}
+            >
+              <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 1.5 }}>
+                <Box>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#0F172A", display: "flex", alignItems: "center", gap: 1 }}>
+                    <KeyRound size={18} color="#4F46E5" /> OAuth 2.0 Client Credentials
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: "#64748B", fontSize: "0.85rem", mt: 0.5, mb: 2 }}>
+                    Used by AI platforms requiring standard OAuth 2.0 authentication such as <strong>Google Gemini Web App</strong> (Settings &gt; Personal Intelligence &gt; Connect to an MCP server).
+                  </Typography>
+                </Box>
+                <Chip
+                  size="small"
+                  label="RFC 8414 & RFC 9728"
+                  sx={{ bgcolor: "#EEF2FF", color: "#4F46E5", fontWeight: 700, fontSize: "0.72rem" }}
+                />
+              </Box>
+
+              <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" }, gap: 2 }}>
+                {/* OAuth Client ID */}
+                <Box sx={{ p: 2, borderRadius: 2, bgcolor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
+                  <Typography variant="caption" sx={{ fontWeight: 700, color: "#334155", textTransform: "uppercase", letterSpacing: "0.04em", display: "block", mb: 1 }}>
+                    OAuth Client ID
+                  </Typography>
+                  <Box sx={{ display: "flex", gap: 1 }}>
+                    <TextField
+                      fullWidth
+                      size="small"
+                      value={data?.oauth_client_id || "easy42-mcp"}
+                      slotProps={{ input: { readOnly: true } }}
+                      sx={{ "& .MuiInputBase-input": { fontFamily: "monospace", fontSize: "0.82rem", bgcolor: "#FFFFFF" } }}
+                    />
+                    <Tooltip title={copiedKey === "oauth_cid" ? "Copied!" : "Copy Client ID"}>
+                      <Button
+                        variant="outlined"
+                        onClick={() => handleCopy(data?.oauth_client_id || "easy42-mcp", "oauth_cid")}
+                        sx={{ minWidth: 42, px: 1, borderColor: "#CBD5E1" }}
+                      >
+                        {copiedKey === "oauth_cid" ? <Check size={16} color="#16A34A" /> : <Copy size={16} />}
+                      </Button>
+                    </Tooltip>
+                  </Box>
+                  <Typography variant="caption" sx={{ color: "#64748B", display: "block", mt: 0.8 }}>
+                    Enter this into Gemini's "OAuth client ID" field.
+                  </Typography>
+                </Box>
+
+                {/* OAuth Client Secret */}
+                <Box sx={{ p: 2, borderRadius: 2, bgcolor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
+                  <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
+                    <Typography variant="caption" sx={{ fontWeight: 700, color: "#334155", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                      OAuth Client Secret
+                    </Typography>
+                    <Button
+                      size="small"
+                      onClick={() => handleOpenResetDialog("oauth_secret")}
+                      sx={{ textTransform: "none", fontSize: "0.72rem", p: 0, minWidth: "auto", color: "#64748B" }}
+                    >
+                      Regenerate
+                    </Button>
+                  </Box>
+                  <Box sx={{ display: "flex", gap: 1 }}>
+                    <TextField
+                      fullWidth
+                      size="small"
+                      type={showOAuthSecret ? "text" : "password"}
+                      value={data?.oauth_client_secret || ""}
+                      slotProps={{
+                        input: {
+                          readOnly: true,
+                          endAdornment: (
+                            <InputAdornment position="end">
+                              <IconButton size="small" onClick={() => setShowOAuthSecret(!showOAuthSecret)}>
+                                {showOAuthSecret ? <EyeOff size={16} /> : <Eye size={16} />}
+                              </IconButton>
+                            </InputAdornment>
+                          ),
+                        },
+                      }}
+                      sx={{ "& .MuiInputBase-input": { fontFamily: "monospace", fontSize: "0.82rem", bgcolor: "#FFFFFF" } }}
+                    />
+                    <Tooltip title={copiedKey === "oauth_sec" ? "Copied!" : "Copy Client Secret"}>
+                      <Button
+                        variant="outlined"
+                        onClick={() => handleCopy(data?.oauth_client_secret || "", "oauth_sec")}
+                        sx={{ minWidth: 42, px: 1, borderColor: "#CBD5E1" }}
+                      >
+                        {copiedKey === "oauth_sec" ? <Check size={16} color="#16A34A" /> : <Copy size={16} />}
+                      </Button>
+                    </Tooltip>
+                  </Box>
+                  <Typography variant="caption" sx={{ color: "#64748B", display: "block", mt: 0.8 }}>
+                    Enter this into Gemini's "OAuth client secret" field.
+                  </Typography>
+                </Box>
+              </Box>
+            </Paper>
+
             {/* AI TOOLS INTEGRATION GUIDES */}
             <Paper
               elevation={0}
@@ -870,9 +996,125 @@ export const MCPSettingsTab: React.FC = () => {
                 <Tab value="cursor" label="Cursor IDE" icon={<Terminal size={15} />} iconPosition="start" />
                 <Tab value="cline" label="Cline / Roo Code" icon={<Code size={15} />} iconPosition="start" />
                 <Tab value="windsurf" label="Windsurf" icon={<Sliders size={15} />} iconPosition="start" />
+                <Tab value="gemini" label="Google Gemini" icon={<Globe size={15} />} iconPosition="start" />
                 <Tab value="stdio" label="CLI / Stdio" icon={<Network size={15} />} iconPosition="start" />
                 <Tab value="curl" label="cURL Test" icon={<ExternalLink size={15} />} iconPosition="start" />
               </Tabs>
+
+              {/* Special Guide Card for Google Gemini Web App */}
+              {selectedClient === "gemini" && (
+                <Box
+                  sx={{
+                    p: 2.5,
+                    mt: 2,
+                    borderRadius: 2,
+                    bgcolor: "rgba(79, 70, 229, 0.04)",
+                    border: "1px solid #C7D2FE",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 2,
+                  }}
+                >
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+                    <Box
+                      sx={{
+                        width: 36,
+                        height: 36,
+                        borderRadius: 1.5,
+                        bgcolor: "#EEF2FF",
+                        color: "#4F46E5",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      <Globe size={20} />
+                    </Box>
+                    <Box>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#1E1B4B" }}>
+                        Connect to Google Gemini Web App
+                      </Typography>
+                      <Typography variant="caption" sx={{ color: "#4338CA" }}>
+                        In Gemini Web, open <strong>Settings</strong> &gt; <strong>Personal Intelligence</strong> &gt; <strong>Connect to an MCP server</strong> and paste these credentials:
+                      </Typography>
+                    </Box>
+                  </Box>
+
+                  <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr 1fr" }, gap: 1.5 }}>
+                    <Box>
+                      <Typography variant="caption" sx={{ fontWeight: 700, color: "#312E81", display: "block", mb: 0.5 }}>
+                        1. MCP Server URL
+                      </Typography>
+                      <Box sx={{ display: "flex", gap: 0.5 }}>
+                        <TextField
+                          fullWidth
+                          size="small"
+                          value={data?.server_url || ""}
+                          slotProps={{ input: { readOnly: true } }}
+                          sx={{ "& .MuiInputBase-input": { fontFamily: "monospace", fontSize: "0.78rem", bgcolor: "#FFFFFF" } }}
+                        />
+                        <Tooltip title={copiedKey === "gem_url" ? "Copied!" : "Copy"}>
+                          <Button variant="outlined" size="small" onClick={() => handleCopy(data?.server_url || "", "gem_url")} sx={{ minWidth: 36, px: 0.5, borderColor: "#CBD5E1" }}>
+                            {copiedKey === "gem_url" ? <Check size={14} color="#16A34A" /> : <Copy size={14} />}
+                          </Button>
+                        </Tooltip>
+                      </Box>
+                    </Box>
+
+                    <Box>
+                      <Typography variant="caption" sx={{ fontWeight: 700, color: "#312E81", display: "block", mb: 0.5 }}>
+                        2. OAuth Client ID
+                      </Typography>
+                      <Box sx={{ display: "flex", gap: 0.5 }}>
+                        <TextField
+                          fullWidth
+                          size="small"
+                          value={data?.oauth_client_id || "easy42-mcp"}
+                          slotProps={{ input: { readOnly: true } }}
+                          sx={{ "& .MuiInputBase-input": { fontFamily: "monospace", fontSize: "0.78rem", bgcolor: "#FFFFFF" } }}
+                        />
+                        <Tooltip title={copiedKey === "gem_cid" ? "Copied!" : "Copy"}>
+                          <Button variant="outlined" size="small" onClick={() => handleCopy(data?.oauth_client_id || "easy42-mcp", "gem_cid")} sx={{ minWidth: 36, px: 0.5, borderColor: "#CBD5E1" }}>
+                            {copiedKey === "gem_cid" ? <Check size={14} color="#16A34A" /> : <Copy size={14} />}
+                          </Button>
+                        </Tooltip>
+                      </Box>
+                    </Box>
+
+                    <Box>
+                      <Typography variant="caption" sx={{ fontWeight: 700, color: "#312E81", display: "block", mb: 0.5 }}>
+                        3. OAuth Client Secret
+                      </Typography>
+                      <Box sx={{ display: "flex", gap: 0.5 }}>
+                        <TextField
+                          fullWidth
+                          size="small"
+                          type={showOAuthSecret ? "text" : "password"}
+                          value={data?.oauth_client_secret || ""}
+                          slotProps={{
+                            input: {
+                              readOnly: true,
+                              endAdornment: (
+                                <InputAdornment position="end">
+                                  <IconButton size="small" onClick={() => setShowOAuthSecret(!showOAuthSecret)}>
+                                    {showOAuthSecret ? <EyeOff size={14} /> : <Eye size={14} />}
+                                  </IconButton>
+                                </InputAdornment>
+                              ),
+                            },
+                          }}
+                          sx={{ "& .MuiInputBase-input": { fontFamily: "monospace", fontSize: "0.78rem", bgcolor: "#FFFFFF" } }}
+                        />
+                        <Tooltip title={copiedKey === "gem_sec" ? "Copied!" : "Copy"}>
+                          <Button variant="outlined" size="small" onClick={() => handleCopy(data?.oauth_client_secret || "", "gem_sec")} sx={{ minWidth: 36, px: 0.5, borderColor: "#CBD5E1" }}>
+                            {copiedKey === "gem_sec" ? <Check size={14} color="#16A34A" /> : <Copy size={14} />}
+                          </Button>
+                        </Tooltip>
+                      </Box>
+                    </Box>
+                  </Box>
+                </Box>
+              )}
 
               <Box sx={{ mt: 2.5 }}>
                 <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
@@ -1091,9 +1333,11 @@ export const MCPSettingsTab: React.FC = () => {
                 ? "Full-Control"
                 : tokenToReset === "read_only"
                 ? "Read-Only"
+                : tokenToReset === "oauth_secret"
+                ? "OAuth Client Secret"
                 : "both"}
             </strong>{" "}
-            token?
+            credential?
           </Typography>
           <Alert severity="warning" sx={{ mt: 2, borderRadius: 2, fontSize: "0.82rem" }}>
             Any AI tools or background agents currently using this token will lose access until updated with the new token.

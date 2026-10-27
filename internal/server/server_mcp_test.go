@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -152,5 +154,120 @@ func TestMCPSettingsEndpoints(t *testing.T) {
 	}
 	if proxyRr.Code != http.StatusOK {
 		t.Errorf("expected 200 from /mcp POST initialize, got %d: %s", proxyRr.Code, proxyRr.Body.String())
+	}
+
+	// 6. Test OAuth 2.0 / 2.1 RFC 9728 and RFC 8414 metadata discovery
+	protReq := httptest.NewRequest("GET", "/.well-known/oauth-protected-resource", nil)
+	protRr := httptest.NewRecorder()
+	srv.router.ServeHTTP(protRr, protReq)
+	if protRr.Code != http.StatusOK {
+		t.Fatalf("expected 200 from /.well-known/oauth-protected-resource, got %d", protRr.Code)
+	}
+
+	asReq := httptest.NewRequest("GET", "/.well-known/oauth-authorization-server", nil)
+	asRr := httptest.NewRecorder()
+	srv.router.ServeHTTP(asRr, asReq)
+	if asRr.Code != http.StatusOK {
+		t.Fatalf("expected 200 from /.well-known/oauth-authorization-server, got %d", asRr.Code)
+	}
+
+	// 7. Test OAuth Client Credentials Flow (Gemini Web App)
+	tokenReqBody := "grant_type=client_credentials&client_id=" + resetResp.OAuthClientID + "&client_secret=" + resetResp.OAuthClientSecret
+	tokenReq := httptest.NewRequest("POST", "/oauth/token", strings.NewReader(tokenReqBody))
+	tokenReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	tokenRr := httptest.NewRecorder()
+	srv.router.ServeHTTP(tokenRr, tokenReq)
+	if tokenRr.Code != http.StatusOK {
+		t.Fatalf("expected 200 from /oauth/token client_credentials, got %d: %s", tokenRr.Code, tokenRr.Body.String())
+	}
+
+	var oauthTokenResp struct {
+		AccessToken string `json:"access_token"`
+		TokenType   string `json:"token_type"`
+	}
+	_ = json.NewDecoder(tokenRr.Body).Decode(&oauthTokenResp)
+	if oauthTokenResp.AccessToken == "" {
+		t.Fatalf("expected non-empty access_token from /oauth/token")
+	}
+
+	// 8. Test calling /mcp using OAuth Bearer Token
+	oauthMcpReq := httptest.NewRequest("POST", "/mcp", bytes.NewReader([]byte(`{"jsonrpc":"2.0","id":2,"method":"initialize","params":{"protocolVersion":"2025-03-26","clientInfo":{"name":"gemini-test","version":"1.0"}}}`)))
+	oauthMcpReq.Header.Set("Authorization", "Bearer "+oauthTokenResp.AccessToken)
+	oauthMcpReq.Header.Set("Content-Type", "application/json")
+	oauthMcpRr := httptest.NewRecorder()
+	srv.router.ServeHTTP(oauthMcpRr, oauthMcpReq)
+	if oauthMcpRr.Code != http.StatusOK {
+		t.Fatalf("expected 200 from /mcp with OAuth access_token, got %d: %s", oauthMcpRr.Code, oauthMcpRr.Body.String())
+	}
+}
+
+func TestMCPOAuthAuthorizationCodeFlow(t *testing.T) {
+	srv, cleanup, sessionToken := setupTestServerForMCP(t)
+	defer cleanup()
+
+	// 1. GET /oauth/authorize (consent page)
+	authReq := httptest.NewRequest("GET", "/oauth/authorize?response_type=code&client_id=easy42-mcp&redirect_uri=https://example.com/callback&state=xyz123&code_challenge=E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM&code_challenge_method=S256", nil)
+	authReq.AddCookie(&http.Cookie{Name: "easy42_session", Value: sessionToken})
+	authRr := httptest.NewRecorder()
+	srv.router.ServeHTTP(authRr, authReq)
+
+	if authRr.Code != http.StatusOK {
+		t.Fatalf("expected 200 from /oauth/authorize GET, got %d", authRr.Code)
+	}
+
+	// 2. POST /oauth/authorize (approve)
+	form := "action=approve&response_type=code&client_id=easy42-mcp&redirect_uri=https://example.com/callback&state=xyz123&code_challenge=E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM&code_challenge_method=S256&role=full_control"
+	postReq := httptest.NewRequest("POST", "/oauth/authorize", strings.NewReader(form))
+	postReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	postReq.AddCookie(&http.Cookie{Name: "easy42_session", Value: sessionToken})
+	postRr := httptest.NewRecorder()
+	srv.router.ServeHTTP(postRr, postReq)
+
+	if postRr.Code != http.StatusFound {
+		t.Fatalf("expected 302 redirect from /oauth/authorize POST, got %d: %s", postRr.Code, postRr.Body.String())
+	}
+
+	location := postRr.Header().Get("Location")
+	locURL, err := url.Parse(location)
+	if err != nil {
+		t.Fatalf("failed to parse redirect Location: %v", err)
+	}
+	code := locURL.Query().Get("code")
+	if code == "" {
+		t.Fatalf("expected code parameter in redirect URL: %s", location)
+	}
+	if locURL.Query().Get("state") != "xyz123" {
+		t.Errorf("expected state=xyz123 in redirect, got %s", locURL.Query().Get("state"))
+	}
+
+	// 3. POST /oauth/token to exchange authorization code using PKCE
+	// RFC 7636: challenge "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM", verifier "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"
+	tokenForm := "grant_type=authorization_code&client_id=easy42-mcp&code=" + code + "&code_verifier=dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk&redirect_uri=https://example.com/callback"
+	tokenReq := httptest.NewRequest("POST", "/oauth/token", strings.NewReader(tokenForm))
+	tokenReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	tokenRr := httptest.NewRecorder()
+	srv.router.ServeHTTP(tokenRr, tokenReq)
+
+	if tokenRr.Code != http.StatusOK {
+		t.Fatalf("expected 200 from /oauth/token exchange, got %d: %s", tokenRr.Code, tokenRr.Body.String())
+	}
+
+	var resp struct {
+		AccessToken  string `json:"access_token"`
+		RefreshToken string `json:"refresh_token"`
+	}
+	_ = json.NewDecoder(tokenRr.Body).Decode(&resp)
+	if resp.AccessToken == "" || resp.RefreshToken == "" {
+		t.Fatalf("expected access_token and refresh_token, got: %+v", resp)
+	}
+
+	// 4. Test calling /mcp using the access_token
+	mcpReq := httptest.NewRequest("POST", "/mcp", bytes.NewReader([]byte(`{"jsonrpc":"2.0","id":3,"method":"initialize","params":{"protocolVersion":"2025-03-26","clientInfo":{"name":"gemini-test","version":"1.0"}}}`)))
+	mcpReq.Header.Set("Authorization", "Bearer "+resp.AccessToken)
+	mcpReq.Header.Set("Content-Type", "application/json")
+	mcpRr := httptest.NewRecorder()
+	srv.router.ServeHTTP(mcpRr, mcpReq)
+	if mcpRr.Code != http.StatusOK {
+		t.Fatalf("expected 200 from /mcp using authorization_code token, got %d: %s", mcpRr.Code, mcpRr.Body.String())
 	}
 }

@@ -14,14 +14,16 @@ func (m *Manager) GetMCPSettings() config.MCPSettings {
 
 	if cfg == nil {
 		return config.MCPSettings{
-			Enabled:          true,
-			ReadOnlyToken:    config.GenerateMCPToken("ro"),
-			FullControlToken: config.GenerateMCPToken("full"),
+			Enabled:           true,
+			ReadOnlyToken:     config.GenerateMCPToken("ro"),
+			FullControlToken:  config.GenerateMCPToken("full"),
+			OAuthClientID:     "easy42-mcp",
+			OAuthClientSecret: config.GenerateOAuthSecret(),
 		}
 	}
 
 	settings := cfg.GetMCPSettings()
-	if strings.TrimSpace(settings.ReadOnlyToken) == "" || strings.TrimSpace(settings.FullControlToken) == "" {
+	if strings.TrimSpace(settings.ReadOnlyToken) == "" || strings.TrimSpace(settings.FullControlToken) == "" || strings.TrimSpace(settings.OAuthClientSecret) == "" {
 		m.mu.Lock()
 		defer m.mu.Unlock()
 		cfg = m.store.Get()
@@ -33,6 +35,14 @@ func (m *Manager) GetMCPSettings() config.MCPSettings {
 			}
 			if strings.TrimSpace(cfg.MCP.FullControlToken) == "" {
 				cfg.MCP.FullControlToken = config.GenerateMCPToken("full")
+				modified = true
+			}
+			if strings.TrimSpace(cfg.MCP.OAuthClientID) == "" {
+				cfg.MCP.OAuthClientID = "easy42-mcp"
+				modified = true
+			}
+			if strings.TrimSpace(cfg.MCP.OAuthClientSecret) == "" {
+				cfg.MCP.OAuthClientSecret = config.GenerateOAuthSecret()
 				modified = true
 			}
 			if modified {
@@ -65,12 +75,18 @@ func (m *Manager) UpdateMCPSettings(settings config.MCPSettings) error {
 	if strings.TrimSpace(settings.FullControlToken) == "" {
 		settings.FullControlToken = config.GenerateMCPToken("full")
 	}
+	if strings.TrimSpace(settings.OAuthClientID) == "" {
+		settings.OAuthClientID = "easy42-mcp"
+	}
+	if strings.TrimSpace(settings.OAuthClientSecret) == "" {
+		settings.OAuthClientSecret = config.GenerateOAuthSecret()
+	}
 
 	cfg.MCP = settings
 	return m.store.Save(cfg)
 }
 
-// ResetMCPToken generates a new random token for read_only, full_control, or both
+// ResetMCPToken generates a new random token for read_only, full_control, oauth_secret, or all
 func (m *Manager) ResetMCPToken(tokenType string) (config.MCPSettings, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -82,6 +98,8 @@ func (m *Manager) ResetMCPToken(tokenType string) (config.MCPSettings, error) {
 
 	lower := strings.ToLower(tokenType)
 	switch {
+	case strings.Contains(lower, "oauth") || strings.Contains(lower, "secret"):
+		cfg.MCP.OAuthClientSecret = config.GenerateOAuthSecret()
 	case strings.Contains(lower, "ro") || strings.Contains(lower, "read"):
 		cfg.MCP.ReadOnlyToken = config.GenerateMCPToken("ro")
 	case strings.Contains(lower, "full") || strings.Contains(lower, "admin") || strings.Contains(lower, "rw"):
@@ -89,6 +107,7 @@ func (m *Manager) ResetMCPToken(tokenType string) (config.MCPSettings, error) {
 	default:
 		cfg.MCP.ReadOnlyToken = config.GenerateMCPToken("ro")
 		cfg.MCP.FullControlToken = config.GenerateMCPToken("full")
+		cfg.MCP.OAuthClientSecret = config.GenerateOAuthSecret()
 	}
 
 	if err := m.store.Save(cfg); err != nil {

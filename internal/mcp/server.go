@@ -20,6 +20,7 @@ type Server struct {
 	mcpServer        *server.MCPServer
 	streamableServer *server.StreamableHTTPServer
 	sseServer        *server.SSEServer
+	oauthServer      *OAuthServer
 }
 
 // NewServer creates and initializes the Easy42 MCP server with all tools, resources, and prompts
@@ -171,8 +172,9 @@ func NewServer(mgr *engine.Manager) *Server {
 	})
 
 	s := &Server{
-		mgr:       mgr,
-		mcpServer: mcpServer,
+		mgr:         mgr,
+		mcpServer:   mcpServer,
+		oauthServer: NewOAuthServer(mgr),
 	}
 
 	// Setup Streamable HTTP transport
@@ -230,7 +232,14 @@ func (s *Server) extractRole(r *http.Request) string {
 		return ""
 	}
 
-	// Constant-time comparison for security
+	// 1. Check OAuth access token
+	if s.oauthServer != nil {
+		if role, ok := s.oauthServer.ValidateAccessToken(token); ok {
+			return role
+		}
+	}
+
+	// 2. Constant-time comparison for security
 	if settings.FullControlToken != "" && subtle.ConstantTimeCompare([]byte(token), []byte(settings.FullControlToken)) == 1 {
 		return RoleFullControl
 	}
@@ -241,9 +250,24 @@ func (s *Server) extractRole(r *http.Request) string {
 	return ""
 }
 
+// OAuthServer returns the associated OAuth 2.0 authorization server
+func (s *Server) OAuthServer() *OAuthServer {
+	return s.oauthServer
+}
+
 // AuthMiddleware wraps an HTTP handler, ensuring the request has valid MCP credentials
 func (s *Server) AuthMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Allow CORS preflight and headers for web-based AI clients (e.g. Gemini Web)
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS, HEAD")
+		w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Accept, X-MCP-Token, X-Requested-With")
+		w.Header().Set("Access-Control-Expose-Headers", "WWW-Authenticate, Authorization")
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
 		settings := s.mgr.GetMCPSettings()
 		if !settings.Enabled {
 			http.Error(w, "MCP server is disabled in Easy42 settings", http.StatusForbidden)
@@ -252,7 +276,12 @@ func (s *Server) AuthMiddleware(next http.Handler) http.Handler {
 
 		role := s.extractRole(r)
 		if role == "" {
-			w.Header().Set("WWW-Authenticate", `Bearer realm="easy42 mcp"`)
+			scheme := "http"
+			if r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" {
+				scheme = "https"
+			}
+			metaURL := fmt.Sprintf("%s://%s/.well-known/oauth-protected-resource", scheme, r.Host)
+			w.Header().Set("WWW-Authenticate", fmt.Sprintf(`Bearer resource_metadata="%s"`, metaURL))
 			http.Error(w, "Unauthorized: valid Easy42 MCP token required", http.StatusUnauthorized)
 			return
 		}

@@ -179,9 +179,11 @@ type Config struct {
 func (c *Config) GetMCPSettings() MCPSettings {
 	if c == nil {
 		return MCPSettings{
-			Enabled:          true,
-			ReadOnlyToken:    GenerateMCPToken("ro"),
-			FullControlToken: GenerateMCPToken("full"),
+			Enabled:           true,
+			ReadOnlyToken:     GenerateMCPToken("ro"),
+			FullControlToken:  GenerateMCPToken("full"),
+			OAuthClientID:     "easy42-mcp",
+			OAuthClientSecret: GenerateOAuthSecret(),
 		}
 	}
 	s := c.MCP
@@ -190,6 +192,12 @@ func (c *Config) GetMCPSettings() MCPSettings {
 	}
 	if s.FullControlToken == "" {
 		s.FullControlToken = GenerateMCPToken("full")
+	}
+	if s.OAuthClientID == "" {
+		s.OAuthClientID = "easy42-mcp"
+	}
+	if s.OAuthClientSecret == "" {
+		s.OAuthClientSecret = GenerateOAuthSecret()
 	}
 	return s
 }

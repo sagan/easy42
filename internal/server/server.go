@@ -324,6 +324,15 @@ func New(cfg Config) *Server {
 		r.Handle("/mcp/message", s.mcpServer.MessageHandler())
 		r.Handle("/api/mcp/sse", s.mcpServer.SSEHandler())
 		r.Handle("/api/mcp/message", s.mcpServer.MessageHandler())
+
+		// OAuth 2.0 / 2.1 Authorization & Discovery endpoints for Gemini, etc.
+		r.HandleFunc("/.well-known/oauth-protected-resource", s.handleOAuthProtectedResource)
+		r.HandleFunc("/mcp/.well-known/oauth-protected-resource", s.handleOAuthProtectedResource)
+		r.HandleFunc("/.well-known/oauth-authorization-server", s.handleOAuthAuthorizationServerMetadata)
+		r.HandleFunc("/.well-known/openid-configuration", s.handleOpenIDConfiguration)
+		r.HandleFunc("/oauth/authorize", s.handleOAuthAuthorize)
+		r.HandleFunc("/oauth/token", s.handleOAuthToken)
+		r.HandleFunc("/oauth/register", s.handleOAuthRegister)
 	}
 
 	// Static frontend routing
