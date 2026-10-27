@@ -19,12 +19,16 @@ func registerCronTaskTools(s *server.MCPServer, mgr *engine.Manager) {
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(false),
+		mcp.WithOutputSchema[ListCronTasksOutput](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		tasks, err := mgr.GetCronTasks()
 		if err != nil {
 			return errorResult(err)
 		}
-		return jsonResult(tasks)
+		if tasks == nil {
+			tasks = []config.CronTask{}
+		}
+		return jsonResult(ListCronTasksOutput{Tasks: tasks})
 	})
 
 	// 2. create_cron_task
@@ -35,6 +39,7 @@ func registerCronTaskTools(s *server.MCPServer, mgr *engine.Manager) {
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(false),
 		mcp.WithOpenWorldHintAnnotation(false),
+		mcp.WithOutputSchema[CronTaskMutationOutput](),
 		mcp.WithString("id", mcp.Required(), mcp.Description("Unique cron task ID")),
 		mcp.WithString("name", mcp.Required(), mcp.Description("Descriptive name")),
 		mcp.WithString("task_type", mcp.Required(), mcp.Description("Task type: 'ping' or 'tcp_ping'")),
@@ -96,9 +101,9 @@ func registerCronTaskTools(s *server.MCPServer, mgr *engine.Manager) {
 		if err != nil {
 			return errorResult(err)
 		}
-		return jsonResult(map[string]any{
-			"message": fmt.Sprintf("Cron task %q created successfully", id),
-			"task":    saved,
+		return jsonResult(CronTaskMutationOutput{
+			Message: fmt.Sprintf("Cron task %q created successfully", id),
+			Task:    saved,
 		})
 	})
 
@@ -110,6 +115,7 @@ func registerCronTaskTools(s *server.MCPServer, mgr *engine.Manager) {
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(false),
+		mcp.WithOutputSchema[CronTaskMutationOutput](),
 		mcp.WithString("id", mcp.Required(), mcp.Description("Cron task ID")),
 		mcp.WithString("name", mcp.Description("Updated name")),
 		mcp.WithString("cron_expr", mcp.Description("Updated cron expression")),
@@ -167,9 +173,9 @@ func registerCronTaskTools(s *server.MCPServer, mgr *engine.Manager) {
 		if err != nil {
 			return errorResult(err)
 		}
-		return jsonResult(map[string]any{
-			"message": fmt.Sprintf("Cron task %q updated successfully", id),
-			"task":    saved,
+		return jsonResult(CronTaskMutationOutput{
+			Message: fmt.Sprintf("Cron task %q updated successfully", id),
+			Task:    saved,
 		})
 	})
 
@@ -181,6 +187,7 @@ func registerCronTaskTools(s *server.MCPServer, mgr *engine.Manager) {
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(false),
 		mcp.WithOpenWorldHintAnnotation(false),
+		mcp.WithOutputSchema[CronTaskMutationOutput](),
 		mcp.WithString("id", mcp.Required(), mcp.Description("Cron task ID")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		if err := RequireFullControl(ctx); err != nil {
@@ -194,9 +201,9 @@ func registerCronTaskTools(s *server.MCPServer, mgr *engine.Manager) {
 		if err != nil {
 			return errorResult(err)
 		}
-		return jsonResult(map[string]any{
-			"message": fmt.Sprintf("Cron task %q status toggled to enabled=%t", id, task.Enabled),
-			"task":    task,
+		return jsonResult(CronTaskMutationOutput{
+			Message: fmt.Sprintf("Cron task %q status toggled to enabled=%t", id, task.Enabled),
+			Task:    task,
 		})
 	})
 
@@ -208,6 +215,7 @@ func registerCronTaskTools(s *server.MCPServer, mgr *engine.Manager) {
 		mcp.WithDestructiveHintAnnotation(true),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(false),
+		mcp.WithOutputSchema[SimpleMessageOutput](),
 		mcp.WithString("id", mcp.Required(), mcp.Description("Cron task ID")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		if err := RequireFullControl(ctx); err != nil {
@@ -231,6 +239,7 @@ func registerCronTaskTools(s *server.MCPServer, mgr *engine.Manager) {
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(false),
+		mcp.WithOutputSchema[config.NodeCronTasksResultsResponse](),
 		mcp.WithString("node", mcp.Required(), mcp.Description("Node name")),
 		mcp.WithString("task_id", mcp.Description("Optional specific cron task ID")),
 		mcp.WithString("range", mcp.Description("Time range (e.g. '1h', '24h', '7d'). Default '24h'")),

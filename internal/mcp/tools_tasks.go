@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"easy42/internal/engine"
+	"easy42/tasks"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -18,12 +19,16 @@ func registerDeviceHelperTaskTools(s *server.MCPServer, mgr *engine.Manager) {
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(false),
+		mcp.WithOutputSchema[ListTasksOutput](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		tasksList, err := mgr.GetTasks()
 		if err != nil {
 			return errorResult(err)
 		}
-		return jsonResult(tasksList)
+		if tasksList == nil {
+			tasksList = []tasks.TaskMeta{}
+		}
+		return jsonResult(ListTasksOutput{Tasks: tasksList})
 	})
 
 	// 2. get_task_sources
@@ -34,6 +39,7 @@ func registerDeviceHelperTaskTools(s *server.MCPServer, mgr *engine.Manager) {
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(false),
+		mcp.WithOutputSchema[TaskSourcesOutput](),
 		mcp.WithString("id", mcp.Required(), mcp.Description("Task identifier")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		taskID, err := req.RequireString("id")
@@ -44,7 +50,10 @@ func registerDeviceHelperTaskTools(s *server.MCPServer, mgr *engine.Manager) {
 		if err != nil {
 			return errorResult(err)
 		}
-		return jsonResult(sources)
+		if sources == nil {
+			sources = []tasks.TaskSourceFile{}
+		}
+		return jsonResult(TaskSourcesOutput{Sources: sources})
 	})
 
 	// 3. check_task_status
@@ -55,6 +64,7 @@ func registerDeviceHelperTaskTools(s *server.MCPServer, mgr *engine.Manager) {
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(true),
+		mcp.WithOutputSchema[CheckTaskStatusOutput](),
 		mcp.WithString("id", mcp.Required(), mcp.Description("Task identifier")),
 		mcp.WithArray("nodes", mcp.WithStringItems(), mcp.Description("Target node names. If empty, checks all nodes")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -67,7 +77,10 @@ func registerDeviceHelperTaskTools(s *server.MCPServer, mgr *engine.Manager) {
 		if err != nil {
 			return errorResult(err)
 		}
-		return jsonResult(results)
+		if results == nil {
+			results = map[string]tasks.TaskStatusResult{}
+		}
+		return jsonResult(CheckTaskStatusOutput{Results: results})
 	})
 
 	// 4. run_task
@@ -78,6 +91,7 @@ func registerDeviceHelperTaskTools(s *server.MCPServer, mgr *engine.Manager) {
 		mcp.WithDestructiveHintAnnotation(true),
 		mcp.WithIdempotentHintAnnotation(false),
 		mcp.WithOpenWorldHintAnnotation(true),
+		mcp.WithOutputSchema[RunTaskOutput](),
 		mcp.WithString("id", mcp.Required(), mcp.Description("Task identifier to execute")),
 		mcp.WithArray("nodes", mcp.WithStringItems(), mcp.Description("Target node names")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -93,7 +107,10 @@ func registerDeviceHelperTaskTools(s *server.MCPServer, mgr *engine.Manager) {
 		if err != nil {
 			return errorResult(err)
 		}
-		return jsonResult(results)
+		if results == nil {
+			results = map[string]tasks.TaskRunResult{}
+		}
+		return jsonResult(RunTaskOutput{Results: results})
 	})
 
 	// 5. get_online_tasks_manifest
@@ -104,6 +121,7 @@ func registerDeviceHelperTaskTools(s *server.MCPServer, mgr *engine.Manager) {
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(true),
+		mcp.WithOutputSchema[tasks.OnlineManifest](),
 		mcp.WithString("source_url", mcp.Description("Optional custom repository URL")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		sourceURL := req.GetString("source_url", "")
@@ -122,6 +140,7 @@ func registerDeviceHelperTaskTools(s *server.MCPServer, mgr *engine.Manager) {
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(true),
+		mcp.WithOutputSchema[SimpleMessageOutput](),
 		mcp.WithString("task_id", mcp.Required(), mcp.Description("Task ID from manifest")),
 		mcp.WithString("source_url", mcp.Description("Optional custom repository source URL")),
 		mcp.WithArray("files", mcp.WithStringItems(), mcp.Description("Files to install")),
@@ -150,6 +169,7 @@ func registerDeviceHelperTaskTools(s *server.MCPServer, mgr *engine.Manager) {
 		mcp.WithDestructiveHintAnnotation(true),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(false),
+		mcp.WithOutputSchema[SimpleMessageOutput](),
 		mcp.WithString("id", mcp.Required(), mcp.Description("Task ID")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		if err := RequireFullControl(ctx); err != nil {
@@ -162,6 +182,6 @@ func registerDeviceHelperTaskTools(s *server.MCPServer, mgr *engine.Manager) {
 		if err := mgr.DeleteCustomTask(ctx, taskID); err != nil {
 			return errorResult(err)
 		}
-		return successText(fmt.Sprintf("Custom task %q deleted successfully", taskID))
+		return successText(fmt.Sprintf("Task %q deleted successfully", taskID))
 	})
 }

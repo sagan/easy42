@@ -35,6 +35,7 @@ func NewServer(mgr *engine.Manager) *Server {
 		server.WithToolCapabilities(true),
 		server.WithResourceCapabilities(true, true),
 		server.WithPromptCapabilities(true),
+		server.WithOutputSchemaValidation(),
 	)
 
 	// Top-level cluster info tool
@@ -45,6 +46,7 @@ func NewServer(mgr *engine.Manager) *Server {
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(false),
+		mcp.WithOutputSchema[ClusterInfoOutput](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		cfg := mgr.Store().Get()
 		netName := "Easy42"
@@ -58,28 +60,27 @@ func NewServer(mgr *engine.Manager) *Server {
 		policies := mgr.GetNetworkPolicies()
 		templates := mgr.GetTemplates()
 
-		info := map[string]any{
-			"network_name":   netName,
-			"public_asn":     asn,
-			"version":        version.Version,
-			"node_count":     len(nodes),
-			"link_count":     len(links),
-			"policy_count":   len(policies),
-			"template_count": len(templates),
-			"role":           GetRole(ctx),
-			"nodes": func() []map[string]any {
-				summaries := make([]map[string]any, 0, len(nodes))
-				for _, n := range nodes {
-					summaries = append(summaries, map[string]any{
-						"name": n.Name,
-						"ip":   n.IP,
-						"ip6":  n.IP6,
-						"asn":  n.ASN,
-					})
-				}
-				return summaries
-			}(),
-			"hint": "To inspect full runtime health or BGP WireGuard status, call 'get_cluster_state', 'get_fleet_live_status', or 'list_links'.",
+		summaries := make([]ClusterNodeSummary, 0, len(nodes))
+		for _, n := range nodes {
+			summaries = append(summaries, ClusterNodeSummary{
+				Name: n.Name,
+				IP:   n.IP,
+				IP6:  n.IP6,
+				ASN:  n.ASN,
+			})
+		}
+
+		info := ClusterInfoOutput{
+			NetworkName:   netName,
+			PublicASN:     asn,
+			Version:       version.Version,
+			NodeCount:     len(nodes),
+			LinkCount:     len(links),
+			PolicyCount:   len(policies),
+			TemplateCount: len(templates),
+			Role:          GetRole(ctx),
+			Nodes:         summaries,
+			Hint:          "To inspect full runtime health or BGP WireGuard status, call 'get_cluster_state', 'get_fleet_live_status', or 'list_links'.",
 		}
 		return jsonResult(info)
 	})

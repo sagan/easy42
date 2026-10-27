@@ -18,6 +18,7 @@ func registerSyncTools(s *server.MCPServer, mgr *engine.Manager) {
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(false),
+		mcp.WithOutputSchema[PreviewSyncOutput](),
 		mcp.WithArray("nodes", mcp.WithStringItems(), mcp.Description("Optional list of specific node names to inspect")),
 		mcp.WithString("scope", mcp.Description("Sync scope filter: 'all', 'wireguard', 'bird', or 'auto'")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -31,7 +32,7 @@ func registerSyncTools(s *server.MCPServer, mgr *engine.Manager) {
 		if actions == nil {
 			actions = []config.SyncAction{}
 		}
-		return jsonResult(actions)
+		return jsonResult(PreviewSyncOutput{Actions: actions})
 	})
 
 	// 2. execute_sync
@@ -42,6 +43,7 @@ func registerSyncTools(s *server.MCPServer, mgr *engine.Manager) {
 		mcp.WithDestructiveHintAnnotation(true),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(true),
+		mcp.WithOutputSchema[ExecuteSyncOutput](),
 		mcp.WithArray("nodes", mcp.WithStringItems(), mcp.Description("Optional list of node names to sync. If omitted, syncs all modified/eligible nodes")),
 		mcp.WithString("scope", mcp.Description("Optional sync scope: 'all', 'wireguard', 'bird', or 'auto'")),
 		mcp.WithBoolean("force", mcp.Description("Force regeneration and push even if no changes are detected")),
@@ -60,7 +62,7 @@ func registerSyncTools(s *server.MCPServer, mgr *engine.Manager) {
 		if results == nil {
 			results = []config.SyncResult{}
 		}
-		return jsonResult(results)
+		return jsonResult(ExecuteSyncOutput{Results: results})
 	})
 
 	// 3. get_sync_status
@@ -71,14 +73,15 @@ func registerSyncTools(s *server.MCPServer, mgr *engine.Manager) {
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(false),
+		mcp.WithOutputSchema[SyncStatusOutput](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		lastSync, results := mgr.GetLastSyncResults()
 		if results == nil {
 			results = []config.SyncResult{}
 		}
-		return jsonResult(map[string]any{
-			"last_sync": lastSync,
-			"results":   results,
+		return jsonResult(SyncStatusOutput{
+			LastSync: lastSync,
+			Results:  results,
 		})
 	})
 
@@ -90,6 +93,7 @@ func registerSyncTools(s *server.MCPServer, mgr *engine.Manager) {
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(false),
+		mcp.WithOutputSchema[config.NetworkState](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		state := mgr.GetNetworkState()
 		return jsonResult(state)

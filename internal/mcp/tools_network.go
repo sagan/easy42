@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"easy42/internal/config"
+	"easy42/internal/dns"
 	"easy42/internal/engine"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -21,6 +22,7 @@ func registerNetworkTools(s *server.MCPServer, mgr *engine.Manager) {
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(false),
+		mcp.WithOutputSchema[config.NetworkSettings](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		settings := mgr.GetNetworkSettings()
 		return jsonResult(settings)
@@ -34,6 +36,7 @@ func registerNetworkTools(s *server.MCPServer, mgr *engine.Manager) {
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(false),
+		mcp.WithOutputSchema[UpdateNetworkSettingsOutput](),
 		mcp.WithString("name", mcp.Description("Network name (e.g. 'DN42 Mesh')")),
 		mcp.WithInteger("public_asn", mcp.Description("Public / Network Autonomous System Number (ASN)")),
 		mcp.WithArray("prefixes", mcp.WithStringItems(), mcp.Description("IP prefixes assigned to the mesh")),
@@ -76,9 +79,9 @@ func registerNetworkTools(s *server.MCPServer, mgr *engine.Manager) {
 		if err := mgr.UpdateNetworkSettings(current); err != nil {
 			return errorResult(err)
 		}
-		return jsonResult(map[string]any{
-			"message":  "Network settings updated successfully",
-			"settings": mgr.GetNetworkSettings(),
+		return jsonResult(UpdateNetworkSettingsOutput{
+			Message:  "Network settings updated successfully",
+			Settings: mgr.GetNetworkSettings(),
 		})
 	})
 
@@ -90,9 +93,13 @@ func registerNetworkTools(s *server.MCPServer, mgr *engine.Manager) {
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(false),
+		mcp.WithOutputSchema[GetIPBlocksOutput](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		blocks := mgr.GetBlocks()
-		return jsonResult(blocks)
+		if blocks == nil {
+			blocks = []config.Block{}
+		}
+		return jsonResult(GetIPBlocksOutput{Blocks: blocks})
 	})
 
 	// 4. update_ip_blocks
@@ -103,6 +110,7 @@ func registerNetworkTools(s *server.MCPServer, mgr *engine.Manager) {
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(false),
+		mcp.WithOutputSchema[UpdateIPBlocksOutput](),
 		mcp.WithString("blocks_json", mcp.Required(), mcp.Description("JSON array of Block objects")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		if err := RequireFullControl(ctx); err != nil {
@@ -121,9 +129,13 @@ func registerNetworkTools(s *server.MCPServer, mgr *engine.Manager) {
 		if err := mgr.UpdateBlocks(blocks); err != nil {
 			return errorResult(err)
 		}
-		return jsonResult(map[string]any{
-			"message": "Topology blocks updated successfully",
-			"blocks":  mgr.GetBlocks(),
+		updated := mgr.GetBlocks()
+		if updated == nil {
+			updated = []config.Block{}
+		}
+		return jsonResult(UpdateIPBlocksOutput{
+			Message: "Topology blocks updated successfully",
+			Blocks:  updated,
 		})
 	})
 
@@ -135,6 +147,7 @@ func registerNetworkTools(s *server.MCPServer, mgr *engine.Manager) {
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(false),
+		mcp.WithOutputSchema[config.DNSConfig](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		cfg := mgr.GetDNSConfig()
 		display := cfg
@@ -152,6 +165,7 @@ func registerNetworkTools(s *server.MCPServer, mgr *engine.Manager) {
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(false),
+		mcp.WithOutputSchema[SimpleMessageOutput](),
 		mcp.WithString("zone_id", mcp.Description("Cloudflare DNS Zone ID")),
 		mcp.WithString("api_token", mcp.Description("Cloudflare API Token")),
 		mcp.WithString("base_domain", mcp.Description("Base domain (e.g. dn42.example.com)")),
@@ -191,6 +205,7 @@ func registerNetworkTools(s *server.MCPServer, mgr *engine.Manager) {
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(true),
+		mcp.WithOutputSchema[dns.SyncResult](),
 		mcp.WithBoolean("force", mcp.Description("Force overwrite existing remote DNS records")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		if err := RequireFullControl(ctx); err != nil {

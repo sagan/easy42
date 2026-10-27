@@ -18,6 +18,7 @@ func registerDatabaseAndIntegrationsTools(s *server.MCPServer, mgr *engine.Manag
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(false),
+		mcp.WithOutputSchema[engine.DatabaseInfo](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		info, err := mgr.GetDatabaseInfo()
 		if err != nil {
@@ -34,6 +35,7 @@ func registerDatabaseAndIntegrationsTools(s *server.MCPServer, mgr *engine.Manag
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(false),
+		mcp.WithOutputSchema[engine.DatabaseInfo](),
 		mcp.WithInteger("retention_days", mcp.Description("Retention days for summarized metrics (default 47)")),
 		mcp.WithInteger("raw_retention_days", mcp.Description("Retention days for raw high-resolution metrics (default 2)")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -61,6 +63,7 @@ func registerDatabaseAndIntegrationsTools(s *server.MCPServer, mgr *engine.Manag
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(false),
+		mcp.WithOutputSchema[ReclaimDatabaseOutput](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		if err := RequireFullControl(ctx); err != nil {
 			return errorResult(err)
@@ -69,9 +72,9 @@ func registerDatabaseAndIntegrationsTools(s *server.MCPServer, mgr *engine.Manag
 		if err != nil {
 			return errorResult(err)
 		}
-		return jsonResult(map[string]any{
-			"message":  "Database vacuum completed successfully",
-			"database": info,
+		return jsonResult(ReclaimDatabaseOutput{
+			Message:  "Database vacuum completed successfully",
+			Database: info,
 		})
 	})
 
@@ -83,6 +86,7 @@ func registerDatabaseAndIntegrationsTools(s *server.MCPServer, mgr *engine.Manag
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(false),
+		mcp.WithOutputSchema[config.IntegrationsSettings](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		settings := mgr.GetIntegrationsSettings()
 		display := settings
@@ -103,6 +107,7 @@ func registerDatabaseAndIntegrationsTools(s *server.MCPServer, mgr *engine.Manag
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(false),
+		mcp.WithOutputSchema[SimpleMessageOutput](),
 		mcp.WithBoolean("prometheus_enabled", mcp.Description("Enable Prometheus metrics export at /metrics")),
 		mcp.WithBoolean("telegram_enabled", mcp.Description("Enable Telegram Bot notifications")),
 		mcp.WithString("telegram_bot_token", mcp.Description("Telegram Bot API token")),
@@ -146,6 +151,7 @@ func registerDatabaseAndIntegrationsTools(s *server.MCPServer, mgr *engine.Manag
 		mcp.WithDestructiveHintAnnotation(true),
 		mcp.WithIdempotentHintAnnotation(false),
 		mcp.WithOpenWorldHintAnnotation(false),
+		mcp.WithOutputSchema[ResetPrometheusTokenOutput](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		if err := RequireFullControl(ctx); err != nil {
 			return errorResult(err)
@@ -154,9 +160,9 @@ func registerDatabaseAndIntegrationsTools(s *server.MCPServer, mgr *engine.Manag
 		if err != nil {
 			return errorResult(err)
 		}
-		return jsonResult(map[string]any{
-			"message":               "Prometheus auth token rotated successfully",
-			"prometheus_auth_token": updated.PrometheusAuthToken,
+		return jsonResult(ResetPrometheusTokenOutput{
+			Message:               "Prometheus auth token rotated successfully",
+			PrometheusAuthToken: updated.PrometheusAuthToken,
 		})
 	})
 }

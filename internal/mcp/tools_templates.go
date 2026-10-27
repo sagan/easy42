@@ -19,9 +19,13 @@ func registerTemplateTools(s *server.MCPServer, mgr *engine.Manager) {
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(false),
+		mcp.WithOutputSchema[ListTemplatesOutput](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		templates := mgr.GetTemplates()
-		return jsonResult(templates)
+		if templates == nil {
+			templates = []config.ConfigTemplate{}
+		}
+		return jsonResult(ListTemplatesOutput{Templates: templates})
 	})
 
 	// 2. get_template
@@ -32,6 +36,7 @@ func registerTemplateTools(s *server.MCPServer, mgr *engine.Manager) {
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(false),
+		mcp.WithOutputSchema[config.ConfigTemplate](),
 		mcp.WithString("id", mcp.Required(), mcp.Description("Template ID (e.g. 'default_bird', 'default_wg', or custom ID)")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		id, err := req.RequireString("id")
@@ -53,6 +58,7 @@ func registerTemplateTools(s *server.MCPServer, mgr *engine.Manager) {
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(false),
 		mcp.WithOpenWorldHintAnnotation(false),
+		mcp.WithOutputSchema[TemplateMutationOutput](),
 		mcp.WithString("id", mcp.Required(), mcp.Description("Unique template identifier")),
 		mcp.WithString("name", mcp.Required(), mcp.Description("Template name")),
 		mcp.WithString("type", mcp.Required(), mcp.Description("Template type: 'bird', 'wg', or 'nft'")),
@@ -91,9 +97,9 @@ func registerTemplateTools(s *server.MCPServer, mgr *engine.Manager) {
 		if err != nil {
 			return errorResult(err)
 		}
-		return jsonResult(map[string]any{
-			"message":  fmt.Sprintf("Template %q created successfully", id),
-			"template": created,
+		return jsonResult(TemplateMutationOutput{
+			Message:  fmt.Sprintf("Template %q created successfully", id),
+			Template: *created,
 		})
 	})
 
@@ -105,6 +111,7 @@ func registerTemplateTools(s *server.MCPServer, mgr *engine.Manager) {
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(false),
+		mcp.WithOutputSchema[TemplateMutationOutput](),
 		mcp.WithString("id", mcp.Required(), mcp.Description("Template ID")),
 		mcp.WithString("name", mcp.Description("Updated template name")),
 		mcp.WithString("type", mcp.Description("Updated template type: 'bird', 'wg', or 'nft'")),
@@ -141,9 +148,9 @@ func registerTemplateTools(s *server.MCPServer, mgr *engine.Manager) {
 		if err != nil {
 			return errorResult(err)
 		}
-		return jsonResult(map[string]any{
-			"message":  fmt.Sprintf("Template %q updated successfully", id),
-			"template": updated,
+		return jsonResult(TemplateMutationOutput{
+			Message:  fmt.Sprintf("Template %q updated successfully", id),
+			Template: *updated,
 		})
 	})
 
@@ -155,6 +162,7 @@ func registerTemplateTools(s *server.MCPServer, mgr *engine.Manager) {
 		mcp.WithDestructiveHintAnnotation(true),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(false),
+		mcp.WithOutputSchema[SimpleMessageOutput](),
 		mcp.WithString("id", mcp.Required(), mcp.Description("Template ID to delete")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		if err := RequireFullControl(ctx); err != nil {

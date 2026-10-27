@@ -20,6 +20,7 @@ func registerLookingGlassTools(s *server.MCPServer, mgr *engine.Manager) {
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(false),
+		mcp.WithOutputSchema[lookingglass.TasksResponse](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		tasks, err := mgr.GetLookingGlassTasks()
 		if err != nil {
@@ -36,6 +37,7 @@ func registerLookingGlassTools(s *server.MCPServer, mgr *engine.Manager) {
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(true),
+		mcp.WithOutputSchema[lookingglass.RunResponse](),
 		mcp.WithArray("nodes", mcp.WithStringItems(), mcp.Required(), mcp.Description("Node names to execute the diagnostic from")),
 		mcp.WithString("task_id", mcp.Description("Task template ID (e.g. 'ping', 'traceroute', 'bird_route')")),
 		mcp.WithString("target", mcp.Description("Target host or IP address to diagnose")),
@@ -85,6 +87,7 @@ func registerLookingGlassTools(s *server.MCPServer, mgr *engine.Manager) {
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(false),
+		mcp.WithOutputSchema[SaveLookingGlassTaskOutput](),
 		mcp.WithString("id", mcp.Required(), mcp.Description("Unique task ID")),
 		mcp.WithString("name", mcp.Required(), mcp.Description("Human-readable task name")),
 		mcp.WithString("command", mcp.Required(), mcp.Description("CLI command template")),
@@ -119,9 +122,9 @@ func registerLookingGlassTools(s *server.MCPServer, mgr *engine.Manager) {
 		if err != nil {
 			return errorResult(err)
 		}
-		return jsonResult(map[string]any{
-			"message": fmt.Sprintf("Looking Glass task %q saved successfully", id),
-			"task":    saved,
+		return jsonResult(SaveLookingGlassTaskOutput{
+			Message: fmt.Sprintf("Looking Glass task %q saved successfully", id),
+			Task:    saved,
 		})
 	})
 
@@ -133,6 +136,7 @@ func registerLookingGlassTools(s *server.MCPServer, mgr *engine.Manager) {
 		mcp.WithDestructiveHintAnnotation(true),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(false),
+		mcp.WithOutputSchema[SimpleMessageOutput](),
 		mcp.WithString("id", mcp.Required(), mcp.Description("Task template ID to delete")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		if err := RequireFullControl(ctx); err != nil {

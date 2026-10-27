@@ -4,9 +4,12 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
+	agentpb "easy42/internal/agent/proto"
 	"easy42/internal/config"
 	"easy42/internal/engine"
+	"easy42/internal/ssh"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -20,6 +23,7 @@ func registerNodeTools(s *server.MCPServer, mgr *engine.Manager) {
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(false),
+		mcp.WithOutputSchema[ListNodesOutput](),
 		mcp.WithString("tag", mcp.Description("Optional tag filter (e.g. 'edge', 'gateway')")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		nodes := mgr.GetNodes()
@@ -36,7 +40,7 @@ func registerNodeTools(s *server.MCPServer, mgr *engine.Manager) {
 			}
 			nodes = filtered
 		}
-		return jsonResult(nodes)
+		return jsonResult(ListNodesOutput{Nodes: nodes})
 	})
 
 	// 2. get_node
@@ -47,6 +51,7 @@ func registerNodeTools(s *server.MCPServer, mgr *engine.Manager) {
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(false),
+		mcp.WithOutputSchema[GetNodeOutput](),
 		mcp.WithString("name", mcp.Required(), mcp.Description("The name of the node")),
 		mcp.WithBoolean("include_bird", mcp.Description("Include rendered BIRD BGP routing daemon configuration")),
 		mcp.WithBoolean("include_nftables", mcp.Description("Include rendered nftables firewall configuration")),
@@ -60,25 +65,25 @@ func registerNodeTools(s *server.MCPServer, mgr *engine.Manager) {
 			return errorResult(fmt.Errorf("node %q not found", name))
 		}
 
-		result := map[string]any{
-			"node": node,
+		result := GetNodeOutput{
+			Node: node,
 		}
 
 		if req.GetBool("include_bird", false) {
 			birdCfg, err := mgr.GenerateBirdConfig(name)
 			if err != nil {
-				result["bird_error"] = err.Error()
+				result.BirdError = err.Error()
 			} else {
-				result["bird_config"] = birdCfg
+				result.BirdConfig = birdCfg
 			}
 		}
 
 		if req.GetBool("include_nftables", false) {
 			nftCfg, err := mgr.GenerateNftablesConfig(name)
 			if err != nil {
-				result["nftables_error"] = err.Error()
+				result.NftablesError = err.Error()
 			} else {
-				result["nftables_config"] = nftCfg
+				result.NftablesConfig = nftCfg
 			}
 		}
 
@@ -93,6 +98,7 @@ func registerNodeTools(s *server.MCPServer, mgr *engine.Manager) {
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(false),
 		mcp.WithOpenWorldHintAnnotation(false),
+		mcp.WithOutputSchema[NodeMutationOutput](),
 		mcp.WithString("name", mcp.Required(), mcp.Description("Unique node identifier/hostname")),
 		mcp.WithString("host", mcp.Description("SSH host / alias / IP address for remote management")),
 		mcp.WithString("ip", mcp.Description("Mesh IPv4 address (e.g. 192.168.100.1)")),
@@ -127,9 +133,12 @@ func registerNodeTools(s *server.MCPServer, mgr *engine.Manager) {
 			return errorResult(err)
 		}
 		saved := mgr.FindNode(name)
-		return jsonResult(map[string]any{
-			"message": fmt.Sprintf("Node %q successfully created", name),
-			"node":    saved,
+		if saved == nil {
+			saved = &node
+		}
+		return jsonResult(NodeMutationOutput{
+			Message: fmt.Sprintf("Node %q successfully created", name),
+			Node:    *saved,
 		})
 	})
 
@@ -141,6 +150,7 @@ func registerNodeTools(s *server.MCPServer, mgr *engine.Manager) {
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(false),
+		mcp.WithOutputSchema[NodeMutationOutput](),
 		mcp.WithString("name", mcp.Required(), mcp.Description("Name of the node to update")),
 		mcp.WithString("host", mcp.Description("SSH host / alias / IP address")),
 		mcp.WithString("ip", mcp.Description("Mesh IPv4 address")),
@@ -194,9 +204,13 @@ func registerNodeTools(s *server.MCPServer, mgr *engine.Manager) {
 		if err := mgr.UpdateNode(name, node); err != nil {
 			return errorResult(err)
 		}
-		return jsonResult(map[string]any{
-			"message": fmt.Sprintf("Node %q successfully updated", name),
-			"node":    mgr.FindNode(name),
+		updated := mgr.FindNode(name)
+		if updated == nil {
+			updated = &node
+		}
+		return jsonResult(NodeMutationOutput{
+			Message: fmt.Sprintf("Node %q successfully updated", name),
+			Node:    *updated,
 		})
 	})
 
@@ -208,6 +222,7 @@ func registerNodeTools(s *server.MCPServer, mgr *engine.Manager) {
 		mcp.WithDestructiveHintAnnotation(true),
 		mcp.WithIdempotentHintAnnotation(false),
 		mcp.WithOpenWorldHintAnnotation(false),
+		mcp.WithOutputSchema[NodeMutationOutput](),
 		mcp.WithString("old_name", mcp.Required(), mcp.Description("Current name of the node")),
 		mcp.WithString("new_name", mcp.Required(), mcp.Description("New unique name for the node")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -227,9 +242,9 @@ func registerNodeTools(s *server.MCPServer, mgr *engine.Manager) {
 		if err != nil {
 			return errorResult(err)
 		}
-		return jsonResult(map[string]any{
-			"message": fmt.Sprintf("Node renamed from %q to %q successfully", oldName, newName),
-			"node":    renamed,
+		return jsonResult(NodeMutationOutput{
+			Message: fmt.Sprintf("Node renamed from %q to %q successfully", oldName, newName),
+			Node:    *renamed,
 		})
 	})
 
@@ -241,6 +256,7 @@ func registerNodeTools(s *server.MCPServer, mgr *engine.Manager) {
 		mcp.WithDestructiveHintAnnotation(true),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(false),
+		mcp.WithOutputSchema[SimpleMessageOutput](),
 		mcp.WithString("name", mcp.Required(), mcp.Description("Name of the node to remove")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		if err := RequireFullControl(ctx); err != nil {
@@ -264,6 +280,7 @@ func registerNodeTools(s *server.MCPServer, mgr *engine.Manager) {
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(true),
+		mcp.WithOutputSchema[ssh.ProbeResult](),
 		mcp.WithString("host", mcp.Required(), mcp.Description("Host, domain, or IP address to test")),
 		mcp.WithString("node_name", mcp.Description("Optional node name to test SSH key alias")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -287,6 +304,7 @@ func registerNodeTools(s *server.MCPServer, mgr *engine.Manager) {
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(true),
+		mcp.WithOutputSchema[config.NodeStatus](),
 		mcp.WithString("name", mcp.Required(), mcp.Description("Node name")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		if err := RequireFullControl(ctx); err != nil {
@@ -311,6 +329,7 @@ func registerNodeTools(s *server.MCPServer, mgr *engine.Manager) {
 		mcp.WithDestructiveHintAnnotation(true),
 		mcp.WithIdempotentHintAnnotation(false),
 		mcp.WithOpenWorldHintAnnotation(true),
+		mcp.WithOutputSchema[CommandOutput](),
 		mcp.WithString("name", mcp.Required(), mcp.Description("Node name")),
 		mcp.WithString("service", mcp.Required(), mcp.Description("Service to restart: 'wireguard', 'bird', or 'interface'")),
 		mcp.WithString("interface", mcp.Description("Interface name (required when service is 'interface')")),
@@ -346,9 +365,9 @@ func registerNodeTools(s *server.MCPServer, mgr *engine.Manager) {
 		if err != nil {
 			return errorResult(err)
 		}
-		return jsonResult(map[string]any{
-			"message": fmt.Sprintf("Service %s restarted on node %s", service, name),
-			"output":  output,
+		return jsonResult(CommandOutput{
+			Message: fmt.Sprintf("Service %s restarted on node %s", service, name),
+			Output:  output,
 		})
 	})
 
@@ -360,6 +379,7 @@ func registerNodeTools(s *server.MCPServer, mgr *engine.Manager) {
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(false),
+		mcp.WithOutputSchema[NodeTelemetryOutput](),
 		mcp.WithString("name", mcp.Required(), mcp.Description("Node name")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		name, err := req.RequireString("name")
@@ -371,20 +391,23 @@ func registerNodeTools(s *server.MCPServer, mgr *engine.Manager) {
 			return errorResult(fmt.Errorf("node %q not found", name))
 		}
 
-		var telemetry any
+		var telemetry *agentpb.TelemetryReport
 		var connected bool
-		var lastSeen any
+		var lastSeenPtr *time.Time
 		if hub := mgr.AgentHub(); hub != nil {
 			telemetry = hub.GetTelemetry(name)
 			connected = hub.IsConnected(name)
-			lastSeen = hub.GetLastSeen(name)
+			lastSeen := hub.GetLastSeen(name)
+			if !lastSeen.IsZero() {
+				lastSeenPtr = &lastSeen
+			}
 		}
 
-		return jsonResult(map[string]any{
-			"node":      name,
-			"connected": connected,
-			"last_seen": lastSeen,
-			"telemetry": telemetry,
+		return jsonResult(NodeTelemetryOutput{
+			Node:      name,
+			Connected: connected,
+			LastSeen:  lastSeenPtr,
+			Telemetry: telemetry,
 		})
 	})
 
@@ -396,14 +419,15 @@ func registerNodeTools(s *server.MCPServer, mgr *engine.Manager) {
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(false),
+		mcp.WithOutputSchema[FleetLiveStatusOutput](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		summary, nodes, err := mgr.GetFleetLiveStatus()
 		if err != nil {
 			return errorResult(err)
 		}
-		return jsonResult(map[string]any{
-			"summary": summary,
-			"nodes":   nodes,
+		return jsonResult(FleetLiveStatusOutput{
+			Summary: summary,
+			Nodes:   nodes,
 		})
 	})
 }

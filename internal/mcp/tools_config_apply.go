@@ -19,6 +19,7 @@ func registerConfigApplyTools(s *server.MCPServer, mgr *engine.Manager) {
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(false),
+		mcp.WithOutputSchema[engine.ApplyPreviewResult](),
 		mcp.WithString("content", mcp.Required(), mcp.Description("Declarative configuration patch snippet in YAML or JSON format")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		content, err := req.RequireString("content")
@@ -41,6 +42,7 @@ func registerConfigApplyTools(s *server.MCPServer, mgr *engine.Manager) {
 		mcp.WithDestructiveHintAnnotation(true),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(false),
+		mcp.WithOutputSchema[engine.ApplyResult](),
 		mcp.WithString("content", mcp.Required(), mcp.Description("Declarative configuration patch in YAML or JSON")),
 		mcp.WithBoolean("auto_sync", mcp.Description("Automatically synchronize generated WireGuard and BIRD configs to affected nodes")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -74,9 +76,13 @@ func registerConfigApplyTools(s *server.MCPServer, mgr *engine.Manager) {
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(false),
+		mcp.WithOutputSchema[ListConfigChangesOutput](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		changes := mgr.ListConfigChanges()
-		return jsonResult(changes)
+		if changes == nil {
+			changes = []config.ConfigChange{}
+		}
+		return jsonResult(ListConfigChangesOutput{Changes: changes})
 	})
 
 	// 4. get_config_change
@@ -87,6 +93,7 @@ func registerConfigApplyTools(s *server.MCPServer, mgr *engine.Manager) {
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(false),
+		mcp.WithOutputSchema[config.ConfigChange](),
 		mcp.WithString("id", mcp.Required(), mcp.Description("Saved change ID")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		id, err := req.RequireString("id")
@@ -108,6 +115,7 @@ func registerConfigApplyTools(s *server.MCPServer, mgr *engine.Manager) {
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(false),
+		mcp.WithOutputSchema[SaveConfigChangeOutput](),
 		mcp.WithString("name", mcp.Required(), mcp.Description("Name of the configuration snippet")),
 		mcp.WithString("content", mcp.Required(), mcp.Description("Patch content in YAML or JSON")),
 		mcp.WithString("description", mcp.Description("Optional description of the changes")),
@@ -136,9 +144,9 @@ func registerConfigApplyTools(s *server.MCPServer, mgr *engine.Manager) {
 		if err != nil {
 			return errorResult(err)
 		}
-		return jsonResult(map[string]any{
-			"message": "Configuration change saved successfully",
-			"change":  saved,
+		return jsonResult(SaveConfigChangeOutput{
+			Message: "Configuration change saved successfully",
+			Change:  saved,
 		})
 	})
 
@@ -150,6 +158,7 @@ func registerConfigApplyTools(s *server.MCPServer, mgr *engine.Manager) {
 		mcp.WithDestructiveHintAnnotation(true),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(false),
+		mcp.WithOutputSchema[engine.ApplyResult](),
 		mcp.WithString("id", mcp.Required(), mcp.Description("Saved change ID")),
 		mcp.WithBoolean("auto_sync", mcp.Description("Automatically synchronize configurations to affected nodes")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -183,6 +192,7 @@ func registerConfigApplyTools(s *server.MCPServer, mgr *engine.Manager) {
 		mcp.WithDestructiveHintAnnotation(true),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(false),
+		mcp.WithOutputSchema[SimpleMessageOutput](),
 		mcp.WithString("id", mcp.Required(), mcp.Description("Saved change ID to delete")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		if err := RequireFullControl(ctx); err != nil {

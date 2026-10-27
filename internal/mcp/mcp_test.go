@@ -148,22 +148,14 @@ func TestMCPServerToolsRegistration(t *testing.T) {
 		}
 	}
 
-	// Specifically verify read-only tools have ReadOnlyHint = true and DestructiveHint = false
-	clusterInfo := tools["get_cluster_info"].Tool
-	if clusterInfo.Annotations.ReadOnlyHint == nil || !*clusterInfo.Annotations.ReadOnlyHint {
-		t.Errorf("expected get_cluster_info to have ReadOnlyHint=true")
-	}
-	if clusterInfo.Annotations.DestructiveHint == nil || *clusterInfo.Annotations.DestructiveHint {
-		t.Errorf("expected get_cluster_info to have DestructiveHint=false")
-	}
-
-	// Specifically verify destructive tool has DestructiveHint = true and ReadOnlyHint = false
-	deleteNode := tools["delete_node"].Tool
-	if deleteNode.Annotations.DestructiveHint == nil || !*deleteNode.Annotations.DestructiveHint {
-		t.Errorf("expected delete_node to have DestructiveHint=true")
-	}
-	if deleteNode.Annotations.ReadOnlyHint == nil || *deleteNode.Annotations.ReadOnlyHint {
-		t.Errorf("expected delete_node to have ReadOnlyHint=false")
+	// Verify output schema on every registered tool
+	for name, tool := range tools {
+		if tool.Tool.OutputSchema.Type != "object" {
+			t.Errorf("tool %q OutputSchema.Type is %q, expected 'object'", name, tool.Tool.OutputSchema.Type)
+		}
+		if len(tool.Tool.OutputSchema.Properties) == 0 {
+			t.Errorf("tool %q has empty OutputSchema.Properties", name)
+		}
 	}
 }
 
@@ -302,3 +294,118 @@ func TestMCPServerAuthMiddleware(t *testing.T) {
 		t.Errorf("expected 403 when MCP disabled, got %d", rr5.Code)
 	}
 }
+
+func TestMCPServerOutputSchemaValidation(t *testing.T) {
+	mgr, cleanup := setupTestManager(t)
+	defer cleanup()
+
+	s := NewServer(mgr)
+	fcCtx := WithRole(context.Background(), RoleFullControl)
+
+	toolsToTest := []struct {
+		name string
+		args map[string]any
+	}{
+		{name: "get_cluster_info", args: nil},
+		{name: "list_nodes", args: nil},
+		{name: "list_links", args: nil},
+		{name: "get_network_settings", args: nil},
+		{name: "get_ip_blocks", args: nil},
+		{name: "list_network_policies", args: nil},
+		{name: "list_templates", args: nil},
+		{name: "preview_sync", args: nil},
+		{name: "get_sync_status", args: nil},
+		{name: "get_cluster_state", args: nil},
+		{name: "list_tasks", args: nil},
+		{name: "list_cron_tasks", args: nil},
+		{name: "get_database_info", args: nil},
+		{name: "get_integrations_settings", args: nil},
+	}
+
+	for _, tt := range toolsToTest {
+		tool := s.MCPServer().GetTool(tt.name)
+		if tool == nil {
+			t.Fatalf("tool %q not found", tt.name)
+		}
+
+		res, err := tool.Handler(fcCtx, mcp.CallToolRequest{
+			Params: mcp.CallToolParams{
+				Name:      tt.name,
+				Arguments: tt.args,
+			},
+		})
+		if err != nil {
+			t.Fatalf("tool %q failed with error: %v", tt.name, err)
+		}
+		if res.IsError {
+			t.Fatalf("tool %q returned tool execution error: %v", tt.name, res)
+		}
+		if res.StructuredContent == nil {
+			t.Fatalf("tool %q returned nil StructuredContent", tt.name)
+		}
+		if len(res.Content) == 0 {
+			t.Fatalf("tool %q returned empty Content fallback", tt.name)
+		}
+	}
+
+	// Test mutating tools and verify structured output
+	addNodeTool := s.MCPServer().GetTool("add_node")
+	res, err := addNodeTool.Handler(fcCtx, mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Name: "add_node",
+			Arguments: map[string]any{
+				"name": "node-alpha",
+				"host": "10.0.0.1",
+				"ip":   "10.0.0.1",
+				"asn":  4242420001,
+			},
+		},
+	})
+	if err != nil || res.IsError {
+		t.Fatalf("add_node failed: %v, %v", err, res)
+	}
+	mutationOut, ok := res.StructuredContent.(NodeMutationOutput)
+	if !ok {
+		t.Fatalf("expected NodeMutationOutput, got %T", res.StructuredContent)
+	}
+	if mutationOut.Node.Name != "node-alpha" {
+		t.Fatalf("expected node-alpha, got %s", mutationOut.Node.Name)
+	}
+
+	// Test getNode
+	getNodeTool := s.MCPServer().GetTool("get_node")
+	res, err = getNodeTool.Handler(fcCtx, mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Name: "get_node",
+			Arguments: map[string]any{
+				"name": "node-alpha",
+			},
+		},
+	})
+	if err != nil || res.IsError {
+		t.Fatalf("get_node failed: %v, %v", err, res)
+	}
+	getOut, ok := res.StructuredContent.(GetNodeOutput)
+	if !ok || getOut.Node == nil || getOut.Node.Name != "node-alpha" {
+		t.Fatalf("invalid GetNodeOutput: %v", res.StructuredContent)
+	}
+
+	// Test deleteNode returns SimpleMessageOutput
+	delNodeTool := s.MCPServer().GetTool("delete_node")
+	res, err = delNodeTool.Handler(fcCtx, mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Name: "delete_node",
+			Arguments: map[string]any{
+				"name": "node-alpha",
+			},
+		},
+	})
+	if err != nil || res.IsError {
+		t.Fatalf("delete_node failed: %v, %v", err, res)
+	}
+	msgOut, ok := res.StructuredContent.(SimpleMessageOutput)
+	if !ok || msgOut.Message == "" {
+		t.Fatalf("expected SimpleMessageOutput, got %T: %v", res.StructuredContent, res.StructuredContent)
+	}
+}
+

@@ -20,6 +20,7 @@ func registerLinkTools(s *server.MCPServer, mgr *engine.Manager) {
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(false),
+		mcp.WithOutputSchema[ListLinksOutput](),
 		mcp.WithString("node", mcp.Description("Optional filter: return only links connected to this node name")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		links := mgr.GetLinks()
@@ -33,7 +34,10 @@ func registerLinkTools(s *server.MCPServer, mgr *engine.Manager) {
 			}
 			links = filtered
 		}
-		return jsonResult(links)
+		if links == nil {
+			links = []config.Link{}
+		}
+		return jsonResult(ListLinksOutput{Links: links})
 	})
 
 	// 2. get_link
@@ -44,6 +48,7 @@ func registerLinkTools(s *server.MCPServer, mgr *engine.Manager) {
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(false),
+		mcp.WithOutputSchema[config.Link](),
 		mcp.WithString("from", mcp.Required(), mcp.Description("First node name")),
 		mcp.WithString("to", mcp.Required(), mcp.Description("Second node name")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -74,6 +79,7 @@ func registerLinkTools(s *server.MCPServer, mgr *engine.Manager) {
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(false),
 		mcp.WithOpenWorldHintAnnotation(false),
+		mcp.WithOutputSchema[LinkMutationOutput](),
 		mcp.WithString("from", mcp.Required(), mcp.Description("First node name")),
 		mcp.WithString("to", mcp.Required(), mcp.Description("Second node name")),
 		mcp.WithInteger("from_port", mcp.Description("Listen port on the first node")),
@@ -116,9 +122,9 @@ func registerLinkTools(s *server.MCPServer, mgr *engine.Manager) {
 		if err != nil {
 			return errorResult(err)
 		}
-		return jsonResult(map[string]any{
-			"message": fmt.Sprintf("Link between %q and %q created successfully", from, to),
-			"link":    link,
+		return jsonResult(LinkMutationOutput{
+			Message: fmt.Sprintf("Link between %q and %q created successfully", from, to),
+			Link:    *link,
 		})
 	})
 
@@ -130,6 +136,7 @@ func registerLinkTools(s *server.MCPServer, mgr *engine.Manager) {
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(false),
+		mcp.WithOutputSchema[CreateMeshLinksOutput](),
 		mcp.WithArray("nodes", mcp.WithStringItems(), mcp.Description("List of node names to interconnect. If empty, meshes all cluster nodes")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		if err := RequireFullControl(ctx); err != nil {
@@ -140,9 +147,12 @@ func registerLinkTools(s *server.MCPServer, mgr *engine.Manager) {
 		if err != nil {
 			return errorResult(err)
 		}
-		return jsonResult(map[string]any{
-			"message": fmt.Sprintf("Generated %d mesh links", len(links)),
-			"links":   links,
+		if links == nil {
+			links = []*config.Link{}
+		}
+		return jsonResult(CreateMeshLinksOutput{
+			Message: fmt.Sprintf("Generated %d mesh links", len(links)),
+			Links:   links,
 		})
 	})
 
@@ -154,6 +164,7 @@ func registerLinkTools(s *server.MCPServer, mgr *engine.Manager) {
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(false),
+		mcp.WithOutputSchema[LinkMutationOutput](),
 		mcp.WithString("from", mcp.Required(), mcp.Description("First node name")),
 		mcp.WithString("to", mcp.Required(), mcp.Description("Second node name")),
 		mcp.WithInteger("mtu", mcp.Description("MTU override")),
@@ -188,9 +199,9 @@ func registerLinkTools(s *server.MCPServer, mgr *engine.Manager) {
 		if err != nil {
 			return errorResult(err)
 		}
-		return jsonResult(map[string]any{
-			"message": fmt.Sprintf("Link between %q and %q updated successfully", from, to),
-			"link":    link,
+		return jsonResult(LinkMutationOutput{
+			Message: fmt.Sprintf("Link between %q and %q updated successfully", from, to),
+			Link:    *link,
 		})
 	})
 
@@ -202,6 +213,7 @@ func registerLinkTools(s *server.MCPServer, mgr *engine.Manager) {
 		mcp.WithDestructiveHintAnnotation(true),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(false),
+		mcp.WithOutputSchema[SimpleMessageOutput](),
 		mcp.WithString("from", mcp.Required(), mcp.Description("First node name")),
 		mcp.WithString("to", mcp.Required(), mcp.Description("Second node name")),
 		mcp.WithString("interface", mcp.Description("Optional specific interface name if multiple links exist")),
@@ -233,6 +245,7 @@ func registerLinkTools(s *server.MCPServer, mgr *engine.Manager) {
 		mcp.WithDestructiveHintAnnotation(true),
 		mcp.WithIdempotentHintAnnotation(false),
 		mcp.WithOpenWorldHintAnnotation(false),
+		mcp.WithOutputSchema[ResetLinkPskOutput](),
 		mcp.WithString("from", mcp.Required(), mcp.Description("First node name")),
 		mcp.WithString("to", mcp.Required(), mcp.Description("Second node name")),
 		mcp.WithString("psk", mcp.Description("Custom base64 PSK. If omitted, a fresh secure random key is generated")),
@@ -256,11 +269,11 @@ func registerLinkTools(s *server.MCPServer, mgr *engine.Manager) {
 		if err != nil {
 			return errorResult(err)
 		}
-		return jsonResult(map[string]any{
-			"message": "WireGuard PSK reset successfully",
-			"from":    from,
-			"to":      to,
-			"psk":     newPsk,
+		return jsonResult(ResetLinkPskOutput{
+			Message: "WireGuard PSK reset successfully",
+			From:    from,
+			To:      to,
+			Psk:     newPsk,
 		})
 	})
 
@@ -272,6 +285,7 @@ func registerLinkTools(s *server.MCPServer, mgr *engine.Manager) {
 		mcp.WithDestructiveHintAnnotation(true),
 		mcp.WithIdempotentHintAnnotation(false),
 		mcp.WithOpenWorldHintAnnotation(false),
+		mcp.WithOutputSchema[ResetLinkPrivateKeyOutput](),
 		mcp.WithString("from", mcp.Required(), mcp.Description("First node name")),
 		mcp.WithString("to", mcp.Required(), mcp.Description("Second node name")),
 		mcp.WithString("node", mcp.Required(), mcp.Description("Which node endpoint's key to reset")),
@@ -298,12 +312,12 @@ func registerLinkTools(s *server.MCPServer, mgr *engine.Manager) {
 		if err != nil {
 			return errorResult(err)
 		}
-		return jsonResult(map[string]any{
-			"message":    "WireGuard private key regenerated successfully",
-			"node":       node,
-			"public_key": newPub,
-			"note":       "Private key safely encrypted and updated in configuration",
-			"private":    newPriv,
+		return jsonResult(ResetLinkPrivateKeyOutput{
+			Message:   "WireGuard private key regenerated successfully",
+			Node:      node,
+			PublicKey: newPub,
+			Note:      "Private key safely encrypted and updated in configuration",
+			Private:   newPriv,
 		})
 	})
 }

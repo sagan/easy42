@@ -21,9 +21,13 @@ func registerPolicyTools(s *server.MCPServer, mgr *engine.Manager) {
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(false),
+		mcp.WithOutputSchema[ListNetworkPoliciesOutput](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		policies := mgr.GetNetworkPolicies()
-		return jsonResult(policies)
+		if policies == nil {
+			policies = []config.NetworkPolicy{}
+		}
+		return jsonResult(ListNetworkPoliciesOutput{Policies: policies})
 	})
 
 	// 2. get_network_policy
@@ -34,6 +38,7 @@ func registerPolicyTools(s *server.MCPServer, mgr *engine.Manager) {
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(false),
+		mcp.WithOutputSchema[config.NetworkPolicy](),
 		mcp.WithString("id", mcp.Required(), mcp.Description("Policy ID (e.g. 'default', 'dn42', or custom ID)")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		id, err := req.RequireString("id")
@@ -55,6 +60,7 @@ func registerPolicyTools(s *server.MCPServer, mgr *engine.Manager) {
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(false),
 		mcp.WithOpenWorldHintAnnotation(false),
+		mcp.WithOutputSchema[NetworkPolicyMutationOutput](),
 		mcp.WithString("id", mcp.Required(), mcp.Description("Unique policy identifier (alphanumeric/hyphen)")),
 		mcp.WithString("name", mcp.Required(), mcp.Description("Human-readable policy name")),
 		mcp.WithString("description", mcp.Description("Optional description of the policy")),
@@ -94,9 +100,9 @@ func registerPolicyTools(s *server.MCPServer, mgr *engine.Manager) {
 		if err != nil {
 			return errorResult(err)
 		}
-		return jsonResult(map[string]any{
-			"message": fmt.Sprintf("Network policy %q created successfully", id),
-			"policy":  created,
+		return jsonResult(NetworkPolicyMutationOutput{
+			Message: fmt.Sprintf("Network policy %q created successfully", id),
+			Policy:  *created,
 		})
 	})
 
@@ -108,6 +114,7 @@ func registerPolicyTools(s *server.MCPServer, mgr *engine.Manager) {
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(false),
+		mcp.WithOutputSchema[NetworkPolicyMutationOutput](),
 		mcp.WithString("id", mcp.Required(), mcp.Description("Policy ID to update")),
 		mcp.WithString("name", mcp.Description("Updated human-readable name")),
 		mcp.WithString("description", mcp.Description("Updated description")),
@@ -152,9 +159,9 @@ func registerPolicyTools(s *server.MCPServer, mgr *engine.Manager) {
 		if err != nil {
 			return errorResult(err)
 		}
-		return jsonResult(map[string]any{
-			"message": fmt.Sprintf("Network policy %q updated successfully", id),
-			"policy":  updated,
+		return jsonResult(NetworkPolicyMutationOutput{
+			Message: fmt.Sprintf("Network policy %q updated successfully", id),
+			Policy:  *updated,
 		})
 	})
 
@@ -166,6 +173,7 @@ func registerPolicyTools(s *server.MCPServer, mgr *engine.Manager) {
 		mcp.WithDestructiveHintAnnotation(true),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(false),
+		mcp.WithOutputSchema[SimpleMessageOutput](),
 		mcp.WithString("id", mcp.Required(), mcp.Description("Policy ID to delete")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		if err := RequireFullControl(ctx); err != nil {
@@ -189,6 +197,7 @@ func registerPolicyTools(s *server.MCPServer, mgr *engine.Manager) {
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(true),
 		mcp.WithOpenWorldHintAnnotation(true),
+		mcp.WithOutputSchema[SimpleMessageOutput](),
 		mcp.WithString("policy_id", mcp.Description("Optional specific policy ID. If omitted, refreshes all policies")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		if err := RequireFullControl(ctx); err != nil {
