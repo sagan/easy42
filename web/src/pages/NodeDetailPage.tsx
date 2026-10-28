@@ -80,6 +80,8 @@ import { Node, NodeMetricPoint, GraphBlock, Link, NetworkPolicy } from "../types
 import { MetricAreaChart } from "../components/Nodes/MetricAreaChart";
 import { MarkdownView } from "../components/Common/MarkdownView";
 import { NodeCronTasksTab } from "../components/Nodes/NodeCronTasksTab";
+import { Dn42InfoCard } from "../components/Nodes/Dn42InfoCard";
+import { isDn42ExternalNode } from "../utils/dn42";
 import { getLinkWorkingState, isManualLink } from "../components/Topology/TopologyGraph";
 import { extractPort } from "../utils/endpoint";
 import { ViewNetworkPolicyModal } from "../components/Modals/ViewNetworkPolicyModal";
@@ -1885,10 +1887,16 @@ export const NodeDetailPage: React.FC = () => {
               </Grid>
 
               {/* Host & Agent Details */}
-              <Grid item xs={12} md={5}>
+              <Grid item xs={12} md={5} sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
                 <Paper
                   elevation={0}
-                  sx={{ p: 3, borderRadius: 3, bgcolor: "#FFFFFF", border: "1px solid #E2E8F0", height: "100%" }}
+                  sx={{
+                    p: 3,
+                    borderRadius: 3,
+                    bgcolor: "#FFFFFF",
+                    border: "1px solid #E2E8F0",
+                    height: isDn42ExternalNode(node) ? "auto" : "100%",
+                  }}
                 >
                   <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0F172A", mb: 2 }}>
                     Host & Management Details
@@ -2008,6 +2016,11 @@ export const NodeDetailPage: React.FC = () => {
                     </Box>
                   )}
                 </Paper>
+
+                {/* DN42 Info Card for External DN42 Nodes */}
+                {isDn42ExternalNode(node) && (
+                  <Dn42InfoCard asn={node.asn} variant="page" />
+                )}
               </Grid>
             </Grid>
 

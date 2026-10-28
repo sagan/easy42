@@ -62,6 +62,8 @@ const formatUptime = (seconds?: number): string => {
   return `${minutes}m`;
 };
 import { MarkdownView } from "../Common/MarkdownView";
+import { Dn42InfoCard } from "../Nodes/Dn42InfoCard";
+import { isDn42ExternalNode } from "../../utils/dn42";
 
 interface NodeDetailDrawerProps {
   node: Node | null;
@@ -520,6 +522,11 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
             </Typography>
           )}
         </Box>
+
+        {/* DN42 Info Card */}
+        {isDn42ExternalNode(node) && (
+          <Dn42InfoCard asn={node.asn} variant="drawer" />
+        )}
 
         {/* Node Markdown Note Card */}
         <Box sx={{ p: 2, borderRadius: 2, backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
