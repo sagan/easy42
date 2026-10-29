@@ -669,6 +669,7 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 			"cost":           rl.linkCost,
 			"has_preference": pref != nil,
 			"has_mark":       mark != "",
+			"disable_bfd":    rl.link.DisableBFD,
 		}
 		if pref != nil {
 			nodeLink["preference"] = *pref

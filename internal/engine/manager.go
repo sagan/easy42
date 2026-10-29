@@ -992,9 +992,11 @@ func (m *Manager) buildLink(cfg *config.Config, n1, n2 *config.Node, listenPort1
 	var customFromEnd, customToEnd *config.LinkEnd
 	linkType := config.LinkTypeWireGuard
 	assignIPv4 := false
+	disableBFD := false
 	if len(linkParams) > 0 && linkParams[0] != nil {
 		lp := linkParams[0]
 		assignIPv4 = lp.AssignIPv4
+		disableBFD = lp.DisableBFD
 		if lp.Type != "" {
 			linkType = lp.Type
 		}
@@ -1462,6 +1464,7 @@ func (m *Manager) buildLink(cfg *config.Config, n1, n2 *config.Node, listenPort1
 	link := &config.Link{
 		Type:       linkType,
 		AssignIPv4: assignIPv4,
+		DisableBFD: disableBFD,
 		Psk:        encPsk,
 		From: config.LinkEnd{
 			Name:                fromNode.Name,
@@ -1548,6 +1551,11 @@ func (m *Manager) AddLinkAdvanced(node1Name, node2Name string, fromEnd, toEnd *c
 
 // AddLinkWithOptions creates a link with full custom LinkEnd properties and link-level options (such as assignIPv4)
 func (m *Manager) AddLinkWithOptions(node1Name, node2Name string, fromEnd, toEnd *config.LinkEnd, tags []string, assignIPv4 bool, customMTU ...int) (*config.Link, error) {
+	return m.AddLinkWithAllOptions(node1Name, node2Name, fromEnd, toEnd, tags, assignIPv4, false, customMTU...)
+}
+
+// AddLinkWithAllOptions creates a link with full custom LinkEnd properties and link-level options (such as assignIPv4, disableBFD)
+func (m *Manager) AddLinkWithAllOptions(node1Name, node2Name string, fromEnd, toEnd *config.LinkEnd, tags []string, assignIPv4 bool, disableBFD bool, customMTU ...int) (*config.Link, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -1586,9 +1594,10 @@ func (m *Manager) AddLinkWithOptions(node1Name, node2Name string, fromEnd, toEnd
 	}
 
 	var lp *config.Link
-	if fromEnd != nil || toEnd != nil || assignIPv4 {
+	if fromEnd != nil || toEnd != nil || assignIPv4 || disableBFD {
 		lp = &config.Link{
 			AssignIPv4: assignIPv4,
+			DisableBFD: disableBFD,
 		}
 		if isManual {
 			lp.Type = config.LinkTypeManual
@@ -1832,8 +1841,8 @@ func (m *Manager) UpdateLinkAdvanced(node1Name, node2Name string, customFrom, cu
 	return m.UpdateLinkWithOptions(node1Name, node2Name, customFrom, customTo, tags, nil)
 }
 
-// UpdateLinkWithOptions updates parameters of an existing link, including assignIPv4 option
-func (m *Manager) UpdateLinkWithOptions(node1Name, node2Name string, customFrom, customTo *config.LinkEnd, tags []string, assignIPv4 *bool) (*config.Link, error) {
+// UpdateLinkWithOptions updates parameters of an existing link, including assignIPv4 and disableBFD options
+func (m *Manager) UpdateLinkWithOptions(node1Name, node2Name string, customFrom, customTo *config.LinkEnd, tags []string, assignIPv4 *bool, disableBFD ...*bool) (*config.Link, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -2093,6 +2102,10 @@ func (m *Manager) UpdateLinkWithOptions(node1Name, node2Name string, customFrom,
 	}
 	if toEnd != nil && toEnd.Address4 != "" {
 		link.To.Address4 = toEnd.Address4
+	}
+
+	if len(disableBFD) > 0 && disableBFD[0] != nil {
+		link.DisableBFD = *disableBFD[0]
 	}
 
 	if assignIPv4 != nil {

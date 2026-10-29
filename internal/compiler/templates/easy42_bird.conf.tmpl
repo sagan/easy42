@@ -1480,7 +1480,8 @@ template bgp {{.template_name}} {
 {{range .links}}
 {{if .is_external}}
 protocol bgp 'ext_peer_{{.remote.name}}' from {{.bgp_template}} {
-    bfd no; # Disable bfd for external peering
+{{if .disable_bfd}}    bfd no;
+{{end -}}
 {{if .has_preference -}}
     ipv4 { preference {{ .preference }}; };
     ipv6 { preference {{ .preference }}; };
@@ -1501,6 +1502,8 @@ protocol bgp 'ext_peer_{{.remote.name}}' from {{.bgp_template}} {
 }
 {{else if eq .policy_id "default"}}
 protocol bgp 'easy42_peer_{{.remote.name}}' from {{.bgp_template}} {
+{{if .disable_bfd}}    bfd no;
+{{end -}}
 {{if .has_preference -}}
     ipv4 { preference {{ .preference }}; };
     ipv6 { preference {{ .preference }}; };
@@ -1518,6 +1521,8 @@ protocol bgp 'easy42_peer_{{.remote.name}}' from {{.bgp_template}} {
 }
 {{else}}
 protocol bgp 'peer_{{.remote.name}}' from {{.bgp_template}} {
+{{if .disable_bfd}}    bfd no;
+{{end -}}
 {{if .has_preference -}}
     ipv4 { preference {{ .preference }}; };
     ipv6 { preference {{ .preference }}; };

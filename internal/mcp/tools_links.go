@@ -87,6 +87,7 @@ func registerLinkTools(s *server.MCPServer, mgr *engine.Manager) {
 		mcp.WithInteger("mtu", mcp.Description("WireGuard interface MTU (default 1420)")),
 		mcp.WithInteger("cost", mcp.Description("Routing cost metric for BIRD routing calculations")),
 		mcp.WithBoolean("assign_ipv4", mcp.Description("Assign IPv4 link-local address (169.254.x.x)")),
+		mcp.WithBoolean("disable_bfd", mcp.Description("Disable BFD session for this link (default false)")),
 		mcp.WithArray("tags", mcp.WithStringItems(), mcp.Description("Optional link tags")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		if err := RequireFullControl(ctx); err != nil {
@@ -106,6 +107,7 @@ func registerLinkTools(s *server.MCPServer, mgr *engine.Manager) {
 		mtu := req.GetInt("mtu", 0)
 		cost := req.GetInt("cost", 0)
 		assignIPv4 := req.GetBool("assign_ipv4", false)
+		disableBFD := req.GetBool("disable_bfd", false)
 		tags := req.GetStringSlice("tags", nil)
 
 		var fromEnd, toEnd *config.LinkEnd
@@ -114,9 +116,9 @@ func registerLinkTools(s *server.MCPServer, mgr *engine.Manager) {
 			toEnd = &config.LinkEnd{Cost: cost}
 		}
 
-		link, err := mgr.AddLinkWithOptions(from, to, fromEnd, toEnd, tags, assignIPv4, mtu, mtu)
+		link, err := mgr.AddLinkWithAllOptions(from, to, fromEnd, toEnd, tags, assignIPv4, disableBFD, mtu, mtu)
 		if err != nil {
-			// Fallback to basic AddLink if AddLinkWithOptions failed
+			// Fallback to basic AddLink if AddLinkWithAllOptions failed
 			link, err = mgr.AddLink(from, to, fromPort, toPort, tags, mtu, mtu)
 		}
 		if err != nil {
@@ -170,6 +172,7 @@ func registerLinkTools(s *server.MCPServer, mgr *engine.Manager) {
 		mcp.WithInteger("mtu", mcp.Description("MTU override")),
 		mcp.WithInteger("cost", mcp.Description("Routing cost metric")),
 		mcp.WithString("policy", mcp.Description("Network policy ID for routing")),
+		mcp.WithBoolean("disable_bfd", mcp.Description("Disable BFD session for this link")),
 		mcp.WithArray("tags", mcp.WithStringItems(), mcp.Description("Link tags")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		if err := RequireFullControl(ctx); err != nil {
@@ -188,6 +191,12 @@ func registerLinkTools(s *server.MCPServer, mgr *engine.Manager) {
 		cost := req.GetInt("cost", 0)
 		policy := req.GetString("policy", "")
 		tags := req.GetStringSlice("tags", nil)
+		var disableBFD *bool
+		if args := req.GetArguments(); args != nil {
+			if val, ok := args["disable_bfd"].(bool); ok {
+				disableBFD = &val
+			}
+		}
 
 		var fromEnd, toEnd *config.LinkEnd
 		if cost > 0 || policy != "" || mtu > 0 {
@@ -195,7 +204,7 @@ func registerLinkTools(s *server.MCPServer, mgr *engine.Manager) {
 			toEnd = &config.LinkEnd{Cost: cost, Policy: policy, MTU: mtu}
 		}
 
-		link, err := mgr.UpdateLinkWithOptions(from, to, fromEnd, toEnd, tags, nil)
+		link, err := mgr.UpdateLinkWithOptions(from, to, fromEnd, toEnd, tags, nil, disableBFD)
 		if err != nil {
 			return errorResult(err)
 		}

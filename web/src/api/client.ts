@@ -222,6 +222,7 @@ export const api = {
     tags?: string[];
     assign_ipv4?: boolean;
     psk?: string;
+    disable_bfd?: boolean;
     from?: Partial<Link["from"]>;
     to?: Partial<Link["to"]>;
   }) =>
@@ -262,6 +263,7 @@ export const api = {
     tags?: string[];
     assign_ipv4?: boolean;
     psk?: string;
+    disable_bfd?: boolean;
     from?: Partial<Link["from"]>;
     to?: Partial<Link["to"]>;
   }) =>

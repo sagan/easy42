@@ -516,6 +516,19 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
                   }}
                 />
               )}
+              <Chip
+                label={link.disable_bfd ? "BFD Disabled" : "BFD Enabled"}
+                size="small"
+                sx={{
+                  height: 18,
+                  fontSize: "0.6rem",
+                  fontWeight: 800,
+                  bgcolor: link.disable_bfd ? "rgba(239, 68, 68, 0.12)" : "rgba(16, 185, 129, 0.12)",
+                  color: link.disable_bfd ? "#DC2626" : "#059669",
+                  border: link.disable_bfd ? "1px solid rgba(239, 68, 68, 0.25)" : "1px solid rgba(16, 185, 129, 0.25)",
+                  borderRadius: "4px",
+                }}
+              />
             </Box>
             <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, flexWrap: "wrap", mt: 0.25 }}>
               <Typography
@@ -746,6 +759,20 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
                   </Typography>
                 </Box>
               )}
+              <Box sx={{ display: "flex", justifyContent: "space-between" }}>
+                <Typography variant="caption" sx={{ color: "#64748B" }}>
+                  Enable BFD:
+                </Typography>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    fontWeight: 600,
+                    color: link.disable_bfd ? "#DC2626" : "#059669",
+                  }}
+                >
+                  {link.disable_bfd ? "Disabled (bfd no)" : "Enabled"}
+                </Typography>
+              </Box>
             </Box>
           </Box>
         );

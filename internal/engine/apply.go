@@ -829,6 +829,10 @@ func mergeLink(target *config.Link, patch config.LinkPatch, now time.Time) ([]Ap
 		checkField("assign_ipv4", target.AssignIPv4, *patch.AssignIPv4)
 		target.AssignIPv4 = *patch.AssignIPv4
 	}
+	if patch.DisableBFD != nil && *patch.DisableBFD != target.DisableBFD {
+		checkField("disable_bfd", target.DisableBFD, *patch.DisableBFD)
+		target.DisableBFD = *patch.DisableBFD
+	}
 	if patch.Psk != nil && *patch.Psk != target.Psk {
 		checkField("psk", "***", "***")
 		target.Psk = *patch.Psk
@@ -950,6 +954,9 @@ func createLinkFromPatch(patch config.LinkPatch, now time.Time) (*config.Link, [
 	link.Tags = baseTags
 	if patch.AssignIPv4 != nil {
 		link.AssignIPv4 = *patch.AssignIPv4
+	}
+	if patch.DisableBFD != nil {
+		link.DisableBFD = *patch.DisableBFD
 	}
 	if patch.Psk != nil {
 		link.Psk = *patch.Psk

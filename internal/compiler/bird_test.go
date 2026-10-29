@@ -2874,6 +2874,134 @@ func TestBirdNetworkPolicySnippets(t *testing.T) {
 	validateBirdSyntax(t, confNode2)
 }
 
+func TestDisableBFDInBirdConfig(t *testing.T) {
+	node1 := config.Node{
+		Name:      "r1",
+		IP:        "192.168.1.1",
+		ASN:       4242421001,
+		Interface: "eth0",
+	}
+	node2 := config.Node{
+		Name:      "r2",
+		IP:        "192.168.1.2",
+		ASN:       4242421002,
+		Interface: "eth0",
+	}
+	allNodes := []config.Node{node1, node2}
+
+	// 1. Link with DisableBFD = false (default)
+	linkDefault := config.Link{
+		From: config.LinkEnd{
+			Name:      "r1",
+			Interface: "wg42r2",
+			Address:   "fe80::1/64",
+			Policy:    "default",
+		},
+		To: config.LinkEnd{
+			Name:      "r2",
+			Interface: "wg42r1",
+			Address:   "fe80::2/64",
+			Policy:    "default",
+		},
+		DisableBFD: false,
+	}
+
+	conf1, err := GenerateBirdConfig(&node1, allNodes, []config.Link{linkDefault})
+	if err != nil {
+		t.Fatalf("GenerateBirdConfig for node1 failed: %v", err)
+	}
+	// The protocol easy42_peer_r2 block should NOT contain "bfd no;"
+	if strings.Contains(conf1, "bfd no;") {
+		t.Errorf("Expected conf1 NOT to contain 'bfd no;', but found it in:\n%s", conf1)
+	}
+
+	conf2, err := GenerateBirdConfig(&node2, allNodes, []config.Link{linkDefault})
+	if err != nil {
+		t.Fatalf("GenerateBirdConfig for node2 failed: %v", err)
+	}
+	if strings.Contains(conf2, "bfd no;") {
+		t.Errorf("Expected conf2 NOT to contain 'bfd no;', but found it in:\n%s", conf2)
+	}
+
+	// 2. Link with DisableBFD = true (default policy)
+	linkDisabled := config.Link{
+		From: config.LinkEnd{
+			Name:      "r1",
+			Interface: "wg42r2",
+			Address:   "fe80::1/64",
+			Policy:    "default",
+		},
+		To: config.LinkEnd{
+			Name:      "r2",
+			Interface: "wg42r1",
+			Address:   "fe80::2/64",
+			Policy:    "default",
+		},
+		DisableBFD: true,
+	}
+
+	conf1Disabled, err := GenerateBirdConfig(&node1, allNodes, []config.Link{linkDisabled})
+	if err != nil {
+		t.Fatalf("GenerateBirdConfig for node1 failed: %v", err)
+	}
+	expectedBlock1 := "protocol bgp 'easy42_peer_r2' from easy42_peer {\n    bfd no;"
+	if !strings.Contains(conf1Disabled, expectedBlock1) {
+		t.Errorf("Expected conf1Disabled to contain %q, but got:\n%s", expectedBlock1, conf1Disabled)
+	}
+
+	conf2Disabled, err := GenerateBirdConfig(&node2, allNodes, []config.Link{linkDisabled})
+	if err != nil {
+		t.Fatalf("GenerateBirdConfig for node2 failed: %v", err)
+	}
+	expectedBlock2 := "protocol bgp 'easy42_peer_r1' from easy42_peer {\n    bfd no;"
+	if !strings.Contains(conf2Disabled, expectedBlock2) {
+		t.Errorf("Expected conf2Disabled to contain %q, but got:\n%s", expectedBlock2, conf2Disabled)
+	}
+
+	// 3. Link with DisableBFD = true (custom policy)
+	customPolicy := config.NetworkPolicy{
+		ID:   "custom",
+		Name: "Custom Policy",
+	}
+	linkCustomDisabled := config.Link{
+		From: config.LinkEnd{
+			Name:      "r1",
+			Interface: "wg42r2",
+			Address:   "fe80::1/64",
+			Policy:    "custom",
+		},
+		To: config.LinkEnd{
+			Name:      "r2",
+			Interface: "wg42r1",
+			Address:   "fe80::2/64",
+			Policy:    "custom",
+		},
+		DisableBFD: true,
+	}
+
+	confCustom1, err := GenerateBirdConfig(&node1, allNodes, []config.Link{linkCustomDisabled}, []config.NetworkPolicy{customPolicy})
+	if err != nil {
+		t.Fatalf("GenerateBirdConfig with custom policy failed: %v", err)
+	}
+	expectedCustomBlock1 := "protocol bgp 'peer_r2' from pol_peer_custom {\n    bfd no;"
+	if !strings.Contains(confCustom1, expectedCustomBlock1) {
+		t.Errorf("Expected confCustom1 to contain %q, but got:\n%s", expectedCustomBlock1, confCustom1)
+	}
+
+	confCustom2, err := GenerateBirdConfig(&node2, allNodes, []config.Link{linkCustomDisabled}, []config.NetworkPolicy{customPolicy})
+	if err != nil {
+		t.Fatalf("GenerateBirdConfig with custom policy failed: %v", err)
+	}
+	expectedCustomBlock2 := "protocol bgp 'peer_r1' from pol_peer_custom {\n    bfd no;"
+	if !strings.Contains(confCustom2, expectedCustomBlock2) {
+		t.Errorf("Expected confCustom2 to contain %q, but got:\n%s", expectedCustomBlock2, confCustom2)
+	}
+
+	validateBirdSyntax(t, conf1)
+	validateBirdSyntax(t, conf1Disabled)
+	validateBirdSyntax(t, confCustom1)
+}
+
 
 
 

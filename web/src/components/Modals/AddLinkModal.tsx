@@ -14,6 +14,7 @@ import {
   Divider,
   FormControlLabel,
   Switch,
+  Checkbox,
   Chip,
   Tooltip,
   IconButton,
@@ -101,6 +102,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
   const [fromNoteTab, setFromNoteTab] = useState<"write" | "preview">("write");
   const [toNoteTab, setToNoteTab] = useState<"write" | "preview">("write");
   const [assignIPv4, setAssignIPv4] = useState<boolean>(false);
+  const [enableBFD, setEnableBFD] = useState<boolean>(true);
   const [enablePsk, setEnablePsk] = useState<boolean>(true);
   const [customPsk, setCustomPsk] = useState<string>("");
   const linkHadPsk = Boolean(linkToEdit?.psk || linkToEdit?.from?.psk || linkToEdit?.to?.psk);
@@ -241,12 +243,14 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
       setFromNote(linkToEdit.from.note || "");
       setToNote(linkToEdit.to.note || "");
       setAssignIPv4(Boolean(linkToEdit.assign_ipv4));
+      setEnableBFD(!Boolean(linkToEdit.disable_bfd));
       setEnablePsk(Boolean(linkToEdit.psk || linkToEdit.from.psk || linkToEdit.to.psk));
       setCustomPsk("");
       setError(null);
     } else {
       setLinkType("wireguard");
       setAssignIPv4(false);
+      setEnableBFD(true);
       setEnablePsk(true);
       setCustomPsk("");
       setFromInterface("");
@@ -618,6 +622,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
             from_note: reqFrom.note || "",
             to_note: reqTo.note || "",
             assign_ipv4: assignIPv4,
+            disable_bfd: !enableBFD,
             psk: pskVal,
           });
           onLinkUpdated?.(updated);
@@ -644,6 +649,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
             from_note: reqFrom.note,
             to_note: reqTo.note,
             assign_ipv4: assignIPv4,
+            disable_bfd: !enableBFD,
             psk: pskVal,
           });
           onLinkAdded?.(link);
@@ -716,6 +722,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
               psk: pskVal !== undefined ? pskVal : (linkToEdit.to?.psk || undefined),
             },
             assign_ipv4: assignIPv4,
+            disable_bfd: !enableBFD,
             psk: pskVal,
           });
           onLinkUpdated?.(updated);
@@ -744,6 +751,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
             from_note: fromNote.trim() || undefined,
             to_note: toNote.trim() || undefined,
             assign_ipv4: assignIPv4,
+            disable_bfd: !enableBFD,
             psk: pskVal,
             from: {
               use_ip: fromUseIp,
@@ -1011,6 +1019,59 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
           )}
 
           <Divider sx={{ borderColor: "#E2E8F0" }} />
+
+          {/* BFD Option: Enable BFD */}
+          <Box
+            sx={{
+              p: 1.75,
+              borderRadius: 2,
+              backgroundColor: enableBFD ? "rgba(16, 185, 129, 0.05)" : "#F8FAFC",
+              border: "1px solid",
+              borderColor: enableBFD ? "rgba(16, 185, 129, 0.35)" : "#E2E8F0",
+              transition: "all 0.2s ease",
+            }}
+          >
+            <FormControlLabel
+              control={
+                <Checkbox
+                  id="link-enable-bfd-checkbox"
+                  size="small"
+                  checked={enableBFD}
+                  onChange={(e) => setEnableBFD(e.target.checked)}
+                  color="primary"
+                />
+              }
+              label={
+                <Box>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                    <Typography variant="body2" sx={{ fontSize: "0.85rem", fontWeight: 700, color: "#1E293B" }}>
+                      Enable BFD
+                    </Typography>
+                    <Chip
+                      label={enableBFD ? "Enabled (Default)" : "Disabled (bfd no)"}
+                      size="small"
+                      sx={{
+                        height: 18,
+                        fontSize: "0.62rem",
+                        fontWeight: 800,
+                        bgcolor: enableBFD ? "rgba(16, 185, 129, 0.15)" : "#E2E8F0",
+                        color: enableBFD ? "#059669" : "#64748B",
+                        borderRadius: "4px",
+                      }}
+                    />
+                  </Box>
+                  <Typography
+                    variant="caption"
+                    sx={{ color: "#64748B", display: "block", fontSize: "0.72rem", lineHeight: 1.4, mt: 0.3 }}
+                  >
+                    Bidirectional Forwarding Detection (BFD) provides sub-second link failure detection for BGP peering
+                    sessions. When disabled, adds &quot;bfd no;&quot; to BIRD link configuration on both link ends.
+                  </Typography>
+                </Box>
+              }
+              sx={{ alignItems: "flex-start", ml: 0, m: 0 }}
+            />
+          </Box>
 
           {/* WireGuard Options: Assign IPv4 Link-Local */}
           {linkType === "wireguard" && (

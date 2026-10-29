@@ -146,7 +146,8 @@ const ConfigChangeJSONSchema = `{
         "tags_add": { "type": "array", "items": { "type": "string" } },
         "tags_del": { "type": "array", "items": { "type": "string" } },
         "assign_ipv4": { "type": "boolean" },
-        "psk": { "type": "string" }
+        "psk": { "type": "string" },
+        "disable_bfd": { "type": "boolean" }
       }
     },
     "LinkEndPatch": {
@@ -331,6 +332,7 @@ type LinkPatch struct {
 	TagsDel    *[]string     `json:"tags_del,omitempty" yaml:"tags_del,omitempty"`
 	AssignIPv4 *bool         `json:"assign_ipv4,omitempty" yaml:"assign_ipv4,omitempty"`
 	Psk        *string       `json:"psk,omitempty" yaml:"psk,omitempty"`
+	DisableBFD *bool         `json:"disable_bfd,omitempty" yaml:"disable_bfd,omitempty"`
 }
 
 // DNSPatch holds partial changes to DNS settings

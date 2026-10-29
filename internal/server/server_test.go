@@ -2084,6 +2084,82 @@ func TestLinkAssignIPv4API(t *testing.T) {
 	}
 }
 
+func TestLinkDisableBFD_API(t *testing.T) {
+	srv, tempDir, initPass := setupTestServer(t)
+	defer os.RemoveAll(tempDir)
+
+	// Login
+	loginBody, _ := json.Marshal(map[string]string{"password": initPass})
+	req := httptest.NewRequest("POST", "/api/auth/login", bytes.NewReader(loginBody))
+	w := httptest.NewRecorder()
+	srv.router.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("Login failed: code %d, body: %s", w.Code, w.Body.String())
+	}
+	cookie := w.Result().Cookies()[0]
+
+	// Create two nodes
+	n1Body, _ := json.Marshal(config.Node{Name: "bfd-n1", Host: "192.168.10.1", IP: "10.42.1.1", ASN: 4242421111})
+	reqN1 := httptest.NewRequest("POST", "/api/nodes", bytes.NewReader(n1Body))
+	reqN1.AddCookie(cookie)
+	wN1 := httptest.NewRecorder()
+	srv.router.ServeHTTP(wN1, reqN1)
+	if wN1.Code != http.StatusCreated {
+		t.Fatalf("Create node 1 failed: %d %s", wN1.Code, wN1.Body.String())
+	}
+
+	n2Body, _ := json.Marshal(config.Node{Name: "bfd-n2", Host: "192.168.10.2", IP: "10.42.1.2", ASN: 4242421112})
+	reqN2 := httptest.NewRequest("POST", "/api/nodes", bytes.NewReader(n2Body))
+	reqN2.AddCookie(cookie)
+	wN2 := httptest.NewRecorder()
+	srv.router.ServeHTTP(wN2, reqN2)
+	if wN2.Code != http.StatusCreated {
+		t.Fatalf("Create node 2 failed: %d %s", wN2.Code, wN2.Body.String())
+	}
+
+	// 1. Create link with disable_bfd = true
+	disableBFD := true
+	linkReqBody, _ := json.Marshal(map[string]any{
+		"from_node":   "bfd-n1",
+		"to_node":     "bfd-n2",
+		"disable_bfd": disableBFD,
+	})
+	reqLink := httptest.NewRequest("POST", "/api/links", bytes.NewReader(linkReqBody))
+	reqLink.AddCookie(cookie)
+	wLink := httptest.NewRecorder()
+	srv.router.ServeHTTP(wLink, reqLink)
+	if wLink.Code != http.StatusCreated {
+		t.Fatalf("Create link failed: %d %s", wLink.Code, wLink.Body.String())
+	}
+
+	var createdLink config.Link
+	_ = json.Unmarshal(wLink.Body.Bytes(), &createdLink)
+	if !createdLink.DisableBFD {
+		t.Fatalf("Expected DisableBFD == true in created link, got false")
+	}
+
+	// 2. Update link with disable_bfd = false
+	enableBFD := false
+	updateReqBody, _ := json.Marshal(map[string]any{
+		"from_node":   "bfd-n1",
+		"to_node":     "bfd-n2",
+		"disable_bfd": enableBFD,
+	})
+	reqUpdate := httptest.NewRequest("PUT", "/api/links", bytes.NewReader(updateReqBody))
+	reqUpdate.AddCookie(cookie)
+	wUpdate := httptest.NewRecorder()
+	srv.router.ServeHTTP(wUpdate, reqUpdate)
+	if wUpdate.Code != http.StatusOK {
+		t.Fatalf("Update link failed: %d %s", wUpdate.Code, wUpdate.Body.String())
+	}
+
+	var updatedLink config.Link
+	_ = json.Unmarshal(wUpdate.Body.Bytes(), &updatedLink)
+	if updatedLink.DisableBFD {
+		t.Fatalf("Expected DisableBFD == false after update, got true")
+	}
+}
+
 func TestServerMultipleListeners(t *testing.T) {
 	tempDir, err := os.MkdirTemp("", "easy42-multi-listen-*")
 	if err != nil {

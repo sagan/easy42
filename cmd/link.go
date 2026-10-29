@@ -25,6 +25,7 @@ var (
 	fromAddr     string
 	toAddr       string
 	linkAssignIPv4 bool
+	linkDisableBFD bool
 )
 
 var linkCmd = &cobra.Command{
@@ -119,7 +120,7 @@ var linkAddCmd = &cobra.Command{
 
 		var link *config.Link
 		var err error
-		if linkAssignIPv4 {
+		if linkAssignIPv4 || linkDisableBFD {
 			var fromEnd, toEnd *config.LinkEnd
 			if fromPort > 0 {
 				fromEnd = &config.LinkEnd{Name: node1, ListenPort: fromPort}
@@ -127,7 +128,7 @@ var linkAddCmd = &cobra.Command{
 			if toPort > 0 {
 				toEnd = &config.LinkEnd{Name: node2, ListenPort: toPort}
 			}
-			link, err = mgr.AddLinkWithOptions(node1, node2, fromEnd, toEnd, nil, true)
+			link, err = mgr.AddLinkWithAllOptions(node1, node2, fromEnd, toEnd, nil, linkAssignIPv4, linkDisableBFD)
 		} else {
 			link, err = mgr.AddLink(node1, node2, fromPort, toPort, nil)
 		}
@@ -183,6 +184,7 @@ func init() {
 	linkAddCmd.Flags().StringVar(&fromAddr, "from-addr", "", "Local IP on node1 (required for manual link)")
 	linkAddCmd.Flags().StringVar(&toAddr, "to-addr", "", "Local IP on node2 (required for manual link)")
 	linkAddCmd.Flags().BoolVar(&linkAssignIPv4, "assign-ipv4", false, "Assign a pair of IPv4 link-local addresses (169.254.X.X/32) to wg interface")
+	linkAddCmd.Flags().BoolVar(&linkDisableBFD, "disable-bfd", false, "Disable BFD for BGP session on this link")
 	linkRemoveCmd.Flags().StringVarP(&linkIface, "interface", "i", "", "Specific interface name of the link to remove")
 
 	linkCmd.AddCommand(linkListCmd)

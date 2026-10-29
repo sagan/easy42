@@ -185,6 +185,7 @@ export interface Link {
   tags?: string[];
   assign_ipv4?: boolean;
   psk?: string;
+  disable_bfd?: boolean;
   modified_at?: string;
 }
 
