@@ -762,7 +762,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
               </Alert>
 
               <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
-                <TextField
+                <TextFieldWithCopy
                   label="Peer Name"
                   size="small"
                   value={name}
@@ -786,7 +786,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                   disabled={saving || Boolean(nodeToEdit)}
                 />
 
-                <TextField
+                <TextFieldWithCopy
                   label="Peer AS Number (ASN)"
                   type="number"
                   size="small"
@@ -798,7 +798,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                 />
               </Box>
 
-              <TextField
+              <TextFieldWithCopy
                 fullWidth
                 size="small"
                 label="Caption"
@@ -806,16 +806,6 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                 value={caption}
                 onChange={(e) => setCaption(e.target.value)}
                 helperText="Optional short description (one short sentence) of the node"
-                disabled={saving}
-              />
-
-              <TextField
-                fullWidth
-                size="small"
-                label="Description / Peering Partner"
-                placeholder="e.g. DN42 peer with AS4242421234 in Frankfurt"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
                 disabled={saving}
               />
 
@@ -883,7 +873,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
               </Box>
 
               <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
-                <TextField
+                <TextFieldWithCopy
                   label="Router IPv4 (Optional)"
                   size="small"
                   value={ip}
@@ -893,7 +883,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                   disabled={saving}
                 />
 
-                <TextField
+                <TextFieldWithCopy
                   label="Router IPv6 (Optional)"
                   size="small"
                   value={ip6}
@@ -905,7 +895,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
               </Box>
 
               <Box>
-                <TextField
+                <TextFieldWithCopy
                   fullWidth
                   label="Tags (comma-separated)"
                   size="small"
@@ -969,7 +959,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                       </Box>
 
                       <Box sx={{ display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: 1.5 }}>
-                        <TextField
+                        <TextFieldWithCopy
                           label="Endpoint Host / IP"
                           size="small"
                           placeholder="e.g. peer.example.com or 198.51.100.1"
@@ -978,7 +968,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                           helperText="Public IP or DDNS hostname"
                           disabled={saving}
                         />
-                        <TextField
+                        <TextFieldWithCopy
                           label="Listen Port (Optional)"
                           size="small"
                           placeholder="e.g. 51820"
@@ -990,7 +980,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                       </Box>
 
                       <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}>
-                        <TextField
+                        <TextFieldWithCopy
                           label="Tags"
                           size="small"
                           placeholder="external"
@@ -999,7 +989,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                           helperText="Default: external (used to match internal endpoints)"
                           disabled={saving}
                         />
-                        <TextField
+                        <TextFieldWithCopy
                           label="MTU (Optional)"
                           size="small"
                           placeholder="1420"
@@ -1153,7 +1143,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                     disabled={saving}
                   />
 
-                  <TextField
+                  <TextFieldWithCopy
                     label="Node Tags (comma-separated)"
                     size="small"
                     value={nodeTags}
@@ -1191,7 +1181,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                   </Box>
                 )}
 
-                <TextField
+                <TextFieldWithCopy
                   fullWidth
                   size="small"
                   label="Caption"
@@ -1317,7 +1307,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                           </Box>
 
                           <Box sx={{ width: { xs: "100%", sm: 180 }, flexShrink: 0 }}>
-                            <TextField
+                            <TextFieldWithCopy
                               label="Tags"
                               size="small"
                               placeholder="nat"
@@ -1390,7 +1380,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                             required
                           />
 
-                          <TextField
+                          <TextFieldWithCopy
                             label="Port(s) (Optional)"
                             size="small"
                             placeholder="e.g. 51820, 2000-2999"
@@ -1399,7 +1389,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                             helperText="Blank for auto port"
                           />
 
-                          <TextField
+                          <TextFieldWithCopy
                             label="Tags"
                             size="small"
                             placeholder="e.g. direct, wan1"
@@ -1408,7 +1398,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                             helperText="Comma separated"
                           />
 
-                          <TextField
+                          <TextFieldWithCopy
                             label="MTU"
                             type="number"
                             size="small"
@@ -1434,7 +1424,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                 </Box>
 
                 <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr 1fr" }, gap: 2 }}>
-                  <TextField
+                  <TextFieldWithCopy
                     label="Kernel Routing Table ID"
                     type="number"
                     size="small"
@@ -1444,7 +1434,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                     disabled={saving}
                   />
 
-                  <TextField
+                  <TextFieldWithCopy
                     label="External Routing Table ID"
                     type="number"
                     size="small"
@@ -1455,7 +1445,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                     disabled={saving}
                   />
 
-                  <TextField
+                  <TextFieldWithCopy
                     label="Internet Routing Table ID"
                     type="number"
                     size="small"
@@ -1466,7 +1456,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                     disabled={saving}
                   />
 
-                  <TextField
+                  <TextFieldWithCopy
                     label="Kernel Route Metric"
                     type="number"
                     size="small"
@@ -1505,7 +1495,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                     disabled={saving}
                   />
 
-                  <TextField
+                  <TextFieldWithCopy
                     label="Static BGP Prefixes"
                     size="small"
                     value={staticRoutesStr}
@@ -1782,7 +1772,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                           }}
                         >
                           <Box sx={{ width: { xs: "100%", sm: 130 }, flexShrink: 0 }}>
-                            <TextField
+                            <TextFieldWithCopy
                               label="Kernel Table"
                               type="number"
                               size="small"
@@ -1800,7 +1790,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                             />
                           </Box>
                           <Box sx={{ flex: 1 }}>
-                            <TextField
+                            <TextFieldWithCopy
                               label="Prefixes (BIRD syntax)"
                               size="small"
                               placeholder="e.g. 10.0.0.0/8+, 192.168.0.0/16+"
@@ -1890,7 +1880,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                               }}
                             >
                               <Box sx={{ width: { xs: "100%", sm: 260 }, flexShrink: 0 }}>
-                                <TextField
+                                <TextFieldWithCopy
                                   select
                                   label="Hook Type"
                                   size="small"
@@ -1903,11 +1893,11 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                                       {opt.label}
                                     </MenuItem>
                                   ))}
-                                </TextField>
+                                </TextFieldWithCopy>
                               </Box>
                               {isWg && (
                                 <Box sx={{ flex: 1 }}>
-                                  <TextField
+                                  <TextFieldWithCopy
                                     label="Target (optional)"
                                     size="small"
                                     placeholder="e.g. wg42* or peer name (empty for all)"

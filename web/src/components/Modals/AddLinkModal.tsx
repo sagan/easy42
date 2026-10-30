@@ -38,6 +38,7 @@ import { useMesh } from "../../context/MeshContext";
 import { MarkdownView } from "../Common/MarkdownView";
 import { derivePortFromIP } from "../../utils/port";
 import { resolvePeerEntrypoint, extractPort, formatEndpoint } from "../../utils/endpoint";
+import TextFieldWithCopy from "../Common/TextFieldWithCopy";
 
 export function getInterfaceNameWithSuffix(peerName: string, suffix: string, isExternal?: boolean): string {
   const cleanName = (peerName || "").trim();
@@ -603,11 +604,11 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
             to_node: toNodeName,
             from: {
               ...reqFrom,
-              psk: pskVal !== undefined ? pskVal : (linkToEdit.from?.psk || undefined),
+              psk: pskVal !== undefined ? pskVal : linkToEdit.from?.psk || undefined,
             },
             to: {
               ...reqTo,
-              psk: pskVal !== undefined ? pskVal : (linkToEdit.to?.psk || undefined),
+              psk: pskVal !== undefined ? pskVal : linkToEdit.to?.psk || undefined,
             },
             from_use_ip: fromUseIp,
             to_use_ip: toUseIp,
@@ -707,7 +708,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
               endpoint: undefined,
               resolved_endpoint: undefined,
               note: fromNote.trim() || undefined,
-              psk: pskVal !== undefined ? pskVal : (linkToEdit.from?.psk || undefined),
+              psk: pskVal !== undefined ? pskVal : linkToEdit.from?.psk || undefined,
             },
             to: {
               ...linkToEdit.to,
@@ -723,7 +724,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
               endpoint: undefined,
               resolved_endpoint: undefined,
               note: toNote.trim() || undefined,
-              psk: pskVal !== undefined ? pskVal : (linkToEdit.to?.psk || undefined),
+              psk: pskVal !== undefined ? pskVal : linkToEdit.to?.psk || undefined,
             },
             assign_ipv4: assignIPv4,
             disable_bfd: !enableBFD,
@@ -1184,7 +1185,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
 
                     {enablePsk && (
                       <Box sx={{ mt: 1.5 }}>
-                        <TextField
+                        <TextFieldWithCopy
                           id="link-custom-psk-input"
                           fullWidth
                           size="small"
@@ -1240,7 +1241,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                   Local Interface: {managedNode.name}
                 </Typography>
                 <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5, mb: 1.5 }}>
-                  <TextField
+                  <TextFieldWithCopy
                     label="Interface Name"
                     size="small"
                     value={
@@ -1252,7 +1253,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                     }
                     disabled
                   />
-                  <TextField
+                  <TextFieldWithCopy
                     label="Local Listen Port"
                     type="number"
                     size="small"
@@ -1267,7 +1268,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                   />
                 </Box>
                 <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}>
-                  <TextField
+                  <TextFieldWithCopy
                     label="Local WG Address"
                     size="small"
                     value={localAddress}
@@ -1276,7 +1277,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                     helperText="IP assigned to local interface"
                     required
                   />
-                  <TextField
+                  <TextFieldWithCopy
                     label="Interface MTU"
                     type="number"
                     size="small"
@@ -1328,7 +1329,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                     }}
                     helperText="Firewall & BGP routing policy applied on this peering link"
                   >
-                    {networkPolicies.map((p) => (
+                    {networkPolicies.map((p: NetworkPolicy) => (
                       <MenuItem key={p.id} value={p.id}>
                         {p.name} ({p.id}){p.is_internal ? " — Built-in" : ""}
                       </MenuItem>
@@ -1352,7 +1353,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                     <MenuItem value="receive_only">Receive Only — Import only</MenuItem>
                     <MenuItem value="advertise_only">Advertise Only — Export only</MenuItem>
                   </TextField>
-                  <TextField
+                  <TextFieldWithCopy
                     fullWidth
                     size="small"
                     label="Link Cost (Optional)"
@@ -1368,7 +1369,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                   />
                 </Box>
                 <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 1.5 }}>
-                  <TextField
+                  <TextFieldWithCopy
                     fullWidth
                     size="small"
                     label="WireGuard FwMark (Optional)"
@@ -1381,7 +1382,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                     placeholder="Policy default"
                     helperText="Overrides policy WireGuard FwMark"
                   />
-                  <TextField
+                  <TextFieldWithCopy
                     fullWidth
                     size="small"
                     type="number"
@@ -1395,7 +1396,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                     placeholder="Policy default"
                     helperText="Overrides policy BGP preference"
                   />
-                  <TextField
+                  <TextFieldWithCopy
                     fullWidth
                     size="small"
                     label="Netfilter Mark (Optional)"
@@ -1591,7 +1592,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                 </Box>
 
                 <Box sx={{ display: "grid", gridTemplateColumns: "1.2fr 0.8fr", gap: 1.5, mb: 1.5 }}>
-                  <TextField
+                  <TextFieldWithCopy
                     label="Resolved Entrypoint (IP / Host)"
                     size="small"
                     value={
@@ -1622,7 +1623,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                       },
                     }}
                   />
-                  <TextField
+                  <TextFieldWithCopy
                     label="Remote Port"
                     type="number"
                     size="small"
@@ -1634,7 +1635,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                 </Box>
 
                 <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5, mb: 1.5 }}>
-                  <TextField
+                  <TextFieldWithCopy
                     label="Remote WG Address"
                     size="small"
                     value={remoteAddress}
@@ -1643,7 +1644,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                     helperText="Peer's WireGuard IP address (fe80::<peer ASN last 4 digits>)"
                     required
                   />
-                  <TextField
+                  <TextFieldWithCopy
                     size="small"
                     label="Remote WireGuard Public Key (Optional)"
                     value={remotePublicKey}
@@ -1725,7 +1726,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                 </Typography>
 
                 <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 1.5, mb: 1.5 }}>
-                  <TextField
+                  <TextFieldWithCopy
                     id="manual-from-interface"
                     label="Interface Name"
                     size="small"
@@ -1735,7 +1736,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                     required
                     helperText="Name of existing link interface"
                   />
-                  <TextField
+                  <TextFieldWithCopy
                     id="manual-from-address"
                     label="Local IP Address"
                     size="small"
@@ -1745,7 +1746,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                     required
                     helperText="Local IP on this interface"
                   />
-                  <TextField
+                  <TextFieldWithCopy
                     id="manual-from-neighbor-address"
                     label="Neighbor IP Address"
                     size="small"
@@ -1787,7 +1788,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                     <MenuItem value="receive_only">Receive Only — Import only</MenuItem>
                     <MenuItem value="advertise_only">Advertise Only — Export only</MenuItem>
                   </TextField>
-                  <TextField
+                  <TextFieldWithCopy
                     fullWidth
                     size="small"
                     label="Link Cost (Optional)"
@@ -1800,7 +1801,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                 </Box>
 
                 <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}>
-                  <TextField
+                  <TextFieldWithCopy
                     fullWidth
                     size="small"
                     type="number"
@@ -1810,7 +1811,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                     placeholder="Policy default"
                     helperText="Overrides policy BGP preference"
                   />
-                  <TextField
+                  <TextFieldWithCopy
                     fullWidth
                     size="small"
                     label="Netfilter Mark (Optional)"
@@ -1901,7 +1902,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                 </Typography>
 
                 <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 1.5, mb: 1.5 }}>
-                  <TextField
+                  <TextFieldWithCopy
                     id="manual-to-interface"
                     label="Interface Name"
                     size="small"
@@ -1911,7 +1912,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                     required
                     helperText="Name of existing link interface"
                   />
-                  <TextField
+                  <TextFieldWithCopy
                     id="manual-to-address"
                     label="Local IP Address"
                     size="small"
@@ -1921,7 +1922,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                     required
                     helperText="Local IP on this interface"
                   />
-                  <TextField
+                  <TextFieldWithCopy
                     id="manual-to-neighbor-address"
                     label="Neighbor IP Address"
                     size="small"
@@ -1963,7 +1964,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                     <MenuItem value="receive_only">Receive Only — Import only</MenuItem>
                     <MenuItem value="advertise_only">Advertise Only — Export only</MenuItem>
                   </TextField>
-                  <TextField
+                  <TextFieldWithCopy
                     fullWidth
                     size="small"
                     label="Link Cost (Optional)"
@@ -1976,7 +1977,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                 </Box>
 
                 <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}>
-                  <TextField
+                  <TextFieldWithCopy
                     fullWidth
                     size="small"
                     type="number"
@@ -1986,7 +1987,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                     placeholder="Policy default"
                     helperText="Overrides policy BGP preference"
                   />
-                  <TextField
+                  <TextFieldWithCopy
                     fullWidth
                     size="small"
                     label="Netfilter Mark (Optional)"
@@ -2086,7 +2087,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                     End 1: {fromNode.name}
                   </Typography>
                   <Box sx={{ display: "grid", gridTemplateColumns: "1.2fr 1fr 1fr", gap: 1.5 }}>
-                    <TextField
+                    <TextFieldWithCopy
                       label="Interface"
                       size="small"
                       value={
@@ -2098,7 +2099,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                       }
                       disabled
                     />
-                    <TextField
+                    <TextFieldWithCopy
                       label="Listen Port"
                       type="number"
                       size="small"
@@ -2106,7 +2107,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                       onChange={(e) => setFromPort(Number(e.target.value))}
                       helperText={toNode.ip ? `Derived from ${toNode.ip}` : "Default port: 20000"}
                     />
-                    <TextField
+                    <TextFieldWithCopy
                       label="MTU"
                       type="number"
                       size="small"
@@ -2227,7 +2228,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                       <MenuItem value="receive_only">Receive Only — Import only</MenuItem>
                       <MenuItem value="advertise_only">Advertise Only — Export only</MenuItem>
                     </TextField>
-                    <TextField
+                    <TextFieldWithCopy
                       fullWidth
                       size="small"
                       label="Link Cost (Optional)"
@@ -2239,7 +2240,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                     />
                   </Box>
                   <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 1.5 }}>
-                    <TextField
+                    <TextFieldWithCopy
                       fullWidth
                       size="small"
                       label="WireGuard FwMark (Optional)"
@@ -2248,7 +2249,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                       placeholder="Policy default"
                       helperText="Overrides policy WireGuard FwMark"
                     />
-                    <TextField
+                    <TextFieldWithCopy
                       fullWidth
                       size="small"
                       type="number"
@@ -2258,7 +2259,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                       placeholder="Policy default"
                       helperText="Overrides policy BGP preference"
                     />
-                    <TextField
+                    <TextFieldWithCopy
                       fullWidth
                       size="small"
                       label="Netfilter Mark (Optional)"
@@ -2348,7 +2349,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                     End 2: {toNode.name}
                   </Typography>
                   <Box sx={{ display: "grid", gridTemplateColumns: "1.2fr 1fr 1fr", gap: 1.5 }}>
-                    <TextField
+                    <TextFieldWithCopy
                       label="Interface"
                       size="small"
                       value={
@@ -2360,7 +2361,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                       }
                       disabled
                     />
-                    <TextField
+                    <TextFieldWithCopy
                       label="Listen Port"
                       type="number"
                       size="small"
@@ -2368,7 +2369,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                       onChange={(e) => setToPort(Number(e.target.value))}
                       helperText={fromNode.ip ? `Derived from ${fromNode.ip}` : "Default port: 20000"}
                     />
-                    <TextField
+                    <TextFieldWithCopy
                       label="MTU"
                       type="number"
                       size="small"
@@ -2489,7 +2490,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                       <MenuItem value="receive_only">Receive Only — Import only</MenuItem>
                       <MenuItem value="advertise_only">Advertise Only — Export only</MenuItem>
                     </TextField>
-                    <TextField
+                    <TextFieldWithCopy
                       fullWidth
                       size="small"
                       label="Link Cost (Optional)"
@@ -2501,7 +2502,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                     />
                   </Box>
                   <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 1.5 }}>
-                    <TextField
+                    <TextFieldWithCopy
                       fullWidth
                       size="small"
                       label="WireGuard FwMark (Optional)"
@@ -2510,7 +2511,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                       placeholder="Policy default"
                       helperText="Overrides policy WireGuard FwMark"
                     />
-                    <TextField
+                    <TextFieldWithCopy
                       fullWidth
                       size="small"
                       type="number"
@@ -2520,7 +2521,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                       placeholder="Policy default"
                       helperText="Overrides policy BGP preference"
                     />
-                    <TextField
+                    <TextFieldWithCopy
                       fullWidth
                       size="small"
                       label="Netfilter Mark (Optional)"
