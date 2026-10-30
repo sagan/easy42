@@ -2441,6 +2441,16 @@ func TestVersionEndpoint(t *testing.T) {
 	if resp["github_url"] != "https://github.com/sagan/easy42" {
 		t.Errorf("Expected github_url to match, got %v", resp["github_url"])
 	}
+	if resp["listen_address"] != "127.0.0.1:0" {
+		t.Errorf("Expected listen_address to be 127.0.0.1:0, got %v", resp["listen_address"])
+	}
+	if resp["data_dir"] != tempDir {
+		t.Errorf("Expected data_dir to match tempDir, got %v", resp["data_dir"])
+	}
+	expectedConfigFile := filepath.Join(tempDir, "config.json")
+	if resp["config_file"] != expectedConfigFile {
+		t.Errorf("Expected config_file to be %v, got %v", expectedConfigFile, resp["config_file"])
+	}
 }
 
 func TestUpdateLinkPSKDisableAndRemove(t *testing.T) {

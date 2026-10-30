@@ -63,6 +63,10 @@ import {
   Bot,
   ChevronDown,
   ChevronUp,
+  Server,
+  Folder,
+  FileText,
+  Radio,
 } from "lucide-react";
 import { api } from "../../api/client";
 import {
@@ -308,8 +312,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
   const [versionLoading, setVersionLoading] = useState(false);
   const [versionError, setVersionError] = useState<string | null>(null);
   const [versionCopied, setVersionCopied] = useState(false);
+  const [copiedInstanceField, setCopiedInstanceField] = useState<string | null>(null);
   const [swFlushLoading, setSwFlushLoading] = useState(false);
   const [swFlushResult, setSwFlushResult] = useState<{ text: string; severity: "success" | "error" } | null>(null);
+
+  const handleCopyInstanceField = (text: string, field: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedInstanceField(field);
+    setTimeout(() => {
+      setCopiedInstanceField((curr) => (curr === field ? null : curr));
+    }, 2000);
+  };
 
   const handleFlushCacheAndSw = async () => {
     setSwFlushLoading(true);
@@ -3239,6 +3252,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                           return <Zap size={20} color="#7C3AED" />;
                         case "sync_dns":
                           return <Cloud size={20} color="#0284C7" />;
+                        case "backup_config":
+                          return <Database size={20} color="#059669" />;
                         default:
                           return <Activity size={20} color="#4F46E5" />;
                       }
@@ -3252,6 +3267,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                           return "#F5F3FF";
                         case "sync_dns":
                           return "#F0F9FF";
+                        case "backup_config":
+                          return "#ECFDF5";
                         default:
                           return "#EEF2FF";
                       }
@@ -5620,7 +5637,265 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                 </Box>
               </Paper>
 
-              {/* Section 2: easy42 Bundled Agent */}
+              {/* Section 2: Current Server Instance */}
+              <Paper
+                elevation={0}
+                sx={{
+                  p: 2.5,
+                  borderRadius: 2,
+                  border: "1px solid #E2E8F0",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 2,
+                }}
+              >
+                <Box
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    flexWrap: "wrap",
+                    gap: 1,
+                  }}
+                >
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                    <Server size={18} color="#0284C7" />
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0F172A", fontSize: "0.95rem" }}>
+                      Current Server Instance
+                    </Typography>
+                  </Box>
+                  <Chip
+                    label="Online"
+                    size="small"
+                    color="success"
+                    variant="outlined"
+                    sx={{
+                      height: 22,
+                      fontSize: "0.75rem",
+                      fontWeight: 700,
+                      borderColor: "rgba(16, 185, 129, 0.4)",
+                      bgcolor: "rgba(16, 185, 129, 0.08)",
+                      color: "#059669",
+                    }}
+                  />
+                </Box>
+                <Typography variant="caption" sx={{ color: "#64748B", mt: -1 }}>
+                  Active easy42 controller process bindings, local storage paths, and configuration locations.
+                </Typography>
+
+                <Box sx={{ display: "flex", flexDirection: "column", gap: 1.25 }}>
+                  {/* Listen Address */}
+                  <Box
+                    sx={{
+                      p: 1.5,
+                      borderRadius: 1.5,
+                      bgcolor: "#F8FAFC",
+                      border: "1px solid #E2E8F0",
+                      display: "flex",
+                      alignItems: { xs: "flex-start", sm: "center" },
+                      justifyContent: "space-between",
+                      flexDirection: { xs: "column", sm: "row" },
+                      gap: 1.5,
+                    }}
+                  >
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1.25, minWidth: { sm: 200 } }}>
+                      <Radio size={16} color="#0284C7" />
+                      <Box>
+                        <Typography
+                          variant="caption"
+                          sx={{
+                            color: "#475569",
+                            fontWeight: 700,
+                            textTransform: "uppercase",
+                            fontSize: "0.72rem",
+                            letterSpacing: "0.4px",
+                          }}
+                        >
+                          Listen Address
+                        </Typography>
+                        <Typography variant="caption" sx={{ color: "#94A3B8", display: "block", fontSize: "0.72rem" }}>
+                          HTTP REST & WebSocket binding
+                        </Typography>
+                      </Box>
+                    </Box>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, maxWidth: "100%", overflow: "hidden" }}>
+                      <Typography
+                        variant="body2"
+                        sx={{
+                          fontFamily: "monospace",
+                          fontWeight: 600,
+                          color: "#0369A1",
+                          bgcolor: "#F0F9FF",
+                          border: "1px solid #BAE6FD",
+                          px: 1,
+                          py: 0.3,
+                          borderRadius: 1,
+                          fontSize: "0.82rem",
+                          wordBreak: "break-all",
+                        }}
+                      >
+                        {versionInfo?.listen_address || "127.0.0.1:4242"}
+                      </Typography>
+                      {versionInfo?.listen_address && (
+                        <Tooltip title={copiedInstanceField === "listen_address" ? "Copied!" : "Copy Listen Address"}>
+                          <IconButton
+                            size="small"
+                            onClick={() =>
+                              handleCopyInstanceField(versionInfo.listen_address || "", "listen_address")
+                            }
+                            sx={{
+                              p: 0.5,
+                              color: copiedInstanceField === "listen_address" ? "#10B981" : "#64748B",
+                            }}
+                          >
+                            {copiedInstanceField === "listen_address" ? <Check size={14} /> : <Copy size={14} />}
+                          </IconButton>
+                        </Tooltip>
+                      )}
+                    </Box>
+                  </Box>
+
+                  {/* Data Directory */}
+                  <Box
+                    sx={{
+                      p: 1.5,
+                      borderRadius: 1.5,
+                      bgcolor: "#F8FAFC",
+                      border: "1px solid #E2E8F0",
+                      display: "flex",
+                      alignItems: { xs: "flex-start", sm: "center" },
+                      justifyContent: "space-between",
+                      flexDirection: { xs: "column", sm: "row" },
+                      gap: 1.5,
+                    }}
+                  >
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1.25, minWidth: { sm: 200 } }}>
+                      <Folder size={16} color="#4F46E5" />
+                      <Box>
+                        <Typography
+                          variant="caption"
+                          sx={{
+                            color: "#475569",
+                            fontWeight: 700,
+                            textTransform: "uppercase",
+                            fontSize: "0.72rem",
+                            letterSpacing: "0.4px",
+                          }}
+                        >
+                          Data Directory
+                        </Typography>
+                        <Typography variant="caption" sx={{ color: "#94A3B8", display: "block", fontSize: "0.72rem" }}>
+                          Database, state store & cache storage
+                        </Typography>
+                      </Box>
+                    </Box>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, maxWidth: "100%", overflow: "hidden" }}>
+                      <Typography
+                        variant="body2"
+                        sx={{
+                          fontFamily: "monospace",
+                          fontWeight: 600,
+                          color: "#334155",
+                          bgcolor: "#F1F5F9",
+                          border: "1px solid #E2E8F0",
+                          px: 1,
+                          py: 0.3,
+                          borderRadius: 1,
+                          fontSize: "0.82rem",
+                          wordBreak: "break-all",
+                        }}
+                      >
+                        {versionInfo?.data_dir || "—"}
+                      </Typography>
+                      {versionInfo?.data_dir && (
+                        <Tooltip title={copiedInstanceField === "data_dir" ? "Copied!" : "Copy Data Directory"}>
+                          <IconButton
+                            size="small"
+                            onClick={() => handleCopyInstanceField(versionInfo.data_dir || "", "data_dir")}
+                            sx={{
+                              p: 0.5,
+                              color: copiedInstanceField === "data_dir" ? "#10B981" : "#64748B",
+                            }}
+                          >
+                            {copiedInstanceField === "data_dir" ? <Check size={14} /> : <Copy size={14} />}
+                          </IconButton>
+                        </Tooltip>
+                      )}
+                    </Box>
+                  </Box>
+
+                  {/* Main Config File */}
+                  <Box
+                    sx={{
+                      p: 1.5,
+                      borderRadius: 1.5,
+                      bgcolor: "#F8FAFC",
+                      border: "1px solid #E2E8F0",
+                      display: "flex",
+                      alignItems: { xs: "flex-start", sm: "center" },
+                      justifyContent: "space-between",
+                      flexDirection: { xs: "column", sm: "row" },
+                      gap: 1.5,
+                    }}
+                  >
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1.25, minWidth: { sm: 200 } }}>
+                      <FileText size={16} color="#059669" />
+                      <Box>
+                        <Typography
+                          variant="caption"
+                          sx={{
+                            color: "#475569",
+                            fontWeight: 700,
+                            textTransform: "uppercase",
+                            fontSize: "0.72rem",
+                            letterSpacing: "0.4px",
+                          }}
+                        >
+                          Main Config File
+                        </Typography>
+                        <Typography variant="caption" sx={{ color: "#94A3B8", display: "block", fontSize: "0.72rem" }}>
+                          Encrypted JSON mesh configuration
+                        </Typography>
+                      </Box>
+                    </Box>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, maxWidth: "100%", overflow: "hidden" }}>
+                      <Typography
+                        variant="body2"
+                        sx={{
+                          fontFamily: "monospace",
+                          fontWeight: 600,
+                          color: "#334155",
+                          bgcolor: "#F1F5F9",
+                          border: "1px solid #E2E8F0",
+                          px: 1,
+                          py: 0.3,
+                          borderRadius: 1,
+                          fontSize: "0.82rem",
+                          wordBreak: "break-all",
+                        }}
+                      >
+                        {versionInfo?.config_file || "—"}
+                      </Typography>
+                      {versionInfo?.config_file && (
+                        <Tooltip title={copiedInstanceField === "config_file" ? "Copied!" : "Copy Config File Path"}>
+                          <IconButton
+                            size="small"
+                            onClick={() => handleCopyInstanceField(versionInfo.config_file || "", "config_file")}
+                            sx={{
+                              p: 0.5,
+                              color: copiedInstanceField === "config_file" ? "#10B981" : "#64748B",
+                            }}
+                          >
+                            {copiedInstanceField === "config_file" ? <Check size={14} /> : <Copy size={14} />}
+                          </IconButton>
+                        </Tooltip>
+                      )}
+                    </Box>
+                  </Box>
+                </Box>
+              </Paper>
+
+              {/* Section 3: easy42 Bundled Agent */}
               <Paper
                 elevation={0}
                 sx={{

@@ -231,7 +231,7 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
       ourLines.push(`WireGuard PSK: ${pskValue}`);
     }
     ourLines.push(`BGP Peering Address (ipv6 link local): ${ourAddress}`);
-    ourLines.push("Configurations: ROA, MP-BGP, Extended Next-hop");
+    ourLines.push(`Configurations: ROA, MP-BGP, Extended Next-hop${!link.disable_bfd ? ", BFD" : ""}`);
 
     const theirLines = [
       "Your side:",

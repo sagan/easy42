@@ -48,11 +48,11 @@ func TestServerTasksAPI(t *testing.T) {
 		t.Fatalf("failed to parse tasks response: %v", err)
 	}
 
-	if len(tasks) != 3 {
-		t.Fatalf("expected 3 predefined tasks, got %d", len(tasks))
+	if len(tasks) != 4 {
+		t.Fatalf("expected 4 predefined tasks, got %d", len(tasks))
 	}
 
-	expectedIDs := []string{config.ServerTaskUpdateROA, config.ServerTaskSync, config.ServerTaskSyncDNS}
+	expectedIDs := []string{config.ServerTaskUpdateROA, config.ServerTaskSync, config.ServerTaskSyncDNS, config.ServerTaskBackupConfig}
 	for i, expID := range expectedIDs {
 		if tasks[i].ID != expID {
 			t.Errorf("task %d: expected id %s, got %s", i, expID, tasks[i].ID)
@@ -136,5 +136,29 @@ func TestServerTasksAPI(t *testing.T) {
 	}
 	if ranTask.LastMessage != "Successfully synced 0 node(s) (0 actions executed)" {
 		t.Errorf("unexpected LastMessage: %s", ranTask.LastMessage)
+	}
+
+	// 6. Test POST /api/settings/tasks/backup_config/run (Execute backup_config)
+	req = httptest.NewRequest("POST", "/api/settings/tasks/backup_config/run", nil)
+	req = withURLParam(req, "id", config.ServerTaskBackupConfig)
+	w = httptest.NewRecorder()
+	srv.handleRunServerTask(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200 on backup run, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var backupRanTask engine.ServerTask
+	if err := json.Unmarshal(w.Body.Bytes(), &backupRanTask); err != nil {
+		t.Fatalf("failed to decode ran backup task: %v", err)
+	}
+	if backupRanTask.LastRun == nil {
+		t.Errorf("expected non-nil LastRun after backup execution")
+	}
+	if backupRanTask.LastStatus != "success" {
+		t.Errorf("expected LastStatus 'success', got '%s'", backupRanTask.LastStatus)
+	}
+	if !bytes.Contains([]byte(backupRanTask.LastMessage), []byte("Successfully created config backup: config.json.bak.")) {
+		t.Errorf("unexpected backup LastMessage: %s", backupRanTask.LastMessage)
 	}
 }

@@ -6,9 +6,10 @@ import (
 )
 
 const (
-	ServerTaskUpdateROA = "update_roa"
-	ServerTaskSync      = "sync"
-	ServerTaskSyncDNS   = "sync_dns"
+	ServerTaskUpdateROA    = "update_roa"
+	ServerTaskSync         = "sync"
+	ServerTaskSyncDNS      = "sync_dns"
+	ServerTaskBackupConfig = "backup_config"
 )
 
 // ServerTaskMeta defines immutable metadata for a predefined easy42 server task
@@ -35,11 +36,16 @@ var PredefinedServerTasks = []ServerTaskMeta{
 		Name:        "Sync DNS",
 		Description: "Synchronize node records to Cloudflare DNS",
 	},
+	{
+		ID:          ServerTaskBackupConfig,
+		Name:        "Backup Config",
+		Description: "Create a timestamped backup of the current easy42 configuration file (config.json)",
+	},
 }
 
 // DefaultCronForTask returns the default cron expression for a given task ID.
 // update_roa runs first at 00:00, followed by sync at 00:30 to push updated ROA tables to nodes,
-// and sync_dns at 01:00.
+// sync_dns at 01:00, and backup_config at 02:00.
 func DefaultCronForTask(id string) string {
 	switch id {
 	case ServerTaskUpdateROA:
@@ -48,6 +54,8 @@ func DefaultCronForTask(id string) string {
 		return "30 0 * * *" // 00:30 daily (after ROA update)
 	case ServerTaskSyncDNS:
 		return "0 1 * * *" // 01:00 daily
+	case ServerTaskBackupConfig:
+		return "0 2 * * *" // 02:00 daily
 	default:
 		return "0 0 * * *"
 	}

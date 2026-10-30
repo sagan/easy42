@@ -1970,16 +1970,16 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                     select
                     label="WireGuard Template"
                     size="small"
-                    value={wgTemplate}
-                    onChange={(e) => setWgTemplate(e.target.value)}
+                    value={wgTemplate && wgTemplate !== "default_wg" ? wgTemplate : "_"}
+                    onChange={(e) => setWgTemplate(e.target.value !== "_" ? e.target.value : "")}
                     helperText="WireGuard interface template"
                     disabled={saving}
                   >
-                    <MenuItem value="">
+                    <MenuItem value="_">
                       <em>(Default: System Template)</em>
                     </MenuItem>
                     {availableTemplates
-                      .filter((t) => t.type === "wg")
+                      .filter((t) => t.type === "wg" && t.id !== "default_wg")
                       .map((t) => (
                         <MenuItem key={t.id} value={t.id}>
                           {t.name} {t.is_builtin ? "(Built-in)" : ""}
@@ -1991,16 +1991,16 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                     select
                     label="BIRD Template"
                     size="small"
-                    value={birdTemplate}
-                    onChange={(e) => setBirdTemplate(e.target.value)}
+                    value={birdTemplate && birdTemplate !== "default_bird" ? birdTemplate : "_"}
+                    onChange={(e) => setBirdTemplate(e.target.value !== "_" ? e.target.value : "")}
                     helperText="BIRD 2 routing template"
                     disabled={saving}
                   >
-                    <MenuItem value="">
+                    <MenuItem value="_">
                       <em>(Default: System Template)</em>
                     </MenuItem>
                     {availableTemplates
-                      .filter((t) => t.type === "bird")
+                      .filter((t) => t.type === "bird" && t.id !== "default_bird")
                       .map((t) => (
                         <MenuItem key={t.id} value={t.id}>
                           {t.name} {t.is_builtin ? "(Built-in)" : ""}
@@ -2012,16 +2012,16 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                     select
                     label="nftables Template"
                     size="small"
-                    value={nftTemplate}
-                    onChange={(e) => setNftTemplate(e.target.value)}
+                    value={nftTemplate && nftTemplate !== "default_nft" ? nftTemplate : "_"}
+                    onChange={(e) => setNftTemplate(e.target.value !== "_" ? e.target.value : "")}
                     helperText="nftables firewall template"
                     disabled={saving}
                   >
-                    <MenuItem value="">
+                    <MenuItem value="_">
                       <em>(Default: System Template)</em>
                     </MenuItem>
                     {availableTemplates
-                      .filter((t) => t.type === "nft")
+                      .filter((t) => t.type === "nft" && t.id !== "default_nft")
                       .map((t) => (
                         <MenuItem key={t.id} value={t.id}>
                           {t.name} {t.is_builtin ? "(Built-in)" : ""}

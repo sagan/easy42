@@ -26,14 +26,17 @@ const (
 
 // Info encapsulates comprehensive build and version details.
 type Info struct {
-	Version      string `json:"version"`
-	Commit       string `json:"commit,omitempty"`
-	Date         string `json:"date,omitempty"`
-	BuiltBy      string `json:"built_by,omitempty"`
-	GoVersion    string `json:"go_version"`
-	Platform     string `json:"platform"`
-	AgentVersion string `json:"agent_version"`
-	GitHubURL    string `json:"github_url"`
+	Version       string `json:"version"`
+	Commit        string `json:"commit,omitempty"`
+	Date          string `json:"date,omitempty"`
+	BuiltBy       string `json:"built_by,omitempty"`
+	GoVersion     string `json:"go_version"`
+	Platform      string `json:"platform"`
+	AgentVersion  string `json:"agent_version"`
+	GitHubURL     string `json:"github_url"`
+	ListenAddress string `json:"listen_address,omitempty"`
+	DataDir       string `json:"data_dir,omitempty"`
+	ConfigFile    string `json:"config_file,omitempty"`
 }
 
 func init() {

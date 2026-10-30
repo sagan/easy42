@@ -26,6 +26,7 @@ func TestNormalizeServerTasks_NewTaskAdded(t *testing.T) {
 	var roaTask *ServerTaskConfig
 	var syncTask *ServerTaskConfig
 	var dnsTask *ServerTaskConfig
+	var backupTask *ServerTaskConfig
 
 	for i := range normalized {
 		task := &normalized[i]
@@ -36,6 +37,8 @@ func TestNormalizeServerTasks_NewTaskAdded(t *testing.T) {
 			syncTask = task
 		case ServerTaskSyncDNS:
 			dnsTask = task
+		case ServerTaskBackupConfig:
+			backupTask = task
 		}
 	}
 
@@ -49,6 +52,9 @@ func TestNormalizeServerTasks_NewTaskAdded(t *testing.T) {
 	}
 	if dnsTask == nil || dnsTask.CronExpr != DefaultCronForTask(ServerTaskSyncDNS) || dnsTask.Enabled != true {
 		t.Fatalf("expected dnsTask to be added with defaults, got %+v", dnsTask)
+	}
+	if backupTask == nil || backupTask.CronExpr != DefaultCronForTask(ServerTaskBackupConfig) || backupTask.Enabled != true {
+		t.Fatalf("expected backupTask to be added with defaults, got %+v", backupTask)
 	}
 }
 

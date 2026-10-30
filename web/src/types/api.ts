@@ -344,6 +344,9 @@ export interface VersionInfo {
   platform: string;
   agent_version: string;
   github_url: string;
+  listen_address?: string;
+  data_dir?: string;
+  config_file?: string;
 }
 
 export interface SyncAction {

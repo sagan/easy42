@@ -56,6 +56,11 @@ func (s *Store) DataDir() string {
 	return s.dataDir
 }
 
+// ConfigFile returns the path to the store's config.json file
+func (s *Store) ConfigFile() string {
+	return s.filePath
+}
+
 // Exists checks if config.json exists
 func (s *Store) Exists() bool {
 	_, err := os.Stat(s.filePath)

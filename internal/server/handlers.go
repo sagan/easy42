@@ -19,7 +19,15 @@ import (
 // Version Handler
 
 func (s *Server) handleGetVersion(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, version.GetInfo())
+	info := version.GetInfo()
+	if s.listen != "" {
+		info.ListenAddress = s.listen
+	}
+	if s.mgr != nil && s.mgr.Store() != nil {
+		info.DataDir = s.mgr.Store().DataDir()
+		info.ConfigFile = s.mgr.Store().ConfigFile()
+	}
+	writeJSON(w, http.StatusOK, info)
 }
 
 // Auth Handlers

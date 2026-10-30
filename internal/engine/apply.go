@@ -209,6 +209,7 @@ func (m *Manager) ApplyConfigChange(content string) (*ApplyResult, error) {
 	origBytes, _ := json.MarshalIndent(cfg, "", "  ")
 	_ = os.WriteFile(backupFile, origBytes, 0600)
 	_ = os.WriteFile(filepath.Join(m.store.DataDir(), "config.json.bak"), origBytes, 0600)
+	_ = m.PruneConfigBackups(MaxConfigBackups)
 
 	// Save to store
 	if err := m.store.Save(cloned); err != nil {

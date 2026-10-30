@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -253,6 +254,15 @@ func (m *Manager) ExecuteServerTask(ctx context.Context, id string) (*ServerTask
 				msg = fmt.Sprintf("DNS synced successfully: %d created, %d updated, %d deleted, %d ignored",
 					res.Created, res.Updated, res.Deleted, res.Ignored)
 			}
+		}
+
+	case config.ServerTaskBackupConfig:
+		backupPath, err := m.BackupConfig()
+		if err != nil {
+			execErr = err
+			msg = fmt.Sprintf("Backup failed: %v", err)
+		} else {
+			msg = fmt.Sprintf("Successfully created config backup: %s", filepath.Base(backupPath))
 		}
 
 	default:

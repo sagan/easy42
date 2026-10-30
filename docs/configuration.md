@@ -495,21 +495,22 @@ Results are stored in `data.db` and presented in the node's Cron Tasks view.
 
 ### `server_tasks`
 
-Only the three predefined server tasks are valid. Missing entries are recreated with defaults on load.
+Only the predefined server tasks are valid. Missing entries are recreated with defaults on load.
 
-| ID           | Default cron | Description                                                                                 |
-| :----------- | :----------- | :------------------------------------------------------------------------------------------ |
-| `update_roa` | `0 0 * * *`  | Download/update ROA files for all policy ROA URLs.                                          |
-| `sync`       | `30 0 * * *` | Synchronize topology, WireGuard, BIRD, nftables, ROA, and hosts configuration to all nodes. |
-| `sync_dns`   | `0 1 * * *`  | Synchronize node records to Cloudflare DNS.                                                 |
+| ID              | Default cron | Description                                                                                 |
+| :-------------- | :----------- | :------------------------------------------------------------------------------------------ |
+| `update_roa`    | `0 0 * * *`  | Download/update ROA files for all policy ROA URLs.                                          |
+| `sync`          | `30 0 * * *` | Synchronize topology, WireGuard, BIRD, nftables, ROA, and hosts configuration to all nodes. |
+| `sync_dns`      | `0 1 * * *`  | Synchronize node records to Cloudflare DNS.                                                 |
+| `backup_config` | `0 2 * * *`  | Backup easy42 configuration file (config.json) preserving at most 100 backups.              |
 
-| Field       | Type      | Description                                                             |
-| :---------- | :-------- | :---------------------------------------------------------------------- |
-| `id`        | `string`  | One of `update_roa`, `sync`, `sync_dns`.                                |
+| Field       | Type      | Description                                                |
+| :---------- | :-------- | :--------------------------------------------------------- |
+| `id`        | `string`  | One of `update_roa`, `sync`, `sync_dns`, `backup_config`.   |
 | `cron_expr` | `string`  | 5- or 6-field cron expression. Invalid values fall back to the default. |
-| `enabled`   | `boolean` | Enable the schedule.                                                    |
+| `enabled`   | `boolean` | Enable the schedule.                                       |
 
-All three tasks are enabled by default. Schedules can be changed from the UI or the `/api/settings/tasks/{id}` API. The apply schema accepts `server_tasks`, but the current apply engine does not merge that section.
+All tasks are enabled by default. Schedules can be changed from the UI or the `/api/settings/tasks/{id}` API. The apply schema accepts `server_tasks`, but the current apply engine does not merge that section.
 
 ### `database`
 
