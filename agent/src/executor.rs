@@ -439,7 +439,18 @@ done"#;
                     .and_then(|s| s.parse().ok())
                     .unwrap_or(4)
                     .clamp(1, 30);
-                run_cmd("ping", &["-c", &count_num.to_string(), &req.target]).await
+                let mut cmd_args = vec!["-c".to_string(), count_num.to_string()];
+                if !req.interface.is_empty() {
+                    let iface = req.interface.trim();
+                    if !crate::validation::is_valid_iface_name(iface) {
+                        return (false, -1, String::new(), format!("invalid interface name: {}", iface));
+                    }
+                    cmd_args.push("-I".to_string());
+                    cmd_args.push(iface.to_string());
+                }
+                cmd_args.push(req.target.clone());
+                let args_ref: Vec<&str> = cmd_args.iter().map(|s| s.as_str()).collect();
+                run_cmd("ping", &args_ref).await
             }
             proto::looking_glass_cmd::Tool::Traceroute => {
                 if !crate::validation::is_valid_host(&req.target) {

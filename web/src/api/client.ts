@@ -20,6 +20,8 @@ import type {
   LookingGlassTask,
   LGRunRequest,
   LGRunResponse,
+  PingTableTask,
+  PingTableTaskSummary,
   GraphBlock,
   FleetLiveResponse,
   NodeMetricsResponse,
@@ -493,6 +495,27 @@ export const api = {
     request<LGRunResponse>("/looking-glass/run", {
       method: "POST",
       body: JSON.stringify(req),
+    }),
+
+  // Ping Table
+  runPingTable: (latencyType: "e2e" | "link") =>
+    request<PingTableTask>("/looking-glass/ping-table/run", {
+      method: "POST",
+      body: JSON.stringify({ latency_type: latencyType }),
+    }),
+  cancelPingTable: () =>
+    request<{ cancelled: boolean }>("/looking-glass/ping-table/cancel", {
+      method: "POST",
+    }),
+  getCurrentPingTable: () =>
+    request<PingTableTask | null>("/looking-glass/ping-table/current"),
+  getPingTableHistory: (limit = 50) =>
+    request<PingTableTaskSummary[]>(`/looking-glass/ping-table/history?limit=${limit}`),
+  getPingTableTask: (id: string) =>
+    request<PingTableTask>(`/looking-glass/ping-table/tasks/${encodeURIComponent(id)}`),
+  deletePingTableTask: (id: string) =>
+    request<{ deleted: boolean }>(`/looking-glass/ping-table/tasks/${encodeURIComponent(id)}`, {
+      method: "DELETE",
     }),
 
   // Blocks

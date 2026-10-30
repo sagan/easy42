@@ -1,6 +1,6 @@
 [package]
 name = "easy42-agent"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 authors = ["Easy42 Team"]
 description = "Lightweight high-performance node agent for Easy42"

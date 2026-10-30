@@ -31,6 +31,7 @@ import {
   Server,
   Zap,
   Clock,
+  Table as TableIcon,
 } from "lucide-react";
 import { api } from "../../api/client";
 import { Node, LookingGlassTask, LGRunRequest, LGRunResponse, LGNodeResult } from "../../types/api";
@@ -43,8 +44,9 @@ import { TracerouteView } from "../LookingGlass/TracerouteView";
 import { TcpPingView } from "../LookingGlass/TcpPingView";
 import { CustomTaskEditorModal } from "../LookingGlass/CustomTaskEditorModal";
 import { CronTasksTab } from "../LookingGlass/CronTasksTab";
+import { PingTableTab } from "../LookingGlass/PingTableTab";
 
-export type LookingGlassTab = "presets" | "adhoc" | "manage" | "cron";
+export type LookingGlassTab = "presets" | "adhoc" | "manage" | "cron" | "pingtable";
 
 export const VALID_LG_TABS: Record<string, LookingGlassTab> = {
   presets: "presets",
@@ -56,6 +58,8 @@ export const VALID_LG_TABS: Record<string, LookingGlassTab> = {
   tasks: "manage",
   cron: "cron",
   "cron-tasks": "cron",
+  pingtable: "pingtable",
+  "ping-table": "pingtable",
 };
 
 export const TAB_TO_INDEX: Record<LookingGlassTab, number> = {
@@ -63,6 +67,7 @@ export const TAB_TO_INDEX: Record<LookingGlassTab, number> = {
   adhoc: 1,
   manage: 2,
   cron: 3,
+  pingtable: 4,
 };
 
 export const INDEX_TO_TAB: Record<number, LookingGlassTab> = {
@@ -70,6 +75,7 @@ export const INDEX_TO_TAB: Record<number, LookingGlassTab> = {
   1: "adhoc",
   2: "manage",
   3: "cron",
+  4: "pingtable",
 };
 
 interface LookingGlassModalProps {
@@ -495,6 +501,12 @@ export const LookingGlassModal: React.FC<LookingGlassModalProps> = ({ nodes, ini
             <Tab
               label="Cron Tasks"
               icon={<Clock size={16} />}
+              iconPosition="start"
+              sx={{ textTransform: "none", fontWeight: 600, fontSize: "0.875rem", minHeight: 44 }}
+            />
+            <Tab
+              label="Ping Table"
+              icon={<TableIcon size={16} />}
               iconPosition="start"
               sx={{ textTransform: "none", fontWeight: 600, fontSize: "0.875rem", minHeight: 44 }}
             />
@@ -1167,6 +1179,9 @@ export const LookingGlassModal: React.FC<LookingGlassModalProps> = ({ nodes, ini
             }}
           />
         )}
+
+        {/* Tab 4: Ping Table */}
+        {activeTab === 4 && <PingTableTab nodes={managedNodes} />}
       </Paper>
 
       {/* Task Editor Modal */}

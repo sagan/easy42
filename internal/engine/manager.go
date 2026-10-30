@@ -47,9 +47,13 @@ type Manager struct {
 	lastResults        []config.SyncResult
 	stopCh             chan struct{}
 	serverTasksMu      sync.Mutex
-	runningTasks       map[string]bool
-	prometheusExporter *PrometheusExporter
-	telegramBot        *telegram.BotService
+	runningTasks         map[string]bool
+	prometheusExporter   *PrometheusExporter
+	telegramBot          *telegram.BotService
+	pingTableMu          sync.RWMutex
+	currentPingTable     *config.PingTableTask
+	pingTableCancel      context.CancelFunc
+	pingTableSubscribers map[chan *config.PingTableTask]struct{}
 }
 
 // NewManager creates a new Manager instance
@@ -67,7 +71,8 @@ func NewManager(store *config.Store) *Manager {
 		statuses:     make(map[string]*config.NodeStatus),
 		lastResults:  make([]config.SyncResult, 0),
 		stopCh:       make(chan struct{}),
-		runningTasks: make(map[string]bool),
+		runningTasks:         make(map[string]bool),
+		pingTableSubscribers: make(map[chan *config.PingTableTask]struct{}),
 	}
 	m.prometheusExporter = NewPrometheusExporter(m)
 	m.telegramBot = telegram.NewBotService(m)

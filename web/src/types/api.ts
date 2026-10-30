@@ -581,6 +581,42 @@ export interface TcpPingResult {
   tcp_timestamps?: boolean;
 }
 
+export interface PingTableItem {
+  from_node: string;
+  to_node: string;
+  target_ip?: string;
+  interface?: string;
+  latency_ms?: number | null;
+  packet_loss_pct: number;
+  status: "pending" | "running" | "success" | "failed" | "unreachable" | "no_agent" | "no_link" | "self";
+  error?: string;
+}
+
+export interface PingTableTask {
+  id: string;
+  created_at: number;
+  finished_at: number;
+  latency_type: "e2e" | "link";
+  status: "running" | "completed" | "cancelled" | "failed";
+  total_pairs: number;
+  completed_pairs: number;
+  nodes: string[];
+  results: Record<string, Record<string, PingTableItem>>;
+  error?: string;
+}
+
+export interface PingTableTaskSummary {
+  id: string;
+  created_at: number;
+  finished_at: number;
+  latency_type: "e2e" | "link";
+  status: "running" | "completed" | "cancelled" | "failed";
+  total_pairs: number;
+  completed_pairs: number;
+  node_count: number;
+  error?: string;
+}
+
 export interface TracerouteHop {
   hop: number;
   host: string;

@@ -1661,6 +1661,7 @@ type LookingGlassCmd struct {
 	Args           []string               `protobuf:"bytes,3,rep,name=args,proto3" json:"args,omitempty"`
 	TimeoutSeconds uint32                 `protobuf:"varint,4,opt,name=timeout_seconds,json=timeoutSeconds,proto3" json:"timeout_seconds,omitempty"`
 	Command        string                 `protobuf:"bytes,5,opt,name=command,proto3" json:"command,omitempty"`
+	Interface      string                 `protobuf:"bytes,6,opt,name=interface,proto3" json:"interface,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -1726,6 +1727,13 @@ func (x *LookingGlassCmd) GetTimeoutSeconds() uint32 {
 func (x *LookingGlassCmd) GetCommand() string {
 	if x != nil {
 		return x.Command
+	}
+	return ""
+}
+
+func (x *LookingGlassCmd) GetInterface() string {
+	if x != nil {
+		return x.Interface
 	}
 	return ""
 }
@@ -2518,13 +2526,14 @@ const file_proto_agent_proto_rawDesc = "" +
 	"check_only\x18\x01 \x01(\bR\tcheckOnly\"3\n" +
 	"\x10ApplyNftablesCmd\x12\x1f\n" +
 	"\vscript_path\x18\x01 \x01(\tR\n" +
-	"scriptPath\"\x82\x02\n" +
+	"scriptPath\"\xa0\x02\n" +
 	"\x0fLookingGlassCmd\x129\n" +
 	"\x04tool\x18\x01 \x01(\x0e2%.easy42.agent.v1.LookingGlassCmd.ToolR\x04tool\x12\x16\n" +
 	"\x06target\x18\x02 \x01(\tR\x06target\x12\x12\n" +
 	"\x04args\x18\x03 \x03(\tR\x04args\x12'\n" +
 	"\x0ftimeout_seconds\x18\x04 \x01(\rR\x0etimeoutSeconds\x12\x18\n" +
-	"\acommand\x18\x05 \x01(\tR\acommand\"E\n" +
+	"\acommand\x18\x05 \x01(\tR\acommand\x12\x1c\n" +
+	"\tinterface\x18\x06 \x01(\tR\tinterface\"E\n" +
 	"\x04Tool\x12\b\n" +
 	"\x04PING\x10\x00\x12\x0e\n" +
 	"\n" +

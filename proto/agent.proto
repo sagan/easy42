@@ -182,6 +182,7 @@ message LookingGlassCmd {
   repeated string args = 3;
   uint32 timeout_seconds = 4;
   string command = 5;
+  string interface = 6;
 }
 
 message ProbeSystemCmd {}

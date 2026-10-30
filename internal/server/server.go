@@ -298,6 +298,13 @@ func New(cfg Config) *Server {
 			r.Put("/looking-glass/tasks/{id}", s.handleSaveLookingGlassTask)
 			r.Delete("/looking-glass/tasks/{id}", s.handleDeleteLookingGlassTask)
 			r.Post("/looking-glass/run", s.handleRunLookingGlass)
+			r.Post("/looking-glass/ping-table/run", s.handleRunPingTable)
+			r.Post("/looking-glass/ping-table/cancel", s.handleCancelPingTable)
+			r.Get("/looking-glass/ping-table/current", s.handleGetCurrentPingTable)
+			r.Get("/looking-glass/ping-table/history", s.handleGetPingTableHistory)
+			r.Get("/looking-glass/ping-table/tasks/{id}", s.handleGetPingTableTask)
+			r.Delete("/looking-glass/ping-table/tasks/{id}", s.handleDeletePingTableTask)
+			r.Get("/looking-glass/ping-table/stream", s.handleStreamPingTable)
 
 			// Cron Tasks
 			r.Get("/cron-tasks", s.handleGetCronTasks)
