@@ -59,6 +59,7 @@ export const AppLayout: React.FC = () => {
   const {
     nodes,
     links,
+    blocks,
     fleetLive,
     isUnlocked,
     setIsUnlocked,
@@ -71,6 +72,7 @@ export const AppLayout: React.FC = () => {
     addNodeOpen,
     setAddNodeOpen,
     nodeToEdit,
+    setLocateNodeName,
     renameModalOpen,
     setRenameModalOpen,
     nodeToRename,
@@ -635,7 +637,12 @@ export const AppLayout: React.FC = () => {
         open={addNodeOpen}
         onClose={() => setAddNodeOpen(false)}
         nodeToEdit={nodeToEdit}
-        onNodeAdded={() => loadData()}
+        existingNodes={nodes}
+        blocks={blocks}
+        onNodeAdded={(saved) => {
+          setLocateNodeName(saved.name);
+          loadData();
+        }}
         onNodeUpdated={(updated) => {
           setSelectedNode(updated);
           loadData();

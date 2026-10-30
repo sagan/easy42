@@ -213,14 +213,18 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
       if (fNode?.is_external) {
         setLocalAddress(linkToEdit.to.address || "fe80::1/64");
         setRemoteAddress(linkToEdit.from.address || "fe80::2/64");
-        const ep = linkToEdit.to.endpoint || linkToEdit.from.endpoint || "";
-        setRemotePort(extractPort(ep) ?? "");
+        const ep = linkToEdit.to.endpoint || "";
+        const portFromEp = extractPort(ep);
+        const p = portFromEp ?? (linkToEdit.from.listen_port > 0 ? linkToEdit.from.listen_port : "");
+        setRemotePort(p);
         setRemotePublicKey(linkToEdit.from.public_key || "");
       } else if (tNode?.is_external) {
         setLocalAddress(linkToEdit.from.address || "fe80::1/64");
         setRemoteAddress(linkToEdit.to.address || "fe80::2/64");
-        const ep = linkToEdit.from.endpoint || linkToEdit.to.endpoint || "";
-        setRemotePort(extractPort(ep) ?? "");
+        const ep = linkToEdit.from.endpoint || "";
+        const portFromEp = extractPort(ep);
+        const p = portFromEp ?? (linkToEdit.to.listen_port > 0 ? linkToEdit.to.listen_port : "");
+        setRemotePort(p);
         setRemotePublicKey(linkToEdit.to.public_key || "");
       } else {
         setLocalAddress("fe80::1/64");
@@ -568,7 +572,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
           name: externalNode.name,
           listen_port: parsedRemotePort,
           address: remoteAddress.trim() || "fe80::2/64",
-          endpoint: managedPeerEndpoint || undefined,
+          endpoint: undefined,
           public_key: remotePublicKey.trim() || undefined,
           mtu: 1420,
           policy: "none",

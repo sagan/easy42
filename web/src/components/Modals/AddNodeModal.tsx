@@ -35,10 +35,12 @@ import {
   FileCode,
 } from "lucide-react";
 import { api } from "../../api/client";
-import { Node, Entrypoint, KernelRouteRule, ConfigHook, ConfigTemplate } from "../../types/api";
+import { Node, Entrypoint, KernelRouteRule, ConfigHook, ConfigTemplate, GraphBlock } from "../../types/api";
 import { MarkdownView } from "../Common/MarkdownView";
 import { getInterfaceName } from "../../utils/interface";
 import TextFieldWithCopy from "../Common/TextFieldWithCopy";
+import { findInitialNodePosition } from "../../utils/nodePlacement";
+import { useMesh } from "../../context/MeshContext";
 
 const HOOK_TYPES = [
   { value: "bird", label: "BIRD: Global / Post (e.g. protocol direct)" },
@@ -55,6 +57,7 @@ interface AddNodeModalProps {
   open: boolean;
   nodeToEdit?: Node | null;
   existingNodes?: Node[];
+  blocks?: GraphBlock[];
   onClose: () => void;
   onNodeAdded?: (node: Node) => void;
   onNodeUpdated?: (node: Node) => void;
@@ -100,10 +103,15 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
   open,
   nodeToEdit,
   existingNodes = [],
+  blocks,
   onClose,
   onNodeAdded,
   onNodeUpdated,
 }) => {
+  const mesh = useMesh();
+  const effectiveNodes = existingNodes && existingNodes.length > 0 ? existingNodes : (mesh?.nodes ?? []);
+  const effectiveBlocks = blocks && blocks.length > 0 ? blocks : (mesh?.blocks ?? []);
+
   const [sshHost, setSshHost] = useState("");
   const [probing, setProb] = useState(false);
   const [probeError, setProbeError] = useState<string | null>(null);
@@ -548,6 +556,14 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
         content: h.content.trim(),
       }));
 
+    let posX = nodeToEdit?.x;
+    let posY = nodeToEdit?.y;
+    if (!nodeToEdit) {
+      const initialPos = findInitialNodePosition(effectiveNodes, effectiveBlocks);
+      posX = initialPos.x;
+      posY = initialPos.y;
+    }
+
     if (isExternal) {
       const finalEntrypoints = buildFinalEntrypoints(entrypoints, true);
       newNode = {
@@ -562,8 +578,8 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
         note: note.trim() || undefined,
         tags: parsedTags.length > 0 ? parsedTags : undefined,
         config_hooks: parsedHooks.length > 0 ? parsedHooks : undefined,
-        x: nodeToEdit?.x,
-        y: nodeToEdit?.y,
+        x: posX,
+        y: posY,
       };
     } else {
       // Convert editable entrypoints to API format
@@ -619,8 +635,8 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
         caption: caption.trim() || undefined,
         description: description.trim() || undefined,
         note: note.trim() || undefined,
-        x: nodeToEdit?.x,
-        y: nodeToEdit?.y,
+        x: posX,
+        y: posY,
         mode: nodeToEdit?.mode,
         agent_token: nodeToEdit?.agent_token,
         agent_version: nodeToEdit?.agent_version,
@@ -634,6 +650,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
         onNodeUpdated?.(saved);
       } else {
         const saved = await api.addNode(newNode);
+        mesh?.setLocateNodeName(saved.name);
         onNodeAdded?.(saved);
       }
       onClose();

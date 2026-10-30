@@ -60,6 +60,8 @@ interface MeshContextType {
   setAddNodeOpen: (open: boolean) => void;
   nodeToEdit: Node | null;
   setNodeToEdit: (node: Node | null) => void;
+  locateNodeName: string | null;
+  setLocateNodeName: (name: string | null) => void;
   renameModalOpen: boolean;
   setRenameModalOpen: (open: boolean) => void;
   nodeToRename: Node | null;
@@ -148,6 +150,7 @@ export const MeshProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Modals
   const [addNodeOpen, setAddNodeOpen] = useState(false);
   const [nodeToEdit, setNodeToEdit] = useState<Node | null>(null);
+  const [locateNodeName, setLocateNodeName] = useState<string | null>(null);
   const [renameModalOpen, setRenameModalOpen] = useState(false);
   const [nodeToRename, setNodeToRename] = useState<Node | null>(null);
   const [addLinkOpen, setAddLinkOpen] = useState(false);
@@ -660,6 +663,8 @@ export const MeshProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setAddNodeOpen,
     nodeToEdit,
     setNodeToEdit,
+    locateNodeName,
+    setLocateNodeName,
     renameModalOpen,
     setRenameModalOpen,
     nodeToRename,

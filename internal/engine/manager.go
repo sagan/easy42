@@ -1275,13 +1275,19 @@ func (m *Manager) buildLink(cfg *config.Config, n1, n2 *config.Node, listenPort1
 		if fromNode.IsExternal {
 			// fromNode is external, connecting to toNode (managed internal)
 			fromEP, _, epTo = compiler.ResolvePeerEndpointWithEntrypoint(fromNode, toNode, nil, toPort)
-			if toEP == "" && customFromEnd != nil && customFromEnd.Endpoint != "" {
+			if toEP == "" {
+				toEP, _, epFrom = compiler.ResolvePeerEndpointWithEntrypoint(toNode, fromNode, nil, fromPort)
+			}
+			if toEP == "" && customFromEnd != nil && customFromEnd.Endpoint != "" && customFromEnd.Endpoint != fromEP {
 				toEP = customFromEnd.Endpoint
 			}
 		} else if toNode.IsExternal {
 			// toNode is external, connecting to fromNode (managed internal)
 			toEP, _, epFrom = compiler.ResolvePeerEndpointWithEntrypoint(toNode, fromNode, nil, fromPort)
-			if fromEP == "" && customToEnd != nil && customToEnd.Endpoint != "" {
+			if fromEP == "" {
+				fromEP, _, epTo = compiler.ResolvePeerEndpointWithEntrypoint(fromNode, toNode, nil, toPort)
+			}
+			if fromEP == "" && customToEnd != nil && customToEnd.Endpoint != "" && customToEnd.Endpoint != toEP {
 				fromEP = customToEnd.Endpoint
 			}
 		} else {
@@ -2193,26 +2199,38 @@ func (m *Manager) UpdateLinkWithOptions(node1Name, node2Name string, customFrom,
 			link.To.PersistentKeepalive = 0
 		}
 	} else if toNode.IsExternal && !link.IsManual() {
-		if link.From.Endpoint == "" && toEnd != nil && toEnd.Endpoint != "" {
+		toEP, _, _ := compiler.ResolvePeerEndpointWithEntrypoint(toNode, fromNode, nil, link.From.ListenPort)
+		if toEP != "" {
+			link.To.Endpoint = toEP
+		}
+		if link.From.Endpoint == "" {
+			fromEP, _, _ := compiler.ResolvePeerEndpointWithEntrypoint(fromNode, toNode, nil, link.To.ListenPort)
+			if fromEP != "" {
+				link.From.Endpoint = fromEP
+			}
+		}
+		if link.From.Endpoint == "" && toEnd != nil && toEnd.Endpoint != "" && toEnd.Endpoint != toEP && toEnd.Endpoint != link.To.Endpoint {
 			link.From.Endpoint = toEnd.Endpoint
 		}
 		if link.From.Endpoint != "" && link.From.PersistentKeepalive == 0 {
 			link.From.PersistentKeepalive = 25
 		}
-		toEP, _, _ := compiler.ResolvePeerEndpointWithEntrypoint(toNode, fromNode, nil, link.From.ListenPort)
-		if toEP != "" {
-			link.To.Endpoint = toEP
-		}
 	} else if fromNode.IsExternal && !link.IsManual() {
-		if link.To.Endpoint == "" && fromEnd != nil && fromEnd.Endpoint != "" {
+		fromEP, _, _ := compiler.ResolvePeerEndpointWithEntrypoint(fromNode, toNode, nil, link.To.ListenPort)
+		if fromEP != "" {
+			link.From.Endpoint = fromEP
+		}
+		if link.To.Endpoint == "" {
+			toEP, _, _ := compiler.ResolvePeerEndpointWithEntrypoint(toNode, fromNode, nil, link.From.ListenPort)
+			if toEP != "" {
+				link.To.Endpoint = toEP
+			}
+		}
+		if link.To.Endpoint == "" && fromEnd != nil && fromEnd.Endpoint != "" && fromEnd.Endpoint != fromEP && fromEnd.Endpoint != link.From.Endpoint {
 			link.To.Endpoint = fromEnd.Endpoint
 		}
 		if link.To.Endpoint != "" && link.To.PersistentKeepalive == 0 {
 			link.To.PersistentKeepalive = 25
-		}
-		fromEP, _, _ := compiler.ResolvePeerEndpointWithEntrypoint(fromNode, toNode, nil, link.To.ListenPort)
-		if fromEP != "" {
-			link.From.Endpoint = fromEP
 		}
 	}
 

@@ -46,6 +46,8 @@ export const TopologyPage: React.FC = () => {
     setAddBlockTrigger,
     updateNodePosition,
     setStateToast,
+    locateNodeName,
+    setLocateNodeName,
   } = useMesh();
 
   const navigate = useNavigate();
@@ -218,6 +220,8 @@ export const TopologyPage: React.FC = () => {
           missingMeshLinksCount={missingMeshLinksCount}
           displayedInternalNodesCount={displayedInternalNodes.length}
           onCreateBlockFullMesh={handleCreateBlockFullMesh}
+          locateNodeName={locateNodeName}
+          onClearLocate={() => setLocateNodeName(null)}
         />
       </Box>
 

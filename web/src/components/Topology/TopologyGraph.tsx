@@ -62,6 +62,7 @@ import { Node, Link, NodeStatus, NetworkState, GraphBlock, NetworkPolicy } from 
 import { api } from "../../api/client";
 import { getEffectiveLinkCost } from "../../utils/cost";
 import { calculateGraphCentrality } from "../../utils/graphCentrality";
+import { findInitialNodePosition } from "../../utils/nodePlacement";
 
 const STORAGE_KEY_VIEWPORT = "easy42_graph_viewport";
 const STORAGE_KEY_ZOOM = "easy42_graph_zoom";
@@ -352,6 +353,8 @@ interface TopologyGraphProps {
   missingMeshLinksCount?: number;
   displayedInternalNodesCount?: number;
   onCreateBlockFullMesh?: (blockName: string, memberNames: string[]) => void;
+  locateNodeName?: string | null;
+  onClearLocate?: () => void;
 }
 
 const nodeTypes = {
@@ -1535,6 +1538,70 @@ const NodeInternalsSync: React.FC<{ nodes: FlowNode[] }> = ({ nodes }) => {
   return null;
 };
 
+interface AutoLocateEffectProps {
+  locateNodeName?: string | null;
+  onClearLocate?: () => void;
+  nodes: Node[];
+  flowNodes: FlowNode[];
+  onSelectNode?: (node: Node) => void;
+  onFocusNode?: (nodeName: string) => void;
+}
+
+const AutoLocateEffect: React.FC<AutoLocateEffectProps> = ({
+  locateNodeName,
+  onClearLocate,
+  nodes,
+  flowNodes,
+  onSelectNode,
+  onFocusNode,
+}) => {
+  const { fitView } = useReactFlow();
+  const lastLocatedRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!locateNodeName) {
+      lastLocatedRef.current = null;
+      return;
+    }
+
+    if (lastLocatedRef.current === locateNodeName) {
+      return;
+    }
+
+    const targetNode = nodes.find((n) => n.name === locateNodeName);
+    const flowNodeExists = flowNodes.some((fn) => fn.id === locateNodeName);
+
+    if (!targetNode || !flowNodeExists) {
+      return;
+    }
+
+    lastLocatedRef.current = locateNodeName;
+
+    const timer = setTimeout(() => {
+      fitView({
+        nodes: [{ id: locateNodeName }],
+        duration: 600,
+        maxZoom: 1.2,
+        padding: 0.4,
+      });
+
+      if (onFocusNode) {
+        onFocusNode(locateNodeName);
+      }
+      if (onSelectNode) {
+        onSelectNode(targetNode);
+      }
+      if (onClearLocate) {
+        onClearLocate();
+      }
+    }, 80);
+
+    return () => clearTimeout(timer);
+  }, [locateNodeName, nodes, flowNodes, fitView, onFocusNode, onSelectNode, onClearLocate]);
+
+  return null;
+};
+
 export const TopologyGraph: React.FC<TopologyGraphProps> = ({
   nodes,
   links,
@@ -1558,6 +1625,8 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
   missingMeshLinksCount,
   displayedInternalNodesCount,
   onCreateBlockFullMesh,
+  locateNodeName,
+  onClearLocate,
 }) => {
   // Block state & Advanced Interaction States
   const [blocks, setBlocks] = useState<GraphBlock[]>(getStoredBlocks);
@@ -1839,19 +1908,24 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
 
   // Compute consistent node positions and block containment map
   const { nodePosMap, effectiveNodeBlockMap } = useMemo(() => {
-    const total = nodes.length;
-    const radius = Math.max(220, total * 60);
-    const centerX = 500;
-    const centerY = 350;
-
     const posMap = new Map<string, { x: number; y: number }>();
-    nodes.forEach((node, i) => {
-      const angle = (i / (total || 1)) * 2 * Math.PI - Math.PI / 2;
-      const defaultX = total === 1 ? centerX : centerX + radius * Math.cos(angle);
-      const defaultY = total === 1 ? centerY : centerY + radius * Math.sin(angle);
-      const x = typeof node.x === "number" && !isNaN(node.x) ? node.x : defaultX;
-      const y = typeof node.y === "number" && !isNaN(node.y) ? node.y : defaultY;
-      posMap.set(node.name, { x, y });
+    const placedNodes: Node[] = [];
+
+    // First collect all nodes that already have valid saved positions
+    nodes.forEach((node) => {
+      if (typeof node.x === "number" && !isNaN(node.x) && typeof node.y === "number" && !isNaN(node.y)) {
+        posMap.set(node.name, { x: node.x, y: node.y });
+        placedNodes.push(node);
+      }
+    });
+
+    // For any unpositioned nodes, iteratively compute an optimal non-overlapping initial position in global scope
+    nodes.forEach((node) => {
+      if (!posMap.has(node.name)) {
+        const nextPos = findInitialNodePosition(placedNodes, blocks);
+        posMap.set(node.name, nextPos);
+        placedNodes.push({ ...node, x: nextPos.x, y: nextPos.y });
+      }
     });
 
     const effMap: Record<string, string> = {};
@@ -2935,6 +3009,15 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
           onToggleCentralityView={() => setCentralityViewEnabled((v) => !v)}
           isLocked={isDiagramLocked}
           onToggleLock={() => setIsDiagramLocked((v) => !v)}
+        />
+
+        <AutoLocateEffect
+          locateNodeName={locateNodeName}
+          onClearLocate={onClearLocate}
+          nodes={nodes}
+          flowNodes={flowNodes}
+          onSelectNode={onSelectNode}
+          onFocusNode={(nodeName) => setPinnedNodeNames(new Set([nodeName]))}
         />
 
         <NodeInternalsSync nodes={flowNodes} />
