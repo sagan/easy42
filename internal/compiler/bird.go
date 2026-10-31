@@ -115,6 +115,12 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 		return nil, fmt.Errorf("failed to unmarshal node %s into context: %w", node.Name, err)
 	}
 
+	nodeData := config.ExtractNoteData(node.Note)
+	ctx["data"] = nodeData
+	ctx["Data"] = nodeData
+	ctx["note"] = node.Note
+	ctx["Note"] = node.Note
+
 	// 2. Ensure integer types for ASN and table (avoid json float64 exponential formatting like 4.29942e+09)
 	table := node.Table
 	if table <= 0 {
@@ -636,11 +642,20 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 				remoteNodeMap["metric"] = *rl.remoteNode.Metric
 				remoteNodeMap["has_metric"] = true
 			}
+			remoteNodeData := config.ExtractNoteData(rl.remoteNode.Note)
+			remoteNodeMap["note"] = rl.remoteNode.Note
+			remoteNodeMap["Note"] = rl.remoteNode.Note
+			remoteNodeMap["data"] = remoteNodeData
+			remoteNodeMap["Data"] = remoteNodeData
 		} else {
 			remoteNodeMap = map[string]any{
 				"name":        rl.remoteEnd.Name,
 				"asn":         uint64(0),
 				"is_external": false,
+				"note":        "",
+				"Note":        "",
+				"data":        map[string]any{},
+				"Data":        map[string]any{},
 			}
 		}
 
@@ -649,6 +664,7 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 			tags = []string{}
 		}
 
+		linkData := config.ExtractNoteData(rl.link.Note)
 		pref := rl.localEnd.EffectivePreference(&rl.pol)
 		mark := rl.localEnd.EffectiveMark(&rl.pol)
 		isSameASN := rl.remoteNode != nil && node.ASN != 0 && rl.remoteNode.ASN == node.ASN
@@ -656,6 +672,19 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 			"type":           rl.link.LinkType(),
 			"is_manual":      rl.link.IsManual(),
 			"tags":           tags,
+			"note":           rl.link.Note,
+			"Note":           rl.link.Note,
+			"data":           linkData,
+			"Data":           linkData,
+			"link": map[string]any{
+				"type":      rl.link.LinkType(),
+				"is_manual": rl.link.IsManual(),
+				"tags":      tags,
+				"note":      rl.link.Note,
+				"Note":      rl.link.Note,
+				"data":      linkData,
+				"Data":      linkData,
+			},
 			"local":          localMap,
 			"remote":         remoteMap,
 			"remote_node":    remoteNodeMap,
@@ -1123,6 +1152,11 @@ func linkEndToContextMap(end *config.LinkEnd, node *config.Node, peerName string
 		mark = end.Mark
 		routingPolicy = end.RoutingPolicy
 	}
+	endNote := ""
+	if end != nil {
+		endNote = end.Note
+	}
+	endData := config.ExtractNoteData(endNote)
 
 	isLinkLocal := strings.HasPrefix(strings.ToLower(addr), "fe80:")
 
@@ -1143,6 +1177,10 @@ func linkEndToContextMap(end *config.LinkEnd, node *config.Node, peerName string
 		"fwmark":               fwmark,
 		"mark":                 mark,
 		"routing_policy":       routingPolicy,
+		"note":                 endNote,
+		"Note":                 endNote,
+		"data":                 endData,
+		"Data":                 endData,
 	}
 	if preference != nil {
 		res["preference"] = *preference

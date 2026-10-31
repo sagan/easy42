@@ -102,6 +102,8 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
   const [toNote, setToNote] = useState<string>("");
   const [fromNoteTab, setFromNoteTab] = useState<"write" | "preview">("write");
   const [toNoteTab, setToNoteTab] = useState<"write" | "preview">("write");
+  const [linkNote, setLinkNote] = useState<string>("");
+  const [linkNoteTab, setLinkNoteTab] = useState<"write" | "preview">("write");
   const [assignIPv4, setAssignIPv4] = useState<boolean>(false);
   const [enableBFD, setEnableBFD] = useState<boolean>(true);
   const [enablePsk, setEnablePsk] = useState<boolean>(true);
@@ -247,6 +249,8 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
       setToRoutingPolicy(linkToEdit.to.routing_policy || "");
       setFromNote(linkToEdit.from.note || "");
       setToNote(linkToEdit.to.note || "");
+      setLinkNote(linkToEdit.note || "");
+      setLinkNoteTab("write");
       setAssignIPv4(Boolean(linkToEdit.assign_ipv4));
       setEnableBFD(!Boolean(linkToEdit.disable_bfd));
       setEnablePsk(Boolean(linkToEdit.psk || linkToEdit.from.psk || linkToEdit.to.psk));
@@ -300,6 +304,8 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
       setToRoutingPolicy("");
       setFromNote("");
       setToNote("");
+      setLinkNote("");
+      setLinkNoteTab("write");
       setLocalAddress("fe80::1/64");
       setRemoteAddress("fe80::2/64");
       setRemotePort("");
@@ -511,6 +517,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
             to_mark: reqTo.mark,
             from_note: reqFrom.note || "",
             to_note: reqTo.note || "",
+            note: linkNote.trim(),
           });
           onLinkUpdated?.(updated);
         } else {
@@ -534,6 +541,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
             to_mark: reqTo.mark,
             from_note: reqFrom.note,
             to_note: reqTo.note,
+            note: linkNote.trim() || undefined,
           });
           onLinkAdded?.(link);
         }
@@ -626,6 +634,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
             to_mark: reqTo.mark,
             from_note: reqFrom.note || "",
             to_note: reqTo.note || "",
+            note: linkNote.trim(),
             assign_ipv4: assignIPv4,
             disable_bfd: !enableBFD,
             psk: pskVal,
@@ -653,6 +662,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
             to_mark: reqTo.mark,
             from_note: reqFrom.note,
             to_note: reqTo.note,
+            note: linkNote.trim() || undefined,
             assign_ipv4: assignIPv4,
             disable_bfd: !enableBFD,
             psk: pskVal,
@@ -729,6 +739,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
             assign_ipv4: assignIPv4,
             disable_bfd: !enableBFD,
             psk: pskVal,
+            note: linkNote.trim(),
           });
           onLinkUpdated?.(updated);
         } else {
@@ -755,6 +766,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
             to_mark: parsedToMark,
             from_note: fromNote.trim() || undefined,
             to_note: toNote.trim() || undefined,
+            note: linkNote.trim() || undefined,
             assign_ipv4: assignIPv4,
             disable_bfd: !enableBFD,
             psk: pskVal,
@@ -1209,6 +1221,100 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
               />
             </Box>
           )}
+
+          {/* Link Note (Markdown) */}
+          <Box
+            sx={{
+              p: 1.75,
+              borderRadius: 2,
+              backgroundColor: "#F8FAFC",
+              border: "1px solid",
+              borderColor: "#E2E8F0",
+              transition: "all 0.2s ease",
+            }}
+          >
+            <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 0.8 }}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                <Typography
+                  variant="caption"
+                  sx={{ color: "#0F766E", fontWeight: 700, display: "flex", alignItems: "center", gap: 0.6 }}
+                >
+                  <FileText size={14} color="#0D9488" /> LINK NOTE (MARKDOWN)
+                </Typography>
+                <Chip
+                  label="Link Scope"
+                  size="small"
+                  sx={{
+                    height: 18,
+                    fontSize: "0.62rem",
+                    fontWeight: 700,
+                    bgcolor: "rgba(13, 148, 136, 0.12)",
+                    color: "#0F766E",
+                    borderRadius: "4px",
+                  }}
+                />
+              </Box>
+              <Box sx={{ display: "flex", gap: 0.5 }}>
+                <Button
+                  id="link-note-tab-write"
+                  size="small"
+                  variant={linkNoteTab === "write" ? "contained" : "text"}
+                  onClick={() => setLinkNoteTab("write")}
+                  sx={{ minWidth: "auto", px: 1, py: 0.2, fontSize: "0.7rem", textTransform: "none" }}
+                >
+                  Write
+                </Button>
+                <Button
+                  id="link-note-tab-preview"
+                  size="small"
+                  variant={linkNoteTab === "preview" ? "contained" : "text"}
+                  onClick={() => setLinkNoteTab("preview")}
+                  sx={{ minWidth: "auto", px: 1, py: 0.2, fontSize: "0.7rem", textTransform: "none" }}
+                >
+                  Preview
+                </Button>
+              </Box>
+            </Box>
+            <Typography variant="caption" sx={{ color: "#64748B", display: "block", fontSize: "0.72rem", mb: 1 }}>
+              Shared documentation for the entire link (transit circuits, SLAs, peering context, provider ticket IDs, etc.).
+            </Typography>
+            {linkNoteTab === "write" ? (
+              <TextField
+                id="link-note-input"
+                fullWidth
+                multiline
+                minRows={2}
+                maxRows={6}
+                size="small"
+                placeholder="Markdown documentation for this link..."
+                value={linkNote}
+                onChange={(e) => setLinkNote(e.target.value)}
+                disabled={submitting}
+                sx={{
+                  backgroundColor: "#FFFFFF",
+                  borderRadius: 1,
+                  "& .MuiInputBase-root": {
+                    fontSize: "0.8rem",
+                    fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+                  },
+                }}
+              />
+            ) : (
+              <Box
+                sx={{
+                  p: 1.25,
+                  minHeight: 60,
+                  maxHeight: 180,
+                  overflowY: "auto",
+                  backgroundColor: "#FFFFFF",
+                  borderRadius: 1,
+                  border: "1px solid #E2E8F0",
+                }}
+              >
+                <MarkdownView content={linkNote} emptyText="No link note written yet" />
+              </Box>
+            )}
+          </Box>
 
           {/* External Peering Configuration Form */}
           {isExternalLink && managedNode && externalNode ? (

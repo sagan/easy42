@@ -2435,6 +2435,43 @@ export const NodeDetailPage: React.FC = () => {
                                 >
                                   {peerEnd.name}
                                 </Typography>
+                                {link.note && (
+                                  <Tooltip
+                                    title={
+                                      <Box sx={{ p: 0.5, maxWidth: 300 }}>
+                                        <Typography variant="caption" sx={{ fontWeight: 700, display: "block", color: "#99F6E4", mb: 0.5 }}>
+                                          Link Note
+                                        </Typography>
+                                        <Typography variant="caption" sx={{ whiteSpace: "pre-wrap", color: "#F1F5F9" }}>
+                                          {link.note.length > 200 ? link.note.slice(0, 200) + "..." : link.note}
+                                        </Typography>
+                                      </Box>
+                                    }
+                                    arrow
+                                  >
+                                    <Chip
+                                      icon={<FileText size={10} color="#0D9488" />}
+                                      label="Note"
+                                      size="small"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setLinkToEdit(link);
+                                      }}
+                                      sx={{
+                                        height: 18,
+                                        fontSize: "0.62rem",
+                                        fontWeight: 700,
+                                        bgcolor: "rgba(13, 148, 136, 0.12)",
+                                        color: "#0F766E",
+                                        border: "1px solid rgba(13, 148, 136, 0.25)",
+                                        cursor: "pointer",
+                                        "&:hover": {
+                                          bgcolor: "rgba(13, 148, 136, 0.2)",
+                                        },
+                                      }}
+                                    />
+                                  </Tooltip>
+                                )}
                               </Box>
                             </TableCell>
                             <TableCell>

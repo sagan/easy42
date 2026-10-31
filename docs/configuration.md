@@ -393,6 +393,7 @@ An entrypoint describes how a node can be reached from outside.
 | `tags`        | `string[]`  | Free-form tags.                                                                            |
 | `assign_ipv4` | `boolean`   | Assign deterministic `169.254.X.X/32` IPv4 link-local addresses.                           |
 | `psk`         | `string`    | Encrypted base64 WireGuard preshared key. Omit to generate one when the vault is unlocked. |
+| `note`        | `string`    | Markdown note for the link.                                                                |
 | `modified_at` | `timestamp` | System-managed last modification time.                                                     |
 
 Each endpoint (`from`, `to`):

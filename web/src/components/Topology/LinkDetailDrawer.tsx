@@ -140,16 +140,24 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
   const [savingToNote, setSavingToNote] = useState(false);
   const [toNoteTab, setToNoteTab] = useState<"write" | "preview">("write");
 
+  const [isEditingLinkNote, setIsEditingLinkNote] = useState(false);
+  const [linkNoteDraft, setLinkNoteDraft] = useState("");
+  const [savingLinkNote, setSavingLinkNote] = useState(false);
+  const [linkNoteTab, setLinkNoteTab] = useState<"write" | "preview">("write");
+
   React.useEffect(() => {
     if (link) {
       setFromNoteDraft(link.from.note || "");
       setToNoteDraft(link.to.note || "");
+      setLinkNoteDraft(link.note || "");
       setIsEditingFromNote(false);
       setIsEditingToNote(false);
+      setIsEditingLinkNote(false);
       setFromNoteTab("write");
       setToNoteTab("write");
+      setLinkNoteTab("write");
     }
-  }, [link?.from?.name, link?.to?.name, link?.from?.note, link?.to?.note]);
+  }, [link?.from?.name, link?.to?.name, link?.from?.note, link?.to?.note, link?.note]);
 
   if (!link) return null;
 
@@ -360,6 +368,28 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
     }
   };
 
+  const handleSaveLinkNote = async () => {
+    if (!link) return;
+    setSavingLinkNote(true);
+    setError(null);
+    try {
+      const updated = await api.updateLink({
+        from_node: link.from.name,
+        to_node: link.to.name,
+        note: linkNoteDraft.trim(),
+      });
+      onLinkUpdated?.(updated);
+      setIsEditingLinkNote(false);
+      setActionSuccess("Link note updated");
+      setTimeout(() => setActionSuccess(null), 3000);
+    } catch (err: unknown) {
+      const e = err as Error;
+      setError(e.message || "Failed to save link note");
+    } finally {
+      setSavingLinkNote(false);
+    }
+  };
+
   const handleRestartEnd = async (end: "from" | "to") => {
     const endData = end === "from" ? link.from : link.to;
     if (
@@ -529,6 +559,22 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
                   borderRadius: "4px",
                 }}
               />
+              {link.note && (
+                <Chip
+                  icon={<FileText size={10} color="#0D9488" />}
+                  label="Note"
+                  size="small"
+                  sx={{
+                    height: 18,
+                    fontSize: "0.6rem",
+                    fontWeight: 800,
+                    bgcolor: "rgba(13, 148, 136, 0.12)",
+                    color: "#0F766E",
+                    border: "1px solid rgba(13, 148, 136, 0.25)",
+                    borderRadius: "4px",
+                  }}
+                />
+              )}
             </Box>
             <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, flexWrap: "wrap", mt: 0.25 }}>
               <Typography
@@ -855,6 +901,163 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
           </Box>
         </Box>
       )}
+
+      {/* Link-Scope Note Card */}
+      <Box
+        sx={{
+          p: 2,
+          borderRadius: 2,
+          backgroundColor: "#F8FAFC",
+          border: "1px solid #E2E8F0",
+        }}
+      >
+        <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 0.8 }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+            <Typography
+              variant="subtitle2"
+              sx={{ fontWeight: 700, color: "#0F766E", display: "flex", alignItems: "center", gap: 0.8 }}
+            >
+              <FileText size={16} color="#0D9488" />
+              Link Documentation & Notes
+            </Typography>
+            <Chip
+              label="LINK SCOPE"
+              size="small"
+              sx={{
+                fontWeight: 700,
+                fontSize: "0.62rem",
+                bgcolor: "rgba(13, 148, 136, 0.12)",
+                color: "#0F766E",
+                borderRadius: "4px",
+              }}
+            />
+          </Box>
+          {!isEditingLinkNote ? (
+            <Button
+              id="btn-edit-link-note"
+              size="small"
+              variant="outlined"
+              startIcon={<Edit2 size={11} />}
+              onClick={() => {
+                setLinkNoteDraft(link.note || "");
+                setIsEditingLinkNote(true);
+                setLinkNoteTab("write");
+              }}
+              sx={{
+                fontSize: "0.68rem",
+                py: 0.2,
+                px: 1,
+                textTransform: "none",
+                fontWeight: 600,
+                borderRadius: 1,
+                borderColor: "#99F6E4",
+                color: "#0F766E",
+                "&:hover": { borderColor: "#0D9488", backgroundColor: "rgba(13, 148, 136, 0.05)" },
+              }}
+            >
+              {link.note ? "Edit Note" : "Add Note"}
+            </Button>
+          ) : (
+            <Box sx={{ display: "flex", gap: 0.5, alignItems: "center" }}>
+              <Button
+                size="small"
+                variant={linkNoteTab === "write" ? "contained" : "text"}
+                onClick={() => setLinkNoteTab("write")}
+                sx={{ minWidth: "auto", px: 0.8, py: 0.1, fontSize: "0.68rem", textTransform: "none" }}
+              >
+                Write
+              </Button>
+              <Button
+                size="small"
+                variant={linkNoteTab === "preview" ? "contained" : "text"}
+                onClick={() => setLinkNoteTab("preview")}
+                sx={{ minWidth: "auto", px: 0.8, py: 0.1, fontSize: "0.68rem", textTransform: "none" }}
+              >
+                Preview
+              </Button>
+            </Box>
+          )}
+        </Box>
+
+        {!isEditingLinkNote ? (
+          <Box
+            sx={{
+              p: 1.25,
+              borderRadius: 1,
+              backgroundColor: "#FFFFFF",
+              border: "1px solid #E2E8F0",
+              maxHeight: 200,
+              overflowY: "auto",
+            }}
+          >
+            <MarkdownView
+              content={link.note}
+              emptyText="No documentation recorded for this link yet. Click 'Add Note' to record markdown notes."
+            />
+          </Box>
+        ) : (
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+            {linkNoteTab === "write" ? (
+              <TextField
+                id="link-note-draft-input"
+                fullWidth
+                multiline
+                minRows={2}
+                maxRows={8}
+                size="small"
+                placeholder="Write markdown documentation, SLAs, circuit IDs, transit provider notes..."
+                value={linkNoteDraft}
+                onChange={(e) => setLinkNoteDraft(e.target.value)}
+                disabled={savingLinkNote}
+                sx={{
+                  backgroundColor: "#FFFFFF",
+                  borderRadius: 1,
+                  "& .MuiInputBase-root": {
+                    fontSize: "0.8rem",
+                    fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+                  },
+                }}
+              />
+            ) : (
+              <Box
+                sx={{
+                  p: 1.25,
+                  borderRadius: 1,
+                  backgroundColor: "#FFFFFF",
+                  border: "1px solid #E2E8F0",
+                  minHeight: 60,
+                  maxHeight: 200,
+                  overflowY: "auto",
+                }}
+              >
+                <MarkdownView content={linkNoteDraft} emptyText="No markdown note content" />
+              </Box>
+            )}
+            <Box sx={{ display: "flex", justifyContent: "flex-end", gap: 0.8, mt: 0.2 }}>
+              <Button
+                size="small"
+                onClick={() => setIsEditingLinkNote(false)}
+                disabled={savingLinkNote}
+                sx={{ fontSize: "0.72rem", textTransform: "none", color: "#64748B" }}
+              >
+                Cancel
+              </Button>
+              <Button
+                id="save-link-note"
+                size="small"
+                variant="contained"
+                color="primary"
+                onClick={handleSaveLinkNote}
+                disabled={savingLinkNote}
+                startIcon={savingLinkNote ? <CircularProgress size={11} color="inherit" /> : <Check size={11} />}
+                sx={{ fontSize: "0.72rem", textTransform: "none", fontWeight: 600, px: 1.2 }}
+              >
+                {savingLinkNote ? "Saving..." : "Save Note"}
+              </Button>
+            </Box>
+          </Box>
+        )}
+      </Box>
 
       {/* Specifications */}
       <Box sx={{ display: "flex", flexDirection: "column", gap: 2.5 }}>

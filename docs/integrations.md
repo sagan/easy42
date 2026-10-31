@@ -289,6 +289,26 @@ Easy42 compiles WireGuard, BIRD, and nftables configuration with Go's `text/temp
 - **Custom templates**: stored in `config.json` under `templates`, managed from **Settings -> Templates** or `/api/templates`.
 - **Per-node selection**: `nodes[].wg_template`, `bird_template`, and `nft_template` accept a template ID or name. Empty (or `default`) uses the built-in template.
 
+### Referencing Note JSON in Templates (`.data`)
+
+The markdown `note` field on **Node**, **Link**, and **LinkEnd** objects can embed structured configuration by including a ` ``` ` or ` ```json ` code block. Easy42 automatically extracts and parses the JSON from the first found code fence and exposes it as the `.data` map in template contexts (best-effort; invalid or missing blocks simply result in an empty map without breaking template rendering).
+
+For example, if a node's Note contains:
+```markdown
+# Edge Gateway
+```json
+{
+  "type": "server",
+  "zone": "us-east"
+}
+```
+```
+
+You can reference these properties in custom BIRD, WireGuard, and nftables templates:
+- **Node level** (BIRD, nftables, WireGuard root): `{{ .data.type }}`
+- **WireGuard context**: `{{ .self_node.data.type }}`, `{{ .peer_node.data.type }}`, `{{ .link.data.type }}`, `{{ .self_end.data.prop }}`, `{{ .peer_end.data.prop }}`
+- **BIRD links iteration**: `{{ range .links }}{{ .data.carrier }} {{ .link.data.carrier }} {{ .local.data.prop }} {{ .remote.data.prop }} {{ .remote_node.data.role }}{{ end }}`
+
 ### Node config hooks
 
 `nodes[].config_hooks` injects snippets into generated files:

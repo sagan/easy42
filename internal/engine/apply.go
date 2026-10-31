@@ -838,6 +838,10 @@ func mergeLink(target *config.Link, patch config.LinkPatch, now time.Time) ([]Ap
 		checkField("psk", "***", "***")
 		target.Psk = *patch.Psk
 	}
+	if patch.Note != nil && *patch.Note != target.Note {
+		checkField("note", target.Note, *patch.Note)
+		target.Note = *patch.Note
+	}
 
 	mergeLinkEnd(targetFrom, patchFrom, "from", &diffs)
 	mergeLinkEnd(targetTo, patchTo, "to", &diffs)
@@ -961,6 +965,9 @@ func createLinkFromPatch(patch config.LinkPatch, now time.Time) (*config.Link, [
 	}
 	if patch.Psk != nil {
 		link.Psk = *patch.Psk
+	}
+	if patch.Note != nil {
+		link.Note = *patch.Note
 	}
 
 	var dummyDiffs []ApplyFieldDiff

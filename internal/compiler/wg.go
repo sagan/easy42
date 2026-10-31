@@ -1,7 +1,9 @@
 package compiler
 
 import (
+	"encoding/json"
 	"fmt"
+	"reflect"
 	"strconv"
 	"strings"
 
@@ -274,11 +276,50 @@ func BuildWgLinkContext(
 		}
 	}
 
+	selfNote := ""
+	if selfNode != nil {
+		selfNote = selfNode.Note
+	}
+	nodeData := config.ExtractNoteData(selfNote)
+
+	peerNote := ""
+	if peerNode != nil {
+		peerNote = peerNode.Note
+	}
+	peerNodeData := config.ExtractNoteData(peerNote)
+
+	selfEndNote := ""
+	if selfEnd != nil {
+		selfEndNote = selfEnd.Note
+	}
+	selfEndData := config.ExtractNoteData(selfEndNote)
+
+	peerEndNote := ""
+	if peerEnd != nil {
+		peerEndNote = peerEnd.Note
+	}
+	peerEndData := config.ExtractNoteData(peerEndNote)
+
+	linkNote := ""
+	if linkForEnd != nil {
+		linkNote = linkForEnd.Note
+	}
+	linkData := config.ExtractNoteData(linkNote)
+
 	ctx := map[string]any{
-		"self_node":            selfNode,
-		"peer_node":            peerNode,
-		"self_end":             selfEnd,
-		"peer_end":             peerEnd,
+		"self_node":            toWgTemplateMap(selfNode, selfNote),
+		"peer_node":            toWgTemplateMap(peerNode, peerNote),
+		"self_end":             toWgTemplateMap(selfEnd, selfEndNote),
+		"peer_end":             toWgTemplateMap(peerEnd, peerEndNote),
+		"data":                 nodeData,
+		"Data":                 nodeData,
+		"note":                 selfNote,
+		"Note":                 selfNote,
+		"node_data":            nodeData,
+		"peer_node_data":       peerNodeData,
+		"link_data":            linkData,
+		"self_end_data":        selfEndData,
+		"peer_end_data":        peerEndData,
 		"address":              address,
 		"listen_port":          listenPort,
 		"private_key":          privateKey,
@@ -289,6 +330,10 @@ func BuildWgLinkContext(
 		"endpoint":             endpoint,
 		"persistent_keepalive": keepalive,
 		"assign_ipv4":          assignIPv4,
+	}
+
+	if linkForEnd != nil {
+		ctx["link"] = toWgTemplateMap(linkForEnd, linkNote)
 	}
 
 	if psk != "" {
@@ -352,6 +397,58 @@ func BuildWgLinkContext(
 	}
 
 	return ctx, nil
+}
+
+// toWgTemplateMap converts a struct pointer (Node, Link, LinkEnd) to a map containing
+// json-tagged names, exported PascalCase struct field names, 0-arg methods, and note / data fields.
+func toWgTemplateMap(v any, note string) map[string]any {
+	if v == nil {
+		return nil
+	}
+	rv := reflect.ValueOf(v)
+	if rv.Kind() == reflect.Pointer && rv.IsNil() {
+		return nil
+	}
+	res := make(map[string]any)
+
+	// 1. JSON tags (e.g. name, is_external, etc.)
+	if data, err := json.Marshal(v); err == nil {
+		_ = json.Unmarshal(data, &res)
+	}
+
+	// 2. Struct field names (e.g. Name, IsExternal, Address4, etc.)
+	elem := rv
+	if elem.Kind() == reflect.Pointer {
+		elem = elem.Elem()
+	}
+	if elem.Kind() == reflect.Struct {
+		typ := elem.Type()
+		for i := 0; i < typ.NumField(); i++ {
+			f := typ.Field(i)
+			if f.PkgPath == "" { // exported field
+				fv := elem.Field(i)
+				if fv.CanInterface() {
+					res[f.Name] = fv.Interface()
+				}
+			}
+		}
+	}
+
+	// 3. Methods without arguments (e.g. LinkType(), IsManual(), ExternalIp(), Data())
+	for i := 0; i < rv.NumMethod(); i++ {
+		m := rv.Type().Method(i)
+		if m.PkgPath == "" && m.Type.NumIn() == 1 && m.Type.NumOut() == 1 {
+			out := m.Func.Call([]reflect.Value{rv})[0]
+			res[m.Name] = out.Interface()
+		}
+	}
+
+	noteData := config.ExtractNoteData(note)
+	res["note"] = note
+	res["Note"] = note
+	res["data"] = noteData
+	res["Data"] = noteData
+	return res
 }
 
 // findLinkForEnd locates the exact link a WireGuard config is generated for.

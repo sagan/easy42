@@ -179,16 +179,7 @@ export const EXPORT_FILTER_EXAMPLES = [
 ];
 
 export type SettingsTab =
-  | "network"
-  | "security"
-  | "policies"
-  | "templates"
-  | "dns"
-  | "tasks"
-  | "database"
-  | "integrations"
-  | "mcp"
-  | "about";
+  "network" | "security" | "policies" | "templates" | "dns" | "tasks" | "database" | "integrations" | "mcp" | "about";
 
 const VALID_TABS: Record<string, SettingsTab> = {
   network: "network",
@@ -2522,7 +2513,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                     <a href="https://github.com/go-sprout/sprout" target="_blank" rel="noopener noreferrer">
                       Sprout functions
                     </a>{" "}
-                    in custom template.
+                    in custom template. The <code>```</code> or <code>```json</code> defined structured data in
+                    Node/Link/LinkEnd <code>Note</code> field can be referenced in template by the object{" "}
+                    <code>{"{{.data}}"}</code> attribute.
                   </Typography>
                 </Box>
                 <Button
@@ -5718,7 +5711,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                         </Typography>
                       </Box>
                     </Box>
-                    <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, maxWidth: "100%", overflow: "hidden" }}>
+                    <Box
+                      sx={{ display: "flex", alignItems: "center", gap: 0.75, maxWidth: "100%", overflow: "hidden" }}
+                    >
                       <Typography
                         variant="body2"
                         sx={{
@@ -5740,9 +5735,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                         <Tooltip title={copiedInstanceField === "listen_address" ? "Copied!" : "Copy Listen Address"}>
                           <IconButton
                             size="small"
-                            onClick={() =>
-                              handleCopyInstanceField(versionInfo.listen_address || "", "listen_address")
-                            }
+                            onClick={() => handleCopyInstanceField(versionInfo.listen_address || "", "listen_address")}
                             sx={{
                               p: 0.5,
                               color: copiedInstanceField === "listen_address" ? "#10B981" : "#64748B",
@@ -5789,7 +5782,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                         </Typography>
                       </Box>
                     </Box>
-                    <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, maxWidth: "100%", overflow: "hidden" }}>
+                    <Box
+                      sx={{ display: "flex", alignItems: "center", gap: 0.75, maxWidth: "100%", overflow: "hidden" }}
+                    >
                       <Typography
                         variant="body2"
                         sx={{
@@ -5858,7 +5853,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                         </Typography>
                       </Box>
                     </Box>
-                    <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, maxWidth: "100%", overflow: "hidden" }}>
+                    <Box
+                      sx={{ display: "flex", alignItems: "center", gap: 0.75, maxWidth: "100%", overflow: "hidden" }}
+                    >
                       <Typography
                         variant="body2"
                         sx={{

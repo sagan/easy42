@@ -220,6 +220,7 @@ export const api = {
     to_mark?: string;
     from_note?: string;
     to_note?: string;
+    note?: string;
     mtu?: number;
     tags?: string[];
     assign_ipv4?: boolean;
@@ -261,6 +262,7 @@ export const api = {
     to_mark?: string;
     from_note?: string;
     to_note?: string;
+    note?: string;
     mtu?: number;
     tags?: string[];
     assign_ipv4?: boolean;

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { BaseEdge, EdgeLabelRenderer, EdgeProps, getBezierPath } from "@xyflow/react";
 import { Box, Typography } from "@mui/material";
+import { FileText } from "lucide-react";
 import { Link } from "../../types/api";
 import { getEffectiveLinkCost } from "../../utils/cost";
 import { isManualLink } from "../../utils/link";
@@ -535,6 +536,23 @@ export const CustomEdge: React.FC<EdgeProps> = ({
                   {workingState === "working" && !isManual && "⚡"}
                   {statusText}
                 </Box>
+
+                {link.note && (
+                  <Box
+                    sx={{
+                      display: "flex",
+                      alignItems: "center",
+                      color: "#0D9488",
+                      backgroundColor: "rgba(13, 148, 136, 0.1)",
+                      borderRadius: 1,
+                      px: 0.45,
+                      py: 0.15,
+                    }}
+                    title={`Link Note: ${link.note}`}
+                  >
+                    <FileText size={10} color="#0D9488" />
+                  </Box>
+                )}
 
                 {isCentralityActive && centralityInfo && (
                   <Box

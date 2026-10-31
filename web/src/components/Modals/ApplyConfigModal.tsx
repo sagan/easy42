@@ -137,6 +137,7 @@ export function generateLinkApplySnippet(link: Link): string {
   if (link.assign_ipv4 !== undefined) lp.assign_ipv4 = link.assign_ipv4;
   if (link.disable_bfd !== undefined) lp.disable_bfd = link.disable_bfd;
   if (link.psk !== undefined && link.psk !== "") lp.psk = link.psk;
+  if (link.note !== undefined && link.note !== "") lp.note = link.note;
 
   return JSON.stringify({ links: [lp] }, null, 2);
 }

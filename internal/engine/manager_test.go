@@ -2660,3 +2660,60 @@ func TestRevealAndResetPrivateKey(t *testing.T) {
 		t.Fatalf("Expected custom public key %s, got %s", customKp.PublicKey, setPub)
 	}
 }
+
+func TestLinkScopeNote(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "easy42-engine-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	store := config.NewStore(tempDir)
+	pass, err := store.Initialize()
+	if err != nil {
+		t.Fatalf("Failed to init store: %v", err)
+	}
+	mgr := NewManager(store)
+	if err := mgr.Unlock(pass); err != nil {
+		t.Fatalf("Failed to unlock manager: %v", err)
+	}
+
+	n1 := config.Node{Name: "ln-a", Host: "192.168.1.1", IP: "10.0.0.1", ASN: 4224420001}
+	n2 := config.Node{Name: "ln-b", Host: "192.168.1.2", IP: "10.0.0.2", ASN: 4224420002}
+	if err := mgr.AddNode(n1); err != nil {
+		t.Fatalf("AddNode ln-a failed: %v", err)
+	}
+	if err := mgr.AddNode(n2); err != nil {
+		t.Fatalf("AddNode ln-b failed: %v", err)
+	}
+
+	// 1. Add link with Link Note
+	initNote := "# Link Note\nThis is a link-scope markdown note."
+	link, err := mgr.AddLinkWithAllOptionsAndNote("ln-a", "ln-b", nil, nil, nil, false, false, initNote)
+	if err != nil {
+		t.Fatalf("AddLinkWithAllOptionsAndNote failed: %v", err)
+	}
+	if link.Note != initNote {
+		t.Fatalf("Expected link.Note %q, got %q", initNote, link.Note)
+	}
+
+	// 2. Update Link Note
+	updatedNote := "Updated link note"
+	updated, err := mgr.UpdateLinkWithAllOptions("ln-a", "ln-b", nil, nil, nil, nil, nil, &updatedNote)
+	if err != nil {
+		t.Fatalf("UpdateLinkWithAllOptions failed: %v", err)
+	}
+	if updated.Note != updatedNote {
+		t.Fatalf("Expected updated link.Note %q, got %q", updatedNote, updated.Note)
+	}
+
+	// 3. Clear Link Note using __CLEAR__
+	clearCmd := "__CLEAR__"
+	cleared, err := mgr.UpdateLinkWithAllOptions("ln-a", "ln-b", nil, nil, nil, nil, nil, &clearCmd)
+	if err != nil {
+		t.Fatalf("UpdateLinkWithAllOptions clear failed: %v", err)
+	}
+	if cleared.Note != "" {
+		t.Fatalf("Expected empty link.Note after clear, got %q", cleared.Note)
+	}
+}

@@ -543,6 +543,7 @@ type addLinkRequest struct {
 	ToRoutingPolicy   string      `json:"to_routing_policy,omitempty"`
 	FromNote       *string         `json:"from_note,omitempty"`
 	ToNote         *string         `json:"to_note,omitempty"`
+	Note           *string         `json:"note,omitempty"`
 	MTU            int             `json:"mtu,omitempty"`
 	Tags           []string        `json:"tags,omitempty"`
 	AssignIPv4     *bool           `json:"assign_ipv4,omitempty"`
@@ -709,10 +710,15 @@ func (s *Server) handleAddLink(w http.ResponseWriter, r *http.Request) {
 		disableBFD = *req.DisableBFD
 	}
 
+	linkNote := ""
+	if req.Note != nil {
+		linkNote = *req.Note
+	}
+
 	var link *config.Link
 	var err error
-	if req.From != nil || req.To != nil || assignIPv4 || disableBFD {
-		link, err = s.mgr.AddLinkWithAllOptions(fromNode, toNode, req.From, req.To, req.Tags, assignIPv4, disableBFD, fromMTU, toMTU)
+	if req.From != nil || req.To != nil || assignIPv4 || disableBFD || linkNote != "" {
+		link, err = s.mgr.AddLinkWithAllOptionsAndNote(fromNode, toNode, req.From, req.To, req.Tags, assignIPv4, disableBFD, linkNote, fromMTU, toMTU)
 	} else {
 		link, err = s.mgr.AddLink(fromNode, toNode, req.FromPort, req.ToPort, req.Tags, fromMTU, toMTU)
 	}
@@ -781,6 +787,7 @@ type updateLinkRequest struct {
 	ToRoutingPolicy   string      `json:"to_routing_policy,omitempty"`
 	FromNote       *string         `json:"from_note,omitempty"`
 	ToNote         *string         `json:"to_note,omitempty"`
+	Note           *string         `json:"note,omitempty"`
 	MTU            int             `json:"mtu,omitempty"`
 	Tags           []string        `json:"tags,omitempty"`
 	AssignIPv4     *bool           `json:"assign_ipv4,omitempty"`
@@ -1029,9 +1036,9 @@ func (s *Server) handleUpdateLink(w http.ResponseWriter, r *http.Request) {
 		if req.To != nil && req.To.MTU == 0 && toMTU > 0 {
 			req.To.MTU = toMTU
 		}
-		link, err = s.mgr.UpdateLinkWithOptions(fromNode, toNode, req.From, req.To, req.Tags, req.AssignIPv4, req.DisableBFD)
-	} else if req.AssignIPv4 != nil || req.DisableBFD != nil {
-		link, err = s.mgr.UpdateLinkWithOptions(fromNode, toNode, nil, nil, req.Tags, req.AssignIPv4, req.DisableBFD)
+		link, err = s.mgr.UpdateLinkWithAllOptions(fromNode, toNode, req.From, req.To, req.Tags, req.AssignIPv4, req.DisableBFD, req.Note)
+	} else if req.AssignIPv4 != nil || req.DisableBFD != nil || req.Note != nil {
+		link, err = s.mgr.UpdateLinkWithAllOptions(fromNode, toNode, nil, nil, req.Tags, req.AssignIPv4, req.DisableBFD, req.Note)
 	} else {
 		link, err = s.mgr.UpdateLink(fromNode, toNode, fromPort, toPort, req.Tags, fromMTU, toMTU)
 	}

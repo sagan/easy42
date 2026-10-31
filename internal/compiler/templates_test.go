@@ -183,3 +183,160 @@ func TestCustomTemplatesInConfigGeneration(t *testing.T) {
 		t.Errorf("expected wg config to contain Address = fe80::1/64, got:\n%s", wgConf)
 	}
 }
+
+func TestNoteDataInCustomTemplates(t *testing.T) {
+	nodeA := &config.Node{
+		Name: "node-a",
+		IP:   "192.168.100.1",
+		ASN:  4224420001,
+		Note: "# Node A Markdown\n```json\n{\n  \"type\": \"server\",\n  \"zone\": \"eu-west\"\n}\n```",
+	}
+
+	nodeB := &config.Node{
+		Name: "node-b",
+		IP:   "192.168.100.2",
+		ASN:  4224420002,
+		Note: "```json\n{\n  \"type\": \"client\",\n  \"role\": \"worker\"\n}\n```",
+	}
+
+	endA := &config.LinkEnd{
+		Name:      "node-a",
+		Interface: "wg42nodeb",
+		Address:   "fe80::1/64",
+		Note:      "```json\n{\n  \"mtu\": 1420,\n  \"local_tag\": \"primary\"\n}\n```",
+	}
+
+	endB := &config.LinkEnd{
+		Name:      "node-b",
+		Interface: "wg42nodea",
+		Address:   "fe80::2/64",
+		Note:      "```\n{\n  \"remote_tag\": \"backup\"\n}\n```",
+	}
+
+	link := config.Link{
+		From: *endA,
+		To:   *endB,
+		Note: "```json\n{\n  \"carrier\": \"fiber\",\n  \"cost\": 10\n}\n```",
+	}
+
+	allNodes := []config.Node{*nodeA, *nodeB}
+	links := []config.Link{link}
+
+	// 1. Test BIRD custom template
+	birdTmpl := `# BIRD for {{ .name }}
+# Node Type: {{ .data.type }}
+# Node Zone: {{ .data.zone }}
+{{ range .links }}
+# Link Carrier: {{ .data.carrier }}
+# Link Carrier via link: {{ .link.data.carrier }}
+# Local Tag: {{ .local.data.local_tag }}
+# Remote Tag: {{ .remote.data.remote_tag }}
+# Remote Node Role: {{ .remote_node.data.role }}
+{{ end }}
+`
+	birdConf, err := GenerateBirdConfigWithTemplate(birdTmpl, nodeA, allNodes, links)
+	if err != nil {
+		t.Fatalf("GenerateBirdConfigWithTemplate failed: %v", err)
+	}
+	if !strings.Contains(birdConf, "# Node Type: server") {
+		t.Errorf("expected '# Node Type: server' in bird config, got:\n%s", birdConf)
+	}
+	if !strings.Contains(birdConf, "# Node Zone: eu-west") {
+		t.Errorf("expected '# Node Zone: eu-west' in bird config, got:\n%s", birdConf)
+	}
+	if !strings.Contains(birdConf, "# Link Carrier: fiber") {
+		t.Errorf("expected '# Link Carrier: fiber' in bird config, got:\n%s", birdConf)
+	}
+	if !strings.Contains(birdConf, "# Link Carrier via link: fiber") {
+		t.Errorf("expected '# Link Carrier via link: fiber' in bird config, got:\n%s", birdConf)
+	}
+	if !strings.Contains(birdConf, "# Local Tag: primary") {
+		t.Errorf("expected '# Local Tag: primary' in bird config, got:\n%s", birdConf)
+	}
+	if !strings.Contains(birdConf, "# Remote Tag: backup") {
+		t.Errorf("expected '# Remote Tag: backup' in bird config, got:\n%s", birdConf)
+	}
+	if !strings.Contains(birdConf, "# Remote Node Role: worker") {
+		t.Errorf("expected '# Remote Node Role: worker' in bird config, got:\n%s", birdConf)
+	}
+
+	// 2. Test WireGuard custom template
+	wgTmpl := `[Interface]
+# Node Type: {{ .data.type }}
+# Self Node Type: {{ .self_node.data.type }}
+# Peer Node Type: {{ .peer_node.data.type }}
+# Self End Local Tag: {{ .self_end.data.local_tag }}
+# Peer End Remote Tag: {{ .peer_end.data.remote_tag }}
+# Link Carrier: {{ .link.data.carrier }}
+`
+	fullCfg := &config.Config{
+		Nodes: allNodes,
+		Links: links,
+	}
+	wgConf, err := GenerateWgConfigContentWithTemplate(wgTmpl, nodeA, nodeB, endA, endB, nil, fullCfg)
+	if err != nil {
+		t.Fatalf("GenerateWgConfigContentWithTemplate failed: %v", err)
+	}
+	if !strings.Contains(wgConf, "# Node Type: server") {
+		t.Errorf("expected '# Node Type: server' in wg config, got:\n%s", wgConf)
+	}
+	if !strings.Contains(wgConf, "# Self Node Type: server") {
+		t.Errorf("expected '# Self Node Type: server' in wg config, got:\n%s", wgConf)
+	}
+	if !strings.Contains(wgConf, "# Peer Node Type: client") {
+		t.Errorf("expected '# Peer Node Type: client' in wg config, got:\n%s", wgConf)
+	}
+	if !strings.Contains(wgConf, "# Self End Local Tag: primary") {
+		t.Errorf("expected '# Self End Local Tag: primary' in wg config, got:\n%s", wgConf)
+	}
+	if !strings.Contains(wgConf, "# Peer End Remote Tag: backup") {
+		t.Errorf("expected '# Peer End Remote Tag: backup' in wg config, got:\n%s", wgConf)
+	}
+	if !strings.Contains(wgConf, "# Link Carrier: fiber") {
+		t.Errorf("expected '# Link Carrier: fiber' in wg config, got:\n%s", wgConf)
+	}
+
+	// 3. Test nftables custom template
+	nftTmpl := `table inet easy42 {
+	# Node Type: {{ .data.type }}
+}
+`
+	nftConf, err := GenerateNftablesConfigWithTemplate(nftTmpl, nodeA, allNodes, links)
+	if err != nil {
+		t.Fatalf("GenerateNftablesConfigWithTemplate failed: %v", err)
+	}
+	if !strings.Contains(nftConf, "# Node Type: server") {
+		t.Errorf("expected '# Node Type: server' in nft config, got:\n%s", nftConf)
+	}
+
+	// 4. Test best-effort error tolerance (invalid JSON, no code block, empty Note)
+	invalidNode := &config.Node{
+		Name: "invalid-node",
+		IP:   "192.168.100.99",
+		Note: "```json\n{ not valid json\n```",
+	}
+	safeTmpl := `Node Type: [{{ if .data.type }}{{ .data.type }}{{ else }}empty{{ end }}]`
+	safeBird, err := GenerateBirdConfigWithTemplate(safeTmpl, invalidNode, []config.Node{*invalidNode}, nil)
+	if err != nil {
+		t.Fatalf("expected invalid json to be ignored without error, got: %v", err)
+	}
+	if !strings.Contains(safeBird, "Node Type: [empty]") {
+		t.Errorf("expected empty data for invalid json, got:\n%s", safeBird)
+	}
+
+	safeWg, err := GenerateWgConfigContentWithTemplate(safeTmpl, invalidNode, nodeB, endA, endB, nil)
+	if err != nil {
+		t.Fatalf("expected invalid json to be ignored in wg, got: %v", err)
+	}
+	if !strings.Contains(safeWg, "Node Type: [empty]") {
+		t.Errorf("expected empty data in wg for invalid json, got:\n%s", safeWg)
+	}
+
+	safeNft, err := GenerateNftablesConfigWithTemplate(safeTmpl, invalidNode, []config.Node{*invalidNode}, nil)
+	if err != nil {
+		t.Fatalf("expected invalid json to be ignored in nft, got: %v", err)
+	}
+	if !strings.Contains(safeNft, "Node Type: [empty]") {
+		t.Errorf("expected empty data in nft for invalid json, got:\n%s", safeNft)
+	}
+}

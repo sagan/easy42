@@ -1713,6 +1713,7 @@ func TestNodeAndLinkEndNotes(t *testing.T) {
 	linkReq := map[string]interface{}{
 		"from_node": "node-a",
 		"to_node":   "node-b",
+		"note":      "Initial link markdown note",
 		"from": map[string]interface{}{
 			"note": fromNote,
 		},
@@ -1731,6 +1732,9 @@ func TestNodeAndLinkEndNotes(t *testing.T) {
 
 	var createdLink config.Link
 	_ = json.Unmarshal(wLink.Body.Bytes(), &createdLink)
+	if createdLink.Note != "Initial link markdown note" {
+		t.Fatalf("Expected link.Note 'Initial link markdown note', got %q", createdLink.Note)
+	}
 	if createdLink.From.Note != fromNote {
 		t.Fatalf("Expected from.Note %q, got %q", fromNote, createdLink.From.Note)
 	}
@@ -1738,14 +1742,16 @@ func TestNodeAndLinkEndNotes(t *testing.T) {
 		t.Fatalf("Expected to.Note %q, got %q", toNote, createdLink.To.Note)
 	}
 
-	// 6. Update LinkEnd notes via PUT /api/links using from_note / to_note
+	// 6. Update LinkEnd notes via PUT /api/links using from_note / to_note, and update link-scope note
 	newFromNote := "New from note"
 	clearToNote := ""
+	newLinkNote := "Updated link-scope markdown note"
 	updateLinkReq := map[string]interface{}{
 		"from_node": "node-a",
 		"to_node":   "node-b",
 		"from_note": newFromNote,
 		"to_note":   clearToNote,
+		"note":      newLinkNote,
 	}
 	bodyUpdateLink, _ := json.Marshal(updateLinkReq)
 	reqUpdateLink := httptest.NewRequest("PUT", "/api/links", bytes.NewReader(bodyUpdateLink))
@@ -1758,11 +1764,34 @@ func TestNodeAndLinkEndNotes(t *testing.T) {
 
 	var updatedLink config.Link
 	_ = json.Unmarshal(wUpdateLink.Body.Bytes(), &updatedLink)
+	if updatedLink.Note != newLinkNote {
+		t.Fatalf("Expected updated link.Note %q, got %q", newLinkNote, updatedLink.Note)
+	}
 	if updatedLink.From.Note != newFromNote {
 		t.Fatalf("Expected updated from.Note %q, got %q", newFromNote, updatedLink.From.Note)
 	}
 	if updatedLink.To.Note != "" {
 		t.Fatalf("Expected cleared to.Note, got %q", updatedLink.To.Note)
+	}
+
+	// 7. Clear link-scope note via PUT /api/links with empty note
+	clearLinkReq := map[string]interface{}{
+		"from_node": "node-a",
+		"to_node":   "node-b",
+		"note":      "",
+	}
+	bodyClearLink, _ := json.Marshal(clearLinkReq)
+	reqClearLink := httptest.NewRequest("PUT", "/api/links", bytes.NewReader(bodyClearLink))
+	reqClearLink.AddCookie(cookie)
+	wClearLink := httptest.NewRecorder()
+	srv.router.ServeHTTP(wClearLink, reqClearLink)
+	if wClearLink.Code != http.StatusOK {
+		t.Fatalf("Clear link note failed: %d %s", wClearLink.Code, wClearLink.Body.String())
+	}
+	var clearedLink config.Link
+	_ = json.Unmarshal(wClearLink.Body.Bytes(), &clearedLink)
+	if clearedLink.Note != "" {
+		t.Fatalf("Expected cleared link.Note, got %q", clearedLink.Note)
 	}
 }
 
