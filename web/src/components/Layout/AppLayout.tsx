@@ -182,7 +182,15 @@ export const AppLayout: React.FC = () => {
                 <Typography variant="subtitle1" sx={{ fontWeight: 800, color: "#0F172A", lineHeight: 1.1 }}>
                   {networkName || "Easy42"}
                 </Typography>
-                <Typography variant="caption" sx={{ color: "#64748B", fontSize: "0.65rem", fontWeight: 600 }}>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: "#64748B",
+                    fontSize: "0.65rem",
+                    fontWeight: 600,
+                    display: isMobile ? "none" : "initial",
+                  }}
+                >
                   FLEET & MESH
                 </Typography>
               </Box>

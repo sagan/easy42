@@ -1,14 +1,5 @@
 import React, { useState } from "react";
-import {
-  Box,
-  Typography,
-  Button,
-  Chip,
-  Paper,
-  TextField,
-  Tooltip,
-  IconButton,
-} from "@mui/material";
+import { Box, Typography, Button, Chip, Paper, TextField, Tooltip, IconButton } from "@mui/material";
 import {
   Sparkles,
   Terminal,
@@ -29,11 +20,7 @@ interface CustomTaskHelpProps {
   onOpenInstallModal?: () => void;
 }
 
-export const CustomTaskHelp: React.FC<CustomTaskHelpProps> = ({
-  onRefreshTasks,
-  isRefreshing,
-  onOpenInstallModal,
-}) => {
+export const CustomTaskHelp: React.FC<CustomTaskHelpProps> = ({ onRefreshTasks, isRefreshing, onOpenInstallModal }) => {
   const [taskGoal, setTaskGoal] = useState<string>(
     "Install and configure chrony NTP client to synchronize time with pool.ntp.org",
   );
@@ -186,8 +173,8 @@ chmod +x ~/.config/easy42/tasks/hello_world/*.sh`;
             />
           </Box>
           <Typography variant="body2" sx={{ color: "#475569", maxWidth: 680 }}>
-            Define custom automation and maintenance scripts executed across your nodes via SSH.
-            Easy42 automatically discovers tasks from your server's local filesystem.
+            Define custom automation and maintenance scripts executed across your nodes via SSH. Easy42 automatically
+            discovers tasks from your server's local filesystem.
           </Typography>
         </Box>
 
@@ -215,12 +202,7 @@ chmod +x ~/.config/easy42/tasks/hello_world/*.sh`;
               size="small"
               onClick={onRefreshTasks}
               disabled={isRefreshing}
-              startIcon={
-                <RotateCw
-                  size={14}
-                  className={isRefreshing ? "animate-spin" : undefined}
-                />
-              }
+              startIcon={<RotateCw size={14} className={isRefreshing ? "animate-spin" : undefined} />}
               sx={{
                 textTransform: "none",
                 fontWeight: 600,
@@ -299,8 +281,8 @@ chmod +x ~/.config/easy42/tasks/hello_world/*.sh`;
               />
             </Box>
             <Typography variant="caption" sx={{ color: "#64748b", display: "block", lineHeight: 1.5 }}>
-              Executable shell script that performs the actual installation or configuration.
-              Exit with code <strong>0</strong> on success, or non-zero on failure.
+              Executable shell script that performs the actual installation or configuration. Exit with code{" "}
+              <strong>0</strong> on success, or non-zero on failure.
             </Typography>
           </Box>
 
@@ -326,9 +308,8 @@ chmod +x ~/.config/easy42/tasks/hello_world/*.sh`;
               />
             </Box>
             <Typography variant="caption" sx={{ color: "#64748b", display: "block", lineHeight: 1.5 }}>
-              Checks node state before running. Exit <strong>0</strong> = Needs Execution,{" "}
-              <strong>10</strong> = Already Done, <strong>20</strong> = Incompatible. If omitted,
-              easy42 marks task as Ready.
+              Checks node state before running. Exit <strong>0</strong> = Needs Execution, <strong>10</strong> = Already
+              Done, <strong>20</strong> = Incompatible. If omitted, easy42 marks task as Ready.
             </Typography>
           </Box>
 
@@ -354,8 +335,8 @@ chmod +x ~/.config/easy42/tasks/hello_world/*.sh`;
               />
             </Box>
             <Typography variant="caption" sx={{ color: "#64748b", display: "block", lineHeight: 1.5 }}>
-              Metadata defining title, description, category, and weight. If omitted, easy42
-              auto-formats the directory name (e.g. <code>install_bird</code> &rarr; "Install Bird").
+              Metadata defining title, description, category, and weight. If omitted, easy42 auto-formats the directory
+              name (e.g. <code>install_bird</code> &rarr; "Install Bird").
             </Typography>
           </Box>
         </Box>
@@ -363,9 +344,11 @@ chmod +x ~/.config/easy42/tasks/hello_world/*.sh`;
         <Box sx={{ display: "flex", alignItems: "center", gap: 1, mt: 2, color: "#64748b" }}>
           <Info size={15} />
           <Typography variant="caption">
-            <strong>Shared Helpers:</strong> All custom tasks automatically have access to{" "}
-            <code>common.sh</code> in their working directory, with helper utilities like{" "}
-            <code>detect_os</code>, <code>pkg_install</code>, and <code>$SUDO</code>.
+            <strong>Shared Helpers:</strong> All custom tasks automatically have access to <code>common.sh</code> in
+            their working directory, with helper utilities like <code>detect_os</code>, <code>pkg_install</code>, and{" "}
+            <code>$SUDO</code>. Current node info are also exposed in common.sh through environment variables:{" "}
+            <code>NODE_NAME</code>, <code>NODE_INTERFACE</code>, <code>NODE_IP</code>, <code>NODE_IP6</code>,{" "}
+            <code>NODE_EXTERNAL_IP</code>, <code>NODE_EXTERNAL_IP6</code>, <code>NODE_DATA_*</code>.
           </Typography>
         </Box>
       </Paper>
@@ -406,8 +389,8 @@ chmod +x ~/.config/easy42/tasks/hello_world/*.sh`;
         </Box>
 
         <Typography variant="body2" sx={{ color: "#5b21b6", mb: 2 }}>
-          Describe what you want to achieve on your devices, then copy the prompt into any AI
-          (ChatGPT, Claude, Gemini, DeepSeek) to generate production-ready task scripts!
+          Describe what you want to achieve on your devices, then copy the prompt into any AI (ChatGPT, Claude, Gemini,
+          DeepSeek) to generate production-ready task scripts!
         </Typography>
 
         <TextField

@@ -503,7 +503,7 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
                 ) : (
                   <>
                     All BIRD routing and firewall configurations are currently in sync with recorded device states. You
-                    can use <strong>Force Apply All</strong> to re-push configs from scratch, or{" "}
+                    can use <strong>Force Apply</strong> to re-push configs from scratch, or{" "}
                     <strong>Update State</strong> to refresh from remote hosts.
                     {!isUnlocked && (
                       <Typography variant="caption" sx={{ display: "block", mt: 0.5, color: "#065F46" }}>
@@ -809,7 +809,7 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
                     },
                   }}
                 >
-                  {targetNode ? `Force Apply (${safeActions.length})` : `Force Apply All (${safeActions.length})`}
+                  Force Apply ({safeActions.length})
                 </Button>
               </Tooltip>
             )}
@@ -832,11 +832,11 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
             >
               {syncing
                 ? targetNode
-                  ? `Applying to ${targetNode}...`
-                  : "Applying to Nodes..."
+                  ? `Applying ${targetNode}...`
+                  : "Applying..."
                 : pendingActions.length > 0
-                  ? `Apply Changes (${pendingActions.length})`
-                  : "No Pending Changes"}
+                  ? `Apply Changes(${pendingActions.length})`
+                  : "No Changes"}
             </Button>
           </Box>
         )}

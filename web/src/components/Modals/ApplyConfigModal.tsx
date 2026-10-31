@@ -296,9 +296,7 @@ export const ApplyConfigModal: React.FC<ApplyConfigModalProps> = ({
   const [applyingSnippetId, setApplyingSnippetId] = useState<string | null>(null);
 
   const existingSnippet = snippetName.trim()
-    ? savedSnippets.find(
-        (s) => s.name.trim().toLowerCase() === snippetName.trim().toLowerCase()
-      )
+    ? savedSnippets.find((s) => s.name.trim().toLowerCase() === snippetName.trim().toLowerCase())
     : undefined;
   const isExistingSnippet = Boolean(existingSnippet);
 
@@ -1259,7 +1257,7 @@ export const ApplyConfigModal: React.FC<ApplyConfigModalProps> = ({
               whiteSpace: "nowrap",
             }}
           >
-            {applying ? "Applying..." : "Apply Changes"}
+            {applying ? "Applying..." : "Apply"}
           </Button>
         </Box>
       </DialogActions>

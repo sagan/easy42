@@ -118,3 +118,55 @@ func TestCleanCIDR(t *testing.T) {
 		}
 	}
 }
+
+func TestBuildNodeEnv_NodeData(t *testing.T) {
+	node := config.Node{
+		Name:      "edge-1",
+		Interface: "eth0",
+		IP:        "192.168.100.1",
+		Note: "# Edge Server\n```json\n{\n  \"type\": \"server\",\n  \"meta\": {\n    \"id\": 1,\n    \"level\": \"center\",\n    \"data\": {\n      \"nested_deep\": 42\n    }\n  },\n  \"tags\": [\"a\", \"b\"],\n  \"enabled\": true,\n  \"description\": \"Main gateway server\"\n}\n```\n",
+	}
+
+	envStr := buildNodeEnv(node)
+
+	// User prompt exact requirements:
+	if !strings.Contains(envStr, "NODE_DATA_TYPE=server") {
+		t.Errorf("expected NODE_DATA_TYPE=server in env, got:\n%s", envStr)
+	}
+	if !strings.Contains(envStr, "NODE_DATA_META_ID=1") {
+		t.Errorf("expected NODE_DATA_META_ID=1 in env, got:\n%s", envStr)
+	}
+	if !strings.Contains(envStr, "NODE_DATA_LEVEL=center") {
+		t.Errorf("expected NODE_DATA_LEVEL=center in env, got:\n%s", envStr)
+	}
+	if !strings.Contains(envStr, "NODE_DATA_META_LEVEL=center") {
+		t.Errorf("expected NODE_DATA_META_LEVEL=center in env, got:\n%s", envStr)
+	}
+
+	// 1-layer hierarchy constraint: NODE_DATA_META_DATA_* must not be set
+	if strings.Contains(envStr, "NODE_DATA_META_DATA") {
+		t.Errorf("expected no NODE_DATA_META_DATA_* in env, got:\n%s", envStr)
+	}
+
+	// Arrays should be ignored (only primitive value fields)
+	if strings.Contains(envStr, "NODE_DATA_TAGS") {
+		t.Errorf("expected arrays to be omitted from env, got:\n%s", envStr)
+	}
+
+	// Boolean primitive
+	if !strings.Contains(envStr, "NODE_DATA_ENABLED=true") {
+		t.Errorf("expected NODE_DATA_ENABLED=true in env, got:\n%s", envStr)
+	}
+
+	// String with spaces should be quoted safely
+	if !strings.Contains(envStr, `NODE_DATA_DESCRIPTION="Main gateway server"`) {
+		t.Errorf("expected quoted NODE_DATA_DESCRIPTION in env, got:\n%s", envStr)
+	}
+
+	// Test node without note
+	emptyNode := config.Node{Name: "empty", IP: "10.0.0.1"}
+	emptyEnv := buildNodeEnv(emptyNode)
+	if strings.Contains(emptyEnv, "NODE_DATA_") {
+		t.Errorf("expected no NODE_DATA_ in empty note env, got:\n%s", emptyEnv)
+	}
+}

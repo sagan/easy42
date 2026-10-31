@@ -3,7 +3,10 @@ package engine
 import (
 	"context"
 	"fmt"
+	"math"
 	"path/filepath"
+	"sort"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -318,7 +321,110 @@ func buildNodeEnv(n config.Node) string {
 		fmt.Fprintf(&envBuf, "HAS_CUSTOM_SCRIPT=\"0\"\n")
 	}
 
+	injectNodeDataEnv(&envBuf, n.Note)
+
 	return envBuf.String()
+}
+
+// sanitizeEnvKey converts a key string to an uppercase alphanumeric + underscore env name.
+func sanitizeEnvKey(k string) string {
+	var b strings.Builder
+	for _, r := range strings.ToUpper(k) {
+		if (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_' {
+			b.WriteRune(r)
+		} else {
+			b.WriteRune('_')
+		}
+	}
+	return b.String()
+}
+
+// formatEnvValue formats primitive values (string, bool, numbers) for .env injection.
+func formatEnvValue(v any) (string, bool) {
+	switch val := v.(type) {
+	case string:
+		if val == "" {
+			return `""`, true
+		}
+		if strings.ContainsAny(val, " \t\n\r\"'$`\\;&|<>*?~#()[]{}=") {
+			return fmt.Sprintf("%q", val), true
+		}
+		return val, true
+	case bool:
+		if val {
+			return "true", true
+		}
+		return "false", true
+	case float64:
+		if val == math.Trunc(val) && !math.IsNaN(val) && !math.IsInf(val, 0) {
+			return strconv.FormatInt(int64(val), 10), true
+		}
+		return strconv.FormatFloat(val, 'f', -1, 64), true
+	case int:
+		return strconv.Itoa(val), true
+	case int64:
+		return strconv.FormatInt(val, 10), true
+	case uint64:
+		return strconv.FormatUint(val, 10), true
+	default:
+		return "", false
+	}
+}
+
+// injectNodeDataEnv extracts structured data from Note and injects primitive fields into envBuf.
+// Follows at most 1 layer of object hierarchy (e.g. NODE_DATA_META_ID).
+func injectNodeDataEnv(envBuf *strings.Builder, note string) {
+	noteData := config.ExtractNoteData(note)
+	if len(noteData) == 0 {
+		return
+	}
+
+	envMap := make(map[string]string)
+
+	// 1. Process Layer 0 primitive fields
+	for k0, v0 := range noteData {
+		s0 := sanitizeEnvKey(k0)
+		if s0 == "" {
+			continue
+		}
+		if formatted, ok := formatEnvValue(v0); ok {
+			envMap["NODE_DATA_"+s0] = formatted
+		}
+	}
+
+	// 2. Process Layer 1 nested object fields
+	for k0, v0 := range noteData {
+		s0 := sanitizeEnvKey(k0)
+		if s0 == "" {
+			continue
+		}
+		if subMap, ok := v0.(map[string]any); ok {
+			for k1, v1 := range subMap {
+				s1 := sanitizeEnvKey(k1)
+				if s1 == "" {
+					continue
+				}
+				if subFormatted, subOk := formatEnvValue(v1); subOk {
+					envMap["NODE_DATA_"+s0+"_"+s1] = subFormatted
+					// Also provide alias without parent prefix if not already defined at root
+					aliasKey := "NODE_DATA_" + s1
+					if _, exists := envMap[aliasKey]; !exists {
+						envMap[aliasKey] = subFormatted
+					}
+				}
+				// Layer 2 objects are ignored (at most 1 layer object hierarchy)
+			}
+		}
+	}
+
+	var keys []string
+	for k := range envMap {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		fmt.Fprintf(envBuf, "%s=%s\n", k, envMap[k])
+	}
 }
 
 func buildConfigureNetworkPayload(n config.Node) map[string][]byte {
