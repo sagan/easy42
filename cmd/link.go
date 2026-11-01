@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -69,7 +70,24 @@ var linkAddCmd = &cobra.Command{
 		mgr := engine.NewManager(store)
 
 		if strings.EqualFold(linkType, config.LinkTypeManual) {
-			if fromIface == "" || toIface == "" || fromAddr == "" || toAddr == "" {
+			n1 := mgr.FindNode(node1)
+			n2 := mgr.FindNode(node2)
+			if n1 == nil || n2 == nil {
+				return errors.New("one or both nodes not found")
+			}
+			if n1.IsExternal && n2.IsExternal {
+				return errors.New("cannot link two external nodes")
+			}
+			if fromAddr == "" || toAddr == "" {
+				return fmt.Errorf("manual link requires --from-addr and --to-addr")
+			}
+			if (!n1.IsExternal && fromIface == "") || (!n2.IsExternal && toIface == "") {
+				if n1.IsExternal {
+					return fmt.Errorf("manual link requires --to-iface for node %s", node2)
+				}
+				if n2.IsExternal {
+					return fmt.Errorf("manual link requires --from-iface for node %s", node1)
+				}
 				return fmt.Errorf("manual link requires --from-iface, --to-iface, --from-addr, and --to-addr")
 			}
 			fromEnd := &config.LinkEnd{

@@ -193,7 +193,14 @@ export const CustomEdge: React.FC<EdgeProps> = ({
     pillBorderColor = workingState === "not_working" ? "#FCA5A5" : "#DDD6FE";
     pillBgColor = workingState === "not_working" ? "#FEF2F2" : "#FAF5FF";
     dotColor = workingState === "not_working" ? "#EF4444" : "#7C3AED";
-    statusText = workingState === "not_working" ? "Down (Manual)" : "Manual";
+    statusText =
+      workingState === "not_working"
+        ? isExternal
+          ? "Down (Manual Ext)"
+          : "Down (Manual)"
+        : isExternal
+          ? "Manual (Ext)"
+          : "Manual";
   } else if (isExternal) {
     strokeColor = "#8B5CF6";
     strokeDasharray = "6 4";

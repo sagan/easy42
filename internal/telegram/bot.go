@@ -551,7 +551,16 @@ func isLinkUp(link config.Link, netState *config.NetworkState, liveMap map[strin
 	if link.IsManual() {
 		fromLive, fromOk := liveMap[link.From.Name]
 		toLive, toOk := liveMap[link.To.Name]
-		return fromOk && fromLive.Connected && toOk && toLive.Connected
+		if fromOk && toOk {
+			return fromLive.Connected && toLive.Connected
+		}
+		if fromOk && !toOk {
+			return fromLive.Connected
+		}
+		if !fromOk && toOk {
+			return toLive.Connected
+		}
+		return false
 	}
 
 	if netState == nil || netState.Nodes == nil {

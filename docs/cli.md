@@ -227,8 +227,8 @@ easy42 link add node-fra node-ext \
 | `--from-port`    | derived     | Custom WireGuard listen port on the first node.                 |
 | `--to-port`      | derived     | Custom WireGuard listen port on the second node.                |
 | `--assign-ipv4`  | `false`     | Assign a deterministic IPv4 link-local (`169.254.X.X/32`) pair. |
-| `--from-iface`   | —           | Interface on the first node (required for manual links).        |
-| `--to-iface`     | —           | Interface on the second node (required for manual links).       |
+| `--from-iface`   | —           | Interface on the first node (required for manual links unless external). |
+| `--to-iface`     | —           | Interface on the second node (required for manual links unless external).|
 | `--from-addr`    | —           | Local address on the first node (required for manual links).    |
 | `--to-addr`      | —           | Local address on the second node (required for manual links).   |
 

@@ -455,12 +455,24 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
 
     try {
       if (linkType === "manual") {
-        if (!fromInterface.trim() || !toInterface.trim()) {
-          setError("Both endpoints must specify an interface name for a manual link");
+        const isFromExt = Boolean(fromNode?.is_external);
+        const isToExt = Boolean(toNode?.is_external);
+        if ((!isFromExt && !fromInterface.trim()) || (!isToExt && !toInterface.trim())) {
+          setError(
+            isFromExt || isToExt
+              ? "Managed endpoint must specify an interface name for a manual link"
+              : "Both endpoints must specify an interface name for a manual link",
+          );
           setSubmitting(false);
           return;
         }
-        if (!fromAddress.trim() || !toAddress.trim()) {
+
+        const effectiveFromAddr = fromAddress.trim() || toNeighborAddress.trim();
+        const effectiveToAddr = toAddress.trim() || fromNeighborAddress.trim();
+        const effectiveFromNeighbor = fromNeighborAddress.trim() || effectiveToAddr;
+        const effectiveToNeighbor = toNeighborAddress.trim() || effectiveFromAddr;
+
+        if (!effectiveFromAddr || !effectiveToAddr) {
           setError("Both endpoints must specify a local IP address for a manual link");
           setSubmitting(false);
           return;
@@ -470,14 +482,14 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
           name: fromNodeName,
           type: "manual",
           interface: fromInterface.trim(),
-          address: fromAddress.trim(),
-          neighbor_address: fromNeighborAddress.trim() || undefined,
-          policy: fromPolicy,
-          routing_policy: fromRoutingPolicy || (linkToEdit ? "inherit" : undefined),
-          cost: parsedFromCost,
-          fwmark: parsedFromFwmark,
-          preference: parsedFromPreference,
-          mark: parsedFromMark,
+          address: effectiveFromAddr,
+          neighbor_address: effectiveFromNeighbor || undefined,
+          policy: isFromExt ? "none" : fromPolicy,
+          routing_policy: isFromExt ? undefined : fromRoutingPolicy || (linkToEdit ? "inherit" : undefined),
+          cost: isFromExt ? undefined : parsedFromCost,
+          fwmark: isFromExt ? undefined : parsedFromFwmark,
+          preference: isFromExt ? undefined : parsedFromPreference,
+          mark: isFromExt ? undefined : parsedFromMark,
           note: fromNote.trim() || undefined,
         };
 
@@ -485,14 +497,14 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
           name: toNodeName,
           type: "manual",
           interface: toInterface.trim(),
-          address: toAddress.trim(),
-          neighbor_address: toNeighborAddress.trim() || undefined,
-          policy: toPolicy,
-          routing_policy: toRoutingPolicy || (linkToEdit ? "inherit" : undefined),
-          cost: parsedToCost,
-          fwmark: parsedToFwmark,
-          preference: parsedToPreference,
-          mark: parsedToMark,
+          address: effectiveToAddr,
+          neighbor_address: effectiveToNeighbor || undefined,
+          policy: isToExt ? "none" : toPolicy,
+          routing_policy: isToExt ? undefined : toRoutingPolicy || (linkToEdit ? "inherit" : undefined),
+          cost: isToExt ? undefined : parsedToCost,
+          fwmark: isToExt ? undefined : parsedToFwmark,
+          preference: isToExt ? undefined : parsedToPreference,
+          mark: isToExt ? undefined : parsedToMark,
           note: toNote.trim() || undefined,
         };
 
@@ -517,6 +529,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
             to_mark: reqTo.mark,
             from_note: reqFrom.note || "",
             to_note: reqTo.note || "",
+            disable_bfd: !enableBFD,
             note: linkNote.trim(),
           });
           onLinkUpdated?.(updated);
@@ -541,6 +554,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
             to_mark: reqTo.mark,
             from_note: reqFrom.note,
             to_note: reqTo.note,
+            disable_bfd: !enableBFD,
             note: linkNote.trim() || undefined,
           });
           onLinkAdded?.(link);
@@ -857,10 +871,12 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
               : `Edit WireGuard Link: ${linkToEdit.from.name} ↔ ${linkToEdit.to.name}`
             : isBothExternal
               ? "Invalid Link (Both External)"
-              : isExternalLink
-                ? "Create External Peering Link"
-                : linkType === "manual"
-                  ? "Create Manual (BGP Only) Link"
+              : linkType === "manual"
+                ? isExternalLink
+                  ? "Create Manual External Peering Link"
+                  : "Create Manual (BGP Only) Link"
+                : isExternalLink
+                  ? "Create External Peering Link"
                   : "Create WireGuard Link"}
         </Typography>
       </DialogTitle>
@@ -957,8 +973,8 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
             </Typography>
           )}
 
-          {/* Link Type Selector (when not external link) */}
-          {!isExternalLink && !isBothExternal && (
+          {/* Link Type Selector */}
+          {!isBothExternal && (
             <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
               <Typography variant="caption" sx={{ color: "#475569", fontWeight: 700, letterSpacing: "0.5px" }}>
                 LINK TYPE
@@ -1316,8 +1332,8 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
             )}
           </Box>
 
-          {/* External Peering Configuration Form */}
-          {isExternalLink && managedNode && externalNode ? (
+          {/* External Peering Configuration Form (WireGuard) */}
+          {linkType === "wireguard" && isExternalLink && managedNode && externalNode ? (
             <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
               <Alert
                 icon={<Globe size={18} />}
@@ -1828,7 +1844,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                 }}
               >
                 <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#6D28D9", mb: 1.2 }}>
-                  End 1: {fromNode.name}
+                  End 1: {fromNode.name} {fromNode.is_external ? "(External Peer)" : ""}
                 </Typography>
 
                 <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 1.5, mb: 1.5 }}>
@@ -1836,11 +1852,11 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                     id="manual-from-interface"
                     label="Interface Name"
                     size="small"
-                    placeholder="e.g. eth1, tun0"
+                    placeholder={fromNode.is_external ? "e.g. eth1 (optional)" : "e.g. eth1, tun0"}
                     value={fromInterface}
                     onChange={(e) => setFromInterface(e.target.value)}
-                    required
-                    helperText="Name of existing link interface"
+                    required={!fromNode.is_external}
+                    helperText={fromNode.is_external ? "Interface name on external peer (optional)" : "Name of existing link interface"}
                   />
                   <TextFieldWithCopy
                     id="manual-from-address"
@@ -1863,70 +1879,74 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                   />
                 </Box>
 
-                <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 1.5 }}>
-                  <TextField
-                    select
-                    fullWidth
-                    size="small"
-                    label="Network Policy"
-                    value={fromPolicy}
-                    onChange={(e) => setFromPolicy(e.target.value)}
-                    helperText="Firewall & BGP routing policy applied"
-                  >
-                    {networkPolicies.map((p) => (
-                      <MenuItem key={p.id} value={p.id}>
-                        {p.name} ({p.id}){p.is_internal ? " — Built-in" : ""}
-                      </MenuItem>
-                    ))}
-                  </TextField>
-                  <TextField
-                    select
-                    fullWidth
-                    size="small"
-                    label="Routing Policy (Optional)"
-                    value={fromRoutingPolicy}
-                    onChange={(e) => setFromRoutingPolicy(e.target.value)}
-                    helperText="Overrides policy routing policy"
-                  >
-                    <MenuItem value="">Policy default</MenuItem>
-                    <MenuItem value="full">Full (Default) — All valid routes</MenuItem>
-                    <MenuItem value="stub">Stub — Receive all, only send local</MenuItem>
-                    <MenuItem value="receive_only">Receive Only — Import only</MenuItem>
-                    <MenuItem value="advertise_only">Advertise Only — Export only</MenuItem>
-                  </TextField>
-                  <TextFieldWithCopy
-                    fullWidth
-                    size="small"
-                    label="Link Cost (Optional)"
-                    type="number"
-                    value={fromCost}
-                    onChange={(e) => setFromCost(e.target.value === "" ? "" : Number(e.target.value))}
-                    placeholder="Policy default"
-                    helperText="Overrides policy cost if set (non-zero)"
-                  />
-                </Box>
+                {!fromNode.is_external && (
+                  <>
+                    <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 1.5 }}>
+                      <TextField
+                        select
+                        fullWidth
+                        size="small"
+                        label="Network Policy"
+                        value={fromPolicy}
+                        onChange={(e) => setFromPolicy(e.target.value)}
+                        helperText="Firewall & BGP routing policy applied"
+                      >
+                        {networkPolicies.map((p) => (
+                          <MenuItem key={p.id} value={p.id}>
+                            {p.name} ({p.id}){p.is_internal ? " — Built-in" : ""}
+                          </MenuItem>
+                        ))}
+                      </TextField>
+                      <TextField
+                        select
+                        fullWidth
+                        size="small"
+                        label="Routing Policy (Optional)"
+                        value={fromRoutingPolicy}
+                        onChange={(e) => setFromRoutingPolicy(e.target.value)}
+                        helperText="Overrides policy routing policy"
+                      >
+                        <MenuItem value="">Policy default</MenuItem>
+                        <MenuItem value="full">Full (Default) — All valid routes</MenuItem>
+                        <MenuItem value="stub">Stub — Receive all, only send local</MenuItem>
+                        <MenuItem value="receive_only">Receive Only — Import only</MenuItem>
+                        <MenuItem value="advertise_only">Advertise Only — Export only</MenuItem>
+                      </TextField>
+                      <TextFieldWithCopy
+                        fullWidth
+                        size="small"
+                        label="Link Cost (Optional)"
+                        type="number"
+                        value={fromCost}
+                        onChange={(e) => setFromCost(e.target.value === "" ? "" : Number(e.target.value))}
+                        placeholder="Policy default"
+                        helperText="Overrides policy cost if set (non-zero)"
+                      />
+                    </Box>
 
-                <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}>
-                  <TextFieldWithCopy
-                    fullWidth
-                    size="small"
-                    type="number"
-                    label="BGP Preference (Optional)"
-                    value={fromPreference}
-                    onChange={(e) => setFromPreference(e.target.value === "" ? "" : Number(e.target.value))}
-                    placeholder="Policy default"
-                    helperText="Overrides policy BGP preference"
-                  />
-                  <TextFieldWithCopy
-                    fullWidth
-                    size="small"
-                    label="Netfilter Mark (Optional)"
-                    value={fromMark}
-                    onChange={(e) => setFromMark(e.target.value)}
-                    placeholder="Policy default"
-                    helperText="Overrides policy netfilter mark"
-                  />
-                </Box>
+                    <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}>
+                      <TextFieldWithCopy
+                        fullWidth
+                        size="small"
+                        type="number"
+                        label="BGP Preference (Optional)"
+                        value={fromPreference}
+                        onChange={(e) => setFromPreference(e.target.value === "" ? "" : Number(e.target.value))}
+                        placeholder="Policy default"
+                        helperText="Overrides policy BGP preference"
+                      />
+                      <TextFieldWithCopy
+                        fullWidth
+                        size="small"
+                        label="Netfilter Mark (Optional)"
+                        value={fromMark}
+                        onChange={(e) => setFromMark(e.target.value)}
+                        placeholder="Policy default"
+                        helperText="Overrides policy netfilter mark"
+                      />
+                    </Box>
+                  </>
+                )}
 
                 {/* End 1 Note */}
                 <Box
@@ -2004,7 +2024,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                 }}
               >
                 <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#6D28D9", mb: 1.2 }}>
-                  End 2: {toNode.name}
+                  End 2: {toNode.name} {toNode.is_external ? "(External Peer)" : ""}
                 </Typography>
 
                 <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 1.5, mb: 1.5 }}>
@@ -2012,11 +2032,11 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                     id="manual-to-interface"
                     label="Interface Name"
                     size="small"
-                    placeholder="e.g. eth2, tun1"
+                    placeholder={toNode.is_external ? "e.g. eth2 (optional)" : "e.g. eth2, tun1"}
                     value={toInterface}
                     onChange={(e) => setToInterface(e.target.value)}
-                    required
-                    helperText="Name of existing link interface"
+                    required={!toNode.is_external}
+                    helperText={toNode.is_external ? "Interface name on external peer (optional)" : "Name of existing link interface"}
                   />
                   <TextFieldWithCopy
                     id="manual-to-address"
@@ -2039,70 +2059,74 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                   />
                 </Box>
 
-                <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 1.5 }}>
-                  <TextField
-                    select
-                    fullWidth
-                    size="small"
-                    label="Network Policy"
-                    value={toPolicy}
-                    onChange={(e) => setToPolicy(e.target.value)}
-                    helperText="Firewall & BGP routing policy applied"
-                  >
-                    {networkPolicies.map((p) => (
-                      <MenuItem key={p.id} value={p.id}>
-                        {p.name} ({p.id}){p.is_internal ? " — Built-in" : ""}
-                      </MenuItem>
-                    ))}
-                  </TextField>
-                  <TextField
-                    select
-                    fullWidth
-                    size="small"
-                    label="Routing Policy (Optional)"
-                    value={toRoutingPolicy}
-                    onChange={(e) => setToRoutingPolicy(e.target.value)}
-                    helperText="Overrides policy routing policy"
-                  >
-                    <MenuItem value="">Policy default</MenuItem>
-                    <MenuItem value="full">Full (Default) — All valid routes</MenuItem>
-                    <MenuItem value="stub">Stub — Receive all, only send local</MenuItem>
-                    <MenuItem value="receive_only">Receive Only — Import only</MenuItem>
-                    <MenuItem value="advertise_only">Advertise Only — Export only</MenuItem>
-                  </TextField>
-                  <TextFieldWithCopy
-                    fullWidth
-                    size="small"
-                    label="Link Cost (Optional)"
-                    type="number"
-                    value={toCost}
-                    onChange={(e) => setToCost(e.target.value === "" ? "" : Number(e.target.value))}
-                    placeholder="Policy default"
-                    helperText="Overrides policy cost if set (non-zero)"
-                  />
-                </Box>
+                {!toNode.is_external && (
+                  <>
+                    <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 1.5 }}>
+                      <TextField
+                        select
+                        fullWidth
+                        size="small"
+                        label="Network Policy"
+                        value={toPolicy}
+                        onChange={(e) => setToPolicy(e.target.value)}
+                        helperText="Firewall & BGP routing policy applied"
+                      >
+                        {networkPolicies.map((p) => (
+                          <MenuItem key={p.id} value={p.id}>
+                            {p.name} ({p.id}){p.is_internal ? " — Built-in" : ""}
+                          </MenuItem>
+                        ))}
+                      </TextField>
+                      <TextField
+                        select
+                        fullWidth
+                        size="small"
+                        label="Routing Policy (Optional)"
+                        value={toRoutingPolicy}
+                        onChange={(e) => setToRoutingPolicy(e.target.value)}
+                        helperText="Overrides policy routing policy"
+                      >
+                        <MenuItem value="">Policy default</MenuItem>
+                        <MenuItem value="full">Full (Default) — All valid routes</MenuItem>
+                        <MenuItem value="stub">Stub — Receive all, only send local</MenuItem>
+                        <MenuItem value="receive_only">Receive Only — Import only</MenuItem>
+                        <MenuItem value="advertise_only">Advertise Only — Export only</MenuItem>
+                      </TextField>
+                      <TextFieldWithCopy
+                        fullWidth
+                        size="small"
+                        label="Link Cost (Optional)"
+                        type="number"
+                        value={toCost}
+                        onChange={(e) => setToCost(e.target.value === "" ? "" : Number(e.target.value))}
+                        placeholder="Policy default"
+                        helperText="Overrides policy cost if set (non-zero)"
+                      />
+                    </Box>
 
-                <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}>
-                  <TextFieldWithCopy
-                    fullWidth
-                    size="small"
-                    type="number"
-                    label="BGP Preference (Optional)"
-                    value={toPreference}
-                    onChange={(e) => setToPreference(e.target.value === "" ? "" : Number(e.target.value))}
-                    placeholder="Policy default"
-                    helperText="Overrides policy BGP preference"
-                  />
-                  <TextFieldWithCopy
-                    fullWidth
-                    size="small"
-                    label="Netfilter Mark (Optional)"
-                    value={toMark}
-                    onChange={(e) => setToMark(e.target.value)}
-                    placeholder="Policy default"
-                    helperText="Overrides policy netfilter mark"
-                  />
-                </Box>
+                    <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}>
+                      <TextFieldWithCopy
+                        fullWidth
+                        size="small"
+                        type="number"
+                        label="BGP Preference (Optional)"
+                        value={toPreference}
+                        onChange={(e) => setToPreference(e.target.value === "" ? "" : Number(e.target.value))}
+                        placeholder="Policy default"
+                        helperText="Overrides policy BGP preference"
+                      />
+                      <TextFieldWithCopy
+                        fullWidth
+                        size="small"
+                        label="Netfilter Mark (Optional)"
+                        value={toMark}
+                        onChange={(e) => setToMark(e.target.value)}
+                        placeholder="Policy default"
+                        helperText="Overrides policy netfilter mark"
+                      />
+                    </Box>
+                  </>
+                )}
 
                 {/* End 2 Note */}
                 <Box

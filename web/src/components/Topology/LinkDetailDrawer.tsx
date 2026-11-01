@@ -228,6 +228,25 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
     const ourAddress = getLinkLocalIpv6CopyText(ourLinkEnd.address);
     const theirAddress = getLinkLocalIpv6CopyText(theirLinkEnd.address || ourLinkEnd.neighbor_address);
 
+    if (isManual) {
+      const ourLines = [
+        "Our side:",
+        `ASN: ${ourAsn}`,
+        ourLinkEnd.interface ? `Interface: ${ourLinkEnd.interface}` : "",
+        `BGP Peering Address (ipv6 link local): ${ourAddress}`,
+        `Configurations: ROA, MP-BGP, Extended Next-hop${!link.disable_bfd ? ", BFD" : ""}`,
+      ].filter(Boolean);
+
+      const theirLines = [
+        "Your side:",
+        `ASN: ${theirAsn}`,
+        theirLinkEnd.interface ? `Interface: ${theirLinkEnd.interface}` : "",
+        `BGP Peering Address (ipv6 link local): ${theirAddress}`,
+      ].filter(Boolean);
+
+      return `${ourLines.join("\n")}\n\n${theirLines.join("\n")}\n`;
+    }
+
     const ourLines = [
       "Our side:",
       `ASN: ${ourAsn}`,
@@ -700,7 +719,7 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
                 />
               </Box>
               <Typography variant="caption" sx={{ color: "#6B21A8", display: "block", lineHeight: 1.4 }}>
-                Data plane interfaces ({link.from.interface} / {link.to.interface}) are manually created and managed by
+                Data plane {link.from.interface && link.to.interface ? `interfaces (${link.from.interface} / ${link.to.interface})` : `interface (${link.from.interface || link.to.interface})`} manually created and managed by
                 you. easy42 automatically manages BIRD BGP routing sessions and adds interfaces to the{" "}
                 <code>easy42_ifname</code> nftables set.
               </Typography>

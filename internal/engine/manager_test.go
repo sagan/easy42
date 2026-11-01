@@ -2014,6 +2014,160 @@ func TestManualLinkLifecycle(t *testing.T) {
 	}
 }
 
+func TestManualLinkWithExternalNode(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "easy42-manual-ext-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	store := config.NewStore(tempDir)
+	pass, err := store.Initialize()
+	if err != nil {
+		t.Fatalf("Initialize failed: %v", err)
+	}
+	mgr := NewManager(store)
+
+	nodeManaged := config.Node{
+		Name: "node-loc",
+		Host: "192.168.1.10",
+		IP:   "192.168.100.10",
+		ASN:  4224420001,
+	}
+	nodeExt := config.Node{
+		Name:       "node-ext",
+		ASN:        4242421234,
+		IsExternal: true,
+	}
+	if err := mgr.AddNode(nodeManaged); err != nil {
+		t.Fatalf("AddNode managed failed: %v", err)
+	}
+	if err := mgr.AddNode(nodeExt); err != nil {
+		t.Fatalf("AddNode external failed: %v", err)
+	}
+
+	// 1. Attempting manual link without interface on managed node should fail
+	badFrom := &config.LinkEnd{
+		Name:    "node-loc",
+		Type:    config.LinkTypeManual,
+		Address: "172.20.1.1/32",
+	}
+	badTo := &config.LinkEnd{
+		Name:    "node-ext",
+		Type:    config.LinkTypeManual,
+		Address: "172.20.1.2/32",
+	}
+	if _, err := mgr.AddLinkAdvanced("node-loc", "node-ext", badFrom, badTo, nil); err == nil {
+		t.Fatalf("Expected error when interface is missing on managed node")
+	}
+
+	// 2. Creating manual link with interface on managed node and omitting interface on external node should succeed
+	locEnd := &config.LinkEnd{
+		Name:            "node-loc",
+		Type:            config.LinkTypeManual,
+		Interface:       "gre-ext",
+		Address:         "172.20.1.1/32",
+		NeighborAddress: "172.20.1.2",
+	}
+	extEnd := &config.LinkEnd{
+		Name: "node-ext",
+		Type: config.LinkTypeManual,
+	}
+	link, err := mgr.AddLinkAdvanced("node-loc", "node-ext", locEnd, extEnd, []string{"manual", "external"})
+	if err != nil {
+		t.Fatalf("AddLinkAdvanced for manual external link failed: %v", err)
+	}
+
+	if !link.IsManual() {
+		t.Errorf("Expected link.IsManual() to be true")
+	}
+	if link.Type != config.LinkTypeManual {
+		t.Errorf("Expected link.Type manual, got %s", link.Type)
+	}
+
+	// Determine endpoints based on lexicographical order (node-ext < node-loc)
+	var managedEnd, externalEnd *config.LinkEnd
+	if link.From.Name == "node-loc" {
+		managedEnd = &link.From
+		externalEnd = &link.To
+	} else {
+		managedEnd = &link.To
+		externalEnd = &link.From
+	}
+
+	if managedEnd.Interface != "gre-ext" {
+		t.Errorf("Expected managed endpoint interface gre-ext, got %s", managedEnd.Interface)
+	}
+	if managedEnd.Address != "172.20.1.1/32" {
+		t.Errorf("Expected managed endpoint address 172.20.1.1/32, got %s", managedEnd.Address)
+	}
+	if externalEnd.Address != "172.20.1.2" {
+		t.Errorf("Expected external endpoint address cross-filled with 172.20.1.2, got %s", externalEnd.Address)
+	}
+	if managedEnd.Policy != config.PolicyDN42 {
+		t.Errorf("Expected default policy dn42 for external link, got %s", managedEnd.Policy)
+	}
+
+	// 3. PlanSync verification: no wireguard config, nftables contains gre-ext, BIRD config contains ext_peer
+	if err := mgr.Unlock(pass); err != nil {
+		t.Fatalf("Unlock failed: %v", err)
+	}
+	actions, err := mgr.PlanSync()
+	if err != nil {
+		t.Fatalf("PlanSync failed: %v", err)
+	}
+
+	for _, a := range actions {
+		if a.Type == config.ActionSyncConfig {
+			t.Errorf("Unexpected WireGuard sync action for manual link: %+v", a)
+		}
+		if a.Type == config.ActionDeleteConfig && a.Interface == "gre-ext" {
+			t.Errorf("Unexpected delete action for manual interface: %+v", a)
+		}
+	}
+
+	hasBirdAction := false
+	hasNftAction := false
+	for _, a := range actions {
+		if a.Type == config.ActionSyncBirdConfig && a.NodeName == "node-loc" {
+			hasBirdAction = true
+			if !strings.Contains(a.FileContent, "protocol bgp 'ext_peer_node-ext' from external_peer") {
+				t.Errorf("Expected BIRD config to contain external_peer protocol, got:\n%s", a.FileContent)
+			}
+			if !strings.Contains(a.FileContent, `interface "gre-ext";`) {
+				t.Errorf("Expected BIRD config to specify interface gre-ext, got:\n%s", a.FileContent)
+			}
+		}
+		if a.Type == config.ActionSyncNftablesConfig && a.NodeName == "node-loc" {
+			hasNftAction = true
+			if !strings.Contains(a.FileContent, `define easy42_ifname = { "wg42*", "gre-ext" }`) {
+				t.Errorf("Expected easy42_ifname in nftables to include gre-ext, got:\n%s", a.FileContent)
+			}
+		}
+	}
+	if !hasBirdAction {
+		t.Errorf("Expected BIRD sync action for node-loc")
+	}
+	if !hasNftAction {
+		t.Errorf("Expected nftables sync action for node-loc")
+	}
+
+	// 4. UpdateLinkAdvanced verification
+	upLoc := *managedEnd
+	upLoc.Address = "172.20.1.5/32"
+	upLoc.NeighborAddress = "172.20.1.6"
+	upExt := *externalEnd
+	upExt.Address = "172.20.1.6/32"
+
+	updated, err := mgr.UpdateLinkAdvanced("node-loc", "node-ext", &upLoc, &upExt, nil)
+	if err != nil {
+		t.Fatalf("UpdateLinkAdvanced failed: %v", err)
+	}
+	if updated.Type != config.LinkTypeManual {
+		t.Errorf("Expected updated link type manual, got %s", updated.Type)
+	}
+}
+
 func TestNodeMetricPersistence(t *testing.T) {
 	tempDir, err := os.MkdirTemp("", "easy42-engine-metric-*")
 	if err != nil {

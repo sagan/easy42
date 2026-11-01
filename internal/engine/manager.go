@@ -1134,10 +1134,10 @@ func (m *Manager) buildLink(cfg *config.Config, n1, n2 *config.Node, listenPort1
 	}
 
 	if isManual {
-		if fromIface == "" {
+		if fromIface == "" && !fromNode.IsExternal {
 			return nil, fmt.Errorf("interface name is required for node %s in manual link", fromNode.Name)
 		}
-		if toIface == "" {
+		if toIface == "" && !toNode.IsExternal {
 			return nil, fmt.Errorf("interface name is required for node %s in manual link", toNode.Name)
 		}
 		// Cross-fill local and neighbor IPs if one is supplied
@@ -1219,10 +1219,10 @@ func (m *Manager) buildLink(cfg *config.Config, n1, n2 *config.Node, listenPort1
 		}
 	}
 
-	if usedIfacesFrom[fromIface] {
+	if !fromNode.IsExternal && fromIface != "" && usedIfacesFrom[fromIface] {
 		return nil, fmt.Errorf("interface %s already exists on node %s", fromIface, fromNode.Name)
 	}
-	if usedIfacesTo[toIface] {
+	if !toNode.IsExternal && toIface != "" && usedIfacesTo[toIface] {
 		return nil, fmt.Errorf("interface %s already exists on node %s", toIface, toNode.Name)
 	}
 
@@ -2091,7 +2091,7 @@ func (m *Manager) UpdateLinkWithAllOptions(node1Name, node2Name string, customFr
 		}
 	}
 
-	if link.From.IsManual() || link.To.IsManual() {
+	if link.From.IsManual() || link.To.IsManual() || link.Type == config.LinkTypeManual || (fromEnd != nil && fromEnd.IsManual()) || (toEnd != nil && toEnd.IsManual()) {
 		link.Type = config.LinkTypeManual
 		link.From.Type = config.LinkTypeManual
 		link.To.Type = config.LinkTypeManual
@@ -2110,10 +2110,10 @@ func (m *Manager) UpdateLinkWithAllOptions(node1Name, node2Name string, customFr
 			link.To.NeighborAddress = link.From.Address
 		}
 
-		if strings.TrimSpace(link.From.Interface) == "" {
+		if strings.TrimSpace(link.From.Interface) == "" && !fromNode.IsExternal {
 			return nil, fmt.Errorf("interface name is required for node %s in manual link", fromNode.Name)
 		}
-		if strings.TrimSpace(link.To.Interface) == "" {
+		if strings.TrimSpace(link.To.Interface) == "" && !toNode.IsExternal {
 			return nil, fmt.Errorf("interface name is required for node %s in manual link", toNode.Name)
 		}
 		if strings.TrimSpace(link.From.Address) == "" {

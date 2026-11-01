@@ -3002,6 +3002,84 @@ func TestDisableBFDInBirdConfig(t *testing.T) {
 	validateBirdSyntax(t, confCustom1)
 }
 
+func TestManualLinkWithExternalPeerBirdConfig(t *testing.T) {
+	nodeLoc := config.Node{
+		Name: "node-loc",
+		IP:   "192.168.100.1",
+		ASN:  4224420001,
+	}
+	nodeExt := config.Node{
+		Name:       "peer-ext",
+		ASN:        4242429999,
+		IsExternal: true,
+	}
+	allNodes := []config.Node{nodeLoc, nodeExt}
+
+	// 1. IPv4 manual external link
+	linkV4 := config.Link{
+		Type: config.LinkTypeManual,
+		From: config.LinkEnd{
+			Name:            "node-loc",
+			Type:            config.LinkTypeManual,
+			Interface:       "gre1",
+			Address:         "172.20.1.1/32",
+			NeighborAddress: "172.20.1.2",
+			Policy:          config.PolicyDN42,
+		},
+		To: config.LinkEnd{
+			Name:    "peer-ext",
+			Type:    config.LinkTypeManual,
+			Address: "172.20.1.2",
+		},
+	}
+
+	confV4, err := GenerateBirdConfig(&nodeLoc, allNodes, []config.Link{linkV4}, nil)
+	if err != nil {
+		t.Fatalf("GenerateBirdConfig failed for IPv4 manual external link: %v", err)
+	}
+
+	if !strings.Contains(confV4, "template bgp external_peer") {
+		t.Errorf("Expected template bgp external_peer in:\n%s", confV4)
+	}
+	if !strings.Contains(confV4, "protocol bgp 'ext_peer_peer-ext' from external_peer {") {
+		t.Errorf("Expected protocol bgp 'ext_peer_peer-ext' from external_peer in:\n%s", confV4)
+	}
+	if !strings.Contains(confV4, `interface "gre1";`) {
+		t.Errorf("Expected interface \"gre1\"; in:\n%s", confV4)
+	}
+	if !strings.Contains(confV4, "neighbor 172.20.1.2 as 4242429999;") {
+		t.Errorf("Expected neighbor 172.20.1.2 as 4242429999; in:\n%s", confV4)
+	}
+	validateBirdSyntax(t, confV4)
+
+	// 2. IPv6 link-local manual external link
+	linkV6 := config.Link{
+		Type: config.LinkTypeManual,
+		From: config.LinkEnd{
+			Name:            "node-loc",
+			Type:            config.LinkTypeManual,
+			Interface:       "gre-v6",
+			Address:         "fe80::1/64",
+			NeighborAddress: "fe80::2",
+			Policy:          config.PolicyDN42,
+		},
+		To: config.LinkEnd{
+			Name:    "peer-ext",
+			Type:    config.LinkTypeManual,
+			Address: "fe80::2",
+		},
+	}
+
+	confV6, err := GenerateBirdConfig(&nodeLoc, allNodes, []config.Link{linkV6}, nil)
+	if err != nil {
+		t.Fatalf("GenerateBirdConfig failed for IPv6 manual external link: %v", err)
+	}
+	if !strings.Contains(confV6, "neighbor fe80::2 % 'gre-v6' as 4242429999;") {
+		t.Errorf("Expected link-local neighbor fe80::2 %% 'gre-v6' as 4242429999; in:\n%s", confV6)
+	}
+	validateBirdSyntax(t, confV6)
+}
+
 
 
 

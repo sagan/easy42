@@ -283,9 +283,21 @@ export function getLinkWorkingState(
   const isManual = isManualLink(link);
 
   if (isManual) {
+    const fromHasStatus = Boolean(nodeStatuses && link.from.name in nodeStatuses);
+    const toHasStatus = Boolean(nodeStatuses && link.to.name in nodeStatuses);
     const fromOnline = Boolean(nodeStatuses?.[link.from.name]?.connected);
     const toOnline = Boolean(nodeStatuses?.[link.to.name]?.connected);
-    return fromOnline && toOnline ? "working" : "not_working";
+
+    if (fromHasStatus && toHasStatus) {
+      return fromOnline && toOnline ? "working" : "not_working";
+    }
+    if (fromHasStatus) {
+      return fromOnline ? "working" : "not_working";
+    }
+    if (toHasStatus) {
+      return toOnline ? "working" : "not_working";
+    }
+    return "working";
   }
 
   // 1. Check real-time live telemetry from connected agents first
