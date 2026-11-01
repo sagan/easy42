@@ -687,3 +687,108 @@ func TestRollupAndCleanCronResults(t *testing.T) {
 	}
 }
 
+func TestTimeBasedDownsamplingMixedRetention(t *testing.T) {
+	tempDir := t.TempDir()
+	store := NewStateStore(tempDir)
+	defer store.Close()
+
+	now := time.Now().Truncate(time.Minute)
+	// Base time is 10 days ago (10 * 24h = 240h)
+	// Raw retention is 2 days (48h).
+	// Older span: 10 days ago to 2 days ago (8 days = 192 hours)
+	// We insert 8 samples in the older span (1 sample per day, CPU = 10%)
+	for d := 10; d >= 3; d-- {
+		ts := now.Add(-time.Duration(d*24) * time.Hour)
+		err := store.RecordMetrics("node-mixed", NodeMetricInput{
+			Timestamp:        ts,
+			CPUPercent:       10,
+			MemoryUsedBytes:  1000,
+			MemoryTotalBytes: 8000,
+			NetRxBytes:       uint64((11 - d) * 1000),
+			NetTxBytes:       uint64((11 - d) * 500),
+			Interfaces: []InterfaceMetricInput{
+				{Name: "eth0", RxBytes: uint64((11 - d) * 1000), TxBytes: uint64((11 - d) * 500)},
+			},
+		})
+		if err != nil {
+			t.Fatalf("RecordMetrics older failed: %v", err)
+		}
+	}
+
+	// Newer span: last 2 days (48h).
+	// We insert 48 samples in the newer span (1 sample per hour, CPU = 80%)
+	for h := 47; h >= 0; h-- {
+		ts := now.Add(-time.Duration(h) * time.Hour)
+		err := store.RecordMetrics("node-mixed", NodeMetricInput{
+			Timestamp:        ts,
+			CPUPercent:       80,
+			MemoryUsedBytes:  2000,
+			MemoryTotalBytes: 8000,
+			NetRxBytes:       uint64(10000 + (48-h)*100),
+			NetTxBytes:       uint64(5000 + (48-h)*50),
+			Interfaces: []InterfaceMetricInput{
+				{Name: "eth0", RxBytes: uint64(10000 + (48-h)*100), TxBytes: uint64(5000 + (48-h)*50)},
+			},
+		})
+		if err != nil {
+			t.Fatalf("RecordMetrics newer failed: %v", err)
+		}
+	}
+
+	// Rollup and clean with 2-day raw retention, 30-day overall retention
+	_, err := store.RollupAndCleanMetrics(2*24*time.Hour, 30*24*time.Hour)
+	if err != nil {
+		t.Fatalf("RollupAndCleanMetrics failed: %v", err)
+	}
+
+	// Query across 10 days downsampled to 10 points
+	// With time-based downsampling:
+	// Total span is ~10 days. The older 8 days (10d to 2d ago) account for 80% of the duration.
+	// So approximately 7-8 points should represent the older span (CPU around 10%),
+	// and 2-3 points should represent the newer span (CPU around 80%).
+	// (Under the old count-based bug, the 48 newer points took up 86% of the buckets,
+	// so the last 2 days squished the previous 8 days into just 1 or 2 buckets!)
+	points, _, _, err := store.GetMetricsHistoryWithInterface("node-mixed", "eth0", now.Add(-11*24*time.Hour), 10)
+	if err != nil {
+		t.Fatalf("GetMetricsHistoryWithInterface failed: %v", err)
+	}
+
+	if len(points) == 0 {
+		t.Fatalf("Expected downsampled points, got 0")
+	}
+
+	cutoffTs := now.Add(-2 * 24 * time.Hour).Unix()
+	olderCount := 0
+	newerCount := 0
+	for _, p := range points {
+		if p.Timestamp < cutoffTs {
+			olderCount++
+		} else {
+			newerCount++
+		}
+	}
+
+	// Older span (8 days out of 10 = 80% of time) should have significantly more buckets than newer span (2 days = 20% of time)
+	if olderCount < 5 {
+		t.Errorf("Expected at least 5 buckets for the older 8 days, got %d (newer had %d)", olderCount, newerCount)
+	}
+
+	// Test GetNodeInterfaceTraffic downsampling as well
+	traffic, err := store.GetNodeInterfaceTraffic("node-mixed", "eth0", now.Add(-11*24*time.Hour), now, 10)
+	if err != nil {
+		t.Fatalf("GetNodeInterfaceTraffic failed: %v", err)
+	}
+	trafficOlder := 0
+	trafficNewer := 0
+	for _, p := range traffic.Points {
+		if p.Timestamp < cutoffTs {
+			trafficOlder++
+		} else {
+			trafficNewer++
+		}
+	}
+	if trafficOlder < 5 {
+		t.Errorf("Expected at least 5 traffic buckets for older 8 days, got %d (newer had %d)", trafficOlder, trafficNewer)
+	}
+}
+

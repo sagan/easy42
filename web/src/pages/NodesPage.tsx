@@ -1669,16 +1669,16 @@ export const NodesPage: React.FC = () => {
                           },
                         }}
                       >
-                        <MenuItem value="general" sx={{ fontSize: "0.8rem", fontWeight: 600 }}>
+                        <MenuItem title="General View" value="general" sx={{ fontSize: "0.8rem", fontWeight: 600 }}>
                           <Box sx={{ display: "flex", alignItems: "center", gap: 0.8 }}>
                             <Server size={14} color="#4F46E5" />
-                            General View
+                            General
                           </Box>
                         </MenuItem>
-                        <MenuItem value="network" sx={{ fontSize: "0.8rem", fontWeight: 600 }}>
+                        <MenuItem title="Network View" value="network" sx={{ fontSize: "0.8rem", fontWeight: 600 }}>
                           <Box sx={{ display: "flex", alignItems: "center", gap: 0.8 }}>
                             <Network size={14} color="#0891B2" />
-                            Network View
+                            Network
                           </Box>
                         </MenuItem>
                       </Select>

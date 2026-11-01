@@ -1658,16 +1658,30 @@ func (s *StateStore) GetMetricsHistoryWithInterface(nodeName string, interfaceNa
 		return points, availableIfaces, selectedIface, nil
 	}
 
-	// Downsample to fit maxPoints buckets
-	downsampled := make([]NodeMetricPoint, 0, maxPoints)
-	bucketSize := float64(len(points)) / float64(maxPoints)
+	minTs := points[0].Timestamp
+	maxTs := points[len(points)-1].Timestamp
+	timeSpan := maxTs - minTs
+	if timeSpan <= 0 {
+		return points[:maxPoints], availableIfaces, selectedIface, nil
+	}
 
-	for i := 0; i < maxPoints; i++ {
-		startIdx := int(float64(i) * bucketSize)
-		endIdx := int(float64(i+1) * bucketSize)
-		if endIdx > len(points) {
-			endIdx = len(points)
+	// Downsample into maxPoints time-based windows
+	downsampled := make([]NodeMetricPoint, 0, maxPoints)
+	bucketDuration := float64(timeSpan) / float64(maxPoints)
+	n := len(points)
+	ptIdx := 0
+
+	for i := 0; i < maxPoints && ptIdx < n; i++ {
+		bucketEnd := float64(minTs) + float64(i+1)*bucketDuration
+		if i == maxPoints-1 {
+			bucketEnd = float64(maxTs) + 1.0 // Ensure the last point is included
 		}
+
+		startIdx := ptIdx
+		for ptIdx < n && float64(points[ptIdx].Timestamp) < bucketEnd {
+			ptIdx++
+		}
+		endIdx := ptIdx
 		if startIdx >= endIdx {
 			continue
 		}
@@ -1825,16 +1839,31 @@ func (s *StateStore) GetNodeInterfaceTraffic(nodeName, interfaceName string, sta
 		return summary, nil
 	}
 
-	// Downsample to fit maxPoints buckets
-	downsampled := make([]InterfaceTrafficPoint, 0, maxPoints)
-	bucketSize := float64(len(rawPoints)) / float64(maxPoints)
+	minTs := rawPoints[0].Timestamp
+	maxTs := rawPoints[len(rawPoints)-1].Timestamp
+	timeSpan := maxTs - minTs
+	if timeSpan <= 0 {
+		summary.Points = rawPoints[:maxPoints]
+		return summary, nil
+	}
 
-	for i := 0; i < maxPoints; i++ {
-		startIdx := int(float64(i) * bucketSize)
-		endIdx := int(float64(i+1) * bucketSize)
-		if endIdx > len(rawPoints) {
-			endIdx = len(rawPoints)
+	// Downsample into maxPoints time-based windows
+	downsampled := make([]InterfaceTrafficPoint, 0, maxPoints)
+	bucketDuration := float64(timeSpan) / float64(maxPoints)
+	n := len(rawPoints)
+	ptIdx := 0
+
+	for i := 0; i < maxPoints && ptIdx < n; i++ {
+		bucketEnd := float64(minTs) + float64(i+1)*bucketDuration
+		if i == maxPoints-1 {
+			bucketEnd = float64(maxTs) + 1.0
 		}
+
+		startIdx := ptIdx
+		for ptIdx < n && float64(rawPoints[ptIdx].Timestamp) < bucketEnd {
+			ptIdx++
+		}
+		endIdx := ptIdx
 		if startIdx >= endIdx {
 			continue
 		}

@@ -77,45 +77,85 @@ export const MetricAreaChart: React.FC<MetricAreaChartProps> = ({
   const plotWidth = width - padding.left - padding.right;
   const plotHeight = height - padding.top - padding.bottom;
 
+  const { minTs, timeSpan } = useMemo(() => {
+    if (data.length === 0) return { minTs: 0, timeSpan: 0 };
+    const min = data[0].timestamp;
+    const max = data[data.length - 1].timestamp;
+    return { minTs: min, timeSpan: max - min };
+  }, [data]);
+
+  const getX = (d: DataPoint, i: number) => {
+    if (timeSpan > 0) {
+      return padding.left + Math.max(0, Math.min(1, (d.timestamp - minTs) / timeSpan)) * plotWidth;
+    }
+    return padding.left + (i / Math.max(1, data.length - 1)) * plotWidth;
+  };
+
   const points1 = useMemo(() => {
     if (data.length === 0) return "";
     return data
       .map((d, i) => {
-        const x = padding.left + (i / Math.max(1, data.length - 1)) * plotWidth;
+        const x = getX(d, i);
         const normY = (d.value - 0) / Math.max(1, stats.max);
         const y = padding.top + plotHeight - Math.max(0, Math.min(plotHeight, normY * plotHeight));
         return `${x},${y}`;
       })
       .join(" ");
-  }, [data, plotWidth, plotHeight, stats.max, padding.left, padding.top]);
+  }, [data, plotWidth, plotHeight, stats.max, padding.left, padding.top, timeSpan, minTs]);
 
   const area1 = useMemo(() => {
     if (!points1 || data.length === 0) return "";
-    const startX = padding.left;
-    const endX = padding.left + plotWidth;
+    const startX = getX(data[0], 0);
+    const endX = getX(data[data.length - 1], data.length - 1);
     const bottomY = padding.top + plotHeight;
     return `M ${startX},${bottomY} L ${points1.replace(/ /g, " L ")} L ${endX},${bottomY} Z`;
-  }, [points1, data.length, padding.left, padding.top, plotWidth, plotHeight]);
+  }, [points1, data, padding.left, padding.top, plotWidth, plotHeight, timeSpan, minTs]);
 
   const points2 = useMemo(() => {
     if (!hasDualSeries || data.length === 0) return "";
     return data
       .map((d, i) => {
         const val = d.value2 || 0;
-        const x = padding.left + (i / Math.max(1, data.length - 1)) * plotWidth;
+        const x = getX(d, i);
         const normY = (val - 0) / Math.max(1, stats.max);
         const y = padding.top + plotHeight - Math.max(0, Math.min(plotHeight, normY * plotHeight));
         return `${x},${y}`;
       })
       .join(" ");
-  }, [data, hasDualSeries, plotWidth, plotHeight, stats.max, padding.left, padding.top]);
+  }, [data, hasDualSeries, plotWidth, plotHeight, stats.max, padding.left, padding.top, timeSpan, minTs]);
 
   const handlePointerMove = (e: React.PointerEvent<SVGSVGElement>) => {
     if (data.length === 0) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-    const index = Math.round(ratio * (data.length - 1));
-    setHoverIndex(index);
+    if (timeSpan > 0) {
+      const targetTs = minTs + ratio * timeSpan;
+      let low = 0;
+      let high = data.length - 1;
+      while (low <= high) {
+        const mid = (low + high) >> 1;
+        if (data[mid].timestamp < targetTs) {
+          low = mid + 1;
+        } else {
+          high = mid - 1;
+        }
+      }
+      let bestIdx = 0;
+      let bestDiff = Infinity;
+      for (const idx of [low - 1, low, low + 1]) {
+        if (idx >= 0 && idx < data.length) {
+          const diff = Math.abs(data[idx].timestamp - targetTs);
+          if (diff < bestDiff) {
+            bestDiff = diff;
+            bestIdx = idx;
+          }
+        }
+      }
+      setHoverIndex(bestIdx);
+    } else {
+      const index = Math.round(ratio * (data.length - 1));
+      setHoverIndex(index);
+    }
   };
 
   const handlePointerLeave = () => {
@@ -250,16 +290,16 @@ export const MetricAreaChart: React.FC<MetricAreaChartProps> = ({
             {hoverIndex !== null && data[hoverIndex] && (
               <g>
                 <line
-                  x1={padding.left + (hoverIndex / Math.max(1, data.length - 1)) * plotWidth}
+                  x1={getX(data[hoverIndex], hoverIndex)}
                   y1={padding.top}
-                  x2={padding.left + (hoverIndex / Math.max(1, data.length - 1)) * plotWidth}
+                  x2={getX(data[hoverIndex], hoverIndex)}
                   y2={padding.top + plotHeight}
                   stroke="#94A3B8"
                   strokeWidth="1.2"
                   strokeDasharray="2 2"
                 />
                 <circle
-                  cx={padding.left + (hoverIndex / Math.max(1, data.length - 1)) * plotWidth}
+                  cx={getX(data[hoverIndex], hoverIndex)}
                   cy={
                     padding.top +
                     plotHeight -
