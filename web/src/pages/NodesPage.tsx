@@ -60,6 +60,7 @@ export type SortField =
   | "ip6"
   | "external_ip"
   | "external_ip6"
+  | "interface"
   | "uptime"
   | "cpu"
   | "memory"
@@ -76,6 +77,7 @@ export const SORT_OPTIONS: { value: SortField; label: string }[] = [
   { value: "ip6", label: "IPv6" },
   { value: "external_ip", label: "External IPv4" },
   { value: "external_ip6", label: "External IPv6" },
+  { value: "interface", label: "Interface" },
   { value: "uptime", label: "Uptime" },
   { value: "cpu", label: "CPU Usage" },
   { value: "memory", label: "Memory Usage" },
@@ -93,6 +95,7 @@ export const SORT_FIELD_LABELS: Record<SortField, string> = {
   ip6: "IPv6",
   external_ip: "External IPv4",
   external_ip6: "External IPv6",
+  interface: "Interface",
   uptime: "Uptime",
   cpu: "CPU",
   memory: "Memory",
@@ -489,6 +492,7 @@ export const NodesPage: React.FC = () => {
         (n.ip6 || "").toLowerCase().includes(q) ||
         (n.external_ip || "").toLowerCase().includes(q) ||
         (n.external_ip6 || "").toLowerCase().includes(q) ||
+        (n.interface || "").toLowerCase().includes(q) ||
         String(n.asn || "").includes(q);
       return matchTag && matchBlock && matchSearch;
     });
@@ -590,6 +594,16 @@ export const NodesPage: React.FC = () => {
         case "external_ip6":
           comparison = (a.external_ip6 || "").localeCompare(b.external_ip6 || "");
           break;
+
+        case "interface": {
+          const ifaceA = a.interface || (liveA?.primary_interface ?? statusA?.primary_interface) || "";
+          const ifaceB = b.interface || (liveB?.primary_interface ?? statusB?.primary_interface) || "";
+          comparison = ifaceA.localeCompare(ifaceB, undefined, { numeric: true, sensitivity: "base" });
+          if (comparison === 0) {
+            comparison = a.name.localeCompare(b.name, undefined, { numeric: true });
+          }
+          break;
+        }
 
         case "uptime": {
           const uptimeA = isOnlineA ? (liveA?.uptime_seconds ?? statusA?.metrics?.uptime_seconds ?? 0) : 0;
@@ -1847,6 +1861,18 @@ export const NodesPage: React.FC = () => {
                         External IPv6
                       </TableSortLabel>
                     </TableCell>
+                    <TableCell
+                      sortDirection={sortField === "interface" ? sortOrder : false}
+                      sx={{ fontWeight: 700, color: "#475569" }}
+                    >
+                      <TableSortLabel
+                        active={sortField === "interface"}
+                        direction={sortField === "interface" ? sortOrder : "asc"}
+                        onClick={() => handleRequestSort("interface")}
+                      >
+                        Interface
+                      </TableSortLabel>
+                    </TableCell>
                   </>
                 )}
 
@@ -1858,7 +1884,7 @@ export const NodesPage: React.FC = () => {
             <TableBody>
               {sortedNodes.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={subView === "general" ? 10 : 8} align="center" sx={{ py: 4, color: "#64748B" }}>
+                  <TableCell colSpan={subView === "general" ? 10 : 9} align="center" sx={{ py: 4, color: "#64748B" }}>
                     No servers match the selected filters.
                   </TableCell>
                 </TableRow>
@@ -2227,6 +2253,34 @@ export const NodesPage: React.FC = () => {
                                   sx={{ p: 0.2, color: copiedId === `${n.name}-ext-ip6` ? "#059669" : "#94A3B8" }}
                                 >
                                   {copiedId === `${n.name}-ext-ip6` ? <Check size={12} /> : <Copy size={12} />}
+                                </IconButton>
+                              </Tooltip>
+                            </Box>
+                          ) : (
+                            <Typography variant="caption" sx={{ color: "#94A3B8" }}>
+                              —
+                            </Typography>
+                          )}
+                        </TableCell>
+
+                        {/* Interface (interface) */}
+                        <TableCell>
+                          {n.interface || primaryIface ? (
+                            <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                              <Typography
+                                variant="body2"
+                                className="mono-font"
+                                sx={{ fontWeight: 600, color: "#0F172A", fontSize: "0.82rem" }}
+                              >
+                                {n.interface || primaryIface}
+                              </Typography>
+                              <Tooltip title={copiedId === `${n.name}-iface` ? "Copied!" : "Copy Interface"}>
+                                <IconButton
+                                  size="small"
+                                  onClick={() => handleCopy(`${n.name}-iface`, (n.interface || primaryIface)!)}
+                                  sx={{ p: 0.2, color: copiedId === `${n.name}-iface` ? "#059669" : "#94A3B8" }}
+                                >
+                                  {copiedId === `${n.name}-iface` ? <Check size={12} /> : <Copy size={12} />}
                                 </IconButton>
                               </Tooltip>
                             </Box>
