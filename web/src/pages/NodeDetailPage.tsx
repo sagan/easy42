@@ -1581,7 +1581,13 @@ export const NodeDetailPage: React.FC = () => {
               <Tab value="agent" icon={<Zap size={16} />} iconPosition="start" label="Agent" title="Agent" />
             )}
             {!node?.is_external && (
-              <Tab value="cron_tasks" icon={<Clock size={16} />} iconPosition="start" label="Tasks" title="Cron Tasks" />
+              <Tab
+                value="cron_tasks"
+                icon={<Clock size={16} />}
+                iconPosition="start"
+                label="Tasks"
+                title="Cron Tasks"
+              />
             )}
           </Tabs>
         </Box>
@@ -1905,7 +1911,9 @@ export const NodeDetailPage: React.FC = () => {
                   <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
                     {node.caption && node.caption.trim() !== "" && (
                       <>
-                        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 2 }}>
+                        <Box
+                          sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 2 }}
+                        >
                           <Typography variant="body2" sx={{ color: "#64748B", flexShrink: 0 }}>
                             Caption:
                           </Typography>
@@ -2018,9 +2026,7 @@ export const NodeDetailPage: React.FC = () => {
                 </Paper>
 
                 {/* DN42 Info Card for External DN42 Nodes */}
-                {isDn42ExternalNode(node) && (
-                  <Dn42InfoCard asn={node.asn} variant="page" />
-                )}
+                {isDn42ExternalNode(node) && <Dn42InfoCard asn={node.asn} variant="page" />}
               </Grid>
             </Grid>
 
@@ -2439,7 +2445,10 @@ export const NodeDetailPage: React.FC = () => {
                                   <Tooltip
                                     title={
                                       <Box sx={{ p: 0.5, maxWidth: 300 }}>
-                                        <Typography variant="caption" sx={{ fontWeight: 700, display: "block", color: "#99F6E4", mb: 0.5 }}>
+                                        <Typography
+                                          variant="caption"
+                                          sx={{ fontWeight: 700, display: "block", color: "#99F6E4", mb: 0.5 }}
+                                        >
                                           Link Note
                                         </Typography>
                                         <Typography variant="caption" sx={{ whiteSpace: "pre-wrap", color: "#F1F5F9" }}>
@@ -2516,7 +2525,9 @@ export const NodeDetailPage: React.FC = () => {
                             </TableCell>
                             <TableCell>
                               <Typography variant="body2">
-                                {selfEnd.persistent_keepalive ? `${selfEnd.persistent_keepalive}s` : "-"}
+                                {link.type !== "manual" && selfEnd.persistent_keepalive
+                                  ? `${selfEnd.persistent_keepalive}s`
+                                  : "-"}
                               </Typography>
                             </TableCell>
                             <TableCell>
@@ -2938,7 +2949,10 @@ export const NodeDetailPage: React.FC = () => {
                       border: node.route_reflector ? "1px solid #C7D2FE" : "1px solid #E2E8F0",
                     }}
                   >
-                    <Typography variant="caption" sx={{ color: node.route_reflector ? "#312E81" : "#64748B", fontWeight: 600 }}>
+                    <Typography
+                      variant="caption"
+                      sx={{ color: node.route_reflector ? "#312E81" : "#64748B", fontWeight: 600 }}
+                    >
                       BGP Route Reflector
                     </Typography>
                     <Box sx={{ mt: 0.8 }}>

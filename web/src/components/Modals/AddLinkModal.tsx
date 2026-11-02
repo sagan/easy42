@@ -314,6 +314,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
       setToUseIp(false);
       setError(null);
       lastExtPeerRef.current = "";
+      lastInternalPeerRef.current = "";
     }
   }, [open, linkToEdit, initialFrom, initialTo, nodes]);
 
@@ -330,12 +331,14 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
   }, [isExternalLink, linkToEdit]);
 
   const lastExtPeerRef = useRef<string>("");
+  const lastInternalPeerRef = useRef<string>("");
 
   // Auto calculate default ports and MTUs only when creating new link
   useEffect(() => {
     if (linkToEdit) return;
 
     if (isExternalLink && managedNode && externalNode) {
+      lastInternalPeerRef.current = "";
       const publicAsn = networkSettings?.public_asn || managedNode.asn || 4242420000;
       const publicAsnStr = String(publicAsn).trim();
       const publicSuffix4 = publicAsnStr ? publicAsnStr.slice(-4) : "1";
@@ -391,43 +394,48 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
       lastExtPeerRef.current = "";
     }
 
-    if (toNode && toNode.ip) {
-      setFromPort(derivePortFromIP(toNode.ip) + linkPortOffset);
-    }
-    if (fromNode && fromNode.ip) {
-      setToPort(derivePortFromIP(fromNode.ip) + linkPortOffset);
-    }
+    const internalPeerKey = `${fromNode?.name || ""}-${toNode?.name || ""}-${linkPortOffset}`;
+    if (lastInternalPeerRef.current !== internalPeerKey) {
+      lastInternalPeerRef.current = internalPeerKey;
 
-    const getUsedEpMTU = (targetNode?: Node, sourceNode?: Node) => {
-      let foundMTU = 1500;
-      const { entrypoint: matchedEP } = resolvePeerEntrypoint(sourceNode, targetNode);
-      if (matchedEP?.mtu && matchedEP.mtu > 0) {
-        return matchedEP.mtu - 80;
+      if (toNode && toNode.ip) {
+        setFromPort(derivePortFromIP(toNode.ip) + linkPortOffset);
       }
-      if (targetNode?.entrypoints) {
-        for (const ep of targetNode.entrypoints) {
-          if (ep.ip && ep.mtu && ep.mtu > 0) {
-            foundMTU = ep.mtu;
-            break;
+      if (fromNode && fromNode.ip) {
+        setToPort(derivePortFromIP(fromNode.ip) + linkPortOffset);
+      }
+
+      const getUsedEpMTU = (targetNode?: Node, sourceNode?: Node) => {
+        let foundMTU = 1500;
+        const { entrypoint: matchedEP } = resolvePeerEntrypoint(sourceNode, targetNode);
+        if (matchedEP?.mtu && matchedEP.mtu > 0) {
+          return matchedEP.mtu - 80;
+        }
+        if (targetNode?.entrypoints) {
+          for (const ep of targetNode.entrypoints) {
+            if (ep.ip && ep.mtu && ep.mtu > 0) {
+              foundMTU = ep.mtu;
+              break;
+            }
           }
         }
-      }
-      if (foundMTU === 1500 && sourceNode?.entrypoints) {
-        for (const ep of sourceNode.entrypoints) {
-          if (ep.ip && ep.mtu && ep.mtu > 0) {
-            foundMTU = ep.mtu;
-            break;
+        if (foundMTU === 1500 && sourceNode?.entrypoints) {
+          for (const ep of sourceNode.entrypoints) {
+            if (ep.ip && ep.mtu && ep.mtu > 0) {
+              foundMTU = ep.mtu;
+              break;
+            }
           }
         }
-      }
-      return foundMTU - 80;
-    };
+        return foundMTU - 80;
+      };
 
-    if (fromNode || toNode) {
-      setFromMtu(getUsedEpMTU(toNode, fromNode));
-      setToMtu(getUsedEpMTU(fromNode, toNode));
+      if (fromNode || toNode) {
+        setFromMtu(getUsedEpMTU(toNode, fromNode));
+        setToMtu(getUsedEpMTU(fromNode, toNode));
+      }
     }
-  }, [fromNode, toNode, linkToEdit, isExternalLink, managedNode, externalNode, fromPort, toPort, networkSettings]);
+  }, [fromNode, toNode, linkToEdit, isExternalLink, managedNode, externalNode, linkPortOffset, networkSettings]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1379,9 +1387,9 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                     label="Local Listen Port"
                     type="number"
                     size="small"
-                    value={managedNode === fromNode ? fromPort : toPort}
+                    value={(managedNode === fromNode ? fromPort : toPort) || ""}
                     onChange={(e) => {
-                      const val = Number(e.target.value);
+                      const val = e.target.value === "" ? 0 : Number(e.target.value);
                       if (managedNode === fromNode) setFromPort(val);
                       else setToPort(val);
                     }}
@@ -2233,8 +2241,8 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                       label="Listen Port"
                       type="number"
                       size="small"
-                      value={fromPort}
-                      onChange={(e) => setFromPort(Number(e.target.value))}
+                      value={fromPort || ""}
+                      onChange={(e) => setFromPort(e.target.value === "" ? 0 : Number(e.target.value))}
                       helperText={toNode.ip ? `Derived from ${toNode.ip}` : "Default port: 20000"}
                     />
                     <TextFieldWithCopy
@@ -2495,8 +2503,8 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                       label="Listen Port"
                       type="number"
                       size="small"
-                      value={toPort}
-                      onChange={(e) => setToPort(Number(e.target.value))}
+                      value={toPort || ""}
+                      onChange={(e) => setToPort(e.target.value === "" ? 0 : Number(e.target.value))}
                       helperText={fromNode.ip ? `Derived from ${fromNode.ip}` : "Default port: 20000"}
                     />
                     <TextFieldWithCopy
