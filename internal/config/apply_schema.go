@@ -551,8 +551,9 @@ func validateNodePatch(n *NodePatch) error {
 			if trimmed == "" {
 				continue
 			}
-			if _, _, err := net.ParseCIDR(trimmed); err != nil {
-				if parsed := net.ParseIP(trimmed); parsed == nil {
+			routeStr := strings.TrimPrefix(trimmed, "@")
+			if _, _, err := net.ParseCIDR(routeStr); err != nil {
+				if parsed := net.ParseIP(routeStr); parsed == nil {
 					return fmt.Errorf("invalid static route '%s' in %s for node %s: must be a valid CIDR or IP", r, fieldName, n.Name)
 				}
 			}

@@ -517,4 +517,78 @@ func TestApply_TagsDelta(t *testing.T) {
 	}
 }
 
+func TestApply_AtStaticRoutes(t *testing.T) {
+	mgr, tmpDir := setupTestManager(t)
+	defer os.RemoveAll(tmpDir)
+	defer mgr.Close()
+
+	patchAdd := `{
+		"nodes": [
+			{
+				"name": "foobar",
+				"static_routes_add": [
+					"@192.168.100.0/24"
+				]
+			}
+		]
+	}`
+
+	res, err := mgr.ApplyConfigChange(patchAdd)
+	if err != nil {
+		t.Fatalf("failed to apply @ static route: %v", err)
+	}
+	if !res.Success {
+		t.Fatalf("apply failed")
+	}
+
+	node, err := mgr.GetNode("foobar")
+	if err != nil {
+		t.Fatalf("failed to get node: %v", err)
+	}
+	found := false
+	for _, r := range node.StaticRoutes {
+		if r == "@192.168.100.0/24" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected @192.168.100.0/24 in static routes, got %v", node.StaticRoutes)
+	}
+
+	// Idempotency: re-adding @192.168.100.0/24 should result in 0 changes
+	preview, err := mgr.PreviewApply(patchAdd)
+	if err != nil {
+		t.Fatalf("preview failed: %v", err)
+	}
+	if preview.Summary.TotalChanges != 0 {
+		t.Fatalf("expected 0 changes on idempotent add of @ route, got %d", preview.Summary.TotalChanges)
+	}
+
+	// Delete @192.168.100.0/24
+	patchDel := `{
+		"nodes": [
+			{
+				"name": "foobar",
+				"static_routes_del": [
+					"@192.168.100.0/24"
+				]
+			}
+		]
+	}`
+	resDel, err := mgr.ApplyConfigChange(patchDel)
+	if err != nil || !resDel.Success {
+		t.Fatalf("failed to delete @ static route: %v", err)
+	}
+	nodeAfterDel, err := mgr.GetNode("foobar")
+	if err != nil {
+		t.Fatalf("failed to get node: %v", err)
+	}
+	for _, r := range nodeAfterDel.StaticRoutes {
+		if r == "@192.168.100.0/24" {
+			t.Fatalf("@192.168.100.0/24 was not deleted: %v", nodeAfterDel.StaticRoutes)
+		}
+	}
+}
+
 

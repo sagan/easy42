@@ -432,13 +432,20 @@ func routeEqual(a, b string) bool {
 	if strings.EqualFold(aTrim, bTrim) {
 		return true
 	}
-	_, ipNetA, errA := net.ParseCIDR(aTrim)
-	_, ipNetB, errB := net.ParseCIDR(bTrim)
+	hasAtA := strings.HasPrefix(aTrim, "@")
+	hasAtB := strings.HasPrefix(bTrim, "@")
+	if hasAtA != hasAtB {
+		return false
+	}
+	cleanA := strings.TrimPrefix(aTrim, "@")
+	cleanB := strings.TrimPrefix(bTrim, "@")
+	_, ipNetA, errA := net.ParseCIDR(cleanA)
+	_, ipNetB, errB := net.ParseCIDR(cleanB)
 	if errA == nil && errB == nil {
 		return ipNetA.String() == ipNetB.String()
 	}
-	ipA := net.ParseIP(aTrim)
-	ipB := net.ParseIP(bTrim)
+	ipA := net.ParseIP(cleanA)
+	ipB := net.ParseIP(cleanB)
 	if ipA != nil && ipB != nil {
 		return ipA.Equal(ipB)
 	}

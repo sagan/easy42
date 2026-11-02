@@ -180,7 +180,7 @@ protocol static static_self_v6 {
 }
 ```
 
-In BIRD, a `reject` route is purely local to the routing daemon; it injects the prefix into BIRD's routing table (`master4`/`master6`) for export to peers, while the local kernel routes the local address through the loopback path. User-configured `static_routes` are emitted the same way in `static_v4`/`static_v6`, with `/32` or `/128` appended when no prefix length is given.
+In BIRD, a `reject` route is purely local to the routing daemon; it injects the prefix into BIRD's routing table (`master4`/`master6`) for export to peers, while the local kernel routes the local address through the loopback path. User-configured `static_routes` are emitted the same way in `static_v4`/`static_v6`, with `/32` or `/128` appended when no prefix length is given. If a static route is prefixed with `@` (e.g. `@192.168.100.0/24`), it is advertised via BGP as usual, but bird adds a reject filter rule above the accept rule in the kernel export filter (`if source ~ [ RTS_STATIC ] && net ~ [ 192.168.100.0/24 ] then reject;`), preventing the unreachable route from being installed into the kernel routing table.
 
 ### 4. Multi-Table Kernel FIB Synchronization & Metrics
 
@@ -196,6 +196,7 @@ Learned BGP routes are exported to the Linux kernel FIB:
               if (COMM_EXTERNAL ~ bgp_large_community) then reject;
               if (source ~ [ RTS_BGP ]) && (net ~ INTERNET) then reject;
               if source ~ [ RTS_BGP ] then accept;
+              if source ~ [ RTS_STATIC ] && net ~ [ 192.168.100.0/24 ] then reject;
               if source ~ [ RTS_STATIC ] && (net ~ PRIVATE) then accept;
               reject;
           };
@@ -204,7 +205,7 @@ Learned BGP routes are exported to the Linux kernel FIB:
       kernel table TABLE;
   }
   ```
-  Setting `krt_prefsrc = SELF_IP` ensures local applications use the overlay IP when originating mesh traffic. Static `reject` routes are only installed for private prefixes, and Internet routes learned over BGP are not installed in the main table when a separate internet table is configured. `kernel_v6` mirrors this with `INTERNET6` and `PRIVATE6`.
+  Setting `krt_prefsrc = SELF_IP` ensures local applications use the overlay IP when originating mesh traffic. Static `reject` routes are only installed for private prefixes (unless suppressed with `@`), and Internet routes learned over BGP are not installed in the main table when a separate internet table is configured. `kernel_v6` mirrors this with `INTERNET6` and `PRIVATE6`.
 - **External Routing Table (`external_table`)**: A pipe copies routes carrying the `COMM_EXTERNAL` large community from `master4`/`master6` into an isolated table, and a dedicated kernel protocol installs them with `krt_prefsrc` set to `external_ip`/`external_ip6` (falling back to `ip`/`ip6`). This enables Policy-Based Routing (PBR) for external peer routes.
 - **Internet Routing Table (`internet_table`)**: A separate pipe/kernel pair isolates upstream transit or default routes (`INTERNET`/`INTERNET6`) into another kernel table. If `external_table` and `internet_table` are equal, external routes and Internet routes share that table. If `internet_table` differs, `COMM_EXTERNAL` routes are excluded from the internet pipe.
 

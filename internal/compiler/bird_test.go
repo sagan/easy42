@@ -771,6 +771,115 @@ func TestStaticRoutesV4AndV6(t *testing.T) {
 	}
 }
 
+func TestStaticRoutesWithAtPrefix(t *testing.T) {
+	node := config.Node{
+		Name: "router1",
+		Host: "10.0.0.1",
+		IP:   "192.168.100.1",
+		ASN:  4224420001,
+		StaticRoutes: []string{
+			"@192.168.100.0/24",
+			"10.0.0.0/8",
+			"@172.16.0.1",
+			"@fd00:42::/48",
+			"2001:db8:1::/64",
+		},
+	}
+
+	ctx, err := BuildNodeContext(&node, []config.Node{node}, nil)
+	if err != nil {
+		t.Fatalf("BuildNodeContext failed: %v", err)
+	}
+
+	v4Routes, ok := ctx["static_routes_v4"].([]string)
+	if !ok || len(v4Routes) != 3 {
+		t.Fatalf("Expected 3 static_routes_v4, got %v", ctx["static_routes_v4"])
+	}
+	if v4Routes[0] != "192.168.100.0/24" || v4Routes[1] != "10.0.0.0/8" || v4Routes[2] != "172.16.0.1" {
+		t.Errorf("Unexpected static_routes_v4 content: %v", v4Routes)
+	}
+
+	v6Routes, ok := ctx["static_routes_v6"].([]string)
+	if !ok || len(v6Routes) != 2 {
+		t.Fatalf("Expected 2 static_routes_v6, got %v", ctx["static_routes_v6"])
+	}
+	if v6Routes[0] != "fd00:42::/48" || v6Routes[1] != "2001:db8:1::/64" {
+		t.Errorf("Unexpected static_routes_v6 content: %v", v6Routes)
+	}
+
+	v4NoExport, ok := ctx["static_routes_v4_no_export"].([]string)
+	if !ok || len(v4NoExport) != 2 {
+		t.Fatalf("Expected 2 static_routes_v4_no_export, got %v", ctx["static_routes_v4_no_export"])
+	}
+	if v4NoExport[0] != "192.168.100.0/24" || v4NoExport[1] != "172.16.0.1/32" {
+		t.Errorf("Unexpected static_routes_v4_no_export: %v", v4NoExport)
+	}
+
+	v6NoExport, ok := ctx["static_routes_v6_no_export"].([]string)
+	if !ok || len(v6NoExport) != 1 {
+		t.Fatalf("Expected 1 static_routes_v6_no_export, got %v", ctx["static_routes_v6_no_export"])
+	}
+	if v6NoExport[0] != "fd00:42::/48" {
+		t.Errorf("Unexpected static_routes_v6_no_export: %v", v6NoExport)
+	}
+
+	conf, err := GenerateBirdConfig(&node, []config.Node{node}, nil)
+	if err != nil {
+		t.Fatalf("GenerateBirdConfig failed: %v", err)
+	}
+
+	expectedSnippets := []string{
+		"protocol static static_v4 {",
+		"    ipv4;",
+		"    route 192.168.100.0/24 reject;",
+		"    route 10.0.0.0/8 reject;",
+		"    route 172.16.0.1/32 reject;",
+		"if source ~ [ RTS_STATIC ] && net ~ [ 192.168.100.0/24, 172.16.0.1/32 ] then reject;",
+		"if source ~ [ RTS_STATIC ] && (net ~ PRIVATE) then accept;",
+		"protocol static static_v6 {",
+		"    ipv6;",
+		"    route fd00:42::/48 reject;",
+		"    route 2001:db8:1::/64 reject;",
+		"if source ~ [ RTS_STATIC ] && net ~ [ fd00:42::/48 ] then reject;",
+		"if source ~ [ RTS_STATIC ] && (net ~ PRIVATE6) then accept;",
+	}
+	for _, s := range expectedSnippets {
+		if !strings.Contains(conf, s) {
+			t.Errorf("Missing expected snippet in generated config: %q", s)
+		}
+	}
+
+	// Verify reject rule is placed before accept rule in kernel_v4
+	idxReject4 := strings.Index(conf, "if source ~ [ RTS_STATIC ] && net ~ [ 192.168.100.0/24, 172.16.0.1/32 ] then reject;")
+	idxAccept4 := strings.Index(conf, "if source ~ [ RTS_STATIC ] && (net ~ PRIVATE) then accept;")
+	if idxReject4 == -1 || idxAccept4 == -1 || idxReject4 >= idxAccept4 {
+		t.Errorf("Expected reject rule to appear before accept rule in kernel_v4 export filter")
+	}
+
+	// Verify reject rule is placed before accept rule in kernel_v6
+	idxReject6 := strings.Index(conf, "if source ~ [ RTS_STATIC ] && net ~ [ fd00:42::/48 ] then reject;")
+	idxAccept6 := strings.Index(conf, "if source ~ [ RTS_STATIC ] && (net ~ PRIVATE6) then accept;")
+	if idxReject6 == -1 || idxAccept6 == -1 || idxReject6 >= idxAccept6 {
+		t.Errorf("Expected reject rule to appear before accept rule in kernel_v6 export filter")
+	}
+
+	// Validate syntax with bird -p if bird is installed
+	if birdPath, err := exec.LookPath("bird"); err == nil && birdPath != "" {
+		tmpFile, err := os.CreateTemp("", "bird_test_at_*.conf")
+		if err != nil {
+			t.Fatalf("Failed to create temp file: %v", err)
+		}
+		defer os.Remove(tmpFile.Name())
+		if err := os.WriteFile(tmpFile.Name(), []byte(conf), 0644); err != nil {
+			t.Fatalf("Failed to write temp file: %v", err)
+		}
+		cmd := exec.Command(birdPath, "-p", "-c", tmpFile.Name())
+		if output, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("bird -p failed: %v\nOutput: %s", err, string(output))
+		}
+	}
+}
+
 func TestBIRDConfigWithCorruptedSplitPrefixes(t *testing.T) {
 	nodeManaged := config.Node{
 		Name:      "dedirock",

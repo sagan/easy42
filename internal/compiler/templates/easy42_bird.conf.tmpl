@@ -150,6 +150,9 @@ protocol kernel kernel_v4 {
             if (source ~ [ RTS_BGP ]) && (net ~ INTERNET) then reject;
             {{end}}
             if source ~ [ RTS_BGP ] then accept;
+            {{if .static_routes_v4_no_export}}
+            if source ~ [ RTS_STATIC ] && net ~ [ {{join ", " .static_routes_v4_no_export}} ] then reject;
+            {{end}}
             # we define static routes in bird as "reject". So only install to kernel for private ip
             if source ~ [ RTS_STATIC ] && (net ~ PRIVATE) then accept;
             reject;
@@ -312,6 +315,9 @@ protocol kernel kernel_v6 {
             if (COMM_EXTERNAL ~ bgp_large_community) then reject;
             {{end}}
             if source ~ [ RTS_BGP ] then accept;
+            {{if .static_routes_v6_no_export}}
+            if source ~ [ RTS_STATIC ] && net ~ [ {{join ", " .static_routes_v6_no_export}} ] then reject;
+            {{end}}
             # we define static routes in bird as "reject". So only install to kernel for private ip
             if source ~ [ RTS_STATIC ] && (net ~ PRIVATE6) then accept;
             reject;

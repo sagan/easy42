@@ -1501,7 +1501,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                     value={staticRoutesStr}
                     onChange={(e) => setStaticRoutesStr(e.target.value)}
                     placeholder="e.g. 192.168.100.0/24"
-                    helperText="Unconditionally advertised via BGP (comma-separated)"
+                    helperText="Unconditionally advertised via BGP (comma-separated, prefix with @ to omit unreachable route from kernel)"
                     disabled={saving}
                     sx={{ gridColumn: "1 / -1" }}
                   />

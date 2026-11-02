@@ -356,7 +356,7 @@ type Node struct {
 	ExternalTable int               `json:"external_table,omitempty"`  // Routing table for routes learned from external BGP peers (if set and != Table)
 	InternetTable int               `json:"internet_table,omitempty"`  // Routing table for Internet routes learned from peers (if set and != Table)
 	Metric        *int              `json:"metric,omitempty"`          // Global metric when bird export routes to kernel
-	StaticRoutes  []string          `json:"static_routes,omitempty"`   // CIDR prefix list unconditionally broadcast via BGP
+	StaticRoutes  []string          `json:"static_routes,omitempty"`   // CIDR prefix list unconditionally broadcast via BGP. Prefix with '@' to prevent exporting as unreachable route to kernel.
 	Routes        []KernelRouteRule `json:"routes,omitempty"`          // Kernel routes imported from kernel tables and broadcast via BGP
 	ConfigHooks   []ConfigHook      `json:"config_hooks,omitempty"`    // Custom configuration injection hooks
 	WgTemplate    string            `json:"wg_template,omitempty"`     // Custom WireGuard template ID/name (empty for default)

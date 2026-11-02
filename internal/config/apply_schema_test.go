@@ -168,6 +168,8 @@ func TestParseAndValidateConfigChange_InvalidValues(t *testing.T) {
 		{"invalid port", `{"links": [{"from": {"name": "n1", "listen_port": 999999}, "to": {"name": "n2"}}]}`},
 		{"invalid static_routes_add CIDR", `{"nodes": [{"name": "n1", "static_routes_add": ["invalid-cidr"]}]}`},
 		{"invalid static_routes_del CIDR", `{"nodes": [{"name": "n1", "static_routes_del": ["invalid-cidr"]}]}`},
+		{"invalid static_routes @ bad", `{"nodes": [{"name": "n1", "static_routes": ["@invalid-cidr"]}]}`},
+		{"invalid static_routes just @", `{"nodes": [{"name": "n1", "static_routes": ["@"]}]}`},
 	}
 
 	for _, tt := range tests {
@@ -233,6 +235,34 @@ func TestParseAndValidateConfigChange_DeltaFields(t *testing.T) {
 	}
 	if l.TagsDel == nil || len(*l.TagsDel) != 1 || (*l.TagsDel)[0] != "slow" {
 		t.Errorf("expected link tags_del ['slow'], got %v", l.TagsDel)
+	}
+}
+
+func TestParseAndValidateConfigChange_AtStaticRoutes(t *testing.T) {
+	snippet := `{
+		"nodes": [
+			{
+				"name": "foobar",
+				"static_routes": ["@192.168.100.0/24", "@fd00::/48", "@10.0.0.1"],
+				"static_routes_add": ["@172.16.0.0/16"],
+				"static_routes_del": ["@10.0.0.0/8"]
+			}
+		]
+	}`
+
+	patch, _, err := ParseAndValidateConfigChange([]byte(snippet))
+	if err != nil {
+		t.Fatalf("unexpected error parsing @ static routes: %v", err)
+	}
+	if patch.Nodes == nil || len(*patch.Nodes) != 1 {
+		t.Fatalf("expected 1 node, got %v", patch.Nodes)
+	}
+	n := (*patch.Nodes)[0]
+	if n.StaticRoutes == nil || len(*n.StaticRoutes) != 3 {
+		t.Fatalf("expected 3 static_routes, got %v", n.StaticRoutes)
+	}
+	if (*n.StaticRoutes)[0] != "@192.168.100.0/24" {
+		t.Errorf("expected @192.168.100.0/24, got %s", (*n.StaticRoutes)[0])
 	}
 }
 

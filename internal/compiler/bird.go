@@ -39,6 +39,8 @@ func GetDefaultBirdTemplate() (string, error) {
 //	  "static_routes": [...],
 //	  "static_routes_v4": [...],
 //	  "static_routes_v6": [...],
+//	  "static_routes_v4_no_export": [...],
+//	  "static_routes_v6_no_export": [...],
 //	  "routes": [...],
 //	  "links": [
 //	    {
@@ -352,15 +354,40 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 
 	var staticV4 []string
 	var staticV6 []string
+	var staticV4NoExport []string
+	var staticV6NoExport []string
 	for _, sr := range node.StaticRoutes {
 		trimmed := strings.TrimSpace(sr)
 		if trimmed == "" {
 			continue
 		}
+		noExport := false
+		if strings.HasPrefix(trimmed, "@") {
+			noExport = true
+			trimmed = strings.TrimPrefix(trimmed, "@")
+			trimmed = strings.TrimSpace(trimmed)
+		}
+		if trimmed == "" {
+			continue
+		}
 		if strings.Contains(trimmed, ":") {
 			staticV6 = append(staticV6, trimmed)
+			if noExport {
+				r := trimmed
+				if !strings.Contains(r, "/") {
+					r = r + "/128"
+				}
+				staticV6NoExport = append(staticV6NoExport, r)
+			}
 		} else {
 			staticV4 = append(staticV4, trimmed)
+			if noExport {
+				r := trimmed
+				if !strings.Contains(r, "/") {
+					r = r + "/32"
+				}
+				staticV4NoExport = append(staticV4NoExport, r)
+			}
 		}
 	}
 	if staticV4 == nil {
@@ -368,6 +395,12 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 	}
 	if staticV6 == nil {
 		staticV6 = []string{}
+	}
+	if staticV4NoExport == nil {
+		staticV4NoExport = []string{}
+	}
+	if staticV6NoExport == nil {
+		staticV6NoExport = []string{}
 	}
 
 	if node.StaticRoutes == nil {
@@ -377,6 +410,8 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 	}
 	ctx["static_routes_v4"] = staticV4
 	ctx["static_routes_v6"] = staticV6
+	ctx["static_routes_v4_no_export"] = staticV4NoExport
+	ctx["static_routes_v6_no_export"] = staticV6NoExport
 
 	if slices.Contains(staticV4, "0.0.0.0/0") {
 		ctx["static_routes_v4_internet"] = 1
