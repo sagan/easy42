@@ -5,6 +5,7 @@ import (
 	"net/netip"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 
 	"easy42/internal/config"
@@ -273,7 +274,7 @@ func BuildNftablesNodeContext(
 		hasSNAT := pol.SNAT != nil && pol.SNAT.Enabled
 		hasForwardSNAT := pol.ForwardSNAT
 		hasDSCP := pol.DSCPIngress != nil || pol.DSCPEgress != nil
-		hasMark := strings.TrimSpace(pol.Mark) != ""
+		hasMark := strings.TrimSpace(pol.EffectiveMark()) != ""
 		hasBlockIngressNew := pol.EffectiveBlockIngressNew() != ""
 		if !pol.FilterForward && !pol.FilterInput && !hasSNAT && !hasForwardSNAT && !hasDSCP && !hasMark && !hasBlockIngressNew {
 			continue
@@ -468,7 +469,7 @@ func BuildNftablesNodeContext(
 			"forward_snat_target_v6": fwdSnatTargetV6,
 			"dscp_ingress":           dscpIngress,
 			"dscp_egress":            dscpEgress,
-			"mark":                   strings.TrimSpace(pol.Mark),
+			"mark":                   strings.TrimSpace(pol.EffectiveMark()),
 			"block_ingress_new":      pol.EffectiveBlockIngressNew(),
 			"ingress_new_wl":         ingressNewWlStr,
 		})
@@ -489,9 +490,13 @@ func BuildNftablesNodeContext(
 		if iface == "" || mark == "" {
 			continue
 		}
+		formattedMark, err := FormatNftMarkAction(mark)
+		if err != nil {
+			return nil, fmt.Errorf("invalid mark format %q for interface %s: %w", mark, iface, err)
+		}
 		quoted := `"` + iface + `"`
-		if !slices.Contains(markIfnames[mark], quoted) {
-			markIfnames[mark] = append(markIfnames[mark], quoted)
+		if !slices.Contains(markIfnames[formattedMark], quoted) {
+			markIfnames[formattedMark] = append(markIfnames[formattedMark], quoted)
 		}
 	}
 
@@ -596,5 +601,71 @@ func GenerateNftablesConfig(
 		return "", err
 	}
 	return GenerateNftablesConfigWithTemplate(tmplContent, node, allNodes, links, args...)
+}
+
+// FormatNftMarkAction formats a netfilter mark string (which can be either a plain "mark"
+// or a "mark/bitmask" format) into the nftables expression to be set in:
+//   meta mark set <expression>
+//
+// Formats:
+// 1. Plain mark (e.g. "0x1234", "42", "0x00000080"):
+//    Returns the mark unchanged.
+// 2. "mark/bitmask" where mark == bitmask (e.g. "0x80/0x80"):
+//    Sets the specified bits via bitwise OR:
+//    Returns "meta mark or 0x80".
+// 3. "mark/bitmask" where mark != bitmask (e.g. "0x40/0xc0" or "0/0x80"):
+//    Preserves unmasked bits via AND with ~bitmask, and sets masked bits via OR:
+//    Returns "meta mark and 0xffffff3f or 0x40".
+func FormatNftMarkAction(rawMark string) (string, error) {
+	s := strings.TrimSpace(rawMark)
+	if s == "" {
+		return "", nil
+	}
+	if !strings.Contains(s, "/") {
+		return s, nil
+	}
+
+	parts := strings.Split(s, "/")
+	if len(parts) != 2 {
+		return "", fmt.Errorf("invalid mark format %q: expected mark or mark/bitmask", rawMark)
+	}
+
+	markVal, err := parseUint32(parts[0])
+	if err != nil {
+		return "", fmt.Errorf("invalid mark part %q in %q: %w", parts[0], rawMark, err)
+	}
+
+	maskVal, err := parseUint32(parts[1])
+	if err != nil {
+		return "", fmt.Errorf("invalid bitmask part %q in %q: %w", parts[1], rawMark, err)
+	}
+
+	if maskVal == 0 {
+		return "", fmt.Errorf("invalid bitmask in %q: mask cannot be 0", rawMark)
+	}
+
+	if markVal == maskVal {
+		return fmt.Sprintf("meta mark or 0x%x", markVal), nil
+	}
+
+	andMask := (^maskVal) & 0xffffffff
+	orVal := markVal & maskVal
+	return fmt.Sprintf("meta mark and 0x%x or 0x%x", andMask, orVal), nil
+}
+
+func parseUint32(s string) (uint32, error) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return 0, fmt.Errorf("empty number")
+	}
+	if strings.HasPrefix(s, "0x") || strings.HasPrefix(s, "0X") {
+		v, err := strconv.ParseUint(s[2:], 16, 32)
+		return uint32(v), err
+	}
+	if v, err := strconv.ParseUint(s, 10, 32); err == nil {
+		return uint32(v), nil
+	}
+	v, err := strconv.ParseUint(s, 0, 32)
+	return uint32(v), err
 }
 

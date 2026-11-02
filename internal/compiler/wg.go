@@ -349,8 +349,14 @@ func BuildWgLinkContext(
 	}
 
 	if fwmark != "" {
-		ctx["fwmark"] = fwmark
-		ctx["FwMark"] = fwmark
+		wgFwmark := fwmark
+		if idx := strings.Index(wgFwmark, "/"); idx != -1 {
+			wgFwmark = strings.TrimSpace(wgFwmark[:idx])
+		}
+		if wgFwmark != "" {
+			ctx["fwmark"] = wgFwmark
+			ctx["FwMark"] = wgFwmark
+		}
 	}
 
 	ifaceName := ""

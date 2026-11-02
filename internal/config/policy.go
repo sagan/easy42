@@ -196,10 +196,14 @@ func (p *NetworkPolicy) EffectiveFwmark() string {
 	return ""
 }
 
-// EffectiveMark returns the configured mark or empty string if unset
+// EffectiveMark returns the configured mark or empty string if unset.
+// If Mark is unset, it falls back to Fwmark.
 func (p *NetworkPolicy) EffectiveMark() string {
 	if p != nil {
-		return strings.TrimSpace(p.Mark)
+		if m := strings.TrimSpace(p.Mark); m != "" {
+			return m
+		}
+		return strings.TrimSpace(p.Fwmark)
 	}
 	return ""
 }
@@ -559,13 +563,19 @@ func (l *LinkEnd) EffectivePreference(p *NetworkPolicy) *int {
 
 // EffectiveMark returns the active mark for this LinkEnd using the provided policy.
 // If LinkEnd's Mark is defined, it overrides the policy's mark.
-// Otherwise, it falls back to the policy's mark.
+// If LinkEnd's Fwmark is defined and Mark is unset, it is used.
+// Otherwise, it falls back to the policy's effective mark.
 func (l *LinkEnd) EffectiveMark(p *NetworkPolicy) string {
-	if l != nil && strings.TrimSpace(l.Mark) != "" {
-		return strings.TrimSpace(l.Mark)
+	if l != nil {
+		if m := strings.TrimSpace(l.Mark); m != "" {
+			return m
+		}
+		if m := strings.TrimSpace(l.Fwmark); m != "" {
+			return m
+		}
 	}
 	if p != nil {
-		return strings.TrimSpace(p.Mark)
+		return p.EffectiveMark()
 	}
 	return ""
 }

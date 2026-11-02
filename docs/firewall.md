@@ -187,16 +187,23 @@ chain mangle_postrouting_dscp {
 
 ### 6. Netfilter Marks
 
-Link endpoints can set `mark` directly or inherit it from their effective policy. Easy42 groups interfaces by mark and emits a `mangle_prerouting_mark` chain:
+Link endpoints can set `mark` (or `fwmark`) directly or inherit it from their effective policy. Easy42 groups interfaces by mark action and emits a `mangle_prerouting_mark` chain:
 
 ```nft
 chain mangle_prerouting_mark {
   type filter hook prerouting priority mangle; policy accept;
   iifname { "wg42nodeB", "wg42nodeC" } meta mark set 0x2a
+  iifname "wg42nodeD" meta mark set meta mark or 0x80
+  iifname "wg42nodeE" meta mark set meta mark and 0xffffff3f or 0x40
 }
 ```
 
-Marks apply to packets arriving from the listed interfaces and can be consumed by `ip rule`/policy routing or by administrator-defined nftables rules. The related `FwMark` option on a WireGuard link is separate: it marks the encapsulated WireGuard packets leaving the host and is written into the WireGuard interface configuration, not this nftables chain.
+The mark field supports either `mark` or `mark/bitmask` format:
+- **Plain mark** (`0x2a` or `42`): Directly sets the packet mark (`meta mark set 0x2a`).
+- **Equal mark/bitmask** (`0x80/0x80`): Sets the specified bits via bitwise OR (`meta mark set meta mark or 0x80`).
+- **Non-equal mark/bitmask** (`0x40/0xc0`): Preserves unmasked bits via bitwise AND with `~bitmask` and sets masked bits via OR (`meta mark set meta mark and 0xffffff3f or 0x40`).
+
+Marks apply to packets arriving from the listed interfaces and can be consumed by `ip rule`/policy routing or by administrator-defined nftables rules. The related `FwMark` option on a WireGuard link marks the encapsulated WireGuard packets leaving the host and is written into the WireGuard interface configuration (`[Interface] FwMark`); if `fwmark` is specified in `mark/bitmask` format, WireGuard uses the mark integer part.
 
 ### 7. Custom Hooks
 

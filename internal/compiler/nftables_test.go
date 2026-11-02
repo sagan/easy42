@@ -968,6 +968,145 @@ func TestGenerateNftablesConfig_NetfilterMark(t *testing.T) {
 	}
 }
 
+func TestFormatNftMarkAction(t *testing.T) {
+	tests := []struct {
+		input       string
+		expected    string
+		expectError bool
+	}{
+		{input: "", expected: "", expectError: false},
+		{input: "0x1234", expected: "0x1234", expectError: false},
+		{input: "42", expected: "42", expectError: false},
+		{input: "0x00000080", expected: "0x00000080", expectError: false},
+		// mark == bitmask
+		{input: "0x80/0x80", expected: "meta mark or 0x80", expectError: false},
+		{input: "0x00000080/0x00000080", expected: "meta mark or 0x80", expectError: false},
+		{input: "128/128", expected: "meta mark or 0x80", expectError: false},
+		{input: "0xcafe/0xcafe", expected: "meta mark or 0xcafe", expectError: false},
+		// mark != bitmask
+		{input: "0x40/0xc0", expected: "meta mark and 0xffffff3f or 0x40", expectError: false},
+		{input: "0/0x80", expected: "meta mark and 0xffffff7f or 0x0", expectError: false},
+		{input: "0x00/0x80", expected: "meta mark and 0xffffff7f or 0x0", expectError: false},
+		{input: "0x10/0x30", expected: "meta mark and 0xffffffcf or 0x10", expectError: false},
+		// spaces around slash
+		{input: " 0x80 / 0x80 ", expected: "meta mark or 0x80", expectError: false},
+		// invalid formats
+		{input: "0x80/0", expectError: true},
+		{input: "0x80/0x0", expectError: true},
+		{input: "0x80/abc", expectError: true},
+		{input: "xyz/0x80", expectError: true},
+		{input: "0x80/0x80/0x80", expectError: true},
+	}
+
+	for _, tc := range tests {
+		actual, err := FormatNftMarkAction(tc.input)
+		if tc.expectError {
+			if err == nil {
+				t.Errorf("FormatNftMarkAction(%q) expected error, got %q", tc.input, actual)
+			}
+		} else {
+			if err != nil {
+				t.Errorf("FormatNftMarkAction(%q) unexpected error: %v", tc.input, err)
+			}
+			if actual != tc.expected {
+				t.Errorf("FormatNftMarkAction(%q) = %q, expected %q", tc.input, actual, tc.expected)
+			}
+		}
+	}
+}
+
+func TestGenerateNftablesConfig_NetfilterMarkBitmask(t *testing.T) {
+	node := config.Node{
+		Name: "router1",
+		IP:   "192.168.100.1",
+		ASN:  4224420001,
+	}
+	allNodes := []config.Node{
+		node,
+		{Name: "peer1"},
+		{Name: "peer2"},
+		{Name: "peer3"},
+		{Name: "peer4"},
+	}
+
+	customPolicies := []config.NetworkPolicy{
+		{
+			ID:     "pol-or",
+			Name:   "Policy with Fwmark 0x80/0x80",
+			Fwmark: "0x80/0x80",
+		},
+		{
+			ID:   "pol-and-or",
+			Name: "Policy with Mark 0x40/0xc0",
+			Mark: "0x40/0xc0",
+		},
+	}
+
+	links := []config.Link{
+		// Link 1: inherits pol-or (Fwmark: 0x80/0x80) -> meta mark or 0x80
+		{
+			From: config.LinkEnd{Name: "router1", Interface: "wg42-p1", Policy: "pol-or"},
+			To:   config.LinkEnd{Name: "peer1", Interface: "wg42"},
+		},
+		// Link 2: inherits pol-or, but LinkEnd Fwmark overrides with 0x80/0x80 -> groups with Link 1
+		{
+			From: config.LinkEnd{Name: "router1", Interface: "wg42-p2", Policy: "pol-or", Fwmark: "0x80/0x80"},
+			To:   config.LinkEnd{Name: "peer2", Interface: "wg42"},
+		},
+		// Link 3: inherits pol-and-or (Mark: 0x40/0xc0) -> meta mark and 0xffffff3f or 0x40
+		{
+			From: config.LinkEnd{Name: "router1", Interface: "wg42-p3", Policy: "pol-and-or"},
+			To:   config.LinkEnd{Name: "peer3", Interface: "wg42"},
+		},
+		// Link 4: default policy, LinkEnd Mark: 0/0x80 -> meta mark and 0xffffff7f or 0x0
+		{
+			From: config.LinkEnd{Name: "router1", Interface: "wg42-p4", Policy: config.PolicyDefault, Mark: "0/0x80"},
+			To:   config.LinkEnd{Name: "peer4", Interface: "wg42"},
+		},
+	}
+
+	conf, err := GenerateNftablesConfig(&node, allNodes, links, nil, customPolicies)
+	if err != nil {
+		t.Fatalf("GenerateNftablesConfig failed: %v", err)
+	}
+
+	// 1. Check chain exists
+	if !strings.Contains(conf, "chain mangle_prerouting_mark {") {
+		t.Errorf("Expected mangle_prerouting_mark chain in conf, got:\n%s", conf)
+	}
+
+	// 2. Check grouped rule for 0x80/0x80 (p1 and p2)
+	expectedOrGrouped := `iifname { "wg42-p1", "wg42-p2" } meta mark set meta mark or 0x80`
+	if !strings.Contains(conf, expectedOrGrouped) {
+		t.Errorf("Expected grouped rule %q in conf, got:\n%s", expectedOrGrouped, conf)
+	}
+
+	// 3. Check rule for 0x40/0xc0 (p3)
+	expectedAndOr := `iifname "wg42-p3" meta mark set meta mark and 0xffffff3f or 0x40`
+	if !strings.Contains(conf, expectedAndOr) {
+		t.Errorf("Expected rule %q in conf, got:\n%s", expectedAndOr, conf)
+	}
+
+	// 4. Check rule for 0/0x80 (p4)
+	expectedClear := `iifname "wg42-p4" meta mark set meta mark and 0xffffff7f or 0x0`
+	if !strings.Contains(conf, expectedClear) {
+		t.Errorf("Expected rule %q in conf, got:\n%s", expectedClear, conf)
+	}
+
+	// 5. Validate with real nft binary
+	if nftPath, err := exec.LookPath("nft"); err == nil {
+		tmpFile := filepath.Join(t.TempDir(), "easy42.nft")
+		if err := os.WriteFile(tmpFile, []byte(conf), 0644); err != nil {
+			t.Fatalf("WriteFile failed: %v", err)
+		}
+		cmd := exec.Command(nftPath, "-c", "-f", tmpFile)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("nft -c -f validation failed: %v\nOutput:\n%s\nConfig:\n%s", err, string(out), conf)
+		}
+	}
+}
+
 func TestNftablesSNAT_MainIP(t *testing.T) {
 	node := config.Node{
 		Name:        "local-node",

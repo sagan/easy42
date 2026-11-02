@@ -303,9 +303,9 @@ User-defined policies with the same ID as a built-in override that built-in at l
 | `roa4`                  | `string`   | IPv4 ROA URL used for BIRD validation.                                                      |
 | `roa6`                  | `string`   | IPv6 ROA URL.                                                                               |
 | `roa_strict`            | `boolean`  | Reject routes without a valid ROA.                                                          |
-| `fwmark`                | `string`   | Default WireGuard `[Interface] FwMark` for links using this policy.                         |
+| `fwmark`                | `string`   | Default WireGuard `[Interface] FwMark` for links using this policy (supports `mark` or `mark/bitmask`). |
 | `preference`            | `integer`  | Default BIRD BGP protocol preference.                                                       |
-| `mark`                  | `string`   | Default netfilter mark applied to packets received from the peer.                           |
+| `mark`                  | `string`   | Default netfilter mark applied to packets received from the peer (supports `mark` or `mark/bitmask`). |
 | `routing_policy`        | `string`   | `full`, `stub`, `receive_only`, or `advertise_only` (aliases are normalized).               |
 | `bird_import_filter`    | `string`   | Custom BIRD snippet appended to the generated import filter.                                |
 | `bird_export_filter`    | `string`   | Custom BIRD snippet appended to the generated export filter.                                |
@@ -416,9 +416,9 @@ Each endpoint (`from`, `to`):
 | `resolved_endpoint`    | `string`  | System-derived endpoint actually used. Not accepted in apply patches.                                    |
 | `policy`               | `string`  | Policy ID. External peers default to `dn42`; internal peers default to `default`.                        |
 | `cost`                 | `integer` | Link cost override. When non-zero, overrides the policy cost.                                            |
-| `fwmark`               | `string`  | WireGuard `FwMark` override for this endpoint.                                                           |
+| `fwmark`               | `string`  | WireGuard `FwMark` override for this endpoint (supports `mark` or `mark/bitmask`).                      |
 | `preference`           | `integer` | BIRD BGP preference override.                                                                            |
-| `mark`                 | `string`  | Netfilter mark override for received packets.                                                            |
+| `mark`                 | `string`  | Netfilter mark override for received packets (supports `mark` or `mark/bitmask`).                        |
 | `routing_policy`       | `string`  | BGP routing policy override.                                                                             |
 | `psk`                  | `string`  | Endpoint-level encrypted PSK (legacy; link-level `psk` is preferred).                                    |
 | `note`                 | `string`  | Markdown note.                                                                                           |

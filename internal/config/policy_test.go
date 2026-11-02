@@ -241,6 +241,42 @@ func TestEffectiveMark(t *testing.T) {
 	if m := end.EffectiveMark(nil); m != "42" {
 		t.Errorf("expected linkEnd mark '42' with nil policy, got %q", m)
 	}
+
+	// 5. Fallback to Fwmark when Mark is empty
+	polFw := &NetworkPolicy{
+		Fwmark: "0x80/0x80",
+	}
+	endEmpty := &LinkEnd{}
+	if m := polFw.EffectiveMark(); m != "0x80/0x80" {
+		t.Errorf("expected policy mark from fwmark '0x80/0x80', got %q", m)
+	}
+	if m := endEmpty.EffectiveMark(polFw); m != "0x80/0x80" {
+		t.Errorf("expected linkEnd mark from policy fwmark '0x80/0x80', got %q", m)
+	}
+
+	// 6. LinkEnd Fwmark overrides policy Fwmark
+	endFw := &LinkEnd{
+		Fwmark: "0x40/0xc0",
+	}
+	if m := endFw.EffectiveMark(polFw); m != "0x40/0xc0" {
+		t.Errorf("expected linkEnd mark from end fwmark '0x40/0xc0', got %q", m)
+	}
+
+	// 7. Mark overrides Fwmark on both policy and linkEnd
+	polBoth := &NetworkPolicy{
+		Mark:   "0x1234",
+		Fwmark: "0x80/0x80",
+	}
+	if m := polBoth.EffectiveMark(); m != "0x1234" {
+		t.Errorf("expected Mark '0x1234' to take precedence over Fwmark, got %q", m)
+	}
+	endBoth := &LinkEnd{
+		Mark:   "0xcafe",
+		Fwmark: "0x40/0xc0",
+	}
+	if m := endBoth.EffectiveMark(polBoth); m != "0xcafe" {
+		t.Errorf("expected LinkEnd Mark '0xcafe' to take precedence over Fwmark, got %q", m)
+	}
 }
 
 func TestEffectiveRoutingPolicy(t *testing.T) {
