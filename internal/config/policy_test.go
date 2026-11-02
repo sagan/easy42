@@ -242,40 +242,43 @@ func TestEffectiveMark(t *testing.T) {
 		t.Errorf("expected linkEnd mark '42' with nil policy, got %q", m)
 	}
 
-	// 5. Fallback to Fwmark when Mark is empty
-	polFw := &NetworkPolicy{
-		Fwmark: "0x80/0x80",
+	// 5. LinkEnd Mark with bitmask syntax
+	end.Mark = "0x80/0x80"
+	if m := end.EffectiveMark(pol); m != "0x80/0x80" {
+		t.Errorf("expected linkEnd mark '0x80/0x80', got %q", m)
+	}
+
+	// 6. NetworkPolicy Mark with bitmask syntax
+	polBitmask := &NetworkPolicy{
+		Mark: "0x40/0xc0",
 	}
 	endEmpty := &LinkEnd{}
-	if m := polFw.EffectiveMark(); m != "0x80/0x80" {
-		t.Errorf("expected policy mark from fwmark '0x80/0x80', got %q", m)
+	if m := polBitmask.EffectiveMark(); m != "0x40/0xc0" {
+		t.Errorf("expected policy mark '0x40/0xc0', got %q", m)
 	}
-	if m := endEmpty.EffectiveMark(polFw); m != "0x80/0x80" {
-		t.Errorf("expected linkEnd mark from policy fwmark '0x80/0x80', got %q", m)
+	if m := endEmpty.EffectiveMark(polBitmask); m != "0x40/0xc0" {
+		t.Errorf("expected linkEnd mark from policy '0x40/0xc0', got %q", m)
 	}
 
-	// 6. LinkEnd Fwmark overrides policy Fwmark
+	// 7. Fwmark does NOT affect EffectiveMark
+	polFw := &NetworkPolicy{
+		Fwmark: "51820",
+	}
+	if m := polFw.EffectiveMark(); m != "" {
+		t.Errorf("expected empty policy mark when only Fwmark is set, got %q", m)
+	}
+	if m := endEmpty.EffectiveMark(polFw); m != "" {
+		t.Errorf("expected empty linkEnd mark when only policy Fwmark is set, got %q", m)
+	}
+
 	endFw := &LinkEnd{
-		Fwmark: "0x40/0xc0",
+		Fwmark: "0xca64",
 	}
-	if m := endFw.EffectiveMark(polFw); m != "0x40/0xc0" {
-		t.Errorf("expected linkEnd mark from end fwmark '0x40/0xc0', got %q", m)
+	if m := endFw.EffectiveMark(nil); m != "" {
+		t.Errorf("expected empty linkEnd mark when only linkEnd Fwmark is set, got %q", m)
 	}
-
-	// 7. Mark overrides Fwmark on both policy and linkEnd
-	polBoth := &NetworkPolicy{
-		Mark:   "0x1234",
-		Fwmark: "0x80/0x80",
-	}
-	if m := polBoth.EffectiveMark(); m != "0x1234" {
-		t.Errorf("expected Mark '0x1234' to take precedence over Fwmark, got %q", m)
-	}
-	endBoth := &LinkEnd{
-		Mark:   "0xcafe",
-		Fwmark: "0x40/0xc0",
-	}
-	if m := endBoth.EffectiveMark(polBoth); m != "0xcafe" {
-		t.Errorf("expected LinkEnd Mark '0xcafe' to take precedence over Fwmark, got %q", m)
+	if m := endFw.EffectiveMark(polFw); m != "" {
+		t.Errorf("expected empty linkEnd mark when only Fwmark is set on linkEnd and policy, got %q", m)
 	}
 }
 

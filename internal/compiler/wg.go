@@ -349,14 +349,7 @@ func BuildWgLinkContext(
 	}
 
 	if fwmark != "" {
-		wgFwmark := fwmark
-		if idx := strings.Index(wgFwmark, "/"); idx != -1 {
-			wgFwmark = strings.TrimSpace(wgFwmark[:idx])
-		}
-		if wgFwmark != "" {
-			ctx["fwmark"] = wgFwmark
-			ctx["FwMark"] = wgFwmark
-		}
+		ctx["fwmark"] = fwmark
 	}
 
 	ifaceName := ""
@@ -584,7 +577,6 @@ func GenerateWgConfigContent(
 	}
 	return GenerateWgConfigContentWithTemplate(tmplContent, selfNode, peerNode, selfEnd, peerEnd, vault, args...)
 }
-
 
 // GetInterfaceNameWithSuffix returns the standard wg42<peer_name><suffix> interface name for internal peers,
 // or wg42-<peer_name><suffix> for external peers, truncating and sanitizing to adhere to Linux's 15-char limit.

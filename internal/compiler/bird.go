@@ -1183,9 +1183,6 @@ func linkEndToContextMap(end *config.LinkEnd, node *config.Node, peerName string
 		mtu = end.MTU
 		cost = end.Cost
 		fwmark = end.Fwmark
-		if idx := strings.Index(fwmark, "/"); idx != -1 {
-			fwmark = strings.TrimSpace(fwmark[:idx])
-		}
 		preference = end.Preference
 		mark = end.Mark
 		routingPolicy = end.RoutingPolicy

@@ -1027,30 +1027,37 @@ func TestGenerateNftablesConfig_NetfilterMarkBitmask(t *testing.T) {
 		{Name: "peer2"},
 		{Name: "peer3"},
 		{Name: "peer4"},
+		{Name: "peer5"},
+		{Name: "peer6"},
 	}
 
 	customPolicies := []config.NetworkPolicy{
 		{
-			ID:     "pol-or",
-			Name:   "Policy with Fwmark 0x80/0x80",
-			Fwmark: "0x80/0x80",
+			ID:   "pol-or",
+			Name: "Policy with Mark 0x80/0x80",
+			Mark: "0x80/0x80",
 		},
 		{
 			ID:   "pol-and-or",
 			Name: "Policy with Mark 0x40/0xc0",
 			Mark: "0x40/0xc0",
 		},
+		{
+			ID:     "pol-fw-only",
+			Name:   "Policy with only Fwmark",
+			Fwmark: "51820",
+		},
 	}
 
 	links := []config.Link{
-		// Link 1: inherits pol-or (Fwmark: 0x80/0x80) -> meta mark or 0x80
+		// Link 1: inherits pol-or (Mark: 0x80/0x80) -> meta mark or 0x80
 		{
 			From: config.LinkEnd{Name: "router1", Interface: "wg42-p1", Policy: "pol-or"},
 			To:   config.LinkEnd{Name: "peer1", Interface: "wg42"},
 		},
-		// Link 2: inherits pol-or, but LinkEnd Fwmark overrides with 0x80/0x80 -> groups with Link 1
+		// Link 2: inherits pol-or, but LinkEnd Mark overrides with 0x80/0x80 -> groups with Link 1
 		{
-			From: config.LinkEnd{Name: "router1", Interface: "wg42-p2", Policy: "pol-or", Fwmark: "0x80/0x80"},
+			From: config.LinkEnd{Name: "router1", Interface: "wg42-p2", Policy: "pol-or", Mark: "0x80/0x80"},
 			To:   config.LinkEnd{Name: "peer2", Interface: "wg42"},
 		},
 		// Link 3: inherits pol-and-or (Mark: 0x40/0xc0) -> meta mark and 0xffffff3f or 0x40
@@ -1062,6 +1069,16 @@ func TestGenerateNftablesConfig_NetfilterMarkBitmask(t *testing.T) {
 		{
 			From: config.LinkEnd{Name: "router1", Interface: "wg42-p4", Policy: config.PolicyDefault, Mark: "0/0x80"},
 			To:   config.LinkEnd{Name: "peer4", Interface: "wg42"},
+		},
+		// Link 5: inherits pol-fw-only (Fwmark: 51820) -> should NOT be included in mangle_prerouting_mark
+		{
+			From: config.LinkEnd{Name: "router1", Interface: "wg42-p5", Policy: "pol-fw-only"},
+			To:   config.LinkEnd{Name: "peer5", Interface: "wg42"},
+		},
+		// Link 6: default policy, LinkEnd Fwmark: 0xca64 -> should NOT be included in mangle_prerouting_mark
+		{
+			From: config.LinkEnd{Name: "router1", Interface: "wg42-p6", Policy: config.PolicyDefault, Fwmark: "0xca64"},
+			To:   config.LinkEnd{Name: "peer6", Interface: "wg42"},
 		},
 	}
 
@@ -1093,7 +1110,21 @@ func TestGenerateNftablesConfig_NetfilterMarkBitmask(t *testing.T) {
 		t.Errorf("Expected rule %q in conf, got:\n%s", expectedClear, conf)
 	}
 
-	// 5. Validate with real nft binary
+	// 5. Check that fwmark-only interfaces (p5 and p6) are NOT included in prerouting mark
+	if strings.Contains(conf, "wg42-p5") {
+		t.Errorf("Expected wg42-p5 not to be in nftables prerouting mark, got:\n%s", conf)
+	}
+	if strings.Contains(conf, "wg42-p6") {
+		t.Errorf("Expected wg42-p6 not to be in nftables prerouting mark, got:\n%s", conf)
+	}
+	if strings.Contains(conf, "51820") {
+		t.Errorf("Expected fwmark 51820 not to be in nftables config, got:\n%s", conf)
+	}
+	if strings.Contains(conf, "0xca64") {
+		t.Errorf("Expected fwmark 0xca64 not to be in nftables config, got:\n%s", conf)
+	}
+
+	// 6. Validate with real nft binary
 	if nftPath, err := exec.LookPath("nft"); err == nil {
 		tmpFile := filepath.Join(t.TempDir(), "easy42.nft")
 		if err := os.WriteFile(tmpFile, []byte(conf), 0644); err != nil {
