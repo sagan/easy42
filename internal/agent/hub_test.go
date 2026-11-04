@@ -9,6 +9,8 @@ import (
 	"time"
 
 	agentpb "easy42/internal/agent/proto"
+	"easy42/internal/version"
+
 	"github.com/gorilla/websocket"
 	"google.golang.org/protobuf/proto"
 )
@@ -68,7 +70,7 @@ func TestHubRegistrationAndStatus(t *testing.T) {
 		Payload: &agentpb.AgentMessage_RegisterReq{
 			RegisterReq: &agentpb.RegisterRequest{
 				NodeName:     "node1",
-				AgentVersion: "0.1.0",
+				AgentVersion: version.AgentVersion,
 				Hostname:     "node1-host",
 			},
 		},

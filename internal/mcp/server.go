@@ -10,6 +10,7 @@ import (
 
 	"easy42/internal/engine"
 	"easy42/internal/version"
+
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -27,7 +28,7 @@ type Server struct {
 func NewServer(mgr *engine.Manager) *Server {
 	ver := version.Version
 	if ver == "" {
-		ver = "0.1.0"
+		ver = "dev"
 	}
 
 	mcpServer := server.NewMCPServer("easy42", ver,

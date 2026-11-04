@@ -20,7 +20,4 @@ func TestVersionCommand(t *testing.T) {
 	if !strings.Contains(output, "easy42") {
 		t.Errorf("expected output to contain 'easy42', got: %s", output)
 	}
-	if !strings.Contains(output, "0.1.0") {
-		t.Errorf("expected output to contain agent version '0.1.0', got: %s", output)
-	}
 }

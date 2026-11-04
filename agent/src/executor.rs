@@ -159,6 +159,9 @@ impl CommandExecutor {
             Some(proto::command_request::Command::SyncAction(sync_act)) => {
                 self.execute_sync_action(sync_act).await
             }
+            Some(proto::command_request::Command::DeleteConfig(del)) => {
+                self.delete_config_file(del).await
+            }
             None => (false, -1, String::new(), "unknown command".to_string()),
         };
 
@@ -279,6 +282,59 @@ impl CommandExecutor {
         }
     }
 
+    async fn delete_config_file(&self, req: proto::DeleteConfigFile) -> (bool, i32, String, String) {
+        let path_str = req.path.trim();
+        if path_str.is_empty() {
+            return (
+                false,
+                -1,
+                String::new(),
+                "file path cannot be empty".to_string(),
+            );
+        }
+        let target_path = Path::new(path_str);
+        if !is_allowed_config_path(target_path) {
+            return (
+                false,
+                -1,
+                String::new(),
+                format!("path '{}' not allowed by agent security policy", path_str),
+            );
+        }
+
+        // If target file is a WireGuard configuration (/etc/wireguard/wg42*.conf),
+        // also bring down the interface and remove ip link
+        if let Some(iface) = path_str
+            .strip_prefix("/etc/wireguard/")
+            .and_then(|s| s.strip_suffix(".conf"))
+        {
+            if iface.starts_with("wg42") && is_valid_iface_name(iface) {
+                let _ = run_cmd("wg-quick", &["down", iface]).await;
+                let _ = run_cmd("ip", &["link", "del", "dev", iface]).await;
+            }
+        }
+
+        if target_path.exists() {
+            if let Err(e) = fs::remove_file(target_path) {
+                return (
+                    false,
+                    -1,
+                    String::new(),
+                    format!("failed to delete file '{}': {}", path_str, e),
+                );
+            }
+            info!("Successfully deleted file: {}", path_str);
+            (true, 0, format!("deleted file {}", path_str), String::new())
+        } else {
+            (
+                true,
+                0,
+                format!("file '{}' does not exist, nothing to delete", path_str),
+                String::new(),
+            )
+        }
+    }
+
     async fn manage_interface(&self, req: proto::ManageInterface) -> (bool, i32, String, String) {
         let action = match proto::manage_interface::Action::try_from(req.action) {
             Ok(a) => a,
@@ -364,8 +420,16 @@ impl CommandExecutor {
             proto::manage_interface::Action::Delete => {
                 let _ = run_cmd("wg-quick", &["down", &iface]).await;
                 let _ = run_cmd("ip", &["link", "del", "dev", &iface]).await;
-                let conf_path = format!("/etc/wireguard/{}.conf", iface);
-                let _ = std::fs::remove_file(&conf_path);
+                let mut files_to_delete = vec![format!("/etc/wireguard/{}.conf", iface)];
+                if !req.config_file.is_empty() && !files_to_delete.contains(&req.config_file) {
+                    files_to_delete.push(req.config_file);
+                }
+                for f in &files_to_delete {
+                    let p = Path::new(f);
+                    if is_allowed_config_path(p) && p.exists() {
+                        let _ = std::fs::remove_file(p);
+                    }
+                }
                 (true, 0, format!("deleted interface {}", iface), String::new())
             }
         }
@@ -622,20 +686,78 @@ done"#;
         }
 
         // 2. Execute the sync action
-        let (action_ok, action_code, mut action_out, action_err) = match req.action_type.as_str() {
-            "delete_wg" | "down_wg" => {
-                self.manage_interface(proto::ManageInterface {
-                    interface_name: req.interface_name.clone(),
-                    action: proto::manage_interface::Action::Delete as i32,
-                    config_file: String::new(),
-                })
-                .await
+        let is_delete = matches!(
+            req.action_type.as_str(),
+            "delete_config" | "delete_wg" | "down_wg" | "delete_file" | "down_interface"
+        ) || req.diff_status.as_str() == "delete";
+
+        let (action_ok, action_code, mut action_out, action_err) = if is_delete {
+            let mut iface = req.interface_name.clone();
+            if iface.is_empty() && !req.target_file.is_empty() {
+                if let Some(name) = Path::new(&req.target_file)
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                {
+                    if name.starts_with("wg42") && is_valid_iface_name(name) {
+                        iface = name.to_string();
+                    }
+                }
             }
-            "sync_hosts" => {
-                self.sync_hosts(proto::SyncHostsCmd {
-                    hosts: req.hosts,
-                })
+
+            if !iface.is_empty() && is_valid_iface_name(&iface) {
+                let _ = run_cmd("wg-quick", &["down", &iface]).await;
+                let _ = run_cmd("ip", &["link", "del", "dev", &iface]).await;
             }
+
+            let mut files_to_delete = Vec::new();
+            if !req.target_file.is_empty() {
+                files_to_delete.push(req.target_file.clone());
+            }
+            if !iface.is_empty() {
+                let default_wg_path = format!("/etc/wireguard/{}.conf", iface);
+                if !files_to_delete.contains(&default_wg_path) {
+                    files_to_delete.push(default_wg_path);
+                }
+            }
+
+            let mut del_err = String::new();
+            let mut del_success = true;
+            for f in &files_to_delete {
+                let p = Path::new(f);
+                if !is_allowed_config_path(p) {
+                    del_success = false;
+                    del_err = format!("path '{}' not allowed by agent security policy", f);
+                    break;
+                }
+                if p.exists() {
+                    if let Err(e) = fs::remove_file(p) {
+                        del_success = false;
+                        del_err = format!("failed to remove file {}: {}", f, e);
+                        break;
+                    }
+                    info!("Successfully removed config file {}", f);
+                }
+            }
+
+            if del_success {
+                let msg = if !iface.is_empty() {
+                    format!("deleted interface {} and removed config file", iface)
+                } else if !files_to_delete.is_empty() {
+                    format!("deleted file(s): {}", files_to_delete.join(", "))
+                } else {
+                    "delete action completed".to_string()
+                };
+                (true, 0, msg, String::new())
+            } else {
+                (false, -1, String::new(), del_err)
+            }
+        } else {
+            match req.action_type.as_str() {
+                "sync_hosts" => {
+                    self.sync_hosts(proto::SyncHostsCmd {
+                        hosts: req.hosts,
+                    })
+                }
             "sync_bird" => {
                 let (write_ok, write_code, write_out, write_err) = self.apply_config_file(proto::ApplyConfigFile {
                     path: req.target_file.clone(),
@@ -699,7 +821,8 @@ done"#;
                     .await
                 }
             }
-        };
+        }
+    };
 
         // 3. Run post_sync hook if defined
         if let Some(ref hook) = post_hook_opt {
@@ -1212,6 +1335,120 @@ mod tests {
             assert!(stdout.contains(r#""local_mss":"#), "stdout should contain local_mss: {}", stdout);
             assert!(stdout.contains(r#""remote_mss":"#), "stdout should contain remote_mss: {}", stdout);
         }
+    }
+
+    #[tokio::test]
+    async fn test_delete_config_file_direct() {
+        let tmp_dir = tempfile::tempdir().unwrap();
+        let target_file = tmp_dir.path().join("test_delete.conf");
+        fs::write(&target_file, "content to delete").unwrap();
+        assert!(target_file.exists());
+
+        let executor = CommandExecutor::default();
+
+        // 1. Delete existing allowed file
+        let (success, code, _, stderr) = executor
+            .delete_config_file(proto::DeleteConfigFile {
+                path: target_file.to_str().unwrap().to_string(),
+            })
+            .await;
+        assert!(success, "delete should succeed: {}", stderr);
+        assert_eq!(code, 0);
+        assert!(!target_file.exists(), "target file should be deleted");
+
+        // 2. Delete non-existent file is idempotent (success)
+        let (success, code, _, _) = executor
+            .delete_config_file(proto::DeleteConfigFile {
+                path: target_file.to_str().unwrap().to_string(),
+            })
+            .await;
+        assert!(success, "deleting non-existent file should succeed idempotently");
+        assert_eq!(code, 0);
+
+        // 3. Security check: deleting disallowed path is blocked
+        let (success, code, _, stderr) = executor
+            .delete_config_file(proto::DeleteConfigFile {
+                path: "/etc/shadow".to_string(),
+            })
+            .await;
+        assert!(!success, "disallowed path deletion must be blocked");
+        assert_eq!(code, -1);
+        assert!(stderr.contains("not allowed by agent security policy"));
+    }
+
+    #[tokio::test]
+    async fn test_sync_action_delete_config_removes_file_and_ignores_placeholder() {
+        let tmp_dir = tempfile::tempdir().unwrap();
+        let target_file = tmp_dir.path().join("wg42_del.conf");
+        fs::write(&target_file, "[Interface]\nPrivateKey = foo\n").unwrap();
+        assert!(target_file.exists());
+
+        let executor = CommandExecutor::default();
+        let req = proto::SyncActionCmd {
+            action_type: "delete_config".to_string(),
+            interface_name: "wg42_del".to_string(),
+            target_file: target_file.to_str().unwrap().to_string(),
+            file_content: b"# Deleted interface wg42_del is no longer in graph.\n# Action: wg-quick down wg42_del && rm -f ...\n".to_vec(),
+            file_mode: 0o600,
+            sha256_hash: String::new(),
+            hosts: Vec::new(),
+            description: "Remove deleted interface wg42_del".to_string(),
+            diff_status: "delete".to_string(),
+        };
+
+        let (success, code, stdout, stderr) = executor.execute_sync_action(req).await;
+        assert!(success, "sync delete should succeed: {}", stderr);
+        assert_eq!(code, 0);
+        assert!(stdout.contains("deleted interface wg42_del and removed config file"));
+
+        // Crucial assertion: the file must be deleted from disk, NOT overwritten with the placeholder!
+        assert!(!target_file.exists(), "target config file must be removed from disk");
+    }
+
+    #[tokio::test]
+    async fn test_sync_action_delete_hooks() {
+        let tmp_dir = tempfile::tempdir().unwrap();
+        let target_file = tmp_dir.path().join("wg42_hook_del.conf");
+        fs::write(&target_file, "[Interface]\nPrivateKey = foo\n").unwrap();
+
+        let pre_flag = tmp_dir.path().join("pre_del.txt");
+        let post_flag = tmp_dir.path().join("post_del.txt");
+
+        let mut config = AgentConfig::default();
+        config.node_name = Some("del-node".to_string());
+        config.pre_sync = Some(format!(
+            "echo \"$EASY42_SYNC_NODE:$EASY42_SYNC_ACTION:$EASY42_SYNC_DIFF_STATUS\" > {}",
+            pre_flag.to_str().unwrap()
+        ));
+        config.post_sync = Some(format!(
+            "echo \"$EASY42_SYNC_NODE:$EASY42_SYNC_SUCCESS:$EASY42_SYNC_STATUS\" > {}",
+            post_flag.to_str().unwrap()
+        ));
+
+        let executor = CommandExecutor::new(config);
+        let req = proto::SyncActionCmd {
+            action_type: "delete_config".to_string(),
+            interface_name: "wg42_hook_del".to_string(),
+            target_file: target_file.to_str().unwrap().to_string(),
+            file_content: b"# placeholder".to_vec(),
+            file_mode: 0o600,
+            sha256_hash: String::new(),
+            hosts: Vec::new(),
+            description: "Remove wg42_hook_del".to_string(),
+            diff_status: "delete".to_string(),
+        };
+
+        let (success, code, _, stderr) = executor.execute_sync_action(req).await;
+        assert!(success, "sync delete with hooks should succeed: {}", stderr);
+        assert_eq!(code, 0);
+
+        assert!(!target_file.exists(), "target file must be deleted");
+
+        let pre_val = fs::read_to_string(&pre_flag).unwrap();
+        assert_eq!(pre_val.trim(), "del-node:delete_config:delete");
+
+        let post_val = fs::read_to_string(&post_flag).unwrap();
+        assert_eq!(post_val.trim(), "del-node:true:success");
     }
 }
 

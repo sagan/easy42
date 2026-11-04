@@ -126,11 +126,12 @@ message CommandRequest {
     FlushCacheCmd flush_cache = 17;
     SyncHostsCmd sync_hosts = 18;
     SyncActionCmd sync_action = 19;
+    DeleteConfigFile delete_config = 20;
   }
 }
 
 message SyncActionCmd {
-  string action_type = 1;        // e.g. "sync_wg", "sync_bird", "sync_nftables", "sync_roa", "sync_hosts", "delete_wg", "down_wg"
+  string action_type = 1;        // e.g. "sync_wg", "sync_bird", "sync_nftables", "sync_roa", "sync_hosts", "delete_config", "down_interface", "delete_file", "delete_wg", "down_wg"
   string interface_name = 2;     // Interface name (e.g. wg42peer)
   string target_file = 3;        // Destination path (e.g. /etc/wireguard/wg42peer.conf)
   bytes file_content = 4;        // Config file content to write
@@ -146,6 +147,10 @@ message ApplyConfigFile {
   bytes content = 2;      // File content
   uint32 file_mode = 3;   // e.g. 0600 or 0644
   string sha256_hash = 4; // Expected SHA-256 for verification
+}
+
+message DeleteConfigFile {
+  string path = 1;        // Destination path to delete (e.g. /etc/wireguard/wg42peer.conf)
 }
 
 message ManageInterface {

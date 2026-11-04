@@ -498,4 +498,134 @@ func TestRustAgentSyncActionPreHookFailure(t *testing.T) {
 	}
 }
 
+func TestRustAgentSyncActionDeleteConfig(t *testing.T) {
+	agentBin := filepath.Join("..", "..", "bin", "easy42-agent")
+	if _, err := os.Stat(agentBin); err != nil {
+		agentBin = filepath.Join("..", "..", "agent", "target", "debug", "easy42-agent")
+	}
+	if _, err := os.Stat(agentBin); err != nil {
+		t.Skipf("agent binary not found at %s, skipping e2e test", agentBin)
+	}
+
+	hub := agent.NewHub()
+	testToken := "e42_del_token_222"
+	nodeName := "e2e-del-node"
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/agent/ws" {
+			http.NotFound(w, r)
+			return
+		}
+		authHeader := r.Header.Get("Authorization")
+		if authHeader != "Bearer "+testToken {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		ws, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			return
+		}
+		conn := agent.NewConnection(nodeName, ws, hub)
+		hub.Register(conn)
+		go conn.ReadLoop()
+	}))
+	defer server.Close()
+
+	tmpDir := t.TempDir()
+	configFile := filepath.Join(tmpDir, "agent.json")
+	targetFile := filepath.Join(tmpDir, "wg42_to_delete.conf")
+
+	// Pre-create the wireguard config file on disk
+	initialContent := "[Interface]\nPrivateKey = aaaa\nAddress = 10.42.0.1/32\n"
+	if err := os.WriteFile(targetFile, []byte(initialContent), 0600); err != nil {
+		t.Fatalf("failed to write initial target file: %v", err)
+	}
+
+	agentCfgContent := `{
+		"server": "` + server.URL + `",
+		"token": "` + testToken + `",
+		"node_name": "` + nodeName + `"
+	}`
+	if err := os.WriteFile(configFile, []byte(agentCfgContent), 0600); err != nil {
+		t.Fatalf("failed to write agent config: %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, agentBin, "--config", configFile)
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("failed to start agent: %v", err)
+	}
+	defer func() {
+		cancel()
+		_ = cmd.Wait()
+	}()
+
+	deadline := time.Now().Add(5 * time.Second)
+	connected := false
+	for time.Now().Before(deadline) {
+		if hub.IsConnected(nodeName) {
+			connected = true
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if !connected {
+		t.Fatalf("agent did not connect within deadline")
+	}
+
+	cmdCtx, cmdCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cmdCancel()
+
+	// 1. Test SyncAction with ActionType = "delete_config" and DiffStatus = "delete"
+	placeholderContent := "# Deleted interface wg42_to_delete is no longer in graph.\n# Action: wg-quick down wg42_to_delete && rm -f ...\n"
+	cmdResp, err := hub.SendCommand(cmdCtx, nodeName, &agentpb.CommandRequest{
+		Command: &agentpb.CommandRequest_SyncAction{
+			SyncAction: &agentpb.SyncActionCmd{
+				ActionType:    "delete_config",
+				InterfaceName: "wg42_to_delete",
+				TargetFile:    targetFile,
+				FileContent:   []byte(placeholderContent),
+				FileMode:      0600,
+				Description:   "Remove deleted interface wg42_to_delete on e2e-del-node",
+				DiffStatus:    "delete",
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("SendCommand error: %v", err)
+	}
+	if !cmdResp.Success {
+		t.Fatalf("expected delete SyncAction to succeed, got error: %s", cmdResp.Stderr)
+	}
+
+	// Verify target file was deleted from disk and NOT written with placeholder content
+	if _, err := os.Stat(targetFile); !os.IsNotExist(err) {
+		t.Fatalf("expected target config file to be deleted from disk, but it still exists")
+	}
+
+	// 2. Test direct DeleteConfigFile CommandRequest
+	directFile := filepath.Join(tmpDir, "direct_del.conf")
+	if err := os.WriteFile(directFile, []byte("direct delete content"), 0644); err != nil {
+		t.Fatalf("failed to write directFile: %v", err)
+	}
+	delResp, err := hub.SendCommand(cmdCtx, nodeName, &agentpb.CommandRequest{
+		Command: &agentpb.CommandRequest_DeleteConfig{
+			DeleteConfig: &agentpb.DeleteConfigFile{
+				Path: directFile,
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("direct DeleteConfig SendCommand error: %v", err)
+	}
+	if !delResp.Success {
+		t.Fatalf("expected direct DeleteConfig to succeed, got: %s", delResp.Stderr)
+	}
+	if _, err := os.Stat(directFile); !os.IsNotExist(err) {
+		t.Fatalf("expected direct file to be deleted from disk, but it still exists")
+	}
+}
+
 

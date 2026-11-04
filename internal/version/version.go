@@ -18,8 +18,8 @@ var (
 )
 
 const (
-	// AgentVersion is the version of the bundled easy42-agent
-	AgentVersion = "0.1.0"
+	// AgentVersion is the version of the bundled easy42-agent. Managed manually right now
+	AgentVersion = "0.1.2"
 	// GitHubURL is the project repository URL
 	GitHubURL = "https://github.com/sagan/easy42"
 )

@@ -123,7 +123,7 @@ Hooks are executed with `sh -c "<command>"` under a 60-second timeout. The agent
 | Environment Variable      |   Available In   | Description                                                                                             |
 | :------------------------ | :--------------: | :------------------------------------------------------------------------------------------------------ |
 | `EASY42_SYNC_NODE`        |       Both       | The name of the node undergoing sync (e.g. `node-frankfurt`).                                           |
-| `EASY42_SYNC_ACTION`      |       Both       | Action type: `sync_wg`, `sync_bird`, `sync_nftables`, `sync_roa`, `sync_hosts`, `delete_wg`, `down_wg`. |
+| `EASY42_SYNC_ACTION`      |       Both       | Action type: `sync_wg`, `sync_bird`, `sync_nftables`, `sync_roa`, `sync_hosts`, `delete_config`, `delete_file`, `delete_wg`, `down_wg`. |
 | `EASY42_SYNC_INTERFACE`   |       Both       | Name of the network interface involved (e.g. `wg42lon`), if applicable.                                 |
 | `EASY42_SYNC_TARGET_FILE` |       Both       | Target file path on disk (e.g. `/etc/wireguard/wg42lon.conf`).                                          |
 | `EASY42_SYNC_DESCRIPTION` |       Both       | Human-readable description of the sync step.                                                            |

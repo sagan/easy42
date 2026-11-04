@@ -5912,7 +5912,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                     </Typography>
                   </Box>
                   <Chip
-                    label={`v${versionInfo?.agent_version || "0.1.0"}`}
+                    label={`v${versionInfo?.agent_version || "unknown"}`}
                     size="small"
                     sx={{
                       height: 22,

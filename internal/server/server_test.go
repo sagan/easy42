@@ -17,6 +17,7 @@ import (
 
 	"easy42/internal/config"
 	"easy42/internal/engine"
+	"easy42/internal/version"
 )
 
 func setupTestServer(t *testing.T) (*Server, string, string) {
@@ -1948,7 +1949,6 @@ func TestNodeRouteReflectorAPI(t *testing.T) {
 	}
 }
 
-
 func TestDNSConfigEndpoints(t *testing.T) {
 	srv, tempDir, initPass := setupTestServer(t)
 	defer os.RemoveAll(tempDir)
@@ -2464,8 +2464,8 @@ func TestVersionEndpoint(t *testing.T) {
 	if resp["version"] == nil || resp["version"] == "" {
 		t.Errorf("Expected non-empty version in response, got %+v", resp)
 	}
-	if resp["agent_version"] != "0.1.0" {
-		t.Errorf("Expected agent_version to be 0.1.0, got %v", resp["agent_version"])
+	if resp["agent_version"] != version.AgentVersion {
+		t.Errorf("Expected agent_version to be %s, got %v", version.AgentVersion, resp["agent_version"])
 	}
 	if resp["github_url"] != "https://github.com/sagan/easy42" {
 		t.Errorf("Expected github_url to match, got %v", resp["github_url"])
@@ -2627,4 +2627,3 @@ func TestStaticFrontendRouting(t *testing.T) {
 		t.Fatalf("expected assets Cache-Control, got %s", w.Header().Get("Cache-Control"))
 	}
 }
-

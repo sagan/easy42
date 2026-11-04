@@ -5284,6 +5284,7 @@ func (m *Manager) executeAgentSyncAction(act config.SyncAction, res *config.Sync
 				ManageIface: &agentpb.ManageInterface{
 					InterfaceName: act.Interface,
 					Action:        agentpb.ManageInterface_DELETE,
+					ConfigFile:    act.TargetFile,
 				},
 			},
 		})

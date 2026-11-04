@@ -9,8 +9,8 @@ func TestGetInfo(t *testing.T) {
 	if info.Version == "" {
 		t.Errorf("expected non-empty Version")
 	}
-	if info.AgentVersion != "0.1.0" {
-		t.Errorf("expected AgentVersion to be 0.1.0, got %s", info.AgentVersion)
+	if info.AgentVersion != AgentVersion {
+		t.Errorf("expected AgentVersion to be %s, got %s", AgentVersion, info.AgentVersion)
 	}
 	if info.GitHubURL != "https://github.com/sagan/easy42" {
 		t.Errorf("expected GitHubURL to match, got %s", info.GitHubURL)
