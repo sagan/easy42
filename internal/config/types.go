@@ -165,6 +165,8 @@ type Config struct {
 	Links             []Link             `json:"links"`
 	LookingGlassTasks []LookingGlassTask `json:"looking_glass_tasks,omitempty"`
 	CronTasks         []CronTask         `json:"cron_tasks,omitempty"`
+	Apps              []App              `json:"apps,omitempty"`
+	AppVariables      []AppVariable      `json:"app_variables,omitempty"`
 	Blocks            []Block            `json:"blocks,omitempty"`
 	DNS               DNSConfig          `json:"dns,omitempty"`
 	Templates         []ConfigTemplate   `json:"templates,omitempty"`

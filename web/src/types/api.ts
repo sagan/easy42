@@ -960,5 +960,68 @@ export interface ResetMCPTokenRequest {
   token_type: "read_only" | "full_control" | "oauth_secret" | "both";
 }
 
+// ----------------- Workload Apps -----------------
+
+export type AppTargetType = "manual" | "all" | "tag";
+
+export interface App {
+  id: string;
+  name: string;
+  description?: string;
+  app_type: "docker" | "systemd";
+  main_content: string;
+  env_content?: string;
+  files?: Record<string, string>;
+  target_type?: AppTargetType;
+  target_tag?: string;
+  nodes?: string[];
+  enabled: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AppStatusRecord {
+  app_id: string;
+  name: string;
+  app_type: string;
+  state: "running" | "stopped" | "failed" | "unknown" | string;
+  status_text: string;
+  last_updated: number;
+  error_message?: string;
+}
+
+export interface NodeAppsResponse {
+  apps: App[];
+  statuses: AppStatusRecord[];
+}
+
+export interface TranspilePreviewResponse {
+  script: string;
+  conf_d?: string;
+  environment?: string;
+  error?: string;
+}
+
+export interface AppActionResponse {
+  request_id: string;
+  success: boolean;
+  exit_code: number;
+  stdout: string;
+  stderr: string;
+  duration_ms: number;
+}
+
+export interface AppVariable {
+  key: string;
+  value: string;
+  description?: string;
+  is_secret?: boolean;
+  updated_at?: string;
+}
+
+export interface InterpolatePreviewResponse {
+  rendered: string;
+}
+
 
 

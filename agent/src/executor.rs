@@ -88,6 +88,7 @@ pub struct ProbeSystemResult {
 
 pub struct CommandExecutor {
     config: RwLock<AgentConfig>,
+    apps_manager: std::sync::Arc<crate::apps::AppsManager>,
 }
 
 impl Default for CommandExecutor {
@@ -100,7 +101,12 @@ impl CommandExecutor {
     pub fn new(config: AgentConfig) -> Self {
         Self {
             config: RwLock::new(config),
+            apps_manager: std::sync::Arc::new(crate::apps::AppsManager::new()),
         }
+    }
+
+    pub fn apps_manager(&self) -> std::sync::Arc<crate::apps::AppsManager> {
+        self.apps_manager.clone()
     }
 
     /// Refresh hooks and node name from config file if available, returning (pre_sync, post_sync, node_name)
@@ -161,6 +167,9 @@ impl CommandExecutor {
             }
             Some(proto::command_request::Command::DeleteConfig(del)) => {
                 self.delete_config_file(del).await
+            }
+            Some(proto::command_request::Command::AppAction(app_act)) => {
+                self.apps_manager.handle_action(app_act).await
             }
             None => (false, -1, String::new(), "unknown command".to_string()),
         };
@@ -1059,7 +1068,7 @@ pub(crate) async fn run_cmd(program: &str, args: &[&str]) -> (bool, i32, String,
     }
 }
 
-async fn run_shell(cmd_str: &str) -> (bool, i32, String, String) {
+pub(crate) async fn run_shell(cmd_str: &str) -> (bool, i32, String, String) {
     use tokio::process::Command;
     let mut cmd = Command::new("sh");
     cmd.arg("-c").arg(cmd_str);

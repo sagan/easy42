@@ -10,6 +10,7 @@ import { TopologyPage } from "./pages/TopologyPage";
 import { LookingGlassPage } from "./pages/LookingGlassPage";
 import { DeviceHelperPage } from "./pages/DeviceHelperPage";
 import { SettingsPage } from "./pages/SettingsPage";
+import { AppsPage } from "./pages/AppsPage";
 import { LoginPage } from "./components/Login/LoginPage";
 
 const AppContent: React.FC = () => {
@@ -32,6 +33,8 @@ const AppContent: React.FC = () => {
       document.title = nodeName ? `${nodeName} - ${netName}` : netName;
     } else if (path.startsWith("/topology")) {
       document.title = `Topology - ${netName}`;
+    } else if (path.startsWith("/apps")) {
+      document.title = `Apps - ${netName}`;
     } else if (path.startsWith("/looking-glass")) {
       document.title = `Looking Glass - ${netName}`;
     } else if (path.startsWith("/helper")) {
@@ -82,6 +85,7 @@ const AppContent: React.FC = () => {
         <Route index element={<Navigate to="/nodes" replace />} />
         <Route path="nodes" element={<NodesPage />} />
         <Route path="nodes/:nodeName" element={<NodeDetailPage />} />
+        <Route path="apps" element={<AppsPage />} />
         <Route path="topology" element={<TopologyPage />} />
         <Route path="looking-glass" element={<LookingGlassPage />} />
         <Route path="looking-glass/:tab" element={<LookingGlassPage />} />

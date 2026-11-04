@@ -24,6 +24,7 @@ message AgentMessage {
     CommandRequest command_req = 22;
     SyncCronTasks sync_cron_tasks = 23;
     SyncHosts sync_hosts = 24;
+    SyncApps sync_apps = 25;
   }
 }
 
@@ -63,6 +64,7 @@ message TelemetryReport {
   repeated BirdProtocolStatus bird_protocols = 4;
   repeated DiskMetrics disks = 5;
   string hosts_hash = 6;
+  repeated AppStatus apps = 7;
 }
 
 message DiskMetrics {
@@ -127,6 +129,7 @@ message CommandRequest {
     SyncHostsCmd sync_hosts = 18;
     SyncActionCmd sync_action = 19;
     DeleteConfigFile delete_config = 20;
+    AppActionCmd app_action = 21;
   }
 }
 
@@ -255,6 +258,51 @@ message SyncHosts {
 
 message SyncHostsCmd {
   repeated HostRecord hosts = 1;
+}
+
+// ----------------- App Management -----------------
+
+enum AppType {
+  DOCKER_COMPOSE = 0;
+  SYSTEMD = 1;
+}
+
+message AppConfigFile {
+  string path = 1;
+  bytes content = 2;
+  uint32 file_mode = 3;
+}
+
+message AppSpec {
+  string id = 1;
+  string name = 2;                         // e.g. "vproxy" -> ezapp-vproxy
+  AppType app_type = 3;
+  string main_content = 4;                 // compose.yaml or .service / init script content
+  string env_content = 5;                  // .env content
+  repeated AppConfigFile config_files = 6; // Auxiliary config files
+  string sha256_hash = 7;                  // Content hash for change detection
+  bool enabled = 8;                        // Desired state (true = running, false = stopped)
+}
+
+message SyncApps {
+  repeated AppSpec apps = 1;
+}
+
+message AppStatus {
+  string app_id = 1;
+  string name = 2;
+  AppType app_type = 3;
+  string state = 4;        // "running" | "stopped" | "failed" | "unknown"
+  string status_text = 5;  // e.g. "Up 2 hours", "active (running)", "inactive (dead)"
+  int64 last_updated = 6;  // Unix timestamp
+  string error_message = 7;
+}
+
+message AppActionCmd {
+  string app_name = 1;
+  string action = 2;       // "start" | "stop" | "restart" | "logs"
+  AppType app_type = 3;
+  uint32 log_lines = 4;    // Lines of logs to retrieve (default 100)
 }
 
 

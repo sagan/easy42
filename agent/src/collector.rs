@@ -37,6 +37,7 @@ pub struct MetricsCollector {
     prev_cpu_total: u64,
     interface_types: HashMap<String, InterfaceCategory>,
     cached_primary_iface: Option<String>,
+    apps_manager: Option<std::sync::Arc<crate::apps::AppsManager>>,
 }
 
 impl Default for MetricsCollector {
@@ -52,7 +53,12 @@ impl MetricsCollector {
             prev_cpu_total: 0,
             interface_types: HashMap::new(),
             cached_primary_iface: None,
+            apps_manager: None,
         }
+    }
+
+    pub fn set_apps_manager(&mut self, mgr: std::sync::Arc<crate::apps::AppsManager>) {
+        self.apps_manager = Some(mgr);
     }
 
     pub fn flush_interface_cache(&mut self) {
@@ -66,6 +72,12 @@ impl MetricsCollector {
     }
 
     pub async fn collect_telemetry(&mut self) -> proto::TelemetryReport {
+        let apps = if let Some(mgr) = &self.apps_manager {
+            mgr.collect_app_statuses().await
+        } else {
+            Vec::new()
+        };
+
         proto::TelemetryReport {
             system: Some(self.collect_system_metrics()),
             interfaces: self.collect_interfaces().await,
@@ -73,6 +85,7 @@ impl MetricsCollector {
             bird_protocols: self.collect_bird_protocols().await,
             disks: self.collect_disks(),
             hosts_hash: crate::hosts::get_current_hosts_hash(&crate::hosts::get_hosts_path()),
+            apps,
         }
     }
 

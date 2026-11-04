@@ -255,3 +255,14 @@ func (c *AgentConnection) SyncHosts(hosts []*agentpb.HostRecord) error {
 	return c.SendMessage(msg)
 }
 
+// SyncApps sends the full set of apps to the connected agent
+func (c *AgentConnection) SyncApps(apps []*agentpb.AppSpec) error {
+	msg := &agentpb.AgentMessage{
+		Payload: &agentpb.AgentMessage_SyncApps{
+			SyncApps: &agentpb.SyncApps{
+				Apps: apps,
+			},
+		},
+	}
+	return c.SendMessage(msg)
+}

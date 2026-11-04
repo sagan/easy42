@@ -80,6 +80,7 @@ import { Node, NodeMetricPoint, GraphBlock, Link, NetworkPolicy } from "../types
 import { MetricAreaChart } from "../components/Nodes/MetricAreaChart";
 import { MarkdownView } from "../components/Common/MarkdownView";
 import { NodeCronTasksTab } from "../components/Nodes/NodeCronTasksTab";
+import { NodeAppsTab } from "../components/Nodes/NodeAppsTab";
 import { Dn42InfoCard } from "../components/Nodes/Dn42InfoCard";
 import { isDn42ExternalNode } from "../utils/dn42";
 import { getLinkWorkingState, isManualLink } from "../components/Topology/TopologyGraph";
@@ -196,7 +197,7 @@ export const NodeDetailPage: React.FC = () => {
   const tabParam = searchParams.get("tab") || "overview";
   const validTabs = node?.is_external
     ? ["overview", "networking"]
-    : ["overview", "metrics", "telemetry", "networking", "routing", "firewall", "agent", "cron_tasks"];
+    : ["overview", "metrics", "telemetry", "networking", "routing", "firewall", "agent", "apps", "cron_tasks"];
   const currentTab = validTabs.includes(tabParam) ? (tabParam === "telemetry" ? "metrics" : tabParam) : "overview";
 
   useEffect(() => {
@@ -1579,6 +1580,15 @@ export const NodeDetailPage: React.FC = () => {
             )}
             {!node?.is_external && (
               <Tab value="agent" icon={<Zap size={16} />} iconPosition="start" label="Agent" title="Agent" />
+            )}
+            {!node?.is_external && (
+              <Tab
+                value="apps"
+                icon={<Layers size={16} />}
+                iconPosition="start"
+                label="Apps"
+                title="Workloads & Apps"
+              />
             )}
             {!node?.is_external && (
               <Tab
@@ -3479,6 +3489,9 @@ export const NodeDetailPage: React.FC = () => {
             </Paper>
           </Box>
         )}
+
+        {/* Tab: Workload Apps */}
+        {currentTab === "apps" && node && !node.is_external && <NodeAppsTab nodeName={node.name} />}
 
         {/* Tab 7: Cron Tasks */}
         {currentTab === "cron_tasks" && node && !node.is_external && <NodeCronTasksTab nodeName={node.name} />}

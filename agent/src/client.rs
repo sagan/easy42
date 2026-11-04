@@ -21,9 +21,12 @@ pub struct AgentClient {
 
 impl AgentClient {
     pub fn new(config: AgentConfig) -> Self {
+        let executor = Arc::new(CommandExecutor::new(config.clone()));
+        let mut collector = MetricsCollector::new();
+        collector.set_apps_manager(executor.apps_manager());
         Self {
-            executor: Arc::new(CommandExecutor::new(config.clone())),
-            collector: Arc::new(Mutex::new(MetricsCollector::new())),
+            executor,
+            collector: Arc::new(Mutex::new(collector)),
             config,
         }
     }
@@ -307,6 +310,13 @@ impl AgentClient {
                                             warn!("Hosts sync failed: {}", e);
                                         }
                                     }
+                                }
+                                Some(proto::agent_message::Payload::SyncApps(sync)) => {
+                                    info!("Received apps sync: {} app(s)", sync.apps.len());
+                                    let apps_mgr = executor.apps_manager();
+                                    tokio::spawn(async move {
+                                        apps_mgr.sync_apps(sync.apps).await;
+                                    });
                                 }
                                 _ => {}
                             }

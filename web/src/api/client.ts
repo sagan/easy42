@@ -28,6 +28,12 @@ import type {
   NodeInterfaceTrafficSummary,
   CronTask,
   NodeCronTasksResultsResponse,
+  App,
+  AppVariable,
+  NodeAppsResponse,
+  TranspilePreviewResponse,
+  AppActionResponse,
+  InterpolatePreviewResponse,
   ServerTask,
   DatabaseInfo,
   IntegrationsSettings,
@@ -629,6 +635,56 @@ export const api = {
     request<MCPSettingsResponse>("/settings/mcp/reset-token", {
       method: "POST",
       body: JSON.stringify({ token_type: tokenType }),
+    }),
+
+  // Workload Apps
+  getApps: () => request<App[]>("/apps"),
+  createApp: (app: Partial<App>) =>
+    request<App>("/apps", {
+      method: "POST",
+      body: JSON.stringify(app),
+    }),
+  updateApp: (id: string, app: Partial<App>) =>
+    request<App>(`/apps/${encodeURIComponent(id)}`, {
+      method: "PUT",
+      body: JSON.stringify(app),
+    }),
+  deleteApp: (id: string) =>
+    request<{ deleted: boolean }>(`/apps/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    }),
+  toggleApp: (id: string) =>
+    request<App>(`/apps/${encodeURIComponent(id)}/toggle`, {
+      method: "POST",
+    }),
+  previewTranspile: (req: { app_name: string; target_init: string; main_content: string; env_content: string }) =>
+    request<TranspilePreviewResponse>("/apps/preview-transpile", {
+      method: "POST",
+      body: JSON.stringify(req),
+    }),
+  getNodeApps: (nodeName: string) =>
+    request<NodeAppsResponse>(`/nodes/${encodeURIComponent(nodeName)}/apps`),
+  triggerNodeAppAction: (nodeName: string, appName: string, action: string, appType: string, logLines?: number) =>
+    request<AppActionResponse>(`/nodes/${encodeURIComponent(nodeName)}/apps/${encodeURIComponent(appName)}/action`, {
+      method: "POST",
+      body: JSON.stringify({ action, app_type: appType, log_lines: logLines }),
+    }),
+
+  // Global App Variables
+  getAppVariables: () => request<AppVariable[]>("/apps/variables"),
+  saveAppVariable: (variable: AppVariable) =>
+    request<AppVariable>("/apps/variables", {
+      method: "POST",
+      body: JSON.stringify(variable),
+    }),
+  deleteAppVariable: (key: string) =>
+    request<{ deleted: boolean }>(`/apps/variables/${encodeURIComponent(key)}`, {
+      method: "DELETE",
+    }),
+  previewInterpolate: (req: { content: string; node_name?: string; app_name?: string }) =>
+    request<InterpolatePreviewResponse>("/apps/preview-interpolate", {
+      method: "POST",
+      body: JSON.stringify(req),
     }),
 };
 

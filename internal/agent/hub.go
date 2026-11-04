@@ -91,6 +91,15 @@ func (h *Hub) SyncHosts(nodeName string, hosts []*agentpb.HostRecord) error {
 	return conn.SyncHosts(hosts)
 }
 
+// SyncApps sends the latest apps to a specific node agent if connected
+func (h *Hub) SyncApps(nodeName string, apps []*agentpb.AppSpec) error {
+	conn, ok := h.GetConnection(nodeName)
+	if !ok {
+		return nil // Agent not connected; will receive on next connect
+	}
+	return conn.SyncApps(apps)
+}
+
 // GetHostsHash returns the latest reported hosts hash for a connected node agent
 func (h *Hub) GetHostsHash(nodeName string) string {
 	conn, ok := h.GetConnection(nodeName)
@@ -98,6 +107,15 @@ func (h *Hub) GetHostsHash(nodeName string) string {
 		return ""
 	}
 	return conn.HostsHash()
+}
+
+// GetOSInfo returns the reported OS info for a connected node agent
+func (h *Hub) GetOSInfo(nodeName string) string {
+	conn, ok := h.GetConnection(nodeName)
+	if !ok {
+		return ""
+	}
+	return conn.OSInfo()
 }
 
 // NotifyRegister triggers registered registration listeners

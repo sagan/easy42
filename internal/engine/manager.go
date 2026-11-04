@@ -54,6 +54,8 @@ type Manager struct {
 	currentPingTable     *config.PingTableTask
 	pingTableCancel      context.CancelFunc
 	pingTableSubscribers map[chan *config.PingTableTask]struct{}
+	appStatusesMu        sync.RWMutex
+	appStatuses          map[string]map[string]AppStatusRecord
 }
 
 // NewManager creates a new Manager instance
@@ -73,6 +75,7 @@ func NewManager(store *config.Store) *Manager {
 		stopCh:       make(chan struct{}),
 		runningTasks:         make(map[string]bool),
 		pingTableSubscribers: make(map[chan *config.PingTableTask]struct{}),
+		appStatuses:          make(map[string]map[string]AppStatusRecord),
 	}
 	m.prometheusExporter = NewPrometheusExporter(m)
 	m.telegramBot = telegram.NewBotService(m)
@@ -89,6 +92,7 @@ func NewManager(store *config.Store) *Manager {
 	m.setupAgentMetricsListeners()
 	m.setupAgentCronTasksListeners()
 	m.setupAgentHostsListeners()
+	m.setupAgentAppsListeners()
 	m.startRetentionWorker()
 	return m
 }

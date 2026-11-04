@@ -39,6 +39,7 @@ import {
   Activity,
   ExternalLink,
   FileCode2,
+  Layers,
 } from "lucide-react";
 import { Easy42Logo } from "../Logo/Easy42Logo";
 import { useMesh } from "../../context/MeshContext";
@@ -106,6 +107,7 @@ export const AppLayout: React.FC = () => {
 
   const navItems = [
     { label: "Nodes", title: "Nodes", path: "/nodes", icon: <Server size={18} /> },
+    { label: "Apps", title: "Workloads", path: "/apps", icon: <Layers size={18} /> },
     { label: "Topology", title: "Topology", path: "/topology", icon: <Network size={18} /> },
     { label: "LG", title: "Looking Glass", path: "/looking-glass", icon: <Compass size={18} /> },
     { label: "Helper", title: "Device Helper", path: "/helper", icon: <Wrench size={18} /> },

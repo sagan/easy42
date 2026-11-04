@@ -314,6 +314,20 @@ func New(cfg Config) *Server {
 			r.Post("/cron-tasks/{id}/toggle", s.handleToggleCronTask)
 			r.Get("/nodes/{name}/cron-tasks/results", s.handleGetNodeCronTasksResults)
 
+			// Workload Apps & Variables
+			r.Get("/apps", s.handleGetApps)
+			r.Post("/apps", s.handleCreateApp)
+			r.Put("/apps/{id}", s.handleUpdateApp)
+			r.Delete("/apps/{id}", s.handleDeleteApp)
+			r.Post("/apps/{id}/toggle", s.handleToggleApp)
+			r.Post("/apps/preview-transpile", s.handlePreviewTranspile)
+			r.Post("/apps/preview-interpolate", s.handlePreviewInterpolate)
+			r.Get("/apps/variables", s.handleGetAppVariables)
+			r.Post("/apps/variables", s.handleSaveAppVariable)
+			r.Delete("/apps/variables/{key}", s.handleDeleteAppVariable)
+			r.Get("/nodes/{name}/apps", s.handleGetNodeApps)
+			r.Post("/nodes/{name}/apps/{appName}/action", s.handleNodeAppAction)
+
 			// FlapAlerted Metrics
 			r.Get("/flaps/metrics/stream", s.handleFlapAlertedMetricsStream)
 			r.Get("/flaps/metrics", s.handleFlapAlertedMetrics)

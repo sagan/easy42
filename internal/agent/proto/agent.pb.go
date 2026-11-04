@@ -21,6 +21,52 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+type AppType int32
+
+const (
+	AppType_DOCKER_COMPOSE AppType = 0
+	AppType_SYSTEMD        AppType = 1
+)
+
+// Enum value maps for AppType.
+var (
+	AppType_name = map[int32]string{
+		0: "DOCKER_COMPOSE",
+		1: "SYSTEMD",
+	}
+	AppType_value = map[string]int32{
+		"DOCKER_COMPOSE": 0,
+		"SYSTEMD":        1,
+	}
+)
+
+func (x AppType) Enum() *AppType {
+	p := new(AppType)
+	*p = x
+	return p
+}
+
+func (x AppType) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (AppType) Descriptor() protoreflect.EnumDescriptor {
+	return file_proto_agent_proto_enumTypes[0].Descriptor()
+}
+
+func (AppType) Type() protoreflect.EnumType {
+	return &file_proto_agent_proto_enumTypes[0]
+}
+
+func (x AppType) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use AppType.Descriptor instead.
+func (AppType) EnumDescriptor() ([]byte, []int) {
+	return file_proto_agent_proto_rawDescGZIP(), []int{0}
+}
+
 type ManageInterface_Action int32
 
 const (
@@ -60,11 +106,11 @@ func (x ManageInterface_Action) String() string {
 }
 
 func (ManageInterface_Action) Descriptor() protoreflect.EnumDescriptor {
-	return file_proto_agent_proto_enumTypes[0].Descriptor()
+	return file_proto_agent_proto_enumTypes[1].Descriptor()
 }
 
 func (ManageInterface_Action) Type() protoreflect.EnumType {
-	return &file_proto_agent_proto_enumTypes[0]
+	return &file_proto_agent_proto_enumTypes[1]
 }
 
 func (x ManageInterface_Action) Number() protoreflect.EnumNumber {
@@ -115,11 +161,11 @@ func (x LookingGlassCmd_Tool) String() string {
 }
 
 func (LookingGlassCmd_Tool) Descriptor() protoreflect.EnumDescriptor {
-	return file_proto_agent_proto_enumTypes[1].Descriptor()
+	return file_proto_agent_proto_enumTypes[2].Descriptor()
 }
 
 func (LookingGlassCmd_Tool) Type() protoreflect.EnumType {
-	return &file_proto_agent_proto_enumTypes[1]
+	return &file_proto_agent_proto_enumTypes[2]
 }
 
 func (x LookingGlassCmd_Tool) Number() protoreflect.EnumNumber {
@@ -149,6 +195,7 @@ type AgentMessage struct {
 	//	*AgentMessage_CommandReq
 	//	*AgentMessage_SyncCronTasks
 	//	*AgentMessage_SyncHosts
+	//	*AgentMessage_SyncApps
 	Payload       isAgentMessage_Payload `protobuf_oneof:"payload"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -304,6 +351,15 @@ func (x *AgentMessage) GetSyncHosts() *SyncHosts {
 	return nil
 }
 
+func (x *AgentMessage) GetSyncApps() *SyncApps {
+	if x != nil {
+		if x, ok := x.Payload.(*AgentMessage_SyncApps); ok {
+			return x.SyncApps
+		}
+	}
+	return nil
+}
+
 type isAgentMessage_Payload interface {
 	isAgentMessage_Payload()
 }
@@ -354,6 +410,10 @@ type AgentMessage_SyncHosts struct {
 	SyncHosts *SyncHosts `protobuf:"bytes,24,opt,name=sync_hosts,json=syncHosts,proto3,oneof"`
 }
 
+type AgentMessage_SyncApps struct {
+	SyncApps *SyncApps `protobuf:"bytes,25,opt,name=sync_apps,json=syncApps,proto3,oneof"`
+}
+
 func (*AgentMessage_RegisterReq) isAgentMessage_Payload() {}
 
 func (*AgentMessage_Heartbeat) isAgentMessage_Payload() {}
@@ -375,6 +435,8 @@ func (*AgentMessage_CommandReq) isAgentMessage_Payload() {}
 func (*AgentMessage_SyncCronTasks) isAgentMessage_Payload() {}
 
 func (*AgentMessage_SyncHosts) isAgentMessage_Payload() {}
+
+func (*AgentMessage_SyncApps) isAgentMessage_Payload() {}
 
 type RegisterRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -616,6 +678,7 @@ type TelemetryReport struct {
 	BirdProtocols []*BirdProtocolStatus  `protobuf:"bytes,4,rep,name=bird_protocols,json=birdProtocols,proto3" json:"bird_protocols,omitempty"`
 	Disks         []*DiskMetrics         `protobuf:"bytes,5,rep,name=disks,proto3" json:"disks,omitempty"`
 	HostsHash     string                 `protobuf:"bytes,6,opt,name=hosts_hash,json=hostsHash,proto3" json:"hosts_hash,omitempty"`
+	Apps          []*AppStatus           `protobuf:"bytes,7,rep,name=apps,proto3" json:"apps,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -690,6 +753,13 @@ func (x *TelemetryReport) GetHostsHash() string {
 		return x.HostsHash
 	}
 	return ""
+}
+
+func (x *TelemetryReport) GetApps() []*AppStatus {
+	if x != nil {
+		return x.Apps
+	}
+	return nil
 }
 
 type DiskMetrics struct {
@@ -1128,6 +1198,7 @@ type CommandRequest struct {
 	//	*CommandRequest_SyncHosts
 	//	*CommandRequest_SyncAction
 	//	*CommandRequest_DeleteConfig
+	//	*CommandRequest_AppAction
 	Command       isCommandRequest_Command `protobuf_oneof:"command"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -1276,6 +1347,15 @@ func (x *CommandRequest) GetDeleteConfig() *DeleteConfigFile {
 	return nil
 }
 
+func (x *CommandRequest) GetAppAction() *AppActionCmd {
+	if x != nil {
+		if x, ok := x.Command.(*CommandRequest_AppAction); ok {
+			return x.AppAction
+		}
+	}
+	return nil
+}
+
 type isCommandRequest_Command interface {
 	isCommandRequest_Command()
 }
@@ -1324,6 +1404,10 @@ type CommandRequest_DeleteConfig struct {
 	DeleteConfig *DeleteConfigFile `protobuf:"bytes,20,opt,name=delete_config,json=deleteConfig,proto3,oneof"`
 }
 
+type CommandRequest_AppAction struct {
+	AppAction *AppActionCmd `protobuf:"bytes,21,opt,name=app_action,json=appAction,proto3,oneof"`
+}
+
 func (*CommandRequest_ApplyConfig) isCommandRequest_Command() {}
 
 func (*CommandRequest_ManageIface) isCommandRequest_Command() {}
@@ -1345,6 +1429,8 @@ func (*CommandRequest_SyncHosts) isCommandRequest_Command() {}
 func (*CommandRequest_SyncAction) isCommandRequest_Command() {}
 
 func (*CommandRequest_DeleteConfig) isCommandRequest_Command() {}
+
+func (*CommandRequest_AppAction) isCommandRequest_Command() {}
 
 type SyncActionCmd struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -2434,11 +2520,375 @@ func (x *SyncHostsCmd) GetHosts() []*HostRecord {
 	return nil
 }
 
+type AppConfigFile struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Path          string                 `protobuf:"bytes,1,opt,name=path,proto3" json:"path,omitempty"`
+	Content       []byte                 `protobuf:"bytes,2,opt,name=content,proto3" json:"content,omitempty"`
+	FileMode      uint32                 `protobuf:"varint,3,opt,name=file_mode,json=fileMode,proto3" json:"file_mode,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AppConfigFile) Reset() {
+	*x = AppConfigFile{}
+	mi := &file_proto_agent_proto_msgTypes[30]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AppConfigFile) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AppConfigFile) ProtoMessage() {}
+
+func (x *AppConfigFile) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_agent_proto_msgTypes[30]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AppConfigFile.ProtoReflect.Descriptor instead.
+func (*AppConfigFile) Descriptor() ([]byte, []int) {
+	return file_proto_agent_proto_rawDescGZIP(), []int{30}
+}
+
+func (x *AppConfigFile) GetPath() string {
+	if x != nil {
+		return x.Path
+	}
+	return ""
+}
+
+func (x *AppConfigFile) GetContent() []byte {
+	if x != nil {
+		return x.Content
+	}
+	return nil
+}
+
+func (x *AppConfigFile) GetFileMode() uint32 {
+	if x != nil {
+		return x.FileMode
+	}
+	return 0
+}
+
+type AppSpec struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"` // e.g. "vproxy" -> ezapp-vproxy
+	AppType       AppType                `protobuf:"varint,3,opt,name=app_type,json=appType,proto3,enum=easy42.agent.v1.AppType" json:"app_type,omitempty"`
+	MainContent   string                 `protobuf:"bytes,4,opt,name=main_content,json=mainContent,proto3" json:"main_content,omitempty"` // compose.yaml or .service / init script content
+	EnvContent    string                 `protobuf:"bytes,5,opt,name=env_content,json=envContent,proto3" json:"env_content,omitempty"`    // .env content
+	ConfigFiles   []*AppConfigFile       `protobuf:"bytes,6,rep,name=config_files,json=configFiles,proto3" json:"config_files,omitempty"` // Auxiliary config files
+	Sha256Hash    string                 `protobuf:"bytes,7,opt,name=sha256_hash,json=sha256Hash,proto3" json:"sha256_hash,omitempty"`    // Content hash for change detection
+	Enabled       bool                   `protobuf:"varint,8,opt,name=enabled,proto3" json:"enabled,omitempty"`                           // Desired state (true = running, false = stopped)
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AppSpec) Reset() {
+	*x = AppSpec{}
+	mi := &file_proto_agent_proto_msgTypes[31]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AppSpec) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AppSpec) ProtoMessage() {}
+
+func (x *AppSpec) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_agent_proto_msgTypes[31]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AppSpec.ProtoReflect.Descriptor instead.
+func (*AppSpec) Descriptor() ([]byte, []int) {
+	return file_proto_agent_proto_rawDescGZIP(), []int{31}
+}
+
+func (x *AppSpec) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *AppSpec) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *AppSpec) GetAppType() AppType {
+	if x != nil {
+		return x.AppType
+	}
+	return AppType_DOCKER_COMPOSE
+}
+
+func (x *AppSpec) GetMainContent() string {
+	if x != nil {
+		return x.MainContent
+	}
+	return ""
+}
+
+func (x *AppSpec) GetEnvContent() string {
+	if x != nil {
+		return x.EnvContent
+	}
+	return ""
+}
+
+func (x *AppSpec) GetConfigFiles() []*AppConfigFile {
+	if x != nil {
+		return x.ConfigFiles
+	}
+	return nil
+}
+
+func (x *AppSpec) GetSha256Hash() string {
+	if x != nil {
+		return x.Sha256Hash
+	}
+	return ""
+}
+
+func (x *AppSpec) GetEnabled() bool {
+	if x != nil {
+		return x.Enabled
+	}
+	return false
+}
+
+type SyncApps struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Apps          []*AppSpec             `protobuf:"bytes,1,rep,name=apps,proto3" json:"apps,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SyncApps) Reset() {
+	*x = SyncApps{}
+	mi := &file_proto_agent_proto_msgTypes[32]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SyncApps) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SyncApps) ProtoMessage() {}
+
+func (x *SyncApps) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_agent_proto_msgTypes[32]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SyncApps.ProtoReflect.Descriptor instead.
+func (*SyncApps) Descriptor() ([]byte, []int) {
+	return file_proto_agent_proto_rawDescGZIP(), []int{32}
+}
+
+func (x *SyncApps) GetApps() []*AppSpec {
+	if x != nil {
+		return x.Apps
+	}
+	return nil
+}
+
+type AppStatus struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	AppId         string                 `protobuf:"bytes,1,opt,name=app_id,json=appId,proto3" json:"app_id,omitempty"`
+	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	AppType       AppType                `protobuf:"varint,3,opt,name=app_type,json=appType,proto3,enum=easy42.agent.v1.AppType" json:"app_type,omitempty"`
+	State         string                 `protobuf:"bytes,4,opt,name=state,proto3" json:"state,omitempty"`                                 // "running" | "stopped" | "failed" | "unknown"
+	StatusText    string                 `protobuf:"bytes,5,opt,name=status_text,json=statusText,proto3" json:"status_text,omitempty"`     // e.g. "Up 2 hours", "active (running)", "inactive (dead)"
+	LastUpdated   int64                  `protobuf:"varint,6,opt,name=last_updated,json=lastUpdated,proto3" json:"last_updated,omitempty"` // Unix timestamp
+	ErrorMessage  string                 `protobuf:"bytes,7,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AppStatus) Reset() {
+	*x = AppStatus{}
+	mi := &file_proto_agent_proto_msgTypes[33]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AppStatus) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AppStatus) ProtoMessage() {}
+
+func (x *AppStatus) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_agent_proto_msgTypes[33]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AppStatus.ProtoReflect.Descriptor instead.
+func (*AppStatus) Descriptor() ([]byte, []int) {
+	return file_proto_agent_proto_rawDescGZIP(), []int{33}
+}
+
+func (x *AppStatus) GetAppId() string {
+	if x != nil {
+		return x.AppId
+	}
+	return ""
+}
+
+func (x *AppStatus) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *AppStatus) GetAppType() AppType {
+	if x != nil {
+		return x.AppType
+	}
+	return AppType_DOCKER_COMPOSE
+}
+
+func (x *AppStatus) GetState() string {
+	if x != nil {
+		return x.State
+	}
+	return ""
+}
+
+func (x *AppStatus) GetStatusText() string {
+	if x != nil {
+		return x.StatusText
+	}
+	return ""
+}
+
+func (x *AppStatus) GetLastUpdated() int64 {
+	if x != nil {
+		return x.LastUpdated
+	}
+	return 0
+}
+
+func (x *AppStatus) GetErrorMessage() string {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return ""
+}
+
+type AppActionCmd struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	AppName       string                 `protobuf:"bytes,1,opt,name=app_name,json=appName,proto3" json:"app_name,omitempty"`
+	Action        string                 `protobuf:"bytes,2,opt,name=action,proto3" json:"action,omitempty"` // "start" | "stop" | "restart" | "logs"
+	AppType       AppType                `protobuf:"varint,3,opt,name=app_type,json=appType,proto3,enum=easy42.agent.v1.AppType" json:"app_type,omitempty"`
+	LogLines      uint32                 `protobuf:"varint,4,opt,name=log_lines,json=logLines,proto3" json:"log_lines,omitempty"` // Lines of logs to retrieve (default 100)
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AppActionCmd) Reset() {
+	*x = AppActionCmd{}
+	mi := &file_proto_agent_proto_msgTypes[34]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AppActionCmd) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AppActionCmd) ProtoMessage() {}
+
+func (x *AppActionCmd) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_agent_proto_msgTypes[34]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AppActionCmd.ProtoReflect.Descriptor instead.
+func (*AppActionCmd) Descriptor() ([]byte, []int) {
+	return file_proto_agent_proto_rawDescGZIP(), []int{34}
+}
+
+func (x *AppActionCmd) GetAppName() string {
+	if x != nil {
+		return x.AppName
+	}
+	return ""
+}
+
+func (x *AppActionCmd) GetAction() string {
+	if x != nil {
+		return x.Action
+	}
+	return ""
+}
+
+func (x *AppActionCmd) GetAppType() AppType {
+	if x != nil {
+		return x.AppType
+	}
+	return AppType_DOCKER_COMPOSE
+}
+
+func (x *AppActionCmd) GetLogLines() uint32 {
+	if x != nil {
+		return x.LogLines
+	}
+	return 0
+}
+
 var File_proto_agent_proto protoreflect.FileDescriptor
 
 const file_proto_agent_proto_rawDesc = "" +
 	"\n" +
-	"\x11proto/agent.proto\x12\x0feasy42.agent.v1\"\xbe\x06\n" +
+	"\x11proto/agent.proto\x12\x0feasy42.agent.v1\"\xf8\x06\n" +
 	"\fAgentMessage\x12\x10\n" +
 	"\x03seq\x18\x01 \x01(\x04R\x03seq\x12\x1c\n" +
 	"\ttimestamp\x18\x02 \x01(\x03R\ttimestamp\x12E\n" +
@@ -2456,7 +2906,8 @@ const file_proto_agent_proto_rawDesc = "" +
 	"commandReq\x12H\n" +
 	"\x0fsync_cron_tasks\x18\x17 \x01(\v2\x1e.easy42.agent.v1.SyncCronTasksH\x00R\rsyncCronTasks\x12;\n" +
 	"\n" +
-	"sync_hosts\x18\x18 \x01(\v2\x1a.easy42.agent.v1.SyncHostsH\x00R\tsyncHostsB\t\n" +
+	"sync_hosts\x18\x18 \x01(\v2\x1a.easy42.agent.v1.SyncHostsH\x00R\tsyncHosts\x128\n" +
+	"\tsync_apps\x18\x19 \x01(\v2\x19.easy42.agent.v1.SyncAppsH\x00R\bsyncAppsB\t\n" +
 	"\apayload\"\xa7\x01\n" +
 	"\x0fRegisterRequest\x12\x1b\n" +
 	"\tnode_name\x18\x01 \x01(\tR\bnodeName\x12#\n" +
@@ -2476,7 +2927,7 @@ const file_proto_agent_proto_rawDesc = "" +
 	"hosts_hash\x18\x02 \x01(\tR\thostsHash\"/\n" +
 	"\fHeartbeatAck\x12\x1f\n" +
 	"\vserver_time\x18\x01 \x01(\x03R\n" +
-	"serverTime\"\xe6\x02\n" +
+	"serverTime\"\x96\x03\n" +
 	"\x0fTelemetryReport\x126\n" +
 	"\x06system\x18\x01 \x01(\v2\x1e.easy42.agent.v1.SystemMetricsR\x06system\x12A\n" +
 	"\n" +
@@ -2486,7 +2937,8 @@ const file_proto_agent_proto_rawDesc = "" +
 	"\x0ebird_protocols\x18\x04 \x03(\v2#.easy42.agent.v1.BirdProtocolStatusR\rbirdProtocols\x122\n" +
 	"\x05disks\x18\x05 \x03(\v2\x1c.easy42.agent.v1.DiskMetricsR\x05disks\x12\x1d\n" +
 	"\n" +
-	"hosts_hash\x18\x06 \x01(\tR\thostsHash\"\x80\x01\n" +
+	"hosts_hash\x18\x06 \x01(\tR\thostsHash\x12.\n" +
+	"\x04apps\x18\a \x03(\v2\x1a.easy42.agent.v1.AppStatusR\x04apps\"\x80\x01\n" +
 	"\vDiskMetrics\x12\x12\n" +
 	"\x04path\x18\x01 \x01(\tR\x04path\x12\x1f\n" +
 	"\vtotal_bytes\x18\x02 \x01(\x04R\n" +
@@ -2529,7 +2981,7 @@ const file_proto_agent_proto_rawDesc = "" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x14\n" +
 	"\x05proto\x18\x02 \x01(\tR\x05proto\x12\x14\n" +
 	"\x05state\x18\x03 \x01(\tR\x05state\x12\x12\n" +
-	"\x04info\x18\x04 \x01(\tR\x04info\"\xbb\x06\n" +
+	"\x04info\x18\x04 \x01(\tR\x04info\"\xfb\x06\n" +
 	"\x0eCommandRequest\x12\x1d\n" +
 	"\n" +
 	"request_id\x18\x01 \x01(\tR\trequestId\x12E\n" +
@@ -2548,7 +3000,9 @@ const file_proto_agent_proto_rawDesc = "" +
 	"sync_hosts\x18\x12 \x01(\v2\x1d.easy42.agent.v1.SyncHostsCmdH\x00R\tsyncHosts\x12A\n" +
 	"\vsync_action\x18\x13 \x01(\v2\x1e.easy42.agent.v1.SyncActionCmdH\x00R\n" +
 	"syncAction\x12H\n" +
-	"\rdelete_config\x18\x14 \x01(\v2!.easy42.agent.v1.DeleteConfigFileH\x00R\fdeleteConfigB\t\n" +
+	"\rdelete_config\x18\x14 \x01(\v2!.easy42.agent.v1.DeleteConfigFileH\x00R\fdeleteConfig\x12>\n" +
+	"\n" +
+	"app_action\x18\x15 \x01(\v2\x1d.easy42.agent.v1.AppActionCmdH\x00R\tappActionB\t\n" +
 	"\acommand\"\xcf\x02\n" +
 	"\rSyncActionCmd\x12\x1f\n" +
 	"\vaction_type\x18\x01 \x01(\tR\n" +
@@ -2657,7 +3111,41 @@ const file_proto_agent_proto_rawDesc = "" +
 	"\tSyncHosts\x121\n" +
 	"\x05hosts\x18\x01 \x03(\v2\x1b.easy42.agent.v1.HostRecordR\x05hosts\"A\n" +
 	"\fSyncHostsCmd\x121\n" +
-	"\x05hosts\x18\x01 \x03(\v2\x1b.easy42.agent.v1.HostRecordR\x05hostsB%Z#easy42/internal/agent/proto;agentpbb\x06proto3"
+	"\x05hosts\x18\x01 \x03(\v2\x1b.easy42.agent.v1.HostRecordR\x05hosts\"Z\n" +
+	"\rAppConfigFile\x12\x12\n" +
+	"\x04path\x18\x01 \x01(\tR\x04path\x12\x18\n" +
+	"\acontent\x18\x02 \x01(\fR\acontent\x12\x1b\n" +
+	"\tfile_mode\x18\x03 \x01(\rR\bfileMode\"\xa4\x02\n" +
+	"\aAppSpec\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x123\n" +
+	"\bapp_type\x18\x03 \x01(\x0e2\x18.easy42.agent.v1.AppTypeR\aappType\x12!\n" +
+	"\fmain_content\x18\x04 \x01(\tR\vmainContent\x12\x1f\n" +
+	"\venv_content\x18\x05 \x01(\tR\n" +
+	"envContent\x12A\n" +
+	"\fconfig_files\x18\x06 \x03(\v2\x1e.easy42.agent.v1.AppConfigFileR\vconfigFiles\x12\x1f\n" +
+	"\vsha256_hash\x18\a \x01(\tR\n" +
+	"sha256Hash\x12\x18\n" +
+	"\aenabled\x18\b \x01(\bR\aenabled\"8\n" +
+	"\bSyncApps\x12,\n" +
+	"\x04apps\x18\x01 \x03(\v2\x18.easy42.agent.v1.AppSpecR\x04apps\"\xea\x01\n" +
+	"\tAppStatus\x12\x15\n" +
+	"\x06app_id\x18\x01 \x01(\tR\x05appId\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x123\n" +
+	"\bapp_type\x18\x03 \x01(\x0e2\x18.easy42.agent.v1.AppTypeR\aappType\x12\x14\n" +
+	"\x05state\x18\x04 \x01(\tR\x05state\x12\x1f\n" +
+	"\vstatus_text\x18\x05 \x01(\tR\n" +
+	"statusText\x12!\n" +
+	"\flast_updated\x18\x06 \x01(\x03R\vlastUpdated\x12#\n" +
+	"\rerror_message\x18\a \x01(\tR\ferrorMessage\"\x93\x01\n" +
+	"\fAppActionCmd\x12\x19\n" +
+	"\bapp_name\x18\x01 \x01(\tR\aappName\x12\x16\n" +
+	"\x06action\x18\x02 \x01(\tR\x06action\x123\n" +
+	"\bapp_type\x18\x03 \x01(\x0e2\x18.easy42.agent.v1.AppTypeR\aappType\x12\x1b\n" +
+	"\tlog_lines\x18\x04 \x01(\rR\blogLines**\n" +
+	"\aAppType\x12\x12\n" +
+	"\x0eDOCKER_COMPOSE\x10\x00\x12\v\n" +
+	"\aSYSTEMD\x10\x01B%Z#easy42/internal/agent/proto;agentpbb\x06proto3"
 
 var (
 	file_proto_agent_proto_rawDescOnce sync.Once
@@ -2671,84 +3159,98 @@ func file_proto_agent_proto_rawDescGZIP() []byte {
 	return file_proto_agent_proto_rawDescData
 }
 
-var file_proto_agent_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_proto_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 31)
+var file_proto_agent_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
+var file_proto_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 36)
 var file_proto_agent_proto_goTypes = []any{
-	(ManageInterface_Action)(0), // 0: easy42.agent.v1.ManageInterface.Action
-	(LookingGlassCmd_Tool)(0),   // 1: easy42.agent.v1.LookingGlassCmd.Tool
-	(*AgentMessage)(nil),        // 2: easy42.agent.v1.AgentMessage
-	(*RegisterRequest)(nil),     // 3: easy42.agent.v1.RegisterRequest
-	(*RegisterResponse)(nil),    // 4: easy42.agent.v1.RegisterResponse
-	(*Heartbeat)(nil),           // 5: easy42.agent.v1.Heartbeat
-	(*HeartbeatAck)(nil),        // 6: easy42.agent.v1.HeartbeatAck
-	(*TelemetryReport)(nil),     // 7: easy42.agent.v1.TelemetryReport
-	(*DiskMetrics)(nil),         // 8: easy42.agent.v1.DiskMetrics
-	(*SystemMetrics)(nil),       // 9: easy42.agent.v1.SystemMetrics
-	(*InterfaceMetrics)(nil),    // 10: easy42.agent.v1.InterfaceMetrics
-	(*WgPeerMetrics)(nil),       // 11: easy42.agent.v1.WgPeerMetrics
-	(*BirdProtocolStatus)(nil),  // 12: easy42.agent.v1.BirdProtocolStatus
-	(*CommandRequest)(nil),      // 13: easy42.agent.v1.CommandRequest
-	(*SyncActionCmd)(nil),       // 14: easy42.agent.v1.SyncActionCmd
-	(*ApplyConfigFile)(nil),     // 15: easy42.agent.v1.ApplyConfigFile
-	(*DeleteConfigFile)(nil),    // 16: easy42.agent.v1.DeleteConfigFile
-	(*ManageInterface)(nil),     // 17: easy42.agent.v1.ManageInterface
-	(*ReloadBirdCmd)(nil),       // 18: easy42.agent.v1.ReloadBirdCmd
-	(*ApplyNftablesCmd)(nil),    // 19: easy42.agent.v1.ApplyNftablesCmd
-	(*LookingGlassCmd)(nil),     // 20: easy42.agent.v1.LookingGlassCmd
-	(*ProbeSystemCmd)(nil),      // 21: easy42.agent.v1.ProbeSystemCmd
-	(*FlushCacheCmd)(nil),       // 22: easy42.agent.v1.FlushCacheCmd
-	(*RestartServiceCmd)(nil),   // 23: easy42.agent.v1.RestartServiceCmd
-	(*CommandResponse)(nil),     // 24: easy42.agent.v1.CommandResponse
-	(*ProbeResponse)(nil),       // 25: easy42.agent.v1.ProbeResponse
-	(*SyncCronTasks)(nil),       // 26: easy42.agent.v1.SyncCronTasks
-	(*CronTaskSpec)(nil),        // 27: easy42.agent.v1.CronTaskSpec
-	(*CronTaskReport)(nil),      // 28: easy42.agent.v1.CronTaskReport
-	(*HostRecord)(nil),          // 29: easy42.agent.v1.HostRecord
-	(*SyncHosts)(nil),           // 30: easy42.agent.v1.SyncHosts
-	(*SyncHostsCmd)(nil),        // 31: easy42.agent.v1.SyncHostsCmd
-	nil,                         // 32: easy42.agent.v1.CronTaskSpec.ParamsEntry
+	(AppType)(0),                // 0: easy42.agent.v1.AppType
+	(ManageInterface_Action)(0), // 1: easy42.agent.v1.ManageInterface.Action
+	(LookingGlassCmd_Tool)(0),   // 2: easy42.agent.v1.LookingGlassCmd.Tool
+	(*AgentMessage)(nil),        // 3: easy42.agent.v1.AgentMessage
+	(*RegisterRequest)(nil),     // 4: easy42.agent.v1.RegisterRequest
+	(*RegisterResponse)(nil),    // 5: easy42.agent.v1.RegisterResponse
+	(*Heartbeat)(nil),           // 6: easy42.agent.v1.Heartbeat
+	(*HeartbeatAck)(nil),        // 7: easy42.agent.v1.HeartbeatAck
+	(*TelemetryReport)(nil),     // 8: easy42.agent.v1.TelemetryReport
+	(*DiskMetrics)(nil),         // 9: easy42.agent.v1.DiskMetrics
+	(*SystemMetrics)(nil),       // 10: easy42.agent.v1.SystemMetrics
+	(*InterfaceMetrics)(nil),    // 11: easy42.agent.v1.InterfaceMetrics
+	(*WgPeerMetrics)(nil),       // 12: easy42.agent.v1.WgPeerMetrics
+	(*BirdProtocolStatus)(nil),  // 13: easy42.agent.v1.BirdProtocolStatus
+	(*CommandRequest)(nil),      // 14: easy42.agent.v1.CommandRequest
+	(*SyncActionCmd)(nil),       // 15: easy42.agent.v1.SyncActionCmd
+	(*ApplyConfigFile)(nil),     // 16: easy42.agent.v1.ApplyConfigFile
+	(*DeleteConfigFile)(nil),    // 17: easy42.agent.v1.DeleteConfigFile
+	(*ManageInterface)(nil),     // 18: easy42.agent.v1.ManageInterface
+	(*ReloadBirdCmd)(nil),       // 19: easy42.agent.v1.ReloadBirdCmd
+	(*ApplyNftablesCmd)(nil),    // 20: easy42.agent.v1.ApplyNftablesCmd
+	(*LookingGlassCmd)(nil),     // 21: easy42.agent.v1.LookingGlassCmd
+	(*ProbeSystemCmd)(nil),      // 22: easy42.agent.v1.ProbeSystemCmd
+	(*FlushCacheCmd)(nil),       // 23: easy42.agent.v1.FlushCacheCmd
+	(*RestartServiceCmd)(nil),   // 24: easy42.agent.v1.RestartServiceCmd
+	(*CommandResponse)(nil),     // 25: easy42.agent.v1.CommandResponse
+	(*ProbeResponse)(nil),       // 26: easy42.agent.v1.ProbeResponse
+	(*SyncCronTasks)(nil),       // 27: easy42.agent.v1.SyncCronTasks
+	(*CronTaskSpec)(nil),        // 28: easy42.agent.v1.CronTaskSpec
+	(*CronTaskReport)(nil),      // 29: easy42.agent.v1.CronTaskReport
+	(*HostRecord)(nil),          // 30: easy42.agent.v1.HostRecord
+	(*SyncHosts)(nil),           // 31: easy42.agent.v1.SyncHosts
+	(*SyncHostsCmd)(nil),        // 32: easy42.agent.v1.SyncHostsCmd
+	(*AppConfigFile)(nil),       // 33: easy42.agent.v1.AppConfigFile
+	(*AppSpec)(nil),             // 34: easy42.agent.v1.AppSpec
+	(*SyncApps)(nil),            // 35: easy42.agent.v1.SyncApps
+	(*AppStatus)(nil),           // 36: easy42.agent.v1.AppStatus
+	(*AppActionCmd)(nil),        // 37: easy42.agent.v1.AppActionCmd
+	nil,                         // 38: easy42.agent.v1.CronTaskSpec.ParamsEntry
 }
 var file_proto_agent_proto_depIdxs = []int32{
-	3,  // 0: easy42.agent.v1.AgentMessage.register_req:type_name -> easy42.agent.v1.RegisterRequest
-	5,  // 1: easy42.agent.v1.AgentMessage.heartbeat:type_name -> easy42.agent.v1.Heartbeat
-	7,  // 2: easy42.agent.v1.AgentMessage.telemetry:type_name -> easy42.agent.v1.TelemetryReport
-	24, // 3: easy42.agent.v1.AgentMessage.command_resp:type_name -> easy42.agent.v1.CommandResponse
-	25, // 4: easy42.agent.v1.AgentMessage.probe_resp:type_name -> easy42.agent.v1.ProbeResponse
-	28, // 5: easy42.agent.v1.AgentMessage.cron_task_report:type_name -> easy42.agent.v1.CronTaskReport
-	4,  // 6: easy42.agent.v1.AgentMessage.register_resp:type_name -> easy42.agent.v1.RegisterResponse
-	6,  // 7: easy42.agent.v1.AgentMessage.heartbeat_ack:type_name -> easy42.agent.v1.HeartbeatAck
-	13, // 8: easy42.agent.v1.AgentMessage.command_req:type_name -> easy42.agent.v1.CommandRequest
-	26, // 9: easy42.agent.v1.AgentMessage.sync_cron_tasks:type_name -> easy42.agent.v1.SyncCronTasks
-	30, // 10: easy42.agent.v1.AgentMessage.sync_hosts:type_name -> easy42.agent.v1.SyncHosts
-	9,  // 11: easy42.agent.v1.TelemetryReport.system:type_name -> easy42.agent.v1.SystemMetrics
-	10, // 12: easy42.agent.v1.TelemetryReport.interfaces:type_name -> easy42.agent.v1.InterfaceMetrics
-	11, // 13: easy42.agent.v1.TelemetryReport.wg_peers:type_name -> easy42.agent.v1.WgPeerMetrics
-	12, // 14: easy42.agent.v1.TelemetryReport.bird_protocols:type_name -> easy42.agent.v1.BirdProtocolStatus
-	8,  // 15: easy42.agent.v1.TelemetryReport.disks:type_name -> easy42.agent.v1.DiskMetrics
-	15, // 16: easy42.agent.v1.CommandRequest.apply_config:type_name -> easy42.agent.v1.ApplyConfigFile
-	17, // 17: easy42.agent.v1.CommandRequest.manage_iface:type_name -> easy42.agent.v1.ManageInterface
-	18, // 18: easy42.agent.v1.CommandRequest.reload_bird:type_name -> easy42.agent.v1.ReloadBirdCmd
-	19, // 19: easy42.agent.v1.CommandRequest.apply_nft:type_name -> easy42.agent.v1.ApplyNftablesCmd
-	20, // 20: easy42.agent.v1.CommandRequest.looking_glass:type_name -> easy42.agent.v1.LookingGlassCmd
-	21, // 21: easy42.agent.v1.CommandRequest.probe_system:type_name -> easy42.agent.v1.ProbeSystemCmd
-	23, // 22: easy42.agent.v1.CommandRequest.restart_service:type_name -> easy42.agent.v1.RestartServiceCmd
-	22, // 23: easy42.agent.v1.CommandRequest.flush_cache:type_name -> easy42.agent.v1.FlushCacheCmd
-	31, // 24: easy42.agent.v1.CommandRequest.sync_hosts:type_name -> easy42.agent.v1.SyncHostsCmd
-	14, // 25: easy42.agent.v1.CommandRequest.sync_action:type_name -> easy42.agent.v1.SyncActionCmd
-	16, // 26: easy42.agent.v1.CommandRequest.delete_config:type_name -> easy42.agent.v1.DeleteConfigFile
-	29, // 27: easy42.agent.v1.SyncActionCmd.hosts:type_name -> easy42.agent.v1.HostRecord
-	0,  // 28: easy42.agent.v1.ManageInterface.action:type_name -> easy42.agent.v1.ManageInterface.Action
-	1,  // 29: easy42.agent.v1.LookingGlassCmd.tool:type_name -> easy42.agent.v1.LookingGlassCmd.Tool
-	10, // 30: easy42.agent.v1.ProbeResponse.interfaces:type_name -> easy42.agent.v1.InterfaceMetrics
-	27, // 31: easy42.agent.v1.SyncCronTasks.tasks:type_name -> easy42.agent.v1.CronTaskSpec
-	32, // 32: easy42.agent.v1.CronTaskSpec.params:type_name -> easy42.agent.v1.CronTaskSpec.ParamsEntry
-	29, // 33: easy42.agent.v1.SyncHosts.hosts:type_name -> easy42.agent.v1.HostRecord
-	29, // 34: easy42.agent.v1.SyncHostsCmd.hosts:type_name -> easy42.agent.v1.HostRecord
-	35, // [35:35] is the sub-list for method output_type
-	35, // [35:35] is the sub-list for method input_type
-	35, // [35:35] is the sub-list for extension type_name
-	35, // [35:35] is the sub-list for extension extendee
-	0,  // [0:35] is the sub-list for field type_name
+	4,  // 0: easy42.agent.v1.AgentMessage.register_req:type_name -> easy42.agent.v1.RegisterRequest
+	6,  // 1: easy42.agent.v1.AgentMessage.heartbeat:type_name -> easy42.agent.v1.Heartbeat
+	8,  // 2: easy42.agent.v1.AgentMessage.telemetry:type_name -> easy42.agent.v1.TelemetryReport
+	25, // 3: easy42.agent.v1.AgentMessage.command_resp:type_name -> easy42.agent.v1.CommandResponse
+	26, // 4: easy42.agent.v1.AgentMessage.probe_resp:type_name -> easy42.agent.v1.ProbeResponse
+	29, // 5: easy42.agent.v1.AgentMessage.cron_task_report:type_name -> easy42.agent.v1.CronTaskReport
+	5,  // 6: easy42.agent.v1.AgentMessage.register_resp:type_name -> easy42.agent.v1.RegisterResponse
+	7,  // 7: easy42.agent.v1.AgentMessage.heartbeat_ack:type_name -> easy42.agent.v1.HeartbeatAck
+	14, // 8: easy42.agent.v1.AgentMessage.command_req:type_name -> easy42.agent.v1.CommandRequest
+	27, // 9: easy42.agent.v1.AgentMessage.sync_cron_tasks:type_name -> easy42.agent.v1.SyncCronTasks
+	31, // 10: easy42.agent.v1.AgentMessage.sync_hosts:type_name -> easy42.agent.v1.SyncHosts
+	35, // 11: easy42.agent.v1.AgentMessage.sync_apps:type_name -> easy42.agent.v1.SyncApps
+	10, // 12: easy42.agent.v1.TelemetryReport.system:type_name -> easy42.agent.v1.SystemMetrics
+	11, // 13: easy42.agent.v1.TelemetryReport.interfaces:type_name -> easy42.agent.v1.InterfaceMetrics
+	12, // 14: easy42.agent.v1.TelemetryReport.wg_peers:type_name -> easy42.agent.v1.WgPeerMetrics
+	13, // 15: easy42.agent.v1.TelemetryReport.bird_protocols:type_name -> easy42.agent.v1.BirdProtocolStatus
+	9,  // 16: easy42.agent.v1.TelemetryReport.disks:type_name -> easy42.agent.v1.DiskMetrics
+	36, // 17: easy42.agent.v1.TelemetryReport.apps:type_name -> easy42.agent.v1.AppStatus
+	16, // 18: easy42.agent.v1.CommandRequest.apply_config:type_name -> easy42.agent.v1.ApplyConfigFile
+	18, // 19: easy42.agent.v1.CommandRequest.manage_iface:type_name -> easy42.agent.v1.ManageInterface
+	19, // 20: easy42.agent.v1.CommandRequest.reload_bird:type_name -> easy42.agent.v1.ReloadBirdCmd
+	20, // 21: easy42.agent.v1.CommandRequest.apply_nft:type_name -> easy42.agent.v1.ApplyNftablesCmd
+	21, // 22: easy42.agent.v1.CommandRequest.looking_glass:type_name -> easy42.agent.v1.LookingGlassCmd
+	22, // 23: easy42.agent.v1.CommandRequest.probe_system:type_name -> easy42.agent.v1.ProbeSystemCmd
+	24, // 24: easy42.agent.v1.CommandRequest.restart_service:type_name -> easy42.agent.v1.RestartServiceCmd
+	23, // 25: easy42.agent.v1.CommandRequest.flush_cache:type_name -> easy42.agent.v1.FlushCacheCmd
+	32, // 26: easy42.agent.v1.CommandRequest.sync_hosts:type_name -> easy42.agent.v1.SyncHostsCmd
+	15, // 27: easy42.agent.v1.CommandRequest.sync_action:type_name -> easy42.agent.v1.SyncActionCmd
+	17, // 28: easy42.agent.v1.CommandRequest.delete_config:type_name -> easy42.agent.v1.DeleteConfigFile
+	37, // 29: easy42.agent.v1.CommandRequest.app_action:type_name -> easy42.agent.v1.AppActionCmd
+	30, // 30: easy42.agent.v1.SyncActionCmd.hosts:type_name -> easy42.agent.v1.HostRecord
+	1,  // 31: easy42.agent.v1.ManageInterface.action:type_name -> easy42.agent.v1.ManageInterface.Action
+	2,  // 32: easy42.agent.v1.LookingGlassCmd.tool:type_name -> easy42.agent.v1.LookingGlassCmd.Tool
+	11, // 33: easy42.agent.v1.ProbeResponse.interfaces:type_name -> easy42.agent.v1.InterfaceMetrics
+	28, // 34: easy42.agent.v1.SyncCronTasks.tasks:type_name -> easy42.agent.v1.CronTaskSpec
+	38, // 35: easy42.agent.v1.CronTaskSpec.params:type_name -> easy42.agent.v1.CronTaskSpec.ParamsEntry
+	30, // 36: easy42.agent.v1.SyncHosts.hosts:type_name -> easy42.agent.v1.HostRecord
+	30, // 37: easy42.agent.v1.SyncHostsCmd.hosts:type_name -> easy42.agent.v1.HostRecord
+	0,  // 38: easy42.agent.v1.AppSpec.app_type:type_name -> easy42.agent.v1.AppType
+	33, // 39: easy42.agent.v1.AppSpec.config_files:type_name -> easy42.agent.v1.AppConfigFile
+	34, // 40: easy42.agent.v1.SyncApps.apps:type_name -> easy42.agent.v1.AppSpec
+	0,  // 41: easy42.agent.v1.AppStatus.app_type:type_name -> easy42.agent.v1.AppType
+	0,  // 42: easy42.agent.v1.AppActionCmd.app_type:type_name -> easy42.agent.v1.AppType
+	43, // [43:43] is the sub-list for method output_type
+	43, // [43:43] is the sub-list for method input_type
+	43, // [43:43] is the sub-list for extension type_name
+	43, // [43:43] is the sub-list for extension extendee
+	0,  // [0:43] is the sub-list for field type_name
 }
 
 func init() { file_proto_agent_proto_init() }
@@ -2768,6 +3270,7 @@ func file_proto_agent_proto_init() {
 		(*AgentMessage_CommandReq)(nil),
 		(*AgentMessage_SyncCronTasks)(nil),
 		(*AgentMessage_SyncHosts)(nil),
+		(*AgentMessage_SyncApps)(nil),
 	}
 	file_proto_agent_proto_msgTypes[11].OneofWrappers = []any{
 		(*CommandRequest_ApplyConfig)(nil),
@@ -2781,14 +3284,15 @@ func file_proto_agent_proto_init() {
 		(*CommandRequest_SyncHosts)(nil),
 		(*CommandRequest_SyncAction)(nil),
 		(*CommandRequest_DeleteConfig)(nil),
+		(*CommandRequest_AppAction)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_agent_proto_rawDesc), len(file_proto_agent_proto_rawDesc)),
-			NumEnums:      2,
-			NumMessages:   31,
+			NumEnums:      3,
+			NumMessages:   36,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
