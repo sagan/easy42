@@ -129,3 +129,70 @@ func TestApplyLegacyDB(t *testing.T) {
 		t.Errorf("Expected column hosts_applied_at to be added to legacy table")
 	}
 }
+
+func TestApplyExistingDBWithMissingColumns(t *testing.T) {
+	db := openTestDB(t)
+	defer db.Close()
+
+	// Simulate an existing database where migrations 0 and 1 are already recorded
+	initSQL := `
+	CREATE TABLE schema_migrations (
+		version INTEGER PRIMARY KEY,
+		name TEXT NOT NULL,
+		applied_at INTEGER NOT NULL
+	);
+	INSERT INTO schema_migrations (version, name, applied_at) VALUES (0, '0000_baseline.sql', 1700000000);
+	INSERT INTO schema_migrations (version, name, applied_at) VALUES (1, '0001_ping_table.sql', 1700000001);
+
+	CREATE TABLE node_states (
+		node_name TEXT PRIMARY KEY,
+		host TEXT NOT NULL DEFAULT '',
+		last_seen INTEGER,
+		bird_config_hash TEXT NOT NULL DEFAULT '',
+		bird_applied_at INTEGER,
+		nftables_config_hash TEXT NOT NULL DEFAULT '',
+		nftables_applied_at INTEGER,
+		roa_config_hashes TEXT NOT NULL DEFAULT '{}',
+		roa_applied_at TEXT NOT NULL DEFAULT '{}',
+		hosts_config_hash TEXT NOT NULL DEFAULT '',
+		hosts_applied_at INTEGER,
+		interfaces TEXT NOT NULL DEFAULT '{}'
+	);
+	`
+	if _, err := db.Exec(initSQL); err != nil {
+		t.Fatalf("Failed to initialize existing DB: %v", err)
+	}
+
+	// Verify columns are initially missing
+	cols, err := getTableColumns(db, "node_states")
+	if err != nil {
+		t.Fatalf("getTableColumns failed: %v", err)
+	}
+	if cols["app_config_hashes"] || cols["app_applied_at"] {
+		t.Fatalf("Expected app columns to be absent initially")
+	}
+
+	// Apply migrations
+	if err := Apply(db); err != nil {
+		t.Fatalf("Apply failed on existing DB: %v", err)
+	}
+
+	// Verify columns were added by ensureLegacyColumns even with migrationCount > 0
+	cols, err = getTableColumns(db, "node_states")
+	if err != nil {
+		t.Fatalf("getTableColumns failed: %v", err)
+	}
+	if !cols["app_config_hashes"] {
+		t.Errorf("Expected column app_config_hashes to be added to existing table")
+	}
+	if !cols["app_applied_at"] {
+		t.Errorf("Expected column app_applied_at to be added to existing table")
+	}
+
+	// Verify querying the full column list succeeds
+	var count int
+	err = db.QueryRow("SELECT COUNT(app_config_hashes) FROM node_states").Scan(&count)
+	if err != nil {
+		t.Fatalf("SELECT with app_config_hashes failed: %v", err)
+	}
+}

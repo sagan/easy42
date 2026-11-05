@@ -62,7 +62,9 @@ type Manager struct {
 // NewManager creates a new Manager instance
 func NewManager(store *config.Store) *Manager {
 	stateStore := config.NewStateStore(store.DataDir())
-	_, _ = stateStore.Load()
+	if _, err := stateStore.Load(); err != nil {
+		log.Printf("[Manager] Warning: failed to load state from db: %v", err)
+	}
 	roaManager := roa.NewManager(filepath.Join(store.DataDir(), "cache", "roa"))
 	m := &Manager{
 		store:        store,

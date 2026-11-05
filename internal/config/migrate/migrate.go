@@ -91,20 +91,12 @@ func Apply(db *sql.DB) error {
 		return err
 	}
 
-	// Check if this is an existing database created before schema_migrations was introduced
-	var migrationCount int
-	if err := db.QueryRow("SELECT COUNT(*) FROM schema_migrations").Scan(&migrationCount); err != nil {
-		return fmt.Errorf("failed to query schema_migrations count: %w", err)
-	}
-
-	if migrationCount == 0 {
-		var hasNodeStates int
-		_ = db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='node_states'").Scan(&hasNodeStates)
-		if hasNodeStates > 0 {
-			// Legacy database detected. Ensure legacy columns are present before baseline stamping.
-			if err := ensureLegacyColumns(db); err != nil {
-				return err
-			}
+	// Ensure legacy and newly introduced columns are present in node_states table if it exists
+	var hasNodeStates int
+	_ = db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='node_states'").Scan(&hasNodeStates)
+	if hasNodeStates > 0 {
+		if err := ensureLegacyColumns(db); err != nil {
+			return err
 		}
 	}
 
