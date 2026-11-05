@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -2165,6 +2166,199 @@ func TestManualLinkWithExternalNode(t *testing.T) {
 	}
 	if updated.Type != config.LinkTypeManual {
 		t.Errorf("Expected updated link type manual, got %s", updated.Type)
+	}
+}
+
+func TestMultipleManualLinksOnSameInterface(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "easy42-multi-manual-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	store := config.NewStore(tempDir)
+	pass, err := store.Initialize()
+	if err != nil {
+		t.Fatalf("Initialize failed: %v", err)
+	}
+	mgr := NewManager(store)
+	if err := mgr.Unlock(pass); err != nil {
+		t.Fatalf("Unlock failed: %v", err)
+	}
+
+	// Internal managed node
+	nodeManaged := config.Node{
+		Name: "nbbug",
+		Host: "192.168.1.50",
+		IP:   "192.168.100.50",
+		ASN:  4224420050,
+	}
+	// Multiple external peers
+	peer1 := config.Node{
+		Name:       "peer1",
+		ASN:        4242421001,
+		IsExternal: true,
+	}
+	peer2 := config.Node{
+		Name:       "peer2",
+		ASN:        4242421002,
+		IsExternal: true,
+	}
+	peer3 := config.Node{
+		Name:       "peer3",
+		ASN:        4242421003,
+		IsExternal: true,
+	}
+
+	for _, n := range []config.Node{nodeManaged, peer1, peer2, peer3} {
+		if err := mgr.AddNode(n); err != nil {
+			t.Fatalf("AddNode %s failed: %v", n.Name, err)
+		}
+	}
+
+	// 1. Create first manual link on ens20 with peer1
+	endFrom1 := &config.LinkEnd{
+		Name:            "nbbug",
+		Type:            config.LinkTypeManual,
+		Interface:       "ens20",
+		Address:         "172.20.1.1/24",
+		NeighborAddress: "172.20.1.2",
+	}
+	endTo1 := &config.LinkEnd{
+		Name: "peer1",
+		Type: config.LinkTypeManual,
+	}
+	link1, err := mgr.AddLinkAdvanced("nbbug", "peer1", endFrom1, endTo1, []string{"manual", "ixp"})
+	if err != nil {
+		t.Fatalf("AddLinkAdvanced for peer1 on ens20 failed: %v", err)
+	}
+	if !link1.IsManual() {
+		t.Errorf("Expected link1 to be manual")
+	}
+
+	// 2. Create second manual link on the SAME interface ens20 with peer2 (should succeed)
+	endFrom2 := &config.LinkEnd{
+		Name:            "nbbug",
+		Type:            config.LinkTypeManual,
+		Interface:       "ens20",
+		Address:         "172.20.1.1/24",
+		NeighborAddress: "172.20.1.3",
+	}
+	endTo2 := &config.LinkEnd{
+		Name: "peer2",
+		Type: config.LinkTypeManual,
+	}
+	link2, err := mgr.AddLinkAdvanced("nbbug", "peer2", endFrom2, endTo2, []string{"manual", "ixp"})
+	if err != nil {
+		t.Fatalf("AddLinkAdvanced for peer2 on ens20 should succeed, but failed: %v", err)
+	}
+	if !link2.IsManual() {
+		t.Errorf("Expected link2 to be manual")
+	}
+
+	// 3. Create third manual link on the SAME interface ens20 with peer3 (should succeed)
+	endFrom3 := &config.LinkEnd{
+		Name:            "nbbug",
+		Type:            config.LinkTypeManual,
+		Interface:       "ens20",
+		Address:         "172.20.1.1/24",
+		NeighborAddress: "172.20.1.4",
+	}
+	endTo3 := &config.LinkEnd{
+		Name: "peer3",
+		Type: config.LinkTypeManual,
+	}
+	link3, err := mgr.AddLinkAdvanced("nbbug", "peer3", endFrom3, endTo3, []string{"manual", "ixp"})
+	if err != nil {
+		t.Fatalf("AddLinkAdvanced for peer3 on ens20 should succeed, but failed: %v", err)
+	}
+	if !link3.IsManual() {
+		t.Errorf("Expected link3 to be manual")
+	}
+
+	// 4. Duplicate manual link between the SAME nodes on ens20 should fail
+	_, err = mgr.AddLinkAdvanced("nbbug", "peer1", endFrom1, endTo1, nil)
+	if err == nil {
+		t.Fatalf("Expected error when adding duplicate manual link between same nodes on ens20")
+	}
+
+	// 5. WireGuard link attempting to use ens20 should fail (collision with existing interface)
+	wgPeer := config.Node{
+		Name:       "peer-wg",
+		ASN:        4242429999,
+		IsExternal: true,
+	}
+	if err := mgr.AddNode(wgPeer); err != nil {
+		t.Fatalf("AddNode peer-wg failed: %v", err)
+	}
+	wgEndFrom := &config.LinkEnd{
+		Name:      "nbbug",
+		Interface: "ens20", // trying to reuse ens20 as WireGuard interface
+	}
+	wgEndTo := &config.LinkEnd{
+		Name: "peer-wg",
+	}
+	_, err = mgr.AddLinkAdvanced("nbbug", "peer-wg", wgEndFrom, wgEndTo, nil)
+	if err == nil {
+		t.Fatalf("Expected error when WireGuard link attempts to use existing interface ens20")
+	}
+	if !strings.Contains(err.Error(), "already exists on node nbbug") {
+		t.Errorf("Expected error to mention 'already exists on node nbbug', got: %v", err)
+	}
+
+	// 6. Verify BIRD configuration generation for nbbug contains peerings for all 3 peers
+	birdConf, err := mgr.GenerateBirdConfig("nbbug")
+	if err != nil {
+		t.Fatalf("GenerateBirdConfig failed: %v", err)
+	}
+	if !strings.Contains(birdConf, "protocol bgp 'ext_peer_peer1' from") {
+		t.Errorf("Expected birdConf to contain protocol bgp 'ext_peer_peer1', got:\n%s", birdConf)
+	}
+	if !strings.Contains(birdConf, "neighbor 172.20.1.2") {
+		t.Errorf("Expected birdConf to contain neighbor 172.20.1.2, got:\n%s", birdConf)
+	}
+	if !strings.Contains(birdConf, "protocol bgp 'ext_peer_peer2' from") {
+		t.Errorf("Expected birdConf to contain protocol bgp 'ext_peer_peer2', got:\n%s", birdConf)
+	}
+	if !strings.Contains(birdConf, "neighbor 172.20.1.3") {
+		t.Errorf("Expected birdConf to contain neighbor 172.20.1.3, got:\n%s", birdConf)
+	}
+	if !strings.Contains(birdConf, "protocol bgp 'ext_peer_peer3' from") {
+		t.Errorf("Expected birdConf to contain protocol bgp 'ext_peer_peer3', got:\n%s", birdConf)
+	}
+	if !strings.Contains(birdConf, "neighbor 172.20.1.4") {
+		t.Errorf("Expected birdConf to contain neighbor 172.20.1.4, got:\n%s", birdConf)
+	}
+
+	// 7. Verify nftables configuration deduplicates ens20
+	nftConf, err := mgr.GenerateNftablesConfig("nbbug")
+	if err != nil {
+		t.Fatalf("GenerateNftablesConfig failed: %v", err)
+	}
+	if !strings.Contains(nftConf, `"ens20"`) {
+		t.Errorf("Expected nftConf to contain \"ens20\", got:\n%s", nftConf)
+	}
+	// Count occurrences of "ens20" in easy42_ifname definition
+	easy42IfnameIdx := strings.Index(nftConf, "define easy42_ifname =")
+	if easy42IfnameIdx != -1 {
+		lineEnd := strings.Index(nftConf[easy42IfnameIdx:], "\n")
+		line := nftConf[easy42IfnameIdx : easy42IfnameIdx+lineEnd]
+		if strings.Count(line, `"ens20"`) != 1 {
+			t.Errorf("Expected \"ens20\" to appear exactly once in define easy42_ifname, got: %s", line)
+		}
+	}
+
+	// 8. Delete link with peer2, ensure peer1 and peer3 remain intact
+	if err := mgr.DeleteLink("nbbug", "peer2", "ens20"); err != nil {
+		t.Fatalf("DeleteLink for peer2 failed: %v", err)
+	}
+	remainingCfg := store.Get()
+	if len(remainingCfg.Links) != 2 {
+		t.Fatalf("Expected 2 links remaining after deletion, got %d", len(remainingCfg.Links))
+	}
+	peerNames := []string{remainingCfg.Links[0].To.Name, remainingCfg.Links[1].To.Name}
+	if !slices.Contains(peerNames, "peer1") || !slices.Contains(peerNames, "peer3") {
+		t.Errorf("Expected peer1 and peer3 remaining, got %v", peerNames)
 	}
 }
 

@@ -1181,18 +1181,32 @@ func (m *Manager) buildLink(cfg *config.Config, n1, n2 *config.Node, listenPort1
 
 	usedIfacesFrom := make(map[string]bool)
 	usedIfacesTo := make(map[string]bool)
+	wgIfacesFrom := make(map[string]bool)
+	wgIfacesTo := make(map[string]bool)
 	for _, l := range cfg.Links {
 		if l.From.Name == fromNode.Name {
 			usedIfacesFrom[l.From.Interface] = true
+			if !l.IsManual() {
+				wgIfacesFrom[l.From.Interface] = true
+			}
 		}
 		if l.To.Name == fromNode.Name {
 			usedIfacesFrom[l.To.Interface] = true
+			if !l.IsManual() {
+				wgIfacesFrom[l.To.Interface] = true
+			}
 		}
 		if l.From.Name == toNode.Name {
 			usedIfacesTo[l.From.Interface] = true
+			if !l.IsManual() {
+				wgIfacesTo[l.From.Interface] = true
+			}
 		}
 		if l.To.Name == toNode.Name {
 			usedIfacesTo[l.To.Interface] = true
+			if !l.IsManual() {
+				wgIfacesTo[l.To.Interface] = true
+			}
 		}
 	}
 
@@ -1223,11 +1237,42 @@ func (m *Manager) buildLink(cfg *config.Config, n1, n2 *config.Node, listenPort1
 		}
 	}
 
-	if !fromNode.IsExternal && fromIface != "" && usedIfacesFrom[fromIface] {
-		return nil, fmt.Errorf("interface %s already exists on node %s", fromIface, fromNode.Name)
-	}
-	if !toNode.IsExternal && toIface != "" && usedIfacesTo[toIface] {
-		return nil, fmt.Errorf("interface %s already exists on node %s", toIface, toNode.Name)
+	if isManual {
+		for _, l := range cfg.Links {
+			samePair := (l.From.Name == fromNode.Name && l.To.Name == toNode.Name) ||
+				(l.From.Name == toNode.Name && l.To.Name == fromNode.Name)
+			if !samePair {
+				continue
+			}
+			var existingFromIface, existingToIface string
+			if l.From.Name == fromNode.Name {
+				existingFromIface = l.From.Interface
+				existingToIface = l.To.Interface
+			} else {
+				existingFromIface = l.To.Interface
+				existingToIface = l.From.Interface
+			}
+			if !fromNode.IsExternal && fromIface != "" && existingFromIface == fromIface {
+				return nil, fmt.Errorf("interface %s already exists on node %s", fromIface, fromNode.Name)
+			}
+			if !toNode.IsExternal && toIface != "" && existingToIface == toIface {
+				return nil, fmt.Errorf("interface %s already exists on node %s", toIface, toNode.Name)
+			}
+		}
+
+		if !fromNode.IsExternal && fromIface != "" && wgIfacesFrom[fromIface] {
+			return nil, fmt.Errorf("interface %s already exists on node %s", fromIface, fromNode.Name)
+		}
+		if !toNode.IsExternal && toIface != "" && wgIfacesTo[toIface] {
+			return nil, fmt.Errorf("interface %s already exists on node %s", toIface, toNode.Name)
+		}
+	} else {
+		if !fromNode.IsExternal && fromIface != "" && usedIfacesFrom[fromIface] {
+			return nil, fmt.Errorf("interface %s already exists on node %s", fromIface, fromNode.Name)
+		}
+		if !toNode.IsExternal && toIface != "" && usedIfacesTo[toIface] {
+			return nil, fmt.Errorf("interface %s already exists on node %s", toIface, toNode.Name)
+		}
 	}
 
 	fromEP := ""
