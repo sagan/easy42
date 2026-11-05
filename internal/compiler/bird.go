@@ -702,6 +702,8 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 		linkData := config.ExtractNoteData(rl.link.Note)
 		pref := rl.localEnd.EffectivePreference(&rl.pol)
 		mark := rl.localEnd.EffectiveMark(&rl.pol)
+		addPaths := rl.localEnd.EffectiveAddPaths(&rl.pol)
+		hasAddPaths := addPaths != config.AddPathsOff
 		isSameASN := rl.remoteNode != nil && node.ASN != 0 && rl.remoteNode.ASN == node.ASN
 		nodeLink := map[string]any{
 			"type":           rl.link.LinkType(),
@@ -733,6 +735,8 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 			"cost":           rl.linkCost,
 			"has_preference": pref != nil,
 			"has_mark":       mark != "",
+			"has_add_paths":  hasAddPaths,
+			"add_paths":      addPaths,
 			"disable_bfd":    rl.link.DisableBFD,
 		}
 		if pref != nil {
@@ -744,6 +748,11 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 			nodeLink["mark"] = mark
 			localMap["mark"] = mark
 			localMap["has_mark"] = true
+		}
+		if hasAddPaths {
+			nodeLink["add_paths"] = addPaths
+			localMap["add_paths"] = addPaths
+			localMap["has_add_paths"] = true
 		}
 		nodeLinks = append(nodeLinks, nodeLink)
 	}
@@ -1167,6 +1176,7 @@ func linkEndToContextMap(end *config.LinkEnd, node *config.Node, peerName string
 	var preference *int
 	mark := ""
 	routingPolicy := ""
+	addPaths := ""
 
 	neighborAddr := ""
 	linkType := config.LinkTypeWireGuard
@@ -1186,6 +1196,7 @@ func linkEndToContextMap(end *config.LinkEnd, node *config.Node, peerName string
 		preference = end.Preference
 		mark = end.Mark
 		routingPolicy = end.RoutingPolicy
+		addPaths = end.AddPaths
 	}
 	endNote := ""
 	if end != nil {
@@ -1212,6 +1223,8 @@ func linkEndToContextMap(end *config.LinkEnd, node *config.Node, peerName string
 		"fwmark":               fwmark,
 		"mark":                 mark,
 		"routing_policy":       routingPolicy,
+		"add_paths":            addPaths,
+		"has_add_paths":        addPaths != config.AddPathsOff,
 		"note":                 endNote,
 		"Note":                 endNote,
 		"data":                 endData,

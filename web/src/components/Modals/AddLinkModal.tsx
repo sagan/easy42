@@ -98,6 +98,8 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
   const [toMark, setToMark] = useState<string>("");
   const [fromRoutingPolicy, setFromRoutingPolicy] = useState<string>("");
   const [toRoutingPolicy, setToRoutingPolicy] = useState<string>("");
+  const [fromAddPaths, setFromAddPaths] = useState<string>("");
+  const [toAddPaths, setToAddPaths] = useState<string>("");
   const [fromNote, setFromNote] = useState<string>("");
   const [toNote, setToNote] = useState<string>("");
   const [fromNoteTab, setFromNoteTab] = useState<"write" | "preview">("write");
@@ -247,6 +249,8 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
       setToMark(linkToEdit.to.mark || "");
       setFromRoutingPolicy(linkToEdit.from.routing_policy || "");
       setToRoutingPolicy(linkToEdit.to.routing_policy || "");
+      setFromAddPaths(linkToEdit.from.add_paths || "");
+      setToAddPaths(linkToEdit.to.add_paths || "");
       setFromNote(linkToEdit.from.note || "");
       setToNote(linkToEdit.to.note || "");
       setLinkNote(linkToEdit.note || "");
@@ -302,6 +306,8 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
       setToMark("");
       setFromRoutingPolicy("");
       setToRoutingPolicy("");
+      setFromAddPaths("");
+      setToAddPaths("");
       setFromNote("");
       setToNote("");
       setLinkNote("");
@@ -494,6 +500,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
           neighbor_address: effectiveFromNeighbor || undefined,
           policy: isFromExt ? "none" : fromPolicy,
           routing_policy: isFromExt ? undefined : fromRoutingPolicy || (linkToEdit ? "inherit" : undefined),
+          add_paths: isFromExt ? undefined : fromAddPaths || (linkToEdit ? "inherit" : undefined),
           cost: isFromExt ? undefined : parsedFromCost,
           fwmark: isFromExt ? undefined : parsedFromFwmark,
           preference: isFromExt ? undefined : parsedFromPreference,
@@ -509,6 +516,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
           neighbor_address: effectiveToNeighbor || undefined,
           policy: isToExt ? "none" : toPolicy,
           routing_policy: isToExt ? undefined : toRoutingPolicy || (linkToEdit ? "inherit" : undefined),
+          add_paths: isToExt ? undefined : toAddPaths || (linkToEdit ? "inherit" : undefined),
           cost: isToExt ? undefined : parsedToCost,
           fwmark: isToExt ? undefined : parsedToFwmark,
           preference: isToExt ? undefined : parsedToPreference,
@@ -527,6 +535,8 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
             to_policy: reqTo.policy,
             from_routing_policy: reqFrom.routing_policy,
             to_routing_policy: reqTo.routing_policy,
+            from_add_paths: reqFrom.add_paths,
+            to_add_paths: reqTo.add_paths,
             from_cost: reqFrom.cost,
             to_cost: reqTo.cost,
             from_fwmark: reqFrom.fwmark,
@@ -552,6 +562,8 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
             to_policy: reqTo.policy,
             from_routing_policy: reqFrom.routing_policy,
             to_routing_policy: reqTo.routing_policy,
+            from_add_paths: reqFrom.add_paths,
+            to_add_paths: reqTo.add_paths,
             from_cost: reqFrom.cost,
             to_cost: reqTo.cost,
             from_fwmark: reqFrom.fwmark,
@@ -578,10 +590,12 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
         const managedPreference = managedNode === fromNode ? parsedFromPreference : parsedToPreference;
         const managedMark = managedNode === fromNode ? parsedFromMark : parsedToMark;
         const managedRoutingPolicy = managedNode === fromNode ? fromRoutingPolicy : toRoutingPolicy;
+        const managedAddPaths = managedNode === fromNode ? fromAddPaths : toAddPaths;
         const externalFwmark = externalNode === fromNode ? parsedFromFwmark : parsedToFwmark;
         const externalPreference = externalNode === fromNode ? parsedFromPreference : parsedToPreference;
         const externalMark = externalNode === fromNode ? parsedFromMark : parsedToMark;
         const externalRoutingPolicy = externalNode === fromNode ? fromRoutingPolicy : toRoutingPolicy;
+        const externalAddPaths = externalNode === fromNode ? fromAddPaths : toAddPaths;
 
         const managedEnd = {
           name: managedNode.name,
@@ -592,6 +606,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
           use_ip: managedNode === fromNode ? fromUseIp : toUseIp,
           policy: managedPolicy,
           routing_policy: managedRoutingPolicy || undefined,
+          add_paths: managedAddPaths || undefined,
           cost: managedNode === fromNode ? parsedFromCost : parsedToCost,
           fwmark: managedFwmark,
           preference: managedPreference,
@@ -608,6 +623,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
           mtu: 1420,
           policy: "none",
           routing_policy: externalRoutingPolicy || undefined,
+          add_paths: externalAddPaths || undefined,
           cost: externalNode === fromNode ? parsedFromCost : parsedToCost,
           fwmark: externalFwmark,
           preference: externalPreference,
@@ -646,6 +662,8 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
             to_policy: reqTo.policy,
             from_routing_policy: reqFrom.routing_policy || (linkToEdit ? "inherit" : undefined),
             to_routing_policy: reqTo.routing_policy || (linkToEdit ? "inherit" : undefined),
+            from_add_paths: reqFrom.add_paths || (linkToEdit ? "inherit" : undefined),
+            to_add_paths: reqTo.add_paths || (linkToEdit ? "inherit" : undefined),
             from_cost: reqFrom.cost,
             to_cost: reqTo.cost,
             from_fwmark: reqFrom.fwmark,
@@ -674,6 +692,8 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
             to_policy: reqTo.policy,
             from_routing_policy: reqFrom.routing_policy,
             to_routing_policy: reqTo.routing_policy,
+            from_add_paths: reqFrom.add_paths,
+            to_add_paths: reqTo.add_paths,
             from_cost: reqFrom.cost,
             to_cost: reqTo.cost,
             from_fwmark: reqFrom.fwmark,
@@ -716,6 +736,8 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
             to_policy: toPolicy,
             from_routing_policy: fromRoutingPolicy ? fromRoutingPolicy : linkToEdit ? "inherit" : undefined,
             to_routing_policy: toRoutingPolicy ? toRoutingPolicy : linkToEdit ? "inherit" : undefined,
+            from_add_paths: fromAddPaths ? fromAddPaths : linkToEdit ? "inherit" : undefined,
+            to_add_paths: toAddPaths ? toAddPaths : linkToEdit ? "inherit" : undefined,
             from_cost: parsedFromCost,
             to_cost: parsedToCost,
             from_fwmark: parsedFromFwmark,
@@ -733,6 +755,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
               use_ip: fromUseIp,
               policy: fromPolicy,
               routing_policy: fromRoutingPolicy ? fromRoutingPolicy : "inherit",
+              add_paths: fromAddPaths ? fromAddPaths : "inherit",
               cost: parsedFromCost,
               fwmark: parsedFromFwmark,
               preference: parsedFromPreference,
@@ -749,6 +772,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
               use_ip: toUseIp,
               policy: toPolicy,
               routing_policy: toRoutingPolicy ? toRoutingPolicy : "inherit",
+              add_paths: toAddPaths ? toAddPaths : "inherit",
               cost: parsedToCost,
               fwmark: parsedToFwmark,
               preference: parsedToPreference,
@@ -778,6 +802,8 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
             to_policy: toPolicy,
             from_routing_policy: fromRoutingPolicy || undefined,
             to_routing_policy: toRoutingPolicy || undefined,
+            from_add_paths: fromAddPaths || undefined,
+            to_add_paths: toAddPaths || undefined,
             from_cost: parsedFromCost,
             to_cost: parsedToCost,
             from_fwmark: parsedFromFwmark,
@@ -796,6 +822,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
               use_ip: fromUseIp,
               policy: fromPolicy,
               routing_policy: fromRoutingPolicy || undefined,
+              add_paths: fromAddPaths || undefined,
               cost: parsedFromCost,
               fwmark: parsedFromFwmark,
               preference: parsedFromPreference,
@@ -806,6 +833,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
               use_ip: toUseIp,
               policy: toPolicy,
               routing_policy: toRoutingPolicy || undefined,
+              add_paths: toAddPaths || undefined,
               cost: parsedToCost,
               fwmark: parsedToFwmark,
               preference: parsedToPreference,
@@ -1526,6 +1554,25 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                     placeholder="Policy default"
                     helperText="Overrides policy BGP preference"
                   />
+                  <TextField
+                    select
+                    fullWidth
+                    size="small"
+                    label="BGP Add-Paths (Optional)"
+                    value={managedNode === fromNode ? fromAddPaths : toAddPaths}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (managedNode === fromNode) setFromAddPaths(val);
+                      else setToAddPaths(val);
+                    }}
+                    helperText="Overrides policy add paths"
+                  >
+                    <MenuItem value="">Policy default</MenuItem>
+                    <MenuItem value="off">Off — Disabled</MenuItem>
+                    <MenuItem value="on">On — Both rx and tx</MenuItem>
+                    <MenuItem value="rx">Rx — Receive only</MenuItem>
+                    <MenuItem value="tx">Tx — Transmit only</MenuItem>
+                  </TextField>
                   <TextFieldWithCopy
                     fullWidth
                     size="small"
@@ -1932,7 +1979,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                       />
                     </Box>
 
-                    <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}>
+                    <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 1.5 }}>
                       <TextFieldWithCopy
                         fullWidth
                         size="small"
@@ -1943,6 +1990,21 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                         placeholder="Policy default"
                         helperText="Overrides policy BGP preference"
                       />
+                      <TextField
+                        select
+                        fullWidth
+                        size="small"
+                        label="BGP Add-Paths (Optional)"
+                        value={fromAddPaths}
+                        onChange={(e) => setFromAddPaths(e.target.value)}
+                        helperText="Overrides policy add paths"
+                      >
+                        <MenuItem value="">Policy default</MenuItem>
+                        <MenuItem value="off">Off — Disabled</MenuItem>
+                        <MenuItem value="on">On — Both rx and tx</MenuItem>
+                        <MenuItem value="rx">Rx — Receive only</MenuItem>
+                        <MenuItem value="tx">Tx — Transmit only</MenuItem>
+                      </TextField>
                       <TextFieldWithCopy
                         fullWidth
                         size="small"
@@ -2112,7 +2174,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                       />
                     </Box>
 
-                    <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}>
+                    <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 1.5 }}>
                       <TextFieldWithCopy
                         fullWidth
                         size="small"
@@ -2123,6 +2185,21 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                         placeholder="Policy default"
                         helperText="Overrides policy BGP preference"
                       />
+                      <TextField
+                        select
+                        fullWidth
+                        size="small"
+                        label="BGP Add-Paths (Optional)"
+                        value={toAddPaths}
+                        onChange={(e) => setToAddPaths(e.target.value)}
+                        helperText="Overrides policy add paths"
+                      >
+                        <MenuItem value="">Policy default</MenuItem>
+                        <MenuItem value="off">Off — Disabled</MenuItem>
+                        <MenuItem value="on">On — Both rx and tx</MenuItem>
+                        <MenuItem value="rx">Rx — Receive only</MenuItem>
+                        <MenuItem value="tx">Tx — Transmit only</MenuItem>
+                      </TextField>
                       <TextFieldWithCopy
                         fullWidth
                         size="small"
@@ -2377,7 +2454,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                       helperText="Overrides policy cost if set (non-zero)"
                     />
                   </Box>
-                  <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 1.5 }}>
+                  <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 1.5 }}>
                     <TextFieldWithCopy
                       fullWidth
                       size="small"
@@ -2397,6 +2474,21 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                       placeholder="Policy default"
                       helperText="Overrides policy BGP preference"
                     />
+                    <TextField
+                      select
+                      fullWidth
+                      size="small"
+                      label="BGP Add-Paths (Optional)"
+                      value={fromAddPaths}
+                      onChange={(e) => setFromAddPaths(e.target.value)}
+                      helperText="Overrides policy add paths"
+                    >
+                      <MenuItem value="">Policy default</MenuItem>
+                      <MenuItem value="off">Off — Disabled</MenuItem>
+                      <MenuItem value="on">On — Both rx and tx</MenuItem>
+                      <MenuItem value="rx">Rx — Receive only</MenuItem>
+                      <MenuItem value="tx">Tx — Transmit only</MenuItem>
+                    </TextField>
                     <TextFieldWithCopy
                       fullWidth
                       size="small"
@@ -2639,7 +2731,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                       helperText="Overrides policy cost if set (non-zero)"
                     />
                   </Box>
-                  <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 1.5 }}>
+                  <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 1.5 }}>
                     <TextFieldWithCopy
                       fullWidth
                       size="small"
@@ -2659,6 +2751,21 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                       placeholder="Policy default"
                       helperText="Overrides policy BGP preference"
                     />
+                    <TextField
+                      select
+                      fullWidth
+                      size="small"
+                      label="BGP Add-Paths (Optional)"
+                      value={toAddPaths}
+                      onChange={(e) => setToAddPaths(e.target.value)}
+                      helperText="Overrides policy add paths"
+                    >
+                      <MenuItem value="">Policy default</MenuItem>
+                      <MenuItem value="off">Off — Disabled</MenuItem>
+                      <MenuItem value="on">On — Both rx and tx</MenuItem>
+                      <MenuItem value="rx">Rx — Receive only</MenuItem>
+                      <MenuItem value="tx">Tx — Transmit only</MenuItem>
+                    </TextField>
                     <TextFieldWithCopy
                       fullWidth
                       size="small"

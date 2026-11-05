@@ -173,6 +173,7 @@ const ConfigChangeJSONSchema = `{
         "preference": { "type": ["integer", "null"] },
         "mark": { "type": "string" },
         "routing_policy": { "type": "string" },
+        "add_paths": { "type": "string" },
         "note": { "type": "string" }
       }
     },
@@ -320,6 +321,7 @@ type LinkEndPatch struct {
 	Preference          *int    `json:"preference,omitempty" yaml:"preference,omitempty"`
 	Mark                *string `json:"mark,omitempty" yaml:"mark,omitempty"`
 	RoutingPolicy       *string `json:"routing_policy,omitempty" yaml:"routing_policy,omitempty"`
+	AddPaths            *string `json:"add_paths,omitempty" yaml:"add_paths,omitempty"`
 	Note                *string `json:"note,omitempty" yaml:"note,omitempty"`
 }
 

@@ -1421,6 +1421,32 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
                     variant="caption"
                     sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}
                   >
+                    <Share2 size={12} /> Add-Paths:
+                  </Typography>
+                  <Chip
+                    label={
+                      link.from.add_paths
+                        ? `${link.from.add_paths.toUpperCase()} (Override)`
+                        : "Inherited"
+                    }
+                    size="small"
+                    sx={{
+                      height: 20,
+                      fontSize: "0.65rem",
+                      fontWeight: 700,
+                      bgcolor: link.from.add_paths ? "rgba(99, 102, 241, 0.12)" : "rgba(148, 163, 184, 0.15)",
+                      color: link.from.add_paths ? "#6366F1" : "#64748B",
+                      border: "1px solid",
+                      borderColor: link.from.add_paths ? "rgba(99, 102, 241, 0.3)" : "rgba(148, 163, 184, 0.2)",
+                    }}
+                  />
+                </Box>
+
+                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <Typography
+                    variant="caption"
+                    sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}
+                  >
                     <Gauge size={12} /> Link Cost:
                   </Typography>
                   <Chip
@@ -2105,6 +2131,32 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
                       color: link.to.routing_policy ? "#D97706" : "#64748B",
                       border: "1px solid",
                       borderColor: link.to.routing_policy ? "rgba(245, 158, 11, 0.3)" : "rgba(148, 163, 184, 0.2)",
+                    }}
+                  />
+                </Box>
+
+                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <Typography
+                    variant="caption"
+                    sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}
+                  >
+                    <Share2 size={12} /> Add-Paths:
+                  </Typography>
+                  <Chip
+                    label={
+                      link.to.add_paths
+                        ? `${link.to.add_paths.toUpperCase()} (Override)`
+                        : "Inherited"
+                    }
+                    size="small"
+                    sx={{
+                      height: 20,
+                      fontSize: "0.65rem",
+                      fontWeight: 700,
+                      bgcolor: link.to.add_paths ? "rgba(99, 102, 241, 0.12)" : "rgba(148, 163, 184, 0.15)",
+                      color: link.to.add_paths ? "#6366F1" : "#64748B",
+                      border: "1px solid",
+                      borderColor: link.to.add_paths ? "rgba(99, 102, 241, 0.3)" : "rgba(148, 163, 184, 0.2)",
                     }}
                   />
                 </Box>

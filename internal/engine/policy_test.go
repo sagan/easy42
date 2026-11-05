@@ -301,3 +301,102 @@ func TestRoutingPolicyEngineCRUD(t *testing.T) {
 	}
 }
 
+func TestAddPathsEngineCRUD(t *testing.T) {
+	tempDir := t.TempDir()
+	store := config.NewStore(tempDir)
+	pass, err := store.Initialize()
+	if err != nil {
+		t.Fatalf("Failed to init store: %v", err)
+	}
+
+	mgr := NewManager(store)
+	if err := mgr.Unlock(pass); err != nil {
+		t.Fatalf("Failed to unlock manager: %v", err)
+	}
+
+	// 1. Create policy with AddPaths "on"
+	p1, err := mgr.CreateNetworkPolicy(config.NetworkPolicy{
+		ID:       "pol-on",
+		Name:     "AddPaths On Policy",
+		AddPaths: "on",
+	})
+	if err != nil {
+		t.Fatalf("CreateNetworkPolicy failed: %v", err)
+	}
+	if p1.AddPaths != config.AddPathsOn {
+		t.Errorf("expected AddPaths 'on', got %q", p1.AddPaths)
+	}
+	if p1.EffectiveAddPaths() != config.AddPathsOn {
+		t.Errorf("expected EffectiveAddPaths 'on', got %q", p1.EffectiveAddPaths())
+	}
+
+	// 2. Update policy to "rx"
+	p1Updated, err := mgr.UpdateNetworkPolicy("pol-on", config.NetworkPolicy{
+		ID:       "pol-on",
+		Name:     "AddPaths Rx Policy",
+		AddPaths: "rx",
+	})
+	if err != nil {
+		t.Fatalf("UpdateNetworkPolicy failed: %v", err)
+	}
+	if p1Updated.AddPaths != config.AddPathsRx {
+		t.Errorf("expected AddPaths 'rx', got %q", p1Updated.AddPaths)
+	}
+
+	// 3. Create two nodes and a link with LinkEnd override
+	n1 := config.Node{Name: "node-1", Host: "h1", IP: "192.168.1.1", Interface: "eth0", ASN: 4224420001}
+	n2 := config.Node{Name: "node-2", Host: "h2", IP: "192.168.1.2", Interface: "eth0", ASN: 4224420002}
+	if err := mgr.AddNode(n1); err != nil {
+		t.Fatalf("AddNode node-1 failed: %v", err)
+	}
+	if err := mgr.AddNode(n2); err != nil {
+		t.Fatalf("AddNode node-2 failed: %v", err)
+	}
+
+	link, err := mgr.AddLinkAdvanced(n1.Name, n2.Name,
+		&config.LinkEnd{Policy: "pol-on", AddPaths: "tx"},
+		&config.LinkEnd{Policy: "pol-on"},
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("AddLinkAdvanced failed: %v", err)
+	}
+
+	var fromEnd, toEnd *config.LinkEnd
+	if link.From.Name == n1.Name {
+		fromEnd = &link.From
+		toEnd = &link.To
+	} else {
+		fromEnd = &link.To
+		toEnd = &link.From
+	}
+
+	if fromEnd.AddPaths != config.AddPathsTx {
+		t.Errorf("expected fromEnd.AddPaths == 'tx', got %q", fromEnd.AddPaths)
+	}
+	if toEnd.AddPaths != "" {
+		t.Errorf("expected toEnd.AddPaths == '', got %q", toEnd.AddPaths)
+	}
+	if toEnd.EffectiveAddPaths(p1Updated) != config.AddPathsRx {
+		t.Errorf("expected toEnd.EffectiveAddPaths to inherit 'rx', got %q", toEnd.EffectiveAddPaths(p1Updated))
+	}
+
+	// 4. Update link to reset AddPaths via 'inherit'
+	updatedLink, err := mgr.UpdateLinkAdvanced(n1.Name, n2.Name,
+		&config.LinkEnd{AddPaths: "inherit"},
+		nil,
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("UpdateLinkAdvanced failed: %v", err)
+	}
+	if updatedLink.From.Name == n1.Name {
+		fromEnd = &updatedLink.From
+	} else {
+		fromEnd = &updatedLink.To
+	}
+	if fromEnd.AddPaths != "" {
+		t.Errorf("expected fromEnd.AddPaths to be cleared to '', got %q", fromEnd.AddPaths)
+	}
+}
+

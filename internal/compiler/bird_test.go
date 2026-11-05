@@ -2153,6 +2153,114 @@ func TestBirdPeerPreference(t *testing.T) {
 	validateBirdSyntax(t, conf)
 }
 
+func TestBirdPeerAddPaths(t *testing.T) {
+	node := config.Node{
+		Name: "node1",
+		IP:   "192.168.1.1",
+		ASN:  4224420001,
+	}
+	allNodes := []config.Node{
+		node,
+		{Name: "peer-none", IP: "192.168.1.2", ASN: 4224420002},
+		{Name: "peer-pol-on", IP: "192.168.1.3", ASN: 4224420003},
+		{Name: "peer-override-rx", IP: "192.168.1.4", ASN: 4224420004},
+		{Name: "peer-override-off", IP: "192.168.1.5", ASN: 4224420005},
+		{Name: "peer-ext-tx", IsExternal: true, ASN: 4224420006},
+		{Name: "peer-both", IP: "192.168.1.7", ASN: 4224420007},
+	}
+
+	prefVal := 180
+	links := []config.Link{
+		// 1. Default policy (unset add_paths -> off)
+		{
+			From: config.LinkEnd{Name: "node1", Interface: "wg42none", Policy: "default"},
+			To:   config.LinkEnd{Name: "peer-none", Interface: "wg42node1"},
+		},
+		// 2. Policy with AddPaths "on"
+		{
+			From: config.LinkEnd{Name: "node1", Interface: "wg42on", Policy: "pol-on"},
+			To:   config.LinkEnd{Name: "peer-pol-on", Interface: "wg42node1"},
+		},
+		// 3. Policy has "on", but LinkEnd overrides to "rx"
+		{
+			From: config.LinkEnd{Name: "node1", Interface: "wg42rx", Policy: "pol-on", AddPaths: "rx"},
+			To:   config.LinkEnd{Name: "peer-override-rx", Interface: "wg42node1"},
+		},
+		// 4. Policy has "on", but LinkEnd overrides to "off"
+		{
+			From: config.LinkEnd{Name: "node1", Interface: "wg42off", Policy: "pol-on", AddPaths: "off"},
+			To:   config.LinkEnd{Name: "peer-override-off", Interface: "wg42node1"},
+		},
+		// 5. External peer with LinkEnd override "tx"
+		{
+			From: config.LinkEnd{Name: "node1", Interface: "wg42ext", Policy: config.PolicyDN42, AddPaths: "tx"},
+			To:   config.LinkEnd{Name: "peer-ext-tx", Interface: "wg42node1", Address: "fe80::6/64"},
+		},
+		// 6. Policy has preference 180 and AddPaths "on" (both present in channel)
+		{
+			From: config.LinkEnd{Name: "node1", Interface: "wg42both", Policy: "pol-both"},
+			To:   config.LinkEnd{Name: "peer-both", Interface: "wg42node1"},
+		},
+	}
+
+	customPolicies := []config.NetworkPolicy{
+		{
+			ID:       "pol-on",
+			Name:     "Policy with AddPaths On",
+			AddPaths: config.AddPathsOn,
+		},
+		{
+			ID:         "pol-both",
+			Name:       "Policy with Preference and AddPaths",
+			Preference: &prefVal,
+			AddPaths:   config.AddPathsOn,
+		},
+	}
+
+	conf, err := GenerateBirdConfig(&node, allNodes, links, nil, customPolicies)
+	if err != nil {
+		t.Fatalf("GenerateBirdConfig failed: %v", err)
+	}
+
+	// 1. peer-none should NOT have add paths line
+	peerNoneBlock := extractBirdProtocolBlock(conf, "easy42_peer_peer-none")
+	if strings.Contains(peerNoneBlock, "add paths") {
+		t.Errorf("Did not expect 'add paths' in peer-none protocol block:\n%s", peerNoneBlock)
+	}
+
+	// 2. peer-pol-on should have "add paths on;" from policy
+	peerOnBlock := extractBirdProtocolBlock(conf, "peer_peer-pol-on")
+	if !strings.Contains(peerOnBlock, "ipv4 { add paths on; };") || !strings.Contains(peerOnBlock, "ipv6 { add paths on; };") {
+		t.Errorf("Expected 'ipv4 { add paths on; };' and 'ipv6 { add paths on; };' in peer-pol-on block:\n%s", peerOnBlock)
+	}
+
+	// 3. peer-override-rx should have "add paths rx;" from LinkEnd override
+	peerRxBlock := extractBirdProtocolBlock(conf, "peer_peer-override-rx")
+	if !strings.Contains(peerRxBlock, "ipv4 { add paths rx; };") || !strings.Contains(peerRxBlock, "ipv6 { add paths rx; };") {
+		t.Errorf("Expected 'ipv4 { add paths rx; };' and 'ipv6 { add paths rx; };' in peer-override-rx block:\n%s", peerRxBlock)
+	}
+
+	// 4. peer-override-off should NOT have add paths line
+	peerOffBlock := extractBirdProtocolBlock(conf, "peer_peer-override-off")
+	if strings.Contains(peerOffBlock, "add paths") {
+		t.Errorf("Did not expect 'add paths' in peer-override-off block:\n%s", peerOffBlock)
+	}
+
+	// 5. peer-ext-tx should have "add paths tx;" from LinkEnd override
+	peerExtTxBlock := extractBirdProtocolBlock(conf, "ext_peer_peer-ext-tx")
+	if !strings.Contains(peerExtTxBlock, "ipv4 { add paths tx; };") || !strings.Contains(peerExtTxBlock, "ipv6 { add paths tx; };") {
+		t.Errorf("Expected 'ipv4 { add paths tx; };' and 'ipv6 { add paths tx; };' in ext_peer_peer-ext-tx block:\n%s", peerExtTxBlock)
+	}
+
+	// 6. peer-both should combine preference and add paths
+	peerBothBlock := extractBirdProtocolBlock(conf, "peer_peer-both")
+	if !strings.Contains(peerBothBlock, "ipv4 { preference 180; add paths on; };") || !strings.Contains(peerBothBlock, "ipv6 { preference 180; add paths on; };") {
+		t.Errorf("Expected 'ipv4 { preference 180; add paths on; };' and 'ipv6 { preference 180; add paths on; };' in peer-both block:\n%s", peerBothBlock)
+	}
+
+	validateBirdSyntax(t, conf)
+}
+
 func extractBirdProtocolBlock(conf, protoName string) string {
 	target := "protocol bgp '" + protoName + "'"
 	idx := strings.Index(conf, target)

@@ -1488,9 +1488,15 @@ template bgp {{.template_name}} {
 protocol bgp 'ext_peer_{{.remote.name}}' from {{.bgp_template}} {
 {{if .disable_bfd}}    bfd no;
 {{end -}}
-{{if .has_preference -}}
+{{if and .has_preference .has_add_paths -}}
+    ipv4 { preference {{ .preference }}; add paths {{ .add_paths }}; };
+    ipv6 { preference {{ .preference }}; add paths {{ .add_paths }}; };
+{{else if .has_preference -}}
     ipv4 { preference {{ .preference }}; };
     ipv6 { preference {{ .preference }}; };
+{{else if .has_add_paths -}}
+    ipv4 { add paths {{ .add_paths }}; };
+    ipv6 { add paths {{ .add_paths }}; };
 {{end -}}
     {{if .local.interface}}interface "{{ .local.interface }}";{{end}}
     local {{ .local.address }} as {{ .local_as }};
@@ -1510,9 +1516,15 @@ protocol bgp 'ext_peer_{{.remote.name}}' from {{.bgp_template}} {
 protocol bgp 'easy42_peer_{{.remote.name}}' from {{.bgp_template}} {
 {{if .disable_bfd}}    bfd no;
 {{end -}}
-{{if .has_preference -}}
+{{if and .has_preference .has_add_paths -}}
+    ipv4 { preference {{ .preference }}; add paths {{ .add_paths }}; };
+    ipv6 { preference {{ .preference }}; add paths {{ .add_paths }}; };
+{{else if .has_preference -}}
     ipv4 { preference {{ .preference }}; };
     ipv6 { preference {{ .preference }}; };
+{{else if .has_add_paths -}}
+    ipv4 { add paths {{ .add_paths }}; };
+    ipv6 { add paths {{ .add_paths }}; };
 {{end -}}
     {{if .local.interface}}interface "{{ .local.interface }}";{{end}}
     local {{ .local.address }} as SELF_AS;
@@ -1529,9 +1541,15 @@ protocol bgp 'easy42_peer_{{.remote.name}}' from {{.bgp_template}} {
 protocol bgp 'peer_{{.remote.name}}' from {{.bgp_template}} {
 {{if .disable_bfd}}    bfd no;
 {{end -}}
-{{if .has_preference -}}
+{{if and .has_preference .has_add_paths -}}
+    ipv4 { preference {{ .preference }}; add paths {{ .add_paths }}; };
+    ipv6 { preference {{ .preference }}; add paths {{ .add_paths }}; };
+{{else if .has_preference -}}
     ipv4 { preference {{ .preference }}; };
     ipv6 { preference {{ .preference }}; };
+{{else if .has_add_paths -}}
+    ipv4 { add paths {{ .add_paths }}; };
+    ipv6 { add paths {{ .add_paths }}; };
 {{end -}}
     {{if .local.interface}}interface "{{ .local.interface }}";{{end}}
     local {{ .local.address }} as {{ .local_as }};

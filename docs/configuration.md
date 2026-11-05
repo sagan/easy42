@@ -307,6 +307,7 @@ User-defined policies with the same ID as a built-in override that built-in at l
 | `preference`            | `integer`  | Default BIRD BGP protocol preference.                                                       |
 | `mark`                  | `string`   | Default netfilter mark applied to packets received from the peer (supports `mark` or `mark/bitmask`). |
 | `routing_policy`        | `string`   | `full`, `stub`, `receive_only`, or `advertise_only` (aliases are normalized).               |
+| `add_paths`             | `string`   | BIRD BGP ADD-PATH capability (`off` [default], `on`, `rx`, or `tx`).                        |
 | `bird_import_filter`    | `string`   | Custom BIRD snippet appended to the generated import filter.                                |
 | `bird_export_filter`    | `string`   | Custom BIRD snippet appended to the generated export filter.                                |
 
@@ -420,6 +421,7 @@ Each endpoint (`from`, `to`):
 | `preference`           | `integer` | BIRD BGP preference override.                                                                            |
 | `mark`                 | `string`  | Netfilter mark override for received packets (supports `mark` or `mark/bitmask`).                        |
 | `routing_policy`       | `string`  | BGP routing policy override.                                                                             |
+| `add_paths`            | `string`  | BIRD BGP add paths override (`off`, `on`, `rx`, `tx`, or `inherit` to revert to policy).                 |
 | `psk`                  | `string`  | Endpoint-level encrypted PSK (legacy; link-level `psk` is preferred).                                    |
 | `note`                 | `string`  | Markdown note.                                                                                           |
 

@@ -20,6 +20,14 @@ const (
 	RoutingPolicyAdvertiseOnly = "advertise_only"
 )
 
+// BGP Add-Paths options (controls Bird "add paths switch|rx|tx")
+const (
+	AddPathsOff = "off"
+	AddPathsOn  = "on"
+	AddPathsRx  = "rx"
+	AddPathsTx  = "tx"
+)
+
 const (
 	BlockIngressNewDisabled = ""
 	BlockIngressNewAll      = "all"
@@ -82,6 +90,34 @@ func IsValidRoutingPolicy(p string) bool {
 	}
 }
 
+// NormalizeAddPaths sanitizes and normalizes BGP add paths options.
+// Supported: "off" (default), "on", "rx", "tx".
+func NormalizeAddPaths(p string) string {
+	switch strings.ToLower(strings.TrimSpace(p)) {
+	case AddPathsOn, "true", "yes", "both":
+		return AddPathsOn
+	case AddPathsRx, "receive", "receive_only", "recv":
+		return AddPathsRx
+	case AddPathsTx, "transmit", "transmit_only", "send":
+		return AddPathsTx
+	case AddPathsOff, "false", "no", "none", "disable", "disabled":
+		return AddPathsOff
+	default:
+		return AddPathsOff
+	}
+}
+
+// IsValidAddPaths returns true if p is a recognized add paths setting or alias.
+func IsValidAddPaths(p string) bool {
+	switch strings.ToLower(strings.TrimSpace(p)) {
+	case AddPathsOff, AddPathsOn, AddPathsRx, AddPathsTx,
+		"true", "false", "yes", "no", "none", "disable", "disabled", "both", "receive", "receive_only", "recv", "transmit", "transmit_only", "send":
+		return true
+	default:
+		return false
+	}
+}
+
 // SNATConfig represents source network address translation options for egress traffic
 type SNATConfig struct {
 	Enabled   bool   `json:"enabled"`
@@ -122,6 +158,7 @@ type NetworkPolicy struct {
 	Preference          *int        `json:"preference,omitempty"`          // BIRD peer BGP protocol preference
 	Mark                string      `json:"mark,omitempty"`                // Netfilter mark for received packets from the link peer
 	RoutingPolicy       string      `json:"routing_policy,omitempty"`      // BGP meta routing policy ("full", "stub", "receive_only", "advertise_only")
+	AddPaths            string      `json:"add_paths,omitempty"`           // BIRD peer BGP add paths configuration ("off", "on", "rx", "tx")
 	BirdImportFilter    string      `json:"bird_import_filter,omitempty"`  // Custom BIRD snippet appended to import filter block end
 	BirdExportFilter    string      `json:"bird_export_filter,omitempty"`  // Custom BIRD snippet appended to export filter block end
 	BirdExportFillter   string      `json:"bird_export_fillter,omitempty"` // Alias for export filter
@@ -186,6 +223,14 @@ func (p *NetworkPolicy) EffectiveRoutingPolicy() string {
 		return NormalizeRoutingPolicy(p.RoutingPolicy)
 	}
 	return RoutingPolicyFull
+}
+
+// EffectiveAddPaths returns the active add paths setting or "off" if unset
+func (p *NetworkPolicy) EffectiveAddPaths() string {
+	if p != nil && strings.TrimSpace(p.AddPaths) != "" {
+		return NormalizeAddPaths(p.AddPaths)
+	}
+	return AddPathsOff
 }
 
 // EffectiveFwmark returns the configured fwmark or empty string if unset
@@ -419,6 +464,7 @@ func GetBuiltinPolicies(netSettings *NetworkSettings) []NetworkPolicy {
 			IsInternal:     true,
 			Cost:           100,
 			RoutingPolicy:  RoutingPolicyFull,
+			AddPaths:       AddPathsOff,
 			RejectInternet: true,
 			FilterForward:  false,
 			FilterInput:    false,
@@ -430,6 +476,7 @@ func GetBuiltinPolicies(netSettings *NetworkSettings) []NetworkPolicy {
 			IsInternal:         true,
 			Cost:               100,
 			RoutingPolicy:      RoutingPolicyFull,
+			AddPaths:           AddPathsOff,
 			AllowedDstCIDRs:    dn42Prefixes,
 			AllowedSrcCIDRs:    dn42Prefixes,
 			DisallowedDstCIDRs: disallowedDN42,
@@ -457,6 +504,7 @@ func GetBuiltinPolicies(netSettings *NetworkSettings) []NetworkPolicy {
 			IsInternal:     true,
 			Cost:           100,
 			RoutingPolicy:  RoutingPolicyFull,
+			AddPaths:       AddPathsOff,
 			RejectInternet: false,
 			FilterForward:  false,
 			FilterInput:    false,
@@ -581,4 +629,17 @@ func (l *LinkEnd) EffectiveRoutingPolicy(p *NetworkPolicy) string {
 		return p.EffectiveRoutingPolicy()
 	}
 	return RoutingPolicyFull
+}
+
+// EffectiveAddPaths returns the active add paths setting for this LinkEnd using the provided policy.
+// If LinkEnd's AddPaths is defined (and not "inherit"), it overrides the policy's add paths setting.
+// Otherwise, it falls back to the policy's add paths setting.
+func (l *LinkEnd) EffectiveAddPaths(p *NetworkPolicy) string {
+	if l != nil && strings.TrimSpace(l.AddPaths) != "" && !strings.EqualFold(strings.TrimSpace(l.AddPaths), "inherit") {
+		return NormalizeAddPaths(l.AddPaths)
+	}
+	if p != nil {
+		return p.EffectiveAddPaths()
+	}
+	return AddPathsOff
 }

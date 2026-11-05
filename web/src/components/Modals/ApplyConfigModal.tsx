@@ -124,6 +124,7 @@ export function generateLinkApplySnippet(link: Link): string {
     if (end.preference !== undefined) ep.preference = end.preference;
     if (end.mark !== undefined && end.mark !== "") ep.mark = end.mark;
     if (end.routing_policy !== undefined && end.routing_policy !== "") ep.routing_policy = end.routing_policy;
+    if (end.add_paths !== undefined && end.add_paths !== "") ep.add_paths = end.add_paths;
     if (end.note !== undefined && end.note !== "") ep.note = end.note;
     return ep;
   };

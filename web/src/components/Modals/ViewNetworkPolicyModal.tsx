@@ -156,7 +156,7 @@ export const ViewNetworkPolicyModal: React.FC<ViewNetworkPolicyModalProps> = ({
             <Route size={16} color="#4F46E5" /> Routing & BGP Configuration
           </Typography>
 
-          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr 1fr" }, gap: 2 }}>
+          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr 1fr", sm: "1fr 1fr 1fr 1fr" }, gap: 2 }}>
             <Box>
               <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600 }}>
                 INTERNAL BGP COST
@@ -179,6 +179,14 @@ export const ViewNetworkPolicyModal: React.FC<ViewNetworkPolicyModalProps> = ({
               </Typography>
               <Typography variant="body2" sx={{ fontWeight: 600, color: "#334155" }}>
                 {routingPolicyLabels[policy.routing_policy || "full"] || policy.routing_policy || "Full"}
+              </Typography>
+            </Box>
+            <Box>
+              <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600 }}>
+                BGP ADD-PATHS
+              </Typography>
+              <Typography variant="body2" className="mono-font" sx={{ fontWeight: 700, color: "#0F172A" }}>
+                {policy.add_paths ? policy.add_paths.toUpperCase() : "OFF"}
               </Typography>
             </Box>
           </Box>

@@ -541,6 +541,8 @@ type addLinkRequest struct {
 	ToMark         *string         `json:"to_mark,omitempty"`
 	FromRoutingPolicy string      `json:"from_routing_policy,omitempty"`
 	ToRoutingPolicy   string      `json:"to_routing_policy,omitempty"`
+	FromAddPaths      string      `json:"from_add_paths,omitempty"`
+	ToAddPaths        string      `json:"to_add_paths,omitempty"`
 	FromNote       *string         `json:"from_note,omitempty"`
 	ToNote         *string         `json:"to_note,omitempty"`
 	Note           *string         `json:"note,omitempty"`
@@ -688,6 +690,18 @@ func (s *Server) handleAddLink(w http.ResponseWriter, r *http.Request) {
 		}
 		req.To.RoutingPolicy = req.ToRoutingPolicy
 	}
+	if req.FromAddPaths != "" {
+		if req.From == nil {
+			req.From = &config.LinkEnd{}
+		}
+		req.From.AddPaths = req.FromAddPaths
+	}
+	if req.ToAddPaths != "" {
+		if req.To == nil {
+			req.To = &config.LinkEnd{}
+		}
+		req.To.AddPaths = req.ToAddPaths
+	}
 	if req.FromNote != nil {
 		if req.From == nil {
 			req.From = &config.LinkEnd{}
@@ -785,6 +799,8 @@ type updateLinkRequest struct {
 	ToMark         *string         `json:"to_mark,omitempty"`
 	FromRoutingPolicy string      `json:"from_routing_policy,omitempty"`
 	ToRoutingPolicy   string      `json:"to_routing_policy,omitempty"`
+	FromAddPaths      string      `json:"from_add_paths,omitempty"`
+	ToAddPaths        string      `json:"to_add_paths,omitempty"`
 	FromNote       *string         `json:"from_note,omitempty"`
 	ToNote         *string         `json:"to_note,omitempty"`
 	Note           *string         `json:"note,omitempty"`
@@ -957,6 +973,18 @@ func (s *Server) handleUpdateLink(w http.ResponseWriter, r *http.Request) {
 			req.To = &config.LinkEnd{}
 		}
 		req.To.RoutingPolicy = req.ToRoutingPolicy
+	}
+	if req.FromAddPaths != "" {
+		if req.From == nil {
+			req.From = &config.LinkEnd{}
+		}
+		req.From.AddPaths = req.FromAddPaths
+	}
+	if req.ToAddPaths != "" {
+		if req.To == nil {
+			req.To = &config.LinkEnd{}
+		}
+		req.To.AddPaths = req.ToAddPaths
 	}
 	if req.FromNote != nil {
 		if req.From == nil {

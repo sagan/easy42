@@ -1559,6 +1559,113 @@ func TestRoutingPolicyServerAPI(t *testing.T) {
 	}
 }
 
+func TestAddPathsAPI(t *testing.T) {
+	srv, tmpDir, initPass := setupTestServer(t)
+	defer os.RemoveAll(tmpDir)
+
+	loginBody, _ := json.Marshal(map[string]string{"password": initPass})
+	reqLogin := httptest.NewRequest("POST", "/api/auth/login", bytes.NewReader(loginBody))
+	wLogin := httptest.NewRecorder()
+	srv.router.ServeHTTP(wLogin, reqLogin)
+	if wLogin.Code != http.StatusOK {
+		t.Fatalf("Login failed: %d", wLogin.Code)
+	}
+	cookie := wLogin.Result().Cookies()[0]
+
+	// 1. Create custom NetworkPolicy with add_paths
+	polPayload := map[string]interface{}{
+		"id":        "pol-custom-addpaths",
+		"name":      "Custom AddPaths Policy",
+		"add_paths": "on",
+	}
+	polBody, _ := json.Marshal(polPayload)
+	reqPol := httptest.NewRequest("POST", "/api/network-policies", bytes.NewReader(polBody))
+	reqPol.AddCookie(cookie)
+	wPol := httptest.NewRecorder()
+	srv.router.ServeHTTP(wPol, reqPol)
+	if wPol.Code != http.StatusCreated {
+		t.Fatalf("Create policy failed: %d %s", wPol.Code, wPol.Body.String())
+	}
+
+	var createdPol config.NetworkPolicy
+	_ = json.Unmarshal(wPol.Body.Bytes(), &createdPol)
+	if createdPol.AddPaths != "on" {
+		t.Errorf("Expected policy AddPaths 'on', got %q", createdPol.AddPaths)
+	}
+
+	// 2. Add two nodes
+	n1Body, _ := json.Marshal(config.Node{Name: "n-ap1", Host: "h1", IP: "192.168.1.1", Interface: "eth0", ASN: 4224420001})
+	reqN1 := httptest.NewRequest("POST", "/api/nodes", bytes.NewReader(n1Body))
+	reqN1.AddCookie(cookie)
+	wN1 := httptest.NewRecorder()
+	srv.router.ServeHTTP(wN1, reqN1)
+	if wN1.Code != http.StatusCreated {
+		t.Fatalf("AddNode 1 failed: %d", wN1.Code)
+	}
+
+	n2Body, _ := json.Marshal(config.Node{Name: "n-ap2", Host: "h2", IP: "192.168.1.2", Interface: "eth0", ASN: 4224420002})
+	reqN2 := httptest.NewRequest("POST", "/api/nodes", bytes.NewReader(n2Body))
+	reqN2.AddCookie(cookie)
+	wN2 := httptest.NewRecorder()
+	srv.router.ServeHTTP(wN2, reqN2)
+	if wN2.Code != http.StatusCreated {
+		t.Fatalf("AddNode 2 failed: %d", wN2.Code)
+	}
+
+	// 3. Add link with from_add_paths
+	linkPayload := map[string]interface{}{
+		"from_node":      "n-ap1",
+		"to_node":        "n-ap2",
+		"from_add_paths": "rx",
+	}
+	linkBody, _ := json.Marshal(linkPayload)
+	reqLink := httptest.NewRequest("POST", "/api/links", bytes.NewReader(linkBody))
+	reqLink.AddCookie(cookie)
+	wLink := httptest.NewRecorder()
+	srv.router.ServeHTTP(wLink, reqLink)
+	if wLink.Code != http.StatusCreated {
+		t.Fatalf("AddLink failed: %d %s", wLink.Code, wLink.Body.String())
+	}
+
+	var createdLink config.Link
+	_ = json.Unmarshal(wLink.Body.Bytes(), &createdLink)
+	var end1 *config.LinkEnd
+	if createdLink.From.Name == "n-ap1" {
+		end1 = &createdLink.From
+	} else {
+		end1 = &createdLink.To
+	}
+	if end1.AddPaths != "rx" {
+		t.Errorf("Expected link end add_paths 'rx', got %q", end1.AddPaths)
+	}
+
+	// 4. Update link with from_add_paths: tx
+	updatePayload := map[string]interface{}{
+		"from_node":      "n-ap1",
+		"to_node":        "n-ap2",
+		"from_add_paths": "tx",
+	}
+	updateBody, _ := json.Marshal(updatePayload)
+	reqUpdate := httptest.NewRequest("PUT", "/api/links", bytes.NewReader(updateBody))
+	reqUpdate.AddCookie(cookie)
+	wUpdate := httptest.NewRecorder()
+	srv.router.ServeHTTP(wUpdate, reqUpdate)
+	if wUpdate.Code != http.StatusOK {
+		t.Fatalf("UpdateLink failed: %d %s", wUpdate.Code, wUpdate.Body.String())
+	}
+
+	var updatedLink config.Link
+	_ = json.Unmarshal(wUpdate.Body.Bytes(), &updatedLink)
+	if updatedLink.From.Name == "n-ap1" {
+		end1 = &updatedLink.From
+	} else {
+		end1 = &updatedLink.To
+	}
+	if end1.AddPaths != "tx" {
+		t.Errorf("Expected updated link end add_paths 'tx', got %q", end1.AddPaths)
+	}
+}
+
 func TestRestartEndpoints(t *testing.T) {
 	srv, tmpDir, initPass := setupTestServer(t)
 	defer os.RemoveAll(tmpDir)

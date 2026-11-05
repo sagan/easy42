@@ -435,6 +435,7 @@ type LinkEnd struct {
 	Preference          *int   `json:"preference,omitempty"`        // BIRD peer BGP protocol preference (overrides policy preference)
 	Mark                string `json:"mark,omitempty"`              // Netfilter mark for received packets from the link peer (overrides policy mark)
 	RoutingPolicy       string `json:"routing_policy,omitempty"`    // BGP meta routing policy override (overrides policy routing policy)
+	AddPaths            string `json:"add_paths,omitempty"`         // BGP add paths override ("off", "on", "rx", "tx", or "inherit" / empty to inherit)
 	Psk                 string `json:"psk,omitempty"`               // Encrypted base64 wireguard preshared key
 	Note                string `json:"note,omitempty"`              // Markdown format text note
 }

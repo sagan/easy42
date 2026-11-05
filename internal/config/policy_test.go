@@ -364,6 +364,107 @@ func TestRoutingPolicyHelpers(t *testing.T) {
 	}
 }
 
+func TestEffectiveAddPaths(t *testing.T) {
+	// 1. Nil policy and nil LinkEnd
+	var pol *NetworkPolicy
+	var end *LinkEnd
+	if ap := pol.EffectiveAddPaths(); ap != AddPathsOff {
+		t.Errorf("expected %q for nil policy, got %q", AddPathsOff, ap)
+	}
+	if ap := end.EffectiveAddPaths(pol); ap != AddPathsOff {
+		t.Errorf("expected %q for nil linkEnd with nil policy, got %q", AddPathsOff, ap)
+	}
+
+	// 2. Empty policy and LinkEnd
+	pol = &NetworkPolicy{}
+	end = &LinkEnd{}
+	if ap := pol.EffectiveAddPaths(); ap != AddPathsOff {
+		t.Errorf("expected %q for empty policy, got %q", AddPathsOff, ap)
+	}
+	if ap := end.EffectiveAddPaths(pol); ap != AddPathsOff {
+		t.Errorf("expected %q for empty linkEnd with empty policy, got %q", AddPathsOff, ap)
+	}
+
+	// 3. Policy has add_paths "on", LinkEnd unset -> inherits "on"
+	pol = &NetworkPolicy{AddPaths: AddPathsOn}
+	if ap := pol.EffectiveAddPaths(); ap != AddPathsOn {
+		t.Errorf("expected %q for policy, got %q", AddPathsOn, ap)
+	}
+	if ap := end.EffectiveAddPaths(pol); ap != AddPathsOn {
+		t.Errorf("expected %q on linkEnd inherited from policy, got %q", AddPathsOn, ap)
+	}
+
+	// 4. LinkEnd overrides policy with "rx"
+	end.AddPaths = AddPathsRx
+	if ap := end.EffectiveAddPaths(pol); ap != AddPathsRx {
+		t.Errorf("expected %q overriding policy, got %q", AddPathsRx, ap)
+	}
+
+	// 5. LinkEnd overrides policy with "off"
+	end.AddPaths = AddPathsOff
+	if ap := end.EffectiveAddPaths(pol); ap != AddPathsOff {
+		t.Errorf("expected %q overriding policy, got %q", AddPathsOff, ap)
+	}
+
+	// 6. LinkEnd overrides policy with "tx"
+	end.AddPaths = AddPathsTx
+	if ap := end.EffectiveAddPaths(pol); ap != AddPathsTx {
+		t.Errorf("expected %q overriding policy, got %q", AddPathsTx, ap)
+	}
+
+	// 7. LinkEnd with "inherit" falls back to policy
+	end.AddPaths = "inherit"
+	if ap := end.EffectiveAddPaths(pol); ap != AddPathsOn {
+		t.Errorf("expected inherit to revert to policy %q, got %q", AddPathsOn, ap)
+	}
+
+	// 8. LinkEnd without policy
+	end.AddPaths = AddPathsRx
+	if ap := end.EffectiveAddPaths(nil); ap != AddPathsRx {
+		t.Errorf("expected %q with nil policy, got %q", AddPathsRx, ap)
+	}
+}
+
+func TestAddPathsHelpers(t *testing.T) {
+	if !IsValidAddPaths("off") || !IsValidAddPaths("on") || !IsValidAddPaths("rx") || !IsValidAddPaths("tx") {
+		t.Errorf("expected standard add paths options to be valid")
+	}
+	if !IsValidAddPaths("both") || !IsValidAddPaths("receive") || !IsValidAddPaths("transmit") || !IsValidAddPaths("disabled") {
+		t.Errorf("expected aliases to be valid")
+	}
+	if IsValidAddPaths("invalid_option_xyz") {
+		t.Errorf("expected invalid option to return false")
+	}
+
+	if NormalizeAddPaths("on") != AddPathsOn {
+		t.Errorf("expected 'on' to normalize to %q", AddPathsOn)
+	}
+	if NormalizeAddPaths("both") != AddPathsOn {
+		t.Errorf("expected 'both' to normalize to %q", AddPathsOn)
+	}
+	if NormalizeAddPaths("rx") != AddPathsRx {
+		t.Errorf("expected 'rx' to normalize to %q", AddPathsRx)
+	}
+	if NormalizeAddPaths("receive") != AddPathsRx {
+		t.Errorf("expected 'receive' to normalize to %q", AddPathsRx)
+	}
+	if NormalizeAddPaths("tx") != AddPathsTx {
+		t.Errorf("expected 'tx' to normalize to %q", AddPathsTx)
+	}
+	if NormalizeAddPaths("transmit") != AddPathsTx {
+		t.Errorf("expected 'transmit' to normalize to %q", AddPathsTx)
+	}
+	if NormalizeAddPaths("off") != AddPathsOff {
+		t.Errorf("expected 'off' to normalize to %q", AddPathsOff)
+	}
+	if NormalizeAddPaths("none") != AddPathsOff {
+		t.Errorf("expected 'none' to normalize to %q", AddPathsOff)
+	}
+	if NormalizeAddPaths("unknown_fallback") != AddPathsOff {
+		t.Errorf("expected unknown to normalize to %q", AddPathsOff)
+	}
+}
+
 func TestCleanPortList(t *testing.T) {
 	tests := []struct {
 		name     string

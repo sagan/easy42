@@ -1492,6 +1492,23 @@ func (m *Manager) buildLink(cfg *config.Config, n1, n2 *config.Node, listenPort1
 		toRoutingPolicy = config.NormalizeRoutingPolicy(customToEnd.RoutingPolicy)
 	}
 
+	fromAddPaths := ""
+	if customFromEnd != nil && customFromEnd.AddPaths != "" {
+		if strings.EqualFold(customFromEnd.AddPaths, "inherit") {
+			fromAddPaths = ""
+		} else {
+			fromAddPaths = config.NormalizeAddPaths(customFromEnd.AddPaths)
+		}
+	}
+	toAddPaths := ""
+	if customToEnd != nil && customToEnd.AddPaths != "" {
+		if strings.EqualFold(customToEnd.AddPaths, "inherit") {
+			toAddPaths = ""
+		} else {
+			toAddPaths = config.NormalizeAddPaths(customToEnd.AddPaths)
+		}
+	}
+
 	fromNote := ""
 	if customFromEnd != nil {
 		fromNote = customFromEnd.Note
@@ -1548,6 +1565,7 @@ func (m *Manager) buildLink(cfg *config.Config, n1, n2 *config.Node, listenPort1
 			UseIp:               fromUseIP,
 			Policy:              fromPolicy,
 			RoutingPolicy:       fromRoutingPolicy,
+			AddPaths:            fromAddPaths,
 			Cost:                fromCost,
 			Fwmark:              fromFwmark,
 			Preference:          fromPref,
@@ -1571,6 +1589,7 @@ func (m *Manager) buildLink(cfg *config.Config, n1, n2 *config.Node, listenPort1
 			UseIp:               toUseIP,
 			Policy:              toPolicy,
 			RoutingPolicy:       toRoutingPolicy,
+			AddPaths:            toAddPaths,
 			Cost:                toCost,
 			Fwmark:              toFwmark,
 			Preference:          toPref,
@@ -2027,6 +2046,13 @@ func (m *Manager) UpdateLinkWithAllOptions(node1Name, node2Name string, customFr
 				link.From.RoutingPolicy = config.NormalizeRoutingPolicy(fromEnd.RoutingPolicy)
 			}
 		}
+		if fromEnd.AddPaths != "" {
+			if strings.EqualFold(fromEnd.AddPaths, "inherit") {
+				link.From.AddPaths = ""
+			} else {
+				link.From.AddPaths = config.NormalizeAddPaths(fromEnd.AddPaths)
+			}
+		}
 		if fromEnd.Note != "" {
 			if fromEnd.Note == "__CLEAR__" || fromEnd.Note == "<clear>" {
 				link.From.Note = ""
@@ -2085,6 +2111,13 @@ func (m *Manager) UpdateLinkWithAllOptions(node1Name, node2Name string, customFr
 				link.To.RoutingPolicy = ""
 			} else {
 				link.To.RoutingPolicy = config.NormalizeRoutingPolicy(toEnd.RoutingPolicy)
+			}
+		}
+		if toEnd.AddPaths != "" {
+			if strings.EqualFold(toEnd.AddPaths, "inherit") {
+				link.To.AddPaths = ""
+			} else {
+				link.To.AddPaths = config.NormalizeAddPaths(toEnd.AddPaths)
 			}
 		}
 		if toEnd.Note != "" {
@@ -4671,6 +4704,7 @@ func (m *Manager) CreateNetworkPolicy(p config.NetworkPolicy) (*config.NetworkPo
 	p.BlockIngressNew = config.NormalizeBlockIngressNew(p.BlockIngressNew)
 	p.IngressNewWhitelist = config.CleanIngressNewWhitelist(p.IngressNewWhitelist)
 	p.RoutingPolicy = config.NormalizeRoutingPolicy(p.RoutingPolicy)
+	p.AddPaths = config.NormalizeAddPaths(p.AddPaths)
 	p.BirdImportFilter = strings.TrimSpace(p.BirdImportFilter)
 	if p.BirdExportFilter == "" && p.BirdExportFillter != "" {
 		p.BirdExportFilter = strings.TrimSpace(p.BirdExportFillter)
@@ -4751,6 +4785,7 @@ func (m *Manager) UpdateNetworkPolicy(id string, p config.NetworkPolicy) (*confi
 	cfg.NetworkPolicies[idx].BlockIngressNew = config.NormalizeBlockIngressNew(p.BlockIngressNew)
 	cfg.NetworkPolicies[idx].IngressNewWhitelist = config.CleanIngressNewWhitelist(p.IngressNewWhitelist)
 	cfg.NetworkPolicies[idx].RoutingPolicy = config.NormalizeRoutingPolicy(p.RoutingPolicy)
+	cfg.NetworkPolicies[idx].AddPaths = config.NormalizeAddPaths(p.AddPaths)
 	cfg.NetworkPolicies[idx].BirdImportFilter = strings.TrimSpace(p.BirdImportFilter)
 	if p.BirdExportFilter == "" && p.BirdExportFillter != "" {
 		cfg.NetworkPolicies[idx].BirdExportFilter = strings.TrimSpace(p.BirdExportFillter)

@@ -66,6 +66,7 @@ func registerPolicyTools(s *server.MCPServer, mgr *engine.Manager) {
 		mcp.WithString("description", mcp.Description("Optional description of the policy")),
 		mcp.WithInteger("cost", mcp.Description("Cost deducted from bgp_local_pref on internal hops (default 100)")),
 		mcp.WithString("routing_policy", mcp.Description("BGP meta routing policy: 'full', 'stub', 'receive_only', or 'advertise_only'")),
+		mcp.WithString("add_paths", mcp.Description("BGP Add-Paths mode: 'off' (default), 'on', 'rx', or 'tx'")),
 		mcp.WithString("policy_json", mcp.Description("Optional full JSON representation for advanced firewall rules, ROA, SNAT, and BIRD filters")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		if err := RequireFullControl(ctx); err != nil {
@@ -86,6 +87,7 @@ func registerPolicyTools(s *server.MCPServer, mgr *engine.Manager) {
 			Description:   req.GetString("description", ""),
 			Cost:          req.GetInt("cost", 100),
 			RoutingPolicy: req.GetString("routing_policy", "full"),
+			AddPaths:      req.GetString("add_paths", "off"),
 		}
 
 		if rawJSON := req.GetString("policy_json", ""); rawJSON != "" {
@@ -120,6 +122,7 @@ func registerPolicyTools(s *server.MCPServer, mgr *engine.Manager) {
 		mcp.WithString("description", mcp.Description("Updated description")),
 		mcp.WithInteger("cost", mcp.Description("Routing cost")),
 		mcp.WithString("routing_policy", mcp.Description("Routing policy mode")),
+		mcp.WithString("add_paths", mcp.Description("BGP Add-Paths mode: 'off' (default), 'on', 'rx', or 'tx'")),
 		mcp.WithString("policy_json", mcp.Description("Optional full JSON representation to overwrite entire policy")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		if err := RequireFullControl(ctx); err != nil {
@@ -152,6 +155,9 @@ func registerPolicyTools(s *server.MCPServer, mgr *engine.Manager) {
 			}
 			if rp := req.GetString("routing_policy", ""); rp != "" {
 				policy.RoutingPolicy = rp
+			}
+			if ap := req.GetString("add_paths", ""); ap != "" {
+				policy.AddPaths = ap
 			}
 		}
 

@@ -98,6 +98,7 @@ export interface NetworkPolicy {
   preference?: number;
   mark?: string;
   routing_policy?: string;
+  add_paths?: "off" | "on" | "rx" | "tx" | string;
   bird_import_filter?: string;
   bird_export_filter?: string;
   bird_export_fillter?: string;
@@ -171,6 +172,7 @@ export interface LinkEnd {
   resolved_endpoint?: string;
   policy?: string;
   routing_policy?: string;
+  add_paths?: "off" | "on" | "rx" | "tx" | string;
   cost?: number;
   fwmark?: string;
   preference?: number;

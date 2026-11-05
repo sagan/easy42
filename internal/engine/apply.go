@@ -937,6 +937,10 @@ func mergeLinkEnd(target *config.LinkEnd, patch *config.LinkEndPatch, prefix str
 		checkField("routing_policy", target.RoutingPolicy, *patch.RoutingPolicy)
 		target.RoutingPolicy = *patch.RoutingPolicy
 	}
+	if patch.AddPaths != nil && *patch.AddPaths != target.AddPaths {
+		checkField("add_paths", target.AddPaths, *patch.AddPaths)
+		target.AddPaths = *patch.AddPaths
+	}
 	if patch.Note != nil && *patch.Note != target.Note {
 		checkField("note", target.Note, *patch.Note)
 		target.Note = *patch.Note
