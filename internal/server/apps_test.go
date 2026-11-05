@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"testing"
+	"time"
 
 	"easy42/internal/config"
 	agentpb "easy42/internal/agent/proto"
@@ -292,4 +293,134 @@ func TestNodeAppsDisabled(t *testing.T) {
 		t.Fatalf("expected DisableApps to be true after telemetry report")
 	}
 }
+
+func TestAppSyncReconciliation(t *testing.T) {
+	srv, tempDir, _ := setupTestServer(t)
+	defer func() {
+		srv.mgr.Close()
+		_ = os.RemoveAll(tempDir)
+	}()
+
+	// 1. Add target node
+	cfg := srv.mgr.Store().Get()
+	cfg.Nodes = append(cfg.Nodes, config.Node{
+		Name: "nbbug",
+		Host: "192.168.142.207",
+		Mode: "agent",
+	})
+	if err := srv.mgr.Store().Save(cfg); err != nil {
+		t.Fatalf("failed to save node: %v", err)
+	}
+
+	// 2. Create rclone app targeting nbbug
+	app := config.App{
+		ID:          "app-rclone",
+		Name:        "rclone",
+		AppType:     "systemd",
+		MainContent: "[Unit]\nDescription=rclone service\n\n[Service]\nExecStart=/usr/bin/rclone serve webdav\n",
+		EnvContent:  "RCLONE_PASS=123456\n",
+		Nodes:       []string{"nbbug"},
+		Enabled:     true,
+	}
+	if _, err := srv.mgr.SaveApp(app); err != nil {
+		t.Fatalf("failed to save app: %v", err)
+	}
+
+	// 3. Plan sync when app has never been deployed -> diff_status: "create", needs_apply: true
+	actions, err := srv.mgr.PlanSyncWithScope("")
+	if err != nil {
+		t.Fatalf("PlanSyncWithScope failed: %v", err)
+	}
+	var rcloneAct *config.SyncAction
+	for i := range actions {
+		if actions[i].Interface == "rclone" && actions[i].Type == config.ActionSyncApp {
+			rcloneAct = &actions[i]
+			break
+		}
+	}
+	if rcloneAct == nil {
+		t.Fatalf("expected sync action for rclone, none found in %v", actions)
+	}
+	if !rcloneAct.NeedsApply || rcloneAct.DiffStatus != "create" {
+		t.Fatalf("expected create pending, got diff_status=%s, needs_apply=%v", rcloneAct.DiffStatus, rcloneAct.NeedsApply)
+	}
+
+	// 4. Record deployed state in StateStore matching desired hash
+	specs, _ := srv.mgr.BuildAppSpecsForNode("nbbug")
+	if len(specs) == 0 {
+		t.Fatalf("expected 1 spec, got 0")
+	}
+	rcloneSpec := specs[0]
+	if err := srv.mgr.StateStore().UpdateAppState("nbbug", "192.168.142.207", "rclone", rcloneSpec.Sha256Hash, time.Now()); err != nil {
+		t.Fatalf("failed to update app state: %v", err)
+	}
+
+	// 5. Plan sync again -> should be synced (needs_apply = false)
+	actions, err = srv.mgr.PlanSyncWithScope("")
+	if err != nil {
+		t.Fatalf("PlanSyncWithScope failed: %v", err)
+	}
+	rcloneAct = nil
+	for i := range actions {
+		if actions[i].Interface == "rclone" && actions[i].Type == config.ActionSyncApp {
+			rcloneAct = &actions[i]
+			break
+		}
+	}
+	if rcloneAct == nil {
+		t.Fatalf("expected sync action for rclone, none found")
+	}
+	if rcloneAct.NeedsApply || rcloneAct.DiffStatus != "synced" {
+		t.Fatalf("expected synced action, got diff_status=%s, needs_apply=%v", rcloneAct.DiffStatus, rcloneAct.NeedsApply)
+	}
+
+	// 6. User edits app unit file on server
+	app.MainContent = "[Unit]\nDescription=rclone modified service\n\n[Service]\nExecStart=/usr/bin/rclone serve webdav --read-only\n"
+	if _, err := srv.mgr.SaveApp(app); err != nil {
+		t.Fatalf("failed to update app: %v", err)
+	}
+
+	// 7. Plan sync -> hash changed! diff_status: "update", needs_apply: true
+	actions, err = srv.mgr.PlanSyncWithScope("")
+	if err != nil {
+		t.Fatalf("PlanSyncWithScope failed: %v", err)
+	}
+	rcloneAct = nil
+	for i := range actions {
+		if actions[i].Interface == "rclone" && actions[i].Type == config.ActionSyncApp {
+			rcloneAct = &actions[i]
+			break
+		}
+	}
+	if rcloneAct == nil {
+		t.Fatalf("expected sync action for rclone, none found")
+	}
+	if !rcloneAct.NeedsApply || rcloneAct.DiffStatus != "update" {
+		t.Fatalf("expected update pending after unit file modified, got diff_status=%s, needs_apply=%v", rcloneAct.DiffStatus, rcloneAct.NeedsApply)
+	}
+
+	// 8. Unassign rclone from nbbug -> diff_status: "delete", needs_apply: true
+	app.Nodes = []string{}
+	if _, err := srv.mgr.SaveApp(app); err != nil {
+		t.Fatalf("failed to unassign app: %v", err)
+	}
+	actions, err = srv.mgr.PlanSyncWithScope("")
+	if err != nil {
+		t.Fatalf("PlanSyncWithScope failed: %v", err)
+	}
+	var deleteAct *config.SyncAction
+	for i := range actions {
+		if actions[i].Interface == "rclone" && actions[i].Type == config.ActionDeleteApp {
+			deleteAct = &actions[i]
+			break
+		}
+	}
+	if deleteAct == nil {
+		t.Fatalf("expected delete action for orphaned rclone, none found in %v", actions)
+	}
+	if !deleteAct.NeedsApply || deleteAct.DiffStatus != "delete" {
+		t.Fatalf("expected delete pending, got diff_status=%s, needs_apply=%v", deleteAct.DiffStatus, deleteAct.NeedsApply)
+	}
+}
+
 

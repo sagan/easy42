@@ -15,6 +15,8 @@ CREATE TABLE IF NOT EXISTS node_states (
 	roa_applied_at TEXT NOT NULL DEFAULT '{}',
 	hosts_config_hash TEXT NOT NULL DEFAULT '',
 	hosts_applied_at INTEGER,
+	app_config_hashes TEXT NOT NULL DEFAULT '{}',
+	app_applied_at TEXT NOT NULL DEFAULT '{}',
 	interfaces TEXT NOT NULL DEFAULT '{}'
 );
 

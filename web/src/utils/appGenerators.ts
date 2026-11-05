@@ -54,7 +54,7 @@ export function dockerRunToCompose(cmd: string): DockerRunConversionResult {
  */
 export function cmdlineToSystemd(
   cmd: string,
-  options?: { description?: string; user?: string; workingDir?: string; envFile?: string }
+  options?: { description?: string; user?: string; workingDir?: string; envFile?: string; appName?: string },
 ): SystemdConversionResult {
   try {
     const trimmed = cmd.trim();
@@ -85,6 +85,9 @@ export function cmdlineToSystemd(
     const desc = options?.description?.trim() || `${program} service`;
     const user = options?.user?.trim() || "nobody";
     const workingDir = options?.workingDir?.trim() || "/var/log";
+    const appName = options?.appName?.trim() || "sample";
+    const envFile =
+      options?.envFile !== undefined ? options.envFile : `/etc/systemd/system/ezapp-${appName}.env`;
 
     const unitLines: string[] = [
       "[Unit]",
@@ -97,8 +100,8 @@ export function cmdlineToSystemd(
       `WorkingDirectory=${workingDir}`,
     ];
 
-    if (options?.envFile) {
-      unitLines.push(`EnvironmentFile=${options.envFile}`);
+    if (envFile) {
+      unitLines.push(`EnvironmentFile=${envFile}`);
     }
 
     unitLines.push(
@@ -108,7 +111,7 @@ export function cmdlineToSystemd(
       "",
       "[Install]",
       "WantedBy=multi-user.target",
-      ""
+      "",
     );
 
     return {
@@ -123,3 +126,34 @@ export function cmdlineToSystemd(
     };
   }
 }
+
+/**
+ * Ensures that the systemd service unit contains the EnvironmentFile directive
+ * for /etc/systemd/system/ezapp-<appName>.env under [Service].
+ */
+export function ensureSystemdEnvironmentFile(appName: string, content: string): string {
+  const cleanName = appName.trim() || "sample";
+  const expectedPath = `/etc/systemd/system/ezapp-${cleanName}.env`;
+  if (content.includes(expectedPath)) {
+    return content;
+  }
+  const samplePath = "/etc/systemd/system/ezapp-sample.env";
+  if (content.includes(samplePath)) {
+    return content.replace(samplePath, expectedPath);
+  }
+
+  const expectedDirective = `EnvironmentFile=${expectedPath}`;
+  const lines = content.split("\n");
+  const serviceIdx = lines.findIndex((l) => l.trim().startsWith("[Service]"));
+  if (serviceIdx !== -1) {
+    const newLines = [...lines.slice(0, serviceIdx + 1), expectedDirective, ...lines.slice(serviceIdx + 1)];
+    return newLines.join("\n");
+  }
+
+  const trimmed = content.trimEnd();
+  if (!trimmed) {
+    return `[Service]\n${expectedDirective}\n`;
+  }
+  return `${trimmed}\n\n[Service]\n${expectedDirective}\n`;
+}
+

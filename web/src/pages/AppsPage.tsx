@@ -66,9 +66,11 @@ import {
 } from "lucide-react";
 import { api } from "../api/client";
 import { useMesh } from "../context/MeshContext";
+import { Link as RouterLink } from "react-router-dom";
 import type { App, AppVariable, TranspilePreviewResponse } from "../types/api";
-import { dockerRunToCompose, cmdlineToSystemd } from "../utils/appGenerators";
+import { dockerRunToCompose, cmdlineToSystemd, ensureSystemdEnvironmentFile } from "../utils/appGenerators";
 import { RenameAppModal } from "../components/Modals/RenameAppModal";
+
 
 const DOCKER_SAMPLE = `version: '3.8'
 services:
@@ -363,11 +365,16 @@ export const AppsPage: React.FC = () => {
         return;
       }
 
+      const resolvedMainContent =
+        formType === "systemd"
+          ? ensureSystemdEnvironmentFile(formName.trim(), formMain)
+          : formMain;
+
       const payload: Partial<App> = {
         name: formName.trim(),
         description: formDesc.trim(),
         app_type: formType,
-        main_content: formMain,
+        main_content: resolvedMainContent,
         env_content: formEnv,
         files: filesMap,
         target_type: formTargetType,
@@ -409,25 +416,19 @@ export const AppsPage: React.FC = () => {
     const actionLabel = nextState ? "enabled" : "disabled";
 
     // Optimistically toggle state for this app only - no layout shift or full list re-render
-    setApps((prev) =>
-      prev.map((a) => (a.id === targetApp.id ? { ...a, enabled: nextState } : a))
-    );
+    setApps((prev) => prev.map((a) => (a.id === targetApp.id ? { ...a, enabled: nextState } : a)));
     setTogglingAppIds((prev) => ({ ...prev, [targetApp.id]: true }));
 
     try {
       const updated = await api.toggleApp(targetApp.id);
-      setApps((prev) =>
-        prev.map((a) => (a.id === targetApp.id ? updated : a))
-      );
+      setApps((prev) => prev.map((a) => (a.id === targetApp.id ? updated : a)));
       setStateToast({
         message: `App "${targetApp.name}" ${actionLabel} successfully.`,
         severity: "success",
       });
     } catch (e: any) {
       // Revert optimistic change on failure
-      setApps((prev) =>
-        prev.map((a) => (a.id === targetApp.id ? { ...a, enabled: targetApp.enabled } : a))
-      );
+      setApps((prev) => prev.map((a) => (a.id === targetApp.id ? { ...a, enabled: targetApp.enabled } : a)));
       setStateToast({
         message: e.message || `Failed to ${nextState ? "enable" : "disable"} app "${targetApp.name}"`,
         severity: "error",
@@ -1060,7 +1061,10 @@ export const AppsPage: React.FC = () => {
                           </Box>
                           <Box>
                             <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-                              <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#0F172A", lineHeight: 1.2 }}>
+                              <Typography
+                                variant="subtitle1"
+                                sx={{ fontWeight: 700, color: "#0F172A", lineHeight: 1.2 }}
+                              >
                                 {app.name}
                               </Typography>
                               <Tooltip title="Rename App">
@@ -1171,11 +1175,38 @@ export const AppsPage: React.FC = () => {
                         <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.6 }}>
                           {(() => {
                             if (app.target_type === "all") {
-                              return (
-                                <Typography variant="caption" sx={{ color: "#0284C7", fontWeight: 600 }}>
-                                  Active on all {managedNodes.length} agent node(s)
-                                </Typography>
-                              );
+                              if (managedNodes.length === 0) {
+                                return (
+                                  <Typography variant="caption" sx={{ color: "#94A3B8", fontStyle: "italic" }}>
+                                    No agent nodes available
+                                  </Typography>
+                                );
+                              }
+                              return managedNodes.map((n) => (
+                                <Chip
+                                  key={n.name}
+                                  component={RouterLink}
+                                  to={`/nodes/${encodeURIComponent(n.name)}?tab=apps`}
+                                  clickable
+                                  onClick={(e) => e.stopPropagation()}
+                                  size="small"
+                                  label={n.name}
+                                  sx={{
+                                    height: 20,
+                                    fontSize: "0.7rem",
+                                    fontWeight: 600,
+                                    bgcolor: "#E0F2FE",
+                                    color: "#0369A1",
+                                    textDecoration: "none",
+                                    cursor: "pointer",
+                                    transition: "all 0.15s ease",
+                                    "&:hover": {
+                                      bgcolor: "#BAE6FD",
+                                      color: "#0284C7",
+                                    },
+                                  }}
+                                />
+                              ));
                             }
                             if (app.target_type === "tag") {
                               const matching = managedNodes.filter((n) =>
@@ -1191,6 +1222,10 @@ export const AppsPage: React.FC = () => {
                               return matching.map((n) => (
                                 <Chip
                                   key={n.name}
+                                  component={RouterLink}
+                                  to={`/nodes/${encodeURIComponent(n.name)}?tab=apps`}
+                                  clickable
+                                  onClick={(e) => e.stopPropagation()}
                                   size="small"
                                   label={n.name}
                                   sx={{
@@ -1199,6 +1234,13 @@ export const AppsPage: React.FC = () => {
                                     fontWeight: 600,
                                     bgcolor: "#EDE9FE",
                                     color: "#5B21B6",
+                                    textDecoration: "none",
+                                    cursor: "pointer",
+                                    transition: "all 0.15s ease",
+                                    "&:hover": {
+                                      bgcolor: "#DDD6FE",
+                                      color: "#4C1D95",
+                                    },
                                   }}
                                 />
                               ));
@@ -1207,6 +1249,10 @@ export const AppsPage: React.FC = () => {
                               return app.nodes.map((nodeName) => (
                                 <Chip
                                   key={nodeName}
+                                  component={RouterLink}
+                                  to={`/nodes/${encodeURIComponent(nodeName)}?tab=apps`}
+                                  clickable
+                                  onClick={(e) => e.stopPropagation()}
                                   size="small"
                                   label={nodeName}
                                   sx={{
@@ -1215,6 +1261,13 @@ export const AppsPage: React.FC = () => {
                                     fontWeight: 600,
                                     bgcolor: "#F1F5F9",
                                     color: "#334155",
+                                    textDecoration: "none",
+                                    cursor: "pointer",
+                                    transition: "all 0.15s ease",
+                                    "&:hover": {
+                                      bgcolor: "#E2E8F0",
+                                      color: "#1E293B",
+                                    },
                                   }}
                                 />
                               ));
@@ -2557,10 +2610,13 @@ export const AppsPage: React.FC = () => {
                           size="small"
                           startIcon={<Wand2 size={14} />}
                           onClick={() => {
+                            const appName = formName.trim() || "sample";
                             const res = cmdlineToSystemd(systemdCmd, {
                               description: systemdDesc || formName || undefined,
                               user: systemdUser || "nobody",
                               workingDir: systemdWorkingDir || "/var/log",
+                              appName: appName,
+                              envFile: `/etc/systemd/system/ezapp-${appName}.env`,
                             });
                             if (res.error) {
                               setSystemdError(res.error);

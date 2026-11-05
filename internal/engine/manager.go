@@ -16,6 +16,7 @@ import (
 
 	"easy42/internal/agent"
 	agentpb "easy42/internal/agent/proto"
+	"easy42/internal/apps"
 	"easy42/internal/compiler"
 	"easy42/internal/config"
 	"easy42/internal/crypto"
@@ -3128,6 +3129,12 @@ func (m *Manager) PlanSyncWithScope(scope string, nodeNames ...string) ([]config
 					cancel()
 					if err == nil && cmdResp.Success && cmdResp.Stdout != "" {
 						_ = json.Unmarshal([]byte(cmdResp.Stdout), &probeRes)
+						if len(probeRes.AppHashes) > 0 {
+							m.agentHub.SetAppHashes(targetNode.Name, probeRes.AppHashes)
+							if m.stateStore != nil {
+								_ = m.stateStore.UpdateAppStates(targetNode.Name, targetNode.Host, probeRes.AppHashes, time.Now())
+							}
+						}
 					}
 
 					nodeStatus := m.agentHub.NodeStatus(targetNode.Name)
@@ -3666,6 +3673,106 @@ func (m *Manager) PlanSyncWithScope(scope string, nodeNames ...string) ([]config
 		})
 	}
 
+	// 6. Node Apps configuration
+	for _, n := range nodes {
+		if n.IsExternal {
+			continue
+		}
+		if isPartial && !targetMap[n.Name] {
+			continue
+		}
+		if m.agentHub != nil && m.agentHub.IsAppsDisabled(n.Name) {
+			continue
+		}
+		node := n
+
+		desiredSpecs, err := m.BuildAppSpecsForNode(node.Name)
+		if err != nil {
+			continue
+		}
+
+		desiredMap := make(map[string]*agentpb.AppSpec)
+		for _, spec := range desiredSpecs {
+			desiredMap[spec.Name] = spec
+		}
+
+		deployedHashes := make(map[string]string)
+		if m.agentHub != nil {
+			for k, v := range m.agentHub.GetAppHashes(node.Name) {
+				deployedHashes[k] = v
+			}
+		}
+		if stNode, ok := currentState.Nodes[node.Name]; ok && stNode.AppConfigHashes != nil {
+			for k, v := range stNode.AppConfigHashes {
+				if _, exists := deployedHashes[k]; !exists {
+					deployedHashes[k] = v
+				}
+			}
+		}
+
+		for _, spec := range desiredSpecs {
+			desiredHash := apps.ComputeAppSpecFilesHash(spec)
+			spec.Sha256Hash = desiredHash
+
+			currentHash := deployedHashes[spec.Name]
+
+			needsApply := true
+			status := "pending"
+			diffStatus := "create"
+
+			if currentHash != "" {
+				if currentHash == desiredHash {
+					needsApply = false
+					status = "synced"
+					diffStatus = "synced"
+				} else {
+					diffStatus = "update"
+				}
+			}
+
+			targetFile := fmt.Sprintf("/etc/systemd/system/ezapp-%s.service", spec.Name)
+			if spec.AppType == agentpb.AppType_DOCKER_COMPOSE {
+				targetFile = fmt.Sprintf("/etc/ezappc/%s/compose.yaml", spec.Name)
+			}
+
+			actions = append(actions, config.SyncAction{
+				NodeName:    node.Name,
+				Host:        node.Host,
+				Type:        config.ActionSyncApp,
+				Interface:   spec.Name,
+				TargetFile:  targetFile,
+				FileContent: spec.MainContent,
+				Command:     fmt.Sprintf("systemctl restart ezapp-%s", spec.Name),
+				Description: fmt.Sprintf("Deploy app '%s' on %s", spec.Name, node.Name),
+				NeedsApply:  needsApply,
+				Status:      status,
+				DiffStatus:  diffStatus,
+			})
+		}
+
+		var orphanedAppNames []string
+		for appName := range deployedHashes {
+			if _, isDesired := desiredMap[appName]; !isDesired {
+				orphanedAppNames = append(orphanedAppNames, appName)
+			}
+		}
+		sort.Strings(orphanedAppNames)
+
+		for _, appName := range orphanedAppNames {
+			actions = append(actions, config.SyncAction{
+				NodeName:    node.Name,
+				Host:        node.Host,
+				Type:        config.ActionDeleteApp,
+				Interface:   appName,
+				TargetFile:  fmt.Sprintf("/etc/systemd/system/ezapp-%s.service", appName),
+				Description: fmt.Sprintf("Remove unassigned app '%s' from %s", appName, node.Name),
+				NeedsApply:  true,
+				Status:      "pending",
+				DiffStatus:  "delete",
+			})
+		}
+	}
+
 	// Sort actions: pending (NeedsApply == true) first, then synced.
 	// Within each group, order by actionPriority (clean/delete -> wireguard -> bird), then NodeName and Interface
 	sort.Slice(actions, func(i, j int) bool {
@@ -3980,6 +4087,7 @@ type agentProbeResult struct {
 	Hostname  string                          `json:"hostname"`
 	Configs   map[string]agentProbeConfigFile `json:"configs"`
 	HostsHash string                          `json:"hosts_hash"`
+	AppHashes map[string]string               `json:"app_hashes"`
 }
 
 type linkMetaInfo struct {
@@ -4007,6 +4115,12 @@ func (m *Manager) collectStateFromAgent(targetNode config.Node, meta map[string]
 		_ = json.Unmarshal([]byte(cmdResp.Stdout), &probeRes)
 		if probeRes.HostsHash != "" && m.stateStore != nil {
 			_ = m.stateStore.UpdateHostsState(targetNode.Name, targetNode.Host, probeRes.HostsHash, time.Now())
+		}
+		if len(probeRes.AppHashes) > 0 {
+			m.agentHub.SetAppHashes(targetNode.Name, probeRes.AppHashes)
+			if m.stateStore != nil {
+				_ = m.stateStore.UpdateAppStates(targetNode.Name, targetNode.Host, probeRes.AppHashes, time.Now())
+			}
 		}
 	}
 
@@ -4527,6 +4641,12 @@ func (m *Manager) UpdateState(nodeNames ...string) (*config.NetworkState, []stri
 			BirdAppliedAt:      existingNode.BirdAppliedAt,
 			NftablesConfigHash: existingNode.NftablesConfigHash,
 			NftablesAppliedAt:  existingNode.NftablesAppliedAt,
+			RoaConfigHashes:    existingNode.RoaConfigHashes,
+			RoaAppliedAt:       existingNode.RoaAppliedAt,
+			HostsConfigHash:    existingNode.HostsConfigHash,
+			HostsAppliedAt:     existingNode.HostsAppliedAt,
+			AppConfigHashes:    existingNode.AppConfigHashes,
+			AppAppliedAt:       existingNode.AppAppliedAt,
 			Interfaces:         res.ifaces,
 		}
 	}
@@ -5006,7 +5126,7 @@ func (m *Manager) StartROABackgroundRefresher(ctx context.Context, interval time
 
 func actionPriority(t config.ActionType) int {
 	switch t {
-	case config.ActionDeleteConfig, config.ActionDownInterface:
+	case config.ActionDeleteConfig, config.ActionDownInterface, config.ActionDeleteApp:
 		return 1
 	case config.ActionCreateConfig, config.ActionUpdateConfig, config.ActionSyncConfig, config.ActionUpInterface:
 		return 2
@@ -5018,8 +5138,10 @@ func actionPriority(t config.ActionType) int {
 		return 5
 	case config.ActionSyncHosts:
 		return 6
-	default:
+	case config.ActionSyncApp:
 		return 7
+	default:
+		return 8
 	}
 }
 
@@ -5286,6 +5408,32 @@ func (m *Manager) executeAgentSyncAction(act config.SyncAction, res *config.Sync
 	if !m.agentHub.IsConnected(act.NodeName) {
 		res.Success = false
 		res.Error = fmt.Sprintf("Node %s agent is not connected", act.NodeName)
+		return
+	}
+
+	if act.Type == config.ActionSyncApp || act.Type == config.ActionDeleteApp {
+		err := m.SyncAppsToNode(act.NodeName)
+		if err != nil {
+			res.Success = false
+			res.Error = fmt.Sprintf("Failed to sync app %s on %s: %v", act.Interface, act.NodeName, err)
+			return
+		}
+		res.Success = true
+		if act.Type == config.ActionDeleteApp {
+			res.Output = fmt.Sprintf("Removed app '%s' on %s", act.Interface, act.NodeName)
+			_ = m.stateStore.RemoveAppState(act.NodeName, act.Interface)
+		} else {
+			res.Output = fmt.Sprintf("Synchronized app '%s' on %s", act.Interface, act.NodeName)
+			specs, err := m.BuildAppSpecsForNode(act.NodeName)
+			if err == nil {
+				for _, s := range specs {
+					if s.Name == act.Interface {
+						_ = m.stateStore.UpdateAppState(act.NodeName, act.Host, s.Name, s.Sha256Hash, time.Now())
+						break
+					}
+				}
+			}
+		}
 		return
 	}
 

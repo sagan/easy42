@@ -27,6 +27,7 @@ type Hub struct {
 	connections      map[string]*AgentConnection
 	telemetry        map[string]*agentpb.TelemetryReport
 	lastSeen         map[string]time.Time
+	appHashes        map[string]map[string]string // nodeName -> appName -> sha256
 	onTelemetry      []TelemetryListener
 	onRegister       []RegisterListener
 	onCronTaskReport []CronTaskReportListener
@@ -38,6 +39,7 @@ func NewHub() *Hub {
 		connections: make(map[string]*AgentConnection),
 		telemetry:   make(map[string]*agentpb.TelemetryReport),
 		lastSeen:    make(map[string]time.Time),
+		appHashes:   make(map[string]map[string]string),
 	}
 }
 
@@ -129,6 +131,44 @@ func (h *Hub) IsAppsDisabled(nodeName string) bool {
 		return t.DisableApps
 	}
 	return false
+}
+
+// SetAppHashes updates the cached deployed app hashes for a node
+func (h *Hub) SetAppHashes(nodeName string, hashes map[string]string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.appHashes == nil {
+		h.appHashes = make(map[string]map[string]string)
+	}
+	cp := make(map[string]string, len(hashes))
+	for k, v := range hashes {
+		cp[k] = v
+	}
+	h.appHashes[nodeName] = cp
+}
+
+// GetAppHashes returns a copy of the cached deployed app hashes for a node
+func (h *Hub) GetAppHashes(nodeName string) map[string]string {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	if h.appHashes == nil {
+		return nil
+	}
+	res := make(map[string]string)
+	for k, v := range h.appHashes[nodeName] {
+		res[k] = v
+	}
+	return res
+}
+
+// GetAppHash returns the cached deployed hash of a specific app on a node
+func (h *Hub) GetAppHash(nodeName, appName string) string {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	if h.appHashes == nil {
+		return ""
+	}
+	return h.appHashes[nodeName][appName]
 }
 
 // NotifyRegister triggers registered registration listeners

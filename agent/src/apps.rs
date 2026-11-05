@@ -1,4 +1,5 @@
-use std::collections::HashSet;
+use sha2::{Digest, Sha256};
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
@@ -62,6 +63,91 @@ impl AppsManager {
 
         // 2. Garbage collect orphaned apps
         self.cleanup_orphans(&desired_names).await;
+    }
+
+    /// Calculate current sha256 hashes of deployed app service & env files on this node
+    pub fn get_installed_app_hashes(&self) -> HashMap<String, String> {
+        let mut hashes = HashMap::new();
+
+        // 1. Docker apps in /etc/ezappc/<name>
+        if let Ok(entries) = fs::read_dir(DOCKER_BASE_DIR) {
+            for entry in entries.flatten() {
+                if let Ok(ft) = entry.file_type() {
+                    if ft.is_dir() {
+                        let name = entry.file_name().to_string_lossy().to_string();
+                        let app_dir = entry.path();
+                        let compose_path = app_dir.join("compose.yaml");
+                        let env_path = app_dir.join(".env");
+                        if compose_path.exists() {
+                            let main_content = fs::read_to_string(&compose_path).unwrap_or_default();
+                            let env_content = fs::read_to_string(&env_path).unwrap_or_default();
+                            let mut files = Vec::new();
+                            read_auxiliary_files_recursive(&app_dir, &app_dir, &mut files);
+                            let hash = compute_files_hash(&main_content, &env_content, &files);
+                            hashes.insert(name, hash);
+                        }
+                    }
+                }
+            }
+        }
+
+        // 2. Systemd apps in /etc/systemd/system/ezapp-*.service
+        if Path::new(SYSTEMD_SYSTEM_DIR).exists() {
+            if let Ok(entries) = fs::read_dir(SYSTEMD_SYSTEM_DIR) {
+                for entry in entries.flatten() {
+                    let file_name = entry.file_name().to_string_lossy().to_string();
+                    if file_name.starts_with("ezapp-") && file_name.ends_with(".service") {
+                        let name = file_name
+                            .trim_start_matches("ezapp-")
+                            .trim_end_matches(".service")
+                            .to_string();
+                        let service_path = entry.path();
+                        let env_path = PathBuf::from(SYSTEMD_SYSTEM_DIR).join(format!("ezapp-{}.env", name));
+                        let data_dir = PathBuf::from(APP_DATA_BASE_DIR).join(&name);
+
+                        let main_content = fs::read_to_string(&service_path).unwrap_or_default();
+                        let env_content = fs::read_to_string(&env_path).unwrap_or_default();
+                        let mut files = Vec::new();
+                        if data_dir.is_dir() {
+                            read_auxiliary_files_recursive(&data_dir, &data_dir, &mut files);
+                        }
+                        let hash = compute_files_hash(&main_content, &env_content, &files);
+                        hashes.insert(name, hash);
+                    }
+                }
+            }
+        }
+
+        // 3. OpenRC / Procd in /etc/init.d/ezapp-*
+        if Path::new(OPENRC_INIT_DIR).exists() && self.init_system != InitSystem::Systemd {
+            if let Ok(entries) = fs::read_dir(OPENRC_INIT_DIR) {
+                for entry in entries.flatten() {
+                    let file_name = entry.file_name().to_string_lossy().to_string();
+                    if file_name.starts_with("ezapp-") {
+                        let name = file_name.trim_start_matches("ezapp-").to_string();
+                        let init_path = entry.path();
+                        let data_dir = PathBuf::from(APP_DATA_BASE_DIR).join(&name);
+
+                        let main_content = fs::read_to_string(&init_path).unwrap_or_default();
+                        let env_content = match self.init_system {
+                            InitSystem::OpenRC => {
+                                let conf_path = PathBuf::from(OPENRC_CONF_DIR).join(format!("ezapp-{}", name));
+                                fs::read_to_string(&conf_path).unwrap_or_default()
+                            }
+                            _ => String::new(),
+                        };
+                        let mut files = Vec::new();
+                        if data_dir.is_dir() {
+                            read_auxiliary_files_recursive(&data_dir, &data_dir, &mut files);
+                        }
+                        let hash = compute_files_hash(&main_content, &env_content, &files);
+                        hashes.insert(name, hash);
+                    }
+                }
+            }
+        }
+
+        hashes
     }
 
     async fn apply_app(&self, app: &AppSpec) -> Result<(), String> {
@@ -145,7 +231,9 @@ impl AppsManager {
         let service_path = PathBuf::from(SYSTEMD_SYSTEM_DIR).join(format!("{}.service", service_name));
         let env_path = PathBuf::from(SYSTEMD_SYSTEM_DIR).join(format!("{}.env", service_name));
 
-        fs::write(&service_path, &app.main_content)
+        let main_content = ensure_systemd_env_file(&app.name, &app.main_content);
+
+        fs::write(&service_path, &main_content)
             .map_err(|e| format!("failed to write systemd service unit: {}", e))?;
         fs::write(&env_path, &app.env_content)
             .map_err(|e| format!("failed to write systemd env file: {}", e))?;
@@ -538,3 +626,144 @@ fn chrono_now() -> i64 {
         .map(|d| d.as_secs() as i64)
         .unwrap_or(0)
 }
+
+pub fn ensure_systemd_env_file(app_name: &str, content: &str) -> String {
+    let app_name = app_name.trim();
+    let app_name = if app_name.is_empty() { "sample" } else { app_name };
+    let expected_path = format!("/etc/systemd/system/ezapp-{}.env", app_name);
+
+    if content.contains(&expected_path) {
+        return content.to_string();
+    }
+
+    let sample_path = "/etc/systemd/system/ezapp-sample.env";
+    if content.contains(sample_path) {
+        return content.replacen(sample_path, &expected_path, 1);
+    }
+
+    let expected_directive = format!("EnvironmentFile={}", expected_path);
+
+    let lines: Vec<&str> = content.lines().collect();
+    let mut service_idx = None;
+    for (i, line) in lines.iter().enumerate() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("[Service]") {
+            service_idx = Some(i);
+            break;
+        }
+    }
+
+    if let Some(idx) = service_idx {
+        let mut new_lines = Vec::with_capacity(lines.len() + 1);
+        new_lines.extend_from_slice(&lines[..=idx]);
+        new_lines.push(&expected_directive);
+        new_lines.extend_from_slice(&lines[idx + 1..]);
+        let mut res = new_lines.join("\n");
+        if content.ends_with('\n') {
+            res.push('\n');
+        }
+        res
+    } else {
+        let trimmed = content.trim_end();
+        if trimmed.is_empty() {
+            format!("[Service]\n{}\n", expected_directive)
+        } else {
+            format!("{}\n\n[Service]\n{}\n", trimmed, expected_directive)
+        }
+    }
+}
+
+fn read_auxiliary_files_recursive(root_dir: &Path, current_dir: &Path, out: &mut Vec<(String, String)>) {
+    if let Ok(entries) = fs::read_dir(current_dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if let Ok(ft) = entry.file_type() {
+                if ft.is_dir() {
+                    read_auxiliary_files_recursive(root_dir, &path, out);
+                } else if ft.is_file() {
+                    if let Ok(rel) = path.strip_prefix(root_dir) {
+                        let rel_str = rel.to_string_lossy().to_string();
+                        if rel_str == "compose.yaml" || rel_str == ".env" {
+                            continue;
+                        }
+                        if let Ok(content) = fs::read_to_string(&path) {
+                            out.push((rel_str, content));
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Compute a deterministic SHA-256 hash across main service content, env content, and auxiliary files
+pub fn compute_files_hash(main: &str, env: &str, files: &[(String, String)]) -> String {
+    let mut hasher = Sha256::new();
+    let norm_main = main.replace("\r\n", "\n");
+    let norm_main = norm_main.trim_end();
+    let norm_env = env.replace("\r\n", "\n");
+    let norm_env = norm_env.trim_end();
+
+    hasher.update(format!("main:\n{}\n", norm_main).as_bytes());
+    hasher.update(format!("env:\n{}\n", norm_env).as_bytes());
+
+    let mut sorted_files: Vec<(String, String)> = files.to_vec();
+    sorted_files.sort_by(|a, b| a.0.cmp(&b.0));
+    for (rel_path, content) in sorted_files {
+        let norm_f = content.replace("\r\n", "\n");
+        let norm_f = norm_f.trim_end();
+        hasher.update(format!("file:{}:\n{}\n", rel_path, norm_f).as_bytes());
+    }
+
+    format!("{:x}", hasher.finalize())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_compute_files_hash() {
+        let main = "[Unit]\nDescription=rclone\n";
+        let env = "RCLONE_PASS=123456\r\n";
+        let files = vec![("conf/rclone.conf".to_string(), "[drive]\ntype=drive\n".to_string())];
+        let h1 = compute_files_hash(main, env, &files);
+        assert_eq!(h1.len(), 64);
+
+        // Whitespace and newline difference normalization
+        let main2 = "[Unit]\nDescription=rclone   \r\n";
+        let env2 = "RCLONE_PASS=123456\n\n";
+        let h2 = compute_files_hash(main2, env2, &files);
+        assert_eq!(h1, h2);
+
+        // Content change changes hash
+        let main3 = "[Unit]\nDescription=rclone modified\n";
+        let h3 = compute_files_hash(main3, env, &files);
+        assert_ne!(h1, h3);
+    }
+
+    #[test]
+    fn test_ensure_systemd_env_file_missing() {
+        let raw = "[Unit]\nDescription=rclone service\n\n[Service]\nType=simple\nExecStart=rclone\n";
+        let res = ensure_systemd_env_file("rclone", raw);
+        assert!(res.contains("EnvironmentFile=/etc/systemd/system/ezapp-rclone.env"));
+        assert!(res.contains("[Service]\nEnvironmentFile=/etc/systemd/system/ezapp-rclone.env\nType=simple"));
+    }
+
+    #[test]
+    fn test_ensure_systemd_env_file_sample_replaced() {
+        let raw = "[Unit]\nDescription=sample\n\n[Service]\nEnvironmentFile=/etc/systemd/system/ezapp-sample.env\nExecStart=test\n";
+        let res = ensure_systemd_env_file("myapp", raw);
+        assert!(res.contains("EnvironmentFile=/etc/systemd/system/ezapp-myapp.env"));
+        assert!(!res.contains("ezapp-sample.env"));
+    }
+
+    #[test]
+    fn test_ensure_systemd_env_file_already_present() {
+        let raw = "[Unit]\nDescription=sample\n\n[Service]\nEnvironmentFile=/etc/systemd/system/ezapp-myapp.env\nExecStart=test\n";
+        let res = ensure_systemd_env_file("myapp", raw);
+        assert_eq!(res, raw);
+    }
+}
+
+

@@ -81,7 +81,7 @@ func TestTranspileToProcd(t *testing.T) {
 	unit := &ParsedServiceUnit{
 		Description: "OpenWrt App",
 		ExecStart:   "/bin/app --verbose",
-		User:        "nobody",
+		User:        "root",
 		Restart:     "always",
 	}
 	env := map[string]string{
@@ -130,3 +130,80 @@ export ADDR=127.0.0.1
 		t.Errorf("expected ADDR=127.0.0.1, got '%s'", res["ADDR"])
 	}
 }
+
+func TestEnsureSystemdEnvironmentFile(t *testing.T) {
+	// 1. Missing EnvironmentFile (like in rclone issue reported by user)
+	rcloneService := `[Unit]
+Description=rclone service
+After=network.target
+
+[Service]
+Type=simple
+User=nobody
+WorkingDirectory=/var/log
+ExecStart=/bin/sh -c "exec rclone serve webdav -L --read-only --user root /root"
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target`
+
+	ensured := EnsureSystemdEnvironmentFile("rclone", rcloneService)
+	if !strings.Contains(ensured, "EnvironmentFile=/etc/systemd/system/ezapp-rclone.env") {
+		t.Fatalf("expected EnvironmentFile=/etc/systemd/system/ezapp-rclone.env, got:\n%s", ensured)
+	}
+	if !strings.Contains(ensured, "[Service]\nEnvironmentFile=/etc/systemd/system/ezapp-rclone.env\nType=simple") {
+		t.Fatalf("expected EnvironmentFile under [Service], got:\n%s", ensured)
+	}
+
+	// 2. Sample service unit with ezapp-sample.env
+	sampleService := `[Unit]
+Description=My Service
+[Service]
+EnvironmentFile=/etc/systemd/system/ezapp-sample.env
+ExecStart=/usr/bin/mybin`
+
+	ensuredSample := EnsureSystemdEnvironmentFile("mydaemon", sampleService)
+	if !strings.Contains(ensuredSample, "EnvironmentFile=/etc/systemd/system/ezapp-mydaemon.env") {
+		t.Fatalf("expected ezapp-sample.env to be replaced by ezapp-mydaemon.env, got:\n%s", ensuredSample)
+	}
+	if strings.Contains(ensuredSample, "ezapp-sample.env") {
+		t.Fatalf("expected ezapp-sample.env to no longer exist in content, got:\n%s", ensuredSample)
+	}
+
+	// 3. Already containing the expected directive
+	alreadyGood := `[Unit]
+Description=My Service
+[Service]
+EnvironmentFile=/etc/systemd/system/ezapp-mydaemon.env
+ExecStart=/usr/bin/mybin`
+
+	ensuredGood := EnsureSystemdEnvironmentFile("mydaemon", alreadyGood)
+	if ensuredGood != alreadyGood {
+		t.Fatalf("expected unchanged content when already present, got:\n%s", ensuredGood)
+	}
+
+	// 4. Custom existing EnvironmentFile
+	customService := `[Unit]
+Description=Custom Service
+[Service]
+EnvironmentFile=/etc/default/custom
+ExecStart=/usr/bin/custom`
+
+	ensuredCustom := EnsureSystemdEnvironmentFile("custom", customService)
+	if !strings.Contains(ensuredCustom, "EnvironmentFile=/etc/systemd/system/ezapp-custom.env") {
+		t.Fatalf("expected EnvironmentFile=/etc/systemd/system/ezapp-custom.env to be injected, got:\n%s", ensuredCustom)
+	}
+	if !strings.Contains(ensuredCustom, "EnvironmentFile=/etc/default/custom") {
+		t.Fatalf("expected existing custom EnvironmentFile to be preserved, got:\n%s", ensuredCustom)
+	}
+
+	// 5. No [Service] section
+	noService := `[Unit]
+Description=Minimal`
+	ensuredNoService := EnsureSystemdEnvironmentFile("minimal", noService)
+	if !strings.Contains(ensuredNoService, "[Service]\nEnvironmentFile=/etc/systemd/system/ezapp-minimal.env") {
+		t.Fatalf("expected [Service] and EnvironmentFile to be appended, got:\n%s", ensuredNoService)
+	}
+}
+

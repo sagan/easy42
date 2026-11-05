@@ -140,6 +140,10 @@ func (m *Manager) SaveApp(app config.App) (config.App, error) {
 		}
 	}
 
+	if strings.ToLower(app.AppType) != "docker" {
+		app.MainContent = apps.EnsureSystemdEnvironmentFile(app.Name, app.MainContent)
+	}
+
 	found := false
 	for i, existing := range cfg.Apps {
 		if existing.ID == app.ID {
@@ -214,6 +218,9 @@ func (m *Manager) RenameApp(appID string, newName string) (config.App, error) {
 
 	cfg.Apps[appIndex].Name = newName
 	cfg.Apps[appIndex].UpdatedAt = time.Now()
+	if strings.ToLower(cfg.Apps[appIndex].AppType) != "docker" {
+		cfg.Apps[appIndex].MainContent = apps.EnsureSystemdEnvironmentFile(newName, cfg.Apps[appIndex].MainContent)
+	}
 
 	// Clear cached status under old name
 	m.appStatusesMu.Lock()
@@ -310,6 +317,10 @@ func (m *Manager) DuplicateApp(appID string) (config.App, error) {
 		Enabled:     false, // Forced to disabled state
 		CreatedAt:   now,
 		UpdatedAt:   now,
+	}
+
+	if strings.ToLower(duplicated.AppType) != "docker" {
+		duplicated.MainContent = apps.EnsureSystemdEnvironmentFile(duplicated.Name, duplicated.MainContent)
 	}
 
 	if original.Files != nil {
@@ -540,9 +551,10 @@ func (m *Manager) BuildAppSpecsForNode(nodeName string) ([]*agentpb.AppSpec, err
 			spec.AppType = agentpb.AppType_DOCKER_COMPOSE
 		} else {
 			spec.AppType = agentpb.AppType_SYSTEMD
+			spec.MainContent = apps.EnsureSystemdEnvironmentFile(app.Name, spec.MainContent)
 
 			// Transpile if target node uses OpenWrt / Procd or Alpine / OpenRC
-			parsedUnit, err := apps.ParseSystemdService(app.MainContent)
+			parsedUnit, err := apps.ParseSystemdService(spec.MainContent)
 			if err == nil && parsedUnit != nil {
 				parsedEnv := apps.ParseEnvFile(app.EnvContent)
 				// Merge any unit-level Environment directives
@@ -573,6 +585,8 @@ func (m *Manager) BuildAppSpecsForNode(nodeName string) ([]*agentpb.AppSpec, err
 				FileMode: 0644,
 			})
 		}
+
+		spec.Sha256Hash = apps.ComputeAppSpecFilesHash(spec)
 
 		specs = append(specs, spec)
 	}

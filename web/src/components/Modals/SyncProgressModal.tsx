@@ -30,6 +30,7 @@ import {
   CheckCheck,
   Network,
   Shield,
+  Layers,
   AlertTriangle,
   Lock,
   Unlock,
@@ -571,8 +572,11 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
                         <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, flex: 1 }}>
                           {act.type === "delete_config" ||
                           act.type === "down_interface" ||
+                          act.type === "delete_app" ||
                           act.diff_status === "delete" ? (
                             <Trash2 size={16} color="#DC2626" />
+                          ) : act.type === "sync_app" ? (
+                            <Layers size={16} color="#9333EA" />
                           ) : act.type === "sync_bird" ? (
                             <Network size={16} color="#0284C7" />
                           ) : act.type === "sync_nftables" ? (
@@ -592,7 +596,7 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
                               {act.host}:{act.target_file} {act.command ? `• (${act.command})` : ""}
                             </Typography>
                           </Box>
-                          {act.diff_status === "delete" || act.type === "delete_config" ? (
+                          {act.diff_status === "delete" || act.type === "delete_config" || act.type === "delete_app" ? (
                             <Chip
                               label="DELETE"
                               size="small"

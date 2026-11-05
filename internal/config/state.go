@@ -55,6 +55,8 @@ type StateNode struct {
 	RoaAppliedAt       map[string]time.Time      `json:"roa_applied_at,omitempty"`
 	HostsConfigHash    string                    `json:"hosts_config_hash,omitempty"`
 	HostsAppliedAt     *time.Time                `json:"hosts_applied_at,omitempty"`
+	AppConfigHashes    map[string]string         `json:"app_config_hashes,omitempty"` // key: app name, val: sha256 hash
+	AppAppliedAt       map[string]time.Time      `json:"app_applied_at,omitempty"`
 	Interfaces         map[string]StateInterface `json:"interfaces"` // key: interface name e.g. "wg42node2"
 }
 
@@ -307,7 +309,8 @@ func (s *StateStore) Load() (*NetworkState, error) {
 	rows, err := s.db.Query(`
 		SELECT node_name, host, last_seen, bird_config_hash, bird_applied_at,
 		       nftables_config_hash, nftables_applied_at, roa_config_hashes,
-		       roa_applied_at, hosts_config_hash, hosts_applied_at, interfaces
+		       roa_applied_at, hosts_config_hash, hosts_applied_at, interfaces,
+		       app_config_hashes, app_applied_at
 		FROM node_states
 	`)
 	if err != nil {
@@ -323,6 +326,7 @@ func (s *StateStore) Load() (*NetworkState, error) {
 			nftAppliedUnix                               sql.NullInt64
 			hostsAppliedUnix                             sql.NullInt64
 			roaHashesJSON, roaAppliedJSON                string
+			appHashesJSON, appAppliedJSON                string
 			ifacesJSON                                   string
 		)
 
@@ -330,6 +334,7 @@ func (s *StateStore) Load() (*NetworkState, error) {
 			&nodeName, &host, &lastSeenUnix, &birdHash, &birdAppliedUnix,
 			&nftHash, &nftAppliedUnix, &roaHashesJSON, &roaAppliedJSON,
 			&hostsHash, &hostsAppliedUnix, &ifacesJSON,
+			&appHashesJSON, &appAppliedJSON,
 		); err != nil {
 			continue
 		}
@@ -342,6 +347,8 @@ func (s *StateStore) Load() (*NetworkState, error) {
 			HostsConfigHash:    hostsHash,
 			RoaConfigHashes:    make(map[string]string),
 			RoaAppliedAt:       make(map[string]time.Time),
+			AppConfigHashes:    make(map[string]string),
+			AppAppliedAt:       make(map[string]time.Time),
 			Interfaces:         make(map[string]StateInterface),
 		}
 
@@ -366,6 +373,12 @@ func (s *StateStore) Load() (*NetworkState, error) {
 		}
 		if roaAppliedJSON != "" {
 			_ = json.Unmarshal([]byte(roaAppliedJSON), &node.RoaAppliedAt)
+		}
+		if appHashesJSON != "" {
+			_ = json.Unmarshal([]byte(appHashesJSON), &node.AppConfigHashes)
+		}
+		if appAppliedJSON != "" {
+			_ = json.Unmarshal([]byte(appAppliedJSON), &node.AppAppliedAt)
 		}
 		if ifacesJSON != "" {
 			_ = json.Unmarshal([]byte(ifacesJSON), &node.Interfaces)
@@ -396,6 +409,8 @@ func (s *StateStore) Get() *NetworkState {
 func (s *StateStore) saveNodeLocked(node StateNode) error {
 	roaHashesJSON, _ := json.Marshal(node.RoaConfigHashes)
 	roaAppliedJSON, _ := json.Marshal(node.RoaAppliedAt)
+	appHashesJSON, _ := json.Marshal(node.AppConfigHashes)
+	appAppliedJSON, _ := json.Marshal(node.AppAppliedAt)
 	ifacesJSON, _ := json.Marshal(node.Interfaces)
 
 	var lastSeenUnix *int64
@@ -426,8 +441,9 @@ func (s *StateStore) saveNodeLocked(node StateNode) error {
 	INSERT INTO node_states (
 		node_name, host, last_seen, bird_config_hash, bird_applied_at,
 		nftables_config_hash, nftables_applied_at, roa_config_hashes,
-		roa_applied_at, hosts_config_hash, hosts_applied_at, interfaces
-	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		roa_applied_at, hosts_config_hash, hosts_applied_at, interfaces,
+		app_config_hashes, app_applied_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	ON CONFLICT(node_name) DO UPDATE SET
 		host=excluded.host,
 		last_seen=excluded.last_seen,
@@ -439,13 +455,16 @@ func (s *StateStore) saveNodeLocked(node StateNode) error {
 		roa_applied_at=excluded.roa_applied_at,
 		hosts_config_hash=excluded.hosts_config_hash,
 		hosts_applied_at=excluded.hosts_applied_at,
-		interfaces=excluded.interfaces;
+		interfaces=excluded.interfaces,
+		app_config_hashes=excluded.app_config_hashes,
+		app_applied_at=excluded.app_applied_at;
 	`
 
 	_, err := s.db.Exec(query,
 		node.Name, node.Host, lastSeenUnix, node.BirdConfigHash, birdUnix,
 		node.NftablesConfigHash, nftUnix, string(roaHashesJSON), string(roaAppliedJSON),
 		node.HostsConfigHash, hostsUnix, string(ifacesJSON),
+		string(appHashesJSON), string(appAppliedJSON),
 	)
 	return err
 }
@@ -818,6 +837,139 @@ func (s *StateStore) UpdateRoaState(nodeName, host, targetFile, configHash strin
 	node.LastSeen = time.Now()
 	node.RoaConfigHashes[targetFile] = configHash
 	node.RoaAppliedAt[targetFile] = appliedAt
+	s.state.Nodes[nodeName] = node
+	s.state.UpdatedAt = time.Now()
+
+	return s.saveNodeLocked(node)
+}
+
+// UpdateAppState records or updates the applied app hash for a specific app on a node
+func (s *StateStore) UpdateAppState(nodeName, host, appName, configHash string, appliedAt time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if err := s.initDBLocked(); err != nil {
+		return err
+	}
+
+	if s.state == nil {
+		s.state = &NetworkState{
+			Version:   1,
+			UpdatedAt: time.Now(),
+			Nodes:     make(map[string]StateNode),
+		}
+	}
+
+	node, exists := s.state.Nodes[nodeName]
+	if !exists {
+		node = StateNode{
+			Name:            nodeName,
+			Host:            host,
+			LastSeen:        time.Now(),
+			Interfaces:      make(map[string]StateInterface),
+			RoaConfigHashes: make(map[string]string),
+			RoaAppliedAt:    make(map[string]time.Time),
+			AppConfigHashes: make(map[string]string),
+			AppAppliedAt:    make(map[string]time.Time),
+		}
+	}
+	if node.Interfaces == nil {
+		node.Interfaces = make(map[string]StateInterface)
+	}
+	if node.AppConfigHashes == nil {
+		node.AppConfigHashes = make(map[string]string)
+	}
+	if node.AppAppliedAt == nil {
+		node.AppAppliedAt = make(map[string]time.Time)
+	}
+	if host != "" {
+		node.Host = host
+	}
+	node.LastSeen = time.Now()
+	node.AppConfigHashes[appName] = configHash
+	node.AppAppliedAt[appName] = appliedAt
+	s.state.Nodes[nodeName] = node
+	s.state.UpdatedAt = time.Now()
+
+	return s.saveNodeLocked(node)
+}
+
+// UpdateAppStates records or updates multiple app hashes reported for a node
+func (s *StateStore) UpdateAppStates(nodeName, host string, hashes map[string]string, appliedAt time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if err := s.initDBLocked(); err != nil {
+		return err
+	}
+
+	if s.state == nil {
+		s.state = &NetworkState{
+			Version:   1,
+			UpdatedAt: time.Now(),
+			Nodes:     make(map[string]StateNode),
+		}
+	}
+
+	node, exists := s.state.Nodes[nodeName]
+	if !exists {
+		node = StateNode{
+			Name:            nodeName,
+			Host:            host,
+			LastSeen:        time.Now(),
+			Interfaces:      make(map[string]StateInterface),
+			RoaConfigHashes: make(map[string]string),
+			RoaAppliedAt:    make(map[string]time.Time),
+			AppConfigHashes: make(map[string]string),
+			AppAppliedAt:    make(map[string]time.Time),
+		}
+	}
+	if node.Interfaces == nil {
+		node.Interfaces = make(map[string]StateInterface)
+	}
+	if node.AppConfigHashes == nil {
+		node.AppConfigHashes = make(map[string]string)
+	}
+	if node.AppAppliedAt == nil {
+		node.AppAppliedAt = make(map[string]time.Time)
+	}
+	if host != "" {
+		node.Host = host
+	}
+	node.LastSeen = time.Now()
+	for k, v := range hashes {
+		node.AppConfigHashes[k] = v
+		node.AppAppliedAt[k] = appliedAt
+	}
+	s.state.Nodes[nodeName] = node
+	s.state.UpdatedAt = time.Now()
+
+	return s.saveNodeLocked(node)
+}
+
+// RemoveAppState removes an app's recorded state from a node
+func (s *StateStore) RemoveAppState(nodeName, appName string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if err := s.initDBLocked(); err != nil {
+		return err
+	}
+
+	if s.state == nil || s.state.Nodes == nil {
+		return nil
+	}
+
+	node, exists := s.state.Nodes[nodeName]
+	if !exists || node.AppConfigHashes == nil {
+		return nil
+	}
+
+	delete(node.AppConfigHashes, appName)
+	if node.AppAppliedAt != nil {
+		delete(node.AppAppliedAt, appName)
+	}
+	node.LastSeen = time.Now()
 	s.state.Nodes[nodeName] = node
 	s.state.UpdatedAt = time.Now()
 

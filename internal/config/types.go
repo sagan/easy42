@@ -578,6 +578,8 @@ const (
 	ActionSyncNftablesConfig ActionType = "sync_nftables"
 	ActionSyncRoaConfig      ActionType = "sync_roa"
 	ActionSyncHosts          ActionType = "sync_hosts"
+	ActionSyncApp            ActionType = "sync_app"
+	ActionDeleteApp          ActionType = "delete_app"
 )
 
 // SyncAction represents a planned action on a target node

@@ -286,3 +286,49 @@ func splitCommand(cmd string) []string {
 	}
 	return res
 }
+
+// EnsureSystemdEnvironmentFile ensures that the systemd service content contains
+// EnvironmentFile=/etc/systemd/system/ezapp-<appName>.env under [Service].
+func EnsureSystemdEnvironmentFile(appName string, content string) string {
+	appName = strings.TrimSpace(appName)
+	if appName == "" {
+		appName = "sample"
+	}
+	expectedPath := fmt.Sprintf("/etc/systemd/system/ezapp-%s.env", appName)
+
+	if strings.Contains(content, expectedPath) {
+		return content
+	}
+
+	samplePath := "/etc/systemd/system/ezapp-sample.env"
+	if strings.Contains(content, samplePath) {
+		return strings.Replace(content, samplePath, expectedPath, 1)
+	}
+
+	expectedDirective := fmt.Sprintf("EnvironmentFile=%s", expectedPath)
+
+	lines := strings.Split(content, "\n")
+	serviceIdx := -1
+	for i, l := range lines {
+		trimmed := strings.TrimSpace(l)
+		if strings.HasPrefix(trimmed, "[Service]") {
+			serviceIdx = i
+			break
+		}
+	}
+
+	if serviceIdx != -1 {
+		newLines := make([]string, 0, len(lines)+1)
+		newLines = append(newLines, lines[:serviceIdx+1]...)
+		newLines = append(newLines, expectedDirective)
+		newLines = append(newLines, lines[serviceIdx+1:]...)
+		return strings.Join(newLines, "\n")
+	}
+
+	trimmedContent := strings.TrimRight(content, "\r\n")
+	if trimmedContent == "" {
+		return fmt.Sprintf("[Service]\n%s\n", expectedDirective)
+	}
+	return fmt.Sprintf("%s\n\n[Service]\n%s\n", trimmedContent, expectedDirective)
+}
+
