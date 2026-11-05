@@ -117,6 +117,7 @@ impl CommandExecutor {
                     if let Ok(new_cfg) = serde_json::from_str::<AgentConfig>(&content) {
                         cfg.pre_sync = new_cfg.pre_sync;
                         cfg.post_sync = new_cfg.post_sync;
+                        cfg.disable_apps = new_cfg.disable_apps;
                         if new_cfg.node_name.is_some() {
                             cfg.node_name = new_cfg.node_name;
                         }
@@ -129,6 +130,22 @@ impl CommandExecutor {
             (pre, post, node)
         } else {
             (None, None, get_system_hostname())
+        }
+    }
+
+    /// Check if app management is disabled in config
+    pub fn is_apps_disabled(&self) -> bool {
+        if let Ok(mut cfg) = self.config.write() {
+            if let Some(ref path) = cfg.config_path {
+                if let Ok(content) = fs::read_to_string(path) {
+                    if let Ok(new_cfg) = serde_json::from_str::<AgentConfig>(&content) {
+                        cfg.disable_apps = new_cfg.disable_apps;
+                    }
+                }
+            }
+            cfg.disable_apps
+        } else {
+            false
         }
     }
 
@@ -169,7 +186,16 @@ impl CommandExecutor {
                 self.delete_config_file(del).await
             }
             Some(proto::command_request::Command::AppAction(app_act)) => {
-                self.apps_manager.handle_action(app_act).await
+                if self.is_apps_disabled() {
+                    (
+                        false,
+                        1,
+                        String::new(),
+                        "App management is disabled on this node (disable_apps = true in agent.json)".to_string(),
+                    )
+                } else {
+                    self.apps_manager.handle_action(app_act).await
+                }
             }
             None => (false, -1, String::new(), "unknown command".to_string()),
         };
@@ -1458,6 +1484,28 @@ mod tests {
 
         let post_val = fs::read_to_string(&post_flag).unwrap();
         assert_eq!(post_val.trim(), "del-node:true:success");
+    }
+
+    #[tokio::test]
+    async fn test_app_action_disabled() {
+        let mut config = AgentConfig::default();
+        config.disable_apps = true;
+        let executor = CommandExecutor::new(config);
+
+        let req = proto::CommandRequest {
+            request_id: "req-1".to_string(),
+            command: Some(proto::command_request::Command::AppAction(proto::AppActionCmd {
+                app_name: "test-app".to_string(),
+                app_type: 0,
+                action: "start".to_string(),
+                log_lines: 0,
+            })),
+        };
+
+        let resp = executor.execute(req).await;
+        assert!(!resp.success);
+        assert_eq!(resp.exit_code, 1);
+        assert!(resp.stderr.contains("App management is disabled on this node"));
     }
 }
 

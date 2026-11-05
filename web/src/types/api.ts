@@ -993,6 +993,7 @@ export interface AppStatusRecord {
 export interface NodeAppsResponse {
   apps: App[];
   statuses: AppStatusRecord[];
+  disable_apps?: boolean;
 }
 
 export interface TranspilePreviewResponse {

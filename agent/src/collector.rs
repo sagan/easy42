@@ -38,6 +38,7 @@ pub struct MetricsCollector {
     interface_types: HashMap<String, InterfaceCategory>,
     cached_primary_iface: Option<String>,
     apps_manager: Option<std::sync::Arc<crate::apps::AppsManager>>,
+    disable_apps_checker: Option<std::sync::Arc<dyn Fn() -> bool + Send + Sync>>,
 }
 
 impl Default for MetricsCollector {
@@ -54,11 +55,19 @@ impl MetricsCollector {
             interface_types: HashMap::new(),
             cached_primary_iface: None,
             apps_manager: None,
+            disable_apps_checker: None,
         }
     }
 
     pub fn set_apps_manager(&mut self, mgr: std::sync::Arc<crate::apps::AppsManager>) {
         self.apps_manager = Some(mgr);
+    }
+
+    pub fn set_disable_apps_checker<F>(&mut self, checker: F)
+    where
+        F: Fn() -> bool + Send + Sync + 'static,
+    {
+        self.disable_apps_checker = Some(std::sync::Arc::new(checker));
     }
 
     pub fn flush_interface_cache(&mut self) {
@@ -72,7 +81,10 @@ impl MetricsCollector {
     }
 
     pub async fn collect_telemetry(&mut self) -> proto::TelemetryReport {
-        let apps = if let Some(mgr) = &self.apps_manager {
+        let is_apps_disabled = self.disable_apps_checker.as_ref().map(|f| f()).unwrap_or(false);
+        let apps = if is_apps_disabled {
+            Vec::new()
+        } else if let Some(mgr) = &self.apps_manager {
             mgr.collect_app_statuses().await
         } else {
             Vec::new()
@@ -86,6 +98,7 @@ impl MetricsCollector {
             disks: self.collect_disks(),
             hosts_hash: crate::hosts::get_current_hosts_hash(&crate::hosts::get_hosts_path()),
             apps,
+            disable_apps: is_apps_disabled,
         }
     }
 

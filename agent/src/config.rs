@@ -18,6 +18,9 @@ pub struct AgentConfig {
     /// Optional shell script snippet executed after Sync action
     #[serde(default)]
     pub post_sync: Option<String>,
+    /// Optional setting: if true, refuse to deploy or manage apps on this node
+    #[serde(default)]
+    pub disable_apps: bool,
     /// Path to config file if loaded from disk
     #[serde(skip)]
     pub config_path: Option<PathBuf>,
@@ -41,6 +44,7 @@ impl Default for AgentConfig {
             node_name: None,
             pre_sync: None,
             post_sync: None,
+            disable_apps: false,
             config_path: None,
         }
     }
@@ -121,5 +125,17 @@ mod tests {
         let cfg: AgentConfig = serde_json::from_str(json).unwrap();
         assert_eq!(cfg.pre_sync_hook(), None);
         assert_eq!(cfg.post_sync_hook(), None);
+        assert!(!cfg.disable_apps);
+    }
+
+    #[test]
+    fn test_config_disable_apps() {
+        let json = r#"{
+            "server": "https://easy42.local",
+            "token": "abc",
+            "disable_apps": true
+        }"#;
+        let cfg: AgentConfig = serde_json::from_str(json).unwrap();
+        assert!(cfg.disable_apps);
     }
 }

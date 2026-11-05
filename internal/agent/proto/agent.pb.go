@@ -445,6 +445,7 @@ type RegisterRequest struct {
 	OsInfo        string                 `protobuf:"bytes,3,opt,name=os_info,json=osInfo,proto3" json:"os_info,omitempty"`
 	Hostname      string                 `protobuf:"bytes,4,opt,name=hostname,proto3" json:"hostname,omitempty"`
 	HostsHash     string                 `protobuf:"bytes,5,opt,name=hosts_hash,json=hostsHash,proto3" json:"hosts_hash,omitempty"`
+	DisableApps   bool                   `protobuf:"varint,6,opt,name=disable_apps,json=disableApps,proto3" json:"disable_apps,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -512,6 +513,13 @@ func (x *RegisterRequest) GetHostsHash() string {
 		return x.HostsHash
 	}
 	return ""
+}
+
+func (x *RegisterRequest) GetDisableApps() bool {
+	if x != nil {
+		return x.DisableApps
+	}
+	return false
 }
 
 type RegisterResponse struct {
@@ -679,6 +687,7 @@ type TelemetryReport struct {
 	Disks         []*DiskMetrics         `protobuf:"bytes,5,rep,name=disks,proto3" json:"disks,omitempty"`
 	HostsHash     string                 `protobuf:"bytes,6,opt,name=hosts_hash,json=hostsHash,proto3" json:"hosts_hash,omitempty"`
 	Apps          []*AppStatus           `protobuf:"bytes,7,rep,name=apps,proto3" json:"apps,omitempty"`
+	DisableApps   bool                   `protobuf:"varint,8,opt,name=disable_apps,json=disableApps,proto3" json:"disable_apps,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -760,6 +769,13 @@ func (x *TelemetryReport) GetApps() []*AppStatus {
 		return x.Apps
 	}
 	return nil
+}
+
+func (x *TelemetryReport) GetDisableApps() bool {
+	if x != nil {
+		return x.DisableApps
+	}
+	return false
 }
 
 type DiskMetrics struct {
@@ -2908,14 +2924,15 @@ const file_proto_agent_proto_rawDesc = "" +
 	"\n" +
 	"sync_hosts\x18\x18 \x01(\v2\x1a.easy42.agent.v1.SyncHostsH\x00R\tsyncHosts\x128\n" +
 	"\tsync_apps\x18\x19 \x01(\v2\x19.easy42.agent.v1.SyncAppsH\x00R\bsyncAppsB\t\n" +
-	"\apayload\"\xa7\x01\n" +
+	"\apayload\"\xca\x01\n" +
 	"\x0fRegisterRequest\x12\x1b\n" +
 	"\tnode_name\x18\x01 \x01(\tR\bnodeName\x12#\n" +
 	"\ragent_version\x18\x02 \x01(\tR\fagentVersion\x12\x17\n" +
 	"\aos_info\x18\x03 \x01(\tR\x06osInfo\x12\x1a\n" +
 	"\bhostname\x18\x04 \x01(\tR\bhostname\x12\x1d\n" +
 	"\n" +
-	"hosts_hash\x18\x05 \x01(\tR\thostsHash\"\x89\x01\n" +
+	"hosts_hash\x18\x05 \x01(\tR\thostsHash\x12!\n" +
+	"\fdisable_apps\x18\x06 \x01(\bR\vdisableApps\"\x89\x01\n" +
 	"\x10RegisterResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12#\n" +
 	"\rerror_message\x18\x02 \x01(\tR\ferrorMessage\x126\n" +
@@ -2927,7 +2944,7 @@ const file_proto_agent_proto_rawDesc = "" +
 	"hosts_hash\x18\x02 \x01(\tR\thostsHash\"/\n" +
 	"\fHeartbeatAck\x12\x1f\n" +
 	"\vserver_time\x18\x01 \x01(\x03R\n" +
-	"serverTime\"\x96\x03\n" +
+	"serverTime\"\xb9\x03\n" +
 	"\x0fTelemetryReport\x126\n" +
 	"\x06system\x18\x01 \x01(\v2\x1e.easy42.agent.v1.SystemMetricsR\x06system\x12A\n" +
 	"\n" +
@@ -2938,7 +2955,8 @@ const file_proto_agent_proto_rawDesc = "" +
 	"\x05disks\x18\x05 \x03(\v2\x1c.easy42.agent.v1.DiskMetricsR\x05disks\x12\x1d\n" +
 	"\n" +
 	"hosts_hash\x18\x06 \x01(\tR\thostsHash\x12.\n" +
-	"\x04apps\x18\a \x03(\v2\x1a.easy42.agent.v1.AppStatusR\x04apps\"\x80\x01\n" +
+	"\x04apps\x18\a \x03(\v2\x1a.easy42.agent.v1.AppStatusR\x04apps\x12!\n" +
+	"\fdisable_apps\x18\b \x01(\bR\vdisableApps\"\x80\x01\n" +
 	"\vDiskMetrics\x12\x12\n" +
 	"\x04path\x18\x01 \x01(\tR\x04path\x12\x1f\n" +
 	"\vtotal_bytes\x18\x02 \x01(\x04R\n" +

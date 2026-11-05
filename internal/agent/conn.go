@@ -21,6 +21,7 @@ type AgentConnection struct {
 	osInfo       string
 	hostname     string
 	hostsHash    string
+	disableApps  bool
 	ws           *websocket.Conn
 	hub          *Hub
 	sendMu       sync.Mutex
@@ -68,6 +69,11 @@ func (c *AgentConnection) OSInfo() string {
 // HostsHash returns the latest reported hosts easy42 block SHA-256 hash
 func (c *AgentConnection) HostsHash() string {
 	return c.hostsHash
+}
+
+// DisableApps returns whether the agent disabled app management
+func (c *AgentConnection) DisableApps() bool {
+	return c.disableApps
 }
 
 // Close closes the WebSocket connection gracefully
@@ -186,6 +192,7 @@ func (c *AgentConnection) handleIncomingMessage(msg *agentpb.AgentMessage) {
 		c.osInfo = req.OsInfo
 		c.hostname = req.Hostname
 		c.hostsHash = req.HostsHash
+		c.disableApps = req.DisableApps
 
 		// Acknowledge registration
 		_ = c.SendMessage(&agentpb.AgentMessage{
@@ -216,6 +223,7 @@ func (c *AgentConnection) handleIncomingMessage(msg *agentpb.AgentMessage) {
 		if payload.Telemetry.HostsHash != "" {
 			c.hostsHash = payload.Telemetry.HostsHash
 		}
+		c.disableApps = payload.Telemetry.DisableApps
 		c.hub.UpdateTelemetry(c.nodeName, payload.Telemetry)
 
 	case *agentpb.AgentMessage_CommandResp:

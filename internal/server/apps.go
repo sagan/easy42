@@ -87,10 +87,59 @@ func (s *Server) handleToggleApp(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, app)
 }
 
+type renameAppRequest struct {
+	NewName string `json:"new_name"`
+}
+
+func (s *Server) handleRenameApp(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		writeError(w, http.StatusBadRequest, "App ID is required")
+		return
+	}
+
+	var req renameAppRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid JSON body: "+err.Error())
+		return
+	}
+
+	newName := strings.TrimSpace(req.NewName)
+	if newName == "" {
+		writeError(w, http.StatusBadRequest, "New app name is required")
+		return
+	}
+
+	renamed, err := s.mgr.RenameApp(id, newName)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, renamed)
+}
+
+func (s *Server) handleDuplicateApp(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		writeError(w, http.StatusBadRequest, "App ID is required")
+		return
+	}
+
+	duplicated, err := s.mgr.DuplicateApp(id)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusCreated, duplicated)
+}
+
 // NodeAppsResponse combines assigned apps configuration and live statuses on a node
 type NodeAppsResponse struct {
-	Apps     []config.App            `json:"apps"`
-	Statuses []engineAppStatusRecord `json:"statuses"`
+	Apps        []config.App            `json:"apps"`
+	Statuses    []engineAppStatusRecord `json:"statuses"`
+	DisableApps bool                    `json:"disable_apps"`
 }
 
 type engineAppStatusRecord struct {
@@ -138,9 +187,12 @@ func (s *Server) handleGetNodeApps(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
+	disabled := s.mgr.AgentHub() != nil && s.mgr.AgentHub().IsAppsDisabled(nodeName)
+
 	writeJSON(w, http.StatusOK, NodeAppsResponse{
-		Apps:     nodeApps,
-		Statuses: statuses,
+		Apps:        nodeApps,
+		Statuses:    statuses,
+		DisableApps: disabled,
 	})
 }
 

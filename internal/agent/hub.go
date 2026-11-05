@@ -118,6 +118,19 @@ func (h *Hub) GetOSInfo(nodeName string) string {
 	return conn.OSInfo()
 }
 
+// IsAppsDisabled returns true if the node agent has disabled apps in its configuration
+func (h *Hub) IsAppsDisabled(nodeName string) bool {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	if conn, ok := h.connections[nodeName]; ok {
+		return conn.DisableApps()
+	}
+	if t, ok := h.telemetry[nodeName]; ok {
+		return t.DisableApps
+	}
+	return false
+}
+
 // NotifyRegister triggers registered registration listeners
 func (h *Hub) NotifyRegister(conn *AgentConnection) {
 	h.mu.RLock()

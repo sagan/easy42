@@ -36,6 +36,7 @@ message RegisterRequest {
   string os_info = 3;
   string hostname = 4;
   string hosts_hash = 5;
+  bool disable_apps = 6;
 }
 
 message RegisterResponse {
@@ -65,6 +66,7 @@ message TelemetryReport {
   repeated DiskMetrics disks = 5;
   string hosts_hash = 6;
   repeated AppStatus apps = 7;
+  bool disable_apps = 8;
 }
 
 message DiskMetrics {

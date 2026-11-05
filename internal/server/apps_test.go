@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"easy42/internal/config"
+	agentpb "easy42/internal/agent/proto"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -22,6 +23,7 @@ func TestAppsAPI(t *testing.T) {
 
 	// 1. Create App
 	newApp := config.App{
+		ID:          "my-nginx-app",
 		Name:        "test-app",
 		Description: "A test docker compose app",
 		AppType:     "docker",
@@ -81,7 +83,72 @@ func TestAppsAPI(t *testing.T) {
 		t.Fatalf("expected enabled to be false after toggle, got %v", toggled.Enabled)
 	}
 
-	// 4. Preview Transpile
+	// 4. Rename App
+	renameBody, _ := json.Marshal(map[string]string{"new_name": "renamed-app"})
+	req = httptest.NewRequest(http.MethodPost, "/api/apps/"+created.ID+"/rename", bytes.NewReader(renameBody))
+	req = req.WithContext(rctx)
+	w = httptest.NewRecorder()
+	srv.handleRenameApp(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200 on rename, got %d: %s", w.Code, w.Body.String())
+	}
+	var renamed config.App
+	_ = json.NewDecoder(w.Body).Decode(&renamed)
+	if renamed.Name != "renamed-app" {
+		t.Fatalf("expected renamed name to be 'renamed-app', got %s", renamed.Name)
+	}
+
+	// Rename with invalid name should fail
+	badRenameBody, _ := json.Marshal(map[string]string{"new_name": "bad name!"})
+	req = httptest.NewRequest(http.MethodPost, "/api/apps/"+created.ID+"/rename", bytes.NewReader(badRenameBody))
+	req = req.WithContext(rctx)
+	w = httptest.NewRecorder()
+	srv.handleRenameApp(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected status 400 on invalid name, got %d", w.Code)
+	}
+
+	// 5. Duplicate App (first time -> appends '1')
+	req = httptest.NewRequest(http.MethodPost, "/api/apps/"+created.ID+"/duplicate", nil)
+	req = req.WithContext(rctx)
+	w = httptest.NewRecorder()
+	srv.handleDuplicateApp(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected status 201 on duplicate, got %d: %s", w.Code, w.Body.String())
+	}
+	var dup1 config.App
+	_ = json.NewDecoder(w.Body).Decode(&dup1)
+	expectedDup1ID := created.ID + "1"
+	if dup1.ID != expectedDup1ID {
+		t.Fatalf("expected dup1 ID to be %s, got %s", expectedDup1ID, dup1.ID)
+	}
+	if dup1.Enabled != false {
+		t.Fatalf("expected duplicated app to be disabled, got %v", dup1.Enabled)
+	}
+	if dup1.MainContent != created.MainContent {
+		t.Fatalf("expected duplicated content to match original")
+	}
+
+	// Duplicate dup1 (ends in '1' -> increments to '2')
+	rctxDup1 := chiContextWithParam("id", dup1.ID)
+	req = httptest.NewRequest(http.MethodPost, "/api/apps/"+dup1.ID+"/duplicate", nil)
+	req = req.WithContext(rctxDup1)
+	w = httptest.NewRecorder()
+	srv.handleDuplicateApp(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected status 201 on duplicating dup1, got %d: %s", w.Code, w.Body.String())
+	}
+	var dup2 config.App
+	_ = json.NewDecoder(w.Body).Decode(&dup2)
+	expectedDup2ID := created.ID + "2"
+	if dup2.ID != expectedDup2ID {
+		t.Fatalf("expected dup2 ID to be %s, got %s", expectedDup2ID, dup2.ID)
+	}
+	if dup2.Enabled != false {
+		t.Fatalf("expected dup2 to be disabled, got %v", dup2.Enabled)
+	}
+
+	// 6. Preview Transpile
 	previewReq := transpilePreviewRequest{
 		AppName:     "mydaemon",
 		TargetInit:  "openrc",
@@ -179,5 +246,50 @@ func chiContextWithParam(key, val string) context.Context {
 	chiCtx := chi.NewRouteContext()
 	chiCtx.URLParams.Add(key, val)
 	return context.WithValue(context.Background(), chi.RouteCtxKey, chiCtx)
+}
+
+func TestNodeAppsDisabled(t *testing.T) {
+	srv, tempDir, _ := setupTestServer(t)
+	defer func() {
+		srv.mgr.Close()
+		_ = os.RemoveAll(tempDir)
+	}()
+
+	// 1. Initially node1 has apps enabled (default)
+	req := httptest.NewRequest(http.MethodGet, "/api/nodes/node1/apps", nil)
+	req = req.WithContext(chiContextWithParam("name", "node1"))
+	w := httptest.NewRecorder()
+	srv.handleGetNodeApps(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	var resp NodeAppsResponse
+	_ = json.NewDecoder(w.Body).Decode(&resp)
+	if resp.DisableApps {
+		t.Fatalf("expected DisableApps to be false initially")
+	}
+
+	// 2. Report telemetry with DisableApps = true
+	srv.mgr.AgentHub().UpdateTelemetry("node1", &agentpb.TelemetryReport{
+		DisableApps: true,
+	})
+
+	if !srv.mgr.AgentHub().IsAppsDisabled("node1") {
+		t.Fatalf("expected AgentHub().IsAppsDisabled(node1) to be true")
+	}
+
+	// 3. Query again, DisableApps should now be true
+	req = httptest.NewRequest(http.MethodGet, "/api/nodes/node1/apps", nil)
+	req = req.WithContext(chiContextWithParam("name", "node1"))
+	w = httptest.NewRecorder()
+	srv.handleGetNodeApps(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	var resp2 NodeAppsResponse
+	_ = json.NewDecoder(w.Body).Decode(&resp2)
+	if !resp2.DisableApps {
+		t.Fatalf("expected DisableApps to be true after telemetry report")
+	}
 }
 

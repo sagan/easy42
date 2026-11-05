@@ -69,6 +69,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             pre_sync: None,
             post_sync: None,
             config_path: Some(cli.config.clone()),
+            disable_apps: false,
         }
     } else {
         eprintln!(

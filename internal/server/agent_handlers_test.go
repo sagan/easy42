@@ -64,6 +64,12 @@ func TestAgentInstallScript(t *testing.T) {
 	if !strings.Contains(body, "--overwrite-config") {
 		t.Fatalf("expected install.sh to support --overwrite-config")
 	}
+	if !strings.Contains(body, "--disable-apps") {
+		t.Fatalf("expected install.sh to support --disable-apps")
+	}
+	if !strings.Contains(body, "disable_apps") {
+		t.Fatalf("expected install.sh to configure disable_apps")
+	}
 	if !strings.Contains(body, "Preserving existing /etc/easy42/agent.json") {
 		t.Fatalf("expected install.sh to preserve existing config by default")
 	}

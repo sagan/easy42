@@ -657,6 +657,15 @@ export const api = {
     request<App>(`/apps/${encodeURIComponent(id)}/toggle`, {
       method: "POST",
     }),
+  renameApp: (id: string, newName: string) =>
+    request<App>(`/apps/${encodeURIComponent(id)}/rename`, {
+      method: "POST",
+      body: JSON.stringify({ new_name: newName }),
+    }),
+  duplicateApp: (id: string) =>
+    request<App>(`/apps/${encodeURIComponent(id)}/duplicate`, {
+      method: "POST",
+    }),
   previewTranspile: (req: { app_name: string; target_init: string; main_content: string; env_content: string }) =>
     request<TranspilePreviewResponse>("/apps/preview-transpile", {
       method: "POST",

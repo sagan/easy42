@@ -68,6 +68,7 @@ import { api } from "../api/client";
 import { useMesh } from "../context/MeshContext";
 import type { App, AppVariable, TranspilePreviewResponse } from "../types/api";
 import { dockerRunToCompose, cmdlineToSystemd } from "../utils/appGenerators";
+import { RenameAppModal } from "../components/Modals/RenameAppModal";
 
 const DOCKER_SAMPLE = `version: '3.8'
 services:
@@ -106,14 +107,30 @@ const INTERNAL_NODE_VARS = [
   { key: "NODE_INTERFACE", label: "${NODE_INTERFACE}", tooltip: "Node interface (node.interface)" },
   { key: "NODE_IP", label: "${NODE_IP}", tooltip: "Node IPv4 stripped CIDR (node.ip)" },
   { key: "NODE_IP6", label: "${NODE_IP6}", tooltip: "Node IPv6 stripped CIDR (node.ip6)" },
-  { key: "NODE_EXTERNAL_IP", label: "${NODE_EXTERNAL_IP}", tooltip: "Node external IPv4 (node.external_ip, when different from NODE_IP)" },
-  { key: "NODE_EXTERNAL_IP6", label: "${NODE_EXTERNAL_IP6}", tooltip: "Node external IPv6 (node.external_ip6, when different from NODE_IP6)" },
-  { key: "HAS_CUSTOM_SCRIPT", label: "${HAS_CUSTOM_SCRIPT}", tooltip: "'1' if custom network script configured, otherwise '0'" },
-  { key: "NODE_DATA_*", label: "${NODE_DATA_*}", tooltip: "Structured JSON fields from node Note (up to 1 layer hierarchy)" },
+  {
+    key: "NODE_EXTERNAL_IP",
+    label: "${NODE_EXTERNAL_IP}",
+    tooltip: "Node external IPv4 (node.external_ip, when different from NODE_IP)",
+  },
+  {
+    key: "NODE_EXTERNAL_IP6",
+    label: "${NODE_EXTERNAL_IP6}",
+    tooltip: "Node external IPv6 (node.external_ip6, when different from NODE_IP6)",
+  },
+  {
+    key: "HAS_CUSTOM_SCRIPT",
+    label: "${HAS_CUSTOM_SCRIPT}",
+    tooltip: "'1' if custom network script configured, otherwise '0'",
+  },
+  {
+    key: "NODE_DATA_*",
+    label: "${NODE_DATA_*}",
+    tooltip: "Structured JSON fields from node Note (up to 1 layer hierarchy)",
+  },
 ];
 
 export const AppsPage: React.FC = () => {
-  const { nodes } = useMesh();
+  const { nodes, setStateToast } = useMesh();
 
   // Top-level Navigation: "apps" or "variables"
   const [activeTab, setActiveTab] = useState<"apps" | "variables">("apps");
@@ -122,6 +139,7 @@ export const AppsPage: React.FC = () => {
   const [apps, setApps] = useState<App[]>([]);
   const [loadingApps, setLoadingApps] = useState(true);
   const [appsError, setAppsError] = useState<string | null>(null);
+  const [togglingAppIds, setTogglingAppIds] = useState<Record<string, boolean>>({});
 
   // Variables State
   const [variables, setVariables] = useState<AppVariable[]>([]);
@@ -141,7 +159,20 @@ export const AppsPage: React.FC = () => {
   // App Modal State
   const [modalOpen, setModalOpen] = useState(false);
   const [editingApp, setEditingApp] = useState<App | null>(null);
-  const [modalTab, setModalTab] = useState<"general" | "definition" | "env" | "files" | "preview" | "transpile">("general");
+  const [modalTab, setModalTab] = useState<"general" | "definition" | "env" | "files" | "preview" | "transpile">(
+    "general",
+  );
+
+  // Rename App Modal State
+  const [renameModalOpen, setRenameModalOpen] = useState(false);
+  const [appToRename, setAppToRename] = useState<App | null>(null);
+
+  const handleOpenRenameApp = (app: App) => {
+    setAppToRename(app);
+    setRenameModalOpen(true);
+  };
+
+  const [duplicatingAppId, setDuplicatingAppId] = useState<string | null>(null);
 
   // App Form Fields
   const [formName, setFormName] = useState("");
@@ -370,12 +401,62 @@ export const AppsPage: React.FC = () => {
     }
   };
 
-  const handleToggleApp = async (id: string) => {
+  const handleToggleApp = async (appOrId: App | string) => {
+    const targetApp = typeof appOrId === "string" ? apps.find((a) => a.id === appOrId) : appOrId;
+    if (!targetApp) return;
+
+    const nextState = !targetApp.enabled;
+    const actionLabel = nextState ? "enabled" : "disabled";
+
+    // Optimistically toggle state for this app only - no layout shift or full list re-render
+    setApps((prev) =>
+      prev.map((a) => (a.id === targetApp.id ? { ...a, enabled: nextState } : a))
+    );
+    setTogglingAppIds((prev) => ({ ...prev, [targetApp.id]: true }));
+
     try {
-      await api.toggleApp(id);
-      await loadApps();
+      const updated = await api.toggleApp(targetApp.id);
+      setApps((prev) =>
+        prev.map((a) => (a.id === targetApp.id ? updated : a))
+      );
+      setStateToast({
+        message: `App "${targetApp.name}" ${actionLabel} successfully.`,
+        severity: "success",
+      });
     } catch (e: any) {
-      alert(e.message || "Failed to toggle app");
+      // Revert optimistic change on failure
+      setApps((prev) =>
+        prev.map((a) => (a.id === targetApp.id ? { ...a, enabled: targetApp.enabled } : a))
+      );
+      setStateToast({
+        message: e.message || `Failed to ${nextState ? "enable" : "disable"} app "${targetApp.name}"`,
+        severity: "error",
+      });
+    } finally {
+      setTogglingAppIds((prev) => {
+        const next = { ...prev };
+        delete next[targetApp.id];
+        return next;
+      });
+    }
+  };
+
+  const handleDuplicateApp = async (app: App) => {
+    try {
+      setDuplicatingAppId(app.id);
+      const duplicated = await api.duplicateApp(app.id);
+      setApps((prev) => [...prev, duplicated]);
+      setStateToast({
+        message: `App "${app.name}" duplicated as "${duplicated.name}" (${duplicated.id}).`,
+        severity: "success",
+      });
+    } catch (e: any) {
+      setStateToast({
+        message: e.message || `Failed to duplicate app "${app.name}"`,
+        severity: "error",
+      });
+    } finally {
+      setDuplicatingAppId(null);
     }
   };
 
@@ -978,9 +1059,20 @@ export const AppsPage: React.FC = () => {
                             {app.app_type === "docker" ? <BoxIcon size={18} /> : <Cpu size={18} />}
                           </Box>
                           <Box>
-                            <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#0F172A", lineHeight: 1.2 }}>
-                              {app.name}
-                            </Typography>
+                            <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                              <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#0F172A", lineHeight: 1.2 }}>
+                                {app.name}
+                              </Typography>
+                              <Tooltip title="Rename App">
+                                <IconButton
+                                  size="small"
+                                  onClick={() => handleOpenRenameApp(app)}
+                                  sx={{ p: 0.3, color: "#94A3B8", "&:hover": { color: "#4F46E5", bgcolor: "#EEF2FF" } }}
+                                >
+                                  <Tag size={13} />
+                                </IconButton>
+                              </Tooltip>
+                            </Box>
                             <Chip
                               size="small"
                               label={app.app_type === "docker" ? "Docker" : "Systemd"}
@@ -999,7 +1091,8 @@ export const AppsPage: React.FC = () => {
                         <Switch
                           size="small"
                           checked={app.enabled}
-                          onChange={() => handleToggleApp(app.id)}
+                          disabled={Boolean(togglingAppIds[app.id])}
+                          onChange={() => handleToggleApp(app)}
                           color="primary"
                         />
                       </Box>
@@ -1027,7 +1120,10 @@ export const AppsPage: React.FC = () => {
                       {/* Target Nodes */}
                       <Box sx={{ mb: 1.5 }}>
                         <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 0.6 }}>
-                          <Typography variant="caption" sx={{ color: "#94A3B8", fontWeight: 700, textTransform: "uppercase" }}>
+                          <Typography
+                            variant="caption"
+                            sx={{ color: "#94A3B8", fontWeight: 700, textTransform: "uppercase" }}
+                          >
                             Target Nodes
                           </Typography>
                           {app.target_type === "all" ? (
@@ -1035,21 +1131,39 @@ export const AppsPage: React.FC = () => {
                               size="small"
                               icon={<Globe size={12} />}
                               label="All Nodes"
-                              sx={{ height: 20, fontSize: "0.68rem", fontWeight: 700, bgcolor: "#E0F2FE", color: "#0369A1" }}
+                              sx={{
+                                height: 20,
+                                fontSize: "0.68rem",
+                                fontWeight: 700,
+                                bgcolor: "#E0F2FE",
+                                color: "#0369A1",
+                              }}
                             />
                           ) : app.target_type === "tag" ? (
                             <Chip
                               size="small"
                               icon={<Tag size={12} />}
                               label={`Tag: #${app.target_tag}`}
-                              sx={{ height: 20, fontSize: "0.68rem", fontWeight: 700, bgcolor: "#F5F3FF", color: "#6D28D9" }}
+                              sx={{
+                                height: 20,
+                                fontSize: "0.68rem",
+                                fontWeight: 700,
+                                bgcolor: "#F5F3FF",
+                                color: "#6D28D9",
+                              }}
                             />
                           ) : (
                             <Chip
                               size="small"
                               icon={<Sliders size={12} />}
                               label={`Manual (${app.nodes?.length || 0})`}
-                              sx={{ height: 20, fontSize: "0.68rem", fontWeight: 700, bgcolor: "#F1F5F9", color: "#475569" }}
+                              sx={{
+                                height: 20,
+                                fontSize: "0.68rem",
+                                fontWeight: 700,
+                                bgcolor: "#F1F5F9",
+                                color: "#475569",
+                              }}
                             />
                           )}
                         </Box>
@@ -1065,7 +1179,7 @@ export const AppsPage: React.FC = () => {
                             }
                             if (app.target_type === "tag") {
                               const matching = managedNodes.filter((n) =>
-                                n.tags?.some((t) => t.toLowerCase() === (app.target_tag || "").toLowerCase())
+                                n.tags?.some((t) => t.toLowerCase() === (app.target_tag || "").toLowerCase()),
                               );
                               if (matching.length === 0) {
                                 return (
@@ -1120,7 +1234,15 @@ export const AppsPage: React.FC = () => {
                       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", pt: 1 }}>
                         <Chip
                           size="small"
-                          icon={app.enabled ? <CheckCircle2 size={12} /> : <Square size={12} />}
+                          icon={
+                            togglingAppIds[app.id] ? (
+                              <CircularProgress size={10} sx={{ color: "inherit" }} />
+                            ) : app.enabled ? (
+                              <CheckCircle2 size={12} />
+                            ) : (
+                              <Square size={12} />
+                            )
+                          }
                           label={app.enabled ? "Active" : "Stopped"}
                           sx={{
                             height: 22,
@@ -1133,17 +1255,36 @@ export const AppsPage: React.FC = () => {
                         />
 
                         <Box sx={{ display: "flex", gap: 0.5 }}>
+                          <Tooltip title="Rename App">
+                            <IconButton
+                              size="small"
+                              onClick={() => handleOpenRenameApp(app)}
+                              sx={{ color: "#64748B", "&:hover": { color: "#4F46E5", bgcolor: "#EEF2FF" } }}
+                            >
+                              <Tag size={16} />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title="Duplicate App">
+                            <IconButton
+                              size="small"
+                              disabled={duplicatingAppId === app.id}
+                              onClick={() => handleDuplicateApp(app)}
+                              sx={{ color: "#64748B", "&:hover": { color: "#4F46E5", bgcolor: "#EEF2FF" } }}
+                            >
+                              {duplicatingAppId === app.id ? (
+                                <CircularProgress size={16} sx={{ color: "inherit" }} />
+                              ) : (
+                                <Copy size={16} />
+                              )}
+                            </IconButton>
+                          </Tooltip>
                           <Tooltip title="Edit App">
                             <IconButton size="small" onClick={() => openEditAppModal(app)} sx={{ color: "#64748B" }}>
                               <Edit size={16} />
                             </IconButton>
                           </Tooltip>
                           <Tooltip title="Delete App">
-                            <IconButton
-                              size="small"
-                              onClick={() => setDeleteAppId(app.id)}
-                              sx={{ color: "#EF4444" }}
-                            >
+                            <IconButton size="small" onClick={() => setDeleteAppId(app.id)} sx={{ color: "#EF4444" }}>
                               <Trash2 size={16} />
                             </IconButton>
                           </Tooltip>
@@ -1373,9 +1514,7 @@ export const AppsPage: React.FC = () => {
                             {isSecret && (
                               <IconButton
                                 size="small"
-                                onClick={() =>
-                                  setRevealedSecrets((prev) => ({ ...prev, [v.key]: !prev[v.key] }))
-                                }
+                                onClick={() => setRevealedSecrets((prev) => ({ ...prev, [v.key]: !prev[v.key] }))}
                                 sx={{ color: "#94A3B8" }}
                               >
                                 {isRevealed ? <EyeOff size={15} /> : <Eye size={15} />}
@@ -1416,11 +1555,7 @@ export const AppsPage: React.FC = () => {
                               </IconButton>
                             </Tooltip>
                             <Tooltip title="Delete Variable">
-                              <IconButton
-                                size="small"
-                                onClick={() => setDeleteVarKey(v.key)}
-                                sx={{ color: "#EF4444" }}
-                              >
+                              <IconButton size="small" onClick={() => setDeleteVarKey(v.key)} sx={{ color: "#EF4444" }}>
                                 <Trash2 size={16} />
                               </IconButton>
                             </Tooltip>
@@ -1487,11 +1622,7 @@ export const AppsPage: React.FC = () => {
           />
           <FormControlLabel
             control={
-              <Switch
-                checked={varIsSecret}
-                onChange={(e) => setVarIsSecret(e.target.checked)}
-                color="primary"
-              />
+              <Switch checked={varIsSecret} onChange={(e) => setVarIsSecret(e.target.checked)} color="primary" />
             }
             label={
               <Box>
@@ -1525,8 +1656,8 @@ export const AppsPage: React.FC = () => {
         <DialogTitle sx={{ fontWeight: 700 }}>Delete Variable</DialogTitle>
         <DialogContent>
           <Typography variant="body2" sx={{ color: "#475569" }}>
-            Are you sure you want to delete variable <strong>{deleteVarKey}</strong>? Applications referencing this variable
-            will fall back to default values or empty strings upon next sync.
+            Are you sure you want to delete variable <strong>{deleteVarKey}</strong>? Applications referencing this
+            variable will fall back to default values or empty strings upon next sync.
           </Typography>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
@@ -1546,11 +1677,11 @@ export const AppsPage: React.FC = () => {
 
       {/* Delete App Confirmation Dialog */}
       <Dialog open={!!deleteAppId} onClose={() => setDeleteAppId(null)} maxWidth="xs" fullWidth>
-        <DialogTitle sx={{ fontWeight: 700 }}>Confirm Delete</DialogTitle>
+        <DialogTitle sx={{ fontWeight: 700 }}>Confirm Delete {deleteAppId}</DialogTitle>
         <DialogContent>
           <Typography variant="body2" sx={{ color: "#475569" }}>
-            Are you sure you want to delete this workload app? Easy42 agents will immediately stop the service, remove
-            its configuration, and clean up orphaned files on all nodes.
+            Are you sure you want to delete this workload app {deleteAppId}? Easy42 agents will immediately stop the
+            service, remove its configuration, and clean up orphaned files on all nodes.
           </Typography>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
@@ -1567,6 +1698,21 @@ export const AppsPage: React.FC = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Rename App Modal */}
+      <RenameAppModal
+        open={renameModalOpen}
+        app={appToRename}
+        existingApps={apps}
+        onClose={() => {
+          setRenameModalOpen(false);
+          setAppToRename(null);
+        }}
+        onAppRenamed={async (_oldName, updatedApp) => {
+          setApps((prev) => prev.map((a) => (a.id === updatedApp.id ? updatedApp : a)));
+          await loadApps();
+        }}
+      />
 
       {/* ========================================================================================= */}
       {/* APP CREATE / EDIT FULL-WIDTH MODAL                                                        */}
@@ -1624,7 +1770,12 @@ export const AppsPage: React.FC = () => {
               iconPosition="start"
             />
             <Tab value="env" label="Environment (.env)" icon={<FileText size={16} />} iconPosition="start" />
-            <Tab value="files" label={`Config Files (${formFiles.length})`} icon={<FilePlus size={16} />} iconPosition="start" />
+            <Tab
+              value="files"
+              label={`Config Files (${formFiles.length})`}
+              icon={<FilePlus size={16} />}
+              iconPosition="start"
+            />
             <Tab value="preview" label="Variables Preview" icon={<Code2 size={16} />} iconPosition="start" />
             {formType === "systemd" && (
               <Tab value="transpile" label="Transpile Preview" icon={<Eye size={16} />} iconPosition="start" />
@@ -1712,9 +1863,12 @@ export const AppsPage: React.FC = () => {
                     label="App Name"
                     placeholder="e.g. vproxy or coredns"
                     value={formName}
-                    disabled={!!editingApp}
                     onChange={(e) => setFormName(e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, ""))}
-                    helperText="Fixed prefix 'ezapp-' will be used on nodes (e.g. ezapp-vproxy)"
+                    helperText={
+                      editingApp && formName && formName !== editingApp.name
+                        ? `Renaming from '${editingApp.name}' to '${formName}' (prefix 'ezapp-' used on nodes)`
+                        : "Fixed prefix 'ezapp-' will be used on nodes (e.g. ezapp-vproxy)"
+                    }
                   />
                 </Grid>
                 <Grid item xs={12} sm={6}>
@@ -1844,14 +1998,26 @@ export const AppsPage: React.FC = () => {
                       >
                         {managedNodes.map((n) => (
                           <MenuItem key={n.name} value={n.name}>
-                            <Box sx={{ display: "flex", justifyContent: "space-between", width: "100%", alignItems: "center" }}>
+                            <Box
+                              sx={{
+                                display: "flex",
+                                justifyContent: "space-between",
+                                width: "100%",
+                                alignItems: "center",
+                              }}
+                            >
                               <Typography variant="body2" sx={{ fontWeight: 500 }}>
                                 {n.name}
                               </Typography>
                               {n.tags && n.tags.length > 0 && (
                                 <Box sx={{ display: "flex", gap: 0.5 }}>
                                   {n.tags.map((t) => (
-                                    <Chip key={t} label={`#${t}`} size="small" sx={{ height: 18, fontSize: "0.65rem", bgcolor: "#EDE9FE", color: "#6D28D9" }} />
+                                    <Chip
+                                      key={t}
+                                      label={`#${t}`}
+                                      size="small"
+                                      sx={{ height: 18, fontSize: "0.65rem", bgcolor: "#EDE9FE", color: "#6D28D9" }}
+                                    />
                                   ))}
                                 </Box>
                               )}
@@ -1860,7 +2026,10 @@ export const AppsPage: React.FC = () => {
                         ))}
                       </Select>
                     </FormControl>
-                    <Typography variant="caption" sx={{ color: formNodes.length === 0 ? "#D97706" : "#64748B", mt: 0.5, display: "block" }}>
+                    <Typography
+                      variant="caption"
+                      sx={{ color: formNodes.length === 0 ? "#D97706" : "#64748B", mt: 0.5, display: "block" }}
+                    >
                       {formNodes.length === 0
                         ? "Notice: No nodes selected. The app will be created but will not deploy anywhere until nodes are assigned."
                         : `Assigned to ${formNodes.length} node(s).`}
@@ -1878,7 +2047,8 @@ export const AppsPage: React.FC = () => {
                       </Typography>
                     </Box>
                     <Typography variant="caption" sx={{ color: "#0C4A6E", display: "block", mb: 1.5 }}>
-                      This app will be deployed to all cluster nodes running in agent mode. Any new agent node added in the future will automatically receive this app.
+                      This app will be deployed to all cluster nodes running in agent mode. Any new agent node added in
+                      the future will automatically receive this app.
                     </Typography>
                     <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.6 }}>
                       {managedNodes.map((n) => (
@@ -1886,7 +2056,13 @@ export const AppsPage: React.FC = () => {
                           key={n.name}
                           label={n.name}
                           size="small"
-                          sx={{ bgcolor: "#FFFFFF", color: "#0369A1", border: "1px solid #7DD3FC", fontWeight: 600, fontSize: "0.75rem" }}
+                          sx={{
+                            bgcolor: "#FFFFFF",
+                            color: "#0369A1",
+                            border: "1px solid #7DD3FC",
+                            fontWeight: 600,
+                            fontSize: "0.75rem",
+                          }}
                         />
                       ))}
                     </Box>
@@ -1912,11 +2088,22 @@ export const AppsPage: React.FC = () => {
                               const matchCount = managedNodes.filter((n) => n.tags?.includes(tag)).length;
                               return (
                                 <MenuItem key={tag} value={tag}>
-                                  <Box sx={{ display: "flex", justifyContent: "space-between", width: "100%", alignItems: "center" }}>
+                                  <Box
+                                    sx={{
+                                      display: "flex",
+                                      justifyContent: "space-between",
+                                      width: "100%",
+                                      alignItems: "center",
+                                    }}
+                                  >
                                     <Typography variant="body2" sx={{ fontWeight: 600, color: "#7C3AED" }}>
                                       #{tag}
                                     </Typography>
-                                    <Chip label={`${matchCount} node(s)`} size="small" sx={{ height: 18, fontSize: "0.68rem" }} />
+                                    <Chip
+                                      label={`${matchCount} node(s)`}
+                                      size="small"
+                                      sx={{ height: 18, fontSize: "0.68rem" }}
+                                    />
                                   </Box>
                                 </MenuItem>
                               );
@@ -1943,7 +2130,7 @@ export const AppsPage: React.FC = () => {
                     <Box sx={{ mt: 1.5, p: 1.5, bgcolor: "#F5F3FF", borderRadius: "8px", border: "1px solid #DDD6FE" }}>
                       {(() => {
                         const matchingNodes = managedNodes.filter((n) =>
-                          n.tags?.some((t) => t.toLowerCase() === formTargetTag.toLowerCase())
+                          n.tags?.some((t) => t.toLowerCase() === formTargetTag.toLowerCase()),
                         );
                         if (!formTargetTag) {
                           return (
@@ -1957,14 +2144,18 @@ export const AppsPage: React.FC = () => {
                             <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                               <Info size={16} color="#8B5CF6" />
                               <Typography variant="caption" sx={{ color: "#6D28D9" }}>
-                                No nodes currently have the tag <strong>#{formTargetTag}</strong>. The app will automatically deploy whenever a node is tagged with <strong>#{formTargetTag}</strong>.
+                                No nodes currently have the tag <strong>#{formTargetTag}</strong>. The app will
+                                automatically deploy whenever a node is tagged with <strong>#{formTargetTag}</strong>.
                               </Typography>
                             </Box>
                           );
                         }
                         return (
                           <Box>
-                            <Typography variant="caption" sx={{ color: "#5B21B6", fontWeight: 700, display: "block", mb: 0.8 }}>
+                            <Typography
+                              variant="caption"
+                              sx={{ color: "#5B21B6", fontWeight: 700, display: "block", mb: 0.8 }}
+                            >
                               {matchingNodes.length} node(s) currently match tag #{formTargetTag}:
                             </Typography>
                             <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.6 }}>
@@ -1973,7 +2164,13 @@ export const AppsPage: React.FC = () => {
                                   key={n.name}
                                   label={n.name}
                                   size="small"
-                                  sx={{ bgcolor: "#FFFFFF", color: "#6D28D9", border: "1px solid #C4B5FD", fontWeight: 600, fontSize: "0.75rem" }}
+                                  sx={{
+                                    bgcolor: "#FFFFFF",
+                                    color: "#6D28D9",
+                                    border: "1px solid #C4B5FD",
+                                    fontWeight: 600,
+                                    fontSize: "0.75rem",
+                                  }}
                                 />
                               ))}
                             </Box>
@@ -1987,11 +2184,7 @@ export const AppsPage: React.FC = () => {
 
               <FormControlLabel
                 control={
-                  <Switch
-                    checked={formEnabled}
-                    onChange={(e) => setFormEnabled(e.target.checked)}
-                    color="primary"
-                  />
+                  <Switch checked={formEnabled} onChange={(e) => setFormEnabled(e.target.checked)} color="primary" />
                 }
                 label={
                   <Box>
@@ -2010,7 +2203,15 @@ export const AppsPage: React.FC = () => {
           {/* TAB 2: Definition Editor */}
           {modalTab === "definition" && (
             <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
-              <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 1 }}>
+              <Box
+                sx={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  flexWrap: "wrap",
+                  gap: 1,
+                }}
+              >
                 <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0F172A" }}>
                   {formType === "docker" ? "compose.yaml Manifest" : "Systemd .service Unit File"}
                 </Typography>
@@ -2086,7 +2287,8 @@ export const AppsPage: React.FC = () => {
                         </IconButton>
                       </Box>
                       <Typography variant="caption" sx={{ color: "#4338CA" }}>
-                        Paste any standard <code>docker run</code> command. It will be converted into a full <code>compose.yaml</code> service definition.
+                        Paste any standard <code>docker run</code> command. It will be converted into a full{" "}
+                        <code>compose.yaml</code> service definition.
                       </Typography>
 
                       <TextField
@@ -2112,7 +2314,15 @@ export const AppsPage: React.FC = () => {
                         </Alert>
                       )}
 
-                      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 1 }}>
+                      <Box
+                        sx={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          flexWrap: "wrap",
+                          gap: 1,
+                        }}
+                      >
                         <Box sx={{ display: "flex", gap: 0.8, alignItems: "center" }}>
                           <Typography variant="caption" sx={{ color: "#6366F1", fontWeight: 600 }}>
                             Examples:
@@ -2120,14 +2330,34 @@ export const AppsPage: React.FC = () => {
                           <Chip
                             size="small"
                             label="Nginx"
-                            onClick={() => setDockerRunCmd("docker run -d --name web -p 80:80 -v /html:/usr/share/nginx/html nginx:alpine")}
-                            sx={{ cursor: "pointer", height: 22, fontSize: "0.72rem", bgcolor: "#FFFFFF", border: "1px solid #C7D2FE" }}
+                            onClick={() =>
+                              setDockerRunCmd(
+                                "docker run -d --name web -p 80:80 -v /html:/usr/share/nginx/html nginx:alpine",
+                              )
+                            }
+                            sx={{
+                              cursor: "pointer",
+                              height: 22,
+                              fontSize: "0.72rem",
+                              bgcolor: "#FFFFFF",
+                              border: "1px solid #C7D2FE",
+                            }}
                           />
                           <Chip
                             size="small"
                             label="Redis"
-                            onClick={() => setDockerRunCmd("docker run -d --name redis -p 6379:6379 -v redis-data:/data redis:alpine --requirepass ${REDIS_PASS}")}
-                            sx={{ cursor: "pointer", height: 22, fontSize: "0.72rem", bgcolor: "#FFFFFF", border: "1px solid #C7D2FE" }}
+                            onClick={() =>
+                              setDockerRunCmd(
+                                "docker run -d --name redis -p 6379:6379 -v redis-data:/data redis:alpine --requirepass ${REDIS_PASS}",
+                              )
+                            }
+                            sx={{
+                              cursor: "pointer",
+                              height: 22,
+                              fontSize: "0.72rem",
+                              bgcolor: "#FFFFFF",
+                              border: "1px solid #C7D2FE",
+                            }}
                           />
                         </Box>
 
@@ -2164,7 +2394,9 @@ export const AppsPage: React.FC = () => {
                         </IconButton>
                       </Box>
                       <Typography variant="caption" sx={{ color: "#4338CA" }}>
-                        Enter a command line (e.g. <code>rclone serve webdav /root --addr 0.0.0.0:8080</code>). If the program is not an absolute path, it will automatically wrap it with <code>/bin/sh -c "exec ..."</code> for systemd compatibility.
+                        Enter a command line (e.g. <code>rclone serve webdav /root --addr 0.0.0.0:8080</code>). If the
+                        program is not an absolute path, it will automatically wrap it with{" "}
+                        <code>/bin/sh -c "exec ..."</code> for systemd compatibility.
                       </Typography>
 
                       <TextField
@@ -2182,42 +2414,43 @@ export const AppsPage: React.FC = () => {
                       />
 
                       {/* Live preview badge of path type */}
-                      {systemdCmd.trim() && (() => {
-                        try {
-                          const res = cmdlineToSystemd(systemdCmd);
-                          if (res.isAbsolute) {
-                            return (
-                              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                                <Chip
-                                  size="small"
-                                  label="Absolute Path"
-                                  color="success"
-                                  sx={{ height: 20, fontSize: "0.7rem", fontWeight: 700 }}
-                                />
-                                <Typography variant="caption" sx={{ color: "#065F46", fontFamily: "monospace" }}>
-                                  ExecStart={res.execStart}
-                                </Typography>
-                              </Box>
-                            );
-                          } else {
-                            return (
-                              <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
-                                <Chip
-                                  size="small"
-                                  label="Relative Executable"
-                                  color="primary"
-                                  sx={{ height: 20, fontSize: "0.7rem", fontWeight: 700 }}
-                                />
-                                <Typography variant="caption" sx={{ color: "#1E40AF", fontFamily: "monospace" }}>
-                                  ExecStart={res.execStart}
-                                </Typography>
-                              </Box>
-                            );
+                      {systemdCmd.trim() &&
+                        (() => {
+                          try {
+                            const res = cmdlineToSystemd(systemdCmd);
+                            if (res.isAbsolute) {
+                              return (
+                                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                                  <Chip
+                                    size="small"
+                                    label="Absolute Path"
+                                    color="success"
+                                    sx={{ height: 20, fontSize: "0.7rem", fontWeight: 700 }}
+                                  />
+                                  <Typography variant="caption" sx={{ color: "#065F46", fontFamily: "monospace" }}>
+                                    ExecStart={res.execStart}
+                                  </Typography>
+                                </Box>
+                              );
+                            } else {
+                              return (
+                                <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
+                                  <Chip
+                                    size="small"
+                                    label="Relative Executable"
+                                    color="primary"
+                                    sx={{ height: 20, fontSize: "0.7rem", fontWeight: 700 }}
+                                  />
+                                  <Typography variant="caption" sx={{ color: "#1E40AF", fontFamily: "monospace" }}>
+                                    ExecStart={res.execStart}
+                                  </Typography>
+                                </Box>
+                              );
+                            }
+                          } catch {
+                            return null;
                           }
-                        } catch {
-                          return null;
-                        }
-                      })()}
+                        })()}
 
                       <Grid container spacing={1.5}>
                         <Grid item xs={12} sm={4}>
@@ -2259,7 +2492,15 @@ export const AppsPage: React.FC = () => {
                         </Alert>
                       )}
 
-                      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 1 }}>
+                      <Box
+                        sx={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          flexWrap: "wrap",
+                          gap: 1,
+                        }}
+                      >
                         <Box sx={{ display: "flex", gap: 0.8, alignItems: "center" }}>
                           <Typography variant="caption" sx={{ color: "#6366F1", fontWeight: 600 }}>
                             Examples:
@@ -2271,7 +2512,13 @@ export const AppsPage: React.FC = () => {
                               setSystemdCmd("rclone serve webdav /root --addr 0.0.0.0:8080");
                               setSystemdDesc("Rclone WebDAV Server");
                             }}
-                            sx={{ cursor: "pointer", height: 22, fontSize: "0.72rem", bgcolor: "#FFFFFF", border: "1px solid #C7D2FE" }}
+                            sx={{
+                              cursor: "pointer",
+                              height: 22,
+                              fontSize: "0.72rem",
+                              bgcolor: "#FFFFFF",
+                              border: "1px solid #C7D2FE",
+                            }}
                           />
                           <Chip
                             size="small"
@@ -2280,7 +2527,13 @@ export const AppsPage: React.FC = () => {
                               setSystemdCmd("/usr/bin/python3 -m http.server ${PORT:-8080}");
                               setSystemdDesc("Python Simple HTTP Server");
                             }}
-                            sx={{ cursor: "pointer", height: 22, fontSize: "0.72rem", bgcolor: "#FFFFFF", border: "1px solid #C7D2FE" }}
+                            sx={{
+                              cursor: "pointer",
+                              height: 22,
+                              fontSize: "0.72rem",
+                              bgcolor: "#FFFFFF",
+                              border: "1px solid #C7D2FE",
+                            }}
                           />
                           <Chip
                             size="small"
@@ -2289,7 +2542,13 @@ export const AppsPage: React.FC = () => {
                               setSystemdCmd("coredns -conf /etc/coredns/Corefile");
                               setSystemdDesc("CoreDNS DNS Server");
                             }}
-                            sx={{ cursor: "pointer", height: 22, fontSize: "0.72rem", bgcolor: "#FFFFFF", border: "1px solid #C7D2FE" }}
+                            sx={{
+                              cursor: "pointer",
+                              height: 22,
+                              fontSize: "0.72rem",
+                              bgcolor: "#FFFFFF",
+                              border: "1px solid #C7D2FE",
+                            }}
                           />
                         </Box>
 
@@ -2388,7 +2647,8 @@ export const AppsPage: React.FC = () => {
                     Auxiliary Config Files Map
                   </Typography>
                   <Typography variant="caption" sx={{ color: "#64748B" }}>
-                    Injected into app directory (./filename) for Docker or /etc/ezapp-data/&lt;name&gt;/ for native daemons.
+                    Injected into app directory (./filename) for Docker or /etc/ezapp-data/&lt;name&gt;/ for native
+                    daemons.
                   </Typography>
                 </Box>
                 <Button
@@ -2405,10 +2665,17 @@ export const AppsPage: React.FC = () => {
               {formFiles.length === 0 ? (
                 <Paper
                   elevation={0}
-                  sx={{ p: 4, textAlign: "center", bgcolor: "#F8FAFC", border: "1px dashed #CBD5E1", borderRadius: "10px" }}
+                  sx={{
+                    p: 4,
+                    textAlign: "center",
+                    bgcolor: "#F8FAFC",
+                    border: "1px dashed #CBD5E1",
+                    borderRadius: "10px",
+                  }}
                 >
                   <Typography variant="body2" sx={{ color: "#64748B" }}>
-                    No auxiliary config files defined. If your app needs a JSON, YAML, or TOML file, click "Add File" above.
+                    No auxiliary config files defined. If your app needs a JSON, YAML, or TOML file, click "Add File"
+                    above.
                   </Typography>
                 </Paper>
               ) : (
@@ -2466,13 +2733,22 @@ export const AppsPage: React.FC = () => {
           {/* TAB 5: Variables Interpolation Live Preview */}
           {modalTab === "preview" && (
             <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-              <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 2 }}>
+              <Box
+                sx={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  flexWrap: "wrap",
+                  gap: 2,
+                }}
+              >
                 <Box>
                   <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0F172A" }}>
                     Live Variable Interpolation Preview
                   </Typography>
                   <Typography variant="caption" sx={{ color: "#64748B" }}>
-                    Select a target node to preview how manifests and configs will be rendered with actual variable values.
+                    Select a target node to preview how manifests and configs will be rendered with actual variable
+                    values.
                   </Typography>
                 </Box>
                 <Box sx={{ display: "flex", gap: 1.5, alignItems: "center" }}>
@@ -2539,10 +2815,7 @@ export const AppsPage: React.FC = () => {
                 </Box>
                 <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
                   <FormControl size="small" sx={{ minWidth: 150 }}>
-                    <Select
-                      value={targetInit}
-                      onChange={(e) => setTargetInit(e.target.value as "procd" | "openrc")}
-                    >
+                    <Select value={targetInit} onChange={(e) => setTargetInit(e.target.value as "procd" | "openrc")}>
                       <MenuItem value="procd">OpenWrt (Procd)</MenuItem>
                       <MenuItem value="openrc">Alpine (OpenRC)</MenuItem>
                     </Select>
@@ -2578,7 +2851,12 @@ export const AppsPage: React.FC = () => {
                     value={previewResult.script}
                     inputProps={{
                       readOnly: true,
-                      style: { fontFamily: "monospace", fontSize: "0.82rem", backgroundColor: "#0F172A", color: "#F8FAFC" },
+                      style: {
+                        fontFamily: "monospace",
+                        fontSize: "0.82rem",
+                        backgroundColor: "#0F172A",
+                        color: "#F8FAFC",
+                      },
                     }}
                   />
                   {previewResult.conf_d && (
@@ -2594,7 +2872,12 @@ export const AppsPage: React.FC = () => {
                         value={previewResult.conf_d}
                         inputProps={{
                           readOnly: true,
-                          style: { fontFamily: "monospace", fontSize: "0.82rem", backgroundColor: "#1E293B", color: "#F1F5F9" },
+                          style: {
+                            fontFamily: "monospace",
+                            fontSize: "0.82rem",
+                            backgroundColor: "#1E293B",
+                            color: "#F1F5F9",
+                          },
                         }}
                       />
                     </>
@@ -2603,7 +2886,13 @@ export const AppsPage: React.FC = () => {
               ) : (
                 <Paper
                   elevation={0}
-                  sx={{ p: 4, textAlign: "center", bgcolor: "#F8FAFC", border: "1px dashed #CBD5E1", borderRadius: "10px" }}
+                  sx={{
+                    p: 4,
+                    textAlign: "center",
+                    bgcolor: "#F8FAFC",
+                    border: "1px dashed #CBD5E1",
+                    borderRadius: "10px",
+                  }}
                 >
                   <Typography variant="body2" sx={{ color: "#64748B" }}>
                     Click "Preview Conversion" above to inspect the transpiled OpenRC or Procd init script.
@@ -2615,6 +2904,25 @@ export const AppsPage: React.FC = () => {
         </DialogContent>
 
         <DialogActions sx={{ px: 3, pb: 2.5, pt: 1.5, borderTop: "1px solid #E2E8F0" }}>
+          {editingApp && (
+            <Button
+              startIcon={
+                duplicatingAppId === editingApp.id ? (
+                  <CircularProgress size={16} sx={{ color: "inherit" }} />
+                ) : (
+                  <Copy size={16} />
+                )
+              }
+              onClick={async () => {
+                await handleDuplicateApp(editingApp);
+                setModalOpen(false);
+              }}
+              disabled={duplicatingAppId === editingApp.id}
+              sx={{ textTransform: "none", color: "#4F46E5", mr: "auto", fontWeight: 600 }}
+            >
+              Duplicate App
+            </Button>
+          )}
           <Button onClick={() => setModalOpen(false)} sx={{ textTransform: "none", color: "#64748B" }}>
             Cancel
           </Button>
@@ -2630,7 +2938,13 @@ export const AppsPage: React.FC = () => {
               "&:hover": { bgcolor: "#4338CA" },
             }}
           >
-            {savingApp ? <CircularProgress size={18} sx={{ color: "#FFFFFF" }} /> : editingApp ? "Save Changes" : "Deploy App"}
+            {savingApp ? (
+              <CircularProgress size={18} sx={{ color: "#FFFFFF" }} />
+            ) : editingApp ? (
+              "Save Changes"
+            ) : (
+              "Deploy App"
+            )}
           </Button>
         </DialogActions>
       </Dialog>

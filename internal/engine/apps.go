@@ -3,6 +3,8 @@ package engine
 import (
 	"context"
 	"fmt"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -32,7 +34,9 @@ func (m *Manager) setupAgentAppsListeners() {
 
 	// 1. When agent registers, immediately push its assigned apps
 	m.agentHub.OnRegister(func(conn *agent.AgentConnection) {
-		_ = m.SyncAppsToNode(conn.NodeName())
+		if !conn.DisableApps() {
+			_ = m.SyncAppsToNode(conn.NodeName())
+		}
 	})
 
 	// 2. When telemetry report arrives, cache reported app statuses
@@ -129,9 +133,23 @@ func (m *Manager) SaveApp(app config.App) (config.App, error) {
 	}
 	app.Nodes = validNodes
 
+	// Check if another app already uses the same name
+	for _, existing := range cfg.Apps {
+		if existing.ID != app.ID && strings.EqualFold(existing.Name, app.Name) {
+			return app, fmt.Errorf("app with name '%s' already exists", app.Name)
+		}
+	}
+
 	found := false
 	for i, existing := range cfg.Apps {
 		if existing.ID == app.ID {
+			if existing.Name != app.Name {
+				m.appStatusesMu.Lock()
+				for _, nodeMap := range m.appStatuses {
+					delete(nodeMap, existing.Name)
+				}
+				m.appStatusesMu.Unlock()
+			}
 			app.CreatedAt = existing.CreatedAt
 			cfg.Apps[i] = app
 			found = true
@@ -150,6 +168,173 @@ func (m *Manager) SaveApp(app config.App) (config.App, error) {
 	m.SyncAppsToAgents()
 
 	return app, nil
+}
+
+// RenameApp renames an existing app by ID
+func (m *Manager) RenameApp(appID string, newName string) (config.App, error) {
+	newName = strings.TrimSpace(newName)
+	if err := config.ValidateAppName(newName); err != nil {
+		return config.App{}, err
+	}
+
+	cfg, err := m.store.Load()
+	if err != nil {
+		return config.App{}, fmt.Errorf("failed to load config: %w", err)
+	}
+
+	appIndex := -1
+	var oldName string
+	for i, a := range cfg.Apps {
+		if a.ID == appID {
+			appIndex = i
+			oldName = a.Name
+			break
+		}
+	}
+
+	if appIndex == -1 {
+		return config.App{}, fmt.Errorf("app '%s' not found", appID)
+	}
+
+	if strings.EqualFold(oldName, newName) {
+		cfg.Apps[appIndex].Name = newName
+		cfg.Apps[appIndex].UpdatedAt = time.Now()
+		if err := m.store.Save(cfg); err != nil {
+			return config.App{}, fmt.Errorf("failed to save config: %w", err)
+		}
+		m.SyncAppsToAgents()
+		return cfg.Apps[appIndex], nil
+	}
+
+	for _, a := range cfg.Apps {
+		if a.ID != appID && strings.EqualFold(a.Name, newName) {
+			return config.App{}, fmt.Errorf("app with name '%s' already exists", newName)
+		}
+	}
+
+	cfg.Apps[appIndex].Name = newName
+	cfg.Apps[appIndex].UpdatedAt = time.Now()
+
+	// Clear cached status under old name
+	m.appStatusesMu.Lock()
+	for _, nodeMap := range m.appStatuses {
+		delete(nodeMap, oldName)
+	}
+	m.appStatusesMu.Unlock()
+
+	if err := m.store.Save(cfg); err != nil {
+		return config.App{}, fmt.Errorf("failed to save config: %w", err)
+	}
+
+	m.SyncAppsToAgents()
+	return cfg.Apps[appIndex], nil
+}
+
+var trailingDigitsRegex = regexp.MustCompile(`^(.*?)(\d+)$`)
+
+// computeDuplicateIdentifier calculates the next identifier by appending '1' or incrementing a trailing digit suffix.
+func computeDuplicateIdentifier(id string, exists func(string) bool) string {
+	var base string
+	var nextNum uint64
+
+	matches := trailingDigitsRegex.FindStringSubmatch(id)
+	if len(matches) == 3 {
+		base = matches[1]
+		num, err := strconv.ParseUint(matches[2], 10, 64)
+		if err == nil {
+			nextNum = num + 1
+		} else {
+			base = id
+			nextNum = 1
+		}
+	} else {
+		base = id
+		nextNum = 1
+	}
+
+	candidate := fmt.Sprintf("%s%d", base, nextNum)
+	for exists != nil && exists(candidate) {
+		nextNum++
+		candidate = fmt.Sprintf("%s%d", base, nextNum)
+	}
+	return candidate
+}
+
+// DuplicateApp creates a duplicate app from an existing app by ID.
+// The new app id is set to "<original-id>1", or if it already ends in digit(s), the suffix number is incremented.
+// The duplicated app is forced to disabled state.
+func (m *Manager) DuplicateApp(appID string) (config.App, error) {
+	cfg, err := m.store.Load()
+	if err != nil {
+		return config.App{}, fmt.Errorf("failed to load config: %w", err)
+	}
+
+	var original *config.App
+	for _, a := range cfg.Apps {
+		if a.ID == appID {
+			cpy := a
+			original = &cpy
+			break
+		}
+	}
+
+	if original == nil {
+		return config.App{}, fmt.Errorf("app '%s' not found", appID)
+	}
+
+	existingIDs := make(map[string]bool)
+	existingNames := make(map[string]bool)
+	for _, a := range cfg.Apps {
+		existingIDs[a.ID] = true
+		existingNames[strings.ToLower(a.Name)] = true
+	}
+
+	newID := computeDuplicateIdentifier(original.ID, func(candidate string) bool {
+		return existingIDs[candidate]
+	})
+
+	newName := computeDuplicateIdentifier(original.Name, func(candidate string) bool {
+		return existingNames[strings.ToLower(candidate)]
+	})
+
+	now := time.Now()
+	duplicated := config.App{
+		ID:          newID,
+		Name:        newName,
+		Description: original.Description,
+		AppType:     original.AppType,
+		MainContent: original.MainContent,
+		EnvContent:  original.EnvContent,
+		TargetType:  original.TargetType,
+		TargetTag:   original.TargetTag,
+		Enabled:     false, // Forced to disabled state
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	}
+
+	if original.Files != nil {
+		duplicated.Files = make(map[string]string, len(original.Files))
+		for k, v := range original.Files {
+			duplicated.Files[k] = v
+		}
+	}
+
+	if original.Nodes != nil {
+		duplicated.Nodes = make([]string, len(original.Nodes))
+		copy(duplicated.Nodes, original.Nodes)
+	}
+
+	if err := config.ValidateApp(duplicated); err != nil {
+		return config.App{}, fmt.Errorf("invalid duplicated app: %w", err)
+	}
+
+	cfg.Apps = append(cfg.Apps, duplicated)
+	if err := m.store.Save(cfg); err != nil {
+		return config.App{}, fmt.Errorf("failed to save config: %w", err)
+	}
+
+	m.SyncAppsToAgents()
+	return duplicated, nil
 }
 
 // DeleteApp deletes an app by ID and updates agents
@@ -401,6 +586,10 @@ func (m *Manager) SyncAppsToNode(nodeName string) error {
 		return nil
 	}
 
+	if m.agentHub.IsAppsDisabled(nodeName) {
+		return nil
+	}
+
 	specs, err := m.BuildAppSpecsForNode(nodeName)
 	if err != nil {
 		return fmt.Errorf("failed to build app specs for node %s: %w", nodeName, err)
@@ -426,6 +615,9 @@ func (m *Manager) SyncAppsToAgents() {
 
 	for _, node := range cfg.Nodes {
 		if node.IsExternal {
+			continue
+		}
+		if m.agentHub.IsAppsDisabled(node.Name) {
 			continue
 		}
 		_ = m.SyncAppsToNode(node.Name)
@@ -462,6 +654,10 @@ func (m *Manager) TriggerAppAction(ctx context.Context, nodeName string, appName
 	conn, ok := m.agentHub.GetConnection(nodeName)
 	if !ok {
 		return nil, fmt.Errorf("node agent '%s' is not connected", nodeName)
+	}
+
+	if conn.DisableApps() {
+		return nil, fmt.Errorf("app management is disabled on node '%s' (disable_apps = true in agent.json)", nodeName)
 	}
 
 	protoType := agentpb.AppType_DOCKER_COMPOSE

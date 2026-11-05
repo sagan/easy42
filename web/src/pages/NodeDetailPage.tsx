@@ -283,6 +283,7 @@ export const NodeDetailPage: React.FC = () => {
 
   // Agent tab state
   const [overwriteConfig, setOverwriteConfig] = useState(false);
+  const [disableApps, setDisableApps] = useState(false);
   const [agentToken, setAgentToken] = useState<string>("");
   const [generatingToken, setGeneratingToken] = useState(false);
   const [uninstallModalOpen, setUninstallModalOpen] = useState(false);
@@ -377,7 +378,7 @@ export const NodeDetailPage: React.FC = () => {
   const serverUrl = window.location.origin;
   const currentToken = agentToken || node?.agent_token || "";
   const installSnippet = currentToken
-    ? `curl ${serverUrl}/api/agent/install.sh | sh -s -- --token "${currentToken}"${overwriteConfig ? " --overwrite-config" : ""}`
+    ? `curl ${serverUrl}/api/agent/install.sh | sh -s -- --token "${currentToken}"${overwriteConfig ? " --overwrite-config" : ""}${disableApps ? " --disable-apps" : ""}`
     : `# No agent token generated yet. Click "Generate Token" above.`;
 
   // Fetch telemetry
@@ -3352,8 +3353,8 @@ export const NodeDetailPage: React.FC = () => {
                 system service manager (<code>systemd</code>, <code>openrc</code>, <code>procd</code>) automatically.
               </Typography>
 
-              {/* Overwrite config checkbox */}
-              <Box sx={{ mb: 2, p: 1.5, bgcolor: "#F8FAFC", borderRadius: 2, border: "1px solid #E2E8F0" }}>
+              {/* Overwrite config & Disable apps options */}
+              <Box sx={{ mb: 2, p: 1.5, bgcolor: "#F8FAFC", borderRadius: 2, border: "1px solid #E2E8F0", display: "flex", flexDirection: "column", gap: 1 }}>
                 <FormControlLabel
                   control={
                     <Checkbox
@@ -3374,6 +3375,30 @@ export const NodeDetailPage: React.FC = () => {
                       </Typography>
                       <Typography variant="caption" sx={{ color: "#64748B" }}>
                         When unchecked (default), existing <code>/etc/easy42/agent.json</code> on the node is preserved.
+                      </Typography>
+                    </Box>
+                  }
+                />
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={disableApps}
+                      onChange={(e) => setDisableApps(e.target.checked)}
+                      sx={{
+                        color: "#94A3B8",
+                        "&.Mui-checked": {
+                          color: "#4F46E5",
+                        },
+                      }}
+                    />
+                  }
+                  label={
+                    <Box>
+                      <Typography variant="body2" sx={{ fontWeight: 600, color: "#0F172A" }}>
+                        Disable Apps
+                      </Typography>
+                      <Typography variant="caption" sx={{ color: "#64748B" }}>
+                        When checked, configures <code>disable_apps: true</code> on the node so the agent refuses app deployments and server skips syncing apps to it.
                       </Typography>
                     </Box>
                   }

@@ -231,6 +231,7 @@ set -e
 SERVER_URL="` + serverURL + `"
 TOKEN=""
 OVERWRITE_CONFIG="false"
+DISABLE_APPS="false"
 
 while [ $# -gt 0 ]; do
   case $1 in
@@ -252,6 +253,10 @@ while [ $# -gt 0 ]; do
       ;;
     --overwrite-config)
       OVERWRITE_CONFIG="true"
+      shift
+      ;;
+    --disable-apps)
+      DISABLE_APPS="true"
       shift
       ;;
     *)
@@ -337,10 +342,26 @@ mkdir -p /etc/easy42 /usr/local/bin
 # Write configuration
 if [ -f /etc/easy42/agent.json ] && [ "$OVERWRITE_CONFIG" != "true" ]; then
   echo "[Easy42 Agent Installer] Preserving existing /etc/easy42/agent.json"
+  if [ "$DISABLE_APPS" = "true" ]; then
+    if command -v sed >/dev/null 2>&1; then
+      if grep -q '"disable_apps"' /etc/easy42/agent.json; then
+        sed -i 's/"disable_apps"[[:space:]]*:[[:space:]]*false/"disable_apps":true/g' /etc/easy42/agent.json
+      else
+        sed -i 's/}/,"disable_apps":true}/' /etc/easy42/agent.json
+      fi
+      echo "[Easy42 Agent Installer] Configured disable_apps: true in existing /etc/easy42/agent.json"
+    fi
+  fi
 else
-  cat <<EOF > /etc/easy42/agent.json
+  if [ "$DISABLE_APPS" = "true" ]; then
+    cat <<EOF > /etc/easy42/agent.json
+{"server":"${SERVER_URL}","token":"${TOKEN}","log_level":"info","disable_apps":true}
+EOF
+  else
+    cat <<EOF > /etc/easy42/agent.json
 {"server":"${SERVER_URL}","token":"${TOKEN}","log_level":"info"}
 EOF
+  fi
   chmod 600 /etc/easy42/agent.json
   echo "[Easy42 Agent Installer] Configuration written to /etc/easy42/agent.json"
 fi

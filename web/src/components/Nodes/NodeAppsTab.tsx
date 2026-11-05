@@ -46,6 +46,7 @@ export const NodeAppsTab: React.FC<NodeAppsTabProps> = ({ nodeName }) => {
 
   const [apps, setApps] = useState<App[]>([]);
   const [statuses, setStatuses] = useState<AppStatusRecord[]>([]);
+  const [appsDisabled, setAppsDisabled] = useState(false);
 
   // Action states
   const [actionLoading, setActionLoading] = useState<Record<string, string>>({}); // appName -> action
@@ -71,6 +72,7 @@ export const NodeAppsTab: React.FC<NodeAppsTabProps> = ({ nodeName }) => {
       const res = await api.getNodeApps(nodeName);
       setApps(res.apps || []);
       setStatuses(res.statuses || []);
+      setAppsDisabled(!!res.disable_apps);
     } catch (e: any) {
       setError(e.message || "Failed to load node workloads");
     } finally {
@@ -183,6 +185,12 @@ export const NodeAppsTab: React.FC<NodeAppsTabProps> = ({ nodeName }) => {
           </Button>
         </Box>
       </Box>
+
+      {appsDisabled && (
+        <Alert severity="warning" sx={{ mb: 2.5, fontWeight: 500 }}>
+          App management is disabled on this node (<code>disable_apps: true</code> in <code>/etc/easy42/agent.json</code>). Easy42 will not deploy or sync apps to this node, and app actions cannot be triggered.
+        </Alert>
+      )}
 
       {error && (
         <Alert severity="error" sx={{ mb: 2.5 }}>
@@ -358,7 +366,7 @@ export const NodeAppsTab: React.FC<NodeAppsTabProps> = ({ nodeName }) => {
                           <RotateCw size={14} />
                         )
                       }
-                      disabled={!!currentAction}
+                      disabled={appsDisabled || !!currentAction}
                       onClick={() => handleAction(app.name, "restart", app.app_type)}
                       sx={{ textTransform: "none", fontSize: "0.78rem", fontWeight: 600, color: "#4F46E5" }}
                     >
@@ -377,7 +385,7 @@ export const NodeAppsTab: React.FC<NodeAppsTabProps> = ({ nodeName }) => {
                             <Square size={14} />
                           )
                         }
-                        disabled={!!currentAction}
+                        disabled={appsDisabled || !!currentAction}
                         onClick={() => handleAction(app.name, "stop", app.app_type)}
                         sx={{ textTransform: "none", fontSize: "0.78rem", fontWeight: 600 }}
                       >
@@ -395,7 +403,7 @@ export const NodeAppsTab: React.FC<NodeAppsTabProps> = ({ nodeName }) => {
                             <Play size={14} />
                           )
                         }
-                        disabled={!!currentAction}
+                        disabled={appsDisabled || !!currentAction}
                         onClick={() => handleAction(app.name, "start", app.app_type)}
                         sx={{ textTransform: "none", fontSize: "0.78rem", fontWeight: 600 }}
                       >

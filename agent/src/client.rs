@@ -24,6 +24,8 @@ impl AgentClient {
         let executor = Arc::new(CommandExecutor::new(config.clone()));
         let mut collector = MetricsCollector::new();
         collector.set_apps_manager(executor.apps_manager());
+        let exec_for_col = executor.clone();
+        collector.set_disable_apps_checker(move || exec_for_col.is_apps_disabled());
         Self {
             executor,
             collector: Arc::new(Mutex::new(collector)),
@@ -99,6 +101,7 @@ impl AgentClient {
             .unwrap_or_else(|| hostname.clone());
 
         let hosts_hash = crate::hosts::get_current_hosts_hash(&crate::hosts::get_hosts_path());
+        let disable_apps = self.executor.is_apps_disabled();
         let reg_msg = proto::AgentMessage {
             seq: 1,
             timestamp: now_millis(),
@@ -109,6 +112,7 @@ impl AgentClient {
                     os_info,
                     hostname,
                     hosts_hash,
+                    disable_apps,
                 },
             )),
         };
@@ -312,11 +316,18 @@ impl AgentClient {
                                     }
                                 }
                                 Some(proto::agent_message::Payload::SyncApps(sync)) => {
-                                    info!("Received apps sync: {} app(s)", sync.apps.len());
-                                    let apps_mgr = executor.apps_manager();
-                                    tokio::spawn(async move {
-                                        apps_mgr.sync_apps(sync.apps).await;
-                                    });
+                                    if executor.is_apps_disabled() {
+                                        warn!(
+                                            "Received apps sync but app management is disabled on this node (disable_apps = true in agent.json); skipping sync of {} app(s)",
+                                            sync.apps.len()
+                                        );
+                                    } else {
+                                        info!("Received apps sync: {} app(s)", sync.apps.len());
+                                        let apps_mgr = executor.apps_manager();
+                                        tokio::spawn(async move {
+                                            apps_mgr.sync_apps(sync.apps).await;
+                                        });
+                                    }
                                 }
                                 _ => {}
                             }
