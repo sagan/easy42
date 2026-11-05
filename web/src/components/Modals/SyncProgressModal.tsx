@@ -23,6 +23,7 @@ import {
   XCircle,
   ChevronDown,
   FileCode,
+  FileText,
   Check,
   Trash2,
   Zap,
@@ -47,6 +48,298 @@ interface SyncProgressModalProps {
   unreachableNodes?: Node[];
   targetNode?: string | null;
 }
+
+const getAppFileTypeChip = (act: SyncAction) => {
+  if (act.type !== "sync_app") return null;
+  const tf = act.target_file || "";
+  if (tf.endsWith(".env") || tf.includes("/conf.d/")) {
+    return {
+      label: "ENV",
+      bgcolor: "#ECFDF5",
+      color: "#059669",
+      border: "#A7F3D0",
+    };
+  }
+  if (tf.endsWith(".service") || tf.endsWith("/compose.yaml") || tf.includes("/init.d/")) {
+    return {
+      label: tf.endsWith("/compose.yaml") ? "COMPOSE" : "UNIT",
+      bgcolor: "#F3E8FF",
+      color: "#7E22CE",
+      border: "#D8B4FE",
+    };
+  }
+  return {
+    label: "CONFIG",
+    bgcolor: "#E0F2FE",
+    color: "#0284C7",
+    border: "#BAE6FD",
+  };
+};
+
+const getActionIcon = (act: SyncAction) => {
+  if (
+    act.type === "delete_config" ||
+    act.type === "down_interface" ||
+    act.type === "delete_app" ||
+    act.diff_status === "delete"
+  ) {
+    return <Trash2 size={16} color="#DC2626" />;
+  }
+  if (act.type === "sync_app") {
+    const tf = act.target_file || "";
+    if (tf.endsWith(".env") || tf.includes("/conf.d/")) {
+      return <FileText size={16} color="#059669" />;
+    }
+    if (tf.includes("/ezapp-data/") || tf.includes("/ezappc/")) {
+      return <FileCode size={16} color="#0284C7" />;
+    }
+    return <Layers size={16} color="#9333EA" />;
+  }
+  if (act.type === "sync_bird") {
+    return <Network size={16} color="#0284C7" />;
+  }
+  if (act.type === "sync_nftables") {
+    return <Shield size={16} color="#E11D48" />;
+  }
+  return <FileCode size={16} color="#4F46E5" />;
+};
+
+const ActionItemAccordion: React.FC<{ act: SyncAction }> = ({ act }) => {
+  const [viewMode, setViewMode] = useState<"diff" | "full">(act.diff ? "diff" : "full");
+  const appChip = getAppFileTypeChip(act);
+
+  return (
+    <Accordion
+      elevation={0}
+      sx={{
+        backgroundColor: "#FFFFFF",
+        border: "1px solid #CBD5E1",
+        borderRadius: "8px !important",
+        "&:before": { display: "none" },
+      }}
+    >
+      <AccordionSummary expandIcon={<ChevronDown size={18} color="#64748B" />}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, flex: 1, minWidth: 0, pr: 1 }}>
+          {getActionIcon(act)}
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
+              <Typography variant="body2" sx={{ fontWeight: 600, color: "#0F172A" }}>
+                {act.description}
+              </Typography>
+              {appChip && (
+                <Chip
+                  label={appChip.label}
+                  size="small"
+                  sx={{
+                    fontSize: "0.62rem",
+                    fontWeight: 700,
+                    height: 18,
+                    bgcolor: appChip.bgcolor,
+                    color: appChip.color,
+                    border: `1px solid ${appChip.border}`,
+                  }}
+                />
+              )}
+            </Box>
+            <Typography
+              variant="caption"
+              className="mono-font"
+              sx={{
+                color: "#64748B",
+                fontSize: "0.7rem",
+                display: "block",
+                textOverflow: "ellipsis",
+                overflow: "hidden",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {act.host}:{act.target_file} {act.command ? `• (${act.command})` : ""}
+            </Typography>
+          </Box>
+          {act.diff_status === "delete" || act.type === "delete_config" || act.type === "delete_app" ? (
+            <Chip
+              label="DELETE"
+              size="small"
+              sx={{
+                fontSize: "0.65rem",
+                fontWeight: 700,
+                height: 20,
+                bgcolor: "#FEE2E2",
+                color: "#DC2626",
+              }}
+            />
+          ) : act.diff_status === "update" ? (
+            <Chip
+              label="UPDATE"
+              size="small"
+              sx={{
+                fontSize: "0.65rem",
+                fontWeight: 700,
+                height: 20,
+                bgcolor: "#FEF3C7",
+                color: "#D97706",
+              }}
+            />
+          ) : (
+            <Chip
+              label="CREATE"
+              size="small"
+              sx={{
+                fontSize: "0.65rem",
+                fontWeight: 700,
+                height: 20,
+                bgcolor: "#E0E7FF",
+                color: "#4338CA",
+              }}
+            />
+          )}
+        </Box>
+      </AccordionSummary>
+      <AccordionDetails sx={{ pt: 0 }}>
+        {act.command && act.file_content && (
+          <Box
+            sx={{
+              mb: 1,
+              p: 0.8,
+              borderRadius: 1,
+              backgroundColor: "#F1F5F9",
+              border: "1px solid #E2E8F0",
+              fontSize: "0.72rem",
+              color: "#334155",
+            }}
+          >
+            <strong>Apply Command:</strong> <code>{act.command}</code>
+          </Box>
+        )}
+
+        {act.diff && (
+          <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 0.75 }}>
+            <Typography variant="caption" sx={{ fontWeight: 600, color: "#64748B", fontSize: "0.72rem" }}>
+              {viewMode === "diff" ? "Unified Diff (Live vs Proposed)" : "Full File Content"}
+            </Typography>
+            <Box sx={{ display: "flex", gap: 0.5 }}>
+              <Button
+                size="small"
+                variant={viewMode === "diff" ? "contained" : "outlined"}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setViewMode("diff");
+                }}
+                sx={{
+                  py: 0.2,
+                  px: 1,
+                  minWidth: "auto",
+                  fontSize: "0.68rem",
+                  textTransform: "none",
+                  fontWeight: 600,
+                  bgcolor: viewMode === "diff" ? "#334155" : "transparent",
+                  color: viewMode === "diff" ? "#FFFFFF" : "#64748B",
+                  borderColor: "#CBD5E1",
+                  "&:hover": {
+                    bgcolor: viewMode === "diff" ? "#1E293B" : "#F1F5F9",
+                  },
+                }}
+              >
+                Diff
+              </Button>
+              <Button
+                size="small"
+                variant={viewMode === "full" ? "contained" : "outlined"}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setViewMode("full");
+                }}
+                sx={{
+                  py: 0.2,
+                  px: 1,
+                  minWidth: "auto",
+                  fontSize: "0.68rem",
+                  textTransform: "none",
+                  fontWeight: 600,
+                  bgcolor: viewMode === "full" ? "#334155" : "transparent",
+                  color: viewMode === "full" ? "#FFFFFF" : "#64748B",
+                  borderColor: "#CBD5E1",
+                  "&:hover": {
+                    bgcolor: viewMode === "full" ? "#1E293B" : "#F1F5F9",
+                  },
+                }}
+              >
+                Full Content
+              </Button>
+            </Box>
+          </Box>
+        )}
+
+        {viewMode === "diff" && act.diff ? (
+          <Box
+            sx={{
+              p: 1.25,
+              borderRadius: 1.5,
+              backgroundColor: "#0F172A",
+              border: "1px solid #1E293B",
+              maxHeight: 280,
+              overflowY: "auto",
+              overflowX: "auto",
+              fontFamily: "monospace",
+              fontSize: "0.75rem",
+              lineHeight: 1.5,
+            }}
+          >
+            {act.diff.split("\n").map((line, idx) => {
+              let color = "#E2E8F0";
+              let bg = "transparent";
+              if (line.startsWith("+")) {
+                color = "#4ADE80";
+                bg = "rgba(74, 222, 128, 0.12)";
+              } else if (line.startsWith("-")) {
+                color = "#F87171";
+                bg = "rgba(248, 113, 113, 0.15)";
+              } else if (line.startsWith("---") || line.startsWith("+++") || line.startsWith("@@")) {
+                color = "#38BDF8";
+              }
+              return (
+                <Box
+                  key={idx}
+                  sx={{
+                    color,
+                    backgroundColor: bg,
+                    px: 0.75,
+                    py: 0.05,
+                    borderRadius: 0.5,
+                    whiteSpace: "pre-wrap",
+                    wordBreak: "break-all",
+                  }}
+                >
+                  {line || " "}
+                </Box>
+              );
+            })}
+          </Box>
+        ) : (
+          <Box
+            component="pre"
+            className="mono-font"
+            sx={{
+              p: 1.5,
+              m: 0,
+              borderRadius: 1.5,
+              backgroundColor: "#F8FAFC",
+              border: "1px solid #E2E8F0",
+              fontSize: "0.75rem",
+              color: "#1E293B",
+              maxHeight: 280,
+              overflowY: "auto",
+              overflowX: "auto",
+              whiteSpace: "pre-wrap",
+            }}
+          >
+            {act.file_content || act.command}
+          </Box>
+        )}
+      </AccordionDetails>
+    </Accordion>
+  );
+};
 
 export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
   open,
@@ -556,123 +849,9 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
                 >
                   Required Actions to Apply ({pendingActions.length})
                 </Typography>
-                <Box sx={{ display: "flex", flexDirection: "column", gap: 1, maxHeight: 260, overflowY: "auto" }}>
+                <Box sx={{ display: "flex", flexDirection: "column", gap: 1, maxHeight: 360, overflowY: "auto" }}>
                   {pendingActions.map((act, i) => (
-                    <Accordion
-                      key={i}
-                      elevation={0}
-                      sx={{
-                        backgroundColor: "#FFFFFF",
-                        border: "1px solid #CBD5E1",
-                        borderRadius: "8px !important",
-                        "&:before": { display: "none" },
-                      }}
-                    >
-                      <AccordionSummary expandIcon={<ChevronDown size={18} color="#64748B" />}>
-                        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, flex: 1 }}>
-                          {act.type === "delete_config" ||
-                          act.type === "down_interface" ||
-                          act.type === "delete_app" ||
-                          act.diff_status === "delete" ? (
-                            <Trash2 size={16} color="#DC2626" />
-                          ) : act.type === "sync_app" ? (
-                            <Layers size={16} color="#9333EA" />
-                          ) : act.type === "sync_bird" ? (
-                            <Network size={16} color="#0284C7" />
-                          ) : act.type === "sync_nftables" ? (
-                            <Shield size={16} color="#E11D48" />
-                          ) : (
-                            <FileCode size={16} color="#4F46E5" />
-                          )}
-                          <Box sx={{ flex: 1 }}>
-                            <Typography variant="body2" sx={{ fontWeight: 600, color: "#0F172A" }}>
-                              {act.description}
-                            </Typography>
-                            <Typography
-                              variant="caption"
-                              className="mono-font"
-                              sx={{ color: "#64748B", fontSize: "0.7rem" }}
-                            >
-                              {act.host}:{act.target_file} {act.command ? `• (${act.command})` : ""}
-                            </Typography>
-                          </Box>
-                          {act.diff_status === "delete" || act.type === "delete_config" || act.type === "delete_app" ? (
-                            <Chip
-                              label="DELETE"
-                              size="small"
-                              sx={{
-                                fontSize: "0.65rem",
-                                fontWeight: 700,
-                                height: 20,
-                                bgcolor: "#FEE2E2",
-                                color: "#DC2626",
-                                mr: 1,
-                              }}
-                            />
-                          ) : act.diff_status === "update" ? (
-                            <Chip
-                              label="UPDATE"
-                              size="small"
-                              sx={{
-                                fontSize: "0.65rem",
-                                fontWeight: 700,
-                                height: 20,
-                                bgcolor: "#FEF3C7",
-                                color: "#D97706",
-                                mr: 1,
-                              }}
-                            />
-                          ) : (
-                            <Chip
-                              label="CREATE"
-                              size="small"
-                              sx={{
-                                fontSize: "0.65rem",
-                                fontWeight: 700,
-                                height: 20,
-                                bgcolor: "#E0E7FF",
-                                color: "#4338CA",
-                                mr: 1,
-                              }}
-                            />
-                          )}
-                        </Box>
-                      </AccordionSummary>
-                      <AccordionDetails sx={{ pt: 0 }}>
-                        {act.command && act.file_content && (
-                          <Box
-                            sx={{
-                              mb: 1,
-                              p: 0.8,
-                              borderRadius: 1,
-                              backgroundColor: "#F1F5F9",
-                              border: "1px solid #E2E8F0",
-                              fontSize: "0.72rem",
-                              color: "#334155",
-                            }}
-                          >
-                            <strong>Apply Command:</strong> <code>{act.command}</code>
-                          </Box>
-                        )}
-                        <Box
-                          component="pre"
-                          className="mono-font"
-                          sx={{
-                            p: 1.5,
-                            m: 0,
-                            borderRadius: 1.5,
-                            backgroundColor: "#F8FAFC",
-                            border: "1px solid #E2E8F0",
-                            fontSize: "0.75rem",
-                            color: "#1E293B",
-                            overflowX: "auto",
-                            whiteSpace: "pre-wrap",
-                          }}
-                        >
-                          {act.file_content || act.command}
-                        </Box>
-                      </AccordionDetails>
-                    </Accordion>
+                    <ActionItemAccordion key={i} act={act} />
                   ))}
                 </Box>
               </Box>
@@ -712,46 +891,69 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
                   </Box>
                 </AccordionSummary>
                 <AccordionDetails sx={{ pt: 0 }}>
-                  <Box sx={{ display: "flex", flexDirection: "column", gap: 1, maxHeight: 180, overflowY: "auto" }}>
-                    {syncedActions.map((act, i) => (
-                      <Box
-                        key={i}
-                        sx={{
-                          p: 1,
-                          px: 1.5,
-                          borderRadius: 1.5,
-                          backgroundColor: "#FFFFFF",
-                          border: "1px solid #E2E8F0",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "space-between",
-                        }}
-                      >
-                        <Box>
-                          <Typography variant="body2" sx={{ fontSize: "0.8rem", color: "#334155" }}>
-                            {act.description}
-                          </Typography>
-                          <Typography
-                            variant="caption"
-                            className="mono-font"
-                            sx={{ color: "#94A3B8", fontSize: "0.68rem" }}
-                          >
-                            {act.host}:{act.target_file}
-                          </Typography>
-                        </Box>
-                        <Chip
-                          label="SYNCED"
-                          size="small"
+                  <Box sx={{ display: "flex", flexDirection: "column", gap: 1, maxHeight: 200, overflowY: "auto" }}>
+                    {syncedActions.map((act, i) => {
+                      const appChip = getAppFileTypeChip(act);
+                      return (
+                        <Box
+                          key={i}
                           sx={{
-                            fontSize: "0.65rem",
-                            fontWeight: 600,
-                            height: 18,
-                            bgcolor: "#F1F5F9",
-                            color: "#64748B",
+                            p: 1,
+                            px: 1.5,
+                            borderRadius: 1.5,
+                            backgroundColor: "#FFFFFF",
+                            border: "1px solid #E2E8F0",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            gap: 1.5,
                           }}
-                        />
-                      </Box>
-                    ))}
+                        >
+                          <Box sx={{ display: "flex", alignItems: "center", gap: 1.25, minWidth: 0, flex: 1 }}>
+                            {getActionIcon(act)}
+                            <Box sx={{ minWidth: 0, flex: 1 }}>
+                              <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
+                                <Typography variant="body2" sx={{ fontSize: "0.8rem", color: "#334155", fontWeight: 600 }}>
+                                  {act.description}
+                                </Typography>
+                                {appChip && (
+                                  <Chip
+                                    label={appChip.label}
+                                    size="small"
+                                    sx={{
+                                      fontSize: "0.62rem",
+                                      fontWeight: 700,
+                                      height: 18,
+                                      bgcolor: appChip.bgcolor,
+                                      color: appChip.color,
+                                      border: `1px solid ${appChip.border}`,
+                                    }}
+                                  />
+                                )}
+                              </Box>
+                              <Typography
+                                variant="caption"
+                                className="mono-font"
+                                sx={{ color: "#94A3B8", fontSize: "0.68rem", display: "block" }}
+                              >
+                                {act.host}:{act.target_file}
+                              </Typography>
+                            </Box>
+                          </Box>
+                          <Chip
+                            label="SYNCED"
+                            size="small"
+                            sx={{
+                              fontSize: "0.65rem",
+                              fontWeight: 600,
+                              height: 18,
+                              bgcolor: "#F1F5F9",
+                              color: "#64748B",
+                            }}
+                          />
+                        </Box>
+                      );
+                    })}
                   </Box>
                 </AccordionDetails>
               </Accordion>

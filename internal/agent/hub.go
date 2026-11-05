@@ -21,13 +21,21 @@ type RegisterListener func(conn *AgentConnection)
 // CronTaskReportListener handles cron task reports from agents
 type CronTaskReportListener func(nodeName string, r *agentpb.CronTaskReport)
 
+// ProbeConfigFile represents a probed remote configuration file with path, content, and hash
+type ProbeConfigFile struct {
+	Path    string `json:"path"`
+	Content string `json:"content"`
+	Hash    string `json:"hash"`
+}
+
 // Hub manages active agent connections and cached telemetry
 type Hub struct {
 	mu               sync.RWMutex
 	connections      map[string]*AgentConnection
 	telemetry        map[string]*agentpb.TelemetryReport
 	lastSeen         map[string]time.Time
-	appHashes        map[string]map[string]string // nodeName -> appName -> sha256
+	appHashes        map[string]map[string]string          // nodeName -> appName -> sha256
+	appFiles         map[string]map[string]ProbeConfigFile // nodeName -> filePath -> ProbeConfigFile
 	onTelemetry      []TelemetryListener
 	onRegister       []RegisterListener
 	onCronTaskReport []CronTaskReportListener
@@ -40,6 +48,7 @@ func NewHub() *Hub {
 		telemetry:   make(map[string]*agentpb.TelemetryReport),
 		lastSeen:    make(map[string]time.Time),
 		appHashes:   make(map[string]map[string]string),
+		appFiles:    make(map[string]map[string]ProbeConfigFile),
 	}
 }
 
@@ -169,6 +178,38 @@ func (h *Hub) GetAppHash(nodeName, appName string) string {
 		return ""
 	}
 	return h.appHashes[nodeName][appName]
+}
+
+// SetAppFiles updates the cached deployed app files for a node
+func (h *Hub) SetAppFiles(nodeName string, files map[string]ProbeConfigFile) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.appFiles == nil {
+		h.appFiles = make(map[string]map[string]ProbeConfigFile)
+	}
+	cp := make(map[string]ProbeConfigFile, len(files))
+	for k, v := range files {
+		cp[k] = v
+	}
+	h.appFiles[nodeName] = cp
+}
+
+// GetAppFiles returns a copy of the cached deployed app files for a node
+func (h *Hub) GetAppFiles(nodeName string) map[string]ProbeConfigFile {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	if h.appFiles == nil {
+		return nil
+	}
+	orig := h.appFiles[nodeName]
+	if orig == nil {
+		return nil
+	}
+	cp := make(map[string]ProbeConfigFile, len(orig))
+	for k, v := range orig {
+		cp[k] = v
+	}
+	return cp
 }
 
 // NotifyRegister triggers registered registration listeners

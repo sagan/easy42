@@ -265,10 +265,10 @@ func VariablesToMap(vars []config.AppVariable) map[string]string {
 	return res
 }
 
-// InterpolateApp creates a copy of the app with variables interpolated in MainContent, EnvContent, and Files
+// InterpolateApp creates a copy of the app with variables interpolated in EnvContent and Files (auxiliary config files).
+// Systemd unit and Docker Compose manifests (MainContent) are excluded to prevent conflicts with their native ${VAR} variable interpolation syntax.
 func InterpolateApp(app config.App, globalVars map[string]string, contextVars map[string]string) config.App {
 	interpolated := app
-	interpolated.MainContent = InterpolateVariables(app.MainContent, globalVars, contextVars)
 	interpolated.EnvContent = InterpolateVariables(app.EnvContent, globalVars, contextVars)
 
 	if len(app.Files) > 0 {

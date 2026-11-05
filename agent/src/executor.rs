@@ -86,6 +86,8 @@ pub struct ProbeSystemResult {
     pub hosts_hash: String,
     #[serde(default)]
     pub app_hashes: HashMap<String, String>,
+    #[serde(default)]
+    pub app_files: HashMap<String, crate::apps::AppInstalledFile>,
 }
 
 pub struct CommandExecutor {
@@ -651,12 +653,13 @@ done"#;
         }
 
         let hosts_hash = crate::hosts::get_current_hosts_hash(&crate::hosts::get_hosts_path());
-        let app_hashes = self.apps_manager.get_installed_app_hashes();
+        let (app_hashes, app_files) = self.apps_manager.get_installed_app_info();
         let result = ProbeSystemResult {
             hostname,
             configs,
             hosts_hash,
             app_hashes,
+            app_files,
         };
 
         match serde_json::to_string(&result) {

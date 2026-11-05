@@ -1,3 +1,4 @@
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
 use std::fs;
@@ -34,6 +35,21 @@ pub fn detect_init_system() -> InitSystem {
     }
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct AppInstalledFile {
+    pub path: String,
+    pub content: String,
+    pub hash: String,
+}
+
+pub fn hash_single_content(content: &str) -> String {
+    let mut hasher = Sha256::new();
+    let normalized = content.replace("\r\n", "\n");
+    let normalized_trimmed = normalized.trim_end();
+    hasher.update(normalized_trimmed.as_bytes());
+    format!("{:x}", hasher.finalize())
+}
+
 pub struct AppsManager {
     init_system: InitSystem,
 }
@@ -65,9 +81,10 @@ impl AppsManager {
         self.cleanup_orphans(&desired_names).await;
     }
 
-    /// Calculate current sha256 hashes of deployed app service & env files on this node
-    pub fn get_installed_app_hashes(&self) -> HashMap<String, String> {
+    /// Calculate current sha256 hashes of deployed apps and collect deployed files with contents
+    pub fn get_installed_app_info(&self) -> (HashMap<String, String>, HashMap<String, AppInstalledFile>) {
         let mut hashes = HashMap::new();
+        let mut files_map = HashMap::new();
 
         // 1. Docker apps in /etc/ezappc/<name>
         if let Ok(entries) = fs::read_dir(DOCKER_BASE_DIR) {
@@ -84,7 +101,39 @@ impl AppsManager {
                             let mut files = Vec::new();
                             read_auxiliary_files_recursive(&app_dir, &app_dir, &mut files);
                             let hash = compute_files_hash(&main_content, &env_content, &files);
-                            hashes.insert(name, hash);
+                            hashes.insert(name.clone(), hash);
+
+                            let comp_path_str = compose_path.to_string_lossy().to_string();
+                            files_map.insert(
+                                comp_path_str.clone(),
+                                AppInstalledFile {
+                                    path: comp_path_str,
+                                    hash: hash_single_content(&main_content),
+                                    content: main_content,
+                                },
+                            );
+                            if env_path.exists() {
+                                let env_path_str = env_path.to_string_lossy().to_string();
+                                files_map.insert(
+                                    env_path_str.clone(),
+                                    AppInstalledFile {
+                                        path: env_path_str,
+                                        hash: hash_single_content(&env_content),
+                                        content: env_content,
+                                    },
+                                );
+                            }
+                            for (rel_path, content) in files {
+                                let abs_path = app_dir.join(&rel_path).to_string_lossy().to_string();
+                                files_map.insert(
+                                    abs_path.clone(),
+                                    AppInstalledFile {
+                                        path: abs_path,
+                                        hash: hash_single_content(&content),
+                                        content,
+                                    },
+                                );
+                            }
                         }
                     }
                 }
@@ -112,7 +161,39 @@ impl AppsManager {
                             read_auxiliary_files_recursive(&data_dir, &data_dir, &mut files);
                         }
                         let hash = compute_files_hash(&main_content, &env_content, &files);
-                        hashes.insert(name, hash);
+                        hashes.insert(name.clone(), hash);
+
+                        let srv_path_str = service_path.to_string_lossy().to_string();
+                        files_map.insert(
+                            srv_path_str.clone(),
+                            AppInstalledFile {
+                                path: srv_path_str,
+                                hash: hash_single_content(&main_content),
+                                content: main_content,
+                            },
+                        );
+                        if env_path.exists() {
+                            let env_path_str = env_path.to_string_lossy().to_string();
+                            files_map.insert(
+                                env_path_str.clone(),
+                                AppInstalledFile {
+                                    path: env_path_str,
+                                    hash: hash_single_content(&env_content),
+                                    content: env_content,
+                                },
+                            );
+                        }
+                        for (rel_path, content) in files {
+                            let abs_path = data_dir.join(&rel_path).to_string_lossy().to_string();
+                            files_map.insert(
+                                abs_path.clone(),
+                                AppInstalledFile {
+                                    path: abs_path,
+                                    hash: hash_single_content(&content),
+                                    content,
+                                },
+                            );
+                        }
                     }
                 }
             }
@@ -129,25 +210,63 @@ impl AppsManager {
                         let data_dir = PathBuf::from(APP_DATA_BASE_DIR).join(&name);
 
                         let main_content = fs::read_to_string(&init_path).unwrap_or_default();
-                        let env_content = match self.init_system {
+                        let (env_content, env_exists, env_path_str) = match self.init_system {
                             InitSystem::OpenRC => {
                                 let conf_path = PathBuf::from(OPENRC_CONF_DIR).join(format!("ezapp-{}", name));
-                                fs::read_to_string(&conf_path).unwrap_or_default()
+                                let exists = conf_path.exists();
+                                let content = fs::read_to_string(&conf_path).unwrap_or_default();
+                                (content, exists, conf_path.to_string_lossy().to_string())
                             }
-                            _ => String::new(),
+                            _ => (String::new(), false, String::new()),
                         };
                         let mut files = Vec::new();
                         if data_dir.is_dir() {
                             read_auxiliary_files_recursive(&data_dir, &data_dir, &mut files);
                         }
                         let hash = compute_files_hash(&main_content, &env_content, &files);
-                        hashes.insert(name, hash);
+                        hashes.insert(name.clone(), hash);
+
+                        let init_path_str = init_path.to_string_lossy().to_string();
+                        files_map.insert(
+                            init_path_str.clone(),
+                            AppInstalledFile {
+                                path: init_path_str,
+                                hash: hash_single_content(&main_content),
+                                content: main_content,
+                            },
+                        );
+                        if env_exists {
+                            files_map.insert(
+                                env_path_str.clone(),
+                                AppInstalledFile {
+                                    path: env_path_str,
+                                    hash: hash_single_content(&env_content),
+                                    content: env_content,
+                                },
+                            );
+                        }
+                        for (rel_path, content) in files {
+                            let abs_path = data_dir.join(&rel_path).to_string_lossy().to_string();
+                            files_map.insert(
+                                abs_path.clone(),
+                                AppInstalledFile {
+                                    path: abs_path,
+                                    hash: hash_single_content(&content),
+                                    content,
+                                },
+                            );
+                        }
                     }
                 }
             }
         }
 
-        hashes
+        (hashes, files_map)
+    }
+
+    /// Calculate current sha256 hashes of deployed app service & env files on this node
+    pub fn get_installed_app_hashes(&self) -> HashMap<String, String> {
+        self.get_installed_app_info().0
     }
 
     async fn apply_app(&self, app: &AppSpec) -> Result<(), String> {

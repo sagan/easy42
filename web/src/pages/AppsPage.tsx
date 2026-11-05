@@ -1379,8 +1379,8 @@ export const AppsPage: React.FC = () => {
                 Global Variables & Dynamic Templates
               </Typography>
               <Typography variant="body2" sx={{ color: "#4338CA", fontSize: "0.85rem", lineHeight: 1.5 }}>
-                Variables are cluster-wide key-value entries automatically substituted in your Docker Compose manifests,
-                Systemd units, <code>.env</code> files, and auxiliary config files.
+                Variables are cluster-wide key-value entries automatically substituted in your <code>.env</code> files
+                and auxiliary config files. Systemd units and Docker Compose manifests are excluded to prevent conflicts with their native variable interpolation.
               </Typography>
               <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1.5, mt: 1.2 }}>
                 <Chip

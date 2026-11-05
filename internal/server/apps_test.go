@@ -7,11 +7,13 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
-	"easy42/internal/config"
+	"easy42/internal/agent"
 	agentpb "easy42/internal/agent/proto"
+	"easy42/internal/config"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -381,22 +383,73 @@ func TestAppSyncReconciliation(t *testing.T) {
 	}
 
 	// 7. Plan sync -> hash changed! diff_status: "update", needs_apply: true
+	// Set live probed files on agentHub to test diff generation
+	srv.mgr.AgentHub().SetAppFiles("nbbug", map[string]agent.ProbeConfigFile{
+		"/etc/systemd/system/ezapp-rclone.service": {
+			Path:    "/etc/systemd/system/ezapp-rclone.service",
+			Content: "[Unit]\nDescription=rclone service\n\n[Service]\nExecStart=/usr/bin/rclone serve webdav\n",
+			Hash:    "oldhash",
+		},
+		"/etc/systemd/system/ezapp-rclone.env": {
+			Path:    "/etc/systemd/system/ezapp-rclone.env",
+			Content: "RCLONE_PASS=123456\n",
+			Hash:    "envhash",
+		},
+	})
+
 	actions, err = srv.mgr.PlanSyncWithScope("")
 	if err != nil {
 		t.Fatalf("PlanSyncWithScope failed: %v", err)
 	}
-	rcloneAct = nil
+	var unitAct, envAct *config.SyncAction
 	for i := range actions {
 		if actions[i].Interface == "rclone" && actions[i].Type == config.ActionSyncApp {
-			rcloneAct = &actions[i]
+			if strings.HasSuffix(actions[i].TargetFile, ".service") {
+				unitAct = &actions[i]
+			} else if strings.HasSuffix(actions[i].TargetFile, ".env") {
+				envAct = &actions[i]
+			}
+		}
+	}
+	if unitAct == nil {
+		t.Fatalf("expected sync action for rclone .service unit")
+	}
+	if !unitAct.NeedsApply || unitAct.DiffStatus != "update" {
+		t.Fatalf("expected update pending for unit file, got diff_status=%s, needs_apply=%v", unitAct.DiffStatus, unitAct.NeedsApply)
+	}
+	if unitAct.Diff == "" || !strings.Contains(unitAct.Diff, "+ Description=rclone modified service") {
+		t.Fatalf("expected unit file diff containing modification, got: %s", unitAct.Diff)
+	}
+
+	if envAct == nil {
+		t.Fatalf("expected sync action for rclone .env file")
+	}
+	// env content didn't change, so envAct should be synced
+	if envAct.NeedsApply || envAct.DiffStatus != "synced" {
+		t.Fatalf("expected synced status for unchanged env file, got diff_status=%s, needs_apply=%v", envAct.DiffStatus, envAct.NeedsApply)
+	}
+
+	// Now modify env content
+	app.EnvContent = "RCLONE_PASS=secret999\n"
+	if _, err := srv.mgr.SaveApp(app); err != nil {
+		t.Fatalf("failed to update app env: %v", err)
+	}
+	actions, err = srv.mgr.PlanSyncWithScope("")
+	if err != nil {
+		t.Fatalf("PlanSyncWithScope failed: %v", err)
+	}
+	envAct = nil
+	for i := range actions {
+		if actions[i].Interface == "rclone" && actions[i].Type == config.ActionSyncApp && strings.HasSuffix(actions[i].TargetFile, ".env") {
+			envAct = &actions[i]
 			break
 		}
 	}
-	if rcloneAct == nil {
-		t.Fatalf("expected sync action for rclone, none found")
+	if envAct == nil || !envAct.NeedsApply || envAct.DiffStatus != "update" {
+		t.Fatalf("expected env file update action, got %+v", envAct)
 	}
-	if !rcloneAct.NeedsApply || rcloneAct.DiffStatus != "update" {
-		t.Fatalf("expected update pending after unit file modified, got diff_status=%s, needs_apply=%v", rcloneAct.DiffStatus, rcloneAct.NeedsApply)
+	if envAct.Diff == "" || !strings.Contains(envAct.Diff, "+ RCLONE_PASS=secret999") {
+		t.Fatalf("expected env diff containing secret999, got: %s", envAct.Diff)
 	}
 
 	// 8. Unassign rclone from nbbug -> diff_status: "delete", needs_apply: true

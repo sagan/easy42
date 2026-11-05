@@ -3074,6 +3074,7 @@ func (m *Manager) PlanSyncWithScope(scope string, nodeNames ...string) ([]config
 
 	currentState := m.stateStore.Get()
 	actions := make([]config.SyncAction, 0)
+	probedConfigsPerNode := make(map[string]map[string]agent.ProbeConfigFile)
 
 	// 1. Detect unused/deleted wg42* interfaces on remote devices by running `wg`
 	// WireGuard tasks require the vault to be unlocked to decrypt private keys and manage interfaces.
@@ -3101,6 +3102,7 @@ func (m *Manager) PlanSyncWithScope(scope string, nodeNames ...string) ([]config
 		var wg sync.WaitGroup
 		var cleanActionsMu sync.Mutex
 		var cleanActions []config.SyncAction
+		var probeMu sync.Mutex
 
 		for _, n := range nodes {
 			if n.IsExternal {
@@ -3135,6 +3137,12 @@ func (m *Manager) PlanSyncWithScope(scope string, nodeNames ...string) ([]config
 								_ = m.stateStore.UpdateAppStates(targetNode.Name, targetNode.Host, probeRes.AppHashes, time.Now())
 							}
 						}
+						if len(probeRes.AppFiles) > 0 {
+							m.agentHub.SetAppFiles(targetNode.Name, probeRes.AppFiles)
+						}
+						probeMu.Lock()
+						probedConfigsPerNode[targetNode.Name] = probeRes.Configs
+						probeMu.Unlock()
 					}
 
 					nodeStatus := m.agentHub.NodeStatus(targetNode.Name)
@@ -3344,6 +3352,15 @@ func (m *Manager) PlanSyncWithScope(scope string, nodeNames ...string) ([]config
 						}
 					}
 
+					diff := ""
+					if diffStatus == "update" {
+						if pMap, ok := probedConfigsPerNode[fromNode.Name]; ok {
+							if pCfg, ok := pMap[link.From.Interface]; ok && pCfg.Content != "" {
+								diff = generateSimpleDiff(pCfg.Content, fromConf)
+							}
+						}
+					}
+
 					actions = append(actions, config.SyncAction{
 						NodeName:    fromNode.Name,
 						Host:        fromNode.Host,
@@ -3351,6 +3368,7 @@ func (m *Manager) PlanSyncWithScope(scope string, nodeNames ...string) ([]config
 						Interface:   link.From.Interface,
 						TargetFile:  targetFile,
 						FileContent: fromConf,
+						Diff:        diff,
 						Description: fmt.Sprintf("Configure %s on %s (peer %s)", link.From.Interface, fromNode.Name, toNode.Name),
 						NeedsApply:  needsApply,
 						Status:      status,
@@ -3382,6 +3400,15 @@ func (m *Manager) PlanSyncWithScope(scope string, nodeNames ...string) ([]config
 						}
 					}
 
+					diff := ""
+					if diffStatus == "update" {
+						if pMap, ok := probedConfigsPerNode[toNode.Name]; ok {
+							if pCfg, ok := pMap[link.To.Interface]; ok && pCfg.Content != "" {
+								diff = generateSimpleDiff(pCfg.Content, toConf)
+							}
+						}
+					}
+
 					actions = append(actions, config.SyncAction{
 						NodeName:    toNode.Name,
 						Host:        toNode.Host,
@@ -3389,6 +3416,7 @@ func (m *Manager) PlanSyncWithScope(scope string, nodeNames ...string) ([]config
 						Interface:   link.To.Interface,
 						TargetFile:  targetFile,
 						FileContent: toConf,
+						Diff:        diff,
 						Description: fmt.Sprintf("Configure %s on %s (peer %s)", link.To.Interface, toNode.Name, fromNode.Name),
 						NeedsApply:  needsApply,
 						Status:      status,
@@ -3686,6 +3714,11 @@ func (m *Manager) PlanSyncWithScope(scope string, nodeNames ...string) ([]config
 		}
 		node := n
 
+		osInfo := ""
+		if m.agentHub != nil {
+			osInfo = strings.ToLower(m.agentHub.GetOSInfo(node.Name))
+		}
+
 		desiredSpecs, err := m.BuildAppSpecsForNode(node.Name)
 		if err != nil {
 			continue
@@ -3710,29 +3743,66 @@ func (m *Manager) PlanSyncWithScope(scope string, nodeNames ...string) ([]config
 			}
 		}
 
+		deployedAppFiles := make(map[string]agent.ProbeConfigFile)
+		if m.agentHub != nil {
+			for k, v := range m.agentHub.GetAppFiles(node.Name) {
+				deployedAppFiles[k] = v
+			}
+		}
+
 		for _, spec := range desiredSpecs {
 			desiredHash := apps.ComputeAppSpecFilesHash(spec)
 			spec.Sha256Hash = desiredHash
 
 			currentHash := deployedHashes[spec.Name]
 
-			needsApply := true
-			status := "pending"
-			diffStatus := "create"
+			mainTargetFile := fmt.Sprintf("/etc/systemd/system/ezapp-%s.service", spec.Name)
+			envTargetFile := fmt.Sprintf("/etc/systemd/system/ezapp-%s.env", spec.Name)
+			applyCmd := fmt.Sprintf("systemctl restart ezapp-%s", spec.Name)
+			mainDesc := fmt.Sprintf("Deploy app '%s' service unit on %s", spec.Name, node.Name)
 
-			if currentHash != "" {
-				if currentHash == desiredHash {
-					needsApply = false
-					status = "synced"
-					diffStatus = "synced"
-				} else {
-					diffStatus = "update"
-				}
+			if spec.AppType == agentpb.AppType_DOCKER_COMPOSE {
+				mainTargetFile = fmt.Sprintf("/etc/ezappc/%s/compose.yaml", spec.Name)
+				envTargetFile = fmt.Sprintf("/etc/ezappc/%s/.env", spec.Name)
+				applyCmd = fmt.Sprintf("docker compose -p ezapp-%s up -d", spec.Name)
+				mainDesc = fmt.Sprintf("Deploy app '%s' compose file on %s", spec.Name, node.Name)
+			} else if strings.Contains(osInfo, "openwrt") {
+				mainTargetFile = fmt.Sprintf("/etc/init.d/ezapp-%s", spec.Name)
+				envTargetFile = ""
+				applyCmd = fmt.Sprintf("/etc/init.d/ezapp-%s restart", spec.Name)
+				mainDesc = fmt.Sprintf("Deploy app '%s' init script on %s", spec.Name, node.Name)
+			} else if strings.Contains(osInfo, "alpine") || strings.Contains(osInfo, "openrc") {
+				mainTargetFile = fmt.Sprintf("/etc/init.d/ezapp-%s", spec.Name)
+				envTargetFile = fmt.Sprintf("/etc/conf.d/ezapp-%s", spec.Name)
+				applyCmd = fmt.Sprintf("rc-service ezapp-%s restart", spec.Name)
+				mainDesc = fmt.Sprintf("Deploy app '%s' init script on %s", spec.Name, node.Name)
 			}
 
-			targetFile := fmt.Sprintf("/etc/systemd/system/ezapp-%s.service", spec.Name)
-			if spec.AppType == agentpb.AppType_DOCKER_COMPOSE {
-				targetFile = fmt.Sprintf("/etc/ezappc/%s/compose.yaml", spec.Name)
+			// 1. Service unit / main content file
+			mainNeedsApply := true
+			mainStatus := "pending"
+			mainDiffStatus := "create"
+			mainDiff := ""
+
+			if curF, ok := deployedAppFiles[mainTargetFile]; ok {
+				curHash := config.HashConfig(compiler.NormalizeConfig(curF.Content))
+				desHash := config.HashConfig(compiler.NormalizeConfig(spec.MainContent))
+				if curHash == desHash {
+					mainNeedsApply = false
+					mainStatus = "synced"
+					mainDiffStatus = "synced"
+				} else {
+					mainDiffStatus = "update"
+					mainDiff = generateSimpleDiff(curF.Content, spec.MainContent)
+				}
+			} else if currentHash != "" {
+				if currentHash == desiredHash {
+					mainNeedsApply = false
+					mainStatus = "synced"
+					mainDiffStatus = "synced"
+				} else {
+					mainDiffStatus = "update"
+				}
 			}
 
 			actions = append(actions, config.SyncAction{
@@ -3740,14 +3810,109 @@ func (m *Manager) PlanSyncWithScope(scope string, nodeNames ...string) ([]config
 				Host:        node.Host,
 				Type:        config.ActionSyncApp,
 				Interface:   spec.Name,
-				TargetFile:  targetFile,
+				TargetFile:  mainTargetFile,
 				FileContent: spec.MainContent,
-				Command:     fmt.Sprintf("systemctl restart ezapp-%s", spec.Name),
-				Description: fmt.Sprintf("Deploy app '%s' on %s", spec.Name, node.Name),
-				NeedsApply:  needsApply,
-				Status:      status,
-				DiffStatus:  diffStatus,
+				Diff:        mainDiff,
+				Command:     applyCmd,
+				Description: mainDesc,
+				NeedsApply:  mainNeedsApply,
+				Status:      mainStatus,
+				DiffStatus:  mainDiffStatus,
 			})
+
+			// 2. Environment file (when applicable)
+			if envTargetFile != "" {
+				envNeedsApply := true
+				envStatus := "pending"
+				envDiffStatus := "create"
+				envDiff := ""
+
+				if curF, ok := deployedAppFiles[envTargetFile]; ok {
+					curHash := config.HashConfig(compiler.NormalizeConfig(curF.Content))
+					desHash := config.HashConfig(compiler.NormalizeConfig(spec.EnvContent))
+					if curHash == desHash {
+						envNeedsApply = false
+						envStatus = "synced"
+						envDiffStatus = "synced"
+					} else {
+						envDiffStatus = "update"
+						envDiff = generateSimpleDiff(curF.Content, spec.EnvContent)
+					}
+				} else if currentHash != "" {
+					if currentHash == desiredHash {
+						envNeedsApply = false
+						envStatus = "synced"
+						envDiffStatus = "synced"
+					} else {
+						envDiffStatus = "update"
+					}
+				}
+
+				actions = append(actions, config.SyncAction{
+					NodeName:    node.Name,
+					Host:        node.Host,
+					Type:        config.ActionSyncApp,
+					Interface:   spec.Name,
+					TargetFile:  envTargetFile,
+					FileContent: spec.EnvContent,
+					Diff:        envDiff,
+					Description: fmt.Sprintf("Deploy app '%s' environment file on %s", spec.Name, node.Name),
+					NeedsApply:  envNeedsApply,
+					Status:      envStatus,
+					DiffStatus:  envDiffStatus,
+				})
+			}
+
+			// 3. Auxiliary config files
+			for _, f := range spec.ConfigFiles {
+				if f == nil {
+					continue
+				}
+				auxTargetFile := fmt.Sprintf("/etc/ezapp-data/%s/%s", spec.Name, f.Path)
+				if spec.AppType == agentpb.AppType_DOCKER_COMPOSE {
+					auxTargetFile = fmt.Sprintf("/etc/ezappc/%s/%s", spec.Name, f.Path)
+				}
+				auxContent := string(f.Content)
+				auxNeedsApply := true
+				auxStatus := "pending"
+				auxDiffStatus := "create"
+				auxDiff := ""
+
+				if curF, ok := deployedAppFiles[auxTargetFile]; ok {
+					curHash := config.HashConfig(compiler.NormalizeConfig(curF.Content))
+					desHash := config.HashConfig(compiler.NormalizeConfig(auxContent))
+					if curHash == desHash {
+						auxNeedsApply = false
+						auxStatus = "synced"
+						auxDiffStatus = "synced"
+					} else {
+						auxDiffStatus = "update"
+						auxDiff = generateSimpleDiff(curF.Content, auxContent)
+					}
+				} else if currentHash != "" {
+					if currentHash == desiredHash {
+						auxNeedsApply = false
+						auxStatus = "synced"
+						auxDiffStatus = "synced"
+					} else {
+						auxDiffStatus = "update"
+					}
+				}
+
+				actions = append(actions, config.SyncAction{
+					NodeName:    node.Name,
+					Host:        node.Host,
+					Type:        config.ActionSyncApp,
+					Interface:   spec.Name,
+					TargetFile:  auxTargetFile,
+					FileContent: auxContent,
+					Diff:        auxDiff,
+					Description: fmt.Sprintf("Deploy app '%s' config file '%s' on %s", spec.Name, f.Path, node.Name),
+					NeedsApply:  auxNeedsApply,
+					Status:      auxStatus,
+					DiffStatus:  auxDiffStatus,
+				})
+			}
 		}
 
 		var orphanedAppNames []string
@@ -3765,7 +3930,7 @@ func (m *Manager) PlanSyncWithScope(scope string, nodeNames ...string) ([]config
 				Type:        config.ActionDeleteApp,
 				Interface:   appName,
 				TargetFile:  fmt.Sprintf("/etc/systemd/system/ezapp-%s.service", appName),
-				Description: fmt.Sprintf("Remove unassigned app '%s' from %s", appName, node.Name),
+				Description: fmt.Sprintf("Remove unassigned app '%s' service unit from %s", appName, node.Name),
 				NeedsApply:  true,
 				Status:      "pending",
 				DiffStatus:  "delete",
@@ -3774,7 +3939,7 @@ func (m *Manager) PlanSyncWithScope(scope string, nodeNames ...string) ([]config
 	}
 
 	// Sort actions: pending (NeedsApply == true) first, then synced.
-	// Within each group, order by actionPriority (clean/delete -> wireguard -> bird), then NodeName and Interface
+	// Within each group, order by actionPriority (clean/delete -> wireguard -> bird), then NodeName, Interface, and TargetFile
 	sort.Slice(actions, func(i, j int) bool {
 		if actions[i].NeedsApply != actions[j].NeedsApply {
 			return actions[i].NeedsApply // true comes before false
@@ -3787,7 +3952,10 @@ func (m *Manager) PlanSyncWithScope(scope string, nodeNames ...string) ([]config
 		if actions[i].NodeName != actions[j].NodeName {
 			return actions[i].NodeName < actions[j].NodeName
 		}
-		return actions[i].Interface < actions[j].Interface
+		if actions[i].Interface != actions[j].Interface {
+			return actions[i].Interface < actions[j].Interface
+		}
+		return actions[i].TargetFile < actions[j].TargetFile
 	})
 
 	if actions == nil {
@@ -4077,17 +4245,14 @@ type probeOutput struct {
 	err      error
 }
 
-type agentProbeConfigFile struct {
-	Path    string `json:"path"`
-	Content string `json:"content"`
-	Hash    string `json:"hash"`
-}
+type agentProbeConfigFile = agent.ProbeConfigFile
 
 type agentProbeResult struct {
 	Hostname  string                          `json:"hostname"`
-	Configs   map[string]agentProbeConfigFile `json:"configs"`
+	Configs   map[string]agent.ProbeConfigFile `json:"configs"`
 	HostsHash string                          `json:"hosts_hash"`
 	AppHashes map[string]string               `json:"app_hashes"`
+	AppFiles  map[string]agent.ProbeConfigFile `json:"app_files"`
 }
 
 type linkMetaInfo struct {
@@ -4121,6 +4286,9 @@ func (m *Manager) collectStateFromAgent(targetNode config.Node, meta map[string]
 			if m.stateStore != nil {
 				_ = m.stateStore.UpdateAppStates(targetNode.Name, targetNode.Host, probeRes.AppHashes, time.Now())
 			}
+		}
+		if len(probeRes.AppFiles) > 0 {
+			m.agentHub.SetAppFiles(targetNode.Name, probeRes.AppFiles)
 		}
 	}
 
@@ -5420,10 +5588,10 @@ func (m *Manager) executeAgentSyncAction(act config.SyncAction, res *config.Sync
 		}
 		res.Success = true
 		if act.Type == config.ActionDeleteApp {
-			res.Output = fmt.Sprintf("Removed app '%s' on %s", act.Interface, act.NodeName)
+			res.Output = fmt.Sprintf("Removed %s on %s", filepath.Base(act.TargetFile), act.NodeName)
 			_ = m.stateStore.RemoveAppState(act.NodeName, act.Interface)
 		} else {
-			res.Output = fmt.Sprintf("Synchronized app '%s' on %s", act.Interface, act.NodeName)
+			res.Output = fmt.Sprintf("Synchronized %s on %s", filepath.Base(act.TargetFile), act.NodeName)
 			specs, err := m.BuildAppSpecsForNode(act.NodeName)
 			if err == nil {
 				for _, s := range specs {

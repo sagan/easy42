@@ -190,9 +190,9 @@ func TestInterpolateApp(t *testing.T) {
 	result := InterpolateApp(app, globalVars, contextVars)
 
 	if !testing.Short() {
-		expectedMain := "version: '3.8'\nservices:\n  app:\n    image: myrepo/app:latest\n    environment:\n      - HOST=sg-node-01\n      - ADDR=10.42.0.8\n"
-		if result.MainContent != expectedMain {
-			t.Errorf("MainContent mismatch:\ngot:\n%s\nwant:\n%s", result.MainContent, expectedMain)
+		// MainContent (Docker Compose / Systemd unit) must NOT be interpolated by Easy42 to preserve native ${VAR} syntax
+		if result.MainContent != app.MainContent {
+			t.Errorf("MainContent should remain untouched (excluding Compose/Systemd manifests from Easy42 expansion):\ngot:\n%s\nwant:\n%s", result.MainContent, app.MainContent)
 		}
 
 		expectedEnv := "PORT=9000\nDOMAIN=easy42.net\n"
