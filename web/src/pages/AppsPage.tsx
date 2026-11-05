@@ -1395,6 +1395,11 @@ export const AppsPage: React.FC = () => {
                 />
                 <Chip
                   size="small"
+                  label="Nested & Bash: ${VAR:-${FALLBACK}}, ${VAR^^}, ${VAR:0:4}"
+                  sx={{ bgcolor: "#FFFFFF", color: "#3730A3", fontWeight: 700, fontSize: "0.75rem" }}
+                />
+                <Chip
+                  size="small"
                   label="Node Context: ${NODE_NAME}, ${NODE_INTERFACE}, ${NODE_IP}, ${NODE_IP6}, ${NODE_EXTERNAL_IP}, ${NODE_EXTERNAL_IP6}, ${HAS_CUSTOM_SCRIPT}, ${NODE_DATA_*}"
                   sx={{ bgcolor: "#FFFFFF", color: "#3730A3", fontWeight: 700, fontSize: "0.75rem" }}
                 />

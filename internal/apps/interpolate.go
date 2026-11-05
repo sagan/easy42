@@ -6,13 +6,13 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/fluxcd/pkg/envsubst"
+	"github.com/fluxcd/pkg/envsubst/parse"
+
 	"easy42/internal/config"
 )
 
 var (
-	// Matches ${VAR_NAME} or ${VAR_NAME:-default_value}
-	dollarBraceRegex = regexp.MustCompile(`\$\{([a-zA-Z_][a-zA-Z0-9_]*)(?::-([^}]*))?\}`)
-
 	// Matches {{VAR_NAME}} or {{.VAR_NAME}}
 	mustacheRegex = regexp.MustCompile(`\{\{\s*\.?([a-zA-Z_][a-zA-Z0-9_]*)\s*\}\}`)
 )
@@ -153,7 +153,71 @@ func BuildNodeContextVars(n config.Node) map[string]string {
 	return res
 }
 
-// InterpolateVariables substitutes variables into content using globalVars and contextVars
+// escapeDollarInText preserves escaped dollars in literal text that would otherwise be parsed as substitutions.
+func escapeDollarInText(s string) string {
+	return strings.ReplaceAll(s, "${", "$${")
+}
+
+// prepareTemplate inspects the AST from envsubst/parse and escapes any bare undefined variables
+// so that envsubst preserves them (e.g. ${UNKNOWN_TAG}) instead of expanding them to empty or failing.
+func prepareTemplate(n parse.Node, lookup func(string) (string, bool), b *strings.Builder) {
+	switch node := n.(type) {
+	case *parse.TextNode:
+		b.WriteString(escapeDollarInText(node.Value))
+	case *parse.ListNode:
+		for _, child := range node.Nodes {
+			prepareTemplate(child, lookup, b)
+		}
+	case *parse.FuncNode:
+		_, exists := lookup(node.Param)
+		if node.Name == "" && !exists {
+			// Bare undefined variable -> escape so envsubst outputs literal ${PARAM}
+			b.WriteString("$${" + node.Param + "}")
+			return
+		}
+
+		b.WriteString("${" + node.Param)
+		if node.Name != "" {
+			b.WriteString(node.Name)
+			for i, arg := range node.Args {
+				if node.Name == ":" && i > 0 {
+					b.WriteString(":")
+				} else if (node.Name == "/" || node.Name == "//") && i > 0 {
+					b.WriteString("/")
+				}
+				prepareTemplate(arg, lookup, b)
+			}
+		}
+		b.WriteString("}")
+	}
+}
+
+// interpolateEnvsubst expands ${VAR} and bash parameter expansions (nested variables, defaults,
+// case conversion, slicing, pattern substitution) using github.com/fluxcd/pkg/envsubst.
+func interpolateEnvsubst(content string, lookup func(string) (string, bool)) string {
+	if content == "" {
+		return ""
+	}
+
+	tree, err := parse.Parse(content)
+	if err != nil {
+		return content
+	}
+
+	var b strings.Builder
+	prepareTemplate(tree.Root, lookup, &b)
+	prepared := b.String()
+
+	res, err := envsubst.Eval(prepared, lookup)
+	if err != nil {
+		return content
+	}
+	return res
+}
+
+// InterpolateVariables substitutes variables into content using globalVars and contextVars.
+// It supports {{VAR}} mustache syntax and full bash-compatible ${VAR} expansion via github.com/fluxcd/pkg/envsubst
+// (including default fallbacks, nested expressions like ${VAR:-${DEFAULT}}, slicing, and pattern replacements).
 func InterpolateVariables(content string, globalVars map[string]string, contextVars map[string]string) string {
 	if content == "" {
 		return ""
@@ -185,27 +249,8 @@ func InterpolateVariables(content string, globalVars map[string]string, contextV
 		return match
 	})
 
-	// 2. Substitute ${VAR} or ${VAR:-default}
-	res = dollarBraceRegex.ReplaceAllStringFunc(res, func(match string) string {
-		sub := dollarBraceRegex.FindStringSubmatch(match)
-		if len(sub) > 1 {
-			k := sub[1]
-			val, found := lookup(k)
-			if found && val != "" {
-				return val
-			}
-			// If not found or empty and default provided
-			if len(sub) > 2 && sub[2] != "" {
-				return sub[2]
-			}
-			if found {
-				return val // empty string was explicitly set
-			}
-		}
-		return match
-	})
-
-	return res
+	// 2. Substitute ${VAR} via fluxcd/pkg/envsubst (supports nested variables and bash expansions)
+	return interpolateEnvsubst(res, lookup)
 }
 
 // VariablesToMap converts a slice of AppVariable into a key-value map

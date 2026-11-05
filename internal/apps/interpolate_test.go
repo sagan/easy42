@@ -57,6 +57,41 @@ func TestInterpolateVariables(t *testing.T) {
 			input:    "node is ${NODE_NAME}",
 			expected: "node is node-sg",
 		},
+		{
+			name:     "Nested variable substitution with fallback to variable",
+			input:    "val: ${MISSING_VAR:-${DOMAIN}}",
+			expected: "val: easy42.net",
+		},
+		{
+			name:     "Deeply nested variable substitution",
+			input:    "val: ${UNDEFINED_1:-${UNDEFINED_2:-${API_PORT}}}",
+			expected: "val: 8080",
+		},
+		{
+			name:     "Nested variable substitution with fallback to static string",
+			input:    "val: ${UNDEFINED_1:-${UNDEFINED_2:-custom-val}}",
+			expected: "val: custom-val",
+		},
+		{
+			name:     "Bash string transformation: uppercase all",
+			input:    "node: ${NODE_NAME^^}",
+			expected: "node: NODE-SG",
+		},
+		{
+			name:     "Bash string transformation: lowercase all",
+			input:    "app: ${APP_NAME,,}",
+			expected: "app: vproxy",
+		},
+		{
+			name:     "Bash string transformation: substring",
+			input:    "prefix: ${NODE_NAME:0:4}",
+			expected: "prefix: node",
+		},
+		{
+			name:     "Escaped dollar brace",
+			input:    "escaped: $${NODE_NAME}",
+			expected: "escaped: ${NODE_NAME}",
+		},
 	}
 
 	for _, tt := range tests {

@@ -7,6 +7,7 @@ require (
 	github.com/awnumar/memguard v0.23.0
 	github.com/dop251/goja v0.0.0-20261023133238-1622cea953df
 	github.com/dop251/goja_nodejs v0.0.0-20260918173711-b481721df8a2
+	github.com/fluxcd/pkg/envsubst v1.9.0
 	github.com/go-chi/chi/v5 v5.5.0
 	github.com/go-chi/cors v1.2.2
 	github.com/go-sprout/sprout v1.1.2
