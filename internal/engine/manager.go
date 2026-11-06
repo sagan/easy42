@@ -3776,6 +3776,16 @@ func (m *Manager) PlanSyncWithScope(scope string, nodeNames ...string) ([]config
 				}
 			}
 		}
+		// Also consider live app statuses reported by the agent. This ensures a
+		// deleted app is garbage collected even if its hash was not cached, and
+		// lets us infer the enabled state of apps deployed before it was tracked.
+		liveStatuses := make(map[string]AppStatusRecord)
+		for _, st := range m.GetNodeAppsStatus(node.Name) {
+			liveStatuses[st.Name] = st
+			if _, exists := deployedHashes[st.Name]; !exists {
+				deployedHashes[st.Name] = ""
+			}
+		}
 
 		deployedAppFiles := make(map[string]agent.ProbeConfigFile)
 		if m.agentHub != nil {
@@ -3789,6 +3799,30 @@ func (m *Manager) PlanSyncWithScope(scope string, nodeNames ...string) ([]config
 			spec.Sha256Hash = desiredHash
 
 			currentHash := deployedHashes[spec.Name]
+
+			// The enabled/disabled state is not part of the deployed file contents,
+			// so it must be tracked separately. Otherwise toggling an app would not
+			// produce a sync action and the agent would never stop/start it.
+			enabledDrift := false
+			if m.agentHub != nil {
+				if recordedEnabled, known := m.agentHub.GetAppEnabled(node.Name, spec.Name); known {
+					enabledDrift = recordedEnabled != spec.Enabled
+				} else if currentHash != "" {
+					// Apps deployed before enabled-state tracking existed have no
+					// recorded value. Infer it from the live status when possible,
+					// otherwise assume they were running (the historical default).
+					recordedEnabled := true
+					if st, ok := liveStatuses[spec.Name]; ok {
+						switch st.State {
+						case "running", "starting":
+							recordedEnabled = true
+						case "stopped", "failed":
+							recordedEnabled = false
+						}
+					}
+					enabledDrift = recordedEnabled != spec.Enabled
+				}
+			}
 
 			mainTargetFile := fmt.Sprintf("/etc/systemd/system/ezapp-%s.service", spec.Name)
 			envTargetFile := fmt.Sprintf("/etc/systemd/system/ezapp-%s.env", spec.Name)
@@ -3837,6 +3871,14 @@ func (m *Manager) PlanSyncWithScope(scope string, nodeNames ...string) ([]config
 					mainStatus = "synced"
 					mainDiffStatus = "synced"
 				} else {
+					mainDiffStatus = "update"
+				}
+			}
+
+			if enabledDrift {
+				mainNeedsApply = true
+				mainStatus = "pending"
+				if mainDiffStatus == "synced" {
 					mainDiffStatus = "update"
 				}
 			}
@@ -5684,6 +5726,7 @@ func (m *Manager) executeAgentSyncAction(act config.SyncAction, res *config.Sync
 				if m.agentHub != nil {
 					m.agentHub.RemoveAppHash(act.NodeName, act.Interface)
 					m.agentHub.RemoveAppFile(act.NodeName, act.TargetFile)
+					m.agentHub.RemoveAppEnabled(act.NodeName, act.Interface)
 				}
 			} else {
 				if m.agentHub != nil {
@@ -5711,6 +5754,7 @@ func (m *Manager) executeAgentSyncAction(act config.SyncAction, res *config.Sync
 						_ = m.stateStore.UpdateAppState(act.NodeName, act.Host, s.Name, s.Sha256Hash, time.Now())
 						if m.agentHub != nil {
 							m.agentHub.SetAppHash(act.NodeName, s.Name, s.Sha256Hash)
+							m.agentHub.SetAppEnabled(act.NodeName, s.Name, s.Enabled)
 							m.agentHub.SetAppFile(act.NodeName, act.TargetFile, agent.ProbeConfigFile{
 								Path:    act.TargetFile,
 								Content: act.FileContent,

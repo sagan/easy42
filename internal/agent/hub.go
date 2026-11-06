@@ -36,6 +36,7 @@ type Hub struct {
 	lastSeen         map[string]time.Time
 	appHashes        map[string]map[string]string          // nodeName -> appName -> sha256
 	appFiles         map[string]map[string]ProbeConfigFile // nodeName -> filePath -> ProbeConfigFile
+	appEnabled       map[string]map[string]bool            // nodeName -> appName -> last applied enabled state
 	onTelemetry      []TelemetryListener
 	onRegister       []RegisterListener
 	onCronTaskReport []CronTaskReportListener
@@ -49,6 +50,7 @@ func NewHub() *Hub {
 		lastSeen:    make(map[string]time.Time),
 		appHashes:   make(map[string]map[string]string),
 		appFiles:    make(map[string]map[string]ProbeConfigFile),
+		appEnabled:  make(map[string]map[string]bool),
 	}
 }
 
@@ -201,6 +203,42 @@ func (h *Hub) GetAppHash(nodeName, appName string) string {
 		return ""
 	}
 	return h.appHashes[nodeName][appName]
+}
+
+// SetAppEnabled records the enabled state that was last applied for an app on a node.
+// The agent probes cannot infer this from files alone, so it is tracked separately to
+// detect enable/disable drift during sync planning.
+func (h *Hub) SetAppEnabled(nodeName, appName string, enabled bool) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.appEnabled == nil {
+		h.appEnabled = make(map[string]map[string]bool)
+	}
+	if h.appEnabled[nodeName] == nil {
+		h.appEnabled[nodeName] = make(map[string]bool)
+	}
+	h.appEnabled[nodeName][appName] = enabled
+}
+
+// GetAppEnabled returns the last applied enabled state and whether it is known.
+func (h *Hub) GetAppEnabled(nodeName, appName string) (bool, bool) {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	if h.appEnabled == nil || h.appEnabled[nodeName] == nil {
+		return false, false
+	}
+	enabled, ok := h.appEnabled[nodeName][appName]
+	return enabled, ok
+}
+
+// RemoveAppEnabled clears the recorded enabled state for an app on a node.
+func (h *Hub) RemoveAppEnabled(nodeName, appName string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.appEnabled == nil || h.appEnabled[nodeName] == nil {
+		return
+	}
+	delete(h.appEnabled[nodeName], appName)
 }
 
 // SetAppFiles updates the cached deployed app files for a node

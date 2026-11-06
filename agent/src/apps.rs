@@ -363,13 +363,29 @@ impl AppsManager {
                 let mut starting = self.starting_apps.lock().await;
                 starting.remove(&app.name);
             }
+            // `stop` leaves the containers around in an exited state, which is
+            // not enough to consider the app disabled. Tear the compose project
+            // down instead so nothing keeps running.
             let cmd = format!(
-                "cd {} && {} -p {} stop",
+                "cd {} && {} -p {} down --remove-orphans",
                 shell_quote(app_dir.to_str().unwrap_or("")),
                 compose_cmd,
                 shell_quote(&project_name)
             );
-            let _ = run_shell(&cmd).await;
+            let (success, code, stdout, stderr) = run_shell(&cmd).await;
+            if !success {
+                error!(
+                    "{} down failed for disabled app '{}' (code {}): {} {}; falling back to kill",
+                    compose_cmd, app.name, code, stdout, stderr
+                );
+                let kill_cmd = format!(
+                    "cd {} && {} -p {} kill",
+                    shell_quote(app_dir.to_str().unwrap_or("")),
+                    compose_cmd,
+                    shell_quote(&project_name)
+                );
+                let _ = run_shell(&kill_cmd).await;
+            }
         }
 
         Ok(())
@@ -543,7 +559,7 @@ impl AppsManager {
                             let project_name = format!("ezapp-{}", name);
                             let compose_cmd = compose_command();
                             let cmd = format!(
-                                "cd {} && {} -p {} down --volumes 2>/dev/null || true",
+                                "cd {} && {} -p {} down --volumes --remove-orphans 2>/dev/null || true",
                                 shell_quote(entry.path().to_str().unwrap_or("")),
                                 compose_cmd,
                                 shell_quote(&project_name)

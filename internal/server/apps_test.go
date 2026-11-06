@@ -1046,5 +1046,203 @@ func TestAppDeleteAuxiliaryConfigFileReconciliation(t *testing.T) {
 	}
 }
 
+func findAppAction(actions []config.SyncAction, appName string, actionType config.ActionType) *config.SyncAction {
+	for i := range actions {
+		if actions[i].Interface == appName && actions[i].Type == actionType {
+			return &actions[i]
+		}
+	}
+	return nil
+}
 
+func recordDeployedDockerApp(t *testing.T, srv *Server, nodeName string, spec *agentpb.AppSpec) {
+	t.Helper()
+	hub := srv.mgr.AgentHub()
+	hub.SetAppHashes(nodeName, map[string]string{spec.Name: spec.Sha256Hash})
+	hub.SetAppFiles(nodeName, map[string]agent.ProbeConfigFile{
+		"/etc/ezappc/" + spec.Name + "/compose.yaml": {
+			Path:    "/etc/ezappc/" + spec.Name + "/compose.yaml",
+			Content: spec.MainContent,
+			Hash:    spec.Sha256Hash,
+		},
+		"/etc/ezappc/" + spec.Name + "/.env": {
+			Path:    "/etc/ezappc/" + spec.Name + "/.env",
+			Content: spec.EnvContent,
+			Hash:    spec.Sha256Hash,
+		},
+	})
+	if err := srv.mgr.StateStore().UpdateAppState(nodeName, "192.168.1.210", spec.Name, spec.Sha256Hash, time.Now()); err != nil {
+		t.Fatalf("failed to update app state: %v", err)
+	}
+}
 
+func TestAppDisableProducesSyncAction(t *testing.T) {
+	srv, tempDir, _ := setupTestServer(t)
+	defer func() {
+		srv.mgr.Close()
+		_ = os.RemoveAll(tempDir)
+	}()
+
+	cfg := srv.mgr.Store().Get()
+	cfg.Nodes = append(cfg.Nodes, config.Node{
+		Name: "node-disable",
+		Host: "192.168.1.210",
+		Mode: "agent",
+	})
+	if err := srv.mgr.Store().Save(cfg); err != nil {
+		t.Fatalf("failed to save node: %v", err)
+	}
+
+	app := config.App{
+		ID:          "app-disable",
+		Name:        "disable-me",
+		AppType:     "docker",
+		MainContent: "services:\n  web:\n    image: nginx\n",
+		EnvContent:  "PORT=8080\n",
+		Nodes:       []string{"node-disable"},
+		Published:   true,
+		Enabled:     true,
+	}
+	if _, err := srv.mgr.SaveApp(app); err != nil {
+		t.Fatalf("failed to save app: %v", err)
+	}
+
+	specs, err := srv.mgr.BuildAppSpecsForNode("node-disable")
+	if err != nil || len(specs) != 1 {
+		t.Fatalf("expected one app spec, got %d (err: %v)", len(specs), err)
+	}
+	recordDeployedDockerApp(t, srv, "node-disable", specs[0])
+	srv.mgr.AgentHub().SetAppEnabled("node-disable", app.Name, true)
+
+	actions, err := srv.mgr.PlanSyncWithScope("")
+	if err != nil {
+		t.Fatalf("PlanSyncWithScope failed: %v", err)
+	}
+	if act := findAppAction(actions, app.Name, config.ActionSyncApp); act == nil || act.NeedsApply {
+		t.Fatalf("expected initially synced app action, got %+v", act)
+	}
+
+	// Disabling the app changes no files, but it must still produce a pending
+	// action so the next sync tells the agent to tear the containers down.
+	if _, err := srv.mgr.ToggleApp(app.ID); err != nil {
+		t.Fatalf("failed to disable app: %v", err)
+	}
+
+	actions, err = srv.mgr.PlanSyncWithScope("")
+	if err != nil {
+		t.Fatalf("PlanSyncWithScope after disable failed: %v", err)
+	}
+	act := findAppAction(actions, app.Name, config.ActionSyncApp)
+	if act == nil {
+		t.Fatalf("expected app action after disabling, got none in %+v", actions)
+	}
+	if !act.NeedsApply || act.DiffStatus != "update" {
+		t.Fatalf("expected pending update after disabling, got needs_apply=%v diff_status=%s", act.NeedsApply, act.DiffStatus)
+	}
+
+	// Simulate the successful sync: the agent has now been told the app is disabled.
+	srv.mgr.AgentHub().SetAppEnabled("node-disable", app.Name, false)
+	_ = srv.mgr.StateStore().UpdateAppState("node-disable", "192.168.1.210", app.Name, specs[0].Sha256Hash, time.Now())
+
+	actions, err = srv.mgr.PlanSyncWithScope("")
+	if err != nil {
+		t.Fatalf("PlanSyncWithScope after disable sync failed: %v", err)
+	}
+	if act := findAppAction(actions, app.Name, config.ActionSyncApp); act == nil || act.NeedsApply {
+		t.Fatalf("expected disabled app to be synced after applying, got %+v", act)
+	}
+}
+
+func TestAppDisableReconcilesLegacyDeployedApp(t *testing.T) {
+	srv, tempDir, _ := setupTestServer(t)
+	defer func() {
+		srv.mgr.Close()
+		_ = os.RemoveAll(tempDir)
+	}()
+
+	cfg := srv.mgr.Store().Get()
+	cfg.Nodes = append(cfg.Nodes, config.Node{
+		Name: "node-legacy",
+		Host: "192.168.1.211",
+		Mode: "agent",
+	})
+	if err := srv.mgr.Store().Save(cfg); err != nil {
+		t.Fatalf("failed to save node: %v", err)
+	}
+
+	app := config.App{
+		ID:          "app-legacy",
+		Name:        "legacy-disabled",
+		AppType:     "docker",
+		MainContent: "services:\n  web:\n    image: nginx\n",
+		Nodes:       []string{"node-legacy"},
+		Published:   true,
+		Enabled:     true,
+	}
+	if _, err := srv.mgr.SaveApp(app); err != nil {
+		t.Fatalf("failed to save app: %v", err)
+	}
+
+	specs, err := srv.mgr.BuildAppSpecsForNode("node-legacy")
+	if err != nil || len(specs) != 1 {
+		t.Fatalf("expected one app spec, got %d (err: %v)", len(specs), err)
+	}
+	recordDeployedDockerApp(t, srv, "node-legacy", specs[0])
+
+	// No enabled state was recorded for legacy deployments; disabling must
+	// still reconcile it once so the agent can run compose down.
+	if _, err := srv.mgr.ToggleApp(app.ID); err != nil {
+		t.Fatalf("failed to disable app: %v", err)
+	}
+
+	actions, err := srv.mgr.PlanSyncWithScope("")
+	if err != nil {
+		t.Fatalf("PlanSyncWithScope failed: %v", err)
+	}
+	act := findAppAction(actions, app.Name, config.ActionSyncApp)
+	if act == nil || !act.NeedsApply {
+		t.Fatalf("expected pending sync action for legacy disabled app, got %+v", act)
+	}
+}
+
+func TestDeletedAppIsDetectedFromLiveStatus(t *testing.T) {
+	srv, tempDir, _ := setupTestServer(t)
+	defer func() {
+		srv.mgr.Close()
+		_ = os.RemoveAll(tempDir)
+	}()
+
+	cfg := srv.mgr.Store().Get()
+	cfg.Nodes = append(cfg.Nodes, config.Node{
+		Name: "node-deleted",
+		Host: "192.168.1.212",
+		Mode: "agent",
+	})
+	if err := srv.mgr.Store().Save(cfg); err != nil {
+		t.Fatalf("failed to save node: %v", err)
+	}
+
+	// Simulate an agent report for an app that is no longer configured. No
+	// deployed hash is cached, so live status must be enough to trigger cleanup.
+	srv.mgr.AgentHub().UpdateTelemetry("node-deleted", &agentpb.TelemetryReport{
+		Apps: []*agentpb.AppStatus{
+			{Name: "orphan-app", AppType: agentpb.AppType_DOCKER_COMPOSE, State: "running"},
+		},
+	})
+	deadline := time.Now().Add(2 * time.Second)
+	for len(srv.mgr.GetNodeAppsStatus("node-deleted")) == 0 && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if len(srv.mgr.GetNodeAppsStatus("node-deleted")) == 0 {
+		t.Fatalf("timed out waiting for app status to be cached")
+	}
+
+	actions, err := srv.mgr.PlanSyncWithScope("")
+	if err != nil {
+		t.Fatalf("PlanSyncWithScope failed: %v", err)
+	}
+	act := findAppAction(actions, "orphan-app", config.ActionDeleteApp)
+	if act == nil || !act.NeedsApply {
+		t.Fatalf("expected delete action for app known only from live status, got %+v", act)
+	}
+}
