@@ -87,6 +87,22 @@ func (s *Server) handleToggleApp(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, app)
 }
 
+func (s *Server) handleToggleAppPublished(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		writeError(w, http.StatusBadRequest, "App ID is required")
+		return
+	}
+
+	app, err := s.mgr.ToggleAppPublished(id)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, app)
+}
+
 type renameAppRequest struct {
 	NewName string `json:"new_name"`
 }
@@ -166,10 +182,22 @@ func (s *Server) handleGetNodeApps(w http.ResponseWriter, r *http.Request) {
 	}
 
 	targetNode := s.mgr.FindNode(nodeName)
+	var contextVars map[string]string
+	var globalVars map[string]string
+	if targetNode != nil {
+		contextVars = apps.BuildNodeContextVars(*targetNode)
+		rawVars, _ := s.mgr.GetAppVariables()
+		globalVars = apps.VariablesToMap(rawVars)
+	}
+
 	var nodeApps []config.App
 	for _, a := range allApps {
-		if config.AppTargetsNode(a, targetNode, nodeName) {
-			nodeApps = append(nodeApps, a)
+		if a.Published && config.AppTargetsNode(a, targetNode, nodeName) {
+			appCopy := a
+			if appCopy.URL != "" && targetNode != nil {
+				appCopy.URL = apps.InterpolateVariables(appCopy.URL, globalVars, contextVars)
+			}
+			nodeApps = append(nodeApps, appCopy)
 		}
 	}
 
@@ -374,6 +402,9 @@ func (s *Server) handlePreviewInterpolate(w http.ResponseWriter, r *http.Request
 			"NODE_EXTERNAL_IP":  "172.20.229.1",
 			"NODE_EXTERNAL_IP6": "2001:db8::1",
 			"HAS_CUSTOM_SCRIPT": "0",
+			"NODE_TAGS":         "edge,vps",
+			"NODE_TAG_EDGE":     "1",
+			"NODE_TAG_VPS":      "1",
 			"NODE_IPV4":         "10.42.0.1",
 			"NODE_IPV6":         "fd42:a159:f9f0::1",
 		}

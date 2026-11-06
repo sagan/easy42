@@ -14,6 +14,7 @@ type App struct {
 	ID          string            `json:"id"`
 	Name        string            `json:"name"`
 	Description string            `json:"description,omitempty"`
+	URL         string            `json:"url,omitempty" yaml:"url,omitempty"`
 	AppType     string            `json:"app_type"` // "docker" or "systemd"
 	MainContent string            `json:"main_content"` // compose.yaml or service unit
 	EnvContent  string            `json:"env_content,omitempty"` // .env content KEY=VAL
@@ -21,6 +22,7 @@ type App struct {
 	TargetType  string            `json:"target_type,omitempty"` // "manual" (default), "all", or "tag"
 	TargetTag   string            `json:"target_tag,omitempty"` // Tag name when TargetType is "tag"
 	Nodes       []string          `json:"nodes"` // Node names assigned when TargetType is "manual" (can be empty)
+	Published   bool              `json:"published"`
 	Enabled     bool              `json:"enabled"`
 	CreatedAt   time.Time         `json:"created_at"`
 	UpdatedAt   time.Time         `json:"updated_at"`

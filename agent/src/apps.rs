@@ -297,8 +297,8 @@ impl AppsManager {
             .map_err(|e| format!("failed to write .env: {}", e))?;
         let _ = fs::set_permissions(&env_file, fs::Permissions::from_mode(0o600));
 
-        // Write auxiliary config files
-        self.write_config_files(&app_dir, &app.config_files)?;
+        // Sync auxiliary config files (write desired ones, remove orphaned ones)
+        self.sync_config_files(&app_dir, &app.config_files, &["compose.yaml", ".env"])?;
 
         // Execute docker compose
         let project_name = format!("ezapp-{}", app.name);
@@ -333,9 +333,13 @@ impl AppsManager {
     async fn apply_native_app(&self, app: &AppSpec) -> Result<(), String> {
         // Write auxiliary files to /etc/ezapp-data/<name>/
         let app_data_dir = PathBuf::from(APP_DATA_BASE_DIR).join(&app.name);
-        if !app.config_files.is_empty() {
+        if app.config_files.is_empty() {
+            if app_data_dir.is_dir() {
+                let _ = fs::remove_dir_all(&app_data_dir);
+            }
+        } else {
             fs::create_dir_all(&app_data_dir).map_err(|e| format!("failed to create data dir: {}", e))?;
-            self.write_config_files(&app_data_dir, &app.config_files)?;
+            self.sync_config_files(&app_data_dir, &app.config_files, &[])?;
         }
 
         match self.init_system {
@@ -422,6 +426,37 @@ impl AppsManager {
             let _ = run_shell(&format!("/etc/init.d/{} stop", service_name)).await;
         }
 
+        Ok(())
+    }
+
+    fn sync_config_files(
+        &self,
+        base_dir: &Path,
+        files: &[AppConfigFile],
+        excluded_rel_paths: &[&str],
+    ) -> Result<(), String> {
+        let mut desired_rel_paths = HashSet::new();
+        for file in files {
+            let rel_path = file.path.trim();
+            if !rel_path.is_empty() && !rel_path.contains("..") && !rel_path.starts_with('/') {
+                desired_rel_paths.insert(rel_path.to_string());
+            }
+        }
+
+        let mut existing_files = Vec::new();
+        read_auxiliary_files_recursive(base_dir, base_dir, &mut existing_files);
+        for (rel_path, _) in existing_files {
+            if excluded_rel_paths.contains(&rel_path.as_str()) {
+                continue;
+            }
+            if !desired_rel_paths.contains(&rel_path) {
+                let target_path = base_dir.join(&rel_path);
+                info!("Removing orphaned app config file: {:?}", target_path);
+                let _ = fs::remove_file(&target_path);
+            }
+        }
+
+        self.write_config_files(base_dir, files)?;
         Ok(())
     }
 

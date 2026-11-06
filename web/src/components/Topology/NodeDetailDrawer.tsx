@@ -524,9 +524,7 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
         </Box>
 
         {/* DN42 Info Card */}
-        {isDn42ExternalNode(node) && (
-          <Dn42InfoCard asn={node.asn} variant="drawer" />
-        )}
+        {isDn42ExternalNode(node) && <Dn42InfoCard asn={node.asn} variant="drawer" />}
 
         {/* Node Markdown Note Card */}
         <Box sx={{ p: 2, borderRadius: 2, backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
@@ -617,7 +615,7 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
                   minRows={3}
                   maxRows={10}
                   size="small"
-                  placeholder="Input arbitrary markdown format text..."
+                  placeholder="Input arbitrary markdown format text, use ```json block to store structured object..."
                   value={noteDraft}
                   onChange={(e) => setNoteDraft(e.target.value)}
                   disabled={savingNote}
@@ -1428,7 +1426,9 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
                   </Typography>
                   <Typography variant="caption" className="mono-font" sx={{ color: "#059669", fontWeight: 600 }}>
                     {[...status.wg_interfaces]
-                      .sort((a, b) => (a.name || "").localeCompare(b.name || "", undefined, { numeric: true, sensitivity: "base" }))
+                      .sort((a, b) =>
+                        (a.name || "").localeCompare(b.name || "", undefined, { numeric: true, sensitivity: "base" }),
+                      )
                       .map((w) => w.name)
                       .join(", ")}
                   </Typography>
@@ -1441,63 +1441,68 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
                   </Typography>
                   <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
                     {[...status.interfaces]
-                      .sort((a, b) => (a.name || "").localeCompare(b.name || "", undefined, { numeric: true, sensitivity: "base" }))
+                      .sort((a, b) =>
+                        (a.name || "").localeCompare(b.name || "", undefined, { numeric: true, sensitivity: "base" }),
+                      )
                       .map((inf) => {
-                      const isPrimary = ((inf.flags ?? 0) & 1) !== 0;
-                      const isPhysical = ((inf.flags ?? 0) & 2) !== 0;
-                      return (
-                        <Box
-                          key={inf.name}
-                          sx={{
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "space-between",
-                            p: 0.5,
-                            borderRadius: 1,
-                            bgcolor: isPrimary ? "#EFF6FF" : "#F8FAFC",
-                          }}
-                        >
-                          <Box sx={{ display: "flex", alignItems: "center", gap: 0.8 }}>
+                        const isPrimary = ((inf.flags ?? 0) & 1) !== 0;
+                        const isPhysical = ((inf.flags ?? 0) & 2) !== 0;
+                        return (
+                          <Box
+                            key={inf.name}
+                            sx={{
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "space-between",
+                              p: 0.5,
+                              borderRadius: 1,
+                              bgcolor: isPrimary ? "#EFF6FF" : "#F8FAFC",
+                            }}
+                          >
+                            <Box sx={{ display: "flex", alignItems: "center", gap: 0.8 }}>
+                              <Typography
+                                variant="caption"
+                                className="mono-font"
+                                sx={{ fontWeight: 700, color: "#0F172A" }}
+                              >
+                                {inf.name}
+                              </Typography>
+                              {isPrimary && (
+                                <Chip
+                                  label="Primary"
+                                  size="small"
+                                  sx={{
+                                    height: 16,
+                                    fontSize: "0.6rem",
+                                    bgcolor: "#DBEAFE",
+                                    color: "#1D4ED8",
+                                    fontWeight: 700,
+                                  }}
+                                />
+                              )}
+                              {isPhysical && (
+                                <Chip
+                                  label="Physical"
+                                  size="small"
+                                  sx={{
+                                    height: 16,
+                                    fontSize: "0.6rem",
+                                    bgcolor: "#E0E7FF",
+                                    color: "#4338CA",
+                                    fontWeight: 600,
+                                  }}
+                                />
+                              )}
+                            </Box>
                             <Typography
                               variant="caption"
-                              className="mono-font"
-                              sx={{ fontWeight: 700, color: "#0F172A" }}
+                              sx={{ color: inf.up ? "#059669" : "#94A3B8", fontWeight: 600 }}
                             >
-                              {inf.name}
+                              {inf.up ? "UP" : "DOWN"}
                             </Typography>
-                            {isPrimary && (
-                              <Chip
-                                label="Primary"
-                                size="small"
-                                sx={{
-                                  height: 16,
-                                  fontSize: "0.6rem",
-                                  bgcolor: "#DBEAFE",
-                                  color: "#1D4ED8",
-                                  fontWeight: 700,
-                                }}
-                              />
-                            )}
-                            {isPhysical && (
-                              <Chip
-                                label="Physical"
-                                size="small"
-                                sx={{
-                                  height: 16,
-                                  fontSize: "0.6rem",
-                                  bgcolor: "#E0E7FF",
-                                  color: "#4338CA",
-                                  fontWeight: 600,
-                                }}
-                              />
-                            )}
                           </Box>
-                          <Typography variant="caption" sx={{ color: inf.up ? "#059669" : "#94A3B8", fontWeight: 600 }}>
-                            {inf.up ? "UP" : "DOWN"}
-                          </Typography>
-                        </Box>
-                      );
-                    })}
+                        );
+                      })}
                   </Box>
                 </Box>
               )}

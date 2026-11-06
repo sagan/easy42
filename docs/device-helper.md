@@ -157,6 +157,8 @@ The controller generates a `node_ip.env` file from the node configuration and in
 | `NODE_EXTERNAL_IP`  | `node.external_ip`           | Added only when different from `NODE_IP`.                        |
 | `NODE_EXTERNAL_IP6` | `node.external_ip6`          | Added only when different from `NODE_IP6`.                       |
 | `HAS_CUSTOM_SCRIPT` | `node.custom_network_script` | `1` when a non-empty custom script is configured, otherwise `0`. |
+| `NODE_TAGS`          | `node.tags`                  | Comma-separated and sorted (alphabetical) node tags list.        |
+| `NODE_TAG_*`         | `node.tags`                  | Flag env set to `1` for each tag (e.g. `NODE_TAG_VPS=1`). Tag name converted to uppercase with invalid characters replaced with `_`. |
 | `NODE_DATA_*`       | `node.note`                  | Structured JSON data fields from node `Note` (up to 1 layer hierarchy). |
 
 If a custom script is configured, it is uploaded as `custom_network.sh` and embedded into the generated network hook.

@@ -34,6 +34,8 @@ import {
   TableContainer,
   Radio,
   RadioGroup,
+  Checkbox,
+  InputAdornment,
 } from "@mui/material";
 import {
   Layers,
@@ -46,6 +48,7 @@ import {
   Cpu,
   FileCode,
   FileText,
+  FileEdit,
   Sliders,
   CheckCircle2,
   Search,
@@ -70,7 +73,6 @@ import { Link as RouterLink } from "react-router-dom";
 import type { App, AppVariable, TranspilePreviewResponse } from "../types/api";
 import { dockerRunToCompose, cmdlineToSystemd, ensureSystemdEnvironmentFile } from "../utils/appGenerators";
 import { RenameAppModal } from "../components/Modals/RenameAppModal";
-
 
 const DOCKER_SAMPLE = `version: '3.8'
 services:
@@ -123,6 +125,16 @@ const INTERNAL_NODE_VARS = [
     key: "HAS_CUSTOM_SCRIPT",
     label: "${HAS_CUSTOM_SCRIPT}",
     tooltip: "'1' if custom network script configured, otherwise '0'",
+  },
+  {
+    key: "NODE_TAGS",
+    label: "${NODE_TAGS}",
+    tooltip: "Comma-separated, alphabetical list of node tags",
+  },
+  {
+    key: "NODE_TAG_*",
+    label: "${NODE_TAG_*}",
+    tooltip: "Tag flag env set to '1' for each tag (e.g. ${NODE_TAG_VPS})",
   },
   {
     key: "NODE_DATA_*",
@@ -179,16 +191,17 @@ export const AppsPage: React.FC = () => {
   // App Form Fields
   const [formName, setFormName] = useState("");
   const [formDesc, setFormDesc] = useState("");
+  const [formUrl, setFormUrl] = useState("");
   const [formType, setFormType] = useState<"docker" | "systemd">("docker");
   const [formMain, setFormMain] = useState(DOCKER_SAMPLE);
   const [formEnv, setFormEnv] = useState("PORT=80\nDOMAIN=\${DOMAIN:-localhost}\n");
   const [formTargetType, setFormTargetType] = useState<"manual" | "all" | "tag">("manual");
   const [formTargetTag, setFormTargetTag] = useState<string>("");
   const [formNodes, setFormNodes] = useState<string[]>([]);
+  const [formPublished, setFormPublished] = useState(true);
   const [formEnabled, setFormEnabled] = useState(true);
-  const [formFiles, setFormFiles] = useState<{ name: string; content: string }[]>([
-    { name: "config.json", content: '{\n  "domain": "${DOMAIN}",\n  "node": "${NODE_NAME}"\n}' },
-  ]);
+  const [togglingPublishedAppIds, setTogglingPublishedAppIds] = useState<Record<string, boolean>>({});
+  const [formFiles, setFormFiles] = useState<{ name: string; content: string }[]>([]);
 
   // Transpile preview state
   const [targetInit, setTargetInit] = useState<"procd" | "openrc">("procd");
@@ -222,7 +235,7 @@ export const AppsPage: React.FC = () => {
 
   // Saving / Delete states
   const [savingApp, setSavingApp] = useState(false);
-  const [deleteAppId, setDeleteAppId] = useState<string | null>(null);
+  const [deleteApp, setDeleteApp] = useState<App | null>(null);
 
   const managedNodes = useMemo(() => {
     return nodes.filter((n) => !n.is_external);
@@ -286,14 +299,16 @@ export const AppsPage: React.FC = () => {
     setEditingApp(null);
     setFormName("");
     setFormDesc("");
+    setFormUrl("");
     setFormType("docker");
     setFormMain(DOCKER_SAMPLE);
-    setFormEnv("PORT=80\nDOMAIN=${DOMAIN:-localhost}\n");
+    setFormEnv("PORT=8080\nIP=${NODE_IP}\n");
     setFormTargetType("manual");
     setFormTargetTag("");
     setFormNodes([]);
+    setFormPublished(true);
     setFormEnabled(true);
-    setFormFiles([{ name: "config.json", content: '{\n  "domain": "${DOMAIN}",\n  "node": "${NODE_NAME}"\n}' }]);
+    setFormFiles([]);
     setPreviewResult(null);
     setShowGenerator(false);
     setDockerRunCmd("");
@@ -311,12 +326,14 @@ export const AppsPage: React.FC = () => {
     setEditingApp(app);
     setFormName(app.name);
     setFormDesc(app.description || "");
+    setFormUrl(app.url || "");
     setFormType(app.app_type);
     setFormMain(app.main_content);
     setFormEnv(app.env_content || "");
     setFormTargetType(app.target_type || "manual");
     setFormTargetTag(app.target_tag || "");
     setFormNodes(app.nodes || []);
+    setFormPublished(app.published ?? false);
     setFormEnabled(app.enabled);
     const filesList = Object.entries(app.files || {}).map(([name, content]) => ({ name, content }));
     setFormFiles(filesList);
@@ -366,13 +383,12 @@ export const AppsPage: React.FC = () => {
       }
 
       const resolvedMainContent =
-        formType === "systemd"
-          ? ensureSystemdEnvironmentFile(formName.trim(), formMain)
-          : formMain;
+        formType === "systemd" ? ensureSystemdEnvironmentFile(formName.trim(), formMain) : formMain;
 
       const payload: Partial<App> = {
         name: formName.trim(),
         description: formDesc.trim(),
+        url: formUrl.trim(),
         app_type: formType,
         main_content: resolvedMainContent,
         env_content: formEnv,
@@ -380,17 +396,27 @@ export const AppsPage: React.FC = () => {
         target_type: formTargetType,
         target_tag: formTargetType === "tag" ? formTargetTag.trim() : "",
         nodes: formTargetType === "manual" ? formNodes : [],
+        published: formPublished,
         enabled: formEnabled,
       };
 
       if (editingApp) {
-        await api.updateApp(editingApp.id, payload);
+        const updated = await api.updateApp(editingApp.id, payload);
+        setApps((prev) => prev.map((a) => (a.id === editingApp.id ? updated : a)));
+        setStateToast({
+          message: `App "${updated.name}" updated successfully.`,
+          severity: "success",
+        });
       } else {
-        await api.createApp(payload);
+        const created = await api.createApp(payload);
+        setApps((prev) => [...prev, created]);
+        setStateToast({
+          message: `App "${created.name}" created successfully.`,
+          severity: "success",
+        });
       }
 
       setModalOpen(false);
-      await loadApps();
     } catch (e: any) {
       alert(e.message || "Failed to save application");
     } finally {
@@ -399,12 +425,55 @@ export const AppsPage: React.FC = () => {
   };
 
   const handleDeleteApp = async (id: string) => {
+    const targetApp = apps.find((a) => a.id === id);
+    const appName = targetApp ? targetApp.name : id;
     try {
       await api.deleteApp(id);
-      setDeleteAppId(null);
-      await loadApps();
+      setDeleteApp(null);
+      setApps((prev) => prev.filter((a) => a.id !== id));
+      setStateToast({
+        message: `App "${appName}" deleted successfully.`,
+        severity: "success",
+      });
     } catch (e: any) {
-      alert(e.message || "Failed to delete app");
+      setStateToast({
+        message: e.message || "Failed to delete app",
+        severity: "error",
+      });
+    }
+  };
+
+  const handleTogglePublished = async (appOrId: App | string) => {
+    const targetApp = typeof appOrId === "string" ? apps.find((a) => a.id === appOrId) : appOrId;
+    if (!targetApp) return;
+
+    const nextState = !targetApp.published;
+    const actionLabel = nextState ? "published" : "set to draft";
+
+    // Optimistically toggle state for this app only - no layout shift or full list re-render
+    setApps((prev) => prev.map((a) => (a.id === targetApp.id ? { ...a, published: nextState } : a)));
+    setTogglingPublishedAppIds((prev) => ({ ...prev, [targetApp.id]: true }));
+
+    try {
+      const updated = await api.toggleAppPublished(targetApp.id);
+      setApps((prev) => prev.map((a) => (a.id === targetApp.id ? updated : a)));
+      setStateToast({
+        message: `App "${targetApp.name}" ${actionLabel} successfully.`,
+        severity: "success",
+      });
+    } catch (e: any) {
+      // Revert optimistic change on failure
+      setApps((prev) => prev.map((a) => (a.id === targetApp.id ? { ...a, published: targetApp.published } : a)));
+      setStateToast({
+        message: e.message || `Failed to update published status for app "${targetApp.name}"`,
+        severity: "error",
+      });
+    } finally {
+      setTogglingPublishedAppIds((prev) => {
+        const next = { ...prev };
+        delete next[targetApp.id];
+        return next;
+      });
     }
   };
 
@@ -1092,13 +1161,75 @@ export const AppsPage: React.FC = () => {
                           </Box>
                         </Box>
 
-                        <Switch
-                          size="small"
-                          checked={app.enabled}
-                          disabled={Boolean(togglingAppIds[app.id])}
-                          onChange={() => handleToggleApp(app)}
-                          color="primary"
-                        />
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                          <FormControlLabel
+                            title={
+                              app.published
+                                ? "Published (app deployed to nodes on sync)"
+                                : "Draft (app will not be deployed to nodes)"
+                            }
+                            control={
+                              <Checkbox
+                                size="small"
+                                checked={Boolean(app.published)}
+                                disabled={Boolean(togglingPublishedAppIds[app.id])}
+                                onChange={() => handleTogglePublished(app)}
+                                sx={{
+                                  p: 0.4,
+                                  color: "#94A3B8",
+                                  "&.Mui-checked": { color: "#059669" },
+                                }}
+                              />
+                            }
+                            label={
+                              <Typography
+                                variant="caption"
+                                sx={{
+                                  fontWeight: 600,
+                                  fontSize: "0.75rem",
+                                  color: app.published ? "#059669" : "#64748B",
+                                  userSelect: "none",
+                                }}
+                              >
+                                Published
+                              </Typography>
+                            }
+                            sx={{ m: 0 }}
+                          />
+
+                          <FormControlLabel
+                            title={
+                              app.enabled ? "Enabled (service runs on node)" : "Disabled (service stopped on node)"
+                            }
+                            control={
+                              <Checkbox
+                                size="small"
+                                checked={app.enabled}
+                                disabled={Boolean(togglingAppIds[app.id])}
+                                onChange={() => handleToggleApp(app)}
+                                sx={{
+                                  p: 0.4,
+                                  color: "#94A3B8",
+                                  "&.Mui-checked": { color: "#4F46E5" },
+                                }}
+                              />
+                            }
+                            label={
+                              <Typography
+                                variant="caption"
+                                sx={{
+                                  fontWeight: 600,
+                                  fontSize: "0.75rem",
+                                  color: app.enabled ? "#4F46E5" : "#64748B",
+                                  userSelect: "none",
+                                }}
+                              >
+                                Enabled
+                              </Typography>
+                            }
+                            sx={{ m: 0 }}
+                          />
+                        </Box>
                       </Box>
 
                       {/* Description */}
@@ -1118,6 +1249,25 @@ export const AppsPage: React.FC = () => {
                       >
                         {app.description || "No description provided."}
                       </Typography>
+
+                      {app.url && (
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 0.6, mb: 1.5, color: "#2563EB" }}>
+                          <Globe size={13} style={{ flexShrink: 0 }} />
+                          <Typography
+                            variant="caption"
+                            sx={{
+                              fontWeight: 600,
+                              color: "#2563EB",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                              maxWidth: "100%",
+                            }}
+                          >
+                            {app.url}
+                          </Typography>
+                        </Box>
+                      )}
 
                       <Divider sx={{ my: 1.2, borderColor: "#F1F5F9" }} />
 
@@ -1285,27 +1435,47 @@ export const AppsPage: React.FC = () => {
 
                       {/* Footer Actions */}
                       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", pt: 1 }}>
-                        <Chip
-                          size="small"
-                          icon={
-                            togglingAppIds[app.id] ? (
-                              <CircularProgress size={10} sx={{ color: "inherit" }} />
-                            ) : app.enabled ? (
-                              <CheckCircle2 size={12} />
-                            ) : (
-                              <Square size={12} />
-                            )
-                          }
-                          label={app.enabled ? "Active" : "Stopped"}
-                          sx={{
-                            height: 22,
-                            fontSize: "0.72rem",
-                            fontWeight: 700,
-                            bgcolor: app.enabled ? "#ECFDF5" : "#F1F5F9",
-                            color: app.enabled ? "#059669" : "#64748B",
-                            "& .MuiChip-icon": { color: "inherit" },
-                          }}
-                        />
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 0.8 }}>
+                          {!app.published ? (
+                            <Tooltip title="Draft app will not be deployed to nodes">
+                              <Chip
+                                size="small"
+                                icon={<FileEdit size={12} />}
+                                label="Draft"
+                                sx={{
+                                  height: 22,
+                                  fontSize: "0.72rem",
+                                  fontWeight: 700,
+                                  bgcolor: "#FEF3C7",
+                                  color: "#D97706",
+                                  "& .MuiChip-icon": { color: "inherit" },
+                                }}
+                              />
+                            </Tooltip>
+                          ) : (
+                            <Chip
+                              size="small"
+                              icon={
+                                togglingAppIds[app.id] ? (
+                                  <CircularProgress size={10} sx={{ color: "inherit" }} />
+                                ) : app.enabled ? (
+                                  <CheckCircle2 size={12} />
+                                ) : (
+                                  <Square size={12} />
+                                )
+                              }
+                              label={app.enabled ? "Active" : "Stopped"}
+                              sx={{
+                                height: 22,
+                                fontSize: "0.72rem",
+                                fontWeight: 700,
+                                bgcolor: app.enabled ? "#ECFDF5" : "#F1F5F9",
+                                color: app.enabled ? "#059669" : "#64748B",
+                                "& .MuiChip-icon": { color: "inherit" },
+                              }}
+                            />
+                          )}
+                        </Box>
 
                         <Box sx={{ display: "flex", gap: 0.5 }}>
                           <Tooltip title="Rename App">
@@ -1337,7 +1507,7 @@ export const AppsPage: React.FC = () => {
                             </IconButton>
                           </Tooltip>
                           <Tooltip title="Delete App">
-                            <IconButton size="small" onClick={() => setDeleteAppId(app.id)} sx={{ color: "#EF4444" }}>
+                            <IconButton size="small" onClick={() => setDeleteApp(app)} sx={{ color: "#EF4444" }}>
                               <Trash2 size={16} />
                             </IconButton>
                           </Tooltip>
@@ -1380,7 +1550,8 @@ export const AppsPage: React.FC = () => {
               </Typography>
               <Typography variant="body2" sx={{ color: "#4338CA", fontSize: "0.85rem", lineHeight: 1.5 }}>
                 Variables are cluster-wide key-value entries automatically substituted in your <code>.env</code> files
-                and auxiliary config files. Systemd units and Docker Compose manifests are excluded to prevent conflicts with their native variable interpolation.
+                and auxiliary config files. Systemd units and Docker Compose manifests are excluded to prevent conflicts
+                with their native variable interpolation.
               </Typography>
               <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1.5, mt: 1.2 }}>
                 <Chip
@@ -1400,7 +1571,7 @@ export const AppsPage: React.FC = () => {
                 />
                 <Chip
                   size="small"
-                  label="Node Context: ${NODE_NAME}, ${NODE_INTERFACE}, ${NODE_IP}, ${NODE_IP6}, ${NODE_EXTERNAL_IP}, ${NODE_EXTERNAL_IP6}, ${HAS_CUSTOM_SCRIPT}, ${NODE_DATA_*}"
+                  label="Node Context: ${NODE_NAME}, ${NODE_INTERFACE}, ${NODE_IP}, ${NODE_IP6}, ${NODE_EXTERNAL_IP}, ${NODE_EXTERNAL_IP6}, ${HAS_CUSTOM_SCRIPT}, ${NODE_TAGS}, ${NODE_TAG_*}, ${NODE_DATA_*}"
                   sx={{ bgcolor: "#FFFFFF", color: "#3730A3", fontWeight: 700, fontSize: "0.75rem" }}
                 />
               </Box>
@@ -1734,22 +1905,22 @@ export const AppsPage: React.FC = () => {
       </Dialog>
 
       {/* Delete App Confirmation Dialog */}
-      <Dialog open={!!deleteAppId} onClose={() => setDeleteAppId(null)} maxWidth="xs" fullWidth>
-        <DialogTitle sx={{ fontWeight: 700 }}>Confirm Delete {deleteAppId}</DialogTitle>
+      <Dialog open={!!deleteApp} onClose={() => setDeleteApp(null)} maxWidth="xs" fullWidth>
+        <DialogTitle sx={{ fontWeight: 700 }}>Confirm Delete {deleteApp?.name}</DialogTitle>
         <DialogContent>
           <Typography variant="body2" sx={{ color: "#475569" }}>
-            Are you sure you want to delete this workload app {deleteAppId}? Easy42 agents will immediately stop the
+            Are you sure you want to delete this workload app {deleteApp?.name}? Easy42 agents will immediately stop the
             service, remove its configuration, and clean up orphaned files on all nodes.
           </Typography>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button onClick={() => setDeleteAppId(null)} sx={{ textTransform: "none", color: "#64748B" }}>
+          <Button onClick={() => setDeleteApp(null)} sx={{ textTransform: "none", color: "#64748B" }}>
             Cancel
           </Button>
           <Button
             variant="contained"
             color="error"
-            onClick={() => deleteAppId && handleDeleteApp(deleteAppId)}
+            onClick={() => deleteApp && handleDeleteApp(deleteApp.id)}
             sx={{ textTransform: "none", fontWeight: 600 }}
           >
             Delete App
@@ -1768,7 +1939,10 @@ export const AppsPage: React.FC = () => {
         }}
         onAppRenamed={async (_oldName, updatedApp) => {
           setApps((prev) => prev.map((a) => (a.id === updatedApp.id ? updatedApp : a)));
-          await loadApps();
+          setStateToast({
+            message: `App renamed to "${updatedApp.name}" successfully.`,
+            severity: "success",
+          });
         }}
       />
 
@@ -1950,6 +2124,22 @@ export const AppsPage: React.FC = () => {
                 placeholder="Brief description of what this workload does..."
                 value={formDesc}
                 onChange={(e) => setFormDesc(e.target.value)}
+              />
+
+              <TextField
+                fullWidth
+                label="Homepage URL (Optional)"
+                placeholder="e.g. http://${NODE_IP}:8080 or https://${DOMAIN}"
+                helperText="Optional homepage/dashboard URL displayed in Node Details. Supports variables like ${NODE_IP}, ${NODE_NAME}, and custom variables."
+                value={formUrl}
+                onChange={(e) => setFormUrl(e.target.value)}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <Globe size={18} color="#64748B" />
+                    </InputAdornment>
+                  ),
+                }}
               />
 
               <Box sx={{ p: 2, bgcolor: "#F8FAFC", borderRadius: "10px", border: "1px solid #E2E8F0" }}>
@@ -2240,21 +2430,44 @@ export const AppsPage: React.FC = () => {
                 )}
               </Box>
 
-              <FormControlLabel
-                control={
-                  <Switch checked={formEnabled} onChange={(e) => setFormEnabled(e.target.checked)} color="primary" />
-                }
-                label={
-                  <Box>
-                    <Typography variant="body2" sx={{ fontWeight: 600, color: "#1E293B" }}>
-                      Enable App immediately
-                    </Typography>
-                    <Typography variant="caption" sx={{ color: "#64748B" }}>
-                      When enabled, agents will start or restart the service immediately upon sync.
-                    </Typography>
-                  </Box>
-                }
-              />
+              <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, mt: 1 }}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={formPublished}
+                      onChange={(e) => setFormPublished(e.target.checked)}
+                      color="success"
+                    />
+                  }
+                  label={
+                    <Box>
+                      <Typography variant="body2" sx={{ fontWeight: 600, color: "#1E293B" }}>
+                        Published
+                      </Typography>
+                      <Typography variant="caption" sx={{ color: "#64748B" }}>
+                        When published, this app is deployed to target nodes during topology synchronization. If
+                        disabled, it stays as a draft and is not deployed.
+                      </Typography>
+                    </Box>
+                  }
+                />
+
+                <FormControlLabel
+                  control={
+                    <Switch checked={formEnabled} onChange={(e) => setFormEnabled(e.target.checked)} color="primary" />
+                  }
+                  label={
+                    <Box>
+                      <Typography variant="body2" sx={{ fontWeight: 600, color: "#1E293B" }}>
+                        Enabled
+                      </Typography>
+                      <Typography variant="caption" sx={{ color: "#64748B" }}>
+                        When enabled, agents will actively run the service upon synchronization.
+                      </Typography>
+                    </Box>
+                  }
+                />
+              </Box>
             </Box>
           )}
 
@@ -2672,6 +2885,16 @@ export const AppsPage: React.FC = () => {
               </Typography>
               <Typography variant="body2" sx={{ color: "#64748B", fontSize: "0.82rem" }}>
                 Standard KEY=VALUE pairs. Variables like <code>{"${DOMAIN}"}</code> will be substituted automatically.
+                Check{" "}
+                <a
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  href="https://github.com/fluxcd/pkg/tree/main/envsubst"
+                  style={{ textDecoration: "none" }}
+                >
+                  envsubst
+                </a>{" "}
+                for more.
               </Typography>
 
               <TextField

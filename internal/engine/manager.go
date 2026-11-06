@@ -3866,6 +3866,7 @@ func (m *Manager) PlanSyncWithScope(scope string, nodeNames ...string) ([]config
 			}
 
 			// 3. Auxiliary config files
+			desiredAuxFiles := make(map[string]bool)
 			for _, f := range spec.ConfigFiles {
 				if f == nil {
 					continue
@@ -3874,6 +3875,7 @@ func (m *Manager) PlanSyncWithScope(scope string, nodeNames ...string) ([]config
 				if spec.AppType == agentpb.AppType_DOCKER_COMPOSE {
 					auxTargetFile = fmt.Sprintf("/etc/ezappc/%s/%s", spec.Name, f.Path)
 				}
+				desiredAuxFiles[auxTargetFile] = true
 				auxContent := string(f.Content)
 				auxNeedsApply := true
 				auxStatus := "pending"
@@ -3913,6 +3915,42 @@ func (m *Manager) PlanSyncWithScope(scope string, nodeNames ...string) ([]config
 					NeedsApply:  auxNeedsApply,
 					Status:      auxStatus,
 					DiffStatus:  auxDiffStatus,
+				})
+			}
+
+			// 4. Check for orphaned auxiliary config files previously deployed for this app
+			auxDirPrefix := fmt.Sprintf("/etc/ezapp-data/%s/", spec.Name)
+			if spec.AppType == agentpb.AppType_DOCKER_COMPOSE {
+				auxDirPrefix = fmt.Sprintf("/etc/ezappc/%s/", spec.Name)
+			}
+			var orphanedAuxFiles []string
+			for deployedFilePath := range deployedAppFiles {
+				if strings.HasPrefix(deployedFilePath, auxDirPrefix) {
+					rel := strings.TrimPrefix(deployedFilePath, auxDirPrefix)
+					if spec.AppType == agentpb.AppType_DOCKER_COMPOSE && (rel == "compose.yaml" || rel == ".env") {
+						continue
+					}
+					if !desiredAuxFiles[deployedFilePath] {
+						orphanedAuxFiles = append(orphanedAuxFiles, deployedFilePath)
+					}
+				}
+			}
+			sort.Strings(orphanedAuxFiles)
+
+			for _, orphanedPath := range orphanedAuxFiles {
+				curF := deployedAppFiles[orphanedPath]
+				rel := strings.TrimPrefix(orphanedPath, auxDirPrefix)
+				actions = append(actions, config.SyncAction{
+					NodeName:    node.Name,
+					Host:        node.Host,
+					Type:        config.ActionDeleteApp,
+					Interface:   spec.Name,
+					TargetFile:  orphanedPath,
+					Diff:        generateSimpleDiff(curF.Content, ""),
+					Description: fmt.Sprintf("Remove orphaned app '%s' config file '%s' from %s", spec.Name, rel, node.Name),
+					NeedsApply:  true,
+					Status:      "pending",
+					DiffStatus:  "delete",
 				})
 			}
 		}
@@ -5591,7 +5629,45 @@ func (m *Manager) executeAgentSyncAction(act config.SyncAction, res *config.Sync
 		res.Success = true
 		if act.Type == config.ActionDeleteApp {
 			res.Output = fmt.Sprintf("Removed %s on %s", filepath.Base(act.TargetFile), act.NodeName)
-			_ = m.stateStore.RemoveAppState(act.NodeName, act.Interface)
+			if m.agentHub != nil {
+				cmdCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				_, _ = m.agentHub.SendCommand(cmdCtx, act.NodeName, &agentpb.CommandRequest{
+					Command: &agentpb.CommandRequest_DeleteConfig{
+						DeleteConfig: &agentpb.DeleteConfigFile{
+							Path: act.TargetFile,
+						},
+					},
+				})
+				cancel()
+			}
+
+			isWholeAppDelete := strings.HasSuffix(act.TargetFile, ".service") ||
+				strings.HasSuffix(act.TargetFile, "compose.yaml") ||
+				strings.HasPrefix(act.TargetFile, "/etc/init.d/ezapp-")
+
+			if isWholeAppDelete {
+				_ = m.stateStore.RemoveAppState(act.NodeName, act.Interface)
+				if m.agentHub != nil {
+					m.agentHub.RemoveAppHash(act.NodeName, act.Interface)
+					m.agentHub.RemoveAppFile(act.NodeName, act.TargetFile)
+				}
+			} else {
+				if m.agentHub != nil {
+					m.agentHub.RemoveAppFile(act.NodeName, act.TargetFile)
+				}
+				specs, err := m.BuildAppSpecsForNode(act.NodeName)
+				if err == nil {
+					for _, s := range specs {
+						if s.Name == act.Interface {
+							_ = m.stateStore.UpdateAppState(act.NodeName, act.Host, s.Name, s.Sha256Hash, time.Now())
+							if m.agentHub != nil {
+								m.agentHub.SetAppHash(act.NodeName, s.Name, s.Sha256Hash)
+							}
+							break
+						}
+					}
+				}
+			}
 		} else {
 			res.Output = fmt.Sprintf("Synchronized %s on %s", filepath.Base(act.TargetFile), act.NodeName)
 			specs, err := m.BuildAppSpecsForNode(act.NodeName)
@@ -5599,6 +5675,14 @@ func (m *Manager) executeAgentSyncAction(act config.SyncAction, res *config.Sync
 				for _, s := range specs {
 					if s.Name == act.Interface {
 						_ = m.stateStore.UpdateAppState(act.NodeName, act.Host, s.Name, s.Sha256Hash, time.Now())
+						if m.agentHub != nil {
+							m.agentHub.SetAppHash(act.NodeName, s.Name, s.Sha256Hash)
+							m.agentHub.SetAppFile(act.NodeName, act.TargetFile, agent.ProbeConfigFile{
+								Path:    act.TargetFile,
+								Content: act.FileContent,
+								Hash:    config.HashConfig(compiler.NormalizeConfig(act.FileContent)),
+							})
+						}
 						break
 					}
 				}

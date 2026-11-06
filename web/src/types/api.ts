@@ -970,6 +970,7 @@ export interface App {
   id: string;
   name: string;
   description?: string;
+  url?: string;
   app_type: "docker" | "systemd";
   main_content: string;
   env_content?: string;
@@ -977,6 +978,7 @@ export interface App {
   target_type?: AppTargetType;
   target_tag?: string;
   nodes?: string[];
+  published?: boolean;
   enabled: boolean;
   created_at: string;
   updated_at: string;

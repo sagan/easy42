@@ -170,6 +170,29 @@ func (h *Hub) GetAppHashes(nodeName string) map[string]string {
 	return res
 }
 
+// SetAppHash updates the cached deployed hash of a specific app on a node
+func (h *Hub) SetAppHash(nodeName, appName, hash string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.appHashes == nil {
+		h.appHashes = make(map[string]map[string]string)
+	}
+	if h.appHashes[nodeName] == nil {
+		h.appHashes[nodeName] = make(map[string]string)
+	}
+	h.appHashes[nodeName][appName] = hash
+}
+
+// RemoveAppHash removes the cached deployed hash of a specific app on a node
+func (h *Hub) RemoveAppHash(nodeName, appName string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.appHashes == nil || h.appHashes[nodeName] == nil {
+		return
+	}
+	delete(h.appHashes[nodeName], appName)
+}
+
 // GetAppHash returns the cached deployed hash of a specific app on a node
 func (h *Hub) GetAppHash(nodeName, appName string) string {
 	h.mu.RLock()
@@ -192,6 +215,29 @@ func (h *Hub) SetAppFiles(nodeName string, files map[string]ProbeConfigFile) {
 		cp[k] = v
 	}
 	h.appFiles[nodeName] = cp
+}
+
+// SetAppFile updates or adds a single cached deployed app file for a node
+func (h *Hub) SetAppFile(nodeName string, filePath string, file ProbeConfigFile) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.appFiles == nil {
+		h.appFiles = make(map[string]map[string]ProbeConfigFile)
+	}
+	if h.appFiles[nodeName] == nil {
+		h.appFiles[nodeName] = make(map[string]ProbeConfigFile)
+	}
+	h.appFiles[nodeName][filePath] = file
+}
+
+// RemoveAppFile removes a cached deployed app file for a node
+func (h *Hub) RemoveAppFile(nodeName string, filePath string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.appFiles == nil || h.appFiles[nodeName] == nil {
+		return
+	}
+	delete(h.appFiles[nodeName], filePath)
 }
 
 // GetAppFiles returns a copy of the cached deployed app files for a node

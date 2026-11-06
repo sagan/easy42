@@ -15,6 +15,7 @@ func TestBuildConfigureIPPayload(t *testing.T) {
 		IP6:         "fd42:a159:f9f0:8000::c8/128",
 		ExternalIP:  "172.20.229.1",
 		ExternalIP6: "fd42:a159:f9f0::1",
+		Tags:        []string{"vps", "lan-1", "prod"},
 	}
 
 	payload := buildConfigureIPPayload(node)
@@ -49,6 +50,19 @@ func TestBuildConfigureIPPayload(t *testing.T) {
 
 	if !strings.Contains(envStr, `HAS_CUSTOM_SCRIPT="0"`) {
 		t.Errorf("expected HAS_CUSTOM_SCRIPT=\"0\" in env, got: %s", envStr)
+	}
+
+	if !strings.Contains(envStr, `NODE_TAGS="lan-1,prod,vps"`) {
+		t.Errorf("expected NODE_TAGS=\"lan-1,prod,vps\" in env, got: %s", envStr)
+	}
+	if !strings.Contains(envStr, `NODE_TAG_VPS="1"`) {
+		t.Errorf("expected NODE_TAG_VPS=\"1\" in env, got: %s", envStr)
+	}
+	if !strings.Contains(envStr, `NODE_TAG_LAN_1="1"`) {
+		t.Errorf("expected NODE_TAG_LAN_1=\"1\" in env, got: %s", envStr)
+	}
+	if !strings.Contains(envStr, `NODE_TAG_PROD="1"`) {
+		t.Errorf("expected NODE_TAG_PROD=\"1\" in env, got: %s", envStr)
 	}
 
 	// Verify dynamic status.sh and run.sh

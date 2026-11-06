@@ -348,7 +348,8 @@ chmod +x ~/.config/easy42/tasks/hello_world/*.sh`;
             their working directory, with helper utilities like <code>detect_os</code>, <code>pkg_install</code>, and{" "}
             <code>$SUDO</code>. Current node info are also exposed in common.sh through environment variables:{" "}
             <code>NODE_NAME</code>, <code>NODE_INTERFACE</code>, <code>NODE_IP</code>, <code>NODE_IP6</code>,{" "}
-            <code>NODE_EXTERNAL_IP</code>, <code>NODE_EXTERNAL_IP6</code>, <code>NODE_DATA_*</code>.
+            <code>NODE_EXTERNAL_IP</code>, <code>NODE_EXTERNAL_IP6</code>, <code>NODE_TAGS</code>,{" "}
+            <code>NODE_TAG_*</code>, <code>NODE_DATA_*</code>.
           </Typography>
         </Box>
       </Paper>

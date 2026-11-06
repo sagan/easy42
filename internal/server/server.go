@@ -320,6 +320,7 @@ func New(cfg Config) *Server {
 			r.Put("/apps/{id}", s.handleUpdateApp)
 			r.Delete("/apps/{id}", s.handleDeleteApp)
 			r.Post("/apps/{id}/toggle", s.handleToggleApp)
+			r.Post("/apps/{id}/toggle-published", s.handleToggleAppPublished)
 			r.Post("/apps/{id}/rename", s.handleRenameApp)
 			r.Put("/apps/{id}/rename", s.handleRenameApp)
 			r.Post("/apps/{id}/duplicate", s.handleDuplicateApp)

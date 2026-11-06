@@ -16,6 +16,7 @@ import {
   Select,
   MenuItem,
   FormControl,
+  Tooltip,
 } from "@mui/material";
 import {
   Layers,
@@ -30,6 +31,8 @@ import {
   XCircle,
   Box as BoxIcon,
   Cpu,
+  ExternalLink,
+  Globe,
 } from "lucide-react";
 import { Link as RouterLink } from "react-router-dom";
 import { api } from "../../api/client";
@@ -60,6 +63,19 @@ export const NodeAppsTab: React.FC<NodeAppsTabProps> = ({ nodeName }) => {
   const [logContent, setLogContent] = useState<string>("");
   const [loadingLogs, setLoadingLogs] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [copiedUrl, setCopiedUrl] = useState<string | null>(null);
+
+  const isHttpUrl = (url?: string): boolean => {
+    if (!url) return false;
+    const trimmed = url.trim();
+    return /^https?:\/\//i.test(trimmed);
+  };
+
+  const copyUrl = (text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedUrl(text);
+    setTimeout(() => setCopiedUrl(null), 2000);
+  };
 
   const loadNodeApps = async (isManualRefresh = false) => {
     try {
@@ -315,6 +331,74 @@ export const NodeAppsTab: React.FC<NodeAppsTabProps> = ({ nodeName }) => {
                         <Typography variant="caption" sx={{ color: "#94A3B8", display: "block", mt: 0.2 }}>
                           Status: {st.status_text}
                         </Typography>
+                      )}
+
+                      {app.url && (
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 0.6, mt: 0.8, flexWrap: "wrap" }}>
+                          {isHttpUrl(app.url) ? (
+                            <Box
+                              component="a"
+                              href={app.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              sx={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: 0.5,
+                                color: "#2563EB",
+                                textDecoration: "none",
+                                fontSize: "0.78rem",
+                                fontWeight: 600,
+                                bgcolor: "#EFF6FF",
+                                px: 1,
+                                py: 0.3,
+                                borderRadius: "6px",
+                                border: "1px solid #BFDBFE",
+                                transition: "all 0.15s ease",
+                                "&:hover": {
+                                  bgcolor: "#DBEAFE",
+                                  textDecoration: "underline",
+                                },
+                              }}
+                            >
+                              <Globe size={13} style={{ flexShrink: 0 }} />
+                              <span style={{ wordBreak: "break-all" }}>{app.url}</span>
+                              <ExternalLink size={12} style={{ flexShrink: 0 }} />
+                            </Box>
+                          ) : (
+                            <Box
+                              sx={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: 0.5,
+                                color: "#475569",
+                                fontSize: "0.78rem",
+                                fontWeight: 500,
+                                bgcolor: "#F1F5F9",
+                                px: 1,
+                                py: 0.3,
+                                borderRadius: "6px",
+                                border: "1px solid #E2E8F0",
+                              }}
+                            >
+                              <Globe size={13} style={{ flexShrink: 0 }} />
+                              <span style={{ wordBreak: "break-all" }}>{app.url}</span>
+                            </Box>
+                          )}
+                          <Tooltip title={copiedUrl === app.url ? "Copied!" : "Copy URL"} placement="top">
+                            <IconButton
+                              size="small"
+                              onClick={() => copyUrl(app.url!)}
+                              sx={{
+                                p: 0.4,
+                                color: copiedUrl === app.url ? "#16A34A" : "#94A3B8",
+                                "&:hover": { color: "#334155" },
+                              }}
+                            >
+                              {copiedUrl === app.url ? <Check size={13} /> : <Copy size={13} />}
+                            </IconButton>
+                          </Tooltip>
+                        </Box>
                       )}
                     </Box>
                   </Box>

@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"easy42/internal/agent"
 	agentpb "easy42/internal/agent/proto"
 	"easy42/internal/apps"
 	"easy42/internal/config"
@@ -32,14 +31,7 @@ func (m *Manager) setupAgentAppsListeners() {
 		return
 	}
 
-	// 1. When agent registers, immediately push its assigned apps
-	m.agentHub.OnRegister(func(conn *agent.AgentConnection) {
-		if !conn.DisableApps() {
-			_ = m.SyncAppsToNode(conn.NodeName())
-		}
-	})
-
-	// 2. When telemetry report arrives, cache reported app statuses
+	// When telemetry report arrives, cache reported app statuses
 	m.agentHub.OnTelemetry(func(nodeName string, t *agentpb.TelemetryReport) {
 		if t == nil || len(t.Apps) == 0 {
 			return
@@ -168,9 +160,6 @@ func (m *Manager) SaveApp(app config.App) (config.App, error) {
 		return app, fmt.Errorf("failed to save config: %w", err)
 	}
 
-	// Synchronize apps to connected agents
-	m.SyncAppsToAgents()
-
 	return app, nil
 }
 
@@ -206,7 +195,6 @@ func (m *Manager) RenameApp(appID string, newName string) (config.App, error) {
 		if err := m.store.Save(cfg); err != nil {
 			return config.App{}, fmt.Errorf("failed to save config: %w", err)
 		}
-		m.SyncAppsToAgents()
 		return cfg.Apps[appIndex], nil
 	}
 
@@ -233,7 +221,6 @@ func (m *Manager) RenameApp(appID string, newName string) (config.App, error) {
 		return config.App{}, fmt.Errorf("failed to save config: %w", err)
 	}
 
-	m.SyncAppsToAgents()
 	return cfg.Apps[appIndex], nil
 }
 
@@ -309,11 +296,13 @@ func (m *Manager) DuplicateApp(appID string) (config.App, error) {
 		ID:          newID,
 		Name:        newName,
 		Description: original.Description,
+		URL:         original.URL,
 		AppType:     original.AppType,
 		MainContent: original.MainContent,
 		EnvContent:  original.EnvContent,
 		TargetType:  original.TargetType,
 		TargetTag:   original.TargetTag,
+		Published:   false, // Draft
 		Enabled:     false, // Forced to disabled state
 		CreatedAt:   now,
 		UpdatedAt:   now,
@@ -344,7 +333,6 @@ func (m *Manager) DuplicateApp(appID string) (config.App, error) {
 		return config.App{}, fmt.Errorf("failed to save config: %w", err)
 	}
 
-	m.SyncAppsToAgents()
 	return duplicated, nil
 }
 
@@ -374,7 +362,6 @@ func (m *Manager) DeleteApp(appID string) error {
 		return fmt.Errorf("failed to save config: %w", err)
 	}
 
-	m.SyncAppsToAgents()
 	return nil
 }
 
@@ -405,7 +392,36 @@ func (m *Manager) ToggleApp(appID string) (config.App, error) {
 		return config.App{}, fmt.Errorf("failed to save config: %w", err)
 	}
 
-	m.SyncAppsToAgents()
+	return toggled, nil
+}
+
+// ToggleAppPublished toggles the published state of an app
+func (m *Manager) ToggleAppPublished(appID string) (config.App, error) {
+	cfg, err := m.store.Load()
+	if err != nil {
+		return config.App{}, fmt.Errorf("failed to load config: %w", err)
+	}
+
+	var toggled config.App
+	found := false
+	for i, a := range cfg.Apps {
+		if a.ID == appID {
+			cfg.Apps[i].Published = !cfg.Apps[i].Published
+			cfg.Apps[i].UpdatedAt = time.Now()
+			toggled = cfg.Apps[i]
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		return config.App{}, fmt.Errorf("app '%s' not found", appID)
+	}
+
+	if err := m.store.Save(cfg); err != nil {
+		return config.App{}, fmt.Errorf("failed to save config: %w", err)
+	}
+
 	return toggled, nil
 }
 
@@ -456,8 +472,6 @@ func (m *Manager) SaveAppVariable(variable config.AppVariable) (config.AppVariab
 		return variable, fmt.Errorf("failed to save config: %w", err)
 	}
 
-	// Trigger sync so apps using this variable get re-rendered and updated
-	m.SyncAppsToAgents()
 	return variable, nil
 }
 
@@ -487,7 +501,6 @@ func (m *Manager) DeleteAppVariable(key string) error {
 		return fmt.Errorf("failed to save config: %w", err)
 	}
 
-	m.SyncAppsToAgents()
 	return nil
 }
 
@@ -524,6 +537,9 @@ func (m *Manager) BuildAppSpecsForNode(nodeName string) ([]*agentpb.AppSpec, err
 
 	var specs []*agentpb.AppSpec
 	for _, rawApp := range cfg.Apps {
+		if !rawApp.Published {
+			continue
+		}
 		if !config.AppTargetsNode(rawApp, targetNode, nodeName) {
 			continue
 		}

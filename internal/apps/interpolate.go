@@ -3,6 +3,7 @@ package apps
 import (
 	"math"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -74,6 +75,8 @@ func formatEnvVal(v any) (string, bool) {
 // - NODE_EXTERNAL_IP: node.external_ip (CIDR suffixes stripped, added only when different from NODE_IP)
 // - NODE_EXTERNAL_IP6: node.external_ip6 (CIDR suffixes stripped, added only when different from NODE_IP6)
 // - HAS_CUSTOM_SCRIPT: "1" when node.custom_network_script is non-empty, otherwise "0"
+// - NODE_TAGS: The comma separated and sorted (alphabetical order) node tags list
+// - NODE_TAG_*: The flag env which is set for each node tag (e.g. NODE_TAG_VPS=1)
 // - NODE_DATA_*: Structured JSON data fields from node Note (up to 1 layer hierarchy)
 // Also provides backward-compatible aliases:
 // - NODE_IPV4 -> NODE_IP
@@ -110,6 +113,25 @@ func BuildNodeContextVars(n config.Node) map[string]string {
 		res["HAS_CUSTOM_SCRIPT"] = "1"
 	} else {
 		res["HAS_CUSTOM_SCRIPT"] = "0"
+	}
+
+	// Comma-separated sorted tags and NODE_TAG_* flag envs
+	var cleanTags []string
+	seenTags := make(map[string]bool)
+	for _, t := range n.Tags {
+		trimmed := strings.TrimSpace(t)
+		if trimmed != "" && !seenTags[trimmed] {
+			seenTags[trimmed] = true
+			cleanTags = append(cleanTags, trimmed)
+		}
+	}
+	sort.Strings(cleanTags)
+	res["NODE_TAGS"] = strings.Join(cleanTags, ",")
+	for _, t := range cleanTags {
+		tagKey := sanitizeEnvKey(t)
+		if tagKey != "" {
+			res["NODE_TAG_"+tagKey] = "1"
+		}
 	}
 
 	// Structured JSON data fields from Note (up to 1 layer hierarchy)
@@ -269,6 +291,9 @@ func VariablesToMap(vars []config.AppVariable) map[string]string {
 // Systemd unit and Docker Compose manifests (MainContent) are excluded to prevent conflicts with their native ${VAR} variable interpolation syntax.
 func InterpolateApp(app config.App, globalVars map[string]string, contextVars map[string]string) config.App {
 	interpolated := app
+	if app.URL != "" {
+		interpolated.URL = InterpolateVariables(app.URL, globalVars, contextVars)
+	}
 	interpolated.EnvContent = InterpolateVariables(app.EnvContent, globalVars, contextVars)
 
 	if len(app.Files) > 0 {

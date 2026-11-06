@@ -661,6 +661,10 @@ export const api = {
     request<App>(`/apps/${encodeURIComponent(id)}/toggle`, {
       method: "POST",
     }),
+  toggleAppPublished: (id: string) =>
+    request<App>(`/apps/${encodeURIComponent(id)}/toggle-published`, {
+      method: "POST",
+    }),
   renameApp: (id: string, newName: string) =>
     request<App>(`/apps/${encodeURIComponent(id)}/rename`, {
       method: "POST",

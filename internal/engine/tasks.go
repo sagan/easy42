@@ -321,6 +321,26 @@ func buildNodeEnv(n config.Node) string {
 		fmt.Fprintf(&envBuf, "HAS_CUSTOM_SCRIPT=\"0\"\n")
 	}
 
+	// Comma-separated sorted tags and NODE_TAG_* flag envs
+	var cleanTags []string
+	seenTags := make(map[string]bool)
+	for _, t := range n.Tags {
+		trimmed := strings.TrimSpace(t)
+		if trimmed != "" && !seenTags[trimmed] {
+			seenTags[trimmed] = true
+			cleanTags = append(cleanTags, trimmed)
+		}
+	}
+	sort.Strings(cleanTags)
+	nodeTags := strings.Join(cleanTags, ",")
+	fmt.Fprintf(&envBuf, "NODE_TAGS=%q\n", nodeTags)
+	for _, t := range cleanTags {
+		tagKey := sanitizeEnvKey(t)
+		if tagKey != "" {
+			fmt.Fprintf(&envBuf, "NODE_TAG_%s=\"1\"\n", tagKey)
+		}
+	}
+
 	injectNodeDataEnv(&envBuf, n.Note)
 
 	return envBuf.String()

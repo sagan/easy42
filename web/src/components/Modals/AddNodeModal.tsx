@@ -1227,7 +1227,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                       minRows={3}
                       maxRows={8}
                       size="small"
-                      placeholder="Arbitrary markdown text (e.g. server location, rack ID, maintenance procedures)..."
+                      placeholder="Arbitrary markdown text, use ```json block to store structured object..."
                       value={note}
                       onChange={(e) => setNote(e.target.value)}
                       disabled={saving}

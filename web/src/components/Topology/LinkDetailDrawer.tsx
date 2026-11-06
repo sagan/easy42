@@ -719,9 +719,12 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
                 />
               </Box>
               <Typography variant="caption" sx={{ color: "#6B21A8", display: "block", lineHeight: 1.4 }}>
-                Data plane {link.from.interface && link.to.interface ? `interfaces (${link.from.interface} / ${link.to.interface})` : `interface (${link.from.interface || link.to.interface})`} manually created and managed by
-                you. easy42 automatically manages BIRD BGP routing sessions and adds interfaces to the{" "}
-                <code>easy42_ifname</code> nftables set.
+                Data plane{" "}
+                {link.from.interface && link.to.interface
+                  ? `interfaces (${link.from.interface} / ${link.to.interface})`
+                  : `interface (${link.from.interface || link.to.interface})`}{" "}
+                manually created and managed by you. easy42 automatically manages BIRD BGP routing sessions and adds
+                interfaces to the <code>easy42_ifname</code> nftables set.
               </Typography>
             </Box>
           );
@@ -1424,11 +1427,7 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
                     <Share2 size={12} /> Add-Paths:
                   </Typography>
                   <Chip
-                    label={
-                      link.from.add_paths
-                        ? `${link.from.add_paths.toUpperCase()} (Override)`
-                        : "Inherited"
-                    }
+                    label={link.from.add_paths ? `${link.from.add_paths.toUpperCase()} (Override)` : "Inherited"}
                     size="small"
                     sx={{
                       height: 20,
@@ -1731,7 +1730,7 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
                       minRows={2}
                       maxRows={8}
                       size="small"
-                      placeholder="Input arbitrary markdown format text..."
+                      placeholder="Input arbitrary markdown format text, use ```json block to store structured object..."
                       value={fromNoteDraft}
                       onChange={(e) => setFromNoteDraft(e.target.value)}
                       disabled={savingFromNote}
@@ -2143,11 +2142,7 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
                     <Share2 size={12} /> Add-Paths:
                   </Typography>
                   <Chip
-                    label={
-                      link.to.add_paths
-                        ? `${link.to.add_paths.toUpperCase()} (Override)`
-                        : "Inherited"
-                    }
+                    label={link.to.add_paths ? `${link.to.add_paths.toUpperCase()} (Override)` : "Inherited"}
                     size="small"
                     sx={{
                       height: 20,
@@ -2448,7 +2443,7 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
                       minRows={2}
                       maxRows={8}
                       size="small"
-                      placeholder="Input arbitrary markdown format text..."
+                      placeholder="Input arbitrary markdown format text, use ```json block to store structured object..."
                       value={toNoteDraft}
                       onChange={(e) => setToNoteDraft(e.target.value)}
                       disabled={savingToNote}

@@ -113,6 +113,7 @@ func TestBuildNodeContextVars(t *testing.T) {
 		ExternalIP:          "198.51.100.22/32",
 		ExternalIP6:         "2001:db8:1::22/64",
 		CustomNetworkScript: "#!/bin/sh\necho custom",
+		Tags:                []string{"vps", "asia-east", "prod"},
 		Note: "```json\n{\n  \"cluster\": \"edge-asia\",\n  \"asn\": 4242421234,\n  \"meta\": {\n    \"env\": \"prod\",\n    \"tier\": 1\n  }\n}\n```",
 	}
 
@@ -127,6 +128,11 @@ func TestBuildNodeContextVars(t *testing.T) {
 		"NODE_EXTERNAL_IP":  "198.51.100.22",
 		"NODE_EXTERNAL_IP6": "2001:db8:1::22",
 		"HAS_CUSTOM_SCRIPT": "1",
+		// Tags
+		"NODE_TAGS":          "asia-east,prod,vps",
+		"NODE_TAG_VPS":       "1",
+		"NODE_TAG_ASIA_EAST": "1",
+		"NODE_TAG_PROD":      "1",
 		// Aliases
 		"NODE_IPV4": "10.42.100.5",
 		"NODE_IPV6": "fd42:a159:f9f0:1::5",
@@ -162,6 +168,9 @@ func TestBuildNodeContextVars(t *testing.T) {
 	}
 	if sameCtx["HAS_CUSTOM_SCRIPT"] != "0" {
 		t.Errorf("HAS_CUSTOM_SCRIPT should be '0' when no custom script")
+	}
+	if sameCtx["NODE_TAGS"] != "" {
+		t.Errorf("NODE_TAGS should be empty string when no tags, got %q", sameCtx["NODE_TAGS"])
 	}
 }
 

@@ -15,6 +15,8 @@ import (
 	agentpb "easy42/internal/agent/proto"
 	"easy42/internal/config"
 	"github.com/go-chi/chi/v5"
+	"github.com/gorilla/websocket"
+	"google.golang.org/protobuf/proto"
 )
 
 func TestAppsAPI(t *testing.T) {
@@ -24,19 +26,30 @@ func TestAppsAPI(t *testing.T) {
 		_ = os.RemoveAll(tempDir)
 	}()
 
+	// 0. Add node1
+	cfg := srv.mgr.Store().Get()
+	cfg.Nodes = append(cfg.Nodes, config.Node{
+		Name: "node1",
+		Host: "192.168.1.50",
+		IP:   "10.42.0.77/24",
+	})
+	_ = srv.mgr.Store().Save(cfg)
+
 	// 1. Create App
 	newApp := config.App{
 		ID:          "my-nginx-app",
 		Name:        "test-app",
 		Description: "A test docker compose app",
+		URL:         "http://${NODE_IP}:8080",
 		AppType:     "docker",
 		MainContent: "version: '3'\nservices:\n  web:\n    image: nginx\n",
 		EnvContent:  "PORT=80\n",
 		Files: map[string]string{
 			"config.json": `{"hello":"world"}`,
 		},
-		Nodes:   []string{"node1"},
-		Enabled: true,
+		Nodes:     []string{"node1"},
+		Published: true,
+		Enabled:   true,
 	}
 
 	body, _ := json.Marshal(newApp)
@@ -54,6 +67,9 @@ func TestAppsAPI(t *testing.T) {
 	}
 	if created.ID == "" || created.Name != "test-app" {
 		t.Fatalf("unexpected created app: %+v", created)
+	}
+	if created.URL != "http://${NODE_IP}:8080" {
+		t.Fatalf("expected created app URL to be http://${NODE_IP}:8080, got %s", created.URL)
 	}
 
 	// 2. Get Apps
@@ -125,11 +141,17 @@ func TestAppsAPI(t *testing.T) {
 	if dup1.ID != expectedDup1ID {
 		t.Fatalf("expected dup1 ID to be %s, got %s", expectedDup1ID, dup1.ID)
 	}
+	if dup1.Published != false {
+		t.Fatalf("expected duplicated app to be draft (published=false), got %v", dup1.Published)
+	}
 	if dup1.Enabled != false {
-		t.Fatalf("expected duplicated app to be disabled, got %v", dup1.Enabled)
+		t.Fatalf("expected duplicated app to be disabled (enabled=false), got %v", dup1.Enabled)
 	}
 	if dup1.MainContent != created.MainContent {
 		t.Fatalf("expected duplicated content to match original")
+	}
+	if dup1.URL != "http://${NODE_IP}:8080" {
+		t.Fatalf("expected duplicated app URL to match original, got %s", dup1.URL)
 	}
 
 	// Duplicate dup1 (ends in '1' -> increments to '2')
@@ -147,8 +169,11 @@ func TestAppsAPI(t *testing.T) {
 	if dup2.ID != expectedDup2ID {
 		t.Fatalf("expected dup2 ID to be %s, got %s", expectedDup2ID, dup2.ID)
 	}
+	if dup2.Published != false {
+		t.Fatalf("expected dup2 to be draft (published=false), got %v", dup2.Published)
+	}
 	if dup2.Enabled != false {
-		t.Fatalf("expected dup2 to be disabled, got %v", dup2.Enabled)
+		t.Fatalf("expected dup2 to be disabled (enabled=false), got %v", dup2.Enabled)
 	}
 
 	// 6. Preview Transpile
@@ -169,6 +194,30 @@ func TestAppsAPI(t *testing.T) {
 	_ = json.NewDecoder(w.Body).Decode(&previewResp)
 	if previewResp.Error != "" || previewResp.Script == "" {
 		t.Fatalf("unexpected preview response: %+v", previewResp)
+	}
+
+	// Verify handleGetNodeApps resolves URL variables
+	nodeAppsReq := httptest.NewRequest(http.MethodGet, "/api/nodes/node1/apps", nil)
+	nodeAppsReq = nodeAppsReq.WithContext(chiContextWithParam("name", "node1"))
+	nodeAppsW := httptest.NewRecorder()
+	srv.handleGetNodeApps(nodeAppsW, nodeAppsReq)
+	if nodeAppsW.Code != http.StatusOK {
+		t.Fatalf("expected 200 on handleGetNodeApps, got %d: %s", nodeAppsW.Code, nodeAppsW.Body.String())
+	}
+	var nodeAppsResp NodeAppsResponse
+	_ = json.NewDecoder(nodeAppsW.Body).Decode(&nodeAppsResp)
+	var foundApp *config.App
+	for i := range nodeAppsResp.Apps {
+		if nodeAppsResp.Apps[i].ID == created.ID {
+			foundApp = &nodeAppsResp.Apps[i]
+			break
+		}
+	}
+	if foundApp == nil {
+		t.Fatalf("created app not found in node1 apps: %+v", nodeAppsResp.Apps)
+	}
+	if foundApp.URL != "http://10.42.0.77:8080" {
+		t.Fatalf("expected resolved node app URL to be 'http://10.42.0.77:8080', got '%s'", foundApp.URL)
 	}
 
 	// 5. Delete App
@@ -322,6 +371,7 @@ func TestAppSyncReconciliation(t *testing.T) {
 		MainContent: "[Unit]\nDescription=rclone service\n\n[Service]\nExecStart=/usr/bin/rclone serve webdav\n",
 		EnvContent:  "RCLONE_PASS=123456\n",
 		Nodes:       []string{"nbbug"},
+		Published:   true,
 		Enabled:     true,
 	}
 	if _, err := srv.mgr.SaveApp(app); err != nil {
@@ -475,5 +525,526 @@ func TestAppSyncReconciliation(t *testing.T) {
 		t.Fatalf("expected delete pending, got diff_status=%s, needs_apply=%v", deleteAct.DiffStatus, deleteAct.NeedsApply)
 	}
 }
+
+func TestAppMutationsDoNotAutoSyncToConnectedAgent(t *testing.T) {
+	srv, tempDir, _ := setupTestServer(t)
+	defer func() {
+		srv.mgr.Close()
+		_ = os.RemoveAll(tempDir)
+	}()
+
+	// 1. Add target node "berohost"
+	cfg := srv.mgr.Store().Get()
+	cfg.Nodes = append(cfg.Nodes, config.Node{
+		Name: "berohost",
+		Host: "192.168.142.208",
+		Mode: "agent",
+	})
+	if err := srv.mgr.Store().Save(cfg); err != nil {
+		t.Fatalf("failed to save node: %v", err)
+	}
+
+	// 2. Set up mock agent connection
+	upgrader := websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }}
+	wsServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ws, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			return
+		}
+		conn := agent.NewConnection("berohost", ws, srv.mgr.AgentHub())
+		srv.mgr.AgentHub().Register(conn)
+		go conn.ReadLoop()
+	}))
+	defer wsServer.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(wsServer.URL, "http")
+	clientWs, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("failed to dial mock agent server: %v", err)
+	}
+	defer clientWs.Close()
+
+	time.Sleep(50 * time.Millisecond)
+
+	if !srv.mgr.AgentHub().IsConnected("berohost") {
+		t.Fatalf("expected berohost to be connected in AgentHub")
+	}
+
+	// Channel to capture agent incoming messages
+	msgCh := make(chan *agentpb.AgentMessage, 20)
+	go func() {
+		for {
+			_, msgBytes, err := clientWs.ReadMessage()
+			if err != nil {
+				return
+			}
+			var agentMsg agentpb.AgentMessage
+			if err := proto.Unmarshal(msgBytes, &agentMsg); err == nil {
+				msgCh <- &agentMsg
+				if cmdReq := agentMsg.GetCommandReq(); cmdReq != nil {
+					resp := &agentpb.AgentMessage{
+						Payload: &agentpb.AgentMessage_CommandResp{
+							CommandResp: &agentpb.CommandResponse{
+								RequestId: cmdReq.RequestId,
+								Success:   true,
+								Stdout:    "{}",
+							},
+						},
+					}
+					data, _ := proto.Marshal(resp)
+					_ = clientWs.WriteMessage(websocket.BinaryMessage, data)
+				}
+			}
+		}
+	}()
+
+	// Drain any initial messages
+	select {
+	case <-msgCh:
+	case <-time.After(50 * time.Millisecond):
+	}
+
+	// 3. Create app "rclone" with RestartSec=10
+	app := config.App{
+		ID:          "app-rclone-demo",
+		Name:        "rclone",
+		AppType:     "systemd",
+		MainContent: "[Unit]\nDescription=rclone service\n\n[Service]\nExecStart=/usr/bin/rclone serve\nRestart=always\nRestartSec=10\n",
+		EnvContent:  "FOO=bar\n",
+		Nodes:       []string{"berohost"},
+		Published:   true,
+		Enabled:     true,
+	}
+
+	// Save initial app
+	if _, err := srv.mgr.SaveApp(app); err != nil {
+		t.Fatalf("failed to save app: %v", err)
+	}
+
+	// Crucial check: verify NO SyncApps message was sent to agent on SaveApp
+	select {
+	case msg := <-msgCh:
+		if msg.GetSyncApps() != nil {
+			t.Fatalf("unexpected SyncApps received upon SaveApp, desired state should not auto-apply!")
+		}
+	case <-time.After(100 * time.Millisecond):
+		// Success: no auto-sync
+	}
+
+	// 4. Record deployed state as having RestartSec=10
+	specs, _ := srv.mgr.BuildAppSpecsForNode("berohost")
+	if len(specs) == 0 {
+		t.Fatalf("expected specs to have rclone")
+	}
+	srv.mgr.AgentHub().SetAppFiles("berohost", map[string]agent.ProbeConfigFile{
+		"/etc/systemd/system/ezapp-rclone.service": {
+			Path:    "/etc/systemd/system/ezapp-rclone.service",
+			Content: specs[0].MainContent,
+			Hash:    specs[0].Sha256Hash,
+		},
+	})
+	srv.mgr.AgentHub().SetAppHash("berohost", "rclone", specs[0].Sha256Hash)
+
+	// Initially plan sync should show synced
+	actions, err := srv.mgr.PlanSyncWithScope("")
+	if err != nil {
+		t.Fatalf("PlanSyncWithScope failed: %v", err)
+	}
+	for _, act := range actions {
+		if act.Interface == "rclone" && strings.HasSuffix(act.TargetFile, ".service") {
+			if act.NeedsApply {
+				t.Fatalf("expected rclone .service to be synced, got needs_apply=true")
+			}
+		}
+	}
+
+	// 5. User changes RestartSec=10 to RestartSec=5 in frontend and saves
+	app.MainContent = "[Unit]\nDescription=rclone service\n\n[Service]\nExecStart=/usr/bin/rclone serve\nRestart=always\nRestartSec=5\n"
+	if _, err := srv.mgr.SaveApp(app); err != nil {
+		t.Fatalf("failed to update app: %v", err)
+	}
+
+	// Crucial check: verify NO SyncApps message was sent to agent upon modifying app
+	select {
+	case msg := <-msgCh:
+		if msg.GetSyncApps() != nil {
+			t.Fatalf("unexpected SyncApps received upon SaveApp edit!")
+		}
+	case <-time.After(100 * time.Millisecond):
+		// Success: no auto-sync!
+	}
+
+	// 6. Plan sync: must detect diff and mark NeedsApply = true
+	actions, err = srv.mgr.PlanSyncWithScope("")
+	if err != nil {
+		t.Fatalf("PlanSyncWithScope failed: %v", err)
+	}
+	var rcloneServiceAct *config.SyncAction
+	for i := range actions {
+		if actions[i].Interface == "rclone" && strings.HasSuffix(actions[i].TargetFile, ".service") {
+			rcloneServiceAct = &actions[i]
+			break
+		}
+	}
+	if rcloneServiceAct == nil {
+		t.Fatalf("expected rclone service action in plan")
+	}
+	if !rcloneServiceAct.NeedsApply {
+		t.Fatalf("expected NeedsApply=true for modified rclone app")
+	}
+	if rcloneServiceAct.DiffStatus != "update" {
+		t.Fatalf("expected DiffStatus='update', got: %s", rcloneServiceAct.DiffStatus)
+	}
+	if !strings.Contains(rcloneServiceAct.Diff, "- RestartSec=10") || !strings.Contains(rcloneServiceAct.Diff, "+ RestartSec=5") {
+		t.Fatalf("expected diff to show RestartSec change, got:\n%s", rcloneServiceAct.Diff)
+	}
+
+	// 7. Toggle app enabled state: should ALSO NOT auto-sync to agent
+	if _, err := srv.mgr.ToggleApp(app.ID); err != nil {
+		t.Fatalf("failed to toggle app: %v", err)
+	}
+	select {
+	case msg := <-msgCh:
+		if msg.GetSyncApps() != nil {
+			t.Fatalf("unexpected SyncApps received upon ToggleApp!")
+		}
+	case <-time.After(100 * time.Millisecond):
+		// Success: no auto-sync!
+	}
+
+	// Toggle it back on
+	if _, err := srv.mgr.ToggleApp(app.ID); err != nil {
+		t.Fatalf("failed to toggle app back: %v", err)
+	}
+
+	// 8. Now explicitly execute sync action (like clicking 'Apply Changes' in UI)
+	results, err := srv.mgr.ExecuteSyncNodesWithScope(false, "", "berohost")
+	if err != nil {
+		t.Fatalf("ExecuteSyncNodesWithScope failed: %v", err)
+	}
+	if len(results) == 0 || !results[0].Success {
+		t.Fatalf("expected sync success, got: %+v", results)
+	}
+
+	// 9. Verify that NOW the agent DID receive SyncApps
+	var syncApps *agentpb.SyncApps
+	timeout := time.After(2 * time.Second)
+	for syncApps == nil {
+		select {
+		case msg := <-msgCh:
+			if sync := msg.GetSyncApps(); sync != nil {
+				syncApps = sync
+			}
+		case <-timeout:
+			t.Fatalf("timed out waiting for SyncApps on agent after ExecuteSyncNodes")
+		}
+	}
+
+	foundRclone := false
+	for _, sp := range syncApps.Apps {
+		if sp.Name == "rclone" {
+			foundRclone = true
+			if !strings.Contains(sp.MainContent, "RestartSec=5") {
+				t.Fatalf("expected agent to receive updated content with RestartSec=5")
+			}
+		}
+	}
+	if !foundRclone {
+		t.Fatalf("expected rclone spec in SyncApps payload")
+	}
+
+	// 10. Verify plan is now clean
+	actions, err = srv.mgr.PlanSyncWithScope("")
+	if err != nil {
+		t.Fatalf("PlanSyncWithScope failed: %v", err)
+	}
+	for _, act := range actions {
+		if act.Interface == "rclone" && strings.HasSuffix(act.TargetFile, ".service") {
+			if act.NeedsApply {
+				t.Fatalf("expected rclone service to be synced after apply, got NeedsApply=true")
+			}
+		}
+	}
+}
+
+func TestAppDraftIsNotDeployed(t *testing.T) {
+	srv, tempDir, _ := setupTestServer(t)
+	defer func() {
+		srv.mgr.Close()
+		_ = os.RemoveAll(tempDir)
+	}()
+
+	// 1. Add target node "node-draft"
+	cfg := srv.mgr.Store().Get()
+	cfg.Nodes = append(cfg.Nodes, config.Node{
+		Name: "node-draft",
+		Host: "192.168.1.100",
+		Mode: "agent",
+	})
+	if err := srv.mgr.Store().Save(cfg); err != nil {
+		t.Fatalf("failed to save node: %v", err)
+	}
+
+	// 2. Create app with Published: false (draft)
+	draftApp := config.App{
+		ID:          "app-draft-test",
+		Name:        "myapp-draft",
+		AppType:     "systemd",
+		MainContent: "[Unit]\nDescription=draft app\n[Service]\nExecStart=/bin/true\n",
+		Nodes:       []string{"node-draft"},
+		Published:   false,
+		Enabled:     true,
+	}
+	saved, err := srv.mgr.SaveApp(draftApp)
+	if err != nil {
+		t.Fatalf("failed to save draft app: %v", err)
+	}
+	if saved.Published {
+		t.Fatalf("expected saved app to have Published=false")
+	}
+
+	// 3. Verify BuildAppSpecsForNode does not include draft app
+	specs, err := srv.mgr.BuildAppSpecsForNode("node-draft")
+	if err != nil {
+		t.Fatalf("BuildAppSpecsForNode failed: %v", err)
+	}
+	if len(specs) != 0 {
+		t.Fatalf("expected 0 specs for draft app, got %d", len(specs))
+	}
+
+	// 4. Verify PlanSyncWithScope does not generate ActionSyncApp
+	actions, err := srv.mgr.PlanSyncWithScope("")
+	if err != nil {
+		t.Fatalf("PlanSyncWithScope failed: %v", err)
+	}
+	for _, act := range actions {
+		if act.Interface == "myapp-draft" {
+			t.Fatalf("unexpected sync action for draft app: %+v", act)
+		}
+	}
+
+	// 5. Toggle published via HTTP endpoint
+	rctx := chiContextWithParam("id", draftApp.ID)
+	req := httptest.NewRequest(http.MethodPost, "/api/apps/"+draftApp.ID+"/toggle-published", nil)
+	req = req.WithContext(rctx)
+	w := httptest.NewRecorder()
+	srv.handleToggleAppPublished(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 on toggle-published, got %d: %s", w.Code, w.Body.String())
+	}
+	var toggled config.App
+	_ = json.NewDecoder(w.Body).Decode(&toggled)
+	if !toggled.Published {
+		t.Fatalf("expected app to be published after toggle")
+	}
+
+	// 6. Now BuildAppSpecsForNode includes the app!
+	specs, err = srv.mgr.BuildAppSpecsForNode("node-draft")
+	if err != nil {
+		t.Fatalf("BuildAppSpecsForNode failed: %v", err)
+	}
+	if len(specs) != 1 || specs[0].Name != "myapp-draft" {
+		t.Fatalf("expected 1 spec for published app, got %+v", specs)
+	}
+
+	// 7. Plan sync now produces ActionSyncApp
+	actions, err = srv.mgr.PlanSyncWithScope("")
+	if err != nil {
+		t.Fatalf("PlanSyncWithScope failed: %v", err)
+	}
+	found := false
+	for _, act := range actions {
+		if act.Interface == "myapp-draft" && act.Type == config.ActionSyncApp {
+			found = true
+			if !act.NeedsApply {
+				t.Fatalf("expected NeedsApply=true for newly published app")
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("expected ActionSyncApp for published app in plan")
+	}
+}
+
+func TestAppDeleteAuxiliaryConfigFileReconciliation(t *testing.T) {
+	srv, tempDir, _ := setupTestServer(t)
+	defer func() {
+		srv.mgr.Close()
+		_ = os.RemoveAll(tempDir)
+	}()
+
+	// 1. Add target agent node
+	cfg := srv.mgr.Store().Get()
+	cfg.Nodes = append(cfg.Nodes, config.Node{
+		Name: "node-aux",
+		Host: "192.168.1.101",
+		Mode: "agent",
+	})
+	if err := srv.mgr.Store().Save(cfg); err != nil {
+		t.Fatalf("failed to save node: %v", err)
+	}
+
+	// Set up mock agent connection
+	upgrader := websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }}
+	wsServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ws, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			return
+		}
+		conn := agent.NewConnection("node-aux", ws, srv.mgr.AgentHub())
+		srv.mgr.AgentHub().Register(conn)
+		go conn.ReadLoop()
+	}))
+	defer wsServer.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(wsServer.URL, "http")
+	clientWs, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("failed to dial mock agent server: %v", err)
+	}
+	defer clientWs.Close()
+
+	// Respond to agent commands
+	go func() {
+		for {
+			_, msgBytes, err := clientWs.ReadMessage()
+			if err != nil {
+				return
+			}
+			var agentMsg agentpb.AgentMessage
+			if err := proto.Unmarshal(msgBytes, &agentMsg); err == nil {
+				if cmdReq := agentMsg.GetCommandReq(); cmdReq != nil {
+					resp := &agentpb.AgentMessage{
+						Payload: &agentpb.AgentMessage_CommandResp{
+							CommandResp: &agentpb.CommandResponse{
+								RequestId: cmdReq.RequestId,
+								Success:   true,
+								Stdout:    "{}",
+							},
+						},
+					}
+					data, _ := proto.Marshal(resp)
+					_ = clientWs.WriteMessage(websocket.BinaryMessage, data)
+				}
+			}
+		}
+	}()
+
+	time.Sleep(50 * time.Millisecond)
+
+	// 2. Create app with an auxiliary config file config.json
+	auxApp := config.App{
+		ID:          "app-aux-test",
+		Name:        "myapp-aux",
+		AppType:     "systemd",
+		MainContent: "[Unit]\nDescription=aux app\n[Service]\nExecStart=/bin/true\n",
+		EnvContent:  "FOO=bar\n",
+		Files: map[string]string{
+			"config.json": `{"version": 1}`,
+		},
+		Nodes:     []string{"node-aux"},
+		Published: true,
+		Enabled:   true,
+	}
+	saved, err := srv.mgr.SaveApp(auxApp)
+	if err != nil {
+		t.Fatalf("failed to save aux app: %v", err)
+	}
+
+	// 3. Build specs to retrieve desired hash and content
+	specs, err := srv.mgr.BuildAppSpecsForNode("node-aux")
+	if err != nil || len(specs) != 1 {
+		t.Fatalf("BuildAppSpecsForNode failed or returned wrong specs count: %v, specs: %+v", err, specs)
+	}
+
+	// 4. Simulate that the app and its config.json were already deployed on the node
+	hub := srv.mgr.AgentHub()
+	hub.SetAppHash("node-aux", "myapp-aux", specs[0].Sha256Hash)
+	hub.SetAppFiles("node-aux", map[string]agent.ProbeConfigFile{
+		"/etc/systemd/system/ezapp-myapp-aux.service": {
+			Path:    "/etc/systemd/system/ezapp-myapp-aux.service",
+			Content: specs[0].MainContent,
+			Hash:    config.HashConfig(specs[0].MainContent),
+		},
+		"/etc/ezapp-data/myapp-aux/config.json": {
+			Path:    "/etc/ezapp-data/myapp-aux/config.json",
+			Content: `{"version": 1}`,
+			Hash:    config.HashConfig(`{"version": 1}`),
+		},
+	})
+
+	// 5. Verify initial PlanSyncWithScope: everything is synced (NeedsApply: false)
+	actions, err := srv.mgr.PlanSyncWithScope("")
+	if err != nil {
+		t.Fatalf("PlanSyncWithScope failed: %v", err)
+	}
+	for _, act := range actions {
+		if act.Interface == "myapp-aux" && act.NeedsApply {
+			t.Fatalf("expected all actions to be synced initially, but got: %+v", act)
+		}
+	}
+
+	// 6. Delete config.json from the app
+	saved.Files = nil
+	if _, err := srv.mgr.SaveApp(saved); err != nil {
+		t.Fatalf("failed to update app removing config.json: %v", err)
+	}
+
+	// 7. Verify PlanSyncWithScope detects the deletion of config.json
+	actions, err = srv.mgr.PlanSyncWithScope("")
+	if err != nil {
+		t.Fatalf("PlanSyncWithScope failed: %v", err)
+	}
+	var deleteAuxAct *config.SyncAction
+	for i := range actions {
+		act := &actions[i]
+		if act.Interface == "myapp-aux" && act.TargetFile == "/etc/ezapp-data/myapp-aux/config.json" {
+			deleteAuxAct = act
+			break
+		}
+	}
+	if deleteAuxAct == nil {
+		t.Fatalf("expected ActionDeleteApp for orphaned config.json in sync plan, got actions: %+v", actions)
+	}
+	if !deleteAuxAct.NeedsApply {
+		t.Fatalf("expected NeedsApply=true for deleted config.json, got false")
+	}
+	if deleteAuxAct.DiffStatus != "delete" {
+		t.Fatalf("expected DiffStatus='delete', got '%s'", deleteAuxAct.DiffStatus)
+	}
+	if deleteAuxAct.Type != config.ActionDeleteApp {
+		t.Fatalf("expected Type=ActionDeleteApp, got '%s'", deleteAuxAct.Type)
+	}
+	if !strings.Contains(deleteAuxAct.Diff, `{"version": 1}`) {
+		t.Fatalf("expected diff to show deletion of config.json content, got: %s", deleteAuxAct.Diff)
+	}
+
+	// 8. Execute sync actions
+	results, err := srv.mgr.ExecuteSyncNodes(false, "node-aux")
+	if err != nil {
+		t.Fatalf("ExecuteSyncNodes failed: %v", err)
+	}
+	if len(results) == 0 {
+		t.Fatalf("expected at least 1 sync result")
+	}
+
+	// 9. Verify hub cached app files no longer has config.json
+	cachedFiles := hub.GetAppFiles("node-aux")
+	if _, ok := cachedFiles["/etc/ezapp-data/myapp-aux/config.json"]; ok {
+		t.Fatalf("expected /etc/ezapp-data/myapp-aux/config.json to be removed from agentHub appFiles, but it was still present")
+	}
+
+	// 10. Verify PlanSyncWithScope now has no pending changes for config.json
+	actionsAfter, err := srv.mgr.PlanSyncWithScope("")
+	if err != nil {
+		t.Fatalf("PlanSyncWithScope after sync failed: %v", err)
+	}
+	for _, act := range actionsAfter {
+		if act.TargetFile == "/etc/ezapp-data/myapp-aux/config.json" {
+			t.Fatalf("orphaned config.json action still appears in plan after sync: %+v", act)
+		}
+	}
+}
+
 
 
