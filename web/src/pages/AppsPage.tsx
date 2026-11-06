@@ -777,6 +777,7 @@ export const AppsPage: React.FC = () => {
       >
         <Tabs
           value={activeTab}
+          variant="scrollable"
           onChange={(_, val) => setActiveTab(val)}
           sx={{
             "& .MuiTab-root": {
@@ -1670,7 +1671,7 @@ export const AppsPage: React.FC = () => {
                 borderRadius: "14px",
                 border: "1px solid #E2E8F0",
                 bgcolor: "#FFFFFF",
-                overflow: "hidden",
+                overflowX: "auto",
               }}
             >
               <Table sx={{ minWidth: 700 }}>
@@ -1986,6 +1987,7 @@ export const AppsPage: React.FC = () => {
         {/* Modal Navigation Tabs */}
         <Box sx={{ px: 3, borderBottom: "1px solid #E2E8F0" }}>
           <Tabs
+            variant="scrollable"
             value={modalTab}
             onChange={(_, val) => setModalTab(val)}
             sx={{
