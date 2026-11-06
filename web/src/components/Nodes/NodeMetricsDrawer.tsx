@@ -37,6 +37,7 @@ export const NodeMetricsDrawer: React.FC<NodeMetricsDrawerProps> = ({
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const [range, setRange] = useState<string>("24h");
   const [loading, setLoading] = useState<boolean>(false);
+  const [metricsFetchTime, setMetricsFetchTime] = useState<number>(() => Math.floor(Date.now() / 1000));
   const [points, setPoints] = useState<NodeMetricPoint[]>([]);
 
   const fetchMetrics = useCallback(async (flush = false) => {
@@ -45,6 +46,7 @@ export const NodeMetricsDrawer: React.FC<NodeMetricsDrawerProps> = ({
     try {
       const res = await api.getNodeMetrics(nodeName, range, flush);
       setPoints(res.points || []);
+      setMetricsFetchTime(Math.floor(Date.now() / 1000));
     } catch {
       setPoints([]);
     } finally {
@@ -228,6 +230,8 @@ export const NodeMetricsDrawer: React.FC<NodeMetricsDrawerProps> = ({
             <MetricAreaChart
               title="CPU Usage"
               data={cpuData}
+              range={range}
+              endTime={metricsFetchTime}
               color="#4F46E5"
               unit="%"
               height={170}
@@ -237,6 +241,8 @@ export const NodeMetricsDrawer: React.FC<NodeMetricsDrawerProps> = ({
             <MetricAreaChart
               title="Memory Utilization (Used / Total)"
               data={memData}
+              range={range}
+              endTime={metricsFetchTime}
               color="#059669"
               color2="#94A3B8"
               label1="Used"
@@ -248,6 +254,8 @@ export const NodeMetricsDrawer: React.FC<NodeMetricsDrawerProps> = ({
             <MetricAreaChart
               title={nodeLive?.primary_interface ? `Network Bandwidth (${nodeLive.primary_interface})` : "Network Bandwidth"}
               data={netData}
+              range={range}
+              endTime={metricsFetchTime}
               color="#059669"
               color2="#0891B2"
               label1="Inbound (Rx)"
@@ -259,6 +267,8 @@ export const NodeMetricsDrawer: React.FC<NodeMetricsDrawerProps> = ({
             <MetricAreaChart
               title="System Load Average"
               data={loadData}
+              range={range}
+              endTime={metricsFetchTime}
               color="#D97706"
               color2="#64748B"
               label1="1 min"

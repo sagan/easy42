@@ -7,6 +7,32 @@ export interface DataPoint {
   value2?: number; // optional second series (e.g. tx rate)
 }
 
+export function parseMetricRangeDuration(rangeStr?: string): number {
+  if (!rangeStr) return 24 * 3600;
+  const s = rangeStr.trim().toLowerCase();
+  switch (s) {
+    case "1h":
+      return 3600;
+    case "6h":
+      return 6 * 3600;
+    case "24h":
+      return 24 * 3600;
+    case "7d":
+      return 7 * 86400;
+    case "30d":
+      return 30 * 86400;
+  }
+  const match = s.match(/^(\d+)([mhd])$/);
+  if (match) {
+    const val = parseInt(match[1], 10);
+    const unit = match[2];
+    if (unit === "m") return val * 60;
+    if (unit === "h") return val * 3600;
+    if (unit === "d") return val * 86400;
+  }
+  return 24 * 3600;
+}
+
 interface MetricAreaChartProps {
   title: string;
   data: DataPoint[];
@@ -17,6 +43,9 @@ interface MetricAreaChartProps {
   label2?: string;
   height?: number;
   formatValue?: (val: number) => string;
+  range?: string;
+  startTime?: number;
+  endTime?: number;
 }
 
 export const MetricAreaChart: React.FC<MetricAreaChartProps> = ({
@@ -29,9 +58,16 @@ export const MetricAreaChart: React.FC<MetricAreaChartProps> = ({
   label2 = "Value 2",
   height = 180,
   formatValue,
+  range,
+  startTime,
+  endTime,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [hoverIndex, setHoverIndex] = useState<number | null>(null);
+  const [hoverState, setHoverState] = useState<{
+    targetTs: number;
+    nearestIndex: number | null;
+    isGap: boolean;
+  } | null>(null);
 
   const hasDualSeries = data.some((d) => d.value2 !== undefined);
 
@@ -77,57 +113,135 @@ export const MetricAreaChart: React.FC<MetricAreaChartProps> = ({
   const plotWidth = width - padding.left - padding.right;
   const plotHeight = height - padding.top - padding.bottom;
 
-  const { minTs, timeSpan } = useMemo(() => {
-    if (data.length === 0) return { minTs: 0, timeSpan: 0 };
-    const min = data[0].timestamp;
-    const max = data[data.length - 1].timestamp;
-    return { minTs: min, timeSpan: max - min };
-  }, [data]);
-
-  const getX = (d: DataPoint, i: number) => {
-    if (timeSpan > 0) {
-      return padding.left + Math.max(0, Math.min(1, (d.timestamp - minTs) / timeSpan)) * plotWidth;
+  // Determine full linear time domain [minTs, maxTs]
+  const { minTs, maxTs, timeSpan } = useMemo(() => {
+    if (startTime !== undefined && endTime !== undefined && endTime > startTime) {
+      return { minTs: startTime, maxTs: endTime, timeSpan: endTime - startTime };
     }
-    return padding.left + (i / Math.max(1, data.length - 1)) * plotWidth;
+
+    if (range) {
+      const dur = parseMetricRangeDuration(range);
+      const latestDataTs = data.length > 0 ? data[data.length - 1].timestamp : 0;
+      const end = endTime !== undefined ? endTime : Math.max(Math.floor(Date.now() / 1000), latestDataTs);
+      const start = startTime !== undefined ? startTime : end - dur;
+      return { minTs: start, maxTs: end, timeSpan: end - start };
+    }
+
+    if (data.length > 0) {
+      const min = data[0].timestamp;
+      const max = data[data.length - 1].timestamp;
+      return { minTs: min, maxTs: max, timeSpan: max - min };
+    }
+
+    return { minTs: 0, maxTs: 0, timeSpan: 0 };
+  }, [data, range, startTime, endTime]);
+
+  const getX = (timestamp: number) => {
+    if (timeSpan > 0) {
+      const ratio = Math.max(0, Math.min(1, (timestamp - minTs) / timeSpan));
+      return padding.left + ratio * plotWidth;
+    }
+    return padding.left;
   };
 
-  const points1 = useMemo(() => {
-    if (data.length === 0) return "";
-    return data
-      .map((d, i) => {
-        const x = getX(d, i);
-        const normY = (d.value - 0) / Math.max(1, stats.max);
-        const y = padding.top + plotHeight - Math.max(0, Math.min(plotHeight, normY * plotHeight));
-        return `${x},${y}`;
-      })
-      .join(" ");
-  }, [data, plotWidth, plotHeight, stats.max, padding.left, padding.top, timeSpan, minTs]);
+  const getY = (val: number) => {
+    const normY = (val - 0) / Math.max(1, stats.max);
+    return padding.top + plotHeight - Math.max(0, Math.min(plotHeight, normY * plotHeight));
+  };
 
-  const area1 = useMemo(() => {
-    if (!points1 || data.length === 0) return "";
-    const startX = getX(data[0], 0);
-    const endX = getX(data[data.length - 1], data.length - 1);
+  // Threshold to identify empty data intervals (node offline, missed samples, etc.)
+  const gapThreshold = useMemo(() => {
+    const rangeDur = timeSpan > 0 ? timeSpan : (range ? parseMetricRangeDuration(range) : 86400);
+    const baseGap = Math.max(60, rangeDur / 120);
+
+    if (data.length < 2) {
+      return baseGap;
+    }
+
+    const diffs: number[] = [];
+    for (let i = 1; i < data.length; i++) {
+      const diff = data[i].timestamp - data[i - 1].timestamp;
+      if (diff > 0) diffs.push(diff);
+    }
+    if (diffs.length === 0) return baseGap;
+
+    diffs.sort((a, b) => a - b);
+    const medianDiff = diffs[Math.floor(diffs.length / 2)];
+
+    return Math.max(medianDiff * 2.5, baseGap);
+  }, [data, timeSpan, range]);
+
+  // Group continuous points into segments, breaking on empty data gaps
+  const segments = useMemo(() => {
+    if (data.length === 0) return [];
+    const segs: DataPoint[][] = [];
+    let current: DataPoint[] = [];
+
+    for (let i = 0; i < data.length; i++) {
+      const pt = data[i];
+      if (current.length > 0) {
+        const prev = current[current.length - 1];
+        if (pt.timestamp - prev.timestamp > gapThreshold) {
+          segs.push(current);
+          current = [];
+        }
+      }
+      current.push(pt);
+    }
+    if (current.length > 0) {
+      segs.push(current);
+    }
+    return segs;
+  }, [data, gapThreshold]);
+
+  // Precompute SVG path/polyline data per segment
+  const segmentPaths = useMemo(() => {
     const bottomY = padding.top + plotHeight;
-    return `M ${startX},${bottomY} L ${points1.replace(/ /g, " L ")} L ${endX},${bottomY} Z`;
-  }, [points1, data, padding.left, padding.top, plotWidth, plotHeight, timeSpan, minTs]);
+    return segments.map((seg, idx) => {
+      if (seg.length === 1) {
+        const pt = seg[0];
+        const x = getX(pt.timestamp);
+        const y1 = getY(pt.value);
+        const y2 = hasDualSeries && pt.value2 !== undefined ? getY(pt.value2) : undefined;
+        return {
+          id: idx,
+          isSingle: true,
+          x,
+          y1,
+          y2,
+          points1: "",
+          area1: "",
+          points2: "",
+        };
+      }
 
-  const points2 = useMemo(() => {
-    if (!hasDualSeries || data.length === 0) return "";
-    return data
-      .map((d, i) => {
-        const val = d.value2 || 0;
-        const x = getX(d, i);
-        const normY = (val - 0) / Math.max(1, stats.max);
-        const y = padding.top + plotHeight - Math.max(0, Math.min(plotHeight, normY * plotHeight));
-        return `${x},${y}`;
-      })
-      .join(" ");
-  }, [data, hasDualSeries, plotWidth, plotHeight, stats.max, padding.left, padding.top, timeSpan, minTs]);
+      const points1 = seg.map((p) => `${getX(p.timestamp)},${getY(p.value)}`).join(" ");
+      const startX = getX(seg[0].timestamp);
+      const endX = getX(seg[seg.length - 1].timestamp);
+      const area1 = `M ${startX},${bottomY} L ${points1.replace(/ /g, " L ")} L ${endX},${bottomY} Z`;
+
+      const points2 = hasDualSeries
+        ? seg.map((p) => `${getX(p.timestamp)},${getY(p.value2 ?? 0)}`).join(" ")
+        : "";
+
+      return {
+        id: idx,
+        isSingle: false,
+        x: startX,
+        y1: 0,
+        y2: undefined,
+        points1,
+        area1,
+        points2,
+      };
+    });
+  }, [segments, plotWidth, plotHeight, stats.max, padding.left, padding.top, timeSpan, minTs, hasDualSeries]);
 
   const handlePointerMove = (e: React.PointerEvent<SVGSVGElement>) => {
     if (data.length === 0) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+
     if (timeSpan > 0) {
       const targetTs = minTs + ratio * timeSpan;
       let low = 0;
@@ -140,6 +254,7 @@ export const MetricAreaChart: React.FC<MetricAreaChartProps> = ({
           high = mid - 1;
         }
       }
+
       let bestIdx = 0;
       let bestDiff = Infinity;
       for (const idx of [low - 1, low, low + 1]) {
@@ -151,18 +266,32 @@ export const MetricAreaChart: React.FC<MetricAreaChartProps> = ({
           }
         }
       }
-      setHoverIndex(bestIdx);
+
+      // Check whether targetTs is close to data[bestIdx] or in an empty gap
+      const pixelDiff = Math.abs(getX(data[bestIdx].timestamp) - (padding.left + ratio * plotWidth));
+      const isClose = bestDiff <= gapThreshold * 0.6 || pixelDiff <= 18;
+
+      setHoverState({
+        targetTs,
+        nearestIndex: isClose ? bestIdx : null,
+        isGap: !isClose,
+      });
     } else {
       const index = Math.round(ratio * (data.length - 1));
-      setHoverIndex(index);
+      setHoverState({
+        targetTs: data[index]?.timestamp ?? 0,
+        nearestIndex: index,
+        isGap: false,
+      });
     }
   };
 
   const handlePointerLeave = () => {
-    setHoverIndex(null);
+    setHoverState(null);
   };
 
-  const activePoint = hoverIndex !== null && data[hoverIndex] ? data[hoverIndex] : null;
+  const activePoint = hoverState && hoverState.nearestIndex !== null ? data[hoverState.nearestIndex] : null;
+  const gradientId = `grad-${title.replace(/[^a-zA-Z0-9]/g, "")}`;
 
   return (
     <Paper
@@ -183,15 +312,22 @@ export const MetricAreaChart: React.FC<MetricAreaChartProps> = ({
           </Typography>
           <Box sx={{ display: "flex", alignItems: "baseline", gap: 1 }}>
             <Typography variant="h6" sx={{ fontWeight: 700, color: "#0F172A", fontSize: "1.2rem" }}>
-              {activePoint ? defaultFormat(activePoint.value) : defaultFormat(stats.current)}
+              {hoverState
+                ? activePoint
+                  ? defaultFormat(activePoint.value)
+                  : "No data"
+                : defaultFormat(stats.current)}
             </Typography>
             {hasDualSeries && (
               <Typography variant="body2" sx={{ fontWeight: 600, color: color2 }}>
-                /{" "}
-                {activePoint && activePoint.value2 !== undefined
-                  ? defaultFormat(activePoint.value2)
+                {hoverState
+                  ? activePoint && activePoint.value2 !== undefined
+                    ? `/ ${defaultFormat(activePoint.value2)}`
+                    : activePoint
+                      ? ""
+                      : "/ —"
                   : stats.current2 !== undefined
-                    ? defaultFormat(stats.current2)
+                    ? `/ ${defaultFormat(stats.current2)}`
                     : ""}
               </Typography>
             )}
@@ -199,10 +335,17 @@ export const MetricAreaChart: React.FC<MetricAreaChartProps> = ({
         </Box>
 
         <Box sx={{ textAlign: "right" }}>
-          {activePoint ? (
-            <Typography variant="caption" sx={{ color: "#475569", fontWeight: 600 }}>
-              {new Date(activePoint.timestamp * 1000).toISOString()}
-            </Typography>
+          {hoverState ? (
+            <Box>
+              <Typography variant="caption" sx={{ color: "#475569", fontWeight: 600 }}>
+                {new Date((activePoint ? activePoint.timestamp : hoverState.targetTs) * 1000).toISOString()}
+              </Typography>
+              {hoverState.isGap && (
+                <Typography variant="caption" sx={{ color: "#94A3B8", display: "block", fontSize: "0.7rem" }}>
+                  (no data recorded)
+                </Typography>
+              )}
+            </Box>
           ) : (
             <Box sx={{ display: "flex", gap: 1 }}>
               <Typography variant="caption" sx={{ color: "#94A3B8" }}>
@@ -229,7 +372,7 @@ export const MetricAreaChart: React.FC<MetricAreaChartProps> = ({
             onPointerLeave={handlePointerLeave}
           >
             <defs>
-              <linearGradient id={`grad-${title.replace(/\s+/g, "")}`} x1="0" y1="0" x2="0" y2="1">
+              <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stopColor={color} stopOpacity="0.25" />
                 <stop offset="100%" stopColor={color} stopOpacity="0.0" />
               </linearGradient>
@@ -259,65 +402,98 @@ export const MetricAreaChart: React.FC<MetricAreaChartProps> = ({
               );
             })}
 
-            {/* Area fill */}
-            {area1 && <path d={area1} fill={`url(#grad-${title.replace(/\s+/g, "")})`} />}
-
-            {/* Series 1 Line */}
-            {points1 && (
-              <polyline
-                fill="none"
-                stroke={color}
-                strokeWidth="2.2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                points={points1}
-              />
+            {/* Area fill for each continuous segment (broken across empty data gaps) */}
+            {segmentPaths.map(
+              (sp) =>
+                !sp.isSingle &&
+                sp.area1 && <path key={`area-${sp.id}`} d={sp.area1} fill={`url(#${gradientId})`} />,
             )}
 
-            {/* Series 2 Line (if dual) */}
-            {hasDualSeries && points2 && (
-              <polyline
-                fill="none"
-                stroke={color2}
-                strokeWidth="2.2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                points={points2}
-              />
+            {/* Series 1 Line and isolated points */}
+            {segmentPaths.map((sp) =>
+              sp.isSingle ? (
+                <circle key={`pt1-${sp.id}`} cx={sp.x} cy={sp.y1} r="2.5" fill={color} />
+              ) : (
+                <polyline
+                  key={`poly1-${sp.id}`}
+                  fill="none"
+                  stroke={color}
+                  strokeWidth="2.2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  points={sp.points1}
+                />
+              ),
             )}
+
+            {/* Series 2 Line and isolated points (if dual) */}
+            {hasDualSeries &&
+              segmentPaths.map((sp) =>
+                sp.isSingle && sp.y2 !== undefined ? (
+                  <circle key={`pt2-${sp.id}`} cx={sp.x} cy={sp.y2} r="2.5" fill={color2} />
+                ) : sp.points2 ? (
+                  <polyline
+                    key={`poly2-${sp.id}`}
+                    fill="none"
+                    stroke={color2}
+                    strokeWidth="2.2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    points={sp.points2}
+                  />
+                ) : null,
+              )}
 
             {/* Interactive hover crosshair */}
-            {hoverIndex !== null && data[hoverIndex] && (
+            {hoverState && (
               <g>
                 <line
-                  x1={getX(data[hoverIndex], hoverIndex)}
-                  y1={padding.top}
-                  x2={getX(data[hoverIndex], hoverIndex)}
-                  y2={padding.top + plotHeight}
-                  stroke="#94A3B8"
-                  strokeWidth="1.2"
-                  strokeDasharray="2 2"
-                />
-                <circle
-                  cx={getX(data[hoverIndex], hoverIndex)}
-                  cy={
-                    padding.top +
-                    plotHeight -
-                    Math.max(0, Math.min(plotHeight, (data[hoverIndex].value / Math.max(1, stats.max)) * plotHeight))
+                  x1={
+                    activePoint
+                      ? getX(activePoint.timestamp)
+                      : padding.left + ((hoverState.targetTs - minTs) / Math.max(1, timeSpan)) * plotWidth
                   }
-                  r="4"
-                  fill="#FFFFFF"
-                  stroke={color}
-                  strokeWidth="2.5"
+                  y1={padding.top}
+                  x2={
+                    activePoint
+                      ? getX(activePoint.timestamp)
+                      : padding.left + ((hoverState.targetTs - minTs) / Math.max(1, timeSpan)) * plotWidth
+                  }
+                  y2={padding.top + plotHeight}
+                  stroke={hoverState.isGap ? "#CBD5E1" : "#94A3B8"}
+                  strokeWidth="1.2"
+                  strokeDasharray={hoverState.isGap ? "3 3" : "2 2"}
                 />
+                {activePoint && (
+                  <>
+                    <circle
+                      cx={getX(activePoint.timestamp)}
+                      cy={getY(activePoint.value)}
+                      r="4"
+                      fill="#FFFFFF"
+                      stroke={color}
+                      strokeWidth="2.5"
+                    />
+                    {hasDualSeries && activePoint.value2 !== undefined && (
+                      <circle
+                        cx={getX(activePoint.timestamp)}
+                        cy={getY(activePoint.value2)}
+                        r="4"
+                        fill="#FFFFFF"
+                        stroke={color2}
+                        strokeWidth="2.5"
+                      />
+                    )}
+                  </>
+                )}
               </g>
             )}
 
-            {/* Time label bottom */}
-            {data.length > 1 && (
+            {/* Time label bottom: linear full time domain */}
+            {timeSpan > 0 && (
               <>
                 <text x={padding.left} y={height - 5} fontSize="10" fill="#94A3B8" fontFamily="sans-serif">
-                  {new Date(data[0].timestamp * 1000).toISOString()}
+                  {new Date(minTs * 1000).toISOString()}
                 </text>
                 <text
                   x={padding.left + plotWidth}
@@ -327,7 +503,7 @@ export const MetricAreaChart: React.FC<MetricAreaChartProps> = ({
                   fill="#94A3B8"
                   fontFamily="sans-serif"
                 >
-                  {new Date(data[data.length - 1].timestamp * 1000).toISOString()}
+                  {new Date(maxTs * 1000).toISOString()}
                 </text>
               </>
             )}

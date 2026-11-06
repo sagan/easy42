@@ -237,6 +237,7 @@ export const NodeDetailPage: React.FC = () => {
   // Telemetry state
   const [range, setRange] = useState<string>("24h");
   const [metricsLoading, setMetricsLoading] = useState(false);
+  const [metricsFetchTime, setMetricsFetchTime] = useState<number>(() => Math.floor(Date.now() / 1000));
   const [points, setPoints] = useState<NodeMetricPoint[]>([]);
   const [selectedInterface, setSelectedInterface] = useState<string>("");
   const [metricsInterfaces, setMetricsInterfaces] = useState<string[]>([]);
@@ -390,6 +391,7 @@ export const NodeDetailPage: React.FC = () => {
         const targetIface = ifaceOverride !== undefined ? ifaceOverride : selectedInterface;
         const res = await api.getNodeMetrics(decodedNodeName, range, flush, targetIface);
         setPoints(res.points || []);
+        setMetricsFetchTime(Math.floor(Date.now() / 1000));
         if (res.interfaces && res.interfaces.length > 0) {
           setMetricsInterfaces(res.interfaces);
         }
@@ -2286,6 +2288,8 @@ export const NodeDetailPage: React.FC = () => {
                   <MetricAreaChart
                     title="CPU Utilization"
                     data={cpuData}
+                    range={range}
+                    endTime={metricsFetchTime}
                     color="#4F46E5"
                     unit="%"
                     height={210}
@@ -2298,6 +2302,8 @@ export const NodeDetailPage: React.FC = () => {
                   <MetricAreaChart
                     title="Memory Utilization (Used / Total)"
                     data={memData}
+                    range={range}
+                    endTime={metricsFetchTime}
                     color="#059669"
                     color2="#94A3B8"
                     label1="Used RAM"
@@ -2316,6 +2322,8 @@ export const NodeDetailPage: React.FC = () => {
                         : "Network Bandwidth"
                     }
                     data={netData}
+                    range={range}
+                    endTime={metricsFetchTime}
                     color="#059669"
                     color2="#0891B2"
                     label1="Inbound (Rx)"
@@ -2334,6 +2342,8 @@ export const NodeDetailPage: React.FC = () => {
                         : "Network Traffics"
                     }
                     data={trafficData}
+                    range={range}
+                    endTime={metricsFetchTime}
                     color="#2563EB"
                     color2="#7C3AED"
                     label1="Inbound (Rx)"
@@ -2348,6 +2358,8 @@ export const NodeDetailPage: React.FC = () => {
                   <MetricAreaChart
                     title="System Load Average"
                     data={loadDataPoints}
+                    range={range}
+                    endTime={metricsFetchTime}
                     color="#D97706"
                     color2="#64748B"
                     label1="Load 1 min"

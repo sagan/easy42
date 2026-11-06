@@ -1725,6 +1725,15 @@ export const AppsPage: React.FC = () => {
                                 <Lock size={14} style={{ color: "#F59E0B" }} />
                               </Tooltip>
                             )}
+                            <Tooltip title={isCopied ? "Copied!" : "Copy value"}>
+                              <IconButton
+                                size="small"
+                                onClick={() => copyText(v.key, v.key + "-key")}
+                                sx={{ color: isCopied ? "#10B981" : "#94A3B8" }}
+                              >
+                                {isCopied ? <Check size={14} /> : <Copy size={14} />}
+                              </IconButton>
+                            </Tooltip>
                           </Box>
                         </TableCell>
 
@@ -1754,7 +1763,7 @@ export const AppsPage: React.FC = () => {
                             <Tooltip title={isCopied ? "Copied!" : "Copy value"}>
                               <IconButton
                                 size="small"
-                                onClick={() => copyText(v.value, v.key)}
+                                onClick={() => copyText(v.value, v.key + "-value")}
                                 sx={{ color: isCopied ? "#10B981" : "#94A3B8" }}
                               >
                                 {isCopied ? <Check size={14} /> : <Copy size={14} />}
