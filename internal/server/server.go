@@ -107,6 +107,10 @@ func New(cfg Config) *Server {
 		s.wsHub.Start()
 	}
 
+	if s.mgr != nil {
+		s.mgr.SetVaultStateCallback(s.broadcastVaultStateChanged)
+	}
+
 	if s.mgr != nil && s.mgr.Store() != nil {
 		s.mgr.Store().OnChange(func() {
 			s.broadcastClusterChange("config_changed")

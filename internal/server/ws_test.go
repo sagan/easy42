@@ -120,6 +120,76 @@ func TestClientWebSocketAuth(t *testing.T) {
 	}
 }
 
+func TestClientWebSocketVaultStateBroadcast(t *testing.T) {
+	srv, ts, cfg, password := setupTestServerForWS(t)
+	wsURL := "ws" + strings.TrimPrefix(ts.URL, "http") + "/api/ws"
+	validToken := crypto.CreateSessionToken(cfg.SessionSecret, cfg.PasswordHash, 1*time.Hour)
+
+	headers := http.Header{}
+	headers.Add("Cookie", "easy42_session="+validToken)
+
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, headers)
+	if err != nil {
+		t.Fatalf("failed to connect: %v", err)
+	}
+	defer conn.Close()
+
+	// Initial greeting should carry the current vault state (locked at startup).
+	_ = conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	_, msg, err := conn.ReadMessage()
+	if err != nil {
+		t.Fatalf("failed to read greeting: %v", err)
+	}
+	var greeting map[string]any
+	if err := json.Unmarshal(msg, &greeting); err != nil {
+		t.Fatalf("failed to parse greeting: %v", err)
+	}
+	if greeting["type"] != "connected" {
+		t.Fatalf("expected 'connected', got: %v", greeting["type"])
+	}
+	if unlocked, ok := greeting["unlocked"].(bool); !ok || unlocked {
+		t.Fatalf("expected greeting unlocked=false, got: %v", greeting["unlocked"])
+	}
+
+	// Unlocking the vault must notify every connected frontend.
+	if err := srv.mgr.Unlock(password); err != nil {
+		t.Fatalf("failed to unlock vault: %v", err)
+	}
+	_ = conn.SetReadDeadline(time.Now().Add(3 * time.Second))
+	_, msg, err = conn.ReadMessage()
+	if err != nil {
+		t.Fatalf("failed to receive unlock broadcast: %v", err)
+	}
+	var event map[string]any
+	if err := json.Unmarshal(msg, &event); err != nil {
+		t.Fatalf("failed to parse unlock event: %v", err)
+	}
+	if event["type"] != "vault_state_changed" {
+		t.Fatalf("expected 'vault_state_changed', got: %v", event["type"])
+	}
+	if unlocked, ok := event["unlocked"].(bool); !ok || !unlocked {
+		t.Fatalf("expected unlocked=true, got: %v", event["unlocked"])
+	}
+
+	// Locking the vault must notify every connected frontend as well.
+	srv.mgr.Lock()
+	_ = conn.SetReadDeadline(time.Now().Add(3 * time.Second))
+	_, msg, err = conn.ReadMessage()
+	if err != nil {
+		t.Fatalf("failed to receive lock broadcast: %v", err)
+	}
+	event = nil
+	if err := json.Unmarshal(msg, &event); err != nil {
+		t.Fatalf("failed to parse lock event: %v", err)
+	}
+	if event["type"] != "vault_state_changed" {
+		t.Fatalf("expected 'vault_state_changed', got: %v", event["type"])
+	}
+	if unlocked, ok := event["unlocked"].(bool); !ok || unlocked {
+		t.Fatalf("expected unlocked=false, got: %v", event["unlocked"])
+	}
+}
+
 func TestClientWebSocketClusterConfigBroadcast(t *testing.T) {
 	srv, ts, cfg, _ := setupTestServerForWS(t)
 	wsURL := "ws" + strings.TrimPrefix(ts.URL, "http") + "/api/ws"

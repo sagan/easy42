@@ -490,6 +490,14 @@ export const MeshProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const data = JSON.parse(event.data);
             if (data?.type === "cluster_updated") {
               scheduleReload();
+            } else if (data?.type === "vault_state_changed") {
+              if (typeof data.unlocked === "boolean") {
+                setIsUnlocked(data.unlocked);
+              }
+            } else if (data?.type === "connected") {
+              if (typeof data.unlocked === "boolean") {
+                setIsUnlocked(data.unlocked);
+              }
             }
           } catch {
             // Ignore non-json messages

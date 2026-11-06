@@ -35,19 +35,21 @@ var (
 
 // Manager orchestrates all operations across config, crypto, ssh, and sync
 type Manager struct {
-	mu                 sync.RWMutex
-	store              *config.Store
-	stateStore         *config.StateStore
-	vault              *crypto.KeyVault
-	pool               *ssh.ClientPool
-	roaManager         *roa.Manager
-	agentHub           *agent.Hub
-	serverURL          string
-	statuses           map[string]*config.NodeStatus
-	lastSync           time.Time
-	lastResults        []config.SyncResult
-	stopCh             chan struct{}
-	serverTasksMu      sync.Mutex
+	mu                   sync.RWMutex
+	store                *config.Store
+	stateStore           *config.StateStore
+	vault                *crypto.KeyVault
+	vaultStateMu         sync.RWMutex
+	onVaultStateChange   func(bool)
+	pool                 *ssh.ClientPool
+	roaManager           *roa.Manager
+	agentHub             *agent.Hub
+	serverURL            string
+	statuses             map[string]*config.NodeStatus
+	lastSync             time.Time
+	lastResults          []config.SyncResult
+	stopCh               chan struct{}
+	serverTasksMu        sync.Mutex
 	runningTasks         map[string]bool
 	prometheusExporter   *PrometheusExporter
 	telegramBot          *telegram.BotService
@@ -67,15 +69,15 @@ func NewManager(store *config.Store) *Manager {
 	}
 	roaManager := roa.NewManager(filepath.Join(store.DataDir(), "cache", "roa"))
 	m := &Manager{
-		store:        store,
-		stateStore:   stateStore,
-		vault:        crypto.NewKeyVault(),
-		pool:         ssh.NewClientPool(),
-		roaManager:   roaManager,
-		agentHub:     agent.NewHub(),
-		statuses:     make(map[string]*config.NodeStatus),
-		lastResults:  make([]config.SyncResult, 0),
-		stopCh:       make(chan struct{}),
+		store:                store,
+		stateStore:           stateStore,
+		vault:                crypto.NewKeyVault(),
+		pool:                 ssh.NewClientPool(),
+		roaManager:           roaManager,
+		agentHub:             agent.NewHub(),
+		statuses:             make(map[string]*config.NodeStatus),
+		lastResults:          make([]config.SyncResult, 0),
+		stopCh:               make(chan struct{}),
 		runningTasks:         make(map[string]bool),
 		pingTableSubscribers: make(map[chan *config.PingTableTask]struct{}),
 		appStatuses:          make(map[string]map[string]AppStatusRecord),
@@ -166,6 +168,36 @@ func (m *Manager) Vault() *crypto.KeyVault {
 	return m.vault
 }
 
+// SetVaultStateCallback registers a function that is invoked whenever the vault's
+// lock state changes. The callback runs synchronously and must not block.
+func (m *Manager) SetVaultStateCallback(cb func(unlocked bool)) {
+	m.vaultStateMu.Lock()
+	m.onVaultStateChange = cb
+	m.vaultStateMu.Unlock()
+}
+
+func (m *Manager) notifyVaultStateChanged(unlocked bool) {
+	m.vaultStateMu.RLock()
+	cb := m.onVaultStateChange
+	m.vaultStateMu.RUnlock()
+	if cb != nil {
+		cb(unlocked)
+	}
+}
+
+func (m *Manager) unlockVaultAndNotify(dek []byte) error {
+	if err := m.vault.Unlock(dek); err != nil {
+		return err
+	}
+	m.notifyVaultStateChanged(true)
+	return nil
+}
+
+func (m *Manager) lockVaultAndNotify() {
+	m.vault.Lock()
+	m.notifyVaultStateChanged(false)
+}
+
 // Unlock unlocks the master key vault using the user password
 func (m *Manager) Unlock(password string) error {
 	cfg := m.store.Get()
@@ -188,12 +220,12 @@ func (m *Manager) Unlock(password string) error {
 	}
 	defer crypto.Memzero(dek)
 
-	return m.vault.Unlock(dek)
+	return m.unlockVaultAndNotify(dek)
 }
 
 // Lock locks the vault
 func (m *Manager) Lock() {
-	m.vault.Lock()
+	m.lockVaultAndNotify()
 }
 
 // ChangePassword verifies oldPassword, re-encrypts the DEK with newPassword, updates config.json, and unlocks the vault
@@ -245,7 +277,7 @@ func (m *Manager) ChangePassword(oldPassword, newPassword string) error {
 	}
 
 	// Update vault with DEK
-	_ = m.vault.Unlock(dek)
+	_ = m.unlockVaultAndNotify(dek)
 
 	return nil
 }
@@ -276,7 +308,7 @@ func (m *Manager) ResetSessionSecret() error {
 		return fmt.Errorf("failed to save config: %w", err)
 	}
 
-	m.vault.Lock()
+	m.lockVaultAndNotify()
 	return nil
 }
 
@@ -2445,7 +2477,7 @@ func (m *Manager) RevealLinkPsk(node1Name, node2Name, iface, password string) (s
 		if err != nil {
 			return "", crypto.ErrVaultLocked
 		}
-		_ = m.vault.Unlock(dek)
+		_ = m.unlockVaultAndNotify(dek)
 		crypto.Memzero(dek)
 	}
 
@@ -2570,7 +2602,7 @@ func (m *Manager) RevealLinkPrivateKey(node1Name, node2Name, targetNode, iface, 
 		if err != nil {
 			return "", "", crypto.ErrVaultLocked
 		}
-		_ = m.vault.Unlock(dek)
+		_ = m.unlockVaultAndNotify(dek)
 		crypto.Memzero(dek)
 	}
 
@@ -4290,10 +4322,10 @@ type probeOutput struct {
 type agentProbeConfigFile = agent.ProbeConfigFile
 
 type agentProbeResult struct {
-	Hostname  string                          `json:"hostname"`
+	Hostname  string                           `json:"hostname"`
 	Configs   map[string]agent.ProbeConfigFile `json:"configs"`
-	HostsHash string                          `json:"hosts_hash"`
-	AppHashes map[string]string               `json:"app_hashes"`
+	HostsHash string                           `json:"hosts_hash"`
+	AppHashes map[string]string                `json:"app_hashes"`
 	AppFiles  map[string]agent.ProbeConfigFile `json:"app_files"`
 }
 

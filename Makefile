@@ -30,8 +30,11 @@ test:
 dev-backend:
 	go run main.go serve --listen 0.0.0.0:4242
 
+frontend:
+	npm --prefix web run build
+
 dev-frontend:
-	cd web && npm run dev
+	npm --prefix web run dev
 
 clean:
 	rm -rf bin/ web/dist

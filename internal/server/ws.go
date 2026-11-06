@@ -182,11 +182,15 @@ func (s *Server) handleClientWebSocket(w http.ResponseWriter, r *http.Request) {
 
 	s.wsHub.register <- conn
 
-	// Send initial greeting with timestamp
-	initialMsg, _ := json.Marshal(map[string]any{
+	// Send initial greeting with timestamp and current vault state
+	greeting := map[string]any{
 		"type":      "connected",
 		"timestamp": time.Now().UnixMilli(),
-	})
+	}
+	if s.mgr != nil {
+		greeting["unlocked"] = s.mgr.IsUnlocked()
+	}
+	initialMsg, _ := json.Marshal(greeting)
 	_ = ws.WriteMessage(websocket.TextMessage, initialMsg)
 
 	go conn.writePump()
@@ -266,6 +270,18 @@ func (s *Server) broadcastClusterChange(event string) {
 		_ = s.wsHub.BroadcastJSON(map[string]any{
 			"type":      "cluster_updated",
 			"event":     event,
+			"timestamp": time.Now().UnixMilli(),
+		})
+	}
+}
+
+// broadcastVaultStateChanged notifies all connected frontend clients that the
+// in-memory key vault was locked or unlocked so their UI stays in sync.
+func (s *Server) broadcastVaultStateChanged(unlocked bool) {
+	if s.wsHub != nil {
+		_ = s.wsHub.BroadcastJSON(map[string]any{
+			"type":      "vault_state_changed",
+			"unlocked":  unlocked,
 			"timestamp": time.Now().UnixMilli(),
 		})
 	}
