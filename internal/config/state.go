@@ -470,9 +470,14 @@ func (s *StateStore) saveNodeLocked(node StateNode) error {
 }
 
 // Save persists the full NetworkState to SQLite
-func (s *StateStore) Save(st *NetworkState) error {
+func (s *StateStore) Save(st *NetworkState) (err error) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
+	defer func() {
+		s.mu.Unlock()
+		if err == nil {
+			s.notifyChange()
+		}
+	}()
 
 	if err := s.initDBLocked(); err != nil {
 		return err
@@ -538,7 +543,6 @@ func (s *StateStore) Save(st *NetworkState) error {
 	}
 
 	s.state = st
-	s.notifyChange()
 	return nil
 }
 
