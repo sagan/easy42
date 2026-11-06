@@ -1106,10 +1106,17 @@ pub(crate) async fn run_cmd(program: &str, args: &[&str]) -> (bool, i32, String,
 }
 
 pub(crate) async fn run_shell(cmd_str: &str) -> (bool, i32, String, String) {
+    run_shell_with_timeout(cmd_str, std::time::Duration::from_secs(30)).await
+}
+
+pub(crate) async fn run_shell_with_timeout(
+    cmd_str: &str,
+    timeout_duration: std::time::Duration,
+) -> (bool, i32, String, String) {
     use tokio::process::Command;
     let mut cmd = Command::new("sh");
     cmd.arg("-c").arg(cmd_str);
-    match tokio::time::timeout(std::time::Duration::from_secs(30), cmd.output()).await {
+    match tokio::time::timeout(timeout_duration, cmd.output()).await {
         Ok(Ok(output)) => {
             let code = output.status.code().unwrap_or(-1);
             let stdout = String::from_utf8_lossy(&output.stdout).to_string();
@@ -1121,7 +1128,7 @@ pub(crate) async fn run_shell(cmd_str: &str) -> (bool, i32, String, String) {
             false,
             -1,
             String::new(),
-            "command timed out after 30s".to_string(),
+            format!("command timed out after {}s", timeout_duration.as_secs()),
         ),
     }
 }

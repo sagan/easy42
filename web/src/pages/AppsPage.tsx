@@ -1540,6 +1540,7 @@ export const AppsPage: React.FC = () => {
               display: "flex",
               alignItems: "flex-start",
               gap: 2,
+              overflowX: "auto",
             }}
           >
             <Box sx={{ color: "#4F46E5", mt: 0.2 }}>

@@ -6,8 +6,12 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use tracing::{error, info};
 
+use std::sync::Arc;
+use tokio::sync::Mutex;
+
 use crate::collector::proto::{AppActionCmd, AppConfigFile, AppSpec, AppStatus, AppType};
-use crate::executor::run_shell;
+use crate::container::compose_command;
+use crate::executor::{run_shell, run_shell_with_timeout};
 
 pub const DOCKER_BASE_DIR: &str = "/etc/ezappc";
 pub const SYSTEMD_SYSTEM_DIR: &str = "/etc/systemd/system";
@@ -52,13 +56,19 @@ pub fn hash_single_content(content: &str) -> String {
 
 pub struct AppsManager {
     init_system: InitSystem,
+    starting_apps: Arc<Mutex<HashMap<String, i64>>>,
+    app_errors: Arc<Mutex<HashMap<String, String>>>,
 }
 
 impl AppsManager {
     pub fn new() -> Self {
         let init_system = detect_init_system();
         info!("AppsManager initialized with init system: {:?}", init_system);
-        Self { init_system }
+        Self {
+            init_system,
+            starting_apps: Arc::new(Mutex::new(HashMap::new())),
+            app_errors: Arc::new(Mutex::new(HashMap::new())),
+        }
     }
 
     /// Sync apps state declaratively: install/update desired apps and garbage collect removed apps
@@ -86,7 +96,7 @@ impl AppsManager {
         let mut hashes = HashMap::new();
         let mut files_map = HashMap::new();
 
-        // 1. Docker apps in /etc/ezappc/<name>
+        // 1. Container (compose) apps in /etc/ezappc/<name>
         if let Ok(entries) = fs::read_dir(DOCKER_BASE_DIR) {
             for entry in entries.flatten() {
                 if let Ok(ft) = entry.file_type() {
@@ -300,24 +310,59 @@ impl AppsManager {
         // Sync auxiliary config files (write desired ones, remove orphaned ones)
         self.sync_config_files(&app_dir, &app.config_files, &["compose.yaml", ".env"])?;
 
-        // Execute docker compose
+        // Execute the compose command using whichever container runtime is installed
         let project_name = format!("ezapp-{}", app.name);
-        let compose_cmd = get_docker_compose_cmd();
+        let compose_cmd = compose_command();
 
         if app.enabled {
-            info!("Starting Docker app '{}'...", app.name);
-            let cmd = format!(
-                "cd {} && {} -p {} --env-file .env up -d --remove-orphans",
-                shell_quote(app_dir.to_str().unwrap_or("")),
-                compose_cmd,
-                shell_quote(&project_name)
-            );
-            let (success, code, stdout, stderr) = run_shell(&cmd).await;
-            if !success {
-                return Err(format!("docker compose up failed (code {}): {} {}", code, stdout, stderr));
+            info!("Starting container app '{}' asynchronously...", app.name);
+            let app_name = app.name.clone();
+            let starting_map = self.starting_apps.clone();
+            let errors_map = self.app_errors.clone();
+
+            // Clear any previous error and check if already in-flight starting
+            {
+                let mut errors = errors_map.lock().await;
+                errors.remove(&app_name);
+                let mut starting = starting_map.lock().await;
+                if starting.contains_key(&app_name) {
+                    info!("Container app '{}' is already in-flight starting/pulling; skipping duplicate spawn", app_name);
+                    return Ok(());
+                }
+                starting.insert(app_name.clone(), chrono_now());
             }
+
+            tokio::spawn(async move {
+                let cmd = format!(
+                    "cd {} && {} -p {} --env-file .env up -d --remove-orphans",
+                    shell_quote(app_dir.to_str().unwrap_or("")),
+                    compose_cmd,
+                    shell_quote(&project_name)
+                );
+                // Allow up to 15 minutes for image pulls and container initialization
+                let (success, code, stdout, stderr) =
+                    run_shell_with_timeout(&cmd, std::time::Duration::from_secs(900)).await;
+
+                {
+                    let mut starting = starting_map.lock().await;
+                    starting.remove(&app_name);
+                }
+
+                if !success {
+                    let err_msg = format!("{} up failed (code {}): {} {}", compose_cmd, code, stdout, stderr);
+                    error!("Container app '{}' background startup error: {}", app_name, err_msg);
+                    let mut errors = errors_map.lock().await;
+                    errors.insert(app_name, err_msg);
+                } else {
+                    info!("Container app '{}' background startup succeeded", app_name);
+                }
+            });
         } else {
-            info!("Stopping disabled Docker app '{}'...", app.name);
+            info!("Stopping disabled container app '{}'...", app.name);
+            {
+                let mut starting = self.starting_apps.lock().await;
+                starting.remove(&app.name);
+            }
             let cmd = format!(
                 "cd {} && {} -p {} stop",
                 shell_quote(app_dir.to_str().unwrap_or("")),
@@ -481,16 +526,22 @@ impl AppsManager {
 
     /// Garbage collect orphaned apps no longer in the desired set
     async fn cleanup_orphans(&self, desired_names: &HashSet<String>) {
-        // 1. Docker apps in /etc/ezappc/
+        // 1. Container (compose) apps in /etc/ezappc/
         if let Ok(entries) = fs::read_dir(DOCKER_BASE_DIR) {
             for entry in entries.flatten() {
                 if let Ok(file_type) = entry.file_type() {
                     if file_type.is_dir() {
                         let name = entry.file_name().to_string_lossy().to_string();
                         if !desired_names.contains(&name) {
-                            info!("Removing orphaned Docker app '{}'...", name);
+                            info!("Removing orphaned container app '{}'...", name);
+                            {
+                                let mut starting = self.starting_apps.lock().await;
+                                starting.remove(&name);
+                                let mut errors = self.app_errors.lock().await;
+                                errors.remove(&name);
+                            }
                             let project_name = format!("ezapp-{}", name);
-                            let compose_cmd = get_docker_compose_cmd();
+                            let compose_cmd = compose_command();
                             let cmd = format!(
                                 "cd {} && {} -p {} down --volumes 2>/dev/null || true",
                                 shell_quote(entry.path().to_str().unwrap_or("")),
@@ -564,7 +615,7 @@ impl AppsManager {
         let mut statuses = Vec::new();
         let mut seen = HashSet::new();
 
-        // 1. Check Docker apps in /etc/ezappc/
+        // 1. Check container (compose) apps in /etc/ezappc/
         if let Ok(entries) = fs::read_dir(DOCKER_BASE_DIR) {
             for entry in entries.flatten() {
                 if let Ok(ft) = entry.file_type() {
@@ -640,7 +691,7 @@ impl AppsManager {
 
     async fn probe_docker_status(&self, name: &str) -> (String, String, String) {
         let project_name = format!("ezapp-{}", name);
-        let compose_cmd = get_docker_compose_cmd();
+        let compose_cmd = compose_command();
         let app_dir = PathBuf::from(DOCKER_BASE_DIR).join(name);
 
         let cmd = format!(
@@ -651,13 +702,44 @@ impl AppsManager {
         );
 
         let (success, _, stdout, stderr) = run_shell(&cmd).await;
+        let is_starting = {
+            let starting = self.starting_apps.lock().await;
+            starting.contains_key(name)
+        };
+        let last_error = {
+            let errors = self.app_errors.lock().await;
+            errors.get(name).cloned().unwrap_or_default()
+        };
+
         if !success || stdout.trim().is_empty() {
+            if is_starting {
+                return (
+                    "starting".to_string(),
+                    "pulling images / starting containers...".to_string(),
+                    String::new(),
+                );
+            }
+            if !last_error.is_empty() {
+                return ("failed".to_string(), "startup failed".to_string(), last_error);
+            }
             return ("stopped".to_string(), "stopped or not started".to_string(), stderr);
         }
 
         let first_line = stdout.lines().next().unwrap_or("").trim();
         if first_line.to_lowercase().starts_with("running") {
+            if is_starting {
+                let mut starting = self.starting_apps.lock().await;
+                starting.remove(name);
+            }
             ("running".to_string(), first_line.to_string(), String::new())
+        } else if is_starting {
+            (
+                "starting".to_string(),
+                "pulling images / starting containers...".to_string(),
+                String::new(),
+            )
+        } else if !last_error.is_empty() {
+            ("failed".to_string(), first_line.to_string(), last_error)
         } else {
             ("stopped".to_string(), first_line.to_string(), String::new())
         }
@@ -711,11 +793,16 @@ impl AppsManager {
         let action = req.action.to_lowercase();
         let lines = if req.log_lines > 0 { req.log_lines } else { 100 };
 
+        if action == "stop" {
+            let mut starting = self.starting_apps.lock().await;
+            starting.remove(&req.app_name);
+        }
+
         match app_type {
             AppType::DockerCompose => {
                 let app_dir = PathBuf::from(DOCKER_BASE_DIR).join(&req.app_name);
                 let project_name = format!("ezapp-{}", req.app_name);
-                let compose_cmd = get_docker_compose_cmd();
+                let compose_cmd = compose_command();
 
                 let cmd = match action.as_str() {
                     "start" => format!("cd {} && {} -p {} start", shell_quote(app_dir.to_str().unwrap_or("")), compose_cmd, shell_quote(&project_name)),
@@ -763,11 +850,6 @@ impl AppsManager {
             }
         }
     }
-}
-
-fn get_docker_compose_cmd() -> &'static str {
-    // Default to modern "docker compose", fallback will be handled by shell if alias exists
-    "docker compose"
 }
 
 fn shell_quote(s: &str) -> String {

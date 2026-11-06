@@ -269,6 +269,7 @@ export const NodeAppsTab: React.FC<NodeAppsTabProps> = ({ nodeName }) => {
             const st = getStatusForApp(app.name);
             const isRunning = st?.state?.toLowerCase() === "running";
             const isFailed = st?.state?.toLowerCase() === "failed";
+            const isStarting = st?.state?.toLowerCase() === "starting";
             const currentAction = actionLoading[app.name];
 
             return (
@@ -328,8 +329,14 @@ export const NodeAppsTab: React.FC<NodeAppsTabProps> = ({ nodeName }) => {
                       </Typography>
 
                       {st?.status_text && (
-                        <Typography variant="caption" sx={{ color: "#94A3B8", display: "block", mt: 0.2 }}>
+                        <Typography variant="caption" sx={{ color: isStarting ? "#2563EB" : "#94A3B8", display: "block", mt: 0.2 }}>
                           Status: {st.status_text}
+                        </Typography>
+                      )}
+
+                      {st?.error_message && (
+                        <Typography variant="caption" sx={{ color: "#DC2626", display: "block", mt: 0.2 }}>
+                          Error: {st.error_message}
                         </Typography>
                       )}
 
@@ -412,6 +419,8 @@ export const NodeAppsTab: React.FC<NodeAppsTabProps> = ({ nodeName }) => {
                           <CheckCircle2 size={13} />
                         ) : isFailed ? (
                           <XCircle size={13} />
+                        ) : isStarting ? (
+                          <CircularProgress size={12} color="inherit" />
                         ) : (
                           <Square size={13} />
                         )
@@ -421,8 +430,8 @@ export const NodeAppsTab: React.FC<NodeAppsTabProps> = ({ nodeName }) => {
                         fontWeight: 800,
                         fontSize: "0.72rem",
                         height: 24,
-                        bgcolor: isRunning ? "#ECFDF5" : isFailed ? "#FEF2F2" : "#F1F5F9",
-                        color: isRunning ? "#059669" : isFailed ? "#DC2626" : "#64748B",
+                        bgcolor: isRunning ? "#ECFDF5" : isFailed ? "#FEF2F2" : isStarting ? "#EFF6FF" : "#F1F5F9",
+                        color: isRunning ? "#059669" : isFailed ? "#DC2626" : isStarting ? "#2563EB" : "#64748B",
                         "& .MuiChip-icon": { color: "inherit" },
                       }}
                     />

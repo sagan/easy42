@@ -3766,7 +3766,9 @@ func (m *Manager) PlanSyncWithScope(scope string, nodeNames ...string) ([]config
 			if spec.AppType == agentpb.AppType_DOCKER_COMPOSE {
 				mainTargetFile = fmt.Sprintf("/etc/ezappc/%s/compose.yaml", spec.Name)
 				envTargetFile = fmt.Sprintf("/etc/ezappc/%s/.env", spec.Name)
-				applyCmd = fmt.Sprintf("docker compose -p ezapp-%s up -d", spec.Name)
+				// Display-only hint: the node agent auto-detects the installed
+				// container runtime (docker, podman, or nerdctl) at apply time.
+				applyCmd = fmt.Sprintf("(docker|podman|nerdctl) compose -p ezapp-%s up -d", spec.Name)
 				mainDesc = fmt.Sprintf("Deploy app '%s' compose file on %s", spec.Name, node.Name)
 			} else if strings.Contains(osInfo, "openwrt") {
 				mainTargetFile = fmt.Sprintf("/etc/init.d/ezapp-%s", spec.Name)

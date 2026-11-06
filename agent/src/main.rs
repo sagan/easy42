@@ -1,6 +1,7 @@
 mod client;
 mod collector;
 mod config;
+mod container;
 mod cron;
 mod executor;
 mod hosts;
