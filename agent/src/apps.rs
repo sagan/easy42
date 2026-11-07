@@ -19,6 +19,16 @@ pub const OPENRC_INIT_DIR: &str = "/etc/init.d";
 pub const OPENRC_CONF_DIR: &str = "/etc/conf.d";
 pub const PROCD_INIT_DIR: &str = "/etc/init.d";
 pub const APP_DATA_BASE_DIR: &str = "/etc/ezapp-data";
+/// Hidden manifest listing the files Easy42 generated inside an app directory.
+/// It lets the agent distinguish managed files from data created by the app
+/// (for example bind-mounted volumes) during updates and garbage collection.
+pub const MANAGED_MANIFEST_FILE: &str = ".easy42-managed.json";
+
+#[derive(Serialize, Deserialize, Default)]
+struct ManagedFilesManifest {
+    #[serde(default)]
+    files: Vec<String>,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InitSystem {
@@ -129,8 +139,7 @@ impl AppsManager {
                         if compose_path.exists() {
                             let main_content = fs::read_to_string(&compose_path).unwrap_or_default();
                             let env_content = fs::read_to_string(&env_path).unwrap_or_default();
-                            let mut files = Vec::new();
-                            read_auxiliary_files_recursive(&app_dir, &app_dir, &mut files);
+                            let files = read_managed_files(&app_dir);
                             let hash = compute_files_hash(&main_content, &env_content, &files);
                             hashes.insert(name.clone(), hash);
 
@@ -187,10 +196,7 @@ impl AppsManager {
 
                         let main_content = fs::read_to_string(&service_path).unwrap_or_default();
                         let env_content = fs::read_to_string(&env_path).unwrap_or_default();
-                        let mut files = Vec::new();
-                        if data_dir.is_dir() {
-                            read_auxiliary_files_recursive(&data_dir, &data_dir, &mut files);
-                        }
+                        let files = read_managed_files(&data_dir);
                         let hash = compute_files_hash(&main_content, &env_content, &files);
                         hashes.insert(name.clone(), hash);
 
@@ -250,10 +256,7 @@ impl AppsManager {
                             }
                             _ => (String::new(), false, String::new()),
                         };
-                        let mut files = Vec::new();
-                        if data_dir.is_dir() {
-                            read_auxiliary_files_recursive(&data_dir, &data_dir, &mut files);
-                        }
+                        let files = read_managed_files(&data_dir);
                         let hash = compute_files_hash(&main_content, &env_content, &files);
                         hashes.insert(name.clone(), hash);
 
@@ -416,14 +419,7 @@ impl AppsManager {
     async fn apply_native_app(&self, app: &AppSpec) -> Result<(), String> {
         // Write auxiliary files to /etc/ezapp-data/<name>/
         let app_data_dir = PathBuf::from(APP_DATA_BASE_DIR).join(&app.name);
-        if app.config_files.is_empty() {
-            if app_data_dir.is_dir() {
-                let _ = fs::remove_dir_all(&app_data_dir);
-            }
-        } else {
-            fs::create_dir_all(&app_data_dir).map_err(|e| format!("failed to create data dir: {}", e))?;
-            self.sync_config_files(&app_data_dir, &app.config_files, &[])?;
-        }
+        self.sync_config_files(&app_data_dir, &app.config_files, &[])?;
 
         match self.init_system {
             InitSystem::Systemd => self.apply_systemd_app(app).await,
@@ -521,14 +517,15 @@ impl AppsManager {
         let mut desired_rel_paths = HashSet::new();
         for file in files {
             let rel_path = file.path.trim();
-            if !rel_path.is_empty() && !rel_path.contains("..") && !rel_path.starts_with('/') {
+            if is_safe_rel_path(rel_path) {
                 desired_rel_paths.insert(rel_path.to_string());
             }
         }
 
-        let mut existing_files = Vec::new();
-        read_auxiliary_files_recursive(base_dir, base_dir, &mut existing_files);
-        for (rel_path, _) in existing_files {
+        // Only delete files that were previously written by Easy42. Scanning the
+        // directory instead would treat app-generated data (e.g. bind-mounted
+        // volumes) as orphaned config and destroy it.
+        for rel_path in read_managed_manifest(base_dir) {
             if excluded_rel_paths.contains(&rel_path.as_str()) {
                 continue;
             }
@@ -536,17 +533,34 @@ impl AppsManager {
                 let target_path = base_dir.join(&rel_path);
                 info!("Removing orphaned app config file: {:?}", target_path);
                 let _ = fs::remove_file(&target_path);
+                prune_empty_parent_dirs(base_dir, &target_path);
             }
         }
 
-        self.write_config_files(base_dir, files)?;
+        let manifest_rel_paths: HashSet<String> = desired_rel_paths
+            .iter()
+            .filter(|rel_path| !excluded_rel_paths.contains(&rel_path.as_str()))
+            .cloned()
+            .collect();
+
+        if !desired_rel_paths.is_empty() {
+            fs::create_dir_all(base_dir)
+                .map_err(|e| format!("failed to create config dir {:?}: {}", base_dir, e))?;
+            self.write_config_files(base_dir, files)?;
+            write_managed_manifest(base_dir, &manifest_rel_paths)?;
+        } else {
+            write_managed_manifest(base_dir, &HashSet::new())?;
+            // Remove the directory only when no app-generated data remains.
+            let _ = fs::remove_dir(base_dir);
+        }
+
         Ok(())
     }
 
     fn write_config_files(&self, base_dir: &Path, files: &[AppConfigFile]) -> Result<(), String> {
         for file in files {
             let rel_path = file.path.trim();
-            if rel_path.is_empty() || rel_path.contains("..") || rel_path.starts_with('/') {
+            if !is_safe_rel_path(rel_path) {
                 continue;
             }
             let target_path = base_dir.join(rel_path);
@@ -571,6 +585,15 @@ impl AppsManager {
                     if file_type.is_dir() {
                         let name = entry.file_name().to_string_lossy().to_string();
                         if !desired_names.contains(&name) {
+                            let app_dir = entry.path();
+                            // A directory that has neither an Easy42 compose file nor
+                            // a managed-file manifest is just leftover user data (for
+                            // example a mounted volume). Leave it untouched.
+                            if !app_dir.join("compose.yaml").exists()
+                                && !app_dir.join(MANAGED_MANIFEST_FILE).exists()
+                            {
+                                continue;
+                            }
                             info!("Removing orphaned container app '{}'...", name);
                             {
                                 let mut starting = self.starting_apps.lock().await;
@@ -582,12 +605,12 @@ impl AppsManager {
                             let compose_cmd = compose_command();
                             let cmd = format!(
                                 "cd {} && {} -p {} down --volumes --remove-orphans 2>/dev/null || true",
-                                shell_quote(entry.path().to_str().unwrap_or("")),
+                                shell_quote(app_dir.to_str().unwrap_or("")),
                                 compose_cmd,
                                 shell_quote(&project_name)
                             );
                             let _ = run_shell(&cmd).await;
-                            let _ = fs::remove_dir_all(entry.path());
+                            remove_managed_app_files(&app_dir, &["compose.yaml", ".env"]);
                         }
                     }
                 }
@@ -608,7 +631,7 @@ impl AppsManager {
                             let _ = run_shell(&format!("systemctl disable {} 2>/dev/null || true", service_name)).await;
                             let _ = fs::remove_file(entry.path());
                             let _ = fs::remove_file(PathBuf::from(SYSTEMD_SYSTEM_DIR).join(format!("{}.env", service_name)));
-                            let _ = fs::remove_dir_all(PathBuf::from(APP_DATA_BASE_DIR).join(name));
+                            remove_managed_app_files(&PathBuf::from(APP_DATA_BASE_DIR).join(name), &[]);
                             let _ = run_shell("systemctl daemon-reload").await;
                         }
                     }
@@ -640,7 +663,7 @@ impl AppsManager {
                                 }
                                 _ => {}
                             }
-                            let _ = fs::remove_dir_all(PathBuf::from(APP_DATA_BASE_DIR).join(name));
+                            remove_managed_app_files(&PathBuf::from(APP_DATA_BASE_DIR).join(name), &[]);
                         }
                     }
                 }
@@ -658,6 +681,13 @@ impl AppsManager {
             for entry in entries.flatten() {
                 if let Ok(ft) = entry.file_type() {
                     if ft.is_dir() {
+                        let app_dir = entry.path();
+                        // Leftover directories can contain only app-generated data
+                        // (e.g. mounted volumes) after an app was removed. They are
+                        // not apps and must not be reported as such.
+                        if !app_dir.join("compose.yaml").exists() {
+                            continue;
+                        }
                         let name = entry.file_name().to_string_lossy().to_string();
                         if seen.insert(name.clone()) {
                             let (state, text, err) = self.probe_docker_status(&name).await;
@@ -987,26 +1017,133 @@ pub fn ensure_systemd_env_file(app_name: &str, content: &str) -> String {
     }
 }
 
-fn read_auxiliary_files_recursive(root_dir: &Path, current_dir: &Path, out: &mut Vec<(String, String)>) {
-    if let Ok(entries) = fs::read_dir(current_dir) {
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if let Ok(ft) = entry.file_type() {
-                if ft.is_dir() {
-                    read_auxiliary_files_recursive(root_dir, &path, out);
-                } else if ft.is_file() {
-                    if let Ok(rel) = path.strip_prefix(root_dir) {
-                        let rel_str = rel.to_string_lossy().to_string();
-                        if rel_str == "compose.yaml" || rel_str == ".env" {
-                            continue;
-                        }
-                        if let Ok(content) = fs::read_to_string(&path) {
-                            out.push((rel_str, content));
-                        }
-                    }
-                }
+/// A relative path that is safe to join onto an app directory. The managed
+/// manifest name is reserved for Easy42 itself.
+fn is_safe_rel_path(rel_path: &str) -> bool {
+    !rel_path.is_empty()
+        && !rel_path.contains("..")
+        && !rel_path.starts_with('/')
+        && rel_path != MANAGED_MANIFEST_FILE
+}
+
+fn read_managed_manifest(base_dir: &Path) -> HashSet<String> {
+    let mut managed = HashSet::new();
+    let Ok(content) = fs::read_to_string(base_dir.join(MANAGED_MANIFEST_FILE)) else {
+        return managed;
+    };
+    let Ok(manifest) = serde_json::from_str::<ManagedFilesManifest>(&content) else {
+        return managed;
+    };
+    for rel_path in manifest.files {
+        let rel_path = rel_path.trim().to_string();
+        if is_safe_rel_path(&rel_path) {
+            managed.insert(rel_path);
+        }
+    }
+    managed
+}
+
+fn write_managed_manifest(base_dir: &Path, files: &HashSet<String>) -> Result<(), String> {
+    let manifest_path = base_dir.join(MANAGED_MANIFEST_FILE);
+    if files.is_empty() {
+        match fs::remove_file(&manifest_path) {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => return Err(format!("failed to remove managed file manifest {:?}: {}", manifest_path, e)),
+        }
+        return Ok(());
+    }
+
+    let mut sorted_files: Vec<&String> = files.iter().collect();
+    sorted_files.sort();
+    let manifest = ManagedFilesManifest {
+        files: sorted_files.into_iter().cloned().collect(),
+    };
+    let content = serde_json::to_string_pretty(&manifest)
+        .map_err(|e| format!("failed to serialize managed file manifest: {}", e))?;
+
+    let tmp_path = base_dir.join(format!("{}.tmp", MANAGED_MANIFEST_FILE));
+    fs::write(&tmp_path, content)
+        .map_err(|e| format!("failed to write managed file manifest {:?}: {}", tmp_path, e))?;
+    fs::rename(&tmp_path, &manifest_path)
+        .map_err(|e| format!("failed to install managed file manifest {:?}: {}", manifest_path, e))?;
+    Ok(())
+}
+
+/// Read only the files Easy42 wrote for an app, never arbitrary files that the
+/// app itself may have created inside its directory.
+fn read_managed_files(base_dir: &Path) -> Vec<(String, String)> {
+    let mut files = Vec::new();
+    for rel_path in read_managed_manifest(base_dir) {
+        let path = base_dir.join(&rel_path);
+        if path.is_file() {
+            if let Ok(content) = fs::read_to_string(&path) {
+                files.push((rel_path, content));
             }
         }
+    }
+    files.sort_by(|a, b| a.0.cmp(&b.0));
+    files
+}
+
+/// Remove empty directories between a deleted managed file and the app base
+/// directory. Never removes the base directory itself.
+fn prune_empty_parent_dirs(base_dir: &Path, target: &Path) {
+    let mut current = target.parent();
+    while let Some(dir) = current {
+        if dir == base_dir || !dir.starts_with(base_dir) {
+            break;
+        }
+        if fs::remove_dir(dir).is_err() {
+            break;
+        }
+        current = dir.parent();
+    }
+}
+
+/// Remove only the files Easy42 generated for an app, then remove the app
+/// directory itself only if it is empty. App-generated data is preserved.
+fn remove_managed_app_files(base_dir: &Path, standard_rel_paths: &[&str]) {
+    let mut targets = read_managed_manifest(base_dir);
+    for rel_path in standard_rel_paths {
+        if !rel_path.is_empty() {
+            targets.insert((*rel_path).to_string());
+        }
+    }
+
+    let mut targets: Vec<String> = targets.into_iter().collect();
+    // Delete deeper paths first so their parent directories can be pruned.
+    targets.sort_by(|a, b| {
+        b.matches('/')
+            .count()
+            .cmp(&a.matches('/').count())
+            .then_with(|| a.cmp(b))
+    });
+
+    for rel_path in &targets {
+        if !is_safe_rel_path(rel_path) {
+            continue;
+        }
+        let target_path = base_dir.join(rel_path);
+        match fs::remove_file(&target_path) {
+            Ok(()) => info!("Removed Easy42 managed app file: {:?}", target_path),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => error!("Failed to remove Easy42 managed app file {:?}: {}", target_path, e),
+        }
+        prune_empty_parent_dirs(base_dir, &target_path);
+    }
+
+    let manifest_path = base_dir.join(MANAGED_MANIFEST_FILE);
+    match fs::remove_file(&manifest_path) {
+        Ok(()) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => error!("Failed to remove managed file manifest {:?}: {}", manifest_path, e),
+    }
+
+    match fs::remove_dir(base_dir) {
+        Ok(()) => info!("Removed empty app directory {:?}", base_dir),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(_) => info!("Preserving non-empty app directory {:?}", base_dir),
     }
 }
 
@@ -1077,6 +1214,143 @@ mod tests {
         let raw = "[Unit]\nDescription=sample\n\n[Service]\nEnvironmentFile=/etc/systemd/system/ezapp-myapp.env\nExecStart=test\n";
         let res = ensure_systemd_env_file("myapp", raw);
         assert_eq!(res, raw);
+    }
+
+    #[test]
+    fn test_remove_managed_app_files_preserves_user_data() {
+        let tmp = tempfile::tempdir().unwrap();
+        let base = tmp.path().join("app");
+        fs::create_dir_all(base.join("conf")).unwrap();
+        fs::create_dir_all(base.join("volume")).unwrap();
+        fs::write(base.join("compose.yaml"), "services: {}").unwrap();
+        fs::write(base.join(".env"), "A=1").unwrap();
+        fs::write(base.join("conf/rclone.conf"), "cfg").unwrap();
+        fs::write(base.join("volume/data.db"), "user data").unwrap();
+
+        let mut managed = HashSet::new();
+        managed.insert("conf/rclone.conf".to_string());
+        write_managed_manifest(&base, &managed).unwrap();
+
+        remove_managed_app_files(&base, &["compose.yaml", ".env"]);
+
+        assert!(!base.join("compose.yaml").exists());
+        assert!(!base.join(".env").exists());
+        assert!(!base.join("conf").exists());
+        assert!(!base.join(MANAGED_MANIFEST_FILE).exists());
+        assert_eq!(
+            fs::read_to_string(base.join("volume/data.db")).unwrap(),
+            "user data"
+        );
+        assert!(base.is_dir(), "directory must be preserved while user data remains");
+    }
+
+    #[test]
+    fn test_remove_managed_app_files_removes_empty_dir() {
+        let tmp = tempfile::tempdir().unwrap();
+        let base = tmp.path().join("app");
+        fs::create_dir_all(base.join("conf")).unwrap();
+        fs::write(base.join("compose.yaml"), "services: {}").unwrap();
+        fs::write(base.join(".env"), "A=1").unwrap();
+        fs::write(base.join("conf/rclone.conf"), "cfg").unwrap();
+
+        let mut managed = HashSet::new();
+        managed.insert("conf/rclone.conf".to_string());
+        write_managed_manifest(&base, &managed).unwrap();
+
+        remove_managed_app_files(&base, &["compose.yaml", ".env"]);
+
+        assert!(!base.exists(), "empty app directory should be removed");
+    }
+
+    #[test]
+    fn test_remove_managed_app_files_without_manifest_keeps_user_data() {
+        let tmp = tempfile::tempdir().unwrap();
+        let base = tmp.path().join("app");
+        fs::create_dir_all(&base).unwrap();
+        fs::write(base.join("compose.yaml"), "services: {}").unwrap();
+        fs::write(base.join(".env"), "A=1").unwrap();
+        fs::write(base.join("user.txt"), "user data").unwrap();
+
+        remove_managed_app_files(&base, &["compose.yaml", ".env"]);
+
+        assert!(!base.join("compose.yaml").exists());
+        assert!(!base.join(".env").exists());
+        assert_eq!(fs::read_to_string(base.join("user.txt")).unwrap(), "user data");
+        assert!(base.is_dir());
+    }
+
+    #[test]
+    fn test_sync_config_files_only_removes_managed_files() {
+        let tmp = tempfile::tempdir().unwrap();
+        let base = tmp.path().join("app");
+        fs::create_dir_all(base.join("conf")).unwrap();
+        fs::write(base.join("conf/old.conf"), "old").unwrap();
+        fs::write(base.join("data.bin"), "user data").unwrap();
+
+        let mut managed = HashSet::new();
+        managed.insert("conf/old.conf".to_string());
+        write_managed_manifest(&base, &managed).unwrap();
+
+        let manager = AppsManager::new();
+        let files = vec![AppConfigFile {
+            path: "conf/new.conf".to_string(),
+            content: b"new".to_vec(),
+            file_mode: 0o644,
+        }];
+        manager.sync_config_files(&base, &files, &[]).unwrap();
+
+        assert!(!base.join("conf/old.conf").exists());
+        assert_eq!(
+            fs::read_to_string(base.join("conf/new.conf")).unwrap(),
+            "new"
+        );
+        assert_eq!(fs::read_to_string(base.join("data.bin")).unwrap(), "user data");
+
+        let managed_after = read_managed_manifest(&base);
+        assert!(managed_after.contains("conf/new.conf"));
+        assert!(!managed_after.contains("conf/old.conf"));
+    }
+
+    #[test]
+    fn test_sync_config_files_empty_preserves_user_data() {
+        let tmp = tempfile::tempdir().unwrap();
+        let base = tmp.path().join("app-data");
+        fs::create_dir_all(base.join("conf")).unwrap();
+        fs::write(base.join("conf/old.conf"), "old").unwrap();
+        fs::write(base.join("volume.db"), "user data").unwrap();
+
+        let mut managed = HashSet::new();
+        managed.insert("conf/old.conf".to_string());
+        write_managed_manifest(&base, &managed).unwrap();
+
+        let manager = AppsManager::new();
+        manager.sync_config_files(&base, &[], &[]).unwrap();
+
+        assert!(!base.join("conf").exists());
+        assert!(!base.join(MANAGED_MANIFEST_FILE).exists());
+        assert_eq!(
+            fs::read_to_string(base.join("volume.db")).unwrap(),
+            "user data"
+        );
+        assert!(base.is_dir());
+    }
+
+    #[test]
+    fn test_read_managed_files_ignores_unmanaged_files() {
+        let tmp = tempfile::tempdir().unwrap();
+        let base = tmp.path().join("app");
+        fs::create_dir_all(base.join("conf")).unwrap();
+        fs::write(base.join("conf/app.conf"), "managed").unwrap();
+        fs::write(base.join("user-data.bin"), "user data").unwrap();
+
+        let mut managed = HashSet::new();
+        managed.insert("conf/app.conf".to_string());
+        write_managed_manifest(&base, &managed).unwrap();
+
+        let files = read_managed_files(&base);
+        assert_eq!(files.len(), 1);
+        assert_eq!(files[0].0, "conf/app.conf");
+        assert_eq!(files[0].1, "managed");
     }
 }
 
