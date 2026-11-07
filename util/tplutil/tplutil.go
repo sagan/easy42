@@ -68,41 +68,90 @@ func GetTemplate(tpl string, strict bool) (*Template, error) {
 
 // GetTemplateWithFuncs parses a template and registers extra dynamic functions before compilation.
 func GetTemplateWithFuncs(tpl string, strict bool, extraFuncs map[string]any) (*Template, error) {
-	templateInstance := template.New("template").Funcs(templateFuncs)
-	if extraFuncs != nil {
-		templateInstance = templateInstance.Funcs(extraFuncs)
+	return getTemplate(tpl, strict, nil, extraFuncs)
+}
+
+// GetTemplateWithHooks parses a template and registers hook snippets as
+// associated named templates on the same template tree (sharing the same
+// function map and options). Hooks can be invoked from the main template or
+// from other hooks with the "include" function: {{ include "hook_name" $ }}.
+func GetTemplateWithHooks(tpl string, strict bool, hooks map[string]string) (*Template, error) {
+	return getTemplate(tpl, strict, hooks, nil)
+}
+
+// getTemplate is the core template builder. It parses the main template, then
+// registers each hook as an associated named template. Both share the sprout
+// function map, extraFuncs, an "include" function, and an on-demand "eval"
+// function backed by a JavaScript runtime.
+func getTemplate(tpl string, strict bool, hooks map[string]string, extraFuncs map[string]any) (*Template, error) {
+	var root *template.Template
+	funcs := template.FuncMap{
+		"include": func(name string, data any) (string, error) {
+			var buf bytes.Buffer
+			if err := root.ExecuteTemplate(&buf, name, data); err != nil {
+				return "", fmt.Errorf("include %q: %w", name, err)
+			}
+			return buf.String(), nil
+		},
 	}
+	for name, fn := range extraFuncs {
+		funcs[name] = fn
+	}
+	templateInstance := template.New("template").Funcs(templateFuncs).Funcs(funcs)
 	if strict {
 		templateInstance = templateInstance.Option("missingkey=error")
 	}
-	t, err := templateInstance.Parse(tpl)
+
 	var jsvm *goja.Runtime
-	if err != nil {
-		if strings.Contains(err.Error(), ` function "eval" not defined`) {
-			jsvm = goja.New()
-			new(require.Registry).Enable(jsvm)
-			console.Enable(jsvm)
-			evalFuncMap := template.FuncMap{
-				"eval": func(input any) any {
-					v, e := Eval(jsvm, input)
-					if e != nil {
-						log.Printf("eval error: %v", e)
-					}
-					return v
-				},
+	// parseInto parses src into dst. If the source uses the "eval" function
+	// which is registered on demand, the JavaScript runtime is created lazily
+	// and the source is re-parsed with the "eval" function available.
+	parseInto := func(dst *template.Template, src string) error {
+		_, err := dst.Parse(src)
+		if err != nil && strings.Contains(err.Error(), ` function "eval" not defined`) {
+			if jsvm == nil {
+				jsvm = goja.New()
+				new(require.Registry).Enable(jsvm)
+				console.Enable(jsvm)
+				templateInstance.Funcs(template.FuncMap{
+					"eval": func(input any) any {
+						v, e := Eval(jsvm, input)
+						if e != nil {
+							log.Printf("eval error: %v", e)
+						}
+						return v
+					},
+				})
 			}
-			templateInstance.Funcs(evalFuncMap)
-			t, err = templateInstance.Parse(tpl)
+			_, err = dst.Parse(src)
 		}
+		return err
 	}
-	if err != nil {
+
+	if err := parseInto(templateInstance, tpl); err != nil {
 		return nil, err
 	}
-	return &Template{Template: t, jsvm: jsvm}, nil
+	root = templateInstance
+	for name, content := range hooks {
+		if err := parseInto(templateInstance.New(name), content); err != nil {
+			return nil, fmt.Errorf("hook template %q: %w", name, err)
+		}
+	}
+	return &Template{Template: templateInstance, jsvm: jsvm}, nil
 }
 
 func RenderTemplate(tplStr string, data any) (string, error) {
 	tpl, err := GetTemplate(tplStr, false)
+	if err != nil {
+		return "", err
+	}
+	return tpl.Exec(data)
+}
+
+// RenderTemplateWithHooks renders a template with hook snippets registered as
+// associated named templates (invokable via the "include" function).
+func RenderTemplateWithHooks(tplStr string, data any, hooks map[string]string) (string, error) {
+	tpl, err := GetTemplateWithHooks(tplStr, false, hooks)
 	if err != nil {
 		return "", err
 	}

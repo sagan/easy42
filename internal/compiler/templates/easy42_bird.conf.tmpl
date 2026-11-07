@@ -58,7 +58,7 @@ router id SELF_IP;
 # Custom BIRD Pre Hooks
 # ==============================================================================
 {{range .bird_hooks_pre}}
-{{.}}
+{{include . $}}
 
 {{end}}
 {{end}}
@@ -1605,7 +1605,7 @@ protocol bgp flapalerted {
 # Custom BIRD Hooks
 # ==============================================================================
 {{range .bird_hooks}}
-{{.}}
+{{include . $}}
 
 {{end}}
 {{end}}

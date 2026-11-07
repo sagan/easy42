@@ -533,11 +533,11 @@ func BuildNftablesNodeContext(
 		}
 		switch strings.ToLower(strings.TrimSpace(h.Type)) {
 		case "nft.pre":
-			nftHooksPre = append(nftHooksPre, content)
+			nftHooksPre = append(nftHooksPre, addHookTemplate(ctx, "nft_pre", content))
 		case "nft.table":
-			nftHooksTable = append(nftHooksTable, content)
+			nftHooksTable = append(nftHooksTable, addHookTemplate(ctx, "nft_table", content))
 		case "nft", "nft.post", "nft.global":
-			nftHooksPost = append(nftHooksPost, content)
+			nftHooksPost = append(nftHooksPost, addHookTemplate(ctx, "nft_post", content))
 		}
 	}
 	if len(nftHooksPre) > 0 {
@@ -566,7 +566,7 @@ func GenerateNftablesConfigWithTemplate(
 		return "", err
 	}
 
-	return tplutil.RenderTemplate(tmplContent, ctx)
+	return tplutil.RenderTemplateWithHooks(tmplContent, ctx, popHookTemplates(ctx))
 }
 
 // GenerateNftablesConfig compiles the nftables configuration for a node using the custom template or default embedded template

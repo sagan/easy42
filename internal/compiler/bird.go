@@ -1077,9 +1077,9 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 		}
 		switch strings.ToLower(strings.TrimSpace(h.Type)) {
 		case "bird.pre":
-			birdHooksPre = append(birdHooksPre, content)
+			birdHooksPre = append(birdHooksPre, addHookTemplate(ctx, "bird_pre", content))
 		case "bird", "bird.post", "bird.global":
-			birdHooksPost = append(birdHooksPost, content)
+			birdHooksPost = append(birdHooksPost, addHookTemplate(ctx, "bird_post", content))
 		}
 	}
 	if len(birdHooksPre) > 0 {
@@ -1249,7 +1249,7 @@ func GenerateBirdConfigWithTemplate(
 	if err != nil {
 		return "", err
 	}
-	return tplutil.RenderTemplate(tmplContent, ctx)
+	return tplutil.RenderTemplateWithHooks(tmplContent, ctx, popHookTemplates(ctx))
 }
 
 // GenerateBirdConfig compiles the BIRD configuration for a node using the custom template or default embedded template

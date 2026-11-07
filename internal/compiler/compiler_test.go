@@ -728,6 +728,54 @@ func TestWgConfigHooks(t *testing.T) {
 	}
 }
 
+func TestWgConfigHooksRenderedAsTemplates(t *testing.T) {
+	nodeA := &config.Node{
+		Name: "node-a",
+		IP:   "192.168.100.1",
+		ConfigHooks: []config.ConfigHook{
+			{
+				Type:    "wg.interface",
+				Content: "# Interface for {{ toUpper .self_node.name }}",
+			},
+			{
+				Type:    "wg.peer",
+				Content: "# Peer {{ .peer_node.name }} from {{ .self_node.ip }}",
+			},
+			{
+				Type:    "wg.post",
+				Content: `# Post {{ if .psk }}with psk{{ else }}without psk{{ end }}`,
+			},
+		},
+	}
+	nodeB := &config.Node{
+		Name: "node-b",
+		IP:   "192.168.100.2",
+	}
+	endA := &config.LinkEnd{
+		Name:       "node-a",
+		ListenPort: 51820,
+	}
+	endB := &config.LinkEnd{
+		Name:      "node-b",
+		PublicKey: "peer-b-pubkey",
+	}
+
+	conf, err := GenerateWgConfigContent(nodeA, nodeB, endA, endB, nil)
+	if err != nil {
+		t.Fatalf("GenerateWgConfigContent failed: %v", err)
+	}
+
+	if !strings.Contains(conf, "# Interface for NODE-A") {
+		t.Errorf("Expected wg.interface hook rendered with node data in:\n%s", conf)
+	}
+	if !strings.Contains(conf, "# Peer node-b from 192.168.100.1") {
+		t.Errorf("Expected wg.peer hook rendered with node data in:\n%s", conf)
+	}
+	if !strings.Contains(conf, "# Post without psk") {
+		t.Errorf("Expected wg.post hook rendered with context conditional in:\n%s", conf)
+	}
+}
+
 func TestGenerateWgConfigContent_Fwmark(t *testing.T) {
 	nodeA := &config.Node{Name: "node-a", IP: "192.168.100.1"}
 	nodeB := &config.Node{Name: "node-b", IP: "192.168.100.2"}

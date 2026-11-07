@@ -736,6 +736,49 @@ func TestNftablesConfigHooks(t *testing.T) {
 	}
 }
 
+func TestNftablesConfigHooksRenderedAsTemplates(t *testing.T) {
+	node := config.Node{
+		Name: "tpl-hook-node",
+		IP:   "192.168.100.1",
+		ASN:  4224420001,
+		ConfigHooks: []config.ConfigHook{
+			{
+				Type:    "nft.pre",
+				Content: `define hook_node_ip = {{ .ip }} # node {{ toUpper .name }}`,
+			},
+			{
+				Type:    "nft.post",
+				Content: "# Post hook for {{ .name }}\ntable inet tpl_hook_table {\n  chain tpl_hook_chain { type filter hook output priority 0; policy accept; }\n}",
+			},
+		},
+	}
+
+	conf, err := GenerateNftablesConfig(&node, []config.Node{node}, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("GenerateNftablesConfig failed: %v", err)
+	}
+
+	if !strings.Contains(conf, "define hook_node_ip = 192.168.100.1 # node TPL-HOOK-NODE") {
+		t.Errorf("Expected nft.pre hook rendered with node data in:\n%s", conf)
+	}
+	if !strings.Contains(conf, "# Post hook for tpl-hook-node") || !strings.Contains(conf, "table inet tpl_hook_table {") {
+		t.Errorf("Expected nft.post hook rendered with node data in:\n%s", conf)
+	}
+
+	// Validate syntax with nft binary if installed
+	if nftPath, err := exec.LookPath("nft"); err == nil {
+		tmpFile := filepath.Join(t.TempDir(), "easy42.nft")
+		if err := os.WriteFile(tmpFile, []byte(conf), 0644); err != nil {
+			t.Fatalf("WriteFile failed: %v", err)
+		}
+		cmd := exec.Command(nftPath, "-c", "-f", tmpFile)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("nft -c -f validation failed: %v\nOutput:\n%s\nConfig:\n%s", err, string(out), conf)
+		}
+	}
+}
+
 func TestDisallowedCIDRsNftables(t *testing.T) {
 	node := config.Node{
 		Name:        "gw1",

@@ -1851,7 +1851,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                     >
                       <Typography variant="caption" sx={{ color: "#94A3B8", fontStyle: "italic" }}>
                         No custom config hooks defined. Click &quot;Add Hook&quot; to inject custom BIRD, WireGuard, or
-                        nftables directives.
+                        nftables directives. Hook content supports Go template syntax (e.g. {"{{ .ip }}"}).
                       </Typography>
                     </Box>
                   ) : (

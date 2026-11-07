@@ -377,11 +377,11 @@ func BuildWgLinkContext(
 			}
 			switch strings.ToLower(strings.TrimSpace(h.Type)) {
 			case "wg.interface":
-				wgHooksInterface = append(wgHooksInterface, content)
+				wgHooksInterface = append(wgHooksInterface, addHookTemplate(ctx, "wg_interface", content))
 			case "wg.peer":
-				wgHooksPeer = append(wgHooksPeer, content)
+				wgHooksPeer = append(wgHooksPeer, addHookTemplate(ctx, "wg_peer", content))
 			case "wg.post", "wg":
-				wgHooksPost = append(wgHooksPost, content)
+				wgHooksPost = append(wgHooksPost, addHookTemplate(ctx, "wg_post", content))
 			}
 		}
 	}
@@ -539,7 +539,7 @@ func GenerateWgConfigContentWithTemplate(
 		return "", err
 	}
 
-	return tplutil.RenderTemplate(tmplContent, ctx)
+	return tplutil.RenderTemplateWithHooks(tmplContent, ctx, popHookTemplates(ctx))
 }
 
 // GenerateWgConfigContent generates the standard WireGuard configuration content for a node's end of a link using the custom template or default template

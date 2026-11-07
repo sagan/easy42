@@ -1920,6 +1920,60 @@ func TestBirdConfigHooks(t *testing.T) {
 	validateBirdSyntax(t, conf)
 }
 
+func TestBirdConfigHooksRenderedAsTemplates(t *testing.T) {
+	node := config.Node{
+		Name: "tplhooknode",
+		IP:   "192.168.100.7",
+		ASN:  4224420001,
+		ConfigHooks: []config.ConfigHook{
+			{
+				Type:    "bird.pre",
+				Content: `define HOOK_NODE_IP = {{ .ip }};`,
+			},
+			{
+				Type:    "bird",
+				Content: `# Hook for {{ toUpper .name }}`,
+			},
+		},
+	}
+
+	conf, err := GenerateBirdConfig(&node, []config.Node{node}, nil)
+	if err != nil {
+		t.Fatalf("GenerateBirdConfig failed: %v", err)
+	}
+
+	if !strings.Contains(conf, "define HOOK_NODE_IP = 192.168.100.7;") {
+		t.Errorf("Expected bird.pre hook rendered with node data in:\n%s", conf)
+	}
+	if !strings.Contains(conf, "# Hook for TPLHOOKNODE") {
+		t.Errorf("Expected bird hook rendered with template function in:\n%s", conf)
+	}
+
+	validateBirdSyntax(t, conf)
+}
+
+func TestBirdConfigHookInvalidTemplate(t *testing.T) {
+	node := config.Node{
+		Name: "badhooknode",
+		IP:   "192.168.100.1",
+		ASN:  4224420001,
+		ConfigHooks: []config.ConfigHook{
+			{
+				Type:    "bird.pre",
+				Content: `{{ .ip`,
+			},
+		},
+	}
+
+	_, err := GenerateBirdConfig(&node, []config.Node{node}, nil)
+	if err == nil {
+		t.Fatal("Expected error for hook with invalid template syntax")
+	}
+	if !strings.Contains(err.Error(), "hook template") {
+		t.Errorf("Expected hook template error, got: %v", err)
+	}
+}
+
 func TestDisallowedExportPrefixesBird(t *testing.T) {
 	node := config.Node{
 		Name:        "hub1",

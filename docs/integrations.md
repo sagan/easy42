@@ -311,7 +311,7 @@ You can reference these properties in custom BIRD, WireGuard, and nftables templ
 
 ### Node config hooks
 
-`nodes[].config_hooks` injects snippets into generated files:
+`nodes[].config_hooks` injects snippets into generated files. Each snippet is itself a Go `text/template` rendered with the same context and functions as the config template it is injected into (e.g. `define hook_ip = {{ .ip }};`), then included by the config template's hook section:
 
 | Hook type                                   | Injection point                      |
 | :------------------------------------------ | :----------------------------------- |
@@ -324,7 +324,7 @@ You can reference these properties in custom BIRD, WireGuard, and nftables templ
 | `nft.table`                                 | Inside `table inet easy42 { ... }`.  |
 | `nft` (aliases `nft.post`, `nft.global`)    | End of the nftables file.            |
 
-For `wg.peer`, an optional `target` limits the snippet to a named peer. Hooks are compiled from the server; malformed snippets produce invalid node configuration and should be validated with `easy42 node bird <name>` or `easy42 node nft <name>` before syncing.
+For `wg.peer`, an optional `target` limits the snippet to a named peer. Hooks are compiled from the server: invalid template syntax fails config generation with an error, while syntactically valid templates may still produce invalid node configuration — validate with `easy42 node bird <name>` or `easy42 node nft <name>` before syncing.
 
 ---
 

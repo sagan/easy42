@@ -383,7 +383,9 @@ An entrypoint describes how a node can be reached from outside.
 | :-------- | :------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `type`    | `string` | Hook location: `bird`, `bird.pre`, `wg.interface`, `wg.peer`, `wg.post`, `nft.table`, `nft.pre`, or `nft`. Aliases: `bird.post`/`bird.global`, `wg`, `nft.post`/`nft.global`. |
 | `target`  | `string` | Optional interface or peer filter for WireGuard hooks.                                                                                                                        |
-| `content` | `string` | Snippet injected verbatim into the generated configuration.                                                                                                                   |
+| `content` | `string` | Snippet rendered as a Go `text/template` (same context and functions as the config template, e.g. `{{.ip}}`) and injected into the generated configuration.                   |
+
+Hook content is loaded into the Go template together with the config template and pulled in via the `include` function: hook sections in config templates render each hook with `{{ include . $ }}`, where `$` is the full template context.
 
 ### `links`
 
