@@ -971,7 +971,7 @@ export interface App {
   name: string;
   description?: string;
   url?: string;
-  app_type: "docker" | "systemd";
+  app_type: "docker" | "systemd" | "cron";
   main_content: string;
   env_content?: string;
   files?: Record<string, string>;

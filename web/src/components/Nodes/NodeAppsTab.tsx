@@ -33,6 +33,7 @@ import {
   Cpu,
   ExternalLink,
   Globe,
+  Clock,
 } from "lucide-react";
 import { Link as RouterLink } from "react-router-dom";
 import { api } from "../../api/client";
@@ -295,15 +296,31 @@ export const NodeAppsTab: React.FC<NodeAppsTabProps> = ({ nodeName }) => {
                         width: 44,
                         height: 44,
                         borderRadius: "10px",
-                        bgcolor: app.app_type === "docker" ? "#E0F2FE" : "#F3E8FF",
-                        color: app.app_type === "docker" ? "#0284C7" : "#9333EA",
+                        bgcolor:
+                          app.app_type === "docker"
+                            ? "#E0F2FE"
+                            : app.app_type === "cron"
+                            ? "#FEF3C7"
+                            : "#F3E8FF",
+                        color:
+                          app.app_type === "docker"
+                            ? "#0284C7"
+                            : app.app_type === "cron"
+                            ? "#D97706"
+                            : "#9333EA",
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
                         flexShrink: 0,
                       }}
                     >
-                      {app.app_type === "docker" ? <BoxIcon size={22} /> : <Cpu size={22} />}
+                      {app.app_type === "docker" ? (
+                        <BoxIcon size={22} />
+                      ) : app.app_type === "cron" ? (
+                        <Clock size={22} />
+                      ) : (
+                        <Cpu size={22} />
+                      )}
                     </Box>
 
                     <Box>
@@ -313,19 +330,38 @@ export const NodeAppsTab: React.FC<NodeAppsTabProps> = ({ nodeName }) => {
                         </Typography>
                         <Chip
                           size="small"
-                          label={app.app_type === "docker" ? "Docker" : "Systemd"}
+                          label={
+                            app.app_type === "docker"
+                              ? "Docker"
+                              : app.app_type === "cron"
+                              ? "Cron"
+                              : "Systemd"
+                          }
                           sx={{
                             height: 20,
                             fontSize: "0.68rem",
                             fontWeight: 700,
-                            bgcolor: app.app_type === "docker" ? "#E0F2FE" : "#F3E8FF",
-                            color: app.app_type === "docker" ? "#0369A1" : "#7E22CE",
+                            bgcolor:
+                              app.app_type === "docker"
+                                ? "#E0F2FE"
+                                : app.app_type === "cron"
+                                ? "#FEF3C7"
+                                : "#F3E8FF",
+                            color:
+                              app.app_type === "docker"
+                                ? "#0369A1"
+                                : app.app_type === "cron"
+                                ? "#B45309"
+                                : "#7E22CE",
                           }}
                         />
                       </Box>
 
                       <Typography variant="body2" sx={{ color: "#64748B", fontSize: "0.82rem", mt: 0.3 }}>
-                        {app.description || `Installed as ezapp-${app.name}`}
+                        {app.description ||
+                          (app.app_type === "cron"
+                            ? "Scheduled via crontab"
+                            : `Installed as ezapp-${app.name}`)}
                       </Typography>
 
                       {st?.status_text && (
@@ -439,69 +475,87 @@ export const NodeAppsTab: React.FC<NodeAppsTabProps> = ({ nodeName }) => {
 
                   {/* Right: Actions */}
                   <Box sx={{ display: "flex", gap: 1, alignItems: "center", flexWrap: "wrap" }}>
-                    <Button
-                      size="small"
-                      variant="outlined"
-                      startIcon={<Terminal size={14} />}
-                      onClick={() => openLogs(app.name, app.app_type)}
-                      sx={{ textTransform: "none", fontSize: "0.78rem", fontWeight: 600, color: "#334155" }}
-                    >
-                      Logs
-                    </Button>
-
-                    <Button
-                      size="small"
-                      variant="outlined"
-                      startIcon={
-                        currentAction === "restart" ? (
-                          <CircularProgress size={14} />
-                        ) : (
-                          <RotateCw size={14} />
-                        )
-                      }
-                      disabled={appsDisabled || !!currentAction}
-                      onClick={() => handleAction(app.name, "restart", app.app_type)}
-                      sx={{ textTransform: "none", fontSize: "0.78rem", fontWeight: 600, color: "#4F46E5" }}
-                    >
-                      Restart
-                    </Button>
-
-                    {isRunning ? (
-                      <Button
+                    {app.app_type === "cron" ? (
+                      <Chip
                         size="small"
                         variant="outlined"
-                        color="error"
-                        startIcon={
-                          currentAction === "stop" ? (
-                            <CircularProgress size={14} color="inherit" />
-                          ) : (
-                            <Square size={14} />
-                          )
-                        }
-                        disabled={appsDisabled || !!currentAction}
-                        onClick={() => handleAction(app.name, "stop", app.app_type)}
-                        sx={{ textTransform: "none", fontSize: "0.78rem", fontWeight: 600 }}
-                      >
-                        Stop
-                      </Button>
+                        label="Managed via crontab"
+                        sx={{
+                          fontSize: "0.75rem",
+                          fontWeight: 600,
+                          color: "#64748B",
+                          borderColor: "#E2E8F0",
+                          bgcolor: "#F8FAFC",
+                          height: 26,
+                        }}
+                      />
                     ) : (
-                      <Button
-                        size="small"
-                        variant="contained"
-                        color="success"
-                        startIcon={
-                          currentAction === "start" ? (
-                            <CircularProgress size={14} color="inherit" />
-                          ) : (
-                            <Play size={14} />
-                          )
-                        }
-                        disabled={appsDisabled || !!currentAction}
-                        onClick={() => handleAction(app.name, "start", app.app_type)}
-                        sx={{ textTransform: "none", fontSize: "0.78rem", fontWeight: 600 }}
-                      >
-                        Start
-                      </Button>
+                      <>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          startIcon={<Terminal size={14} />}
+                          onClick={() => openLogs(app.name, app.app_type)}
+                          sx={{ textTransform: "none", fontSize: "0.78rem", fontWeight: 600, color: "#334155" }}
+                        >
+                          Logs
+                        </Button>
+
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          startIcon={
+                            currentAction === "restart" ? (
+                              <CircularProgress size={14} />
+                            ) : (
+                              <RotateCw size={14} />
+                            )
+                          }
+                          disabled={appsDisabled || !!currentAction}
+                          onClick={() => handleAction(app.name, "restart", app.app_type)}
+                          sx={{ textTransform: "none", fontSize: "0.78rem", fontWeight: 600, color: "#4F46E5" }}
+                        >
+                          Restart
+                        </Button>
+
+                        {isRunning ? (
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            color="error"
+                            startIcon={
+                              currentAction === "stop" ? (
+                                <CircularProgress size={14} color="inherit" />
+                              ) : (
+                                <Square size={14} />
+                              )
+                            }
+                            disabled={appsDisabled || !!currentAction}
+                            onClick={() => handleAction(app.name, "stop", app.app_type)}
+                            sx={{ textTransform: "none", fontSize: "0.78rem", fontWeight: 600 }}
+                          >
+                            Stop
+                          </Button>
+                        ) : (
+                          <Button
+                            size="small"
+                            variant="contained"
+                            color="success"
+                            startIcon={
+                              currentAction === "start" ? (
+                                <CircularProgress size={14} color="inherit" />
+                              ) : (
+                                <Play size={14} />
+                              )
+                            }
+                            disabled={appsDisabled || !!currentAction}
+                            onClick={() => handleAction(app.name, "start", app.app_type)}
+                            sx={{ textTransform: "none", fontSize: "0.78rem", fontWeight: 600 }}
+                          >
+                            Start
+                          </Button>
+                        )}
+                      </>
                     )}
                   </Box>
                 </Paper>

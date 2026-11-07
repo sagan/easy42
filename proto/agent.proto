@@ -267,6 +267,7 @@ message SyncHostsCmd {
 enum AppType {
   DOCKER_COMPOSE = 0;
   SYSTEMD = 1;
+  CRON = 2;
 }
 
 message AppConfigFile {

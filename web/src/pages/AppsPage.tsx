@@ -66,6 +66,7 @@ import {
   Tag,
   Wand2,
   Terminal,
+  Clock,
 } from "lucide-react";
 import { api } from "../api/client";
 import { useMesh } from "../context/MeshContext";
@@ -105,6 +106,31 @@ RestartSec=5
 [Install]
 WantedBy=multi-user.target
 `;
+
+export function parseCronMainContent(mainContent: string): { cronExpr: string; cronCmd: string } {
+  const trimmed = (mainContent || "").trim();
+  if (!trimmed) {
+    return { cronExpr: "0 0 * * *", cronCmd: "" };
+  }
+  if (trimmed.startsWith("@")) {
+    const parts = trimmed.split(/\s+/);
+    return {
+      cronExpr: parts[0] || "@daily",
+      cronCmd: parts.slice(1).join(" "),
+    };
+  }
+  const parts = trimmed.split(/\s+/);
+  if (parts.length >= 6) {
+    return {
+      cronExpr: parts.slice(0, 5).join(" "),
+      cronCmd: parts.slice(5).join(" "),
+    };
+  }
+  return {
+    cronExpr: parts.slice(0, Math.min(parts.length, 5)).join(" "),
+    cronCmd: parts.slice(Math.min(parts.length, 5)).join(" "),
+  };
+}
 
 const INTERNAL_NODE_VARS = [
   { key: "NODE_NAME", label: "${NODE_NAME}", tooltip: "Node name (node.name)" },
@@ -192,8 +218,10 @@ export const AppsPage: React.FC = () => {
   const [formName, setFormName] = useState("");
   const [formDesc, setFormDesc] = useState("");
   const [formUrl, setFormUrl] = useState("");
-  const [formType, setFormType] = useState<"docker" | "systemd">("docker");
+  const [formType, setFormType] = useState<"docker" | "systemd" | "cron">("docker");
   const [formMain, setFormMain] = useState(DOCKER_SAMPLE);
+  const [formCronExpr, setFormCronExpr] = useState("0 0 * * *");
+  const [formCronCmd, setFormCronCmd] = useState("");
   const [formEnv, setFormEnv] = useState("PORT=80\nDOMAIN=\${DOMAIN:-localhost}\n");
   const [formTargetType, setFormTargetType] = useState<"manual" | "all" | "tag">("manual");
   const [formTargetTag, setFormTargetTag] = useState<string>("");
@@ -302,6 +330,8 @@ export const AppsPage: React.FC = () => {
     setFormUrl("");
     setFormType("docker");
     setFormMain(DOCKER_SAMPLE);
+    setFormCronExpr("0 0 * * *");
+    setFormCronCmd("");
     setFormEnv("PORT=8080\nIP=${NODE_IP}\n");
     setFormTargetType("manual");
     setFormTargetTag("");
@@ -329,6 +359,14 @@ export const AppsPage: React.FC = () => {
     setFormUrl(app.url || "");
     setFormType(app.app_type);
     setFormMain(app.main_content);
+    if (app.app_type === "cron") {
+      const parsed = parseCronMainContent(app.main_content);
+      setFormCronExpr(parsed.cronExpr);
+      setFormCronCmd(parsed.cronCmd);
+    } else {
+      setFormCronExpr("0 0 * * *");
+      setFormCronCmd("");
+    }
     setFormEnv(app.env_content || "");
     setFormTargetType(app.target_type || "manual");
     setFormTargetTag(app.target_tag || "");
@@ -350,10 +388,20 @@ export const AppsPage: React.FC = () => {
     setModalOpen(true);
   };
 
-  const handleTypeChange = (newType: "docker" | "systemd") => {
+  const handleTypeChange = (newType: "docker" | "systemd" | "cron") => {
     setFormType(newType);
+    if (newType === "cron" && (modalTab === "env" || modalTab === "files" || modalTab === "transpile")) {
+      setModalTab("definition");
+    }
     if (!editingApp) {
-      setFormMain(newType === "docker" ? DOCKER_SAMPLE : SYSTEMD_SAMPLE);
+      if (newType === "docker") {
+        setFormMain(DOCKER_SAMPLE);
+      } else if (newType === "systemd") {
+        setFormMain(SYSTEMD_SAMPLE);
+      } else {
+        const cronStr = `${formCronExpr.trim()} ${formCronCmd.trim()}`.trim() || "0 0 * * *";
+        setFormMain(cronStr);
+      }
     }
   };
 
@@ -382,8 +430,25 @@ export const AppsPage: React.FC = () => {
         return;
       }
 
+      if (formType === "cron") {
+        if (!formCronExpr.trim()) {
+          alert("Cron expression cannot be empty");
+          setSavingApp(false);
+          return;
+        }
+        if (!formCronCmd.trim()) {
+          alert("Command line cannot be empty");
+          setSavingApp(false);
+          return;
+        }
+      }
+
       const resolvedMainContent =
-        formType === "systemd" ? ensureSystemdEnvironmentFile(formName.trim(), formMain) : formMain;
+        formType === "systemd"
+          ? ensureSystemdEnvironmentFile(formName.trim(), formMain)
+          : formType === "cron"
+          ? `${formCronExpr.trim()} ${formCronCmd.trim()}`
+          : formMain;
 
       const payload: Partial<App> = {
         name: formName.trim(),
@@ -391,8 +456,8 @@ export const AppsPage: React.FC = () => {
         url: formUrl.trim(),
         app_type: formType,
         main_content: resolvedMainContent,
-        env_content: formEnv,
-        files: filesMap,
+        env_content: formType === "cron" ? "" : formEnv,
+        files: formType === "cron" ? {} : filesMap,
         target_type: formTargetType,
         target_tag: formTargetType === "tag" ? formTargetTag.trim() : "",
         nodes: formTargetType === "manual" ? formNodes : [],
@@ -550,8 +615,15 @@ export const AppsPage: React.FC = () => {
   const handleInterpolatePreview = async (nodeName: string) => {
     try {
       setLoadingInterpolate(true);
+      let previewContent = "";
+      if (formType === "cron") {
+        const fullCron = `${formCronExpr.trim()} ${formCronCmd.trim()}`.trim();
+        previewContent = `--- [cron schedule & command] ---\n${fullCron}\n\n--- [installed crontab entry] ---\n${formEnabled ? fullCron : `#${fullCron}`}`;
+      } else {
+        previewContent = `--- [compose / service manifest] ---\n${formMain}\n\n--- [.env] ---\n${formEnv}`;
+      }
       const res = await api.previewInterpolate({
-        content: `--- [compose / service manifest] ---\n${formMain}\n\n--- [.env] ---\n${formEnv}`,
+        content: previewContent,
         node_name: nodeName,
         app_name: formName.trim() || "sample",
       });
@@ -661,6 +733,7 @@ export const AppsPage: React.FC = () => {
 
   const dockerCount = apps.filter((a) => a.app_type === "docker").length;
   const systemdCount = apps.filter((a) => a.app_type === "systemd").length;
+  const cronCount = apps.filter((a) => a.app_type === "cron").length;
   const enabledCount = apps.filter((a) => a.enabled).length;
 
   return (
@@ -984,6 +1057,44 @@ export const AppsPage: React.FC = () => {
                 </Box>
               </Paper>
             </Grid>
+
+            <Grid item xs={12} sm={6} md={3}>
+              <Paper
+                elevation={0}
+                sx={{
+                  p: 2.2,
+                  borderRadius: "12px",
+                  border: "1px solid #E2E8F0",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 2,
+                  bgcolor: "#FFFFFF",
+                }}
+              >
+                <Box
+                  sx={{
+                    width: 44,
+                    height: 44,
+                    borderRadius: "10px",
+                    bgcolor: "#FEF3C7",
+                    color: "#D97706",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <Clock size={22} />
+                </Box>
+                <Box>
+                  <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600 }}>
+                    Cron Jobs (Crontab)
+                  </Typography>
+                  <Typography variant="h6" sx={{ fontWeight: 800, color: "#0F172A", lineHeight: 1.2 }}>
+                    {cronCount}
+                  </Typography>
+                </Box>
+              </Paper>
+            </Grid>
           </Grid>
 
           {/* Full-Width Search & Filter Bar */}
@@ -1016,8 +1127,9 @@ export const AppsPage: React.FC = () => {
               <InputLabel>Runtime Type</InputLabel>
               <Select value={typeFilter} label="Runtime Type" onChange={(e) => setTypeFilter(e.target.value)}>
                 <MenuItem value="all">All Types</MenuItem>
-                <MenuItem value="docker">Docker Compose</MenuItem>
-                <MenuItem value="systemd">Native Systemd</MenuItem>
+                <MenuItem value="docker">Docker Compose ({dockerCount})</MenuItem>
+                <MenuItem value="systemd">Native Systemd ({systemdCount})</MenuItem>
+                <MenuItem value="cron">Cron Jobs ({cronCount})</MenuItem>
               </Select>
             </FormControl>
 
@@ -1123,11 +1235,27 @@ export const AppsPage: React.FC = () => {
                               display: "flex",
                               alignItems: "center",
                               justifyContent: "center",
-                              bgcolor: app.app_type === "docker" ? "#E0F2FE" : "#F3E8FF",
-                              color: app.app_type === "docker" ? "#0284C7" : "#9333EA",
+                              bgcolor:
+                                app.app_type === "docker"
+                                  ? "#E0F2FE"
+                                  : app.app_type === "cron"
+                                  ? "#FEF3C7"
+                                  : "#F3E8FF",
+                              color:
+                                app.app_type === "docker"
+                                  ? "#0284C7"
+                                  : app.app_type === "cron"
+                                  ? "#D97706"
+                                  : "#9333EA",
                             }}
                           >
-                            {app.app_type === "docker" ? <BoxIcon size={18} /> : <Cpu size={18} />}
+                            {app.app_type === "docker" ? (
+                              <BoxIcon size={18} />
+                            ) : app.app_type === "cron" ? (
+                              <Clock size={18} />
+                            ) : (
+                              <Cpu size={18} />
+                            )}
                           </Box>
                           <Box>
                             <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
@@ -1149,13 +1277,29 @@ export const AppsPage: React.FC = () => {
                             </Box>
                             <Chip
                               size="small"
-                              label={app.app_type === "docker" ? "Docker" : "Systemd"}
+                              label={
+                                app.app_type === "docker"
+                                  ? "Docker"
+                                  : app.app_type === "cron"
+                                  ? "Cron"
+                                  : "Systemd"
+                              }
                               sx={{
                                 height: 20,
                                 fontSize: "0.68rem",
                                 fontWeight: 700,
-                                bgcolor: app.app_type === "docker" ? "#E0F2FE" : "#F3E8FF",
-                                color: app.app_type === "docker" ? "#0369A1" : "#7E22CE",
+                                bgcolor:
+                                  app.app_type === "docker"
+                                    ? "#E0F2FE"
+                                    : app.app_type === "cron"
+                                    ? "#FEF3C7"
+                                    : "#F3E8FF",
+                                color:
+                                  app.app_type === "docker"
+                                    ? "#0369A1"
+                                    : app.app_type === "cron"
+                                    ? "#B45309"
+                                    : "#7E22CE",
                                 mt: 0.3,
                               }}
                             />
@@ -2009,17 +2153,27 @@ export const AppsPage: React.FC = () => {
             <Tab value="general" label="General & Nodes" icon={<Sliders size={16} />} iconPosition="start" />
             <Tab
               value="definition"
-              label={formType === "docker" ? "Compose Manifest" : "Systemd Unit"}
+              label={
+                formType === "docker"
+                  ? "Compose Manifest"
+                  : formType === "cron"
+                  ? "Cron Schedule & Command"
+                  : "Systemd Unit"
+              }
               icon={<FileCode size={16} />}
               iconPosition="start"
             />
-            <Tab value="env" label="Environment (.env)" icon={<FileText size={16} />} iconPosition="start" />
-            <Tab
-              value="files"
-              label={`Config Files (${formFiles.length})`}
-              icon={<FilePlus size={16} />}
-              iconPosition="start"
-            />
+            {formType !== "cron" && (
+              <Tab value="env" label="Environment (.env)" icon={<FileText size={16} />} iconPosition="start" />
+            )}
+            {formType !== "cron" && (
+              <Tab
+                value="files"
+                label={`Config Files (${formFiles.length})`}
+                icon={<FilePlus size={16} />}
+                iconPosition="start"
+              />
+            )}
             <Tab value="preview" label="Variables Preview" icon={<Code2 size={16} />} iconPosition="start" />
             {formType === "systemd" && (
               <Tab value="transpile" label="Transpile Preview" icon={<Eye size={16} />} iconPosition="start" />
@@ -2053,8 +2207,17 @@ export const AppsPage: React.FC = () => {
                   label={`\${${v.key}}`}
                   onClick={() => {
                     const tag = `\${${v.key}}`;
-                    if (modalTab === "definition") setFormMain((prev) => prev + tag);
-                    else if (modalTab === "env") setFormEnv((prev) => prev + tag);
+                    if (modalTab === "definition") {
+                      if (formType === "cron") {
+                        setFormCronCmd((prev) => {
+                          const updated = prev ? (prev.endsWith(" ") ? prev + tag : prev + " " + tag) : tag;
+                          setFormMain(`${formCronExpr.trim()} ${updated}`.trim());
+                          return updated;
+                        });
+                      } else {
+                        setFormMain((prev) => prev + tag);
+                      }
+                    } else if (modalTab === "env") setFormEnv((prev) => prev + tag);
                   }}
                   sx={{
                     fontFamily: "monospace",
@@ -2078,8 +2241,17 @@ export const AppsPage: React.FC = () => {
                     label={nv.label}
                     onClick={() => {
                       const tag = nv.key === "NODE_DATA_*" ? "${NODE_DATA_}" : nv.label;
-                      if (modalTab === "definition") setFormMain((prev) => prev + tag);
-                      else if (modalTab === "env") setFormEnv((prev) => prev + tag);
+                      if (modalTab === "definition") {
+                        if (formType === "cron") {
+                          setFormCronCmd((prev) => {
+                            const updated = prev ? (prev.endsWith(" ") ? prev + tag : prev + " " + tag) : tag;
+                            setFormMain(`${formCronExpr.trim()} ${updated}`.trim());
+                            return updated;
+                          });
+                        } else {
+                          setFormMain((prev) => prev + tag);
+                        }
+                      } else if (modalTab === "env") setFormEnv((prev) => prev + tag);
                     }}
                     sx={{
                       fontFamily: "monospace",
@@ -2121,10 +2293,11 @@ export const AppsPage: React.FC = () => {
                     <Select
                       value={formType}
                       label="Runtime Type"
-                      onChange={(e) => handleTypeChange(e.target.value as "docker" | "systemd")}
+                      onChange={(e) => handleTypeChange(e.target.value as "docker" | "systemd" | "cron")}
                     >
                       <MenuItem value="docker">Docker Compose (Container)</MenuItem>
                       <MenuItem value="systemd">Systemd / Native Service (Daemon)</MenuItem>
+                      <MenuItem value="cron">Cron Job (Crontab Scheduled Task)</MenuItem>
                     </Select>
                   </FormControl>
                 </Grid>
@@ -2483,8 +2656,168 @@ export const AppsPage: React.FC = () => {
             </Box>
           )}
 
-          {/* TAB 2: Definition Editor */}
-          {modalTab === "definition" && (
+          {/* TAB 2: Definition Editor (Cron) */}
+          {modalTab === "definition" && formType === "cron" && (
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 2.5 }}>
+              <Box
+                sx={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  flexWrap: "wrap",
+                  gap: 1,
+                }}
+              >
+                <Box>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0F172A" }}>
+                    Cron Job Schedule & Command
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: "#64748B" }}>
+                    Installed into standard system crontab inside the Easy42 managed block
+                  </Typography>
+                </Box>
+                <Button
+                  size="small"
+                  onClick={() => {
+                    setFormCronExpr("0 0 * * *");
+                    setFormCronCmd("/root/backup.sh");
+                    setFormMain("0 0 * * * /root/backup.sh");
+                  }}
+                  sx={{ textTransform: "none", fontSize: "0.75rem", color: "#64748B" }}
+                >
+                  Reset Template
+                </Button>
+              </Box>
+
+              {/* Schedule Presets */}
+              <Box sx={{ p: 2, bgcolor: "#FEF3C7", borderRadius: "10px", border: "1px solid #FDE68A" }}>
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
+                  <Clock size={16} color="#B45309" />
+                  <Typography variant="caption" sx={{ fontWeight: 700, color: "#92400E" }}>
+                    Schedule Presets:
+                  </Typography>
+                </Box>
+                <Box sx={{ display: "flex", gap: 0.8, flexWrap: "wrap" }}>
+                  {[
+                    { label: "Every minute (* * * * *)", expr: "* * * * *" },
+                    { label: "Every 5 min (*/5 * * * *)", expr: "*/5 * * * *" },
+                    { label: "Hourly (0 * * * *)", expr: "0 * * * *" },
+                    { label: "Daily midnight (0 0 * * *)", expr: "0 0 * * *" },
+                    { label: "Daily 3 AM (0 3 * * *)", expr: "0 3 * * *" },
+                    { label: "Weekly Sunday (0 0 * * 0)", expr: "0 0 * * 0" },
+                    { label: "Monthly 1st (0 0 1 * *)", expr: "0 0 1 * *" },
+                  ].map((p) => (
+                    <Chip
+                      key={p.expr}
+                      size="small"
+                      label={p.label}
+                      onClick={() => {
+                        setFormCronExpr(p.expr);
+                        setFormMain(`${p.expr} ${formCronCmd.trim()}`.trim());
+                      }}
+                      sx={{
+                        cursor: "pointer",
+                        fontSize: "0.72rem",
+                        fontWeight: formCronExpr === p.expr ? 700 : 500,
+                        bgcolor: formCronExpr === p.expr ? "#F59E0B" : "#FFFFFF",
+                        color: formCronExpr === p.expr ? "#FFFFFF" : "#78350F",
+                        border: "1px solid #FCD34D",
+                        "&:hover": { bgcolor: "#FDE68A" },
+                      }}
+                    />
+                  ))}
+                </Box>
+              </Box>
+
+              {/* Separated Fields */}
+              <Grid container spacing={2}>
+                <Grid item xs={12} md={5}>
+                  <TextField
+                    fullWidth
+                    label="Cron Expression (Schedule)"
+                    placeholder="0 0 * * *"
+                    value={formCronExpr}
+                    onChange={(e) => {
+                      setFormCronExpr(e.target.value);
+                      setFormMain(`${e.target.value.trim()} ${formCronCmd.trim()}`.trim());
+                    }}
+                    helperText="5 standard fields: minute hour day-of-month month day-of-week"
+                    InputProps={{
+                      style: { fontFamily: "monospace", fontSize: "0.88rem", fontWeight: 700 },
+                    }}
+                  />
+                </Grid>
+                <Grid item xs={12} md={7}>
+                  <TextField
+                    fullWidth
+                    label="Command Line (Executable)"
+                    placeholder="/root/backup.sh"
+                    value={formCronCmd}
+                    onChange={(e) => {
+                      setFormCronCmd(e.target.value);
+                      setFormMain(`${formCronExpr.trim()} ${e.target.value.trim()}`.trim());
+                    }}
+                    helperText="Command or script to execute on the node at scheduled times. Supports variables like ${PORT}, ${NODE_IP}, ${NODE_NAME}"
+                    InputProps={{
+                      style: { fontFamily: "monospace", fontSize: "0.85rem" },
+                    }}
+                  />
+                </Grid>
+              </Grid>
+
+              {/* Crontab Block Live Preview */}
+              <Paper
+                elevation={0}
+                sx={{
+                  p: 2,
+                  borderRadius: "10px",
+                  bgcolor: "#0F172A",
+                  color: "#F8FAFC",
+                  border: "1px solid #1E293B",
+                }}
+              >
+                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
+                  <Typography variant="caption" sx={{ color: "#94A3B8", fontWeight: 700, textTransform: "uppercase" }}>
+                    Crontab Block Preview (Installed on Target Node)
+                  </Typography>
+                  <Chip
+                    size="small"
+                    label={formEnabled ? "Active" : "Disabled (Commented with #)"}
+                    sx={{
+                      height: 20,
+                      fontSize: "0.68rem",
+                      fontWeight: 700,
+                      bgcolor: formEnabled ? "rgba(16, 185, 129, 0.2)" : "rgba(148, 163, 184, 0.2)",
+                      color: formEnabled ? "#34D399" : "#94A3B8",
+                    }}
+                  />
+                </Box>
+                <Box
+                  component="pre"
+                  sx={{
+                    m: 0,
+                    p: 1.5,
+                    bgcolor: "#020617",
+                    borderRadius: "6px",
+                    fontFamily: "monospace",
+                    fontSize: "0.85rem",
+                    lineHeight: 1.6,
+                    color: "#E2E8F0",
+                    overflowX: "auto",
+                  }}
+                >
+                  <code>
+{`### EASY42_START
+${formEnabled ? `${formCronExpr.trim() || "0 0 * * *"} ${formCronCmd.trim() || "/root/backup.sh"}` : `#${formCronExpr.trim() || "0 0 * * *"} ${formCronCmd.trim() || "/root/backup.sh"}`}
+### EASY42_END`}
+                  </code>
+                </Box>
+              </Paper>
+            </Box>
+          )}
+
+          {/* TAB 2: Definition Editor (Docker / Systemd) */}
+          {modalTab === "definition" && formType !== "cron" && (
             <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
               <Box
                 sx={{

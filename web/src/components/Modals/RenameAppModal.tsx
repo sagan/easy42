@@ -12,7 +12,7 @@ import {
   CircularProgress,
   Chip,
 } from "@mui/material";
-import { Layers, Box as BoxIcon, Cpu, AlertCircle, CheckCircle2, Tag } from "lucide-react";
+import { Layers, Box as BoxIcon, Cpu, AlertCircle, CheckCircle2, Tag, Clock } from "lucide-react";
 import type { App } from "../../types/api";
 import { api } from "../../api/client";
 
@@ -79,6 +79,7 @@ export const RenameAppModal: React.FC<RenameAppModalProps> = ({
   };
 
   const isDocker = app.app_type === "docker";
+  const isCron = app.app_type === "cron";
 
   return (
     <Dialog
@@ -108,11 +109,15 @@ export const RenameAppModal: React.FC<RenameAppModalProps> = ({
               width: 38,
               height: 38,
               borderRadius: 2,
-              backgroundColor: isDocker ? "rgba(2, 132, 199, 0.1)" : "rgba(147, 51, 234, 0.1)",
+              backgroundColor: isDocker
+                ? "rgba(2, 132, 199, 0.1)"
+                : isCron
+                ? "rgba(217, 119, 6, 0.1)"
+                : "rgba(147, 51, 234, 0.1)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              color: isDocker ? "#0284C7" : "#9333EA",
+              color: isDocker ? "#0284C7" : isCron ? "#D97706" : "#9333EA",
             }}
           >
             <Layers size={20} />
@@ -147,7 +152,13 @@ export const RenameAppModal: React.FC<RenameAppModalProps> = ({
             }}
           >
             <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-              {isDocker ? <BoxIcon size={16} color="#0284C7" /> : <Cpu size={16} color="#9333EA" />}
+              {isDocker ? (
+                <BoxIcon size={16} color="#0284C7" />
+              ) : isCron ? (
+                <Clock size={16} color="#D97706" />
+              ) : (
+                <Cpu size={16} color="#9333EA" />
+              )}
               <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600 }}>
                 Current Name:
               </Typography>
@@ -164,14 +175,14 @@ export const RenameAppModal: React.FC<RenameAppModalProps> = ({
                 }}
               />
               <Chip
-                label={isDocker ? "Docker" : "Systemd"}
+                label={isDocker ? "Docker" : isCron ? "Cron" : "Systemd"}
                 size="small"
                 sx={{
                   fontSize: "0.68rem",
                   fontWeight: 700,
                   height: 20,
-                  backgroundColor: isDocker ? "#E0F2FE" : "#F3E8FF",
-                  color: isDocker ? "#0369A1" : "#7E22CE",
+                  backgroundColor: isDocker ? "#E0F2FE" : isCron ? "#FEF3C7" : "#F3E8FF",
+                  color: isDocker ? "#0369A1" : isCron ? "#B45309" : "#7E22CE",
                 }}
               />
             </Box>

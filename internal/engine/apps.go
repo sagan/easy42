@@ -58,6 +58,8 @@ func (m *Manager) setupAgentAppsListeners() {
 			appType := "docker"
 			if a.AppType == agentpb.AppType_SYSTEMD {
 				appType = "systemd"
+			} else if a.AppType == agentpb.AppType_CRON {
+				appType = "cron"
 			}
 			nodeMap[a.Name] = AppStatusRecord{
 				AppID:        a.AppId,
@@ -132,7 +134,7 @@ func (m *Manager) SaveApp(app config.App) (config.App, error) {
 		}
 	}
 
-	if strings.ToLower(app.AppType) != "docker" {
+	if strings.ToLower(app.AppType) == "systemd" {
 		app.MainContent = apps.EnsureSystemdEnvironmentFile(app.Name, app.MainContent)
 	}
 
@@ -206,7 +208,7 @@ func (m *Manager) RenameApp(appID string, newName string) (config.App, error) {
 
 	cfg.Apps[appIndex].Name = newName
 	cfg.Apps[appIndex].UpdatedAt = time.Now()
-	if strings.ToLower(cfg.Apps[appIndex].AppType) != "docker" {
+	if strings.ToLower(cfg.Apps[appIndex].AppType) == "systemd" {
 		cfg.Apps[appIndex].MainContent = apps.EnsureSystemdEnvironmentFile(newName, cfg.Apps[appIndex].MainContent)
 	}
 
@@ -308,7 +310,7 @@ func (m *Manager) DuplicateApp(appID string) (config.App, error) {
 		UpdatedAt:   now,
 	}
 
-	if strings.ToLower(duplicated.AppType) != "docker" {
+	if strings.ToLower(duplicated.AppType) == "systemd" {
 		duplicated.MainContent = apps.EnsureSystemdEnvironmentFile(duplicated.Name, duplicated.MainContent)
 	}
 
@@ -565,6 +567,8 @@ func (m *Manager) BuildAppSpecsForNode(nodeName string) ([]*agentpb.AppSpec, err
 
 		if strings.ToLower(app.AppType) == "docker" {
 			spec.AppType = agentpb.AppType_DOCKER_COMPOSE
+		} else if strings.ToLower(app.AppType) == "cron" {
+			spec.AppType = agentpb.AppType_CRON
 		} else {
 			spec.AppType = agentpb.AppType_SYSTEMD
 			spec.MainContent = apps.EnsureSystemdEnvironmentFile(app.Name, spec.MainContent)
@@ -693,6 +697,8 @@ func (m *Manager) TriggerAppAction(ctx context.Context, nodeName string, appName
 	protoType := agentpb.AppType_DOCKER_COMPOSE
 	if strings.ToLower(appType) == "systemd" {
 		protoType = agentpb.AppType_SYSTEMD
+	} else if strings.ToLower(appType) == "cron" {
+		protoType = agentpb.AppType_CRON
 	}
 
 	if logLines == 0 {

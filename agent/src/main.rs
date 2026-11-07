@@ -6,6 +6,7 @@ mod cron;
 mod executor;
 mod hosts;
 pub mod apps;
+pub mod crontab;
 pub mod validation;
 
 pub use collector::proto;

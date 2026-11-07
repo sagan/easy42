@@ -215,3 +215,69 @@ func TestInterpolateApp(t *testing.T) {
 		}
 	}
 }
+
+func TestSplitCronLine(t *testing.T) {
+	tests := []struct {
+		input       string
+		wantSched   string
+		wantCmd     string
+	}{
+		{
+			input:     "0 0 * * * /root/backup.sh",
+			wantSched: "0 0 * * *",
+			wantCmd:   "/root/backup.sh",
+		},
+		{
+			input:     "*/15 8-17 * * 1-5 /usr/bin/curl -s http://127.0.0.1:8080/health",
+			wantSched: "*/15 8-17 * * 1-5",
+			wantCmd:   "/usr/bin/curl -s http://127.0.0.1:8080/health",
+		},
+		{
+			input:     "@daily /opt/scripts/cleanup.sh --days 7",
+			wantSched: "@daily",
+			wantCmd:   "/opt/scripts/cleanup.sh --days 7",
+		},
+		{
+			input:     "#0 0 * * * /root/backup.sh --port=8080",
+			wantSched: "#0 0 * * *",
+			wantCmd:   "/root/backup.sh --port=8080",
+		},
+		{
+			input:     "#@reboot /etc/start.sh",
+			wantSched: "#@reboot",
+			wantCmd:   "/etc/start.sh",
+		},
+	}
+
+	for _, tc := range tests {
+		sched, cmd := SplitCronLine(tc.input)
+		if sched != tc.wantSched || cmd != tc.wantCmd {
+			t.Errorf("SplitCronLine(%q) = (%q, %q); want (%q, %q)", tc.input, sched, cmd, tc.wantSched, tc.wantCmd)
+		}
+	}
+}
+
+func TestInterpolateCronApp(t *testing.T) {
+	app := config.App{
+		ID:          "cron-backup",
+		Name:        "backup-job",
+		AppType:     "cron",
+		MainContent: "0 0 * * * /root/backup.sh --port=${PORT} --host=${NODE_IP}\n*/5 * * * * curl http://${NODE_NAME}:${PORT:-8080}/ping",
+	}
+
+	globalVars := map[string]string{
+		"PORT": "9000",
+	}
+
+	contextVars := map[string]string{
+		"NODE_NAME": "sg-node-01",
+		"NODE_IP":   "10.42.0.8",
+	}
+
+	result := InterpolateApp(app, globalVars, contextVars)
+
+	expectedMain := "0 0 * * * /root/backup.sh --port=9000 --host=10.42.0.8\n*/5 * * * * curl http://sg-node-01:9000/ping"
+	if result.MainContent != expectedMain {
+		t.Errorf("Cron app MainContent mismatch:\ngot:\n%s\nwant:\n%s", result.MainContent, expectedMain)
+	}
+}

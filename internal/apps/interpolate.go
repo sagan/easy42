@@ -287,7 +287,94 @@ func VariablesToMap(vars []config.AppVariable) map[string]string {
 	return res
 }
 
-// InterpolateApp creates a copy of the app with variables interpolated in EnvContent and Files (auxiliary config files).
+// SplitCronLine splits a single cron line into schedule and command.
+// Supports standard 5-field cron, @reboot/@daily special schedules, and commented lines (#).
+func SplitCronLine(line string) (schedule string, cmd string) {
+	trimmed := strings.TrimSpace(line)
+	if trimmed == "" {
+		return "", ""
+	}
+
+	prefix := ""
+	if strings.HasPrefix(trimmed, "#") {
+		prefix = "#"
+		trimmed = strings.TrimSpace(trimmed[1:])
+		if trimmed == "" {
+			return prefix, ""
+		}
+	}
+
+	if strings.HasPrefix(trimmed, "@") {
+		idx := strings.IndexAny(trimmed, " \t")
+		if idx == -1 {
+			return prefix + trimmed, ""
+		}
+		schedule = prefix + trimmed[:idx]
+		cmd = strings.TrimSpace(trimmed[idx+1:])
+		return schedule, cmd
+	}
+
+	fields := strings.Fields(trimmed)
+	if len(fields) <= 5 {
+		return prefix + trimmed, ""
+	}
+
+	count := 0
+	inField := false
+	cmdStartIdx := -1
+	for i, r := range trimmed {
+		isSpace := r == ' ' || r == '\t'
+		if !isSpace && !inField {
+			inField = true
+			count++
+			if count == 6 {
+				cmdStartIdx = i
+				break
+			}
+		} else if isSpace && inField {
+			inField = false
+		}
+	}
+
+	if cmdStartIdx != -1 {
+		schedule = prefix + strings.TrimSpace(trimmed[:cmdStartIdx])
+		cmd = trimmed[cmdStartIdx:]
+	} else {
+		schedule = prefix + strings.Join(fields[:5], " ")
+		cmd = strings.Join(fields[5:], " ")
+	}
+	return schedule, cmd
+}
+
+// InterpolateCronLine interpolates variables into the cmdline part of a cron job line,
+// preserving the cron schedule.
+func InterpolateCronLine(line string, globalVars map[string]string, contextVars map[string]string) string {
+	schedule, cmd := SplitCronLine(line)
+	if cmd == "" {
+		return line
+	}
+	interpolatedCmd := InterpolateVariables(cmd, globalVars, contextVars)
+	if schedule == "" {
+		return interpolatedCmd
+	}
+	return schedule + " " + interpolatedCmd
+}
+
+// InterpolateCronMainContent interpolates variables into the cmdline of each cron line in content.
+func InterpolateCronMainContent(content string, globalVars map[string]string, contextVars map[string]string) string {
+	if strings.TrimSpace(content) == "" {
+		return content
+	}
+	lines := strings.Split(content, "\n")
+	for i, line := range lines {
+		if strings.TrimSpace(line) != "" {
+			lines[i] = InterpolateCronLine(line, globalVars, contextVars)
+		}
+	}
+	return strings.Join(lines, "\n")
+}
+
+// InterpolateApp creates a copy of the app with variables interpolated in EnvContent, Files, and for cron apps, the command line.
 // Systemd unit and Docker Compose manifests (MainContent) are excluded to prevent conflicts with their native ${VAR} variable interpolation syntax.
 func InterpolateApp(app config.App, globalVars map[string]string, contextVars map[string]string) config.App {
 	interpolated := app
@@ -302,6 +389,10 @@ func InterpolateApp(app config.App, globalVars map[string]string, contextVars ma
 			interpolatedFiles[k] = InterpolateVariables(v, globalVars, contextVars)
 		}
 		interpolated.Files = interpolatedFiles
+	}
+
+	if strings.ToLower(app.AppType) == "cron" {
+		interpolated.MainContent = InterpolateCronMainContent(app.MainContent, globalVars, contextVars)
 	}
 
 	return interpolated

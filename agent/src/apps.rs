@@ -58,6 +58,7 @@ pub struct AppsManager {
     init_system: InitSystem,
     starting_apps: Arc<Mutex<HashMap<String, i64>>>,
     app_errors: Arc<Mutex<HashMap<String, String>>>,
+    installed_cron_apps: Arc<Mutex<Vec<AppSpec>>>,
 }
 
 impl AppsManager {
@@ -68,6 +69,7 @@ impl AppsManager {
             init_system,
             starting_apps: Arc::new(Mutex::new(HashMap::new())),
             app_errors: Arc::new(Mutex::new(HashMap::new())),
+            installed_cron_apps: Arc::new(Mutex::new(Vec::new())),
         }
     }
 
@@ -76,18 +78,37 @@ impl AppsManager {
         info!("Synchronizing {} app(s)...", desired_apps.len());
 
         let mut desired_names = HashSet::new();
+        let mut cron_apps = Vec::new();
         for app in &desired_apps {
             desired_names.insert(app.name.clone());
-        }
-
-        // 1. Install or update each desired app
-        for app in &desired_apps {
-            if let Err(e) = self.apply_app(app).await {
-                error!("Failed to apply app '{}': {}", app.name, e);
+            if app.app_type == AppType::Cron as i32 {
+                cron_apps.push(app);
             }
         }
 
-        // 2. Garbage collect orphaned apps
+        // 1. Sync crontab managed by Easy42
+        if let Err(e) = crate::crontab::sync_crontab_apps(&cron_apps).await {
+            error!("Failed to sync crontab apps: {}", e);
+        }
+        {
+            let mut lock = self.installed_cron_apps.lock().await;
+            *lock = desired_apps
+                .iter()
+                .filter(|a| a.app_type == AppType::Cron as i32)
+                .cloned()
+                .collect();
+        }
+
+        // 2. Install or update non-cron desired apps
+        for app in &desired_apps {
+            if app.app_type != AppType::Cron as i32 {
+                if let Err(e) = self.apply_app(app).await {
+                    error!("Failed to apply app '{}': {}", app.name, e);
+                }
+            }
+        }
+
+        // 3. Garbage collect orphaned apps
         self.cleanup_orphans(&desired_names).await;
     }
 
@@ -288,6 +309,7 @@ impl AppsManager {
         match app_type {
             AppType::DockerCompose => self.apply_docker_app(app).await,
             AppType::Systemd => self.apply_native_app(app).await,
+            AppType::Cron => Ok(()),
         }
     }
 
@@ -702,6 +724,41 @@ impl AppsManager {
             }
         }
 
+        // 4. Check Cron apps
+        let cron_apps = {
+            let lock = self.installed_cron_apps.lock().await;
+            lock.clone()
+        };
+
+        if !cron_apps.is_empty() {
+            let current_crontab = crate::crontab::read_system_crontab().await.unwrap_or_default();
+            let current_block = crate::crontab::extract_cron_block(&current_crontab).unwrap_or_default();
+
+            for app in cron_apps {
+                if seen.insert(app.name.clone()) {
+                    let (state, text) = if !current_block.is_empty() {
+                        if app.enabled {
+                            ("running".to_string(), "active (scheduled in crontab)".to_string())
+                        } else {
+                            ("stopped".to_string(), "disabled (commented in crontab)".to_string())
+                        }
+                    } else {
+                        ("stopped".to_string(), "not found in crontab".to_string())
+                    };
+
+                    statuses.push(AppStatus {
+                        app_id: app.id.clone(),
+                        name: app.name.clone(),
+                        app_type: AppType::Cron as i32,
+                        state,
+                        status_text: text,
+                        last_updated: chrono_now(),
+                        error_message: String::new(),
+                    });
+                }
+            }
+        }
+
         statuses
     }
 
@@ -806,6 +863,10 @@ impl AppsManager {
             Err(_) => AppType::DockerCompose,
         };
 
+        if app_type == AppType::Cron {
+            return (false, -1, String::new(), "cron apps do not support action execution".to_string());
+        }
+
         let action = req.action.to_lowercase();
         let lines = if req.log_lines > 0 { req.log_lines } else { 100 };
 
@@ -864,11 +925,12 @@ impl AppsManager {
                     }
                 }
             }
+            AppType::Cron => (false, -1, String::new(), "cron apps do not support action execution".to_string()),
         }
     }
 }
 
-fn shell_quote(s: &str) -> String {
+pub fn shell_quote(s: &str) -> String {
     format!("'{}'", s.replace('\'', "'\\''"))
 }
 

@@ -139,3 +139,20 @@ func TestValidateAppTargetType(t *testing.T) {
 		t.Errorf("expected error with unknown target_type 'random'")
 	}
 }
+
+func TestValidateCronApp(t *testing.T) {
+	cronApp := App{
+		Name:        "backup-job",
+		AppType:     "cron",
+		MainContent: "0 0 * * * /root/backup.sh",
+	}
+	if err := ValidateApp(cronApp); err != nil {
+		t.Fatalf("expected valid cron app, got error: %v", err)
+	}
+
+	cronEmpty := cronApp
+	cronEmpty.MainContent = "   "
+	if err := ValidateApp(cronEmpty); err == nil {
+		t.Errorf("expected error for empty main_content in cron app")
+	}
+}

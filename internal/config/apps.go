@@ -15,7 +15,7 @@ type App struct {
 	Name        string            `json:"name"`
 	Description string            `json:"description,omitempty"`
 	URL         string            `json:"url,omitempty" yaml:"url,omitempty"`
-	AppType     string            `json:"app_type"` // "docker" or "systemd"
+	AppType     string            `json:"app_type"` // "docker", "systemd", or "cron"
 	MainContent string            `json:"main_content"` // compose.yaml or service unit
 	EnvContent  string            `json:"env_content,omitempty"` // .env content KEY=VAL
 	Files       map[string]string `json:"files,omitempty"` // relative_filename -> content
@@ -47,8 +47,8 @@ func ValidateApp(app App) error {
 	}
 
 	appType := strings.TrimSpace(strings.ToLower(app.AppType))
-	if appType != "docker" && appType != "systemd" {
-		return fmt.Errorf("unsupported app type '%s': must be 'docker' or 'systemd'", app.AppType)
+	if appType != "docker" && appType != "systemd" && appType != "cron" {
+		return fmt.Errorf("unsupported app type '%s': must be 'docker', 'systemd', or 'cron'", app.AppType)
 	}
 
 	targetType := strings.ToLower(strings.TrimSpace(app.TargetType))
@@ -62,8 +62,10 @@ func ValidateApp(app App) error {
 	if strings.TrimSpace(app.MainContent) == "" {
 		if appType == "docker" {
 			return fmt.Errorf("docker compose file content cannot be empty")
+		} else if appType == "systemd" {
+			return fmt.Errorf("systemd service unit content cannot be empty")
 		}
-		return fmt.Errorf("systemd service unit content cannot be empty")
+		return fmt.Errorf("cron expression and command cannot be empty")
 	}
 
 	for filename := range app.Files {

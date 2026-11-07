@@ -26,6 +26,7 @@ type AppType int32
 const (
 	AppType_DOCKER_COMPOSE AppType = 0
 	AppType_SYSTEMD        AppType = 1
+	AppType_CRON           AppType = 2
 )
 
 // Enum value maps for AppType.
@@ -33,10 +34,12 @@ var (
 	AppType_name = map[int32]string{
 		0: "DOCKER_COMPOSE",
 		1: "SYSTEMD",
+		2: "CRON",
 	}
 	AppType_value = map[string]int32{
 		"DOCKER_COMPOSE": 0,
 		"SYSTEMD":        1,
+		"CRON":           2,
 	}
 )
 
