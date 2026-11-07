@@ -587,7 +587,7 @@ export const MeshProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (res.state) {
           setNetworkState(res.state);
         }
-        await refreshFleetLive();
+        await refreshFleetLive(true);
         setStateToast({
           message: nodeName
             ? `Live state for ${nodeName} updated.`

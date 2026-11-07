@@ -37,7 +37,6 @@ import {
   HardDrive,
   Compass,
   Info,
-  Zap,
   Layers,
   X,
   Network,
@@ -132,6 +131,22 @@ export const NodesPage: React.FC = () => {
   const sortOrder = (searchParams.get("order") === "desc" ? "desc" : "asc") as "asc" | "desc";
 
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const isRefreshing = refreshing || updatingState;
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([
+        refreshFleetLive(true),
+        handleUpdateState(),
+      ]);
+    } catch {
+      // Errors handled internally in refreshFleetLive & handleUpdateState
+    } finally {
+      setRefreshing(false);
+    }
+  }, [refreshFleetLive, handleUpdateState]);
 
   const handleCopy = useCallback((id: string, text: string) => {
     if (!text) return;
@@ -1141,31 +1156,34 @@ export const NodesPage: React.FC = () => {
             </ToggleButton>
           </ToggleButtonGroup>
 
-          <Tooltip title="Refresh live telemetry (flush agent cache)">
-            <IconButton
-              size="small"
-              onClick={() => refreshFleetLive(true)}
-              sx={{
-                bgcolor: "#F8FAFC",
-                border: "1px solid #E2E8F0",
-                borderRadius: 2,
-                p: 0.8,
-              }}
-            >
-              <RefreshCw size={16} color="#64748B" />
-            </IconButton>
+          <Tooltip title="Refresh live telemetry and probe node states">
+            <span>
+              <Button
+                id="refresh-nodes-btn"
+                size="small"
+                variant="outlined"
+                onClick={handleRefresh}
+                disabled={isRefreshing}
+                startIcon={<RefreshCw size={14} className={isRefreshing ? "spin" : ""} />}
+                sx={{
+                  height: 32,
+                  fontSize: "0.8rem",
+                  borderRadius: 2,
+                  bgcolor: "#FFFFFF",
+                  color: "#475569",
+                  borderColor: "#CBD5E1",
+                  textTransform: "none",
+                  fontWeight: 600,
+                  "&:hover": {
+                    bgcolor: "#F8FAFC",
+                    borderColor: "#94A3B8",
+                  },
+                }}
+              >
+                {isRefreshing ? "Refreshing..." : "Refresh"}
+              </Button>
+            </span>
           </Tooltip>
-
-          <Button
-            size="small"
-            variant="outlined"
-            onClick={() => handleUpdateState()}
-            disabled={updatingState}
-            startIcon={<Zap size={14} />}
-            sx={{ fontSize: "0.8rem", borderRadius: 2 }}
-          >
-            Probe All
-          </Button>
         </Box>
       </Box>
 

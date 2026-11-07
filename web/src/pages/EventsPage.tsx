@@ -88,9 +88,7 @@ export const EventsPage: React.FC = () => {
   const handleMarkAsRead = async (id: number) => {
     try {
       await api.markEventRead(id);
-      setEvents((prev) =>
-        prev.map((e) => (e.id === id ? { ...e, is_read: true } : e))
-      );
+      setEvents((prev) => prev.map((e) => (e.id === id ? { ...e, is_read: true } : e)));
       refreshUnreadEventsCount();
     } catch (err) {
       console.error("Failed to mark event as read:", err);
@@ -145,7 +143,7 @@ export const EventsPage: React.FC = () => {
           e.message.toLowerCase().includes(q) ||
           (e.task_id && e.task_id.toLowerCase().includes(q)) ||
           (e.metadata?.target && String(e.metadata.target).toLowerCase().includes(q)) ||
-          (e.metadata?.task_name && String(e.metadata.task_name).toLowerCase().includes(q))
+          (e.metadata?.task_name && String(e.metadata.task_name).toLowerCase().includes(q)),
       );
     }
     return result;
@@ -315,7 +313,8 @@ export const EventsPage: React.FC = () => {
                 )}
               </Box>
               <Typography variant="body2" sx={{ color: "#64748B", mt: 0.3 }}>
-                Fleet connectivity transitions, Looking Glass cron task alerts, and system notifications ({totalCount} total).
+                Fleet connectivity transitions, Looking Glass cron task alerts, and system notifications ({totalCount}{" "}
+                total).
               </Typography>
             </Box>
           </Box>
@@ -654,9 +653,6 @@ export const EventsPage: React.FC = () => {
               "& .MuiChip-icon": { color: selectedType === "cron_task_failure" ? "#FFFFFF" : "#D97706" },
             }}
           />
-
-          <Box sx={{ width: 1, height: 20, bgcolor: "#E2E8F0", mx: 0.5 }} />
-
           <Chip
             clickable
             label="Unread Only"
@@ -731,9 +727,7 @@ export const EventsPage: React.FC = () => {
                     border: "1px solid",
                     borderColor: isUnread ? "rgba(79, 70, 229, 0.35)" : "#E2E8F0",
                     bgcolor: isUnread ? "#FAF5FF" : "#FFFFFF",
-                    boxShadow: isUnread
-                      ? "0 4px 14px rgba(79, 70, 229, 0.08)"
-                      : "0 1px 3px rgba(0, 0, 0, 0.02)",
+                    boxShadow: isUnread ? "0 4px 14px rgba(79, 70, 229, 0.08)" : "0 1px 3px rgba(0, 0, 0, 0.02)",
                     transition: "all 0.15s ease",
                     "&:hover": {
                       borderColor: isUnread ? "#4F46E5" : "#CBD5E1",
@@ -962,9 +956,7 @@ export const EventsPage: React.FC = () => {
         onClose={() => setClearDialogOpen(false)}
         PaperProps={{ sx: { borderRadius: "14px", p: 1 } }}
       >
-        <DialogTitle sx={{ fontWeight: 800, color: "#0F172A" }}>
-          Clear all events?
-        </DialogTitle>
+        <DialogTitle sx={{ fontWeight: 800, color: "#0F172A" }}>Clear all events?</DialogTitle>
         <DialogContent>
           <DialogContentText sx={{ color: "#64748B" }}>
             This will permanently delete all recorded events from the database. This action cannot be undone.

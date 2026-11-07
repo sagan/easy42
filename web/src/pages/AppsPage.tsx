@@ -447,8 +447,8 @@ export const AppsPage: React.FC = () => {
         formType === "systemd"
           ? ensureSystemdEnvironmentFile(formName.trim(), formMain)
           : formType === "cron"
-          ? `${formCronExpr.trim()} ${formCronCmd.trim()}`
-          : formMain;
+            ? `${formCronExpr.trim()} ${formCronCmd.trim()}`
+            : formMain;
 
       const payload: Partial<App> = {
         name: formName.trim(),
@@ -935,48 +935,10 @@ export const AppsPage: React.FC = () => {
                 </Box>
                 <Box>
                   <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600 }}>
-                    Total Apps
+                    Apps (Active/Total)
                   </Typography>
                   <Typography variant="h6" sx={{ fontWeight: 800, color: "#0F172A", lineHeight: 1.2 }}>
-                    {apps.length}
-                  </Typography>
-                </Box>
-              </Paper>
-            </Grid>
-
-            <Grid item xs={12} sm={6} md={3}>
-              <Paper
-                elevation={0}
-                sx={{
-                  p: 2.2,
-                  borderRadius: "12px",
-                  border: "1px solid #E2E8F0",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 2,
-                  bgcolor: "#FFFFFF",
-                }}
-              >
-                <Box
-                  sx={{
-                    width: 44,
-                    height: 44,
-                    borderRadius: "10px",
-                    bgcolor: "#ECFDF5",
-                    color: "#10B981",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  <CheckCircle2 size={22} />
-                </Box>
-                <Box>
-                  <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600 }}>
-                    Active / Running
-                  </Typography>
-                  <Typography variant="h6" sx={{ fontWeight: 800, color: "#0F172A", lineHeight: 1.2 }}>
-                    {enabledCount}
+                    {enabledCount} / {apps.length}
                   </Typography>
                 </Box>
               </Paper>
@@ -1236,17 +1198,9 @@ export const AppsPage: React.FC = () => {
                               alignItems: "center",
                               justifyContent: "center",
                               bgcolor:
-                                app.app_type === "docker"
-                                  ? "#E0F2FE"
-                                  : app.app_type === "cron"
-                                  ? "#FEF3C7"
-                                  : "#F3E8FF",
+                                app.app_type === "docker" ? "#E0F2FE" : app.app_type === "cron" ? "#FEF3C7" : "#F3E8FF",
                               color:
-                                app.app_type === "docker"
-                                  ? "#0284C7"
-                                  : app.app_type === "cron"
-                                  ? "#D97706"
-                                  : "#9333EA",
+                                app.app_type === "docker" ? "#0284C7" : app.app_type === "cron" ? "#D97706" : "#9333EA",
                             }}
                           >
                             {app.app_type === "docker" ? (
@@ -1278,11 +1232,7 @@ export const AppsPage: React.FC = () => {
                             <Chip
                               size="small"
                               label={
-                                app.app_type === "docker"
-                                  ? "Docker"
-                                  : app.app_type === "cron"
-                                  ? "Cron"
-                                  : "Systemd"
+                                app.app_type === "docker" ? "Docker" : app.app_type === "cron" ? "Cron" : "Systemd"
                               }
                               sx={{
                                 height: 20,
@@ -1292,14 +1242,14 @@ export const AppsPage: React.FC = () => {
                                   app.app_type === "docker"
                                     ? "#E0F2FE"
                                     : app.app_type === "cron"
-                                    ? "#FEF3C7"
-                                    : "#F3E8FF",
+                                      ? "#FEF3C7"
+                                      : "#F3E8FF",
                                 color:
                                   app.app_type === "docker"
                                     ? "#0369A1"
                                     : app.app_type === "cron"
-                                    ? "#B45309"
-                                    : "#7E22CE",
+                                      ? "#B45309"
+                                      : "#7E22CE",
                                 mt: 0.3,
                               }}
                             />
@@ -2157,8 +2107,8 @@ export const AppsPage: React.FC = () => {
                 formType === "docker"
                   ? "Compose Manifest"
                   : formType === "cron"
-                  ? "Cron Schedule & Command"
-                  : "Systemd Unit"
+                    ? "Cron Schedule & Command"
+                    : "Systemd Unit"
               }
               icon={<FileCode size={16} />}
               iconPosition="start"
@@ -2807,7 +2757,7 @@ export const AppsPage: React.FC = () => {
                   }}
                 >
                   <code>
-{`### EASY42_START
+                    {`### EASY42_START
 ${formEnabled ? `${formCronExpr.trim() || "0 0 * * *"} ${formCronCmd.trim() || "/root/backup.sh"}` : `#${formCronExpr.trim() || "0 0 * * *"} ${formCronCmd.trim() || "/root/backup.sh"}`}
 ### EASY42_END`}
                   </code>
