@@ -2167,7 +2167,15 @@ export const AppsPage: React.FC = () => {
                       } else {
                         setFormMain((prev) => prev + tag);
                       }
-                    } else if (modalTab === "env") setFormEnv((prev) => prev + tag);
+                    } else if (modalTab === "env") {
+                      setFormEnv((prev) => prev + tag);
+                    } else {
+                      copyText(`\${${v.key}}`, "env:" + v.key);
+                      setStateToast({
+                        message: `Copied`,
+                        severity: "info",
+                      });
+                    }
                   }}
                   sx={{
                     fontFamily: "monospace",
@@ -2201,7 +2209,15 @@ export const AppsPage: React.FC = () => {
                         } else {
                           setFormMain((prev) => prev + tag);
                         }
-                      } else if (modalTab === "env") setFormEnv((prev) => prev + tag);
+                      } else if (modalTab === "env") {
+                        setFormEnv((prev) => prev + tag);
+                      } else {
+                        copyText(`\${${nv.key}}`, "env:" + nv.key);
+                        setStateToast({
+                          message: `Copied`,
+                          severity: "info",
+                        });
+                      }
                     }}
                     sx={{
                       fontFamily: "monospace",
