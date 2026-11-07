@@ -15,17 +15,18 @@ type App struct {
 	Name        string            `json:"name"`
 	Description string            `json:"description,omitempty"`
 	URL         string            `json:"url,omitempty" yaml:"url,omitempty"`
-	AppType     string            `json:"app_type"` // "docker", "systemd", or "cron"
-	MainContent string            `json:"main_content"` // compose.yaml or service unit
+	AppType     string            `json:"app_type"`              // "docker", "systemd", or "cron"
+	MainContent string            `json:"main_content"`          // compose.yaml or service unit
 	EnvContent  string            `json:"env_content,omitempty"` // .env content KEY=VAL
-	Files       map[string]string `json:"files,omitempty"` // relative_filename -> content
-	TargetType  string            `json:"target_type,omitempty"` // "manual" (default), "all", or "tag"
-	TargetTag   string            `json:"target_tag,omitempty"` // Tag name when TargetType is "tag"
-	Nodes       []string          `json:"nodes"` // Node names assigned when TargetType is "manual" (can be empty)
-	Published   bool              `json:"published"`
-	Enabled     bool              `json:"enabled"`
-	CreatedAt   time.Time         `json:"created_at"`
-	UpdatedAt   time.Time         `json:"updated_at"`
+	Files       map[string]string `json:"files,omitempty"`       // relative_filename -> content
+	// Selector optionally restricts which nodes the app is deployed to.
+	// Supported keys are "name", "tag" and "env:<NAME>". All conditions must match (AND).
+	// An empty selector matches every node.
+	Selector  map[string]string `json:"selector,omitempty"`
+	Published bool              `json:"published"`
+	Enabled   bool              `json:"enabled"`
+	CreatedAt time.Time         `json:"created_at"`
+	UpdatedAt time.Time         `json:"updated_at"`
 }
 
 // ValidateAppName validates that an app name contains only safe alphanumeric, dash, and underscore characters
@@ -51,12 +52,8 @@ func ValidateApp(app App) error {
 		return fmt.Errorf("unsupported app type '%s': must be 'docker', 'systemd', or 'cron'", app.AppType)
 	}
 
-	targetType := strings.ToLower(strings.TrimSpace(app.TargetType))
-	if targetType != "" && targetType != "manual" && targetType != "all" && targetType != "tag" {
-		return fmt.Errorf("invalid target_type '%s': must be 'manual', 'all', or 'tag'", app.TargetType)
-	}
-	if targetType == "tag" && strings.TrimSpace(app.TargetTag) == "" {
-		return fmt.Errorf("target_tag cannot be empty when target_type is 'tag'")
+	if err := ValidateSelector(app.Selector); err != nil {
+		return err
 	}
 
 	if strings.TrimSpace(app.MainContent) == "" {
@@ -82,39 +79,20 @@ func ValidateApp(app App) error {
 }
 
 // AppTargetsNode checks if an app targets a given node.
-// If node is nil but nodeName is provided, manual and all target types are supported.
+// If node is nil but nodeName is provided, name-only selectors can still be
+// evaluated. Selectors relying on node tags or environment variables require
+// the full node definition.
 func AppTargetsNode(app App, node *Node, nodeName string) bool {
-	if node != nil && nodeName == "" {
+	if len(app.Selector) == 0 {
+		return true
+	}
+	if node == nil {
+		return nodeMatchesSelector(nil, nodeName, app.Selector)
+	}
+	if nodeName == "" {
 		nodeName = node.Name
 	}
-	targetType := strings.ToLower(strings.TrimSpace(app.TargetType))
-	switch targetType {
-	case "all":
-		return true
-	case "tag":
-		if node == nil {
-			return false
-		}
-		targetTag := strings.TrimSpace(app.TargetTag)
-		if targetTag == "" {
-			return false
-		}
-		for _, tag := range node.Tags {
-			if strings.EqualFold(strings.TrimSpace(tag), targetTag) {
-				return true
-			}
-		}
-		return false
-	case "manual", "":
-		for _, n := range app.Nodes {
-			if n == nodeName {
-				return true
-			}
-		}
-		return false
-	default:
-		return false
-	}
+	return nodeMatchesSelector(node, nodeName, app.Selector)
 }
 
 var variableKeyRegex = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
@@ -139,4 +117,3 @@ func ValidateVariableKey(key string) error {
 	}
 	return nil
 }
-

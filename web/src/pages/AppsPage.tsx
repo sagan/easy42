@@ -73,6 +73,7 @@ import { useMesh } from "../context/MeshContext";
 import { Link as RouterLink } from "react-router-dom";
 import type { App, AppVariable, TranspilePreviewResponse } from "../types/api";
 import { dockerRunToCompose, cmdlineToSystemd, ensureSystemdEnvironmentFile } from "../utils/appGenerators";
+import { matchesTaskSelector, splitSelectorList } from "../utils/taskSelector";
 import { RenameAppModal } from "../components/Modals/RenameAppModal";
 
 const DOCKER_SAMPLE = `version: '3.8'
@@ -169,6 +170,47 @@ const INTERNAL_NODE_VARS = [
   },
 ];
 
+type AppTargetMode = "manual" | "all" | "tag" | "custom";
+
+function getSelectorValue(selector: Record<string, string>, key: string): string {
+  const target = key.trim().toLowerCase();
+  const entry = Object.entries(selector).find(([k]) => k.trim().toLowerCase() === target);
+  return entry ? entry[1] : "";
+}
+
+function detectTargetMode(selector: Record<string, string>): AppTargetMode {
+  const keys = Object.keys(selector).map((k) => k.trim().toLowerCase());
+  if (keys.length === 0) return "all";
+  if (keys.length === 1 && keys[0] === "name") return "manual";
+  if (keys.length === 1 && keys[0] === "tag") return "tag";
+  return "custom";
+}
+
+function parseSelectorJSON(text: string): { selector: Record<string, string> | null; error: string | null } {
+  const trimmed = text.trim();
+  if (!trimmed) return { selector: {}, error: null };
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(trimmed);
+  } catch (e: any) {
+    return { selector: null, error: `Invalid selector JSON: ${e.message || e}` };
+  }
+
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return { selector: null, error: "Selector must be a JSON object" };
+  }
+
+  const selector: Record<string, string> = {};
+  for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
+    if (typeof value !== "string") {
+      return { selector: null, error: `Selector value for "${key}" must be a string` };
+    }
+    selector[key] = value;
+  }
+  return { selector, error: null };
+}
+
 export const AppsPage: React.FC = () => {
   const { nodes, setStateToast } = useMesh();
 
@@ -223,9 +265,10 @@ export const AppsPage: React.FC = () => {
   const [formCronExpr, setFormCronExpr] = useState("0 0 * * *");
   const [formCronCmd, setFormCronCmd] = useState("");
   const [formEnv, setFormEnv] = useState("PORT=80\nDOMAIN=\${DOMAIN:-localhost}\n");
-  const [formTargetType, setFormTargetType] = useState<"manual" | "all" | "tag">("manual");
-  const [formTargetTag, setFormTargetTag] = useState<string>("");
-  const [formNodes, setFormNodes] = useState<string[]>([]);
+  const [formTargetType, setFormTargetType] = useState<AppTargetMode>("manual");
+  const [formSelector, setFormSelector] = useState<Record<string, string>>({ name: "" });
+  const [formSelectorText, setFormSelectorText] = useState<string>('{\n  "name": ""\n}');
+  const [formSelectorError, setFormSelectorError] = useState<string | null>(null);
   const [formPublished, setFormPublished] = useState(true);
   const [formEnabled, setFormEnabled] = useState(true);
   const [togglingPublishedAppIds, setTogglingPublishedAppIds] = useState<Record<string, boolean>>({});
@@ -279,6 +322,41 @@ export const AppsPage: React.FC = () => {
     return Array.from(s).sort();
   }, [nodes]);
 
+  const formSelectedNodes = splitSelectorList(getSelectorValue(formSelector, "name"));
+  const formTargetTag = getSelectorValue(formSelector, "tag");
+  const selectorMatchedNodes = managedNodes.filter((n) => matchesTaskSelector(n, formSelector));
+
+  const applyFormSelector = (selector: Record<string, string>) => {
+    setFormSelector(selector);
+    setFormSelectorText(JSON.stringify(selector, null, 2));
+    setFormSelectorError(null);
+    setFormTargetType(detectTargetMode(selector));
+  };
+
+  const handleSelectorTextChange = (text: string) => {
+    setFormSelectorText(text);
+    const parsed = parseSelectorJSON(text);
+    if (parsed.error || !parsed.selector) {
+      setFormSelectorError(parsed.error);
+      return;
+    }
+    setFormSelectorError(null);
+    setFormSelector(parsed.selector);
+    setFormTargetType(detectTargetMode(parsed.selector));
+  };
+
+  const handleTargetModeChange = (mode: AppTargetMode) => {
+    if (mode === "manual") {
+      applyFormSelector({ name: getSelectorValue(formSelector, "name") });
+    } else if (mode === "all") {
+      applyFormSelector({});
+    } else if (mode === "tag") {
+      applyFormSelector({ tag: getSelectorValue(formSelector, "tag") });
+    } else {
+      setFormTargetType("custom");
+    }
+  };
+
   const loadApps = async () => {
     try {
       setLoadingApps(true);
@@ -312,16 +390,10 @@ export const AppsPage: React.FC = () => {
 
   // Set default node for preview
   useEffect(() => {
-    if (formTargetType === "manual" && formNodes.length > 0 && !previewNodeName) {
-      setPreviewNodeName(formNodes[0]);
-    } else if (formTargetType === "tag" && formTargetTag && !previewNodeName) {
-      const match = managedNodes.find((n) => n.tags?.some((t) => t.toLowerCase() === formTargetTag.toLowerCase()));
-      if (match) setPreviewNodeName(match.name);
-      else if (managedNodes.length > 0) setPreviewNodeName(managedNodes[0].name);
-    } else if (managedNodes.length > 0 && !previewNodeName) {
-      setPreviewNodeName(managedNodes[0].name);
-    }
-  }, [formTargetType, formTargetTag, formNodes, managedNodes, previewNodeName]);
+    if (previewNodeName || managedNodes.length === 0) return;
+    const match = managedNodes.find((n) => matchesTaskSelector(n, formSelector));
+    setPreviewNodeName((match || managedNodes[0]).name);
+  }, [formSelector, managedNodes, previewNodeName]);
 
   const openCreateAppModal = () => {
     setEditingApp(null);
@@ -334,8 +406,9 @@ export const AppsPage: React.FC = () => {
     setFormCronCmd("");
     setFormEnv("PORT=8080\nIP=${NODE_IP}\n");
     setFormTargetType("manual");
-    setFormTargetTag("");
-    setFormNodes([]);
+    setFormSelector({ name: "" });
+    setFormSelectorText('{\n  "name": ""\n}');
+    setFormSelectorError(null);
     setFormPublished(true);
     setFormEnabled(true);
     setFormFiles([]);
@@ -368,9 +441,11 @@ export const AppsPage: React.FC = () => {
       setFormCronCmd("");
     }
     setFormEnv(app.env_content || "");
-    setFormTargetType(app.target_type || "manual");
-    setFormTargetTag(app.target_tag || "");
-    setFormNodes(app.nodes || []);
+    const selector = app.selector || {};
+    setFormSelector(selector);
+    setFormSelectorText(JSON.stringify(selector, null, 2));
+    setFormSelectorError(null);
+    setFormTargetType(detectTargetMode(selector));
     setFormPublished(app.published ?? false);
     setFormEnabled(app.enabled);
     const filesList = Object.entries(app.files || {}).map(([name, content]) => ({ name, content }));
@@ -424,8 +499,9 @@ export const AppsPage: React.FC = () => {
         }
       }
 
-      if (formTargetType === "tag" && !formTargetTag.trim()) {
-        alert("Please select or enter a target tag");
+      const parsedSelector = parseSelectorJSON(formSelectorText);
+      if (parsedSelector.error || !parsedSelector.selector) {
+        alert(parsedSelector.error || "Invalid selector JSON");
         setSavingApp(false);
         return;
       }
@@ -458,9 +534,7 @@ export const AppsPage: React.FC = () => {
         main_content: resolvedMainContent,
         env_content: formType === "cron" ? "" : formEnv,
         files: formType === "cron" ? {} : filesMap,
-        target_type: formTargetType,
-        target_tag: formTargetType === "tag" ? formTargetTag.trim() : "",
-        nodes: formTargetType === "manual" ? formNodes : [],
+        selector: parsedSelector.selector,
         published: formPublished,
         enabled: formEnabled,
       };
@@ -708,20 +782,12 @@ export const AppsPage: React.FC = () => {
         return false;
       }
       if (nodeFilter !== "all") {
-        const matchesNode = (() => {
-          const targetType = a.target_type || "manual";
-          if (targetType === "all") return true;
-          if (targetType === "tag") {
-            const nodeObj = nodes.find((n) => n.name === nodeFilter);
-            return nodeObj?.tags?.some((t) => t.toLowerCase() === (a.target_tag || "").toLowerCase()) ?? false;
-          }
-          return a.nodes?.includes(nodeFilter) ?? false;
-        })();
-        if (!matchesNode) return false;
+        const nodeObj = nodes.find((n) => n.name === nodeFilter);
+        if (!nodeObj || !matchesTaskSelector(nodeObj, a.selector)) return false;
       }
       return true;
     });
-  }, [apps, search, typeFilter, nodeFilter]);
+  }, [apps, search, typeFilter, nodeFilter, nodes]);
 
   const filteredVars = useMemo(() => {
     return variables.filter((v) => {
@@ -1368,162 +1434,131 @@ export const AppsPage: React.FC = () => {
 
                       {/* Target Nodes */}
                       <Box sx={{ mb: 1.5 }}>
-                        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 0.6 }}>
-                          <Typography
-                            variant="caption"
-                            sx={{ color: "#94A3B8", fontWeight: 700, textTransform: "uppercase" }}
-                          >
-                            Target Nodes
-                          </Typography>
-                          {app.target_type === "all" ? (
-                            <Chip
-                              size="small"
-                              icon={<Globe size={12} />}
-                              label="All Nodes"
-                              sx={{
-                                height: 20,
-                                fontSize: "0.68rem",
-                                fontWeight: 700,
-                                bgcolor: "#E0F2FE",
-                                color: "#0369A1",
-                              }}
-                            />
-                          ) : app.target_type === "tag" ? (
-                            <Chip
-                              size="small"
-                              icon={<Tag size={12} />}
-                              label={`Tag: #${app.target_tag}`}
-                              sx={{
-                                height: 20,
-                                fontSize: "0.68rem",
-                                fontWeight: 700,
-                                bgcolor: "#F5F3FF",
-                                color: "#6D28D9",
-                              }}
-                            />
-                          ) : (
-                            <Chip
-                              size="small"
-                              icon={<Sliders size={12} />}
-                              label={`Manual (${app.nodes?.length || 0})`}
-                              sx={{
-                                height: 20,
-                                fontSize: "0.68rem",
-                                fontWeight: 700,
-                                bgcolor: "#F1F5F9",
-                                color: "#475569",
-                              }}
-                            />
-                          )}
-                        </Box>
+                        {(() => {
+                          const selector = app.selector || {};
+                          const mode = detectTargetMode(selector);
+                          const manualNodes = splitSelectorList(getSelectorValue(selector, "name"));
+                          const tagValue = getSelectorValue(selector, "tag");
+                          const matchingNodes = managedNodes.filter((n) => matchesTaskSelector(n, selector));
 
-                        <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.6 }}>
-                          {(() => {
-                            if (app.target_type === "all") {
-                              if (managedNodes.length === 0) {
-                                return (
-                                  <Typography variant="caption" sx={{ color: "#94A3B8", fontStyle: "italic" }}>
-                                    No agent nodes available
-                                  </Typography>
-                                );
-                              }
-                              return managedNodes.map((n) => (
-                                <Chip
-                                  key={n.name}
-                                  component={RouterLink}
-                                  to={`/nodes/${encodeURIComponent(n.name)}?tab=apps`}
-                                  clickable
-                                  onClick={(e) => e.stopPropagation()}
-                                  size="small"
-                                  label={n.name}
-                                  sx={{
-                                    height: 20,
-                                    fontSize: "0.7rem",
-                                    fontWeight: 600,
-                                    bgcolor: "#E0F2FE",
-                                    color: "#0369A1",
-                                    textDecoration: "none",
-                                    cursor: "pointer",
-                                    transition: "all 0.15s ease",
-                                    "&:hover": {
-                                      bgcolor: "#BAE6FD",
-                                      color: "#0284C7",
-                                    },
-                                  }}
-                                />
-                              ));
-                            }
-                            if (app.target_type === "tag") {
-                              const matching = managedNodes.filter((n) =>
-                                n.tags?.some((t) => t.toLowerCase() === (app.target_tag || "").toLowerCase()),
-                              );
-                              if (matching.length === 0) {
-                                return (
-                                  <Typography variant="caption" sx={{ color: "#94A3B8", fontStyle: "italic" }}>
-                                    No nodes currently matching tag #{app.target_tag}
-                                  </Typography>
-                                );
-                              }
-                              return matching.map((n) => (
-                                <Chip
-                                  key={n.name}
-                                  component={RouterLink}
-                                  to={`/nodes/${encodeURIComponent(n.name)}?tab=apps`}
-                                  clickable
-                                  onClick={(e) => e.stopPropagation()}
-                                  size="small"
-                                  label={n.name}
-                                  sx={{
-                                    height: 20,
-                                    fontSize: "0.7rem",
-                                    fontWeight: 600,
-                                    bgcolor: "#EDE9FE",
-                                    color: "#5B21B6",
-                                    textDecoration: "none",
-                                    cursor: "pointer",
-                                    transition: "all 0.15s ease",
-                                    "&:hover": {
-                                      bgcolor: "#DDD6FE",
-                                      color: "#4C1D95",
-                                    },
-                                  }}
-                                />
-                              ));
-                            }
-                            if (app.nodes && app.nodes.length > 0) {
-                              return app.nodes.map((nodeName) => (
-                                <Chip
-                                  key={nodeName}
-                                  component={RouterLink}
-                                  to={`/nodes/${encodeURIComponent(nodeName)}?tab=apps`}
-                                  clickable
-                                  onClick={(e) => e.stopPropagation()}
-                                  size="small"
-                                  label={nodeName}
-                                  sx={{
-                                    height: 20,
-                                    fontSize: "0.7rem",
-                                    fontWeight: 600,
-                                    bgcolor: "#F1F5F9",
-                                    color: "#334155",
-                                    textDecoration: "none",
-                                    cursor: "pointer",
-                                    transition: "all 0.15s ease",
-                                    "&:hover": {
-                                      bgcolor: "#E2E8F0",
-                                      color: "#1E293B",
-                                    },
-                                  }}
-                                />
-                              ));
-                            }
-                            return (
-                              <Typography variant="caption" sx={{ color: "#94A3B8", fontStyle: "italic" }}>
-                                None assigned (unassigned)
-                              </Typography>
+                          const chipColors =
+                            mode === "tag"
+                              ? { bgcolor: "#EDE9FE", color: "#5B21B6", hoverBg: "#DDD6FE", hoverColor: "#4C1D95" }
+                              : mode === "custom"
+                                ? { bgcolor: "#CCFBF1", color: "#0F766E", hoverBg: "#99F6E4", hoverColor: "#115E59" }
+                                : mode === "manual"
+                                  ? { bgcolor: "#F1F5F9", color: "#334155", hoverBg: "#E2E8F0", hoverColor: "#1E293B" }
+                                  : { bgcolor: "#E0F2FE", color: "#0369A1", hoverBg: "#BAE6FD", hoverColor: "#0284C7" };
+
+                          const headerChip =
+                            mode === "manual" ? (
+                              <Chip
+                                size="small"
+                                icon={<Sliders size={12} />}
+                                label={`Manual (${manualNodes.length})`}
+                                sx={{
+                                  height: 20,
+                                  fontSize: "0.68rem",
+                                  fontWeight: 700,
+                                  bgcolor: chipColors.bgcolor,
+                                  color: chipColors.color,
+                                }}
+                              />
+                            ) : mode === "tag" ? (
+                              <Chip
+                                size="small"
+                                icon={<Tag size={12} />}
+                                label={`Tag: #${tagValue}`}
+                                sx={{
+                                  height: 20,
+                                  fontSize: "0.68rem",
+                                  fontWeight: 700,
+                                  bgcolor: chipColors.bgcolor,
+                                  color: chipColors.color,
+                                }}
+                              />
+                            ) : mode === "custom" ? (
+                              <Chip
+                                size="small"
+                                icon={<Code2 size={12} />}
+                                label="Selector"
+                                sx={{
+                                  height: 20,
+                                  fontSize: "0.68rem",
+                                  fontWeight: 700,
+                                  bgcolor: chipColors.bgcolor,
+                                  color: chipColors.color,
+                                }}
+                              />
+                            ) : (
+                              <Chip
+                                size="small"
+                                icon={<Globe size={12} />}
+                                label="All Nodes"
+                                sx={{
+                                  height: 20,
+                                  fontSize: "0.68rem",
+                                  fontWeight: 700,
+                                  bgcolor: chipColors.bgcolor,
+                                  color: chipColors.color,
+                                }}
+                              />
                             );
-                          })()}
-                        </Box>
+
+                          const nodeNames = mode === "manual" ? manualNodes : matchingNodes.map((n) => n.name);
+
+                          return (
+                            <>
+                              <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 0.6 }}>
+                                <Typography
+                                  variant="caption"
+                                  sx={{ color: "#94A3B8", fontWeight: 700, textTransform: "uppercase" }}
+                                >
+                                  Target Nodes
+                                </Typography>
+                                {headerChip}
+                              </Box>
+
+                              <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.6 }}>
+                                {nodeNames.length > 0 ? (
+                                  nodeNames.map((nodeName) => (
+                                    <Chip
+                                      key={nodeName}
+                                      component={RouterLink}
+                                      to={`/nodes/${encodeURIComponent(nodeName)}?tab=apps`}
+                                      clickable
+                                      onClick={(e) => e.stopPropagation()}
+                                      size="small"
+                                      label={nodeName}
+                                      sx={{
+                                        height: 20,
+                                        fontSize: "0.7rem",
+                                        fontWeight: 600,
+                                        bgcolor: chipColors.bgcolor,
+                                        color: chipColors.color,
+                                        textDecoration: "none",
+                                        cursor: "pointer",
+                                        transition: "all 0.15s ease",
+                                        "&:hover": {
+                                          bgcolor: chipColors.hoverBg,
+                                          color: chipColors.hoverColor,
+                                        },
+                                      }}
+                                    />
+                                  ))
+                                ) : (
+                                  <Typography variant="caption" sx={{ color: "#94A3B8", fontStyle: "italic" }}>
+                                    {mode === "all"
+                                      ? "No agent nodes available"
+                                      : mode === "manual"
+                                        ? "None assigned (unassigned)"
+                                        : "No nodes currently match this selector"}
+                                  </Typography>
+                                )}
+                              </Box>
+                            </>
+                          );
+                        })()}
                       </Box>
 
                       <Box sx={{ flexGrow: 1 }} />
@@ -2298,15 +2333,12 @@ export const AppsPage: React.FC = () => {
                   Target Nodes
                 </Typography>
                 <Typography variant="caption" sx={{ color: "#64748B", display: "block", mb: 1.5 }}>
-                  Choose which cluster nodes will deploy and run this workload.
+                  Choose nodes with the shortcuts below or edit the selector JSON directly. An empty selector matches
+                  every managed node. All selector conditions must match (AND).
                 </Typography>
 
                 <FormControl component="fieldset" fullWidth sx={{ mb: 2 }}>
-                  <RadioGroup
-                    row
-                    value={formTargetType}
-                    onChange={(e) => setFormTargetType(e.target.value as "manual" | "all" | "tag")}
-                  >
+                  <RadioGroup row value={formTargetType} onChange={(e) => handleTargetModeChange(e.target.value as AppTargetMode)}>
                     <FormControlLabel
                       value="manual"
                       control={<Radio size="small" />}
@@ -2338,7 +2370,19 @@ export const AppsPage: React.FC = () => {
                         <Box sx={{ display: "flex", alignItems: "center", gap: 0.8 }}>
                           <Tag size={16} color="#8B5CF6" />
                           <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                            Nodes of a Selected Tag
+                            Nodes of Selected Tag(s)
+                          </Typography>
+                        </Box>
+                      }
+                    />
+                    <FormControlLabel
+                      value="custom"
+                      control={<Radio size="small" />}
+                      label={
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 0.8 }}>
+                          <Code2 size={16} color="#0F766E" />
+                          <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                            Advanced Selector
                           </Typography>
                         </Box>
                       }
@@ -2357,14 +2401,14 @@ export const AppsPage: React.FC = () => {
                         <Button
                           size="small"
                           sx={{ textTransform: "none", fontSize: "0.75rem", p: 0 }}
-                          onClick={() => setFormNodes(managedNodes.map((n) => n.name))}
+                          onClick={() => applyFormSelector({ name: managedNodes.map((n) => n.name).join(",") })}
                         >
                           Select All
                         </Button>
                         <Button
                           size="small"
                           sx={{ textTransform: "none", fontSize: "0.75rem", p: 0, color: "#64748B" }}
-                          onClick={() => setFormNodes([])}
+                          onClick={() => applyFormSelector({ name: "" })}
                         >
                           Clear (None)
                         </Button>
@@ -2372,14 +2416,15 @@ export const AppsPage: React.FC = () => {
                     </Box>
 
                     <FormControl fullWidth size="small">
-                      <InputLabel>Selected Nodes ({formNodes.length})</InputLabel>
+                      <InputLabel>Selected Nodes ({formSelectedNodes.length})</InputLabel>
                       <Select
                         multiple
-                        value={formNodes}
-                        label={`Selected Nodes (${formNodes.length})`}
+                        value={formSelectedNodes}
+                        label={`Selected Nodes (${formSelectedNodes.length})`}
                         onChange={(e) => {
                           const val = e.target.value;
-                          setFormNodes(typeof val === "string" ? val.split(",") : val);
+                          const selected = typeof val === "string" ? val.split(",") : val;
+                          applyFormSelector({ name: selected.join(",") });
                         }}
                         renderValue={(selected) => (
                           <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
@@ -2427,11 +2472,11 @@ export const AppsPage: React.FC = () => {
                     </FormControl>
                     <Typography
                       variant="caption"
-                      sx={{ color: formNodes.length === 0 ? "#D97706" : "#64748B", mt: 0.5, display: "block" }}
+                      sx={{ color: formSelectedNodes.length === 0 ? "#D97706" : "#64748B", mt: 0.5, display: "block" }}
                     >
-                      {formNodes.length === 0
-                        ? "Notice: No nodes selected. The app will be created but will not deploy anywhere until nodes are assigned."
-                        : `Assigned to ${formNodes.length} node(s).`}
+                      {formSelectedNodes.length === 0
+                        ? "Notice: No nodes selected. The selector will match no node until a node name is added."
+                        : `Assigned to ${formSelectedNodes.length} node(s).`}
                     </Typography>
                   </Box>
                 )}
@@ -2446,8 +2491,8 @@ export const AppsPage: React.FC = () => {
                       </Typography>
                     </Box>
                     <Typography variant="caption" sx={{ color: "#0C4A6E", display: "block", mb: 1.5 }}>
-                      This app will be deployed to all cluster nodes running in agent mode. Any new agent node added in
-                      the future will automatically receive this app.
+                      An empty selector deploys this app to all cluster nodes running in agent mode. Any new agent node
+                      added in the future will automatically receive this app.
                     </Typography>
                     <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.6 }}>
                       {managedNodes.map((n) => (
@@ -2468,7 +2513,7 @@ export const AppsPage: React.FC = () => {
                   </Box>
                 )}
 
-                {/* Option 3: Nodes of a Tag */}
+                {/* Option 3: Nodes of Selected Tag(s) */}
                 {formTargetType === "tag" && (
                   <Box>
                     <Grid container spacing={2} alignItems="center">
@@ -2476,13 +2521,28 @@ export const AppsPage: React.FC = () => {
                         <FormControl fullWidth size="small">
                           <InputLabel>Select from Existing Tags</InputLabel>
                           <Select
-                            value={availableTags.includes(formTargetTag) ? formTargetTag : ""}
+                            multiple
+                            value={splitSelectorList(formTargetTag)}
                             label="Select from Existing Tags"
-                            onChange={(e) => setFormTargetTag(e.target.value)}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              const selected = typeof val === "string" ? val.split(",") : val;
+                              applyFormSelector({ tag: selected.join(",") });
+                            }}
+                            renderValue={(selected) => (
+                              <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
+                                {selected.length === 0 ? (
+                                  <Typography variant="body2" sx={{ color: "#94A3B8", fontStyle: "italic" }}>
+                                    None selected
+                                  </Typography>
+                                ) : (
+                                  selected.map((tag) => (
+                                    <Chip key={tag} label={`#${tag}`} size="small" sx={{ height: 22, fontSize: "0.75rem" }} />
+                                  ))
+                                )}
+                              </Box>
+                            )}
                           >
-                            <MenuItem value="">
-                              <em>-- Select a tag --</em>
-                            </MenuItem>
                             {availableTags.map((tag) => {
                               const matchCount = managedNodes.filter((n) => n.tags?.includes(tag)).length;
                               return (
@@ -2514,10 +2574,10 @@ export const AppsPage: React.FC = () => {
                         <TextField
                           fullWidth
                           size="small"
-                          label="Or Enter Custom Tag"
+                          label="Or Enter Tags (comma-separated)"
                           placeholder="e.g. edge, ingress, prod"
                           value={formTargetTag}
-                          onChange={(e) => setFormTargetTag(e.target.value.toLowerCase().trim())}
+                          onChange={(e) => applyFormSelector({ tag: e.target.value.toLowerCase() })}
                           InputProps={{
                             startAdornment: <Tag size={16} style={{ marginRight: 6, color: "#8B5CF6" }} />,
                           }}
@@ -2528,13 +2588,11 @@ export const AppsPage: React.FC = () => {
                     {/* Tag match preview */}
                     <Box sx={{ mt: 1.5, p: 1.5, bgcolor: "#F5F3FF", borderRadius: "8px", border: "1px solid #DDD6FE" }}>
                       {(() => {
-                        const matchingNodes = managedNodes.filter((n) =>
-                          n.tags?.some((t) => t.toLowerCase() === formTargetTag.toLowerCase()),
-                        );
+                        const matchingNodes = managedNodes.filter((n) => matchesTaskSelector(n, { tag: formTargetTag }));
                         if (!formTargetTag) {
                           return (
                             <Typography variant="caption" sx={{ color: "#6D28D9" }}>
-                              Please select or enter a tag above to see matching nodes.
+                              Please select or enter at least one tag above to see matching nodes.
                             </Typography>
                           );
                         }
@@ -2543,8 +2601,8 @@ export const AppsPage: React.FC = () => {
                             <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                               <Info size={16} color="#8B5CF6" />
                               <Typography variant="caption" sx={{ color: "#6D28D9" }}>
-                                No nodes currently have the tag <strong>#{formTargetTag}</strong>. The app will
-                                automatically deploy whenever a node is tagged with <strong>#{formTargetTag}</strong>.
+                                No nodes currently have any of these tags. The app will automatically deploy whenever a
+                                node is tagged with <strong>#{formTargetTag}</strong>.
                               </Typography>
                             </Box>
                           );
@@ -2555,7 +2613,7 @@ export const AppsPage: React.FC = () => {
                               variant="caption"
                               sx={{ color: "#5B21B6", fontWeight: 700, display: "block", mb: 0.8 }}
                             >
-                              {matchingNodes.length} node(s) currently match tag #{formTargetTag}:
+                              {matchingNodes.length} node(s) currently match tag selection:
                             </Typography>
                             <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.6 }}>
                               {matchingNodes.map((n) => (
@@ -2579,6 +2637,61 @@ export const AppsPage: React.FC = () => {
                     </Box>
                   </Box>
                 )}
+
+                {formTargetType === "custom" && (
+                  <Box sx={{ p: 2, bgcolor: "#F0FDFA", borderRadius: "8px", border: "1px solid #99F6E4" }}>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                      <Code2 size={16} color="#0F766E" />
+                      <Typography variant="caption" sx={{ color: "#115E59" }}>
+                        Build an arbitrary selector below. Supported keys are <code>name</code>, <code>tag</code>, and{" "}
+                        <code>env:&lt;NAME&gt;</code>.
+                      </Typography>
+                    </Box>
+                  </Box>
+                )}
+
+                <Box sx={{ mt: 2 }}>
+                  <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 0.8 }}>
+                    <Typography variant="caption" sx={{ color: "#475569", fontWeight: 700 }}>
+                      Selector JSON
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: selectorMatchedNodes.length > 0 ? "#059669" : "#D97706" }}>
+                      {selectorMatchedNodes.length} node(s) match
+                    </Typography>
+                  </Box>
+                  <TextField
+                    fullWidth
+                    multiline
+                    minRows={4}
+                    size="small"
+                    value={formSelectorText}
+                    onChange={(e) => handleSelectorTextChange(e.target.value)}
+                    error={Boolean(formSelectorError)}
+                    helperText={
+                      formSelectorError ||
+                      'Use {"name":"node-a,node-b"}, {"tag":"edge,prod"}, or {"env:NODE_IP":"10.0.0.1"}. Empty {} matches all nodes.'
+                    }
+                    InputProps={{
+                      sx: { fontFamily: "monospace", fontSize: "0.8rem" },
+                    }}
+                  />
+                  <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.6, mt: 1 }}>
+                    {selectorMatchedNodes.length === 0 ? (
+                      <Typography variant="caption" sx={{ color: "#94A3B8", fontStyle: "italic" }}>
+                        No managed nodes match this selector.
+                      </Typography>
+                    ) : (
+                      selectorMatchedNodes.map((n) => (
+                        <Chip
+                          key={n.name}
+                          label={n.name}
+                          size="small"
+                          sx={{ height: 20, fontSize: "0.7rem", bgcolor: "#ECFDF5", color: "#047857" }}
+                        />
+                      ))
+                    )}
+                  </Box>
+                </Box>
               </Box>
 
               <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, mt: 1 }}>

@@ -112,21 +112,6 @@ func (m *Manager) SaveApp(app config.App) (config.App, error) {
 		app.UpdatedAt = now
 	}
 
-	// Filter out invalid or external nodes
-	nodeSet := make(map[string]bool)
-	for _, n := range cfg.Nodes {
-		if !n.IsExternal {
-			nodeSet[n.Name] = true
-		}
-	}
-	var validNodes []string
-	for _, n := range app.Nodes {
-		if nodeSet[n] {
-			validNodes = append(validNodes, n)
-		}
-	}
-	app.Nodes = validNodes
-
 	// Check if another app already uses the same name
 	for _, existing := range cfg.Apps {
 		if existing.ID != app.ID && strings.EqualFold(existing.Name, app.Name) {
@@ -302,8 +287,6 @@ func (m *Manager) DuplicateApp(appID string) (config.App, error) {
 		AppType:     original.AppType,
 		MainContent: original.MainContent,
 		EnvContent:  original.EnvContent,
-		TargetType:  original.TargetType,
-		TargetTag:   original.TargetTag,
 		Published:   false, // Draft
 		Enabled:     false, // Forced to disabled state
 		CreatedAt:   now,
@@ -321,9 +304,11 @@ func (m *Manager) DuplicateApp(appID string) (config.App, error) {
 		}
 	}
 
-	if original.Nodes != nil {
-		duplicated.Nodes = make([]string, len(original.Nodes))
-		copy(duplicated.Nodes, original.Nodes)
+	if original.Selector != nil {
+		duplicated.Selector = make(map[string]string, len(original.Selector))
+		for k, v := range original.Selector {
+			duplicated.Selector[k] = v
+		}
 	}
 
 	if err := config.ValidateApp(duplicated); err != nil {

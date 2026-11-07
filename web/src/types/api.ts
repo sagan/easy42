@@ -966,8 +966,6 @@ export interface ResetMCPTokenRequest {
 
 // ----------------- Workload Apps -----------------
 
-export type AppTargetType = "manual" | "all" | "tag";
-
 export interface App {
   id: string;
   name: string;
@@ -977,9 +975,8 @@ export interface App {
   main_content: string;
   env_content?: string;
   files?: Record<string, string>;
-  target_type?: AppTargetType;
-  target_tag?: string;
-  nodes?: string[];
+  /** Optional node scope conditions. Supported keys: name, tag, env:<NAME>. */
+  selector?: Record<string, string>;
   published?: boolean;
   enabled: boolean;
   created_at: string;

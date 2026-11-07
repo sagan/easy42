@@ -47,7 +47,7 @@ func TestAppsAPI(t *testing.T) {
 		Files: map[string]string{
 			"config.json": `{"hello":"world"}`,
 		},
-		Nodes:     []string{"node1"},
+		Selector:  map[string]string{"name": "node1"},
 		Published: true,
 		Enabled:   true,
 	}
@@ -370,7 +370,7 @@ func TestAppSyncReconciliation(t *testing.T) {
 		AppType:     "systemd",
 		MainContent: "[Unit]\nDescription=rclone service\n\n[Service]\nExecStart=/usr/bin/rclone serve webdav\n",
 		EnvContent:  "RCLONE_PASS=123456\n",
-		Nodes:       []string{"nbbug"},
+		Selector:    map[string]string{"name": "nbbug"},
 		Published:   true,
 		Enabled:     true,
 	}
@@ -503,7 +503,7 @@ func TestAppSyncReconciliation(t *testing.T) {
 	}
 
 	// 8. Unassign rclone from nbbug -> diff_status: "delete", needs_apply: true
-	app.Nodes = []string{}
+	app.Selector = map[string]string{"name": ""}
 	if _, err := srv.mgr.SaveApp(app); err != nil {
 		t.Fatalf("failed to unassign app: %v", err)
 	}
@@ -611,7 +611,7 @@ func TestAppMutationsDoNotAutoSyncToConnectedAgent(t *testing.T) {
 		AppType:     "systemd",
 		MainContent: "[Unit]\nDescription=rclone service\n\n[Service]\nExecStart=/usr/bin/rclone serve\nRestart=always\nRestartSec=10\n",
 		EnvContent:  "FOO=bar\n",
-		Nodes:       []string{"berohost"},
+		Selector:    map[string]string{"name": "berohost"},
 		Published:   true,
 		Enabled:     true,
 	}
@@ -791,7 +791,7 @@ func TestAppDraftIsNotDeployed(t *testing.T) {
 		Name:        "myapp-draft",
 		AppType:     "systemd",
 		MainContent: "[Unit]\nDescription=draft app\n[Service]\nExecStart=/bin/true\n",
-		Nodes:       []string{"node-draft"},
+		Selector:    map[string]string{"name": "node-draft"},
 		Published:   false,
 		Enabled:     true,
 	}
@@ -942,7 +942,7 @@ func TestAppDeleteAuxiliaryConfigFileReconciliation(t *testing.T) {
 		Files: map[string]string{
 			"config.json": `{"version": 1}`,
 		},
-		Nodes:     []string{"node-aux"},
+		Selector:  map[string]string{"name": "node-aux"},
 		Published: true,
 		Enabled:   true,
 	}
@@ -1099,7 +1099,7 @@ func TestAppDisableProducesSyncAction(t *testing.T) {
 		AppType:     "docker",
 		MainContent: "services:\n  web:\n    image: nginx\n",
 		EnvContent:  "PORT=8080\n",
-		Nodes:       []string{"node-disable"},
+		Selector:    map[string]string{"name": "node-disable"},
 		Published:   true,
 		Enabled:     true,
 	}
@@ -1175,7 +1175,7 @@ func TestAppDisableReconcilesLegacyDeployedApp(t *testing.T) {
 		Name:        "legacy-disabled",
 		AppType:     "docker",
 		MainContent: "services:\n  web:\n    image: nginx\n",
-		Nodes:       []string{"node-legacy"},
+		Selector:    map[string]string{"name": "node-legacy"},
 		Published:   true,
 		Enabled:     true,
 	}

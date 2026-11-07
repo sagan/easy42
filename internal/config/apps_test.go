@@ -8,18 +8,19 @@ func TestAppTargetsNode(t *testing.T) {
 	node1 := &Node{
 		Name: "node-tokyo",
 		Tags: []string{"asia", "edge", "prod"},
+		IP:   "192.168.100.1/24",
 	}
 	node2 := &Node{
 		Name: "node-frankfurt",
 		Tags: []string{"europe", "core"},
+		IP:   "192.168.100.2/24",
 	}
 
 	// 1. Manual selection
 	manualApp := App{
-		ID:         "app-1",
-		Name:       "manual-app",
-		TargetType: "manual",
-		Nodes:      []string{"node-tokyo"},
+		ID:       "app-1",
+		Name:     "manual-app",
+		Selector: map[string]string{"name": "node-tokyo"},
 	}
 	if !AppTargetsNode(manualApp, node1, "") {
 		t.Errorf("manualApp should target node1")
@@ -28,38 +29,10 @@ func TestAppTargetsNode(t *testing.T) {
 		t.Errorf("manualApp should NOT target node2")
 	}
 
-	// Default/empty TargetType should behave as manual
-	defaultApp := App{
-		ID:    "app-def",
-		Name:  "default-app",
-		Nodes: []string{"node-frankfurt"},
-	}
-	if AppTargetsNode(defaultApp, node1, "") {
-		t.Errorf("defaultApp should NOT target node1")
-	}
-	if !AppTargetsNode(defaultApp, node2, "") {
-		t.Errorf("defaultApp should target node2")
-	}
-
-	// Selecting none (empty nodes) in manual mode
-	noneApp := App{
-		ID:         "app-none",
-		Name:       "none-app",
-		TargetType: "manual",
-		Nodes:      []string{},
-	}
-	if AppTargetsNode(noneApp, node1, "") {
-		t.Errorf("noneApp should NOT target node1")
-	}
-	if AppTargetsNode(noneApp, node2, "") {
-		t.Errorf("noneApp should NOT target node2")
-	}
-
-	// 2. All nodes
+	// An empty selector matches every node.
 	allApp := App{
-		ID:         "app-all",
-		Name:       "all-app",
-		TargetType: "all",
+		ID:   "app-all",
+		Name: "all-app",
 	}
 	if !AppTargetsNode(allApp, node1, "") {
 		t.Errorf("allApp should target node1")
@@ -68,12 +41,24 @@ func TestAppTargetsNode(t *testing.T) {
 		t.Errorf("allApp should target node2")
 	}
 
-	// 3. Nodes of a selected tag
+	// Selecting none with an empty name list.
+	noneApp := App{
+		ID:       "app-none",
+		Name:     "none-app",
+		Selector: map[string]string{"name": ""},
+	}
+	if AppTargetsNode(noneApp, node1, "") {
+		t.Errorf("noneApp should NOT target node1")
+	}
+	if AppTargetsNode(noneApp, node2, "") {
+		t.Errorf("noneApp should NOT target node2")
+	}
+
+	// 2. Nodes of a selected tag
 	tagApp := App{
-		ID:         "app-tag",
-		Name:       "tag-app",
-		TargetType: "tag",
-		TargetTag:  "edge",
+		ID:       "app-tag",
+		Name:     "tag-app",
+		Selector: map[string]string{"tag": "edge"},
 	}
 	if !AppTargetsNode(tagApp, node1, "") {
 		t.Errorf("tagApp should target node1 (has tag 'edge')")
@@ -82,61 +67,80 @@ func TestAppTargetsNode(t *testing.T) {
 		t.Errorf("tagApp should NOT target node2 (lacks tag 'edge')")
 	}
 
-	// Case-insensitivity in tag matching
-	tagUpperApp := App{
-		ID:         "app-tag-upper",
-		Name:       "tag-upper-app",
-		TargetType: "tag",
-		TargetTag:  "EUROPE",
+	// Node environment variables can be used as selector conditions.
+	envApp := App{
+		ID:       "app-env",
+		Name:     "env-app",
+		Selector: map[string]string{"env:NODE_IP": "192.168.100.2"},
 	}
-	if !AppTargetsNode(tagUpperApp, node2, "") {
-		t.Errorf("tagUpperApp should target node2 ('EUROPE' matches 'europe')")
+	if AppTargetsNode(envApp, node1, "") {
+		t.Errorf("envApp should NOT target node1")
+	}
+	if !AppTargetsNode(envApp, node2, "") {
+		t.Errorf("envApp should target node2")
+	}
+
+	// Name-only selectors work even when only the node name is known.
+	if !AppTargetsNode(manualApp, nil, "node-tokyo") {
+		t.Errorf("manualApp should target node-tokyo by name without a full node")
+	}
+	if AppTargetsNode(tagApp, nil, "node-tokyo") {
+		t.Errorf("tagApp cannot match without a full node")
 	}
 }
 
-func TestValidateAppTargetType(t *testing.T) {
+func TestValidateAppSelector(t *testing.T) {
 	base := App{
 		Name:        "test-app",
 		AppType:     "docker",
 		MainContent: "version: '3.8'\nservices:\n  app:\n    image: nginx",
 	}
 
-	// Valid manual with empty nodes (select none)
+	// Empty selector is valid and targets all nodes.
+	if err := ValidateApp(base); err != nil {
+		t.Errorf("expected empty selector to be valid, got: %v", err)
+	}
+
+	// Valid manual selection with an empty list.
 	appManualEmpty := base
-	appManualEmpty.TargetType = "manual"
-	appManualEmpty.Nodes = []string{}
+	appManualEmpty.Selector = map[string]string{"name": ""}
 	if err := ValidateApp(appManualEmpty); err != nil {
-		t.Errorf("expected manual with empty nodes to be valid, got: %v", err)
+		t.Errorf("expected empty name selector to be valid, got: %v", err)
 	}
 
-	// Valid all
-	appAll := base
-	appAll.TargetType = "all"
-	if err := ValidateApp(appAll); err != nil {
-		t.Errorf("expected target_type 'all' to be valid, got: %v", err)
-	}
-
-	// Valid tag
+	// Valid tag selector.
 	appTag := base
-	appTag.TargetType = "tag"
-	appTag.TargetTag = "edge"
+	appTag.Selector = map[string]string{"tag": "edge"}
 	if err := ValidateApp(appTag); err != nil {
-		t.Errorf("expected target_type 'tag' with tag to be valid, got: %v", err)
+		t.Errorf("expected tag selector to be valid, got: %v", err)
 	}
 
-	// Invalid tag without target_tag
-	appTagEmpty := base
-	appTagEmpty.TargetType = "tag"
-	appTagEmpty.TargetTag = "   "
-	if err := ValidateApp(appTagEmpty); err == nil {
-		t.Errorf("expected error when target_tag is empty with target_type 'tag'")
+	// Valid environment selector.
+	appEnv := base
+	appEnv.Selector = map[string]string{"env:NODE_IP": "10.0.0.1"}
+	if err := ValidateApp(appEnv); err != nil {
+		t.Errorf("expected env selector to be valid, got: %v", err)
 	}
 
-	// Invalid target_type
-	appBadType := base
-	appBadType.TargetType = "random"
-	if err := ValidateApp(appBadType); err == nil {
-		t.Errorf("expected error with unknown target_type 'random'")
+	// Invalid selector key.
+	appBadKey := base
+	appBadKey.Selector = map[string]string{"random": "value"}
+	if err := ValidateApp(appBadKey); err == nil {
+		t.Errorf("expected error with unknown selector key")
+	}
+
+	// Invalid env selector without a variable name.
+	appBadEnv := base
+	appBadEnv.Selector = map[string]string{"env:": "value"}
+	if err := ValidateApp(appBadEnv); err == nil {
+		t.Errorf("expected error with empty env selector variable name")
+	}
+
+	// Invalid empty selector key.
+	appEmptyKey := base
+	appEmptyKey.Selector = map[string]string{" ": "value"}
+	if err := ValidateApp(appEmptyKey); err == nil {
+		t.Errorf("expected error with empty selector key")
 	}
 }
 
