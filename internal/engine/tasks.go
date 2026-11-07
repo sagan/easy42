@@ -56,7 +56,8 @@ func (m *Manager) DeleteCustomTask(ctx context.Context, taskID string) error {
 // CheckTaskStatus checks the status of a task on specified nodes (or all nodes if nodeNames is empty)
 func (m *Manager) CheckTaskStatus(ctx context.Context, taskID string, nodeNames []string) (map[string]tasks.TaskStatusResult, error) {
 	// Verify task exists
-	if _, err := tasks.GetTaskMeta(taskID, m.customTasksDir()); err != nil {
+	meta, err := tasks.GetTaskMeta(taskID, m.customTasksDir())
+	if err != nil {
 		return nil, err
 	}
 
@@ -73,7 +74,7 @@ func (m *Manager) CheckTaskStatus(ctx context.Context, taskID string, nodeNames 
 	targetMap := make(map[string]config.Node)
 	if len(nodeNames) == 0 {
 		for _, n := range cfg.Nodes {
-			if !n.IsExternal {
+			if !n.IsExternal && NodeMatchesTaskSelector(n, meta.Selector) {
 				targetMap[n.Name] = n
 			}
 		}
@@ -83,7 +84,7 @@ func (m *Manager) CheckTaskStatus(ctx context.Context, taskID string, nodeNames 
 			allowed[name] = true
 		}
 		for _, n := range cfg.Nodes {
-			if allowed[n.Name] && !n.IsExternal {
+			if allowed[n.Name] && !n.IsExternal && NodeMatchesTaskSelector(n, meta.Selector) {
 				targetMap[n.Name] = n
 			}
 		}
@@ -135,7 +136,8 @@ func (m *Manager) CheckTaskStatus(ctx context.Context, taskID string, nodeNames 
 // RunTask executes a task on specified nodes
 func (m *Manager) RunTask(ctx context.Context, taskID string, nodeNames []string) (map[string]tasks.TaskRunResult, error) {
 	// Verify task exists
-	if _, err := tasks.GetTaskMeta(taskID, m.customTasksDir()); err != nil {
+	meta, err := tasks.GetTaskMeta(taskID, m.customTasksDir())
+	if err != nil {
 		return nil, err
 	}
 
@@ -155,12 +157,15 @@ func (m *Manager) RunTask(ctx context.Context, taskID string, nodeNames []string
 		allowed[name] = true
 	}
 	for _, n := range cfg.Nodes {
-		if allowed[n.Name] && !n.IsExternal {
+		if allowed[n.Name] && !n.IsExternal && NodeMatchesTaskSelector(n, meta.Selector) {
 			targetMap[n.Name] = n
 		}
 	}
 
 	if len(targetMap) == 0 {
+		if len(meta.Selector) > 0 {
+			return nil, fmt.Errorf("no target nodes match the task selector")
+		}
 		return nil, fmt.Errorf("no valid target nodes specified")
 	}
 

@@ -33,6 +33,7 @@ import { Node, TaskMeta, TaskStatusResult, TaskRunResult } from "../../types/api
 import { TaskSourceModal } from "./TaskSourceModal";
 import { InstallTaskModal } from "./InstallTaskModal";
 import { CustomTaskHelp } from "../DeviceHelper/CustomTaskHelp";
+import { matchesTaskSelector } from "../../utils/taskSelector";
 
 export const CUSTOM_TASK_HELP_ID = "+task";
 
@@ -213,6 +214,24 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
     return tasks.find((t) => t.id === selectedTaskId) || tasks[0] || null;
   }, [tasks, selectedTaskId, isCustomTaskHelp]);
 
+  // Optional task selector: restricts the nodes this task can run on.
+  const activeSelector = selectedTask?.selector;
+  const hasSelector = Boolean(activeSelector && Object.keys(activeSelector).length > 0);
+
+  const selectorMatchedNodes = useMemo(() => {
+    if (!activeSelector) return managedNodes;
+    return managedNodes.filter((node) => matchesTaskSelector(node, activeSelector));
+  }, [managedNodes, activeSelector]);
+
+  const selectorMatchedSet = useMemo(() => {
+    return new Set(selectorMatchedNodes.map((node) => node.name));
+  }, [selectorMatchedNodes]);
+
+  // Nodes in the current tag-filtered view that may be selected for this task.
+  const selectableFilteredNodes = useMemo(() => {
+    return filteredNodes.filter((node) => selectorMatchedSet.has(node.name));
+  }, [filteredNodes, selectorMatchedSet]);
+
   // Task search filter state and View Source modal state
   const [taskFilter, setTaskFilter] = useState<string>("");
   const [mobileTasksOpen, setMobileTasksOpen] = useState<boolean>(false);
@@ -295,8 +314,18 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
     }
   }, [selectedTaskId]);
 
+  // A task selector automatically deselects nodes outside the task scope.
+  useEffect(() => {
+    if (!hasSelector) return;
+    setSelectedNodes((prev) => {
+      const next = prev.filter((name) => selectorMatchedSet.has(name));
+      if (next.length === prev.length) return prev;
+      return next;
+    });
+  }, [hasSelector, selectorMatchedSet]);
+
   const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const filteredNames = new Set(filteredNodes.map((n) => n.name));
+    const filteredNames = new Set(selectableFilteredNodes.map((n) => n.name));
     if (e.target.checked) {
       setSelectedNodes((prev) => Array.from(new Set([...prev, ...filteredNames])));
     } else {
@@ -306,20 +335,21 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
 
   const selectedFilteredCount = useMemo(() => {
     const selectedSet = new Set(selectedNodes);
-    return filteredNodes.filter((n) => selectedSet.has(n.name)).length;
-  }, [filteredNodes, selectedNodes]);
+    return selectableFilteredNodes.filter((n) => selectedSet.has(n.name)).length;
+  }, [selectableFilteredNodes, selectedNodes]);
 
-  const isAllFilteredSelected = filteredNodes.length > 0 && selectedFilteredCount === filteredNodes.length;
-  const isSomeFilteredSelected = selectedFilteredCount > 0 && selectedFilteredCount < filteredNodes.length;
+  const isAllFilteredSelected = selectableFilteredNodes.length > 0 && selectedFilteredCount === selectableFilteredNodes.length;
+  const isSomeFilteredSelected = selectedFilteredCount > 0 && selectedFilteredCount < selectableFilteredNodes.length;
 
   const toggleSelectNode = (name: string) => {
+    if (!selectorMatchedSet.has(name)) return;
     setSelectedNodes((prev) => (prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name]));
   };
 
   // Run status check on selected nodes (or specific node)
   const handleCheckStatus = async (targetNodes?: string[]) => {
     if (!selectedTask) return;
-    const target = targetNodes || selectedNodes;
+    const target = (targetNodes || selectedNodes).filter((name) => selectorMatchedSet.has(name));
     if (target.length === 0) return;
 
     // Mark checking state
@@ -351,7 +381,7 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
   // Run task on selected nodes (or specific node)
   const handleRunTask = async (targetNodes?: string[]) => {
     if (!selectedTask) return;
-    const target = targetNodes || selectedNodes;
+    const target = (targetNodes || selectedNodes).filter((name) => selectorMatchedSet.has(name));
     if (target.length === 0) return;
 
     // Mark running state
@@ -396,14 +426,14 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
 
   const needsExecutionCount = useMemo(() => {
     const targetPool = selectedTag === "All" ? managedNodes : filteredNodes;
-    return targetPool.filter((n) => statuses[n.name]?.status === "ready").length;
-  }, [selectedTag, managedNodes, filteredNodes, statuses]);
+    return targetPool.filter((n) => selectorMatchedSet.has(n.name) && statuses[n.name]?.status === "ready").length;
+  }, [selectedTag, managedNodes, filteredNodes, selectorMatchedSet, statuses]);
 
   // Auto-select nodes whose status is "ready" ("Needs Execution") and unselect other nodes
   const handleAutoSelect = () => {
     const targetPool = selectedTag === "All" ? managedNodes : filteredNodes;
     const readyNodeNames = targetPool
-      .filter((n) => statuses[n.name]?.status === "ready")
+      .filter((n) => selectorMatchedSet.has(n.name) && statuses[n.name]?.status === "ready")
       .map((n) => n.name);
     setSelectedNodes(readyNodeNames);
   };
@@ -958,6 +988,25 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
                 <Typography variant="body2" color="text.secondary">
                   {selectedTask.description}
                 </Typography>
+                {hasSelector && (
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, mt: 1, flexWrap: "wrap" }}>
+                    <Chip
+                      size="small"
+                      label="Task Selector"
+                      sx={{
+                        height: 20,
+                        fontSize: "0.68rem",
+                        fontWeight: 700,
+                        bgcolor: "rgba(79, 70, 229, 0.1)",
+                        color: "primary.main",
+                      }}
+                    />
+                    <Typography variant="caption" sx={{ color: "text.secondary" }}>
+                      Only {selectorMatchedNodes.length} of {managedNodes.length} managed device(s) match this task&apos;s
+                      selector. Other devices are disabled.
+                    </Typography>
+                  </Box>
+                )}
               </Box>
 
               {error && (
@@ -987,7 +1036,8 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
                   }}
                 >
                   <Typography variant="subtitle2" sx={{ fontWeight: 700, fontSize: { xs: "0.8rem", sm: "0.875rem" } }}>
-                    Target Devices ({selectedNodes.length} / {managedNodes.length} selected)
+                    Target Devices ({selectedNodes.length} / {hasSelector ? selectorMatchedNodes.length : managedNodes.length}{" "}
+                    selected)
                   </Typography>
 
                   {/* Tag Filter Selector */}
@@ -1121,6 +1171,7 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
                           checked={isAllFilteredSelected}
                           indeterminate={isSomeFilteredSelected}
                           onChange={handleSelectAll}
+                          disabled={selectableFilteredNodes.length === 0}
                         />
                       </TableCell>
                       <TableCell sx={{ fontWeight: 700 }}>Device</TableCell>
@@ -1142,6 +1193,7 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
                     )}
                     {filteredNodes.map((node) => {
                       const isSelected = selectedNodes.includes(node.name);
+                      const isEligible = selectorMatchedSet.has(node.name);
                       const st = statuses[node.name];
                       const isChecking = checkingNodes[node.name];
                       const isRunning = runningNodes[node.name];
@@ -1151,10 +1203,24 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
                           key={node.name}
                           hover
                           selected={isSelected}
-                          sx={{ "&:last-child td, &:last-child th": { border: 0 } }}
+                          sx={{
+                            "&:last-child td, &:last-child th": { border: 0 },
+                            opacity: isEligible ? 1 : 0.5,
+                          }}
                         >
                           <TableCell padding="checkbox">
-                            <Checkbox size="small" checked={isSelected} onChange={() => toggleSelectNode(node.name)} />
+                            <Tooltip
+                              title={isEligible ? "" : "This device does not match the task selector and cannot be selected"}
+                            >
+                              <span>
+                                <Checkbox
+                                  size="small"
+                                  checked={isEligible && isSelected}
+                                  disabled={!isEligible}
+                                  onChange={() => toggleSelectNode(node.name)}
+                                />
+                              </span>
+                            </Tooltip>
                           </TableCell>
                           <TableCell>
                             <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
@@ -1196,7 +1262,7 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
                                 <span>
                                   <IconButton
                                     size="small"
-                                    disabled={isChecking || isRunning}
+                                    disabled={isChecking || isRunning || !isEligible}
                                     onClick={() => handleCheckStatus([node.name])}
                                   >
                                     <RotateCw size={14} />
@@ -1208,7 +1274,7 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
                                   <IconButton
                                     size="small"
                                     color="primary"
-                                    disabled={isChecking || isRunning}
+                                    disabled={isChecking || isRunning || !isEligible}
                                     onClick={() => handleRunTask([node.name])}
                                   >
                                     <Play size={14} />

@@ -31,6 +31,9 @@ type TaskMeta struct {
 	Category    string `json:"category"`
 	Weight      int    `json:"weight"`
 	Custom      bool   `json:"custom,omitempty"`
+	// Selector optionally restricts which nodes the task can be executed on.
+	// Supported keys are "name", "tag" and "env:<NAME>". All conditions must match (AND).
+	Selector map[string]string `json:"selector,omitempty"`
 }
 
 var (
@@ -130,6 +133,9 @@ func scanCustomTasks(customDir string) ([]TaskMeta, error) {
 				}
 				if parsed.Weight != 0 {
 					meta.Weight = parsed.Weight
+				}
+				if len(parsed.Selector) > 0 {
+					meta.Selector = parsed.Selector
 				}
 			}
 		}

@@ -32,6 +32,7 @@
     - [4. Execute Task on Nodes](#4-execute-task-on-nodes)
   - [Authoring Custom Tasks](#authoring-custom-tasks)
     - [1. Task Manifest (`task.json`)](#1-task-manifest-taskjson)
+    - [Task Selector](#task-selector)
     - [2. Status Script (`status.sh`)](#2-status-script-statussh)
     - [3. Execution Script (`run.sh`)](#3-execution-script-runsh)
   - [Filesystem Custom Tasks](#filesystem-custom-tasks)
@@ -349,6 +350,8 @@ GET /api/tasks
 ]
 ```
 
+Custom tasks may additionally include a `selector` object describing the nodes the task is allowed to run on. Built-in tasks omit this field.
+
 ### 2. Read Task Source Files
 
 ```http
@@ -485,11 +488,48 @@ Directories whose names begin with `_` are skipped. Directories without a valid 
   "title": "Setup Custom MTU Daemon",
   "description": "Installs and tunes custom interface MTU optimization service.",
   "category": "System & Network",
-  "weight": 60
+  "weight": 60,
+  "selector": {
+    "name": "edge-1,edge-2",
+    "tag": "edge,vps",
+    "env:NODE_IP6": "fd42:a159:f9f0::1"
+  }
 }
 ```
 
-`id` is used in API paths and must be unique. `weight` controls ordering (lower runs earlier in the UI).
+`id` is used in API paths and must be unique. `weight` controls ordering (lower runs earlier in the UI). The optional `selector` restricts which nodes the task may run on; see [Task Selector](#task-selector).
+
+### Task Selector
+
+The optional `selector` object in `task.json` defines the scope of nodes a task can be executed on. It is intended for custom Device Helper tasks. When present, the Device Helper page deselects and disables every non-matching node, and the backend independently verifies each target node before dispatching the task.
+
+```json
+"selector": {
+  "name": "edge-1,edge-2",
+  "tag": "edge,vps",
+  "env:NODE_DATA_ROLE": "gateway"
+}
+```
+
+Supported keys:
+
+| Key          | Value                                                                                          |
+| :----------- | :--------------------------------------------------------------------------------------------- |
+| `name`       | Comma-separated node name whitelist. The node name must exactly match one entry.               |
+| `tag`        | Comma-separated node tag whitelist. The node must have at least one of the listed tags.        |
+| `env:<NAME>` | Required node metadata value. `<NAME>` can be any node context variable listed in [Network Configuration Task](#network-configuration-task). |
+
+If multiple keys are present, **all of them must match (AND)**. An empty selector (or an omitted `selector` field) matches every managed node. Unknown selector keys fail closed: no node matches.
+
+`env:<NAME>` supports the same variables exposed to tasks, including `NODE_NAME`, `NODE_INTERFACE`, `NODE_IP`, `NODE_IP6`, `NODE_EXTERNAL_IP`, `NODE_EXTERNAL_IP6`, `NODE_TAGS`, `NODE_TAG_*`, and `NODE_DATA_*` values extracted from the node Note fenced `json` block. For example, a note containing:
+
+````markdown
+```json
+{"role": "gateway", "meta": {"region": "eu"}}
+```
+````
+
+can be matched with `"env:NODE_DATA_ROLE": "gateway"` or `"env:NODE_DATA_META_REGION": "eu"`.
 
 ### 2. Status Script (`status.sh`)
 
@@ -550,7 +590,7 @@ _(Default: `~/.config/easy42/tasks/<task_id>/`, or overridden by the `--data-dir
 
 1. **`run.sh`** (_Required_): Executable shell script run natively on target nodes as root or with sudo. Must exit `0` on success or non-zero on error.
 2. **`status.sh`** (_Optional_): Probes remote node state. If omitted, Device Helper automatically marks the task as **Ready to Execute** (`0`).
-3. **`task.json`** (_Optional_): Metadata defining `title`, `description`, `category`, and `weight`. If omitted, the title is automatically derived from the directory name (e.g. `install_bird` becomes `"Install Bird"`), category defaults to `"Custom"`, and weight defaults to `500`.
+3. **`task.json`** (_Optional_): Metadata defining `title`, `description`, `category`, `weight`, and an optional `selector` that restricts the task to matching nodes. If omitted, the title is automatically derived from the directory name (e.g. `install_bird` becomes `"Install Bird"`), category defaults to `"Custom"`, and weight defaults to `500`.
 4. **Access to `common.sh`**:
    Custom tasks automatically have access to Easy42's shared `common.sh` helper library in their working directory:
    ```sh
@@ -561,6 +601,7 @@ _(Default: `~/.config/easy42/tasks/<task_id>/`, or overridden by the `--data-dir
 ### UI Integration
 
 - **Separated Sidebar Section**: In the Device Helper Web UI, custom tasks are grouped in their own **Custom Tasks** section below the built-in tasks.
+- **Task Selectors**: When a custom task defines a `selector`, non-matching devices are automatically deselected and disabled in the target device table; the backend enforces the same restriction before dispatching the task.
 - **"+ Task" Guide & AI Prompt Page**: A dedicated "+ Task" item provides step-by-step instructions and an interactive **Ready-to-Use AI Prompt Generator** that can be copied into any LLM (ChatGPT, Claude, Gemini, DeepSeek) to generate production-ready `run.sh` and `status.sh` scripts.
 - **View Source**: Operators can click "View Source" on any custom task to inspect its scripts and the shared `common.sh`.
 

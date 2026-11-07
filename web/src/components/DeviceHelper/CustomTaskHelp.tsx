@@ -12,6 +12,7 @@ import {
   FileJson,
   Info,
   Globe,
+  Filter,
 } from "lucide-react";
 
 interface CustomTaskHelpProps {
@@ -74,10 +75,24 @@ When executed, easy42 creates an isolated temporary directory \`/tmp/.easy42_tas
        "title": "A Human Readable Title",
        "description": "Clear explanation of what this task does on target nodes.",
        "category": "Maintenance",
-       "weight": 100
+       "weight": 100,
+       "selector": {
+         "name": "edge-1,edge-2",
+         "tag": "edge,vps",
+         "env:NODE_IP6": "fd42:a159:f9f0::1"
+       }
      }
      \`\`\`
-
+   - The optional \`selector\` restricts which nodes the task may run on. All
+     conditions must match (AND). Supported keys:
+     - \`name\`: comma-separated node name whitelist.
+     - \`tag\`: comma-separated node tag whitelist; the node needs at least one.
+     - \`env:<NAME>\`: required node metadata value. \`<NAME>\` can be a built-in
+       variable such as \`NODE_IP\`, \`NODE_IP6\`, \`NODE_EXTERNAL_IP\`,
+       \`NODE_TAGS\`, or a \`NODE_DATA_*\` value extracted from the node Note
+       \`\`\`json block.
+   - Only include \`selector\` when the task genuinely targets a subset of nodes;
+     omit it for tasks that should be available on every node.
 Please generate the complete, production-grade files (\`task.json\`, \`status.sh\`, and \`run.sh\`) and the shell commands to create the folder and files under \`~/.config/easy42/tasks/<task_id>/\`.`;
 
   const quickstartBash = `# 1. Create a custom task folder
@@ -335,8 +350,9 @@ chmod +x ~/.config/easy42/tasks/hello_world/*.sh`;
               />
             </Box>
             <Typography variant="caption" sx={{ color: "#64748b", display: "block", lineHeight: 1.5 }}>
-              Metadata defining title, description, category, and weight. If omitted, easy42 auto-formats the directory
-              name (e.g. <code>install_bird</code> &rarr; "Install Bird").
+              Metadata defining title, description, category, weight, and an optional <code>selector</code> that
+              restricts which nodes the task can run on. If omitted, easy42 auto-formats the directory name (e.g.{" "}
+              <code>install_bird</code> &rarr; "Install Bird").
             </Typography>
           </Box>
         </Box>
@@ -350,6 +366,109 @@ chmod +x ~/.config/easy42/tasks/hello_world/*.sh`;
             <code>NODE_NAME</code>, <code>NODE_INTERFACE</code>, <code>NODE_IP</code>, <code>NODE_IP6</code>,{" "}
             <code>NODE_EXTERNAL_IP</code>, <code>NODE_EXTERNAL_IP6</code>, <code>NODE_TAGS</code>,{" "}
             <code>NODE_TAG_*</code>, <code>NODE_DATA_*</code>.
+          </Typography>
+        </Box>
+      </Paper>
+
+      {/* Task Selector Card */}
+      <Paper
+        elevation={0}
+        sx={{
+          p: 3,
+          borderRadius: 3,
+          border: "1px solid #e2e8f0",
+          bgcolor: "#ffffff",
+        }}
+      >
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
+          <Box
+            sx={{
+              width: 30,
+              height: 30,
+              borderRadius: 1.5,
+              bgcolor: "rgba(79, 70, 229, 0.1)",
+              color: "primary.main",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Filter size={17} />
+          </Box>
+          <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#0f172a" }}>
+            Task Selector (Optional)
+          </Typography>
+          <Chip
+            label="Scope Control"
+            size="small"
+            variant="outlined"
+            color="primary"
+            sx={{ height: 20, fontSize: "0.65rem", fontWeight: 700 }}
+          />
+        </Box>
+        <Typography variant="body2" sx={{ color: "#475569", mb: 2 }}>
+          Add an optional <code>selector</code> object to <code>task.json</code> to restrict which nodes the task can
+          run on. This is useful for custom Device Helper tasks that only make sense on specific hosts. When a selector
+          is present, non-matching nodes are automatically deselected and disabled in the Device Helper page, and the
+          backend also refuses to dispatch the task to them.
+        </Typography>
+
+        <Box
+          sx={{
+            bgcolor: "#0f172a",
+            color: "#e2e8f0",
+            p: 2,
+            borderRadius: 2,
+            fontFamily: "monospace",
+            fontSize: "0.8rem",
+            whiteSpace: "pre-wrap",
+            mb: 2,
+            border: "1px solid #1e293b",
+          }}
+        >
+          {`{
+  "title": "Configure Storage Node",
+  "description": "Prepares the storage role on selected nodes.",
+  "category": "Maintenance",
+  "weight": 100,
+  "selector": {
+    "name": "storage-1,storage-2",
+    "tag": "storage,nas",
+    "env:NODE_DATA_ROLE": "storage"
+  }
+}`}
+        </Box>
+
+        <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+          <Typography variant="caption" sx={{ color: "#475569", lineHeight: 1.6 }}>
+            <strong>
+              <code>name</code>
+            </strong>{" "}
+            — comma-separated whitelist of node names. The node name must exactly match one entry.
+          </Typography>
+          <Typography variant="caption" sx={{ color: "#475569", lineHeight: 1.6 }}>
+            <strong>
+              <code>tag</code>
+            </strong>{" "}
+            — comma-separated whitelist of node tags. The node must have <em>at least one</em> of the listed tags.
+          </Typography>
+          <Typography variant="caption" sx={{ color: "#475569", lineHeight: 1.6 }}>
+            <strong>
+              <code>env:&lt;NAME&gt;</code>
+            </strong>{" "}
+            — requires an exact node metadata value. Supported variables include built-ins such as <code>NODE_NAME</code>,{" "}
+            <code>NODE_INTERFACE</code>, <code>NODE_IP</code>, <code>NODE_IP6</code>, <code>NODE_EXTERNAL_IP</code>,{" "}
+            <code>NODE_EXTERNAL_IP6</code>, <code>NODE_TAGS</code>, and <code>NODE_DATA_*</code> fields extracted from
+            the node Note <code>```json</code> block.
+          </Typography>
+        </Box>
+
+        <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1, mt: 2, color: "#64748b" }}>
+          <Info size={15} style={{ marginTop: 2, flexShrink: 0 }} />
+          <Typography variant="caption" sx={{ lineHeight: 1.6 }}>
+            When multiple keys are present, <strong>all of them must match (AND)</strong>. If a selector key is
+            invalid, no node matches. Omit the <code>selector</code> field entirely to allow the task on every managed
+            node.
           </Typography>
         </Box>
       </Paper>

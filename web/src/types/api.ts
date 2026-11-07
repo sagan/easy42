@@ -428,6 +428,8 @@ export interface TaskMeta {
   category: string;
   weight: number;
   custom?: boolean;
+  /** Optional node scope conditions. Supported keys: name, tag, env:<NAME>. */
+  selector?: Record<string, string>;
 }
 
 export interface OnlineTask {

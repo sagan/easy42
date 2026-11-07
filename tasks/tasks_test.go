@@ -130,7 +130,12 @@ func TestCustomTasks(t *testing.T) {
 		"title": "Node Backup Routine",
 		"description": "Performs system backup",
 		"category": "Maintenance",
-		"weight": 99
+		"weight": 99,
+		"selector": {
+			"name": "edge-1,edge-2",
+			"tag": "backup",
+			"env:NODE_DATA_ROLE": "storage"
+		}
 	}`
 	if err := os.WriteFile(filepath.Join(backupDir, "task.json"), []byte(metaJSON), 0644); err != nil {
 		t.Fatalf("failed to write task.json: %v", err)
@@ -179,6 +184,9 @@ func TestCustomTasks(t *testing.T) {
 			if task.Weight != 99 {
 				t.Errorf("expected weight 99, got %d", task.Weight)
 			}
+			if task.Selector["name"] != "edge-1,edge-2" || task.Selector["tag"] != "backup" || task.Selector["env:NODE_DATA_ROLE"] != "storage" {
+				t.Errorf("unexpected selector parsed from task.json: %#v", task.Selector)
+			}
 		}
 		if task.ID == "not_a_task" {
 			foundIgnored = true
@@ -202,6 +210,9 @@ func TestCustomTasks(t *testing.T) {
 	}
 	if meta.Title != "Node Backup Routine" {
 		t.Errorf("expected title 'Node Backup Routine', got '%s'", meta.Title)
+	}
+	if len(meta.Selector) != 3 {
+		t.Errorf("expected 3 selector entries, got %#v", meta.Selector)
 	}
 
 	// Test GetTaskSources for custom task
@@ -235,4 +246,3 @@ func TestCustomTasks(t *testing.T) {
 		t.Errorf("expected exit code 0, got %d", statusRes.ExitCode)
 	}
 }
-
