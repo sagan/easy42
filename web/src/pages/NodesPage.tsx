@@ -654,7 +654,7 @@ export const NodesPage: React.FC = () => {
   }, [filteredNodes, sortField, sortOrder, liveMap, nodeStatuses, nodeBlocksMap]);
 
   return (
-    <Box sx={{ p: { xs: 1.5, sm: 2.5, md: 3 }, display: "flex", flexDirection: "column", gap: 2.5 }}>
+    <Box sx={{ width: "100%", boxSizing: "border-box", p: { xs: 1.5, sm: 2.5, md: 3 }, display: "flex", flexDirection: "column", gap: 2.5 }}>
       {/* Fleet Overview Top Summary Banner */}
       <Grid container spacing={{ xs: 1.5, sm: 2 }}>
         <Grid item xs={12} sm={6} md={3}>
@@ -961,7 +961,8 @@ export const NodesPage: React.FC = () => {
             alignItems: "center",
             gap: 0.8,
             overflowX: "auto",
-            maxWidth: { xs: "100%", md: "520px" },
+            flex: 1,
+            minWidth: 0,
             pb: { xs: 0.5, md: 0 },
             "-webkit-overflow-scrolling": "touch",
           }}
@@ -1230,7 +1231,7 @@ export const NodesPage: React.FC = () => {
             const nodeBlocks = nodeBlocksMap.get(n.name) || [];
 
             return (
-              <Grid item xs={12} sm={6} lg={4} xl={3} key={n.name}>
+              <Grid item xs={12} sm={6} md={4} lg={3} xl={2.4} key={n.name}>
                 <Paper
                   elevation={0}
                   onClick={() => navigate(`/nodes/${encodeURIComponent(n.name)}`)}

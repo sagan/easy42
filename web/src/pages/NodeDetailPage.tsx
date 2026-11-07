@@ -1011,7 +1011,7 @@ export const NodeDetailPage: React.FC = () => {
           display: "flex",
           flexDirection: "column",
           overflowY: "auto",
-          p: { xs: 2, sm: 3, md: 4 },
+          p: { xs: 1.5, sm: 2.5, md: 3 },
           gap: 2.5,
         }}
       >

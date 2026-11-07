@@ -464,7 +464,7 @@ export const PingTableTab: React.FC<PingTableTabProps> = ({ nodes }) => {
                 Direct Link Latency
               </ToggleButton>
             </ToggleButtonGroup>
-            <Typography variant="caption" sx={{ color: "#64748B", maxWidth: 640 }}>
+            <Typography variant="caption" sx={{ color: "#64748B", flex: 1, minWidth: 260 }}>
               {latencyType === "e2e"
                 ? "Pings each internal node's main IPv4. Traffic routes across the Easy42 mesh; packets may be dynamically relayed based on link metrics."
                 : "Pings directly connected neighbor nodes via link-local private IPv6 address over WireGuard/manual interface. Only direct links are measured."}

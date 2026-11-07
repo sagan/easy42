@@ -1028,5 +1028,26 @@ export interface InterpolatePreviewResponse {
   rendered: string;
 }
 
+export type EventType = "node_offline" | "node_online" | "cron_task_failure";
+
+export interface EventItem {
+  id: number;
+  type: EventType;
+  node_name: string;
+  task_id?: string;
+  title: string;
+  message: string;
+  metadata?: Record<string, any>;
+  created_at: string;
+  is_read: boolean;
+}
+
+export interface EventsResponse {
+  events: EventItem[];
+  total: number;
+  unread_count: number;
+}
+
+
 
 

@@ -73,7 +73,57 @@ func (m *Manager) setupAgentCronTasksListeners() {
 		PopulateCronTaskParsedMetrics(&record)
 
 		_ = m.stateStore.RecordCronTaskResult(record)
+
+		// Check Looking Glass cron task failure (ping / tcp_ping tasks dispatched to nodes periodically)
+		// Frequency limit: at most 1 event per cron task per node per day (24 hours).
+		if isCronTaskFailed(&record) {
+			hasRecent, err := m.stateStore.HasRecentCronTaskFailure(record.TaskID, record.NodeName, 24*time.Hour)
+			if err == nil && !hasRecent {
+				title := fmt.Sprintf("Cron task '%s' failed on %s", record.TaskName, record.NodeName)
+				message := fmt.Sprintf("Looking Glass cron task '%s' (%s) failed on node %s: all packets timed out (100%% packet loss) targeting %s", record.TaskName, record.TaskType, record.NodeName, record.Target)
+				if record.Error != "" {
+					message = fmt.Sprintf("Looking Glass cron task '%s' (%s) failed on node %s: %s", record.TaskName, record.TaskType, record.NodeName, record.Error)
+				}
+				evt := &config.Event{
+					Type:     config.EventTypeCronTaskFailure,
+					NodeName: record.NodeName,
+					TaskID:   record.TaskID,
+					Title:    title,
+					Message:  message,
+					Metadata: map[string]any{
+						"task_id":          record.TaskID,
+						"task_name":        record.TaskName,
+						"task_type":        record.TaskType,
+						"target":           record.Target,
+						"packets_sent":     record.PacketsSent,
+						"packets_received": record.PacketsReceived,
+						"packet_loss_pct":  record.PacketLossPct,
+						"error":            record.Error,
+						"exit_code":        record.ExitCode,
+					},
+					CreatedAt: time.Now().UTC(),
+				}
+				_, _ = m.RecordEvent(evt)
+			}
+		}
 	})
+}
+
+// isCronTaskFailed checks if a cron task execution timed out or failed
+func isCronTaskFailed(record *config.CronTaskResultRecord) bool {
+	if record == nil {
+		return false
+	}
+	if record.ExitCode != 0 || record.Error != "" {
+		return true
+	}
+	if record.PacketsSent > 0 && record.PacketsReceived == 0 {
+		return true
+	}
+	if record.PacketLossPct >= 100.0 {
+		return true
+	}
+	return false
 }
 
 // PopulateCronTaskParsedMetrics parses raw task output and fills in metrics fields if not already populated

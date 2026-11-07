@@ -2599,4 +2599,259 @@ func (s *StateStore) Vacuum() error {
 	return nil
 }
 
+// RecordEvent inserts an event into SQLite and notifies listeners
+func (s *StateStore) RecordEvent(event Event) (*Event, error) {
+	s.mu.Lock()
+	if err := s.initDBLocked(); err != nil {
+		s.mu.Unlock()
+		return nil, err
+	}
+
+	if event.CreatedAt.IsZero() {
+		event.CreatedAt = time.Now().UTC()
+	}
+
+	metaJSON := "{}"
+	if event.Metadata != nil {
+		if b, err := json.Marshal(event.Metadata); err == nil {
+			metaJSON = string(b)
+		}
+	}
+
+	isReadInt := 0
+	if event.IsRead {
+		isReadInt = 1
+	}
+
+	query := `INSERT INTO events (type, node_name, task_id, title, message, metadata, created_at, is_read) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+	res, err := s.db.Exec(query, string(event.Type), event.NodeName, event.TaskID, event.Title, event.Message, metaJSON, event.CreatedAt.Unix(), isReadInt)
+	if err != nil {
+		s.mu.Unlock()
+		return nil, fmt.Errorf("failed to insert event: %w", err)
+	}
+
+	id, err := res.LastInsertId()
+	if err == nil {
+		event.ID = id
+	}
+	s.mu.Unlock()
+
+	s.notifyChange()
+	return &event, nil
+}
+
+// HasRecentCronTaskFailure checks if a cron task failure event was recorded on the given node within the given window
+func (s *StateStore) HasRecentCronTaskFailure(taskID string, nodeName string, window time.Duration) (bool, error) {
+	s.mu.Lock()
+	if err := s.initDBLocked(); err != nil {
+		s.mu.Unlock()
+		return false, err
+	}
+	db := s.db
+	s.mu.Unlock()
+
+	cutoff := time.Now().Add(-window).Unix()
+	query := `SELECT COUNT(*) FROM events WHERE type = ? AND node_name = ? AND task_id = ? AND created_at >= ?`
+	var count int
+	err := db.QueryRow(query, string(EventTypeCronTaskFailure), nodeName, taskID, cutoff).Scan(&count)
+	if err != nil {
+		return false, fmt.Errorf("failed to check recent cron task failure: %w", err)
+	}
+	return count > 0, nil
+}
+
+// GetEvents queries events matching the filter criteria with pagination
+func (s *StateStore) GetEvents(filter EventFilter) ([]Event, int, error) {
+	s.mu.Lock()
+	if err := s.initDBLocked(); err != nil {
+		s.mu.Unlock()
+		return nil, 0, err
+	}
+	db := s.db
+	s.mu.Unlock()
+
+	whereClauses := []string{"1=1"}
+	var countArgs []any
+
+	if filter.UnreadOnly {
+		whereClauses = append(whereClauses, "is_read = 0")
+	}
+	if filter.Type != "" {
+		whereClauses = append(whereClauses, "type = ?")
+		countArgs = append(countArgs, string(filter.Type))
+	}
+	if filter.NodeName != "" {
+		whereClauses = append(whereClauses, "node_name = ?")
+		countArgs = append(countArgs, filter.NodeName)
+	}
+
+	whereSQL := strings.Join(whereClauses, " AND ")
+
+	var total int
+	countQuery := `SELECT COUNT(*) FROM events WHERE ` + whereSQL
+	if err := db.QueryRow(countQuery, countArgs...).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("failed to count events: %w", err)
+	}
+
+	limit := filter.Limit
+	if limit <= 0 {
+		limit = 50
+	}
+	if limit > 500 {
+		limit = 500
+	}
+	offset := filter.Offset
+	if offset < 0 {
+		offset = 0
+	}
+
+	selectQuery := fmt.Sprintf(`SELECT id, type, node_name, task_id, title, message, metadata, created_at, is_read FROM events WHERE %s ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`, whereSQL)
+	selectArgs := append(append([]any{}, countArgs...), limit, offset)
+
+	rows, err := db.Query(selectQuery, selectArgs...)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to query events: %w", err)
+	}
+	defer rows.Close()
+
+	events := make([]Event, 0, limit)
+	for rows.Next() {
+		var e Event
+		var typeStr string
+		var metaStr string
+		var createdUnix int64
+		var isReadInt int
+
+		if err := rows.Scan(&e.ID, &typeStr, &e.NodeName, &e.TaskID, &e.Title, &e.Message, &metaStr, &createdUnix, &isReadInt); err != nil {
+			return nil, 0, fmt.Errorf("failed to scan event row: %w", err)
+		}
+
+		e.Type = EventType(typeStr)
+		e.CreatedAt = time.Unix(createdUnix, 0).UTC()
+		e.IsRead = isReadInt != 0
+
+		if metaStr != "" && metaStr != "{}" {
+			var m map[string]any
+			if err := json.Unmarshal([]byte(metaStr), &m); err == nil {
+				e.Metadata = m
+			}
+		}
+		if e.Metadata == nil {
+			e.Metadata = make(map[string]any)
+		}
+
+		events = append(events, e)
+	}
+
+	return events, total, nil
+}
+
+// GetUnreadEventsCount returns the total number of unread events
+func (s *StateStore) GetUnreadEventsCount() (int, error) {
+	s.mu.Lock()
+	if err := s.initDBLocked(); err != nil {
+		s.mu.Unlock()
+		return 0, err
+	}
+	db := s.db
+	s.mu.Unlock()
+
+	var count int
+	if err := db.QueryRow("SELECT COUNT(*) FROM events WHERE is_read = 0").Scan(&count); err != nil {
+		return 0, fmt.Errorf("failed to get unread events count: %w", err)
+	}
+	return count, nil
+}
+
+// MarkEventAsRead marks a specific event as read
+func (s *StateStore) MarkEventAsRead(id int64) error {
+	s.mu.Lock()
+	if err := s.initDBLocked(); err != nil {
+		s.mu.Unlock()
+		return err
+	}
+
+	if _, err := s.db.Exec("UPDATE events SET is_read = 1 WHERE id = ?", id); err != nil {
+		s.mu.Unlock()
+		return fmt.Errorf("failed to mark event as read: %w", err)
+	}
+	s.mu.Unlock()
+
+	s.notifyChange()
+	return nil
+}
+
+// MarkAllEventsAsRead marks all unread events as read
+func (s *StateStore) MarkAllEventsAsRead() error {
+	s.mu.Lock()
+	if err := s.initDBLocked(); err != nil {
+		s.mu.Unlock()
+		return err
+	}
+
+	if _, err := s.db.Exec("UPDATE events SET is_read = 1 WHERE is_read = 0"); err != nil {
+		s.mu.Unlock()
+		return fmt.Errorf("failed to mark all events as read: %w", err)
+	}
+	s.mu.Unlock()
+
+	s.notifyChange()
+	return nil
+}
+
+// DeleteEvent removes a single event by ID
+func (s *StateStore) DeleteEvent(id int64) error {
+	s.mu.Lock()
+	if err := s.initDBLocked(); err != nil {
+		s.mu.Unlock()
+		return err
+	}
+
+	if _, err := s.db.Exec("DELETE FROM events WHERE id = ?", id); err != nil {
+		s.mu.Unlock()
+		return fmt.Errorf("failed to delete event: %w", err)
+	}
+	s.mu.Unlock()
+
+	s.notifyChange()
+	return nil
+}
+
+// ClearEvents deletes all events
+func (s *StateStore) ClearEvents() error {
+	s.mu.Lock()
+	if err := s.initDBLocked(); err != nil {
+		s.mu.Unlock()
+		return err
+	}
+
+	if _, err := s.db.Exec("DELETE FROM events"); err != nil {
+		s.mu.Unlock()
+		return fmt.Errorf("failed to clear events: %w", err)
+	}
+	s.mu.Unlock()
+
+	s.notifyChange()
+	return nil
+}
+
+// CleanEventsOlderThan deletes historical events older than the given duration
+func (s *StateStore) CleanEventsOlderThan(retention time.Duration) (int64, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if err := s.initDBLocked(); err != nil {
+		return 0, err
+	}
+
+	cutoff := time.Now().Add(-retention).Unix()
+	res, err := s.db.Exec("DELETE FROM events WHERE created_at < ?", cutoff)
+	if err != nil {
+		return 0, fmt.Errorf("failed to clean old events: %w", err)
+	}
+
+	return res.RowsAffected()
+}
+
+
 

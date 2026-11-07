@@ -1041,3 +1041,86 @@ func TestWebhookCommandRouting(t *testing.T) {
 		t.Errorf("expected tcp ping result, got: %v", sentTexts)
 	}
 }
+
+func TestNotifyEvents(t *testing.T) {
+	mock := &mockClusterProvider{}
+	svc := NewBotService(mock)
+	svc.settings = config.IntegrationsSettings{
+		TelegramEnabled: true,
+		TelegramAdminID: 12345,
+		ServerURL:       "https://e42.example.com",
+	}
+
+	var alerts []string
+	svc.onAlert = func(text string) {
+		alerts = append(alerts, text)
+	}
+
+	// 1. Notify node offline
+	err := svc.NotifyEvent(&config.Event{
+		Type:      config.EventTypeNodeOffline,
+		NodeName:  "node-paris",
+		CreatedAt: time.Now().UTC(),
+		Metadata: map[string]any{
+			"hostname": "paris-edge.net",
+		},
+	})
+	if err != nil {
+		t.Fatalf("NotifyEvent failed: %v", err)
+	}
+	if len(alerts) != 1 {
+		t.Fatalf("expected 1 alert, got %d", len(alerts))
+	}
+	if !strings.Contains(alerts[0], "Node Offline") || !strings.Contains(alerts[0], "node-paris") || !strings.Contains(alerts[0], "paris-edge.net") {
+		t.Errorf("unexpected offline alert: %s", alerts[0])
+	}
+
+	// 2. Notify node online
+	err = svc.NotifyEvent(&config.Event{
+		Type:      config.EventTypeNodeOnline,
+		NodeName:  "node-paris",
+		CreatedAt: time.Now().UTC(),
+		Metadata: map[string]any{
+			"hostname":      "paris-edge.net",
+			"agent_version": "v1.4.2",
+		},
+	})
+	if err != nil {
+		t.Fatalf("NotifyEvent online failed: %v", err)
+	}
+	if len(alerts) != 2 {
+		t.Fatalf("expected 2 alerts, got %d", len(alerts))
+	}
+	if !strings.Contains(alerts[1], "Node Online") || !strings.Contains(alerts[1], "node-paris") || !strings.Contains(alerts[1], "v1.4.2") {
+		t.Errorf("unexpected online alert: %s", alerts[1])
+	}
+
+	// 3. Notify cron task failure
+	err = svc.NotifyEvent(&config.Event{
+		Type:      config.EventTypeCronTaskFailure,
+		NodeName:  "node-paris",
+		TaskID:    "cron-tcp-ping-dns",
+		CreatedAt: time.Now().UTC(),
+		Metadata: map[string]any{
+			"task_id":         "cron-tcp-ping-dns",
+			"task_name":       "TCP Ping Quad9",
+			"task_type":       "tcp_ping",
+			"target":          "9.9.9.9:53",
+			"packet_loss_pct": 100.0,
+			"error":           "connection timed out",
+		},
+	})
+	if err != nil {
+		t.Fatalf("NotifyEvent cron failure failed: %v", err)
+	}
+	if len(alerts) != 3 {
+		t.Fatalf("expected 3 alerts, got %d", len(alerts))
+	}
+	if !strings.Contains(alerts[2], "Looking Glass Cron Task Failure") ||
+		!strings.Contains(alerts[2], "node-paris") ||
+		!strings.Contains(alerts[2], "TCP Ping Quad9") ||
+		!strings.Contains(alerts[2], "9.9.9.9:53") {
+		t.Errorf("unexpected cron failure alert: %s", alerts[2])
+	}
+}
+

@@ -52,6 +52,7 @@ import type {
   MCPSettingsResponse,
   UpdateMCPSettingsRequest,
   ResetMCPTokenRequest,
+  EventsResponse,
 } from "../types/api";
 
 const API_BASE = "/api";
@@ -702,6 +703,35 @@ export const api = {
     request<InterpolatePreviewResponse>("/apps/preview-interpolate", {
       method: "POST",
       body: JSON.stringify(req),
+    }),
+
+  // Events & Notifications
+  getEvents: (params?: { limit?: number; offset?: number; unread_only?: boolean; type?: string; node?: string }) => {
+    const q = new URLSearchParams();
+    if (params?.limit) q.set("limit", String(params.limit));
+    if (params?.offset) q.set("offset", String(params.offset));
+    if (params?.unread_only) q.set("unread_only", "true");
+    if (params?.type) q.set("type", params.type);
+    if (params?.node) q.set("node", params.node);
+    const queryStr = q.toString() ? `?${q.toString()}` : "";
+    return request<EventsResponse>(`/events${queryStr}`);
+  },
+  getUnreadEventsCount: () => request<{ unread_count: number }>("/events/unread-count"),
+  markEventRead: (id: number) =>
+    request<{ status: string }>(`/events/${id}/read`, {
+      method: "POST",
+    }),
+  markAllEventsRead: () =>
+    request<{ status: string }>("/events/read-all", {
+      method: "POST",
+    }),
+  deleteEvent: (id: number) =>
+    request<{ status: string }>(`/events/${id}`, {
+      method: "DELETE",
+    }),
+  clearEvents: () =>
+    request<{ status: string }>("/events", {
+      method: "DELETE",
     }),
 };
 

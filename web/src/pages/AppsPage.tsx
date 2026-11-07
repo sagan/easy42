@@ -664,7 +664,7 @@ export const AppsPage: React.FC = () => {
   const enabledCount = apps.filter((a) => a.enabled).length;
 
   return (
-    <Box sx={{ width: "100%", px: { xs: 2, sm: 3, md: 4 }, py: 3, boxSizing: "border-box" }}>
+    <Box sx={{ width: "100%", px: { xs: 1.5, sm: 2.5, md: 3 }, py: 2.5, boxSizing: "border-box" }}>
       {/* Top Header & Breadcrumbs Bar */}
       <Box
         sx={{

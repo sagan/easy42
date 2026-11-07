@@ -11,6 +11,7 @@ import { LookingGlassPage } from "./pages/LookingGlassPage";
 import { DeviceHelperPage } from "./pages/DeviceHelperPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { AppsPage } from "./pages/AppsPage";
+import { EventsPage } from "./pages/EventsPage";
 import { LoginPage } from "./components/Login/LoginPage";
 
 const AppContent: React.FC = () => {
@@ -41,6 +42,8 @@ const AppContent: React.FC = () => {
       document.title = `Device Helper - ${netName}`;
     } else if (path.startsWith("/settings")) {
       document.title = `Settings - ${netName}`;
+    } else if (path.startsWith("/events")) {
+      document.title = `Events - ${netName}`;
     } else {
       document.title = netName;
     }
@@ -90,6 +93,7 @@ const AppContent: React.FC = () => {
         <Route path="looking-glass" element={<LookingGlassPage />} />
         <Route path="looking-glass/:tab" element={<LookingGlassPage />} />
         <Route path="helper" element={<DeviceHelperPage />} />
+        <Route path="events" element={<EventsPage />} />
         <Route path="settings" element={<Navigate to="/settings/network" replace />} />
         <Route path="settings/:tab" element={<SettingsPage />} />
         <Route path="*" element={<Navigate to="/nodes" replace />} />

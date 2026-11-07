@@ -39,6 +39,8 @@ interface MeshContextType {
   loadingData: boolean;
   loadData: () => Promise<void>;
   refreshFleetLive: (flush?: boolean) => Promise<void>;
+  unreadEventsCount: number;
+  refreshUnreadEventsCount: () => Promise<void>;
 
   // Filter & tags
   selectedTag: string;
@@ -180,6 +182,19 @@ export const MeshProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const [updatingState, setUpdatingState] = useState(false);
   const [addBlockTrigger, setAddBlockTrigger] = useState(0);
+  const [unreadEventsCount, setUnreadEventsCount] = useState<number>(0);
+
+  const refreshUnreadEventsCount = useCallback(async () => {
+    if (!authenticated) return;
+    try {
+      const res = await api.getUnreadEventsCount();
+      if (typeof res?.unread_count === "number") {
+        setUnreadEventsCount(res.unread_count);
+      }
+    } catch {
+      // Ignore background error
+    }
+  }, [authenticated]);
 
   // Apply Config Modal State
   const [applyOpen, setApplyOpen] = useState(false);
@@ -316,12 +331,13 @@ export const MeshProvider: React.FC<{ children: React.ReactNode }> = ({ children
           // ignore
         }
       }
+      refreshUnreadEventsCount();
     } catch {
       // Handled
     } finally {
       setLoadingData(false);
     }
-  }, []);
+  }, [refreshUnreadEventsCount]);
 
   const refreshNetworkSettings = useCallback(async () => {
     try {
@@ -490,6 +506,13 @@ export const MeshProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const data = JSON.parse(event.data);
             if (data?.type === "cluster_updated") {
               scheduleReload();
+              refreshUnreadEventsCount();
+            } else if (data?.type === "event_created") {
+              if (typeof data.unread_count === "number") {
+                setUnreadEventsCount(data.unread_count);
+              } else {
+                refreshUnreadEventsCount();
+              }
             } else if (data?.type === "vault_state_changed") {
               if (typeof data.unlocked === "boolean") {
                 setIsUnlocked(data.unlocked);
@@ -551,9 +574,10 @@ export const MeshProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!authenticated) return;
     const interval = setInterval(() => {
       refreshFleetLive();
+      refreshUnreadEventsCount();
     }, 6000);
     return () => clearInterval(interval);
-  }, [authenticated, refreshFleetLive]);
+  }, [authenticated, refreshFleetLive, refreshUnreadEventsCount]);
 
   const handleUpdateState = useCallback(
     async (nodeName?: string) => {
@@ -707,6 +731,8 @@ export const MeshProvider: React.FC<{ children: React.ReactNode }> = ({ children
     updateNodePosition,
     stateToast,
     setStateToast,
+    unreadEventsCount,
+    refreshUnreadEventsCount,
   };
 
   return <MeshContext.Provider value={value}>{children}</MeshContext.Provider>;

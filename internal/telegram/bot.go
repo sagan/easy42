@@ -59,6 +59,7 @@ type BotService struct {
 	startupGracePeriod     time.Duration
 	debounceCount          int
 	onAlert                func(text string)
+	onEvent                func(evt *config.Event)
 	onSecretTokenGenerated func(token string)
 }
 
@@ -67,6 +68,13 @@ func (s *BotService) SetOnSecretTokenGenerated(fn func(token string)) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.onSecretTokenGenerated = fn
+}
+
+// SetOnEvent registers a callback triggered whenever a new node transition event is detected
+func (s *BotService) SetOnEvent(fn func(evt *config.Event)) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.onEvent = fn
 }
 
 // NewBotService creates a new BotService instance
@@ -87,9 +95,10 @@ func (s *BotService) Start(settings config.IntegrationsSettings) error {
 
 	s.settings = settings
 	if !settings.TelegramEnabled || strings.TrimSpace(settings.TelegramBotToken) == "" {
-		s.stopUnlocked()
+		s.stopBotOnlyUnlocked()
 		s.webhookStatus = "disabled"
 		s.webhookError = ""
+		s.startMonitorUnlocked()
 		return nil
 	}
 
@@ -118,9 +127,33 @@ func (s *BotService) stopUnlocked() {
 	s.botUsername = ""
 }
 
+func (s *BotService) stopBotOnlyUnlocked() {
+	s.bot = nil
+	s.botUsername = ""
+}
+
+func (s *BotService) startMonitorUnlocked() {
+	if s.monitorRunning {
+		return
+	}
+	s.stopCh = make(chan struct{})
+	s.monitorRunning = true
+	s.monitorInitDone = false
+	s.monitorStartedAt = time.Now()
+	s.prevNodeOnline = make(map[string]bool)
+	s.nodeStates = make(map[string]*nodeDebounceState)
+	if s.startupGracePeriod <= 0 {
+		s.startupGracePeriod = 90 * time.Second
+	}
+	if s.debounceCount <= 0 {
+		s.debounceCount = 2
+	}
+	go s.monitorLoop(s.stopCh)
+}
+
 // initBotUnlocked creates the bot instance, configures webhooks, commands, menu buttons, and starts monitoring
 func (s *BotService) initBotUnlocked() error {
-	s.stopUnlocked()
+	s.stopBotOnlyUnlocked()
 
 	token := strings.TrimSpace(s.settings.TelegramBotToken)
 	bot, err := tgbotapi.NewBotAPI(token)
@@ -192,20 +225,7 @@ func (s *BotService) initBotUnlocked() error {
 	}
 
 	// Start background node health alert monitor
-	s.stopCh = make(chan struct{})
-	s.monitorRunning = true
-	s.monitorInitDone = false
-	s.monitorStartedAt = time.Now()
-	s.prevNodeOnline = make(map[string]bool)
-	s.nodeStates = make(map[string]*nodeDebounceState)
-	if s.startupGracePeriod <= 0 {
-		s.startupGracePeriod = 90 * time.Second
-	}
-	if s.debounceCount <= 0 {
-		s.debounceCount = 2
-	}
-
-	go s.monitorLoop(s.stopCh)
+	s.startMonitorUnlocked()
 
 	return nil
 }
@@ -1315,9 +1335,6 @@ func (s *BotService) monitorLoop(stopCh <-chan struct{}) {
 
 func (s *BotService) checkNodeStatusTransitions() {
 	s.mu.RLock()
-	bot := s.bot
-	adminID := s.settings.TelegramAdminID
-	serverURL := s.settings.ServerURL
 	provider := s.provider
 	s.mu.RUnlock()
 
@@ -1331,7 +1348,6 @@ func (s *BotService) checkNodeStatusTransitions() {
 	}
 
 	s.mu.Lock()
-	defer s.mu.Unlock()
 
 	if s.nodeStates == nil {
 		s.nodeStates = make(map[string]*nodeDebounceState)
@@ -1362,10 +1378,11 @@ func (s *BotService) checkNodeStatusTransitions() {
 			s.prevNodeOnline[n.Name] = n.Connected
 		}
 		s.monitorInitDone = true
+		s.mu.Unlock()
 		return
 	}
 
-	now := time.Now().UTC().Format("2006-01-02 15:04:05")
+	var pendingEvents []*config.Event
 
 	for _, n := range nodes {
 		state, existed := s.nodeStates[n.Name]
@@ -1416,51 +1433,182 @@ func (s *BotService) checkNodeStatusTransitions() {
 
 			if wasOnline && !currentOnline {
 				// Node went OFFLINE
-				dashLink := ""
-				if serverURL != "" {
-					dashLink = fmt.Sprintf("\n\nOpen easy42 Dashboard: %s", strings.TrimRight(serverURL, "/"))
+				evt := &config.Event{
+					Type:     config.EventTypeNodeOffline,
+					NodeName: n.Name,
+					Title:    fmt.Sprintf("Node %s is offline", n.Name),
+					Message:  fmt.Sprintf("Node %s (%s) is disconnected / unreachable", n.Name, n.Hostname),
+					Metadata: map[string]any{
+						"hostname": n.Hostname,
+						"status":   "Disconnected / Unreachable",
+					},
+					CreatedAt: time.Now().UTC(),
 				}
-
-				alert := fmt.Sprintf(`🔴 <b>easy42 Alert: Node Offline</b>
-
-Node: <b>%s</b>
-Hostname: <code>%s</code>
-Status: <b>Disconnected / Unreachable</b>
-Time: <code>%s UTC</code>%s`, n.Name, n.Hostname, now, dashLink)
-
-				if s.onAlert != nil {
-					s.onAlert(alert)
-				}
-				if bot != nil && adminID != 0 {
-					go s.sendNotificationDirect(bot, adminID, alert)
-				}
+				pendingEvents = append(pendingEvents, evt)
 			} else if !wasOnline && currentOnline {
 				// Node went BACK ONLINE
-				dashLink := ""
-				if serverURL != "" {
-					dashLink = fmt.Sprintf("\n\nOpen easy42 Dashboard: %s", strings.TrimRight(serverURL, "/"))
-				}
-
 				agentVer := n.AgentVersion
 				if agentVer == "" {
 					agentVer = "active"
 				}
+				evt := &config.Event{
+					Type:     config.EventTypeNodeOnline,
+					NodeName: n.Name,
+					Title:    fmt.Sprintf("Node %s is online", n.Name),
+					Message:  fmt.Sprintf("Node %s (%s) is connected & active (%s)", n.Name, n.Hostname, agentVer),
+					Metadata: map[string]any{
+						"hostname":      n.Hostname,
+						"agent_version": agentVer,
+						"status":        "Connected & Active",
+					},
+					CreatedAt: time.Now().UTC(),
+				}
+				pendingEvents = append(pendingEvents, evt)
+			}
+		}
+	}
+	s.mu.Unlock()
 
-				alert := fmt.Sprintf(`🟢 <b>easy42 Alert: Node Online</b>
+	for _, evt := range pendingEvents {
+		if s.onEvent != nil {
+			s.onEvent(evt)
+		} else {
+			_ = s.NotifyEvent(evt)
+		}
+	}
+}
+
+// NotifyEvent formats and sends a Telegram notification for a new event
+func (s *BotService) NotifyEvent(evt *config.Event) error {
+	if evt == nil {
+		return nil
+	}
+	s.mu.RLock()
+	bot := s.bot
+	adminID := s.settings.TelegramAdminID
+	serverURL := s.settings.ServerURL
+	enabled := s.settings.TelegramEnabled
+	s.mu.RUnlock()
+
+	alertText := s.FormatEventForTelegram(evt, serverURL)
+
+	if s.onAlert != nil {
+		s.onAlert(alertText)
+	}
+
+	if enabled && bot != nil && adminID != 0 {
+		go s.sendNotificationDirect(bot, adminID, alertText)
+	}
+	return nil
+}
+
+// FormatEventForTelegram formats a fleet event into HTML for Telegram message delivery
+func (s *BotService) FormatEventForTelegram(evt *config.Event, serverURL string) string {
+	if evt == nil {
+		return ""
+	}
+
+	dashLink := ""
+	if serverURL != "" {
+		dashLink = fmt.Sprintf("\n\nOpen easy42 Dashboard: %s", strings.TrimRight(serverURL, "/"))
+	}
+
+	eventTime := evt.CreatedAt.UTC().Format("2006-01-02 15:04:05")
+	if evt.CreatedAt.IsZero() {
+		eventTime = time.Now().UTC().Format("2006-01-02 15:04:05")
+	}
+
+	switch evt.Type {
+	case config.EventTypeNodeOffline:
+		hostname := ""
+		if h, ok := evt.Metadata["hostname"].(string); ok {
+			hostname = h
+		}
+		return fmt.Sprintf(`🔴 <b>easy42 Alert: Node Offline</b>
+
+Node: <b>%s</b>
+Hostname: <code>%s</code>
+Status: <b>Disconnected / Unreachable</b>
+Time: <code>%s UTC</code>%s`, evt.NodeName, hostname, eventTime, dashLink)
+
+	case config.EventTypeNodeOnline:
+		hostname := ""
+		if h, ok := evt.Metadata["hostname"].(string); ok {
+			hostname = h
+		}
+		agentVer := "active"
+		if av, ok := evt.Metadata["agent_version"].(string); ok && av != "" {
+			agentVer = av
+		}
+		return fmt.Sprintf(`🟢 <b>easy42 Alert: Node Online</b>
 
 Node: <b>%s</b>
 Hostname: <code>%s</code>
 Status: <b>Connected & Active</b> (%s)
-Time: <code>%s UTC</code>%s`, n.Name, n.Hostname, agentVer, now, dashLink)
+Time: <code>%s UTC</code>%s`, evt.NodeName, hostname, agentVer, eventTime, dashLink)
 
-				if s.onAlert != nil {
-					s.onAlert(alert)
-				}
-				if bot != nil && adminID != 0 {
-					go s.sendNotificationDirect(bot, adminID, alert)
-				}
-			}
+	case config.EventTypeCronTaskFailure:
+		taskName := evt.TaskID
+		if tn, ok := evt.Metadata["task_name"].(string); ok && tn != "" {
+			taskName = tn
 		}
+		taskType := "ping"
+		if tt, ok := evt.Metadata["task_type"].(string); ok && tt != "" {
+			taskType = tt
+		}
+		target := ""
+		if tgt, ok := evt.Metadata["target"].(string); ok {
+			target = tgt
+		}
+		lossPct := 100.0
+		if lp, ok := evt.Metadata["packet_loss_pct"].(float64); ok {
+			lossPct = lp
+		}
+		errStr := ""
+		if es, ok := evt.Metadata["error"].(string); ok && es != "" {
+			errStr = es
+		}
+
+		statusDesc := fmt.Sprintf("Timeout / Failed (%.0f%% loss)", lossPct)
+		if errStr != "" {
+			statusDesc = fmt.Sprintf("Failed: %s", html.EscapeString(errStr))
+		}
+
+		targetLine := ""
+		if target != "" {
+			targetLine = fmt.Sprintf("\nTarget: <code>%s</code>", html.EscapeString(target))
+		}
+
+		return fmt.Sprintf(`⚠️ <b>easy42 Alert: Looking Glass Cron Task Failure</b>
+
+Node: <b>%s</b>
+Task: <b>%s</b> (<code>%s</code>)
+Type: <code>%s</code>%s
+Status: <b>%s</b>
+Time: <code>%s UTC</code>%s`,
+			html.EscapeString(evt.NodeName),
+			html.EscapeString(taskName),
+			html.EscapeString(evt.TaskID),
+			html.EscapeString(taskType),
+			targetLine,
+			statusDesc,
+			eventTime,
+			dashLink,
+		)
+
+	default:
+		return fmt.Sprintf(`ℹ️ <b>easy42 Notification</b>
+
+Node: <b>%s</b>
+Type: <code>%s</code>
+%s
+Time: <code>%s UTC</code>%s`,
+			html.EscapeString(evt.NodeName),
+			html.EscapeString(string(evt.Type)),
+			html.EscapeString(evt.Message),
+			eventTime,
+			dashLink,
+		)
 	}
 }
 

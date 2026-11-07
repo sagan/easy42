@@ -21,6 +21,7 @@ import {
   Alert,
   BottomNavigation,
   BottomNavigationAction,
+  Badge,
   useTheme,
   useMediaQuery,
 } from "@mui/material";
@@ -40,6 +41,7 @@ import {
   ExternalLink,
   FileCode2,
   Layers,
+  Bell,
 } from "lucide-react";
 import { Easy42Logo } from "../Logo/Easy42Logo";
 import { useMesh } from "../../context/MeshContext";
@@ -98,6 +100,7 @@ export const AppLayout: React.FC = () => {
     setSelectedNode,
     setSelectedLink,
     networkName,
+    unreadEventsCount,
   } = useMesh();
 
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
@@ -445,6 +448,46 @@ export const AppLayout: React.FC = () => {
               Sync
             </Button>
 
+            {/* Events & Notifications Icon (Desktop / Tablet) */}
+            <Tooltip title={unreadEventsCount > 0 ? `Events (${unreadEventsCount} unread)` : "Events & Notifications"}>
+              <IconButton
+                size="small"
+                onClick={() => navigate("/events")}
+                sx={{
+                  color: currentPath === "/events" ? "#4F46E5" : "#64748B",
+                  bgcolor: currentPath === "/events" ? "#EEF2FF" : "transparent",
+                  p: 0.8,
+                  borderRadius: 2,
+                  display: { xs: "none", sm: "inline-flex" },
+                  position: "relative",
+                  "&:hover": {
+                    bgcolor: currentPath === "/events" ? "#E0E7FF" : "#F1F5F9",
+                    color: "#0F172A",
+                  },
+                }}
+              >
+                <Badge
+                  badgeContent={unreadEventsCount}
+                  color="error"
+                  max={99}
+                  sx={{
+                    "& .MuiBadge-badge": {
+                      fontSize: "0.68rem",
+                      height: 17,
+                      minWidth: 17,
+                      fontWeight: 700,
+                      bgcolor: "#EF4444",
+                      color: "#FFFFFF",
+                      right: -2,
+                      top: 2,
+                    },
+                  }}
+                >
+                  <Bell size={18} />
+                </Badge>
+              </IconButton>
+            </Tooltip>
+
             {/* Lock / Unlock Toggle */}
             <Tooltip title={isUnlocked ? "Vault Unlocked (Click to Lock)" : "Vault Locked (Click to Unlock)"}>
               <IconButton
@@ -482,6 +525,8 @@ export const AppLayout: React.FC = () => {
           overflowY: "auto",
           display: "flex",
           flexDirection: "column",
+          width: "100%",
+          boxSizing: "border-box",
           pb: isMobile ? "calc(58px + env(safe-area-inset-bottom, 0px))" : 0,
         }}
       >
@@ -579,6 +624,58 @@ export const AppLayout: React.FC = () => {
                 </ListItem>
               );
             })}
+
+            {/* Events Item (Mobile Sidebar Drawer) */}
+            <ListItem disablePadding sx={{ mb: 0.5 }} title="Events & Notifications">
+              <ListItemButton
+                onClick={() => {
+                  navigate("/events");
+                  setMobileDrawerOpen(false);
+                }}
+                sx={{
+                  borderRadius: 2,
+                  bgcolor: currentPath === "/events" ? "#EEF2FF" : "transparent",
+                  color: currentPath === "/events" ? "#4F46E5" : "#334155",
+                  fontWeight: currentPath === "/events" ? 700 : 500,
+                }}
+              >
+                <ListItemIcon sx={{ minWidth: 36, color: currentPath === "/events" ? "#4F46E5" : "#64748B" }}>
+                  <Badge
+                    badgeContent={unreadEventsCount}
+                    color="error"
+                    max={99}
+                    sx={{
+                      "& .MuiBadge-badge": {
+                        fontSize: "0.65rem",
+                        height: 16,
+                        minWidth: 16,
+                        fontWeight: 700,
+                        bgcolor: "#EF4444",
+                      },
+                    }}
+                  >
+                    <Bell size={18} />
+                  </Badge>
+                </ListItemIcon>
+                <ListItemText
+                  primary="Events"
+                  primaryTypographyProps={{ fontSize: "0.9rem", fontWeight: currentPath === "/events" ? 700 : 500 }}
+                />
+                {unreadEventsCount > 0 && (
+                  <Chip
+                    size="small"
+                    label={`${unreadEventsCount} unread`}
+                    sx={{
+                      bgcolor: "#EF4444",
+                      color: "#FFFFFF",
+                      fontWeight: 700,
+                      fontSize: "0.7rem",
+                      height: 20,
+                    }}
+                  />
+                )}
+              </ListItemButton>
+            </ListItem>
 
             {flapAlertedUrl && (
               <ListItem disablePadding sx={{ mb: 0.5 }}>

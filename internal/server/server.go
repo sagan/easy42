@@ -109,6 +109,7 @@ func New(cfg Config) *Server {
 
 	if s.mgr != nil {
 		s.mgr.SetVaultStateCallback(s.broadcastVaultStateChanged)
+		s.mgr.SetOnEventCreated(s.broadcastEventCreated)
 	}
 
 	if s.mgr != nil && s.mgr.Store() != nil {
@@ -246,6 +247,14 @@ func New(cfg Config) *Server {
 			r.Get("/settings/mcp", s.handleGetMCPSettings)
 			r.Put("/settings/mcp", s.handleUpdateMCPSettings)
 			r.Post("/settings/mcp/reset-token", s.handleResetMCPToken)
+
+			// Events
+			r.Get("/events", s.handleGetEvents)
+			r.Get("/events/unread-count", s.handleGetUnreadEventsCount)
+			r.Post("/events/{id}/read", s.handleMarkEventRead)
+			r.Post("/events/read-all", s.handleMarkAllEventsRead)
+			r.Delete("/events/{id}", s.handleDeleteEvent)
+			r.Delete("/events", s.handleClearEvents)
 
 			// Network Policies
 			r.Get("/network-policies", s.handleGetNetworkPolicies)

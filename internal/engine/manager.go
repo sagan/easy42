@@ -53,6 +53,7 @@ type Manager struct {
 	runningTasks         map[string]bool
 	prometheusExporter   *PrometheusExporter
 	telegramBot          *telegram.BotService
+	onEventCreated       func(evt *config.Event)
 	pingTableMu          sync.RWMutex
 	currentPingTable     *config.PingTableTask
 	pingTableCancel      context.CancelFunc
@@ -91,6 +92,9 @@ func NewManager(store *config.Store) *Manager {
 			cfg.Integrations.TelegramSecretToken = token
 			_ = m.store.Save(cfg)
 		}
+	})
+	m.telegramBot.SetOnEvent(func(evt *config.Event) {
+		_, _ = m.RecordEvent(evt)
 	})
 	intSettings := m.GetIntegrationsSettings()
 	_ = m.telegramBot.Start(intSettings)
