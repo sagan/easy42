@@ -66,9 +66,9 @@ func (s *Server) handleOAuthAuthorizationServerMetadata(w http.ResponseWriter, r
 		"authorization_endpoint":                baseURL + "/oauth/authorize",
 		"token_endpoint":                        baseURL + "/oauth/token",
 		"registration_endpoint":                 baseURL + "/oauth/register",
-		"response_types_supported":             []string{"code"},
-		"grant_types_supported":                []string{"authorization_code", "client_credentials", "refresh_token"},
-		"code_challenge_methods_supported":     []string{"S256", "plain"},
+		"response_types_supported":              []string{"code"},
+		"grant_types_supported":                 []string{"authorization_code", "client_credentials", "refresh_token"},
+		"code_challenge_methods_supported":      []string{"S256", "plain"},
 		"token_endpoint_auth_methods_supported": []string{"client_secret_post", "client_secret_basic"},
 		"scopes_supported":                      []string{"read", "write", "mcp:all"},
 	}
@@ -333,7 +333,7 @@ func renderConsentPage(w http.ResponseWriter, r *http.Request, clientID, redirec
   <title>Authorize AI Agent - Easy42 MCP</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-    body { background-color: #F8FAFC; color: #0F172A; display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; }
+    body { background-color: #F8FAFC; color: #0F172A; display: flex; align-items: center; justify-content: center; min-height: 100dvh; padding: 20px; }
     .card { background: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 16px; box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.08); max-width: 480px; width: 100%; padding: 32px; }
     .header { display: flex; align-items: center; gap: 14px; margin-bottom: 20px; }
     .logo-badge { width: 48px; height: 48px; border-radius: 12px; background: #EEF2FF; color: #4F46E5; display: flex; align-items: center; justify-content: center; font-size: 24px; font-weight: bold; border: 1px solid #E0E7FF; }

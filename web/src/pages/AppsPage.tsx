@@ -73,7 +73,14 @@ import { useMesh } from "../context/MeshContext";
 import { Link as RouterLink } from "react-router-dom";
 import type { App, AppVariable, TranspilePreviewResponse } from "../types/api";
 import { dockerRunToCompose, cmdlineToSystemd, ensureSystemdEnvironmentFile } from "../utils/appGenerators";
-import { matchesTaskSelector, splitSelectorList } from "../utils/taskSelector";
+import {
+  matchesTaskSelector,
+  splitSelectorList,
+  getSelectorValue,
+  detectTargetMode,
+  parseSelectorJSON,
+  type SelectorTargetMode,
+} from "../utils/taskSelector";
 import { RenameAppModal } from "../components/Modals/RenameAppModal";
 
 const DOCKER_SAMPLE = `version: '3.8'
@@ -97,7 +104,7 @@ After=network.target
 
 [Service]
 Type=simple
-User=nobody
+User=root
 WorkingDirectory=/var/log
 EnvironmentFile=/etc/systemd/system/ezapp-sample.env
 ExecStart=/usr/bin/python3 -m http.server \${PORT:-8080}
@@ -170,46 +177,7 @@ const INTERNAL_NODE_VARS = [
   },
 ];
 
-type AppTargetMode = "manual" | "all" | "tag" | "custom";
-
-function getSelectorValue(selector: Record<string, string>, key: string): string {
-  const target = key.trim().toLowerCase();
-  const entry = Object.entries(selector).find(([k]) => k.trim().toLowerCase() === target);
-  return entry ? entry[1] : "";
-}
-
-function detectTargetMode(selector: Record<string, string>): AppTargetMode {
-  const keys = Object.keys(selector).map((k) => k.trim().toLowerCase());
-  if (keys.length === 0) return "all";
-  if (keys.length === 1 && keys[0] === "name") return "manual";
-  if (keys.length === 1 && keys[0] === "tag") return "tag";
-  return "custom";
-}
-
-function parseSelectorJSON(text: string): { selector: Record<string, string> | null; error: string | null } {
-  const trimmed = text.trim();
-  if (!trimmed) return { selector: {}, error: null };
-
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(trimmed);
-  } catch (e: any) {
-    return { selector: null, error: `Invalid selector JSON: ${e.message || e}` };
-  }
-
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    return { selector: null, error: "Selector must be a JSON object" };
-  }
-
-  const selector: Record<string, string> = {};
-  for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
-    if (typeof value !== "string") {
-      return { selector: null, error: `Selector value for "${key}" must be a string` };
-    }
-    selector[key] = value;
-  }
-  return { selector, error: null };
-}
+type AppTargetMode = SelectorTargetMode;
 
 export const AppsPage: React.FC = () => {
   const { nodes, setStateToast } = useMesh();
@@ -291,7 +259,7 @@ export const AppsPage: React.FC = () => {
 
   const [systemdCmd, setSystemdCmd] = useState("");
   const [systemdDesc, setSystemdDesc] = useState("");
-  const [systemdUser, setSystemdUser] = useState("nobody");
+  const [systemdUser, setSystemdUser] = useState("root");
   const [systemdWorkingDir, setSystemdWorkingDir] = useState("/var/log");
   const [systemdError, setSystemdError] = useState<string | null>(null);
 
@@ -418,7 +386,7 @@ export const AppsPage: React.FC = () => {
     setDockerRunError(null);
     setSystemdCmd("");
     setSystemdDesc("");
-    setSystemdUser("nobody");
+    setSystemdUser("root");
     setSystemdWorkingDir("/var/log");
     setSystemdError(null);
     setModalTab("general");
@@ -456,7 +424,7 @@ export const AppsPage: React.FC = () => {
     setDockerRunError(null);
     setSystemdCmd("");
     setSystemdDesc("");
-    setSystemdUser("nobody");
+    setSystemdUser("root");
     setSystemdWorkingDir("/var/log");
     setSystemdError(null);
     setModalTab("general");
@@ -1509,7 +1477,9 @@ export const AppsPage: React.FC = () => {
 
                           return (
                             <>
-                              <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 0.6 }}>
+                              <Box
+                                sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 0.6 }}
+                              >
                                 <Typography
                                   variant="caption"
                                   sx={{ color: "#94A3B8", fontWeight: 700, textTransform: "uppercase" }}
@@ -2338,7 +2308,11 @@ export const AppsPage: React.FC = () => {
                 </Typography>
 
                 <FormControl component="fieldset" fullWidth sx={{ mb: 2 }}>
-                  <RadioGroup row value={formTargetType} onChange={(e) => handleTargetModeChange(e.target.value as AppTargetMode)}>
+                  <RadioGroup
+                    row
+                    value={formTargetType}
+                    onChange={(e) => handleTargetModeChange(e.target.value as AppTargetMode)}
+                  >
                     <FormControlLabel
                       value="manual"
                       control={<Radio size="small" />}
@@ -2537,7 +2511,12 @@ export const AppsPage: React.FC = () => {
                                   </Typography>
                                 ) : (
                                   selected.map((tag) => (
-                                    <Chip key={tag} label={`#${tag}`} size="small" sx={{ height: 22, fontSize: "0.75rem" }} />
+                                    <Chip
+                                      key={tag}
+                                      label={`#${tag}`}
+                                      size="small"
+                                      sx={{ height: 22, fontSize: "0.75rem" }}
+                                    />
                                   ))
                                 )}
                               </Box>
@@ -2588,7 +2567,9 @@ export const AppsPage: React.FC = () => {
                     {/* Tag match preview */}
                     <Box sx={{ mt: 1.5, p: 1.5, bgcolor: "#F5F3FF", borderRadius: "8px", border: "1px solid #DDD6FE" }}>
                       {(() => {
-                        const matchingNodes = managedNodes.filter((n) => matchesTaskSelector(n, { tag: formTargetTag }));
+                        const matchingNodes = managedNodes.filter((n) =>
+                          matchesTaskSelector(n, { tag: formTargetTag }),
+                        );
                         if (!formTargetTag) {
                           return (
                             <Typography variant="caption" sx={{ color: "#6D28D9" }}>
@@ -2655,7 +2636,10 @@ export const AppsPage: React.FC = () => {
                     <Typography variant="caption" sx={{ color: "#475569", fontWeight: 700 }}>
                       Selector JSON
                     </Typography>
-                    <Typography variant="caption" sx={{ color: selectorMatchedNodes.length > 0 ? "#059669" : "#D97706" }}>
+                    <Typography
+                      variant="caption"
+                      sx={{ color: selectorMatchedNodes.length > 0 ? "#059669" : "#D97706" }}
+                    >
                       {selectorMatchedNodes.length} node(s) match
                     </Typography>
                   </Box>
@@ -3255,7 +3239,7 @@ ${formEnabled ? `${formCronExpr.trim() || "0 0 * * *"} ${formCronCmd.trim() || "
                             const appName = formName.trim() || "sample";
                             const res = cmdlineToSystemd(systemdCmd, {
                               description: systemdDesc || formName || undefined,
-                              user: systemdUser || "nobody",
+                              user: systemdUser || "root",
                               workingDir: systemdWorkingDir || "/var/log",
                               appName: appName,
                               envFile: `/etc/systemd/system/ezapp-${appName}.env`,

@@ -9,17 +9,20 @@ import (
 
 // CronTask represents a scheduled Looking Glass task executed periodically by node agents
 type CronTask struct {
-	ID          string            `json:"id"`
-	Name        string            `json:"name"`
-	Description string            `json:"description,omitempty"`
-	TaskType    string            `json:"task_type"` // "ping" or "tcp_ping"
-	CronExpr    string            `json:"cron_expr"` // e.g. "0 */1 * * *" or "*/5 * * * *"
-	Nodes       []string          `json:"nodes"`     // Node names assigned to execute this task
-	Params      map[string]string `json:"params"`    // Task parameters (e.g. target, count)
-	TimeoutSec  int               `json:"timeout_sec,omitempty"`
-	Enabled     bool              `json:"enabled"`
-	CreatedAt   time.Time         `json:"created_at"`
-	UpdatedAt   time.Time         `json:"updated_at"`
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+	TaskType    string `json:"task_type"` // "ping" or "tcp_ping"
+	CronExpr    string `json:"cron_expr"` // e.g. "0 */1 * * *" or "*/5 * * * *"
+	// Selector optionally restricts which nodes execute this task.
+	// Supported keys are "name", "tag" and "env:<NAME>". All conditions must match (AND).
+	// An empty selector matches every node.
+	Selector   map[string]string `json:"selector,omitempty"`
+	Params     map[string]string `json:"params"` // Task parameters (e.g. target, count)
+	TimeoutSec int               `json:"timeout_sec,omitempty"`
+	Enabled    bool              `json:"enabled"`
+	CreatedAt  time.Time         `json:"created_at"`
+	UpdatedAt  time.Time         `json:"updated_at"`
 }
 
 // CronTaskResultRecord represents an executed cron task result stored in SQLite
@@ -66,6 +69,31 @@ type NodeCronTasksResultsResponse struct {
 	Results []CronTaskResultRecord `json:"results"`
 	Summary []CronTaskStatsSummary `json:"summary"`
 	Tasks   []CronTask             `json:"tasks"`
+}
+
+// ValidateCronTask validates the selector of a CronTask definition
+func ValidateCronTask(task CronTask) error {
+	if err := ValidateSelector(task.Selector); err != nil {
+		return err
+	}
+	return nil
+}
+
+// CronTaskTargetsNode checks if a cron task targets a given node.
+// If node is nil but nodeName is provided, name-only selectors can still be
+// evaluated. Selectors relying on node tags or environment variables require
+// the full node definition.
+func CronTaskTargetsNode(task CronTask, node *Node, nodeName string) bool {
+	if len(task.Selector) == 0 {
+		return true
+	}
+	if node == nil {
+		return nodeMatchesSelector(nil, nodeName, task.Selector)
+	}
+	if nodeName == "" {
+		nodeName = node.Name
+	}
+	return nodeMatchesSelector(node, nodeName, task.Selector)
 }
 
 // ValidateCronExpr checks if a cron expression has a valid syntax (5 or 6 fields)

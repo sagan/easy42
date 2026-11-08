@@ -83,11 +83,10 @@ export function cmdlineToSystemd(
     }
 
     const desc = options?.description?.trim() || `${program} service`;
-    const user = options?.user?.trim() || "nobody";
+    const user = options?.user?.trim() || "root";
     const workingDir = options?.workingDir?.trim() || "/var/log";
     const appName = options?.appName?.trim() || "sample";
-    const envFile =
-      options?.envFile !== undefined ? options.envFile : `/etc/systemd/system/ezapp-${appName}.env`;
+    const envFile = options?.envFile !== undefined ? options.envFile : `/etc/systemd/system/ezapp-${appName}.env`;
 
     const unitLines: string[] = [
       "[Unit]",
@@ -156,4 +155,3 @@ export function ensureSystemdEnvironmentFile(appName: string, content: string): 
   }
   return `${trimmed}\n\n[Service]\n${expectedDirective}\n`;
 }
-

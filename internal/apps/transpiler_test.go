@@ -139,7 +139,7 @@ After=network.target
 
 [Service]
 Type=simple
-User=nobody
+User=root
 WorkingDirectory=/var/log
 ExecStart=/bin/sh -c "exec rclone serve webdav -L --read-only --user root /root"
 Restart=always

@@ -145,7 +145,7 @@ export const ExportDiagramModal: React.FC<ExportDiagramModalProps> = ({
           borderRadius: { xs: 0, md: 3 },
           boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
           overflow: "hidden",
-          maxHeight: { xs: "100%", md: "calc(100vh - 64px)" },
+          maxHeight: { xs: "100%", md: "calc(100dvh - 64px)" },
           height: { xs: "100%", md: 680 },
           display: "flex",
           flexDirection: "column",

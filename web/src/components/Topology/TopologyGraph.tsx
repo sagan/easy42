@@ -517,7 +517,7 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = ({
           borderRadius: 2.5,
           p: "6px 10px",
           boxShadow: "0 4px 16px -2px rgba(15, 23, 42, 0.08), 0 2px 6px -1px rgba(15, 23, 42, 0.04)",
-          maxWidth: "calc(100vw - 32px)",
+          maxWidth: "calc(100dvw - 32px)",
         }}
       >
         {/* Pinned Nodes with N-Hop Depth Slider */}
@@ -2262,28 +2262,28 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
       const isCollapsed = collapsedBlockIds.has(block.id);
       const isGroupFocused = focusedBlockId === block.id;
 
-        const bW = isCollapsed ? 310 : block.width;
-        const bH = isCollapsed ? 76 : block.height;
+      const bW = isCollapsed ? 310 : block.width;
+      const bH = isCollapsed ? 76 : block.height;
 
-        return {
-          id: block.id,
-          type: "blockGroup",
-          position: { x: block.x, y: block.y },
-          style: isCollapsed
-            ? { width: 310, height: 76, zIndex: 0 }
-            : { width: block.width, height: block.height, zIndex: 0 },
-          initialWidth: bW,
-          initialHeight: bH,
-          width: bW,
-          height: bH,
-          measured: { width: bW, height: bH },
-          handles: [
-            { type: "source" as const, id: "block-source", position: Position.Top, x: bW / 2, y: bH / 2 },
-            { type: "target" as const, id: "block-target", position: Position.Top, x: bW / 2, y: bH / 2 },
-          ],
-          selectable: true,
-          draggable: !isDiagramLocked,
-          dragHandle: isDiagramLocked ? undefined : ".block-header",
+      return {
+        id: block.id,
+        type: "blockGroup",
+        position: { x: block.x, y: block.y },
+        style: isCollapsed
+          ? { width: 310, height: 76, zIndex: 0 }
+          : { width: block.width, height: block.height, zIndex: 0 },
+        initialWidth: bW,
+        initialHeight: bH,
+        width: bW,
+        height: bH,
+        measured: { width: bW, height: bH },
+        handles: [
+          { type: "source" as const, id: "block-source", position: Position.Top, x: bW / 2, y: bH / 2 },
+          { type: "target" as const, id: "block-target", position: Position.Top, x: bW / 2, y: bH / 2 },
+        ],
+        selectable: true,
+        draggable: !isDiagramLocked,
+        dragHandle: isDiagramLocked ? undefined : ".block-header",
         data: {
           block,
           memberCount: memberNodes.length,
@@ -2631,7 +2631,10 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
         return {
           ...n,
           position: pos,
-          measured: (existing as any)?.measured || n.measured || (n.width && n.height ? { width: n.width, height: n.height } : undefined),
+          measured:
+            (existing as any)?.measured ||
+            n.measured ||
+            (n.width && n.height ? { width: n.width, height: n.height } : undefined),
           width: (existing as any)?.width ?? n.width,
           height: (existing as any)?.height ?? n.height,
         };
@@ -2920,7 +2923,7 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
   }, [handleClearFocus]);
 
   return (
-    <Box sx={{ width: "100%", height: "calc(100vh - 64px)", position: "relative", backgroundColor: "#F8FAFC" }}>
+    <Box sx={{ width: "100%", height: "calc(100dvh - 64px)", position: "relative", backgroundColor: "#F8FAFC" }}>
       {nodes.length === 0 ? (
         <Box
           sx={{

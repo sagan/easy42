@@ -26,10 +26,37 @@ import {
   TableBody,
   TableContainer,
   InputAdornment,
+  RadioGroup,
+  FormControlLabel,
+  Radio,
 } from "@mui/material";
-import { Clock, Plus, Trash2, Edit2, Play, CheckCircle2, Activity, RefreshCw, Search, X } from "lucide-react";
+import {
+  Clock,
+  Plus,
+  Trash2,
+  Edit2,
+  Play,
+  CheckCircle2,
+  Activity,
+  RefreshCw,
+  Search,
+  X,
+  Globe,
+  Tag,
+  Code2,
+  Sliders,
+  Info,
+} from "lucide-react";
 import { api } from "../../api/client";
 import type { CronTask, Node } from "../../types/api";
+import {
+  matchesTaskSelector,
+  splitSelectorList,
+  getSelectorValue,
+  detectTargetMode,
+  parseSelectorJSON,
+  type SelectorTargetMode,
+} from "../../utils/taskSelector";
 
 interface CronTasksTabProps {
   nodes: Node[];
@@ -70,7 +97,12 @@ export const CronTasksTab: React.FC<CronTasksTabProps> = ({ nodes, onExecuteNow 
   const [formCount, setFormCount] = useState("4");
   const [formTimeout, setFormTimeout] = useState("15");
   const [formCronExpr, setFormCronExpr] = useState("*/5 * * * *");
-  const [formNodes, setFormNodes] = useState<string[]>([]);
+  const [formTargetType, setFormTargetType] = useState<SelectorTargetMode>("manual");
+  const [formSelector, setFormSelector] = useState<Record<string, string>>({ name: "" });
+  const [formSelectorText, setFormSelectorText] = useState<string>(`{
+  "name": ""
+}`);
+  const [formSelectorError, setFormSelectorError] = useState<string | null>(null);
   const [nodeFilter, setNodeFilter] = useState("");
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -97,6 +129,51 @@ export const CronTasksTab: React.FC<CronTasksTabProps> = ({ nodes, onExecuteNow 
     return (nodes || []).filter((n) => !n.is_external);
   }, [nodes]);
 
+  const availableTags = React.useMemo(() => {
+    const s = new Set<string>();
+    availableNodes.forEach((n) => {
+      n.tags?.forEach((t) => {
+        if (t.trim()) s.add(t.trim());
+      });
+    });
+    return Array.from(s).sort();
+  }, [availableNodes]);
+
+  const formSelectedNodes = splitSelectorList(getSelectorValue(formSelector, "name"));
+  const formTargetTag = getSelectorValue(formSelector, "tag");
+  const selectorMatchedNodes = availableNodes.filter((n) => matchesTaskSelector(n, formSelector));
+
+  const applyFormSelector = (selector: Record<string, string>) => {
+    setFormSelector(selector);
+    setFormSelectorText(JSON.stringify(selector, null, 2));
+    setFormSelectorError(null);
+    setFormTargetType(detectTargetMode(selector));
+  };
+
+  const handleSelectorTextChange = (text: string) => {
+    setFormSelectorText(text);
+    const parsed = parseSelectorJSON(text);
+    if (parsed.error || !parsed.selector) {
+      setFormSelectorError(parsed.error);
+      return;
+    }
+    setFormSelectorError(null);
+    setFormSelector(parsed.selector);
+    setFormTargetType(detectTargetMode(parsed.selector));
+  };
+
+  const handleTargetModeChange = (mode: SelectorTargetMode) => {
+    if (mode === "manual") {
+      applyFormSelector({ name: getSelectorValue(formSelector, "name") });
+    } else if (mode === "all") {
+      applyFormSelector({});
+    } else if (mode === "tag") {
+      applyFormSelector({ tag: getSelectorValue(formSelector, "tag") });
+    } else {
+      setFormTargetType("custom");
+    }
+  };
+
   const filteredAvailableNodes = React.useMemo(() => {
     if (!nodeFilter.trim()) return availableNodes;
     const q = nodeFilter.trim().toLowerCase();
@@ -122,7 +199,7 @@ export const CronTasksTab: React.FC<CronTasksTabProps> = ({ nodes, onExecuteNow 
     // Default to first agent node or first available node
     const defaultNode =
       availableNodes.find((n) => n.mode === "agent" || Boolean(n.agent_token))?.name || availableNodes[0]?.name;
-    setFormNodes(defaultNode ? [defaultNode] : []);
+    applyFormSelector({ name: defaultNode || "" });
     setNodeFilter("");
     setFormError(null);
     setModalOpen(true);
@@ -137,7 +214,7 @@ export const CronTasksTab: React.FC<CronTasksTabProps> = ({ nodes, onExecuteNow 
     setFormCount(task.params?.count || "4");
     setFormTimeout(task.timeout_sec ? String(task.timeout_sec) : "15");
     setFormCronExpr(task.cron_expr);
-    setFormNodes(task.nodes || []);
+    applyFormSelector(task.selector || {});
     setNodeFilter("");
     setFormError(null);
     setModalOpen(true);
@@ -152,8 +229,14 @@ export const CronTasksTab: React.FC<CronTasksTabProps> = ({ nodes, onExecuteNow 
       setFormError("Target host or address is required");
       return;
     }
-    if (formNodes.length === 0) {
-      setFormError("Select at least one target node");
+    const parsedSelector = parseSelectorJSON(formSelectorText);
+    if (parsedSelector.error || !parsedSelector.selector) {
+      setFormError(parsedSelector.error || "Invalid selector JSON");
+      return;
+    }
+    const matchedNodes = availableNodes.filter((n) => matchesTaskSelector(n, parsedSelector.selector));
+    if (matchedNodes.length === 0) {
+      setFormError("Selector matches no managed nodes. Select at least one target node.");
       return;
     }
     if (!formCronExpr.trim()) {
@@ -169,7 +252,7 @@ export const CronTasksTab: React.FC<CronTasksTabProps> = ({ nodes, onExecuteNow 
         description: formDesc.trim(),
         task_type: formType,
         cron_expr: formCronExpr.trim(),
-        nodes: formNodes,
+        selector: parsedSelector.selector,
         params: {
           target: formTarget.trim(),
           count: formCount.trim() || "4",
@@ -217,10 +300,10 @@ export const CronTasksTab: React.FC<CronTasksTabProps> = ({ nodes, onExecuteNow 
   };
 
   const toggleNodeSelection = (nodeName: string) => {
-    if (formNodes.includes(nodeName)) {
-      setFormNodes(formNodes.filter((n) => n !== nodeName));
+    if (formSelectedNodes.includes(nodeName)) {
+      applyFormSelector({ name: formSelectedNodes.filter((n) => n !== nodeName).join(",") });
     } else {
-      setFormNodes([...formNodes, nodeName]);
+      applyFormSelector({ name: [...formSelectedNodes, nodeName].join(",") });
     }
   };
 
@@ -370,7 +453,7 @@ export const CronTasksTab: React.FC<CronTasksTabProps> = ({ nodes, onExecuteNow 
                 <TableCell sx={{ fontWeight: 700, color: "#475569" }}>Type</TableCell>
                 <TableCell sx={{ fontWeight: 700, color: "#475569" }}>Target</TableCell>
                 <TableCell sx={{ fontWeight: 700, color: "#475569" }}>Schedule</TableCell>
-                <TableCell sx={{ fontWeight: 700, color: "#475569" }}>Nodes</TableCell>
+                <TableCell sx={{ fontWeight: 700, color: "#475569" }}>Target Nodes</TableCell>
                 <TableCell align="right" sx={{ fontWeight: 700, color: "#475569" }}>
                   Actions
                 </TableCell>
@@ -433,18 +516,21 @@ export const CronTasksTab: React.FC<CronTasksTabProps> = ({ nodes, onExecuteNow 
                   </TableCell>
                   <TableCell>
                     <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5, maxWidth: 220 }}>
-                      {task.nodes && task.nodes.length > 0 ? (
-                        task.nodes.map((nodeName) => (
-                          <Chip
-                            size="small"
-                            title={`View task "${task.name}" on ${nodeName}`}
-                            label={nodeName}
-                            clickable
-                            onClick={() =>
-                              navigate(
-                                `/nodes/${encodeURIComponent(nodeName)}?tab=cron_tasks&task=${encodeURIComponent(task.id)}`,
-                              )
-                            }
+                      {(() => {
+                        const matchedNodes = availableNodes.filter((n) => matchesTaskSelector(n, task.selector || {}));
+                        return matchedNodes.length > 0 ? (
+                          matchedNodes.map((matchedNode) => (
+                            <Chip
+                              key={matchedNode.name}
+                              size="small"
+                              title={`View task "${task.name}" on ${matchedNode.name}`}
+                              label={matchedNode.name}
+                              clickable
+                              onClick={() =>
+                                navigate(
+                                  `/nodes/${encodeURIComponent(matchedNode.name)}?tab=cron_tasks&task=${encodeURIComponent(task.id)}`,
+                                )
+                              }
                             variant="outlined"
                             sx={{
                               fontSize: "0.7rem",
@@ -460,13 +546,14 @@ export const CronTasksTab: React.FC<CronTasksTabProps> = ({ nodes, onExecuteNow 
                                 color: "#3730A3",
                               },
                             }}
-                          />
-                        ))
-                      ) : (
-                        <Typography variant="caption" sx={{ color: "#94A3B8" }}>
-                          None
-                        </Typography>
-                      )}
+                            />
+                          ))
+                        ) : (
+                          <Typography variant="caption" sx={{ color: "#94A3B8" }}>
+                            None
+                          </Typography>
+                        );
+                      })()}
                     </Box>
                   </TableCell>
                   <TableCell align="right">
@@ -652,128 +739,594 @@ export const CronTasksTab: React.FC<CronTasksTabProps> = ({ nodes, onExecuteNow 
             />
           </Paper>
 
-          {/* Node Selection */}
-          <Box>
-            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
-              <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#1E293B" }}>
-                Target Nodes ({formNodes.length} selected)
-              </Typography>
-              <Box sx={{ display: "flex", gap: 1 }}>
-                <Button
-                  size="small"
-                  onClick={() => {
-                    const toAdd = filteredAvailableNodes.map((n) => n.name);
-                    setFormNodes((prev) => Array.from(new Set([...prev, ...toAdd])));
+          {/* Target Nodes (Selector) */}
+          <Paper
+            elevation={0}
+            sx={{
+              p: 2,
+              bgcolor: "#F8FAFC",
+              borderRadius: 2,
+              border: "1px solid #E2E8F0",
+            }}
+          >
+            <Typography
+              variant="subtitle2"
+              sx={{ fontWeight: 700, color: "#1E293B", mb: 0.5 }}
+            >
+              Target Nodes
+            </Typography>
+            <Typography
+              variant="caption"
+              sx={{ color: "#64748B", display: "block", mb: 1.5 }}
+            >
+              Choose nodes with the shortcuts below or edit the selector JSON
+              directly. An empty selector matches every managed node. All
+              selector conditions must match (AND).
+            </Typography>
+
+            <FormControl component="fieldset" fullWidth sx={{ mb: 2 }}>
+              <RadioGroup
+                row
+                value={formTargetType}
+                onChange={(e) =>
+                  handleTargetModeChange(e.target.value as SelectorTargetMode)
+                }
+              >
+                <FormControlLabel
+                  value="manual"
+                  control={<Radio size="small" />}
+                  label={
+                    <Box
+                      sx={{ display: "flex", alignItems: "center", gap: 0.8 }}
+                    >
+                      <Sliders size={16} color="#6366F1" />
+                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                        Manually Select Nodes
+                      </Typography>
+                    </Box>
+                  }
+                />
+                <FormControlLabel
+                  value="all"
+                  control={<Radio size="small" />}
+                  label={
+                    <Box
+                      sx={{ display: "flex", alignItems: "center", gap: 0.8 }}
+                    >
+                      <Globe size={16} color="#0EA5E9" />
+                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                        All Nodes
+                      </Typography>
+                    </Box>
+                  }
+                />
+                <FormControlLabel
+                  value="tag"
+                  control={<Radio size="small" />}
+                  label={
+                    <Box
+                      sx={{ display: "flex", alignItems: "center", gap: 0.8 }}
+                    >
+                      <Tag size={16} color="#8B5CF6" />
+                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                        Nodes of Selected Tag(s)
+                      </Typography>
+                    </Box>
+                  }
+                />
+                <FormControlLabel
+                  value="custom"
+                  control={<Radio size="small" />}
+                  label={
+                    <Box
+                      sx={{ display: "flex", alignItems: "center", gap: 0.8 }}
+                    >
+                      <Code2 size={16} color="#0F766E" />
+                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                        Advanced Selector
+                      </Typography>
+                    </Box>
+                  }
+                />
+              </RadioGroup>
+            </FormControl>
+
+            {formTargetType === "manual" && (
+              <Box>
+                <Box
+                  sx={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    mb: 1,
                   }}
-                  sx={{ textTransform: "none", fontSize: "0.75rem" }}
                 >
-                  {nodeFilter.trim() ? "Select Filtered" : "Select All"}
-                </Button>
-                <Button
+                  <Typography variant="caption" sx={{ color: "#64748B" }}>
+                    Target Nodes ({formSelectedNodes.length} selected)
+                  </Typography>
+                  <Box sx={{ display: "flex", gap: 1 }}>
+                    <Button
+                      size="small"
+                      onClick={() => {
+                        const toAdd = filteredAvailableNodes.map((n) => n.name);
+                        applyFormSelector({
+                          name: Array.from(
+                            new Set([...formSelectedNodes, ...toAdd]),
+                          ).join(","),
+                        });
+                      }}
+                      sx={{ textTransform: "none", fontSize: "0.75rem" }}
+                    >
+                      {nodeFilter.trim() ? "Select Filtered" : "Select All"}
+                    </Button>
+                    <Button
+                      size="small"
+                      onClick={() => {
+                        if (nodeFilter.trim()) {
+                          const toRemove = new Set(
+                            filteredAvailableNodes.map((n) => n.name),
+                          );
+                          applyFormSelector({
+                            name: formSelectedNodes
+                              .filter((name) => !toRemove.has(name))
+                              .join(","),
+                          });
+                        } else {
+                          applyFormSelector({ name: "" });
+                        }
+                      }}
+                      sx={{ textTransform: "none", fontSize: "0.75rem" }}
+                    >
+                      {nodeFilter.trim() ? "Clear Filtered" : "Clear"}
+                    </Button>
+                  </Box>
+                </Box>
+
+                <TextField
                   size="small"
-                  onClick={() => {
-                    if (nodeFilter.trim()) {
-                      const toRemove = new Set(filteredAvailableNodes.map((n) => n.name));
-                      setFormNodes((prev) => prev.filter((name) => !toRemove.has(name)));
-                    } else {
-                      setFormNodes([]);
+                  fullWidth
+                  placeholder="Filter nodes by name, IP, tag..."
+                  value={nodeFilter}
+                  onChange={(e) => setNodeFilter(e.target.value)}
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <Search size={15} color="#94A3B8" />
+                      </InputAdornment>
+                    ),
+                    endAdornment: nodeFilter ? (
+                      <InputAdornment position="end">
+                        <IconButton
+                          size="small"
+                          onClick={() => setNodeFilter("")}
+                          edge="end"
+                          sx={{ p: 0.5 }}
+                        >
+                          <X size={14} color="#94A3B8" />
+                        </IconButton>
+                      </InputAdornment>
+                    ) : undefined,
+                    sx: { height: 34, fontSize: "0.8rem", bgcolor: "#FFFFFF" },
+                  }}
+                  sx={{ mb: 1.5 }}
+                />
+
+                <Box
+                  sx={{
+                    display: "grid",
+                    gridTemplateColumns:
+                      "repeat(auto-fill, minmax(180px, 1fr))",
+                    gap: 1.5,
+                    maxHeight: 180,
+                    overflowY: "auto",
+                    p: 1.5,
+                    bgcolor: "#FFFFFF",
+                    borderRadius: 2,
+                    border: "1px solid #E2E8F0",
+                  }}
+                >
+                  {filteredAvailableNodes.length === 0 ? (
+                    <Box
+                      sx={{
+                        gridColumn: "1 / -1",
+                        py: 3,
+                        textAlign: "center",
+                        color: "#94A3B8",
+                      }}
+                    >
+                      <Typography variant="body2">
+                        {availableNodes.length === 0
+                          ? "No managed nodes available"
+                          : `No nodes matching "${nodeFilter}"`}
+                      </Typography>
+                    </Box>
+                  ) : (
+                    filteredAvailableNodes.map((n) => {
+                      const isSelected = formSelectedNodes.includes(n.name);
+                      const isAgent =
+                        n.mode === "agent" || Boolean(n.agent_token);
+                      return (
+                        <Paper
+                          key={n.name}
+                          elevation={0}
+                          onClick={() => toggleNodeSelection(n.name)}
+                          sx={{
+                            p: 1.25,
+                            borderRadius: 2,
+                            border: "1px solid",
+                            borderColor: isSelected ? "#4F46E5" : "#E2E8F0",
+                            bgcolor: isSelected ? "#EEF2FF" : "#F8FAFC",
+                            cursor: "pointer",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            transition: "all 0.15s ease",
+                            "&:hover": { borderColor: "#818CF8" },
+                          }}
+                        >
+                          <Box>
+                            <Typography
+                              variant="body2"
+                              sx={{
+                                fontWeight: isSelected ? 700 : 500,
+                                color: isSelected ? "#312E81" : "#1E293B",
+                              }}
+                            >
+                              {n.name}
+                            </Typography>
+                            <Typography
+                              variant="caption"
+                              sx={{ color: isAgent ? "#16A34A" : "#D97706" }}
+                            >
+                              {isAgent ? "Agent Node" : "No Agent"}
+                            </Typography>
+                          </Box>
+                          {isSelected && (
+                            <CheckCircle2 size={16} color="#4F46E5" />
+                          )}
+                        </Paper>
+                      );
+                    })
+                  )}
+                </Box>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color:
+                      formSelectedNodes.length === 0 ? "#D97706" : "#64748B",
+                    mt: 0.5,
+                    display: "block",
+                  }}
+                >
+                  {formSelectedNodes.length === 0
+                    ? "Notice: No nodes selected. The selector will match no node until a node name is added."
+                    : `Assigned to ${formSelectedNodes.length} node(s).`}
+                </Typography>
+              </Box>
+            )}
+
+            {formTargetType === "all" && (
+              <Box
+                sx={{
+                  p: 2,
+                  bgcolor: "#E0F2FE",
+                  borderRadius: "8px",
+                  border: "1px solid #BAE6FD",
+                }}
+              >
+                <Box
+                  sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}
+                >
+                  <Globe size={18} color="#0284C7" />
+                  <Typography
+                    variant="body2"
+                    sx={{ fontWeight: 700, color: "#0369A1" }}
+                  >
+                    Automatic Execution on All Agent Nodes (
+                    {availableNodes.length})
+                  </Typography>
+                </Box>
+                <Typography
+                  variant="caption"
+                  sx={{ color: "#0C4A6E", display: "block", mb: 1.5 }}
+                >
+                  An empty selector runs this task on all cluster nodes running
+                  in agent mode. Any new agent node added in the future will
+                  automatically receive this task.
+                </Typography>
+                <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.6 }}>
+                  {availableNodes.map((n) => (
+                    <Chip
+                      key={n.name}
+                      label={n.name}
+                      size="small"
+                      sx={{
+                        bgcolor: "#FFFFFF",
+                        color: "#0369A1",
+                        border: "1px solid #7DD3FC",
+                        fontWeight: 600,
+                        fontSize: "0.75rem",
+                      }}
+                    />
+                  ))}
+                </Box>
+              </Box>
+            )}
+
+            {formTargetType === "tag" && (
+              <Box>
+                <Box
+                  sx={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr 1fr",
+                    gap: 2,
+                    alignItems: "center",
+                  }}
+                >
+                  <FormControl fullWidth size="small">
+                    <InputLabel>Select from Existing Tags</InputLabel>
+                    <Select
+                      multiple
+                      value={splitSelectorList(formTargetTag)}
+                      label="Select from Existing Tags"
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        const selected =
+                          typeof val === "string" ? val.split(",") : val;
+                        applyFormSelector({ tag: selected.join(",") });
+                      }}
+                      renderValue={(selected) => (
+                        <Box
+                          sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}
+                        >
+                          {selected.length === 0 ? (
+                            <Typography
+                              variant="body2"
+                              sx={{ color: "#94A3B8", fontStyle: "italic" }}
+                            >
+                              None selected
+                            </Typography>
+                          ) : (
+                            selected.map((tag) => (
+                              <Chip
+                                key={tag}
+                                label={`#${tag}`}
+                                size="small"
+                                sx={{ height: 22, fontSize: "0.75rem" }}
+                              />
+                            ))
+                          )}
+                        </Box>
+                      )}
+                    >
+                      {availableTags.map((tag) => {
+                        const matchCount = availableNodes.filter((n) =>
+                          n.tags?.includes(tag),
+                        ).length;
+                        return (
+                          <MenuItem key={tag} value={tag}>
+                            <Box
+                              sx={{
+                                display: "flex",
+                                justifyContent: "space-between",
+                                width: "100%",
+                                alignItems: "center",
+                              }}
+                            >
+                              <Typography
+                                variant="body2"
+                                sx={{ fontWeight: 600, color: "#7C3AED" }}
+                              >
+                                #{tag}
+                              </Typography>
+                              <Chip
+                                label={`${matchCount} node(s)`}
+                                size="small"
+                                sx={{ height: 18, fontSize: "0.68rem" }}
+                              />
+                            </Box>
+                          </MenuItem>
+                        );
+                      })}
+                    </Select>
+                  </FormControl>
+                  <TextField
+                    fullWidth
+                    size="small"
+                    label="Or Enter Tags (comma-separated)"
+                    placeholder="e.g. edge, ingress, prod"
+                    value={formTargetTag}
+                    onChange={(e) =>
+                      applyFormSelector({ tag: e.target.value.toLowerCase() })
                     }
+                    InputProps={{
+                      startAdornment: (
+                        <Tag
+                          size={16}
+                          style={{ marginRight: 6, color: "#8B5CF6" }}
+                        />
+                      ),
+                    }}
+                  />
+                </Box>
+
+                <Box
+                  sx={{
+                    mt: 1.5,
+                    p: 1.5,
+                    bgcolor: "#F5F3FF",
+                    borderRadius: "8px",
+                    border: "1px solid #DDD6FE",
                   }}
-                  sx={{ textTransform: "none", fontSize: "0.75rem" }}
                 >
-                  {nodeFilter.trim() ? "Clear Filtered" : "Clear"}
-                </Button>
+                  {(() => {
+                    const matchingNodes = availableNodes.filter((n) =>
+                      matchesTaskSelector(n, { tag: formTargetTag }),
+                    );
+                    if (!formTargetTag) {
+                      return (
+                        <Typography variant="caption" sx={{ color: "#6D28D9" }}>
+                          Please select or enter at least one tag above to see
+                          matching nodes.
+                        </Typography>
+                      );
+                    }
+                    if (matchingNodes.length === 0) {
+                      return (
+                        <Box
+                          sx={{ display: "flex", alignItems: "center", gap: 1 }}
+                        >
+                          <Info size={16} color="#8B5CF6" />
+                          <Typography
+                            variant="caption"
+                            sx={{ color: "#6D28D9" }}
+                          >
+                            No nodes currently have any of these tags. The task
+                            will automatically run on any node tagged with{" "}
+                            <strong>#{formTargetTag}</strong>.
+                          </Typography>
+                        </Box>
+                      );
+                    }
+                    return (
+                      <Box>
+                        <Typography
+                          variant="caption"
+                          sx={{
+                            color: "#5B21B6",
+                            fontWeight: 700,
+                            display: "block",
+                            mb: 0.8,
+                          }}
+                        >
+                          {matchingNodes.length} node(s) currently match tag
+                          selection:
+                        </Typography>
+                        <Box
+                          sx={{ display: "flex", flexWrap: "wrap", gap: 0.6 }}
+                        >
+                          {matchingNodes.map((n) => (
+                            <Chip
+                              key={n.name}
+                              label={n.name}
+                              size="small"
+                              sx={{
+                                bgcolor: "#FFFFFF",
+                                color: "#6D28D9",
+                                border: "1px solid #C4B5FD",
+                                fontWeight: 600,
+                                fontSize: "0.75rem",
+                              }}
+                            />
+                          ))}
+                        </Box>
+                      </Box>
+                    );
+                  })()}
+                </Box>
+              </Box>
+            )}
+
+            {formTargetType === "custom" && (
+              <Box
+                sx={{
+                  p: 2,
+                  bgcolor: "#F0FDFA",
+                  borderRadius: "8px",
+                  border: "1px solid #99F6E4",
+                }}
+              >
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                  <Code2 size={16} color="#0F766E" />
+                  <Typography variant="caption" sx={{ color: "#115E59" }}>
+                    Build an arbitrary selector below. Supported keys are{" "}
+                    <code>name</code>, <code>tag</code>, and{" "}
+                    <code>env:&lt;NAME&gt;</code>.
+                  </Typography>
+                </Box>
+              </Box>
+            )}
+
+            <Box sx={{ mt: 2 }}>
+              <Box
+                sx={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  mb: 0.8,
+                }}
+              >
+                <Typography
+                  variant="caption"
+                  sx={{ color: "#475569", fontWeight: 700 }}
+                >
+                  Selector JSON
+                </Typography>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color:
+                      selectorMatchedNodes.length > 0 ? "#059669" : "#D97706",
+                  }}
+                >
+                  {selectorMatchedNodes.length} node(s) match
+                </Typography>
+              </Box>
+              <TextField
+                fullWidth
+                multiline
+                minRows={4}
+                size="small"
+                value={formSelectorText}
+                onChange={(e) => handleSelectorTextChange(e.target.value)}
+                error={Boolean(formSelectorError)}
+                helperText={
+                  formSelectorError ||
+                  'Use {"name":"node-a,node-b"}, {"tag":"edge,prod"}, or {"env:NODE_IP":"10.0.0.1"}. Empty {} matches all nodes.'
+                }
+                InputProps={{
+                  sx: {
+                    fontFamily: "monospace",
+                    fontSize: "0.8rem",
+                    bgcolor: "#FFFFFF",
+                  },
+                }}
+              />
+              <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.6, mt: 1 }}>
+                {selectorMatchedNodes.length === 0 ? (
+                  <Typography
+                    variant="caption"
+                    sx={{ color: "#94A3B8", fontStyle: "italic" }}
+                  >
+                    No managed nodes match this selector.
+                  </Typography>
+                ) : (
+                  selectorMatchedNodes.map((n) => (
+                    <Chip
+                      key={n.name}
+                      label={n.name}
+                      size="small"
+                      sx={{
+                        height: 20,
+                        fontSize: "0.7rem",
+                        bgcolor: "#ECFDF5",
+                        color: "#047857",
+                      }}
+                    />
+                  ))
+                )}
               </Box>
             </Box>
 
-            <TextField
-              size="small"
-              fullWidth
-              placeholder="Filter nodes by name, IP, tag..."
-              value={nodeFilter}
-              onChange={(e) => setNodeFilter(e.target.value)}
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <Search size={15} color="#94A3B8" />
-                  </InputAdornment>
-                ),
-                endAdornment: nodeFilter ? (
-                  <InputAdornment position="end">
-                    <IconButton size="small" onClick={() => setNodeFilter("")} edge="end" sx={{ p: 0.5 }}>
-                      <X size={14} color="#94A3B8" />
-                    </IconButton>
-                  </InputAdornment>
-                ) : undefined,
-                sx: { height: 34, fontSize: "0.8rem", bgcolor: "#FFFFFF" },
-              }}
-              sx={{ mb: 1.5 }}
-            />
-
-            <Box
-              sx={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))",
-                gap: 1.5,
-                maxHeight: 180,
-                overflowY: "auto",
-                p: 1.5,
-                bgcolor: "#F8FAFC",
-                borderRadius: 2,
-                border: "1px solid #E2E8F0",
-              }}
+            <Typography
+              variant="caption"
+              sx={{ color: "#64748B", display: "block", mt: 1 }}
             >
-              {filteredAvailableNodes.length === 0 ? (
-                <Box sx={{ gridColumn: "1 / -1", py: 3, textAlign: "center", color: "#94A3B8" }}>
-                  <Typography variant="body2">
-                    {availableNodes.length === 0 ? "No managed nodes available" : `No nodes matching "${nodeFilter}"`}
-                  </Typography>
-                </Box>
-              ) : (
-                filteredAvailableNodes.map((n) => {
-                  const isSelected = formNodes.includes(n.name);
-                  const isAgent = n.mode === "agent" || Boolean(n.agent_token);
-                  return (
-                    <Paper
-                      key={n.name}
-                      elevation={0}
-                      onClick={() => toggleNodeSelection(n.name)}
-                      sx={{
-                        p: 1.25,
-                        borderRadius: 2,
-                        border: "1px solid",
-                        borderColor: isSelected ? "#4F46E5" : "#E2E8F0",
-                        bgcolor: isSelected ? "#EEF2FF" : "#FFFFFF",
-                        cursor: "pointer",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        transition: "all 0.15s ease",
-                        "&:hover": { borderColor: "#818CF8" },
-                      }}
-                    >
-                      <Box>
-                        <Typography
-                          variant="body2"
-                          sx={{ fontWeight: isSelected ? 700 : 500, color: isSelected ? "#312E81" : "#1E293B" }}
-                        >
-                          {n.name}
-                        </Typography>
-                        <Typography variant="caption" sx={{ color: isAgent ? "#16A34A" : "#D97706" }}>
-                          {isAgent ? "Agent Node" : "No Agent"}
-                        </Typography>
-                      </Box>
-                      {isSelected && <CheckCircle2 size={16} color="#4F46E5" />}
-                    </Paper>
-                  );
-                })
-              )}
-            </Box>
-            <Typography variant="caption" sx={{ color: "#64748B", display: "block", mt: 0.75 }}>
-              * Cron tasks are executed solely by node agents. If a node does not have an active agent, the task will
-              automatically execute once the agent comes online.
+              * Cron tasks are executed solely by node agents. If a node does
+              not have an active agent, the task will automatically execute once
+              the agent comes online.
             </Typography>
-          </Box>
+          </Paper>
         </DialogContent>
 
         <DialogActions sx={{ p: 2, pt: 1 }}>

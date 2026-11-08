@@ -221,8 +221,8 @@ func (m *Manager) SaveCronTask(task config.CronTask) (config.CronTask, error) {
 		return task, fmt.Errorf("invalid cron expression: %w", err)
 	}
 
-	if len(task.Nodes) == 0 {
-		return task, fmt.Errorf("at least one target node must be specified")
+	if err := config.ValidateCronTask(task); err != nil {
+		return task, err
 	}
 
 	if task.Params == nil || strings.TrimSpace(task.Params["target"]) == "" {
@@ -264,23 +264,18 @@ func (m *Manager) SaveCronTask(task config.CronTask) (config.CronTask, error) {
 		task.UpdatedAt = now
 	}
 
-	// Filter out invalid or external node names
-	nodeSet := make(map[string]bool)
-	for _, n := range cfg.Nodes {
-		if !n.IsExternal {
-			nodeSet[n.Name] = true
+	// The selector must match at least one managed (non-external) node eligible for cron tasks
+	matched := false
+	for i := range cfg.Nodes {
+		n := &cfg.Nodes[i]
+		if !n.IsExternal && config.CronTaskTargetsNode(task, n, n.Name) {
+			matched = true
+			break
 		}
 	}
-	var validNodes []string
-	for _, n := range task.Nodes {
-		if nodeSet[n] {
-			validNodes = append(validNodes, n)
-		}
+	if !matched {
+		return task, fmt.Errorf("no managed nodes match the cron task selector")
 	}
-	if len(validNodes) == 0 {
-		return task, fmt.Errorf("none of the specified nodes are managed nodes eligible for cron tasks")
-	}
-	task.Nodes = validNodes
 
 	found := false
 	for i, existing := range cfg.CronTasks {
@@ -397,9 +392,15 @@ func (m *Manager) SyncCronTasksToNode(nodeName string) {
 		return
 	}
 
-	for _, n := range cfg.Nodes {
-		if n.Name == nodeName && n.IsExternal {
-			return
+	var targetNode *config.Node
+	for i := range cfg.Nodes {
+		n := &cfg.Nodes[i]
+		if n.Name == nodeName {
+			if n.IsExternal {
+				return
+			}
+			targetNode = n
+			break
 		}
 	}
 
@@ -408,15 +409,8 @@ func (m *Manager) SyncCronTasksToNode(nodeName string) {
 		if !t.Enabled {
 			continue
 		}
-		// Check if task is assigned to this node
-		assigned := false
-		for _, assignedNode := range t.Nodes {
-			if assignedNode == nodeName {
-				assigned = true
-				break
-			}
-		}
-		if !assigned {
+		// Check if task targets this node via its selector
+		if !config.CronTaskTargetsNode(t, targetNode, nodeName) {
 			continue
 		}
 
@@ -462,16 +456,20 @@ func (m *Manager) GetNodeCronTasksResults(nodeName string, taskID string, rangeS
 		return config.NodeCronTasksResultsResponse{}, fmt.Errorf("failed to load cron task results: %w", err)
 	}
 
-	// Load all cron tasks configured for this node
+	// Load all cron tasks targeting this node
 	cfg, err := m.store.Load()
 	var assignedTasks []config.CronTask
 	if err == nil {
+		var targetNode *config.Node
+		for i := range cfg.Nodes {
+			if cfg.Nodes[i].Name == nodeName {
+				targetNode = &cfg.Nodes[i]
+				break
+			}
+		}
 		for _, t := range cfg.CronTasks {
-			for _, n := range t.Nodes {
-				if n == nodeName {
-					assignedTasks = append(assignedTasks, t)
-					break
-				}
+			if config.CronTaskTargetsNode(t, targetNode, nodeName) {
+				assignedTasks = append(assignedTasks, t)
 			}
 		}
 	}

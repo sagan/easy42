@@ -44,12 +44,7 @@ export interface ExportPingTableModalProps {
   nodes: Node[];
 }
 
-export const ExportPingTableModal: React.FC<ExportPingTableModalProps> = ({
-  open,
-  onClose,
-  task,
-  nodes,
-}) => {
+export const ExportPingTableModal: React.FC<ExportPingTableModalProps> = ({ open, onClose, task, nodes }) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
   const { networkName } = useMesh();
@@ -153,7 +148,7 @@ export const ExportPingTableModal: React.FC<ExportPingTableModalProps> = ({
           borderRadius: { xs: 0, md: 3 },
           boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
           overflow: "hidden",
-          maxHeight: { xs: "100%", md: "calc(100vh - 64px)" },
+          maxHeight: { xs: "100%", md: "calc(100dvh - 64px)" },
           height: { xs: "100%", md: 680 },
           display: "flex",
           flexDirection: "column",
@@ -261,9 +256,7 @@ export const ExportPingTableModal: React.FC<ExportPingTableModalProps> = ({
 
           {/* Option: Node Name */}
           <Box>
-            <Typography sx={{ fontSize: "0.82rem", fontWeight: 700, color: "#1E293B", mb: 0.25 }}>
-              Node Name
-            </Typography>
+            <Typography sx={{ fontSize: "0.82rem", fontWeight: 700, color: "#1E293B", mb: 0.25 }}>Node Name</Typography>
             <Typography variant="caption" sx={{ fontSize: "0.71rem", color: "#64748B", display: "block", mb: 0.75 }}>
               Displayed node name label source
             </Typography>
@@ -317,10 +310,7 @@ export const ExportPingTableModal: React.FC<ExportPingTableModalProps> = ({
               Decide which nodes are included in the exported chart
             </Typography>
             <FormControl component="fieldset" size="small" fullWidth>
-              <RadioGroup
-                value={nodeFilter}
-                onChange={(e) => setNodeFilter(e.target.value as PingTableNodeFilter)}
-              >
+              <RadioGroup value={nodeFilter} onChange={(e) => setNodeFilter(e.target.value as PingTableNodeFilter)}>
                 <FormControlLabel
                   value="all"
                   control={<Radio size="small" sx={{ color: "#4F46E5", "&.Mui-checked": { color: "#4F46E5" } }} />}

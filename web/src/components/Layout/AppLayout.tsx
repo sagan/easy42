@@ -145,7 +145,7 @@ export const AppLayout: React.FC = () => {
   };
 
   return (
-    <Box sx={{ display: "flex", flexDirection: "column", height: "100vh", bgcolor: "#F8FAFC", overflow: "hidden" }}>
+    <Box sx={{ display: "flex", flexDirection: "column", height: "100dvh", bgcolor: "#F8FAFC", overflow: "hidden" }}>
       {/* Top Application Bar */}
       <AppBar
         position="static"
@@ -185,7 +185,10 @@ export const AppLayout: React.FC = () => {
                 }}
               />
               <Box>
-                <Typography variant="subtitle1" sx={{ fontWeight: 800, color: "#0F172A", lineHeight: 1.1 }}>
+                <Typography
+                  variant="subtitle1"
+                  sx={{ fontWeight: 800, color: "#0F172A", lineHeight: 1.1, whiteSpace: "nowrap" }}
+                >
                   {networkName || "Easy42"}
                 </Typography>
                 <Typography
@@ -195,6 +198,7 @@ export const AppLayout: React.FC = () => {
                     fontSize: "0.65rem",
                     fontWeight: 600,
                     display: isMobile ? "none" : "initial",
+                    whiteSpace: "nowrap",
                   }}
                 >
                   FLEET & MESH

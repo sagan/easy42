@@ -78,8 +78,8 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
   return (
     <Box
       sx={{
-        minHeight: "100vh",
-        width: "100vw",
+        minHeight: "100dvh",
+        width: "100dvw",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",

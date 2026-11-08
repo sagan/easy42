@@ -1,5 +1,46 @@
 import { Node } from "../types/api";
 
+export type SelectorTargetMode = "manual" | "all" | "tag" | "custom";
+
+export function getSelectorValue(selector: Record<string, string>, key: string): string {
+  const target = key.trim().toLowerCase();
+  const entry = Object.entries(selector).find(([k]) => k.trim().toLowerCase() === target);
+  return entry ? entry[1] : "";
+}
+
+export function detectTargetMode(selector: Record<string, string>): SelectorTargetMode {
+  const keys = Object.keys(selector).map((k) => k.trim().toLowerCase());
+  if (keys.length === 0) return "all";
+  if (keys.length === 1 && keys[0] === "name") return "manual";
+  if (keys.length === 1 && keys[0] === "tag") return "tag";
+  return "custom";
+}
+
+export function parseSelectorJSON(text: string): { selector: Record<string, string> | null; error: string | null } {
+  const trimmed = text.trim();
+  if (!trimmed) return { selector: {}, error: null };
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(trimmed);
+  } catch (e: any) {
+    return { selector: null, error: `Invalid selector JSON: ${e.message || e}` };
+  }
+
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return { selector: null, error: "Selector must be a JSON object" };
+  }
+
+  const selector: Record<string, string> = {};
+  for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
+    if (typeof value !== "string") {
+      return { selector: null, error: `Selector value for "${key}" must be a string` };
+    }
+    selector[key] = value;
+  }
+  return { selector, error: null };
+}
+
 /**
  * Split a comma-separated selector value into trimmed, non-empty items.
  */

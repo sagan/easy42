@@ -10,6 +10,31 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 )
 
+// parseSelectorArg extracts an optional string-valued selector object argument
+func parseSelectorArg(req mcp.CallToolRequest) (map[string]string, error) {
+	args := req.GetArguments()
+	if args == nil {
+		return nil, nil
+	}
+	raw, ok := args["selector"]
+	if !ok || raw == nil {
+		return nil, nil
+	}
+	obj, ok := raw.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("selector must be an object with string values")
+	}
+	selector := make(map[string]string, len(obj))
+	for key, value := range obj {
+		str, ok := value.(string)
+		if !ok {
+			return nil, fmt.Errorf("selector value for %q must be a string", key)
+		}
+		selector[key] = str
+	}
+	return selector, nil
+}
+
 func registerCronTaskTools(s *server.MCPServer, mgr *engine.Manager) {
 	// 1. list_cron_tasks
 	s.AddTool(mcp.NewTool("list_cron_tasks",
@@ -44,7 +69,7 @@ func registerCronTaskTools(s *server.MCPServer, mgr *engine.Manager) {
 		mcp.WithString("name", mcp.Required(), mcp.Description("Descriptive name")),
 		mcp.WithString("task_type", mcp.Required(), mcp.Description("Task type: 'ping' or 'tcp_ping'")),
 		mcp.WithString("cron_expr", mcp.Required(), mcp.Description("Standard cron expression (e.g. '*/5 * * * *')")),
-		mcp.WithArray("nodes", mcp.WithStringItems(), mcp.Required(), mcp.Description("Node names that should execute this task")),
+		mcp.WithObject("selector", mcp.Description("Optional node selector object (e.g. {\"name\":\"node-a,node-b\"}, {\"tag\":\"edge,prod\"}, or {\"env:NODE_IP\":\"10.0.0.1\"}). All conditions must match (AND). An empty selector matches every managed node."), mcp.AdditionalProperties(map[string]any{"type": "string"})),
 		mcp.WithString("target", mcp.Required(), mcp.Description("Target host or IP address to test")),
 		mcp.WithBoolean("enabled", mcp.Description("Enable task immediately (default true)")),
 		mcp.WithString("description", mcp.Description("Optional description")),
@@ -68,7 +93,7 @@ func registerCronTaskTools(s *server.MCPServer, mgr *engine.Manager) {
 		if err != nil {
 			return errorResult(err)
 		}
-		nodes, err := req.RequireStringSlice("nodes")
+		selector, err := parseSelectorArg(req)
 		if err != nil {
 			return errorResult(err)
 		}
@@ -90,7 +115,7 @@ func registerCronTaskTools(s *server.MCPServer, mgr *engine.Manager) {
 			Description: req.GetString("description", ""),
 			TaskType:    taskType,
 			CronExpr:    cronExpr,
-			Nodes:       nodes,
+			Selector:    selector,
 			Params: map[string]string{
 				"target": target,
 			},
@@ -119,7 +144,7 @@ func registerCronTaskTools(s *server.MCPServer, mgr *engine.Manager) {
 		mcp.WithString("id", mcp.Required(), mcp.Description("Cron task ID")),
 		mcp.WithString("name", mcp.Description("Updated name")),
 		mcp.WithString("cron_expr", mcp.Description("Updated cron expression")),
-		mcp.WithArray("nodes", mcp.WithStringItems(), mcp.Description("Updated target node names")),
+		mcp.WithObject("selector", mcp.Description("Updated node selector object (e.g. {\"name\":\"node-a,node-b\"}, {\"tag\":\"edge,prod\"}, or {\"env:NODE_IP\":\"10.0.0.1\"}). All conditions must match (AND). An empty selector matches every managed node."), mcp.AdditionalProperties(map[string]any{"type": "string"})),
 		mcp.WithString("target", mcp.Description("Updated target host/IP")),
 		mcp.WithBoolean("enabled", mcp.Description("Enable or disable")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -154,8 +179,14 @@ func registerCronTaskTools(s *server.MCPServer, mgr *engine.Manager) {
 		if expr := req.GetString("cron_expr", ""); expr != "" {
 			task.CronExpr = expr
 		}
-		if nodes := req.GetStringSlice("nodes", nil); nodes != nil {
-			task.Nodes = nodes
+		if args := req.GetArguments(); args != nil {
+			if _, ok := args["selector"]; ok {
+				selector, err := parseSelectorArg(req)
+				if err != nil {
+					return errorResult(err)
+				}
+				task.Selector = selector
+			}
 		}
 		if target := req.GetString("target", ""); target != "" {
 			if task.Params == nil {

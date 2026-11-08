@@ -44,6 +44,7 @@ import { TracerouteView } from "../LookingGlass/TracerouteView";
 import { TcpPingView } from "../LookingGlass/TcpPingView";
 import { CustomTaskEditorModal } from "../LookingGlass/CustomTaskEditorModal";
 import { CronTasksTab } from "../LookingGlass/CronTasksTab";
+import { matchesTaskSelector } from "../../utils/taskSelector";
 import { PingTableTab } from "../LookingGlass/PingTableTab";
 
 export type LookingGlassTab = "presets" | "adhoc" | "manage" | "cron" | "pingtable";
@@ -1173,7 +1174,12 @@ export const LookingGlassModal: React.FC<LookingGlassModalProps> = ({ nodes, ini
             nodes={managedNodes}
             onExecuteNow={(task) => {
               setSelectedTaskId(task.task_type === "tcp_ping" ? "tcp_ping" : "ping");
-              setSelectedNodes([...task.nodes].sort());
+              setSelectedNodes(
+                managedNodes
+                  .filter((n) => matchesTaskSelector(n, task.selector || {}))
+                  .map((n) => n.name)
+                  .sort(),
+              );
               setParamValues(task.params || {});
               navigate("/looking-glass/presets");
             }}

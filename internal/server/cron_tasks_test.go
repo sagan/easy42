@@ -56,7 +56,7 @@ func TestCronTasksAPI(t *testing.T) {
 		Name:     "Google Ping Test",
 		TaskType: "ping",
 		CronExpr: "*/5 * * * *",
-		Nodes:    []string{"node1"},
+		Selector: map[string]string{"name": "node1"},
 		Params: map[string]string{
 			"target": "8.8.8.8",
 			"count":  "4",

@@ -930,7 +930,7 @@ export const NodeDetailPage: React.FC = () => {
   // If node not found
   if (!node && nodes.length > 0) {
     return (
-      <Box sx={{ display: "flex", height: "calc(100vh - 64px)", bgcolor: "#F8FAFC" }}>
+      <Box sx={{ display: "flex", height: "calc(100dvh - 64px)", bgcolor: "#F8FAFC" }}>
         {/* Desktop Sidebar */}
         {!isMobile && (
           <Box
@@ -976,7 +976,7 @@ export const NodeDetailPage: React.FC = () => {
   }
 
   return (
-    <Box sx={{ display: "flex", height: "calc(100vh - 64px)", overflow: "hidden", bgcolor: "#F8FAFC" }}>
+    <Box sx={{ display: "flex", height: "calc(100dvh - 64px)", overflow: "hidden", bgcolor: "#F8FAFC" }}>
       {/* 1. Desktop Persistent Sidebar */}
       {!isMobile && (
         <Box
@@ -3366,7 +3366,18 @@ export const NodeDetailPage: React.FC = () => {
               </Typography>
 
               {/* Overwrite config & Disable apps options */}
-              <Box sx={{ mb: 2, p: 1.5, bgcolor: "#F8FAFC", borderRadius: 2, border: "1px solid #E2E8F0", display: "flex", flexDirection: "column", gap: 1 }}>
+              <Box
+                sx={{
+                  mb: 2,
+                  p: 1.5,
+                  bgcolor: "#F8FAFC",
+                  borderRadius: 2,
+                  border: "1px solid #E2E8F0",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 1,
+                }}
+              >
                 <FormControlLabel
                   control={
                     <Checkbox
@@ -3410,7 +3421,8 @@ export const NodeDetailPage: React.FC = () => {
                         Disable Apps
                       </Typography>
                       <Typography variant="caption" sx={{ color: "#64748B" }}>
-                        When checked, configures <code>disable_apps: true</code> on the node so the agent refuses app deployments and server skips syncing apps to it.
+                        When checked, configures <code>disable_apps: true</code> on the node so the agent refuses app
+                        deployments and server skips syncing apps to it.
                       </Typography>
                     </Box>
                   }

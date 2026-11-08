@@ -199,7 +199,7 @@ This document is the reference for Easy42's state file, stored in `<data-dir>/co
       "description": "ICMP reachability to the core router",
       "task_type": "ping",
       "cron_expr": "*/5 * * * *",
-      "nodes": ["node-fra"],
+      "selector": { "name": "node-fra" },
       "params": { "target": "172.20.0.53", "count": "4" },
       "timeout_sec": 20,
       "enabled": true
@@ -494,7 +494,7 @@ Scheduled probes executed by node agents (a Looking Glass task can also be run m
 | `description`              | `string`    | Optional description.                                                                                   |
 | `task_type`                | `string`    | `ping` (ICMP) or `tcp_ping`.                                                                            |
 | `cron_expr`                | `string`    | 5-field (`min hour dom mon dow`) or 6-field (`sec min hour dom mon dow`) cron expression.               |
-| `nodes`                    | `string[]`  | Nodes that execute the task.                                                                            |
+| `selector`                 | `object`    | Node selector (`name`, `tag`, `env:<NAME>`; AND). Empty matches every managed node.                     |
 | `params`                   | `object`    | Probe parameters. `ping` uses `target` and `count`; `tcp_ping` uses `target` (`host:port`) and `count`. |
 | `timeout_sec`              | `integer`   | Optional timeout.                                                                                       |
 | `enabled`                  | `boolean`   | Whether the schedule is active.                                                                         |

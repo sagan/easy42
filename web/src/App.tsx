@@ -54,8 +54,8 @@ const AppContent: React.FC = () => {
       <Box
         sx={{
           display: "flex",
-          height: "100vh",
-          width: "100vw",
+          height: "100dvh",
+          width: "100dvw",
           alignItems: "center",
           justifyContent: "center",
           flexDirection: "column",
@@ -114,4 +114,3 @@ export const App: React.FC = () => {
     </ThemeProvider>
   );
 };
-

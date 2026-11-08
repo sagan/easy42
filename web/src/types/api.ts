@@ -780,7 +780,8 @@ export interface CronTask {
   description?: string;
   task_type: "ping" | "tcp_ping";
   cron_expr: string;
-  nodes: string[];
+  /** Optional node scope conditions. Supported keys: name, tag, env:<NAME>. Empty matches all nodes. */
+  selector?: Record<string, string>;
   params: Record<string, string>;
   timeout_sec?: number;
   enabled: boolean;
