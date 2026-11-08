@@ -108,6 +108,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         backgroundColor: "#FFFFFF",
         borderBottom: "1px solid #E2E8F0",
         zIndex: 10,
+        overflowX: "auto",
       }}
     >
       <Toolbar sx={{ justifyContent: "space-between", minHeight: 64 }}>

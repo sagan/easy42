@@ -207,3 +207,258 @@ Description=Minimal`
 	}
 }
 
+const fullUnit = `[Unit]
+Description=Full Service
+After=network.target dbus.service
+Wants=other.service
+Requires=req.service
+Before=later.service
+
+[Service]
+Type=simple
+User=appuser
+Group=appgroup
+WorkingDirectory=/opt/app
+ExecStartPre=/bin/mkdir -p /run/app
+ExecStartPre=-/bin/touch /run/app/pre-ok
+ExecCondition=/usr/bin/test -f /etc/app.conf
+ExecStart=/usr/bin/app --serve
+ExecStartPost=/usr/bin/app --notify-ready
+ExecStop=/usr/bin/app --stop
+ExecStopPost=/bin/rm -f /run/app/done
+ExecReload=/usr/bin/app --reload
+Restart=always
+RestartSec=3s
+TimeoutStopSec=15
+KillSignal=SIGTERM
+StandardOutput=append:/var/log/app.log
+StandardError=journal
+UMask=0027
+Nice=-5
+LimitNOFILE=4096
+NoNewPrivileges=true
+Environment="FOO=bar" "BAZ=qux"
+Environment=EMPTY=
+
+[Install]
+WantedBy=multi-user.target
+`
+
+func mustParse(t *testing.T, content string) *ParsedServiceUnit {
+	t.Helper()
+	unit, err := ParseSystemdService(content)
+	if err != nil {
+		t.Fatalf("unexpected error parsing unit: %v", err)
+	}
+	return unit
+}
+
+func TestParseExtendedDirectives(t *testing.T) {
+	unit := mustParse(t, fullUnit)
+
+	if unit.Type != "simple" {
+		t.Errorf("expected Type simple, got %q", unit.Type)
+	}
+	if len(unit.ExecStartPre) != 2 {
+		t.Errorf("expected 2 ExecStartPre, got %v", unit.ExecStartPre)
+	}
+	if len(unit.ExecCondition) != 1 || unit.ExecCondition[0] != "/usr/bin/test -f /etc/app.conf" {
+		t.Errorf("unexpected ExecCondition %v", unit.ExecCondition)
+	}
+	if len(unit.ExecStop) != 1 || len(unit.ExecStopPost) != 1 || len(unit.ExecReload) != 1 || len(unit.ExecStartPost) != 1 {
+		t.Errorf("unexpected hooks: stop=%v stoppost=%v reload=%v post=%v",
+			unit.ExecStop, unit.ExecStopPost, unit.ExecReload, unit.ExecStartPost)
+	}
+	if unit.RestartSec != "3s" || unit.TimeoutStopSec != "15" || unit.KillSignal != "SIGTERM" {
+		t.Errorf("unexpected restart/timeout fields: %q %q %q", unit.RestartSec, unit.TimeoutStopSec, unit.KillSignal)
+	}
+	if unit.StandardOutput != "append:/var/log/app.log" || unit.StandardError != "journal" {
+		t.Errorf("unexpected stdio: %q %q", unit.StandardOutput, unit.StandardError)
+	}
+	if unit.UMask != "0027" || unit.Nice != "-5" || unit.LimitNOFILE != "4096" || !unit.NoNewPrivileges {
+		t.Errorf("unexpected misc fields: umask=%q nice=%q nofile=%q nnp=%v", unit.UMask, unit.Nice, unit.LimitNOFILE, unit.NoNewPrivileges)
+	}
+	if unit.Environment["FOO"] != "bar" || unit.Environment["BAZ"] != "qux" || unit.Environment["EMPTY"] != "" {
+		t.Errorf("unexpected environment %v", unit.Environment)
+	}
+	if len(unit.After) != 2 || len(unit.Wants) != 1 || len(unit.Requires) != 1 || len(unit.Before) != 1 {
+		t.Errorf("unexpected deps after=%v wants=%v requires=%v before=%v", unit.After, unit.Wants, unit.Requires, unit.Before)
+	}
+	if len(unit.WantedBy) != 1 || unit.WantedBy[0] != "multi-user.target" {
+		t.Errorf("unexpected WantedBy %v", unit.WantedBy)
+	}
+}
+
+func TestParseListResetAndContinuation(t *testing.T) {
+	unit := mustParse(t, `[Service]
+ExecStartPre=/bin/first
+ExecStartPre=
+ExecStartPre=/bin/second \
+  --with-arg
+ExecStart=/bin/main
+`)
+	if len(unit.ExecStartPre) != 1 || unit.ExecStartPre[0] != "/bin/second --with-arg" {
+		t.Errorf("expected reset+continuation to yield one pre command, got %v", unit.ExecStartPre)
+	}
+}
+
+func TestParseDurationSeconds(t *testing.T) {
+	cases := []struct {
+		in   string
+		want float64
+		ok   bool
+	}{
+		{"5", 5, true},
+		{"500ms", 0.5, true},
+		{"2min", 120, true},
+		{"1h 30min", 5400, true},
+		{"1min 30s", 90, true},
+		{"infinity", 0, false},
+		{"abc", 0, false},
+		{"", 0, false},
+	}
+	for _, c := range cases {
+		got, ok := ParseDurationSeconds(c.in)
+		if ok != c.ok || (ok && got != c.want) {
+			t.Errorf("ParseDurationSeconds(%q) = %v, %v; want %v, %v", c.in, got, ok, c.want, c.ok)
+		}
+	}
+}
+
+func TestTranspileExtendedToOpenRC(t *testing.T) {
+	unit := mustParse(t, fullUnit)
+	openrc, err := TranspileToOpenRC("full", unit)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	for _, want := range []string{
+		`supervisor="supervise-daemon"`,
+		`respawn_delay="3"`,
+		`command_user='appuser:appgroup'`,
+		`directory='/opt/app'`,
+		`umask='0027'`,
+		`no_new_privs="yes"`,
+		`start_stop_daemon_args="--nice -5"`,
+		`stopsig='SIGTERM'`,
+		`retry="TERM/15/KILL/5"`,
+		`output_log='/var/log/app.log'`,
+		`error_logger="logger -t ezapp-full"`,
+		"after dbus",
+		"use other",
+		"before later",
+		"/usr/bin/test -f /etc/app.conf || return 1",
+		"/bin/mkdir -p /run/app || return 1",
+		"/bin/touch /run/app/pre-ok || true",
+		"/usr/bin/app --notify-ready || return 1",
+		"/usr/bin/app --stop || true",
+		"/bin/rm -f /run/app/done || true",
+		"/usr/bin/app --reload || return 1",
+		`extra_started_commands="reload"`,
+		"ulimit -n 4096",
+	} {
+		if !strings.Contains(openrc, want) {
+			t.Errorf("expected OpenRC script to contain %q, got:\n%s", want, openrc)
+		}
+	}
+}
+
+func TestTranspileExtendedToProcd(t *testing.T) {
+	unit := mustParse(t, fullUnit)
+	procd, err := TranspileToProcd("full", unit, map[string]string{"PORT": "8080"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	for _, want := range []string{
+		"/usr/bin/test -f /etc/app.conf || return 1",
+		"/bin/mkdir -p /run/app || return 1",
+		"procd_set_param respawn 3600 3 5",
+		"procd_set_param user 'appuser'",
+		"procd_set_param group 'appgroup'",
+		"procd_set_param nice -5",
+		"procd_set_param term_timeout 15",
+		"procd_set_param no_new_privs 1",
+		`procd_set_param limits nofile="4096"`,
+		"procd_set_param stderr 1",
+		"stop_service() {",
+		"/usr/bin/app --stop || true",
+		"reload_service() {",
+		"/usr/bin/app --reload || return 1",
+		"cd ",
+		"/opt/app",
+		"umask 0027",
+		"exec ",
+		"/usr/bin/app",
+		"--serve",
+		">> ",
+		"/var/log/app.log",
+	} {
+		if !strings.Contains(procd, want) {
+			t.Errorf("expected Procd script to contain %q, got:\n%s", want, procd)
+		}
+	}
+	// WorkingDirectory is only expressible via the shell wrapper on procd.
+	if !strings.Contains(procd, `'/bin/sh' '-c'`) {
+		t.Errorf("expected shell wrapper command for WorkingDirectory, got:\n%s", procd)
+	}
+}
+
+func TestTranspileOneshotOpenRC(t *testing.T) {
+	unit := mustParse(t, `[Service]
+Type=oneshot
+ExecStart=/bin/first
+ExecStart=/bin/second
+Restart=always
+`)
+	openrc, err := TranspileToOpenRC("shot", unit)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(openrc, `command_background="no"`) {
+		t.Errorf("expected oneshot to run in foreground, got:\n%s", openrc)
+	}
+	// Earlier ExecStart lines of a oneshot run sequentially in start_pre.
+	if !strings.Contains(openrc, "/bin/first || return 1") {
+		t.Errorf("expected first oneshot ExecStart in start_pre, got:\n%s", openrc)
+	}
+	if strings.Contains(openrc, "supervisor=") {
+		t.Errorf("oneshot must not be supervised, got:\n%s", openrc)
+	}
+}
+
+func TestUnsupportedDirectiveNotes(t *testing.T) {
+	unit := mustParse(t, `[Service]
+ExecStart=/bin/main
+PrivateTmp=true
+ProtectSystem=strict
+TimeoutStartSec=30
+`)
+	procd, err := TranspileToProcd("sandbox", unit, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	for _, want := range []string{"Service.PrivateTmp", "Service.ProtectSystem", "Service.TimeoutStartSec"} {
+		if !strings.Contains(procd, want) {
+			t.Errorf("expected dropped-directive note for %s, got:\n%s", want, procd)
+		}
+	}
+	openrc, err := TranspileToOpenRC("sandbox", unit)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(openrc, "Service.PrivateTmp") {
+		t.Errorf("expected dropped-directive note in OpenRC script, got:\n%s", openrc)
+	}
+}
+
+func TestExecPrefixHandling(t *testing.T) {
+	unit := mustParse(t, `[Service]
+ExecStart=-/usr/bin/app --serve
+`)
+	openrc, err := TranspileToOpenRC("prefixed", unit)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(openrc, `command='/usr/bin/app'`) {
+		t.Errorf("expected '-' prefix to be stripped, got:\n%s", openrc)
+	}
+}

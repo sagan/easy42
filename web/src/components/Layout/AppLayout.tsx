@@ -155,6 +155,7 @@ export const AppLayout: React.FC = () => {
           borderBottom: "1px solid #E2E8F0",
           color: "#0F172A",
           zIndex: 1100,
+          overflowX: "auto",
         }}
       >
         <Toolbar sx={{ px: { xs: 1.5, sm: 2.5 }, minHeight: { xs: 56, sm: 62 }, justifyContent: "space-between" }}>
