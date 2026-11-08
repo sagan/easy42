@@ -20,6 +20,7 @@ func TestGetTasks(t *testing.T) {
 		"deploy_agent",
 		"install_wireguard",
 		"install_wgquick_openwrt",
+		"install_phantun",
 		"install_bird",
 		"config_bird",
 		"config_nftables",

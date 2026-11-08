@@ -10,15 +10,16 @@ import (
 	"time"
 
 	"easy42/internal/agent"
-	"easy42/internal/agent/proto"
+	agentpb "easy42/internal/agent/proto"
 	"easy42/internal/compiler"
 	"easy42/internal/config"
 )
 
 const (
 	obfuscatorPortStart     = 30000
-	obfuscatorTunBlockStart = 1  // first usable /30 block in 192.168.200.0/24
-	obfuscatorTunBlockEnd   = 63 // last usable /30 block
+	obfuscatorTunAddrPrefix = "198.51.100" // The A.B.C ipv4 prefix. Use 198.51.100.0/24 (RFC 6890 TEST-NET-2)
+	obfuscatorTunBlockStart = 1            // first usable /30 block in <obfuscatorTunAddrPrefix>/24
+	obfuscatorTunBlockEnd   = 63           // last usable /30 block
 )
 
 func isSameLink(a, b *config.Link) bool {
@@ -123,7 +124,7 @@ func allocateObfuscatorTunBlock(cfg *config.Config, nodeNames []string, skip *co
 			continue
 		}
 		base := block * 4
-		return fmt.Sprintf("192.168.200.%d", base+1), fmt.Sprintf("192.168.200.%d", base+2), nil
+		return fmt.Sprintf("%s.%d", obfuscatorTunAddrPrefix, base+1), fmt.Sprintf("%s.%d", obfuscatorTunAddrPrefix, base+2), nil
 	}
 	return "", "", fmt.Errorf("no free obfuscator TUN address block available")
 }

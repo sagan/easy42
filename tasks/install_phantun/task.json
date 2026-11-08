@@ -1,0 +1,7 @@
+{
+  "id": "install_phantun",
+  "title": "Install Phantun",
+  "description": "Resolves the latest sagan/phantun release through the GitHub API (falling back to v0.8.1-fix8), downloads the matching musl ZIP, verifies its SHA-256 digest when available, and installs phantun_client and phantun_server into /usr/local/bin when it is in PATH, otherwise /usr/bin. Installs unzip via the system package manager when neither unzip nor python is available.",
+  "category": "Packages",
+  "weight": 15
+}
