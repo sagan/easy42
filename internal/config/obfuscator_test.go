@@ -99,6 +99,25 @@ func TestObfuscatorServiceName(t *testing.T) {
 	}
 }
 
+func TestEffectiveMTU(t *testing.T) {
+	tests := []struct {
+		name     string
+		end      *LinkEnd
+		expected int
+	}{
+		{name: "none", end: &LinkEnd{MTU: 1420}, expected: 1420},
+		{name: "client", end: &LinkEnd{MTU: 1420, Obfuscator: ObfuscatorPhantunClient}, expected: 1408},
+		{name: "server", end: &LinkEnd{MTU: 1420, Obfuscator: ObfuscatorPhantunServer}, expected: 1408},
+		{name: "small", end: &LinkEnd{MTU: 10, Obfuscator: ObfuscatorPhantunClient}, expected: 1},
+		{name: "unset", end: &LinkEnd{Obfuscator: ObfuscatorPhantunClient}, expected: 0},
+	}
+	for _, tc := range tests {
+		if got := tc.end.EffectiveMTU(); got != tc.expected {
+			t.Errorf("%s: expected effective MTU %d, got %d", tc.name, tc.expected, got)
+		}
+	}
+}
+
 func TestParseAndValidateConfigChange_ObfuscatorLinkEnd(t *testing.T) {
 	snippet := `{
 		"links": [

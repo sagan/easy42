@@ -10,6 +10,9 @@ import (
 const (
 	// ObfuscatorTunNameMaxLen is the maximum length of a Linux TUN interface name.
 	ObfuscatorTunNameMaxLen = 15
+	// ObfuscatorMTUOverhead is the MTU reduction applied to an obfuscated
+	// WireGuard interface, in bytes.
+	ObfuscatorMTUOverhead = 12
 	// ObfuscatorServiceSuffix is appended to the WireGuard interface name to form
 	// the system service name (e.g. wg42peer-obfuscator).
 	ObfuscatorServiceSuffix = "-obfuscator"

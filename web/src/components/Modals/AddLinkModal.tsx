@@ -163,8 +163,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
   const managedNode = fromNode?.is_external ? (toNode?.is_external ? undefined : toNode) : fromNode;
   const externalNode = fromNode?.is_external ? fromNode : toNode?.is_external ? toNode : undefined;
   const isAgentNode = (n?: Node) => Boolean(n && (n.mode === "agent" || n.agent_token));
-  const canUseObfuscator =
-    linkType === "wireguard" && !isExternalLink && isAgentNode(fromNode) && isAgentNode(toNode);
+  const canUseObfuscator = linkType === "wireguard" && !isExternalLink && isAgentNode(fromNode) && isAgentNode(toNode);
 
   // Resolve external peer's entrypoint using matching tags with managed node
   const { entrypoint: resolvedExtEP, matchedTag } = resolvePeerEntrypoint(managedNode, externalNode);
@@ -1288,7 +1287,16 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                     >
                       Wraps this WireGuard UDP link in a TCP tunnel. Both nodes must run the Easy42 agent with
                       phantun_client and phantun_server installed. Parameters are generated automatically on first
-                      enable and can be edited afterwards.
+                      enable and can be edited afterwards. Requires a fork version of phantun{" "}
+                      <a
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        href="https://github.com/sagan/phantun"
+                        style={{ textDecoration: "none" }}
+                      >
+                        sagan/phantun
+                      </a>
+                      .
                     </Typography>
                   </Box>
                 }
@@ -1462,7 +1470,8 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
               </Box>
             </Box>
             <Typography variant="caption" sx={{ color: "#64748B", display: "block", fontSize: "0.72rem", mb: 1 }}>
-              Shared documentation for the entire link (transit circuits, SLAs, peering context, provider ticket IDs, etc.).
+              Shared documentation for the entire link (transit circuits, SLAs, peering context, provider ticket IDs,
+              etc.).
             </Typography>
             {linkNoteTab === "write" ? (
               <TextField
@@ -2045,7 +2054,11 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                     value={fromInterface}
                     onChange={(e) => setFromInterface(e.target.value)}
                     required={!fromNode.is_external}
-                    helperText={fromNode.is_external ? "Interface name on external peer (optional)" : "Name of existing link interface"}
+                    helperText={
+                      fromNode.is_external
+                        ? "Interface name on external peer (optional)"
+                        : "Name of existing link interface"
+                    }
                   />
                   <TextFieldWithCopy
                     id="manual-from-address"
@@ -2231,7 +2244,11 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                     value={toInterface}
                     onChange={(e) => setToInterface(e.target.value)}
                     required={!toNode.is_external}
-                    helperText={toNode.is_external ? "Interface name on external peer (optional)" : "Name of existing link interface"}
+                    helperText={
+                      toNode.is_external
+                        ? "Interface name on external peer (optional)"
+                        : "Name of existing link interface"
+                    }
                   />
                   <TextFieldWithCopy
                     id="manual-to-address"

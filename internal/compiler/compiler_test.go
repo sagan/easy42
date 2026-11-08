@@ -298,6 +298,26 @@ func TestGenerateWgConfigContent(t *testing.T) {
 		t.Fatalf("Expected custom MTU = 1380, got:\n%s", confCustom)
 	}
 
+	// Phantun wraps UDP as TCP and adds overhead, so the generated interface
+	// MTU for an obfuscated end is reduced by 12 bytes.
+	endA.Obfuscator = config.ObfuscatorPhantunClient
+	confObfuscated, err := GenerateWgConfigContent(nodeA, nodeB, endA, endB, vault)
+	if err != nil {
+		t.Fatalf("GenerateWgConfigContent with obfuscator failed: %v", err)
+	}
+	if !strings.Contains(confObfuscated, "MTU = 1368") {
+		t.Fatalf("Expected obfuscated MTU = 1368, got:\n%s", confObfuscated)
+	}
+
+	endA.Obfuscator = config.ObfuscatorNone
+	confNoObfuscator, err := GenerateWgConfigContent(nodeA, nodeB, endA, endB, vault)
+	if err != nil {
+		t.Fatalf("GenerateWgConfigContent after disabling obfuscator failed: %v", err)
+	}
+	if !strings.Contains(confNoObfuscator, "MTU = 1380") {
+		t.Fatalf("Expected MTU restored to 1380, got:\n%s", confNoObfuscator)
+	}
+
 	// Test UseIp = false vs true with domain endpoint
 	origLookup := DefaultLookupIP
 	defer func() { DefaultLookupIP = origLookup }()

@@ -85,7 +85,12 @@ func BuildWgLinkContext(
 
 	mtu := 1420
 	if selfEnd != nil && selfEnd.MTU > 0 {
-		mtu = selfEnd.MTU
+		mtu = selfEnd.EffectiveMTU()
+	} else if selfEnd != nil && selfEnd.ObfuscatorEnabled() {
+		mtu -= config.ObfuscatorMTUOverhead
+		if mtu <= 0 {
+			mtu = 1
+		}
 	}
 
 	peerPublicKey := ""
@@ -336,9 +341,17 @@ func BuildWgLinkContext(
 		ctx["link"] = toWgTemplateMap(linkForEnd, linkNote)
 	}
 
+	for key, end := range map[string]*config.LinkEnd{"self_end": selfEnd, "peer_end": peerEnd} {
+		if end == nil || end.MTU <= 0 {
+			continue
+		}
+		if endMap, ok := ctx[key].(map[string]any); ok {
+			endMap["mtu"] = end.EffectiveMTU()
+		}
+	}
+
 	if psk != "" {
 		ctx["psk"] = psk
-		ctx["Psk"] = psk
 	}
 
 	if address4 != "" {

@@ -429,7 +429,7 @@ Each endpoint (`from`, `to`):
 | `obfuscator`           | `string`  | Agent-mode WireGuard UDP-over-TCP obfuscation: `none`, `phantun_client`, or `phantun_server`. Both endpoints must be complementary. |
 | `obfuscator_parameters` | `object` | Generated Phantun parameters (`local_port`, `server_port`, `wireguard_port`, `tun_name`, `tun_local`, `tun_peer`, optional `extra_args`). Generated on first enable and editable thereafter. |
 
-When a link is obfuscated, the client-side WireGuard peer endpoint becomes `127.0.0.1:<local_port>` and the server-side WireGuard peer endpoint is unset. The Easy42 agent installs and supervises one service per endpoint named `<interface>-obfuscator` (for example `wg42peer-obfuscator`). Both endpoints, ports, and TUN addresses must be unique per node. Sync fails if an obfuscated link must be deployed to a node without a running Easy42 agent.
+When a link is obfuscated, the client-side WireGuard peer endpoint becomes `127.0.0.1:<local_port>` and the server-side WireGuard peer endpoint is unset. The Easy42 agent installs and supervises one service per endpoint named `<interface>-obfuscator` (for example `wg42peer-obfuscator`). Generated Phantun ports are random in `10000...19999`; generated TUN pairs use a random `198.51.100.X` with peer `X+1`. Default generation avoids ports and TUN addresses already used by obfuscated links on the node. Both generated WireGuard interface configurations use an MTU that is reduced by `12` bytes for Phantun encapsulation overhead. Sync fails if an obfuscated link must be deployed to a node without a running Easy42 agent.
 
 ### `blocks`
 

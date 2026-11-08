@@ -1,6 +1,8 @@
 package engine
 
 import (
+	"crypto/rand"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -16,10 +18,9 @@ import (
 )
 
 const (
-	obfuscatorPortStart     = 30000
-	obfuscatorTunAddrPrefix = "198.51.100" // The A.B.C ipv4 prefix. Use 198.51.100.0/24 (RFC 6890 TEST-NET-2)
-	obfuscatorTunBlockStart = 1            // first usable /30 block in <obfuscatorTunAddrPrefix>/24
-	obfuscatorTunBlockEnd   = 63           // last usable /30 block
+	obfuscatorPortMin       = 10000
+	obfuscatorPortMax       = 19999
+	obfuscatorTunAddrPrefix = "198.51.100" // The A.B.C IPv4 prefix. Uses RFC 6890 TEST-NET-2.
 )
 
 func isSameLink(a, b *config.Link) bool {
@@ -60,6 +61,18 @@ func usedObfuscatorPorts(cfg *config.Config, nodeName string, skip *config.Link)
 	return used
 }
 
+func randomInt(min, max int) (int, error) {
+	if min > max {
+		return 0, fmt.Errorf("invalid random range %d..%d", min, max)
+	}
+	size := uint64(max - min + 1)
+	var b [8]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return 0, fmt.Errorf("failed to generate random value: %w", err)
+	}
+	return min + int(binary.BigEndian.Uint64(b[:])%size), nil
+}
+
 func allocateObfuscatorPort(used map[int]bool, preferred int) (int, error) {
 	if preferred > 0 {
 		if used[preferred] {
@@ -67,28 +80,35 @@ func allocateObfuscatorPort(used map[int]bool, preferred int) (int, error) {
 		}
 		return preferred, nil
 	}
-	for port := obfuscatorPortStart; port <= 65535; port++ {
+
+	size := obfuscatorPortMax - obfuscatorPortMin + 1
+	start, err := randomInt(obfuscatorPortMin, obfuscatorPortMax)
+	if err != nil {
+		return 0, err
+	}
+	for offset := 0; offset < size; offset++ {
+		port := start + offset
+		if port > obfuscatorPortMax {
+			port -= size
+		}
 		if !used[port] {
 			return port, nil
 		}
 	}
-	return 0, fmt.Errorf("no free obfuscator port available")
+	return 0, fmt.Errorf("no free obfuscator port available in %d..%d", obfuscatorPortMin, obfuscatorPortMax)
 }
 
-func obfuscatorTunBlock(ip string) int {
-	parsed := net.ParseIP(strings.TrimSuffix(strings.TrimSpace(ip), "/32"))
+func obfuscatorTunAddress(ip string) string {
+	cleaned := strings.TrimSuffix(strings.TrimSpace(ip), "/32")
+	parsed := net.ParseIP(cleaned)
 	if parsed == nil || parsed.To4() == nil {
-		return -1
+		return ""
 	}
-	v4 := parsed.To4()
-	if v4[0] != 192 || v4[1] != 168 || v4[2] != 200 {
-		return -1
-	}
-	return int(v4[3]) / 4
+	return parsed.To4().String()
 }
 
-func usedObfuscatorTunBlocks(cfg *config.Config, nodeNames []string, skip *config.Link) map[int]bool {
-	used := make(map[int]bool)
+func usedObfuscatorTunAddresses(cfg *config.Config, nodeNames []string, skip *config.Link) map[string]bool {
+	used := make(map[string]bool)
 	if cfg == nil {
 		return used
 	}
@@ -106,27 +126,32 @@ func usedObfuscatorTunBlocks(cfg *config.Config, nodeNames []string, skip *confi
 				continue
 			}
 			p := end.ObfuscatorParameters
-			if b := obfuscatorTunBlock(p.TunLocal); b >= 0 {
-				used[b] = true
+			if ip := obfuscatorTunAddress(p.TunLocal); ip != "" {
+				used[ip] = true
 			}
-			if b := obfuscatorTunBlock(p.TunPeer); b >= 0 {
-				used[b] = true
+			if ip := obfuscatorTunAddress(p.TunPeer); ip != "" {
+				used[ip] = true
 			}
 		}
 	}
 	return used
 }
 
-func allocateObfuscatorTunBlock(cfg *config.Config, nodeNames []string, skip *config.Link) (string, string, error) {
-	used := usedObfuscatorTunBlocks(cfg, nodeNames, skip)
-	for block := obfuscatorTunBlockStart; block <= obfuscatorTunBlockEnd; block++ {
-		if used[block] {
-			continue
-		}
-		base := block * 4
-		return fmt.Sprintf("%s.%d", obfuscatorTunAddrPrefix, base+1), fmt.Sprintf("%s.%d", obfuscatorTunAddrPrefix, base+2), nil
+func allocateObfuscatorTunAddresses(cfg *config.Config, nodeNames []string, skip *config.Link) (string, string, error) {
+	used := usedObfuscatorTunAddresses(cfg, nodeNames, skip)
+	start, err := randomInt(1, 253)
+	if err != nil {
+		return "", "", err
 	}
-	return "", "", fmt.Errorf("no free obfuscator TUN address block available")
+	for offset := 0; offset < 253; offset++ {
+		localX := 1 + ((start - 1 + offset) % 253)
+		local := fmt.Sprintf("%s.%d", obfuscatorTunAddrPrefix, localX)
+		peer := fmt.Sprintf("%s.%d", obfuscatorTunAddrPrefix, localX+1)
+		if !used[local] && !used[peer] {
+			return local, peer, nil
+		}
+	}
+	return "", "", fmt.Errorf("no free obfuscator TUN address pair available in %s.0/24", obfuscatorTunAddrPrefix)
 }
 
 func usedObfuscatorTunNames(cfg *config.Config, nodeName string, skip *config.Link) map[string]bool {
@@ -226,7 +251,7 @@ func fillObfuscatorDefaults(cfg *config.Config, link *config.Link, clientEnd, se
 		clientP.TunLocal = serverP.TunPeer
 		clientP.TunPeer = serverP.TunLocal
 	default:
-		clientLocal, clientPeer, err := allocateObfuscatorTunBlock(cfg, []string{clientNode.Name, serverNode.Name}, link)
+		clientLocal, clientPeer, err := allocateObfuscatorTunAddresses(cfg, []string{clientNode.Name, serverNode.Name}, link)
 		if err != nil {
 			return err
 		}
@@ -237,10 +262,12 @@ func fillObfuscatorDefaults(cfg *config.Config, link *config.Link, clientEnd, se
 	}
 
 	if clientP.ExtraArgs == nil {
-		clientP.ExtraArgs = []string{}
+		// OpenSSH client banner: SSH-2.0-OpenSSH_9.9
+		clientP.ExtraArgs = []string{"--nft-interface", "-", "--handshake-packet-data", "U1NILTIuMC1PcGVuU1NIXzkuOQ0K"}
 	}
 	if serverP.ExtraArgs == nil {
-		serverP.ExtraArgs = []string{}
+		// OpenSSH server banner: SSH-2.0-OpenSSH_10.0p2 Debian-7+deb13u4
+		serverP.ExtraArgs = []string{"--nft-interface", "-", "--handshake-packet-data", "U1NILTIuMC1PcGVuU1NIXzEwLjBwMiBEZWJpYW4tNytkZWIxM3U0DQo="}
 	}
 
 	clientEnd.Obfuscator = config.ObfuscatorPhantunClient

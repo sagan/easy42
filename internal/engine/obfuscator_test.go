@@ -1,6 +1,8 @@
 package engine
 
 import (
+	"fmt"
+	"net"
 	"os"
 	"strings"
 	"testing"
@@ -294,5 +296,130 @@ func TestSimpleUpdateLinkRefreshesObfuscatorWireGuardPort(t *testing.T) {
 	}
 	if updated.To.ObfuscatorParameters == nil || updated.To.ObfuscatorParameters.WireGuardPort != 51010 {
 		t.Fatalf("expected refreshed server WireGuard port 51010, got %+v", updated.To.ObfuscatorParameters)
+	}
+}
+
+func obfuscatorTunLastOctet(t *testing.T, ip string) int {
+	t.Helper()
+	parsed := net.ParseIP(ip)
+	if parsed == nil || parsed.To4() == nil {
+		t.Fatalf("invalid TUN address %q", ip)
+	}
+	return int(parsed.To4()[3])
+}
+
+func TestGeneratedObfuscatorParametersAvoidNodeConflicts(t *testing.T) {
+	mgr, dir := newObfuscatorTestManager(t)
+	defer os.RemoveAll(dir)
+	defer mgr.Close()
+
+	addObfuscatorTestNode(t, mgr, "home2", "192.168.100.1", "10.0.0.1", "agent")
+	addObfuscatorTestNode(t, mgr, "tcnj", "198.51.100.1", "10.0.0.2", "agent")
+	addObfuscatorTestNode(t, mgr, "pandatc", "198.51.100.2", "10.0.0.3", "agent")
+
+	first, err := mgr.AddLinkWithAllOptions(
+		"home2", "tcnj",
+		&config.LinkEnd{Name: "home2", Obfuscator: config.ObfuscatorPhantunClient},
+		&config.LinkEnd{Name: "tcnj"},
+		nil, false, false,
+	)
+	if err != nil {
+		t.Fatalf("failed to add first obfuscated link: %v", err)
+	}
+	second, err := mgr.AddLinkWithAllOptions(
+		"home2", "pandatc",
+		&config.LinkEnd{Name: "home2", Obfuscator: config.ObfuscatorPhantunClient},
+		&config.LinkEnd{Name: "pandatc"},
+		nil, false, false,
+	)
+	if err != nil {
+		t.Fatalf("failed to add second obfuscated link: %v", err)
+	}
+
+	links := []*config.Link{first, second}
+	localPorts := make(map[int]string)
+	serverPorts := make(map[int]string)
+	tunAddresses := make(map[string]string)
+	for _, link := range links {
+		cp := link.From.ObfuscatorParameters
+		sp := link.To.ObfuscatorParameters
+		if cp == nil || sp == nil {
+			t.Fatalf("missing generated parameters for link %s <-> %s", link.From.Name, link.To.Name)
+		}
+		for label, port := range map[string]int{"client local": cp.LocalPort, "server": cp.ServerPort} {
+			if port < 10000 || port > 19999 {
+				t.Fatalf("expected %s port in 10000..19999, got %d", label, port)
+			}
+		}
+		if other, ok := localPorts[cp.LocalPort]; ok {
+			t.Fatalf("duplicate client local port %d used by %s and %s", cp.LocalPort, other, link.From.Interface)
+		}
+		localPorts[cp.LocalPort] = link.From.Interface
+		if other, ok := serverPorts[cp.ServerPort]; ok {
+			t.Fatalf("duplicate server port %d used by %s and %s", cp.ServerPort, other, link.From.Interface)
+		}
+		serverPorts[cp.ServerPort] = link.From.Interface
+
+		if !strings.HasPrefix(cp.TunLocal, "198.51.100.") || !strings.HasPrefix(cp.TunPeer, "198.51.100.") {
+			t.Fatalf("expected TEST-NET-2 TUN addresses, got %s/%s", cp.TunLocal, cp.TunPeer)
+		}
+		localX := obfuscatorTunLastOctet(t, cp.TunLocal)
+		peerX := obfuscatorTunLastOctet(t, cp.TunPeer)
+		if peerX != localX+1 {
+			t.Fatalf("expected peer TUN address = local + 1, got %s/%s", cp.TunLocal, cp.TunPeer)
+		}
+		for _, ip := range []string{cp.TunLocal, cp.TunPeer} {
+			if other, ok := tunAddresses[ip]; ok {
+				t.Fatalf("duplicate TUN address %s used by %s and %s", ip, other, link.From.Interface)
+			}
+			tunAddresses[ip] = link.From.Interface
+		}
+	}
+}
+
+func TestAllocateObfuscatorPortsAvoidsUsedPorts(t *testing.T) {
+	used := map[int]bool{10000: true, 10001: true, 10002: true}
+	for i := 0; i < 25; i++ {
+		port, err := allocateObfuscatorPort(used, 0)
+		if err != nil {
+			t.Fatalf("failed to allocate port: %v", err)
+		}
+		if port < 10000 || port > 19999 {
+			t.Fatalf("allocated port %d outside 10000..19999", port)
+		}
+		if used[port] {
+			t.Fatalf("allocated already-used port %d", port)
+		}
+		used[port] = true
+	}
+}
+
+func TestAllocateObfuscatorTunAddressesAvoidsUsedAddresses(t *testing.T) {
+	cfg := &config.Config{
+		Links: []config.Link{
+			{
+				From: config.LinkEnd{
+					Name:                 "home2",
+					ObfuscatorParameters: &config.ObfuscatorParameters{TunLocal: fmt.Sprintf("%s.37", obfuscatorTunAddrPrefix), TunPeer: fmt.Sprintf("%s.38", obfuscatorTunAddrPrefix)},
+				},
+				To: config.LinkEnd{
+					Name:                 "tcnj",
+					ObfuscatorParameters: &config.ObfuscatorParameters{TunLocal: fmt.Sprintf("%s.38", obfuscatorTunAddrPrefix), TunPeer: fmt.Sprintf("%s.37", obfuscatorTunAddrPrefix)},
+				},
+			},
+		},
+	}
+	for i := 0; i < 10; i++ {
+		local, peer, err := allocateObfuscatorTunAddresses(cfg, []string{"home2", "tcnj"}, nil)
+		if err != nil {
+			t.Fatalf("failed to allocate TUN addresses: %v", err)
+		}
+		if local == fmt.Sprintf("%s.37", obfuscatorTunAddrPrefix) || peer == fmt.Sprintf("%s.38", obfuscatorTunAddrPrefix) {
+			t.Fatalf("allocated used TUN pair %s/%s", local, peer)
+		}
+		x := obfuscatorTunLastOctet(t, local)
+		if obfuscatorTunLastOctet(t, peer) != x+1 {
+			t.Fatalf("expected peer = local + 1, got %s/%s", local, peer)
+		}
 	}
 }

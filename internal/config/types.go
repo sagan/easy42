@@ -486,6 +486,22 @@ func (l *LinkEnd) ObfuscatorEnabled() bool {
 	return role == ObfuscatorPhantunClient || role == ObfuscatorPhantunServer
 }
 
+// EffectiveMTU returns the WireGuard interface MTU for this endpoint. Phantun
+// encapsulation adds overhead, so an obfuscated endpoint gets a 12-byte reduction.
+func (l *LinkEnd) EffectiveMTU() int {
+	if l == nil || l.MTU <= 0 {
+		return 0
+	}
+	mtu := l.MTU
+	if l.ObfuscatorEnabled() {
+		mtu -= ObfuscatorMTUOverhead
+		if mtu <= 0 {
+			return 1
+		}
+	}
+	return mtu
+}
+
 // NormalizeObfuscatorRole normalizes an obfuscator role, treating empty as "none".
 func NormalizeObfuscatorRole(role string) string {
 	switch strings.ToLower(strings.TrimSpace(role)) {
