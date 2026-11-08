@@ -329,6 +329,15 @@ impl AgentClient {
                                         });
                                     }
                                 }
+                                Some(proto::agent_message::Payload::SyncObfuscators(sync)) => {
+                                    info!(
+                                        "Received WireGuard obfuscator sync: {} service(s)",
+                                        sync.obfuscators.len()
+                                    );
+                                    tokio::spawn(async move {
+                                        crate::obfuscators::sync_obfuscators(sync.obfuscators).await;
+                                    });
+                                }
                                 _ => {}
                             }
                         }

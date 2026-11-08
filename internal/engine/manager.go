@@ -101,6 +101,7 @@ func NewManager(store *config.Store) *Manager {
 	m.setupAgentMetricsListeners()
 	m.setupAgentCronTasksListeners()
 	m.setupAgentHostsListeners()
+	m.setupAgentObfuscatorListeners()
 	m.setupAgentAppsListeners()
 	m.startRetentionWorker()
 	return m
@@ -1636,7 +1637,19 @@ func (m *Manager) buildLink(cfg *config.Config, n1, n2 *config.Node, listenPort1
 		ModifiedAt: time.Now().UTC(),
 	}
 
+	if customFromEnd != nil {
+		link.From.Obfuscator = customFromEnd.Obfuscator
+		link.From.ObfuscatorParameters = customFromEnd.ObfuscatorParameters.Clone()
+	}
+	if customToEnd != nil {
+		link.To.Obfuscator = customToEnd.Obfuscator
+		link.To.ObfuscatorParameters = customToEnd.ObfuscatorParameters.Clone()
+	}
+
 	if !isManual {
+		if err := m.prepareLinkObfuscator(cfg, link, fromNode, toNode, true); err != nil {
+			return nil, err
+		}
 		link.From.ResolvedEndpoint = compiler.ResolveLinkEndpoint(fromNode, toNode, &link.From, &link.To)
 		link.To.ResolvedEndpoint = compiler.ResolveLinkEndpoint(toNode, fromNode, &link.To, &link.From)
 	}
@@ -1952,6 +1965,11 @@ func (m *Manager) UpdateLink(node1Name, node2Name string, listenPort1, listenPor
 		}
 	}
 	link.ModifiedAt = time.Now().UTC()
+	if link.From.ObfuscatorEnabled() || link.To.ObfuscatorEnabled() {
+		if err := m.prepareLinkObfuscator(cfg, link, fromNode, toNode, false); err != nil {
+			return nil, err
+		}
+	}
 	link.From.ResolvedEndpoint = compiler.ResolveLinkEndpoint(fromNode, toNode, &link.From, &link.To)
 	link.To.ResolvedEndpoint = compiler.ResolveLinkEndpoint(toNode, fromNode, &link.To, &link.From)
 
@@ -2093,6 +2111,15 @@ func (m *Manager) UpdateLinkWithAllOptions(node1Name, node2Name string, customFr
 				link.From.Note = fromEnd.Note
 			}
 		}
+		if fromEnd.Obfuscator != "" {
+			link.From.Obfuscator = config.NormalizeObfuscatorRole(fromEnd.Obfuscator)
+			if !link.From.ObfuscatorEnabled() {
+				link.From.ObfuscatorParameters = nil
+			}
+		}
+		if fromEnd.ObfuscatorParameters != nil {
+			link.From.ObfuscatorParameters = fromEnd.ObfuscatorParameters.Clone()
+		}
 	}
 
 	if toEnd != nil {
@@ -2156,6 +2183,15 @@ func (m *Manager) UpdateLinkWithAllOptions(node1Name, node2Name string, customFr
 			} else {
 				link.To.Note = toEnd.Note
 			}
+		}
+		if toEnd.Obfuscator != "" {
+			link.To.Obfuscator = config.NormalizeObfuscatorRole(toEnd.Obfuscator)
+			if !link.To.ObfuscatorEnabled() {
+				link.To.ObfuscatorParameters = nil
+			}
+		}
+		if toEnd.ObfuscatorParameters != nil {
+			link.To.ObfuscatorParameters = toEnd.ObfuscatorParameters.Clone()
 		}
 	}
 
@@ -2378,6 +2414,20 @@ func (m *Manager) UpdateLinkWithAllOptions(node1Name, node2Name string, customFr
 		}
 		if link.To.Endpoint != "" && link.To.PersistentKeepalive == 0 {
 			link.To.PersistentKeepalive = 25
+		}
+	}
+
+	explicitObfuscatorDisable :=
+		(fromEnd != nil && fromEnd.Obfuscator != "" && config.NormalizeObfuscatorRole(fromEnd.Obfuscator) == config.ObfuscatorNone) ||
+			(toEnd != nil && toEnd.Obfuscator != "" && config.NormalizeObfuscatorRole(toEnd.Obfuscator) == config.ObfuscatorNone)
+	if explicitObfuscatorDisable || link.IsManual() {
+		link.From.Obfuscator = ""
+		link.From.ObfuscatorParameters = nil
+		link.To.Obfuscator = ""
+		link.To.ObfuscatorParameters = nil
+	} else if link.From.ObfuscatorEnabled() || link.To.ObfuscatorEnabled() {
+		if err := m.prepareLinkObfuscator(cfg, link, fromNode, toNode, false); err != nil {
+			return nil, err
 		}
 	}
 
@@ -3457,6 +3507,14 @@ func (m *Manager) PlanSyncWithScope(scope string, nodeNames ...string) ([]config
 			}
 		}
 	}
+
+	// 2b. WireGuard obfuscator services (agent mode only, full desired set per node)
+	// This also garbage-collects services after an obfuscator is disabled or a link is removed.
+	obfuscatorActions, err := m.planObfuscatorActions(cfg, nodes, targetMap, isPartial, currentState)
+	if err != nil {
+		return nil, err
+	}
+	actions = append(actions, obfuscatorActions...)
 
 	// Build map of all policies and nodes for policy/ROA planning
 	allPolicies := cfg.GetAllPolicies()
@@ -5409,7 +5467,7 @@ func actionPriority(t config.ActionType) int {
 	switch t {
 	case config.ActionDeleteConfig, config.ActionDownInterface, config.ActionDeleteApp:
 		return 1
-	case config.ActionCreateConfig, config.ActionUpdateConfig, config.ActionSyncConfig, config.ActionUpInterface:
+	case config.ActionCreateConfig, config.ActionUpdateConfig, config.ActionSyncConfig, config.ActionUpInterface, config.ActionSyncObfuscators:
 		return 2
 	case config.ActionSyncRoaConfig:
 		return 3
@@ -5689,6 +5747,21 @@ func (m *Manager) executeAgentSyncAction(act config.SyncAction, res *config.Sync
 	if !m.agentHub.IsConnected(act.NodeName) {
 		res.Success = false
 		res.Error = fmt.Sprintf("Node %s agent is not connected", act.NodeName)
+		return
+	}
+
+	if act.Type == config.ActionSyncObfuscators {
+		hash, err := m.SyncObfuscatorsToNode(act.NodeName)
+		if err != nil {
+			res.Success = false
+			res.Error = fmt.Sprintf("Failed to sync WireGuard obfuscators on %s: %v", act.NodeName, err)
+			return
+		}
+		res.Success = true
+		res.Output = fmt.Sprintf("Synchronized WireGuard obfuscators on %s", act.NodeName)
+		if m.stateStore != nil {
+			_ = m.stateStore.UpdateObfuscatorState(act.NodeName, act.Host, hash, time.Now())
+		}
 		return
 	}
 

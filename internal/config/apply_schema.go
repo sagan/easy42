@@ -153,6 +153,7 @@ const ConfigChangeJSONSchema = `{
     },
     "LinkEndPatch": {
       "type": "object",
+      "$comment": "neighbor_address is system-managed (derived from the peer's address); accepted for backward compatibility with legacy snippets but ignored during apply",
       "required": ["name"],
       "additionalProperties": false,
       "properties": {
@@ -161,8 +162,6 @@ const ConfigChangeJSONSchema = `{
         "interface": { "type": "string" },
         "address": { "type": "string" },
         "address4": { "type": "string" },
-        // neighbor_address is system-managed (derived from the peer's address); accepted for
-        // backward compatibility with legacy snippets but ignored during apply
         "neighbor_address": { "type": "string" },
         "listen_port": { "type": "integer", "minimum": 0, "maximum": 65535 },
         "endpoint": { "type": "string" },
@@ -176,7 +175,22 @@ const ConfigChangeJSONSchema = `{
         "mark": { "type": "string" },
         "routing_policy": { "type": "string" },
         "add_paths": { "type": "string" },
-        "note": { "type": "string" }
+        "note": { "type": "string" },
+        "obfuscator": { "type": "string", "enum": ["none", "phantun_client", "phantun_server", ""] },
+        "obfuscator_parameters": { "$ref": "#/definitions/ObfuscatorParameters" }
+      }
+    },
+    "ObfuscatorParameters": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "local_port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "server_port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "wireguard_port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "tun_name": { "type": "string", "pattern": "^[A-Za-z0-9_.-]{1,15}$" },
+        "tun_local": { "type": "string" },
+        "tun_peer": { "type": "string" },
+        "extra_args": { "type": "array", "items": { "type": "string" } }
       }
     },
     "DNSPatch": {
@@ -239,16 +253,16 @@ const ConfigChangeJSONSchema = `{
 
 // ConfigPatch represents the validated top-level patch object
 type ConfigPatch struct {
-	NetworkSettings *NetworkSettingsPatch  `json:"network_settings,omitempty" yaml:"network_settings,omitempty"`
-	NetworkPolicies *[]NetworkPolicy       `json:"network_policies,omitempty" yaml:"network_policies,omitempty"`
-	Nodes           *[]NodePatch           `json:"nodes,omitempty" yaml:"nodes,omitempty"`
-	Links           *[]LinkPatch           `json:"links,omitempty" yaml:"links,omitempty"`
-	Blocks          *[]Block               `json:"blocks,omitempty" yaml:"blocks,omitempty"`
-	DNS             *DNSPatch              `json:"dns,omitempty" yaml:"dns,omitempty"`
-	Templates       *[]ConfigTemplate      `json:"templates,omitempty" yaml:"templates,omitempty"`
-	ServerTasks     *[]ServerTaskConfig    `json:"server_tasks,omitempty" yaml:"server_tasks,omitempty"`
-	CronTasks       *[]CronTask            `json:"cron_tasks,omitempty" yaml:"cron_tasks,omitempty"`
-	Database        *DatabaseSettingsPatch `json:"database,omitempty" yaml:"database,omitempty"`
+	NetworkSettings *NetworkSettingsPatch      `json:"network_settings,omitempty" yaml:"network_settings,omitempty"`
+	NetworkPolicies *[]NetworkPolicy           `json:"network_policies,omitempty" yaml:"network_policies,omitempty"`
+	Nodes           *[]NodePatch               `json:"nodes,omitempty" yaml:"nodes,omitempty"`
+	Links           *[]LinkPatch               `json:"links,omitempty" yaml:"links,omitempty"`
+	Blocks          *[]Block                   `json:"blocks,omitempty" yaml:"blocks,omitempty"`
+	DNS             *DNSPatch                  `json:"dns,omitempty" yaml:"dns,omitempty"`
+	Templates       *[]ConfigTemplate          `json:"templates,omitempty" yaml:"templates,omitempty"`
+	ServerTasks     *[]ServerTaskConfig        `json:"server_tasks,omitempty" yaml:"server_tasks,omitempty"`
+	CronTasks       *[]CronTask                `json:"cron_tasks,omitempty" yaml:"cron_tasks,omitempty"`
+	Database        *DatabaseSettingsPatch     `json:"database,omitempty" yaml:"database,omitempty"`
 	Integrations    *IntegrationsSettingsPatch `json:"integrations,omitempty" yaml:"integrations,omitempty"`
 }
 
@@ -267,19 +281,19 @@ type NetworkSettingsPatch struct {
 
 // NodePatch holds partial changes to a node
 type NodePatch struct {
-	Name          string             `json:"name" yaml:"name"`
-	Host          *string            `json:"host,omitempty" yaml:"host,omitempty"`
-	IsExternal    *bool              `json:"is_external,omitempty" yaml:"is_external,omitempty"`
-	Caption       *string            `json:"caption,omitempty" yaml:"caption,omitempty"`
-	Description   *string            `json:"description,omitempty" yaml:"description,omitempty"`
-	Note          *string            `json:"note,omitempty" yaml:"note,omitempty"`
-	IP            *string            `json:"ip,omitempty" yaml:"ip,omitempty"`
-	IP6           *string            `json:"ip6,omitempty" yaml:"ip6,omitempty"`
-	ExternalIP    *string            `json:"external_ip,omitempty" yaml:"external_ip,omitempty"`
-	ExternalIP6   *string            `json:"external_ip6,omitempty" yaml:"external_ip6,omitempty"`
-	Interface     *string            `json:"interface,omitempty" yaml:"interface,omitempty"`
-	ASN           *uint64            `json:"asn,omitempty" yaml:"asn,omitempty"`
-	Entrypoints   *[]Entrypoint      `json:"entrypoints,omitempty" yaml:"entrypoints,omitempty"`
+	Name                string             `json:"name" yaml:"name"`
+	Host                *string            `json:"host,omitempty" yaml:"host,omitempty"`
+	IsExternal          *bool              `json:"is_external,omitempty" yaml:"is_external,omitempty"`
+	Caption             *string            `json:"caption,omitempty" yaml:"caption,omitempty"`
+	Description         *string            `json:"description,omitempty" yaml:"description,omitempty"`
+	Note                *string            `json:"note,omitempty" yaml:"note,omitempty"`
+	IP                  *string            `json:"ip,omitempty" yaml:"ip,omitempty"`
+	IP6                 *string            `json:"ip6,omitempty" yaml:"ip6,omitempty"`
+	ExternalIP          *string            `json:"external_ip,omitempty" yaml:"external_ip,omitempty"`
+	ExternalIP6         *string            `json:"external_ip6,omitempty" yaml:"external_ip6,omitempty"`
+	Interface           *string            `json:"interface,omitempty" yaml:"interface,omitempty"`
+	ASN                 *uint64            `json:"asn,omitempty" yaml:"asn,omitempty"`
+	Entrypoints         *[]Entrypoint      `json:"entrypoints,omitempty" yaml:"entrypoints,omitempty"`
 	Tags                *[]string          `json:"tags,omitempty" yaml:"tags,omitempty"`
 	TagsAdd             *[]string          `json:"tags_add,omitempty" yaml:"tags_add,omitempty"`
 	TagsDel             *[]string          `json:"tags_del,omitempty" yaml:"tags_del,omitempty"`
@@ -306,25 +320,27 @@ type NodePatch struct {
 
 // LinkEndPatch holds partial changes to a link endpoint
 type LinkEndPatch struct {
-	Name                string  `json:"name" yaml:"name"`
-	Type                *string `json:"type,omitempty" yaml:"type,omitempty"`
-	Interface           *string `json:"interface,omitempty" yaml:"interface,omitempty"`
-	Address             *string `json:"address,omitempty" yaml:"address,omitempty"`
-	Address4            *string `json:"address4,omitempty" yaml:"address4,omitempty"`
-	NeighborAddress     *string `json:"neighbor_address,omitempty" yaml:"neighbor_address,omitempty"`
-	ListenPort          *int    `json:"listen_port,omitempty" yaml:"listen_port,omitempty"`
-	Endpoint            *string `json:"endpoint,omitempty" yaml:"endpoint,omitempty"`
-	PersistentKeepalive *int    `json:"persistent_keepalive,omitempty" yaml:"persistent_keepalive,omitempty"`
-	MTU                 *int    `json:"mtu,omitempty" yaml:"mtu,omitempty"`
-	UseIp               *bool   `json:"use_ip,omitempty" yaml:"use_ip,omitempty"`
-	Policy              *string `json:"policy,omitempty" yaml:"policy,omitempty"`
-	Cost                *int    `json:"cost,omitempty" yaml:"cost,omitempty"`
-	Fwmark              *string `json:"fwmark,omitempty" yaml:"fwmark,omitempty"`
-	Preference          *int    `json:"preference,omitempty" yaml:"preference,omitempty"`
-	Mark                *string `json:"mark,omitempty" yaml:"mark,omitempty"`
-	RoutingPolicy       *string `json:"routing_policy,omitempty" yaml:"routing_policy,omitempty"`
-	AddPaths            *string `json:"add_paths,omitempty" yaml:"add_paths,omitempty"`
-	Note                *string `json:"note,omitempty" yaml:"note,omitempty"`
+	Name                 string                `json:"name" yaml:"name"`
+	Type                 *string               `json:"type,omitempty" yaml:"type,omitempty"`
+	Interface            *string               `json:"interface,omitempty" yaml:"interface,omitempty"`
+	Address              *string               `json:"address,omitempty" yaml:"address,omitempty"`
+	Address4             *string               `json:"address4,omitempty" yaml:"address4,omitempty"`
+	NeighborAddress      *string               `json:"neighbor_address,omitempty" yaml:"neighbor_address,omitempty"`
+	ListenPort           *int                  `json:"listen_port,omitempty" yaml:"listen_port,omitempty"`
+	Endpoint             *string               `json:"endpoint,omitempty" yaml:"endpoint,omitempty"`
+	PersistentKeepalive  *int                  `json:"persistent_keepalive,omitempty" yaml:"persistent_keepalive,omitempty"`
+	MTU                  *int                  `json:"mtu,omitempty" yaml:"mtu,omitempty"`
+	UseIp                *bool                 `json:"use_ip,omitempty" yaml:"use_ip,omitempty"`
+	Policy               *string               `json:"policy,omitempty" yaml:"policy,omitempty"`
+	Cost                 *int                  `json:"cost,omitempty" yaml:"cost,omitempty"`
+	Fwmark               *string               `json:"fwmark,omitempty" yaml:"fwmark,omitempty"`
+	Preference           *int                  `json:"preference,omitempty" yaml:"preference,omitempty"`
+	Mark                 *string               `json:"mark,omitempty" yaml:"mark,omitempty"`
+	RoutingPolicy        *string               `json:"routing_policy,omitempty" yaml:"routing_policy,omitempty"`
+	AddPaths             *string               `json:"add_paths,omitempty" yaml:"add_paths,omitempty"`
+	Note                 *string               `json:"note,omitempty" yaml:"note,omitempty"`
+	Obfuscator           *string               `json:"obfuscator,omitempty" yaml:"obfuscator,omitempty"`
+	ObfuscatorParameters *ObfuscatorParameters `json:"obfuscator_parameters,omitempty" yaml:"obfuscator_parameters,omitempty"`
 }
 
 // LinkPatch holds partial changes to a link

@@ -156,22 +156,22 @@ func (d *DatabaseSettings) GetRawRetentionDays() int {
 
 // Config represents the top-level configuration stored in config.json
 type Config struct {
-	PasswordHash      string             `json:"password_hash"`
-	EncryptedDEK      string             `json:"encrypted_dek"`
-	SessionSecret     string             `json:"session_secret"`
-	NetworkSettings   NetworkSettings    `json:"network_settings,omitempty"`
-	NetworkPolicies   []NetworkPolicy    `json:"network_policies,omitempty"`
-	Nodes             []Node             `json:"nodes"`
-	Links             []Link             `json:"links"`
-	LookingGlassTasks []LookingGlassTask `json:"looking_glass_tasks,omitempty"`
-	CronTasks         []CronTask         `json:"cron_tasks,omitempty"`
-	Apps              []App              `json:"apps,omitempty"`
-	AppVariables      []AppVariable      `json:"app_variables,omitempty"`
-	Blocks            []Block            `json:"blocks,omitempty"`
-	DNS               DNSConfig          `json:"dns,omitempty"`
-	Templates         []ConfigTemplate   `json:"templates,omitempty"`
-	ServerTasks       []ServerTaskConfig `json:"server_tasks,omitempty"`
-	Database          DatabaseSettings   `json:"database,omitempty"`
+	PasswordHash      string               `json:"password_hash"`
+	EncryptedDEK      string               `json:"encrypted_dek"`
+	SessionSecret     string               `json:"session_secret"`
+	NetworkSettings   NetworkSettings      `json:"network_settings,omitempty"`
+	NetworkPolicies   []NetworkPolicy      `json:"network_policies,omitempty"`
+	Nodes             []Node               `json:"nodes"`
+	Links             []Link               `json:"links"`
+	LookingGlassTasks []LookingGlassTask   `json:"looking_glass_tasks,omitempty"`
+	CronTasks         []CronTask           `json:"cron_tasks,omitempty"`
+	Apps              []App                `json:"apps,omitempty"`
+	AppVariables      []AppVariable        `json:"app_variables,omitempty"`
+	Blocks            []Block              `json:"blocks,omitempty"`
+	DNS               DNSConfig            `json:"dns,omitempty"`
+	Templates         []ConfigTemplate     `json:"templates,omitempty"`
+	ServerTasks       []ServerTaskConfig   `json:"server_tasks,omitempty"`
+	Database          DatabaseSettings     `json:"database,omitempty"`
 	Integrations      IntegrationsSettings `json:"integrations,omitempty"`
 	MCP               MCPSettings          `json:"mcp,omitempty"`
 	ConfigChanges     []ConfigChange       `json:"config_changes,omitempty"`
@@ -203,7 +203,6 @@ func (c *Config) GetMCPSettings() MCPSettings {
 	}
 	return s
 }
-
 
 // ConfigChange represents a saved, named config patch snippet
 type ConfigChange struct {
@@ -340,40 +339,40 @@ type Hook = ConfigHook
 
 // Node represents a device/node in the network
 type Node struct {
-	Name          string            `json:"name"`                   // Node name / hostname (WireGuard interface wg42* is truncated to 15 chars)
-	Host          string            `json:"host,omitempty"`         // SSH host / alias / IP (omitted for external peers)
-	IsExternal    bool              `json:"is_external,omitempty"`  // True if external unmanaged peer (e.g. DN42)
-	Caption       string            `json:"caption,omitempty"`      // Optional short description (plain text, one short sentence) of the node
-	Description   string            `json:"description,omitempty"`  // Optional description / contact info
-	Note          string            `json:"note,omitempty"`         // Markdown format text note
-	IP            string            `json:"ip,omitempty"`           // Main IPv4 (e.g. 192.168.100.1)
-	IP6           string            `json:"ip6,omitempty"`          // Main IPv6 (e.g. fd42:a159:f9f0::1)
-	ExternalIP    string            `json:"external_ip,omitempty"`  // External / DN42 IPv4 (e.g. 172.20.x.x)
-	ExternalIP6   string            `json:"external_ip6,omitempty"` // External / DN42 IPv6 (e.g. fd42:a159:f9f0::d)
-	Interface     string            `json:"interface,omitempty"`    // Main IP interface name (e.g. lo, dn42, eth0)
-	ASN           uint64            `json:"asn"`                    // AS Number (default in 4224420000..4224429999 or external ASN)
-	Entrypoints   []Entrypoint      `json:"entrypoints,omitempty"`  // External entrypoints
-	Tags          []string          `json:"tags,omitempty"`
-	Table         int               `json:"table,omitempty"`           // Main routing table bird used to export BGP learned routing to (defaults to 254)
-	ExternalTable int               `json:"external_table,omitempty"`  // Routing table for routes learned from external BGP peers (if set and != Table)
-	InternetTable int               `json:"internet_table,omitempty"`  // Routing table for Internet routes learned from peers (if set and != Table)
-	Metric        *int              `json:"metric,omitempty"`          // Global metric when bird export routes to kernel
-	StaticRoutes  []string          `json:"static_routes,omitempty"`   // CIDR prefix list unconditionally broadcast via BGP. Prefix with '@' to prevent exporting as unreachable route to kernel.
-	Routes        []KernelRouteRule `json:"routes,omitempty"`          // Kernel routes imported from kernel tables and broadcast via BGP
-	ConfigHooks   []ConfigHook      `json:"config_hooks,omitempty"`    // Custom configuration injection hooks
-	WgTemplate    string            `json:"wg_template,omitempty"`     // Custom WireGuard template ID/name (empty for default)
-	BirdTemplate  string            `json:"bird_template,omitempty"`   // Custom BIRD template ID/name (empty for default)
-	NftTemplate   string            `json:"nft_template,omitempty"`    // Custom nftables template ID/name (empty for default)
-	X             *float64          `json:"x,omitempty"`               // Graph X coordinate
-	Y             *float64          `json:"y,omitempty"`               // Graph Y coordinate
-	ModifiedAt    time.Time         `json:"modified_at,omitempty"`     // Last updated timestamp
-	Mode          string            `json:"mode,omitempty"`            // "ssh" (default) or "agent"
-	AgentToken    string            `json:"agent_token,omitempty"`     // Static shared token for agent authentication
-	AgentVersion  string            `json:"agent_version,omitempty"`   // Reported agent version
-	AgentLastSeen time.Time         `json:"agent_last_seen,omitempty"` // Timestamp of last agent heartbeat/report
-	EnableFA            bool              `json:"enable_fa,omitempty"`       // Enable FlapAlerted BGP peering
-	UpdateHosts         bool              `json:"update_hosts,omitempty"`    // Enable managing /etc/hosts file of the node
-	CustomNetworkScript string            `json:"custom_network_script,omitempty"` // Custom shell script for node network manager (e.g. policy routing)
+	Name                string            `json:"name"`                   // Node name / hostname (WireGuard interface wg42* is truncated to 15 chars)
+	Host                string            `json:"host,omitempty"`         // SSH host / alias / IP (omitted for external peers)
+	IsExternal          bool              `json:"is_external,omitempty"`  // True if external unmanaged peer (e.g. DN42)
+	Caption             string            `json:"caption,omitempty"`      // Optional short description (plain text, one short sentence) of the node
+	Description         string            `json:"description,omitempty"`  // Optional description / contact info
+	Note                string            `json:"note,omitempty"`         // Markdown format text note
+	IP                  string            `json:"ip,omitempty"`           // Main IPv4 (e.g. 192.168.100.1)
+	IP6                 string            `json:"ip6,omitempty"`          // Main IPv6 (e.g. fd42:a159:f9f0::1)
+	ExternalIP          string            `json:"external_ip,omitempty"`  // External / DN42 IPv4 (e.g. 172.20.x.x)
+	ExternalIP6         string            `json:"external_ip6,omitempty"` // External / DN42 IPv6 (e.g. fd42:a159:f9f0::d)
+	Interface           string            `json:"interface,omitempty"`    // Main IP interface name (e.g. lo, dn42, eth0)
+	ASN                 uint64            `json:"asn"`                    // AS Number (default in 4224420000..4224429999 or external ASN)
+	Entrypoints         []Entrypoint      `json:"entrypoints,omitempty"`  // External entrypoints
+	Tags                []string          `json:"tags,omitempty"`
+	Table               int               `json:"table,omitempty"`                                            // Main routing table bird used to export BGP learned routing to (defaults to 254)
+	ExternalTable       int               `json:"external_table,omitempty"`                                   // Routing table for routes learned from external BGP peers (if set and != Table)
+	InternetTable       int               `json:"internet_table,omitempty"`                                   // Routing table for Internet routes learned from peers (if set and != Table)
+	Metric              *int              `json:"metric,omitempty"`                                           // Global metric when bird export routes to kernel
+	StaticRoutes        []string          `json:"static_routes,omitempty"`                                    // CIDR prefix list unconditionally broadcast via BGP. Prefix with '@' to prevent exporting as unreachable route to kernel.
+	Routes              []KernelRouteRule `json:"routes,omitempty"`                                           // Kernel routes imported from kernel tables and broadcast via BGP
+	ConfigHooks         []ConfigHook      `json:"config_hooks,omitempty"`                                     // Custom configuration injection hooks
+	WgTemplate          string            `json:"wg_template,omitempty"`                                      // Custom WireGuard template ID/name (empty for default)
+	BirdTemplate        string            `json:"bird_template,omitempty"`                                    // Custom BIRD template ID/name (empty for default)
+	NftTemplate         string            `json:"nft_template,omitempty"`                                     // Custom nftables template ID/name (empty for default)
+	X                   *float64          `json:"x,omitempty"`                                                // Graph X coordinate
+	Y                   *float64          `json:"y,omitempty"`                                                // Graph Y coordinate
+	ModifiedAt          time.Time         `json:"modified_at,omitempty"`                                      // Last updated timestamp
+	Mode                string            `json:"mode,omitempty"`                                             // "ssh" (default) or "agent"
+	AgentToken          string            `json:"agent_token,omitempty"`                                      // Static shared token for agent authentication
+	AgentVersion        string            `json:"agent_version,omitempty"`                                    // Reported agent version
+	AgentLastSeen       time.Time         `json:"agent_last_seen,omitempty"`                                  // Timestamp of last agent heartbeat/report
+	EnableFA            bool              `json:"enable_fa,omitempty"`                                        // Enable FlapAlerted BGP peering
+	UpdateHosts         bool              `json:"update_hosts,omitempty"`                                     // Enable managing /etc/hosts file of the node
+	CustomNetworkScript string            `json:"custom_network_script,omitempty"`                            // Custom shell script for node network manager (e.g. policy routing)
 	RouteReflector      bool              `json:"route_reflector,omitempty" yaml:"route_reflector,omitempty"` // True if node acts as BGP Route Reflector for internal iBGP peers
 }
 
@@ -414,6 +413,35 @@ const (
 )
 
 // LinkEnd represents one endpoint of a link
+// WireGuard obfuscator role constants (Phantun).
+const (
+	ObfuscatorNone          = "none"
+	ObfuscatorPhantunClient = "phantun_client"
+	ObfuscatorPhantunServer = "phantun_server"
+)
+
+// ObfuscatorParameters holds the locally generated (and user-editable) parameters
+// for deploying a Phantun WireGuard obfuscator end.
+type ObfuscatorParameters struct {
+	LocalPort     int      `json:"local_port,omitempty"`     // Client: local UDP port WireGuard sends to (127.0.0.1:<local_port>)
+	ServerPort    int      `json:"server_port,omitempty"`    // Server: public TCP listen port; Client: remote server TCP port
+	WireGuardPort int      `json:"wireguard_port,omitempty"` // Server: local WireGuard UDP port Phantun forwards to
+	TunName       string   `json:"tun_name,omitempty"`       // TUN interface name (max 15 chars)
+	TunLocal      string   `json:"tun_local,omitempty"`      // TUN local IPv4 address
+	TunPeer       string   `json:"tun_peer,omitempty"`       // TUN peer IPv4 address
+	ExtraArgs     []string `json:"extra_args,omitempty"`     // Additional validated Phantun CLI arguments
+}
+
+// Clone returns a deep copy of the parameters.
+func (p *ObfuscatorParameters) Clone() *ObfuscatorParameters {
+	if p == nil {
+		return nil
+	}
+	cp := *p
+	cp.ExtraArgs = append([]string(nil), p.ExtraArgs...)
+	return &cp
+}
+
 type LinkEnd struct {
 	Name                string `json:"name"`
 	Type                string `json:"type,omitempty"`             // "wireguard" (default) or "manual"
@@ -438,6 +466,50 @@ type LinkEnd struct {
 	AddPaths            string `json:"add_paths,omitempty"`         // BGP add paths override ("off", "on", "rx", "tx", or "inherit" / empty to inherit)
 	Psk                 string `json:"psk,omitempty"`               // Encrypted base64 wireguard preshared key
 	Note                string `json:"note,omitempty"`              // Markdown format text note
+
+	// WireGuard UDP-over-TCP obfuscation (Phantun), agent mode only.
+	Obfuscator           string                `json:"obfuscator,omitempty"`            // "none" (default), "phantun_client", or "phantun_server"
+	ObfuscatorParameters *ObfuscatorParameters `json:"obfuscator_parameters,omitempty"` // Generated on first enable; user editable afterwards
+}
+
+// ObfuscatorRole returns the normalized obfuscator role for this link end.
+func (l *LinkEnd) ObfuscatorRole() string {
+	if l == nil {
+		return ObfuscatorNone
+	}
+	return NormalizeObfuscatorRole(l.Obfuscator)
+}
+
+// ObfuscatorEnabled reports whether this link end uses an obfuscator.
+func (l *LinkEnd) ObfuscatorEnabled() bool {
+	role := l.ObfuscatorRole()
+	return role == ObfuscatorPhantunClient || role == ObfuscatorPhantunServer
+}
+
+// NormalizeObfuscatorRole normalizes an obfuscator role, treating empty as "none".
+func NormalizeObfuscatorRole(role string) string {
+	switch strings.ToLower(strings.TrimSpace(role)) {
+	case "", ObfuscatorNone:
+		return ObfuscatorNone
+	case ObfuscatorPhantunClient:
+		return ObfuscatorPhantunClient
+	case ObfuscatorPhantunServer:
+		return ObfuscatorPhantunServer
+	default:
+		return strings.ToLower(strings.TrimSpace(role))
+	}
+}
+
+// ComplementObfuscatorRole returns the opposite side role.
+func ComplementObfuscatorRole(role string) string {
+	switch NormalizeObfuscatorRole(role) {
+	case ObfuscatorPhantunClient:
+		return ObfuscatorPhantunServer
+	case ObfuscatorPhantunServer:
+		return ObfuscatorPhantunClient
+	default:
+		return ObfuscatorNone
+	}
 }
 
 // LinkType returns the link type for LinkEnd ("wireguard" by default, or "manual")
@@ -578,6 +650,7 @@ const (
 	ActionSyncNftablesConfig ActionType = "sync_nftables"
 	ActionSyncRoaConfig      ActionType = "sync_roa"
 	ActionSyncHosts          ActionType = "sync_hosts"
+	ActionSyncObfuscators    ActionType = "sync_obfuscators"
 	ActionSyncApp            ActionType = "sync_app"
 	ActionDeleteApp          ActionType = "delete_app"
 )

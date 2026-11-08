@@ -44,20 +44,22 @@ type StateInterface struct {
 
 // StateNode represents the actual applied/observed state of a node
 type StateNode struct {
-	Name               string                    `json:"name"`
-	Host               string                    `json:"host"`
-	LastSeen           time.Time                 `json:"last_seen,omitempty"`
-	BirdConfigHash     string                    `json:"bird_config_hash,omitempty"`
-	BirdAppliedAt      *time.Time                `json:"bird_applied_at,omitempty"`
-	NftablesConfigHash string                    `json:"nftables_config_hash,omitempty"`
-	NftablesAppliedAt  *time.Time                `json:"nftables_applied_at,omitempty"`
-	RoaConfigHashes    map[string]string         `json:"roa_config_hashes,omitempty"` // key: targetFile, val: sha256 hash
-	RoaAppliedAt       map[string]time.Time      `json:"roa_applied_at,omitempty"`
-	HostsConfigHash    string                    `json:"hosts_config_hash,omitempty"`
-	HostsAppliedAt     *time.Time                `json:"hosts_applied_at,omitempty"`
-	AppConfigHashes    map[string]string         `json:"app_config_hashes,omitempty"` // key: app name, val: sha256 hash
-	AppAppliedAt       map[string]time.Time      `json:"app_applied_at,omitempty"`
-	Interfaces         map[string]StateInterface `json:"interfaces"` // key: interface name e.g. "wg42node2"
+	Name                 string                    `json:"name"`
+	Host                 string                    `json:"host"`
+	LastSeen             time.Time                 `json:"last_seen,omitempty"`
+	BirdConfigHash       string                    `json:"bird_config_hash,omitempty"`
+	BirdAppliedAt        *time.Time                `json:"bird_applied_at,omitempty"`
+	NftablesConfigHash   string                    `json:"nftables_config_hash,omitempty"`
+	NftablesAppliedAt    *time.Time                `json:"nftables_applied_at,omitempty"`
+	RoaConfigHashes      map[string]string         `json:"roa_config_hashes,omitempty"` // key: targetFile, val: sha256 hash
+	RoaAppliedAt         map[string]time.Time      `json:"roa_applied_at,omitempty"`
+	HostsConfigHash      string                    `json:"hosts_config_hash,omitempty"`
+	HostsAppliedAt       *time.Time                `json:"hosts_applied_at,omitempty"`
+	AppConfigHashes      map[string]string         `json:"app_config_hashes,omitempty"` // key: app name, val: sha256 hash
+	AppAppliedAt         map[string]time.Time      `json:"app_applied_at,omitempty"`
+	ObfuscatorConfigHash string                    `json:"obfuscator_config_hash,omitempty"`
+	ObfuscatorAppliedAt  *time.Time                `json:"obfuscator_applied_at,omitempty"`
+	Interfaces           map[string]StateInterface `json:"interfaces"` // key: interface name e.g. "wg42node2"
 }
 
 // NetworkState represents the recorded state in the database
@@ -108,10 +110,10 @@ type NodeMetricPoint struct {
 	Load15m          float32 `json:"load_15m"`
 	NetRxBytes       uint64  `json:"net_rx_bytes"`
 	NetTxBytes       uint64  `json:"net_tx_bytes"`
-	NetRxRate        float64 `json:"net_rx_rate"`        // bytes/second
-	NetTxRate        float64 `json:"net_tx_rate"`        // bytes/second
-	TrafficRxBytes   uint64  `json:"traffic_rx_bytes"`   // Accumulated rx traffic starting from 0 in queried timespan
-	TrafficTxBytes   uint64  `json:"traffic_tx_bytes"`   // Accumulated tx traffic starting from 0 in queried timespan
+	NetRxRate        float64 `json:"net_rx_rate"`      // bytes/second
+	NetTxRate        float64 `json:"net_tx_rate"`      // bytes/second
+	TrafficRxBytes   uint64  `json:"traffic_rx_bytes"` // Accumulated rx traffic starting from 0 in queried timespan
+	TrafficTxBytes   uint64  `json:"traffic_tx_bytes"` // Accumulated tx traffic starting from 0 in queried timespan
 }
 
 // InterfaceTrafficPoint represents a point in the derived traffic time series
@@ -163,12 +165,12 @@ type FleetMetricsSummary struct {
 
 // NodeLiveStatus represents live node info + latest metric snapshot
 type NodeLiveStatus struct {
-	Name           string           `json:"name"`
-	Hostname       string           `json:"hostname"`
-	OSInfo         string           `json:"os_info"`
-	AgentVersion   string           `json:"agent_version"`
-	UptimeSeconds  uint64           `json:"uptime_seconds"`
-	Connected      bool             `json:"connected"`
+	Name             string           `json:"name"`
+	Hostname         string           `json:"hostname"`
+	OSInfo           string           `json:"os_info"`
+	AgentVersion     string           `json:"agent_version"`
+	UptimeSeconds    uint64           `json:"uptime_seconds"`
+	Connected        bool             `json:"connected"`
 	AgentInstalled   bool             `json:"agent_installed"`
 	LastSeen         time.Time        `json:"last_seen"`
 	PrimaryInterface string           `json:"primary_interface,omitempty"`
@@ -310,7 +312,7 @@ func (s *StateStore) Load() (*NetworkState, error) {
 		SELECT node_name, host, last_seen, bird_config_hash, bird_applied_at,
 		       nftables_config_hash, nftables_applied_at, roa_config_hashes,
 		       roa_applied_at, hosts_config_hash, hosts_applied_at, interfaces,
-		       app_config_hashes, app_applied_at
+		       app_config_hashes, app_applied_at, obfuscator_config_hash, obfuscator_applied_at
 		FROM node_states
 	`)
 	if err != nil {
@@ -321,10 +323,12 @@ func (s *StateStore) Load() (*NetworkState, error) {
 	for rows.Next() {
 		var (
 			nodeName, host, birdHash, nftHash, hostsHash string
+			obfuscatorHash                               string
 			lastSeenUnix                                 sql.NullInt64
 			birdAppliedUnix                              sql.NullInt64
 			nftAppliedUnix                               sql.NullInt64
 			hostsAppliedUnix                             sql.NullInt64
+			obfuscatorAppliedUnix                        sql.NullInt64
 			roaHashesJSON, roaAppliedJSON                string
 			appHashesJSON, appAppliedJSON                string
 			ifacesJSON                                   string
@@ -334,22 +338,23 @@ func (s *StateStore) Load() (*NetworkState, error) {
 			&nodeName, &host, &lastSeenUnix, &birdHash, &birdAppliedUnix,
 			&nftHash, &nftAppliedUnix, &roaHashesJSON, &roaAppliedJSON,
 			&hostsHash, &hostsAppliedUnix, &ifacesJSON,
-			&appHashesJSON, &appAppliedJSON,
+			&appHashesJSON, &appAppliedJSON, &obfuscatorHash, &obfuscatorAppliedUnix,
 		); err != nil {
 			continue
 		}
 
 		node := StateNode{
-			Name:               nodeName,
-			Host:               host,
-			BirdConfigHash:     birdHash,
-			NftablesConfigHash: nftHash,
-			HostsConfigHash:    hostsHash,
-			RoaConfigHashes:    make(map[string]string),
-			RoaAppliedAt:       make(map[string]time.Time),
-			AppConfigHashes:    make(map[string]string),
-			AppAppliedAt:       make(map[string]time.Time),
-			Interfaces:         make(map[string]StateInterface),
+			Name:                 nodeName,
+			Host:                 host,
+			BirdConfigHash:       birdHash,
+			NftablesConfigHash:   nftHash,
+			HostsConfigHash:      hostsHash,
+			ObfuscatorConfigHash: obfuscatorHash,
+			RoaConfigHashes:      make(map[string]string),
+			RoaAppliedAt:         make(map[string]time.Time),
+			AppConfigHashes:      make(map[string]string),
+			AppAppliedAt:         make(map[string]time.Time),
+			Interfaces:           make(map[string]StateInterface),
 		}
 
 		if lastSeenUnix.Valid && lastSeenUnix.Int64 > 0 {
@@ -366,6 +371,10 @@ func (s *StateStore) Load() (*NetworkState, error) {
 		if hostsAppliedUnix.Valid && hostsAppliedUnix.Int64 > 0 {
 			t := time.Unix(hostsAppliedUnix.Int64, 0)
 			node.HostsAppliedAt = &t
+		}
+		if obfuscatorAppliedUnix.Valid && obfuscatorAppliedUnix.Int64 > 0 {
+			t := time.Unix(obfuscatorAppliedUnix.Int64, 0)
+			node.ObfuscatorAppliedAt = &t
 		}
 
 		if roaHashesJSON != "" {
@@ -437,13 +446,19 @@ func (s *StateStore) saveNodeLocked(node StateNode) error {
 		hostsUnix = &u
 	}
 
+	var obfuscatorUnix *int64
+	if node.ObfuscatorAppliedAt != nil {
+		u := node.ObfuscatorAppliedAt.Unix()
+		obfuscatorUnix = &u
+	}
+
 	query := `
 	INSERT INTO node_states (
 		node_name, host, last_seen, bird_config_hash, bird_applied_at,
 		nftables_config_hash, nftables_applied_at, roa_config_hashes,
 		roa_applied_at, hosts_config_hash, hosts_applied_at, interfaces,
-		app_config_hashes, app_applied_at
-	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		app_config_hashes, app_applied_at, obfuscator_config_hash, obfuscator_applied_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	ON CONFLICT(node_name) DO UPDATE SET
 		host=excluded.host,
 		last_seen=excluded.last_seen,
@@ -457,7 +472,9 @@ func (s *StateStore) saveNodeLocked(node StateNode) error {
 		hosts_applied_at=excluded.hosts_applied_at,
 		interfaces=excluded.interfaces,
 		app_config_hashes=excluded.app_config_hashes,
-		app_applied_at=excluded.app_applied_at;
+		app_applied_at=excluded.app_applied_at,
+		obfuscator_config_hash=excluded.obfuscator_config_hash,
+		obfuscator_applied_at=excluded.obfuscator_applied_at;
 	`
 
 	_, err := s.db.Exec(query,
@@ -465,6 +482,7 @@ func (s *StateStore) saveNodeLocked(node StateNode) error {
 		node.NftablesConfigHash, nftUnix, string(roaHashesJSON), string(roaAppliedJSON),
 		node.HostsConfigHash, hostsUnix, string(ifacesJSON),
 		string(appHashesJSON), string(appAppliedJSON),
+		node.ObfuscatorConfigHash, obfuscatorUnix,
 	)
 	return err
 }
@@ -498,6 +516,8 @@ func (s *StateStore) Save(st *NetworkState) (err error) {
 	for _, node := range st.Nodes {
 		roaHashesJSON, _ := json.Marshal(node.RoaConfigHashes)
 		roaAppliedJSON, _ := json.Marshal(node.RoaAppliedAt)
+		appHashesJSON, _ := json.Marshal(node.AppConfigHashes)
+		appAppliedJSON, _ := json.Marshal(node.AppAppliedAt)
 		ifacesJSON, _ := json.Marshal(node.Interfaces)
 
 		var lastSeenUnix *int64
@@ -518,16 +538,32 @@ func (s *StateStore) Save(st *NetworkState) (err error) {
 			nftUnix = &u
 		}
 
+		var hostsUnix *int64
+		if node.HostsAppliedAt != nil {
+			u := node.HostsAppliedAt.Unix()
+			hostsUnix = &u
+		}
+
+		var obfuscatorUnix *int64
+		if node.ObfuscatorAppliedAt != nil {
+			u := node.ObfuscatorAppliedAt.Unix()
+			obfuscatorUnix = &u
+		}
+
 		query := `
 		INSERT INTO node_states (
 			node_name, host, last_seen, bird_config_hash, bird_applied_at,
 			nftables_config_hash, nftables_applied_at, roa_config_hashes,
-			roa_applied_at, interfaces
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+			roa_applied_at, hosts_config_hash, hosts_applied_at, interfaces,
+			app_config_hashes, app_applied_at, obfuscator_config_hash, obfuscator_applied_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 		`
 		if _, err := tx.Exec(query,
 			node.Name, node.Host, lastSeenUnix, node.BirdConfigHash, birdUnix,
-			node.NftablesConfigHash, nftUnix, string(roaHashesJSON), string(roaAppliedJSON), string(ifacesJSON),
+			node.NftablesConfigHash, nftUnix, string(roaHashesJSON), string(roaAppliedJSON),
+			node.HostsConfigHash, hostsUnix, string(ifacesJSON),
+			string(appHashesJSON), string(appAppliedJSON),
+			node.ObfuscatorConfigHash, obfuscatorUnix,
 		); err != nil {
 			return err
 		}
@@ -794,6 +830,45 @@ func (s *StateStore) UpdateHostsState(nodeName, host, configHash string, applied
 	node.LastSeen = time.Now()
 	node.HostsConfigHash = configHash
 	node.HostsAppliedAt = &appliedAt
+	s.state.Nodes[nodeName] = node
+	s.state.UpdatedAt = time.Now()
+
+	return s.saveNodeLocked(node)
+}
+
+// UpdateObfuscatorState records or updates the applied obfuscator service set hash for a node.
+func (s *StateStore) UpdateObfuscatorState(nodeName, host, configHash string, appliedAt time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if err := s.initDBLocked(); err != nil {
+		return err
+	}
+
+	if s.state == nil {
+		s.state = &NetworkState{
+			Version:   1,
+			UpdatedAt: time.Now(),
+			Nodes:     make(map[string]StateNode),
+		}
+	}
+
+	node, exists := s.state.Nodes[nodeName]
+	if !exists {
+		node = StateNode{
+			Name:       nodeName,
+			Host:       host,
+			LastSeen:   time.Now(),
+			Interfaces: make(map[string]StateInterface),
+		}
+	}
+	if node.Interfaces == nil {
+		node.Interfaces = make(map[string]StateInterface)
+	}
+	node.Host = host
+	node.LastSeen = time.Now()
+	node.ObfuscatorConfigHash = configHash
+	node.ObfuscatorAppliedAt = &appliedAt
 	s.state.Nodes[nodeName] = node
 	s.state.UpdatedAt = time.Now()
 
@@ -2852,6 +2927,3 @@ func (s *StateStore) CleanEventsOlderThan(retention time.Duration) (int64, error
 
 	return res.RowsAffected()
 }
-
-
-

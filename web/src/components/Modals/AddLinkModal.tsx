@@ -110,6 +110,10 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
   const [enableBFD, setEnableBFD] = useState<boolean>(true);
   const [enablePsk, setEnablePsk] = useState<boolean>(true);
   const [customPsk, setCustomPsk] = useState<string>("");
+  const [obfuscatorEnabled, setObfuscatorEnabled] = useState<boolean>(false);
+  const [obfuscatorClientSide, setObfuscatorClientSide] = useState<"from" | "to">("from");
+  const [fromObfuscatorParams, setFromObfuscatorParams] = useState<string>("");
+  const [toObfuscatorParams, setToObfuscatorParams] = useState<string>("");
   const linkHadPsk = Boolean(linkToEdit?.psk || linkToEdit?.from?.psk || linkToEdit?.to?.psk);
 
   // Manual link fields
@@ -158,6 +162,9 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
   const isExternalLink = !isBothExternal && Boolean(fromNode?.is_external || toNode?.is_external);
   const managedNode = fromNode?.is_external ? (toNode?.is_external ? undefined : toNode) : fromNode;
   const externalNode = fromNode?.is_external ? fromNode : toNode?.is_external ? toNode : undefined;
+  const isAgentNode = (n?: Node) => Boolean(n && (n.mode === "agent" || n.agent_token));
+  const canUseObfuscator =
+    linkType === "wireguard" && !isExternalLink && isAgentNode(fromNode) && isAgentNode(toNode);
 
   // Resolve external peer's entrypoint using matching tags with managed node
   const { entrypoint: resolvedExtEP, matchedTag } = resolvePeerEntrypoint(managedNode, externalNode);
@@ -255,6 +262,16 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
       setEnableBFD(!Boolean(linkToEdit.disable_bfd));
       setEnablePsk(Boolean(linkToEdit.psk || linkToEdit.from.psk || linkToEdit.to.psk));
       setCustomPsk("");
+      const fromRole = linkToEdit.from.obfuscator || "none";
+      const toRole = linkToEdit.to.obfuscator || "none";
+      setObfuscatorEnabled(fromRole !== "none" || toRole !== "none");
+      setObfuscatorClientSide(fromRole === "phantun_server" ? "to" : "from");
+      setFromObfuscatorParams(
+        linkToEdit.from.obfuscator_parameters ? JSON.stringify(linkToEdit.from.obfuscator_parameters, null, 2) : "",
+      );
+      setToObfuscatorParams(
+        linkToEdit.to.obfuscator_parameters ? JSON.stringify(linkToEdit.to.obfuscator_parameters, null, 2) : "",
+      );
       setError(null);
     } else {
       setLinkType("wireguard");
@@ -262,6 +279,10 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
       setEnableBFD(true);
       setEnablePsk(true);
       setCustomPsk("");
+      setObfuscatorEnabled(false);
+      setObfuscatorClientSide("from");
+      setFromObfuscatorParams("");
+      setToObfuscatorParams("");
       setFromInterface("");
       setToInterface("");
       setFromAddress("");
@@ -460,6 +481,30 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
     const parsedToPreference = toPreference === "" ? undefined : Number(toPreference);
     const parsedFromMark = fromMark.trim() || undefined;
     const parsedToMark = toMark.trim() || undefined;
+
+    const useObfuscator = obfuscatorEnabled && canUseObfuscator;
+    let fromObfuscatorParamsValue: Record<string, unknown> | undefined = undefined;
+    let toObfuscatorParamsValue: Record<string, unknown> | undefined = undefined;
+    if (useObfuscator) {
+      try {
+        if (fromObfuscatorParams.trim()) fromObfuscatorParamsValue = JSON.parse(fromObfuscatorParams);
+        if (toObfuscatorParams.trim()) toObfuscatorParamsValue = JSON.parse(toObfuscatorParams);
+      } catch {
+        setError("Obfuscator parameters must be valid JSON");
+        setSubmitting(false);
+        return;
+      }
+    }
+    const fromObfuscatorRole = !useObfuscator
+      ? "none"
+      : obfuscatorClientSide === "from"
+        ? "phantun_client"
+        : "phantun_server";
+    const toObfuscatorRole = !useObfuscator
+      ? "none"
+      : obfuscatorClientSide === "to"
+        ? "phantun_client"
+        : "phantun_server";
 
     try {
       if (linkType === "manual") {
@@ -754,6 +799,8 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
               resolved_endpoint: undefined,
               note: fromNote.trim() || undefined,
               psk: pskVal !== undefined ? pskVal : linkToEdit.from?.psk || undefined,
+              obfuscator: fromObfuscatorRole,
+              obfuscator_parameters: fromObfuscatorParamsValue,
             },
             to: {
               ...linkToEdit.to,
@@ -771,6 +818,8 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
               resolved_endpoint: undefined,
               note: toNote.trim() || undefined,
               psk: pskVal !== undefined ? pskVal : linkToEdit.to?.psk || undefined,
+              obfuscator: toObfuscatorRole,
+              obfuscator_parameters: toObfuscatorParamsValue,
             },
             assign_ipv4: assignIPv4,
             disable_bfd: !enableBFD,
@@ -818,6 +867,8 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
               preference: parsedFromPreference,
               mark: parsedFromMark,
               note: fromNote.trim() || undefined,
+              obfuscator: fromObfuscatorRole,
+              obfuscator_parameters: fromObfuscatorParamsValue,
             },
             to: {
               use_ip: toUseIp,
@@ -829,6 +880,8 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
               preference: parsedToPreference,
               mark: parsedToMark,
               note: toNote.trim() || undefined,
+              obfuscator: toObfuscatorRole,
+              obfuscator_parameters: toObfuscatorParamsValue,
             },
           });
           onLinkAdded?.(link);
@@ -1185,6 +1238,97 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                 }
                 sx={{ alignItems: "flex-start", ml: 0, m: 0 }}
               />
+            </Box>
+          )}
+
+          {/* WireGuard Obfuscator (Phantun) */}
+          {canUseObfuscator && (
+            <Box
+              sx={{
+                p: 1.75,
+                borderRadius: 2,
+                backgroundColor: obfuscatorEnabled ? "rgba(124, 58, 237, 0.05)" : "#F8FAFC",
+                border: "1px solid",
+                borderColor: obfuscatorEnabled ? "rgba(124, 58, 237, 0.35)" : "#E2E8F0",
+                transition: "all 0.2s ease",
+              }}
+            >
+              <FormControlLabel
+                control={
+                  <Switch
+                    id="link-obfuscator-switch"
+                    size="small"
+                    checked={obfuscatorEnabled}
+                    onChange={(e) => setObfuscatorEnabled(e.target.checked)}
+                    color="primary"
+                  />
+                }
+                label={
+                  <Box>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                      <Typography variant="body2" sx={{ fontSize: "0.85rem", fontWeight: 700, color: "#1E293B" }}>
+                        WireGuard Obfuscator (Phantun)
+                      </Typography>
+                      <Chip
+                        label={obfuscatorEnabled ? "UDP over TCP" : "Disabled"}
+                        size="small"
+                        sx={{
+                          height: 18,
+                          fontSize: "0.62rem",
+                          fontWeight: 800,
+                          bgcolor: obfuscatorEnabled ? "rgba(124, 58, 237, 0.15)" : "#E2E8F0",
+                          color: obfuscatorEnabled ? "#7C3AED" : "#64748B",
+                          borderRadius: "4px",
+                        }}
+                      />
+                    </Box>
+                    <Typography
+                      variant="caption"
+                      sx={{ color: "#64748B", display: "block", fontSize: "0.72rem", lineHeight: 1.4, mt: 0.3 }}
+                    >
+                      Wraps this WireGuard UDP link in a TCP tunnel. Both nodes must run the Easy42 agent with
+                      phantun_client and phantun_server installed. Parameters are generated automatically on first
+                      enable and can be edited afterwards.
+                    </Typography>
+                  </Box>
+                }
+                sx={{ alignItems: "flex-start", ml: 0, m: 0 }}
+              />
+              {obfuscatorEnabled && (
+                <Box sx={{ mt: 1.5, display: "flex", flexDirection: "column", gap: 1.5 }}>
+                  <TextField
+                    select
+                    size="small"
+                    label="Client side"
+                    value={obfuscatorClientSide}
+                    onChange={(e) => setObfuscatorClientSide(e.target.value as "from" | "to")}
+                    helperText="The client initiates the TCP connection; the other end runs phantun_server."
+                  >
+                    <MenuItem value="from">{fromNodeName || "From"} (from)</MenuItem>
+                    <MenuItem value="to">{toNodeName || "To"} (to)</MenuItem>
+                  </TextField>
+                  <TextField
+                    label={`${fromNodeName || "From"} parameters (JSON)`}
+                    value={fromObfuscatorParams}
+                    onChange={(e) => setFromObfuscatorParams(e.target.value)}
+                    multiline
+                    minRows={2}
+                    size="small"
+                    placeholder={linkToEdit ? "" : "Leave blank to generate automatically"}
+                    InputProps={{ sx: { fontFamily: "monospace", fontSize: "0.75rem" } }}
+                  />
+                  <TextField
+                    label={`${toNodeName || "To"} parameters (JSON)`}
+                    value={toObfuscatorParams}
+                    onChange={(e) => setToObfuscatorParams(e.target.value)}
+                    multiline
+                    minRows={2}
+                    size="small"
+                    placeholder={linkToEdit ? "" : "Leave blank to generate automatically"}
+                    InputProps={{ sx: { fontFamily: "monospace", fontSize: "0.75rem" } }}
+                  />
+                </Box>
+              )}
             </Box>
           )}
 

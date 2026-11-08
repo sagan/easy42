@@ -113,6 +113,15 @@ func (h *Hub) SyncApps(nodeName string, apps []*agentpb.AppSpec) error {
 	return conn.SyncApps(apps)
 }
 
+// SyncObfuscators sends the latest WireGuard obfuscator desired state to a specific node agent if connected
+func (h *Hub) SyncObfuscators(nodeName string, specs []*agentpb.ObfuscatorSpec) error {
+	conn, ok := h.GetConnection(nodeName)
+	if !ok {
+		return nil // Agent not connected; will receive on next connect
+	}
+	return conn.SyncObfuscators(specs)
+}
+
 // GetHostsHash returns the latest reported hosts hash for a connected node agent
 func (h *Hub) GetHostsHash(nodeName string) string {
 	conn, ok := h.GetConnection(nodeName)

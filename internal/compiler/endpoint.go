@@ -71,10 +71,11 @@ func ResolveEndpointToIP(endpoint string) string {
 	return selectedIP
 }
 
-// ResolveLinkEndpoint determines the remote peer endpoint for selfNode's connection to peerNode.
+// ResolveUnderlyingLinkEndpoint determines the real remote peer endpoint (the WireGuard
+// UDP endpoint) for selfNode's connection to peerNode, ignoring any obfuscator override.
 // If selfNode is external, the remote endpoint is always derived from the managed peerNode's entrypoint and listen port.
 // If selfEnd.UseIp is true, any hostname in the endpoint will be resolved to an IP in easy42 server.
-func ResolveLinkEndpoint(
+func ResolveUnderlyingLinkEndpoint(
 	selfNode *config.Node,
 	peerNode *config.Node,
 	selfEnd *config.LinkEnd,
@@ -125,6 +126,36 @@ func ResolveLinkEndpoint(
 	}
 
 	return endpoint
+}
+
+// ResolveLinkEndpoint determines the endpoint that WireGuard should actually use for
+// selfNode's connection to peerNode. When the link end is obfuscated, a Phantun client
+// connects to its local loopback listener, while a Phantun server has no peer endpoint.
+func ResolveLinkEndpoint(
+	selfNode *config.Node,
+	peerNode *config.Node,
+	selfEnd *config.LinkEnd,
+	peerEnd *config.LinkEnd,
+) string {
+	endpoint := ResolveUnderlyingLinkEndpoint(selfNode, peerNode, selfEnd, peerEnd)
+	if selfEnd == nil || !selfEnd.ObfuscatorEnabled() {
+		return endpoint
+	}
+	switch selfEnd.ObfuscatorRole() {
+	case config.ObfuscatorPhantunClient:
+		port := 0
+		if selfEnd.ObfuscatorParameters != nil {
+			port = selfEnd.ObfuscatorParameters.LocalPort
+		}
+		if port > 0 {
+			return net.JoinHostPort("127.0.0.1", strconv.Itoa(port))
+		}
+		return ""
+	case config.ObfuscatorPhantunServer:
+		return ""
+	default:
+		return endpoint
+	}
 }
 
 // ResolvePeerEndpoint resolves the endpoint string that nodeFrom should use to connect to nodeTo

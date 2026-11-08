@@ -274,3 +274,15 @@ func (c *AgentConnection) SyncApps(apps []*agentpb.AppSpec) error {
 	}
 	return c.SendMessage(msg)
 }
+
+// SyncObfuscators sends the full desired set of WireGuard obfuscator services to the connected agent
+func (c *AgentConnection) SyncObfuscators(specs []*agentpb.ObfuscatorSpec) error {
+	msg := &agentpb.AgentMessage{
+		Payload: &agentpb.AgentMessage_SyncObfuscators{
+			SyncObfuscators: &agentpb.SyncObfuscators{
+				Obfuscators: specs,
+			},
+		},
+	}
+	return c.SendMessage(msg)
+}

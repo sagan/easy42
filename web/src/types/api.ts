@@ -154,6 +154,16 @@ export interface Node {
   route_reflector?: boolean;
 }
 
+export interface ObfuscatorParameters {
+  local_port?: number;
+  server_port?: number;
+  wireguard_port?: number;
+  tun_name?: string;
+  tun_local?: string;
+  tun_peer?: string;
+  extra_args?: string[];
+}
+
 export interface LinkEnd {
   name: string;
   type?: "wireguard" | "manual" | string;
@@ -179,6 +189,8 @@ export interface LinkEnd {
   preference?: number;
   mark?: string;
   note?: string;
+  obfuscator?: "none" | "phantun_client" | "phantun_server" | string;
+  obfuscator_parameters?: ObfuscatorParameters;
 }
 
 export interface Link {

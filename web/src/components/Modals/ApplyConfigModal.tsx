@@ -126,6 +126,10 @@ export function generateLinkApplySnippet(link: Link): string {
     if (end.routing_policy !== undefined && end.routing_policy !== "") ep.routing_policy = end.routing_policy;
     if (end.add_paths !== undefined && end.add_paths !== "") ep.add_paths = end.add_paths;
     if (end.note !== undefined && end.note !== "") ep.note = end.note;
+    if (end.obfuscator !== undefined && end.obfuscator !== "") {
+      ep.obfuscator = end.obfuscator;
+      if (end.obfuscator_parameters) ep.obfuscator_parameters = end.obfuscator_parameters;
+    }
     return ep;
   };
 

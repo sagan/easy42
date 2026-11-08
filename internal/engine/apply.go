@@ -70,13 +70,13 @@ type ApplyPreviewResult struct {
 
 // ApplyResult represents the outcome of an applied config change
 type ApplyResult struct {
-	Success        bool               `json:"success"`
-	AppliedAt      time.Time          `json:"applied_at"`
-	Summary        ApplySummary       `json:"summary"`
-	AffectedNodes  []string           `json:"affected_nodes"`
-	AffectedLinks  []string           `json:"affected_links"`
-	BackupFile     string             `json:"backup_file,omitempty"`
-	Plan           ApplyPreviewResult `json:"plan"`
+	Success       bool               `json:"success"`
+	AppliedAt     time.Time          `json:"applied_at"`
+	Summary       ApplySummary       `json:"summary"`
+	AffectedNodes []string           `json:"affected_nodes"`
+	AffectedLinks []string           `json:"affected_links"`
+	BackupFile    string             `json:"backup_file,omitempty"`
+	Plan          ApplyPreviewResult `json:"plan"`
 }
 
 // GetNode returns a copy of a node by name
@@ -216,8 +216,9 @@ func (m *Manager) ApplyConfigChange(content string) (*ApplyResult, error) {
 		return nil, fmt.Errorf("failed to save config: %w", err)
 	}
 
-	// Re-trigger host sync in background
+	// Re-trigger host and WireGuard obfuscator sync in background
 	go m.SyncHostsToAgents()
+	go m.SyncObfuscatorsToAgents()
 
 	affectedLinks := make([]string, 0)
 	if preview.Links != nil {
@@ -419,6 +420,9 @@ func (m *Manager) simulateApply(cfg *config.Config, patch *config.ConfigPatch) (
 	}
 
 	// Check post-patch integrity
+	if err := m.normalizeObfuscatorsInConfig(cfg); err != nil {
+		return nil, nil, fmt.Errorf("obfuscator validation failed: %w", err)
+	}
 	if err := validateMeshIntegrity(cfg); err != nil {
 		return nil, nil, fmt.Errorf("mesh integrity validation failed: %w", err)
 	}
@@ -853,6 +857,18 @@ func mergeLink(target *config.Link, patch config.LinkPatch, now time.Time) ([]Ap
 	mergeLinkEnd(targetFrom, patchFrom, "from", &diffs)
 	mergeLinkEnd(targetTo, patchTo, "to", &diffs)
 
+	explicitObfuscatorDisable := (patchFrom != nil && patchFrom.Obfuscator != nil && config.NormalizeObfuscatorRole(*patchFrom.Obfuscator) == config.ObfuscatorNone) ||
+		(patchTo != nil && patchTo.Obfuscator != nil && config.NormalizeObfuscatorRole(*patchTo.Obfuscator) == config.ObfuscatorNone)
+	if explicitObfuscatorDisable {
+		if targetFrom.ObfuscatorRole() != config.ObfuscatorNone || targetTo.ObfuscatorRole() != config.ObfuscatorNone {
+			diffs = append(diffs, ApplyFieldDiff{Field: "obfuscator", OldValue: "enabled", NewValue: config.ObfuscatorNone})
+		}
+		targetFrom.Obfuscator = ""
+		targetFrom.ObfuscatorParameters = nil
+		targetTo.Obfuscator = ""
+		targetTo.ObfuscatorParameters = nil
+	}
+
 	if len(diffs) > 0 {
 		target.ModifiedAt = now
 	}
@@ -942,6 +958,22 @@ func mergeLinkEnd(target *config.LinkEnd, patch *config.LinkEndPatch, prefix str
 	if patch.Note != nil && *patch.Note != target.Note {
 		checkField("note", target.Note, *patch.Note)
 		target.Note = *patch.Note
+	}
+	if patch.Obfuscator != nil {
+		role := config.NormalizeObfuscatorRole(*patch.Obfuscator)
+		if role != target.ObfuscatorRole() {
+			checkField("obfuscator", target.ObfuscatorRole(), role)
+		}
+		target.Obfuscator = role
+		if role == config.ObfuscatorNone {
+			target.ObfuscatorParameters = nil
+		}
+	}
+	if patch.ObfuscatorParameters != nil {
+		if !reflect.DeepEqual(target.ObfuscatorParameters, patch.ObfuscatorParameters) {
+			checkField("obfuscator_parameters", target.ObfuscatorParameters, patch.ObfuscatorParameters)
+		}
+		target.ObfuscatorParameters = patch.ObfuscatorParameters.Clone()
 	}
 }
 
@@ -1202,6 +1234,10 @@ func (m *Manager) recomputeLinksAndEndpoints(cfg *config.Config, now time.Time) 
 		}
 		if fromEP != "" && !fromN.IsExternal && l.From.PersistentKeepalive == 0 {
 			l.From.PersistentKeepalive = 25
+		}
+		if !l.IsManual() {
+			l.From.ResolvedEndpoint = compiler.ResolveLinkEndpoint(fromN, toN, &l.From, &l.To)
+			l.To.ResolvedEndpoint = compiler.ResolveLinkEndpoint(toN, fromN, &l.To, &l.From)
 		}
 	}
 }

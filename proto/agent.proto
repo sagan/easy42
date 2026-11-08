@@ -25,6 +25,7 @@ message AgentMessage {
     SyncCronTasks sync_cron_tasks = 23;
     SyncHosts sync_hosts = 24;
     SyncApps sync_apps = 25;
+    SyncObfuscators sync_obfuscators = 26;
   }
 }
 
@@ -306,6 +307,28 @@ message AppActionCmd {
   string action = 2;       // "start" | "stop" | "restart" | "logs"
   AppType app_type = 3;
   uint32 log_lines = 4;    // Lines of logs to retrieve (default 100)
+}
+
+// ----------------- WireGuard Obfuscator (Phantun) -----------------
+
+message ObfuscatorSpec {
+  string interface_name = 1; // WireGuard interface, e.g. wg42peer
+  string service_name = 2;   // wg42peer-obfuscator
+  string role = 3;           // "phantun_client" or "phantun_server"
+  string tun_name = 4;       // TUN interface name (max 15 chars)
+  string tun_local = 5;      // TUN local IPv4
+  string tun_peer = 6;       // TUN peer IPv4
+  int32 local_port = 7;      // Client: local listener port; Server: public TCP listen port
+  int32 server_port = 8;     // Remote Phantun server TCP port (client only)
+  int32 wireguard_port = 9;  // Server: local WireGuard UDP port
+  string remote = 10;        // Client: remote endpoint:port
+  string fwmark = 11;        // Optional WireGuard fwmark
+  repeated string extra_args = 12;
+  bool enabled = 13;
+}
+
+message SyncObfuscators {
+  repeated ObfuscatorSpec obfuscators = 1;
 }
 
 

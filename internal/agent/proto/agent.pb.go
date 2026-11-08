@@ -199,6 +199,7 @@ type AgentMessage struct {
 	//	*AgentMessage_SyncCronTasks
 	//	*AgentMessage_SyncHosts
 	//	*AgentMessage_SyncApps
+	//	*AgentMessage_SyncObfuscators
 	Payload       isAgentMessage_Payload `protobuf_oneof:"payload"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -363,6 +364,15 @@ func (x *AgentMessage) GetSyncApps() *SyncApps {
 	return nil
 }
 
+func (x *AgentMessage) GetSyncObfuscators() *SyncObfuscators {
+	if x != nil {
+		if x, ok := x.Payload.(*AgentMessage_SyncObfuscators); ok {
+			return x.SyncObfuscators
+		}
+	}
+	return nil
+}
+
 type isAgentMessage_Payload interface {
 	isAgentMessage_Payload()
 }
@@ -417,6 +427,10 @@ type AgentMessage_SyncApps struct {
 	SyncApps *SyncApps `protobuf:"bytes,25,opt,name=sync_apps,json=syncApps,proto3,oneof"`
 }
 
+type AgentMessage_SyncObfuscators struct {
+	SyncObfuscators *SyncObfuscators `protobuf:"bytes,26,opt,name=sync_obfuscators,json=syncObfuscators,proto3,oneof"`
+}
+
 func (*AgentMessage_RegisterReq) isAgentMessage_Payload() {}
 
 func (*AgentMessage_Heartbeat) isAgentMessage_Payload() {}
@@ -440,6 +454,8 @@ func (*AgentMessage_SyncCronTasks) isAgentMessage_Payload() {}
 func (*AgentMessage_SyncHosts) isAgentMessage_Payload() {}
 
 func (*AgentMessage_SyncApps) isAgentMessage_Payload() {}
+
+func (*AgentMessage_SyncObfuscators) isAgentMessage_Payload() {}
 
 type RegisterRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -2903,11 +2919,195 @@ func (x *AppActionCmd) GetLogLines() uint32 {
 	return 0
 }
 
+type ObfuscatorSpec struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	InterfaceName string                 `protobuf:"bytes,1,opt,name=interface_name,json=interfaceName,proto3" json:"interface_name,omitempty"`  // WireGuard interface, e.g. wg42peer
+	ServiceName   string                 `protobuf:"bytes,2,opt,name=service_name,json=serviceName,proto3" json:"service_name,omitempty"`        // wg42peer-obfuscator
+	Role          string                 `protobuf:"bytes,3,opt,name=role,proto3" json:"role,omitempty"`                                         // "phantun_client" or "phantun_server"
+	TunName       string                 `protobuf:"bytes,4,opt,name=tun_name,json=tunName,proto3" json:"tun_name,omitempty"`                    // TUN interface name (max 15 chars)
+	TunLocal      string                 `protobuf:"bytes,5,opt,name=tun_local,json=tunLocal,proto3" json:"tun_local,omitempty"`                 // TUN local IPv4
+	TunPeer       string                 `protobuf:"bytes,6,opt,name=tun_peer,json=tunPeer,proto3" json:"tun_peer,omitempty"`                    // TUN peer IPv4
+	LocalPort     int32                  `protobuf:"varint,7,opt,name=local_port,json=localPort,proto3" json:"local_port,omitempty"`             // Client: local listener port; Server: public TCP listen port
+	ServerPort    int32                  `protobuf:"varint,8,opt,name=server_port,json=serverPort,proto3" json:"server_port,omitempty"`          // Remote Phantun server TCP port (client only)
+	WireguardPort int32                  `protobuf:"varint,9,opt,name=wireguard_port,json=wireguardPort,proto3" json:"wireguard_port,omitempty"` // Server: local WireGuard UDP port
+	Remote        string                 `protobuf:"bytes,10,opt,name=remote,proto3" json:"remote,omitempty"`                                    // Client: remote endpoint:port
+	Fwmark        string                 `protobuf:"bytes,11,opt,name=fwmark,proto3" json:"fwmark,omitempty"`                                    // Optional WireGuard fwmark
+	ExtraArgs     []string               `protobuf:"bytes,12,rep,name=extra_args,json=extraArgs,proto3" json:"extra_args,omitempty"`
+	Enabled       bool                   `protobuf:"varint,13,opt,name=enabled,proto3" json:"enabled,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ObfuscatorSpec) Reset() {
+	*x = ObfuscatorSpec{}
+	mi := &file_proto_agent_proto_msgTypes[35]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ObfuscatorSpec) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ObfuscatorSpec) ProtoMessage() {}
+
+func (x *ObfuscatorSpec) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_agent_proto_msgTypes[35]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ObfuscatorSpec.ProtoReflect.Descriptor instead.
+func (*ObfuscatorSpec) Descriptor() ([]byte, []int) {
+	return file_proto_agent_proto_rawDescGZIP(), []int{35}
+}
+
+func (x *ObfuscatorSpec) GetInterfaceName() string {
+	if x != nil {
+		return x.InterfaceName
+	}
+	return ""
+}
+
+func (x *ObfuscatorSpec) GetServiceName() string {
+	if x != nil {
+		return x.ServiceName
+	}
+	return ""
+}
+
+func (x *ObfuscatorSpec) GetRole() string {
+	if x != nil {
+		return x.Role
+	}
+	return ""
+}
+
+func (x *ObfuscatorSpec) GetTunName() string {
+	if x != nil {
+		return x.TunName
+	}
+	return ""
+}
+
+func (x *ObfuscatorSpec) GetTunLocal() string {
+	if x != nil {
+		return x.TunLocal
+	}
+	return ""
+}
+
+func (x *ObfuscatorSpec) GetTunPeer() string {
+	if x != nil {
+		return x.TunPeer
+	}
+	return ""
+}
+
+func (x *ObfuscatorSpec) GetLocalPort() int32 {
+	if x != nil {
+		return x.LocalPort
+	}
+	return 0
+}
+
+func (x *ObfuscatorSpec) GetServerPort() int32 {
+	if x != nil {
+		return x.ServerPort
+	}
+	return 0
+}
+
+func (x *ObfuscatorSpec) GetWireguardPort() int32 {
+	if x != nil {
+		return x.WireguardPort
+	}
+	return 0
+}
+
+func (x *ObfuscatorSpec) GetRemote() string {
+	if x != nil {
+		return x.Remote
+	}
+	return ""
+}
+
+func (x *ObfuscatorSpec) GetFwmark() string {
+	if x != nil {
+		return x.Fwmark
+	}
+	return ""
+}
+
+func (x *ObfuscatorSpec) GetExtraArgs() []string {
+	if x != nil {
+		return x.ExtraArgs
+	}
+	return nil
+}
+
+func (x *ObfuscatorSpec) GetEnabled() bool {
+	if x != nil {
+		return x.Enabled
+	}
+	return false
+}
+
+type SyncObfuscators struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Obfuscators   []*ObfuscatorSpec      `protobuf:"bytes,1,rep,name=obfuscators,proto3" json:"obfuscators,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SyncObfuscators) Reset() {
+	*x = SyncObfuscators{}
+	mi := &file_proto_agent_proto_msgTypes[36]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SyncObfuscators) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SyncObfuscators) ProtoMessage() {}
+
+func (x *SyncObfuscators) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_agent_proto_msgTypes[36]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SyncObfuscators.ProtoReflect.Descriptor instead.
+func (*SyncObfuscators) Descriptor() ([]byte, []int) {
+	return file_proto_agent_proto_rawDescGZIP(), []int{36}
+}
+
+func (x *SyncObfuscators) GetObfuscators() []*ObfuscatorSpec {
+	if x != nil {
+		return x.Obfuscators
+	}
+	return nil
+}
+
 var File_proto_agent_proto protoreflect.FileDescriptor
 
 const file_proto_agent_proto_rawDesc = "" +
 	"\n" +
-	"\x11proto/agent.proto\x12\x0feasy42.agent.v1\"\xf8\x06\n" +
+	"\x11proto/agent.proto\x12\x0feasy42.agent.v1\"\xc7\a\n" +
 	"\fAgentMessage\x12\x10\n" +
 	"\x03seq\x18\x01 \x01(\x04R\x03seq\x12\x1c\n" +
 	"\ttimestamp\x18\x02 \x01(\x03R\ttimestamp\x12E\n" +
@@ -2926,7 +3126,8 @@ const file_proto_agent_proto_rawDesc = "" +
 	"\x0fsync_cron_tasks\x18\x17 \x01(\v2\x1e.easy42.agent.v1.SyncCronTasksH\x00R\rsyncCronTasks\x12;\n" +
 	"\n" +
 	"sync_hosts\x18\x18 \x01(\v2\x1a.easy42.agent.v1.SyncHostsH\x00R\tsyncHosts\x128\n" +
-	"\tsync_apps\x18\x19 \x01(\v2\x19.easy42.agent.v1.SyncAppsH\x00R\bsyncAppsB\t\n" +
+	"\tsync_apps\x18\x19 \x01(\v2\x19.easy42.agent.v1.SyncAppsH\x00R\bsyncApps\x12M\n" +
+	"\x10sync_obfuscators\x18\x1a \x01(\v2 .easy42.agent.v1.SyncObfuscatorsH\x00R\x0fsyncObfuscatorsB\t\n" +
 	"\apayload\"\xca\x01\n" +
 	"\x0fRegisterRequest\x12\x1b\n" +
 	"\tnode_name\x18\x01 \x01(\tR\bnodeName\x12#\n" +
@@ -3163,10 +3364,31 @@ const file_proto_agent_proto_rawDesc = "" +
 	"\bapp_name\x18\x01 \x01(\tR\aappName\x12\x16\n" +
 	"\x06action\x18\x02 \x01(\tR\x06action\x123\n" +
 	"\bapp_type\x18\x03 \x01(\x0e2\x18.easy42.agent.v1.AppTypeR\aappType\x12\x1b\n" +
-	"\tlog_lines\x18\x04 \x01(\rR\blogLines**\n" +
+	"\tlog_lines\x18\x04 \x01(\rR\blogLines\"\x91\x03\n" +
+	"\x0eObfuscatorSpec\x12%\n" +
+	"\x0einterface_name\x18\x01 \x01(\tR\rinterfaceName\x12!\n" +
+	"\fservice_name\x18\x02 \x01(\tR\vserviceName\x12\x12\n" +
+	"\x04role\x18\x03 \x01(\tR\x04role\x12\x19\n" +
+	"\btun_name\x18\x04 \x01(\tR\atunName\x12\x1b\n" +
+	"\ttun_local\x18\x05 \x01(\tR\btunLocal\x12\x19\n" +
+	"\btun_peer\x18\x06 \x01(\tR\atunPeer\x12\x1d\n" +
+	"\n" +
+	"local_port\x18\a \x01(\x05R\tlocalPort\x12\x1f\n" +
+	"\vserver_port\x18\b \x01(\x05R\n" +
+	"serverPort\x12%\n" +
+	"\x0ewireguard_port\x18\t \x01(\x05R\rwireguardPort\x12\x16\n" +
+	"\x06remote\x18\n" +
+	" \x01(\tR\x06remote\x12\x16\n" +
+	"\x06fwmark\x18\v \x01(\tR\x06fwmark\x12\x1d\n" +
+	"\n" +
+	"extra_args\x18\f \x03(\tR\textraArgs\x12\x18\n" +
+	"\aenabled\x18\r \x01(\bR\aenabled\"T\n" +
+	"\x0fSyncObfuscators\x12A\n" +
+	"\vobfuscators\x18\x01 \x03(\v2\x1f.easy42.agent.v1.ObfuscatorSpecR\vobfuscators*4\n" +
 	"\aAppType\x12\x12\n" +
 	"\x0eDOCKER_COMPOSE\x10\x00\x12\v\n" +
-	"\aSYSTEMD\x10\x01B%Z#easy42/internal/agent/proto;agentpbb\x06proto3"
+	"\aSYSTEMD\x10\x01\x12\b\n" +
+	"\x04CRON\x10\x02B%Z#easy42/internal/agent/proto;agentpbb\x06proto3"
 
 var (
 	file_proto_agent_proto_rawDescOnce sync.Once
@@ -3181,7 +3403,7 @@ func file_proto_agent_proto_rawDescGZIP() []byte {
 }
 
 var file_proto_agent_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
-var file_proto_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 36)
+var file_proto_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 38)
 var file_proto_agent_proto_goTypes = []any{
 	(AppType)(0),                // 0: easy42.agent.v1.AppType
 	(ManageInterface_Action)(0), // 1: easy42.agent.v1.ManageInterface.Action
@@ -3221,7 +3443,9 @@ var file_proto_agent_proto_goTypes = []any{
 	(*SyncApps)(nil),            // 35: easy42.agent.v1.SyncApps
 	(*AppStatus)(nil),           // 36: easy42.agent.v1.AppStatus
 	(*AppActionCmd)(nil),        // 37: easy42.agent.v1.AppActionCmd
-	nil,                         // 38: easy42.agent.v1.CronTaskSpec.ParamsEntry
+	(*ObfuscatorSpec)(nil),      // 38: easy42.agent.v1.ObfuscatorSpec
+	(*SyncObfuscators)(nil),     // 39: easy42.agent.v1.SyncObfuscators
+	nil,                         // 40: easy42.agent.v1.CronTaskSpec.ParamsEntry
 }
 var file_proto_agent_proto_depIdxs = []int32{
 	4,  // 0: easy42.agent.v1.AgentMessage.register_req:type_name -> easy42.agent.v1.RegisterRequest
@@ -3236,42 +3460,44 @@ var file_proto_agent_proto_depIdxs = []int32{
 	27, // 9: easy42.agent.v1.AgentMessage.sync_cron_tasks:type_name -> easy42.agent.v1.SyncCronTasks
 	31, // 10: easy42.agent.v1.AgentMessage.sync_hosts:type_name -> easy42.agent.v1.SyncHosts
 	35, // 11: easy42.agent.v1.AgentMessage.sync_apps:type_name -> easy42.agent.v1.SyncApps
-	10, // 12: easy42.agent.v1.TelemetryReport.system:type_name -> easy42.agent.v1.SystemMetrics
-	11, // 13: easy42.agent.v1.TelemetryReport.interfaces:type_name -> easy42.agent.v1.InterfaceMetrics
-	12, // 14: easy42.agent.v1.TelemetryReport.wg_peers:type_name -> easy42.agent.v1.WgPeerMetrics
-	13, // 15: easy42.agent.v1.TelemetryReport.bird_protocols:type_name -> easy42.agent.v1.BirdProtocolStatus
-	9,  // 16: easy42.agent.v1.TelemetryReport.disks:type_name -> easy42.agent.v1.DiskMetrics
-	36, // 17: easy42.agent.v1.TelemetryReport.apps:type_name -> easy42.agent.v1.AppStatus
-	16, // 18: easy42.agent.v1.CommandRequest.apply_config:type_name -> easy42.agent.v1.ApplyConfigFile
-	18, // 19: easy42.agent.v1.CommandRequest.manage_iface:type_name -> easy42.agent.v1.ManageInterface
-	19, // 20: easy42.agent.v1.CommandRequest.reload_bird:type_name -> easy42.agent.v1.ReloadBirdCmd
-	20, // 21: easy42.agent.v1.CommandRequest.apply_nft:type_name -> easy42.agent.v1.ApplyNftablesCmd
-	21, // 22: easy42.agent.v1.CommandRequest.looking_glass:type_name -> easy42.agent.v1.LookingGlassCmd
-	22, // 23: easy42.agent.v1.CommandRequest.probe_system:type_name -> easy42.agent.v1.ProbeSystemCmd
-	24, // 24: easy42.agent.v1.CommandRequest.restart_service:type_name -> easy42.agent.v1.RestartServiceCmd
-	23, // 25: easy42.agent.v1.CommandRequest.flush_cache:type_name -> easy42.agent.v1.FlushCacheCmd
-	32, // 26: easy42.agent.v1.CommandRequest.sync_hosts:type_name -> easy42.agent.v1.SyncHostsCmd
-	15, // 27: easy42.agent.v1.CommandRequest.sync_action:type_name -> easy42.agent.v1.SyncActionCmd
-	17, // 28: easy42.agent.v1.CommandRequest.delete_config:type_name -> easy42.agent.v1.DeleteConfigFile
-	37, // 29: easy42.agent.v1.CommandRequest.app_action:type_name -> easy42.agent.v1.AppActionCmd
-	30, // 30: easy42.agent.v1.SyncActionCmd.hosts:type_name -> easy42.agent.v1.HostRecord
-	1,  // 31: easy42.agent.v1.ManageInterface.action:type_name -> easy42.agent.v1.ManageInterface.Action
-	2,  // 32: easy42.agent.v1.LookingGlassCmd.tool:type_name -> easy42.agent.v1.LookingGlassCmd.Tool
-	11, // 33: easy42.agent.v1.ProbeResponse.interfaces:type_name -> easy42.agent.v1.InterfaceMetrics
-	28, // 34: easy42.agent.v1.SyncCronTasks.tasks:type_name -> easy42.agent.v1.CronTaskSpec
-	38, // 35: easy42.agent.v1.CronTaskSpec.params:type_name -> easy42.agent.v1.CronTaskSpec.ParamsEntry
-	30, // 36: easy42.agent.v1.SyncHosts.hosts:type_name -> easy42.agent.v1.HostRecord
-	30, // 37: easy42.agent.v1.SyncHostsCmd.hosts:type_name -> easy42.agent.v1.HostRecord
-	0,  // 38: easy42.agent.v1.AppSpec.app_type:type_name -> easy42.agent.v1.AppType
-	33, // 39: easy42.agent.v1.AppSpec.config_files:type_name -> easy42.agent.v1.AppConfigFile
-	34, // 40: easy42.agent.v1.SyncApps.apps:type_name -> easy42.agent.v1.AppSpec
-	0,  // 41: easy42.agent.v1.AppStatus.app_type:type_name -> easy42.agent.v1.AppType
-	0,  // 42: easy42.agent.v1.AppActionCmd.app_type:type_name -> easy42.agent.v1.AppType
-	43, // [43:43] is the sub-list for method output_type
-	43, // [43:43] is the sub-list for method input_type
-	43, // [43:43] is the sub-list for extension type_name
-	43, // [43:43] is the sub-list for extension extendee
-	0,  // [0:43] is the sub-list for field type_name
+	39, // 12: easy42.agent.v1.AgentMessage.sync_obfuscators:type_name -> easy42.agent.v1.SyncObfuscators
+	10, // 13: easy42.agent.v1.TelemetryReport.system:type_name -> easy42.agent.v1.SystemMetrics
+	11, // 14: easy42.agent.v1.TelemetryReport.interfaces:type_name -> easy42.agent.v1.InterfaceMetrics
+	12, // 15: easy42.agent.v1.TelemetryReport.wg_peers:type_name -> easy42.agent.v1.WgPeerMetrics
+	13, // 16: easy42.agent.v1.TelemetryReport.bird_protocols:type_name -> easy42.agent.v1.BirdProtocolStatus
+	9,  // 17: easy42.agent.v1.TelemetryReport.disks:type_name -> easy42.agent.v1.DiskMetrics
+	36, // 18: easy42.agent.v1.TelemetryReport.apps:type_name -> easy42.agent.v1.AppStatus
+	16, // 19: easy42.agent.v1.CommandRequest.apply_config:type_name -> easy42.agent.v1.ApplyConfigFile
+	18, // 20: easy42.agent.v1.CommandRequest.manage_iface:type_name -> easy42.agent.v1.ManageInterface
+	19, // 21: easy42.agent.v1.CommandRequest.reload_bird:type_name -> easy42.agent.v1.ReloadBirdCmd
+	20, // 22: easy42.agent.v1.CommandRequest.apply_nft:type_name -> easy42.agent.v1.ApplyNftablesCmd
+	21, // 23: easy42.agent.v1.CommandRequest.looking_glass:type_name -> easy42.agent.v1.LookingGlassCmd
+	22, // 24: easy42.agent.v1.CommandRequest.probe_system:type_name -> easy42.agent.v1.ProbeSystemCmd
+	24, // 25: easy42.agent.v1.CommandRequest.restart_service:type_name -> easy42.agent.v1.RestartServiceCmd
+	23, // 26: easy42.agent.v1.CommandRequest.flush_cache:type_name -> easy42.agent.v1.FlushCacheCmd
+	32, // 27: easy42.agent.v1.CommandRequest.sync_hosts:type_name -> easy42.agent.v1.SyncHostsCmd
+	15, // 28: easy42.agent.v1.CommandRequest.sync_action:type_name -> easy42.agent.v1.SyncActionCmd
+	17, // 29: easy42.agent.v1.CommandRequest.delete_config:type_name -> easy42.agent.v1.DeleteConfigFile
+	37, // 30: easy42.agent.v1.CommandRequest.app_action:type_name -> easy42.agent.v1.AppActionCmd
+	30, // 31: easy42.agent.v1.SyncActionCmd.hosts:type_name -> easy42.agent.v1.HostRecord
+	1,  // 32: easy42.agent.v1.ManageInterface.action:type_name -> easy42.agent.v1.ManageInterface.Action
+	2,  // 33: easy42.agent.v1.LookingGlassCmd.tool:type_name -> easy42.agent.v1.LookingGlassCmd.Tool
+	11, // 34: easy42.agent.v1.ProbeResponse.interfaces:type_name -> easy42.agent.v1.InterfaceMetrics
+	28, // 35: easy42.agent.v1.SyncCronTasks.tasks:type_name -> easy42.agent.v1.CronTaskSpec
+	40, // 36: easy42.agent.v1.CronTaskSpec.params:type_name -> easy42.agent.v1.CronTaskSpec.ParamsEntry
+	30, // 37: easy42.agent.v1.SyncHosts.hosts:type_name -> easy42.agent.v1.HostRecord
+	30, // 38: easy42.agent.v1.SyncHostsCmd.hosts:type_name -> easy42.agent.v1.HostRecord
+	0,  // 39: easy42.agent.v1.AppSpec.app_type:type_name -> easy42.agent.v1.AppType
+	33, // 40: easy42.agent.v1.AppSpec.config_files:type_name -> easy42.agent.v1.AppConfigFile
+	34, // 41: easy42.agent.v1.SyncApps.apps:type_name -> easy42.agent.v1.AppSpec
+	0,  // 42: easy42.agent.v1.AppStatus.app_type:type_name -> easy42.agent.v1.AppType
+	0,  // 43: easy42.agent.v1.AppActionCmd.app_type:type_name -> easy42.agent.v1.AppType
+	38, // 44: easy42.agent.v1.SyncObfuscators.obfuscators:type_name -> easy42.agent.v1.ObfuscatorSpec
+	45, // [45:45] is the sub-list for method output_type
+	45, // [45:45] is the sub-list for method input_type
+	45, // [45:45] is the sub-list for extension type_name
+	45, // [45:45] is the sub-list for extension extendee
+	0,  // [0:45] is the sub-list for field type_name
 }
 
 func init() { file_proto_agent_proto_init() }
@@ -3292,6 +3518,7 @@ func file_proto_agent_proto_init() {
 		(*AgentMessage_SyncCronTasks)(nil),
 		(*AgentMessage_SyncHosts)(nil),
 		(*AgentMessage_SyncApps)(nil),
+		(*AgentMessage_SyncObfuscators)(nil),
 	}
 	file_proto_agent_proto_msgTypes[11].OneofWrappers = []any{
 		(*CommandRequest_ApplyConfig)(nil),
@@ -3313,7 +3540,7 @@ func file_proto_agent_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_agent_proto_rawDesc), len(file_proto_agent_proto_rawDesc)),
 			NumEnums:      3,
-			NumMessages:   36,
+			NumMessages:   38,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
