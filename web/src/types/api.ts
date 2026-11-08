@@ -160,6 +160,7 @@ export interface LinkEnd {
   interface: string;
   address: string;
   address4?: string;
+  /** System-managed: derived from the peer end's address; not manually editable */
   neighbor_address?: string;
   listen_port: number;
   endpoint?: string;

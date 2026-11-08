@@ -1183,18 +1183,12 @@ func (m *Manager) buildLink(cfg *config.Config, n1, n2 *config.Node, listenPort1
 		if toIface == "" && !toNode.IsExternal {
 			return nil, fmt.Errorf("interface name is required for node %s in manual link", toNode.Name)
 		}
-		// Cross-fill local and neighbor IPs if one is supplied
+		// Cross-fill local IPs if only the peer's neighbor IP was supplied (legacy input)
 		if fromAddr == "" && toNeighborAddr != "" {
 			fromAddr = toNeighborAddr
 		}
 		if toAddr == "" && fromNeighborAddr != "" {
 			toAddr = fromNeighborAddr
-		}
-		if fromNeighborAddr == "" && toAddr != "" {
-			fromNeighborAddr = toAddr
-		}
-		if toNeighborAddr == "" && fromAddr != "" {
-			toNeighborAddr = fromAddr
 		}
 		if fromAddr == "" {
 			return nil, fmt.Errorf("local IP address is required for node %s in manual link", fromNode.Name)
@@ -1202,6 +1196,9 @@ func (m *Manager) buildLink(cfg *config.Config, n1, n2 *config.Node, listenPort1
 		if toAddr == "" {
 			return nil, fmt.Errorf("local IP address is required for node %s in manual link", toNode.Name)
 		}
+		// NeighborAddress is a system-managed derivative: always mirror the peer's local address
+		fromNeighborAddr = toAddr
+		toNeighborAddr = fromAddr
 	} else {
 		if fromAddr == "" && fromNode.IP != "" {
 			fromAddr, _ = compiler.DeriveIPv6LinkLocal(fromNode.IP)
@@ -2041,9 +2038,6 @@ func (m *Manager) UpdateLinkWithAllOptions(node1Name, node2Name string, customFr
 		if fromEnd.Interface != "" {
 			link.From.Interface = fromEnd.Interface
 		}
-		if fromEnd.NeighborAddress != "" {
-			link.From.NeighborAddress = fromEnd.NeighborAddress
-		}
 		if fromEnd.ListenPort > 0 {
 			link.From.ListenPort = fromEnd.ListenPort
 		}
@@ -2107,9 +2101,6 @@ func (m *Manager) UpdateLinkWithAllOptions(node1Name, node2Name string, customFr
 		}
 		if toEnd.Interface != "" {
 			link.To.Interface = toEnd.Interface
-		}
-		if toEnd.NeighborAddress != "" {
-			link.To.NeighborAddress = toEnd.NeighborAddress
 		}
 		if toEnd.ListenPort > 0 {
 			link.To.ListenPort = toEnd.ListenPort
@@ -2217,17 +2208,19 @@ func (m *Manager) UpdateLinkWithAllOptions(node1Name, node2Name string, customFr
 		link.From.Type = config.LinkTypeManual
 		link.To.Type = config.LinkTypeManual
 
-		// Cross-fill missing local IP with neighbor IP if provided
+		// Cross-fill missing local IP from the peer's stored neighbor IP (legacy entries)
 		if link.From.Address == "" && link.To.NeighborAddress != "" {
 			link.From.Address = link.To.NeighborAddress
 		}
 		if link.To.Address == "" && link.From.NeighborAddress != "" {
 			link.To.Address = link.From.NeighborAddress
 		}
-		if link.From.NeighborAddress == "" && link.To.Address != "" {
+		// NeighborAddress is a system-managed derivative: always mirror the peer's local address
+		// (kept when the peer has no address, where it records the peer's BGP IP)
+		if link.To.Address != "" {
 			link.From.NeighborAddress = link.To.Address
 		}
-		if link.To.NeighborAddress == "" && link.From.Address != "" {
+		if link.From.Address != "" {
 			link.To.NeighborAddress = link.From.Address
 		}
 

@@ -118,8 +118,6 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
   const [toInterface, setToInterface] = useState<string>("");
   const [fromAddress, setFromAddress] = useState<string>("");
   const [toAddress, setToAddress] = useState<string>("");
-  const [fromNeighborAddress, setFromNeighborAddress] = useState<string>("");
-  const [toNeighborAddress, setToNeighborAddress] = useState<string>("");
 
   // External peering custom fields
   const [localAddress, setLocalAddress] = useState("");
@@ -198,8 +196,6 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
       setToInterface(linkToEdit.to?.interface || "");
       setFromAddress(linkToEdit.from?.address || "");
       setToAddress(linkToEdit.to?.address || "");
-      setFromNeighborAddress(linkToEdit.from?.neighbor_address || "");
-      setToNeighborAddress(linkToEdit.to?.neighbor_address || "");
 
       setFromNodeName(linkToEdit.from.name);
       setToNodeName(linkToEdit.to.name);
@@ -270,8 +266,6 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
       setToInterface("");
       setFromAddress("");
       setToAddress("");
-      setFromNeighborAddress("");
-      setToNeighborAddress("");
 
       if (initialFrom && initialTo) {
         const nFrom = nodes.find((n) => n.name === initialFrom);
@@ -481,10 +475,8 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
           return;
         }
 
-        const effectiveFromAddr = fromAddress.trim() || toNeighborAddress.trim();
-        const effectiveToAddr = toAddress.trim() || fromNeighborAddress.trim();
-        const effectiveFromNeighbor = fromNeighborAddress.trim() || effectiveToAddr;
-        const effectiveToNeighbor = toNeighborAddress.trim() || effectiveFromAddr;
+        const effectiveFromAddr = fromAddress.trim();
+        const effectiveToAddr = toAddress.trim();
 
         if (!effectiveFromAddr || !effectiveToAddr) {
           setError("Both endpoints must specify a local IP address for a manual link");
@@ -497,7 +489,6 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
           type: "manual",
           interface: fromInterface.trim(),
           address: effectiveFromAddr,
-          neighbor_address: effectiveFromNeighbor || undefined,
           policy: isFromExt ? "none" : fromPolicy,
           routing_policy: isFromExt ? undefined : fromRoutingPolicy || (linkToEdit ? "inherit" : undefined),
           add_paths: isFromExt ? undefined : fromAddPaths || (linkToEdit ? "inherit" : undefined),
@@ -513,7 +504,6 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
           type: "manual",
           interface: toInterface.trim(),
           address: effectiveToAddr,
-          neighbor_address: effectiveToNeighbor || undefined,
           policy: isToExt ? "none" : toPolicy,
           routing_policy: isToExt ? undefined : toRoutingPolicy || (linkToEdit ? "inherit" : undefined),
           add_paths: isToExt ? undefined : toAddPaths || (linkToEdit ? "inherit" : undefined),
@@ -1902,7 +1892,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                   End 1: {fromNode.name} {fromNode.is_external ? "(External Peer)" : ""}
                 </Typography>
 
-                <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 1.5, mb: 1.5 }}>
+                <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5, mb: 1.5 }}>
                   <TextFieldWithCopy
                     id="manual-from-interface"
                     label="Interface Name"
@@ -1921,16 +1911,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                     value={fromAddress}
                     onChange={(e) => setFromAddress(e.target.value)}
                     required
-                    helperText="Local IP on this interface"
-                  />
-                  <TextFieldWithCopy
-                    id="manual-from-neighbor-address"
-                    label="Neighbor IP Address"
-                    size="small"
-                    placeholder="e.g. 10.0.0.2 or fe80::2"
-                    value={fromNeighborAddress}
-                    onChange={(e) => setFromNeighborAddress(e.target.value)}
-                    helperText="Remote BGP peer IP (optional)"
+                    helperText="Local IP on this interface (neighbor IP is derived automatically)"
                   />
                 </Box>
 
@@ -2097,7 +2078,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                   End 2: {toNode.name} {toNode.is_external ? "(External Peer)" : ""}
                 </Typography>
 
-                <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 1.5, mb: 1.5 }}>
+                <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5, mb: 1.5 }}>
                   <TextFieldWithCopy
                     id="manual-to-interface"
                     label="Interface Name"
@@ -2116,16 +2097,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                     value={toAddress}
                     onChange={(e) => setToAddress(e.target.value)}
                     required
-                    helperText="Local IP on this interface"
-                  />
-                  <TextFieldWithCopy
-                    id="manual-to-neighbor-address"
-                    label="Neighbor IP Address"
-                    size="small"
-                    placeholder="e.g. 10.0.0.1 or fe80::1"
-                    value={toNeighborAddress}
-                    onChange={(e) => setToNeighborAddress(e.target.value)}
-                    helperText="Remote BGP peer IP (optional)"
+                    helperText="Local IP on this interface (neighbor IP is derived automatically)"
                   />
                 </Box>
 

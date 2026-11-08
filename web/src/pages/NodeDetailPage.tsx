@@ -2422,7 +2422,7 @@ export const NodeDetailPage: React.FC = () => {
                         const isUp = workingState === "working";
                         const isDown = workingState === "not_working";
 
-                        const rawPeerAddress = peerEnd.address || selfEnd.neighbor_address || peerEnd.address4 || "";
+                        const rawPeerAddress = peerEnd.address || peerEnd.address4 || "";
                         const cleanPeerAddress = rawPeerAddress ? rawPeerAddress.replace(/\/64$/, "") : "—";
                         const peerPort =
                           peerEnd.listen_port ||

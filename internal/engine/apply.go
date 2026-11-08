@@ -889,10 +889,8 @@ func mergeLinkEnd(target *config.LinkEnd, patch *config.LinkEndPatch, prefix str
 		checkField("address4", target.Address4, *patch.Address4)
 		target.Address4 = *patch.Address4
 	}
-	if patch.NeighborAddress != nil && *patch.NeighborAddress != target.NeighborAddress {
-		checkField("neighbor_address", target.NeighborAddress, *patch.NeighborAddress)
-		target.NeighborAddress = *patch.NeighborAddress
-	}
+	// patch.NeighborAddress is intentionally ignored: neighbor_address is a system-managed
+	// derivative of the peer's address and is not manually editable
 	if patch.ListenPort != nil && *patch.ListenPort != target.ListenPort {
 		checkField("listen_port", target.ListenPort, *patch.ListenPort)
 		target.ListenPort = *patch.ListenPort

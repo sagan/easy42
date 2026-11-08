@@ -161,6 +161,8 @@ const ConfigChangeJSONSchema = `{
         "interface": { "type": "string" },
         "address": { "type": "string" },
         "address4": { "type": "string" },
+        // neighbor_address is system-managed (derived from the peer's address); accepted for
+        // backward compatibility with legacy snippets but ignored during apply
         "neighbor_address": { "type": "string" },
         "listen_port": { "type": "integer", "minimum": 0, "maximum": 65535 },
         "endpoint": { "type": "string" },

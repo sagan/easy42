@@ -420,7 +420,7 @@ type LinkEnd struct {
 	Interface           string `json:"interface"`                  // e.g. wg42<peer>, wg42-<peer>, or manual tunnel iface
 	Address             string `json:"address"`                    // e.g. fe80::192:168:100:10/64 or local ip
 	Address4            string `json:"address4,omitempty"`         // Optional IPv4 link-local address (e.g. 169.254.x.x/32)
-	NeighborAddress     string `json:"neighbor_address,omitempty"` // Neighbor IP for manual link (optional, defaults to peer's address)
+	NeighborAddress     string `json:"neighbor_address,omitempty"` // System-managed derivative of the peer's address; not manually editable
 	ListenPort          int    `json:"listen_port"`                // Local device wg listening port
 	Endpoint            string `json:"endpoint,omitempty"`         // External access endpoint (optional)
 	PrivateKey          string `json:"private_key,omitempty"`      // Encrypted base64 wireguard private key

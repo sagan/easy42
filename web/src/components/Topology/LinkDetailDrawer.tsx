@@ -226,7 +226,7 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
     const theirPublicKey = theirLinkEnd.public_key || "";
 
     const ourAddress = getLinkLocalIpv6CopyText(ourLinkEnd.address);
-    const theirAddress = getLinkLocalIpv6CopyText(theirLinkEnd.address || ourLinkEnd.neighbor_address);
+    const theirAddress = getLinkLocalIpv6CopyText(theirLinkEnd.address);
 
     if (isManual) {
       const ourLines = [
@@ -1233,17 +1233,6 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
               </Box>
             )}
 
-            {isManual && (
-              <Box sx={{ display: "flex", justifyContent: "space-between" }}>
-                <Typography variant="caption" sx={{ color: "#64748B" }}>
-                  Neighbor Address:
-                </Typography>
-                <Typography variant="caption" className="mono-font" sx={{ color: "#7C3AED", fontWeight: 600 }}>
-                  {link.from.neighbor_address || link.to.address || "(Auto from peer)"}
-                </Typography>
-              </Box>
-            )}
-
             {!isManual && (
               <>
                 <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -1945,17 +1934,6 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
                 </Typography>
                 <Typography variant="caption" className="mono-font" sx={{ color: "#059669", fontWeight: 600 }}>
                   {link.to.address4 || "169.254.X.X/32 (Auto)"}
-                </Typography>
-              </Box>
-            )}
-
-            {isManual && (
-              <Box sx={{ display: "flex", justifyContent: "space-between" }}>
-                <Typography variant="caption" sx={{ color: "#64748B" }}>
-                  Neighbor Address:
-                </Typography>
-                <Typography variant="caption" className="mono-font" sx={{ color: "#7C3AED", fontWeight: 600 }}>
-                  {link.to.neighbor_address || link.from.address || "(Auto from peer)"}
                 </Typography>
               </Box>
             )}

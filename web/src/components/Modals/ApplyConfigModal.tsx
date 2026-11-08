@@ -101,7 +101,8 @@ export function generateNodeApplySnippet(node: Node): string {
 
 /**
  * Extracts all valid apply config fields from a link's current state.
- * Strictly excludes sensitive/system/crypto fields like public_key, private_key, resolved_endpoint, modified_at.
+ * Strictly excludes sensitive/system/crypto fields like public_key, private_key, resolved_endpoint, modified_at,
+ * and system-managed derived fields like neighbor_address.
  */
 export function generateLinkApplySnippet(link: Link): string {
   const cleanEnd = (end: LinkEnd) => {
@@ -112,7 +113,6 @@ export function generateLinkApplySnippet(link: Link): string {
     if (end.interface !== undefined && end.interface !== "") ep.interface = end.interface;
     if (end.address !== undefined && end.address !== "") ep.address = end.address;
     if (end.address4 !== undefined && end.address4 !== "") ep.address4 = end.address4;
-    if (end.neighbor_address !== undefined && end.neighbor_address !== "") ep.neighbor_address = end.neighbor_address;
     if (end.listen_port !== undefined && end.listen_port !== 0) ep.listen_port = end.listen_port;
     if (end.endpoint !== undefined && end.endpoint !== "") ep.endpoint = end.endpoint;
     if (end.persistent_keepalive !== undefined) ep.persistent_keepalive = end.persistent_keepalive;
