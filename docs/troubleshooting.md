@@ -89,9 +89,9 @@ Easy42 includes an embedded task execution engine to bootstrap prerequisites, in
 | `install_wgquick_openwrt` | Packages         | Installs `wg-quick` (`wg-quick-op`) for OpenWrt or minimal systems lacking `wg-quick` in their native package repositories.                                                                                                             |
 | `install_phantun`       | Packages         | Resolves the latest `sagan/phantun` release with the GitHub API (falling back to v0.8.1-fix8), downloads the matching musl ZIP, verifies its SHA-256 digest when available, and installs `phantun_client` and `phantun_server` into `/usr/local/bin` when present and in `PATH`, otherwise `/usr/bin`; installs `unzip` with the system package manager when neither `unzip` nor Python is available.                                                                                                                                                         |
 | `install_bird`            | Packages         | Installs BIRD 2 and enables the system service.                                                                                                                                                                                         |
-| `config_bird`             | Configuration    | Finds `/etc/bird/bird.conf`, `/etc/bird.conf`, or `/etc/bird2/bird.conf` (creating `/etc/bird/bird.conf` when none exists), backs it up, inserts `include "/etc/bird_easy42.conf";`, validates syntax with `bird -p`, and reloads BIRD. |
-| `config_nftables`         | Configuration    | Configures `/etc/nftables.conf` (or OpenWrt / Alpine init systems) to include `/etc/easy42.nft` and enables the service.                                                                                                                |
-| `sysctl_params`           | System & Network | Deploys `/etc/sysctl.d/99-easy42.conf` enabling IPv4/IPv6 forwarding and setting `rp_filter=0`.                                                                                                                                         |
+| `config_bird`             | Configuration    | Finds `/etc/bird/bird.conf`, `/etc/bird.conf`, or `/etc/bird2/bird.conf` (creating `/etc/bird/bird.conf` when none exists), backs it up, writes `include "/etc/bird_easy42.conf";`, validates syntax with `bird -p -c`, and reloads BIRD. Returns `20` (incompatible) if no BIRD config file is found. |
+| `config_nftables`         | Configuration    | Configures the first found nftables candidate file to include `/etc/easy42.nft`, validates/applies it immediately with `nft -c -f` / `nft -f`, and enables the service (or the standalone `easy42-nftables` unit).                                                                                                                |
+| `sysctl_params`           | System & Network | Deploys `/etc/sysctl.d/99-easy42.conf` enabling IPv4/IPv6 forwarding (including `net.ipv6.conf.default.forwarding=1` and wildcard IPv4 `rp_filter=0`), setting `rp_filter=0`, and enabling BBR congestion control.                                                                                                                                         |
 | `autostart_interfaces`    | System & Network | Installs systemd, OpenRC, or procd units to bring up `wg42*` interfaces on boot.                                                                                                                                                        |
 
 Inspect, verify, and execute these tasks directly from the **Device Helper** page (`/helper`) in the top navigation bar, or via the **Device Helper** button in any node's detail view. You can filter devices by tag (`#core`, `#edge`), batch check prerequisites, run tasks, and view live execution logs.
@@ -209,6 +209,19 @@ The default data directory is `~/.config/easy42` (override with the global `--da
 - **Symptom**: WireGuard handshakes succeed and ICMP pings work, but HTTPS or large file transfers hang.
 - **Fix**: Verify that nftables MSS clamping is active in `table inet easy42`:
   ```bash
+  nft list chain inet easy42 mangle_output
   nft list chain inet easy42 mangle_postrouting
   ```
-  Ensure the rule `tcp flags syn tcp option maxseg size set rt mtu` is present.
+  Ensure the rule `tcp flags syn tcp option maxseg size set rt mtu` is present in **both** chains. For Phantun-obfuscated links, the generated WireGuard MTU is already reduced by 12 bytes.
+
+### 6. Apps Not Deploying on an Agent Node
+
+- **Symptom**: An enabled App never appears on a node, or app actions return `app management is disabled`.
+- **Root Cause**: The agent's `agent.json` has `"disable_apps": true`, or the App's `selector` does not match the node, or the App is unpublished/disabled.
+- **Fix**: Check `disable_apps` in `/etc/easy42/agent.json` (the agent reloads it on every sync action; restart the agent if you edit it by hand), verify the selector against the node's `name`/`tag`/`env:` context, and ensure the App is both `published` and `enabled`.
+
+### 7. Obfuscated Link Sync Failure
+
+- **Symptom**: Sync fails for a link with `obfuscator: phantun_client|phantun_server`.
+- **Root Cause**: Obfuscation requires a running `easy42-agent` on **both** ends (WireGuard links only, complementary roles). An SSH-only node cannot run Phantun.
+- **Fix**: Deploy the agent on both nodes (`deploy_agent` task), install Phantun (`install_phantun` task), and ensure the two ends are complementary (`phantun_client` + `phantun_server`).

@@ -24,7 +24,8 @@ Easy42 includes a comprehensive command-line interface built with [Cobra](https:
     - [4. `easy42 status`](#4-easy42-status)
     - [5. `easy42 sync`](#5-easy42-sync)
     - [6. `easy42 apply`](#6-easy42-apply)
-    - [7. `easy42 version`](#7-easy42-version)
+    - [7. `easy42 mcp`](#7-easy42-mcp)
+    - [8. `easy42 version`](#8-easy42-version)
   - [Common Workflows](#common-workflows)
     - [Bootstrap an SSH-managed mesh](#bootstrap-an-ssh-managed-mesh)
     - [Apply a declarative patch in CI](#apply-a-declarative-patch-in-ci)
@@ -46,6 +47,7 @@ easy42 node nft node-fra    # Preview generated nftables rules
 easy42 link list
 easy42 link add node-fra node-lon
 easy42 link add node-fra node-lon --assign-ipv4 --from-port 21001 --to-port 21002
+easy42 link add node-fra node-lon --disable-bfd
 
 # Declarative configuration changes
 easy42 apply --dry-run patch.yaml
@@ -56,7 +58,9 @@ easy42 status --live        # Probe live node connectivity and interface count
 easy42 sync --dry-run       # Preview diffs across all nodes
 easy42 sync                 # Apply configuration across all nodes
 easy42 sync --node node-fra # Synchronize a single node
+easy42 mcp                  # Run the MCP server over stdio
 easy42 version              # Print version and bundled agent information
+easy42 --version            # Cobra version flag (same as `easy42 version`)
 ```
 
 ## Global Flags
@@ -70,7 +74,7 @@ The data directory contains:
 | File          | Description                                                                                                      |
 | :------------ | :--------------------------------------------------------------------------------------------------------------- |
 | `config.json` | Main configuration, encrypted secrets, and session secret (mode `0600`).                                         |
-| `data.db`     | SQLite database for telemetry history, interface traffic, cron results, and applied-state hashes.                |
+| `data.db`     | SQLite database for telemetry history, interface traffic, cron results, fleet events, ping-table tasks, node state, and applied-state hashes. |
 | `server.url`  | Transient URL file written by `easy42 serve` so CLI commands can locate the running server. Removed on shutdown. |
 
 ---
@@ -152,7 +156,7 @@ easy42 node add \
 | `-a, --asn`               | `4224420001` |    No    | Private or external AS number.                                 |
 | `--custom-network-script` | —            |    No    | Shell script persisted by the `configure_network` helper task. |
 
-The CLI creates SSH-mode nodes. To use agent mode, generate an agent token and deploy the agent from the Web UI or API; the node then reports its mode as `agent`.
+The CLI creates SSH-mode nodes (no `mode`/`agent_token` is set; an implicit `nat` entrypoint with an empty IP is appended). To use agent mode, generate an agent token and deploy the agent from the Web UI or API; the node then reports its mode as `agent`.
 
 #### `easy42 node rename <old-name> <new-name>`
 
@@ -231,12 +235,13 @@ easy42 link add node-fra node-ext \
 | `--to-iface`     | —           | Interface on the second node (required for manual links unless external).|
 | `--from-addr`    | —           | Local address on the first node (required for manual links).    |
 | `--to-addr`      | —           | Local address on the second node (required for manual links).   |
+| `--disable-bfd`  | `false`     | Emit `bfd no;` for this link's BGP session.                     |
 
-> **Note:** There is no `--psk` flag on `link add`. Preshared keys are generated and rotated through the Web UI, the `/api/links/psk/*` endpoints, or declarative config (`links[].psk`).
+> **Note:** There is no `--psk` flag on `link add`. Preshared keys are generated and rotated through the Web UI, the `/api/links/psk/reveal` and `/api/links/psk/reset` endpoints (private keys: `/api/links/private-key/reveal` and `/api/links/private-key/reset`), or declarative config (`links[].psk`).
 
 #### `easy42 link remove <from-node> <to-node>`
 
-Deletes the link between two nodes. If more than one link exists between the same pair, disambiguate with `-i, --interface <iface>`.
+Deletes the link between two nodes. Aliases: `rm`, `delete`. If more than one link exists between the same pair, disambiguate with `-i, --interface <iface>`.
 
 ```bash
 easy42 link remove node-fra node-lon
@@ -265,7 +270,7 @@ easy42 status --live
 
 ### 5. `easy42 sync`
 
-Synchronizes compiled configuration state (WireGuard, BIRD, nftables, ROA, and `/etc/hosts` where applicable) to managed nodes.
+Synchronizes compiled configuration state (WireGuard, BIRD, nftables, ROA, and `/etc/hosts` where applicable) to managed nodes. The command declares alias `apply`, but the root-level `easy42 apply` command (declarative config apply, below) takes precedence, so `easy42 apply` always means declarative apply — use `easy42 sync` for synchronization.
 
 ```bash
 # Dry run: calculate and preview actions across all nodes
@@ -330,18 +335,36 @@ easy42 apply --name "Add Static Route"
 | `-s, --sync` | `false` | Trigger a sync of affected nodes after a successful apply.                 |
 | `--format`   | `text`  | Preview format: `text` or `json`.                                          |
 
-The patch may contain `network_settings`, `network_policies`, `nodes`, `links`, `blocks`, `dns`, `templates`, `server_tasks`, `cron_tasks`, `database`, and `integrations`. Unknown fields are rejected. See [Configuration Specification](configuration.md#declarative-config-apply) for details and examples.
+The patch may contain `network_settings`, `network_policies`, `nodes`, `links`, `blocks`, `dns`, `templates`, `server_tasks`, `cron_tasks`, `database`, and `integrations` (the latter six are accepted by the schema but not merged by the engine). `apps`, `app_variables`, `mcp`, and `looking_glass_tasks` are not in the apply schema. Unknown top-level/node/link fields are rejected. See [Configuration Specification](configuration.md#declarative-config-apply) for details and examples.
 
 When a server is running, the CLI sends the apply request to `/api/config/apply` (or `/api/config/apply/preview`); otherwise it applies the change directly to the data directory. Successful applies create a timestamped backup of `config.json`.
 
 ---
 
-### 7. `easy42 version`
+### 7. `easy42 mcp`
 
-Prints the easy42 version, Git commit, build timestamp, builder, Go version, OS/architecture, bundled agent version, and project URL.
+Runs the Easy42 Model Context Protocol (MCP) server over standard I/O (stdio), for use by MCP clients that spawn the binary as a subprocess. The same MCP tools are also available over HTTP when `serve` is running (`/mcp`, `/api/mcp`, SSE at `/mcp/sse`).
+
+```bash
+easy42 mcp
+easy42 mcp --role read_only
+```
+
+| Flag      | Default        | Description                                              |
+| :-------- | :------------- | :------------------------------------------------------- |
+| `--role`  | `full_control` | Access role: `full_control` (read-write) or `read_only`. |
+
+See [MCP Server](integrations.md#10-mcp-server) for tokens, OAuth, and the HTTP endpoints.
+
+---
+
+### 8. `easy42 version`
+
+Prints the easy42 version, Git commit, build timestamp, builder, Go version, OS/architecture, bundled agent version, and project URL. Fields that are empty, `none`, or `unknown` at build time are omitted. Cobra also provides `easy42 --version` / `easy42 -v` as a shorthand for the version string.
 
 ```bash
 easy42 version
+easy42 --version
 ```
 
 ---

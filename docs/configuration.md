@@ -2,7 +2,7 @@
 
 This document is the reference for Easy42's state file, stored in `<data-dir>/config.json` (default: `~/.config/easy42/config.json`, mode `0600`). The file is managed by the server and CLI, but it is plain JSON and can be edited declaratively with [`easy42 apply`](#declarative-config-apply).
 
-> **WARNING:** `password_hash`, `encrypted_dek`, and `session_secret` are security-critical. Back up `config.json` before manual edits and never commit it to version control. Declarative apply deliberately forbids changing these fields.
+> **WARNING:** `password_hash`, `encrypted_dek`, and `session_secret` are security-critical. Back up `config.json` before manual edits and never commit it to version control. Declarative apply deliberately forbids changing these fields. Other credentials are also stored in plaintext in `config.json` (see [Security Fields](#security-fields)); protect the file (mode `0600`) and any backups.
 
 ---
 
@@ -26,6 +26,8 @@ This document is the reference for Easy42's state file, stored in `<data-dir>/co
     - [`server_tasks`](#server_tasks)
     - [`database`](#database)
     - [`integrations`](#integrations)
+    - [`mcp`](#mcp)
+    - [`apps` and `app_variables`](#apps-and-app_variables)
     - [`config_changes`](#config_changes)
   - [Declarative Config Apply](#declarative-config-apply)
     - [Allowed patch sections](#allowed-patch-sections)
@@ -49,12 +51,15 @@ This document is the reference for Easy42's state file, stored in `<data-dir>/co
 | `links`               | `object[]` | WireGuard or manual point-to-point links between nodes.                                                               |
 | `looking_glass_tasks` | `object[]` | Custom Looking Glass tasks (built-ins are added at runtime).                                                          |
 | `cron_tasks`          | `object[]` | Recurring ping / TCP-ping probes executed by agents.                                                                  |
+| `apps`                | `object[]` | Workload apps (Docker Compose, systemd, cron) deployed to agent nodes. See [Apps](#apps-and-app_variables).            |
+| `app_variables`       | `object[]` | Global variables interpolated into app manifests/env files. See [Apps](#apps-and-app_variables).                         |
 | `blocks`              | `object[]` | Visual grouping rectangles on the topology graph.                                                                     |
 | `dns`                 | `object`   | Cloudflare DNS synchronization settings.                                                                              |
 | `templates`           | `object[]` | Custom WireGuard, BIRD, and nftables Go templates.                                                                    |
-| `server_tasks`        | `object[]` | Schedules for the three fixed server background tasks.                                                                |
+| `server_tasks`        | `object[]` | Schedules for the four fixed server background tasks.                                                                 |
 | `database`            | `object`   | Summarized and raw telemetry retention.                                                                               |
 | `integrations`        | `object`   | Prometheus and Telegram Bot settings.                                                                                 |
+| `mcp`                 | `object`   | Model Context Protocol server settings and tokens. See [`mcp`](#mcp).                                                  |
 | `config_changes`      | `object[]` | Saved declarative config snippets displayed in the UI.                                                                |
 
 ---
@@ -97,7 +102,8 @@ This document is the reference for Easy42's state file, stored in `<data-dir>/co
     {
       "name": "node-fra",
       "host": "vps-fra.example.com",
-      "description": "Frankfurt edge",
+      "caption": "Frankfurt edge",
+      "description": "Contact: noc@example.com",
       "note": "Managed by **Ansible**",
       "ip": "192.168.100.1",
       "ip6": "fd42:a159:f9f0::1",
@@ -132,6 +138,7 @@ This document is the reference for Easy42's state file, stored in `<data-dir>/co
     {
       "type": "wireguard",
       "assign_ipv4": true,
+      "disable_bfd": false,
       "psk": "base64_encrypted_preshared_key",
       "tags": ["backbone"],
       "from": {
@@ -155,7 +162,8 @@ This document is the reference for Easy42's state file, stored in `<data-dir>/co
         "public_key": "k9L1p...",
         "policy": "default",
         "cost": 10,
-        "persistent_keepalive": 25
+        "persistent_keepalive": 25,
+        "mtu": 1420
       }
     }
   ],
@@ -190,7 +198,8 @@ This document is the reference for Easy42's state file, stored in `<data-dir>/co
   "server_tasks": [
     { "id": "update_roa", "cron_expr": "0 0 * * *", "enabled": true },
     { "id": "sync", "cron_expr": "30 0 * * *", "enabled": true },
-    { "id": "sync_dns", "cron_expr": "0 1 * * *", "enabled": true }
+    { "id": "sync_dns", "cron_expr": "0 1 * * *", "enabled": true },
+    { "id": "backup_config", "cron_expr": "0 2 * * *", "enabled": true }
   ],
   "cron_tasks": [
     {
@@ -218,6 +227,34 @@ This document is the reference for Easy42's state file, stored in `<data-dir>/co
     "telegram_secret_token": "",
     "server_url": ""
   },
+  "mcp": {
+    "enabled": true,
+    "read_only_token": "e42_mcp_ro_...",
+    "full_control_token": "e42_mcp_full_...",
+    "oauth_client_id": "easy42-mcp",
+    "oauth_client_secret": "e42_sec_..."
+  },
+  "apps": [
+    {
+      "id": "app-uuid",
+      "name": "my-service",
+      "description": "Example Docker Compose app",
+      "note": "",
+      "url": "https://example.com/my-service",
+      "app_type": "docker",
+      "main_content": "services:\n  web:\n    image: nginx:latest\n",
+      "env_content": "APP_ENV=production\n",
+      "files": {},
+      "selector": {},
+      "published": true,
+      "enabled": true,
+      "created_at": "2026-01-01T00:00:00Z",
+      "updated_at": "2026-01-01T00:00:00Z"
+    }
+  ],
+  "app_variables": [
+    { "key": "APP_DOMAIN", "value": "example.com", "description": "", "is_secret": false, "updated_at": "2026-01-01T00:00:00Z" }
+  ],
   "config_changes": [
     {
       "id": "0b0e...",
@@ -246,7 +283,7 @@ This document is the reference for Easy42's state file, stored in `<data-dir>/co
 
 WireGuard private keys and preshared keys are encrypted with the DEK (XAES-256-GCM, 24-byte nonce, stored as base64). They are decrypted only while the in-memory vault is unlocked with the admin password.
 
-Other credentials are **not** vault-encrypted: `nodes[].agent_token`, `dns.api_token`, `integrations.prometheus_auth_token`, `integrations.telegram_bot_token`, and `integrations.telegram_secret_token` are stored as plaintext in `config.json`. Protect the file (mode `0600`) and any backups, and avoid committing them to version control.
+Other credentials are **not** vault-encrypted: `nodes[].agent_token`, `dns.api_token`, `integrations.prometheus_auth_token`, `integrations.telegram_bot_token`, `integrations.telegram_secret_token`, `mcp.read_only_token`, `mcp.full_control_token`, `mcp.oauth_client_secret`, and `app_variables[].value` (even when `is_secret` is set, the value is stored in plaintext in `config.json`) are stored as plaintext in `config.json`. Protect the file (mode `0600`) and any backups, and avoid committing them to version control.
 
 ### `network_settings`
 
@@ -258,8 +295,8 @@ Other credentials are **not** vault-encrypted: `nodes[].agent_token`, `dns.api_t
 | `disallowed_dn42_networks` | `string[]` | CIDRs excluded from the built-in DN42 policy's import/export and firewall allow-lists.                                                               |
 | `disallowed_dn42_cidrs`    | `string[]` | Legacy alias for `disallowed_dn42_networks`. Both are normalized to the same value on load.                                                          |
 | `flapalerted_address`      | `string`   | IP address of the FlapAlerted service. Enables the FlapAlerted BGP session on nodes with `enable_fa`.                                                |
-| `flapalerted_port`         | `integer`  | FlapAlerted BGP port. Default `1790`.                                                                                                                |
-| `flapalerted_asn`          | `integer`  | FlapAlerted BGP ASN. Default `4224420000`.                                                                                                           |
+| `flapalerted_port`         | `integer`  | FlapAlerted BGP port. Effective default `1790` (via getter; only persisted in `config.json` when `flapalerted_address` is set). |
+| `flapalerted_asn`          | `integer`  | FlapAlerted BGP ASN. Effective default `4224420000` (same persistence note as above).                                          |
 | `flapalerted_url`          | `string`   | Base URL of the FlapAlerted web UI. If omitted, derived from `flapalerted_address` and port `8699`.                                                  |
 
 ### `network_policies`
@@ -269,7 +306,7 @@ Easy42 always provides three read-only built-in policies (`is_internal: true`):
 | ID        | Name                    | Behavior                                                                                                                                                                           |
 | :-------- | :---------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `default` | Default (Internal)      | Full routing, rejects Internet route leaks, no ingress filtering. Cost `100`.                                                                                                      |
-| `dn42`    | DN42 / External Peering | Full routing with DN42 prefix allow-lists and disallowed-CIDR filtering, forward/input firewall, ICMP/ICMPv6 and UDP/53 allowed, SNAT to `external_ip`, DN42 ROA URLs. Cost `100`. |
+| `dn42`    | DN42 / External Peering | Full routing with DN42 prefix allow-lists and disallowed-CIDR filtering, forward/input firewall, ICMP/ICMPv6 and UDP/53 allowed, SNAT to `external_ip`, DSCP ingress/egress `0`, DN42 ROA URLs. Cost `100`. |
 | `none`    | None (Unrestricted)     | Full routing, no filters, no Internet-leak protection. Cost `100`.                                                                                                                 |
 
 User-defined policies with the same ID as a built-in override that built-in at lookup time.
@@ -310,6 +347,9 @@ User-defined policies with the same ID as a built-in override that built-in at l
 | `add_paths`             | `string`   | BIRD BGP ADD-PATH capability (`off` [default], `on`, `rx`, or `tx`).                        |
 | `bird_import_filter`    | `string`   | Custom BIRD snippet appended to the generated import filter.                                |
 | `bird_export_filter`    | `string`   | Custom BIRD snippet appended to the generated export filter.                                |
+| `bird_export_fillter`   | `string`   | Legacy alias for `bird_export_filter` (note the historical spelling). Used only when `bird_export_filter` is empty. |
+| `bird_pre_snippet`      | `string`   | Custom BIRD snippet inserted early in `bird_easy42.conf` (before `bird_hooks_pre`).         |
+| `bird_post_snippet`     | `string`   | Custom BIRD snippet appended at the end of `bird_easy42.conf` (before `bird_hooks`).         |
 
 `snat` object:
 
@@ -319,7 +359,7 @@ User-defined policies with the same ID as a built-in override that built-in at l
 | `condition` | `string`  | `not_dst` (SNAT traffic whose source is outside the allowed destination CIDR set, or inside the disallowed set) or `all`. |
 | `target`    | `string`  | `external_ip`, `masquerade`, `main_ip`, or a literal IP.                                                                  |
 
-`block_ingress_new` accepts aliases such as `ingress`, `forwarding`, `none`, `off`. Unrecognized values normalize to disabled.
+`block_ingress_new` accepts aliases such as `ingress`, `all_ingress`/`all-ingress`, `forwarding`, `forward_only`/`forward-only`, `none`, `off`, `disabled`, `false`. Unrecognized values normalize to disabled.
 
 ### `nodes`
 
@@ -328,7 +368,8 @@ User-defined policies with the same ID as a built-in override that built-in at l
 | `name`                  | `string`        | Unique node name and hostname. Alphanumeric, `-`, and `_` only. WireGuard interface names are derived from it and truncated to 15 characters.                          |
 | `host`                  | `string`        | SSH host, alias, or IP. Omitted for external peers.                                                                                                                    |
 | `is_external`           | `boolean`       | Marks an unmanaged external peer (for example DN42).                                                                                                                   |
-| `description`           | `string`        | Short description or contact info.                                                                                                                                     |
+| `caption`               | `string`        | Optional short description (plain text, one short sentence). Shown in the UI.                                                                                              |
+| `description`           | `string`        | Optional description / contact info.                                                                                                                                     |
 | `note`                  | `string`        | Markdown note shown in the UI.                                                                                                                                         |
 | `ip`                    | `string`        | Primary overlay IPv4 address (normally bound to `interface`).                                                                                                          |
 | `ip6`                   | `string`        | Primary overlay IPv6 address.                                                                                                                                          |
@@ -395,6 +436,7 @@ Hook content is loaded into the Go template together with the config template an
 | `from`, `to`  | `object`    | The two link endpoints. Order is not significant.                                          |
 | `tags`        | `string[]`  | Free-form tags.                                                                            |
 | `assign_ipv4` | `boolean`   | Assign deterministic `169.254.X.X/32` IPv4 link-local addresses.                           |
+| `disable_bfd` | `boolean`   | Emit `bfd no;` for this link's BGP session, overriding the template's `bfd yes;`.          |
 | `psk`         | `string`    | Encrypted base64 WireGuard preshared key. Omit to generate one when the vault is unlocked. |
 | `note`        | `string`    | Markdown note for the link.                                                                |
 | `modified_at` | `timestamp` | System-managed last modification time.                                                     |
@@ -485,7 +527,7 @@ Built-in tasks include `ping`, `tcp_ping`, `traceroute`, `mtr`, `bird_show_proto
 
 ### `cron_tasks`
 
-Scheduled probes executed by node agents (a Looking Glass task can also be run manually).
+Scheduled `ping`/`tcp_ping` probes executed by node agents on a selector-matched set of nodes. This is distinct from per-node Looking Glass tasks (which are run manually from the Looking Glass UI) and from cron-type workload Apps (see [Apps](#apps-and-app_variables)).
 
 | Field                      | Type        | Description                                                                                             |
 | :------------------------- | :---------- | :------------------------------------------------------------------------------------------------------ |
@@ -496,11 +538,11 @@ Scheduled probes executed by node agents (a Looking Glass task can also be run m
 | `cron_expr`                | `string`    | 5-field (`min hour dom mon dow`) or 6-field (`sec min hour dom mon dow`) cron expression.               |
 | `selector`                 | `object`    | Node selector (`name`, `tag`, `env:<NAME>`; AND). Empty matches every managed node.                     |
 | `params`                   | `object`    | Probe parameters. `ping` uses `target` and `count`; `tcp_ping` uses `target` (`host:port`) and `count`. |
-| `timeout_sec`              | `integer`   | Optional timeout.                                                                                       |
+| `timeout_sec`              | `integer`   | Optional timeout in seconds (default `15`, capped at `60`).                                              |
 | `enabled`                  | `boolean`   | Whether the schedule is active.                                                                         |
 | `created_at`, `updated_at` | `timestamp` | Timestamps managed by the server.                                                                       |
 
-Results are stored in `data.db` and presented in the node's Cron Tasks view.
+`params.count` defaults to `4` (clamped to `1`–`20`; invalid values fall back to `4`). A cron task that matches no managed node is rejected on save. Results are stored in `data.db` and presented in the node's Cron Tasks view; summarized status is `ok`, `degraded`, or `failed`, and repeated failures record a fleet event (see [Events](integrations.md#8-events)).
 
 ### `server_tasks`
 
@@ -519,7 +561,7 @@ Only the predefined server tasks are valid. Missing entries are recreated with d
 | `cron_expr` | `string`  | 5- or 6-field cron expression. Invalid values fall back to the default. |
 | `enabled`   | `boolean` | Enable the schedule.                                       |
 
-All tasks are enabled by default. Schedules can be changed from the UI or the `/api/settings/tasks/{id}` API. The apply schema accepts `server_tasks`, but the current apply engine does not merge that section.
+All tasks are enabled by default. Schedules can be changed from the UI or the `/api/settings/tasks` API (`GET /api/settings/tasks`, `PUT /api/settings/tasks/{id}`, `POST /api/settings/tasks/{id}/run`). The apply schema accepts `server_tasks`, but the current apply engine does not merge that section.
 
 ### `database`
 
@@ -528,7 +570,7 @@ All tasks are enabled by default. Schedules can be changed from the UI or the `/
 | `retention_days`     | `integer` | Retention for summarized telemetry, rollups, and cron results. Default `47`. |
 | `raw_retention_days` | `integer` | Retention for high-resolution raw telemetry and logs. Default `2`.           |
 
-Cleanup runs hourly after an initial pass, and telemetry is rolled up into 5-minute buckets. Values `<= 0` are treated as the defaults.
+Cleanup runs hourly after an initial pass, and telemetry is rolled up into 5-minute buckets. Values `<= 0` are treated as the defaults (`47` / `2` via getters; a fresh `config.json` may omit `raw_retention_days` until it is explicitly set).
 
 ### `integrations`
 
@@ -542,6 +584,50 @@ Cleanup runs hourly after an initial pass, and telemetry is rolled up into 5-min
 | `telegram_secret_token` | `string`  | Secret token sent in the `X-Telegram-Bot-Api-Secret-Token` header. Auto-generated if empty.                      |
 | `server_url`            | `string`  | Public HTTPS base URL of this Easy42 instance, used to register the Telegram webhook at `/api/telegram/webhook`. |
 
+### `mcp`
+
+Model Context Protocol (MCP) server settings. The MCP server is enabled by default and exposes cluster inspection/mutation tools over Streamable HTTP (`/mcp`, `/api/mcp`) and SSE (`/mcp/sse`, `/mcp/message`), with OAuth 2.0/2.1 discovery under `/.well-known/*` and `/oauth/*`. There is also a stdio CLI (`easy42 mcp --role full_control|read_only`). See [MCP Server](integrations.md#10-mcp-server).
+
+| Field                   | Type     | Description                                                                                   |
+| :---------------------- | :------- | :---------------------------------------------------------------------------------------------- |
+| `enabled`               | `boolean` | Enable the MCP server. Enabled by default.                                                    |
+| `read_only_token`       | `string`  | Bearer token for inspection-only tools. Auto-generated on first load if empty.                  |
+| `full_control_token`    | `string`  | Bearer token for tools that may modify configuration. Auto-generated; must differ from the read-only token. |
+| `oauth_client_id`       | `string`  | OAuth client ID for MCP OAuth flow. Default `easy42-mcp`.                                      |
+| `oauth_client_secret`   | `string`  | OAuth client secret. Auto-generated if empty.                                                  |
+
+Tokens are accepted as `Authorization: Bearer <token>` (or `?token=<token>`). Manage them from **Settings -> MCP** or `GET/PUT /api/settings/mcp` and `POST /api/settings/mcp/reset-token`. The apply schema does not merge `mcp`; manage it through the UI/API.
+
+### `apps` and `app_variables`
+
+Workload apps deployed to agent-managed nodes (see [Workload Apps](integrations.md#9-workload-apps-apps)). Apps are **not** part of the declarative apply schema; manage them through the UI/API (`/api/apps`, `/api/apps/variables`).
+
+| Field (`apps[]`) | Type | Description |
+| :--------------- | :--- | :---------- |
+| `id` | `string` | Server-generated UUID. |
+| `name` | `string` | App name, `^[a-zA-Z0-9_-]{1,64}$`. Used as the Docker/project and systemd unit suffix (`ezapp-<name>`). |
+| `description` | `string` | Optional description. |
+| `note` | `string` | Markdown note. A fenced ` ```json ` block is exposed as `.data` in templates, like node/link notes. |
+| `url` | `string` | Optional URL associated with the app. Interpolated like `env_content`. |
+| `app_type` | `string` | `docker`, `systemd`, or `cron`. |
+| `main_content` | `string` | Docker Compose YAML, systemd unit content, or cron expression + command. Required. |
+| `env_content` | `string` | `.env` content (`KEY=VAL` lines). Interpolated. |
+| `files` | `object` | Map of relative filename to content for auxiliary config files. Paths must not contain `..` or start with `/`. |
+| `selector` | `object` | Node selector (`name`, `tag`, `env:<NAME>`; AND). Empty matches every node. See [Selectors](device-helper.md#task-selector). |
+| `published` | `boolean` | Whether the app is published/visible. Duplicating an app forces `published: false`. |
+| `enabled` | `boolean` | Whether the app is enabled (deployed). Disabled apps are not synced. |
+| `created_at`, `updated_at` | `timestamp` | Server-managed timestamps. |
+
+| Field (`app_variables[]`) | Type | Description |
+| :------------------------ | :--- | :---------- |
+| `key` | `string` | Variable name, `^[a-zA-Z_][a-zA-Z0-9_]*$`. |
+| `value` | `string` | Variable value (stored in plaintext in `config.json`). |
+| `description` | `string` | Optional description. |
+| `is_secret` | `boolean` | Marks the variable as secret in the UI (does not encrypt the stored value). |
+| `updated_at` | `timestamp` | Server-managed timestamp. |
+
+Interpolation uses `{{VAR}}` / `{{.VAR}}` and `${VAR}` syntax in `url`, `env_content`, `files`, and cron-type `main_content` (Docker/systemd manifests are not interpolated). Global variables are combined with per-node context variables (plus `APP_NAME`).
+
 ### `config_changes`
 
 Saved snippets shown in the Config Apply UI. They are validated before being stored but are not applied until explicitly run.
@@ -549,7 +635,7 @@ Saved snippets shown in the Config Apply UI. They are validated before being sto
 | Field                       | Type        | Description                                                    |
 | :-------------------------- | :---------- | :------------------------------------------------------------- |
 | `id`                        | `string`    | UUID generated by the server.                                  |
-| `name`                      | `string`    | Display name. Required when saving through the API.            |
+| `name`                      | `string`    | Display name. If empty when saving through the API, the server generates `Snippet <date>`. Duplicate names are de-duplicated. |
 | `description`               | `string`    | Optional description.                                          |
 | `content`                   | `string`    | JSON or YAML patch content. Must pass strict apply validation. |
 | `format`                    | `string`    | `json` or `yaml`.                                              |
@@ -576,8 +662,11 @@ Saved snippets shown in the Config Apply UI. They are validated before being sto
 | `templates`        | Accepted by the schema. The current apply engine does not merge this section; manage templates through the UI/API.                                                               |
 | `server_tasks`     | Accepted by the schema. The current apply engine does not merge this section; manage schedules through the UI/API.                                                               |
 | `cron_tasks`       | Accepted by the schema. The current apply engine does not merge this section; manage cron tasks through the UI/API.                                                              |
+| `apps`, `app_variables`, `mcp`, `looking_glass_tasks` | **Not** in the apply schema at all; manage through the UI/API. |
 
-For a section that is merged, omitted fields are left unchanged. To clear an optional string or list field, set it to an empty string or an empty list. A JSON `null` is treated like an omitted field by the patch decoder. Lists such as `entrypoints`, `routes`, and `config_hooks` are replaced wholesale when present.
+Unknown-field rejection is strict at the top level and for `nodes[]`/`links[]`/link endpoints, but the advertised schema defines `network_policies`, `blocks`, `templates`, `server_tasks`, and `cron_tasks` as permissive objects, so unknown keys inside those sections are not rejected by the schema (and are ignored by the engine since those sections are not merged).
+
+For a section that is merged, omitted fields are left unchanged. To clear an optional string or list field, set it to an empty string or an empty list. A JSON `null` is treated like an omitted field by the patch decoder — pointer fields (for example `metric`, `x`/`y`, `preference`) therefore cannot be cleared via apply. Lists such as `entrypoints`, `routes`, and `config_hooks` are replaced wholesale when present.
 
 ### Delta operations
 
@@ -598,28 +687,29 @@ The following fields are rejected even though they exist in `config.json`:
 | :-------- | :------------------------------------------------- |
 | Root      | `password_hash`, `encrypted_dek`, `session_secret` |
 | `nodes[]` | `modified_at`, `agent_version`, `agent_last_seen`  |
-| `links[]` | `modified_at`, `resolved_endpoint`                 |
+| `links[]` | `modified_at`                                      |
+| `links[].from/to` | `resolved_endpoint` (system-derived; rejected as an unknown field in the endpoint patch) |
 
-`nodes[].agent_token`, `links[].from.private_key`, and `links[].to.private_key` are not part of the apply schema and cannot be set declaratively. Use the UI/API to manage agent tokens and WireGuard keys.
+`nodes[].agent_token`, `links[].from/to.private_key`, `links[].from/to.public_key`, and `links[].from/to.psk` are not part of the apply schema and cannot be set declaratively (only the link-level `links[].psk` is accepted). Use the UI/API to manage agent tokens and WireGuard keys — apply cannot supply them either when the vault is locked.
 
 ### Merge and validation rules
 
 - Node names must match `^[a-zA-Z0-9_-]+$` and be unique (case-insensitive).
 - Non-external nodes must not share the same main IPv6 address.
 - Every link endpoint must reference an existing node.
-- `ip` and `external_ip` must be valid IPv4 addresses; `ip6` and `external_ip6` must be valid IPv6 addresses (a CIDR suffix is ignored for validation).
+- `ip` and `external_ip` must be valid IPv4 addresses *without* a CIDR suffix; `ip6` and `external_ip6` must be valid IPv6 addresses (a CIDR suffix is stripped/ignored for IPv6 validation only).
 - `asn` must be greater than zero. Tables must be non-negative. Entrypoint/link MTUs must be within `0-9000`.
-- The apply schema requires link `cost` values to be non-negative. `config.json` and the UI/API accept negative costs for preference boosting, but such values cannot be applied through a declarative patch.
+- The advertised apply schema declares link `cost >= 0`, but the Go patch validator does not enforce non-negativity, so a negative `cost` in a patch currently passes and merges. `config.json` and the UI/API accept negative costs for preference boosting.
 - A link patch cannot use the same node for both endpoints.
-- New WireGuard links receive generated keys and (if absent) a PSK only while the encryption vault is unlocked. Apply cannot set private/public keys; supply them through the UI/API when the vault is locked.
+- New WireGuard links receive generated keys and (if absent) a PSK only while the encryption vault is unlocked. With a locked vault, apply leaves those fields empty; use the UI/API (after unlocking) to supply/rotate keys.
 
 ### Side effects
 
 A successful apply:
 
-1. Writes a timestamped backup to `<data-dir>/config.json.bak.<unix>` and a `config.json.bak` copy.
+1. Writes a timestamped backup to `<data-dir>/config.json.bak.<unix>` and a `config.json.bak` copy, then prunes old backups to at most 100.
 2. Saves the merged configuration atomically.
-3. Triggers an `/etc/hosts` resynchronization for agent nodes in the background.
+3. Triggers an `/etc/hosts` resynchronization for agent nodes in the background, and re-syncs Phantun obfuscator services to agents.
 4. Optionally triggers a sync of affected nodes (`--sync` on the CLI, `auto_sync: true` on the API).
 
 Applying does not automatically roll back if a later node sync fails. To recover, restore one of the backups and run a sync.
@@ -670,7 +760,7 @@ easy42 apply patch.yaml --sync
 
 ### Related API endpoints
 
-All endpoints are under `/api` and require an authenticated session.
+The apply endpoints below are under `/api` and require an authenticated session. (The server also exposes non-`/api` endpoints such as `/metrics`, `/mcp`, `/oauth/*`, and `/.well-known/*`; see `internal/server/server.go`.)
 
 | Method   | Path                         | Purpose                                                |
 | :------- | :--------------------------- | :----------------------------------------------------- |
@@ -685,7 +775,7 @@ All endpoints are under `/api` and require an authenticated session.
 | `DELETE` | `/config/changes/{id}`       | Delete a snippet.                                      |
 | `POST`   | `/config/changes/{id}/apply` | Apply a saved snippet. Accepts optional `auto_sync`.   |
 
-The preview response includes `valid`, `format`, a summary (`added_nodes`, `modified_nodes`, `added_links`, `modified_links`, `total_changes`), per-field diffs, and a unified text diff.
+The preview response includes `valid`, `format`, a summary (`added_nodes`, `modified_nodes`, `added_links`, `modified_links`, `total_changes`), per-field diffs, and a unified text diff. The unified diff is computed from a filtered view (network ASN/prefixes, node name/host/IPs/ASN/static routes/tags, link endpoints/cost), not a full byte-for-byte diff of `config.json`. Other API areas (nodes, links, policies, templates, apps, events, tasks, Looking Glass, settings) are documented in their respective chapters.
 
 ---
 
@@ -696,7 +786,7 @@ The preview response includes `valid`, `format`, a summary (`added_nodes`, `modi
 | `<data-dir>/config.json`            | This file. Created with mode `0600`.                                                                  |
 | `<data-dir>/config.json.bak`        | Most recent apply backup.                                                                             |
 | `<data-dir>/config.json.bak.<unix>` | Timestamped backups written by each apply.                                                            |
-| `<data-dir>/data.db`                | SQLite database for telemetry, interface traffic, cron results, node info, and applied-config hashes. |
+| `<data-dir>/data.db`                | SQLite database for telemetry, interface traffic, cron results, fleet events, ping-table tasks, node state (including obfuscator state), and applied-config hashes. |
 | `<data-dir>/server.url`             | Transient URL used by the CLI to find a running `easy42 serve`; removed on shutdown.                  |
 
 The database is not part of `config.json`. Deleting `data.db` resets telemetry and applied-state tracking but leaves the network configuration intact.

@@ -131,9 +131,9 @@ Tasks are sorted by weight and categorized into logical operational domains:
 | `install_wgquick_openwrt` | Packages         | **Install wg-quick (OpenWrt)**   |  `12`  | Downloads and installs the third-party Golang `wg-quick` implementation (`wg-quick-op`) into `/usr/bin/wg-quick` for OpenWrt or other systems where package managers do not supply `wg-quick`.                                                                                                                         |
 | `install_phantun`       | Packages         | **Install Phantun**              |  `15`  | Resolves the latest `sagan/phantun` release through the GitHub API (falling back to `v0.8.1-fix8`), downloads the matching musl ZIP, verifies its SHA-256 digest when available, and installs `phantun_client` and `phantun_server` into `/usr/local/bin` when that directory exists and is in `PATH`, otherwise `/usr/bin`. If neither `unzip` nor Python is present, it installs `unzip` with the system package manager.                                                                                                                                                                          |
 | `install_bird`            | Packages         | **Install BIRD**                 |  `20`  | Installs BIRD 2 (`bird2` or `bird`) via the native package manager and enables the system service.                                                                                                                                                                                                                     |
-| `config_bird`             | Configuration    | **Configure BIRD Main Config**   |  `30`  | Finds `/etc/bird/bird.conf`, `/etc/bird.conf`, or `/etc/bird2/bird.conf` (creating `/etc/bird/bird.conf` when none exists), creates a fallback placeholder `/etc/bird_easy42.conf`, appends `include "/etc/bird_easy42.conf";`, validates syntax with `bird -p`, and issues `birdc configure` if the daemon is active. |
-| `config_nftables`         | Configuration    | **Configure Nftables Autostart** |  `35`  | Creates placeholder `/etc/easy42.nft`, hooks `include "/etc/easy42.nft"` into `/etc/nftables.conf`, or installs the standalone `easy42-nftables` service unit on systems without standard nftables loaders.                                                                                                            |
-| `sysctl_params`           | System & Network | **Configure Sysctl Parameters**  |  `40`  | Deploys `/etc/sysctl.d/99-easy42.conf` enabling `net.ipv4.ip_forward=1`, `net.ipv6.conf.all.forwarding=1`, and loose reverse path filtering (`net.ipv4.conf.all.rp_filter=0`, `net.ipv4.conf.default.rp_filter=0`) so asymmetric dynamic routing works without kernel packet drops.                                    |
+| `config_bird`             | Configuration    | **Configure BIRD Main Config**   |  `30`  | Finds `/etc/bird/bird.conf`, `/etc/bird.conf`, or `/etc/bird2/bird.conf` (creating `/etc/bird/bird.conf` when none exists), creates a fallback placeholder `/etc/bird_easy42.conf`, writes `include "/etc/bird_easy42.conf";` (overwriting the file rather than appending), validates syntax with `bird -p -c`, and reloads BIRD (`birdc configure`, falling back to service reload). Returns `20` (incompatible) if no BIRD config file is found. |
+| `config_nftables`         | Configuration    | **Configure Nftables Autostart** |  `35`  | Creates placeholder `/etc/easy42.nft`, hooks `include "/etc/easy42.nft"` into the first found candidate (`/etc/nftables.conf`, `/etc/nftables/nftables.conf`, `/etc/nftables.nft`, or `/etc/sysconfig/nftables.conf`; Alpine defaults to `/etc/nftables.nft`), validates with `nft -c -f`, applies immediately with `nft -f`, or installs the standalone `easy42-nftables` service unit on systems without standard nftables loaders.                                                                                                            |
+| `sysctl_params`           | System & Network | **Configure Sysctl Parameters**  |  `40`  | Deploys `/etc/sysctl.d/99-easy42.conf` enabling `net.ipv4.ip_forward=1`, `net.ipv6.conf.all.forwarding=1`, `net.ipv6.conf.default.forwarding=1`, loose reverse path filtering (`net.ipv4.conf.all.rp_filter=0`, `net.ipv4.conf.default.rp_filter=0`, plus wildcard `net.ipv4.conf.*.rp_filter=0`), and `net.ipv4.tcp_congestion_control=bbr` so asymmetric dynamic routing works without kernel packet drops. The status check only verifies the file plus `ip_forward` and `rp_filter` on `all`/`default`.                                    |
 | `autostart_interfaces`    | System & Network | **WireGuard Autostart Service**  |  `50`  | Generates and enables an autostart daemon (`easy42-autostart`) under `systemd`, `openrc`, or `procd` to bring up all `wg42*` interfaces automatically on boot.                                                                                                                                                         |
 
 The task list API returns the manifest fields exactly as stored in each `task.json`, sorted by ascending weight and then by task ID.
@@ -156,12 +156,13 @@ The controller generates a `node_ip.env` file from the node configuration and in
 | `NODE_INTERFACE`    | `node.interface`             | Must match the interface whitelist.                              |
 | `NODE_IP`           | `node.ip`                    | CIDR suffixes are stripped before use.                           |
 | `NODE_IP6`          | `node.ip6`                   | CIDR suffixes are stripped before use.                           |
+| `NODE_IPV4` / `NODE_IPV6` | `node.ip` / `node.ip6` | Backward-compatible aliases for `NODE_IP` / `NODE_IP6`.         |
 | `NODE_EXTERNAL_IP`  | `node.external_ip`           | Added only when different from `NODE_IP`.                        |
 | `NODE_EXTERNAL_IP6` | `node.external_ip6`          | Added only when different from `NODE_IP6`.                       |
 | `HAS_CUSTOM_SCRIPT` | `node.custom_network_script` | `1` when a non-empty custom script is configured, otherwise `0`. |
 | `NODE_TAGS`          | `node.tags`                  | Comma-separated and sorted (alphabetical) node tags list.        |
 | `NODE_TAG_*`         | `node.tags`                  | Flag env set to `1` for each tag (e.g. `NODE_TAG_VPS=1`). Tag name converted to uppercase with invalid characters replaced with `_`. |
-| `NODE_DATA_*`       | `node.note`                  | Structured JSON data fields from node `Note` (up to 1 layer hierarchy). |
+| `NODE_DATA_*`       | `node.note`                  | Structured JSON data fields from node `Note`: layer-0 primitives as `NODE_DATA_<KEY>`, plus layer-1 nested fields as `NODE_DATA_<K0>_<K1>` with an alias `NODE_DATA_<K1>` when unset. Booleans format as `true`/`false`, integral numbers without a decimal point. |
 
 If a custom script is configured, it is uploaded as `custom_network.sh` and embedded into the generated network hook.
 
@@ -198,10 +199,10 @@ Persistence by backend:
 
 | Backend          | Persistent configuration                                                                                                                 |
 | :--------------- | :--------------------------------------------------------------------------------------------------------------------------------------- |
-| netplan          | `/etc/netplan/99-easy42.yaml` (`renderer: networkd`), validated with `netplan generate`, then `netplan apply`.                           |
-| interfaces       | `### EASY42_START` / `### EASY42_END` block in `/etc/network/interfaces`, replacing any previous Easy42 block.                           |
+| netplan          | `/etc/netplan/99-easy42.yaml` (`renderer: networkd`; for `lo` also adds `127.0.0.1/8` and `::1/128`), validated with `netplan generate`, then `netplan apply`. |
+| interfaces       | `### EASY42_START` / `### EASY42_END` block in `/etc/network/interfaces`, replacing any previous Easy42 block (for `dummy*` a `pre-up ip link add ... type dummy` line is emitted). |
 | systemd-networkd | `99-easy42-<iface>.netdev` (dummy, non-`lo`) and `99-easy42-<iface>.network` in `/etc/systemd/network`, followed by `networkctl reload`. |
-| OpenWrt          | `network.easy42_node` UCI interface with `proto=static`, committed and applied via `/etc/init.d/network restart`.                        |
+| OpenWrt          | `network.easy42_node` UCI interface with `proto=static` (`ipaddr`/`ip6addr` lists), committed and applied via `/etc/init.d/network restart`. |
 
 Existing managed files are backed up first with a timestamped suffix:
 
@@ -213,7 +214,7 @@ Existing managed files are backed up first with a timestamped suffix:
 
 `node.custom_network_script` lets operators append arbitrary commands (for example policy-routing or mark rules) that run when the target interface becomes routable.
 
-- **systemd hosts**: written to `/etc/networkd-dispatcher/routable.d/99-easy42.sh`, guarded by an interface match, plus a `networkd-dispatcher.service` drop-in at `/etc/systemd/system/networkd-dispatcher.service.d/90-easy42.conf`. Additionally, a `systemd-networkd` override drop-in is written to `/etc/systemd/system/systemd-networkd.service.d/90-easy42.conf` to prevent `systemd-networkd` from clearing foreign routing policy rules, routes, and next hops (`ManageForeignRoutingPolicyRules=no`, `ManageForeignRoutes=no`, `ManageForeignNextHops=no`). The `networkd-dispatcher` package is installed automatically when possible.
+- **systemd hosts**: written to `/etc/networkd-dispatcher/routable.d/99-easy42.sh`, guarded by an interface match, plus a `networkd-dispatcher.service` drop-in at `/etc/systemd/system/networkd-dispatcher.service.d/90-easy42.conf`. Additionally, a `systemd-networkd` override drop-in is written to `/etc/systemd/system/systemd-networkd.service.d/90-easy42.conf` to prevent `systemd-networkd` from clearing foreign routing policy rules, routes, and next hops (`ManageForeignRoutingPolicyRules=no`, `ManageForeignRoutes=no`, `ManageForeignNextHops=no`). The `networkd-dispatcher` package is installed automatically when possible, and the service is daemon-reloaded and enabled/started. Removing the custom script removes the dispatcher hook, drop-ins, and override on the next run.
 - **interfaces-based hosts / Alpine**: written to `/etc/network/easy42.sh` and referenced from the generated interface block with `up /etc/network/easy42.sh`.
 - Scripts are wrapped in `### EASY42_CUSTOM_START` / `### EASY42_CUSTOM_END` markers. Removing the custom script from the node configuration removes the generated dispatcher/hook on the next run.
 - Status checks compare the marker contents with the desired script and report drift instead of silently accepting an outdated script.
@@ -520,9 +521,11 @@ Supported keys:
 | `tag`        | Comma-separated node tag whitelist. The node must have at least one of the listed tags.        |
 | `env:<NAME>` | Required node metadata value. `<NAME>` can be any node context variable listed in [Network Configuration Task](#network-configuration-task). |
 
-If multiple keys are present, **all of them must match (AND)**. An empty selector (or an omitted `selector` field) matches every managed node. Unknown selector keys fail closed: no node matches.
+If multiple keys are present, **all of them must match (AND)**. An empty selector (or an omitted `selector` field) matches every managed node. Unknown selector keys fail closed: no node matches. `name`/`tag` keys are matched case-insensitively by key name; `env:` keys are uppercased while values are compared exactly.
 
-`env:<NAME>` supports the same variables exposed to tasks, including `NODE_NAME`, `NODE_INTERFACE`, `NODE_IP`, `NODE_IP6`, `NODE_EXTERNAL_IP`, `NODE_EXTERNAL_IP6`, `NODE_TAGS`, `NODE_TAG_*`, and `NODE_DATA_*` values extracted from the node Note fenced `json` block. For example, a note containing:
+The same selector mechanism is shared by Device Helper tasks (`TaskMeta.selector`), workload Apps (`apps[].selector`), and cron probes (`cron_tasks[].selector`) — the semantics above apply to all three.
+
+`env:<NAME>` supports the same variables exposed to tasks, including `NODE_NAME`, `NODE_INTERFACE`, `NODE_IP`, `NODE_IP6` (plus aliases `NODE_IPV4`/`NODE_IPV6`), `NODE_EXTERNAL_IP`, `NODE_EXTERNAL_IP6`, `NODE_TAGS`, `NODE_TAG_*`, and `NODE_DATA_*` values extracted from the node Note fenced `json` block. For example, a note containing:
 
 ````markdown
 ```json
@@ -530,7 +533,7 @@ If multiple keys are present, **all of them must match (AND)**. An empty selecto
 ```
 ````
 
-can be matched with `"env:NODE_DATA_ROLE": "gateway"` or `"env:NODE_DATA_META_REGION": "eu"`.
+can be matched with `"env:NODE_DATA_ROLE": "gateway"` or `"env:NODE_DATA_META_REGION": "eu"`. Note extraction considers only the **first** fenced block with no language or `json` language; if that first block is invalid JSON, extraction stops and returns empty (later blocks are not scanned).
 
 ### 2. Status Script (`status.sh`)
 

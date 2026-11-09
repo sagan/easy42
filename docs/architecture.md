@@ -19,7 +19,7 @@ This document details the internal architecture, link-local addressing schemes, 
 
 ## High-Level Architecture
 
-Easy42 is structured around a central orchestrator controller (providing both a modern Web UI and a scriptable CLI) that configures managed nodes either **agent-lessly** over SSH/SFTP or **agent-powered** via `easy42-agent` over persistent WebSockets.
+Easy42 is structured around a central orchestrator controller (providing both a modern Web UI and a scriptable CLI) that configures managed nodes either **agent-lessly** over SSH/SFTP or **agent-powered** via `easy42-agent` over persistent WebSockets. Beyond WireGuard/BIRD/nftables compilation, the controller also reconciles workload Apps, Phantun obfuscator services, ROA files, `/etc/hosts`, and Cloudflare DNS, and exposes an MCP server (HTTP/SSE + OAuth, plus a stdio CLI) for AI/tooling integration.
 
 ```
  ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -95,7 +95,7 @@ For integration with third-party software or routing appliances that do not supp
 
 ### 3. Multiprotocol BGP over IPv6 Link-Local (RFC 8950 / RFC 5549)
 
-BIRD establishes a single BGP peering session over the IPv6 link-local address bound to the interface (`neighbor fe80::... % 'wg42peer'`). By enabling **Extended Next Hop**, BIRD transmits both IPv4 and IPv6 routing tables over this single session:
+BIRD establishes a single BGP peering session over the IPv6 link-local address bound to the interface. When the peer address is link-local, the neighbor is written with the interface scope (`neighbor fe80::... % 'wg42peer'`); otherwise a bare `neighbor` is emitted. By enabling **Extended Next Hop**, BIRD transmits both IPv4 and IPv6 routing tables over this single session:
 
 ```bird
 protocol bgp 'easy42_peer_nodeB' from easy42_peer {
@@ -104,6 +104,8 @@ protocol bgp 'easy42_peer_nodeB' from easy42_peer {
     neighbor fe80::c0a8:640b % 'wg42nodeB' as 4224420002;
 }
 ```
+
+Protocol names are suffixed/deduplicated when multiple links share an interface, and the `interface` line is omitted for manual links without an interface.
 
 This eliminates dual-stack tunnel configuration and separate IPv4 BGP sessions.
 
@@ -147,19 +149,29 @@ The `169.254.120.1/32` address, IPv4 route, and `FwMark` are present only when t
 
 - **`Table = off`**: **Crucial.** Prevents `wg-quick` from inserting default routes (`0.0.0.0/0`) into the kernel routing table and hijacking internet connectivity. Routing decisions are handled strictly by BIRD.
 - **`AllowedIPs = <peer_link_locals>, 0.0.0.0/0, ::/0`**: In WireGuard, `AllowedIPs` acts as a cryptokey-routing filter. To allow the interface to forward transit packets for any network prefix advertised by BGP, `AllowedIPs` must accept wildcard traffic (`0.0.0.0/0` and `::/0`).
-- **`ListenPort = 2XXXX`**: Calculated deterministically using a 32-bit FNV-1a hash of the peer's IP (`20000 + hash(peer_ip) % 10000`). This avoids port collisions while maintaining stable port assignments across restarts.
+- **`ListenPort = 2XXXX`**: Calculated deterministically using a 32-bit FNV-1a hash of the peer's IP (`20000 + hash(peer_ip) % 10000`), with the link index added by the engine for multiple links. An entrypoint's explicit `external_port` wins when that port is unused on the node; otherwise the first unused port in the entrypoint range is scanned.
 - **`PostUp`**: Runs three things on interface creation: enables IPv4 forwarding on the interface (`net.ipv4.conf.%i.forwarding=1`), disables strict Reverse Path Filtering (`net.ipv4.conf.%i.rp_filter=0`), and installs a host route to the peer's IPv4 link-local (when IPv4 link-local addressing is in use) plus a best-effort IPv6 route to the peer's link-local. In multi-path mesh networks, return packets frequently enter via a different interface than outbound traffic (asymmetric routing); without `rp_filter=0`, the Linux kernel silently drops valid transit packets.
-- **`MTU = 1420`**: The default, chosen to leave room for WireGuard and IPv6 headers inside a 1500-byte path. It can be overridden per link endpoint.
-- **`FwMark`**: Optional firewall mark emitted only when set on the link or its effective network policy. It lets policy routing and nftables rules steer WireGuard-encapsulated traffic.
+- **`MTU = 1420`**: The default, chosen to leave room for WireGuard and IPv6 headers inside a 1500-byte path. It is derived as `entrypoint.MTU - 80` (falling back to `1500 - 80`) and can be overridden per link endpoint. Obfuscated (Phantun) endpoints reduce it by a further `12` bytes.
+- **`FwMark`**: Optional firewall mark emitted only when set on the link endpoint or its effective network policy (endpoint wins over policy). It is written verbatim into the WireGuard `[Interface] FwMark` and is distinct from the nftables `mark`/`mark/bitmask` syntax. It lets policy routing and nftables rules steer WireGuard-encapsulated traffic.
 - **`PersistentKeepalive = 25`**: Keeps stateful firewall entries and NAT mappings alive on intermediate routers. Automatically enabled only when an endpoint is resolvable for the peer; it is left at `0` (omitted) for unidirectional/NAT-only links.
-- **`PresharedKey` (PSK)**: Optional post-quantum symmetric encryption key shared between peers.
+- **`PresharedKey` (PSK)**: Post-quantum symmetric encryption key shared between peers. Easy42 auto-generates a PSK for new WireGuard links when the vault is unlocked (link-level `psk` preferred, then endpoint-level), and emits `PresharedKey=` whenever one is present. Manual links get no keys/PSK.
 
 ### Manual Links (Non-WireGuard Tunnels & Existing Interfaces)
 
 In addition to WireGuard, Easy42 supports **Manual Links** for integrating pre-existing interfaces into the dynamic routing mesh (such as GRE, SIT, IPIP, VXLAN, physical links, or existing tunnel software):
 
-- Manual links bypass WireGuard interface generation and configure BIRD 2 BGP peering directly over the specified interface and neighbor addresses.
-- Policies, link costs, BFD, and firewall rules apply seamlessly to manual links.
+- Manual links bypass WireGuard interface generation (no `wg42*` config, keys, or PSK on either side) and configure BIRD 2 BGP peering directly over the specified interface and neighbor addresses.
+- `neighbor_address` is a **system-derived** field (a mirror of the peer endpoint's `address`), not user input; it is used by BIRD only as a fallback when the peer `address` is empty. Manual-link creation still requires an `address` on both ends.
+- **External manual links**: the external end may omit `interface` but not `address`; its MTU defaults to `1500`. Manual interfaces are injected into the nftables `easy42_ifname` set so firewall/NAT rules apply.
+- Policies, link costs, BFD (`bfd yes;` unless `disable_bfd` is set on the link), and firewall rules apply seamlessly to manual links.
+
+### WireGuard Obfuscation (Phantun)
+
+A WireGuard link endpoint can set `obfuscator: phantun_client` or `phantun_server` (agent mode only, WireGuard links only; both ends must be complementary). The agent installs and supervises a `<interface>-obfuscator` service per endpoint:
+
+- Client: WireGuard peer endpoint becomes `127.0.0.1:<local_port>`; server: WireGuard peer endpoint is unset, and Phantun forwards TCP to the local WireGuard port.
+- Missing complement roles are auto-completed; generated ports are random in `10000–19999`, TUN pairs use `198.51.100.0/24`, and an OpenSSH-banner `extra_args` default is applied. Generated parameters (`local_port`, `server_port`, `wireguard_port`, `tun_name`, `tun_local`, `tun_peer`, optional `extra_args`) are stored in `obfuscator_parameters` and remain editable.
+- Both generated WireGuard configs use MTU reduced by `12` bytes for Phantun overhead. Sync fails if an obfuscated link must be deployed to a node without a running agent. Install the binaries with the Device Helper `install_phantun` task.
 
 ---
 
@@ -171,7 +183,8 @@ When generating links between Node A and Node B:
 2. If no entrypoint tag matches, the source node's own `tags` are compared against the destination node's entrypoint tags. This lets a node-level tag select a specific reachable entrypoint.
 3. If neither match produces a candidate, the first non-`none` entrypoint on the destination node is used.
 4. If every destination entrypoint is marked `none` (strictly behind a NAT/firewall without port forwarding), no `Endpoint = ...` is emitted for that direction. The link becomes unidirectional: only the side with a reachable endpoint gets an `Endpoint`, while the NATed side initiates the connection and maintains it via `PersistentKeepalive = 25`.
-5. Endpoint ports come from the selected entrypoint's explicit port or port range, then fall back to the requested listen port or a peer-IP-derived port. `ExternalPort` takes precedence over `Port` when present.
+5. Endpoint ports come from the selected entrypoint's explicit port or port range, then fall back to the requested listen port or a peer-IP-derived port. `ExternalPort` takes precedence over `Port` when present (provided that port is unused on the node; otherwise the first unused port in range is scanned).
+6. When `use_ip` is set on a link endpoint, the peer's endpoint hostname is resolved to an IP on the server and the result is stored as `resolved_endpoint` (system-derived, never accepted via apply).
 
 ---
 

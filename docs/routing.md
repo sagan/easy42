@@ -57,7 +57,7 @@ graph TD
 
 #### Strategy 1: iBGP Full-Mesh (All Nodes in Same AS)
 
-All internal nodes share the identical AS number and peer with each other in an all-to-all full mesh. No confederation or Route Reflector directives are generated.
+All internal nodes share the identical AS number and peer with each other in an all-to-all full mesh. No confederation or Route Reflector directives are generated — **unless** a global `public_asn` is configured, in which case the templates still emit confederation directives (there is no ASN-diversity check).
 
 - **Why this strategy is NOT ideal and NOT recommended**:
   - **No Path Redundancy**: Even though physical or logical links may exist in a full mesh, standard iBGP does **not** provide dynamic link-failure failover. Consider a 3-node full mesh ($A$, $B$, $C$): if link $A \leftrightarrow C$ goes down, node $A$ cannot communicate with $C$ via node $B$ as a relay, even though $A \leftrightarrow B$ and $B \leftrightarrow C$ are fully functional. This is due to the fundamental **iBGP split-horizon rule** (RFC 4271), which strictly forbids an iBGP router from advertising routes learned from one iBGP peer to another iBGP peer.
@@ -67,7 +67,7 @@ All internal nodes share the identical AS number and peer with each other in an 
 All internal nodes share the same AS number, but one or more nodes are designated as **BGP Route Reflectors** by enabling `"route_reflector": true` on the node configuration:
 
 - **How it works**:
-  - On Route Reflector nodes, Easy42 automatically appends `rr client;` to internal iBGP peer blocks that share the same ASN in `/etc/bird_easy42.conf` (external peers and internal peers with a different ASN are excluded as BIRD only permits internal neighbors to be RR clients).
+  - On Route Reflector nodes, Easy42 automatically appends `rr client;` to internal iBGP peer blocks that share the same ASN in `/etc/bird_easy42.conf` (external peers and internal peers with a different ASN are excluded as BIRD only permits internal neighbors to be RR clients). The RR logic exists only in the default/custom peer branches — the external-peer branch has no RR handling.
   - Internal nodes and the RR typically form a hub-and-spoke (star) topology.
   - The Route Reflector relaxes the split-horizon constraint by reflecting routes learned from one client to all other clients, eliminating the need for an all-to-all full mesh.
   - In the Easy42 Web UI topology graph, Route Reflector nodes are visually highlighted with a distinct `BGP RR` / `RR Active` badge and indigo border accents, making them instantly identifiable at first glance.
@@ -77,7 +77,7 @@ All internal nodes share the same AS number, but one or more nodes are designate
 
 #### Strategy 3: Unique Private ASN per Node + BGP Confederation (RFC 5065) — **[Recommended]**
 
-In this architecture, each internal node is configured with its own unique private ASN (chosen and configured by the user, commonly within `4224420000`–`4224429999` for DN42 networks), grouped under a globally configured parent Confederation AS (e.g., your public DN42 ASN `424242xxxx`):
+In this architecture, each internal node is configured with its own unique private ASN (chosen and configured by the user, commonly within `4224420000`–`4224429999` for DN42 networks), grouped under a globally configured parent Confederation AS (e.g., your public DN42 ASN `424242xxxx`). Confederation directives are emitted **only when `network_settings.public_asn > 0`**; without it, `COMM_EXTERNAL` falls back to `(4224420000, 1, 1)` and no `confederation` lines are generated. For external peers, `local as` is `CONFED_AS` only when the remote is external and `public_asn` is set (otherwise `SELF_AS`), with a per-protocol override when `is_external && bgp_template != "external_peer"`:
 
 > [!NOTE]
 > **User-Configured Node ASNs**: Easy42 does **not** automatically assign ASNs to nodes. It is the user who decides and configures each node's unique ASN during node creation or editing in the Web UI, CLI, or declarative config.
@@ -160,7 +160,7 @@ protocol bfd {
 }
 ```
 
-Internal peer protocols enable `bfd yes;`, so BGP sessions are torn down when the overlay path stops responding instead of waiting for the BGP hold timer. With the generated `2000ms` intervals and multiplier `5`, detection takes roughly 10 seconds. Faster detection requires overriding the BIRD template (for example with `bird_template`).
+All peer protocols (internal and external) enable `bfd yes;` by default, so BGP sessions are torn down when the overlay path stops responding instead of waiting for the BGP hold timer. With the generated `2000ms` intervals and multiplier `5`, detection takes roughly 10 seconds. Per-link, set `disable_bfd: true` (`--disable-bfd` on `link add`) to emit `bfd no;` for that session. Faster detection requires overriding the BIRD template (for example with `bird_template`).
 
 ### 3. Route Origination & Loopback Announcement
 
@@ -180,7 +180,7 @@ protocol static static_self_v6 {
 }
 ```
 
-In BIRD, a `reject` route is purely local to the routing daemon; it injects the prefix into BIRD's routing table (`master4`/`master6`) for export to peers, while the local kernel routes the local address through the loopback path. User-configured `static_routes` are emitted the same way in `static_v4`/`static_v6`, with `/32` or `/128` appended when no prefix length is given. If a static route is prefixed with `@` (e.g. `@192.168.100.0/24`), it is advertised via BGP as usual, but bird adds a reject filter rule above the accept rule in the kernel export filter (`if source ~ [ RTS_STATIC ] && net ~ [ 192.168.100.0/24 ] then reject;`), preventing the unreachable route from being installed into the kernel routing table.
+In BIRD, a `reject` route is purely local to the routing daemon; it injects the prefix into BIRD's routing table (`master4`/`master6`) for export to peers, while the local kernel routes the local address through the loopback path. User-configured `static_routes` are emitted the same way in `static_v4`/`static_v6`, with `/32` or `/128` appended when no prefix length is given. If a static route is prefixed with `@` (e.g. `@192.168.100.0/24`), it is advertised via BGP as usual, but BIRD adds a reject filter rule above the accept rule in the main kernel export filter (`if source ~ [ RTS_STATIC ] && net ~ [ 192.168.100.0/24 ] then reject;`), preventing the unreachable route from being installed in the main kernel table. Note the `@` is stripped before the route is stored in the compiler context, bare IPs are normalized to `/32`/`/128`, and `@`-suppression applies only to the main `kernel_v4`/`kernel_v6` tables — the `pipe_inet_*` tables still accept `RTS_STATIC` + `INTERNET` routes regardless of `@` (subject to BGP export filters).
 
 ### 4. Multi-Table Kernel FIB Synchronization & Metrics
 
@@ -205,7 +205,7 @@ Learned BGP routes are exported to the Linux kernel FIB:
       kernel table TABLE;
   }
   ```
-  Setting `krt_prefsrc = SELF_IP` ensures local applications use the overlay IP when originating mesh traffic. Static `reject` routes are only installed for private prefixes (unless suppressed with `@`), and Internet routes learned over BGP are not installed in the main table when a separate internet table is configured. `kernel_v6` mirrors this with `INTERNET6` and `PRIVATE6`.
+  Setting `krt_prefsrc = SELF_IP` ensures local applications use the overlay IP when originating mesh traffic. Static `reject` routes are only installed for private prefixes (unless suppressed with `@`), and Internet routes learned over BGP are not installed in the main table when a separate internet table is configured. `kernel_v6` mirrors this with `INTERNET6` and `PRIVATE6`. The `COMM_EXTERNAL` reject is emitted only when an external table is configured, and the Internet reject only when an internet table is configured; the example above omits those conditionals for brevity.
 - **External Routing Table (`external_table`)**: A pipe copies routes carrying the `COMM_EXTERNAL` large community from `master4`/`master6` into an isolated table, and a dedicated kernel protocol installs them with `krt_prefsrc` set to `external_ip`/`external_ip6` (falling back to `ip`/`ip6`). This enables Policy-Based Routing (PBR) for external peer routes.
 - **Internet Routing Table (`internet_table`)**: A separate pipe/kernel pair isolates upstream transit or default routes (`INTERNET`/`INTERNET6`) into another kernel table. If `external_table` and `internet_table` are equal, external routes and Internet routes share that table. If `internet_table` differs, `COMM_EXTERNAL` routes are excluded from the internet pipe.
 
@@ -215,7 +215,7 @@ The metric is emitted only when configured on the node, and kernel `learn` is en
 
 Nodes can dynamically redistribute existing routes into BGP:
 
-- `routes`: Imports prefixes directly from specific Linux kernel routing tables (e.g., table 100 subnets) into BIRD using kernel protocol `learn`.
+- `routes`: Imports prefixes directly from specific Linux kernel routing tables (e.g., table 100 subnets) into BIRD using kernel protocol `learn`. The main-table kernel protocol imports only the listed prefixes; other tables get separate kernel+pipe pairs.
 - `static_routes`: Injects static prefix announcements directly into BIRD's static protocol block for unconditional BGP advertisement.
 
 ### 6. Route Leak Protection
@@ -282,12 +282,14 @@ Policy defaults are resolved at compile time:
 - Built-in policies are always present and cannot be edited. Custom policies with the same ID take precedence over built-ins.
 - The default DN42 prefix list comes from global `network_settings.prefixes` when set; otherwise it uses the standard DN42/ChaosVPN/Freifunk/NeoNetwork ranges. `disallowed_dn42_networks` / `disallowed_dn42_cidrs` add exclusions.
 - If neither `external_ip`/`external_ip6` is configured for a SNAT target, no corresponding SNAT rule is emitted for that family.
+- Custom BIRD injection points: `bird_import_filter` / `bird_export_filter` (alias `bird_export_fillter`) are appended to the generated import/export filters; `bird_pre_snippet` is inserted early in `bird_easy42.conf` (before `bird_hooks_pre`) and `bird_post_snippet` at the end (before `bird_hooks`). Node `config_hooks` with `bird.pre` / `bird` (`bird.post`/`bird.global`) targets are Go templates rendered with the same context as the BIRD template and included via `include`.
 
 ### Link Costs, Negative Costs & Latency Steering
 
 Each policy defines a base `cost` (default: 100), which can be overridden by `cost` on an individual link endpoint:
 
-- **In confederation mode only**, BIRD adjusts `bgp_local_pref` on import. Without a confederation ASN, the cost is still stored and displayed but does not alter `bgp_local_pref`.
+- **Internal links**: BIRD adjusts `bgp_local_pref` on import as `bgp_local_pref − cost` (floored at `1`); the confederation path-length workaround above relies on this cumulative adjustment.
+- **External links**: BIRD unconditionally sets `bgp_local_pref = DEFAULT_LOCAL_PREF ± cost`, even without a confederation ASN.
 - Positive cost: `bgp_local_pref = DEFAULT_LOCAL_PREF(10000) − cost` (floored at 1).
 - **Negative link costs** (e.g. `-50`) increase preference above 10000: `bgp_local_pref = 10000 + |cost|`, clamped to the 32-bit maximum. This allows explicitly preferring high-bandwidth or primary transit paths.
 - An endpoint `cost` of `0` means "inherit the policy cost"; it is not a literal zero cost.
@@ -295,6 +297,8 @@ Each policy defines a base `cost` (default: 100), which can be overridden by `co
 ### Routing Policy Modes
 
 Each policy or link endpoint can enforce a BGP routing policy. Aliases are normalized by the configuration layer:
+
+Per-link and per-policy BGP tuning is also available: `preference` sets the BIRD protocol `preference`, and `add_paths` (`off`/`on`/`rx`/`tx`, or `inherit` on a link endpoint to revert to the policy value) sets the BGP ADD-PATH capability in each IPv4/IPv6 address family. The FlapAlerted session (below) always uses `add paths on;`.
 
 | Mode             | Aliases                                          | Import behavior                                    | Export behavior                                                                        |
 | :--------------- | :----------------------------------------------- | :------------------------------------------------- | :------------------------------------------------------------------------------------- |

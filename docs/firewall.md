@@ -76,6 +76,11 @@ table inet easy42 {
     iifname @pol_dn42_ifname counter drop
   }
 
+  chain mangle_output {
+    type filter hook output priority mangle; policy accept;
+    tcp flags syn tcp option maxseg size set rt mtu
+  }
+
   chain mangle_postrouting {
     type filter hook postrouting priority mangle; policy accept;
     tcp flags syn tcp option maxseg size set rt mtu
@@ -119,13 +124,14 @@ tcp flags syn tcp option maxseg size set rt mtu
 
 Tunnel encapsulation (WireGuard, VXLAN, GRE) adds header bytes to IP packets, reducing the effective path MTU (typically from 1500 to 1420 bytes). When Path MTU Discovery (PMTUD) fails because ICMP Frag-Needed messages are filtered on external transit, TCP connections hang during TLS handshakes or large transfers (an MTU blackhole).
 
-Easy42 clamps the Maximum Segment Size (MSS) in TCP SYN packets to the route MTU (`rt mtu`), so TCP sessions negotiate a segment size that traverses the tunnel without fragmentation.
+Easy42 clamps the Maximum Segment Size (MSS) in TCP SYN packets to the route MTU (`rt mtu`), so TCP sessions negotiate a segment size that traverses the tunnel without fragmentation. The clamp is emitted in **both** `mangle_output` (output hook) and `mangle_postrouting` (postrouting hook).
 
 ### 2. Policy-Based Forwarding & Input Filters
 
 - **Forwarding (`filter_forward`)**:
   - Accepts established/related flows first.
   - For each policy with `filter_forward` enabled, drops traffic on matching interfaces whose source or destination is outside the allowed CIDRs, or inside a disallowed CIDR.
+  - When a policy also defines `local_networks` and the node has input filtering enabled with local v4/v6 addresses, additional combined `saddr`/`daddr` rules are emitted inside `filter_forward`.
   - After all policy checks, accepts traffic on `easy42_ifname`. This is important: the policy rules are **restrictions layered before a final overlay-wide accept**, not a default-deny overlay.
 - **Input (`filter_input`)**:
   - Accepts established/related flows.
@@ -146,7 +152,7 @@ chain filter_prerouting {
 
 - `block_ingress_new: "all"` drops new/invalid connections arriving on the policy interfaces, regardless of whether the destination is local.
 - `block_ingress_new: "forward"` only drops new/invalid connections that are **not** destined to a local address (`fib daddr type != local`), leaving local input available.
-- `ingress_new_whitelist` adds exceptions. Entries are normalized to `address:port` or `address:port/proto` (for example `172.20.0.53:80` or `[fd42::1]:443/tcp`) and compiled into a concatenated set matched against `ip daddr . meta l4proto . th dport`. Whitelisting is only active while `block_ingress_new` is enabled.
+- `ingress_new_whitelist` adds exceptions. Entries are normalized to `address:port` or `address:port/proto` (for example `172.20.0.53:80`) and compiled into a concatenated IPv4 set (`ipv4_addr . inet_proto . inet_service`) matched against `ip daddr . meta l4proto . th dport`. Non-IPv4 entries (including IPv6 literals such as `[fd42::1]:443/tcp`) are silently dropped. Whitelisting is only active while `block_ingress_new` is enabled.
 
 Accepted values and aliases are normalized by the configuration layer; unrecognized values disable the feature.
 
@@ -156,7 +162,8 @@ Accepted values and aliases are normalized by the configuration layer; unrecogni
   - `condition: "not_dst"` (default) emits a source-address test against the policy's allowed/disallowed **destination** CIDR sets: `ip saddr != @..._dst_v4` or `ip saddr @..._disallowed_dst_v4`. In other words, traffic sourced from outside the allowed prefix set is translated, while traffic sourced from an allowed prefix is not. If the policy has no CIDR sets, the rule applies unconditionally.
   - `condition: "all"` applies SNAT to all matching egress traffic.
   - `target`: `external_ip`/empty (default), `main_ip`, `masquerade`, or a literal IPv4/IPv6 address. IPv4 and IPv6 rules are emitted separately when the corresponding target exists.
-- **Forward SNAT (`forward_snat`)**: Rewrites traffic entering from a policy interface and leaving through a different interface. The default action is `masquerade`; `forward_snat_target` accepts the same values as SNAT targets.
+- **Forward SNAT (`forward_snat`)**: Rewrites traffic entering from a policy interface and leaving through a different interface. The default action is `masquerade`; `forward_snat_target` accepts the same values as SNAT targets. Explicit forward-SNAT targets are guarded by `fib saddr type != local`; the IPv6 allowed-destination SNAT branch excludes `fe80::/10` sources, and when no CIDR sets are present the masquerade/SNAT fallback applies unconditionally.
+- **Note-data SNAT (`nft_snat_iifname`)**: If the node's Note JSON sets `nft_snat_iifname` (a space-separated interface list), Easy42 emits extra `iifname { <list> } oifname @easy42_ifname ... snat to $self_ip/$self_ip6` rules in `nat_postrouting` for third-party tunnel traffic that should exit via the overlay.
 - **Transit SNAT for third-party overlays**: Traffic arriving from `tunnel_ifname` (WireGuard, Tailscale, ZeroTier, OpenVPN `tun*`, netbird `wt*`) that is not already on an Easy42 interface and exits through `easy42_ifname` is translated to `$self_ip`/`$self_ip6`, ensuring the return path comes back to this gateway.
 - **Link-local and local-socket fallbacks**:
   - Outbound IPv4 packets sourced from `169.254.0.0/16` are masqueraded. There is intentionally no IPv6 link-local equivalent; the kernel drops forwarded IPv6 link-local sources.
@@ -165,7 +172,7 @@ Accepted values and aliases are normalized by the configuration layer; unrecogni
 
 ### 5. DSCP Rewriting
 
-Policies may set `dscp_ingress` and/or `dscp_egress` as a string. When present, Easy42 adds:
+Policies may set `dscp_ingress` and/or `dscp_egress` as a string. The built-in `dn42` policy defaults both to `"0"`, so DSCP-zeroing chains are emitted unconditionally for DN42 links. When present, Easy42 adds:
 
 ```nft
 chain mangle_prerouting_dscp {
@@ -215,7 +222,7 @@ Marks apply to packets arriving from the listed interfaces and can be consumed b
 
 ### 7. Custom Hooks
 
-Node `config_hooks` with nft targets are injected at three points:
+Node `config_hooks` with nft targets are Go `text/template` snippets rendered with the same context as the nft template (invalid syntax fails generation with a `hook template` error) and injected at three points:
 
 | Hook type                                | Placement                                            |
 | :--------------------------------------- | :--------------------------------------------------- |

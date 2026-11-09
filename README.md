@@ -108,7 +108,8 @@ Easy42 combines an intuitive, visual **Web UI** with a scriptable **CLI**, suppo
 - **Zero Tunnel IPAM Headaches**: Overlay tunnels use deterministic IPv6 link-local (`fe80::/64`) and optional deterministic IPv4 link-local (`169.254.X.X/32`) addressing, saving your routable IP prefixes for actual workloads.
 - **Zero-Dependency Host Provisioning**: Built-in **Device Helper** verifies prerequisites, installs WireGuard/BIRD, tunes sysctl parameters (forwarding, rp_filter), configures persistent node IPs and startup daemons across heterogeneous Linux distributions (Debian, Ubuntu, Alpine, Arch, OpenWrt) directly from the Web UI or API—no Ansible needed.
 - **Agent-Less or Agent-Powered**: Manage nodes agent-lessly over standard SSH, or deploy the static Rust agent (`easy42-agent`) for nodes behind firewalls, symmetric NAT, or without public IPs.
-- **Declarative Automation**: Apply partial JSON/YAML configuration patches through the Web UI or `easy42 apply`, with strict schema validation, a field-level preview/diff, automatic backups, and a saved change library.
+- **Declarative Automation**: Apply partial JSON/YAML configuration patches through the Web UI or `easy42 apply`, with strict schema validation, a field-level preview/diff, automatic backups (pruned to 100), and a saved change library.
+- **Workload Apps & MCP**: Deploy Docker/systemd/cron apps to agent nodes with variable interpolation and node selectors, and expose the whole control plane to AI tooling via the built-in MCP server (HTTP/SSE + OAuth, plus `easy42 mcp` stdio).
 
 ---
 
@@ -119,13 +120,17 @@ Easy42 combines an intuitive, visual **Web UI** with a scriptable **CLI**, suppo
 - **Device Helper & Remote Host Automation**: Integrated host preparation engine to install WireGuard/BIRD, configure `/etc/sysctl.d/99-easy42.conf`, persist node and external IPs through the host's native network manager, inject BIRD/nftables includes, run custom network scripts, configure interface autostart on boot, and deploy `easy42-agent` binaries with real-time web terminal output.
 - **Post-Quantum WireGuard PSK Support**: Add Preshared Keys (PSK) to all WireGuard links by default for defense-in-depth against quantum cryptanalysis. PSKs are generated, revealed, and rotated from the Web UI/API, or supplied as encrypted values through declarative config.
 - **Agent Sync Hooks**: Execute pre-sync and post-sync shell scripts on agent-managed nodes with rich execution context and safety abort semantics.
+- **Workload Apps**: Deploy Docker Compose stacks, systemd units (transpiled to OpenRC/procd on Alpine/OpenWrt), and cron entries to agent nodes from the Web UI, with global variables, per-node selectors, and start/stop/restart/log actions. See [Integrations](docs/integrations.md#9-workload-apps-apps).
+- **Events & Ping Table**: Persisted fleet events (node online/offline, cron failures) with unread tracking, and all-pairs latency measurement (`e2e`/`link`) with live streaming and history.
+- **MCP Server & OAuth**: Built-in Model Context Protocol server (Streamable HTTP + SSE) with separate read-only and full-control tokens and OAuth 2.0/2.1 discovery, plus a `easy42 mcp` stdio CLI. See [Integrations](docs/integrations.md#10-mcp-server).
+- **WireGuard Obfuscation (Phantun)**: Optional UDP-over-TCP obfuscation (`phantun_client`/`phantun_server`) for WireGuard links on agent-managed nodes, with auto-generated ports/TUN addresses and a one-click Device Helper installer.
 - **Real-Time Telemetry & Traffic History**: Live CPU, memory, load average, disk usage, interface throughput (Rx/Tx B/s), and WireGuard handshake tracking, persisted in SQLite with configurable raw and summarized retention.
 - **Prometheus Metrics Integration**: Built-in `/metrics` endpoint exposing cluster-wide telemetry, agent statuses, node resource usage, and tunnel traffic counters, with bundled Grafana dashboards.
 - **Automatic `/etc/hosts` Management**: Keep node hostnames, `.internal` aliases, and overlay IPv4 addresses automatically synchronized on agent-managed nodes.
-- **Interactive Looking Glass**: Built-in visual diagnostic suite supporting ICMP Ping, TCP Ping, Traceroute, MTR (with automatic node hop mapping), and live BIRD route/protocol inspection, plus reusable presets and scheduled probes.
-- **Scheduled Operations**: Server-side background tasks for daily ROA refresh, topology sync, and Cloudflare DNS sync, plus per-node cron probes executed by `easy42-agent`.
-- **Telegram Bot**: Query cluster status, node details, ping, and TCP ping from Telegram, and receive debounced node online/offline alerts through the webhook integration.
-- **Configuration Templates**: Built-in and custom Go templates for WireGuard, BIRD 2, and nftables generation, with per-node template selection and injectable config hooks.
+- **Interactive Looking Glass**: Built-in visual diagnostic suite supporting ICMP Ping, TCP Ping, Traceroute, MTR (with automatic node hop mapping), and live BIRD route/protocol inspection, plus custom tasks, reusable presets, and scheduled probes.
+- **Scheduled Operations**: Server-side background tasks for daily ROA refresh, topology sync, Cloudflare DNS sync, and config backup (preserving at most 100 backups), plus per-node cron probes executed by `easy42-agent`.
+- **Telegram Bot**: Query cluster status, node details, ping, ping-all (`/pingall`), and TCP ping from Telegram, and receive debounced node online/offline alerts through the webhook integration.
+- **Configuration Templates**: Built-in and custom Go templates for WireGuard, BIRD 2, and nftables generation, with per-node template selection and injectable config hooks (rendered as Go templates).
 - **Cloudflare DNS Automation**: Automatically synchronize node overlay IPv4/IPv6 hostnames and wildcards directly to Cloudflare DNS zones.
 - **Encrypted State Store**: WireGuard private keys and preshared keys are encrypted with XAES-256-GCM under a random data key, which is itself protected by an Argon2id-derived key and held in volatile memory with `memguard`.
 
@@ -207,9 +212,9 @@ Detailed technical guides and architectural deep dives have been separated into 
 | **[nftables Firewall & NAT](docs/firewall.md)**              | Stateful packet filtering, TCP MSS clamping, transit SNAT, DSCP/mark handling, and policy-based ingress protection.                                                                        |
 | **[Node Agent (`easy42-agent`) & Hooks](docs/agent.md)**     | Rust agent architecture, real-time telemetry streaming, edge cron probes, and lifecycle sync hooks (`pre_sync` / `post_sync`).                                                             |
 | **[Device Helper & Node Automation](docs/device-helper.md)** | Remote host provisioning, embedded bootstrap tasks, persistent network/IP configuration, tag-based fleet execution, and REST API.                                                          |
-| **[Integrations & Extended Features](docs/integrations.md)** | Prometheus metrics, Grafana dashboards, `/etc/hosts` sync, WireGuard PSK, database retention, templates, scheduled tasks, Telegram, and Cloudflare DNS.                                    |
+| **[Integrations & Extended Features](docs/integrations.md)** | Prometheus metrics, Grafana dashboards, `/etc/hosts` sync, WireGuard PSK/obfuscation, database retention, templates, events, workload Apps, MCP Server, scheduled tasks, Telegram, and Cloudflare DNS. |
 | **[Configuration Specification](docs/configuration.md)**     | Complete reference schema, annotated example for `config.json`, and declarative JSON/YAML config apply.                                                                                    |
-| **[CLI Reference](docs/cli.md)**                             | Complete command-line manual for `serve`, `node`, `link`, `status`, `sync`, `apply`, and `version`.                                                                                        |
+| **[CLI Reference](docs/cli.md)**                             | Complete command-line manual for `serve`, `node`, `link`, `status`, `sync`, `apply`, `mcp`, and `version`.                                                                                        |
 | **[Operations & Troubleshooting](docs/troubleshooting.md)**  | Interface verification, BIRD diagnostics, live health checks, config apply recovery, and common gotchas.                                                                                   |
 
 ---
