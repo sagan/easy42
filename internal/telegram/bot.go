@@ -202,12 +202,13 @@ func (s *BotService) initBotUnlocked() error {
 		s.webhookStatus = "no_server_url"
 	}
 
-	// Register bot commands list (/status, /nodes, /node, /ping, /tcp_ping, /start, /help)
+	// Register bot commands list (/status, /nodes, /node, /ping, /pingall, /tcp_ping, /start, /help)
 	cmdConfig := tgbotapi.NewSetMyCommands(
 		tgbotapi.BotCommand{Command: "status", Description: "Query easy42 cluster overview status"},
 		tgbotapi.BotCommand{Command: "nodes", Description: "Detailed node statuses and metrics"},
 		tgbotapi.BotCommand{Command: "node", Description: "Detailed info and state of a node"},
 		tgbotapi.BotCommand{Command: "ping", Description: "Looking Glass ICMP ping test"},
+		tgbotapi.BotCommand{Command: "pingall", Description: "ICMP ping to target from all nodes"},
 		tgbotapi.BotCommand{Command: "tcp_ping", Description: "Looking Glass TCP ping test"},
 		tgbotapi.BotCommand{Command: "start", Description: "Welcome & usage instructions"},
 		tgbotapi.BotCommand{Command: "help", Description: "Show available commands"},
@@ -322,6 +323,8 @@ func (s *BotService) HandleWebhookUpdate(update *tgbotapi.Update) error {
 		return s.handleNodeCommand(chatID, serverURL, args)
 	case "/ping":
 		return s.handlePingCommand(chatID, args)
+	case "/pingall":
+		return s.handlePingAllCommand(chatID, args)
 	case "/tcp_ping":
 		return s.handleTCPPingCommand(chatID, args)
 	default:
@@ -346,6 +349,7 @@ I am your easy42 overlay network monitoring and diagnostic assistant.
 • /nodes - Detailed node list, agent statuses, and resource usage
 • /node [name] - Detailed info, network addresses, and live state of a node
 • /ping [node] &lt;target&gt; - Run Looking Glass ICMP ping test
+• /pingall &lt;target&gt; - ICMP ping to target from all nodes
 • /tcp_ping [node] &lt;host:port&gt; - Run Looking Glass TCP ping test
 • /help - Show available commands and instructions%s`, webLink)
 
@@ -368,6 +372,7 @@ func (s *BotService) handleHelpCommand(chatID int64, serverURL string) error {
 • <b>/nodes</b>: Summary list of cluster nodes with connection status and metrics.
 • <b>/node [name-or-prefix]</b>: Detailed hardware metrics, network addresses, and live state for a specific node.
 • <b>/ping [node] &lt;target&gt; [count]</b>: Execute Looking Glass ICMP ping test from a cluster node.
+• <b>/pingall &lt;target&gt; [count]</b>: Execute ICMP ping to target from all cluster nodes and aggregate results.
 • <b>/tcp_ping [node] &lt;host:port&gt; [count]</b>: Execute Looking Glass TCP connectivity and latency test.
 • <b>/help</b>: Display this help message.
 
@@ -922,6 +927,22 @@ Usage: <code>/tcp_ping [node] &lt;host:port&gt; [count]</code>
 • <code>/tcp_ping node1 1.1.1.1:443 5</code>`
 }
 
+func pingAllHelpMessage() string {
+	return `ℹ️ <b>PingAll Command Usage</b>
+━━━━━━━━━━━━━━━━━━━━
+Usage: <code>/pingall &lt;target&gt; [count]</code>
+
+<b>Arguments:</b>
+• <code>target</code> (required): Destination IPv4, IPv6, or hostname (e.g. <code>1.1.1.1</code>, <code>example.com</code>).
+• <code>count</code> (optional): Number of ICMP packets to send from each node (1-20, default: 4).
+
+Ping is executed concurrently from all managed nodes and results are aggregated. Offline or unreachable nodes are reported as failed.
+
+<b>Examples:</b>
+• <code>/pingall 1.1.1.1</code>
+• <code>/pingall example.com 5</code>`
+}
+
 func formatPingResult(nodeName string, target string, nr lookingglass.NodeResult) string {
 	var sb strings.Builder
 	sb.WriteString(fmt.Sprintf("🏓 <b>Ping Result: %s</b>\n", html.EscapeString(target)))
@@ -1295,6 +1316,228 @@ func (s *BotService) handleTCPPingCommand(chatID int64, args []string) error {
 	resMsg.ParseMode = tgbotapi.ModeHTML
 	_, sErr := s.bot.Send(resMsg)
 	return sErr
+}
+
+func pingResultFromNodeResult(nr lookingglass.NodeResult) (lookingglass.PingResult, bool) {
+	switch v := nr.Parsed.(type) {
+	case lookingglass.PingResult:
+		return v, true
+	case *lookingglass.PingResult:
+		if v != nil {
+			return *v, true
+		}
+	}
+	return lookingglass.PingResult{}, false
+}
+
+func truncatePingAllText(s string, max int) string {
+	s = strings.TrimSpace(s)
+	if max <= 0 {
+		return s
+	}
+	r := []rune(s)
+	if len(r) <= max {
+		return s
+	}
+	return string(r[:max]) + "…"
+}
+
+func formatPingAllLine(nodeName string, nr lookingglass.NodeResult) string {
+	escName := html.EscapeString(nodeName)
+	if nr.Error != "" {
+		return fmt.Sprintf("• ⚫ <b>%s</b>: error: %s", escName, html.EscapeString(truncatePingAllText(nr.Error, 120)))
+	}
+	if pr, ok := pingResultFromNodeResult(nr); ok && pr.PacketsSent > 0 {
+		if pr.PacketsReceived == 0 {
+			return fmt.Sprintf("• 🔴 <b>%s</b>: 0/%d, 100%% loss, no reply", escName, pr.PacketsSent)
+		}
+		icon := "🟢"
+		if pr.PacketLossPct > 0 {
+			icon = "🟡"
+		}
+		if pr.AvgRTT > 0 {
+			return fmt.Sprintf("• %s <b>%s</b>: %d/%d, %.0f%% loss, avg %.2fms (min %.2f, max %.2f)", icon, escName, pr.PacketsReceived, pr.PacketsSent, pr.PacketLossPct, pr.AvgRTT, pr.MinRTT, pr.MaxRTT)
+		}
+		return fmt.Sprintf("• %s <b>%s</b>: %d/%d, %.0f%% loss", icon, escName, pr.PacketsReceived, pr.PacketsSent, pr.PacketLossPct)
+	}
+	if nr.RawOutput != "" {
+		trimmed := strings.TrimSpace(nr.RawOutput)
+		first := strings.TrimSpace(strings.SplitN(trimmed, "\n", 2)[0])
+		return fmt.Sprintf("• ⚪ <b>%s</b>: %s", escName, html.EscapeString(truncatePingAllText(first, 100)))
+	}
+	return fmt.Sprintf("• ⚫ <b>%s</b>: no output", escName)
+}
+
+// formatPingAllResults formats aggregated ping results from all nodes into one or more
+// Telegram messages (each <= ~3500 runes to stay under the 4096 limit). Node names are
+// expected sorted for deterministic output. Missing entries are reported as errors.
+func formatPingAllResults(cleanTarget string, names []string, results map[string]lookingglass.NodeResult) []string {
+	sorted := append([]string(nil), names...)
+	sort.Strings(sorted)
+
+	total := len(sorted)
+	replied := 0
+	var avgSum float64
+	avgCount := 0
+	var minOverall, maxOverall float64
+	firstAvg := true
+	for _, n := range sorted {
+		nr, ok := results[n]
+		if !ok || nr.Error != "" {
+			continue
+		}
+		if pr, ok2 := pingResultFromNodeResult(nr); ok2 && pr.PacketsReceived > 0 {
+			replied++
+			if pr.AvgRTT > 0 {
+				avgSum += pr.AvgRTT
+				avgCount++
+				if firstAvg || pr.MinRTT < minOverall {
+					minOverall = pr.MinRTT
+				}
+				if firstAvg || pr.MaxRTT > maxOverall {
+					maxOverall = pr.MaxRTT
+				}
+				firstAvg = false
+			}
+		}
+	}
+	failed := total - replied
+
+	var header string
+	if replied > 0 && avgCount > 0 {
+		avgRTT := avgSum / float64(avgCount)
+		header = fmt.Sprintf("🏓 <b>PingAll Result: %s</b>\n📊 <b>Summary: %d/%d nodes replied</b> (%d failed) | avg RTT %.2fms (min %.2f, max %.2f)\n━━━━━━━━━━━━━━━━━━━━\n",
+			html.EscapeString(cleanTarget), replied, total, failed, avgRTT, minOverall, maxOverall)
+	} else {
+		header = fmt.Sprintf("🏓 <b>PingAll Result: %s</b>\n📊 <b>Summary: %d/%d nodes replied</b> (%d failed)\n━━━━━━━━━━━━━━━━━━━━\n",
+			html.EscapeString(cleanTarget), replied, total, failed)
+	}
+
+	var lines []string
+	for _, n := range sorted {
+		nr, ok := results[n]
+		if !ok {
+			nr = lookingglass.NodeResult{NodeName: n, Error: "No result returned"}
+		}
+		lines = append(lines, formatPingAllLine(n, nr))
+	}
+
+	const chunkLimit = 3500
+	contPrefix := fmt.Sprintf("🏓 <b>PingAll Result: %s (cont.)</b>\n━━━━━━━━━━━━━━━━━━━━\n", html.EscapeString(cleanTarget))
+	var chunks []string
+	cur := header
+	for _, line := range lines {
+		if len([]rune(cur))+len([]rune(line))+1 > chunkLimit {
+			chunks = append(chunks, cur)
+			cur = contPrefix + line + "\n"
+		} else {
+			cur += line + "\n"
+		}
+	}
+	chunks = append(chunks, cur)
+	return chunks
+}
+
+func (s *BotService) handlePingAllCommand(chatID int64, args []string) error {
+	if s.provider == nil {
+		msg := tgbotapi.NewMessage(chatID, "⚠️ Cluster provider not available.")
+		_, err := s.bot.Send(msg)
+		return err
+	}
+
+	if len(args) == 0 {
+		msg := tgbotapi.NewMessage(chatID, pingAllHelpMessage())
+		msg.ParseMode = tgbotapi.ModeHTML
+		_, err := s.bot.Send(msg)
+		return err
+	}
+
+	target := args[0]
+	countStr := "4"
+	if len(args) >= 2 {
+		countStr = args[1]
+	}
+
+	// Validate target
+	specTarget := config.TaskParam{
+		Key:   "target",
+		Label: "Target Host or IP",
+		Type:  config.ParamTypeIPOrCIDR,
+	}
+	cleanTarget, err := lookingglass.SanitizeParam(specTarget, target)
+	if err != nil {
+		errText := fmt.Sprintf("⚠️ <b>Invalid Target:</b> %v\n\n%s", err, pingAllHelpMessage())
+		msg := tgbotapi.NewMessage(chatID, errText)
+		msg.ParseMode = tgbotapi.ModeHTML
+		_, sErr := s.bot.Send(msg)
+		return sErr
+	}
+
+	// Validate count
+	specCount := config.TaskParam{
+		Key:          "count",
+		Label:        "Packet Count",
+		Type:         config.ParamTypeNumber,
+		DefaultValue: "4",
+	}
+	cleanCount, err := lookingglass.SanitizeParam(specCount, countStr)
+	if err != nil {
+		errText := fmt.Sprintf("⚠️ <b>Invalid Packet Count:</b> %v\n\n%s", err, pingAllHelpMessage())
+		msg := tgbotapi.NewMessage(chatID, errText)
+		msg.ParseMode = tgbotapi.ModeHTML
+		_, sErr := s.bot.Send(msg)
+		return sErr
+	}
+
+	nodes := filterManagedNodes(s.provider.GetNodes())
+	if len(nodes) == 0 {
+		msg := tgbotapi.NewMessage(chatID, "ℹ️ No managed nodes in the easy42 cluster.")
+		_, sErr := s.bot.Send(msg)
+		return sErr
+	}
+
+	var names []string
+	for _, n := range nodes {
+		names = append(names, n.Name)
+	}
+	sort.Strings(names)
+
+	typing := tgbotapi.NewChatAction(chatID, tgbotapi.ChatTyping)
+	_, _ = s.bot.Send(typing)
+
+	req := lookingglass.RunRequest{
+		Nodes:      names,
+		TaskID:     "ping",
+		Params:     map[string]string{"target": cleanTarget, "count": cleanCount},
+		TimeoutSec: 20,
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	resp, err := s.provider.RunLookingGlass(ctx, req)
+	if err != nil {
+		errMsg := tgbotapi.NewMessage(chatID, fmt.Sprintf("❌ Failed to execute ping from all nodes: %v", err))
+		errMsg.ParseMode = tgbotapi.ModeHTML
+		_, sErr := s.bot.Send(errMsg)
+		return sErr
+	}
+
+	results := resp.Results
+	if results == nil {
+		results = make(map[string]lookingglass.NodeResult)
+	}
+
+	chunks := formatPingAllResults(cleanTarget, names, results)
+	for _, chunk := range chunks {
+		resMsg := tgbotapi.NewMessage(chatID, chunk)
+		resMsg.ParseMode = tgbotapi.ModeHTML
+		resMsg.DisableWebPagePreview = true
+		if _, sErr := s.bot.Send(resMsg); sErr != nil {
+			return sErr
+		}
+	}
+	return nil
 }
 
 func isNumber(s string) bool {

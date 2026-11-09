@@ -275,9 +275,10 @@ Use `POST /api/settings/integrations/telegram/test` to verify the token and send
 | `/nodes`                               | List managed nodes and connection state.                      |
 | `/node [name-or-prefix]`               | Node details; without an argument shows a selection keyboard. |
 | `/ping [node] <target> [count]`        | ICMP ping from a node (count 1-20, default 4).                |
+| `/pingall <target> [count]`            | ICMP ping to target from all managed nodes (aggregated).      |
 | `/tcp_ping [node] <host:port> [count]` | TCP handshake probe (agent required).                         |
 
-If no node is given, Easy42 uses the first available managed node (`tcp_ping` requires an active agent). Node names may be abbreviated when unambiguous.
+If no node is given to `/ping` or `/tcp_ping`, Easy42 uses the first available managed node (`tcp_ping` requires an active agent). Node names may be abbreviated when unambiguous. `/pingall` fans out to all managed nodes concurrently and returns one aggregated report.
 
 ---
 
