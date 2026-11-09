@@ -87,8 +87,8 @@ export interface NetworkPolicy {
   snat?: SNATConfig;
   forward_snat?: boolean;
   forward_snat_target?: string;
-  dscp_ingress?: number;
-  dscp_egress?: number;
+  dscp_ingress?: string;
+  dscp_egress?: string;
   block_ingress_new?: string;
   ingress_new_whitelist?: string[];
   roa4?: string;

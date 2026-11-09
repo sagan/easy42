@@ -296,8 +296,8 @@ User-defined policies with the same ID as a built-in override that built-in at l
 | `snat`                  | `object`   | Egress SNAT configuration (see below).                                                      |
 | `forward_snat`          | `boolean`  | Enable SNAT for forwarded traffic.                                                          |
 | `forward_snat_target`   | `string`   | `masquerade`, `external_ip`, `main_ip`, or a literal IP.                                    |
-| `dscp_ingress`          | `integer`  | Rewrite DSCP (0-63) on packets received from the peer. Values are clamped.                  |
-| `dscp_egress`           | `integer`  | Rewrite DSCP (0-63) on packets sent to the peer.                                            |
+| `dscp_ingress`          | `string`   | Rewrite DSCP on packets received from the peer. Supports `value` or `value/mask` (decimal or hex, both 0-63, mask non-zero). |
+| `dscp_egress`           | `string`   | Rewrite DSCP on packets sent to the peer. Supports `value` or `value/mask` (decimal or hex, both 0-63, mask non-zero).      |
 | `block_ingress_new`     | `string`   | Block new/invalid ingress connections: `""` (disabled), `"all"`, or `"forward"`.            |
 | `ingress_new_whitelist` | `string[]` | Exceptions in `ip:port` or `ip:port/tcp                                                     | udp` form. |
 | `roa4`                  | `string`   | IPv4 ROA URL used for BIRD validation.                                                      |

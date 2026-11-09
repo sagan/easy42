@@ -273,7 +273,7 @@ func BuildNftablesNodeContext(
 		}
 		hasSNAT := pol.SNAT != nil && pol.SNAT.Enabled
 		hasForwardSNAT := pol.ForwardSNAT
-		hasDSCP := pol.DSCPIngress != nil || pol.DSCPEgress != nil
+		hasDSCP := pol.EffectiveDSCPIngress() != "" || pol.EffectiveDSCPEgress() != ""
 		hasMark := strings.TrimSpace(pol.EffectiveMark()) != ""
 		hasBlockIngressNew := pol.EffectiveBlockIngressNew() != ""
 		if !pol.FilterForward && !pol.FilterInput && !hasSNAT && !hasForwardSNAT && !hasDSCP && !hasMark && !hasBlockIngressNew {
@@ -421,14 +421,21 @@ func BuildNftablesNodeContext(
 			}
 		}
 
-		// DSCP values: -1 means not set
-		dscpIngress := -1
-		dscpEgress := -1
-		if pol.DSCPIngress != nil {
-			dscpIngress = *pol.DSCPIngress
+		dscpIngressIP, err := FormatNftDSCPAction(pol.DSCPIngress, "ip")
+		if err != nil {
+			return nil, fmt.Errorf("invalid dscp_ingress %q for policy %s: %w", pol.DSCPIngress, polID, err)
 		}
-		if pol.DSCPEgress != nil {
-			dscpEgress = *pol.DSCPEgress
+		dscpIngressIP6, err := FormatNftDSCPAction(pol.DSCPIngress, "ip6")
+		if err != nil {
+			return nil, fmt.Errorf("invalid dscp_ingress %q for policy %s: %w", pol.DSCPIngress, polID, err)
+		}
+		dscpEgressIP, err := FormatNftDSCPAction(pol.DSCPEgress, "ip")
+		if err != nil {
+			return nil, fmt.Errorf("invalid dscp_egress %q for policy %s: %w", pol.DSCPEgress, polID, err)
+		}
+		dscpEgressIP6, err := FormatNftDSCPAction(pol.DSCPEgress, "ip6")
+		if err != nil {
+			return nil, fmt.Errorf("invalid dscp_egress %q for policy %s: %w", pol.DSCPEgress, polID, err)
 		}
 
 		var ingressNewWlStr string
@@ -467,8 +474,10 @@ func BuildNftablesNodeContext(
 			"forward_snat_action":    fwdSnatAction,
 			"forward_snat_target_v4": fwdSnatTargetV4,
 			"forward_snat_target_v6": fwdSnatTargetV6,
-			"dscp_ingress":           dscpIngress,
-			"dscp_egress":            dscpEgress,
+			"dscp_ingress":           dscpIngressIP,
+			"dscp_ingress_ip6":       dscpIngressIP6,
+			"dscp_egress":            dscpEgressIP,
+			"dscp_egress_ip6":        dscpEgressIP6,
 			"mark":                   strings.TrimSpace(pol.EffectiveMark()),
 			"block_ingress_new":      pol.EffectiveBlockIngressNew(),
 			"ingress_new_wl":         ingressNewWlStr,
@@ -651,6 +660,77 @@ func FormatNftMarkAction(rawMark string) (string, error) {
 	andMask := (^maskVal) & 0xffffffff
 	orVal := markVal & maskVal
 	return fmt.Sprintf("meta mark and 0x%x or 0x%x", andMask, orVal), nil
+}
+
+// FormatNftDSCPAction formats a DSCP string (which can be either a plain "value"
+// or a "value/mask" format) into the nftables expression to be set in:
+//
+//	<family> dscp set <expression>
+//
+// family is "ip" (IPv4) or "ip6" (IPv6). DSCP is a 6-bit field, so both the
+// value and the mask must be in the range 0-63 and the mask must be non-zero.
+//
+// Formats:
+//  1. Plain value (e.g. "46", "0x2e", "0"):
+//     Returns the value unchanged, so e.g. "ip dscp set 46".
+//  2. "value/mask" where value == mask (e.g. "0x20/0x20"):
+//     Sets the specified bits via bitwise OR:
+//     Returns "ip dscp | 0x20" (i.e. "ip dscp set ip dscp | 0x20").
+//  3. "value/mask" where value != mask (e.g. "0x10/0x30" or "0/0x20"):
+//     Preserves unmasked bits via AND with ~mask (within the 6-bit DSCP range)
+//     and sets masked bits via OR:
+//     Returns "ip dscp & 0xf | 0x10" (i.e. "ip dscp set ip dscp & 0xf | 0x10").
+func FormatNftDSCPAction(rawDSCP string, family string) (string, error) {
+	s := strings.TrimSpace(rawDSCP)
+	if s == "" {
+		return "", nil
+	}
+	if family != "ip" && family != "ip6" {
+		return "", fmt.Errorf("invalid DSCP family %q: expected ip or ip6", family)
+	}
+	if !strings.Contains(s, "/") {
+		val, err := parseUint32(s)
+		if err != nil {
+			return "", fmt.Errorf("invalid DSCP value %q: %w", s, err)
+		}
+		if val > 63 {
+			return "", fmt.Errorf("invalid DSCP value %q: value must be 0-63", s)
+		}
+		return s, nil
+	}
+
+	parts := strings.Split(s, "/")
+	if len(parts) != 2 {
+		return "", fmt.Errorf("invalid DSCP format %q: expected value or value/mask", rawDSCP)
+	}
+
+	val, err := parseUint32(parts[0])
+	if err != nil {
+		return "", fmt.Errorf("invalid DSCP value part %q in %q: %w", parts[0], rawDSCP, err)
+	}
+
+	mask, err := parseUint32(parts[1])
+	if err != nil {
+		return "", fmt.Errorf("invalid DSCP mask part %q in %q: %w", parts[1], rawDSCP, err)
+	}
+
+	if mask == 0 {
+		return "", fmt.Errorf("invalid mask in %q: mask cannot be 0", rawDSCP)
+	}
+	if val > 63 {
+		return "", fmt.Errorf("invalid DSCP value %q: value must be 0-63", rawDSCP)
+	}
+	if mask > 63 {
+		return "", fmt.Errorf("invalid DSCP mask %q: mask must be 0-63", rawDSCP)
+	}
+
+	if val == mask {
+		return fmt.Sprintf("%s dscp | 0x%x", family, val), nil
+	}
+
+	andMask := (^mask) & 0x3f
+	orVal := val & mask
+	return fmt.Sprintf("%s dscp & 0x%x | 0x%x", family, andMask, orVal), nil
 }
 
 func parseUint32(s string) (uint32, error) {

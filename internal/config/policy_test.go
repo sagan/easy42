@@ -519,23 +519,29 @@ func TestCleanPortList(t *testing.T) {
 }
 
 func TestValidateDSCP(t *testing.T) {
-	if got := ValidateDSCP(nil); got != nil {
-		t.Errorf("expected nil for nil input, got %v", got)
+	if got := ValidateDSCP(""); got != "" {
+		t.Errorf("expected empty for empty input, got %q", got)
 	}
-
-	val := -5
-	if got := ValidateDSCP(&val); got == nil || *got != 0 {
-		t.Errorf("expected 0 for negative input, got %v", got)
+	if got := ValidateDSCP("   "); got != "" {
+		t.Errorf("expected empty for whitespace input, got %q", got)
 	}
-
-	val = 70
-	if got := ValidateDSCP(&val); got == nil || *got != 63 {
-		t.Errorf("expected 63 for input > 63, got %v", got)
+	if got := ValidateDSCP("46"); got != "46" {
+		t.Errorf("expected 46, got %q", got)
 	}
-
-	val = 46
-	if got := ValidateDSCP(&val); got == nil || *got != 46 {
-		t.Errorf("expected 46 for valid input, got %v", got)
+	if got := ValidateDSCP("  46  "); got != "46" {
+		t.Errorf("expected trimmed 46, got %q", got)
+	}
+	if got := ValidateDSCP("0x2e"); got != "0x2e" {
+		t.Errorf("expected 0x2e, got %q", got)
+	}
+	if got := ValidateDSCP("0x20/0x20"); got != "0x20/0x20" {
+		t.Errorf("expected 0x20/0x20, got %q", got)
+	}
+	if got := ValidateDSCP(" 0x20 / 0x20 "); got != "0x20/0x20" {
+		t.Errorf("expected normalized 0x20/0x20, got %q", got)
+	}
+	if got := ValidateDSCP("0/0x20"); got != "0/0x20" {
+		t.Errorf("expected 0/0x20, got %q", got)
 	}
 }
 

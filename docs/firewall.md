@@ -165,7 +165,7 @@ Accepted values and aliases are normalized by the configuration layer; unrecogni
 
 ### 5. DSCP Rewriting
 
-Policies may set `dscp_ingress` and/or `dscp_egress` (0–63). When present, Easy42 adds:
+Policies may set `dscp_ingress` and/or `dscp_egress` as a string. When present, Easy42 adds:
 
 ```nft
 chain mangle_prerouting_dscp {
@@ -180,6 +180,14 @@ chain mangle_postrouting_dscp {
   oifname @pol_example_ifname ip6 dscp set 46
 }
 ```
+
+The DSCP fields support either `value` or `value/mask` format, mirroring the netfilter mark syntax:
+
+- **Plain value** (`46` or `0x2e`): Directly sets the DSCP (`ip dscp set 46` / `ip6 dscp set 46`).
+- **Equal value/mask** (`0x20/0x20`): Sets the specified bits via bitwise OR (`ip dscp set ip dscp | 0x20` / `ip6 dscp set ip6 dscp | 0x20`).
+- **Non-equal value/mask** (`0x10/0x30` or `0/0x20`): Preserves unmasked bits via bitwise AND with `~mask` (within the 6-bit DSCP range) and sets masked bits via OR (`ip dscp set ip dscp & 0xf | 0x10`).
+
+Both the value and the mask must be in the range 0–63 (decimal or hex) and the mask must be non-zero.
 
 - Ingress DSCP is rewritten on packets received from the peer interface.
 - Egress DSCP is rewritten on packets sent toward the peer interface.

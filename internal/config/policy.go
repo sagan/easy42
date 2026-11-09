@@ -147,8 +147,8 @@ type NetworkPolicy struct {
 	SNAT                *SNATConfig `json:"snat,omitempty"`
 	ForwardSNAT         bool        `json:"forward_snat,omitempty"`
 	ForwardSNATTarget   string      `json:"forward_snat_target,omitempty"`   // "masquerade" | "external_ip" | "main_ip" | custom IP string
-	DSCPIngress         *int        `json:"dscp_ingress,omitempty"`          // Rewrite DSCP on packets received from the link peer (0-63)
-	DSCPEgress          *int        `json:"dscp_egress,omitempty"`           // Rewrite DSCP on packets sent to the link peer (0-63)
+	DSCPIngress         string      `json:"dscp_ingress,omitempty"`          // Rewrite DSCP on packets received from the link peer: value (0-63) or value/mask (both 0-63)
+	DSCPEgress          string      `json:"dscp_egress,omitempty"`           // Rewrite DSCP on packets sent to the link peer: value (0-63) or value/mask (both 0-63)
 	BlockIngressNew     string      `json:"block_ingress_new,omitempty"`     // Block ingress new/invalid connections: "" (disabled) | "all" | "forward"
 	IngressNewWhitelist []string    `json:"ingress_new_whitelist,omitempty"` // Whitelist dst addr:port exceptions for block ingress new
 	ROA4                string      `json:"roa4,omitempty"`
@@ -249,6 +249,22 @@ func (p *NetworkPolicy) EffectiveMark() string {
 	return ""
 }
 
+// EffectiveDSCPIngress returns the configured ingress DSCP or empty string if unset
+func (p *NetworkPolicy) EffectiveDSCPIngress() string {
+	if p != nil {
+		return strings.TrimSpace(p.DSCPIngress)
+	}
+	return ""
+}
+
+// EffectiveDSCPEgress returns the configured egress DSCP or empty string if unset
+func (p *NetworkPolicy) EffectiveDSCPEgress() string {
+	if p != nil {
+		return strings.TrimSpace(p.DSCPEgress)
+	}
+	return ""
+}
+
 // EffectivePreference returns the configured preference or nil if unset
 func (p *NetworkPolicy) EffectivePreference() *int {
 	if p != nil {
@@ -265,19 +281,25 @@ func (p *NetworkPolicy) EffectiveCost() int {
 	return 100
 }
 
-// ValidateDSCP returns a sanitized DSCP pointer: nil if the input is nil,
-// otherwise clamped to the valid range 0-63.
-func ValidateDSCP(v *int) *int {
-	if v == nil {
-		return nil
+// ValidateDSCP returns a sanitized DSCP string: the trimmed input with
+// whitespace around the "/" in the "value/mask" form normalized away.
+// An empty (or whitespace-only) string is returned as "" and means "unset".
+// The value and mask are DSCP (6-bit) values in 0-63; format/range validation
+// (including a non-zero mask) is enforced in the nftables compiler
+// (FormatNftDSCPAction), mirroring how Netfilter Mark strings are handled.
+func ValidateDSCP(v string) string {
+	s := strings.TrimSpace(v)
+	if s == "" {
+		return ""
 	}
-	d := *v
-	if d < 0 {
-		d = 0
-	} else if d > 63 {
-		d = 63
+	if !strings.Contains(s, "/") {
+		return s
 	}
-	return &d
+	parts := strings.Split(s, "/")
+	if len(parts) != 2 {
+		return s
+	}
+	return strings.TrimSpace(parts[0]) + "/" + strings.TrimSpace(parts[1])
 }
 
 // CleanPortList normalizes and validates a list of ports and port ranges.
@@ -486,8 +508,8 @@ func GetBuiltinPolicies(netSettings *NetworkSettings) []NetworkPolicy {
 			FilterInput:        true,
 			InputAllowICMP:     true,
 			InputAllowICMP6:    true,
-			DSCPIngress:        new(0),
-			DSCPEgress:         new(0),
+			DSCPIngress:        "0",
+			DSCPEgress:         "0",
 			InputUDPPorts:      []string{"53"},
 			SNAT: &SNATConfig{
 				Enabled:   true,

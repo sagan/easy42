@@ -35,8 +35,8 @@ func TestNetworkPolicyManagerCRUD(t *testing.T) {
 	}
 
 	// 3. Create custom policy (unset Cost should default to 100)
-	dscpIn := 46
-	dscpOut := 10
+	dscpIn := "46"
+	dscpOut := "0x20/0x20"
 	custom, err := mgr.CreateNetworkPolicy(config.NetworkPolicy{
 		ID:                 "pol-office",
 		Name:               "Branch Office",
@@ -48,8 +48,8 @@ func TestNetworkPolicyManagerCRUD(t *testing.T) {
 		RejectInternet:     true,
 		FilterForward:      true,
 		FilterInput:        true,
-		DSCPIngress:        &dscpIn,
-		DSCPEgress:         &dscpOut,
+		DSCPIngress:        dscpIn,
+		DSCPEgress:         dscpOut,
 		BlockIngressNew:    "forwarding", // test normalization to "forward"
 		BirdImportFilter:   "bgp_local_pref = 150;",
 		BirdExportFilter:   "bgp_path.prepend(SELF_AS);",
@@ -83,11 +83,11 @@ func TestNetworkPolicyManagerCRUD(t *testing.T) {
 	if len(custom.DisallowedSrcCIDRs) != 1 || custom.DisallowedSrcCIDRs[0] != "172.20.200.128/25" {
 		t.Errorf("expected DisallowedSrcCIDRs [172.20.200.128/25], got %v", custom.DisallowedSrcCIDRs)
 	}
-	if custom.DSCPIngress == nil || *custom.DSCPIngress != 46 {
+	if custom.DSCPIngress != "46" {
 		t.Errorf("expected DSCPIngress 46, got %v", custom.DSCPIngress)
 	}
-	if custom.DSCPEgress == nil || *custom.DSCPEgress != 10 {
-		t.Errorf("expected DSCPEgress 10, got %v", custom.DSCPEgress)
+	if custom.DSCPEgress != "0x20/0x20" {
+		t.Errorf("expected DSCPEgress 0x20/0x20, got %v", custom.DSCPEgress)
 	}
 
 	// 4. Reject duplicate ID
@@ -100,7 +100,7 @@ func TestNetworkPolicyManagerCRUD(t *testing.T) {
 	}
 
 	// 5. Update custom policy with custom Cost, updated DSCP, and updated BlockIngressNew
-	dscpInUpdated := 0
+	dscpInUpdated := "0"
 	updated, err := mgr.UpdateNetworkPolicy("pol-office", config.NetworkPolicy{
 		Name:               "Branch Office Updated",
 		Cost:               250,
@@ -108,7 +108,7 @@ func TestNetworkPolicyManagerCRUD(t *testing.T) {
 		AllowedSrcCIDRs:    []string{"172.20.201.0/24"},
 		DisallowedDstCIDRs: []string{"172.20.101.128/25"},
 		DisallowedSrcCIDRs: []string{"172.20.201.128/25"},
-		DSCPIngress:        &dscpInUpdated,
+		DSCPIngress:        dscpInUpdated,
 		BlockIngressNew:    "all",
 		BirdImportFilter:   "bgp_local_pref = 200;",
 		BirdExportFillter:  "bgp_community.delete([(64512, *)]);", // test alias
@@ -142,11 +142,11 @@ func TestNetworkPolicyManagerCRUD(t *testing.T) {
 	if len(updated.DisallowedSrcCIDRs) != 1 || updated.DisallowedSrcCIDRs[0] != "172.20.201.128/25" {
 		t.Errorf("expected updated DisallowedSrcCIDRs [172.20.201.128/25], got %v", updated.DisallowedSrcCIDRs)
 	}
-	if updated.DSCPIngress == nil || *updated.DSCPIngress != 0 {
+	if updated.DSCPIngress != "0" {
 		t.Errorf("expected updated DSCPIngress 0, got %v", updated.DSCPIngress)
 	}
-	if updated.DSCPEgress != nil {
-		t.Errorf("expected updated DSCPEgress nil, got %v", updated.DSCPEgress)
+	if updated.DSCPEgress != "" {
+		t.Errorf("expected updated DSCPEgress empty, got %v", updated.DSCPEgress)
 	}
 
 	// 6. Reject updating built-in policy

@@ -1110,6 +1110,7 @@ export const AppsPage: React.FC = () => {
           >
             <TextField
               size="small"
+              type="search"
               placeholder="Search apps by name, description, or referenced variables..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}

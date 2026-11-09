@@ -395,16 +395,16 @@ table inet easy42 {
 {{- $has_dscp_ingress := false }}
 {{- $has_dscp_egress := false }}
 {{- range .nft_policies }}
-  {{- if ge .dscp_ingress 0 }}{{ $has_dscp_ingress = true }}{{ end }}
-  {{- if ge .dscp_egress 0 }}{{ $has_dscp_egress = true }}{{ end }}
+  {{- if .dscp_ingress }}{{ $has_dscp_ingress = true }}{{ end }}
+  {{- if .dscp_egress }}{{ $has_dscp_egress = true }}{{ end }}
 {{- end }}
 {{- if $has_dscp_ingress }}
   chain mangle_prerouting_dscp {
     type filter hook prerouting priority mangle; policy accept;
   {{- range .nft_policies }}
-    {{- if ge .dscp_ingress 0 }}
+    {{- if .dscp_ingress }}
     iifname @pol_{{ .id }}_ifname ip dscp set {{ .dscp_ingress }}
-    iifname @pol_{{ .id }}_ifname ip6 dscp set {{ .dscp_ingress }}
+    iifname @pol_{{ .id }}_ifname ip6 dscp set {{ .dscp_ingress_ip6 }}
     {{- end }}
   {{- end }}
   }
@@ -413,9 +413,9 @@ table inet easy42 {
   chain mangle_postrouting_dscp {
     type filter hook postrouting priority mangle + 1; policy accept;
   {{- range .nft_policies }}
-    {{- if ge .dscp_egress 0 }}
+    {{- if .dscp_egress }}
     oifname @pol_{{ .id }}_ifname ip dscp set {{ .dscp_egress }}
-    oifname @pol_{{ .id }}_ifname ip6 dscp set {{ .dscp_egress }}
+    oifname @pol_{{ .id }}_ifname ip6 dscp set {{ .dscp_egress_ip6 }}
     {{- end }}
   {{- end }}
   }

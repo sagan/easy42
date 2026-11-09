@@ -409,8 +409,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
   const [policyRoa4, setPolicyRoa4] = useState("");
   const [policyRoa6, setPolicyRoa6] = useState("");
   const [policyRoaStrict, setPolicyRoaStrict] = useState(false);
-  const [policyDscpIngress, setPolicyDscpIngress] = useState<number | string>("");
-  const [policyDscpEgress, setPolicyDscpEgress] = useState<number | string>("");
+  const [policyDscpIngress, setPolicyDscpIngress] = useState<string>("");
+  const [policyDscpEgress, setPolicyDscpEgress] = useState<string>("");
   const [policyFwmark, setPolicyFwmark] = useState("");
   const [policyPreference, setPolicyPreference] = useState<number | string>("");
   const [policyMark, setPolicyMark] = useState("");
@@ -1282,8 +1282,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
         roa4: policyRoa4.trim() || undefined,
         roa6: policyRoa6.trim() || undefined,
         roa_strict: policyRoaStrict,
-        dscp_ingress: policyDscpIngress !== "" ? Number(policyDscpIngress) : undefined,
-        dscp_egress: policyDscpEgress !== "" ? Number(policyDscpEgress) : undefined,
+        dscp_ingress: policyDscpIngress.trim() || undefined,
+        dscp_egress: policyDscpEgress.trim() || undefined,
         fwmark: policyFwmark.trim() || undefined,
         preference: policyPreference !== "" ? Number(policyPreference) : undefined,
         mark: policyMark.trim() || undefined,
@@ -6319,11 +6319,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                   fullWidth
                   size="small"
                   label="Netfilter Mark (optional)"
-                  placeholder="e.g. 42 or 0x1234"
+                  placeholder="e.g. 42, 0x80, 0x2/0x2"
                   value={policyMark}
                   onChange={(e) => setPolicyMark(e.target.value)}
                   disabled={policyDialogMode === "view" || policyDialogSaving}
-                  helperText="Rewrite mark of received packets via nftables."
+                  helperText="Rewrite mark of received packets via nftables. Supports <value>/<mask> syntax."
                 />
               </Box>
 
@@ -6784,42 +6784,31 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                   <Shield size={16} /> DSCP Marking
                 </Typography>
                 <Typography variant="caption" sx={{ color: "#64748B" }}>
-                  Set / rewrite the Differentiated Services Code Point (DSCP) on packets traversing this link. Valid
-                  values: 0–63. Leave empty to disable.
+                  Set / rewrite the Differentiated Services Code Point (DSCP) on packets traversing this link. Supports
+                  a plain value (0–63) or value/mask — both parts 0–63, mask non-zero (e.g. 0x20/0x20 sets only those
+                  bits). Leave empty to disable.
                 </Typography>
 
                 <Box sx={{ display: "flex", gap: 2 }}>
                   <TextField
                     fullWidth
                     size="small"
-                    type="number"
                     label="Ingress DSCP"
-                    placeholder="e.g. 46 (EF)"
+                    placeholder="e.g. 46 (EF) or 0x20/0x20"
                     value={policyDscpIngress}
-                    onChange={(e) =>
-                      setPolicyDscpIngress(
-                        e.target.value === "" ? "" : Math.max(0, Math.min(63, Number(e.target.value))),
-                      )
-                    }
+                    onChange={(e) => setPolicyDscpIngress(e.target.value)}
                     disabled={policyDialogMode === "view" || policyDialogSaving}
-                    helperText="Rewrite DSCP on packets received from the link peer."
-                    inputProps={{ min: 0, max: 63 }}
+                    helperText="Rewrite DSCP on packets received from the link peer. Use value or value/mask."
                   />
                   <TextField
                     fullWidth
                     size="small"
-                    type="number"
                     label="Egress DSCP"
-                    placeholder="e.g. 46 (EF)"
+                    placeholder="e.g. 46 (EF) or 0x20/0x20"
                     value={policyDscpEgress}
-                    onChange={(e) =>
-                      setPolicyDscpEgress(
-                        e.target.value === "" ? "" : Math.max(0, Math.min(63, Number(e.target.value))),
-                      )
-                    }
+                    onChange={(e) => setPolicyDscpEgress(e.target.value)}
                     disabled={policyDialogMode === "view" || policyDialogSaving}
-                    helperText="Rewrite DSCP on packets sent to the link peer."
-                    inputProps={{ min: 0, max: 63 }}
+                    helperText="Rewrite DSCP on packets sent to the link peer. Use value or value/mask."
                   />
                 </Box>
               </Box>

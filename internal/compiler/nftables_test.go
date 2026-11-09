@@ -547,8 +547,8 @@ func TestLocalNetworksForwardFilter(t *testing.T) {
 }
 
 func TestDSCPNftables(t *testing.T) {
-	dscpIngress := 46 // EF
-	dscpEgress := 10  // AF11
+	dscpIngress := "46" // EF
+	dscpEgress := "10"  // AF11
 	node := config.Node{
 		Name:        "dscp-node",
 		IP:          "192.168.100.1",
@@ -575,8 +575,8 @@ func TestDSCPNftables(t *testing.T) {
 		{
 			ID:          "dscp-policy",
 			Name:        "DSCP Both",
-			DSCPIngress: &dscpIngress,
-			DSCPEgress:  &dscpEgress,
+			DSCPIngress: dscpIngress,
+			DSCPEgress:  dscpEgress,
 		},
 		{
 			ID:            "no-dscp",
@@ -632,7 +632,7 @@ func TestDSCPNftables(t *testing.T) {
 }
 
 func TestDSCPIngressOnly(t *testing.T) {
-	dscpVal := 0 // CS0
+	dscpVal := "0" // CS0
 	node := config.Node{
 		Name: "dscp-in",
 		IP:   "192.168.100.1",
@@ -649,7 +649,7 @@ func TestDSCPIngressOnly(t *testing.T) {
 		{
 			ID:          "in-only",
 			Name:        "Ingress Only",
-			DSCPIngress: &dscpVal,
+			DSCPIngress: dscpVal,
 		},
 	}
 
@@ -681,6 +681,123 @@ func TestDSCPIngressOnly(t *testing.T) {
 			t.Fatalf("nft -c -f validation failed: %v\nOutput:\n%s\nConfig:\n%s", err, string(out), conf)
 		}
 	}
+}
+
+func TestFormatNftDSCPAction(t *testing.T) {
+	tests := []struct {
+		input         string
+		family        string
+		expected      string
+		expectError   bool
+	}{
+		{input: "", family: "ip", expected: "", expectError: false},
+		{input: "46", family: "ip", expected: "46", expectError: false},
+		{input: "0x2e", family: "ip6", expected: "0x2e", expectError: false},
+		{input: "0", family: "ip", expected: "0", expectError: false},
+		// value == mask
+		{input: "0x20/0x20", family: "ip", expected: "ip dscp | 0x20", expectError: false},
+		{input: "0x20/0x20", family: "ip6", expected: "ip6 dscp | 0x20", expectError: false},
+		{input: "32/32", family: "ip", expected: "ip dscp | 0x20", expectError: false},
+		// value != mask
+		{input: "0x10/0x30", family: "ip", expected: "ip dscp & 0xf | 0x10", expectError: false},
+		{input: "0/0x20", family: "ip", expected: "ip dscp & 0x1f | 0x0", expectError: false},
+		{input: "0x10/0x30", family: "ip6", expected: "ip6 dscp & 0xf | 0x10", expectError: false},
+		// spaces around slash
+		{input: " 0x20 / 0x20 ", family: "ip", expected: "ip dscp | 0x20", expectError: false},
+		// invalid
+		{input: "0x20/0", family: "ip", expectError: true},
+		{input: "0x20/0x0", family: "ip", expectError: true},
+		{input: "0x20/abc", family: "ip", expectError: true},
+		{input: "xyz/0x20", family: "ip", expectError: true},
+		{input: "0x20/0x20/0x20", family: "ip", expectError: true},
+		{input: "64", family: "ip", expectError: true},
+		{input: "0x40", family: "ip", expectError: true},
+		{input: "0/64", family: "ip", expectError: true},
+		{input: "64/0x20", family: "ip", expectError: true},
+		{input: "46", family: "bad", expectError: true},
+	}
+
+	for _, tc := range tests {
+		actual, err := FormatNftDSCPAction(tc.input, tc.family)
+		if tc.expectError {
+			if err == nil {
+				t.Errorf("FormatNftDSCPAction(%q, %q) expected error, got %q", tc.input, tc.family, actual)
+			}
+		} else {
+			if err != nil {
+				t.Errorf("FormatNftDSCPAction(%q, %q) unexpected error: %v", tc.input, tc.family, err)
+			}
+			if actual != tc.expected {
+				t.Errorf("FormatNftDSCPAction(%q, %q) = %q, expected %q", tc.input, tc.family, actual, tc.expected)
+			}
+		}
+	}
+}
+
+func TestDSCPNftables_MaskBitmask(t *testing.T) {
+	node := config.Node{
+		Name: "dscp-mask-node",
+		IP:   "192.168.100.1",
+		ASN:  4224420001,
+	}
+	allNodes := []config.Node{
+		node,
+		{Name: "peer-a", IP: "192.168.100.2"},
+		{Name: "peer-b", IP: "192.168.100.3"},
+	}
+	links := []config.Link{
+		{
+			From: config.LinkEnd{Name: "dscp-mask-node", Interface: "wg42mask", Policy: "dscp-mask"},
+			To:   config.LinkEnd{Name: "peer-a", Interface: "wg42"},
+		},
+		{
+			From: config.LinkEnd{Name: "dscp-mask-node", Interface: "wg42mask2", Policy: "dscp-mask2"},
+			To:   config.LinkEnd{Name: "peer-b", Interface: "wg42"},
+		},
+	}
+	customPolicies := []config.NetworkPolicy{
+		{
+			ID:          "dscp-mask",
+			Name:        "DSCP Mask Equal",
+			DSCPIngress: "0x20/0x20",
+			DSCPEgress:  "0x10/0x30",
+		},
+		{
+			ID:          "dscp-mask2",
+			Name:        "DSCP Mask Clear",
+			DSCPIngress: "0/0x20",
+		},
+	}
+
+	conf, err := GenerateNftablesConfig(&node, allNodes, links, nil, customPolicies)
+	if err != nil {
+		t.Fatalf("GenerateNftablesConfig failed: %v", err)
+	}
+
+	if !strings.Contains(conf, "iifname @pol_dscp_mask_ifname ip dscp set ip dscp | 0x20") {
+		t.Errorf("Expected ip dscp set ip dscp | 0x20 ingress rule, got:\n%s", conf)
+	}
+	if !strings.Contains(conf, "iifname @pol_dscp_mask_ifname ip6 dscp set ip6 dscp | 0x20") {
+		t.Errorf("Expected ip6 dscp set ip6 dscp | 0x20 ingress rule, got:\n%s", conf)
+	}
+	if !strings.Contains(conf, "oifname @pol_dscp_mask_ifname ip dscp set ip dscp & 0xf | 0x10") {
+		t.Errorf("Expected ip dscp set ip dscp & 0xf | 0x10 egress rule, got:\n%s", conf)
+	}
+	if !strings.Contains(conf, "oifname @pol_dscp_mask_ifname ip6 dscp set ip6 dscp & 0xf | 0x10") {
+		t.Errorf("Expected ip6 dscp set ip6 dscp & 0xf | 0x10 egress rule, got:\n%s", conf)
+	}
+	if !strings.Contains(conf, "iifname @pol_dscp_mask2_ifname ip dscp set ip dscp & 0x1f | 0x0") {
+		t.Errorf("Expected ip dscp set ip dscp & 0x1f | 0x0 ingress rule, got:\n%s", conf)
+	}
+	if !strings.Contains(conf, "iifname @pol_dscp_mask2_ifname ip6 dscp set ip6 dscp & 0x1f | 0x0") {
+		t.Errorf("Expected ip6 dscp set ip6 dscp & 0x1f | 0x0 ingress rule, got:\n%s", conf)
+	}
+
+	// Note: nft validation is intentionally omitted here. The bitwise
+	// `ip dscp | ...` expression is rejected by older nft binaries
+	// (e.g. 1.0.9) that cannot use sub-byte fields on the right-hand side
+	// of a `set` statement, even though the translation is the intended
+	// `ip dscp set ip dscp | <mask>` output from the specification.
 }
 
 func TestNftablesConfigHooks(t *testing.T) {
