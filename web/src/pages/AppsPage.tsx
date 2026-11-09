@@ -79,6 +79,8 @@ import { useMesh } from "../context/MeshContext";
 import { Link as RouterLink, useSearchParams, useNavigate, useParams } from "react-router-dom";
 import type { App, AppVariable, TranspilePreviewResponse } from "../types/api";
 import { dockerRunToCompose, cmdlineToSystemd, ensureSystemdEnvironmentFile } from "../utils/appGenerators";
+import { MarkdownView } from "../components/Common/MarkdownView";
+import { AppDetailsDrawer } from "../components/Apps/AppDetailsDrawer";
 import {
   matchesTaskSelector,
   splitSelectorList,
@@ -399,9 +401,15 @@ export const AppsPage: React.FC = () => {
   // App Modal State
   const [modalOpen, setModalOpen] = useState(false);
   const [editingApp, setEditingApp] = useState<App | null>(null);
-  const [modalTab, setModalTab] = useState<"general" | "definition" | "env" | "files" | "preview" | "transpile">(
-    "general",
-  );
+  const [modalTab, setModalTab] = useState<
+    "general" | "definition" | "env" | "files" | "note" | "preview" | "transpile"
+  >("general");
+
+  // App Details Drawer State
+  const [detailsApp, setDetailsApp] = useState<App | null>(null);
+
+  // Note editor sub-state (write / preview)
+  const [noteEditMode, setNoteEditMode] = useState<"write" | "preview">("write");
 
   // Rename App Modal State
   const [renameModalOpen, setRenameModalOpen] = useState(false);
@@ -417,6 +425,7 @@ export const AppsPage: React.FC = () => {
   // App Form Fields
   const [formName, setFormName] = useState("");
   const [formDesc, setFormDesc] = useState("");
+  const [formNote, setFormNote] = useState("");
   const [formUrl, setFormUrl] = useState("");
   const [formType, setFormType] = useState<"docker" | "systemd" | "cron">("docker");
   const [formMain, setFormMain] = useState(DOCKER_SAMPLE);
@@ -580,6 +589,8 @@ export const AppsPage: React.FC = () => {
     setEditingApp(null);
     setFormName("");
     setFormDesc("");
+    setFormNote("");
+    setNoteEditMode("write");
     setFormUrl("");
     setFormType("docker");
     setFormMain(DOCKER_SAMPLE);
@@ -610,6 +621,8 @@ export const AppsPage: React.FC = () => {
     setEditingApp(app);
     setFormName(app.name);
     setFormDesc(app.description || "");
+    setFormNote(app.note || "");
+    setNoteEditMode("write");
     setFormUrl(app.url || "");
     setFormType(app.app_type);
     setFormMain(app.main_content);
@@ -710,6 +723,7 @@ export const AppsPage: React.FC = () => {
       const payload: Partial<App> = {
         name: formName.trim(),
         description: formDesc.trim(),
+        note: formNote,
         url: formUrl.trim(),
         app_type: formType,
         main_content: resolvedMainContent,
@@ -957,7 +971,8 @@ export const AppsPage: React.FC = () => {
         const q = search.trim().toLowerCase();
         const matchName = a.name.toLowerCase().includes(q);
         const matchDesc = a.description?.toLowerCase().includes(q);
-        if (!matchName && !matchDesc) return false;
+        const matchNote = a.note?.toLowerCase().includes(q);
+        if (!matchName && !matchDesc && !matchNote) return false;
       }
       if (typeFilter !== "all" && a.app_type !== typeFilter) {
         return false;
@@ -1356,7 +1371,7 @@ export const AppsPage: React.FC = () => {
             <TextField
               size="small"
               type="search"
-              placeholder="Search apps by name, description, or referenced variables..."
+              placeholder="Search apps by name, description, note, or referenced variables..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               InputProps={{
@@ -1626,14 +1641,33 @@ export const AppsPage: React.FC = () => {
                               >
                                 <Typography
                                   variant="body2"
+                                  onClick={() => setDetailsApp(app)}
                                   sx={{
                                     fontWeight: 700,
-                                    color: "#0F172A",
+                                    color: "#4F46E5",
                                     lineHeight: 1.2,
+                                    cursor: "pointer",
+                                    "&:hover": { textDecoration: "underline" },
                                   }}
                                 >
                                   {app.name}
                                 </Typography>
+                                <Tooltip title="App Details">
+                                  <IconButton
+                                    size="small"
+                                    onClick={() => setDetailsApp(app)}
+                                    sx={{
+                                      p: 0.3,
+                                      color: "#94A3B8",
+                                      "&:hover": {
+                                        color: "#4F46E5",
+                                        bgcolor: "#EEF2FF",
+                                      },
+                                    }}
+                                  >
+                                    <Info size={13} />
+                                  </IconButton>
+                                </Tooltip>
                                 <Tooltip title="Rename App">
                                   <IconButton
                                     size="small"
@@ -1944,6 +1978,21 @@ export const AppsPage: React.FC = () => {
                               gap: 0.5,
                             }}
                           >
+                            <Tooltip title="App Details">
+                              <IconButton
+                                size="small"
+                                onClick={() => setDetailsApp(app)}
+                                sx={{
+                                  color: "#64748B",
+                                  "&:hover": {
+                                    color: "#4F46E5",
+                                    bgcolor: "#EEF2FF",
+                                  },
+                                }}
+                              >
+                                <Info size={16} />
+                              </IconButton>
+                            </Tooltip>
                             <Tooltip title="Rename App">
                               <IconButton
                                 size="small"
@@ -2004,12 +2053,14 @@ export const AppsPage: React.FC = () => {
                 <Grid item xs={12} sm={6} md={4} lg={3} xl={2.4} key={app.id}>
                   <Card
                     elevation={0}
+                    onClick={() => setDetailsApp(app)}
                     sx={{
                       borderRadius: "14px",
                       border: "1px solid #E2E8F0",
                       height: "100%",
                       display: "flex",
                       flexDirection: "column",
+                      cursor: "pointer",
                       transition: "all 0.2s ease-in-out",
                       "&:hover": {
                         borderColor: "#CBD5E1",
@@ -2055,7 +2106,10 @@ export const AppsPage: React.FC = () => {
                               <Tooltip title="Rename App">
                                 <IconButton
                                   size="small"
-                                  onClick={() => handleOpenRenameApp(app)}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleOpenRenameApp(app);
+                                  }}
                                   sx={{ p: 0.3, color: "#94A3B8", "&:hover": { color: "#4F46E5", bgcolor: "#EEF2FF" } }}
                                 >
                                   <Tag size={13} />
@@ -2089,7 +2143,7 @@ export const AppsPage: React.FC = () => {
                           </Box>
                         </Box>
 
-                        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }} onClick={(e) => e.stopPropagation()}>
                           <FormControlLabel
                             title={
                               app.published
@@ -2446,10 +2500,25 @@ export const AppsPage: React.FC = () => {
                         </Box>
 
                         <Box sx={{ display: "flex", gap: 0.5 }}>
+                          <Tooltip title="App Details">
+                            <IconButton
+                              size="small"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setDetailsApp(app);
+                              }}
+                              sx={{ color: "#64748B", "&:hover": { color: "#4F46E5", bgcolor: "#EEF2FF" } }}
+                            >
+                              <Info size={16} />
+                            </IconButton>
+                          </Tooltip>
                           <Tooltip title="Rename App">
                             <IconButton
                               size="small"
-                              onClick={() => handleOpenRenameApp(app)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleOpenRenameApp(app);
+                              }}
                               sx={{ color: "#64748B", "&:hover": { color: "#4F46E5", bgcolor: "#EEF2FF" } }}
                             >
                               <Tag size={16} />
@@ -2459,7 +2528,10 @@ export const AppsPage: React.FC = () => {
                             <IconButton
                               size="small"
                               disabled={duplicatingAppId === app.id}
-                              onClick={() => handleDuplicateApp(app)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDuplicateApp(app);
+                              }}
                               sx={{ color: "#64748B", "&:hover": { color: "#4F46E5", bgcolor: "#EEF2FF" } }}
                             >
                               {duplicatingAppId === app.id ? (
@@ -2470,12 +2542,26 @@ export const AppsPage: React.FC = () => {
                             </IconButton>
                           </Tooltip>
                           <Tooltip title="Edit App">
-                            <IconButton size="small" onClick={() => openEditAppModal(app)} sx={{ color: "#64748B" }}>
+                            <IconButton
+                              size="small"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openEditAppModal(app);
+                              }}
+                              sx={{ color: "#64748B" }}
+                            >
                               <Edit size={16} />
                             </IconButton>
                           </Tooltip>
                           <Tooltip title="Delete App">
-                            <IconButton size="small" onClick={() => setDeleteApp(app)} sx={{ color: "#EF4444" }}>
+                            <IconButton
+                              size="small"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setDeleteApp(app);
+                              }}
+                              sx={{ color: "#EF4444" }}
+                            >
                               <Trash2 size={16} />
                             </IconButton>
                           </Tooltip>
@@ -2997,6 +3083,7 @@ export const AppsPage: React.FC = () => {
                 iconPosition="start"
               />
             )}
+            <Tab value="note" label="Note" icon={<FileText size={16} />} iconPosition="start" />
             <Tab value="preview" label="Variables Preview" icon={<Code2 size={16} />} iconPosition="start" />
             {formType === "systemd" && (
               <Tab value="transpile" label="Transpile Preview" icon={<Eye size={16} />} iconPosition="start" />
@@ -3006,7 +3093,7 @@ export const AppsPage: React.FC = () => {
 
         <DialogContent sx={{ p: 3 }}>
           {/* Quick Variables Insert Chips Bar */}
-          {modalTab !== "general" && modalTab !== "preview" && modalTab !== "transpile" && (
+          {modalTab !== "general" && modalTab !== "preview" && modalTab !== "transpile" && modalTab !== "note" && (
             <Box
               sx={{
                 mb: 2,
@@ -4290,7 +4377,78 @@ ${formEnabled ? `${formCronExpr.trim() || "0 0 * * *"} ${formCronCmd.trim() || "
             </Box>
           )}
 
-          {/* TAB 5: Variables Interpolation Live Preview */}
+          {/* TAB 5: Note (Markdown) */}
+          {modalTab === "note" && (
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+              <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 1 }}>
+                <Box>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0F172A" }}>
+                    App Note (Markdown)
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: "#64748B" }}>
+                    Markdown documentation for this app — usage notes, runbooks, provisioning steps, and more.
+                  </Typography>
+                </Box>
+                <Box sx={{ display: "flex", gap: 1 }}>
+                  <Button
+                    size="small"
+                    variant={noteEditMode === "write" ? "contained" : "outlined"}
+                    onClick={() => setNoteEditMode("write")}
+                    sx={{ textTransform: "none", fontSize: "0.78rem" }}
+                  >
+                    Write
+                  </Button>
+                  <Button
+                    size="small"
+                    variant={noteEditMode === "preview" ? "contained" : "outlined"}
+                    onClick={() => setNoteEditMode("preview")}
+                    sx={{ textTransform: "none", fontSize: "0.78rem" }}
+                  >
+                    Preview
+                  </Button>
+                </Box>
+              </Box>
+
+              {noteEditMode === "write" ? (
+                <TextField
+                  fullWidth
+                  multiline
+                  minRows={12}
+                  maxRows={22}
+                  placeholder={"# App documentation\n\nWrite deployment notes, access instructions, or operational runbooks in Markdown.\n\nUse a ```json block to store structured data (optional)."}
+                  value={formNote}
+                  onChange={(e) => setFormNote(e.target.value)}
+                  inputProps={{
+                    style: {
+                      fontFamily: "monospace",
+                      fontSize: "0.85rem",
+                      lineHeight: 1.5,
+                    },
+                  }}
+                  sx={{
+                    bgcolor: "#F8FAFC",
+                    "& .MuiOutlinedInput-root": { bgcolor: "#F8FAFC" },
+                  }}
+                />
+              ) : (
+                <Box
+                  sx={{
+                    p: 2,
+                    bgcolor: "#F8FAFC",
+                    borderRadius: "10px",
+                    border: "1px solid #E2E8F0",
+                    minHeight: 240,
+                    maxHeight: 480,
+                    overflowY: "auto",
+                  }}
+                >
+                  <MarkdownView content={formNote} emptyText="No note content written yet." />
+                </Box>
+              )}
+            </Box>
+          )}
+
+          {/* TAB 6: Variables Interpolation Live Preview */}
           {modalTab === "preview" && (
             <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
               <Box
@@ -4508,6 +4666,42 @@ ${formEnabled ? `${formCronExpr.trim() || "0 0 * * *"} ${formCronCmd.trim() || "
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* App Details Sidebar Drawer */}
+      <AppDetailsDrawer
+        app={detailsApp}
+        open={!!detailsApp}
+        onClose={() => setDetailsApp(null)}
+        targetNodeNames={detailsApp ? getTargetNodeInfo(detailsApp).nodeNames : undefined}
+        targetModeLabel={
+          detailsApp
+            ? (() => {
+                const mode = getTargetNodeInfo(detailsApp).mode;
+                return mode === "manual"
+                  ? `Manual`
+                  : mode === "tag"
+                    ? `Tag: #${getSelectorValue(detailsApp.selector || {}, "tag")}`
+                    : mode === "custom"
+                      ? "Selector"
+                      : "All Nodes";
+              })()
+            : undefined
+        }
+        homepageUrl={detailsApp ? (resolveHomepageUrl(detailsApp, managedNodes, variables)?.url || detailsApp.url) : undefined}
+        homepageNode={detailsApp ? resolveHomepageUrl(detailsApp, managedNodes, variables)?.node.name : undefined}
+        homepageClickable={
+          detailsApp
+            ? (() => {
+                const r = resolveHomepageUrl(detailsApp, managedNodes, variables);
+                return !!r && !r.containsTemplate && isHttpUrl(r.url);
+              })()
+            : false
+        }
+        onEdit={(app) => {
+          setDetailsApp(null);
+          openEditAppModal(app);
+        }}
+      />
     </Box>
   );
 };

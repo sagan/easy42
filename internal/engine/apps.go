@@ -283,6 +283,7 @@ func (m *Manager) DuplicateApp(appID string) (config.App, error) {
 		ID:          newID,
 		Name:        newName,
 		Description: original.Description,
+		Note:        original.Note,
 		URL:         original.URL,
 		AppType:     original.AppType,
 		MainContent: original.MainContent,

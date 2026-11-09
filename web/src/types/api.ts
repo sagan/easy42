@@ -984,6 +984,7 @@ export interface App {
   id: string;
   name: string;
   description?: string;
+  note?: string;
   url?: string;
   app_type: "docker" | "systemd" | "cron";
   main_content: string;

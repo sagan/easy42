@@ -70,3 +70,11 @@ func (e *LinkEnd) Data() map[string]any {
 	}
 	return ExtractNoteData(e.Note)
 }
+
+// Data returns the structured JSON data extracted from Note.
+func (a *App) Data() map[string]any {
+	if a == nil {
+		return map[string]any{}
+	}
+	return ExtractNoteData(a.Note)
+}

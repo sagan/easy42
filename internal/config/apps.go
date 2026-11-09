@@ -14,6 +14,7 @@ type App struct {
 	ID          string            `json:"id"`
 	Name        string            `json:"name"`
 	Description string            `json:"description,omitempty"`
+	Note        string            `json:"note,omitempty"` // Markdown format text note
 	URL         string            `json:"url,omitempty" yaml:"url,omitempty"`
 	AppType     string            `json:"app_type"`              // "docker", "systemd", or "cron"
 	MainContent string            `json:"main_content"`          // compose.yaml or service unit

@@ -34,10 +34,12 @@ import {
   ExternalLink,
   Globe,
   Clock,
+  Info,
 } from "lucide-react";
 import { Link as RouterLink } from "react-router-dom";
 import { api } from "../../api/client";
 import type { App, AppStatusRecord } from "../../types/api";
+import { AppDetailsDrawer } from "../Apps/AppDetailsDrawer";
 
 interface NodeAppsTabProps {
   nodeName: string;
@@ -65,6 +67,7 @@ export const NodeAppsTab: React.FC<NodeAppsTabProps> = ({ nodeName }) => {
   const [loadingLogs, setLoadingLogs] = useState(false);
   const [copied, setCopied] = useState(false);
   const [copiedUrl, setCopiedUrl] = useState<string | null>(null);
+  const [detailsApp, setDetailsApp] = useState<App | null>(null);
 
   const isHttpUrl = (url?: string): boolean => {
     if (!url) return false;
@@ -325,9 +328,28 @@ export const NodeAppsTab: React.FC<NodeAppsTabProps> = ({ nodeName }) => {
 
                     <Box>
                       <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                        <Typography variant="subtitle1" sx={{ fontWeight: 800, color: "#0F172A", lineHeight: 1.2 }}>
+                        <Typography
+                          variant="subtitle1"
+                          onClick={() => setDetailsApp(app)}
+                          sx={{
+                            fontWeight: 800,
+                            color: "#4F46E5",
+                            lineHeight: 1.2,
+                            cursor: "pointer",
+                            "&:hover": { textDecoration: "underline" },
+                          }}
+                        >
                           {app.name}
                         </Typography>
+                        <Tooltip title="App Details">
+                          <IconButton
+                            size="small"
+                            onClick={() => setDetailsApp(app)}
+                            sx={{ p: 0.3, color: "#94A3B8", "&:hover": { color: "#4F46E5", bgcolor: "#EEF2FF" } }}
+                          >
+                            <Info size={14} />
+                          </IconButton>
+                        </Tooltip>
                         <Chip
                           size="small"
                           label={
@@ -664,6 +686,19 @@ export const NodeAppsTab: React.FC<NodeAppsTabProps> = ({ nodeName }) => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* App Details Sidebar Drawer */}
+      <AppDetailsDrawer
+        app={detailsApp}
+        open={!!detailsApp}
+        onClose={() => setDetailsApp(null)}
+        targetNodeNames={detailsApp ? [nodeName] : undefined}
+        targetModeLabel="This Node"
+        status={detailsApp ? getStatusForApp(detailsApp.name) : undefined}
+        homepageUrl={detailsApp?.url}
+        homepageNode={nodeName}
+        homepageClickable={!!detailsApp?.url && isHttpUrl(detailsApp.url)}
+      />
     </Box>
   );
 };
