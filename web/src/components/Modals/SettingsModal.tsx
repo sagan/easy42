@@ -2548,7 +2548,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                     "&:hover": { bgcolor: "#4338CA" },
                   }}
                 >
-                  Create Template
+                  New Template
                 </Button>
               </Box>
 

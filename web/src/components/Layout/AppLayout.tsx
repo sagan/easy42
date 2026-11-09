@@ -198,7 +198,7 @@ export const AppLayout: React.FC = () => {
                     fontSize: "0.65rem",
                     fontWeight: 600,
                     display: isMobile ? "none" : "initial",
-                    whiteSpace: "nowrap",
+                    whiteSpace: isMobile ? "initial" : "nowrap",
                   }}
                 >
                   FLEET & MESH

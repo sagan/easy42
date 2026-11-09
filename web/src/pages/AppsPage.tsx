@@ -848,7 +848,7 @@ export const AppsPage: React.FC = () => {
                 "&:hover": { bgcolor: "#4338CA" },
               }}
             >
-              Create App
+              New App
             </Button>
           ) : (
             <Button

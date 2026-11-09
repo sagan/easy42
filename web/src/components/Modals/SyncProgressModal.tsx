@@ -913,7 +913,10 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
                             {getActionIcon(act)}
                             <Box sx={{ minWidth: 0, flex: 1 }}>
                               <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
-                                <Typography variant="body2" sx={{ fontSize: "0.8rem", color: "#334155", fontWeight: 600 }}>
+                                <Typography
+                                  variant="body2"
+                                  sx={{ fontSize: "0.8rem", color: "#334155", fontWeight: 600 }}
+                                >
                                   {act.description}
                                 </Typography>
                                 {appChip && (
@@ -975,9 +978,9 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
           borderTop: "1px solid #E2E8F0",
           backgroundColor: "#F8FAFC",
           display: "flex",
-          flexWrap: "wrap",
+          flexWrap: "nowrap",
           justifyContent: "space-between",
-          gap: 1.5,
+          gap: 1,
         }}
       >
         <Button onClick={onClose} disabled={syncing || updatingState} sx={{ color: "#64748B" }}>
@@ -1015,7 +1018,7 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
                     },
                   }}
                 >
-                  Force Apply ({safeActions.length})
+                  Force Apply{!isMobile && ` (${safeActions.length})`}
                 </Button>
               </Tooltip>
             )}
@@ -1041,7 +1044,9 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
                   ? `Applying ${targetNode}...`
                   : "Applying..."
                 : pendingActions.length > 0
-                  ? `Apply Changes(${pendingActions.length})`
+                  ? isMobile
+                    ? "Apply"
+                    : `Apply Changes(${pendingActions.length})`
                   : "No Changes"}
             </Button>
           </Box>
