@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import {
   Box,
   Typography,
@@ -32,10 +32,13 @@ import {
   TableCell,
   TableBody,
   TableContainer,
+  TableSortLabel,
   Radio,
   RadioGroup,
   Checkbox,
   InputAdornment,
+  ToggleButton,
+  ToggleButtonGroup,
 } from "@mui/material";
 import {
   Layers,
@@ -67,10 +70,13 @@ import {
   Wand2,
   Terminal,
   Clock,
+  LayoutGrid,
+  List,
+  ExternalLink,
 } from "lucide-react";
 import { api } from "../api/client";
 import { useMesh } from "../context/MeshContext";
-import { Link as RouterLink } from "react-router-dom";
+import { Link as RouterLink, useSearchParams, useNavigate, useParams } from "react-router-dom";
 import type { App, AppVariable, TranspilePreviewResponse } from "../types/api";
 import { dockerRunToCompose, cmdlineToSystemd, ensureSystemdEnvironmentFile } from "../utils/appGenerators";
 import {
@@ -81,6 +87,7 @@ import {
   parseSelectorJSON,
   type SelectorTargetMode,
 } from "../utils/taskSelector";
+import { resolveHomepageUrl, isHttpUrl } from "../utils/appUrl";
 import { RenameAppModal } from "../components/Modals/RenameAppModal";
 
 const DOCKER_SAMPLE = `version: '3.8'
@@ -179,11 +186,22 @@ const INTERNAL_NODE_VARS = [
 
 type AppTargetMode = SelectorTargetMode;
 
+type AppSortField = "name" | "type" | "published" | "enabled";
+const APP_SORT_FIELDS: AppSortField[] = ["name", "type", "published", "enabled"];
+const APP_TYPE_FILTERS = ["all", "docker", "systemd", "cron"] as const;
+
 export const AppsPage: React.FC = () => {
   const { nodes, setStateToast } = useMesh();
 
-  // Top-level Navigation: "apps" or "variables"
-  const [activeTab, setActiveTab] = useState<"apps" | "variables">("apps");
+  // Top-level Navigation: separated URLs /apps (Workload Apps) and /apps/variables (Global Variables)
+  const { tab: tabParam } = useParams<{ tab?: string }>();
+  const navigate = useNavigate();
+  const activeTab: "apps" | "variables" = tabParam === "variables" ? "variables" : "apps";
+
+  const handleTabChange = (_: React.SyntheticEvent, newValue: string) => {
+    if (newValue === activeTab) return;
+    navigate(newValue === "variables" ? "/apps/variables" : "/apps");
+  };
 
   // Apps State
   const [apps, setApps] = useState<App[]>([]);
@@ -198,13 +216,185 @@ export const AppsPage: React.FC = () => {
   const [revealedSecrets, setRevealedSecrets] = useState<Record<string, boolean>>({});
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
-  // Apps Filters & Search
-  const [search, setSearch] = useState("");
-  const [typeFilter, setTypeFilter] = useState<string>("all");
-  const [nodeFilter, setNodeFilter] = useState<string>("all");
+  // Apps Filters & Search (synced to URL query parameters via replaceState)
+  const [searchParams, setSearchParams] = useSearchParams();
+  const urlSearch = searchParams.get("search") || "";
+  const rawUrlType = searchParams.get("type") || "all";
+  const typeFilter: string = (APP_TYPE_FILTERS as readonly string[]).includes(rawUrlType) ? rawUrlType : "all";
+  const rawUrlNode = searchParams.get("node") || "all";
+  const view: "cards" | "table" = searchParams.get("view") === "table" ? "table" : "cards";
+  const rawSort = searchParams.get("sort");
+  const sortField = (APP_SORT_FIELDS as string[]).includes(rawSort || "")
+    ? (rawSort as AppSortField)
+    : ("name" as AppSortField);
+  const sortOrder = (searchParams.get("order") === "desc" ? "desc" : "asc") as "asc" | "desc";
 
-  // Variables Search
-  const [varSearch, setVarSearch] = useState("");
+  // Local search terms (per-tab, synced to that tab's `?search` via replaceState)
+  // `?search` means app search on /apps and variable search on /apps/variables.
+  const [search, setSearch] = useState(() => (activeTab === "apps" ? urlSearch : ""));
+  const [varSearch, setVarSearch] = useState(() => (activeTab === "variables" ? urlSearch : ""));
+
+  // Normalize unknown sub-paths and legacy ?tab= params to canonical separated URLs
+  useEffect(() => {
+    if (tabParam && tabParam !== "variables") {
+      navigate("/apps", { replace: true });
+      return;
+    }
+    const queryTab = searchParams.get("tab");
+    if (!queryTab) return;
+    if (queryTab === "variables" && activeTab !== "variables") {
+      setVarSearch(urlSearch);
+      navigate(`/apps/variables${urlSearch ? `?search=${encodeURIComponent(urlSearch)}` : ""}`, { replace: true });
+    } else if (queryTab === "apps" && activeTab !== "apps") {
+      setSearch(urlSearch);
+      navigate(`/apps${urlSearch ? `?search=${encodeURIComponent(urlSearch)}` : ""}`, { replace: true });
+    } else if (queryTab !== "variables" && queryTab !== "apps") {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.delete("tab");
+          return next;
+        },
+        { replace: true },
+      );
+    } else {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.delete("tab");
+          return next;
+        },
+        { replace: true },
+      );
+    }
+  }, [tabParam, searchParams, activeTab, navigate, setSearchParams, urlSearch]);
+
+  // Synchronize local search term if URL search changes externally (back/forward),
+  // skipping the tab-switch itself so each tab keeps its own search value
+  const prevTabRef = useRef(activeTab);
+  useEffect(() => {
+    if (prevTabRef.current !== activeTab) {
+      prevTabRef.current = activeTab;
+      return;
+    }
+    if (activeTab === "apps") {
+      setSearch(urlSearch);
+    } else {
+      setVarSearch(urlSearch);
+    }
+  }, [urlSearch, activeTab]);
+
+  // Debounce app search updates to URL (replaceState, like NodesPage) — apps tab only
+  useEffect(() => {
+    if (activeTab !== "apps") return;
+    const timer = setTimeout(() => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          const trimmed = search.trim();
+          if (trimmed) {
+            if (next.get("search") !== trimmed) next.set("search", trimmed);
+          } else {
+            next.delete("search");
+          }
+          return next;
+        },
+        { replace: true },
+      );
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [search, activeTab, setSearchParams]);
+
+  // Debounce variable search updates to URL (replaceState) — variables tab only
+  useEffect(() => {
+    if (activeTab !== "variables") return;
+    const timer = setTimeout(() => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          const trimmed = varSearch.trim();
+          if (trimmed) {
+            if (next.get("search") !== trimmed) next.set("search", trimmed);
+          } else {
+            next.delete("search");
+          }
+          return next;
+        },
+        { replace: true },
+      );
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [varSearch, activeTab, setSearchParams]);
+
+  // Helper to update URL query parameters (replaceState)
+  const updateQueryParam = useCallback(
+    (updates: { type?: string; node?: string; view?: "cards" | "table" }) => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          if (updates.type !== undefined) {
+            if (updates.type && updates.type !== "all") {
+              next.set("type", updates.type);
+            } else {
+              next.delete("type");
+            }
+          }
+          if (updates.node !== undefined) {
+            if (updates.node && updates.node !== "all") {
+              next.set("node", updates.node);
+            } else {
+              next.delete("node");
+            }
+          }
+          if (updates.view !== undefined) {
+            if (updates.view && updates.view !== "cards") {
+              next.set("view", updates.view);
+            } else {
+              next.delete("view");
+            }
+          }
+          return next;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
+
+  const handleSelectType = (type: string) => updateQueryParam({ type });
+  const handleSelectNode = (node: string) => updateQueryParam({ node });
+  const handleToggleView = (v: "cards" | "table") => updateQueryParam({ view: v });
+
+  const handleRequestSort = useCallback(
+    (field: AppSortField) => {
+      const isAsc = sortField === field && sortOrder === "asc";
+      const newOrder = isAsc ? "desc" : "asc";
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.set("sort", field);
+          next.set("order", newOrder);
+          return next;
+        },
+        { replace: true },
+      );
+    },
+    [sortField, sortOrder, setSearchParams],
+  );
+
+  const handleClearFilters = () => {
+    setSearch("");
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete("search");
+        next.delete("type");
+        next.delete("node");
+        return next;
+      },
+      { replace: true },
+    );
+  };
 
   // App Modal State
   const [modalOpen, setModalOpen] = useState(false);
@@ -279,6 +469,29 @@ export const AppsPage: React.FC = () => {
   const managedNodes = useMemo(() => {
     return nodes.filter((n) => !n.is_external);
   }, [nodes]);
+
+  // Validated node filter for display + filtering (unknown names fall back to "all")
+  const isValidNodeFilter = rawUrlNode === "all" || managedNodes.some((n) => n.name === rawUrlNode);
+  const nodeFilter = isValidNodeFilter ? rawUrlNode : "all";
+
+  // Target-node resolution shared by card + table views
+  const getTargetNodeInfo = (app: App) => {
+    const selector = app.selector || {};
+    const mode = detectTargetMode(selector);
+    const manualNodes = splitSelectorList(getSelectorValue(selector, "name"));
+    const matchingNodes = managedNodes.filter((n) => matchesTaskSelector(n, selector));
+    const nodeNames = mode === "manual" ? manualNodes : matchingNodes.map((n) => n.name);
+    return { selector, mode, manualNodes, matchingNodes, nodeNames };
+  };
+
+  const targetChipColors = (mode: SelectorTargetMode) =>
+    mode === "tag"
+      ? { bgcolor: "#EDE9FE", color: "#5B21B6", hoverBg: "#DDD6FE", hoverColor: "#4C1D95" }
+      : mode === "custom"
+        ? { bgcolor: "#CCFBF1", color: "#0F766E", hoverBg: "#99F6E4", hoverColor: "#115E59" }
+        : mode === "manual"
+          ? { bgcolor: "#F1F5F9", color: "#334155", hoverBg: "#E2E8F0", hoverColor: "#1E293B" }
+          : { bgcolor: "#E0F2FE", color: "#0369A1", hoverBg: "#BAE6FD", hoverColor: "#0284C7" };
 
   const availableTags = useMemo(() => {
     const s = new Set<string>();
@@ -740,8 +953,8 @@ export const AppsPage: React.FC = () => {
 
   const filteredApps = useMemo(() => {
     return apps.filter((a) => {
-      if (search) {
-        const q = search.toLowerCase();
+      if (search.trim()) {
+        const q = search.trim().toLowerCase();
         const matchName = a.name.toLowerCase().includes(q);
         const matchDesc = a.description?.toLowerCase().includes(q);
         if (!matchName && !matchDesc) return false;
@@ -757,10 +970,42 @@ export const AppsPage: React.FC = () => {
     });
   }, [apps, search, typeFilter, nodeFilter, nodes]);
 
+  // Sorted apps for the list (table) view; card view keeps API order
+  const sortedApps = useMemo(() => {
+    if (view !== "table") return filteredApps;
+    const list = [...filteredApps];
+    list.sort((a, b) => {
+      let comparison = 0;
+      switch (sortField) {
+        case "name":
+          comparison = a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" });
+          break;
+        case "type":
+          comparison = a.app_type.localeCompare(b.app_type);
+          if (comparison === 0) comparison = a.name.localeCompare(b.name, undefined, { numeric: true });
+          break;
+        case "published":
+          comparison = Number(Boolean(a.published)) - Number(Boolean(b.published));
+          if (comparison === 0) comparison = a.name.localeCompare(b.name, undefined, { numeric: true });
+          break;
+        case "enabled":
+          comparison = Number(a.enabled) - Number(b.enabled);
+          if (comparison === 0) comparison = a.name.localeCompare(b.name, undefined, { numeric: true });
+          break;
+        default:
+          comparison = a.name.localeCompare(b.name, undefined, { numeric: true });
+      }
+      return sortOrder === "asc" ? comparison : -comparison;
+    });
+    return list;
+  }, [filteredApps, view, sortField, sortOrder]);
+
+  const isFiltering = Boolean(search.trim() || typeFilter !== "all" || nodeFilter !== "all");
+
   const filteredVars = useMemo(() => {
     return variables.filter((v) => {
-      if (!varSearch) return true;
-      const q = varSearch.toLowerCase();
+      if (!varSearch.trim()) return true;
+      const q = varSearch.trim().toLowerCase();
       return v.key.toLowerCase().includes(q) || v.description?.toLowerCase().includes(q);
     });
   }, [variables, varSearch]);
@@ -885,7 +1130,7 @@ export const AppsPage: React.FC = () => {
         <Tabs
           value={activeTab}
           variant="scrollable"
-          onChange={(_, val) => setActiveTab(val)}
+          onChange={handleTabChange}
           sx={{
             "& .MuiTab-root": {
               textTransform: "none",
@@ -1122,7 +1367,7 @@ export const AppsPage: React.FC = () => {
 
             <FormControl size="small" sx={{ minWidth: 170 }}>
               <InputLabel>Runtime Type</InputLabel>
-              <Select value={typeFilter} label="Runtime Type" onChange={(e) => setTypeFilter(e.target.value)}>
+              <Select value={typeFilter} label="Runtime Type" onChange={(e) => handleSelectType(e.target.value)}>
                 <MenuItem value="all">All Types</MenuItem>
                 <MenuItem value="docker">Docker Compose ({dockerCount})</MenuItem>
                 <MenuItem value="systemd">Native Systemd ({systemdCount})</MenuItem>
@@ -1132,7 +1377,7 @@ export const AppsPage: React.FC = () => {
 
             <FormControl size="small" sx={{ minWidth: 180 }}>
               <InputLabel>Deployed Node</InputLabel>
-              <Select value={nodeFilter} label="Deployed Node" onChange={(e) => setNodeFilter(e.target.value)}>
+              <Select value={nodeFilter} label="Deployed Node" onChange={(e) => handleSelectNode(e.target.value)}>
                 <MenuItem value="all">All Nodes</MenuItem>
                 {managedNodes.map((n) => (
                   <MenuItem key={n.name} value={n.name}>
@@ -1141,6 +1386,35 @@ export const AppsPage: React.FC = () => {
                 ))}
               </Select>
             </FormControl>
+
+            <Box sx={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 1 }}>
+              <Button
+                size="small"
+                variant="text"
+                disabled={!isFiltering}
+                onClick={handleClearFilters}
+                startIcon={<X size={14} />}
+                sx={{ color: "#64748B", fontSize: "0.75rem", textTransform: "none", py: 0.4 }}
+              >
+                Clear ({filteredApps.length}/{apps.length})
+              </Button>
+              <Tooltip title={view === "cards" ? "Card view" : "List (table) view"}>
+                <ToggleButtonGroup
+                  value={view}
+                  exclusive
+                  onChange={(_, val) => val && handleToggleView(val)}
+                  size="small"
+                  sx={{ height: 36 }}
+                >
+                  <ToggleButton value="cards" aria-label="card view" sx={{ px: 1.5 }}>
+                    <LayoutGrid size={16} />
+                  </ToggleButton>
+                  <ToggleButton value="table" aria-label="list view" sx={{ px: 1.5 }}>
+                    <List size={16} />
+                  </ToggleButton>
+                </ToggleButtonGroup>
+              </Tooltip>
+            </Box>
           </Paper>
 
           {/* Content */}
@@ -1199,6 +1473,530 @@ export const AppsPage: React.FC = () => {
                 </Button>
               )}
             </Paper>
+          ) : view === "table" ? (
+            /* List (table) view — mirrors NodesPage table view */
+            <TableContainer
+              component={Paper}
+              elevation={0}
+              sx={{
+                borderRadius: "14px",
+                border: "1px solid #E2E8F0",
+                bgcolor: "#FFFFFF",
+                overflowX: "auto",
+              }}
+            >
+              <Table size="small" sx={{ minWidth: 1100 }}>
+                <TableHead sx={{ bgcolor: "#F8FAFC" }}>
+                  <TableRow>
+                    <TableCell
+                      sortDirection={sortField === "name" ? sortOrder : false}
+                      sx={{ fontWeight: 800, color: "#475569", minWidth: 200 }}
+                    >
+                      <TableSortLabel
+                        active={sortField === "name"}
+                        direction={sortField === "name" ? sortOrder : "asc"}
+                        onClick={() => handleRequestSort("name")}
+                      >
+                        App
+                      </TableSortLabel>
+                    </TableCell>
+                    <TableCell sx={{ fontWeight: 800, color: "#475569", minWidth: 220 }}>Description</TableCell>
+                    <TableCell
+                      sortDirection={sortField === "type" ? sortOrder : false}
+                      sx={{ fontWeight: 800, color: "#475569", minWidth: 130 }}
+                    >
+                      <TableSortLabel
+                        active={sortField === "type"}
+                        direction={sortField === "type" ? sortOrder : "asc"}
+                        onClick={() => handleRequestSort("type")}
+                      >
+                        Runtime
+                      </TableSortLabel>
+                    </TableCell>
+                    <TableCell sx={{ fontWeight: 800, color: "#475569", minWidth: 220 }}>Homepage URL</TableCell>
+                    <TableCell sx={{ fontWeight: 800, color: "#475569", minWidth: 240 }}>Target Nodes</TableCell>
+                    <TableCell
+                      sortDirection={sortField === "published" ? sortOrder : false}
+                      sx={{
+                        fontWeight: 800,
+                        color: "#475569",
+                        minWidth: 110,
+                        textAlign: "center",
+                      }}
+                    >
+                      <TableSortLabel
+                        active={sortField === "published"}
+                        direction={sortField === "published" ? sortOrder : "asc"}
+                        onClick={() => handleRequestSort("published")}
+                      >
+                        Published
+                      </TableSortLabel>
+                    </TableCell>
+                    <TableCell
+                      sortDirection={sortField === "enabled" ? sortOrder : false}
+                      sx={{
+                        fontWeight: 800,
+                        color: "#475569",
+                        minWidth: 110,
+                        textAlign: "center",
+                      }}
+                    >
+                      <TableSortLabel
+                        active={sortField === "enabled"}
+                        direction={sortField === "enabled" ? sortOrder : "asc"}
+                        onClick={() => handleRequestSort("enabled")}
+                      >
+                        Enabled
+                      </TableSortLabel>
+                    </TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 800, color: "#475569", minWidth: 140 }}>
+                      Actions
+                    </TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {sortedApps.map((app) => {
+                    const target = getTargetNodeInfo(app);
+                    const chipColors = targetChipColors(target.mode);
+                    const resolved = resolveHomepageUrl(app, managedNodes, variables);
+                    const isClickableHomepage = !!resolved && !resolved.containsTemplate && isHttpUrl(resolved.url);
+                    const displayHomepage = resolved && !resolved.containsTemplate ? resolved.url : app.url;
+                    const homepageTooltip = isClickableHomepage
+                      ? `Homepage on ${resolved!.node.name}: ${resolved!.url}`
+                      : resolved
+                        ? `Homepage template ${resolved.containsTemplate ? "(unresolved variables)" : ""}: ${app.url} (deployed to ${target.nodeNames.length} node(s))`
+                        : `Homepage template: ${app.url} (deployed to ${target.nodeNames.length} node(s))`;
+                    return (
+                      <TableRow
+                        key={app.id}
+                        hover
+                        sx={{
+                          "&:hover": { bgcolor: "#F8FAFC" },
+                          "& td": { borderColor: "#F1F5F9" },
+                          verticalAlign: "top",
+                        }}
+                      >
+                        {/* App */}
+                        <TableCell>
+                          <Box
+                            sx={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 1.2,
+                            }}
+                          >
+                            <Box
+                              sx={{
+                                width: 34,
+                                height: 34,
+                                borderRadius: "8px",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                flexShrink: 0,
+                                bgcolor:
+                                  app.app_type === "docker"
+                                    ? "#E0F2FE"
+                                    : app.app_type === "cron"
+                                      ? "#FEF3C7"
+                                      : "#F3E8FF",
+                                color:
+                                  app.app_type === "docker"
+                                    ? "#0284C7"
+                                    : app.app_type === "cron"
+                                      ? "#D97706"
+                                      : "#9333EA",
+                              }}
+                            >
+                              {app.app_type === "docker" ? (
+                                <BoxIcon size={17} />
+                              ) : app.app_type === "cron" ? (
+                                <Clock size={17} />
+                              ) : (
+                                <Cpu size={17} />
+                              )}
+                            </Box>
+                            <Box sx={{ minWidth: 0 }}>
+                              <Box
+                                sx={{
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: 0.5,
+                                }}
+                              >
+                                <Typography
+                                  variant="body2"
+                                  sx={{
+                                    fontWeight: 700,
+                                    color: "#0F172A",
+                                    lineHeight: 1.2,
+                                  }}
+                                >
+                                  {app.name}
+                                </Typography>
+                                <Tooltip title="Rename App">
+                                  <IconButton
+                                    size="small"
+                                    onClick={() => handleOpenRenameApp(app)}
+                                    sx={{
+                                      p: 0.3,
+                                      color: "#94A3B8",
+                                      "&:hover": {
+                                        color: "#4F46E5",
+                                        bgcolor: "#EEF2FF",
+                                      },
+                                    }}
+                                  >
+                                    <Tag size={13} />
+                                  </IconButton>
+                                </Tooltip>
+                              </Box>
+                              <Typography
+                                variant="caption"
+                                sx={{
+                                  color: "#94A3B8",
+                                  fontWeight: 600,
+                                  display: "block",
+                                  mt: 0.2,
+                                }}
+                              >
+                                {app.published ? (app.enabled ? "Active" : "Stopped") : "Draft"}
+                              </Typography>
+                            </Box>
+                          </Box>
+                        </TableCell>
+
+                        {/* Description */}
+                        <TableCell>
+                          <Typography
+                            variant="body2"
+                            sx={{
+                              color: "#64748B",
+                              fontSize: "0.85rem",
+                              lineHeight: 1.4,
+                              display: "-webkit-box",
+                              WebkitLineClamp: 3,
+                              WebkitBoxOrient: "vertical",
+                              overflow: "hidden",
+                            }}
+                          >
+                            {app.description || "No description provided."}
+                          </Typography>
+                        </TableCell>
+
+                        {/* Runtime */}
+                        <TableCell>
+                          <Chip
+                            size="small"
+                            label={app.app_type === "docker" ? "Docker" : app.app_type === "cron" ? "Cron" : "Systemd"}
+                            sx={{
+                              height: 22,
+                              fontSize: "0.7rem",
+                              fontWeight: 700,
+                              bgcolor:
+                                app.app_type === "docker" ? "#E0F2FE" : app.app_type === "cron" ? "#FEF3C7" : "#F3E8FF",
+                              color:
+                                app.app_type === "docker" ? "#0369A1" : app.app_type === "cron" ? "#B45309" : "#7E22CE",
+                            }}
+                          />
+                        </TableCell>
+
+                        {/* Homepage URL */}
+                        <TableCell>
+                          {app.url ? (
+                            isClickableHomepage ? (
+                              <Tooltip title={homepageTooltip} arrow placement="top">
+                                <Box
+                                  component="a"
+                                  href={displayHomepage}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  sx={{
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: 0.5,
+                                    maxWidth: "100%",
+                                    color: "#2563EB",
+                                    textDecoration: "none",
+                                    fontSize: "0.78rem",
+                                    fontWeight: 600,
+                                    bgcolor: "#EFF6FF",
+                                    px: 1,
+                                    py: 0.4,
+                                    borderRadius: "6px",
+                                    border: "1px solid #BFDBFE",
+                                    transition: "all 0.15s ease",
+                                    "&:hover": {
+                                      bgcolor: "#DBEAFE",
+                                      textDecoration: "underline",
+                                    },
+                                  }}
+                                >
+                                  <Globe size={13} style={{ flexShrink: 0 }} />
+                                  <span style={{ wordBreak: "break-all" }}>{displayHomepage}</span>
+                                  <ExternalLink size={12} style={{ flexShrink: 0 }} />
+                                </Box>
+                              </Tooltip>
+                            ) : (
+                              <Tooltip title={homepageTooltip} arrow placement="top">
+                                <Box
+                                  sx={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: 0.6,
+                                    maxWidth: "100%",
+                                  }}
+                                >
+                                  <Globe size={13} style={{ flexShrink: 0, color: "#2563EB" }} />
+                                  <Typography
+                                    variant="caption"
+                                    sx={{
+                                      fontWeight: 600,
+                                      color: "#2563EB",
+                                      wordBreak: "break-all",
+                                    }}
+                                  >
+                                    {displayHomepage}
+                                  </Typography>
+                                </Box>
+                              </Tooltip>
+                            )
+                          ) : (
+                            <Typography variant="caption" sx={{ color: "#94A3B8" }}>
+                              —
+                            </Typography>
+                          )}
+                        </TableCell>
+
+                        {/* Target Nodes */}
+                        <TableCell>
+                          <Box
+                            sx={{
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: 0.6,
+                            }}
+                          >
+                            <Box>
+                              <Chip
+                                size="small"
+                                label={
+                                  target.mode === "manual"
+                                    ? `Manual (${target.manualNodes.length})`
+                                    : target.mode === "tag"
+                                      ? `Tag: #${getSelectorValue(app.selector || {}, "tag")}`
+                                      : target.mode === "custom"
+                                        ? "Selector"
+                                        : "All Nodes"
+                                }
+                                sx={{
+                                  height: 20,
+                                  fontSize: "0.68rem",
+                                  fontWeight: 700,
+                                  bgcolor: chipColors.bgcolor,
+                                  color: chipColors.color,
+                                }}
+                              />
+                            </Box>
+                            <Box
+                              sx={{
+                                display: "flex",
+                                flexWrap: "wrap",
+                                gap: 0.5,
+                              }}
+                            >
+                              {target.nodeNames.length > 0 ? (
+                                <>
+                                  {target.nodeNames.slice(0, 3).map((nodeName) => (
+                                    <Chip
+                                      key={nodeName}
+                                      component={RouterLink}
+                                      to={`/nodes/${encodeURIComponent(nodeName)}?tab=apps`}
+                                      clickable
+                                      onClick={(e) => e.stopPropagation()}
+                                      size="small"
+                                      label={nodeName}
+                                      sx={{
+                                        height: 20,
+                                        fontSize: "0.7rem",
+                                        fontWeight: 600,
+                                        bgcolor: chipColors.bgcolor,
+                                        color: chipColors.color,
+                                        textDecoration: "none",
+                                        cursor: "pointer",
+                                        transition: "all 0.15s ease",
+                                        "&:hover": {
+                                          bgcolor: chipColors.hoverBg,
+                                          color: chipColors.hoverColor,
+                                        },
+                                      }}
+                                    />
+                                  ))}
+                                  {target.nodeNames.length > 3 && (
+                                    <Tooltip title={target.nodeNames.join(", ")} arrow placement="top">
+                                      <Chip
+                                        size="small"
+                                        label={`+${target.nodeNames.length - 3} more`}
+                                        sx={{
+                                          height: 20,
+                                          fontSize: "0.7rem",
+                                          fontWeight: 700,
+                                          bgcolor: "#F1F5F9",
+                                          color: "#475569",
+                                        }}
+                                      />
+                                    </Tooltip>
+                                  )}
+                                </>
+                              ) : (
+                                <Typography variant="caption" sx={{ color: "#94A3B8", fontStyle: "italic" }}>
+                                  {target.mode === "all"
+                                    ? "No agent nodes available"
+                                    : target.mode === "manual"
+                                      ? "None assigned (unassigned)"
+                                      : "No nodes currently match this selector"}
+                                </Typography>
+                              )}
+                            </Box>
+                          </Box>
+                        </TableCell>
+
+                        {/* Published */}
+                        <TableCell align="center">
+                          <FormControlLabel
+                            title={
+                              app.published
+                                ? "Published (app deployed to nodes on sync)"
+                                : "Draft (app will not be deployed to nodes)"
+                            }
+                            control={
+                              <Checkbox
+                                size="small"
+                                checked={Boolean(app.published)}
+                                disabled={Boolean(togglingPublishedAppIds[app.id])}
+                                onChange={() => handleTogglePublished(app)}
+                                sx={{
+                                  p: 0.4,
+                                  color: "#94A3B8",
+                                  "&.Mui-checked": { color: "#059669" },
+                                }}
+                              />
+                            }
+                            label={
+                              <Typography
+                                variant="caption"
+                                sx={{
+                                  fontWeight: 600,
+                                  fontSize: "0.75rem",
+                                  color: app.published ? "#059669" : "#64748B",
+                                  userSelect: "none",
+                                }}
+                              >
+                                {app.published ? "Yes" : "Draft"}
+                              </Typography>
+                            }
+                            sx={{ m: 0 }}
+                          />
+                        </TableCell>
+
+                        {/* Enabled */}
+                        <TableCell align="center">
+                          <FormControlLabel
+                            title={
+                              app.enabled ? "Enabled (service runs on node)" : "Disabled (service stopped on node)"
+                            }
+                            control={
+                              <Checkbox
+                                size="small"
+                                checked={app.enabled}
+                                disabled={Boolean(togglingAppIds[app.id])}
+                                onChange={() => handleToggleApp(app)}
+                                sx={{
+                                  p: 0.4,
+                                  color: "#94A3B8",
+                                  "&.Mui-checked": { color: "#4F46E5" },
+                                }}
+                              />
+                            }
+                            label={
+                              <Typography
+                                variant="caption"
+                                sx={{
+                                  fontWeight: 600,
+                                  fontSize: "0.75rem",
+                                  color: app.enabled ? "#4F46E5" : "#64748B",
+                                  userSelect: "none",
+                                }}
+                              >
+                                {app.enabled ? "On" : "Off"}
+                              </Typography>
+                            }
+                            sx={{ m: 0 }}
+                          />
+                        </TableCell>
+
+                        {/* Actions */}
+                        <TableCell align="right">
+                          <Box
+                            sx={{
+                              display: "flex",
+                              justifyContent: "flex-end",
+                              gap: 0.5,
+                            }}
+                          >
+                            <Tooltip title="Rename App">
+                              <IconButton
+                                size="small"
+                                onClick={() => handleOpenRenameApp(app)}
+                                sx={{
+                                  color: "#64748B",
+                                  "&:hover": {
+                                    color: "#4F46E5",
+                                    bgcolor: "#EEF2FF",
+                                  },
+                                }}
+                              >
+                                <Tag size={16} />
+                              </IconButton>
+                            </Tooltip>
+                            <Tooltip title="Duplicate App">
+                              <IconButton
+                                size="small"
+                                disabled={duplicatingAppId === app.id}
+                                onClick={() => handleDuplicateApp(app)}
+                                sx={{
+                                  color: "#64748B",
+                                  "&:hover": {
+                                    color: "#4F46E5",
+                                    bgcolor: "#EEF2FF",
+                                  },
+                                }}
+                              >
+                                {duplicatingAppId === app.id ? (
+                                  <CircularProgress size={16} sx={{ color: "inherit" }} />
+                                ) : (
+                                  <Copy size={16} />
+                                )}
+                              </IconButton>
+                            </Tooltip>
+                            <Tooltip title="Edit App">
+                              <IconButton size="small" onClick={() => openEditAppModal(app)} sx={{ color: "#64748B" }}>
+                                <Edit size={16} />
+                              </IconButton>
+                            </Tooltip>
+                            <Tooltip title="Delete App">
+                              <IconButton size="small" onClick={() => setDeleteApp(app)} sx={{ color: "#EF4444" }}>
+                                <Trash2 size={16} />
+                              </IconButton>
+                            </Tooltip>
+                          </Box>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </TableContainer>
           ) : (
             /* Full-Width Grid Cards */
             <Grid container spacing={2.5}>
@@ -1381,21 +2179,90 @@ export const AppsPage: React.FC = () => {
                       </Typography>
 
                       {app.url && (
-                        <Box sx={{ display: "flex", alignItems: "center", gap: 0.6, mb: 1.5, color: "#2563EB" }}>
-                          <Globe size={13} style={{ flexShrink: 0 }} />
-                          <Typography
-                            variant="caption"
-                            sx={{
-                              fontWeight: 600,
-                              color: "#2563EB",
-                              overflow: "hidden",
-                              textOverflow: "ellipsis",
-                              whiteSpace: "nowrap",
-                              maxWidth: "100%",
-                            }}
-                          >
-                            {app.url}
-                          </Typography>
+                        <Box sx={{ mb: 1.5 }}>
+                          {(() => {
+                            const resolved = resolveHomepageUrl(app, managedNodes, variables);
+                            const isClickable = !!resolved && !resolved.containsTemplate && isHttpUrl(resolved.url);
+                            const displayUrl = resolved && !resolved.containsTemplate ? resolved.url : app.url;
+                            const tooltip = isClickable
+                              ? `Homepage on ${resolved!.node.name}: ${resolved!.url}`
+                              : resolved
+                                ? `Homepage template ${resolved.containsTemplate ? "(unresolved variables)" : ""}: ${app.url} (deployed to ${getTargetNodeInfo(app).nodeNames.length} node(s))`
+                                : `Homepage template: ${app.url} (deployed to ${getTargetNodeInfo(app).nodeNames.length} node(s))`;
+                            if (isClickable) {
+                              return (
+                                <Tooltip title={tooltip} arrow placement="top">
+                                  <Box
+                                    component="a"
+                                    href={displayUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    onClick={(e) => e.stopPropagation()}
+                                    sx={{
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      gap: 0.5,
+                                      maxWidth: "100%",
+                                      color: "#2563EB",
+                                      textDecoration: "none",
+                                      fontSize: "0.75rem",
+                                      fontWeight: 600,
+                                      bgcolor: "#EFF6FF",
+                                      px: 1,
+                                      py: 0.4,
+                                      borderRadius: "6px",
+                                      border: "1px solid #BFDBFE",
+                                      transition: "all 0.15s ease",
+                                      "&:hover": {
+                                        bgcolor: "#DBEAFE",
+                                        textDecoration: "underline",
+                                      },
+                                    }}
+                                  >
+                                    <Globe size={13} style={{ flexShrink: 0 }} />
+                                    <span
+                                      style={{
+                                        overflow: "hidden",
+                                        textOverflow: "ellipsis",
+                                        whiteSpace: "nowrap",
+                                      }}
+                                    >
+                                      {displayUrl}
+                                    </span>
+                                    <ExternalLink size={12} style={{ flexShrink: 0 }} />
+                                  </Box>
+                                </Tooltip>
+                              );
+                            }
+                            return (
+                              <Tooltip title={tooltip} arrow placement="top">
+                                <Box
+                                  sx={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: 0.6,
+                                    color: "#2563EB",
+                                    maxWidth: "100%",
+                                  }}
+                                >
+                                  <Globe size={13} style={{ flexShrink: 0 }} />
+                                  <Typography
+                                    variant="caption"
+                                    sx={{
+                                      fontWeight: 600,
+                                      color: "#2563EB",
+                                      overflow: "hidden",
+                                      textOverflow: "ellipsis",
+                                      whiteSpace: "nowrap",
+                                      maxWidth: "100%",
+                                    }}
+                                  >
+                                    {displayUrl}
+                                  </Typography>
+                                </Box>
+                              </Tooltip>
+                            );
+                          })()}
                         </Box>
                       )}
 
