@@ -119,9 +119,7 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 
 	nodeData := config.ExtractNoteData(node.Note)
 	ctx["data"] = nodeData
-	ctx["Data"] = nodeData
 	ctx["note"] = node.Note
-	ctx["Note"] = node.Note
 
 	// 2. Ensure integer types for ASN and table (avoid json float64 exponential formatting like 4.29942e+09)
 	table := node.Table
@@ -679,18 +677,14 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 			}
 			remoteNodeData := config.ExtractNoteData(rl.remoteNode.Note)
 			remoteNodeMap["note"] = rl.remoteNode.Note
-			remoteNodeMap["Note"] = rl.remoteNode.Note
 			remoteNodeMap["data"] = remoteNodeData
-			remoteNodeMap["Data"] = remoteNodeData
 		} else {
 			remoteNodeMap = map[string]any{
 				"name":        rl.remoteEnd.Name,
 				"asn":         uint64(0),
 				"is_external": false,
 				"note":        "",
-				"Note":        "",
 				"data":        map[string]any{},
-				"Data":        map[string]any{},
 			}
 		}
 
@@ -706,21 +700,17 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 		hasAddPaths := addPaths != config.AddPathsOff
 		isSameASN := rl.remoteNode != nil && node.ASN != 0 && rl.remoteNode.ASN == node.ASN
 		nodeLink := map[string]any{
-			"type":           rl.link.LinkType(),
-			"is_manual":      rl.link.IsManual(),
-			"tags":           tags,
-			"note":           rl.link.Note,
-			"Note":           rl.link.Note,
-			"data":           linkData,
-			"Data":           linkData,
+			"type":      rl.link.LinkType(),
+			"is_manual": rl.link.IsManual(),
+			"tags":      tags,
+			"note":      rl.link.Note,
+			"data":      linkData,
 			"link": map[string]any{
 				"type":      rl.link.LinkType(),
 				"is_manual": rl.link.IsManual(),
 				"tags":      tags,
 				"note":      rl.link.Note,
-				"Note":      rl.link.Note,
 				"data":      linkData,
-				"Data":      linkData,
 			},
 			"local":          localMap,
 			"remote":         remoteMap,
@@ -1226,9 +1216,7 @@ func linkEndToContextMap(end *config.LinkEnd, node *config.Node, peerName string
 		"add_paths":            addPaths,
 		"has_add_paths":        addPaths != config.AddPathsOff,
 		"note":                 endNote,
-		"Note":                 endNote,
 		"data":                 endData,
-		"Data":                 endData,
 	}
 	if preference != nil {
 		res["preference"] = *preference

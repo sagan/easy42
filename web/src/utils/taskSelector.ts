@@ -75,10 +75,15 @@ function formatEnvValue(value: unknown): string | null {
 /**
  * Extract structured JSON data from the first ``` or ```json fenced block in a
  * node note. Mirrors the backend config.ExtractNoteData implementation.
+ *
+ * Unlike extractNoteData, returns null when the note contains no valid
+ * structured data object (no ``` / ```json block, an empty or unparseable
+ * block, or a block that does not contain a JSON object), so callers can
+ * distinguish a valid empty object ({}) from the absence of structured data.
  */
-export function extractNoteData(note?: string): Record<string, unknown> {
+export function parseNoteData(note?: string | null): Record<string, unknown> | null {
   const trimmed = (note || "").trim();
-  if (!trimmed) return {};
+  if (!trimmed) return null;
 
   const regex = /```+([a-zA-Z0-9_-]*)?[ \t]*(?:\r?\n)?([\s\S]*?)```+/gi;
   let match: RegExpExecArray | null;
@@ -87,7 +92,7 @@ export function extractNoteData(note?: string): Record<string, unknown> {
     if (lang !== "" && lang !== "json") continue;
 
     const body = (match[2] || "").trim();
-    if (!body) return {};
+    if (!body) return null;
     try {
       const parsed = JSON.parse(body);
       if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
@@ -96,9 +101,66 @@ export function extractNoteData(note?: string): Record<string, unknown> {
     } catch {
       // Best effort: the first ``` or ```json block could not be parsed.
     }
-    return {};
+    return null;
   }
-  return {};
+  return null;
+}
+
+/**
+ * Extract structured JSON data from the first ``` or ```json fenced block in a
+ * node note. Mirrors the backend config.ExtractNoteData implementation.
+ * Returns an empty object when no valid structured data object is present.
+ */
+export function extractNoteData(note?: string | null): Record<string, unknown> {
+  return parseNoteData(note) ?? {};
+}
+
+/**
+ * Build the recognized NODE_DATA_* environment variables for already-parsed
+ * structured note data. Only string, number, and boolean fields are exposed,
+ * up to one nested object level; nested fields also get a NODE_DATA_<child>
+ * alias when that name is not already taken by a top-level field.
+ */
+export function buildNoteDataEnvVars(noteData: Record<string, unknown>): Record<string, string> {
+  const res: Record<string, string> = {};
+
+  // Layer 0 primitive fields
+  Object.entries(noteData).forEach(([key, value]) => {
+    const s0 = sanitizeEnvKey(key);
+    if (!s0) return;
+    const formatted = formatEnvValue(value);
+    if (formatted !== null) res[`NODE_DATA_${s0}`] = formatted;
+  });
+
+  // Layer 1 nested object fields
+  Object.entries(noteData).forEach(([key, value]) => {
+    const s0 = sanitizeEnvKey(key);
+    if (!s0) return;
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      Object.entries(value as Record<string, unknown>).forEach(([childKey, childValue]) => {
+        const s1 = sanitizeEnvKey(childKey);
+        if (!s1) return;
+        const formatted = formatEnvValue(childValue);
+        if (formatted !== null) {
+          res[`NODE_DATA_${s0}_${s1}`] = formatted;
+          const aliasKey = `NODE_DATA_${s1}`;
+          if (!(aliasKey in res)) res[aliasKey] = formatted;
+        }
+      });
+    }
+  });
+
+  return res;
+}
+
+/**
+ * Build the recognized NODE_DATA_* environment variables from a node note.
+ * Returns an empty object when the note contains no valid structured data.
+ */
+export function getNoteDataEnvVars(note?: string | null): Record<string, string> {
+  const noteData = parseNoteData(note);
+  if (!noteData) return {};
+  return buildNoteDataEnvVars(noteData);
 }
 
 /**
@@ -144,32 +206,7 @@ export function buildNodeContextVars(node: Node): Record<string, string> {
     if (tagKey) res[`NODE_TAG_${tagKey}`] = "1";
   });
 
-  const noteData = extractNoteData(node.note);
-  // Layer 0 primitive fields
-  Object.entries(noteData).forEach(([key, value]) => {
-    const s0 = sanitizeEnvKey(key);
-    if (!s0) return;
-    const formatted = formatEnvValue(value);
-    if (formatted !== null) res[`NODE_DATA_${s0}`] = formatted;
-  });
-
-  // Layer 1 nested object fields
-  Object.entries(noteData).forEach(([key, value]) => {
-    const s0 = sanitizeEnvKey(key);
-    if (!s0) return;
-    if (value && typeof value === "object" && !Array.isArray(value)) {
-      Object.entries(value as Record<string, unknown>).forEach(([childKey, childValue]) => {
-        const s1 = sanitizeEnvKey(childKey);
-        if (!s1) return;
-        const formatted = formatEnvValue(childValue);
-        if (formatted !== null) {
-          res[`NODE_DATA_${s0}_${s1}`] = formatted;
-          const aliasKey = `NODE_DATA_${s1}`;
-          if (!(aliasKey in res)) res[aliasKey] = formatted;
-        }
-      });
-    }
-  });
+  Object.assign(res, getNoteDataEnvVars(node.note));
 
   return res;
 }

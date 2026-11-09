@@ -317,9 +317,7 @@ func BuildWgLinkContext(
 		"self_end":             toWgTemplateMap(selfEnd, selfEndNote),
 		"peer_end":             toWgTemplateMap(peerEnd, peerEndNote),
 		"data":                 nodeData,
-		"Data":                 nodeData,
 		"note":                 selfNote,
-		"Note":                 selfNote,
 		"node_data":            nodeData,
 		"peer_node_data":       peerNodeData,
 		"link_data":            linkData,
@@ -457,9 +455,7 @@ func toWgTemplateMap(v any, note string) map[string]any {
 
 	noteData := config.ExtractNoteData(note)
 	res["note"] = note
-	res["Note"] = note
 	res["data"] = noteData
-	res["Data"] = noteData
 	return res
 }
 

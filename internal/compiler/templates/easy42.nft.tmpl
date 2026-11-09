@@ -301,7 +301,7 @@ table inet easy42 {
     tcp flags syn tcp option maxseg size set rt mtu
   }
   chain nat_postrouting {
-    type nat hook postrouting priority srcnat; policy accept;
+    type nat hook postrouting priority srcnat - 1; policy accept;
 {{- range .nft_policies }}
   {{- if .snat }}
     {{- if eq .snat_action "masquerade" }}
@@ -387,6 +387,13 @@ table inet easy42 {
     fib saddr type local oifname @easy42_ifname meta nfproto ipv4 snat to $self_ip
 {{- if .ip6 }}
     fib saddr type local ip6 saddr != fe80::/10 oifname @easy42_ifname meta nfproto ipv6 snat to $self_ip6
+{{- end }}
+
+{{- if $.data.nft_snat_iifname }}
+    iifname { {{$.data.nft_snat_iifname}} } oifname @easy42_ifname meta nfproto ipv4 snat to $self_ip
+{{- if .ip6 }}
+    iifname { {{$.data.nft_snat_iifname}} } oifname @easy42_ifname meta nfproto ipv6 snat to $self_ip6
+{{- end }}
 {{- end }}
 
     ip daddr @private_ip oifname @easy42_ifname accept

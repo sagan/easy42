@@ -81,6 +81,7 @@ import { MetricAreaChart } from "../components/Nodes/MetricAreaChart";
 import { MarkdownView } from "../components/Common/MarkdownView";
 import { NodeCronTasksTab } from "../components/Nodes/NodeCronTasksTab";
 import { NodeAppsTab } from "../components/Nodes/NodeAppsTab";
+import { NodeNoteDataView } from "../components/Nodes/NodeNoteDataView";
 import { Dn42InfoCard } from "../components/Nodes/Dn42InfoCard";
 import { isDn42ExternalNode } from "../utils/dn42";
 import { getLinkWorkingState, isManualLink } from "../components/Topology/TopologyGraph";
@@ -2090,20 +2091,23 @@ export const NodeDetailPage: React.FC = () => {
               </Box>
 
               {!isEditingNote ? (
-                <Box
-                  sx={{
-                    p: 2,
-                    borderRadius: 2,
-                    bgcolor: "#F8FAFC",
-                    border: "1px solid #E2E8F0",
-                    minHeight: 100,
-                  }}
-                >
-                  <MarkdownView
-                    content={node.note}
-                    emptyText="No documentation recorded for this node yet. Click 'Add Notes' to add network notes or maintenance instructions."
-                  />
-                </Box>
+                <>
+                  <Box
+                    sx={{
+                      p: 2,
+                      borderRadius: 2,
+                      bgcolor: "#F8FAFC",
+                      border: "1px solid #E2E8F0",
+                      minHeight: 100,
+                    }}
+                  >
+                    <MarkdownView
+                      content={node.note}
+                      emptyText="No documentation recorded for this node yet. Click 'Add Notes' to add network notes or maintenance instructions."
+                    />
+                  </Box>
+                  <NodeNoteDataView note={node.note} />
+                </>
               ) : (
                 <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
                   {noteTab === "write" ? (
