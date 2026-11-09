@@ -12,8 +12,8 @@ This document describes Easy42's third-party integrations and advanced managemen
     - [Exported Metrics Catalog](#exported-metrics-catalog)
       - [A. Easy42 Cluster State \& Topology](#a-easy42-cluster-state--topology)
       - [B. WireGuard Telemetry (MindFlavor Compatible)](#b-wireguard-telemetry-mindflavor-compatible)
-      - [C. BIRD / BGP Dynamic Routing (bird\_exporter Compatible)](#c-bird--bgp-dynamic-routing-bird_exporter-compatible)
-      - [D. Linux Host System (node\_exporter Compatible)](#d-linux-host-system-node_exporter-compatible)
+      - [C. BIRD / BGP Dynamic Routing (bird_exporter Compatible)](#c-bird--bgp-dynamic-routing-bird_exporter-compatible)
+      - [D. Linux Host System (node_exporter Compatible)](#d-linux-host-system-node_exporter-compatible)
   - [2. `/etc/hosts` Automatic Management](#2-etchosts-automatic-management)
     - [How It Works](#how-it-works)
   - [3. WireGuard PSK (Preshared Key) Support](#3-wireguard-psk-preshared-key-support)
@@ -299,17 +299,20 @@ Easy42 compiles WireGuard, BIRD, and nftables configuration with Go's `text/temp
 The markdown `note` field on **Node**, **Link**, **LinkEnd**, and **App** objects can embed structured configuration by including a ` ``` ` or ` ```json ` code block. Easy42 automatically extracts and parses the JSON from the first found code fence (a block with any other language is skipped) and exposes it as the `.data` map in template contexts (best-effort; if the first matching block is invalid JSON, extraction stops and yields an empty map without breaking template rendering).
 
 For example, if a node's Note contains:
-```markdown
+
+````markdown
 # Edge Gateway
+
 ```json
 {
   "type": "server",
   "zone": "us-east"
 }
 ```
-```
+````
 
 You can reference these properties in custom BIRD, WireGuard, and nftables templates:
+
 - **Node level** (BIRD, nftables, WireGuard root): `{{ .data.type }}`
 - **WireGuard context**: `{{ .self_node.data.type }}`, `{{ .peer_node.data.type }}`, `{{ .link.data.type }}`, `{{ .self_end.data.prop }}`, `{{ .peer_end.data.prop }}`
 - **BIRD links iteration**: `{{ range .links }}{{ .data.carrier }} {{ .link.data.carrier }} {{ .local.data.prop }} {{ .remote.data.prop }} {{ .remote_node.data.role }}{{ end }}`
@@ -341,14 +344,14 @@ For `wg.peer`, an optional `target` limits the snippet to a matching interface o
 
 Easy42 records fleet events in SQLite (`data.db`) and broadcasts them over the client WebSocket (`event_created`) and to Telegram via the bot's notify path.
 
-| Field | Type | Description |
-| :---- | :--- | :---------- |
-| `type` | `string` | `node_offline`, `node_online`, or `cron_task_failure`. |
-| `node_name` | `string` | Affected node. |
-| `task_id` | `string` | Cron task ID for `cron_task_failure`. |
-| `title`, `message` | `string` | Human-readable summary and detail. |
-| `metadata` | `object` | Structured extra data. |
-| `created_at`, `is_read` | — | Timestamp and read flag. |
+| Field                   | Type     | Description                                            |
+| :---------------------- | :------- | :----------------------------------------------------- |
+| `type`                  | `string` | `node_offline`, `node_online`, or `cron_task_failure`. |
+| `node_name`             | `string` | Affected node.                                         |
+| `task_id`               | `string` | Cron task ID for `cron_task_failure`.                  |
+| `title`, `message`      | `string` | Human-readable summary and detail.                     |
+| `metadata`              | `object` | Structured extra data.                                 |
+| `created_at`, `is_read` | —        | Timestamp and read flag.                               |
 
 Producers: node online/offline transitions from the Telegram monitor (90s grace, debounce 2), and cron-task failures (debounced to at most one event per task/node per 24h). API: `GET /api/events` (with `limit`/`offset`/`unread_only`/`type`/`node_name` filters, returning `events`, `total`, `unread_count`), `GET /api/events/unread-count`, `POST /api/events/{id}/read`, `POST /api/events/read-all`, `DELETE /api/events/{id}`, `DELETE /api/events`.
 
@@ -356,11 +359,11 @@ Producers: node online/offline transitions from the Telegram monitor (90s grace,
 
 Workload Apps are declarative units of work deployed to agent-managed nodes from the Web UI or `/api/apps`. External nodes are never targets, and nodes whose agent reports `disable_apps: true` refuse app sync/actions.
 
-| App type | Agent destination | Notes |
-| :------- | :---------------- | :---- |
-| `docker` | `/etc/ezappc/<name>/compose.yaml` + `.env` (`0600`) | `docker compose up` runs asynchronously (900s timeout); status is probed. |
+| App type  | Agent destination                                                                                                 | Notes                                                                                                                                                             |
+| :-------- | :---------------------------------------------------------------------------------------------------------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `docker`  | `/etc/ezappc/<name>/compose.yaml` + `.env` (`0600`)                                                               | `docker compose up` runs asynchronously (900s timeout); status is probed.                                                                                         |
 | `systemd` | `/etc/systemd/system/ezapp-<name>.service` + `.env` (plus `EnvironmentFile=/etc/systemd/system/ezapp-<name>.env`) | Transpiled to OpenRC (`/etc/init.d/ezapp-*` + `/etc/conf.d/ezapp-*`) or procd on Alpine/OpenWrt; sandboxing/cgroup directives are dropped with `# NOTE:` headers. |
-| `cron` | System crontab between `### EASY42_START`/`### EASY42_END` markers | Sorted entries; disabled apps are `#`-prefixed. Distinct from cron **probes** below. |
+| `cron`    | System crontab between `### EASY42_START`/`### EASY42_END` markers                                                | Sorted entries; disabled apps are `#`-prefixed. Distinct from cron **probes** below.                                                                              |
 
 Auxiliary `files` are written to `/etc/ezapp-data/<name>/`. Orphaned files from deleted/renamed apps are garbage-collected via a `.easy42-managed.json` manifest (user bind-mounts are preserved). Deployment is hash-based (`ComputeAppHash` / `ComputeAppSpecFilesHash`) and skipped entirely when `is_apps_disabled` on the node.
 
@@ -386,11 +389,11 @@ Easy42 has two scheduler layers.
 
 Four fixed tasks run on the Easy42 server (scheduler ticks every second, 60s slots, 10-minute execution timeout; each run records `ServerTaskState`):
 
-| Task            | Default schedule | Purpose                                   |
-| :-------------- | :--------------- | :---------------------------------------- |
-| `update_roa`    | `0 0 * * *`      | Refresh policy ROA files.                 |
-| `sync`          | `30 0 * * *`     | Push compiled configuration to all nodes. |
-| `sync_dns`      | `0 1 * * *`      | Reconcile Cloudflare DNS records.         |
+| Task            | Default schedule | Purpose                                               |
+| :-------------- | :--------------- | :---------------------------------------------------- |
+| `update_roa`    | `0 0 * * *`      | Refresh policy ROA files.                             |
+| `sync`          | `30 0 * * *`     | Push compiled configuration to all nodes.             |
+| `sync_dns`      | `0 1 * * *`      | Reconcile Cloudflare DNS records.                     |
 | `backup_config` | `0 2 * * *`      | Backup `config.json` (at most 100 backups preserved). |
 
 Schedules use 5- or 6-field cron syntax and can be changed from **Settings -> Tasks** or the `/api/settings/tasks` API (`GET /api/settings/tasks`, `PUT /api/settings/tasks/{id}`). `POST /api/settings/tasks/{id}/run` executes one immediately. The apply schema accepts a `server_tasks` section, but the current apply engine does not merge it.
