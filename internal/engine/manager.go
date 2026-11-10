@@ -3734,7 +3734,6 @@ func (m *Manager) PlanSyncWithScope(scope string, nodeNames ...string) ([]config
 	}
 
 	// 5. Node /etc/hosts configuration
-	hostsBlock, expectedHostsHash := m.ExpectedHostsBlock()
 	for _, n := range nodes {
 		if n.IsExternal {
 			continue
@@ -3746,6 +3745,7 @@ func (m *Manager) PlanSyncWithScope(scope string, nodeNames ...string) ([]config
 			continue
 		}
 		node := n
+		hostsBlock, expectedHostsHash := m.ExpectedHostsBlockForNode(node.Name)
 
 		needsApply := true
 		status := "pending"
@@ -5362,8 +5362,15 @@ func (m *Manager) UpdateNetworkSettings(settings config.NetworkSettings) error {
 	} else {
 		settings.FlapAlertedURL = ""
 	}
+	oldExtraHosts := cfg.NetworkSettings.ExtraHosts
 	cfg.NetworkSettings = settings
-	return m.store.Save(cfg)
+	if err := m.store.Save(cfg); err != nil {
+		return err
+	}
+	if oldExtraHosts != settings.ExtraHosts {
+		go m.SyncHostsToAgents()
+	}
+	return nil
 }
 
 // GetBlocks returns current blocks from config
@@ -5848,7 +5855,7 @@ func (m *Manager) executeAgentSyncAction(act config.SyncAction, res *config.Sync
 
 	var hosts []*agentpb.HostRecord
 	if act.Type == config.ActionSyncHosts {
-		hosts = m.buildClusterHostRecords()
+		hosts = m.buildHostRecordsForNode(act.NodeName)
 	}
 
 	syncCmd := &agentpb.SyncActionCmd{
@@ -5939,7 +5946,7 @@ func (m *Manager) executeAgentSyncAction(act config.SyncAction, res *config.Sync
 
 	// Hosts file update
 	if act.Type == config.ActionSyncHosts {
-		records := m.buildClusterHostRecords()
+		records := m.buildHostRecordsForNode(act.NodeName)
 		cmdResp, err := m.agentHub.SendCommand(ctx, act.NodeName, &agentpb.CommandRequest{
 			Command: &agentpb.CommandRequest_SyncHosts{
 				SyncHosts: &agentpb.SyncHostsCmd{

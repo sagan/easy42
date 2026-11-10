@@ -11,6 +11,7 @@ import (
 
 	"easy42/internal/agent"
 	"easy42/internal/engine"
+
 	"github.com/go-chi/chi/v5"
 	"github.com/gorilla/websocket"
 )
@@ -418,6 +419,7 @@ Wants=network-online.target
 
 [Service]
 Type=simple
+User=root
 ExecStart=/usr/local/bin/easy42-agent --config /etc/easy42/agent.json
 Restart=always
 RestartSec=5

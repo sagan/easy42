@@ -364,6 +364,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
   const [faPort, setFaPort] = useState<number | "">(1790);
   const [faAsn, setFaAsn] = useState<number | "">(4224420000);
   const [faUrl, setFaUrl] = useState("");
+  const [extraHosts, setExtraHosts] = useState("");
   const [networkLoading, setNetworkLoading] = useState(false);
   const [networkSaving, setNetworkSaving] = useState(false);
   const [networkError, setNetworkError] = useState<string | null>(null);
@@ -1080,6 +1081,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
           : 4224420000,
       );
       setFaUrl(settings.flapalerted_url || "");
+      setExtraHosts(settings.extra_hosts || "");
     } catch (err: unknown) {
       const e = err as Error;
       setNetworkError(e.message || "Failed to load network settings.");
@@ -1104,6 +1106,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
       flapalerted_port: faPort === "" ? 1790 : Number(faPort),
       flapalerted_asn: faAsn === "" ? 4224420000 : Number(faAsn),
       flapalerted_url: faUrl.trim() || undefined,
+      extra_hosts: extraHosts.trim() || undefined,
     };
 
     try {
@@ -1878,6 +1881,19 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                     value={disallowedDn42Networks}
                     onChange={(e) => setDisallowedDn42Networks(e.target.value)}
                     helperText="Excluded subnets for built-in dn42 policy (used as DisallowedDstCIDRs & DisallowedSrcCIDRs). Rejects BGP export, drops inbound traffic, and triggers SNAT for internal egress traffic."
+                    disabled={networkSaving}
+                  />
+
+                  <TextFieldWithCopy
+                    fullWidth
+                    size="small"
+                    multiline
+                    rows={3}
+                    label="Global Extra Hosts"
+                    placeholder={"# Global /etc/hosts records (IP hostname [aliases...]):\n192.168.1.50 gitlab.example.com gitlab\n10.0.0.1 db.lan db"}
+                    value={extraHosts}
+                    onChange={(e) => setExtraHosts(e.target.value)}
+                    helperText="Global custom /etc/hosts records injected into all cluster nodes with Update Hosts enabled. Merged with node extra hosts and cluster node IP hosts (priority: node extra hosts > global extra hosts > easy42 node IP hosts)."
                     disabled={networkSaving}
                   />
 

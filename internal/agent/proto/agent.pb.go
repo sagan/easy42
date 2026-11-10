@@ -2419,6 +2419,7 @@ type HostRecord struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	Ip            string                 `protobuf:"bytes,2,opt,name=ip,proto3" json:"ip,omitempty"`
+	Aliases       []string               `protobuf:"bytes,3,rep,name=aliases,proto3" json:"aliases,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2465,6 +2466,13 @@ func (x *HostRecord) GetIp() string {
 		return x.Ip
 	}
 	return ""
+}
+
+func (x *HostRecord) GetAliases() []string {
+	if x != nil {
+		return x.Aliases
+	}
+	return nil
 }
 
 type SyncHosts struct {
@@ -3325,11 +3333,12 @@ const file_proto_agent_proto_rawDesc = "" +
 	"durationMs\x12\x1d\n" +
 	"\n" +
 	"raw_output\x18\x06 \x01(\tR\trawOutput\x12#\n" +
-	"\rerror_message\x18\a \x01(\tR\ferrorMessage\"0\n" +
+	"\rerror_message\x18\a \x01(\tR\ferrorMessage\"J\n" +
 	"\n" +
 	"HostRecord\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x0e\n" +
-	"\x02ip\x18\x02 \x01(\tR\x02ip\">\n" +
+	"\x02ip\x18\x02 \x01(\tR\x02ip\x12\x18\n" +
+	"\aaliases\x18\x03 \x03(\tR\aaliases\">\n" +
 	"\tSyncHosts\x121\n" +
 	"\x05hosts\x18\x01 \x03(\v2\x1b.easy42.agent.v1.HostRecordR\x05hosts\"A\n" +
 	"\fSyncHostsCmd\x121\n" +

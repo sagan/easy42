@@ -2951,7 +2951,7 @@ export const NodeDetailPage: React.FC = () => {
                     <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600 }}>
                       Manage /etc/hosts
                     </Typography>
-                    <Box sx={{ mt: 0.8 }}>
+                    <Box sx={{ mt: 0.8, display: "flex", alignItems: "center", gap: 0.8, flexWrap: "wrap" }}>
                       <Chip
                         label={node.update_hosts ? "Enabled" : "Disabled"}
                         size="small"
@@ -2963,6 +2963,19 @@ export const NodeDetailPage: React.FC = () => {
                           border: node.update_hosts ? "1px solid rgba(79, 70, 229, 0.25)" : "1px solid #E2E8F0",
                         }}
                       />
+                      {node.extra_hosts && (
+                        <Chip
+                          label="Custom Extra Hosts"
+                          size="small"
+                          sx={{
+                            fontWeight: 600,
+                            fontSize: "0.7rem",
+                            bgcolor: "#F0FDF4",
+                            color: "#16A34A",
+                            border: "1px solid rgba(22, 163, 74, 0.25)",
+                          }}
+                        />
+                      )}
                     </Box>
                   </Box>
                 </Grid>
@@ -2998,6 +3011,59 @@ export const NodeDetailPage: React.FC = () => {
                   </Box>
                 </Grid>
               </Grid>
+
+              {/* Node Extra Hosts */}
+              {node.extra_hosts && (
+                <Box sx={{ mt: 3, p: 2, bgcolor: "#F8FAFC", borderRadius: 2, border: "1px solid #E2E8F0" }}>
+                  <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                      <Typography variant="caption" sx={{ color: "#475569", fontWeight: 700 }}>
+                        EXTRA HOSTS (/etc/hosts)
+                      </Typography>
+                      <Chip
+                        label="Node Scope"
+                        size="small"
+                        sx={{
+                          height: 18,
+                          fontSize: "0.65rem",
+                          fontWeight: 600,
+                          bgcolor: "#EEF2FF",
+                          color: "#4F46E5",
+                        }}
+                      />
+                    </Box>
+                    <Tooltip title={copiedKey === "node_extra_hosts" ? "Copied!" : "Copy Records"}>
+                      <IconButton
+                        size="small"
+                        onClick={() => handleCopy("node_extra_hosts", node.extra_hosts!)}
+                        sx={{ p: 0.3, color: "#64748B" }}
+                      >
+                        {copiedKey === "node_extra_hosts" ? (
+                          <Check size={14} color="#059669" />
+                        ) : (
+                          <Copy size={14} />
+                        )}
+                      </IconButton>
+                    </Tooltip>
+                  </Box>
+                  <Box
+                    component="pre"
+                    sx={{
+                      m: 0,
+                      p: 1.5,
+                      borderRadius: 1.5,
+                      bgcolor: "#0F172A",
+                      color: "#38BDF8",
+                      fontSize: "0.75rem",
+                      fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+                      overflowX: "auto",
+                      maxHeight: 180,
+                    }}
+                  >
+                    {node.extra_hosts}
+                  </Box>
+                </Box>
+              )}
 
               {/* Kernel Route Imports */}
               <Box sx={{ mt: 3 }}>

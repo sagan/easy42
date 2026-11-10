@@ -1,4 +1,5 @@
 import composerize from "composerize";
+import { load, dump } from "js-yaml";
 import * as shlex from "shlex";
 
 export interface DockerRunConversionResult {
@@ -38,7 +39,13 @@ export function dockerRunToCompose(cmd: string): DockerRunConversionResult {
       return { composeYaml: "", error: "Could not generate compose file from the given command." };
     }
 
-    return { composeYaml: result };
+    const parsedObject = load(result);
+    // 2. Dump it back out to YAML, enforcing a 2-space indent
+    const formattedYaml = dump(parsedObject, {
+      indent: 2,
+      lineWidth: -1, // Optional: prevents line wrapping
+    });
+    return { composeYaml: formattedYaml };
   } catch (err: any) {
     return {
       composeYaml: "",

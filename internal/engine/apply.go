@@ -663,6 +663,10 @@ func mergeNode(target *config.Node, patch config.NodePatch, now time.Time) ([]Ap
 		checkField("update_hosts", target.UpdateHosts, *patch.UpdateHosts)
 		target.UpdateHosts = *patch.UpdateHosts
 	}
+	if patch.ExtraHosts != nil && *patch.ExtraHosts != target.ExtraHosts {
+		checkField("extra_hosts", target.ExtraHosts, *patch.ExtraHosts)
+		target.ExtraHosts = *patch.ExtraHosts
+	}
 	if patch.CustomNetworkScript != nil && *patch.CustomNetworkScript != target.CustomNetworkScript {
 		checkField("custom_network_script", target.CustomNetworkScript, *patch.CustomNetworkScript)
 		target.CustomNetworkScript = *patch.CustomNetworkScript
@@ -779,6 +783,9 @@ func createNodeFromPatch(patch config.NodePatch, now time.Time) (*config.Node, [
 	}
 	if patch.UpdateHosts != nil {
 		node.UpdateHosts = *patch.UpdateHosts
+	}
+	if patch.ExtraHosts != nil {
+		node.ExtraHosts = *patch.ExtraHosts
 	}
 	if patch.CustomNetworkScript != nil {
 		node.CustomNetworkScript = *patch.CustomNetworkScript
@@ -1072,6 +1079,10 @@ func mergeNetworkSettings(target *config.NetworkSettings, patch *config.NetworkS
 	if patch.FlapAlertedURL != nil && *patch.FlapAlertedURL != target.FlapAlertedURL {
 		checkField("flapalerted_url", target.FlapAlertedURL, *patch.FlapAlertedURL)
 		target.FlapAlertedURL = *patch.FlapAlertedURL
+	}
+	if patch.ExtraHosts != nil && *patch.ExtraHosts != target.ExtraHosts {
+		checkField("extra_hosts", target.ExtraHosts, *patch.ExtraHosts)
+		target.ExtraHosts = *patch.ExtraHosts
 	}
 	return diffs
 }

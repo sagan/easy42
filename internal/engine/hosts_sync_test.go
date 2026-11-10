@@ -150,3 +150,92 @@ func TestBuildClusterHostRecords(t *testing.T) {
 		t.Fatalf("unexpected record 1: %+v", protoRecords[1])
 	}
 }
+
+func TestHostsExtraMergingAndPriority(t *testing.T) {
+	tmpDir := t.TempDir()
+	store := config.NewStore(tmpDir)
+	pass, _ := store.Initialize()
+	mgr := NewManager(store)
+	defer mgr.Close()
+	_ = mgr.Unlock(pass)
+
+	cfg := &config.Config{
+		NetworkSettings: config.NetworkSettings{
+			ExtraHosts: "10.0.0.2 bar\n10.0.0.50 global.lan\n",
+		},
+		Nodes: []config.Node{
+			{
+				Name:        "nodeA",
+				IP:          "192.168.1.1",
+				Mode:        "agent",
+				AgentToken:  "token-a",
+				UpdateHosts: true,
+				ExtraHosts:  "172.16.0.1 bar\n172.16.0.10 custom-a.lan\n",
+			},
+			{
+				Name:        "nodeB",
+				IP:          "192.168.1.2",
+				Mode:        "agent",
+				AgentToken:  "token-b",
+				UpdateHosts: true,
+				ExtraHosts:  "",
+			},
+			{
+				Name: "bar",
+				IP:   "192.168.1.99",
+			},
+		},
+	}
+	_ = mgr.store.Save(cfg)
+
+	// NodeA should have bar overridden by nodeA ExtraHosts (172.16.0.1)
+	nodeARecords := mgr.GetHostRecordsForNode("nodeA")
+	lookupA := make(map[string]string)
+	for _, r := range nodeARecords {
+		lookupA[r.Name] = r.IP
+		for _, a := range r.Aliases {
+			lookupA[a] = r.IP
+		}
+	}
+	if lookupA["bar"] != "172.16.0.1" {
+		t.Fatalf("expected nodeA bar -> 172.16.0.1 (node extra priority), got %s", lookupA["bar"])
+	}
+	if lookupA["custom-a.lan"] != "172.16.0.10" {
+		t.Fatalf("expected custom-a.lan -> 172.16.0.10, got %s", lookupA["custom-a.lan"])
+	}
+	if lookupA["global.lan"] != "10.0.0.50" {
+		t.Fatalf("expected global.lan -> 10.0.0.50, got %s", lookupA["global.lan"])
+	}
+
+	// NodeB should NOT have nodeA's extra hosts; bar should be overridden by Global ExtraHosts (10.0.0.2)
+	nodeBRecords := mgr.GetHostRecordsForNode("nodeB")
+	lookupB := make(map[string]string)
+	for _, r := range nodeBRecords {
+		lookupB[r.Name] = r.IP
+		for _, a := range r.Aliases {
+			lookupB[a] = r.IP
+		}
+	}
+	if lookupB["bar"] != "10.0.0.2" {
+		t.Fatalf("expected nodeB bar -> 10.0.0.2 (global extra priority), got %s", lookupB["bar"])
+	}
+	if _, exists := lookupB["custom-a.lan"]; exists {
+		t.Fatalf("nodeB should not have custom-a.lan from nodeA")
+	}
+	if lookupB["global.lan"] != "10.0.0.50" {
+		t.Fatalf("expected nodeB global.lan -> 10.0.0.50, got %s", lookupB["global.lan"])
+	}
+
+	// Verify buildHostRecordsForNode sends correct proto records to agent
+	protoA := mgr.buildHostRecordsForNode("nodeA")
+	foundBar := false
+	for _, p := range protoA {
+		if p.Name == "bar" && p.Ip == "172.16.0.1" {
+			foundBar = true
+			break
+		}
+	}
+	if !foundBar {
+		t.Fatalf("expected protoA to contain bar with 172.16.0.1")
+	}
+}

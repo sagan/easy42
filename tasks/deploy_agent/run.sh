@@ -74,6 +74,7 @@ Wants=network-online.target
 
 [Service]
 Type=simple
+User=root
 ExecStart=/usr/local/bin/easy42-agent --config /etc/easy42/agent.json
 Restart=always
 RestartSec=5

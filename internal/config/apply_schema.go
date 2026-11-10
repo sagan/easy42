@@ -277,6 +277,7 @@ type NetworkSettingsPatch struct {
 	FlapAlertedPort        *int      `json:"flapalerted_port,omitempty" yaml:"flapalerted_port,omitempty"`
 	FlapAlertedASN         *uint64   `json:"flapalerted_asn,omitempty" yaml:"flapalerted_asn,omitempty"`
 	FlapAlertedURL         *string   `json:"flapalerted_url,omitempty" yaml:"flapalerted_url,omitempty"`
+	ExtraHosts             *string   `json:"extra_hosts,omitempty" yaml:"extra_hosts,omitempty"`
 }
 
 // NodePatch holds partial changes to a node
@@ -314,6 +315,7 @@ type NodePatch struct {
 	Mode                *string            `json:"mode,omitempty" yaml:"mode,omitempty"`
 	EnableFA            *bool              `json:"enable_fa,omitempty" yaml:"enable_fa,omitempty"`
 	UpdateHosts         *bool              `json:"update_hosts,omitempty" yaml:"update_hosts,omitempty"`
+	ExtraHosts          *string            `json:"extra_hosts,omitempty" yaml:"extra_hosts,omitempty"`
 	CustomNetworkScript *string            `json:"custom_network_script,omitempty" yaml:"custom_network_script,omitempty"`
 	RouteReflector      *bool              `json:"route_reflector,omitempty" yaml:"route_reflector,omitempty"`
 }
@@ -622,6 +624,12 @@ func validateNodePatch(n *NodePatch) error {
 		}
 	}
 
+	if n.ExtraHosts != nil && strings.TrimSpace(*n.ExtraHosts) != "" {
+		if _, err := ParseExtraHosts(*n.ExtraHosts); err != nil {
+			return fmt.Errorf("invalid extra_hosts for node %s: %w", n.Name, err)
+		}
+	}
+
 	return nil
 }
 
@@ -670,6 +678,11 @@ func validateNetworkSettingsPatch(s *NetworkSettingsPatch) error {
 	}
 	if s.FlapAlertedPort != nil && (*s.FlapAlertedPort < 1 || *s.FlapAlertedPort > 65535) {
 		return fmt.Errorf("invalid flapalerted_port %d: must be between 1 and 65535", *s.FlapAlertedPort)
+	}
+	if s.ExtraHosts != nil && strings.TrimSpace(*s.ExtraHosts) != "" {
+		if _, err := ParseExtraHosts(*s.ExtraHosts); err != nil {
+			return fmt.Errorf("invalid extra_hosts: %w", err)
+		}
 	}
 	return nil
 }

@@ -154,6 +154,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
   const [nftTemplate, setNftTemplate] = useState<string>("");
   const [enableFa, setEnableFa] = useState(false);
   const [updateHosts, setUpdateHosts] = useState(false);
+  const [extraHosts, setExtraHosts] = useState("");
   const [routeReflector, setRouteReflector] = useState(false);
   const [customNetworkScript, setCustomNetworkScript] = useState("");
   const [saving, setSaving] = useState(false);
@@ -195,6 +196,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
       setNftTemplate(nodeToEdit.nft_template || "");
       setEnableFa(Boolean(nodeToEdit.enable_fa));
       setUpdateHosts(Boolean(nodeToEdit.update_hosts));
+      setExtraHosts(nodeToEdit.extra_hosts || "");
       setRouteReflector(Boolean(nodeToEdit.route_reflector));
       setCustomNetworkScript(nodeToEdit.custom_network_script || "");
       if (nodeToEdit.routes && nodeToEdit.routes.length > 0) {
@@ -287,6 +289,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
       setNftTemplate("");
       setEnableFa(false);
       setUpdateHosts(false);
+      setExtraHosts("");
       setRouteReflector(false);
       setCustomNetworkScript("");
       setEntrypoints([{ id: "nat-fallback", ip: "", portStr: "", tagStr: "nat", mtuStr: "", isNone: true }]);
@@ -630,6 +633,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
         nft_template: nftTemplate.trim() || undefined,
         enable_fa: enableFa,
         update_hosts: updateHosts,
+        extra_hosts: extraHosts.trim() || undefined,
         route_reflector: routeReflector,
         custom_network_script: customNetworkScript.trim() || undefined,
         caption: caption.trim() || undefined,
@@ -1666,6 +1670,32 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                         </Typography>
                       </Box>
                     }
+                  />
+                </Box>
+
+                {/* Node Extra Hosts Field */}
+                <Box sx={{ mt: 1.5 }}>
+                  <TextField
+                    id="node-extra-hosts-input"
+                    label="Extra Hosts"
+                    multiline
+                    rows={3}
+                    size="small"
+                    fullWidth
+                    value={extraHosts}
+                    onChange={(e) => setExtraHosts(e.target.value)}
+                    placeholder={
+                      "# Custom hosts records for this node (IP hostname [aliases...]):\n192.168.1.10 db.internal db\n10.0.0.5 gitlab.lan"
+                    }
+                    helperText="Custom /etc/hosts records for this node. Merged with global extra hosts and cluster node IP hosts (priority: node extra hosts > global extra hosts > easy42 node IP hosts)."
+                    disabled={saving}
+                    InputProps={{
+                      sx: {
+                        fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+                        fontSize: "0.82rem",
+                        bgcolor: "#F8FAFC",
+                      },
+                    }}
                   />
                 </Box>
 

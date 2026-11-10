@@ -269,6 +269,12 @@ func ValidateNode(node *Node) error {
 		}
 	}
 
+	if strings.TrimSpace(node.ExtraHosts) != "" {
+		if _, err := ParseExtraHosts(node.ExtraHosts); err != nil {
+			return fmt.Errorf("invalid extra_hosts for node %s: %w", node.Name, err)
+		}
+	}
+
 	return nil
 }
 
@@ -303,6 +309,12 @@ func ValidateNetworkSettings(settings *NetworkSettings) error {
 		u, err := url.ParseRequestURI(faURL)
 		if err != nil || (u.Scheme != "http" && u.Scheme != "https") {
 			return fmt.Errorf("invalid flapalerted_url: must be a valid http or https URL")
+		}
+	}
+
+	if strings.TrimSpace(settings.ExtraHosts) != "" {
+		if _, err := ParseExtraHosts(settings.ExtraHosts); err != nil {
+			return fmt.Errorf("invalid extra_hosts: %w", err)
 		}
 	}
 

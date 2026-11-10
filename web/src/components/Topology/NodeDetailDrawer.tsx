@@ -929,6 +929,53 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
               </Box>
             ) : null}
 
+            {node.extra_hosts ? (
+              <Box
+                sx={{
+                  p: 1.2,
+                  borderRadius: 1.5,
+                  backgroundColor: "#F8FAFC",
+                  border: "1px solid #E2E8F0",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 0.5,
+                }}
+              >
+                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600 }}>
+                    Extra Hosts:
+                  </Typography>
+                  <Chip
+                    label="Configured"
+                    size="small"
+                    sx={{
+                      height: 18,
+                      fontSize: "0.65rem",
+                      fontWeight: 600,
+                      backgroundColor: "rgba(16, 185, 129, 0.08)",
+                      color: "#059669",
+                    }}
+                  />
+                </Box>
+                <Box
+                  component="pre"
+                  sx={{
+                    m: 0,
+                    p: 0.8,
+                    borderRadius: 1,
+                    backgroundColor: "#0F172A",
+                    color: "#38BDF8",
+                    fontSize: "0.68rem",
+                    fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+                    overflowX: "auto",
+                    maxHeight: 100,
+                  }}
+                >
+                  {node.extra_hosts}
+                </Box>
+              </Box>
+            ) : null}
+
             {node.route_reflector ? (
               <Box
                 sx={{

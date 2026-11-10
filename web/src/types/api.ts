@@ -34,6 +34,7 @@ export interface NetworkSettings {
   flapalerted_port?: number;
   flapalerted_asn?: number;
   flapalerted_url?: string;
+  extra_hosts?: string;
 }
 
 export interface FlapAlertedMetrics {
@@ -150,6 +151,7 @@ export interface Node {
   agent_last_seen?: string;
   enable_fa?: boolean;
   update_hosts?: boolean;
+  extra_hosts?: string;
   custom_network_script?: string;
   route_reflector?: boolean;
 }

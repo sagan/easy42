@@ -19,6 +19,7 @@ type NetworkSettings struct {
 	FlapAlertedPort        int      `json:"flapalerted_port,omitempty"`         // FlapAlerted BGP port (default 1790)
 	FlapAlertedASN         uint64   `json:"flapalerted_asn,omitempty"`          // FlapAlerted BGP ASN (default 4224420000)
 	FlapAlertedURL         string   `json:"flapalerted_url,omitempty"`          // FlapAlerted web/dashboard base URL
+	ExtraHosts             string   `json:"extra_hosts,omitempty"`              // Custom global /etc/hosts records
 }
 
 // GetName returns the configured network name or "Easy42" if empty
@@ -372,6 +373,7 @@ type Node struct {
 	AgentLastSeen       time.Time         `json:"agent_last_seen,omitempty"`                                  // Timestamp of last agent heartbeat/report
 	EnableFA            bool              `json:"enable_fa,omitempty"`                                        // Enable FlapAlerted BGP peering
 	UpdateHosts         bool              `json:"update_hosts,omitempty"`                                     // Enable managing /etc/hosts file of the node
+	ExtraHosts          string            `json:"extra_hosts,omitempty"`                                      // Custom node /etc/hosts records
 	CustomNetworkScript string            `json:"custom_network_script,omitempty"`                            // Custom shell script for node network manager (e.g. policy routing)
 	RouteReflector      bool              `json:"route_reflector,omitempty" yaml:"route_reflector,omitempty"` // True if node acts as BGP Route Reflector for internal iBGP peers
 }

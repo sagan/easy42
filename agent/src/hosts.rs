@@ -40,9 +40,22 @@ pub fn build_hosts_block(mut records: Vec<HostRecord>) -> String {
         if !ip.is_empty()
             && !name.is_empty()
             && crate::validation::is_valid_ip(ip)
-            && crate::validation::is_valid_node_name(name)
+            && (crate::validation::is_valid_node_name(name) || crate::validation::is_valid_domain(name))
         {
-            out.push_str(&format!("{} {} {}.internal\n", ip, name, name));
+            let mut parts = vec![name.to_string()];
+            for a in &r.aliases {
+                let a_trimmed = a.trim();
+                if !a_trimmed.is_empty()
+                    && a_trimmed != name
+                    && (crate::validation::is_valid_node_name(a_trimmed) || crate::validation::is_valid_domain(a_trimmed))
+                {
+                    parts.push(a_trimmed.to_string());
+                }
+            }
+            if parts.len() == 1 && r.aliases.is_empty() && !name.contains('.') {
+                parts.push(format!("{}.internal", name));
+            }
+            out.push_str(&format!("{} {}\n", ip, parts.join(" ")));
         }
     }
     out.push_str(HOSTS_END_MARKER);
@@ -198,10 +211,12 @@ mod tests {
             HostRecord {
                 name: "foo".to_string(),
                 ip: "192.168.100.1".to_string(),
+                aliases: vec![],
             },
             HostRecord {
                 name: "bar".to_string(),
                 ip: "192.168.100.2".to_string(),
+                aliases: vec![],
             },
         ];
 
@@ -218,6 +233,26 @@ mod tests {
     }
 
     #[test]
+    fn test_build_hosts_block_with_custom_domains_and_aliases() {
+        let records = vec![
+            HostRecord {
+                name: "db".to_string(),
+                ip: "10.0.0.1".to_string(),
+                aliases: vec!["db.lan".to_string(), "postgres".to_string()],
+            },
+            HostRecord {
+                name: "gitlab.example.com".to_string(),
+                ip: "10.0.0.50".to_string(),
+                aliases: vec![],
+            },
+        ];
+
+        let block = build_hosts_block(records);
+        let expected = "### EASY42_START\n10.0.0.1 db db.lan postgres\n10.0.0.50 gitlab.example.com\n### EASY42_END\n";
+        assert_eq!(block, expected);
+    }
+
+    #[test]
     fn test_atomic_update_preserves_content() {
         let hosts_file = NamedTempFile::new().unwrap();
         let hosts_path = hosts_file.path().to_path_buf();
@@ -230,10 +265,12 @@ mod tests {
             HostRecord {
                 name: "foo".to_string(),
                 ip: "192.168.100.1".to_string(),
+                aliases: vec![],
             },
             HostRecord {
                 name: "bar".to_string(),
                 ip: "192.168.100.2".to_string(),
+                aliases: vec![],
             },
         ];
 
@@ -257,14 +294,17 @@ mod tests {
             HostRecord {
                 name: "bar".to_string(),
                 ip: "192.168.100.2".to_string(),
+                aliases: vec![],
             },
             HostRecord {
                 name: "baz".to_string(),
                 ip: "192.168.100.3".to_string(),
+                aliases: vec![],
             },
             HostRecord {
                 name: "foo".to_string(),
                 ip: "192.168.100.1".to_string(),
+                aliases: vec![],
             },
         ];
 
@@ -292,6 +332,7 @@ mod tests {
             HostRecord {
                 name: "foo".to_string(),
                 ip: "192.168.100.1".to_string(),
+                aliases: vec![],
             },
         ];
 

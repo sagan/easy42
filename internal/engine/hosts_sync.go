@@ -27,7 +27,7 @@ func (m *Manager) setupAgentHostsListeners() {
 	})
 }
 
-// GetClusterHostRecords returns the list of active cluster node name-to-IPv4 records
+// GetClusterHostRecords returns the list of active cluster node name-to-IPv4 records (with aliases)
 func (m *Manager) GetClusterHostRecords() []config.HostRecord {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -38,11 +38,40 @@ func (m *Manager) GetClusterHostRecords() []config.HostRecord {
 	var records []config.HostRecord
 	for _, n := range cfg.Nodes {
 		if !n.IsExternal && strings.TrimSpace(n.IP) != "" {
+			name := strings.TrimSpace(n.Name)
 			records = append(records, config.HostRecord{
-				Name: strings.TrimSpace(n.Name),
-				IP:   strings.TrimSpace(n.IP),
+				Name:    name,
+				IP:      strings.TrimSpace(n.IP),
+				Aliases: []string{name + ".internal"},
 			})
 		}
+	}
+	return records
+}
+
+// GetHostRecordsForNode returns the merged host records specifically for a given node.
+// Priority: node extra hosts > global extra hosts > easy42 node IP hosts.
+func (m *Manager) GetHostRecordsForNode(nodeName string) []config.HostRecord {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	cfg := m.store.Get()
+	if cfg == nil {
+		return nil
+	}
+
+	nodeExtraHosts := ""
+	for _, n := range cfg.Nodes {
+		if n.Name == nodeName {
+			nodeExtraHosts = n.ExtraHosts
+			break
+		}
+	}
+
+	globalExtraHosts := cfg.NetworkSettings.ExtraHosts
+	records, err := config.MergeHostRecords(nodeExtraHosts, globalExtraHosts, cfg.Nodes)
+	if err != nil {
+		// Fallback to cluster host records on any unexpected merge error
+		return m.GetClusterHostRecords()
 	}
 	return records
 }
@@ -53,16 +82,48 @@ func (m *Manager) buildClusterHostRecords() []*agentpb.HostRecord {
 	res := make([]*agentpb.HostRecord, len(records))
 	for i, r := range records {
 		res[i] = &agentpb.HostRecord{
-			Name: r.Name,
-			Ip:   r.IP,
+			Name:    r.Name,
+			Ip:      r.IP,
+			Aliases: r.Aliases,
 		}
 	}
 	return res
 }
 
-// ExpectedHostsBlock generates the full expected easy42 block and its SHA-256 hash
+// buildHostRecordsForNode returns protobuf HostRecord entries specifically for a target node
+func (m *Manager) buildHostRecordsForNode(nodeName string) []*agentpb.HostRecord {
+	records := m.GetHostRecordsForNode(nodeName)
+	res := make([]*agentpb.HostRecord, len(records))
+	for i, r := range records {
+		res[i] = &agentpb.HostRecord{
+			Name:    r.Name,
+			Ip:      r.IP,
+			Aliases: r.Aliases,
+		}
+	}
+	return res
+}
+
+// ExpectedHostsBlock generates the full expected easy42 block and its SHA-256 hash using global config
 func (m *Manager) ExpectedHostsBlock() (string, string) {
-	records := m.GetClusterHostRecords()
+	m.mu.RLock()
+	cfg := m.store.Get()
+	m.mu.RUnlock()
+	if cfg == nil {
+		return "", ""
+	}
+	records, err := config.MergeHostRecords("", cfg.NetworkSettings.ExtraHosts, cfg.Nodes)
+	if err != nil {
+		records = m.GetClusterHostRecords()
+	}
+	block := config.BuildHostsBlock(records)
+	hash := config.HashHostsBlock(block)
+	return block, hash
+}
+
+// ExpectedHostsBlockForNode generates the expected hosts block and its SHA-256 hash for a specific node
+func (m *Manager) ExpectedHostsBlockForNode(nodeName string) (string, string) {
+	records := m.GetHostRecordsForNode(nodeName)
 	block := config.BuildHostsBlock(records)
 	hash := config.HashHostsBlock(block)
 	return block, hash
@@ -79,13 +140,13 @@ func (m *Manager) SyncHostsToNode(nodeName string) {
 		return
 	}
 
-	_, expectedHash := m.ExpectedHostsBlock()
+	_, expectedHash := m.ExpectedHostsBlockForNode(nodeName)
 	currentHash := m.agentHub.GetHostsHash(nodeName)
 	if currentHash != "" && currentHash == expectedHash {
 		return
 	}
 
-	records := m.buildClusterHostRecords()
+	records := m.buildHostRecordsForNode(nodeName)
 	_ = m.agentHub.SyncHosts(nodeName, records)
 }
 
@@ -100,9 +161,9 @@ func (m *Manager) checkAndSyncHostsIfMismatched(nodeName string, currentHash str
 		return
 	}
 
-	_, expectedHash := m.ExpectedHostsBlock()
+	_, expectedHash := m.ExpectedHostsBlockForNode(nodeName)
 	if currentHash != expectedHash {
-		records := m.buildClusterHostRecords()
+		records := m.buildHostRecordsForNode(nodeName)
 		_ = m.agentHub.SyncHosts(nodeName, records)
 	}
 }
