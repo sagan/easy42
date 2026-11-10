@@ -178,7 +178,7 @@ fi
 
 ## Workload Apps, Obfuscators & `disable_apps`
 
-- **Apps**: The agent declaratively syncs Docker Compose apps to `/etc/ezappc/<name>/compose.yaml` + `.env` (`0600`), systemd apps to `/etc/systemd/system/ezapp-<name>.service` + `.env` (or `/etc/init.d/ezapp-*` + `/etc/conf.d/ezapp-*` on OpenRC/procd), auxiliary files to `/etc/ezapp-data/<name>/`, and cron apps into the system crontab. Orphaned files are garbage-collected via a `.easy42-managed.json` manifest (preserving user bind-mounts). Actions `start`/`stop`/`restart`/`logs` are supported (cron apps reject actions). See [Workload Apps](integrations.md#9-workload-apps-apps).
+- **Apps**: The agent declaratively syncs Docker Compose apps to `/etc/ezappc/ezapp-<name>/compose.yaml` + `.env` (`0600`), systemd apps to `/etc/systemd/system/ezapp-<name>.service` + `.env` (or `/etc/init.d/ezapp-*` + `/etc/conf.d/ezapp-*` on OpenRC/procd), auxiliary files to `/etc/ezapp-data/<name>/`, and cron apps into the system crontab. Orphaned files are garbage-collected via a `.easy42-managed.json` manifest (preserving user bind-mounts). Actions `start`/`stop`/`restart`/`logs` are supported (cron apps reject actions). See [Workload Apps](integrations.md#9-workload-apps-apps).
 - **Obfuscators**: The agent installs and supervises one Phantun service per obfuscated link endpoint (`<interface>-obfuscator`). See [WireGuard Obfuscation](architecture.md#wireguard-obfuscation-phantun).
 - **`disable_apps`**: Setting `"disable_apps": true` in `agent.json` makes the agent refuse `SyncApps`/`AppAction` requests and omit app statuses from telemetry. The `install.sh` agent installer supports configuring this flag in an existing `agent.json`.
 

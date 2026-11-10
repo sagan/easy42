@@ -127,21 +127,23 @@ impl AppsManager {
         let mut hashes = HashMap::new();
         let mut files_map = HashMap::new();
 
-        // 1. Container (compose) apps in /etc/ezappc/<name>
+        // 1. Container (compose) apps in /etc/ezappc/ezapp-<name>
         if let Ok(entries) = fs::read_dir(DOCKER_BASE_DIR) {
             for entry in entries.flatten() {
                 if let Ok(ft) = entry.file_type() {
                     if ft.is_dir() {
-                        let name = entry.file_name().to_string_lossy().to_string();
-                        let app_dir = entry.path();
-                        let compose_path = app_dir.join("compose.yaml");
-                        let env_path = app_dir.join(".env");
-                        if compose_path.exists() {
-                            let main_content = fs::read_to_string(&compose_path).unwrap_or_default();
-                            let env_content = fs::read_to_string(&env_path).unwrap_or_default();
-                            let files = read_managed_files(&app_dir);
-                            let hash = compute_files_hash(&main_content, &env_content, &files);
-                            hashes.insert(name.clone(), hash);
+                        let dir_name = entry.file_name().to_string_lossy().to_string();
+                        if let Some(name) = dir_name.strip_prefix("ezapp-") {
+                            let name = name.to_string();
+                            let app_dir = entry.path();
+                            let compose_path = app_dir.join("compose.yaml");
+                            let env_path = app_dir.join(".env");
+                            if compose_path.exists() {
+                                let main_content = fs::read_to_string(&compose_path).unwrap_or_default();
+                                let env_content = fs::read_to_string(&env_path).unwrap_or_default();
+                                let files = read_managed_files(&app_dir);
+                                let hash = compute_files_hash(&main_content, &env_content, &files);
+                                hashes.insert(name.clone(), hash);
 
                             let comp_path_str = compose_path.to_string_lossy().to_string();
                             files_map.insert(
@@ -179,6 +181,7 @@ impl AppsManager {
                 }
             }
         }
+    }
 
         // 2. Systemd apps in /etc/systemd/system/ezapp-*.service
         if Path::new(SYSTEMD_SYSTEM_DIR).exists() {
@@ -317,7 +320,7 @@ impl AppsManager {
     }
 
     async fn apply_docker_app(&self, app: &AppSpec) -> Result<(), String> {
-        let app_dir = PathBuf::from(DOCKER_BASE_DIR).join(&app.name);
+        let app_dir = PathBuf::from(DOCKER_BASE_DIR).join(format!("ezapp-{}", app.name));
         fs::create_dir_all(&app_dir).map_err(|e| format!("failed to create dir {:?}: {}", app_dir, e))?;
 
         let compose_file = app_dir.join("compose.yaml");
@@ -336,7 +339,6 @@ impl AppsManager {
         self.sync_config_files(&app_dir, &app.config_files, &["compose.yaml", ".env"])?;
 
         // Execute the compose command using whichever container runtime is installed
-        let project_name = format!("ezapp-{}", app.name);
         let compose_cmd = compose_command();
 
         if app.enabled {
@@ -359,10 +361,9 @@ impl AppsManager {
 
             tokio::spawn(async move {
                 let cmd = format!(
-                    "cd {} && {} -p {} --env-file .env up -d --remove-orphans",
+                    "cd {} && {} --env-file .env up -d --remove-orphans",
                     shell_quote(app_dir.to_str().unwrap_or("")),
-                    compose_cmd,
-                    shell_quote(&project_name)
+                    compose_cmd
                 );
                 // Allow up to 15 minutes for image pulls and container initialization
                 let (success, code, stdout, stderr) =
@@ -392,10 +393,9 @@ impl AppsManager {
             // not enough to consider the app disabled. Tear the compose project
             // down instead so nothing keeps running.
             let cmd = format!(
-                "cd {} && {} -p {} down --remove-orphans",
+                "cd {} && {} down --remove-orphans",
                 shell_quote(app_dir.to_str().unwrap_or("")),
-                compose_cmd,
-                shell_quote(&project_name)
+                compose_cmd
             );
             let (success, code, stdout, stderr) = run_shell(&cmd).await;
             if !success {
@@ -404,10 +404,9 @@ impl AppsManager {
                     compose_cmd, app.name, code, stdout, stderr
                 );
                 let kill_cmd = format!(
-                    "cd {} && {} -p {} kill",
+                    "cd {} && {} kill",
                     shell_quote(app_dir.to_str().unwrap_or("")),
-                    compose_cmd,
-                    shell_quote(&project_name)
+                    compose_cmd
                 );
                 let _ = run_shell(&kill_cmd).await;
             }
@@ -583,34 +582,35 @@ impl AppsManager {
             for entry in entries.flatten() {
                 if let Ok(file_type) = entry.file_type() {
                     if file_type.is_dir() {
-                        let name = entry.file_name().to_string_lossy().to_string();
-                        if !desired_names.contains(&name) {
-                            let app_dir = entry.path();
-                            // A directory that has neither an Easy42 compose file nor
-                            // a managed-file manifest is just leftover user data (for
-                            // example a mounted volume). Leave it untouched.
-                            if !app_dir.join("compose.yaml").exists()
-                                && !app_dir.join(MANAGED_MANIFEST_FILE).exists()
-                            {
-                                continue;
+                        let dir_name = entry.file_name().to_string_lossy().to_string();
+                        if let Some(name) = dir_name.strip_prefix("ezapp-") {
+                            let name = name.to_string();
+                            if !desired_names.contains(&name) {
+                                let app_dir = entry.path();
+                                // A directory that has neither an Easy42 compose file nor
+                                // a managed-file manifest is just leftover user data (for
+                                // example a mounted volume). Leave it untouched.
+                                if !app_dir.join("compose.yaml").exists()
+                                    && !app_dir.join(MANAGED_MANIFEST_FILE).exists()
+                                {
+                                    continue;
+                                }
+                                info!("Removing orphaned container app '{}'...", name);
+                                {
+                                    let mut starting = self.starting_apps.lock().await;
+                                    starting.remove(&name);
+                                    let mut errors = self.app_errors.lock().await;
+                                    errors.remove(&name);
+                                }
+                                let compose_cmd = compose_command();
+                                let cmd = format!(
+                                    "cd {} && {} down --volumes --remove-orphans 2>/dev/null || true",
+                                    shell_quote(app_dir.to_str().unwrap_or("")),
+                                    compose_cmd
+                                );
+                                let _ = run_shell(&cmd).await;
+                                remove_managed_app_files(&app_dir, &["compose.yaml", ".env"]);
                             }
-                            info!("Removing orphaned container app '{}'...", name);
-                            {
-                                let mut starting = self.starting_apps.lock().await;
-                                starting.remove(&name);
-                                let mut errors = self.app_errors.lock().await;
-                                errors.remove(&name);
-                            }
-                            let project_name = format!("ezapp-{}", name);
-                            let compose_cmd = compose_command();
-                            let cmd = format!(
-                                "cd {} && {} -p {} down --volumes --remove-orphans 2>/dev/null || true",
-                                shell_quote(app_dir.to_str().unwrap_or("")),
-                                compose_cmd,
-                                shell_quote(&project_name)
-                            );
-                            let _ = run_shell(&cmd).await;
-                            remove_managed_app_files(&app_dir, &["compose.yaml", ".env"]);
                         }
                     }
                 }
@@ -681,25 +681,28 @@ impl AppsManager {
             for entry in entries.flatten() {
                 if let Ok(ft) = entry.file_type() {
                     if ft.is_dir() {
-                        let app_dir = entry.path();
-                        // Leftover directories can contain only app-generated data
-                        // (e.g. mounted volumes) after an app was removed. They are
-                        // not apps and must not be reported as such.
-                        if !app_dir.join("compose.yaml").exists() {
-                            continue;
-                        }
-                        let name = entry.file_name().to_string_lossy().to_string();
-                        if seen.insert(name.clone()) {
-                            let (state, text, err) = self.probe_docker_status(&name).await;
-                            statuses.push(AppStatus {
-                                app_id: String::new(),
-                                name,
-                                app_type: AppType::DockerCompose as i32,
-                                state,
-                                status_text: text,
-                                last_updated: chrono_now(),
-                                error_message: err,
-                            });
+                        let dir_name = entry.file_name().to_string_lossy().to_string();
+                        if let Some(name) = dir_name.strip_prefix("ezapp-") {
+                            let app_dir = entry.path();
+                            // Leftover directories can contain only app-generated data
+                            // (e.g. mounted volumes) after an app was removed. They are
+                            // not apps and must not be reported as such.
+                            if !app_dir.join("compose.yaml").exists() {
+                                continue;
+                            }
+                            let name = name.to_string();
+                            if seen.insert(name.clone()) {
+                                let (state, text, err) = self.probe_docker_status(&name).await;
+                                statuses.push(AppStatus {
+                                    app_id: String::new(),
+                                    name,
+                                    app_type: AppType::DockerCompose as i32,
+                                    state,
+                                    status_text: text,
+                                    last_updated: chrono_now(),
+                                    error_message: err,
+                                });
+                            }
                         }
                     }
                 }
@@ -793,15 +796,13 @@ impl AppsManager {
     }
 
     async fn probe_docker_status(&self, name: &str) -> (String, String, String) {
-        let project_name = format!("ezapp-{}", name);
         let compose_cmd = compose_command();
-        let app_dir = PathBuf::from(DOCKER_BASE_DIR).join(name);
+        let app_dir = PathBuf::from(DOCKER_BASE_DIR).join(format!("ezapp-{}", name));
 
         let cmd = format!(
-            "cd {} && {} -p {} ps --format '{{{{.State}}}} {{{{.Status}}}}' 2>/dev/null",
+            "cd {} && {} ps --format '{{{{.State}}}} {{{{.Status}}}}' 2>/dev/null",
             shell_quote(app_dir.to_str().unwrap_or("")),
-            compose_cmd,
-            shell_quote(&project_name)
+            compose_cmd
         );
 
         let (success, _, stdout, stderr) = run_shell(&cmd).await;
@@ -907,15 +908,14 @@ impl AppsManager {
 
         match app_type {
             AppType::DockerCompose => {
-                let app_dir = PathBuf::from(DOCKER_BASE_DIR).join(&req.app_name);
-                let project_name = format!("ezapp-{}", req.app_name);
+                let app_dir = PathBuf::from(DOCKER_BASE_DIR).join(format!("ezapp-{}", req.app_name));
                 let compose_cmd = compose_command();
 
                 let cmd = match action.as_str() {
-                    "start" => format!("cd {} && {} -p {} start", shell_quote(app_dir.to_str().unwrap_or("")), compose_cmd, shell_quote(&project_name)),
-                    "stop" => format!("cd {} && {} -p {} stop", shell_quote(app_dir.to_str().unwrap_or("")), compose_cmd, shell_quote(&project_name)),
-                    "restart" => format!("cd {} && {} -p {} restart", shell_quote(app_dir.to_str().unwrap_or("")), compose_cmd, shell_quote(&project_name)),
-                    "logs" => format!("cd {} && {} -p {} logs --tail {}", shell_quote(app_dir.to_str().unwrap_or("")), compose_cmd, shell_quote(&project_name), lines),
+                    "start" => format!("cd {} && {} start", shell_quote(app_dir.to_str().unwrap_or("")), compose_cmd),
+                    "stop" => format!("cd {} && {} stop", shell_quote(app_dir.to_str().unwrap_or("")), compose_cmd),
+                    "restart" => format!("cd {} && {} restart", shell_quote(app_dir.to_str().unwrap_or("")), compose_cmd),
+                    "logs" => format!("cd {} && {} logs --tail {}", shell_quote(app_dir.to_str().unwrap_or("")), compose_cmd, lines),
                     other => return (false, -1, String::new(), format!("unknown action '{}'", other)),
                 };
                 run_shell(&cmd).await
@@ -1351,6 +1351,14 @@ mod tests {
         assert_eq!(files.len(), 1);
         assert_eq!(files[0].0, "conf/app.conf");
         assert_eq!(files[0].1, "managed");
+    }
+
+    #[test]
+    fn test_docker_app_name_from_dir() {
+        assert_eq!("ezapp-myapp".strip_prefix("ezapp-"), Some("myapp"));
+        assert_eq!("ezapp-my-complex_app-1".strip_prefix("ezapp-"), Some("my-complex_app-1"));
+        assert_eq!("myapp".strip_prefix("ezapp-"), None);
+        assert_eq!("other-app".strip_prefix("ezapp-"), None);
     }
 }
 

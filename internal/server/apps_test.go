@@ -1060,13 +1060,13 @@ func recordDeployedDockerApp(t *testing.T, srv *Server, nodeName string, spec *a
 	hub := srv.mgr.AgentHub()
 	hub.SetAppHashes(nodeName, map[string]string{spec.Name: spec.Sha256Hash})
 	hub.SetAppFiles(nodeName, map[string]agent.ProbeConfigFile{
-		"/etc/ezappc/" + spec.Name + "/compose.yaml": {
-			Path:    "/etc/ezappc/" + spec.Name + "/compose.yaml",
+		"/etc/ezappc/ezapp-" + spec.Name + "/compose.yaml": {
+			Path:    "/etc/ezappc/ezapp-" + spec.Name + "/compose.yaml",
 			Content: spec.MainContent,
 			Hash:    spec.Sha256Hash,
 		},
-		"/etc/ezappc/" + spec.Name + "/.env": {
-			Path:    "/etc/ezappc/" + spec.Name + "/.env",
+		"/etc/ezappc/ezapp-" + spec.Name + "/.env": {
+			Path:    "/etc/ezappc/ezapp-" + spec.Name + "/.env",
 			Content: spec.EnvContent,
 			Hash:    spec.Sha256Hash,
 		},
@@ -1244,5 +1244,72 @@ func TestDeletedAppIsDetectedFromLiveStatus(t *testing.T) {
 	act := findAppAction(actions, "orphan-app", config.ActionDeleteApp)
 	if act == nil || !act.NeedsApply {
 		t.Fatalf("expected delete action for app known only from live status, got %+v", act)
+	}
+}
+
+func TestDockerAppDeployPathAndCommand(t *testing.T) {
+	srv, tempDir, _ := setupTestServer(t)
+	defer func() {
+		srv.mgr.Close()
+		_ = os.RemoveAll(tempDir)
+	}()
+
+	cfg := srv.mgr.Store().Get()
+	cfg.Nodes = append(cfg.Nodes, config.Node{
+		Name: "node-docker",
+		Host: "192.168.1.215",
+		Mode: "agent",
+	})
+	if err := srv.mgr.Store().Save(cfg); err != nil {
+		t.Fatalf("failed to save node: %v", err)
+	}
+
+	app := config.App{
+		ID:          "app-dockertest",
+		Name:        "testservice",
+		AppType:     "docker",
+		MainContent: "services:\n  web:\n    image: nginx\n",
+		EnvContent:  "PORT=80\n",
+		Files: map[string]string{
+			"conf/extra.conf": "setting=1",
+		},
+		Selector:  map[string]string{"name": "node-docker"},
+		Published: true,
+		Enabled:   true,
+	}
+	if _, err := srv.mgr.SaveApp(app); err != nil {
+		t.Fatalf("failed to save app: %v", err)
+	}
+
+	actions, err := srv.mgr.PlanSyncWithScope("")
+	if err != nil {
+		t.Fatalf("PlanSyncWithScope failed: %v", err)
+	}
+
+	var mainAct, envAct, auxAct *config.SyncAction
+	for i := range actions {
+		if actions[i].Interface == app.Name {
+			switch actions[i].TargetFile {
+			case "/etc/ezappc/ezapp-testservice/compose.yaml":
+				mainAct = &actions[i]
+			case "/etc/ezappc/ezapp-testservice/.env":
+				envAct = &actions[i]
+			case "/etc/ezappc/ezapp-testservice/conf/extra.conf":
+				auxAct = &actions[i]
+			}
+		}
+	}
+
+	if mainAct == nil {
+		t.Fatalf("expected action for /etc/ezappc/ezapp-testservice/compose.yaml, got none in %+v", actions)
+	}
+	if mainAct.Command != "(docker|podman|nerdctl) compose up -d" {
+		t.Errorf("expected command without -p flag, got %q", mainAct.Command)
+	}
+	if envAct == nil {
+		t.Fatalf("expected action for /etc/ezappc/ezapp-testservice/.env, got none")
+	}
+	if auxAct == nil {
+		t.Fatalf("expected action for /etc/ezappc/ezapp-testservice/conf/extra.conf, got none")
 	}
 }

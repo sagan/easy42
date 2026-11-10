@@ -3885,11 +3885,11 @@ func (m *Manager) PlanSyncWithScope(scope string, nodeNames ...string) ([]config
 			mainDesc := fmt.Sprintf("Deploy app '%s' service unit on %s", spec.Name, node.Name)
 
 			if spec.AppType == agentpb.AppType_DOCKER_COMPOSE {
-				mainTargetFile = fmt.Sprintf("/etc/ezappc/%s/compose.yaml", spec.Name)
-				envTargetFile = fmt.Sprintf("/etc/ezappc/%s/.env", spec.Name)
+				mainTargetFile = fmt.Sprintf("/etc/ezappc/ezapp-%s/compose.yaml", spec.Name)
+				envTargetFile = fmt.Sprintf("/etc/ezappc/ezapp-%s/.env", spec.Name)
 				// Display-only hint: the node agent auto-detects the installed
 				// container runtime (docker, podman, or nerdctl) at apply time.
-				applyCmd = fmt.Sprintf("(docker|podman|nerdctl) compose -p ezapp-%s up -d", spec.Name)
+				applyCmd = "(docker|podman|nerdctl) compose up -d"
 				mainDesc = fmt.Sprintf("Deploy app '%s' compose file on %s", spec.Name, node.Name)
 			} else if strings.Contains(osInfo, "openwrt") {
 				mainTargetFile = fmt.Sprintf("/etc/init.d/ezapp-%s", spec.Name)
@@ -4004,7 +4004,7 @@ func (m *Manager) PlanSyncWithScope(scope string, nodeNames ...string) ([]config
 				}
 				auxTargetFile := fmt.Sprintf("/etc/ezapp-data/%s/%s", spec.Name, f.Path)
 				if spec.AppType == agentpb.AppType_DOCKER_COMPOSE {
-					auxTargetFile = fmt.Sprintf("/etc/ezappc/%s/%s", spec.Name, f.Path)
+					auxTargetFile = fmt.Sprintf("/etc/ezappc/ezapp-%s/%s", spec.Name, f.Path)
 				}
 				desiredAuxFiles[auxTargetFile] = true
 				auxContent := string(f.Content)
@@ -4052,7 +4052,7 @@ func (m *Manager) PlanSyncWithScope(scope string, nodeNames ...string) ([]config
 			// 4. Check for orphaned auxiliary config files previously deployed for this app
 			auxDirPrefix := fmt.Sprintf("/etc/ezapp-data/%s/", spec.Name)
 			if spec.AppType == agentpb.AppType_DOCKER_COMPOSE {
-				auxDirPrefix = fmt.Sprintf("/etc/ezappc/%s/", spec.Name)
+				auxDirPrefix = fmt.Sprintf("/etc/ezappc/ezapp-%s/", spec.Name)
 			}
 			var orphanedAuxFiles []string
 			for deployedFilePath := range deployedAppFiles {
