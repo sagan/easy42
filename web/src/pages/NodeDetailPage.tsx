@@ -1863,6 +1863,73 @@ export const NodeDetailPage: React.FC = () => {
                     </Box>
                   )}
 
+                  {/* Node Extra Hosts */}
+                  {node.extra_hosts && node.extra_hosts.trim() !== "" && (
+                    <Box sx={{ mt: 2.5, p: 2, bgcolor: "#F8FAFC", borderRadius: 2, border: "1px solid #E2E8F0" }}>
+                      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                          <Typography variant="caption" sx={{ color: "#475569", fontWeight: 700 }}>
+                            EXTRA HOSTS (/etc/hosts)
+                          </Typography>
+                          <Chip
+                            label="Node Scope"
+                            size="small"
+                            sx={{
+                              height: 18,
+                              fontSize: "0.65rem",
+                              fontWeight: 600,
+                              bgcolor: "#EEF2FF",
+                              color: "#4F46E5",
+                            }}
+                          />
+                        </Box>
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                          <Tooltip title={copiedKey === "overview_extra_hosts" ? "Copied!" : "Copy Records"}>
+                            <IconButton
+                              size="small"
+                              onClick={() => handleCopy("overview_extra_hosts", node.extra_hosts!)}
+                              sx={{ p: 0.3, color: "#64748B" }}
+                            >
+                              {copiedKey === "overview_extra_hosts" ? (
+                                <Check size={14} color="#059669" />
+                              ) : (
+                                <Copy size={14} />
+                              )}
+                            </IconButton>
+                          </Tooltip>
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            startIcon={<Edit2 size={13} />}
+                            onClick={() => {
+                              setNodeToEdit(node);
+                              setAddNodeOpen(true);
+                            }}
+                            sx={{ fontSize: "0.72rem", py: 0.2, px: 1, borderColor: "#CBD5E1", color: "#334155" }}
+                          >
+                            Edit
+                          </Button>
+                        </Box>
+                      </Box>
+                      <Box
+                        component="pre"
+                        sx={{
+                          m: 0,
+                          p: 1.5,
+                          borderRadius: 1.5,
+                          bgcolor: "#0F172A",
+                          color: "#38BDF8",
+                          fontSize: "0.75rem",
+                          fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+                          overflowX: "auto",
+                          maxHeight: 180,
+                        }}
+                      >
+                        {node.extra_hosts}
+                      </Box>
+                    </Box>
+                  )}
+
                   {/* Node Tags */}
                   <Box sx={{ mt: 3 }}>
                     <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 700, display: "block", mb: 1 }}>
