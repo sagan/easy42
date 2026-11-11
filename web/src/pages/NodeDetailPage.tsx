@@ -89,6 +89,7 @@ import { extractPort } from "../utils/endpoint";
 import { ViewNetworkPolicyModal } from "../components/Modals/ViewNetworkPolicyModal";
 import { LinkKeyActionModal, LinkKeyActionMode } from "../components/Modals/LinkKeyActionModal";
 import { generateNodeApplySnippet } from "../components/Modals/ApplyConfigModal";
+import { isAgentVersionOutdated } from "../utils/version";
 
 const getHandshakeRelativeLabel = (dateStr?: string): { text: string; isHealthy: boolean } => {
   if (!dateStr || dateStr === "None" || dateStr.trim() === "") {
@@ -176,6 +177,7 @@ export const NodeDetailPage: React.FC = () => {
     openSyncModal,
     openApplyModal,
     setStateToast,
+    serverAgentVersion,
   } = useMesh();
 
   const decodedNodeName = useMemo(() => {
@@ -193,6 +195,8 @@ export const NodeDetailPage: React.FC = () => {
   const agentInstalled = Boolean(
     live?.agent_installed ?? (status?.agent_version != null || status?.mode === "agent" || node?.mode === "agent"),
   );
+  const currentAgentVer = live?.agent_version || status?.agent_version || node?.agent_version;
+  const isOutdated = isAgentVersionOutdated(currentAgentVer, serverAgentVersion);
 
   // Tabs state synced with query params
   const tabParam = searchParams.get("tab") || "overview";
@@ -2066,11 +2070,33 @@ export const NodeDetailPage: React.FC = () => {
                           <Typography variant="body2" sx={{ color: "#64748B" }}>
                             easy42 Agent Version:
                           </Typography>
-                          <Typography variant="body2" className="mono-font" sx={{ fontWeight: 600, color: "#0F172A" }}>
-                            {live?.agent_version || status?.agent_version
-                              ? `v${live?.agent_version || status?.agent_version}`
-                              : "Not reported"}
-                          </Typography>
+                          <Box sx={{ display: "flex", alignItems: "center", gap: 0.8 }}>
+                            <Typography variant="body2" className="mono-font" sx={{ fontWeight: 600, color: "#0F172A" }}>
+                              {currentAgentVer
+                                ? `v${currentAgentVer.replace(/^[vV]/, "")}`
+                                : "Not reported"}
+                            </Typography>
+                            {isOutdated && (
+                              <Tooltip
+                                title={`Agent v${currentAgentVer?.replace(/^[vV]/, "")} is outdated. Latest version is v${serverAgentVersion?.replace(/^[vV]/, "")}`}
+                              >
+                                <Chip
+                                  label="Outdated"
+                                  size="small"
+                                  sx={{
+                                    height: 20,
+                                    fontSize: "0.68rem",
+                                    fontWeight: 700,
+                                    bgcolor: "#FEF3C7",
+                                    color: "#B45309",
+                                    border: "1px solid #FCD34D",
+                                    px: 0,
+                                    "& .MuiChip-label": { px: 0.6 },
+                                  }}
+                                />
+                              </Tooltip>
+                            )}
+                          </Box>
                         </Box>
                         <Divider />
 
@@ -3484,15 +3510,37 @@ export const NodeDetailPage: React.FC = () => {
                     <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600 }}>
                       Agent Version
                     </Typography>
-                    <Typography
-                      variant="body1"
-                      className="mono-font"
-                      sx={{ fontWeight: 700, color: "#0F172A", mt: 0.5 }}
-                    >
-                      {live?.agent_version || status?.agent_version || node?.agent_version
-                        ? `v${live?.agent_version || status?.agent_version || node?.agent_version}`
-                        : "Not Reported"}
-                    </Typography>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 0.8, mt: 0.5 }}>
+                      <Typography
+                        variant="body1"
+                        className="mono-font"
+                        sx={{ fontWeight: 700, color: "#0F172A" }}
+                      >
+                        {currentAgentVer
+                          ? `v${currentAgentVer.replace(/^[vV]/, "")}`
+                          : "Not Reported"}
+                      </Typography>
+                      {isOutdated && (
+                        <Tooltip
+                          title={`Agent v${currentAgentVer?.replace(/^[vV]/, "")} is outdated. Latest version is v${serverAgentVersion?.replace(/^[vV]/, "")}`}
+                        >
+                          <Chip
+                            label="Outdated"
+                            size="small"
+                            sx={{
+                              height: 20,
+                              fontSize: "0.68rem",
+                              fontWeight: 700,
+                              bgcolor: "#FEF3C7",
+                              color: "#B45309",
+                              border: "1px solid #FCD34D",
+                              px: 0,
+                              "& .MuiChip-label": { px: 0.6 },
+                            }}
+                          />
+                        </Tooltip>
+                      )}
+                    </Box>
                   </Box>
                 </Grid>
 

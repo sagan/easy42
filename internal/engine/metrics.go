@@ -8,6 +8,7 @@ import (
 	"easy42/internal/agent"
 	agentpb "easy42/internal/agent/proto"
 	"easy42/internal/config"
+	"easy42/internal/version"
 )
 
 // setupAgentMetricsListeners registers telemetry and registration event handlers
@@ -481,6 +482,7 @@ func (m *Manager) GetFleetLiveStatus() (config.FleetMetricsSummary, []config.Nod
 		TotalTxRate:    totalTxRate,
 		AverageCPU:     avgCPU,
 		AverageMemPerc: avgMem,
+		AgentVersion:   version.AgentVersion,
 	}
 
 	return summary, list, nil

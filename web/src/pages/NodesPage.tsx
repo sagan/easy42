@@ -49,6 +49,7 @@ import { useMesh } from "../context/MeshContext";
 import { NodeLiveStatus } from "../types/api";
 import { getLinkWorkingState } from "../components/Topology/TopologyGraph";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { isAgentVersionOutdated } from "../utils/version";
 
 export type SortField =
   | "name"
@@ -116,6 +117,7 @@ export const NodesPage: React.FC = () => {
     handleUpdateState,
     updatingState,
     blocks,
+    serverAgentVersion,
   } = useMesh();
 
   const navigate = useNavigate();
@@ -1248,6 +1250,8 @@ export const NodesPage: React.FC = () => {
               status?.interfaces?.find((i) => ((i.flags ?? 0) & 1) !== 0)?.name;
             const rxRate = live?.metrics?.net_rx_rate ?? 0;
             const txRate = live?.metrics?.net_tx_rate ?? 0;
+            const currentAgentVer = live?.agent_version || status?.agent_version || n.agent_version;
+            const isOutdated = isAgentVersionOutdated(currentAgentVer, serverAgentVersion);
             const nodeBlocks = nodeBlocksMap.get(n.name) || [];
 
             return (
@@ -1588,11 +1592,33 @@ export const NodesPage: React.FC = () => {
 
                   {/* OS / Agent Info Footer & Actions */}
                   <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", pt: 0.5 }}>
-                    <Typography variant="caption" sx={{ color: "#94A3B8", fontSize: "0.7rem" }}>
-                      {agentInstalled
-                        ? `${live?.os_info || "Linux"} ${live?.agent_version ? `• v${live.agent_version}` : ""}`
-                        : "Mesh Managed Node"}
-                    </Typography>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 0.8, minWidth: 0, flexWrap: "wrap" }}>
+                      <Typography variant="caption" sx={{ color: "#94A3B8", fontSize: "0.7rem" }}>
+                        {agentInstalled
+                          ? `${live?.os_info || "Linux"}${currentAgentVer ? ` • v${currentAgentVer.replace(/^[vV]/, "")}` : ""}`
+                          : "Mesh Managed Node"}
+                      </Typography>
+                      {agentInstalled && isOutdated && (
+                        <Tooltip
+                          title={`Agent v${currentAgentVer?.replace(/^[vV]/, "")} is outdated. Latest version is v${serverAgentVersion?.replace(/^[vV]/, "")}`}
+                        >
+                          <Chip
+                            label="Outdated"
+                            size="small"
+                            sx={{
+                              height: 18,
+                              fontSize: "0.62rem",
+                              fontWeight: 700,
+                              bgcolor: "#FEF3C7",
+                              color: "#B45309",
+                              border: "1px solid #FCD34D",
+                              px: 0,
+                              "& .MuiChip-label": { px: 0.6 },
+                            }}
+                          />
+                        </Tooltip>
+                      )}
+                    </Box>
 
                     {/* Actions */}
                     <Box sx={{ display: "flex", gap: 0.8 }}>
@@ -1955,6 +1981,8 @@ export const NodesPage: React.FC = () => {
                 const rxRate = live?.metrics?.net_rx_rate ?? 0;
                 const txRate = live?.metrics?.net_tx_rate ?? 0;
                 const nodeBlocks = nodeBlocksMap.get(n.name) || [];
+                const currentAgentVer = live?.agent_version || status?.agent_version || n.agent_version;
+                const isOutdated = isAgentVersionOutdated(currentAgentVer, serverAgentVersion);
 
                 return (
                   <TableRow key={n.name} hover>
@@ -2018,7 +2046,7 @@ export const NodesPage: React.FC = () => {
                       </Box>
                     </TableCell>
                     <TableCell>
-                      <Box sx={{ display: "flex", alignItems: "center", gap: 0.6, flexWrap: "nowrap" }}>
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 0.6, flexWrap: "wrap" }}>
                         <Chip
                           label={isOnline ? "Online" : agentInstalled ? "Offline" : "No Agent"}
                           size="small"
@@ -2045,6 +2073,26 @@ export const NodesPage: React.FC = () => {
                                 fontSize: "0.7rem",
                                 height: 20,
                                 border: "1px solid #FECDD3",
+                              }}
+                            />
+                          </Tooltip>
+                        )}
+                        {agentInstalled && isOutdated && (
+                          <Tooltip
+                            title={`Agent v${currentAgentVer?.replace(/^[vV]/, "")} is outdated. Latest version is v${serverAgentVersion?.replace(/^[vV]/, "")}`}
+                          >
+                            <Chip
+                              label="Outdated"
+                              size="small"
+                              sx={{
+                                height: 20,
+                                fontSize: "0.65rem",
+                                fontWeight: 700,
+                                bgcolor: "#FEF3C7",
+                                color: "#B45309",
+                                border: "1px solid #FCD34D",
+                                px: 0,
+                                "& .MuiChip-label": { px: 0.5 },
                               }}
                             />
                           </Tooltip>

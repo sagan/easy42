@@ -161,6 +161,7 @@ type FleetMetricsSummary struct {
 	TotalTxRate    float64 `json:"total_tx_rate"`    // bytes/sec aggregate
 	AverageCPU     float32 `json:"average_cpu"`      // fleet average CPU %
 	AverageMemPerc float32 `json:"average_mem_perc"` // fleet average Mem %
+	AgentVersion   string  `json:"agent_version,omitempty"`
 }
 
 // NodeLiveStatus represents live node info + latest metric snapshot

@@ -10,6 +10,7 @@ import {
   FleetLiveResponse,
   GraphBlock,
   FlapAlertedMetrics,
+  VersionInfo,
 } from "../types/api";
 import { isSameLink } from "../utils/link";
 
@@ -41,6 +42,8 @@ interface MeshContextType {
   refreshFleetLive: (flush?: boolean) => Promise<void>;
   unreadEventsCount: number;
   refreshUnreadEventsCount: () => Promise<void>;
+  versionInfo: VersionInfo | null;
+  serverAgentVersion: string | null;
 
   // Filter & tags
   selectedTag: string;
@@ -126,7 +129,12 @@ export const MeshProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [networkSettings, setNetworkSettings] = useState<NetworkSettings | null>(null);
   const [networkName, setNetworkName] = useState<string>("Easy42");
   const [fleetLive, setFleetLive] = useState<FleetLiveResponse | null>(null);
+  const [versionInfo, setVersionInfo] = useState<VersionInfo | null>(null);
   const [loadingData, setLoadingData] = useState(false);
+
+  const serverAgentVersion = useMemo(() => {
+    return versionInfo?.agent_version || fleetLive?.summary?.agent_version || null;
+  }, [versionInfo, fleetLive]);
 
   // Selected for drawers
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
@@ -271,11 +279,17 @@ export const MeshProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const checkAuth = useCallback(async () => {
     try {
-      const res = await api.getAuthStatus();
+      const [res, ver] = await Promise.all([
+        api.getAuthStatus(),
+        api.getVersion().catch(() => null),
+      ]);
       setAuthenticated(res.authenticated);
       setIsUnlocked(res.unlocked);
       if (res.network_name) {
         setNetworkName(res.network_name);
+      }
+      if (ver) {
+        setVersionInfo(ver);
       }
     } catch {
       setAuthenticated(false);
@@ -288,7 +302,7 @@ export const MeshProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const loadData = useCallback(async () => {
     setLoadingData(true);
     try {
-      const [nodesData, linksData, statusesData, stateData, policiesData, liveData, blocksData, settingsData] =
+      const [nodesData, linksData, statusesData, stateData, policiesData, liveData, blocksData, settingsData, verData] =
         await Promise.all([
           api.getNodes(),
           api.getLinks(),
@@ -298,6 +312,7 @@ export const MeshProvider: React.FC<{ children: React.ReactNode }> = ({ children
           api.getFleetLiveStatus().catch(() => null),
           api.getBlocks().catch(() => []),
           api.getNetworkSettings().catch(() => null),
+          api.getVersion().catch(() => null),
         ]);
       setNodes(nodesData || []);
       setLinks(linksData || []);
@@ -319,6 +334,7 @@ export const MeshProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       }
       if (liveData) setFleetLive(liveData);
+      if (verData) setVersionInfo(verData);
       if (blocksData && blocksData.length > 0) {
         setBlocks(blocksData);
       } else {
@@ -680,6 +696,8 @@ export const MeshProvider: React.FC<{ children: React.ReactNode }> = ({ children
     loadingData,
     loadData,
     refreshFleetLive,
+    versionInfo,
+    serverAgentVersion,
     selectedTag,
     setSelectedTag,
     uniqueTags,

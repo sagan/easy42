@@ -11,6 +11,7 @@ import (
 
 	"easy42/internal/config"
 	"easy42/internal/engine"
+	"easy42/internal/version"
 	"github.com/go-chi/chi/v5"
 	"github.com/gorilla/websocket"
 )
@@ -213,7 +214,8 @@ func TestFleetLiveStatusAndMetricsEndpoints(t *testing.T) {
 
 	var liveResp struct {
 		Summary struct {
-			TotalNodes int `json:"total_nodes"`
+			TotalNodes   int    `json:"total_nodes"`
+			AgentVersion string `json:"agent_version"`
 		} `json:"summary"`
 		Nodes []any `json:"nodes"`
 	}
@@ -222,6 +224,9 @@ func TestFleetLiveStatusAndMetricsEndpoints(t *testing.T) {
 	}
 	if liveResp.Summary.TotalNodes != 1 {
 		t.Fatalf("expected 1 total node, got %d", liveResp.Summary.TotalNodes)
+	}
+	if liveResp.Summary.AgentVersion != version.AgentVersion {
+		t.Fatalf("expected agent_version %s, got %s", version.AgentVersion, liveResp.Summary.AgentVersion)
 	}
 
 	// 2. Record dummy metric point

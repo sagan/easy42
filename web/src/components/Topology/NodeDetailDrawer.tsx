@@ -43,6 +43,8 @@ import {
 } from "lucide-react";
 import { api } from "../../api/client";
 import { Node, NodeStatus } from "../../types/api";
+import { useMesh } from "../../context/MeshContext";
+import { isAgentVersionOutdated } from "../../utils/version";
 
 const formatBytes = (bytes?: number): string => {
   if (!bytes || isNaN(bytes) || bytes <= 0) return "0B";
@@ -98,6 +100,7 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
   onSyncNode,
   onNodeUpdated,
 }) => {
+  const { serverAgentVersion } = useMesh();
   const [refreshing, setRefreshing] = useState(false);
   const [updatingState, setUpdatingState] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -1329,9 +1332,31 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
                   <Typography variant="caption" sx={{ color: "#64748B" }}>
                     Agent Version:
                   </Typography>
-                  <Typography variant="caption" className="mono-font" sx={{ color: "#0F172A", fontWeight: 600 }}>
-                    {status.agent_version}
-                  </Typography>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 0.8 }}>
+                    <Typography variant="caption" className="mono-font" sx={{ color: "#0F172A", fontWeight: 600 }}>
+                      {status.agent_version.startsWith("v") ? status.agent_version : `v${status.agent_version}`}
+                    </Typography>
+                    {isAgentVersionOutdated(status.agent_version, serverAgentVersion) && (
+                      <Tooltip
+                        title={`Agent v${status.agent_version.replace(/^[vV]/, "")} is outdated. Latest version is v${serverAgentVersion?.replace(/^[vV]/, "")}`}
+                      >
+                        <Chip
+                          label="Outdated"
+                          size="small"
+                          sx={{
+                            height: 18,
+                            fontSize: "0.62rem",
+                            fontWeight: 700,
+                            bgcolor: "#FEF3C7",
+                            color: "#B45309",
+                            border: "1px solid #FCD34D",
+                            px: 0,
+                            "& .MuiChip-label": { px: 0.5 },
+                          }}
+                        />
+                      </Tooltip>
+                    )}
+                  </Box>
                 </Box>
               )}
 
