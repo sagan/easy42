@@ -889,6 +889,14 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 		baseTmplName := "pol_peer_" + cleanID
 		importFilter := pol.EffectiveBirdImportFilter()
 		exportFilter := pol.EffectiveBirdExportFilter()
+		importHook := ""
+		if importFilter != "" {
+			importHook = addHookTemplate(ctx, "pol_bird_import_"+cleanID, importFilter)
+		}
+		exportHook := ""
+		if exportFilter != "" {
+			exportHook = addHookTemplate(ctx, "pol_bird_export_"+cleanID, exportFilter)
+		}
 
 		customBirdPolicies = append(customBirdPolicies, map[string]any{
 			"id":                            cleanID,
@@ -913,10 +921,10 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 			"has_disallowed_export_v6":      disallowedExportV6 != "",
 			"disallowed_export_prefixes_v4": disallowedExportV4,
 			"disallowed_export_prefixes_v6": disallowedExportV6,
-			"has_bird_import_filter":        importFilter != "",
-			"bird_import_filter":            importFilter,
-			"has_bird_export_filter":        exportFilter != "",
-			"bird_export_filter":            exportFilter,
+			"has_bird_import_filter":        importHook != "",
+			"bird_import_filter":            importHook,
+			"has_bird_export_filter":        exportHook != "",
+			"bird_export_filter":            exportHook,
 			"has_roa":                       hasRoa,
 			"roa_fn":                        roaFn,
 		})
@@ -959,10 +967,10 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 					"has_disallowed_export_v6":      disallowedExportV6 != "",
 					"disallowed_export_prefixes_v4": disallowedExportV4,
 					"disallowed_export_prefixes_v6": disallowedExportV6,
-					"has_bird_import_filter":        importFilter != "",
-					"bird_import_filter":            importFilter,
-					"has_bird_export_filter":        exportFilter != "",
-					"bird_export_filter":            exportFilter,
+					"has_bird_import_filter":        importHook != "",
+					"bird_import_filter":            importHook,
+					"has_bird_export_filter":        exportHook != "",
+					"bird_export_filter":            exportHook,
 					"has_roa":                       hasRoa,
 					"roa_fn":                        roaFn,
 				})
@@ -1015,10 +1023,10 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 	for _, id := range usedPolicyIDs {
 		pol := usedPolicyMap[id]
 		if pre := pol.EffectiveBirdPreSnippet(); pre != "" {
-			policyBirdSnippetsPre = append(policyBirdSnippetsPre, pre)
+			policyBirdSnippetsPre = append(policyBirdSnippetsPre, addHookTemplate(ctx, "pol_bird_pre", pre))
 		}
 		if post := pol.EffectiveBirdPostSnippet(); post != "" {
-			policyBirdSnippetsPost = append(policyBirdSnippetsPost, post)
+			policyBirdSnippetsPost = append(policyBirdSnippetsPost, addHookTemplate(ctx, "pol_bird_post", post))
 		}
 	}
 	if len(policyBirdSnippetsPre) > 0 {
@@ -1034,17 +1042,21 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 	globalExportFilter := settings.EffectiveBirdExportFilter()
 
 	if globalPreSnippet != "" {
-		ctx["global_bird_pre_snippet"] = globalPreSnippet
+		ctx["global_bird_pre_snippet"] = addHookTemplate(ctx, "global_bird_pre", globalPreSnippet)
 		ctx["has_global_bird_pre_snippet"] = true
 	}
 	if globalPostSnippet != "" {
-		ctx["global_bird_post_snippet"] = globalPostSnippet
+		ctx["global_bird_post_snippet"] = addHookTemplate(ctx, "global_bird_post", globalPostSnippet)
 		ctx["has_global_bird_post_snippet"] = true
 	}
-	ctx["global_bird_import_filter"] = globalImportFilter
-	ctx["has_global_bird_import_filter"] = globalImportFilter != ""
-	ctx["global_bird_export_filter"] = globalExportFilter
-	ctx["has_global_bird_export_filter"] = globalExportFilter != ""
+	if globalImportFilter != "" {
+		ctx["global_bird_import_filter"] = addHookTemplate(ctx, "global_bird_import", globalImportFilter)
+		ctx["has_global_bird_import_filter"] = true
+	}
+	if globalExportFilter != "" {
+		ctx["global_bird_export_filter"] = addHookTemplate(ctx, "global_bird_export", globalExportFilter)
+		ctx["has_global_bird_export_filter"] = true
+	}
 
 	ctx["links"] = nodeLinks
 	ctx["default_cost"] = defaultCost
@@ -1063,18 +1075,30 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 	ctx["roa_policies"] = roaPolicies
 	ctx["has_dn42_roa"] = hasDN42Roa
 	ctx["has_default_roa"] = hasDefaultRoa
-	ctx["default_bird_import_filter"] = defaultImportFilter
-	ctx["has_default_bird_import_filter"] = defaultImportFilter != ""
-	ctx["default_bird_export_filter"] = defaultExportFilter
-	ctx["has_default_bird_export_filter"] = defaultExportFilter != ""
-	ctx["none_bird_import_filter"] = noneImportFilter
-	ctx["has_none_bird_import_filter"] = noneImportFilter != ""
-	ctx["none_bird_export_filter"] = noneExportFilter
-	ctx["has_none_bird_export_filter"] = noneExportFilter != ""
-	ctx["ext_bird_import_filter"] = extImportFilter
-	ctx["has_ext_bird_import_filter"] = extImportFilter != ""
-	ctx["ext_bird_export_filter"] = extExportFilter
-	ctx["has_ext_bird_export_filter"] = extExportFilter != ""
+	if defaultImportFilter != "" {
+		ctx["default_bird_import_filter"] = addHookTemplate(ctx, "default_bird_import", defaultImportFilter)
+		ctx["has_default_bird_import_filter"] = true
+	}
+	if defaultExportFilter != "" {
+		ctx["default_bird_export_filter"] = addHookTemplate(ctx, "default_bird_export", defaultExportFilter)
+		ctx["has_default_bird_export_filter"] = true
+	}
+	if noneImportFilter != "" {
+		ctx["none_bird_import_filter"] = addHookTemplate(ctx, "none_bird_import", noneImportFilter)
+		ctx["has_none_bird_import_filter"] = true
+	}
+	if noneExportFilter != "" {
+		ctx["none_bird_export_filter"] = addHookTemplate(ctx, "none_bird_export", noneExportFilter)
+		ctx["has_none_bird_export_filter"] = true
+	}
+	if extImportFilter != "" {
+		ctx["ext_bird_import_filter"] = addHookTemplate(ctx, "ext_bird_import", extImportFilter)
+		ctx["has_ext_bird_import_filter"] = true
+	}
+	if extExportFilter != "" {
+		ctx["ext_bird_export_filter"] = addHookTemplate(ctx, "ext_bird_export", extExportFilter)
+		ctx["has_ext_bird_export_filter"] = true
+	}
 
 	var birdHooksPre []string
 	var birdHooksPost []string
