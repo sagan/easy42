@@ -146,6 +146,15 @@ func (m *Manager) SyncHostsToNode(nodeName string) {
 		return
 	}
 
+	// Only push if this desired state has actually been synced/applied in stateStore.
+	if m.stateStore != nil {
+		st := m.stateStore.Get()
+		stNode, ok := st.Nodes[nodeName]
+		if !ok || stNode.HostsConfigHash != expectedHash {
+			return
+		}
+	}
+
 	records := m.buildHostRecordsForNode(nodeName)
 	_ = m.agentHub.SyncHosts(nodeName, records)
 }
@@ -163,6 +172,15 @@ func (m *Manager) checkAndSyncHostsIfMismatched(nodeName string, currentHash str
 
 	_, expectedHash := m.ExpectedHostsBlockForNode(nodeName)
 	if currentHash != expectedHash {
+		// Only auto-remediate if this desired state has actually been synced/applied
+		// in stateStore. If it is unapplied/pending, do not silently overwrite before user syncs.
+		if m.stateStore != nil {
+			st := m.stateStore.Get()
+			stNode, ok := st.Nodes[nodeName]
+			if !ok || stNode.HostsConfigHash != expectedHash {
+				return
+			}
+		}
 		records := m.buildHostRecordsForNode(nodeName)
 		_ = m.agentHub.SyncHosts(nodeName, records)
 	}

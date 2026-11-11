@@ -714,14 +714,6 @@ func TestEffectiveBirdFilters(t *testing.T) {
 	if pol.EffectiveBirdExportFilter() != "export rule;" {
 		t.Errorf("expected trimmed export rule, got %q", pol.EffectiveBirdExportFilter())
 	}
-
-	// Test bird_export_fillter alias
-	aliasPol := &NetworkPolicy{
-		BirdExportFillter: "  alias export rule;  ",
-	}
-	if aliasPol.EffectiveBirdExportFilter() != "alias export rule;" {
-		t.Errorf("expected trimmed alias export rule, got %q", aliasPol.EffectiveBirdExportFilter())
-	}
 }
 
 func TestEffectiveBirdSnippets(t *testing.T) {

@@ -111,7 +111,6 @@ func TestNetworkPolicyManagerCRUD(t *testing.T) {
 		DSCPIngress:        dscpInUpdated,
 		BlockIngressNew:    "all",
 		BirdImportFilter:   "bgp_local_pref = 200;",
-		BirdExportFillter:  "bgp_community.delete([(64512, *)]);", // test alias
 		BirdPreSnippet:     "  define PRE_CONST = 2;  ",
 		BirdPostSnippet:    "  protocol bfd { };  ",
 	})
@@ -399,4 +398,3 @@ func TestAddPathsEngineCRUD(t *testing.T) {
 		t.Errorf("expected fromEnd.AddPaths to be cleared to '', got %q", fromEnd.AddPaths)
 	}
 }
-

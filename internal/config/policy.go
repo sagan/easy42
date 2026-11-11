@@ -154,16 +154,15 @@ type NetworkPolicy struct {
 	ROA4                string      `json:"roa4,omitempty"`
 	ROA6                string      `json:"roa6,omitempty"`
 	ROAStrict           bool        `json:"roa_strict,omitempty"`
-	Fwmark              string      `json:"fwmark,omitempty"`              // Local WireGuard [Interface] FwMark
-	Preference          *int        `json:"preference,omitempty"`          // BIRD peer BGP protocol preference
-	Mark                string      `json:"mark,omitempty"`                // Netfilter mark for received packets from the link peer
-	RoutingPolicy       string      `json:"routing_policy,omitempty"`      // BGP meta routing policy ("full", "stub", "receive_only", "advertise_only")
-	AddPaths            string      `json:"add_paths,omitempty"`           // BIRD peer BGP add paths configuration ("off", "on", "rx", "tx")
-	BirdImportFilter    string      `json:"bird_import_filter,omitempty"`  // Custom BIRD snippet appended to import filter block end
-	BirdExportFilter    string      `json:"bird_export_filter,omitempty"`  // Custom BIRD snippet appended to export filter block end
-	BirdExportFillter   string      `json:"bird_export_fillter,omitempty"` // Alias for export filter
-	BirdPreSnippet      string      `json:"bird_pre_snippet,omitempty"`    // Custom BIRD snippet inserted in early position of bird_easy42.conf (before bird_hooks_pre)
-	BirdPostSnippet     string      `json:"bird_post_snippet,omitempty"`   // Custom BIRD snippet appended at end of bird_easy42.conf (before bird_hooks)
+	Fwmark              string      `json:"fwmark,omitempty"`             // Local WireGuard [Interface] FwMark
+	Preference          *int        `json:"preference,omitempty"`         // BIRD peer BGP protocol preference
+	Mark                string      `json:"mark,omitempty"`               // Netfilter mark for received packets from the link peer
+	RoutingPolicy       string      `json:"routing_policy,omitempty"`     // BGP meta routing policy ("full", "stub", "receive_only", "advertise_only")
+	AddPaths            string      `json:"add_paths,omitempty"`          // BIRD peer BGP add paths configuration ("off", "on", "rx", "tx")
+	BirdImportFilter    string      `json:"bird_import_filter,omitempty"` // Custom BIRD snippet appended to import filter block end
+	BirdExportFilter    string      `json:"bird_export_filter,omitempty"` // Custom BIRD snippet appended to export filter block end
+	BirdPreSnippet      string      `json:"bird_pre_snippet,omitempty"`   // Custom BIRD snippet inserted in early position of bird_easy42.conf (before bird_hooks_pre)
+	BirdPostSnippet     string      `json:"bird_post_snippet,omitempty"`  // Custom BIRD snippet appended at end of bird_easy42.conf (before bird_hooks)
 }
 
 // EffectiveBirdImportFilter returns the configured BIRD import filter snippet or empty string if unset
@@ -177,10 +176,7 @@ func (p *NetworkPolicy) EffectiveBirdImportFilter() string {
 // EffectiveBirdExportFilter returns the configured BIRD export filter snippet or empty string if unset
 func (p *NetworkPolicy) EffectiveBirdExportFilter() string {
 	if p != nil {
-		if s := strings.TrimSpace(p.BirdExportFilter); s != "" {
-			return s
-		}
-		return strings.TrimSpace(p.BirdExportFillter)
+		return strings.TrimSpace(p.BirdExportFilter)
 	}
 	return ""
 }

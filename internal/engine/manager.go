@@ -3751,23 +3751,27 @@ func (m *Manager) PlanSyncWithScope(scope string, nodeNames ...string) ([]config
 		status := "pending"
 		diffStatus := "create"
 
-		currentHash := ""
+		appliedHash := ""
+		if stNode, ok := currentState.Nodes[node.Name]; ok && stNode.HostsConfigHash != "" {
+			appliedHash = stNode.HostsConfigHash
+		}
+
+		liveHash := ""
 		if m.agentHub != nil && m.agentHub.IsConnected(node.Name) {
-			currentHash = m.agentHub.GetHostsHash(node.Name)
-			if currentHash == "" {
+			liveHash = m.agentHub.GetHostsHash(node.Name)
+			if liveHash == "" {
 				if t := m.agentHub.GetTelemetry(node.Name); t != nil {
-					currentHash = t.HostsHash
+					liveHash = t.HostsHash
 				}
 			}
 		}
-		if currentHash == "" {
-			if stNode, ok := currentState.Nodes[node.Name]; ok && stNode.HostsConfigHash != "" {
-				currentHash = stNode.HostsConfigHash
-			}
+
+		if appliedHash != "" || liveHash != "" {
+			diffStatus = "update"
 		}
 
-		if currentHash != "" {
-			if currentHash == expectedHostsHash {
+		if appliedHash == expectedHostsHash {
+			if liveHash == "" || liveHash == expectedHostsHash {
 				needsApply = false
 				status = "synced"
 				diffStatus = "synced"
@@ -5165,12 +5169,7 @@ func (m *Manager) CreateNetworkPolicy(p config.NetworkPolicy) (*config.NetworkPo
 	p.RoutingPolicy = config.NormalizeRoutingPolicy(p.RoutingPolicy)
 	p.AddPaths = config.NormalizeAddPaths(p.AddPaths)
 	p.BirdImportFilter = strings.TrimSpace(p.BirdImportFilter)
-	if p.BirdExportFilter == "" && p.BirdExportFillter != "" {
-		p.BirdExportFilter = strings.TrimSpace(p.BirdExportFillter)
-	} else {
-		p.BirdExportFilter = strings.TrimSpace(p.BirdExportFilter)
-	}
-	p.BirdExportFillter = p.BirdExportFilter
+	p.BirdExportFilter = strings.TrimSpace(p.BirdExportFilter)
 	p.BirdPreSnippet = strings.TrimSpace(p.BirdPreSnippet)
 	p.BirdPostSnippet = strings.TrimSpace(p.BirdPostSnippet)
 
@@ -5246,12 +5245,7 @@ func (m *Manager) UpdateNetworkPolicy(id string, p config.NetworkPolicy) (*confi
 	cfg.NetworkPolicies[idx].RoutingPolicy = config.NormalizeRoutingPolicy(p.RoutingPolicy)
 	cfg.NetworkPolicies[idx].AddPaths = config.NormalizeAddPaths(p.AddPaths)
 	cfg.NetworkPolicies[idx].BirdImportFilter = strings.TrimSpace(p.BirdImportFilter)
-	if p.BirdExportFilter == "" && p.BirdExportFillter != "" {
-		cfg.NetworkPolicies[idx].BirdExportFilter = strings.TrimSpace(p.BirdExportFillter)
-	} else {
-		cfg.NetworkPolicies[idx].BirdExportFilter = strings.TrimSpace(p.BirdExportFilter)
-	}
-	cfg.NetworkPolicies[idx].BirdExportFillter = cfg.NetworkPolicies[idx].BirdExportFilter
+	cfg.NetworkPolicies[idx].BirdExportFilter = strings.TrimSpace(p.BirdExportFilter)
 	cfg.NetworkPolicies[idx].BirdPreSnippet = strings.TrimSpace(p.BirdPreSnippet)
 	cfg.NetworkPolicies[idx].BirdPostSnippet = strings.TrimSpace(p.BirdPostSnippet)
 
