@@ -330,6 +330,22 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
                   }}
                 />
               )}
+              {node.enable_dynamic_bird_config && (
+                <Chip
+                  icon={<FileCode size={10} style={{ color: "#0D9488", marginLeft: 4 }} />}
+                  label="Dynamic BIRD"
+                  size="small"
+                  sx={{
+                    height: 18,
+                    fontSize: "0.62rem",
+                    fontWeight: 800,
+                    backgroundColor: "#F0FDFA",
+                    color: "#0F766E",
+                    border: "1px solid #99F6E4",
+                    "& .MuiChip-label": { px: 0.5 },
+                  }}
+                />
+              )}
             </Box>
             <Typography variant="caption" className="mono-font" sx={{ color: "#64748B" }}>
               {node.host}
@@ -1002,6 +1018,38 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
                     fontSize: "0.7rem",
                     fontWeight: 700,
                     backgroundColor: "#4F46E5",
+                    color: "#FFFFFF",
+                  }}
+                />
+              </Box>
+            ) : null}
+
+            {node.enable_dynamic_bird_config ? (
+              <Box
+                sx={{
+                  p: 1.2,
+                  borderRadius: 1.5,
+                  backgroundColor: "#F0FDFA",
+                  border: "1px solid #99F6E4",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                }}
+              >
+                <Box sx={{ display: "flex", alignItems: "center", gap: 0.8 }}>
+                  <FileCode size={14} color="#0D9488" />
+                  <Typography variant="caption" sx={{ color: "#0F766E", fontWeight: 700 }}>
+                    Dynamic BIRD Config:
+                  </Typography>
+                </Box>
+                <Chip
+                  label="Enabled (/etc/bird_easy42_dynamic.conf)"
+                  size="small"
+                  sx={{
+                    height: 20,
+                    fontSize: "0.7rem",
+                    fontWeight: 700,
+                    backgroundColor: "#0D9488",
                     color: "#FFFFFF",
                   }}
                 />

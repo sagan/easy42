@@ -158,6 +158,7 @@ export interface Node {
   extra_hosts?: string;
   custom_network_script?: string;
   route_reflector?: boolean;
+  enable_dynamic_bird_config?: boolean;
 }
 
 export interface ObfuscatorParameters {

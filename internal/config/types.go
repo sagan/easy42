@@ -411,7 +411,8 @@ type Node struct {
 	UpdateHosts         bool              `json:"update_hosts,omitempty"`                                     // Enable managing /etc/hosts file of the node
 	ExtraHosts          string            `json:"extra_hosts,omitempty"`                                      // Custom node /etc/hosts records
 	CustomNetworkScript string            `json:"custom_network_script,omitempty"`                            // Custom shell script for node network manager (e.g. policy routing)
-	RouteReflector      bool              `json:"route_reflector,omitempty" yaml:"route_reflector,omitempty"` // True if node acts as BGP Route Reflector for internal iBGP peers
+	RouteReflector          bool              `json:"route_reflector,omitempty" yaml:"route_reflector,omitempty"` // True if node acts as BGP Route Reflector for internal iBGP peers
+	EnableDynamicBirdConfig bool              `json:"enable_dynamic_bird_config,omitempty" yaml:"enable_dynamic_bird_config,omitempty"` // Enable dynamic BIRD config file (/etc/bird_easy42_dynamic.conf)
 }
 
 // IsAgentMode returns true if the node is configured to use the agent

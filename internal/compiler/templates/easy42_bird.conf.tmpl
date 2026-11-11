@@ -43,6 +43,11 @@ define DEFAULT_LOCAL_PREF = 10000;
 
 router id SELF_IP;
 
+{{if .enable_dynamic_bird_config}}
+# Dynamic BIRD configuration for third-party programs/scripts
+include "/etc/bird_easy42_dynamic.conf";
+{{end}}
+
 {{if .has_global_bird_pre_snippet}}
 # ==============================================================================
 # Global BIRD Pre Snippet
@@ -479,6 +484,9 @@ template bgp easy42_peer {
         next hop self;
         
         import filter {
+            {{if $.enable_dynamic_bird_config}}
+            easy42_dynamic_import_filter();
+            {{end}}
             {{if or (eq .default_routing_policy "advertise_only") (eq .default_routing_policy "none")}}
             reject;
             {{else}}
@@ -503,6 +511,9 @@ template bgp easy42_peer {
             {{end}}
         }; 
         export filter {
+            {{if $.enable_dynamic_bird_config}}
+            easy42_dynamic_export_filter();
+            {{end}}
             {{if or (eq .default_routing_policy "receive_only") (eq .default_routing_policy "none")}}
             reject;
             {{else}}
@@ -526,6 +537,9 @@ template bgp easy42_peer {
     ipv6 {
         next hop self;
         import filter {
+            {{if $.enable_dynamic_bird_config}}
+            easy42_dynamic_import_filter();
+            {{end}}
             {{if or (eq .default_routing_policy "advertise_only") (eq .default_routing_policy "none")}}
             reject;
             {{else}}
@@ -550,6 +564,9 @@ template bgp easy42_peer {
             {{end}}
         };
         export filter {
+            {{if $.enable_dynamic_bird_config}}
+            easy42_dynamic_export_filter();
+            {{end}}
             {{if or (eq .default_routing_policy "receive_only") (eq .default_routing_policy "none")}}
             reject;
             {{else}}
@@ -592,6 +609,9 @@ template bgp {{.template_name}} {
         next hop self;
         
         import filter {
+            {{if $.enable_dynamic_bird_config}}
+            easy42_dynamic_import_filter();
+            {{end}}
             {{if or (eq .routing_policy "advertise_only") (eq .routing_policy "none")}}
             reject;
             {{else}}
@@ -618,6 +638,9 @@ template bgp {{.template_name}} {
             {{end}}
         }; 
         export filter {
+            {{if $.enable_dynamic_bird_config}}
+            easy42_dynamic_export_filter();
+            {{end}}
             {{if or (eq .routing_policy "receive_only") (eq .routing_policy "none")}}
             reject;
             {{else}}
@@ -643,6 +666,9 @@ template bgp {{.template_name}} {
     ipv6 {
         next hop self;
         import filter {
+            {{if $.enable_dynamic_bird_config}}
+            easy42_dynamic_import_filter();
+            {{end}}
             {{if or (eq .routing_policy "advertise_only") (eq .routing_policy "none")}}
             reject;
             {{else}}
@@ -669,6 +695,9 @@ template bgp {{.template_name}} {
             {{end}}
         };
         export filter {
+            {{if $.enable_dynamic_bird_config}}
+            easy42_dynamic_export_filter();
+            {{end}}
             {{if or (eq .routing_policy "receive_only") (eq .routing_policy "none")}}
             reject;
             {{else}}
@@ -713,6 +742,9 @@ template bgp none_peer {
         extended next hop on;
         next hop self;
         import filter {
+            {{if $.enable_dynamic_bird_config}}
+            easy42_dynamic_import_filter();
+            {{end}}
             {{if or (eq .none_routing_policy "advertise_only") (eq .none_routing_policy "none")}}
             reject;
             {{else}}
@@ -735,6 +767,9 @@ template bgp none_peer {
             {{end}}
         };
         export filter {
+            {{if $.enable_dynamic_bird_config}}
+            easy42_dynamic_export_filter();
+            {{end}}
             {{if or (eq .none_routing_policy "receive_only") (eq .none_routing_policy "none")}}
             reject;
             {{else}}
@@ -757,6 +792,9 @@ template bgp none_peer {
     ipv6 {
         next hop self;
         import filter {
+            {{if $.enable_dynamic_bird_config}}
+            easy42_dynamic_import_filter();
+            {{end}}
             {{if or (eq .none_routing_policy "advertise_only") (eq .none_routing_policy "none")}}
             reject;
             {{else}}
@@ -779,6 +817,9 @@ template bgp none_peer {
             {{end}}
         };
         export filter {
+            {{if $.enable_dynamic_bird_config}}
+            easy42_dynamic_export_filter();
+            {{end}}
             {{if or (eq .none_routing_policy "receive_only") (eq .none_routing_policy "none")}}
             reject;
             {{else}}
@@ -819,6 +860,9 @@ template bgp {{.template_name}} {
         extended next hop on;
         next hop self;
         import filter {
+            {{if $.enable_dynamic_bird_config}}
+            easy42_dynamic_import_filter();
+            {{end}}
             {{if or (eq .routing_policy "advertise_only") (eq .routing_policy "none")}}
             reject;
             {{else}}
@@ -843,6 +887,9 @@ template bgp {{.template_name}} {
             {{end}}
         };
         export filter {
+            {{if $.enable_dynamic_bird_config}}
+            easy42_dynamic_export_filter();
+            {{end}}
             {{if or (eq .routing_policy "receive_only") (eq .routing_policy "none")}}
             reject;
             {{else}}
@@ -867,6 +914,9 @@ template bgp {{.template_name}} {
     ipv6 {
         next hop self;
         import filter {
+            {{if $.enable_dynamic_bird_config}}
+            easy42_dynamic_import_filter();
+            {{end}}
             {{if or (eq .routing_policy "advertise_only") (eq .routing_policy "none")}}
             reject;
             {{else}}
@@ -891,6 +941,9 @@ template bgp {{.template_name}} {
             {{end}}
         };
         export filter {
+            {{if $.enable_dynamic_bird_config}}
+            easy42_dynamic_export_filter();
+            {{end}}
             {{if or (eq .routing_policy "receive_only") (eq .routing_policy "none")}}
             reject;
             {{else}}
@@ -941,6 +994,9 @@ template bgp external_peer {
         extended next hop on;
         next hop self;
         import filter {
+            {{if $.enable_dynamic_bird_config}}
+            easy42_dynamic_import_filter();
+            {{end}}
             {{if or (eq .ext_routing_policy "advertise_only") (eq .ext_routing_policy "none")}}
             reject;
             {{else}}
@@ -986,6 +1042,9 @@ template bgp external_peer {
             {{end}}
         };
         export filter {
+            {{if $.enable_dynamic_bird_config}}
+            easy42_dynamic_export_filter();
+            {{end}}
             {{if or (eq .ext_routing_policy "receive_only") (eq .ext_routing_policy "none")}}
             reject;
             {{else}}
@@ -1043,6 +1102,9 @@ template bgp external_peer {
     ipv6 {
         next hop self;
         import filter {
+            {{if $.enable_dynamic_bird_config}}
+            easy42_dynamic_import_filter();
+            {{end}}
             {{if or (eq .ext_routing_policy "advertise_only") (eq .ext_routing_policy "none")}}
             reject;
             {{else}}
@@ -1088,6 +1150,9 @@ template bgp external_peer {
             {{end}}
         };
         export filter {
+            {{if $.enable_dynamic_bird_config}}
+            easy42_dynamic_export_filter();
+            {{end}}
             {{if or (eq .ext_routing_policy "receive_only") (eq .ext_routing_policy "none")}}
             reject;
             {{else}}
@@ -1161,6 +1226,9 @@ template bgp {{.template_name}} {
         extended next hop on;
         next hop self;
         import filter {
+            {{if $.enable_dynamic_bird_config}}
+            easy42_dynamic_import_filter();
+            {{end}}
             {{if or (eq .routing_policy "advertise_only") (eq .routing_policy "none")}}
             reject;
             {{else}}
@@ -1210,6 +1278,9 @@ template bgp {{.template_name}} {
             {{end}}
         };
         export filter {
+            {{if $.enable_dynamic_bird_config}}
+            easy42_dynamic_export_filter();
+            {{end}}
             {{if or (eq .routing_policy "receive_only") (eq .routing_policy "none")}}
             reject;
             {{else}}
@@ -1275,6 +1346,9 @@ template bgp {{.template_name}} {
     ipv6 {
         next hop self;
         import filter {
+            {{if $.enable_dynamic_bird_config}}
+            easy42_dynamic_import_filter();
+            {{end}}
             {{if or (eq .routing_policy "advertise_only") (eq .routing_policy "none")}}
             reject;
             {{else}}
@@ -1324,6 +1398,9 @@ template bgp {{.template_name}} {
             {{end}}
         };
         export filter {
+            {{if $.enable_dynamic_bird_config}}
+            easy42_dynamic_export_filter();
+            {{end}}
             {{if or (eq .routing_policy "receive_only") (eq .routing_policy "none")}}
             reject;
             {{else}}
@@ -1419,6 +1496,9 @@ template bgp {{.template_name}} {
         extended next hop on;
         next hop self;
         import filter {
+            {{if $.enable_dynamic_bird_config}}
+            easy42_dynamic_import_filter();
+            {{end}}
             {{if or (eq .routing_policy "advertise_only") (eq .routing_policy "none")}}
             reject;
             {{else}}
@@ -1466,6 +1546,9 @@ template bgp {{.template_name}} {
             {{end}}
         };
         export filter {
+            {{if $.enable_dynamic_bird_config}}
+            easy42_dynamic_export_filter();
+            {{end}}
             {{if or (eq .routing_policy "receive_only") (eq .routing_policy "none")}}
             reject;
             {{else}}
@@ -1533,6 +1616,9 @@ template bgp {{.template_name}} {
     ipv6 {
         next hop self;
         import filter {
+            {{if $.enable_dynamic_bird_config}}
+            easy42_dynamic_import_filter();
+            {{end}}
             {{if or (eq .routing_policy "advertise_only") (eq .routing_policy "none")}}
             reject;
             {{else}}
@@ -1580,6 +1666,9 @@ template bgp {{.template_name}} {
             {{end}}
         };
         export filter {
+            {{if $.enable_dynamic_bird_config}}
+            easy42_dynamic_export_filter();
+            {{end}}
             {{if or (eq .routing_policy "receive_only") (eq .routing_policy "none")}}
             reject;
             {{else}}

@@ -16,6 +16,56 @@ import (
 // DefaultBirdConfigPath is the standard destination path for generated BIRD config on managed devices
 const DefaultBirdConfigPath = "/etc/bird_easy42.conf"
 
+// DefaultBirdDynamicConfigPath is the standard destination path for user/third-party dynamic BIRD config
+const DefaultBirdDynamicConfigPath = "/etc/bird_easy42_dynamic.conf"
+
+const (
+	DynamicBirdImportFilterFunc = "easy42_dynamic_import_filter"
+	DynamicBirdExportFilterFunc = "easy42_dynamic_export_filter"
+)
+
+// EnsureDynamicBirdConfigContent takes existing file content (or empty string if file does not exist)
+// and returns the updated content and a boolean indicating if changes were made.
+// If the file does not exist, it creates a new file with placeholder functions.
+// If the file exists, it checks for all expected functions and appends placeholder functions if missing.
+func EnsureDynamicBirdConfigContent(existingContent string, fileExists bool) (string, bool) {
+	if !fileExists {
+		initial := `# Dynamic BIRD configuration for easy42
+# Managed dynamically by third-party scripts/programs
+
+function easy42_dynamic_import_filter() {
+
+}
+
+function easy42_dynamic_export_filter() {
+
+}
+`
+		return initial, true
+	}
+
+	hasImport := strings.Contains(existingContent, DynamicBirdImportFilterFunc)
+	hasExport := strings.Contains(existingContent, DynamicBirdExportFilterFunc)
+
+	if hasImport && hasExport {
+		return existingContent, false
+	}
+
+	content := existingContent
+	if len(content) > 0 && !strings.HasSuffix(content, "\n") {
+		content += "\n"
+	}
+
+	if !hasImport {
+		content += fmt.Sprintf("\nfunction %s() {\n\n}\n", DynamicBirdImportFilterFunc)
+	}
+	if !hasExport {
+		content += fmt.Sprintf("\nfunction %s() {\n\n}\n", DynamicBirdExportFilterFunc)
+	}
+
+	return content, true
+}
+
 //go:embed templates/*
 var templatesFS embed.FS
 
@@ -239,6 +289,7 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 
 	ctx["route_reflector"] = node.RouteReflector
 	ctx["is_route_reflector"] = node.RouteReflector
+	ctx["enable_dynamic_bird_config"] = node.EnableDynamicBirdConfig
 
 	dn42Pol, hasDN42 := policyMap[config.PolicyDN42]
 	var dn42ImportV4, dn42ImportV6, dn42ExportV4, dn42ExportV6 string

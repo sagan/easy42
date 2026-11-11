@@ -675,6 +675,10 @@ func mergeNode(target *config.Node, patch config.NodePatch, now time.Time) ([]Ap
 		checkField("route_reflector", target.RouteReflector, *patch.RouteReflector)
 		target.RouteReflector = *patch.RouteReflector
 	}
+	if patch.EnableDynamicBirdConfig != nil && *patch.EnableDynamicBirdConfig != target.EnableDynamicBirdConfig {
+		checkField("enable_dynamic_bird_config", target.EnableDynamicBirdConfig, *patch.EnableDynamicBirdConfig)
+		target.EnableDynamicBirdConfig = *patch.EnableDynamicBirdConfig
+	}
 
 	if len(diffs) > 0 {
 		target.ModifiedAt = now
@@ -792,6 +796,9 @@ func createNodeFromPatch(patch config.NodePatch, now time.Time) (*config.Node, [
 	}
 	if patch.RouteReflector != nil {
 		node.RouteReflector = *patch.RouteReflector
+	}
+	if patch.EnableDynamicBirdConfig != nil {
+		node.EnableDynamicBirdConfig = *patch.EnableDynamicBirdConfig
 	}
 
 	var diffs []ApplyFieldDiff

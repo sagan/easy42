@@ -24,6 +24,8 @@ import (
 	"easy42/internal/roa"
 	"easy42/internal/ssh"
 	"easy42/internal/telegram"
+
+	"github.com/pkg/sftp"
 )
 
 var (
@@ -4250,13 +4252,28 @@ func (m *Manager) ExecuteSyncNodesWithScope(isForce bool, scope string, nodeName
 
 		// Handle BIRD configuration update
 		if act.Type == config.ActionSyncBirdConfig {
-			if needsUpdate {
-				if err := ssh.AtomicWriteFile(sftpClient, act.TargetFile, []byte(act.FileContent), 0644); err != nil {
+			dynamicConfigChanged := false
+			if node != nil && node.EnableDynamicBirdConfig {
+				var err error
+				dynamicConfigChanged, err = m.ensureDynamicBirdConfigSSH(sftpClient)
+				if err != nil {
 					res.Success = false
-					res.Error = fmt.Sprintf("Failed to write BIRD config: %v", err)
+					res.Error = fmt.Sprintf("Failed to ensure dynamic BIRD config on %s: %v", node.Name, err)
 					res.Duration = float64(time.Since(start).Milliseconds())
 					results = append(results, res)
 					continue
+				}
+			}
+
+			if needsUpdate || dynamicConfigChanged {
+				if needsUpdate {
+					if err := ssh.AtomicWriteFile(sftpClient, act.TargetFile, []byte(act.FileContent), 0644); err != nil {
+						res.Success = false
+						res.Error = fmt.Sprintf("Failed to write BIRD config: %v", err)
+						res.Duration = float64(time.Since(start).Milliseconds())
+						results = append(results, res)
+						continue
+					}
 				}
 
 				// Apply BIRD configuration on remote device
@@ -4411,6 +4428,20 @@ func (m *Manager) ExecuteSyncNodesWithScope(isForce bool, scope string, nodeName
 	m.mu.Unlock()
 
 	return results, nil
+}
+
+// ensureDynamicBirdConfigSSH ensures that /etc/bird_easy42_dynamic.conf exists and contains all required functions
+func (m *Manager) ensureDynamicBirdConfigSSH(sftpClient *sftp.Client) (bool, error) {
+	currentContent, err := ssh.ReadRemoteFile(sftpClient, compiler.DefaultBirdDynamicConfigPath)
+	fileExists := err == nil
+	newContent, changed := compiler.EnsureDynamicBirdConfigContent(currentContent, fileExists)
+	if changed {
+		if err := ssh.AtomicWriteFile(sftpClient, compiler.DefaultBirdDynamicConfigPath, []byte(newContent), 0644); err != nil {
+			return false, err
+		}
+		return true, nil
+	}
+	return false, nil
 }
 
 type probeOutput struct {

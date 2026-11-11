@@ -126,7 +126,8 @@ const ConfigChangeJSONSchema = `{
         "y": { "type": ["number", "null"] },
         "mode": { "type": "string", "enum": ["ssh", "agent", ""] },
         "enable_fa": { "type": "boolean" },
-        "update_hosts": { "type": "boolean" }
+        "update_hosts": { "type": "boolean" },
+        "enable_dynamic_bird_config": { "type": "boolean" }
       }
     },
     "EntrypointPatch": {
@@ -326,7 +327,8 @@ type NodePatch struct {
 	UpdateHosts         *bool              `json:"update_hosts,omitempty" yaml:"update_hosts,omitempty"`
 	ExtraHosts          *string            `json:"extra_hosts,omitempty" yaml:"extra_hosts,omitempty"`
 	CustomNetworkScript *string            `json:"custom_network_script,omitempty" yaml:"custom_network_script,omitempty"`
-	RouteReflector      *bool              `json:"route_reflector,omitempty" yaml:"route_reflector,omitempty"`
+	RouteReflector          *bool              `json:"route_reflector,omitempty" yaml:"route_reflector,omitempty"`
+	EnableDynamicBirdConfig *bool              `json:"enable_dynamic_bird_config,omitempty" yaml:"enable_dynamic_bird_config,omitempty"`
 }
 
 // LinkEndPatch holds partial changes to a link endpoint

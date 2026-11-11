@@ -108,6 +108,7 @@ func registerNodeTools(s *server.MCPServer, mgr *engine.Manager) {
 		mcp.WithString("caption", mcp.Description("Short description or location of the node")),
 		mcp.WithString("mode", mcp.Description("Management mode: 'ssh' (default) or 'agent'")),
 		mcp.WithBoolean("route_reflector", mcp.Description("Set to true if node acts as BGP Route Reflector for internal iBGP peers")),
+		mcp.WithBoolean("enable_dynamic_bird_config", mcp.Description("Enable dynamic BIRD config file (/etc/bird_easy42_dynamic.conf)")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		if err := RequireFullControl(ctx); err != nil {
 			return errorResult(err)
@@ -118,15 +119,16 @@ func registerNodeTools(s *server.MCPServer, mgr *engine.Manager) {
 		}
 
 		node := config.Node{
-			Name:           name,
-			Host:           req.GetString("host", ""),
-			IP:             req.GetString("ip", ""),
-			IP6:            req.GetString("ip6", ""),
-			ASN:            uint64(req.GetInt("asn", 0)),
-			Tags:           req.GetStringSlice("tags", nil),
-			Caption:        req.GetString("caption", ""),
-			Mode:           req.GetString("mode", "ssh"),
-			RouteReflector: req.GetBool("route_reflector", false),
+			Name:                    name,
+			Host:                    req.GetString("host", ""),
+			IP:                      req.GetString("ip", ""),
+			IP6:                     req.GetString("ip6", ""),
+			ASN:                     uint64(req.GetInt("asn", 0)),
+			Tags:                    req.GetStringSlice("tags", nil),
+			Caption:                 req.GetString("caption", ""),
+			Mode:                    req.GetString("mode", "ssh"),
+			RouteReflector:          req.GetBool("route_reflector", false),
+			EnableDynamicBirdConfig: req.GetBool("enable_dynamic_bird_config", false),
 		}
 
 		if err := mgr.AddNode(node); err != nil {
@@ -160,6 +162,7 @@ func registerNodeTools(s *server.MCPServer, mgr *engine.Manager) {
 		mcp.WithString("caption", mcp.Description("Short description")),
 		mcp.WithString("mode", mcp.Description("Management mode: 'ssh' or 'agent'")),
 		mcp.WithBoolean("route_reflector", mcp.Description("Act as BGP Route Reflector")),
+		mcp.WithBoolean("enable_dynamic_bird_config", mcp.Description("Enable dynamic BIRD config file (/etc/bird_easy42_dynamic.conf)")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		if err := RequireFullControl(ctx); err != nil {
 			return errorResult(err)
@@ -198,6 +201,9 @@ func registerNodeTools(s *server.MCPServer, mgr *engine.Manager) {
 		if args := req.GetArguments(); args != nil {
 			if _, ok := args["route_reflector"]; ok {
 				node.RouteReflector = req.GetBool("route_reflector", node.RouteReflector)
+			}
+			if _, ok := args["enable_dynamic_bird_config"]; ok {
+				node.EnableDynamicBirdConfig = req.GetBool("enable_dynamic_bird_config", node.EnableDynamicBirdConfig)
 			}
 		}
 

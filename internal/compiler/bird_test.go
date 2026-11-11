@@ -3461,6 +3461,124 @@ func TestGlobalBirdHooks(t *testing.T) {
 	validateBirdSyntax(t, confIsolated)
 }
 
+func TestDynamicBirdConfigGeneration(t *testing.T) {
+	nodeDisabled := config.Node{
+		Name:                    "node-static",
+		IP:                      "192.168.100.1",
+		IP6:                     "fd42:a159:f9f0::1",
+		ASN:                     4224420001,
+		EnableDynamicBirdConfig: false,
+	}
+	nodeEnabled := config.Node{
+		Name:                    "node-dynamic",
+		IP:                      "192.168.100.2",
+		IP6:                     "fd42:a159:f9f0::2",
+		ASN:                     4224420002,
+		EnableDynamicBirdConfig: true,
+	}
+
+	confDisabled, err := GenerateBirdConfig(&nodeDisabled, []config.Node{nodeDisabled}, nil, nil)
+	if err != nil {
+		t.Fatalf("GenerateBirdConfig failed for disabled node: %v", err)
+	}
+	if strings.Contains(confDisabled, DefaultBirdDynamicConfigPath) {
+		t.Errorf("Disabled node should not include dynamic config path in:\n%s", confDisabled)
+	}
+	if strings.Contains(confDisabled, "easy42_dynamic_import_filter();") {
+		t.Errorf("Disabled node should not call easy42_dynamic_import_filter() in:\n%s", confDisabled)
+	}
+	if strings.Contains(confDisabled, "easy42_dynamic_export_filter();") {
+		t.Errorf("Disabled node should not call easy42_dynamic_export_filter() in:\n%s", confDisabled)
+	}
+
+	confEnabled, err := GenerateBirdConfig(&nodeEnabled, []config.Node{nodeEnabled}, nil, nil)
+	if err != nil {
+		t.Fatalf("GenerateBirdConfig failed for enabled node: %v", err)
+	}
+	if !strings.Contains(confEnabled, `include "/etc/bird_easy42_dynamic.conf";`) {
+		t.Errorf("Enabled node must contain dynamic include in:\n%s", confEnabled)
+	}
+	if !strings.Contains(confEnabled, "easy42_dynamic_import_filter();") {
+		t.Errorf("Enabled node must contain easy42_dynamic_import_filter(); in:\n%s", confEnabled)
+	}
+	if !strings.Contains(confEnabled, "easy42_dynamic_export_filter();") {
+		t.Errorf("Enabled node must contain easy42_dynamic_export_filter(); in:\n%s", confEnabled)
+	}
+}
+
+func TestEnsureDynamicBirdConfigContent(t *testing.T) {
+	// Case 1: File does not exist -> creates default with both functions
+	content, changed := EnsureDynamicBirdConfigContent("", false)
+	if !changed {
+		t.Errorf("Expected changed=true when file does not exist")
+	}
+	if !strings.Contains(content, "function easy42_dynamic_import_filter() {") {
+		t.Errorf("Expected easy42_dynamic_import_filter in initial content:\n%s", content)
+	}
+	if !strings.Contains(content, "function easy42_dynamic_export_filter() {") {
+		t.Errorf("Expected easy42_dynamic_export_filter in initial content:\n%s", content)
+	}
+
+	// Case 2: File exists with both functions -> unchanged
+	existing := `# Custom user config
+function easy42_dynamic_import_filter() {
+    bgp_local_pref = 200;
+}
+
+function easy42_dynamic_export_filter() {
+    bgp_path.prepend(4224420000);
+}
+`
+	content, changed = EnsureDynamicBirdConfigContent(existing, true)
+	if changed {
+		t.Errorf("Expected changed=false when both functions are present")
+	}
+	if content != existing {
+		t.Errorf("Expected content to remain identical, got:\n%s", content)
+	}
+
+	// Case 3: File exists with only import filter -> appends export filter
+	missingExport := `function easy42_dynamic_import_filter() {
+    bgp_local_pref = 100;
+}
+`
+	content, changed = EnsureDynamicBirdConfigContent(missingExport, true)
+	if !changed {
+		t.Errorf("Expected changed=true when export filter is missing")
+	}
+	if !strings.Contains(content, "bgp_local_pref = 100;") {
+		t.Errorf("Expected existing content preserved:\n%s", content)
+	}
+	if !strings.Contains(content, "function easy42_dynamic_export_filter() {") {
+		t.Errorf("Expected appended easy42_dynamic_export_filter:\n%s", content)
+	}
+
+	// Case 4: File exists with only export filter -> appends import filter
+	missingImport := `function easy42_dynamic_export_filter() {
+}
+`
+	content, changed = EnsureDynamicBirdConfigContent(missingImport, true)
+	if !changed {
+		t.Errorf("Expected changed=true when import filter is missing")
+	}
+	if !strings.Contains(content, "function easy42_dynamic_import_filter() {") {
+		t.Errorf("Expected appended easy42_dynamic_import_filter:\n%s", content)
+	}
+
+	// Case 5: File exists but empty -> appends both functions
+	content, changed = EnsureDynamicBirdConfigContent("", true)
+	if !changed {
+		t.Errorf("Expected changed=true when empty file exists")
+	}
+	if !strings.Contains(content, "function easy42_dynamic_import_filter() {") {
+		t.Errorf("Expected easy42_dynamic_import_filter in content:\n%s", content)
+	}
+	if !strings.Contains(content, "function easy42_dynamic_export_filter() {") {
+		t.Errorf("Expected easy42_dynamic_export_filter in content:\n%s", content)
+	}
+}
+
+
 
 
 

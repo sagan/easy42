@@ -96,6 +96,7 @@ export function generateNodeApplySnippet(node: Node): string {
   if (node.update_hosts !== undefined) p.update_hosts = node.update_hosts;
   if (node.extra_hosts !== undefined && node.extra_hosts !== "") p.extra_hosts = node.extra_hosts;
   if (node.route_reflector !== undefined) p.route_reflector = node.route_reflector;
+  if (node.enable_dynamic_bird_config !== undefined) p.enable_dynamic_bird_config = node.enable_dynamic_bird_config;
 
   return JSON.stringify({ nodes: [p] }, null, 2);
 }

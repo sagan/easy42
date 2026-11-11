@@ -1340,6 +1340,22 @@ export const NodeDetailPage: React.FC = () => {
                       }}
                     />
                   )}
+
+                  {node?.enable_dynamic_bird_config && (
+                    <Chip
+                      icon={<FileCode size={12} style={{ color: "#0D9488" }} />}
+                      label="Dynamic BIRD Config"
+                      size="small"
+                      sx={{
+                        height: 24,
+                        fontSize: "0.72rem",
+                        fontWeight: 700,
+                        bgcolor: "#F0FDFA",
+                        color: "#0F766E",
+                        border: "1px solid #99F6E4",
+                      }}
+                    />
+                  )}
                 </Box>
 
                 <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, flexWrap: "wrap" }}>
@@ -3072,6 +3088,37 @@ export const NodeDetailPage: React.FC = () => {
                           bgcolor: node.route_reflector ? "#4F46E5" : "#F1F5F9",
                           color: node.route_reflector ? "#FFFFFF" : "#64748B",
                           border: node.route_reflector ? "none" : "1px solid #E2E8F0",
+                        }}
+                      />
+                    </Box>
+                  </Box>
+                </Grid>
+
+                <Grid item xs={12} sm={3}>
+                  <Box
+                    sx={{
+                      p: 2,
+                      bgcolor: node.enable_dynamic_bird_config ? "#F0FDFA" : "#F8FAFC",
+                      borderRadius: 2,
+                      border: node.enable_dynamic_bird_config ? "1px solid #99F6E4" : "1px solid #E2E8F0",
+                    }}
+                  >
+                    <Typography
+                      variant="caption"
+                      sx={{ color: node.enable_dynamic_bird_config ? "#0F766E" : "#64748B", fontWeight: 600 }}
+                    >
+                      Dynamic BIRD Config
+                    </Typography>
+                    <Box sx={{ mt: 0.8 }}>
+                      <Chip
+                        label={node.enable_dynamic_bird_config ? "Enabled" : "Disabled"}
+                        size="small"
+                        sx={{
+                          fontWeight: 700,
+                          fontSize: "0.75rem",
+                          bgcolor: node.enable_dynamic_bird_config ? "#0D9488" : "#F1F5F9",
+                          color: node.enable_dynamic_bird_config ? "#FFFFFF" : "#64748B",
+                          border: node.enable_dynamic_bird_config ? "none" : "1px solid #E2E8F0",
                         }}
                       />
                     </Box>

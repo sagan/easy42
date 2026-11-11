@@ -43,6 +43,7 @@ import {
   Copy,
   Check,
   Radio,
+  FileCode,
 } from "lucide-react";
 import { useMesh } from "../context/MeshContext";
 import { NodeLiveStatus } from "../types/api";
@@ -1305,6 +1306,22 @@ export const NodesPage: React.FC = () => {
                               }}
                             />
                           )}
+                          {n.enable_dynamic_bird_config && (
+                            <Chip
+                              icon={<FileCode size={10} style={{ color: "#0D9488", marginLeft: 4 }} />}
+                              label="Dynamic BIRD"
+                              size="small"
+                              sx={{
+                                height: 18,
+                                fontSize: "0.62rem",
+                                fontWeight: 800,
+                                bgcolor: "#F0FDFA",
+                                color: "#0F766E",
+                                border: "1px solid #99F6E4",
+                                "& .MuiChip-label": { px: 0.5 },
+                              }}
+                            />
+                          )}
                           {nodeBlocks.map((bName) => (
                             <Chip
                               key={bName}
@@ -1975,6 +1992,22 @@ export const NodesPage: React.FC = () => {
                                 bgcolor: "#EEF2FF",
                                 color: "#4338CA",
                                 border: "1px solid #C7D2FE",
+                                px: 0,
+                                "& .MuiChip-label": { px: 0.4 },
+                              }}
+                            />
+                          )}
+                          {n.enable_dynamic_bird_config && (
+                            <Chip
+                              label="Dynamic"
+                              size="small"
+                              sx={{
+                                height: 16,
+                                fontSize: "0.58rem",
+                                fontWeight: 800,
+                                bgcolor: "#F0FDFA",
+                                color: "#0F766E",
+                                border: "1px solid #99F6E4",
                                 px: 0,
                                 "& .MuiChip-label": { px: 0.4 },
                               }}

@@ -34,6 +34,7 @@ fn is_allowed_config_path(path: &Path) -> bool {
     // 1. Exact static configuration files used by easy42
     if p_str == "/etc/easy42.nft"
         || p_str == "/etc/bird_easy42.conf"
+        || p_str == "/etc/bird_easy42_dynamic.conf"
         || p_str == "/etc/easy42/agent.json"
     {
         return true;
@@ -76,6 +77,58 @@ fn is_allowed_config_path(path: &Path) -> bool {
 
 fn is_valid_iface_name(iface: &str) -> bool {
     crate::validation::is_valid_iface_name(iface)
+}
+
+pub const DYNAMIC_BIRD_CONFIG_PATH: &str = "/etc/bird_easy42_dynamic.conf";
+pub const FUNC_DYNAMIC_IMPORT_FILTER: &str = "easy42_dynamic_import_filter";
+pub const FUNC_DYNAMIC_EXPORT_FILTER: &str = "easy42_dynamic_export_filter";
+
+pub fn ensure_dynamic_bird_config(path: &Path) -> std::io::Result<bool> {
+    if !path.exists() {
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        let initial_content = "# Dynamic BIRD configuration for easy42\n# Managed dynamically by third-party scripts/programs\n\nfunction easy42_dynamic_import_filter() {\n\n}\n\nfunction easy42_dynamic_export_filter() {\n\n}\n";
+        let tmp_path = format!("{}.tmp.{}", path.display(), std::process::id());
+        {
+            let mut file = File::create(&tmp_path)?;
+            file.write_all(initial_content.as_bytes())?;
+            file.sync_all()?;
+            fs::set_permissions(&tmp_path, fs::Permissions::from_mode(0o644))?;
+        }
+        fs::rename(&tmp_path, path)?;
+        return Ok(true);
+    }
+
+    let content = fs::read_to_string(path)?;
+    let has_import = content.contains(FUNC_DYNAMIC_IMPORT_FILTER);
+    let has_export = content.contains(FUNC_DYNAMIC_EXPORT_FILTER);
+
+    if has_import && has_export {
+        return Ok(false);
+    }
+
+    let mut new_content = content;
+    if !new_content.is_empty() && !new_content.ends_with('\n') {
+        new_content.push('\n');
+    }
+
+    if !has_import {
+        new_content.push_str(&format!("\nfunction {}() {{\n\n}}\n", FUNC_DYNAMIC_IMPORT_FILTER));
+    }
+    if !has_export {
+        new_content.push_str(&format!("\nfunction {}() {{\n\n}}\n", FUNC_DYNAMIC_EXPORT_FILTER));
+    }
+
+    let tmp_path = format!("{}.tmp.{}", path.display(), std::process::id());
+    {
+        let mut file = File::create(&tmp_path)?;
+        file.write_all(new_content.as_bytes())?;
+        file.sync_all()?;
+        fs::set_permissions(&tmp_path, fs::Permissions::from_mode(0o644))?;
+    }
+    fs::rename(&tmp_path, path)?;
+    Ok(true)
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -475,6 +528,16 @@ impl CommandExecutor {
     }
 
     async fn reload_bird(&self, req: proto::ReloadBirdCmd) -> (bool, i32, String, String) {
+        let bird_conf = Path::new("/etc/bird_easy42.conf");
+        if bird_conf.exists() {
+            if let Ok(content) = fs::read_to_string(bird_conf) {
+                if content.contains("/etc/bird_easy42_dynamic.conf") {
+                    if let Err(e) = ensure_dynamic_bird_config(Path::new(DYNAMIC_BIRD_CONFIG_PATH)) {
+                        return (false, -1, String::new(), format!("Failed to ensure dynamic BIRD config: {}", e));
+                    }
+                }
+            }
+        }
         if req.check_only {
             run_shell("bird -p").await
         } else {
@@ -805,6 +868,12 @@ done"#;
                     })
                 }
             "sync_bird" => {
+                let content_str = String::from_utf8_lossy(&req.file_content);
+                if content_str.contains("/etc/bird_easy42_dynamic.conf") {
+                    if let Err(e) = ensure_dynamic_bird_config(Path::new(DYNAMIC_BIRD_CONFIG_PATH)) {
+                        return (false, -1, String::new(), format!("Failed to ensure dynamic BIRD config: {}", e));
+                    }
+                }
                 let (write_ok, write_code, write_out, write_err) = self.apply_config_file(proto::ApplyConfigFile {
                     path: req.target_file.clone(),
                     content: req.file_content,
@@ -1177,6 +1246,7 @@ mod tests {
         // Valid exact paths
         assert!(is_allowed_config_path(Path::new("/etc/easy42.nft")));
         assert!(is_allowed_config_path(Path::new("/etc/bird_easy42.conf")));
+        assert!(is_allowed_config_path(Path::new("/etc/bird_easy42_dynamic.conf")));
         assert!(is_allowed_config_path(Path::new("/etc/easy42/agent.json")));
 
         // Valid WireGuard configs
@@ -1524,6 +1594,38 @@ mod tests {
         assert!(!resp.success);
         assert_eq!(resp.exit_code, 1);
         assert!(resp.stderr.contains("App management is disabled on this node"));
+    }
+
+    #[test]
+    fn test_ensure_dynamic_bird_config() {
+        let dir = std::env::temp_dir().join(format!("easy42_dyn_test_{}", std::process::id()));
+        let _ = fs::create_dir_all(&dir);
+        let dynamic_file = dir.join("bird_easy42_dynamic.conf");
+
+        // Case 1: File doesn't exist -> created with both functions
+        let res1 = ensure_dynamic_bird_config(&dynamic_file).expect("ensure failed");
+        assert!(res1, "should indicate change when creating file");
+        assert!(dynamic_file.exists());
+        let c1 = fs::read_to_string(&dynamic_file).unwrap();
+        assert!(c1.contains(FUNC_DYNAMIC_IMPORT_FILTER));
+        assert!(c1.contains(FUNC_DYNAMIC_EXPORT_FILTER));
+
+        // Case 2: File exists and has both functions -> no change
+        let res2 = ensure_dynamic_bird_config(&dynamic_file).expect("ensure failed");
+        assert!(!res2, "should not change file when both functions present");
+        let c2 = fs::read_to_string(&dynamic_file).unwrap();
+        assert_eq!(c1, c2);
+
+        // Case 3: File missing export filter -> appends export filter
+        let partial_content = format!("function {}() {{\n    bgp_local_pref = 300;\n}}\n", FUNC_DYNAMIC_IMPORT_FILTER);
+        fs::write(&dynamic_file, &partial_content).unwrap();
+        let res3 = ensure_dynamic_bird_config(&dynamic_file).expect("ensure failed");
+        assert!(res3, "should update file when missing export filter");
+        let c3 = fs::read_to_string(&dynamic_file).unwrap();
+        assert!(c3.contains("bgp_local_pref = 300;"));
+        assert!(c3.contains(FUNC_DYNAMIC_EXPORT_FILTER));
+
+        let _ = fs::remove_dir_all(&dir);
     }
 }
 

@@ -156,6 +156,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
   const [updateHosts, setUpdateHosts] = useState(false);
   const [extraHosts, setExtraHosts] = useState("");
   const [routeReflector, setRouteReflector] = useState(false);
+  const [enableDynamicBirdConfig, setEnableDynamicBirdConfig] = useState(false);
   const [customNetworkScript, setCustomNetworkScript] = useState("");
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -198,6 +199,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
       setUpdateHosts(Boolean(nodeToEdit.update_hosts));
       setExtraHosts(nodeToEdit.extra_hosts || "");
       setRouteReflector(Boolean(nodeToEdit.route_reflector));
+      setEnableDynamicBirdConfig(Boolean(nodeToEdit.enable_dynamic_bird_config));
       setCustomNetworkScript(nodeToEdit.custom_network_script || "");
       if (nodeToEdit.routes && nodeToEdit.routes.length > 0) {
         setKernelRoutes(
@@ -291,6 +293,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
       setUpdateHosts(false);
       setExtraHosts("");
       setRouteReflector(false);
+      setEnableDynamicBirdConfig(false);
       setCustomNetworkScript("");
       setEntrypoints([{ id: "nat-fallback", ip: "", portStr: "", tagStr: "nat", mtuStr: "", isNone: true }]);
       setDiscoveredIps([]);
@@ -635,6 +638,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
         update_hosts: updateHosts,
         extra_hosts: extraHosts.trim() || undefined,
         route_reflector: routeReflector,
+        enable_dynamic_bird_config: enableDynamicBirdConfig,
         custom_network_script: customNetworkScript.trim() || undefined,
         caption: caption.trim() || undefined,
         description: description.trim() || undefined,
@@ -1743,6 +1747,54 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                           When enabled, appends &quot;rr client;&quot; to internal iBGP peer blocks that share the same
                           ASN in bird.conf, allowing this node to act as a Route Reflector without needing full mesh
                           peering.
+                        </Typography>
+                      </Box>
+                    }
+                  />
+                </Box>
+
+                {/* Dynamic BIRD Config Checkbox */}
+                <Box
+                  sx={{
+                    p: 1.5,
+                    borderRadius: 2,
+                    bgcolor: enableDynamicBirdConfig ? "rgba(79, 70, 229, 0.05)" : "#F8FAFC",
+                    border: enableDynamicBirdConfig ? "1px solid rgba(79, 70, 229, 0.35)" : "1px solid #E2E8F0",
+                    transition: "all 0.2s ease",
+                    mt: 1.5,
+                  }}
+                >
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        id="enable-dynamic-bird-config-checkbox"
+                        checked={enableDynamicBirdConfig}
+                        onChange={(e) => setEnableDynamicBirdConfig(e.target.checked)}
+                        color="primary"
+                        disabled={saving}
+                      />
+                    }
+                    label={
+                      <Box>
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                          <Typography variant="body2" sx={{ fontWeight: 600, color: "#1E293B" }}>
+                            Dynamic BIRD Config (enable_dynamic_bird_config)
+                          </Typography>
+                          <Chip
+                            label="Dynamic BIRD"
+                            size="small"
+                            sx={{
+                              height: 20,
+                              fontSize: "0.68rem",
+                              fontWeight: 700,
+                              bgcolor: enableDynamicBirdConfig ? "#EEF2FF" : "#F1F5F9",
+                              color: enableDynamicBirdConfig ? "#4F46E5" : "#64748B",
+                              border: enableDynamicBirdConfig ? "1px solid rgba(79, 70, 229, 0.3)" : "1px solid #CBD5E1",
+                            }}
+                          />
+                        </Box>
+                        <Typography variant="caption" sx={{ color: "#64748B" }}>
+                          When enabled, includes /etc/bird_easy42_dynamic.conf and injects dynamic import/export filter functions into peer filters for 3rd-party runtime modifications.
                         </Typography>
                       </Box>
                     }
