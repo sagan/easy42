@@ -365,6 +365,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
   const [faAsn, setFaAsn] = useState<number | "">(4224420000);
   const [faUrl, setFaUrl] = useState("");
   const [extraHosts, setExtraHosts] = useState("");
+  const [globalBirdPreSnippet, setGlobalBirdPreSnippet] = useState("");
+  const [globalBirdImportFilter, setGlobalBirdImportFilter] = useState("");
+  const [globalBirdExportFilter, setGlobalBirdExportFilter] = useState("");
+  const [globalBirdPostSnippet, setGlobalBirdPostSnippet] = useState("");
   const [networkLoading, setNetworkLoading] = useState(false);
   const [networkSaving, setNetworkSaving] = useState(false);
   const [networkError, setNetworkError] = useState<string | null>(null);
@@ -434,6 +438,22 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
 
   const handleAppendExportExample = (snippet: string) => {
     setPolicyBirdExportFilter((prev) => {
+      const trimmed = prev.trim();
+      if (!trimmed) return snippet;
+      return `${trimmed}\n\n${snippet}`;
+    });
+  };
+
+  const handleAppendGlobalImportExample = (snippet: string) => {
+    setGlobalBirdImportFilter((prev) => {
+      const trimmed = prev.trim();
+      if (!trimmed) return snippet;
+      return `${trimmed}\n\n${snippet}`;
+    });
+  };
+
+  const handleAppendGlobalExportExample = (snippet: string) => {
+    setGlobalBirdExportFilter((prev) => {
       const trimmed = prev.trim();
       if (!trimmed) return snippet;
       return `${trimmed}\n\n${snippet}`;
@@ -1082,6 +1102,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
       );
       setFaUrl(settings.flapalerted_url || "");
       setExtraHosts(settings.extra_hosts || "");
+      setGlobalBirdPreSnippet(settings.bird_pre_snippet || "");
+      setGlobalBirdImportFilter(settings.bird_import_filter || "");
+      setGlobalBirdExportFilter(settings.bird_export_filter || "");
+      setGlobalBirdPostSnippet(settings.bird_post_snippet || "");
     } catch (err: unknown) {
       const e = err as Error;
       setNetworkError(e.message || "Failed to load network settings.");
@@ -1107,6 +1131,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
       flapalerted_asn: faAsn === "" ? 4224420000 : Number(faAsn),
       flapalerted_url: faUrl.trim() || undefined,
       extra_hosts: extraHosts.trim() || undefined,
+      bird_pre_snippet: globalBirdPreSnippet.trim() || undefined,
+      bird_import_filter: globalBirdImportFilter.trim() || undefined,
+      bird_export_filter: globalBirdExportFilter.trim() || undefined,
+      bird_post_snippet: globalBirdPostSnippet.trim() || undefined,
     };
 
     try {
@@ -1896,6 +1924,230 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                     helperText="Global custom /etc/hosts records injected into all cluster nodes with Update Hosts enabled. Merged with node extra hosts and cluster node IP hosts (priority: node extra hosts > global extra hosts > easy42 node IP hosts)."
                     disabled={networkSaving}
                   />
+
+                  <Divider sx={{ my: 0.5 }} />
+
+                  {/* Global BIRD Hook Settings */}
+                  <Box
+                    sx={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 2,
+                      p: 2,
+                      borderRadius: 2,
+                      bgcolor: "#F8FAFC",
+                      border: "1px solid #E2E8F0",
+                    }}
+                  >
+                    <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 1 }}>
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                        <FileCode size={18} color="#4F46E5" />
+                        <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#1E293B" }}>
+                          Global BIRD Hook Settings
+                        </Typography>
+                        <Chip
+                          label="Cluster-Wide Scope"
+                          size="small"
+                          sx={{
+                            height: 20,
+                            fontSize: "0.68rem",
+                            fontWeight: 600,
+                            bgcolor: "#EEF2FF",
+                            color: "#4F46E5",
+                          }}
+                        />
+                      </Box>
+                    </Box>
+                    <Typography variant="body2" sx={{ color: "#64748B", fontSize: "0.82rem" }}>
+                      Configure cluster-wide BIRD routing daemon hooks. These snippets and filters are injected into the generated{" "}
+                      <code style={{ background: "#F1F5F9", padding: "2px 6px", borderRadius: 4, fontFamily: "monospace" }}>
+                        bird_easy42.conf
+                      </code>{" "}
+                      of every node in your network, across all BGP peer templates.
+                    </Typography>
+
+                    {/* Bird Pre Snippet */}
+                    <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                      <Typography variant="body2" sx={{ fontWeight: 600, color: "#334155" }}>
+                        Bird Pre Snippet
+                      </Typography>
+                      <TextField
+                        fullWidth
+                        size="small"
+                        multiline
+                        rows={3}
+                        placeholder={`# Snippet inserted in the early section of bird_easy42.conf on every node (before policy pre snippets)\n# e.g.\ndefine GLOBAL_PRE_VAR = 1;`}
+                        value={globalBirdPreSnippet}
+                        onChange={(e) => setGlobalBirdPreSnippet(e.target.value)}
+                        disabled={networkSaving}
+                        InputProps={{
+                          sx: {
+                            fontFamily: "monospace",
+                            fontSize: "0.82rem",
+                            bgcolor: "#FFFFFF",
+                          },
+                        }}
+                        helperText="Inserted into the early position of bird_easy42.conf (before policy pre-snippets) across all nodes."
+                      />
+                    </Box>
+
+                    <Divider sx={{ my: 0.5 }} />
+
+                    {/* Bird Import Filter */}
+                    <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                      <Box
+                        sx={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          flexWrap: "wrap",
+                          gap: 1,
+                        }}
+                      >
+                        <Typography variant="body2" sx={{ fontWeight: 600, color: "#334155" }}>
+                          BIRD Import Filter Snippet
+                        </Typography>
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 0.8, flexWrap: "wrap" }}>
+                          <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600, mr: 0.5 }}>
+                            Add example:
+                          </Typography>
+                          {IMPORT_FILTER_EXAMPLES.map((ex) => (
+                            <Tooltip key={ex.label} title={ex.desc}>
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                onClick={() => handleAppendGlobalImportExample(ex.snippet)}
+                                disabled={networkSaving}
+                                sx={{
+                                  textTransform: "none",
+                                  fontSize: "0.75rem",
+                                  py: 0.2,
+                                  px: 1,
+                                  height: 24,
+                                  borderColor: "#CBD5E1",
+                                  color: "#475569",
+                                  bgcolor: "#FFFFFF",
+                                  "&:hover": { bgcolor: "#F1F5F9", borderColor: "#94A3B8" },
+                                }}
+                              >
+                                + {ex.label}
+                              </Button>
+                            </Tooltip>
+                          ))}
+                        </Box>
+                      </Box>
+                      <TextField
+                        fullWidth
+                        size="small"
+                        multiline
+                        rows={4}
+                        placeholder={`# Snippet appended to every peer's import filter block across all nodes (before policy import filters)\n# e.g.\nif (64512, 100) ~ bgp_community then bgp_local_pref = 200;\nbgp_large_community.add((4242421234, 1, 1));`}
+                        value={globalBirdImportFilter}
+                        onChange={(e) => setGlobalBirdImportFilter(e.target.value)}
+                        disabled={networkSaving}
+                        InputProps={{
+                          sx: {
+                            fontFamily: "monospace",
+                            fontSize: "0.82rem",
+                            bgcolor: "#FFFFFF",
+                          },
+                        }}
+                        helperText="Executed before accepting valid routes on import across all BGP sessions and peer templates cluster-wide."
+                      />
+                    </Box>
+
+                    <Divider sx={{ my: 0.5 }} />
+
+                    {/* Bird Export Filter */}
+                    <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                      <Box
+                        sx={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          flexWrap: "wrap",
+                          gap: 1,
+                        }}
+                      >
+                        <Typography variant="body2" sx={{ fontWeight: 600, color: "#334155" }}>
+                          BIRD Export Filter Snippet
+                        </Typography>
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 0.8, flexWrap: "wrap" }}>
+                          <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600, mr: 0.5 }}>
+                            Add example:
+                          </Typography>
+                          {EXPORT_FILTER_EXAMPLES.map((ex) => (
+                            <Tooltip key={ex.label} title={ex.desc}>
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                onClick={() => handleAppendGlobalExportExample(ex.snippet)}
+                                disabled={networkSaving}
+                                sx={{
+                                  textTransform: "none",
+                                  fontSize: "0.75rem",
+                                  py: 0.2,
+                                  px: 1,
+                                  height: 24,
+                                  borderColor: "#CBD5E1",
+                                  color: "#475569",
+                                  bgcolor: "#FFFFFF",
+                                  "&:hover": { bgcolor: "#F1F5F9", borderColor: "#94A3B8" },
+                                }}
+                              >
+                                + {ex.label}
+                              </Button>
+                            </Tooltip>
+                          ))}
+                        </Box>
+                      </Box>
+                      <TextField
+                        fullWidth
+                        size="small"
+                        multiline
+                        rows={4}
+                        placeholder={`# Snippet appended to every peer's export filter block across all nodes (before policy export filters)\n# e.g.\nbgp_community.delete([(64512, *)]);\nbgp_large_community.add((4242421234, 2, 1));`}
+                        value={globalBirdExportFilter}
+                        onChange={(e) => setGlobalBirdExportFilter(e.target.value)}
+                        disabled={networkSaving}
+                        InputProps={{
+                          sx: {
+                            fontFamily: "monospace",
+                            fontSize: "0.82rem",
+                            bgcolor: "#FFFFFF",
+                          },
+                        }}
+                        helperText="Executed before exporting routes to peers across all BGP sessions and peer templates cluster-wide."
+                      />
+                    </Box>
+
+                    <Divider sx={{ my: 0.5 }} />
+
+                    {/* Bird Post Snippet */}
+                    <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                      <Typography variant="body2" sx={{ fontWeight: 600, color: "#334155" }}>
+                        Bird Post Snippet
+                      </Typography>
+                      <TextField
+                        fullWidth
+                        size="small"
+                        multiline
+                        rows={3}
+                        placeholder={`# Snippet appended near the end of bird_easy42.conf on every node (after policy post snippets, before node hooks)\n# e.g.\nprotocol direct custom_direct {\n    ipv4;\n    ipv6;\n}`}
+                        value={globalBirdPostSnippet}
+                        onChange={(e) => setGlobalBirdPostSnippet(e.target.value)}
+                        disabled={networkSaving}
+                        InputProps={{
+                          sx: {
+                            fontFamily: "monospace",
+                            fontSize: "0.82rem",
+                            bgcolor: "#FFFFFF",
+                          },
+                        }}
+                        helperText="Appended near the end of bird_easy42.conf (after policy post-snippets, before node-scope bird_hooks) across all nodes."
+                      />
+                    </Box>
+                  </Box>
 
                   <Divider sx={{ my: 0.5 }} />
 

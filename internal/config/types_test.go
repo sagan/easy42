@@ -153,4 +153,39 @@ func TestNetworkSettingsName(t *testing.T) {
 	}
 }
 
+func TestNetworkSettingsBirdHooks(t *testing.T) {
+	var nilNS *NetworkSettings
+	if nilNS.EffectiveBirdImportFilter() != "" {
+		t.Errorf("expected empty string for nilNS EffectiveBirdImportFilter")
+	}
+	if nilNS.EffectiveBirdExportFilter() != "" {
+		t.Errorf("expected empty string for nilNS EffectiveBirdExportFilter")
+	}
+	if nilNS.EffectiveBirdPreSnippet() != "" {
+		t.Errorf("expected empty string for nilNS EffectiveBirdPreSnippet")
+	}
+	if nilNS.EffectiveBirdPostSnippet() != "" {
+		t.Errorf("expected empty string for nilNS EffectiveBirdPostSnippet")
+	}
+
+	ns := NetworkSettings{
+		BirdImportFilter: "  bgp_local_pref = 100;  ",
+		BirdExportFilter: "  bgp_path.prepend(1234);  ",
+		BirdPreSnippet:   "  define TEST = 1;  ",
+		BirdPostSnippet:  "  protocol bfd {};  ",
+	}
+	if ns.EffectiveBirdImportFilter() != "bgp_local_pref = 100;" {
+		t.Errorf("expected trimmed import filter, got %q", ns.EffectiveBirdImportFilter())
+	}
+	if ns.EffectiveBirdExportFilter() != "bgp_path.prepend(1234);" {
+		t.Errorf("expected trimmed export filter, got %q", ns.EffectiveBirdExportFilter())
+	}
+	if ns.EffectiveBirdPreSnippet() != "define TEST = 1;" {
+		t.Errorf("expected trimmed pre snippet, got %q", ns.EffectiveBirdPreSnippet())
+	}
+	if ns.EffectiveBirdPostSnippet() != "protocol bfd {};" {
+		t.Errorf("expected trimmed post snippet, got %q", ns.EffectiveBirdPostSnippet())
+	}
+}
+
 

@@ -43,6 +43,14 @@ define DEFAULT_LOCAL_PREF = 10000;
 
 router id SELF_IP;
 
+{{if .global_bird_pre_snippet}}
+# ==============================================================================
+# Global BIRD Pre Snippet
+# ==============================================================================
+{{.global_bird_pre_snippet}}
+
+{{end}}
+
 {{if .policy_bird_snippets_pre}}
 # ==============================================================================
 # Network Policy BIRD Pre Snippets
@@ -485,6 +493,9 @@ template bgp easy42_peer {
             if bgp_local_pref > {{if .default_cost}}{{.default_cost}}{{else}}100{{end}} then bgp_local_pref = bgp_local_pref - {{if .default_cost}}{{.default_cost}}{{else}}100{{end}}; else bgp_local_pref = 1;
             {{end}}
             {{end}}
+            {{if $.has_global_bird_import_filter}}
+            {{$.global_bird_import_filter}}
+            {{end}}
             {{if $.has_default_bird_import_filter}}
             {{$.default_bird_import_filter}}
             {{end}}
@@ -501,6 +512,9 @@ template bgp easy42_peer {
             if net ~ INTERNET then reject;
             {{if .confed_as}}
             if !defined(bgp_local_pref) then bgp_local_pref = DEFAULT_LOCAL_PREF;
+            {{end}}
+            {{if $.has_global_bird_export_filter}}
+            {{$.global_bird_export_filter}}
             {{end}}
             {{if $.has_default_bird_export_filter}}
             {{$.default_bird_export_filter}}
@@ -526,6 +540,9 @@ template bgp easy42_peer {
             if bgp_local_pref > {{if .default_cost}}{{.default_cost}}{{else}}100{{end}} then bgp_local_pref = bgp_local_pref - {{if .default_cost}}{{.default_cost}}{{else}}100{{end}}; else bgp_local_pref = 1;
             {{end}}
             {{end}}
+            {{if $.has_global_bird_import_filter}}
+            {{$.global_bird_import_filter}}
+            {{end}}
             {{if $.has_default_bird_import_filter}}
             {{$.default_bird_import_filter}}
             {{end}}
@@ -542,6 +559,9 @@ template bgp easy42_peer {
             if net ~ INTERNET6 then reject;
             {{if .confed_as}}
             if !defined(bgp_local_pref) then bgp_local_pref = DEFAULT_LOCAL_PREF;
+            {{end}}
+            {{if $.has_global_bird_export_filter}}
+            {{$.global_bird_export_filter}}
             {{end}}
             {{if $.has_default_bird_export_filter}}
             {{$.default_bird_export_filter}}
@@ -586,6 +606,9 @@ template bgp {{.template_name}} {
             if bgp_local_pref > {{.cost}} then bgp_local_pref = bgp_local_pref - {{.cost}}; else bgp_local_pref = 1;
             {{end}}
             {{end}}
+            {{if $.has_global_bird_import_filter}}
+            {{$.global_bird_import_filter}}
+            {{end}}
             {{if .has_bird_import_filter}}
             {{.bird_import_filter}}
             {{else if $.has_default_bird_import_filter}}
@@ -604,6 +627,9 @@ template bgp {{.template_name}} {
             if net ~ INTERNET then reject;
             {{if $.confed_as}}
             if !defined(bgp_local_pref) then bgp_local_pref = DEFAULT_LOCAL_PREF;
+            {{end}}
+            {{if $.has_global_bird_export_filter}}
+            {{$.global_bird_export_filter}}
             {{end}}
             {{if .has_bird_export_filter}}
             {{.bird_export_filter}}
@@ -631,6 +657,9 @@ template bgp {{.template_name}} {
             if bgp_local_pref > {{.cost}} then bgp_local_pref = bgp_local_pref - {{.cost}}; else bgp_local_pref = 1;
             {{end}}
             {{end}}
+            {{if $.has_global_bird_import_filter}}
+            {{$.global_bird_import_filter}}
+            {{end}}
             {{if .has_bird_import_filter}}
             {{.bird_import_filter}}
             {{else if $.has_default_bird_import_filter}}
@@ -649,6 +678,9 @@ template bgp {{.template_name}} {
             if net ~ INTERNET6 then reject;
             {{if $.confed_as}}
             if !defined(bgp_local_pref) then bgp_local_pref = DEFAULT_LOCAL_PREF;
+            {{end}}
+            {{if $.has_global_bird_export_filter}}
+            {{$.global_bird_export_filter}}
             {{end}}
             {{if .has_bird_export_filter}}
             {{.bird_export_filter}}
@@ -693,6 +725,9 @@ template bgp none_peer {
             if bgp_local_pref > {{if .none_cost}}{{.none_cost}}{{else}}100{{end}} then bgp_local_pref = bgp_local_pref - {{if .none_cost}}{{.none_cost}}{{else}}100{{end}}; else bgp_local_pref = 1;
             {{end}}
             {{end}}
+            {{if $.has_global_bird_import_filter}}
+            {{$.global_bird_import_filter}}
+            {{end}}
             {{if $.has_none_bird_import_filter}}
             {{$.none_bird_import_filter}}
             {{end}}
@@ -708,6 +743,9 @@ template bgp none_peer {
             {{end}}
             {{if .confed_as}}
             if !defined(bgp_local_pref) then bgp_local_pref = DEFAULT_LOCAL_PREF;
+            {{end}}
+            {{if $.has_global_bird_export_filter}}
+            {{$.global_bird_export_filter}}
             {{end}}
             {{if $.has_none_bird_export_filter}}
             {{$.none_bird_export_filter}}
@@ -731,6 +769,9 @@ template bgp none_peer {
             if bgp_local_pref > {{if .none_cost}}{{.none_cost}}{{else}}100{{end}} then bgp_local_pref = bgp_local_pref - {{if .none_cost}}{{.none_cost}}{{else}}100{{end}}; else bgp_local_pref = 1;
             {{end}}
             {{end}}
+            {{if $.has_global_bird_import_filter}}
+            {{$.global_bird_import_filter}}
+            {{end}}
             {{if $.has_none_bird_import_filter}}
             {{$.none_bird_import_filter}}
             {{end}}
@@ -746,6 +787,9 @@ template bgp none_peer {
             {{end}}
             {{if .confed_as}}
             if !defined(bgp_local_pref) then bgp_local_pref = DEFAULT_LOCAL_PREF;
+            {{end}}
+            {{if $.has_global_bird_export_filter}}
+            {{$.global_bird_export_filter}}
             {{end}}
             {{if $.has_none_bird_export_filter}}
             {{$.none_bird_export_filter}}
@@ -787,6 +831,9 @@ template bgp {{.template_name}} {
             if bgp_local_pref > {{.cost}} then bgp_local_pref = bgp_local_pref - {{.cost}}; else bgp_local_pref = 1;
             {{end}}
             {{end}}
+            {{if $.has_global_bird_import_filter}}
+            {{$.global_bird_import_filter}}
+            {{end}}
             {{if .has_bird_import_filter}}
             {{.bird_import_filter}}
             {{else if $.has_none_bird_import_filter}}
@@ -804,6 +851,9 @@ template bgp {{.template_name}} {
             {{end}}
             {{if $.confed_as}}
             if !defined(bgp_local_pref) then bgp_local_pref = DEFAULT_LOCAL_PREF;
+            {{end}}
+            {{if $.has_global_bird_export_filter}}
+            {{$.global_bird_export_filter}}
             {{end}}
             {{if .has_bird_export_filter}}
             {{.bird_export_filter}}
@@ -829,6 +879,9 @@ template bgp {{.template_name}} {
             if bgp_local_pref > {{.cost}} then bgp_local_pref = bgp_local_pref - {{.cost}}; else bgp_local_pref = 1;
             {{end}}
             {{end}}
+            {{if $.has_global_bird_import_filter}}
+            {{$.global_bird_import_filter}}
+            {{end}}
             {{if .has_bird_import_filter}}
             {{.bird_import_filter}}
             {{else if $.has_none_bird_import_filter}}
@@ -846,6 +899,9 @@ template bgp {{.template_name}} {
             {{end}}
             {{if $.confed_as}}
             if !defined(bgp_local_pref) then bgp_local_pref = DEFAULT_LOCAL_PREF;
+            {{end}}
+            {{if $.has_global_bird_export_filter}}
+            {{$.global_bird_export_filter}}
             {{end}}
             {{if .has_bird_export_filter}}
             {{.bird_export_filter}}
@@ -901,6 +957,9 @@ template bgp external_peer {
               {{else}}
               bgp_local_pref = DEFAULT_LOCAL_PREF;
               {{end}}
+              {{if $.has_global_bird_import_filter}}
+              {{$.global_bird_import_filter}}
+              {{end}}
               {{if $.has_ext_bird_import_filter}}
               {{$.ext_bird_import_filter}}
               {{end}}
@@ -915,6 +974,9 @@ template bgp external_peer {
             if DEFAULT_LOCAL_PREF > {{.ext_cost}} then bgp_local_pref = DEFAULT_LOCAL_PREF - {{.ext_cost}}; else bgp_local_pref = 1;
             {{else}}
             bgp_local_pref = DEFAULT_LOCAL_PREF;
+            {{end}}
+            {{if $.has_global_bird_import_filter}}
+            {{$.global_bird_import_filter}}
             {{end}}
             {{if $.has_ext_bird_import_filter}}
             {{$.ext_bird_import_filter}}
@@ -933,6 +995,9 @@ template bgp external_peer {
             {{if or (eq .ext_routing_policy "stub") (eq .ext_routing_policy "advertise_only")}}
             if (source ~ [ RTS_STATIC, RTS_DEVICE, RTS_INHERIT ]) && (net ~ EXT_EXPORT_PREFIXES_V4) then {
               bgp_large_community.delete(COMM_EXTERNAL);
+              {{if $.has_global_bird_export_filter}}
+              {{$.global_bird_export_filter}}
+              {{end}}
               {{if $.has_ext_bird_export_filter}}
               {{$.ext_bird_export_filter}}
               {{end}}
@@ -942,6 +1007,9 @@ template bgp external_peer {
             {{else}}
             if (source ~ [ RTS_STATIC, RTS_BGP ]) && (net ~ EXT_EXPORT_PREFIXES_V4) then {
               bgp_large_community.delete(COMM_EXTERNAL);
+              {{if $.has_global_bird_export_filter}}
+              {{$.global_bird_export_filter}}
+              {{end}}
               {{if $.has_ext_bird_export_filter}}
               {{$.ext_bird_export_filter}}
               {{end}}
@@ -952,11 +1020,17 @@ template bgp external_peer {
             {{else}}
             {{if or (eq .ext_routing_policy "stub") (eq .ext_routing_policy "advertise_only")}}
             if !(source ~ [ RTS_STATIC, RTS_DEVICE, RTS_INHERIT ]) then reject;
+            {{if $.has_global_bird_export_filter}}
+            {{$.global_bird_export_filter}}
+            {{end}}
             {{if $.has_ext_bird_export_filter}}
             {{$.ext_bird_export_filter}}
             {{end}}
             accept;
             {{else}}
+            {{if $.has_global_bird_export_filter}}
+            {{$.global_bird_export_filter}}
+            {{end}}
             {{if $.has_ext_bird_export_filter}}
             {{$.ext_bird_export_filter}}
             {{end}}
@@ -985,6 +1059,9 @@ template bgp external_peer {
               {{else}}
               bgp_local_pref = DEFAULT_LOCAL_PREF;
               {{end}}
+              {{if $.has_global_bird_import_filter}}
+              {{$.global_bird_import_filter}}
+              {{end}}
               {{if $.has_ext_bird_import_filter}}
               {{$.ext_bird_import_filter}}
               {{end}}
@@ -999,6 +1076,9 @@ template bgp external_peer {
             if DEFAULT_LOCAL_PREF > {{.ext_cost}} then bgp_local_pref = DEFAULT_LOCAL_PREF - {{.ext_cost}}; else bgp_local_pref = 1;
             {{else}}
             bgp_local_pref = DEFAULT_LOCAL_PREF;
+            {{end}}
+            {{if $.has_global_bird_import_filter}}
+            {{$.global_bird_import_filter}}
             {{end}}
             {{if $.has_ext_bird_import_filter}}
             {{$.ext_bird_import_filter}}
@@ -1017,6 +1097,9 @@ template bgp external_peer {
             {{if or (eq .ext_routing_policy "stub") (eq .ext_routing_policy "advertise_only")}}
             if (source ~ [ RTS_STATIC, RTS_DEVICE, RTS_INHERIT ]) && (net ~ EXT_EXPORT_PREFIXES_V6) then {
               bgp_large_community.delete(COMM_EXTERNAL);
+              {{if $.has_global_bird_export_filter}}
+              {{$.global_bird_export_filter}}
+              {{end}}
               {{if $.has_ext_bird_export_filter}}
               {{$.ext_bird_export_filter}}
               {{end}}
@@ -1026,6 +1109,9 @@ template bgp external_peer {
             {{else}}
             if (source ~ [ RTS_STATIC, RTS_BGP ]) && (net ~ EXT_EXPORT_PREFIXES_V6) then {
               bgp_large_community.delete(COMM_EXTERNAL);
+              {{if $.has_global_bird_export_filter}}
+              {{$.global_bird_export_filter}}
+              {{end}}
               {{if $.has_ext_bird_export_filter}}
               {{$.ext_bird_export_filter}}
               {{end}}
@@ -1036,11 +1122,17 @@ template bgp external_peer {
             {{else}}
             {{if or (eq .ext_routing_policy "stub") (eq .ext_routing_policy "advertise_only")}}
             if !(source ~ [ RTS_STATIC, RTS_DEVICE, RTS_INHERIT ]) then reject;
+            {{if $.has_global_bird_export_filter}}
+            {{$.global_bird_export_filter}}
+            {{end}}
             {{if $.has_ext_bird_export_filter}}
             {{$.ext_bird_export_filter}}
             {{end}}
             accept;
             {{else}}
+            {{if $.has_global_bird_export_filter}}
+            {{$.global_bird_export_filter}}
+            {{end}}
             {{if $.has_ext_bird_export_filter}}
             {{$.ext_bird_export_filter}}
             {{end}}
@@ -1085,6 +1177,9 @@ template bgp {{.template_name}} {
               {{else}}
               bgp_local_pref = DEFAULT_LOCAL_PREF;
               {{end}}
+              {{if $.has_global_bird_import_filter}}
+              {{$.global_bird_import_filter}}
+              {{end}}
               {{if .has_bird_import_filter}}
               {{.bird_import_filter}}
               {{else if $.has_ext_bird_import_filter}}
@@ -1101,6 +1196,9 @@ template bgp {{.template_name}} {
             if DEFAULT_LOCAL_PREF > {{.cost}} then bgp_local_pref = DEFAULT_LOCAL_PREF - {{.cost}}; else bgp_local_pref = 1;
             {{else}}
             bgp_local_pref = DEFAULT_LOCAL_PREF;
+            {{end}}
+            {{if $.has_global_bird_import_filter}}
+            {{$.global_bird_import_filter}}
             {{end}}
             {{if .has_bird_import_filter}}
             {{.bird_import_filter}}
@@ -1121,6 +1219,9 @@ template bgp {{.template_name}} {
             {{if or (eq .routing_policy "stub") (eq .routing_policy "advertise_only")}}
             if (source ~ [ RTS_STATIC, RTS_DEVICE, RTS_INHERIT ]) && (net ~ EXT_EXPORT_PREFIXES_V4) then {
               bgp_large_community.delete(COMM_EXTERNAL);
+              {{if $.has_global_bird_export_filter}}
+              {{$.global_bird_export_filter}}
+              {{end}}
               {{if .has_bird_export_filter}}
               {{.bird_export_filter}}
               {{else if $.has_ext_bird_export_filter}}
@@ -1132,6 +1233,9 @@ template bgp {{.template_name}} {
             {{else}}
             if (source ~ [ RTS_STATIC, RTS_BGP ]) && (net ~ EXT_EXPORT_PREFIXES_V4) then {
               bgp_large_community.delete(COMM_EXTERNAL);
+              {{if $.has_global_bird_export_filter}}
+              {{$.global_bird_export_filter}}
+              {{end}}
               {{if .has_bird_export_filter}}
               {{.bird_export_filter}}
               {{else if $.has_ext_bird_export_filter}}
@@ -1144,6 +1248,9 @@ template bgp {{.template_name}} {
             {{else}}
             {{if or (eq .routing_policy "stub") (eq .routing_policy "advertise_only")}}
             if !(source ~ [ RTS_STATIC, RTS_DEVICE, RTS_INHERIT ]) then reject;
+            {{if $.has_global_bird_export_filter}}
+            {{$.global_bird_export_filter}}
+            {{end}}
             {{if .has_bird_export_filter}}
             {{.bird_export_filter}}
             {{else if $.has_ext_bird_export_filter}}
@@ -1151,6 +1258,9 @@ template bgp {{.template_name}} {
             {{end}}
             accept;
             {{else}}
+            {{if $.has_global_bird_export_filter}}
+            {{$.global_bird_export_filter}}
+            {{end}}
             {{if .has_bird_export_filter}}
             {{.bird_export_filter}}
             {{else if $.has_ext_bird_export_filter}}
@@ -1181,6 +1291,9 @@ template bgp {{.template_name}} {
               {{else}}
               bgp_local_pref = DEFAULT_LOCAL_PREF;
               {{end}}
+              {{if $.has_global_bird_import_filter}}
+              {{$.global_bird_import_filter}}
+              {{end}}
               {{if .has_bird_import_filter}}
               {{.bird_import_filter}}
               {{else if $.has_ext_bird_import_filter}}
@@ -1197,6 +1310,9 @@ template bgp {{.template_name}} {
             if DEFAULT_LOCAL_PREF > {{.cost}} then bgp_local_pref = DEFAULT_LOCAL_PREF - {{.cost}}; else bgp_local_pref = 1;
             {{else}}
             bgp_local_pref = DEFAULT_LOCAL_PREF;
+            {{end}}
+            {{if $.has_global_bird_import_filter}}
+            {{$.global_bird_import_filter}}
             {{end}}
             {{if .has_bird_import_filter}}
             {{.bird_import_filter}}
@@ -1217,6 +1333,9 @@ template bgp {{.template_name}} {
             {{if or (eq .routing_policy "stub") (eq .routing_policy "advertise_only")}}
             if (source ~ [ RTS_STATIC, RTS_DEVICE, RTS_INHERIT ]) && (net ~ EXT_EXPORT_PREFIXES_V6) then {
               bgp_large_community.delete(COMM_EXTERNAL);
+              {{if $.has_global_bird_export_filter}}
+              {{$.global_bird_export_filter}}
+              {{end}}
               {{if .has_bird_export_filter}}
               {{.bird_export_filter}}
               {{else if $.has_ext_bird_export_filter}}
@@ -1228,6 +1347,9 @@ template bgp {{.template_name}} {
             {{else}}
             if (source ~ [ RTS_STATIC, RTS_BGP ]) && (net ~ EXT_EXPORT_PREFIXES_V6) then {
               bgp_large_community.delete(COMM_EXTERNAL);
+              {{if $.has_global_bird_export_filter}}
+              {{$.global_bird_export_filter}}
+              {{end}}
               {{if .has_bird_export_filter}}
               {{.bird_export_filter}}
               {{else if $.has_ext_bird_export_filter}}
@@ -1240,6 +1362,9 @@ template bgp {{.template_name}} {
             {{else}}
             {{if or (eq .routing_policy "stub") (eq .routing_policy "advertise_only")}}
             if !(source ~ [ RTS_STATIC, RTS_DEVICE, RTS_INHERIT ]) then reject;
+            {{if $.has_global_bird_export_filter}}
+            {{$.global_bird_export_filter}}
+            {{end}}
             {{if .has_bird_export_filter}}
             {{.bird_export_filter}}
             {{else if $.has_ext_bird_export_filter}}
@@ -1247,6 +1372,9 @@ template bgp {{.template_name}} {
             {{end}}
             accept;
             {{else}}
+            {{if $.has_global_bird_export_filter}}
+            {{$.global_bird_export_filter}}
+            {{end}}
             {{if .has_bird_export_filter}}
             {{.bird_export_filter}}
             {{else if $.has_ext_bird_export_filter}}
@@ -1308,6 +1436,9 @@ template bgp {{.template_name}} {
                 if bgp_local_pref > {{.cost}} then bgp_local_pref = bgp_local_pref - {{.cost}}; else bgp_local_pref = 1;
                 {{end}}
                 {{end}}
+                {{if $.has_global_bird_import_filter}}
+                {{$.global_bird_import_filter}}
+                {{end}}
                 {{if .has_bird_import_filter}}
                 {{.bird_import_filter}}
                 {{end}}
@@ -1323,6 +1454,9 @@ template bgp {{.template_name}} {
             {{else}}
             if bgp_local_pref > {{.cost}} then bgp_local_pref = bgp_local_pref - {{.cost}}; else bgp_local_pref = 1;
             {{end}}
+            {{end}}
+            {{if $.has_global_bird_import_filter}}
+            {{$.global_bird_import_filter}}
             {{end}}
             {{if .has_bird_import_filter}}
             {{.bird_import_filter}}
@@ -1343,6 +1477,9 @@ template bgp {{.template_name}} {
                 {{if $.confed_as}}
                 if !defined(bgp_local_pref) then bgp_local_pref = DEFAULT_LOCAL_PREF;
                 {{end}}
+                {{if $.has_global_bird_export_filter}}
+                {{$.global_bird_export_filter}}
+                {{end}}
                 {{if .has_bird_export_filter}}
                 {{.bird_export_filter}}
                 {{end}}
@@ -1353,6 +1490,9 @@ template bgp {{.template_name}} {
             if (source ~ [ RTS_STATIC, RTS_BGP ]) && (net ~ POL_{{.id}}_EXPORT_V4) then {
                 {{if $.confed_as}}
                 if !defined(bgp_local_pref) then bgp_local_pref = DEFAULT_LOCAL_PREF;
+                {{end}}
+                {{if $.has_global_bird_export_filter}}
+                {{$.global_bird_export_filter}}
                 {{end}}
                 {{if .has_bird_export_filter}}
                 {{.bird_export_filter}}
@@ -1367,6 +1507,9 @@ template bgp {{.template_name}} {
             {{if $.confed_as}}
             if !defined(bgp_local_pref) then bgp_local_pref = DEFAULT_LOCAL_PREF;
             {{end}}
+            {{if $.has_global_bird_export_filter}}
+            {{$.global_bird_export_filter}}
+            {{end}}
             {{if .has_bird_export_filter}}
             {{.bird_export_filter}}
             {{end}}
@@ -1374,6 +1517,9 @@ template bgp {{.template_name}} {
             {{else}}
             {{if $.confed_as}}
             if !defined(bgp_local_pref) then bgp_local_pref = DEFAULT_LOCAL_PREF;
+            {{end}}
+            {{if $.has_global_bird_export_filter}}
+            {{$.global_bird_export_filter}}
             {{end}}
             {{if .has_bird_export_filter}}
             {{.bird_export_filter}}
@@ -1404,6 +1550,9 @@ template bgp {{.template_name}} {
                 if bgp_local_pref > {{.cost}} then bgp_local_pref = bgp_local_pref - {{.cost}}; else bgp_local_pref = 1;
                 {{end}}
                 {{end}}
+                {{if $.has_global_bird_import_filter}}
+                {{$.global_bird_import_filter}}
+                {{end}}
                 {{if .has_bird_import_filter}}
                 {{.bird_import_filter}}
                 {{end}}
@@ -1419,6 +1568,9 @@ template bgp {{.template_name}} {
             {{else}}
             if bgp_local_pref > {{.cost}} then bgp_local_pref = bgp_local_pref - {{.cost}}; else bgp_local_pref = 1;
             {{end}}
+            {{end}}
+            {{if $.has_global_bird_import_filter}}
+            {{$.global_bird_import_filter}}
             {{end}}
             {{if .has_bird_import_filter}}
             {{.bird_import_filter}}
@@ -1439,6 +1591,9 @@ template bgp {{.template_name}} {
                 {{if $.confed_as}}
                 if !defined(bgp_local_pref) then bgp_local_pref = DEFAULT_LOCAL_PREF;
                 {{end}}
+                {{if $.has_global_bird_export_filter}}
+                {{$.global_bird_export_filter}}
+                {{end}}
                 {{if .has_bird_export_filter}}
                 {{.bird_export_filter}}
                 {{end}}
@@ -1449,6 +1604,9 @@ template bgp {{.template_name}} {
             if (source ~ [ RTS_STATIC, RTS_BGP ]) && (net ~ POL_{{.id}}_EXPORT_V6) then {
                 {{if $.confed_as}}
                 if !defined(bgp_local_pref) then bgp_local_pref = DEFAULT_LOCAL_PREF;
+                {{end}}
+                {{if $.has_global_bird_export_filter}}
+                {{$.global_bird_export_filter}}
                 {{end}}
                 {{if .has_bird_export_filter}}
                 {{.bird_export_filter}}
@@ -1463,6 +1621,9 @@ template bgp {{.template_name}} {
             {{if $.confed_as}}
             if !defined(bgp_local_pref) then bgp_local_pref = DEFAULT_LOCAL_PREF;
             {{end}}
+            {{if $.has_global_bird_export_filter}}
+            {{$.global_bird_export_filter}}
+            {{end}}
             {{if .has_bird_export_filter}}
             {{.bird_export_filter}}
             {{end}}
@@ -1470,6 +1631,9 @@ template bgp {{.template_name}} {
             {{else}}
             {{if $.confed_as}}
             if !defined(bgp_local_pref) then bgp_local_pref = DEFAULT_LOCAL_PREF;
+            {{end}}
+            {{if $.has_global_bird_export_filter}}
+            {{$.global_bird_export_filter}}
             {{end}}
             {{if .has_bird_export_filter}}
             {{.bird_export_filter}}
@@ -1598,6 +1762,14 @@ protocol bgp flapalerted {
 {{.}}
 
 {{end}}
+{{end}}
+
+{{if .global_bird_post_snippet}}
+# ==============================================================================
+# Global BIRD Post Snippet
+# ==============================================================================
+{{.global_bird_post_snippet}}
+
 {{end}}
 
 {{if .bird_hooks}}

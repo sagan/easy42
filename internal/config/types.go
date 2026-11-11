@@ -20,6 +20,10 @@ type NetworkSettings struct {
 	FlapAlertedASN         uint64   `json:"flapalerted_asn,omitempty"`          // FlapAlerted BGP ASN (default 4224420000)
 	FlapAlertedURL         string   `json:"flapalerted_url,omitempty"`          // FlapAlerted web/dashboard base URL
 	ExtraHosts             string   `json:"extra_hosts,omitempty"`              // Custom global /etc/hosts records
+	BirdImportFilter       string   `json:"bird_import_filter,omitempty"`       // Global custom BIRD snippet appended to import filter block end
+	BirdExportFilter       string   `json:"bird_export_filter,omitempty"`       // Global custom BIRD snippet appended to export filter block end
+	BirdPreSnippet         string   `json:"bird_pre_snippet,omitempty"`         // Global custom BIRD snippet inserted in early position of bird_easy42.conf (before bird_hooks_pre)
+	BirdPostSnippet        string   `json:"bird_post_snippet,omitempty"`        // Global custom BIRD snippet appended at end of bird_easy42.conf (before bird_hooks)
 }
 
 // GetName returns the configured network name or "Easy42" if empty
@@ -74,6 +78,38 @@ func (s *NetworkSettings) GetFlapAlertedURL() string {
 		return fmt.Sprintf("http://[%s]:8699", addr)
 	}
 	return fmt.Sprintf("http://%s:8699", addr)
+}
+
+// EffectiveBirdImportFilter returns the configured global BIRD import filter snippet or empty string if unset
+func (s *NetworkSettings) EffectiveBirdImportFilter() string {
+	if s != nil {
+		return strings.TrimSpace(s.BirdImportFilter)
+	}
+	return ""
+}
+
+// EffectiveBirdExportFilter returns the configured global BIRD export filter snippet or empty string if unset
+func (s *NetworkSettings) EffectiveBirdExportFilter() string {
+	if s != nil {
+		return strings.TrimSpace(s.BirdExportFilter)
+	}
+	return ""
+}
+
+// EffectiveBirdPreSnippet returns the configured global BIRD pre snippet or empty string if unset
+func (s *NetworkSettings) EffectiveBirdPreSnippet() string {
+	if s != nil {
+		return strings.TrimSpace(s.BirdPreSnippet)
+	}
+	return ""
+}
+
+// EffectiveBirdPostSnippet returns the configured global BIRD post snippet or empty string if unset
+func (s *NetworkSettings) EffectiveBirdPostSnippet() string {
+	if s != nil {
+		return strings.TrimSpace(s.BirdPostSnippet)
+	}
+	return ""
 }
 
 // Block represents a visual block grouping of nodes on the topology graph

@@ -749,8 +749,12 @@ func TestExternalNodeAndPeering(t *testing.T) {
 
 	// 1. Test NetworkSettings
 	netSettings := config.NetworkSettings{
-		PublicASN: 4242421234,
-		Prefixes:  []string{"172.20.1.0/24", "172.20.0.0/14{21,29}"},
+		PublicASN:        4242421234,
+		Prefixes:         []string{"172.20.1.0/24", "172.20.0.0/14{21,29}"},
+		BirdImportFilter: "  bgp_large_community.add((4242420000, 1, 1));  ",
+		BirdExportFilter: "  bgp_community.delete([(64512, *)]);  ",
+		BirdPreSnippet:   "  define PRE_HOOK = 1;  ",
+		BirdPostSnippet:  "  define POST_HOOK = 2;  ",
 	}
 	if err := mgr.UpdateNetworkSettings(netSettings); err != nil {
 		t.Fatalf("UpdateNetworkSettings failed: %v", err)
@@ -758,6 +762,18 @@ func TestExternalNodeAndPeering(t *testing.T) {
 	loadedSettings := mgr.GetNetworkSettings()
 	if loadedSettings.PublicASN != 4242421234 {
 		t.Fatalf("Expected PublicASN 4242421234, got %d", loadedSettings.PublicASN)
+	}
+	if loadedSettings.BirdImportFilter != "bgp_large_community.add((4242420000, 1, 1));" {
+		t.Fatalf("Expected trimmed BirdImportFilter, got %q", loadedSettings.BirdImportFilter)
+	}
+	if loadedSettings.BirdExportFilter != "bgp_community.delete([(64512, *)]);" {
+		t.Fatalf("Expected trimmed BirdExportFilter, got %q", loadedSettings.BirdExportFilter)
+	}
+	if loadedSettings.BirdPreSnippet != "define PRE_HOOK = 1;" {
+		t.Fatalf("Expected trimmed BirdPreSnippet, got %q", loadedSettings.BirdPreSnippet)
+	}
+	if loadedSettings.BirdPostSnippet != "define POST_HOOK = 2;" {
+		t.Fatalf("Expected trimmed BirdPostSnippet, got %q", loadedSettings.BirdPostSnippet)
 	}
 
 	// 2. Add Managed Node

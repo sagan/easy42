@@ -1084,6 +1084,22 @@ func mergeNetworkSettings(target *config.NetworkSettings, patch *config.NetworkS
 		checkField("extra_hosts", target.ExtraHosts, *patch.ExtraHosts)
 		target.ExtraHosts = *patch.ExtraHosts
 	}
+	if patch.BirdImportFilter != nil && *patch.BirdImportFilter != target.BirdImportFilter {
+		checkField("bird_import_filter", target.BirdImportFilter, *patch.BirdImportFilter)
+		target.BirdImportFilter = *patch.BirdImportFilter
+	}
+	if patch.BirdExportFilter != nil && *patch.BirdExportFilter != target.BirdExportFilter {
+		checkField("bird_export_filter", target.BirdExportFilter, *patch.BirdExportFilter)
+		target.BirdExportFilter = *patch.BirdExportFilter
+	}
+	if patch.BirdPreSnippet != nil && *patch.BirdPreSnippet != target.BirdPreSnippet {
+		checkField("bird_pre_snippet", target.BirdPreSnippet, *patch.BirdPreSnippet)
+		target.BirdPreSnippet = *patch.BirdPreSnippet
+	}
+	if patch.BirdPostSnippet != nil && *patch.BirdPostSnippet != target.BirdPostSnippet {
+		checkField("bird_post_snippet", target.BirdPostSnippet, *patch.BirdPostSnippet)
+		target.BirdPostSnippet = *patch.BirdPostSnippet
+	}
 	return diffs
 }
 

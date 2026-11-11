@@ -1028,6 +1028,24 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 		ctx["policy_bird_snippets_post"] = policyBirdSnippetsPost
 	}
 
+	globalPreSnippet := settings.EffectiveBirdPreSnippet()
+	globalPostSnippet := settings.EffectiveBirdPostSnippet()
+	globalImportFilter := settings.EffectiveBirdImportFilter()
+	globalExportFilter := settings.EffectiveBirdExportFilter()
+
+	if globalPreSnippet != "" {
+		ctx["global_bird_pre_snippet"] = globalPreSnippet
+		ctx["has_global_bird_pre_snippet"] = true
+	}
+	if globalPostSnippet != "" {
+		ctx["global_bird_post_snippet"] = globalPostSnippet
+		ctx["has_global_bird_post_snippet"] = true
+	}
+	ctx["global_bird_import_filter"] = globalImportFilter
+	ctx["has_global_bird_import_filter"] = globalImportFilter != ""
+	ctx["global_bird_export_filter"] = globalExportFilter
+	ctx["has_global_bird_export_filter"] = globalExportFilter != ""
+
 	ctx["links"] = nodeLinks
 	ctx["default_cost"] = defaultCost
 	ctx["default_routing_policy"] = defaultRoutingPolicy

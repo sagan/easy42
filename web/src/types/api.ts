@@ -35,6 +35,10 @@ export interface NetworkSettings {
   flapalerted_asn?: number;
   flapalerted_url?: string;
   extra_hosts?: string;
+  bird_import_filter?: string;
+  bird_export_filter?: string;
+  bird_pre_snippet?: string;
+  bird_post_snippet?: string;
 }
 
 export interface FlapAlertedMetrics {

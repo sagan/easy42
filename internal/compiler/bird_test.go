@@ -3351,6 +3351,117 @@ func TestManualLinkWithExternalPeerBirdConfig(t *testing.T) {
 	validateBirdSyntax(t, confV6)
 }
 
+func TestGlobalBirdHooks(t *testing.T) {
+	node1 := config.Node{
+		Name: "node1",
+		IP:   "172.20.1.1",
+		IP6:  "fd00::1",
+		ASN:  4224420001,
+		ConfigHooks: []config.ConfigHook{
+			{Type: "bird.pre", Content: "define NODE_PRE = 1;"},
+			{Type: "bird.post", Content: "define NODE_POST = 2;"},
+		},
+	}
+	node2 := config.Node{
+		Name: "node2",
+		IP:   "172.20.1.2",
+		IP6:  "fd00::2",
+		ASN:  4224420002,
+	}
+	customPol := config.NetworkPolicy{
+		ID:               "custom-pol",
+		Name:             "Custom Pol",
+		BirdPreSnippet:  "define POLICY_PRE = 10;",
+		BirdPostSnippet: "define POLICY_POST = 20;",
+		BirdImportFilter: "bgp_local_pref = 150;",
+		BirdExportFilter: "bgp_path.prepend(SELF_AS);",
+	}
+	link := config.Link{
+		From: config.LinkEnd{Name: "node1", Policy: "custom-pol"},
+		To:   config.LinkEnd{Name: "node2", Policy: "custom-pol"},
+	}
+
+	netSettings := &config.NetworkSettings{
+		BirdPreSnippet:   "define GLOBAL_PRE = 100;",
+		BirdPostSnippet:  "define GLOBAL_POST = 200;",
+		BirdImportFilter: "bgp_large_community.add((4242420000, 100, 1));",
+		BirdExportFilter: "bgp_community.delete([(64512, *)]);",
+	}
+
+	// 1. Generate for node1 with links
+	conf, err := GenerateBirdConfig(&node1, []config.Node{node1, node2}, []config.Link{link}, netSettings, []config.NetworkPolicy{customPol})
+	if err != nil {
+		t.Fatalf("GenerateBirdConfig failed: %v", err)
+	}
+
+	if !strings.Contains(conf, "define GLOBAL_PRE = 100;") {
+		t.Errorf("Expected GLOBAL_PRE in conf:\n%s", conf)
+	}
+	if !strings.Contains(conf, "define GLOBAL_POST = 200;") {
+		t.Errorf("Expected GLOBAL_POST in conf:\n%s", conf)
+	}
+	if !strings.Contains(conf, "bgp_large_community.add((4242420000, 100, 1));") {
+		t.Errorf("Expected GLOBAL import filter in conf:\n%s", conf)
+	}
+	if !strings.Contains(conf, "bgp_community.delete([(64512, *)]);") {
+		t.Errorf("Expected GLOBAL export filter in conf:\n%s", conf)
+	}
+
+	// Verify ordering: GLOBAL_PRE before POLICY_PRE before NODE_PRE
+	idxGlobalPre := strings.Index(conf, "define GLOBAL_PRE = 100;")
+	idxPolicyPre := strings.Index(conf, "define POLICY_PRE = 10;")
+	idxNodePre := strings.Index(conf, "define NODE_PRE = 1;")
+	if idxGlobalPre == -1 || idxPolicyPre == -1 || idxNodePre == -1 {
+		t.Fatalf("Missing pre snippet or hook in conf")
+	}
+	if idxGlobalPre >= idxPolicyPre {
+		t.Errorf("GLOBAL_PRE (%d) must appear before POLICY_PRE (%d)", idxGlobalPre, idxPolicyPre)
+	}
+	if idxPolicyPre >= idxNodePre {
+		t.Errorf("POLICY_PRE (%d) must appear before NODE_PRE (%d)", idxPolicyPre, idxNodePre)
+	}
+
+	// Verify ordering: POLICY_POST before GLOBAL_POST before NODE_POST
+	idxPolicyPost := strings.Index(conf, "define POLICY_POST = 20;")
+	idxGlobalPost := strings.Index(conf, "define GLOBAL_POST = 200;")
+	idxNodePost := strings.Index(conf, "define NODE_POST = 2;")
+	if idxPolicyPost == -1 || idxGlobalPost == -1 || idxNodePost == -1 {
+		t.Fatalf("Missing post snippet or hook in conf")
+	}
+	if idxPolicyPost >= idxGlobalPost {
+		t.Errorf("POLICY_POST (%d) must appear before GLOBAL_POST (%d)", idxPolicyPost, idxGlobalPost)
+	}
+	if idxGlobalPost >= idxNodePost {
+		t.Errorf("GLOBAL_POST (%d) must appear before NODE_POST (%d)", idxGlobalPost, idxNodePost)
+	}
+
+	// Verify global filter appears alongside policy filter
+	idxGlobalImport := strings.Index(conf, "bgp_large_community.add((4242420000, 100, 1));")
+	idxPolicyImport := strings.Index(conf, "bgp_local_pref = 150;")
+	if idxGlobalImport >= idxPolicyImport {
+		t.Errorf("Global import filter should precede policy import filter")
+	}
+
+	validateBirdSyntax(t, conf)
+
+	// 2. Generate for an isolated node without any links - verify global snippets are STILL injected
+	confIsolated, err := GenerateBirdConfig(&node1, []config.Node{node1}, nil, netSettings)
+	if err != nil {
+		t.Fatalf("GenerateBirdConfig failed for isolated node: %v", err)
+	}
+	if !strings.Contains(confIsolated, "define GLOBAL_PRE = 100;") {
+		t.Errorf("Expected GLOBAL_PRE on isolated node in:\n%s", confIsolated)
+	}
+	if !strings.Contains(confIsolated, "define GLOBAL_POST = 200;") {
+		t.Errorf("Expected GLOBAL_POST on isolated node in:\n%s", confIsolated)
+	}
+	if !strings.Contains(confIsolated, "bgp_large_community.add((4242420000, 100, 1));") {
+		t.Errorf("Expected global import filter in easy42_peer template on isolated node in:\n%s", confIsolated)
+	}
+	validateBirdSyntax(t, confIsolated)
+}
+
+
 
 
 

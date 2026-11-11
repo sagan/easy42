@@ -45,6 +45,11 @@ func registerNetworkTools(s *server.MCPServer, mgr *engine.Manager) {
 		mcp.WithInteger("flapalerted_port", mcp.Description("FlapAlerted BGP listening port (default 1790)")),
 		mcp.WithInteger("flapalerted_asn", mcp.Description("FlapAlerted BGP ASN (default 4224420000)")),
 		mcp.WithString("flapalerted_url", mcp.Description("FlapAlerted dashboard base URL")),
+		mcp.WithString("extra_hosts", mcp.Description("Custom global /etc/hosts records")),
+		mcp.WithString("bird_import_filter", mcp.Description("Global custom BIRD snippet appended to import filter block end")),
+		mcp.WithString("bird_export_filter", mcp.Description("Global custom BIRD snippet appended to export filter block end")),
+		mcp.WithString("bird_pre_snippet", mcp.Description("Global custom BIRD snippet inserted in early position of bird_easy42.conf")),
+		mcp.WithString("bird_post_snippet", mcp.Description("Global custom BIRD snippet appended at end of bird_easy42.conf")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		if err := RequireFullControl(ctx); err != nil {
 			return errorResult(err)
@@ -74,6 +79,21 @@ func registerNetworkTools(s *server.MCPServer, mgr *engine.Manager) {
 		}
 		if faURL := req.GetString("flapalerted_url", ""); faURL != "" {
 			current.FlapAlertedURL = faURL
+		}
+		if extraHosts := req.GetString("extra_hosts", ""); extraHosts != "" {
+			current.ExtraHosts = extraHosts
+		}
+		if birdImport := req.GetString("bird_import_filter", ""); birdImport != "" {
+			current.BirdImportFilter = birdImport
+		}
+		if birdExport := req.GetString("bird_export_filter", ""); birdExport != "" {
+			current.BirdExportFilter = birdExport
+		}
+		if birdPre := req.GetString("bird_pre_snippet", ""); birdPre != "" {
+			current.BirdPreSnippet = birdPre
+		}
+		if birdPost := req.GetString("bird_post_snippet", ""); birdPost != "" {
+			current.BirdPostSnippet = birdPost
 		}
 
 		if err := mgr.UpdateNetworkSettings(current); err != nil {

@@ -111,6 +111,7 @@ func TestNetworkPolicyManagerCRUD(t *testing.T) {
 		DSCPIngress:        dscpInUpdated,
 		BlockIngressNew:    "all",
 		BirdImportFilter:   "bgp_local_pref = 200;",
+		BirdExportFilter:   "bgp_community.delete([(64512, *)]);",
 		BirdPreSnippet:     "  define PRE_CONST = 2;  ",
 		BirdPostSnippet:    "  protocol bfd { };  ",
 	})

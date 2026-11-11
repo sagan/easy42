@@ -5356,6 +5356,10 @@ func (m *Manager) UpdateNetworkSettings(settings config.NetworkSettings) error {
 	} else {
 		settings.FlapAlertedURL = ""
 	}
+	settings.BirdImportFilter = strings.TrimSpace(settings.BirdImportFilter)
+	settings.BirdExportFilter = strings.TrimSpace(settings.BirdExportFilter)
+	settings.BirdPreSnippet = strings.TrimSpace(settings.BirdPreSnippet)
+	settings.BirdPostSnippet = strings.TrimSpace(settings.BirdPostSnippet)
 	oldExtraHosts := cfg.NetworkSettings.ExtraHosts
 	cfg.NetworkSettings = settings
 	if err := m.store.Save(cfg); err != nil {

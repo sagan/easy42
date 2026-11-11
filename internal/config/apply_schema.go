@@ -72,7 +72,12 @@ const ConfigChangeJSONSchema = `{
         "flapalerted_address": { "type": "string" },
         "flapalerted_port": { "type": "integer", "minimum": 1, "maximum": 65535 },
         "flapalerted_asn": { "type": "integer", "minimum": 1, "maximum": 4294967295 },
-        "flapalerted_url": { "type": "string" }
+        "flapalerted_url": { "type": "string" },
+        "extra_hosts": { "type": "string" },
+        "bird_import_filter": { "type": "string" },
+        "bird_export_filter": { "type": "string" },
+        "bird_pre_snippet": { "type": "string" },
+        "bird_post_snippet": { "type": "string" }
       }
     },
     "NodePatch": {
@@ -278,6 +283,10 @@ type NetworkSettingsPatch struct {
 	FlapAlertedASN         *uint64   `json:"flapalerted_asn,omitempty" yaml:"flapalerted_asn,omitempty"`
 	FlapAlertedURL         *string   `json:"flapalerted_url,omitempty" yaml:"flapalerted_url,omitempty"`
 	ExtraHosts             *string   `json:"extra_hosts,omitempty" yaml:"extra_hosts,omitempty"`
+	BirdImportFilter       *string   `json:"bird_import_filter,omitempty" yaml:"bird_import_filter,omitempty"`
+	BirdExportFilter       *string   `json:"bird_export_filter,omitempty" yaml:"bird_export_filter,omitempty"`
+	BirdPreSnippet         *string   `json:"bird_pre_snippet,omitempty" yaml:"bird_pre_snippet,omitempty"`
+	BirdPostSnippet        *string   `json:"bird_post_snippet,omitempty" yaml:"bird_post_snippet,omitempty"`
 }
 
 // NodePatch holds partial changes to a node

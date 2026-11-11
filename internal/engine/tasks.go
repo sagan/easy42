@@ -2,7 +2,9 @@ package engine
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"log"
 	"math"
 	"path/filepath"
 	"sort"
@@ -244,11 +246,30 @@ func (m *Manager) RunTask(ctx context.Context, taskID string, nodeNames []string
 				if serverURL == "" {
 					serverURL = "http://127.0.0.1:4242"
 				}
-
-				agentJSON := fmt.Sprintf(`{"server":%q,"token":%q,"log_level":"info","node_name":%q}`, serverURL, token, n.Name)
+				agentJsonData := map[string]any{
+					"server":    serverURL,
+					"token":     token,
+					"log_level": "info",
+					"node_name": n.Name,
+				}
+				noteData := config.ExtractNoteData(node.Note)
+				if preSync, ok := noteData["agent_pre_sync"]; ok {
+					agentJsonData["pre_sync"] = preSync
+				}
+				if postSync, ok := noteData["agent_post_sync"]; ok {
+					agentJsonData["post_sync"] = postSync
+				}
+				if disableApps, ok := noteData["agent_disable_apps"]; ok {
+					agentJsonData["disable_apps"] = disableApps
+				}
+				agentJSON, err := json.Marshal(agentJsonData)
+				if err != nil {
+					log.Printf("Failed to serialize agent json: %v", err)
+					return
+				}
 				payload := map[string][]byte{
 					"easy42-agent": binData,
-					"agent.json":   []byte(agentJSON),
+					"agent.json":   agentJSON,
 					"node_ip.env":  []byte(buildNodeEnv(n)),
 				}
 				res = tasks.RunTaskWithPayload(sshClient, sftpClient, taskID, n.Name, payload, m.customTasksDir())
