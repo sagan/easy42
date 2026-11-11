@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"easy42/internal/agent"
+	"easy42/internal/config"
 	"easy42/internal/engine"
 
 	"github.com/go-chi/chi/v5"
@@ -76,6 +77,39 @@ func (s *Server) handleAgentWebSocket(w http.ResponseWriter, r *http.Request) {
 	conn.ReadLoop()
 }
 
+// appendAgentNoteArgs extracts agent options from node Note and appends CLI flags to the install command
+func appendAgentNoteArgs(cmd string, note string) string {
+	noteData := config.ExtractNoteData(note)
+	preSync, ok := noteData["agent_pre_sync"]
+	if !ok {
+		preSync, ok = noteData["pre_sync"]
+	}
+	if ok {
+		if s := fmt.Sprint(preSync); s != "" {
+			cmd += fmt.Sprintf(" --pre-sync %q", s)
+		}
+	}
+	postSync, ok := noteData["agent_post_sync"]
+	if !ok {
+		postSync, ok = noteData["post_sync"]
+	}
+	if ok {
+		if s := fmt.Sprint(postSync); s != "" {
+			cmd += fmt.Sprintf(" --post-sync %q", s)
+		}
+	}
+	disableApps, ok := noteData["agent_disable_apps"]
+	if !ok {
+		disableApps, ok = noteData["disable_apps"]
+	}
+	if ok {
+		if b, ok := disableApps.(bool); ok && b {
+			cmd += " --disable-apps"
+		}
+	}
+	return cmd
+}
+
 // handleGenerateAgentToken generates a new agent authentication token for a node
 func (s *Server) handleGenerateAgentToken(w http.ResponseWriter, r *http.Request) {
 	name := chi.URLParam(r, "name")
@@ -100,6 +134,9 @@ func (s *Server) handleGenerateAgentToken(w http.ResponseWriter, r *http.Request
 	}
 
 	installCmd := fmt.Sprintf("curl %s/api/agent/install.sh | sh -s -- --token %q", serverURL, token)
+	if node := s.mgr.FindNode(name); node != nil {
+		installCmd = appendAgentNoteArgs(installCmd, node.Note)
+	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"node":            name,
@@ -136,6 +173,7 @@ func (s *Server) handleGetNodeAgent(w http.ResponseWriter, r *http.Request) {
 	installCmd := ""
 	if token != "" {
 		installCmd = fmt.Sprintf("curl %s/api/agent/install.sh | sh -s -- --token %q", serverURL, token)
+		installCmd = appendAgentNoteArgs(installCmd, node.Note)
 	}
 
 	connected := s.mgr.AgentHub().IsConnected(name)
@@ -233,6 +271,9 @@ SERVER_URL="` + serverURL + `"
 TOKEN=""
 OVERWRITE_CONFIG="false"
 DISABLE_APPS="false"
+PRE_SYNC=""
+POST_SYNC=""
+NODE_NAME=""
 
 while [ $# -gt 0 ]; do
   case $1 in
@@ -252,11 +293,35 @@ while [ $# -gt 0 ]; do
       TOKEN="${1#*=}"
       shift
       ;;
-    --overwrite-config)
+    --pre-sync|--pre_sync)
+      PRE_SYNC="$2"
+      shift 2
+      ;;
+    --pre-sync=*|--pre_sync=*)
+      PRE_SYNC="${1#*=}"
+      shift
+      ;;
+    --post-sync|--post_sync)
+      POST_SYNC="$2"
+      shift 2
+      ;;
+    --post-sync=*|--post_sync=*)
+      POST_SYNC="${1#*=}"
+      shift
+      ;;
+    --node-name|--node_name)
+      NODE_NAME="$2"
+      shift 2
+      ;;
+    --node-name=*|--node_name=*)
+      NODE_NAME="${1#*=}"
+      shift
+      ;;
+    --overwrite-config|--overwrite_config)
       OVERWRITE_CONFIG="true"
       shift
       ;;
-    --disable-apps)
+    --disable-apps|--disable_apps)
       DISABLE_APPS="true"
       shift
       ;;
@@ -340,6 +405,61 @@ echo "[Easy42 Agent Installer] Detected init system: $INIT_SYSTEM"
 
 mkdir -p /etc/easy42 /usr/local/bin
 
+update_json_field() {
+  _k="$1"
+  _v="$2"
+  _f="$3"
+  if command -v python3 >/dev/null 2>&1; then
+    if JSON_FILE="$_f" JSON_KEY="$_k" JSON_VAL="$_v" python3 -c '
+import json, os
+p, k, v = os.environ["JSON_FILE"], os.environ["JSON_KEY"], os.environ["JSON_VAL"]
+with open(p, "r") as f:
+    d = json.load(f)
+d[k] = v
+with open(p, "w") as f:
+    json.dump(d, f)
+' 2>/dev/null; then
+      return 0
+    fi
+  fi
+  if command -v awk >/dev/null 2>&1; then
+    _tmp="${_f}.tmp.$$"
+    JSON_KEY="$_k" JSON_VAL="$_v" awk '
+BEGIN {
+  k = ENVIRON["JSON_KEY"]
+  v = ENVIRON["JSON_VAL"]
+  gsub(/\\/, "\\\\", v)
+  gsub(/"/, "\\\"", v)
+  found = 0
+}
+{
+  if ($0 ~ "\"" k "\"") {
+    gsub("\"" k "\"[[:space:]]*:[[:space:]]*\"([^\"\\\\]|\\\\.)*\"[[:space:]]*,?", "")
+    gsub(",[[:space:]]*}", "}")
+  }
+  lines[NR] = $0
+}
+END {
+  for (i = 1; i <= NR; i++) {
+    if (i == NR) {
+      idx = match(lines[i], /}[[:space:]]*$/)
+      if (idx > 0) {
+        prefix = substr(lines[i], 1, idx - 1)
+        suffix = substr(lines[i], idx)
+        if (prefix ~ /[^,{[:space:]][[:space:]]*$/) {
+          prefix = prefix ","
+        }
+        lines[i] = prefix "\"" k "\":\"" v "\"" suffix
+      }
+    }
+    print lines[i]
+  }
+}' "$_f" > "$_tmp" 2>/dev/null && mv -f "$_tmp" "$_f" && return 0
+    rm -f "$_tmp" 2>/dev/null
+  fi
+  return 1
+}
+
 # Write configuration
 if [ -f /etc/easy42/agent.json ] && [ "$OVERWRITE_CONFIG" != "true" ]; then
   echo "[Easy42 Agent Installer] Preserving existing /etc/easy42/agent.json"
@@ -353,15 +473,37 @@ if [ -f /etc/easy42/agent.json ] && [ "$OVERWRITE_CONFIG" != "true" ]; then
       echo "[Easy42 Agent Installer] Configured disable_apps: true in existing /etc/easy42/agent.json"
     fi
   fi
+  if [ -n "$PRE_SYNC" ]; then
+    update_json_field "pre_sync" "$PRE_SYNC" /etc/easy42/agent.json
+    echo "[Easy42 Agent Installer] Configured pre_sync in existing /etc/easy42/agent.json"
+  fi
+  if [ -n "$POST_SYNC" ]; then
+    update_json_field "post_sync" "$POST_SYNC" /etc/easy42/agent.json
+    echo "[Easy42 Agent Installer] Configured post_sync in existing /etc/easy42/agent.json"
+  fi
+  if [ -n "$NODE_NAME" ]; then
+    update_json_field "node_name" "$NODE_NAME" /etc/easy42/agent.json
+    echo "[Easy42 Agent Installer] Configured node_name in existing /etc/easy42/agent.json"
+  fi
 else
-  if [ "$DISABLE_APPS" = "true" ]; then
-    cat <<EOF > /etc/easy42/agent.json
-{"server":"${SERVER_URL}","token":"${TOKEN}","log_level":"info","disable_apps":true}
-EOF
-  else
-    cat <<EOF > /etc/easy42/agent.json
+  cat <<EOF > /etc/easy42/agent.json
 {"server":"${SERVER_URL}","token":"${TOKEN}","log_level":"info"}
 EOF
+  if [ -n "$NODE_NAME" ]; then
+    update_json_field "node_name" "$NODE_NAME" /etc/easy42/agent.json
+  fi
+  if [ -n "$PRE_SYNC" ]; then
+    update_json_field "pre_sync" "$PRE_SYNC" /etc/easy42/agent.json
+  fi
+  if [ -n "$POST_SYNC" ]; then
+    update_json_field "post_sync" "$POST_SYNC" /etc/easy42/agent.json
+  fi
+  if [ "$DISABLE_APPS" = "true" ]; then
+    if grep -q '"disable_apps"' /etc/easy42/agent.json; then
+      sed -i 's/"disable_apps"[[:space:]]*:[[:space:]]*false/"disable_apps":true/g' /etc/easy42/agent.json
+    else
+      sed -i 's/}/,"disable_apps":true}/' /etc/easy42/agent.json
+    fi
   fi
   chmod 600 /etc/easy42/agent.json
   echo "[Easy42 Agent Installer] Configuration written to /etc/easy42/agent.json"

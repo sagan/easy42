@@ -1689,9 +1689,9 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                     value={extraHosts}
                     onChange={(e) => setExtraHosts(e.target.value)}
                     placeholder={
-                      "# Custom hosts records for this node (IP hostname [aliases...]):\n192.168.1.10 db.internal db\n10.0.0.5 gitlab.lan"
+                      "# Custom hosts records for this node (IP hostname [aliases...]):\n192.168.1.10 db.internal db\n10.0.0.5 gitlab.lan\n- example.com"
                     }
-                    helperText="Custom /etc/hosts records for this node. Merged with global extra hosts and cluster node IP hosts (priority: node extra hosts > global extra hosts > easy42 node IP hosts)."
+                    helperText="Custom /etc/hosts records for this node. Merged with global extra hosts and cluster node IP hosts (priority: node extra hosts > global extra hosts > easy42 node IP hosts). Use '-' as IP to unset host(s)."
                     disabled={saving}
                     InputProps={{
                       sx: {

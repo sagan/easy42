@@ -71,8 +71,89 @@ func TestAgentInstallScript(t *testing.T) {
 	if !strings.Contains(body, "disable_apps") {
 		t.Fatalf("expected install.sh to configure disable_apps")
 	}
+	if !strings.Contains(body, "--pre-sync") {
+		t.Fatalf("expected install.sh to support --pre-sync")
+	}
+	if !strings.Contains(body, "--post-sync") {
+		t.Fatalf("expected install.sh to support --post-sync")
+	}
+	if !strings.Contains(body, "--node-name") {
+		t.Fatalf("expected install.sh to support --node-name")
+	}
+	if !strings.Contains(body, "pre_sync") {
+		t.Fatalf("expected install.sh to configure pre_sync")
+	}
+	if !strings.Contains(body, "post_sync") {
+		t.Fatalf("expected install.sh to configure post_sync")
+	}
 	if !strings.Contains(body, "Preserving existing /etc/easy42/agent.json") {
 		t.Fatalf("expected install.sh to preserve existing config by default")
+	}
+}
+
+func TestAgentNodeNoteParamsInInstallCommand(t *testing.T) {
+	srv, mgr, cleanup := setupAgentTestServer(t)
+	defer cleanup()
+
+	// Update node-test-1 Note with agent_pre_sync, agent_post_sync, and agent_disable_apps
+	node := mgr.FindNode("node-test-1")
+	if node == nil {
+		t.Fatalf("node-test-1 not found")
+	}
+	updatedNode := *node
+	updatedNode.Note = "```json\n{\n  \"agent_pre_sync\": \"/usr/local/bin/easy42-pre-sync.sh\",\n  \"agent_post_sync\": \"/usr/local/bin/easy42-post-sync.sh\",\n  \"agent_disable_apps\": true\n}\n```"
+	if err := mgr.UpdateNode("node-test-1", updatedNode); err != nil {
+		t.Fatalf("failed to update node: %v", err)
+	}
+
+	// 1. Test handleGenerateAgentToken
+	reqGen := httptest.NewRequest(http.MethodPost, "/api/nodes/node-test-1/agent/token", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("name", "node-test-1")
+	reqGen = reqGen.WithContext(context.WithValue(reqGen.Context(), chi.RouteCtxKey, rctx))
+	rrGen := httptest.NewRecorder()
+	srv.handleGenerateAgentToken(rrGen, reqGen)
+
+	if rrGen.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rrGen.Code, rrGen.Body.String())
+	}
+	var genResp map[string]any
+	if err := json.Unmarshal(rrGen.Body.Bytes(), &genResp); err != nil {
+		t.Fatalf("failed to decode json: %v", err)
+	}
+	genCmd, _ := genResp["install_command"].(string)
+	if !strings.Contains(genCmd, `--pre-sync "/usr/local/bin/easy42-pre-sync.sh"`) {
+		t.Fatalf("expected install_command to contain --pre-sync hook, got: %s", genCmd)
+	}
+	if !strings.Contains(genCmd, `--post-sync "/usr/local/bin/easy42-post-sync.sh"`) {
+		t.Fatalf("expected install_command to contain --post-sync hook, got: %s", genCmd)
+	}
+	if !strings.Contains(genCmd, "--disable-apps") {
+		t.Fatalf("expected install_command to contain --disable-apps, got: %s", genCmd)
+	}
+
+	// 2. Test handleGetNodeAgent
+	reqGet := httptest.NewRequest(http.MethodGet, "/api/nodes/node-test-1/agent", nil)
+	reqGet = reqGet.WithContext(context.WithValue(reqGet.Context(), chi.RouteCtxKey, rctx))
+	rrGet := httptest.NewRecorder()
+	srv.handleGetNodeAgent(rrGet, reqGet)
+
+	if rrGet.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rrGet.Code, rrGet.Body.String())
+	}
+	var getResp map[string]any
+	if err := json.Unmarshal(rrGet.Body.Bytes(), &getResp); err != nil {
+		t.Fatalf("failed to decode json: %v", err)
+	}
+	getCmd, _ := getResp["install_command"].(string)
+	if !strings.Contains(getCmd, `--pre-sync "/usr/local/bin/easy42-pre-sync.sh"`) {
+		t.Fatalf("expected install_command to contain --pre-sync hook, got: %s", getCmd)
+	}
+	if !strings.Contains(getCmd, `--post-sync "/usr/local/bin/easy42-post-sync.sh"`) {
+		t.Fatalf("expected install_command to contain --post-sync hook, got: %s", getCmd)
+	}
+	if !strings.Contains(getCmd, "--disable-apps") {
+		t.Fatalf("expected install_command to contain --disable-apps, got: %s", getCmd)
 	}
 }
 

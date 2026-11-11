@@ -79,10 +79,17 @@ func ParseExtraHosts(text string) ([]ParsedHostEntry, error) {
 		var ip string
 		var hostnames []string
 
-		// Check if first token is IP
-		if net.ParseIP(tokens[0]) != nil {
+		// Check if first token or last token is IP or "-" (to unset)
+		if tokens[0] == "-" {
+			ip = "-"
+			hostnames = tokens[1:]
+		} else if net.ParseIP(tokens[0]) != nil {
 			ip = tokens[0]
 			hostnames = tokens[1:]
+		} else if tokens[len(tokens)-1] == "-" {
+			// In case formatted as hostname... -
+			ip = "-"
+			hostnames = tokens[:len(tokens)-1]
 		} else if net.ParseIP(tokens[len(tokens)-1]) != nil {
 			// In case formatted as hostname... IP
 			ip = tokens[len(tokens)-1]
@@ -128,6 +135,9 @@ func ParseExtraHosts(text string) ([]ParsedHostEntry, error) {
 // MergeHostRecords merges node extra hosts, global extra hosts, and easy42 cluster node IP hosts.
 // Priority: node extra hosts (1) > global extra hosts (2) > easy42 node IP hosts (3).
 // If a same hostname has different IPs from different sources only the IP of highest priority wins.
+// If an entry specifies "-" as the IP, the host is unset and excluded from effective hosts.
+// For Easy42 cluster node main IPs with the node name present in the domain list,
+// <name> and <name>.internal are always placed in the beginning of the domain list.
 func MergeHostRecords(nodeExtraHostsText, globalExtraHostsText string, clusterNodes []Node) ([]HostRecord, error) {
 	nodeEntries, err := ParseExtraHosts(nodeExtraHostsText)
 	if err != nil {
@@ -206,7 +216,23 @@ func MergeHostRecords(nodeExtraHostsText, globalExtraHostsText string, clusterNo
 		}
 	}
 
-	// Group by winning IP
+	// Map cluster node main IP -> cluster node name
+	clusterNodeIPToName := make(map[string]string)
+	for _, n := range clusterNodes {
+		if n.IsExternal {
+			continue
+		}
+		ip := strings.TrimSpace(n.IP)
+		name := strings.TrimSpace(n.Name)
+		if ip != "" && name != "" {
+			clusterNodeIPToName[ip] = name
+			if parsed := net.ParseIP(ip); parsed != nil {
+				clusterNodeIPToName[parsed.String()] = name
+			}
+		}
+	}
+
+	// Group by winning IP (excluding unset hosts where IP == "-")
 	ipMap := make(map[string][]string)
 	var ipOrder []string
 	seenIP := make(map[string]bool)
@@ -219,6 +245,9 @@ func MergeHostRecords(nodeExtraHostsText, globalExtraHostsText string, clusterNo
 
 	for _, hl := range allHostnames {
 		info := hostWin[hl]
+		if info.ip == "-" {
+			continue
+		}
 		if !seenIP[info.ip] {
 			seenIP[info.ip] = true
 			ipOrder = append(ipOrder, info.ip)
@@ -232,19 +261,65 @@ func MergeHostRecords(nodeExtraHostsText, globalExtraHostsText string, clusterNo
 		if len(hosts) == 0 {
 			continue
 		}
-		// Sort hostnames: non-internal / shorter / alphabetical
-		sort.Slice(hosts, func(i, j int) bool {
-			if strings.HasSuffix(hosts[i], ".internal") && !strings.HasSuffix(hosts[j], ".internal") {
-				return false
+
+		nodeName, isClusterNodeIP := clusterNodeIPToName[ip]
+		if !isClusterNodeIP {
+			if parsed := net.ParseIP(ip); parsed != nil {
+				nodeName, isClusterNodeIP = clusterNodeIPToName[parsed.String()]
 			}
-			if !strings.HasSuffix(hosts[i], ".internal") && strings.HasSuffix(hosts[j], ".internal") {
-				return true
+		}
+
+		var nodeNameFound string
+		var internalFound string
+		var otherHosts []string
+
+		if isClusterNodeIP {
+			internalName := nodeName + ".internal"
+			for _, h := range hosts {
+				if nodeNameFound == "" && strings.EqualFold(h, nodeName) {
+					nodeNameFound = h
+				} else if internalFound == "" && strings.EqualFold(h, internalName) {
+					internalFound = h
+				} else {
+					otherHosts = append(otherHosts, h)
+				}
 			}
-			return hosts[i] < hosts[j]
-		})
+		}
+
+		if nodeNameFound != "" {
+			// If the ip is an Easy42 cluster node main IP and the node name exists in the domain list,
+			// always put the node <name> and <name>.internal in the beginning of the domain list.
+			sort.Slice(otherHosts, func(i, j int) bool {
+				if strings.HasSuffix(otherHosts[i], ".internal") && !strings.HasSuffix(otherHosts[j], ".internal") {
+					return false
+				}
+				if !strings.HasSuffix(otherHosts[i], ".internal") && strings.HasSuffix(otherHosts[j], ".internal") {
+					return true
+				}
+				return otherHosts[i] < otherHosts[j]
+			})
+
+			ordered := []string{nodeNameFound}
+			if internalFound != "" {
+				ordered = append(ordered, internalFound)
+			}
+			ordered = append(ordered, otherHosts...)
+			hosts = ordered
+		} else {
+			// Sort hostnames: non-internal / shorter / alphabetical
+			sort.Slice(hosts, func(i, j int) bool {
+				if strings.HasSuffix(hosts[i], ".internal") && !strings.HasSuffix(hosts[j], ".internal") {
+					return false
+				}
+				if !strings.HasSuffix(hosts[i], ".internal") && strings.HasSuffix(hosts[j], ".internal") {
+					return true
+				}
+				return hosts[i] < hosts[j]
+			})
+		}
 
 		primary := hosts[0]
-		var aliases []string
+		aliases := []string{}
 		if len(hosts) > 1 {
 			aliases = hosts[1:]
 		}
@@ -283,7 +358,7 @@ func BuildHostsBlock(records []HostRecord) string {
 	for _, r := range sorted {
 		ip := strings.TrimSpace(r.IP)
 		name := strings.TrimSpace(r.Name)
-		if ip != "" && name != "" {
+		if ip != "" && ip != "-" && name != "" {
 			parts := []string{name}
 			for _, a := range r.Aliases {
 				at := strings.TrimSpace(a)

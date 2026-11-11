@@ -82,6 +82,7 @@ import { MarkdownView } from "../components/Common/MarkdownView";
 import { NodeCronTasksTab } from "../components/Nodes/NodeCronTasksTab";
 import { NodeAppsTab } from "../components/Nodes/NodeAppsTab";
 import { NodeNoteDataView } from "../components/Nodes/NodeNoteDataView";
+import { parseNoteData } from "../utils/taskSelector";
 import { Dn42InfoCard } from "../components/Nodes/Dn42InfoCard";
 import { isDn42ExternalNode } from "../utils/dn42";
 import { getLinkWorkingState, isManualLink } from "../components/Topology/TopologyGraph";
@@ -295,6 +296,23 @@ export const NodeDetailPage: React.FC = () => {
   const [uninstallModalOpen, setUninstallModalOpen] = useState(false);
   const [uninstallingAgent, setUninstallingAgent] = useState(false);
 
+  // Extract agent options configured in node Note data
+  const nodeNoteData = useMemo(() => parseNoteData(node?.note), [node?.note]);
+  const preSyncParam = useMemo(() => {
+    const v = nodeNoteData?.["agent_pre_sync"] ?? nodeNoteData?.["pre_sync"];
+    return typeof v === "string" ? v : v ? String(v) : "";
+  }, [nodeNoteData]);
+  const postSyncParam = useMemo(() => {
+    const v = nodeNoteData?.["agent_post_sync"] ?? nodeNoteData?.["post_sync"];
+    return typeof v === "string" ? v : v ? String(v) : "";
+  }, [nodeNoteData]);
+
+  useEffect(() => {
+    if (nodeNoteData?.["agent_disable_apps"] === true || nodeNoteData?.["disable_apps"] === true) {
+      setDisableApps(true);
+    }
+  }, [nodeNoteData]);
+
   // View Policy Modal
   const [viewPolicyModalOpen, setViewPolicyModalOpen] = useState(false);
   const [policyToView, setPolicyToView] = useState<NetworkPolicy | null>(null);
@@ -383,9 +401,26 @@ export const NodeDetailPage: React.FC = () => {
 
   const serverUrl = window.location.origin;
   const currentToken = agentToken || node?.agent_token || "";
-  const installSnippet = currentToken
-    ? `curl ${serverUrl}/api/agent/install.sh | sh -s -- --token "${currentToken}"${overwriteConfig ? " --overwrite-config" : ""}${disableApps ? " --disable-apps" : ""}`
-    : `# No agent token generated yet. Click "Generate Token" above.`;
+  const escapeShellArg = (val: string) => val.replace(/(["\\$`])/g, "\\$1");
+  const installSnippet = useMemo(() => {
+    if (!currentToken) {
+      return `# No agent token generated yet. Click "Generate Token" above.`;
+    }
+    let cmd = `curl ${serverUrl}/api/agent/install.sh | sh -s -- --token "${escapeShellArg(currentToken)}"`;
+    if (overwriteConfig) {
+      cmd += " --overwrite-config";
+    }
+    if (disableApps) {
+      cmd += " --disable-apps";
+    }
+    if (preSyncParam) {
+      cmd += ` --pre-sync "${escapeShellArg(preSyncParam)}"`;
+    }
+    if (postSyncParam) {
+      cmd += ` --post-sync "${escapeShellArg(postSyncParam)}"`;
+    }
+    return cmd;
+  }, [currentToken, serverUrl, overwriteConfig, disableApps, preSyncParam, postSyncParam]);
 
   // Fetch telemetry
   const fetchMetrics = useCallback(
@@ -3674,6 +3709,29 @@ export const NodeDetailPage: React.FC = () => {
                     </Box>
                   }
                 />
+                {(preSyncParam || postSyncParam) && (
+                  <Box
+                    sx={{
+                      pt: 1,
+                      mt: 0.5,
+                      borderTop: "1px dashed #CBD5E1",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 0.5,
+                    }}
+                  >
+                    {preSyncParam && (
+                      <Typography variant="caption" sx={{ color: "#334155" }}>
+                        <strong>Pre-sync hook</strong> (from Note): <code>{preSyncParam}</code>
+                      </Typography>
+                    )}
+                    {postSyncParam && (
+                      <Typography variant="caption" sx={{ color: "#334155" }}>
+                        <strong>Post-sync hook</strong> (from Note): <code>{postSyncParam}</code>
+                      </Typography>
+                    )}
+                  </Box>
+                )}
               </Box>
 
               {/* Code Snippet Box */}

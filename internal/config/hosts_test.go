@@ -53,13 +53,15 @@ func TestParseExtraHosts(t *testing.T) {
 10.0.0.1 db.lan, postgres
 
 fd42:a159:f9f0:1::1 node1.dn42 node1
+- example.com unset.lan
+another.lan -
 `
 	entries, err := ParseExtraHosts(raw)
 	if err != nil {
 		t.Fatalf("ParseExtraHosts failed: %v", err)
 	}
-	if len(entries) != 3 {
-		t.Fatalf("expected 3 entries, got %d", len(entries))
+	if len(entries) != 5 {
+		t.Fatalf("expected 5 entries, got %d", len(entries))
 	}
 
 	if entries[0].IP != "192.168.1.50" || len(entries[0].Hostnames) != 2 || entries[0].Hostnames[0] != "gitlab.example.com" {
@@ -71,6 +73,12 @@ fd42:a159:f9f0:1::1 node1.dn42 node1
 	if entries[2].IP != "fd42:a159:f9f0:1::1" || len(entries[2].Hostnames) != 2 {
 		t.Fatalf("unexpected entry 2: %+v", entries[2])
 	}
+	if entries[3].IP != "-" || len(entries[3].Hostnames) != 2 || entries[3].Hostnames[0] != "example.com" || entries[3].Hostnames[1] != "unset.lan" {
+		t.Fatalf("unexpected entry 3: %+v", entries[3])
+	}
+	if entries[4].IP != "-" || len(entries[4].Hostnames) != 1 || entries[4].Hostnames[0] != "another.lan" {
+		t.Fatalf("unexpected entry 4: %+v", entries[4])
+	}
 
 	// Test invalid cases
 	invalidCases := []struct {
@@ -79,7 +87,9 @@ fd42:a159:f9f0:1::1 node1.dn42 node1
 	}{
 		{"invalid_ip host.lan", "invalid IP address"},
 		{"192.168.1.1", "missing hostname"},
+		{"-", "missing hostname"},
 		{"192.168.1.1 -bad-hostname", "invalid hostname"},
+		{"- -bad-hostname", "invalid hostname"},
 		{"192.168.1.1 host@bad", "invalid hostname"},
 	}
 
@@ -163,3 +173,139 @@ func TestMergeHostRecordsPriority(t *testing.T) {
 		t.Errorf("expected '192.168.100.3 baz baz.internal' in block, got:\n%s", block)
 	}
 }
+
+func TestMergeHostRecordsUnset(t *testing.T) {
+	clusterNodes := []Node{
+		{Name: "nbbug", IP: "192.168.142.207"},
+		{Name: "othernode", IP: "192.168.142.208"},
+	}
+
+	globalExtra := `
+1.2.3.4 example.com
+5.6.7.8 keep.com removeme.com
+- othernode
+`
+
+	nodeExtra := `
+- example.com
+- removeme.com
+- nbbug.internal
+`
+
+	records, err := MergeHostRecords(nodeExtra, globalExtra, clusterNodes)
+	if err != nil {
+		t.Fatalf("MergeHostRecords failed: %v", err)
+	}
+
+	lookup := make(map[string]string)
+	for _, r := range records {
+		lookup[r.Name] = r.IP
+		for _, a := range r.Aliases {
+			lookup[a] = r.IP
+		}
+	}
+
+	// example.com unset by node extra -> should not exist
+	if ip, exists := lookup["example.com"]; exists {
+		t.Errorf("expected example.com to be unset, got IP %s", ip)
+	}
+
+	// 1.2.3.4 had only example.com -> no record for 1.2.3.4 should exist
+	for _, r := range records {
+		if r.IP == "1.2.3.4" {
+			t.Errorf("expected no record for 1.2.3.4, got %+v", r)
+		}
+	}
+
+	// removeme.com unset, but keep.com remains on 5.6.7.8
+	if ip, exists := lookup["removeme.com"]; exists {
+		t.Errorf("expected removeme.com to be unset, got IP %s", ip)
+	}
+	if lookup["keep.com"] != "5.6.7.8" {
+		t.Errorf("expected keep.com -> 5.6.7.8, got %s", lookup["keep.com"])
+	}
+
+	// nbbug.internal unset by node extra -> nbbug remains, nbbug.internal does not exist
+	if lookup["nbbug"] != "192.168.142.207" {
+		t.Errorf("expected nbbug -> 192.168.142.207, got %s", lookup["nbbug"])
+	}
+	if ip, exists := lookup["nbbug.internal"]; exists {
+		t.Errorf("expected nbbug.internal to be unset, got IP %s", ip)
+	}
+
+	// othernode unset by global extra -> othernode does not exist
+	if ip, exists := lookup["othernode"]; exists {
+		t.Errorf("expected othernode to be unset by global extra, got IP %s", ip)
+	}
+
+	// Node extra overriding a global unset
+	globalWithUnset := `- override.me`
+	nodeWithSet := `9.9.9.9 override.me`
+	records2, err := MergeHostRecords(nodeWithSet, globalWithUnset, nil)
+	if err != nil {
+		t.Fatalf("MergeHostRecords failed: %v", err)
+	}
+	lookup2 := make(map[string]string)
+	for _, r := range records2 {
+		lookup2[r.Name] = r.IP
+		for _, a := range r.Aliases {
+			lookup2[a] = r.IP
+		}
+	}
+	if lookup2["override.me"] != "9.9.9.9" {
+		t.Errorf("expected override.me -> 9.9.9.9 (node extra priority), got %s", lookup2["override.me"])
+	}
+}
+
+func TestMergeHostRecordsDomainOrder(t *testing.T) {
+	clusterNodes := []Node{
+		{Name: "nbbug", IP: "192.168.142.207"},
+	}
+
+	// Extra hosts adds multiple domains to the node's main IP
+	globalExtra := `
+192.168.142.207 bitwarden.sagan.me s3.sagan.me webdav-gd.sagan.me webdav-gds.sagan.me webdav.sagan.me
+`
+
+	records, err := MergeHostRecords("", globalExtra, clusterNodes)
+	if err != nil {
+		t.Fatalf("MergeHostRecords failed: %v", err)
+	}
+
+	if len(records) != 1 {
+		t.Fatalf("expected 1 record, got %d", len(records))
+	}
+
+	r := records[0]
+	if r.IP != "192.168.142.207" {
+		t.Errorf("expected IP 192.168.142.207, got %s", r.IP)
+	}
+	if r.Name != "nbbug" {
+		t.Errorf("expected primary Name 'nbbug', got %s", r.Name)
+	}
+
+	expectedAliases := []string{
+		"nbbug.internal",
+		"bitwarden.sagan.me",
+		"s3.sagan.me",
+		"webdav-gd.sagan.me",
+		"webdav-gds.sagan.me",
+		"webdav.sagan.me",
+	}
+
+	if len(r.Aliases) != len(expectedAliases) {
+		t.Fatalf("expected %d aliases, got %d (%v)", len(expectedAliases), len(r.Aliases), r.Aliases)
+	}
+	for i, exp := range expectedAliases {
+		if r.Aliases[i] != exp {
+			t.Errorf("alias[%d]: expected %q, got %q", i, exp, r.Aliases[i])
+		}
+	}
+
+	block := BuildHostsBlock(records)
+	expectedLine := "192.168.142.207 nbbug nbbug.internal bitwarden.sagan.me s3.sagan.me webdav-gd.sagan.me webdav-gds.sagan.me webdav.sagan.me"
+	if !strings.Contains(block, expectedLine) {
+		t.Errorf("expected line %q in block, got:\n%s", expectedLine, block)
+	}
+}
+

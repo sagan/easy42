@@ -1918,10 +1918,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                     multiline
                     rows={3}
                     label="Global Extra Hosts"
-                    placeholder={"# Global /etc/hosts records (IP hostname [aliases...]):\n192.168.1.50 gitlab.example.com gitlab\n10.0.0.1 db.lan db"}
+                    placeholder={"# Global /etc/hosts records (IP hostname [aliases...]):\n192.168.1.50 gitlab.example.com gitlab\n10.0.0.1 db.lan db\n- example.com"}
                     value={extraHosts}
                     onChange={(e) => setExtraHosts(e.target.value)}
-                    helperText="Global custom /etc/hosts records injected into all cluster nodes with Update Hosts enabled. Merged with node extra hosts and cluster node IP hosts (priority: node extra hosts > global extra hosts > easy42 node IP hosts)."
+                    helperText="Global custom /etc/hosts records injected into all cluster nodes with Update Hosts enabled. Merged with node extra hosts and cluster node IP hosts (priority: node extra hosts > global extra hosts > easy42 node IP hosts). Use '-' as IP to unset host(s)."
                     disabled={networkSaving}
                   />
 
