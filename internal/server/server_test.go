@@ -2677,6 +2677,120 @@ func TestUpdateLinkPSKDisableAndRemove(t *testing.T) {
 	}
 }
 
+func TestLinkDisabled_API(t *testing.T) {
+	srv, tempDir, initPass := setupTestServer(t)
+	defer os.RemoveAll(tempDir)
+
+	// Login
+	loginBody, _ := json.Marshal(map[string]string{"password": initPass})
+	req := httptest.NewRequest("POST", "/api/auth/login", bytes.NewReader(loginBody))
+	w := httptest.NewRecorder()
+	srv.router.ServeHTTP(w, req)
+	cookie := w.Result().Cookies()[0]
+
+	// Add two nodes
+	nodeA := config.Node{Name: "n1", Host: "1.1.1.1", IP: "10.0.0.1", Interface: "lo", ASN: 4224420001}
+	nodeB := config.Node{Name: "n2", Host: "2.2.2.2", IP: "10.0.0.2", Interface: "lo", ASN: 4224420002}
+	for _, n := range []config.Node{nodeA, nodeB} {
+		b, _ := json.Marshal(n)
+		r := httptest.NewRequest("POST", "/api/nodes", bytes.NewReader(b))
+		r.AddCookie(cookie)
+		rec := httptest.NewRecorder()
+		srv.router.ServeHTTP(rec, r)
+	}
+
+	// 1. Add link with disabled: true
+	disabledTrue := true
+	addReq := map[string]any{
+		"from_node": "n1",
+		"to_node":   "n2",
+		"from_port": 50001,
+		"to_port":   50002,
+		"disabled":  disabledTrue,
+	}
+	bodyAdd, _ := json.Marshal(addReq)
+	reqAdd := httptest.NewRequest("POST", "/api/links", bytes.NewReader(bodyAdd))
+	reqAdd.AddCookie(cookie)
+	wAdd := httptest.NewRecorder()
+	srv.router.ServeHTTP(wAdd, reqAdd)
+	if wAdd.Code != http.StatusCreated {
+		t.Fatalf("AddLink with disabled=true failed: %d %s", wAdd.Code, wAdd.Body.String())
+	}
+
+	var addedLink config.Link
+	_ = json.Unmarshal(wAdd.Body.Bytes(), &addedLink)
+	if !addedLink.Disabled {
+		t.Fatalf("Expected added link to have Disabled=true, got false")
+	}
+
+	// Verify in config.json on disk
+	cfgPath := filepath.Join(tempDir, "config.json")
+	diskCfg, err := os.ReadFile(cfgPath)
+	if err != nil {
+		t.Fatalf("Failed to read config.json: %v", err)
+	}
+	if !strings.Contains(string(diskCfg), `"disabled": true`) {
+		t.Fatalf("Expected config.json to contain '\"disabled\": true', got:\n%s", string(diskCfg))
+	}
+
+	// 2. Update link to re-enable (disabled: false)
+	disabledFalse := false
+	updateReq := map[string]any{
+		"from_node": "n1",
+		"to_node":   "n2",
+		"from":      addedLink.From,
+		"to":        addedLink.To,
+		"disabled":  disabledFalse,
+	}
+	bodyUpdate, _ := json.Marshal(updateReq)
+	reqUpdate := httptest.NewRequest("PUT", "/api/links", bytes.NewReader(bodyUpdate))
+	reqUpdate.AddCookie(cookie)
+	wUpdate := httptest.NewRecorder()
+	srv.router.ServeHTTP(wUpdate, reqUpdate)
+	if wUpdate.Code != http.StatusOK {
+		t.Fatalf("UpdateLink with disabled=false failed: %d %s", wUpdate.Code, wUpdate.Body.String())
+	}
+
+	var updatedLink config.Link
+	_ = json.Unmarshal(wUpdate.Body.Bytes(), &updatedLink)
+	if updatedLink.Disabled {
+		t.Fatalf("Expected updated link to have Disabled=false, got true")
+	}
+
+	diskCfg2, _ := os.ReadFile(cfgPath)
+	if strings.Contains(string(diskCfg2), `"disabled": true`) {
+		t.Fatalf("Expected config.json not to contain '\"disabled\": true' after re-enabling, got:\n%s", string(diskCfg2))
+	}
+
+	// 3. Update link to disable again (disabled: true)
+	updateReq2 := map[string]any{
+		"from_node": "n1",
+		"to_node":   "n2",
+		"from":      addedLink.From,
+		"to":        addedLink.To,
+		"disabled":  true,
+	}
+	bodyUpdate2, _ := json.Marshal(updateReq2)
+	reqUpdate2 := httptest.NewRequest("PUT", "/api/links", bytes.NewReader(bodyUpdate2))
+	reqUpdate2.AddCookie(cookie)
+	wUpdate2 := httptest.NewRecorder()
+	srv.router.ServeHTTP(wUpdate2, reqUpdate2)
+	if wUpdate2.Code != http.StatusOK {
+		t.Fatalf("UpdateLink with disabled=true failed: %d %s", wUpdate2.Code, wUpdate2.Body.String())
+	}
+
+	var updatedLink2 config.Link
+	_ = json.Unmarshal(wUpdate2.Body.Bytes(), &updatedLink2)
+	if !updatedLink2.Disabled {
+		t.Fatalf("Expected updated link to have Disabled=true, got false")
+	}
+
+	diskCfg3, _ := os.ReadFile(cfgPath)
+	if !strings.Contains(string(diskCfg3), `"disabled": true`) {
+		t.Fatalf("Expected config.json to contain '\"disabled\": true' after re-disabling, got:\n%s", string(diskCfg3))
+	}
+}
+
 func TestStaticFrontendRouting(t *testing.T) {
 	mockFS := fstest.MapFS{
 		"index.html":          &fstest.MapFile{Data: []byte("<html>Mock Index</html>")},

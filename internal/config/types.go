@@ -597,6 +597,7 @@ type Link struct {
 	AssignIPv4 bool      `json:"assign_ipv4,omitempty"` // Assign IPv4 link-local address (169.254.X.X/32) to wg interface
 	Psk        string    `json:"psk,omitempty"`         // Encrypted base64 wireguard preshared key
 	DisableBFD bool      `json:"disable_bfd,omitempty"` // Disable BFD for BGP session
+	Disabled   bool      `json:"disabled,omitempty"`    // Link disabled flag (treated as deleted on node sync)
 	Note       string    `json:"note,omitempty"`        // Markdown format text note
 	ModifiedAt time.Time `json:"modified_at,omitempty"` // Last updated timestamp
 }

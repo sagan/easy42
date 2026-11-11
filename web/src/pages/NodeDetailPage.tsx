@@ -2594,19 +2594,34 @@ export const NodeDetailPage: React.FC = () => {
                               </Box>
                             </TableCell>
                             <TableCell>
-                              <Chip
-                                label={isUp ? "Up" : isDown ? "Down" : "Unknown"}
-                                size="small"
-                                sx={{
-                                  fontWeight: 700,
-                                  fontSize: "0.7rem",
-                                  height: 20,
-                                  bgcolor: isUp ? "#ECFDF5" : isDown ? "#FEF2F2" : "#F1F5F9",
-                                  color: isUp ? "#059669" : isDown ? "#DC2626" : "#64748B",
-                                  border: "1px solid",
-                                  borderColor: isUp ? "#A7F3D0" : isDown ? "#FECDD3" : "#CBD5E1",
-                                }}
-                              />
+                              {link.disabled ? (
+                                <Chip
+                                  label="Disabled"
+                                  size="small"
+                                  sx={{
+                                    fontWeight: 700,
+                                    fontSize: "0.7rem",
+                                    height: 20,
+                                    bgcolor: "#F1F5F9",
+                                    color: "#64748B",
+                                    border: "1px solid #CBD5E1",
+                                  }}
+                                />
+                              ) : (
+                                <Chip
+                                  label={isUp ? "Up" : isDown ? "Down" : "Unknown"}
+                                  size="small"
+                                  sx={{
+                                    fontWeight: 700,
+                                    fontSize: "0.7rem",
+                                    height: 20,
+                                    bgcolor: isUp ? "#ECFDF5" : isDown ? "#FEF2F2" : "#F1F5F9",
+                                    color: isUp ? "#059669" : isDown ? "#DC2626" : "#64748B",
+                                    border: "1px solid",
+                                    borderColor: isUp ? "#A7F3D0" : isDown ? "#FECDD3" : "#CBD5E1",
+                                  }}
+                                />
+                              )}
                             </TableCell>
                             <TableCell>
                               <Typography variant="body2" className="mono-font" sx={{ color: "#334155" }}>

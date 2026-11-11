@@ -175,6 +175,7 @@ func registerLinkTools(s *server.MCPServer, mgr *engine.Manager) {
 		mcp.WithInteger("cost", mcp.Description("Routing cost metric")),
 		mcp.WithString("policy", mcp.Description("Network policy ID for routing")),
 		mcp.WithBoolean("disable_bfd", mcp.Description("Disable BFD session for this link")),
+		mcp.WithBoolean("disabled", mcp.Description("Disable or re-enable this link (omitted from node configs when disabled)")),
 		mcp.WithString("note", mcp.Description("Optional link-level markdown note (use __CLEAR__ to unset)")),
 		mcp.WithArray("tags", mcp.WithStringItems(), mcp.Description("Link tags")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -195,10 +196,14 @@ func registerLinkTools(s *server.MCPServer, mgr *engine.Manager) {
 		policy := req.GetString("policy", "")
 		tags := req.GetStringSlice("tags", nil)
 		var disableBFD *bool
+		var disabledPtr *bool
 		var notePtr *string
 		if args := req.GetArguments(); args != nil {
 			if val, ok := args["disable_bfd"].(bool); ok {
 				disableBFD = &val
+			}
+			if val, ok := args["disabled"].(bool); ok {
+				disabledPtr = &val
 			}
 			if val, ok := args["note"].(string); ok {
 				notePtr = &val
@@ -211,7 +216,7 @@ func registerLinkTools(s *server.MCPServer, mgr *engine.Manager) {
 			toEnd = &config.LinkEnd{Cost: cost, Policy: policy, MTU: mtu}
 		}
 
-		link, err := mgr.UpdateLinkWithAllOptions(from, to, fromEnd, toEnd, tags, nil, disableBFD, notePtr)
+		link, err := mgr.UpdateLinkWithAllOptions(from, to, fromEnd, toEnd, tags, nil, disableBFD, notePtr, disabledPtr)
 		if err != nil {
 			return errorResult(err)
 		}

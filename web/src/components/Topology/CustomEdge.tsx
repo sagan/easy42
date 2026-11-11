@@ -186,7 +186,17 @@ export const CustomEdge: React.FC<EdgeProps> = ({
   let statusText = isExternal ? "External" : "Idle";
   let edgeOpacity = 1.0;
 
-  if (isManual) {
+  const isDisabled = Boolean(link?.disabled);
+
+  if (isDisabled) {
+    strokeColor = "#94A3B8";
+    strokeWidth = 2;
+    strokeDasharray = "6 4";
+    pillBorderColor = "#CBD5E1";
+    pillBgColor = "#F8FAFC";
+    dotColor = "#94A3B8";
+    statusText = isExternal ? "Disabled (Ext)" : isManual ? "Disabled (Manual)" : "Disabled";
+  } else if (isManual) {
     strokeColor = workingState === "not_working" ? "#EF4444" : "#7C3AED";
     strokeDasharray = "5 3";
     strokeWidth = 2.2;
@@ -251,6 +261,9 @@ export const CustomEdge: React.FC<EdgeProps> = ({
     // Focused or hovered: high-contrast, thick, fully visible
     strokeWidth = 2.8;
     edgeOpacity = 1.0;
+    if (isDisabled) {
+      strokeColor = "#64748B";
+    }
   } else if (isDimmed) {
     // Dimmed canvas elements when another node/block is focused
     edgeOpacity = 0.05;
@@ -269,7 +282,11 @@ export const CustomEdge: React.FC<EdgeProps> = ({
     }
     edgeOpacity = baseSubtleOpacity;
 
-    if (isManual) {
+    if (isDisabled) {
+      strokeColor = "#94A3B8";
+      strokeWidth = 1.6;
+      strokeDasharray = "5 4";
+    } else if (isManual) {
       strokeColor = workingState === "not_working" ? "#EF4444" : "#7C3AED"; // Consistent Violet for manual links
       strokeWidth = 1.6;
       strokeDasharray = "5 3";
@@ -299,7 +316,7 @@ export const CustomEdge: React.FC<EdgeProps> = ({
   if (isCentralityActive && centralityInfo && !isDimmed && !isGhostDrag) {
     strokeWidth = Math.max(strokeWidth, centralityInfo.strokeWidth);
     if (isCoreLink) {
-      if (!isExternal && !isManual && workingState !== "not_working") {
+      if (!isExternal && !isManual && !isDisabled && workingState !== "not_working") {
         strokeColor = "#059669";
       }
       edgeOpacity = Math.max(edgeOpacity, 0.95);
@@ -534,13 +551,13 @@ export const CustomEdge: React.FC<EdgeProps> = ({
                     borderRadius: 1,
                     px: 0.5,
                     py: 0.1,
-                    backgroundColor: "rgba(0,0,0,0.03)",
+                    backgroundColor: isDisabled ? "rgba(148, 163, 184, 0.15)" : "rgba(0,0,0,0.03)",
                     display: "flex",
                     alignItems: "center",
                     gap: 0.3,
                   }}
                 >
-                  {workingState === "working" && !isManual && "⚡"}
+                  {workingState === "working" && !isManual && !isDisabled && "⚡"}
                   {statusText}
                 </Box>
 

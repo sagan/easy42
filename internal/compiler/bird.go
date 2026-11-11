@@ -507,6 +507,9 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 	extVariantsMap := make(map[policyVariantKey]bool)
 
 	for _, l := range links {
+		if l.Disabled {
+			continue
+		}
 		var localEnd, remoteEnd *config.LinkEnd
 		var remoteNode *config.Node
 

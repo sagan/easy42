@@ -859,6 +859,10 @@ func mergeLink(target *config.Link, patch config.LinkPatch, now time.Time) ([]Ap
 		checkField("disable_bfd", target.DisableBFD, *patch.DisableBFD)
 		target.DisableBFD = *patch.DisableBFD
 	}
+	if patch.Disabled != nil && *patch.Disabled != target.Disabled {
+		checkField("disabled", target.Disabled, *patch.Disabled)
+		target.Disabled = *patch.Disabled
+	}
 	if patch.Psk != nil && *patch.Psk != target.Psk {
 		checkField("psk", "***", "***")
 		target.Psk = *patch.Psk
@@ -1017,6 +1021,9 @@ func createLinkFromPatch(patch config.LinkPatch, now time.Time) (*config.Link, [
 	}
 	if patch.DisableBFD != nil {
 		link.DisableBFD = *patch.DisableBFD
+	}
+	if patch.Disabled != nil {
+		link.Disabled = *patch.Disabled
 	}
 	if patch.Psk != nil {
 		link.Psk = *patch.Psk

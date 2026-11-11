@@ -108,6 +108,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
   const [linkNoteTab, setLinkNoteTab] = useState<"write" | "preview">("write");
   const [assignIPv4, setAssignIPv4] = useState<boolean>(false);
   const [enableBFD, setEnableBFD] = useState<boolean>(true);
+  const [linkDisabled, setLinkDisabled] = useState<boolean>(false);
   const [enablePsk, setEnablePsk] = useState<boolean>(true);
   const [customPsk, setCustomPsk] = useState<string>("");
   const [obfuscatorEnabled, setObfuscatorEnabled] = useState<boolean>(false);
@@ -259,6 +260,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
       setLinkNoteTab("write");
       setAssignIPv4(Boolean(linkToEdit.assign_ipv4));
       setEnableBFD(!Boolean(linkToEdit.disable_bfd));
+      setLinkDisabled(Boolean(linkToEdit.disabled));
       setEnablePsk(Boolean(linkToEdit.psk || linkToEdit.from.psk || linkToEdit.to.psk));
       setCustomPsk("");
       const fromRole = linkToEdit.from.obfuscator || "none";
@@ -276,6 +278,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
       setLinkType("wireguard");
       setAssignIPv4(false);
       setEnableBFD(true);
+      setLinkDisabled(false);
       setEnablePsk(true);
       setCustomPsk("");
       setObfuscatorEnabled(false);
@@ -582,6 +585,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
             from_note: reqFrom.note || "",
             to_note: reqTo.note || "",
             disable_bfd: !enableBFD,
+            disabled: linkDisabled,
             note: linkNote.trim(),
           });
           onLinkUpdated?.(updated);
@@ -609,6 +613,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
             from_note: reqFrom.note,
             to_note: reqTo.note,
             disable_bfd: !enableBFD,
+            disabled: linkDisabled,
             note: linkNote.trim() || undefined,
           });
           onLinkAdded?.(link);
@@ -711,6 +716,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
             note: linkNote.trim(),
             assign_ipv4: assignIPv4,
             disable_bfd: !enableBFD,
+            disabled: linkDisabled,
             psk: pskVal,
           });
           onLinkUpdated?.(updated);
@@ -741,6 +747,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
             note: linkNote.trim() || undefined,
             assign_ipv4: assignIPv4,
             disable_bfd: !enableBFD,
+            disabled: linkDisabled,
             psk: pskVal,
           });
           onLinkAdded?.(link);
@@ -822,6 +829,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
             },
             assign_ipv4: assignIPv4,
             disable_bfd: !enableBFD,
+            disabled: linkDisabled,
             psk: pskVal,
             note: linkNote.trim(),
           });
@@ -855,6 +863,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
             note: linkNote.trim() || undefined,
             assign_ipv4: assignIPv4,
             disable_bfd: !enableBFD,
+            disabled: linkDisabled,
             psk: pskVal,
             from: {
               use_ip: fromUseIp,
@@ -1177,6 +1186,63 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                   >
                     Bidirectional Forwarding Detection (BFD) provides sub-second link failure detection for BGP peering
                     sessions. When disabled, adds &quot;bfd no;&quot; to BIRD link configuration on both link ends.
+                  </Typography>
+                </Box>
+              }
+              sx={{ alignItems: "flex-start", ml: 0, m: 0 }}
+            />
+          </Box>
+
+          {/* Link Status: Disable Link */}
+          <Box
+            sx={{
+              p: 1.75,
+              borderRadius: 2,
+              backgroundColor: linkDisabled ? "rgba(100, 116, 139, 0.08)" : "#F8FAFC",
+              border: "1px solid",
+              borderColor: linkDisabled ? "rgba(100, 116, 139, 0.4)" : "#E2E8F0",
+              transition: "all 0.2s ease",
+            }}
+          >
+            <FormControlLabel
+              control={
+                <Checkbox
+                  id="link-disabled-checkbox"
+                  size="small"
+                  checked={linkDisabled}
+                  onChange={(e) => setLinkDisabled(e.target.checked)}
+                  sx={{
+                    color: "#94A3B8",
+                    "&.Mui-checked": {
+                      color: "#64748B",
+                    },
+                  }}
+                />
+              }
+              label={
+                <Box>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                    <Typography variant="body2" sx={{ fontSize: "0.85rem", fontWeight: 700, color: "#1E293B" }}>
+                      Disable Link
+                    </Typography>
+                    <Chip
+                      label={linkDisabled ? "Disabled (Skipped on Sync)" : "Active"}
+                      size="small"
+                      sx={{
+                        height: 18,
+                        fontSize: "0.62rem",
+                        fontWeight: 800,
+                        bgcolor: linkDisabled ? "#94A3B8" : "rgba(16, 185, 129, 0.15)",
+                        color: linkDisabled ? "#FFFFFF" : "#059669",
+                        borderRadius: "4px",
+                      }}
+                    />
+                  </Box>
+                  <Typography
+                    variant="caption"
+                    sx={{ color: "#64748B", display: "block", fontSize: "0.72rem", lineHeight: 1.4, mt: 0.3 }}
+                  >
+                    When disabled, this link is treated as deleted when syncing to nodes (interfaces and BGP sessions will be removed on nodes), but its configuration is preserved in Easy42.
                   </Typography>
                 </Box>
               }

@@ -3081,3 +3081,157 @@ func TestLinkScopeNote(t *testing.T) {
 		t.Fatalf("Expected empty link.Note after clear, got %q", cleared.Note)
 	}
 }
+
+func TestLinkDisabled(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "easy42-engine-link-disabled-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	store := config.NewStore(tempDir)
+	pass, err := store.Initialize()
+	if err != nil {
+		t.Fatalf("Failed to init store: %v", err)
+	}
+	mgr := NewManager(store)
+	if err := mgr.Unlock(pass); err != nil {
+		t.Fatalf("Failed to unlock manager: %v", err)
+	}
+
+	nodeA := config.Node{
+		Name: "dis-a",
+		Host: "192.168.10.1",
+		IP:   "10.0.0.1",
+		ASN:  4242420001,
+	}
+	nodeB := config.Node{
+		Name: "dis-b",
+		Host: "192.168.10.2",
+		IP:   "10.0.0.2",
+		ASN:  4242420002,
+	}
+	if err := mgr.AddNode(nodeA); err != nil {
+		t.Fatalf("AddNode nodeA failed: %v", err)
+	}
+	if err := mgr.AddNode(nodeB); err != nil {
+		t.Fatalf("AddNode nodeB failed: %v", err)
+	}
+
+	// 1. Add link
+	link, err := mgr.AddLink("dis-a", "dis-b", 51820, 51820, nil)
+	if err != nil {
+		t.Fatalf("AddLink failed: %v", err)
+	}
+	if link.Disabled {
+		t.Fatalf("Expected link.Disabled == false initially")
+	}
+
+	// Active link: plan sync should include WireGuard configuration
+	actionsActive, err := mgr.PlanSync("dis-a", "dis-b")
+	if err != nil {
+		t.Fatalf("PlanSync failed: %v", err)
+	}
+	var wgConfigActions []config.SyncAction
+	for _, act := range actionsActive {
+		if act.Type == config.ActionSyncConfig {
+			wgConfigActions = append(wgConfigActions, act)
+		}
+	}
+	if len(wgConfigActions) == 0 {
+		t.Fatalf("Expected WireGuard sync actions for active link, got none")
+	}
+
+	// Active link: BIRD config should include peer protocol
+	birdActive, err := mgr.GenerateBirdConfig("dis-a")
+	if err != nil {
+		t.Fatalf("GenerateBirdConfig failed: %v", err)
+	}
+	if !strings.Contains(birdActive, "protocol bgp") || !strings.Contains(birdActive, link.From.Interface) {
+		t.Fatalf("Expected BIRD config to contain bgp protocol for %s, got:\n%s", link.From.Interface, birdActive)
+	}
+
+	// Simulate that the interface was previously synced and recorded in stateStore
+	_ = mgr.StateStore().UpdateInterface("dis-a", nodeA.Host, config.StateInterface{
+		Name:       link.From.Interface,
+		TargetFile: fmt.Sprintf("/etc/wireguard/%s.conf", link.From.Interface),
+		ConfigHash: "some-previous-hash",
+		AppliedAt:  time.Now(),
+	})
+
+	// 2. Disable link
+	disabledVal := true
+	updated, err := mgr.UpdateLinkWithAllOptions("dis-a", "dis-b", nil, nil, nil, nil, nil, nil, &disabledVal)
+	if err != nil {
+		t.Fatalf("UpdateLinkWithAllOptions failed: %v", err)
+	}
+	if !updated.Disabled {
+		t.Fatalf("Expected updated.Disabled == true")
+	}
+
+	// Verify info is NOT deleted from Easy42 config.json
+	linksInStore := mgr.GetLinks()
+	if len(linksInStore) != 1 {
+		t.Fatalf("Expected 1 link preserved in store, got %d", len(linksInStore))
+	}
+	if !linksInStore[0].Disabled {
+		t.Fatalf("Expected preserved link in store to have Disabled == true")
+	}
+
+	// 3. PlanSync when link is disabled:
+	// Should treat link as deleted on nodes:
+	// - No ActionSyncConfig for this link
+	// - ActionDeleteConfig generated to remove the interface from dis-a
+	actionsDisabled, err := mgr.PlanSync("dis-a", "dis-b")
+	if err != nil {
+		t.Fatalf("PlanSync when disabled failed: %v", err)
+	}
+	foundDeleteAction := false
+	for _, act := range actionsDisabled {
+		if act.Type == config.ActionSyncConfig && (act.Interface == link.From.Interface || act.Interface == link.To.Interface) {
+			t.Fatalf("Unexpected ActionSyncConfig for disabled link interface %s", act.Interface)
+		}
+		if act.Type == config.ActionDeleteConfig && act.NodeName == "dis-a" && act.Interface == link.From.Interface {
+			foundDeleteAction = true
+		}
+	}
+	if !foundDeleteAction {
+		t.Fatalf("Expected ActionDeleteConfig for interface %s on dis-a, got actions: %+v", link.From.Interface, actionsDisabled)
+	}
+
+	// BIRD config should omit the disabled link
+	birdDisabled, err := mgr.GenerateBirdConfig("dis-a")
+	if err != nil {
+		t.Fatalf("GenerateBirdConfig when disabled failed: %v", err)
+	}
+	if strings.Contains(birdDisabled, link.From.Interface) {
+		t.Fatalf("Expected BIRD config to omit disabled interface %s, but found it in:\n%s", link.From.Interface, birdDisabled)
+	}
+
+	// 4. Re-enable link
+	enabledVal := false
+	reEnabled, err := mgr.UpdateLinkWithAllOptions("dis-a", "dis-b", nil, nil, nil, nil, nil, nil, &enabledVal)
+	if err != nil {
+		t.Fatalf("UpdateLinkWithAllOptions re-enable failed: %v", err)
+	}
+	if reEnabled.Disabled {
+		t.Fatalf("Expected reEnabled.Disabled == false")
+	}
+
+	// PlanSync should once again sync the link
+	actionsReEnabled, err := mgr.PlanSync("dis-a", "dis-b")
+	if err != nil {
+		t.Fatalf("PlanSync re-enabled failed: %v", err)
+	}
+	hasSyncAction := false
+	for _, act := range actionsReEnabled {
+		if act.Type == config.ActionSyncConfig && act.Interface == link.From.Interface {
+			hasSyncAction = true
+			break
+		}
+	}
+	if !hasSyncAction {
+		t.Fatalf("Expected ActionSyncConfig for re-enabled link interface %s", link.From.Interface)
+	}
+}
+

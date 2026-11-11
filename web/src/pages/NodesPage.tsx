@@ -412,6 +412,7 @@ export const NodesPage: React.FC = () => {
   const nodeDownLinksCountMap = useMemo(() => {
     const map = new Map<string, number>();
     (links || []).forEach((l) => {
+      if (l.disabled) return;
       if (getLinkWorkingState(l, networkState, nodeStatuses) === "not_working") {
         if (l.from?.name) {
           map.set(l.from.name, (map.get(l.from.name) || 0) + 1);

@@ -362,7 +362,7 @@ func BuildObfuscatorSpecsForNode(cfg *config.Config, node *config.Node) ([]*agen
 	specs := make([]*agentpb.ObfuscatorSpec, 0)
 	for i := range cfg.Links {
 		link := &cfg.Links[i]
-		if link.IsManual() {
+		if link.IsManual() || link.Disabled {
 			continue
 		}
 		var selfEnd, peerEnd *config.LinkEnd
@@ -463,6 +463,9 @@ func validateNodeObfuscatorConfiguration(cfg *config.Config, node *config.Node) 
 	}
 	for i := range cfg.Links {
 		link := &cfg.Links[i]
+		if link.Disabled {
+			continue
+		}
 		if link.From.Name != node.Name && link.To.Name != node.Name {
 			continue
 		}

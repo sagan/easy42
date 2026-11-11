@@ -208,6 +208,7 @@ export interface Link {
   assign_ipv4?: boolean;
   psk?: string;
   disable_bfd?: boolean;
+  disabled?: boolean;
   note?: string;
   modified_at?: string;
 }

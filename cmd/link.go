@@ -47,8 +47,12 @@ var linkListCmd = &cobra.Command{
 		w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 0, 3, ' ', 0)
 		fmt.Fprintln(w, "TYPE\tFROM NODE\tINTERFACE\tADDRESS\tPORT\tTO NODE\tINTERFACE\tADDRESS\tPORT")
 		for _, l := range cfg.Links {
+			lType := l.LinkType()
+			if l.Disabled {
+				lType += " (disabled)"
+			}
 			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%d\t%s\t%s\t%s\t%d\n",
-				l.LinkType(),
+				lType,
 				l.From.Name, l.From.Interface, l.From.Address, l.From.ListenPort,
 				l.To.Name, l.To.Interface, l.To.Address, l.To.ListenPort)
 		}

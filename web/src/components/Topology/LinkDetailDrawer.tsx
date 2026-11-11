@@ -108,6 +108,7 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
   const [restartingTo, setRestartingTo] = useState(false);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [togglingDisabled, setTogglingDisabled] = useState(false);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [copiedEndpoint, setCopiedEndpoint] = useState<string | null>(null);
   const [copiedField, setCopiedField] = useState<string | null>(null);
@@ -438,6 +439,30 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
     }
   };
 
+  const handleToggleDisabled = async () => {
+    if (!link) return;
+    setTogglingDisabled(true);
+    setError(null);
+    try {
+      const willDisable = !Boolean(link.disabled);
+      const updated = await api.updateLink({
+        from_node: link.from.name,
+        to_node: link.to.name,
+        disabled: willDisable,
+        from: { interface: link.from.interface },
+        to: { interface: link.to.interface },
+      });
+      onLinkUpdated?.(updated);
+      setActionSuccess(`Link ${willDisable ? "disabled" : "enabled"} successfully. Sync to nodes to apply changes.`);
+      setTimeout(() => setActionSuccess(null), 4000);
+    } catch (err: unknown) {
+      const e = err as Error;
+      setError(e.message || "Failed to update link status");
+    } finally {
+      setTogglingDisabled(false);
+    }
+  };
+
   const copyToClipboard = (text: string, id: string) => {
     if (!text) return;
     navigator.clipboard.writeText(text);
@@ -666,6 +691,19 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
               </IconButton>
             </Tooltip>
           )}
+          <Tooltip title={link.disabled ? "Enable Link" : "Disable Link"}>
+            <IconButton
+              size="small"
+              onClick={handleToggleDisabled}
+              disabled={togglingDisabled}
+              sx={{
+                color: link.disabled ? "#10B981" : "#64748B",
+                "&:hover": { backgroundColor: link.disabled ? "rgba(16, 185, 129, 0.08)" : "rgba(100, 116, 139, 0.08)" },
+              }}
+            >
+              {link.disabled ? <Check size={18} /> : <EyeOff size={18} />}
+            </IconButton>
+          </Tooltip>
           <Tooltip title="Edit Link">
             <IconButton
               size="small"
@@ -685,6 +723,46 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
       </Box>
 
       <Divider sx={{ borderColor: "#E2E8F0", mb: 2.5 }} />
+
+      {link.disabled && (
+        <Box
+          sx={{
+            p: 1.75,
+            mb: 2.5,
+            borderRadius: 2,
+            backgroundColor: "#F1F5F9",
+            border: "1px solid #CBD5E1",
+            display: "flex",
+            alignItems: "flex-start",
+            justifyContent: "space-between",
+            gap: 1.5,
+          }}
+        >
+          <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1.2 }}>
+            <EyeOff size={18} color="#64748B" style={{ marginTop: 2, flexShrink: 0 }} />
+            <Box>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#334155", lineHeight: 1.2 }}>
+                Link is Disabled
+              </Typography>
+              <Typography variant="caption" sx={{ color: "#64748B", display: "block", mt: 0.5, lineHeight: 1.4 }}>
+                This link is disabled and treated as deleted when syncing to nodes. Its configuration remains safely stored in Easy42.
+              </Typography>
+            </Box>
+          </Box>
+          <Chip
+            label="DISABLED"
+            size="small"
+            sx={{
+              fontWeight: 800,
+              fontSize: "0.62rem",
+              bgcolor: "#94A3B8",
+              color: "#FFFFFF",
+              borderRadius: "4px",
+              flexShrink: 0,
+            }}
+          />
+        </Box>
+      )}
 
       {/* Live Connection Health Card */}
       {(() => {
@@ -2539,6 +2617,38 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
             {refreshing ? "Refreshing Link State..." : "Refresh Link State"}
           </Button>
         )}
+        <Button
+          fullWidth
+          variant="outlined"
+          color={link.disabled ? "success" : "inherit"}
+          startIcon={
+            togglingDisabled ? (
+              <CircularProgress size={16} color="inherit" />
+            ) : link.disabled ? (
+              <Check size={16} />
+            ) : (
+              <EyeOff size={16} />
+            )
+          }
+          onClick={handleToggleDisabled}
+          disabled={refreshing || deleting || togglingDisabled}
+          sx={{
+            borderColor: link.disabled ? "#10B981" : "#CBD5E1",
+            color: link.disabled ? "#059669" : "#475569",
+            fontWeight: 600,
+            textTransform: "none",
+            "&:hover": {
+              borderColor: link.disabled ? "#059669" : "#64748B",
+              backgroundColor: link.disabled ? "rgba(16, 185, 129, 0.08)" : "rgba(100, 116, 139, 0.08)",
+            },
+          }}
+        >
+          {togglingDisabled
+            ? "Updating..."
+            : link.disabled
+              ? "Enable Link"
+              : "Disable Link"}
+        </Button>
         <Button
           fullWidth
           variant="contained"

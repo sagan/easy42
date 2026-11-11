@@ -1044,11 +1044,13 @@ func (m *Manager) buildLink(cfg *config.Config, n1, n2 *config.Node, listenPort1
 	linkType := config.LinkTypeWireGuard
 	assignIPv4 := false
 	disableBFD := false
+	linkDisabled := false
 	linkNote := ""
 	if len(linkParams) > 0 && linkParams[0] != nil {
 		lp := linkParams[0]
 		assignIPv4 = lp.AssignIPv4
 		disableBFD = lp.DisableBFD
+		linkDisabled = lp.Disabled
 		if lp.Note != "" {
 			linkNote = lp.Note
 		}
@@ -1585,6 +1587,7 @@ func (m *Manager) buildLink(cfg *config.Config, n1, n2 *config.Node, listenPort1
 		Type:       linkType,
 		AssignIPv4: assignIPv4,
 		DisableBFD: disableBFD,
+		Disabled:   linkDisabled,
 		Note:       linkNote,
 		Psk:        encPsk,
 		From: config.LinkEnd{
@@ -1996,8 +1999,8 @@ func (m *Manager) UpdateLinkWithOptions(node1Name, node2Name string, customFrom,
 	return m.UpdateLinkWithAllOptions(node1Name, node2Name, customFrom, customTo, tags, assignIPv4, bfd, nil)
 }
 
-// UpdateLinkWithAllOptions updates parameters of an existing link, including assignIPv4, disableBFD, and note options
-func (m *Manager) UpdateLinkWithAllOptions(node1Name, node2Name string, customFrom, customTo *config.LinkEnd, tags []string, assignIPv4 *bool, disableBFD *bool, note *string) (*config.Link, error) {
+// UpdateLinkWithAllOptions updates parameters of an existing link, including assignIPv4, disableBFD, note, and disabled options
+func (m *Manager) UpdateLinkWithAllOptions(node1Name, node2Name string, customFrom, customTo *config.LinkEnd, tags []string, assignIPv4 *bool, disableBFD *bool, note *string, disabled ...*bool) (*config.Link, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -2289,6 +2292,9 @@ func (m *Manager) UpdateLinkWithAllOptions(node1Name, node2Name string, customFr
 
 	if disableBFD != nil {
 		link.DisableBFD = *disableBFD
+	}
+	if len(disabled) > 0 && disabled[0] != nil {
+		link.Disabled = *disabled[0]
 	}
 
 	if note != nil {
@@ -3169,6 +3175,9 @@ func (m *Manager) PlanSyncWithScope(scope string, nodeNames ...string) ([]config
 			manualIfacesPerNode[n.Name] = make(map[string]bool)
 		}
 		for _, link := range links {
+			if link.Disabled {
+				continue
+			}
 			if link.IsManual() {
 				manualIfacesPerNode[link.From.Name][link.From.Interface] = true
 				manualIfacesPerNode[link.To.Name][link.To.Interface] = true
@@ -3403,7 +3412,7 @@ func (m *Manager) PlanSyncWithScope(scope string, nodeNames ...string) ([]config
 	// Skipped if vault is locked since WireGuard private keys cannot be decrypted.
 	if isVaultUnlocked {
 		for _, link := range links {
-			if link.IsManual() {
+			if link.IsManual() || link.Disabled {
 				continue
 			}
 			fromNode := nodeMap[link.From.Name]
@@ -3543,6 +3552,9 @@ func (m *Manager) PlanSyncWithScope(scope string, nodeNames ...string) ([]config
 		// Determine policies used by links on this node
 		usedPolicies := make(map[string]config.NetworkPolicy)
 		for _, l := range links {
+			if l.Disabled {
+				continue
+			}
 			var localEnd *config.LinkEnd
 			var remoteNode *config.Node
 			if l.From.Name == node.Name {

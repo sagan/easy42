@@ -367,6 +367,7 @@ type LinkPatch struct {
 	AssignIPv4 *bool         `json:"assign_ipv4,omitempty" yaml:"assign_ipv4,omitempty"`
 	Psk        *string       `json:"psk,omitempty" yaml:"psk,omitempty"`
 	DisableBFD *bool         `json:"disable_bfd,omitempty" yaml:"disable_bfd,omitempty"`
+	Disabled   *bool         `json:"disabled,omitempty" yaml:"disabled,omitempty"`
 	Note       *string       `json:"note,omitempty" yaml:"note,omitempty"`
 }
 

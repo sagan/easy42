@@ -403,7 +403,10 @@ export function generateTopologySvg(
 
       let strokeColor = "#10B981"; // Emerald
       let strokeDash = "";
-      if (isManual) {
+      if (link.disabled) {
+        strokeColor = "#94A3B8"; // Grey for disabled links
+        strokeDash = 'stroke-dasharray="5 4"';
+      } else if (isManual) {
         strokeColor = "#7C3AED"; // Consistent Violet
         strokeDash = 'stroke-dasharray="5 3"';
       } else if (isExternal) {
