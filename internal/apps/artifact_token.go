@@ -9,11 +9,16 @@ import (
 
 // ArtifactTokenInfo stores information associated with an artifact download token
 type ArtifactTokenInfo struct {
-	FilePath  string
-	FileName  string
-	SHA256    string
-	NodeName  string
-	ExpiresAt time.Time
+	AppName   string    `json:"app_name,omitempty"`
+	Version   string    `json:"version,omitempty"`
+	Arch      string    `json:"arch,omitempty"`
+	OSName    string    `json:"os_name,omitempty"`
+	Endian    string    `json:"endian,omitempty"`
+	FilePath  string    `json:"file_path"`
+	FileName  string    `json:"file_name"`
+	SHA256    string    `json:"sha256"`
+	NodeName  string    `json:"node_name"`
+	ExpiresAt time.Time `json:"expires_at"`
 }
 
 // ArtifactTokenManager securely issues and validates temporary download tokens
@@ -31,6 +36,11 @@ func NewArtifactTokenManager() *ArtifactTokenManager {
 
 // GenerateToken creates an ephemeral token for downloading an artifact file
 func (m *ArtifactTokenManager) GenerateToken(filePath, fileName, sha256Hash, nodeName string, ttl time.Duration) string {
+	return m.GenerateTokenWithApp("", "", "", "", "", filePath, fileName, sha256Hash, nodeName, ttl)
+}
+
+// GenerateTokenWithApp creates an ephemeral token including app context for on-demand re-download
+func (m *ArtifactTokenManager) GenerateTokenWithApp(appName, version, arch, osName, endian, filePath, fileName, sha256Hash, nodeName string, ttl time.Duration) string {
 	b := make([]byte, 24)
 	if _, err := rand.Read(b); err != nil {
 		// Fallback to timestamp-based if crypto/rand fails
@@ -52,6 +62,11 @@ func (m *ArtifactTokenManager) GenerateToken(filePath, fileName, sha256Hash, nod
 	}
 
 	m.tokens[token] = ArtifactTokenInfo{
+		AppName:   appName,
+		Version:   version,
+		Arch:      arch,
+		OSName:    osName,
+		Endian:    endian,
 		FilePath:  filePath,
 		FileName:  fileName,
 		SHA256:    sha256Hash,

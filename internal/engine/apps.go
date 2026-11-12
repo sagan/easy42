@@ -667,7 +667,7 @@ func (m *Manager) BuildAppSpecsForNode(nodeName string) ([]*agentpb.AppSpec, err
 					if !ok || info == nil {
 						continue
 					}
-					token := m.artifactTokens.GenerateToken(info.LocalPath, reqFile.Name, info.SHA256, nodeName, 24*time.Hour)
+					token := m.artifactTokens.GenerateTokenWithApp(rawApp.Name, rawApp.Version, nodeArch, osName, nodeEndian, info.LocalPath, reqFile.Name, info.SHA256, nodeName, 24*time.Hour)
 
 					pullPolicy := reqFile.PullPolicy
 					if pullPolicy == "" {
@@ -806,4 +806,171 @@ func (m *Manager) TriggerAppAction(ctx context.Context, nodeName string, appName
 	}
 
 	return conn.SendCommand(ctx, cmd)
+}
+
+// GetApp finds an app by ID or name
+func (m *Manager) GetApp(id string) (*config.App, error) {
+	allApps, err := m.GetApps()
+	if err != nil {
+		return nil, err
+	}
+	for _, a := range allApps {
+		if a.ID == id || a.Name == id {
+			appCopy := a
+			return &appCopy, nil
+		}
+	}
+	return nil, fmt.Errorf("app '%s' not found", id)
+}
+
+// FindAppByName finds an app by its exact name
+func (m *Manager) FindAppByName(name string) (*config.App, error) {
+	allApps, err := m.GetApps()
+	if err != nil {
+		return nil, err
+	}
+	for _, a := range allApps {
+		if a.Name == name {
+			appCopy := a
+			return &appCopy, nil
+		}
+	}
+	return nil, fmt.Errorf("app with name '%s' not found", name)
+}
+
+// ValidateAppArtifact validates a cached app artifact against its origin
+func (m *Manager) ValidateAppArtifact(ctx context.Context, appID string) (*apps.ArtifactValidationResult, error) {
+	if m.artifactMgr == nil {
+		return nil, fmt.Errorf("artifact manager not initialized")
+	}
+
+	app, err := m.GetApp(appID)
+	if err != nil {
+		return nil, err
+	}
+	if app == nil || app.Artifact == nil {
+		return nil, fmt.Errorf("app '%s' does not have artifact configured", appID)
+	}
+
+	rawVars, _ := m.GetAppVariables()
+	globalVars := apps.VariablesToMap(rawVars)
+
+	// Determine node arch/endian from a target node if possible, else default to amd64
+	nodeArch := "amd64"
+	nodeEndian := ""
+	osName := "linux"
+	cfg := m.store.Get()
+	if cfg != nil {
+		for _, n := range cfg.Nodes {
+			if config.AppTargetsNode(*app, &n, n.Name) {
+				osInfo := strings.ToLower(m.GetOSInfo(n.Name))
+				if arch := apps.NodeArchFromOSInfo(osInfo); arch != "" {
+					nodeArch = arch
+				}
+				nodeEndian = apps.NodeEndianFromOSInfo(osInfo)
+				break
+			}
+		}
+	}
+
+	return m.artifactMgr.ValidateArtifact(ctx, *app, nodeArch, osName, nodeEndian, globalVars)
+}
+
+// ValidateAllAppArtifacts validates all apps with artifact configurations
+func (m *Manager) ValidateAllAppArtifacts(ctx context.Context) ([]*apps.ArtifactValidationResult, error) {
+	allApps, err := m.GetApps()
+	if err != nil {
+		return nil, err
+	}
+
+	var results []*apps.ArtifactValidationResult
+	for _, app := range allApps {
+		if app.Artifact != nil {
+			res, err := m.ValidateAppArtifact(ctx, app.ID)
+			if err != nil {
+				results = append(results, &apps.ArtifactValidationResult{
+					AppName: app.Name,
+					Version: app.Version,
+					Status:  "error",
+					Message: err.Error(),
+				})
+			} else if res != nil {
+				results = append(results, res)
+			}
+		}
+	}
+	return results, nil
+}
+
+// ClearAppArtifactCache purges cached physical files for an app while preserving metadata
+func (m *Manager) ClearAppArtifactCache(appID string) (*apps.ArtifactClearCacheResult, error) {
+	if m.artifactMgr == nil {
+		return nil, fmt.Errorf("artifact manager not initialized")
+	}
+	app, err := m.GetApp(appID)
+	if err != nil {
+		return nil, err
+	}
+	return m.artifactMgr.ClearAppCache(app.Name)
+}
+
+// ClearAllAppArtifactCache purges all physical artifact files across all apps while preserving metadata
+func (m *Manager) ClearAllAppArtifactCache() (*apps.ArtifactClearCacheResult, error) {
+	if m.artifactMgr == nil {
+		return nil, fmt.Errorf("artifact manager not initialized")
+	}
+	return m.artifactMgr.ClearAllArtifactCaches()
+}
+
+// GetAppArtifactStatus returns live artifact cache status for an app
+func (m *Manager) GetAppArtifactStatus(appID string) (*apps.AppArtifactStatus, error) {
+	if m.artifactMgr == nil {
+		return nil, fmt.Errorf("artifact manager not initialized")
+	}
+	app, err := m.GetApp(appID)
+	if err != nil {
+		return nil, err
+	}
+	return m.artifactMgr.GetAppCacheStatus(*app)
+}
+
+// GetAllAppArtifactStatus returns artifact status for all apps
+func (m *Manager) GetAllAppArtifactStatus() ([]*apps.AppArtifactStatus, error) {
+	if m.artifactMgr == nil {
+		return nil, fmt.Errorf("artifact manager not initialized")
+	}
+	allApps, err := m.GetApps()
+	if err != nil {
+		return nil, err
+	}
+	var list []*apps.AppArtifactStatus
+	for _, app := range allApps {
+		if app.Artifact != nil {
+			st, err := m.artifactMgr.GetAppCacheStatus(app)
+			if err == nil && st != nil {
+				list = append(list, st)
+			}
+		}
+	}
+	return list, nil
+}
+
+// EnsureArtifactPhysicalFile re-downloads and extracts an artifact file on demand if purged from disk
+func (m *Manager) EnsureArtifactPhysicalFile(ctx context.Context, tokenInfo *apps.ArtifactTokenInfo) error {
+	if m.artifactMgr == nil {
+		return fmt.Errorf("artifact manager not initialized")
+	}
+	if tokenInfo == nil || tokenInfo.AppName == "" {
+		return fmt.Errorf("insufficient token info to restore artifact")
+	}
+
+	app, err := m.FindAppByName(tokenInfo.AppName)
+	if err != nil || app == nil || app.Artifact == nil {
+		return fmt.Errorf("app '%s' not found or has no artifact", tokenInfo.AppName)
+	}
+
+	rawVars, _ := m.GetAppVariables()
+	globalVars := apps.VariablesToMap(rawVars)
+
+	return m.artifactMgr.EnsurePhysicalFile(ctx, *app, tokenInfo.Version, tokenInfo.Arch, tokenInfo.OSName, tokenInfo.Endian, globalVars)
 }

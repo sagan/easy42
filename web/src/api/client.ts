@@ -53,6 +53,9 @@ import type {
   UpdateMCPSettingsRequest,
   ResetMCPTokenRequest,
   EventsResponse,
+  AppArtifactStatus,
+  ArtifactValidationResult,
+  ArtifactClearCacheResult,
 } from "../types/api";
 
 const API_BASE = "/api";
@@ -688,6 +691,28 @@ export const api = {
     request<AppActionResponse>(`/nodes/${encodeURIComponent(nodeName)}/apps/${encodeURIComponent(appName)}/action`, {
       method: "POST",
       body: JSON.stringify({ action, app_type: appType, log_lines: logLines }),
+    }),
+
+  // Artifact Cache & Validation
+  getAppArtifactStatus: (id: string) =>
+    request<AppArtifactStatus>(`/apps/${encodeURIComponent(id)}/artifact/status`),
+  getAllAppArtifactStatus: () =>
+    request<AppArtifactStatus[]>("/apps/artifact/status"),
+  validateAppArtifact: (id: string) =>
+    request<ArtifactValidationResult>(`/apps/${encodeURIComponent(id)}/artifact/validate`, {
+      method: "POST",
+    }),
+  validateAllAppArtifacts: () =>
+    request<ArtifactValidationResult[]>("/apps/artifact/validate-all", {
+      method: "POST",
+    }),
+  clearAppArtifactCache: (id: string) =>
+    request<ArtifactClearCacheResult>(`/apps/${encodeURIComponent(id)}/artifact/clear-cache`, {
+      method: "POST",
+    }),
+  clearAllAppArtifactCache: () =>
+    request<ArtifactClearCacheResult>("/apps/artifact/clear-cache-all", {
+      method: "POST",
     }),
 
   // Global App Variables

@@ -449,3 +449,81 @@ func (s *Server) handlePreviewInterpolate(w http.ResponseWriter, r *http.Request
 	rendered := apps.InterpolateVariables(req.Content, globalVars, contextVars)
 	writeJSON(w, http.StatusOK, interpolatePreviewResponse{Rendered: rendered})
 }
+
+func (s *Server) handleGetAppArtifactStatus(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		writeError(w, http.StatusBadRequest, "App ID is required")
+		return
+	}
+
+	status, err := s.mgr.GetAppArtifactStatus(id)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, status)
+}
+
+func (s *Server) handleGetAllAppArtifactStatus(w http.ResponseWriter, r *http.Request) {
+	statuses, err := s.mgr.GetAllAppArtifactStatus()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, statuses)
+}
+
+func (s *Server) handleValidateAppArtifact(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		writeError(w, http.StatusBadRequest, "App ID is required")
+		return
+	}
+
+	res, err := s.mgr.ValidateAppArtifact(r.Context(), id)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, res)
+}
+
+func (s *Server) handleValidateAllAppArtifacts(w http.ResponseWriter, r *http.Request) {
+	results, err := s.mgr.ValidateAllAppArtifacts(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, results)
+}
+
+func (s *Server) handleClearAppArtifactCache(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		writeError(w, http.StatusBadRequest, "App ID is required")
+		return
+	}
+
+	res, err := s.mgr.ClearAppArtifactCache(id)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, res)
+}
+
+func (s *Server) handleClearAllAppArtifactCache(w http.ResponseWriter, r *http.Request) {
+	res, err := s.mgr.ClearAllAppArtifactCache()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, res)
+}

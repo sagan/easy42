@@ -14,6 +14,7 @@ import {
   FormControl,
   InputLabel,
   Select,
+  Menu,
   MenuItem,
   Switch,
   FormControlLabel,
@@ -76,11 +77,20 @@ import {
   List,
   ExternalLink,
   Package,
+  HardDrive,
+  ShieldCheck,
 } from "lucide-react";
 import { api } from "../api/client";
 import { useMesh } from "../context/MeshContext";
 import { Link as RouterLink, useSearchParams, useNavigate, useParams } from "react-router-dom";
-import type { App, AppVariable, TranspilePreviewResponse, ArtifactFile, ArtifactSpec } from "../types/api";
+import type {
+  App,
+  AppVariable,
+  TranspilePreviewResponse,
+  ArtifactFile,
+  ArtifactSpec,
+  AppArtifactStatus,
+} from "../types/api";
 import { dockerRunToCompose, cmdlineToSystemd, ensureSystemdEnvironmentFile } from "../utils/appGenerators";
 import { MarkdownView } from "../components/Common/MarkdownView";
 import { AppDetailsDrawer } from "../components/Apps/AppDetailsDrawer";
@@ -489,6 +499,15 @@ export const AppsPage: React.FC = () => {
   ]);
   const [formArtifactChecksums, setFormArtifactChecksums] = useState<Record<string, string>>({});
   const [formArtifactArchMapping, setFormArtifactArchMapping] = useState<Record<string, string>>({});
+
+  // Artifact Cache & Validation States
+  const [artifactStatusMap, setArtifactStatusMap] = useState<Record<string, AppArtifactStatus>>({});
+  const [loadingArtifactStatus, setLoadingArtifactStatus] = useState<Record<string, boolean>>({});
+  const [validatingArtifactId, setValidatingArtifactId] = useState<string | null>(null);
+  const [clearingArtifactId, setClearingArtifactId] = useState<string | null>(null);
+  const [artifactCacheModalApp, setArtifactCacheModalApp] = useState<App | null>(null);
+  const [artifactToolbarMenuAnchor, setArtifactToolbarMenuAnchor] = useState<null | HTMLElement>(null);
+  const [copiedSha, setCopiedSha] = useState<string | null>(null);
 
   // Transpile preview state
   const [targetInit, setTargetInit] = useState<"procd" | "openrc">("procd");
@@ -1089,6 +1108,116 @@ export const AppsPage: React.FC = () => {
     }
   };
 
+  const fetchAppArtifactStatus = useCallback(async (appId: string) => {
+    try {
+      setLoadingArtifactStatus((prev) => ({ ...prev, [appId]: true }));
+      const status = await api.getAppArtifactStatus(appId);
+      setArtifactStatusMap((prev) => ({ ...prev, [appId]: status }));
+      return status;
+    } catch (err) {
+      console.error("Failed to load artifact status for app", appId, err);
+    } finally {
+      setLoadingArtifactStatus((prev) => ({ ...prev, [appId]: false }));
+    }
+  }, []);
+
+  const handleValidateAppArtifact = async (app: App) => {
+    try {
+      setValidatingArtifactId(app.id);
+      const res = await api.validateAppArtifact(app.id);
+      await fetchAppArtifactStatus(app.id);
+      setStateToast({
+        message: res.message || `Artifact for "${app.name}" validated.`,
+        severity: res.updated ? "success" : "info",
+      });
+    } catch (err: any) {
+      setStateToast({
+        message: err.message || "Failed to validate artifact with origin",
+        severity: "error",
+      });
+    } finally {
+      setValidatingArtifactId(null);
+    }
+  };
+
+  const handleClearAppArtifactCache = async (app: App) => {
+    try {
+      setClearingArtifactId(app.id);
+      const res = await api.clearAppArtifactCache(app.id);
+      await fetchAppArtifactStatus(app.id);
+      setStateToast({
+        message: res.message || `Server cache cleared for "${app.name}". Metadata preserved for node sync.`,
+        severity: "success",
+      });
+    } catch (err: any) {
+      setStateToast({
+        message: err.message || "Failed to clear server artifact cache",
+        severity: "error",
+      });
+    } finally {
+      setClearingArtifactId(null);
+    }
+  };
+
+  const handleValidateAllArtifacts = async () => {
+    setArtifactToolbarMenuAnchor(null);
+    try {
+      setStateToast({
+        message: "Checking origin sources for all app artifacts...",
+        severity: "info",
+      });
+      const results = await api.validateAllAppArtifacts();
+      const updatedCount = results.filter((r) => r.updated).length;
+      setStateToast({
+        message: `Validated ${results.length} artifact(s). ${updatedCount} updated from origin.`,
+        severity: "success",
+      });
+      for (const a of apps) {
+        if (a.artifact) {
+          fetchAppArtifactStatus(a.id);
+        }
+      }
+    } catch (err: any) {
+      setStateToast({
+        message: err.message || "Failed to validate all artifacts",
+        severity: "error",
+      });
+    }
+  };
+
+  const handleClearAllArtifactCache = async () => {
+    setArtifactToolbarMenuAnchor(null);
+    try {
+      const res = await api.clearAllAppArtifactCache();
+      setStateToast({
+        message: res.message || "All cached artifact files cleared from server. Metadata preserved for node sync.",
+        severity: "success",
+      });
+      for (const a of apps) {
+        if (a.artifact) {
+          fetchAppArtifactStatus(a.id);
+        }
+      }
+    } catch (err: any) {
+      setStateToast({
+        message: err.message || "Failed to clear all artifact caches",
+        severity: "error",
+      });
+    }
+  };
+
+  const handleCopySha = (sha: string) => {
+    navigator.clipboard.writeText(sha);
+    setCopiedSha(sha);
+    setTimeout(() => setCopiedSha(null), 2000);
+  };
+
+  useEffect(() => {
+    if (modalOpen && modalTab === "artifact" && editingApp && editingApp.artifact) {
+      fetchAppArtifactStatus(editingApp.id);
+    }
+  }, [modalOpen, modalTab, editingApp, fetchAppArtifactStatus]);
+
   // Variable Actions
   const openCreateVarModal = () => {
     setVarKey("");
@@ -1237,6 +1366,252 @@ export const AppsPage: React.FC = () => {
   const cronCount = apps.filter((a) => a.app_type === "cron").length;
   const enabledCount = apps.filter((a) => a.enabled).length;
 
+  const renderArtifactCacheCard = (app: App) => {
+    const status = artifactStatusMap[app.id];
+    const isLoading = loadingArtifactStatus[app.id];
+    const isValidating = validatingArtifactId === app.id;
+    const isClearing = clearingArtifactId === app.id;
+
+    return (
+      <Paper
+        elevation={0}
+        sx={{
+          p: 2.5,
+          borderRadius: "14px",
+          bgcolor: "#F8FAFC",
+          border: "1px solid #E2E8F0",
+          display: "flex",
+          flexDirection: "column",
+          gap: 2,
+        }}
+      >
+        {/* Header with Title and Status Badges */}
+        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 1.5 }}>
+          <Box>
+            <Typography variant="subtitle2" sx={{ fontWeight: 800, color: "#0F172A", display: "flex", alignItems: "center", gap: 1 }}>
+              <HardDrive size={18} color="#4F46E5" />
+              Server Artifact Cache & Storage
+            </Typography>
+            <Typography variant="caption" sx={{ color: "#64748B", display: "block", mt: 0.5 }}>
+              Cached under <code>~/.config/easy42/cache/artifacts</code>. Metadata is stored in a separate persistent cache meta file so disk files can be purged while node sync continues seamlessly.
+            </Typography>
+          </Box>
+
+          {/* Badges & Refresh */}
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+            {isLoading ? (
+              <CircularProgress size={16} />
+            ) : status?.files_on_disk ? (
+              <Chip
+                size="small"
+                icon={<HardDrive size={12} />}
+                label={`Cached on Server (${status.disk_size_human})`}
+                sx={{
+                  height: 24,
+                  fontSize: "0.72rem",
+                  fontWeight: 700,
+                  bgcolor: "#DCFCE7",
+                  color: "#15803D",
+                  "& .MuiChip-icon": { color: "#15803D" },
+                }}
+              />
+            ) : status?.meta_exists ? (
+              <Chip
+                size="small"
+                icon={<ShieldCheck size={12} />}
+                label="Metadata Preserved (Disk Cleared)"
+                sx={{
+                  height: 24,
+                  fontSize: "0.72rem",
+                  fontWeight: 700,
+                  bgcolor: "#FEF3C7",
+                  color: "#B45309",
+                  "& .MuiChip-icon": { color: "#B45309" },
+                }}
+              />
+            ) : (
+              <Chip
+                size="small"
+                label="Not Cached on Server"
+                sx={{
+                  height: 24,
+                  fontSize: "0.72rem",
+                  fontWeight: 600,
+                  bgcolor: "#F1F5F9",
+                  color: "#64748B",
+                }}
+              />
+            )}
+            <Tooltip title="Refresh Cache Status">
+              <IconButton size="small" onClick={() => fetchAppArtifactStatus(app.id)} disabled={isLoading} sx={{ p: 0.5 }}>
+                <RefreshCw size={13} className={isLoading ? "spin" : ""} />
+              </IconButton>
+            </Tooltip>
+          </Box>
+        </Box>
+
+        {/* Metadata Details Grid */}
+        <Box
+          sx={{
+            bgcolor: "#FFFFFF",
+            borderRadius: "10px",
+            p: 1.5,
+            border: "1px solid #EDF2F7",
+            display: "grid",
+            gridTemplateColumns: { xs: "1fr", sm: "repeat(4, 1fr)" },
+            gap: 1.5,
+          }}
+        >
+          <Box>
+            <Typography variant="caption" sx={{ color: "#94A3B8", fontWeight: 700, textTransform: "uppercase", fontSize: "0.65rem" }}>
+              App / Version
+            </Typography>
+            <Typography variant="body2" sx={{ fontWeight: 700, color: "#1E293B", mt: 0.2 }}>
+              {app.name} ({app.version || "latest"})
+            </Typography>
+          </Box>
+          <Box>
+            <Typography variant="caption" sx={{ color: "#94A3B8", fontWeight: 700, textTransform: "uppercase", fontSize: "0.65rem" }}>
+              Server Disk Usage
+            </Typography>
+            <Typography variant="body2" sx={{ fontWeight: 700, color: status?.files_on_disk ? "#15803D" : "#64748B", mt: 0.2 }}>
+              {status?.disk_size_human || "0 B"}
+            </Typography>
+          </Box>
+          <Box>
+            <Typography variant="caption" sx={{ color: "#94A3B8", fontWeight: 700, textTransform: "uppercase", fontSize: "0.65rem" }}>
+              Last Origin Check
+            </Typography>
+            <Typography variant="body2" sx={{ fontWeight: 600, color: "#475569", mt: 0.2 }}>
+              {status?.last_checked ? new Date(status.last_checked).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : "Never"}
+            </Typography>
+          </Box>
+          <Box>
+            <Typography variant="caption" sx={{ color: "#94A3B8", fontWeight: 700, textTransform: "uppercase", fontSize: "0.65rem" }}>
+              Last Validated
+            </Typography>
+            <Typography variant="body2" sx={{ fontWeight: 600, color: "#475569", mt: 0.2 }}>
+              {status?.last_validated ? new Date(status.last_validated).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : "Never"}
+            </Typography>
+          </Box>
+        </Box>
+
+        {/* Extracted Binaries and SHA-256 Hashes Breakdown */}
+        {status?.versions && Object.keys(status.versions).length > 0 ? (
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+            <Typography variant="caption" sx={{ fontWeight: 700, color: "#475569" }}>
+              Cached Targets & Extracted Binaries:
+            </Typography>
+            {Object.entries(status.versions).map(([verKey, verStatus]) => (
+              <Box key={verKey} sx={{ bgcolor: "#FFFFFF", borderRadius: "8px", p: 1.5, border: "1px solid #E2E8F0" }}>
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1, flexWrap: "wrap" }}>
+                  <Chip size="small" label={`Version: ${verKey}`} sx={{ height: 20, fontSize: "0.7rem", fontWeight: 700 }} />
+                  {verStatus.resolved_version && verStatus.resolved_version !== verKey && (
+                    <Chip size="small" label={`Resolved Tag: ${verStatus.resolved_version}`} sx={{ height: 20, fontSize: "0.7rem", fontWeight: 600, bgcolor: "#EEF2FF", color: "#4F46E5" }} />
+                  )}
+                </Box>
+                {Object.entries(verStatus.architectures || {}).map(([archKey, archStatus]) => (
+                  <Box key={archKey} sx={{ mt: 1, pt: 1, borderTop: "1px dashed #F1F5F9" }}>
+                    <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 0.5 }}>
+                      <Typography variant="caption" sx={{ fontWeight: 700, color: "#334155" }}>
+                        Arch: <span style={{ color: "#2563EB" }}>{archKey}</span> ({archStatus.files_on_disk ? "files present on disk" : "metadata preserved, disk freed"})
+                      </Typography>
+                      {archStatus.archive_size > 0 && (
+                        <Typography variant="caption" sx={{ color: "#64748B" }}>
+                          Archive: {(archStatus.archive_size / (1024 * 1024)).toFixed(1)} MB
+                        </Typography>
+                      )}
+                    </Box>
+                    {archStatus.extracted_files?.map((ef) => (
+                      <Box
+                        key={ef.name}
+                        sx={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          bgcolor: "#F8FAFC",
+                          p: 0.8,
+                          borderRadius: "6px",
+                          mb: 0.5,
+                          fontFamily: "monospace",
+                          fontSize: "0.74rem",
+                        }}
+                      >
+                        <Typography sx={{ fontWeight: 700, fontSize: "0.74rem", color: "#0F172A" }}>
+                          {ef.name} ({(ef.size / (1024 * 1024)).toFixed(2)} MB)
+                        </Typography>
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                          <Tooltip title={`Click to copy full SHA-256: ${ef.sha256}`} arrow>
+                            <Chip
+                              size="small"
+                              label={`SHA256: ${ef.sha256.slice(0, 14)}...`}
+                              onClick={() => handleCopySha(ef.sha256)}
+                              icon={copiedSha === ef.sha256 ? <Check size={11} /> : <Copy size={11} />}
+                              sx={{ height: 20, fontSize: "0.68rem", cursor: "pointer", bgcolor: copiedSha === ef.sha256 ? "#DCFCE7" : undefined }}
+                            />
+                          </Tooltip>
+                        </Box>
+                      </Box>
+                    ))}
+                  </Box>
+                ))}
+              </Box>
+            ))}
+          </Box>
+        ) : (
+          <Box sx={{ bgcolor: "#FFFFFF", p: 2, borderRadius: "8px", border: "1px dashed #CBD5E1", textAlign: "center" }}>
+            <Typography variant="caption" sx={{ color: "#64748B" }}>
+              No artifact has been downloaded or cached on server yet. Click "Check & Validate Origin" to download and cache now.
+            </Typography>
+          </Box>
+        )}
+
+        {/* Action Buttons Row */}
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, pt: 1, borderTop: "1px solid #E2E8F0", flexWrap: "wrap" }}>
+          <Button
+            size="small"
+            variant="contained"
+            startIcon={isValidating ? <CircularProgress size={13} color="inherit" /> : <RefreshCw size={14} />}
+            disabled={isValidating || isClearing}
+            onClick={() => handleValidateAppArtifact(app)}
+            sx={{
+              bgcolor: "#4F46E5",
+              textTransform: "none",
+              fontWeight: 700,
+              fontSize: "0.78rem",
+              "&:hover": { bgcolor: "#4338CA" },
+            }}
+          >
+            {isValidating ? "Validating with Origin..." : "Check & Validate Origin"}
+          </Button>
+
+          <Button
+            size="small"
+            variant="outlined"
+            color="error"
+            startIcon={isClearing ? <CircularProgress size={13} color="inherit" /> : <Trash2 size={14} />}
+            disabled={isClearing || isValidating || !status?.files_on_disk}
+            onClick={() => handleClearAppArtifactCache(app)}
+            sx={{
+              textTransform: "none",
+              fontWeight: 700,
+              fontSize: "0.78rem",
+              borderColor: "#FECACA",
+              color: "#DC2626",
+              "&:hover": { bgcolor: "#FEF2F2", borderColor: "#F87171" },
+            }}
+          >
+            {isClearing ? "Clearing Files..." : "Clear Cache (Free Disk Space)"}
+          </Button>
+
+          <Typography variant="caption" sx={{ color: "#64748B", ml: "auto" }}>
+            Clearing cache frees server disk while preserving metadata for node sync.
+          </Typography>
+        </Box>
+      </Paper>
+    );
+  };
+
   return (
     <Box sx={{ width: "100%", px: { xs: 1.5, sm: 2.5, md: 3 }, py: 2.5, boxSizing: "border-box" }}>
       {/* Top Header & Breadcrumbs Bar */}
@@ -1299,6 +1674,49 @@ export const AppsPage: React.FC = () => {
           >
             Refresh
           </Button>
+
+          {activeTab === "apps" && (
+            <>
+              <Button
+                variant="outlined"
+                startIcon={<HardDrive size={15} />}
+                onClick={(e) => setArtifactToolbarMenuAnchor(e.currentTarget)}
+                sx={{
+                  borderColor: "#CBD5E1",
+                  color: "#475569",
+                  textTransform: "none",
+                  fontWeight: 600,
+                  fontSize: "0.85rem",
+                  bgcolor: "#FFFFFF",
+                  "&:hover": { borderColor: "#94A3B8", bgcolor: "#F8FAFC" },
+                }}
+              >
+                Artifact Cache
+              </Button>
+              <Menu
+                anchorEl={artifactToolbarMenuAnchor}
+                open={Boolean(artifactToolbarMenuAnchor)}
+                onClose={() => setArtifactToolbarMenuAnchor(null)}
+                PaperProps={{
+                  sx: {
+                    borderRadius: "10px",
+                    boxShadow: "0 10px 25px rgba(0,0,0,0.1)",
+                    border: "1px solid #E2E8F0",
+                    minWidth: 260,
+                  },
+                }}
+              >
+                <MenuItem onClick={handleValidateAllArtifacts} sx={{ fontSize: "0.82rem", fontWeight: 600, py: 1, gap: 1.2 }}>
+                  <RefreshCw size={15} color="#4F46E5" />
+                  Check All Artifacts for Origin Updates
+                </MenuItem>
+                <MenuItem onClick={handleClearAllArtifactCache} sx={{ fontSize: "0.82rem", fontWeight: 600, py: 1, gap: 1.2, color: "#DC2626" }}>
+                  <Trash2 size={15} color="#DC2626" />
+                  Clear All Server Caches (Free Disk Space)
+                </MenuItem>
+              </Menu>
+            </>
+          )}
 
           {activeTab === "apps" ? (
             <Button
@@ -2088,20 +2506,27 @@ export const AppsPage: React.FC = () => {
                             />
                             {app.artifact && (
                               <Tooltip
-                                title={`Artifact managed: ${app.artifact.files?.map((f) => f.name).join(", ")}`}
+                                title="Click to view server artifact cache, check origin updates, or free disk space"
                                 arrow
                               >
                                 <Chip
                                   size="small"
                                   icon={<Package size={11} />}
                                   label={app.version || "Artifact"}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setArtifactCacheModalApp(app);
+                                    fetchAppArtifactStatus(app.id);
+                                  }}
                                   sx={{
                                     height: 20,
                                     fontSize: "0.68rem",
                                     fontWeight: 700,
                                     bgcolor: "#ECFDF5",
                                     color: "#059669",
+                                    cursor: "pointer",
                                     "& .MuiChip-icon": { color: "#059669" },
+                                    "&:hover": { bgcolor: "#D1FAE5" },
                                   }}
                                 />
                               </Tooltip>
@@ -2538,20 +2963,27 @@ export const AppsPage: React.FC = () => {
                               />
                               {app.artifact && (
                                 <Tooltip
-                                  title={`Artifact managed: ${app.artifact.files?.map((f) => f.name).join(", ")}`}
+                                  title="Click to view server artifact cache, check origin updates, or free disk space"
                                   arrow
                                 >
                                   <Chip
                                     size="small"
                                     icon={<Package size={11} />}
                                     label={app.version || "Artifact"}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setArtifactCacheModalApp(app);
+                                      fetchAppArtifactStatus(app.id);
+                                    }}
                                     sx={{
                                       height: 20,
                                       fontSize: "0.68rem",
                                       fontWeight: 700,
                                       bgcolor: "#ECFDF5",
                                       color: "#059669",
+                                      cursor: "pointer",
                                       "& .MuiChip-icon": { color: "#059669" },
+                                      "&:hover": { bgcolor: "#D1FAE5" },
                                     }}
                                   />
                                 </Tooltip>
@@ -5358,6 +5790,9 @@ ${formEnabled ? `${formCronExpr.trim() || "0 0 * * *"} ${formCronCmd.trim() || "
                       ))}
                     </Box>
                   </Box>
+
+                  {/* Server Artifact Cache & Origin Validation Section */}
+                  {editingApp && renderArtifactCacheCard(editingApp)}
                 </>
               )}
             </Box>
@@ -5507,6 +5942,70 @@ ${formEnabled ? `${formCronExpr.trim() || "0 0 * * *"} ${formCronCmd.trim() || "
             ) : (
               "Deploy App"
             )}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Standalone Artifact Cache Management Dialog */}
+      <Dialog
+        open={Boolean(artifactCacheModalApp)}
+        onClose={() => setArtifactCacheModalApp(null)}
+        maxWidth="md"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: "16px",
+            boxShadow: "0 20px 40px rgba(0,0,0,0.15)",
+            border: "1px solid #E2E8F0",
+          },
+        }}
+      >
+        <DialogTitle
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            pb: 1.5,
+            borderBottom: "1px solid #F1F5F9",
+          }}
+        >
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+            <Box
+              sx={{
+                width: 32,
+                height: 32,
+                borderRadius: "8px",
+                bgcolor: "#EEF2FF",
+                color: "#4F46E5",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Package size={18} />
+            </Box>
+            <Box>
+              <Typography variant="subtitle1" sx={{ fontWeight: 800, color: "#0F172A", lineHeight: 1.2 }}>
+                Artifact Cache: {artifactCacheModalApp?.name}
+              </Typography>
+              <Typography variant="caption" sx={{ color: "#64748B" }}>
+                Inspect server cached files, trigger validation against origin, or purge disk files
+              </Typography>
+            </Box>
+          </Box>
+          <IconButton size="small" onClick={() => setArtifactCacheModalApp(null)}>
+            <X size={16} />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent sx={{ p: 2.5 }}>
+          {artifactCacheModalApp && renderArtifactCacheCard(artifactCacheModalApp)}
+        </DialogContent>
+        <DialogActions sx={{ px: 2.5, py: 1.5, borderTop: "1px solid #F1F5F9" }}>
+          <Button
+            onClick={() => setArtifactCacheModalApp(null)}
+            sx={{ textTransform: "none", fontWeight: 600, color: "#64748B" }}
+          >
+            Close
           </Button>
         </DialogActions>
       </Dialog>

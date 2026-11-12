@@ -768,8 +768,16 @@ func (s *Server) handleArtifactDownload(w http.ResponseWriter, r *http.Request) 
 
 	f, err := os.Open(info.FilePath)
 	if err != nil {
-		http.Error(w, "artifact file not found on server", http.StatusNotFound)
-		return
+		if os.IsNotExist(err) && info.AppName != "" && s.mgr != nil {
+			// Physical file was purged from server to free disk space; re-download from origin on demand
+			if restoreErr := s.mgr.EnsureArtifactPhysicalFile(r.Context(), info); restoreErr == nil {
+				f, err = os.Open(info.FilePath)
+			}
+		}
+		if err != nil {
+			http.Error(w, "artifact file not found on server", http.StatusNotFound)
+			return
+		}
 	}
 	defer f.Close()
 

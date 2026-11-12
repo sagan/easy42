@@ -332,6 +332,12 @@ func New(cfg Config) *Server {
 			// Workload Apps & Variables
 			r.Get("/apps", s.handleGetApps)
 			r.Post("/apps", s.handleCreateApp)
+			r.Get("/apps/artifact/status", s.handleGetAllAppArtifactStatus)
+			r.Post("/apps/artifact/validate-all", s.handleValidateAllAppArtifacts)
+			r.Post("/apps/artifact/clear-cache-all", s.handleClearAllAppArtifactCache)
+			r.Get("/apps/{id}/artifact/status", s.handleGetAppArtifactStatus)
+			r.Post("/apps/{id}/artifact/validate", s.handleValidateAppArtifact)
+			r.Post("/apps/{id}/artifact/clear-cache", s.handleClearAppArtifactCache)
 			r.Put("/apps/{id}", s.handleUpdateApp)
 			r.Delete("/apps/{id}", s.handleDeleteApp)
 			r.Post("/apps/{id}/toggle", s.handleToggleApp)

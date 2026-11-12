@@ -1034,6 +1034,62 @@ export interface ArtifactSpec {
   files: ArtifactFile[];
 }
 
+export interface ExtractedFileInfo {
+  name: string;
+  local_path: string;
+  sha256: string;
+  size: number;
+}
+
+export interface ArchArtifactStatus {
+  arch: string;
+  download_url: string;
+  archive_size: number;
+  archive_sha256: string;
+  files_on_disk: boolean;
+  extracted_files: ExtractedFileInfo[];
+  last_validated: string;
+}
+
+export interface VersionArtifactStatus {
+  version: string;
+  resolved_version?: string;
+  architectures: Record<string, ArchArtifactStatus>;
+}
+
+export interface AppArtifactStatus {
+  app_id: string;
+  app_name: string;
+  version: string;
+  has_artifact: boolean;
+  meta_exists: boolean;
+  files_on_disk: boolean;
+  disk_size_bytes: number;
+  disk_size_human: string;
+  last_checked?: string;
+  last_validated?: string;
+  versions?: Record<string, VersionArtifactStatus>;
+}
+
+export interface ArtifactValidationResult {
+  app_name: string;
+  version: string;
+  arch: string;
+  status: "up_to_date" | "updated" | "re_downloaded" | "error" | string;
+  previous_version?: string;
+  resolved_version?: string;
+  message: string;
+  updated: boolean;
+}
+
+export interface ArtifactClearCacheResult {
+  app_name: string;
+  freed_bytes: number;
+  freed_human: string;
+  meta_preserved: boolean;
+  message: string;
+}
+
 export interface AppStatusRecord {
   app_id: string;
   name: string;

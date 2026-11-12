@@ -26,15 +26,17 @@ type GitHubRelease struct {
 	Assets  []GitHubReleaseAsset `json:"assets"`
 }
 
-// ResolveArtifactURL determines the final download URL for an artifact, expanding variables
-// or resolving via upstream provider APIs (like GitHub Releases).
-//
-// The endian parameter ("little"/"big", may be empty) is used to disambiguate MIPS targets:
-// upstream projects conventionally name little-endian 32-bit MIPS assets "mipsel" and
-// big-endian ones "mips", while the kernel often reports a bare "mips" for both.
-func ResolveArtifactURL(ctx context.Context, spec *config.ArtifactSpec, appName, version, arch, osName, endian string, globalVars map[string]string, client *http.Client) (string, error) {
+// ResolvedArtifact represents the resolved download URL and upstream version information
+type ResolvedArtifact struct {
+	DownloadURL     string `json:"download_url"`
+	ResolvedVersion string `json:"resolved_version"` // Upstream tag name (e.g. "v1.68.1") or spec version
+}
+
+// ResolveArtifact determines the final download URL and upstream version for an artifact,
+// expanding variables or querying upstream provider APIs (like GitHub Releases).
+func ResolveArtifact(ctx context.Context, spec *config.ArtifactSpec, appName, version, arch, osName, endian string, globalVars map[string]string, client *http.Client) (*ResolvedArtifact, error) {
 	if spec == nil {
-		return "", fmt.Errorf("artifact spec is nil")
+		return nil, fmt.Errorf("artifact spec is nil")
 	}
 
 	if osName == "" {
@@ -65,7 +67,10 @@ func ResolveArtifactURL(ctx context.Context, spec *config.ArtifactSpec, appName,
 	// Mode A: Direct URL Template
 	if spec.URL != "" {
 		resolved := InterpolateVariables(spec.URL, globalVars, contextVars)
-		return resolved, nil
+		return &ResolvedArtifact{
+			DownloadURL:     resolved,
+			ResolvedVersion: version,
+		}, nil
 	}
 
 	// Mode B: GitHub Release Resolver
@@ -74,11 +79,21 @@ func ResolveArtifactURL(ctx context.Context, spec *config.ArtifactSpec, appName,
 		case "github_release", "github":
 			return resolveGitHubRelease(ctx, spec.Resolver, version, arch, osName, endian, globalVars, contextVars, client)
 		default:
-			return "", fmt.Errorf("unsupported artifact resolver type: %s", spec.Resolver.Type)
+			return nil, fmt.Errorf("unsupported artifact resolver type: %s", spec.Resolver.Type)
 		}
 	}
 
-	return "", fmt.Errorf("artifact spec has neither url nor resolver configured")
+	return nil, fmt.Errorf("artifact spec has neither url nor resolver configured")
+}
+
+// ResolveArtifactURL determines the final download URL for an artifact, expanding variables
+// or resolving via upstream provider APIs (like GitHub Releases).
+func ResolveArtifactURL(ctx context.Context, spec *config.ArtifactSpec, appName, version, arch, osName, endian string, globalVars map[string]string, client *http.Client) (string, error) {
+	res, err := ResolveArtifact(ctx, spec, appName, version, arch, osName, endian, globalVars, client)
+	if err != nil {
+		return "", err
+	}
+	return res.DownloadURL, nil
 }
 
 // IsMipsArch reports whether arch belongs to the MIPS family (any endianness or bit width).
@@ -91,10 +106,10 @@ func IsMipsArch(arch string) bool {
 // point the resolver at a local server.
 var githubAPIBase = "https://api.github.com"
 
-func resolveGitHubRelease(ctx context.Context, resolver *config.ArtifactResolver, appVersion, arch, osName, endian string, globalVars, contextVars map[string]string, client *http.Client) (string, error) {
+func resolveGitHubRelease(ctx context.Context, resolver *config.ArtifactResolver, appVersion, arch, osName, endian string, globalVars, contextVars map[string]string, client *http.Client) (*ResolvedArtifact, error) {
 	repo := strings.TrimSpace(resolver.Repo)
 	if repo == "" {
-		return "", fmt.Errorf("github resolver repo cannot be empty")
+		return nil, fmt.Errorf("github resolver repo cannot be empty")
 	}
 
 	targetVersion := resolver.Version
@@ -112,7 +127,7 @@ func resolveGitHubRelease(ctx context.Context, resolver *config.ArtifactResolver
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	req.Header.Set("Accept", "application/vnd.github.v3+json")
 	req.Header.Set("User-Agent", "Easy42-Server/1.0")
@@ -128,7 +143,7 @@ func resolveGitHubRelease(ctx context.Context, resolver *config.ArtifactResolver
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("failed to query GitHub API: %w", err)
+		return nil, fmt.Errorf("failed to query GitHub API: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -143,16 +158,21 @@ func resolveGitHubRelease(ctx context.Context, resolver *config.ArtifactResolver
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", fmt.Errorf("GitHub API returned status %d %s for repo %s", resp.StatusCode, resp.Status, repo)
+		return nil, fmt.Errorf("GitHub API returned status %d %s for repo %s", resp.StatusCode, resp.Status, repo)
 	}
 
 	var rel GitHubRelease
 	if err := json.NewDecoder(resp.Body).Decode(&rel); err != nil {
-		return "", fmt.Errorf("failed to parse GitHub release response: %w", err)
+		return nil, fmt.Errorf("failed to parse GitHub release response: %w", err)
 	}
 
 	if len(rel.Assets) == 0 {
-		return "", fmt.Errorf("no assets found in GitHub release for %s (tag: %s)", repo, rel.TagName)
+		return nil, fmt.Errorf("no assets found in GitHub release for %s (tag: %s)", repo, rel.TagName)
+	}
+
+	resolvedVersion := rel.TagName
+	if resolvedVersion == "" {
+		resolvedVersion = targetVersion
 	}
 
 	// 1. If an asset pattern was provided, use it
@@ -160,14 +180,20 @@ func resolveGitHubRelease(ctx context.Context, resolver *config.ArtifactResolver
 		pattern := InterpolateVariables(resolver.AssetPattern, globalVars, contextVars)
 		for _, asset := range rel.Assets {
 			if matched, _ := path.Match(pattern, asset.Name); matched {
-				return asset.BrowserDownloadURL, nil
+				return &ResolvedArtifact{
+					DownloadURL:     asset.BrowserDownloadURL,
+					ResolvedVersion: resolvedVersion,
+				}, nil
 			}
 			// Regex fallback if pattern contains regex characters
 			if re, err := regexp.Compile(pattern); err == nil && re.MatchString(asset.Name) {
-				return asset.BrowserDownloadURL, nil
+				return &ResolvedArtifact{
+					DownloadURL:     asset.BrowserDownloadURL,
+					ResolvedVersion: resolvedVersion,
+				}, nil
 			}
 		}
-		return "", fmt.Errorf("no asset matching pattern '%s' found in release %s", pattern, rel.TagName)
+		return nil, fmt.Errorf("no asset matching pattern '%s' found in release %s", pattern, rel.TagName)
 	}
 
 	// 2. Automatic asset selection matching arch and osName
@@ -179,11 +205,14 @@ func resolveGitHubRelease(ctx context.Context, resolver *config.ArtifactResolver
 			continue
 		}
 		if assetMatchesArch(name, archVariants) {
-			return asset.BrowserDownloadURL, nil
+			return &ResolvedArtifact{
+				DownloadURL:     asset.BrowserDownloadURL,
+				ResolvedVersion: resolvedVersion,
+			}, nil
 		}
 	}
 
-	return "", fmt.Errorf("failed to automatically match release asset for %s %s/%s (found %d assets)", repo, osName, arch, len(rel.Assets))
+	return nil, fmt.Errorf("failed to automatically match release asset for %s %s/%s (found %d assets)", repo, osName, arch, len(rel.Assets))
 }
 
 // archMatchVariants returns the lowercase architecture spellings to look for in
