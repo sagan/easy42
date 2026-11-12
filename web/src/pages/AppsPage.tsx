@@ -39,9 +39,11 @@ import {
   InputAdornment,
   ToggleButton,
   ToggleButtonGroup,
+  Autocomplete,
 } from "@mui/material";
 import {
   Layers,
+  Bookmark,
   Plus,
   Trash2,
   Edit,
@@ -240,6 +242,7 @@ export const AppsPage: React.FC = () => {
   const rawUrlType = searchParams.get("type") || "all";
   const typeFilter: string = (APP_TYPE_FILTERS as readonly string[]).includes(rawUrlType) ? rawUrlType : "all";
   const rawUrlNode = searchParams.get("node") || "all";
+  const groupFilter = searchParams.get("group") || "all";
   const view: "cards" | "table" = searchParams.get("view") === "table" ? "table" : "cards";
   const rawSort = searchParams.get("sort");
   const sortField = (APP_SORT_FIELDS as string[]).includes(rawSort || "")
@@ -346,7 +349,7 @@ export const AppsPage: React.FC = () => {
 
   // Helper to update URL query parameters (replaceState)
   const updateQueryParam = useCallback(
-    (updates: { type?: string; node?: string; view?: "cards" | "table" }) => {
+    (updates: { type?: string; node?: string; view?: "cards" | "table"; group?: string }) => {
       setSearchParams(
         (prev) => {
           const next = new URLSearchParams(prev);
@@ -362,6 +365,13 @@ export const AppsPage: React.FC = () => {
               next.set("node", updates.node);
             } else {
               next.delete("node");
+            }
+          }
+          if (updates.group !== undefined) {
+            if (updates.group && updates.group !== "all") {
+              next.set("group", updates.group);
+            } else {
+              next.delete("group");
             }
           }
           if (updates.view !== undefined) {
@@ -381,6 +391,7 @@ export const AppsPage: React.FC = () => {
 
   const handleSelectType = (type: string) => updateQueryParam({ type });
   const handleSelectNode = (node: string) => updateQueryParam({ node });
+  const handleSelectGroup = (group: string) => updateQueryParam({ group: group === groupFilter ? "all" : group });
   const handleToggleView = (v: "cards" | "table") => updateQueryParam({ view: v });
 
   const handleRequestSort = useCallback(
@@ -408,6 +419,7 @@ export const AppsPage: React.FC = () => {
         next.delete("search");
         next.delete("type");
         next.delete("node");
+        next.delete("group");
         return next;
       },
       { replace: true },
@@ -441,6 +453,7 @@ export const AppsPage: React.FC = () => {
   // App Form Fields
   const [formName, setFormName] = useState("");
   const [formDesc, setFormDesc] = useState("");
+  const [formGroup, setFormGroup] = useState("");
   const [formNote, setFormNote] = useState("");
   const [formUrl, setFormUrl] = useState("");
   const [formType, setFormType] = useState<"docker" | "systemd" | "cron">("docker");
@@ -625,6 +638,7 @@ export const AppsPage: React.FC = () => {
     setEditingApp(null);
     setFormName("");
     setFormDesc("");
+    setFormGroup("");
     setFormNote("");
     setNoteEditMode("write");
     setFormUrl("");
@@ -675,6 +689,7 @@ export const AppsPage: React.FC = () => {
     setEditingApp(app);
     setFormName(app.name);
     setFormDesc(app.description || "");
+    setFormGroup(app.group || "");
     setFormVersion(app.version || "");
     if (app.artifact) {
       setFormArtifactEnabled(true);
@@ -889,6 +904,7 @@ export const AppsPage: React.FC = () => {
       const payload: Partial<App> = {
         name: formName.trim(),
         description: formDesc.trim(),
+        group: formGroup.trim() || undefined,
         version: formVersion.trim() || undefined,
         note: formNote,
         url: formUrl.trim(),
@@ -1141,7 +1157,8 @@ export const AppsPage: React.FC = () => {
         const matchName = a.name.toLowerCase().includes(q);
         const matchDesc = a.description?.toLowerCase().includes(q);
         const matchNote = a.note?.toLowerCase().includes(q);
-        if (!matchName && !matchDesc && !matchNote) return false;
+        const matchGroup = a.group?.toLowerCase().includes(q);
+        if (!matchName && !matchDesc && !matchNote && !matchGroup) return false;
       }
       if (typeFilter !== "all" && a.app_type !== typeFilter) {
         return false;
@@ -1150,9 +1167,30 @@ export const AppsPage: React.FC = () => {
         const nodeObj = nodes.find((n) => n.name === nodeFilter);
         if (!nodeObj || !matchesTaskSelector(nodeObj, a.selector)) return false;
       }
+      if (groupFilter !== "all") {
+        if (groupFilter === "ungrouped") {
+          if (a.group && a.group.trim()) return false;
+        } else {
+          if ((a.group || "").trim().toLowerCase() !== groupFilter.trim().toLowerCase()) return false;
+        }
+      }
       return true;
     });
-  }, [apps, search, typeFilter, nodeFilter, nodes]);
+  }, [apps, search, typeFilter, nodeFilter, groupFilter, nodes]);
+
+  const appGroups = useMemo(() => {
+    const set = new Set<string>();
+    apps.forEach((a) => {
+      if (a.group && a.group.trim()) {
+        set.add(a.group.trim());
+      }
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+  }, [apps]);
+
+  const ungroupedAppsCount = useMemo(() => {
+    return apps.filter((a) => !a.group || !a.group.trim()).length;
+  }, [apps]);
 
   // Sorted apps for the list (table) view; card view keeps API order
   const sortedApps = useMemo(() => {
@@ -1184,7 +1222,7 @@ export const AppsPage: React.FC = () => {
     return list;
   }, [filteredApps, view, sortField, sortOrder]);
 
-  const isFiltering = Boolean(search.trim() || typeFilter !== "all" || nodeFilter !== "all");
+  const isFiltering = Boolean(search.trim() || typeFilter !== "all" || nodeFilter !== "all" || groupFilter !== "all");
 
   const filteredVars = useMemo(() => {
     return variables.filter((v) => {
@@ -1531,74 +1569,209 @@ export const AppsPage: React.FC = () => {
               borderRadius: "12px",
               border: "1px solid #E2E8F0",
               display: "flex",
-              gap: 2,
-              flexWrap: "wrap",
-              alignItems: "center",
+              flexDirection: "column",
+              gap: 1.5,
               bgcolor: "#FFFFFF",
             }}
           >
-            <TextField
-              size="small"
-              type="search"
-              placeholder="Search apps by name, description, note, or referenced variables..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              InputProps={{
-                startAdornment: <Search size={16} style={{ marginRight: 8, color: "#94A3B8" }} />,
+            <Box
+              sx={{
+                display: "flex",
+                gap: 2,
+                flexWrap: "wrap",
+                alignItems: "center",
+                width: "100%",
               }}
-              sx={{ flex: 1, minWidth: 280 }}
-            />
-
-            <FormControl size="small" sx={{ minWidth: 170 }}>
-              <InputLabel>Runtime Type</InputLabel>
-              <Select value={typeFilter} label="Runtime Type" onChange={(e) => handleSelectType(e.target.value)}>
-                <MenuItem value="all">All Types</MenuItem>
-                <MenuItem value="docker">Docker Compose ({dockerCount})</MenuItem>
-                <MenuItem value="systemd">Native Systemd ({systemdCount})</MenuItem>
-                <MenuItem value="cron">Cron Jobs ({cronCount})</MenuItem>
-              </Select>
-            </FormControl>
-
-            <FormControl size="small" sx={{ minWidth: 180 }}>
-              <InputLabel>Deployed Node</InputLabel>
-              <Select value={nodeFilter} label="Deployed Node" onChange={(e) => handleSelectNode(e.target.value)}>
-                <MenuItem value="all">All Nodes</MenuItem>
-                {managedNodes.map((n) => (
-                  <MenuItem key={n.name} value={n.name}>
-                    {n.name}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-
-            <Box sx={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 1 }}>
-              <Button
+            >
+              <TextField
                 size="small"
-                variant="text"
-                disabled={!isFiltering}
-                onClick={handleClearFilters}
-                startIcon={<X size={14} />}
-                sx={{ color: "#64748B", fontSize: "0.75rem", textTransform: "none", py: 0.4 }}
-              >
-                Clear ({filteredApps.length}/{apps.length})
-              </Button>
-              <Tooltip title={view === "cards" ? "Card view" : "List (table) view"}>
-                <ToggleButtonGroup
-                  value={view}
-                  exclusive
-                  onChange={(_, val) => val && handleToggleView(val)}
+                type="search"
+                placeholder="Search apps by name, description, note, or referenced variables..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                InputProps={{
+                  startAdornment: <Search size={16} style={{ marginRight: 8, color: "#94A3B8" }} />,
+                }}
+                sx={{ flex: 1, minWidth: 280 }}
+              />
+
+              <FormControl size="small" sx={{ minWidth: 170 }}>
+                <InputLabel>Runtime Type</InputLabel>
+                <Select value={typeFilter} label="Runtime Type" onChange={(e) => handleSelectType(e.target.value)}>
+                  <MenuItem value="all">All Types</MenuItem>
+                  <MenuItem value="docker">Docker Compose ({dockerCount})</MenuItem>
+                  <MenuItem value="systemd">Native Systemd ({systemdCount})</MenuItem>
+                  <MenuItem value="cron">Cron Jobs ({cronCount})</MenuItem>
+                </Select>
+              </FormControl>
+
+              <FormControl size="small" sx={{ minWidth: 180 }}>
+                <InputLabel>Deployed Node</InputLabel>
+                <Select value={nodeFilter} label="Deployed Node" onChange={(e) => handleSelectNode(e.target.value)}>
+                  <MenuItem value="all">All Nodes</MenuItem>
+                  {managedNodes.map((n) => (
+                    <MenuItem key={n.name} value={n.name}>
+                      {n.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+
+              <Box sx={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 1 }}>
+                <Button
                   size="small"
-                  sx={{ height: 36 }}
+                  variant="text"
+                  disabled={!isFiltering}
+                  onClick={handleClearFilters}
+                  startIcon={<X size={14} />}
+                  sx={{ color: "#64748B", fontSize: "0.75rem", textTransform: "none", py: 0.4 }}
                 >
-                  <ToggleButton value="cards" aria-label="card view" sx={{ px: 1.5 }}>
-                    <LayoutGrid size={16} />
-                  </ToggleButton>
-                  <ToggleButton value="table" aria-label="list view" sx={{ px: 1.5 }}>
-                    <List size={16} />
-                  </ToggleButton>
-                </ToggleButtonGroup>
-              </Tooltip>
+                  Clear ({filteredApps.length}/{apps.length})
+                </Button>
+                <Tooltip title={view === "cards" ? "Card view" : "List (table) view"}>
+                  <ToggleButtonGroup
+                    value={view}
+                    exclusive
+                    onChange={(_, val) => val && handleToggleView(val)}
+                    size="small"
+                    sx={{ height: 36 }}
+                  >
+                    <ToggleButton value="cards" aria-label="card view" sx={{ px: 1.5 }}>
+                      <LayoutGrid size={16} />
+                    </ToggleButton>
+                    <ToggleButton value="table" aria-label="list view" sx={{ px: 1.5 }}>
+                      <List size={16} />
+                    </ToggleButton>
+                  </ToggleButtonGroup>
+                </Tooltip>
+              </Box>
             </Box>
+
+            {/* Clickable Groups Filter Chips */}
+            {appGroups.length > 0 && (
+              <Box
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 1,
+                  flexWrap: "wrap",
+                  pt: 1.5,
+                  mt: 0.5,
+                  borderTop: "1px solid #F1F5F9",
+                  width: "100%",
+                }}
+              >
+                <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, mr: 0.5 }}>
+                  <Bookmark size={14} color="#64748B" />
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      color: "#64748B",
+                      fontWeight: 700,
+                      textTransform: "uppercase",
+                      letterSpacing: "0.5px",
+                      fontSize: "0.7rem",
+                    }}
+                  >
+                    Groups:
+                  </Typography>
+                </Box>
+
+                <Chip
+                  size="small"
+                  label={`All (${apps.length})`}
+                  onClick={() => handleSelectGroup("all")}
+                  color={groupFilter === "all" ? "primary" : "default"}
+                  variant={groupFilter === "all" ? "filled" : "outlined"}
+                  clickable
+                  sx={{
+                    fontWeight: 600,
+                    fontSize: "0.75rem",
+                    height: 26,
+                    cursor: "pointer",
+                    transition: "all 0.15s ease",
+                    ...(groupFilter === "all"
+                      ? {
+                          bgcolor: "#4F46E5",
+                          color: "#FFFFFF",
+                          "&:hover": { bgcolor: "#4338CA" },
+                        }
+                      : {
+                          bgcolor: "#F8FAFC",
+                          color: "#475569",
+                          borderColor: "#E2E8F0",
+                          "&:hover": { bgcolor: "#F1F5F9", borderColor: "#CBD5E1" },
+                        }),
+                  }}
+                />
+
+                {appGroups.map((grp) => {
+                  const count = apps.filter((a) => (a.group || "").trim() === grp).length;
+                  const isSelected = groupFilter.toLowerCase() === grp.toLowerCase();
+                  return (
+                    <Chip
+                      key={grp}
+                      size="small"
+                      label={`${grp} (${count})`}
+                      onClick={() => handleSelectGroup(grp)}
+                      color={isSelected ? "primary" : "default"}
+                      variant={isSelected ? "filled" : "outlined"}
+                      clickable
+                      sx={{
+                        fontWeight: 600,
+                        fontSize: "0.75rem",
+                        height: 26,
+                        cursor: "pointer",
+                        transition: "all 0.15s ease",
+                        ...(isSelected
+                          ? {
+                              bgcolor: "#4F46E5",
+                              color: "#FFFFFF",
+                              "&:hover": { bgcolor: "#4338CA" },
+                            }
+                          : {
+                              bgcolor: "#F8FAFC",
+                              color: "#475569",
+                              borderColor: "#E2E8F0",
+                              "&:hover": { bgcolor: "#F1F5F9", borderColor: "#CBD5E1" },
+                            }),
+                      }}
+                    />
+                  );
+                })}
+
+                {ungroupedAppsCount > 0 && (
+                  <Chip
+                    size="small"
+                    label={`Ungrouped (${ungroupedAppsCount})`}
+                    onClick={() => handleSelectGroup("ungrouped")}
+                    color={groupFilter === "ungrouped" ? "primary" : "default"}
+                    variant={groupFilter === "ungrouped" ? "filled" : "outlined"}
+                    clickable
+                    sx={{
+                      fontWeight: 600,
+                      fontSize: "0.75rem",
+                      height: 26,
+                      cursor: "pointer",
+                      transition: "all 0.15s ease",
+                      fontStyle: "italic",
+                      ...(groupFilter === "ungrouped"
+                        ? {
+                            bgcolor: "#4F46E5",
+                            color: "#FFFFFF",
+                            "&:hover": { bgcolor: "#4338CA" },
+                          }
+                        : {
+                            bgcolor: "#F8FAFC",
+                            color: "#64748B",
+                            borderColor: "#E2E8F0",
+                            "&:hover": { bgcolor: "#F1F5F9", borderColor: "#CBD5E1" },
+                          }),
+                    }}
+                  />
+                )}
+              </Box>
+            )}
           </Paper>
 
           {/* Content */}
@@ -1929,6 +2102,28 @@ export const AppsPage: React.FC = () => {
                                     bgcolor: "#ECFDF5",
                                     color: "#059669",
                                     "& .MuiChip-icon": { color: "#059669" },
+                                  }}
+                                />
+                              </Tooltip>
+                            )}
+                            {app.group && (
+                              <Tooltip title={`Filter by group: ${app.group}`} arrow>
+                                <Chip
+                                  size="small"
+                                  label={app.group}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleSelectGroup(app.group!);
+                                  }}
+                                  sx={{
+                                    height: 20,
+                                    fontSize: "0.68rem",
+                                    fontWeight: 600,
+                                    bgcolor: "#F1F5F9",
+                                    color: "#475569",
+                                    border: "1px solid #E2E8F0",
+                                    cursor: "pointer",
+                                    "&:hover": { bgcolor: "#E2E8F0" },
                                   }}
                                 />
                               </Tooltip>
@@ -2357,6 +2552,28 @@ export const AppsPage: React.FC = () => {
                                       bgcolor: "#ECFDF5",
                                       color: "#059669",
                                       "& .MuiChip-icon": { color: "#059669" },
+                                    }}
+                                  />
+                                </Tooltip>
+                              )}
+                              {app.group && (
+                                <Tooltip title={`Filter by group: ${app.group}`} arrow>
+                                  <Chip
+                                    size="small"
+                                    label={app.group}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleSelectGroup(app.group!);
+                                    }}
+                                    sx={{
+                                      height: 20,
+                                      fontSize: "0.68rem",
+                                      fontWeight: 600,
+                                      bgcolor: "#F1F5F9",
+                                      color: "#475569",
+                                      border: "1px solid #E2E8F0",
+                                      cursor: "pointer",
+                                      "&:hover": { bgcolor: "#E2E8F0" },
                                     }}
                                   />
                                 </Tooltip>
@@ -3461,6 +3678,22 @@ export const AppsPage: React.FC = () => {
                   </FormControl>
                 </Grid>
               </Grid>
+
+              <Autocomplete
+                freeSolo
+                options={appGroups}
+                value={formGroup}
+                onInputChange={(_, newValue) => setFormGroup(newValue)}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    fullWidth
+                    label="Group / Category (Optional)"
+                    placeholder="e.g. Monitoring, Proxy, Database, Core..."
+                    helperText="Category used to organize and filter apps in the apps list"
+                  />
+                )}
+              />
 
               <TextField
                 fullWidth

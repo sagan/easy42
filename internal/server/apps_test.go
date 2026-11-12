@@ -40,6 +40,7 @@ func TestAppsAPI(t *testing.T) {
 		ID:          "my-nginx-app",
 		Name:        "test-app",
 		Description: "A test docker compose app",
+		Group:       "web-services",
 		URL:         "http://${NODE_IP}:8080",
 		AppType:     "docker",
 		MainContent: "version: '3'\nservices:\n  web:\n    image: nginx\n",
@@ -67,6 +68,9 @@ func TestAppsAPI(t *testing.T) {
 	}
 	if created.ID == "" || created.Name != "test-app" {
 		t.Fatalf("unexpected created app: %+v", created)
+	}
+	if created.Group != "web-services" {
+		t.Fatalf("expected created app Group to be 'web-services', got %s", created.Group)
 	}
 	if created.URL != "http://${NODE_IP}:8080" {
 		t.Fatalf("expected created app URL to be http://${NODE_IP}:8080, got %s", created.URL)
@@ -152,6 +156,9 @@ func TestAppsAPI(t *testing.T) {
 	}
 	if dup1.URL != "http://${NODE_IP}:8080" {
 		t.Fatalf("expected duplicated app URL to match original, got %s", dup1.URL)
+	}
+	if dup1.Group != "web-services" {
+		t.Fatalf("expected duplicated app Group to match original, got %s", dup1.Group)
 	}
 
 	// Duplicate dup1 (ends in '1' -> increments to '2')

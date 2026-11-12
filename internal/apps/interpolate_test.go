@@ -221,14 +221,13 @@ func TestInterpolateAppWithEzappDir(t *testing.T) {
 	systemdApp := config.App{
 		AppType:    "systemd",
 		Name:       "rclone",
-		EnvContent: "RCLONE_CONFIG=${EZAPP_DIR}/rclone.conf\nDATA_DIR=${ezapp_dir}/data\n",
+		EnvContent: "RCLONE_CONFIG=${EZAPP_DIR}/rclone.conf\nDATA_DIR=${EZAPP_DIR}/data\n",
 		Files: map[string]string{
 			"start.sh": "#!/bin/sh\nexec ${EZAPP_DIR}/bin/rclone --config ${EZAPP_DIR}/rclone.conf\n",
 		},
 	}
 	systemdCtx := map[string]string{
 		"EZAPP_DIR": "/etc/ezapp/rclone",
-		"ezapp_dir": "/etc/ezapp/rclone",
 	}
 	resSystemd := InterpolateApp(systemdApp, nil, systemdCtx)
 	expectedEnv := "RCLONE_CONFIG=/etc/ezapp/rclone/rclone.conf\nDATA_DIR=/etc/ezapp/rclone/data\n"
@@ -251,7 +250,6 @@ func TestInterpolateAppWithEzappDir(t *testing.T) {
 	}
 	dockerCtx := map[string]string{
 		"EZAPP_DIR": "/etc/ezappc/ezapp-web",
-		"ezapp_dir": "/etc/ezappc/ezapp-web",
 	}
 	resDocker := InterpolateApp(dockerApp, nil, dockerCtx)
 	expectedDockerEnv := "STORAGE_PATH=/etc/ezappc/ezapp-web/storage\n"

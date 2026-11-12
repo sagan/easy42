@@ -184,6 +184,20 @@ export const AppDetailsDrawer: React.FC<AppDetailsDrawerProps> = ({
                 color: app.enabled ? "#4F46E5" : "#64748B",
               }}
             />
+            {app.group && (
+              <Chip
+                size="small"
+                label={`Group: ${app.group}`}
+                sx={{
+                  height: 22,
+                  fontSize: "0.72rem",
+                  fontWeight: 700,
+                  bgcolor: "#F1F5F9",
+                  color: "#475569",
+                  border: "1px solid #E2E8F0",
+                }}
+              />
+            )}
             {status && (
               <Chip
                 size="small"

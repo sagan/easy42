@@ -284,8 +284,10 @@ func (m *Manager) DuplicateApp(appID string) (config.App, error) {
 		ID:          newID,
 		Name:        newName,
 		Description: original.Description,
+		Group:       original.Group,
 		Note:        original.Note,
 		URL:         original.URL,
+		Version:     original.Version,
 		AppType:     original.AppType,
 		MainContent: original.MainContent,
 		EnvContent:  original.EnvContent,
@@ -585,18 +587,12 @@ func (m *Manager) BuildAppSpecsForNode(nodeName string) ([]*agentpb.AppSpec, err
 		}
 		appCtx["APP_NAME"] = rawApp.Name
 		appCtx["EZAPP_DIR"] = ezappDir
-		appCtx["ezapp_dir"] = ezappDir
 		appCtx["NODE_ARCH"] = nodeArch
 		appCtx["ARCH"] = goArch
 		appCtx["ARCH_GNU"] = gnuArch
 		appCtx["ARCH_RUST"] = rustArch
 		appCtx["ARCH_DEB"] = debArch
-		appCtx["arch"] = goArch
-		appCtx["arch_gnu"] = gnuArch
-		appCtx["arch_rust"] = rustArch
-		appCtx["arch_deb"] = debArch
 		appCtx["NODE_ENDIAN"] = nodeEndian
-		appCtx["node_endian"] = nodeEndian
 
 		// Interpolate global & context variables for this specific node
 		app := apps.InterpolateApp(rawApp, globalVars, appCtx)

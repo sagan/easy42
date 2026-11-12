@@ -993,6 +993,7 @@ export interface App {
   id: string;
   name: string;
   description?: string;
+  group?: string;
   note?: string;
   url?: string;
   version?: string;

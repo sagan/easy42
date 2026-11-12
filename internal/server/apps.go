@@ -7,6 +7,7 @@ import (
 
 	"easy42/internal/apps"
 	"easy42/internal/config"
+
 	"github.com/go-chi/chi/v5"
 )
 
@@ -428,15 +429,10 @@ func (s *Server) handlePreviewInterpolate(w http.ResponseWriter, r *http.Request
 	goArch := apps.NormalizeArch(nodeArch, nil)
 	contextVars["NODE_ARCH"] = nodeArch
 	contextVars["NODE_ENDIAN"] = nodeEndian
-	contextVars["node_endian"] = nodeEndian
 	contextVars["ARCH"] = goArch
 	contextVars["ARCH_GNU"] = apps.ToGNUArch(goArch)
 	contextVars["ARCH_RUST"] = apps.ToRustArch(goArch)
 	contextVars["ARCH_DEB"] = apps.ToDebArch(goArch)
-	contextVars["arch"] = goArch
-	contextVars["arch_gnu"] = apps.ToGNUArch(goArch)
-	contextVars["arch_rust"] = apps.ToRustArch(goArch)
-	contextVars["arch_deb"] = apps.ToDebArch(goArch)
 
 	appName := req.AppName
 	if appName == "" {
@@ -449,9 +445,7 @@ func (s *Server) handlePreviewInterpolate(w http.ResponseWriter, r *http.Request
 		ezappDir = "/etc/ezapp/" + appName
 	}
 	contextVars["EZAPP_DIR"] = ezappDir
-	contextVars["ezapp_dir"] = ezappDir
 
 	rendered := apps.InterpolateVariables(req.Content, globalVars, contextVars)
 	writeJSON(w, http.StatusOK, interpolatePreviewResponse{Rendered: rendered})
 }
-
