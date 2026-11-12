@@ -462,3 +462,99 @@ ExecStart=-/usr/bin/app --serve
 		t.Errorf("expected '-' prefix to be stripped, got:\n%s", openrc)
 	}
 }
+
+func TestParseInitSystem(t *testing.T) {
+	cases := map[string]InitSystem{
+		"systemd": InitSystemSystemd,
+		"SYSTEMD": InitSystemSystemd,
+		" procd ": InitSystemProcd,
+		"openwrt": InitSystemProcd,
+		"openrc":  InitSystemOpenRC,
+		"alpine":  InitSystemOpenRC,
+		"":        "",
+		"upstart": "",
+	}
+	for in, want := range cases {
+		if got := ParseInitSystem(in); got != want {
+			t.Errorf("ParseInitSystem(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+// TestDetectInitSystem covers the regression that broke OpenWrt app deployment:
+// agents report os_info as "<os> <arch>" (e.g. "linux mips"), which never
+// contains "openwrt", so the legacy heuristic classified OpenWrt nodes as
+// systemd and skipped procd transpilation entirely.
+func TestDetectInitSystem(t *testing.T) {
+	cases := []struct {
+		name     string
+		reported string
+		osInfo   string
+		want     InitSystem
+	}{
+		// The reported field always wins.
+		{"openwrt via reported field", "procd", "linux mips", InitSystemProcd},
+		{"alpine via reported field", "openrc", "linux x86_64", InitSystemOpenRC},
+		{"systemd via reported field", "systemd", "linux x86_64", InitSystemSystemd},
+		// Legacy agents: fall back to the os_info heuristic.
+		{"legacy openwrt os_info", "", "linux x86_64 openwrt", InitSystemProcd},
+		{"legacy alpine os_info", "", "linux x86_64 alpine", InitSystemOpenRC},
+		{"legacy plain linux", "", "linux amd64", InitSystemSystemd},
+		// The old broken case: a real OpenWrt host with a legacy agent is
+		// misdetected as systemd. This documents the limitation, which is why
+		// the agent now reports init_system explicitly.
+		{"legacy openwrt without marker", "", "linux mips", InitSystemSystemd},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := DetectInitSystem(c.reported, c.osInfo); got != c.want {
+				t.Errorf("DetectInitSystem(%q, %q) = %q, want %q", c.reported, c.osInfo, got, c.want)
+			}
+		})
+	}
+}
+
+// TestTranspileWgWatcherUnitToProcd reproduces the wg-watcher app definition
+// from the bug report and asserts the generated script is a valid procd init
+// script rather than a raw systemd unit.
+func TestTranspileWgWatcherUnitToProcd(t *testing.T) {
+	unit := "[Unit]\nDescription=wg-watcher\nAfter=network.target\n\n[Service]\nType=simple\nUser=root\nWorkingDirectory=/var/log\nEnvironmentFile=/etc/systemd/system/ezapp-wg-watcher.env\nExecStart=/bin/sh -c \"exec wg-watcher\"\nRestart=always\nRestartSec=5\n\n[Install]\nWantedBy=multi-user.target\n"
+
+	parsed, err := ParseSystemdService(unit)
+	if err != nil {
+		t.Fatalf("ParseSystemdService failed: %v", err)
+	}
+	env := ParseEnvFile("DIR=/etc/ezapp/wg-watcher\nIP=192.168.50.1\n")
+	for k, v := range parsed.Environment {
+		if _, ok := env[k]; !ok {
+			env[k] = v
+		}
+	}
+
+	script, err := TranspileToProcd("wg-watcher", parsed, env)
+	if err != nil {
+		t.Fatalf("TranspileToProcd failed: %v", err)
+	}
+
+	if !strings.HasPrefix(script, "#!/bin/sh /etc/rc.common") {
+		t.Errorf("script must start with the rc.common shebang, got:\n%s", script)
+	}
+	for _, want := range []string{
+		"USE_PROCD=1",
+		"start_service()",
+		"procd_set_param command",
+		"procd_set_param respawn",
+		"procd_set_param env",
+		"procd_close_instance",
+	} {
+		if !strings.Contains(script, want) {
+			t.Errorf("script missing %q:\n%s", want, script)
+		}
+	}
+	// The raw systemd section headers must not leak into the init script.
+	for _, unwanted := range []string{"[Unit]", "[Service]", "[Install]"} {
+		if strings.Contains(script, unwanted) {
+			t.Errorf("script must not contain %q:\n%s", unwanted, script)
+		}
+	}
+}

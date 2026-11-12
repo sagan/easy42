@@ -39,6 +39,17 @@ pub enum InitSystem {
     Procd,
 }
 
+impl InitSystem {
+    /// Stable wire name reported to the server in `RegisterRequest.init_system`.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            InitSystem::Systemd => "systemd",
+            InitSystem::Procd => "procd",
+            InitSystem::OpenRC => "openrc",
+        }
+    }
+}
+
 pub fn detect_init_system() -> InitSystem {
     if Path::new("/run/systemd/system").exists() {
         InitSystem::Systemd

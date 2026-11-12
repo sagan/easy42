@@ -133,7 +133,7 @@ func TestResolveArtifactURLTemplate(t *testing.T) {
 		URL: "https://downloads.rclone.org/${VERSION}/rclone-${VERSION}-linux-${ARCH}.zip",
 	}
 
-	res, err := ResolveArtifactURL(context.Background(), spec, "rclone", "v1.68.1", "amd64", "linux", nil, http.DefaultClient)
+	res, err := ResolveArtifactURL(context.Background(), spec, "rclone", "v1.68.1", "amd64", "linux", "", nil, http.DefaultClient)
 	if err != nil {
 		t.Fatalf("ResolveArtifactURL failed: %v", err)
 	}
@@ -187,7 +187,7 @@ func TestResolveArtifactURLTemplateWithARCH_GNU(t *testing.T) {
 		URL: "https://github.com/fastfetch-cli/fastfetch/releases/download/${VERSION}/fastfetch-linux-${ARCH_GNU}.tar.gz",
 	}
 
-	res, err := ResolveArtifactURL(context.Background(), spec, "fastfetch", "2.28.0", "amd64", "linux", nil, http.DefaultClient)
+	res, err := ResolveArtifactURL(context.Background(), spec, "fastfetch", "2.28.0", "amd64", "linux", "", nil, http.DefaultClient)
 	if err != nil {
 		t.Fatalf("ResolveArtifactURL failed: %v", err)
 	}
@@ -198,7 +198,7 @@ func TestResolveArtifactURLTemplateWithARCH_GNU(t *testing.T) {
 	}
 
 	// Test arm64
-	resArm, err := ResolveArtifactURL(context.Background(), spec, "fastfetch", "2.28.0", "arm64", "linux", nil, http.DefaultClient)
+	resArm, err := ResolveArtifactURL(context.Background(), spec, "fastfetch", "2.28.0", "arm64", "linux", "", nil, http.DefaultClient)
 	if err != nil {
 		t.Fatalf("ResolveArtifactURL failed: %v", err)
 	}
@@ -292,4 +292,164 @@ func TestArtifactTokenManager(t *testing.T) {
 func sha256Hex(data []byte) string {
 	h := sha256.Sum256(data)
 	return hex.EncodeToString(h[:])
+}
+
+func TestNormalizeEndianness(t *testing.T) {
+	cases := map[string]string{
+		"little":        "little",
+		"LE":            "little",
+		"little-endian": "little",
+		"big":           "big",
+		"be":            "big",
+		"big-endian":    "big",
+		"":              "",
+		"unknown-value": "",
+	}
+	for in, want := range cases {
+		if got := NormalizeEndianness(in); got != want {
+			t.Errorf("NormalizeEndianness(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestResolveMipsEndianness(t *testing.T) {
+	cases := []struct{ arch, endian, want string }{
+		// Kernel reports a bare "mips" on both endiannesses (OpenWrt MT7621).
+		{"mips", "little", "mipsel"},
+		{"mips", "big", "mips"},
+		{"mips", "", "mips"},
+		{"mips64", "little", "mips64le"},
+		{"mips64", "big", "mips64"},
+		// Already-disambiguated names trust the reported byte order.
+		{"mipsel", "big", "mips"},
+		{"mipsel", "little", "mipsel"},
+		{"mips64le", "big", "mips64"},
+		// Non-MIPS architectures pass through untouched.
+		{"amd64", "little", "amd64"},
+		{"arm64", "big", "arm64"},
+	}
+	for _, c := range cases {
+		if got := ResolveMipsEndianness(c.arch, c.endian); got != c.want {
+			t.Errorf("ResolveMipsEndianness(%q, %q) = %q, want %q", c.arch, c.endian, got, c.want)
+		}
+	}
+}
+
+func TestNodeArchAndEndianFromOSInfo(t *testing.T) {
+	cases := []struct {
+		osInfo     string
+		wantArch   string
+		wantEndian string
+	}{
+		{"linux mips little", "mips", "little"},
+		{"linux mips big", "mips", "big"},
+		{"linux x86_64", "x86_64", ""},
+		{"linux aarch64", "aarch64", ""},
+		// Legacy agents report a bare architecture.
+		{"mipsel", "mipsel", ""},
+		{"mips", "mips", ""},
+		{"", "", ""},
+	}
+	for _, c := range cases {
+		if got := NodeArchFromOSInfo(c.osInfo); got != c.wantArch {
+			t.Errorf("NodeArchFromOSInfo(%q) = %q, want %q", c.osInfo, got, c.wantArch)
+		}
+		if got := NodeEndianFromOSInfo(c.osInfo); got != c.wantEndian {
+			t.Errorf("NodeEndianFromOSInfo(%q) = %q, want %q", c.osInfo, got, c.wantEndian)
+		}
+	}
+}
+
+// TestResolveArtifactURLMipsRustTriple reproduces the wg-watcher report: an
+// MT7621 router reports "mips" (little-endian), and the upstream asset is named
+// after the Rust target triple "mipsel-unknown-linux-musl".
+func TestResolveArtifactURLMipsRustTriple(t *testing.T) {
+	spec := &config.ArtifactSpec{
+		URL: "https://github.com/sagan/wg-watcher/releases/download/${VERSION}/wg-watcher-${ARCH_RUST}-unknown-linux-musl",
+	}
+
+	cases := []struct {
+		arch, endian, want string
+	}{
+		{"mips", "little", "https://github.com/sagan/wg-watcher/releases/download/v0.1.6/wg-watcher-mipsel-unknown-linux-musl"},
+		{"mips", "big", "https://github.com/sagan/wg-watcher/releases/download/v0.1.6/wg-watcher-mips-unknown-linux-musl"},
+		{"amd64", "", "https://github.com/sagan/wg-watcher/releases/download/v0.1.6/wg-watcher-x86_64-unknown-linux-musl"},
+		{"arm64", "", "https://github.com/sagan/wg-watcher/releases/download/v0.1.6/wg-watcher-aarch64-unknown-linux-musl"},
+	}
+	for _, c := range cases {
+		got, err := ResolveArtifactURL(context.Background(), spec, "wg-watcher", "v0.1.6", c.arch, "linux", c.endian, nil, http.DefaultClient)
+		if err != nil {
+			t.Fatalf("ResolveArtifactURL(%s/%s) failed: %v", c.arch, c.endian, err)
+		}
+		if got != c.want {
+			t.Errorf("ResolveArtifactURL(%s/%s) = %q, want %q", c.arch, c.endian, got, c.want)
+		}
+	}
+}
+
+func TestAssetMatchesArch(t *testing.T) {
+	cases := []struct {
+		asset    string
+		variants []string
+		want     bool
+	}{
+		{"wg-watcher-mipsel-unknown-linux-musl", []string{"mips", "mipsel"}, true},
+		// "mips" must not match inside "mipsel".
+		{"wg-watcher-mipsel-unknown-linux-musl", []string{"mips"}, false},
+		{"wg-watcher-mips-unknown-linux-musl", []string{"mips"}, true},
+		{"wg-watcher-mips-unknown-linux-musl", []string{"mipsel"}, false},
+		// "arm" must not match inside "arm64".
+		{"tool-linux-arm64.tar.gz", []string{"arm"}, false},
+		{"tool-linux-arm64.tar.gz", []string{"aarch64", "arm64"}, true},
+		// "arm" is only a token prefix of "armv7l", which is a legitimate match.
+		{"tool-linux-armv7l.tar.gz", []string{"arm"}, false},
+		{"tool-linux-armv7l.tar.gz", []string{"armv7l"}, true},
+	}
+	for _, c := range cases {
+		if got := assetMatchesArch(c.asset, c.variants); got != c.want {
+			t.Errorf("assetMatchesArch(%q, %v) = %v, want %v", c.asset, c.variants, got, c.want)
+		}
+	}
+}
+
+func TestResolveGitHubReleaseAutoSelectsMipsEndianness(t *testing.T) {
+	// Mirrors the wg-watcher release: only little-endian MIPS is published.
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{
+			"tag_name": "v0.1.6",
+			"assets": [
+				{"name": "wg-watcher-aarch64-unknown-linux-musl", "browser_download_url": "https://example.com/aarch64", "size": 1},
+				{"name": "wg-watcher-mipsel-unknown-linux-musl", "browser_download_url": "https://example.com/mipsel", "size": 1},
+				{"name": "wg-watcher-x86_64-unknown-linux-musl", "browser_download_url": "https://example.com/x86_64", "size": 1}
+			]
+		}`)
+	}))
+	defer mockServer.Close()
+
+	origBase := githubAPIBase
+	githubAPIBase = mockServer.URL
+	defer func() { githubAPIBase = origBase }()
+
+	spec := &config.ArtifactSpec{
+		Resolver: &config.ArtifactResolver{
+			Type:    "github_release",
+			Repo:    "sagan/wg-watcher",
+			Version: "latest",
+		},
+	}
+
+	// Little-endian MIPS host: automatic selection must pick the mipsel asset.
+	got, err := ResolveArtifactURL(context.Background(), spec, "wg-watcher", "latest", "mips", "linux", "little", nil, mockServer.Client())
+	if err != nil {
+		t.Fatalf("automatic selection failed: %v", err)
+	}
+	if got != "https://example.com/mipsel" {
+		t.Errorf("got %q, want https://example.com/mipsel", got)
+	}
+
+	// Big-endian MIPS host: no matching asset, and it must not fall back to mipsel.
+	if _, err := ResolveArtifactURL(context.Background(), spec, "wg-watcher", "latest", "mips", "linux", "big", nil, mockServer.Client()); err == nil {
+		t.Errorf("expected an error for big-endian MIPS with no matching asset")
+	}
 }

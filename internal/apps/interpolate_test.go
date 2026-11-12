@@ -114,7 +114,7 @@ func TestBuildNodeContextVars(t *testing.T) {
 		ExternalIP6:         "2001:db8:1::22/64",
 		CustomNetworkScript: "#!/bin/sh\necho custom",
 		Tags:                []string{"vps", "asia-east", "prod"},
-		Note: "```json\n{\n  \"cluster\": \"edge-asia\",\n  \"asn\": 4242421234,\n  \"meta\": {\n    \"env\": \"prod\",\n    \"tier\": 1\n  }\n}\n```",
+		Note:                "```json\n{\n  \"cluster\": \"edge-asia\",\n  \"asn\": 4242421234,\n  \"meta\": {\n    \"env\": \"prod\",\n    \"tier\": 1\n  }\n}\n```",
 	}
 
 	ctx := BuildNodeContextVars(node)
@@ -266,9 +266,9 @@ func TestInterpolateAppWithEzappDir(t *testing.T) {
 
 func TestSplitCronLine(t *testing.T) {
 	tests := []struct {
-		input       string
-		wantSched   string
-		wantCmd     string
+		input     string
+		wantSched string
+		wantCmd   string
 	}{
 		{
 			input:     "0 0 * * * /root/backup.sh",

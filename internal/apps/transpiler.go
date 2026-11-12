@@ -9,6 +9,56 @@ import (
 	"strings"
 )
 
+// InitSystem identifies the service manager running on a node.
+type InitSystem string
+
+const (
+	// InitSystemSystemd is the default for Linux hosts.
+	InitSystemSystemd InitSystem = "systemd"
+	// InitSystemProcd is used by OpenWrt.
+	InitSystemProcd InitSystem = "procd"
+	// InitSystemOpenRC is used by Alpine and other OpenRC distributions.
+	InitSystemOpenRC InitSystem = "openrc"
+)
+
+// ParseInitSystem normalizes an init system name reported by an agent.
+// It returns "" when the value is empty or unrecognized.
+func ParseInitSystem(value string) InitSystem {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "systemd":
+		return InitSystemSystemd
+	case "procd", "openwrt":
+		return InitSystemProcd
+	case "openrc", "alpine":
+		return InitSystemOpenRC
+	default:
+		return ""
+	}
+}
+
+// DetectInitSystem determines the init system of a node from the init system
+// reported by its agent, falling back to the legacy os_info heuristic for
+// agents that predate the init_system field.
+//
+// The heuristic is unreliable: agents report os_info as "<os> <arch>", which
+// never contains "openwrt", so OpenWrt nodes were previously treated as
+// systemd. The reported field is therefore preferred whenever present.
+func DetectInitSystem(reportedInitSystem, osInfo string) InitSystem {
+	if is := ParseInitSystem(reportedInitSystem); is != "" {
+		return is
+	}
+
+	lower := strings.ToLower(osInfo)
+	switch {
+	case strings.Contains(lower, "openwrt"), strings.Contains(lower, "procd"):
+		return InitSystemProcd
+	case strings.Contains(lower, "alpine"), strings.Contains(lower, "openrc"):
+		return InitSystemOpenRC
+	default:
+		return InitSystemSystemd
+	}
+}
+
 // ParsedServiceUnit holds the extracted fields from a systemd service unit.
 //
 // Only directives that have a meaningful equivalent (or a close

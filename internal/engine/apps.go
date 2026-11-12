@@ -532,9 +532,13 @@ func (m *Manager) BuildAppSpecsForNode(nodeName string) ([]*agentpb.AppSpec, err
 	}
 
 	osInfo := ""
+	reportedInitSystem := ""
 	if m.agentHub != nil {
 		osInfo = strings.ToLower(m.agentHub.GetOSInfo(nodeName))
+		reportedInitSystem = m.agentHub.GetInitSystem(nodeName)
 	}
+	nodeEndian := apps.NodeEndianFromOSInfo(osInfo)
+	initSystem := apps.DetectInitSystem(reportedInitSystem, osInfo)
 
 	globalVars := apps.VariablesToMap(cfg.AppVariables)
 
@@ -559,11 +563,8 @@ func (m *Manager) BuildAppSpecsForNode(nodeName string) ([]*agentpb.AppSpec, err
 		}
 
 		nodeArch := "amd64"
-		parts := strings.Fields(osInfo)
-		if len(parts) >= 2 {
-			nodeArch = parts[1]
-		} else if len(parts) == 1 && !strings.Contains(parts[0], "linux") {
-			nodeArch = parts[0]
+		if arch := apps.NodeArchFromOSInfo(osInfo); arch != "" {
+			nodeArch = arch
 		}
 		goArch := apps.NormalizeArch(nodeArch, nil)
 		gnuArch := apps.ToGNUArch(goArch)
@@ -594,6 +595,8 @@ func (m *Manager) BuildAppSpecsForNode(nodeName string) ([]*agentpb.AppSpec, err
 		appCtx["arch_gnu"] = gnuArch
 		appCtx["arch_rust"] = rustArch
 		appCtx["arch_deb"] = debArch
+		appCtx["NODE_ENDIAN"] = nodeEndian
+		appCtx["node_endian"] = nodeEndian
 
 		// Interpolate global & context variables for this specific node
 		app := apps.InterpolateApp(rawApp, globalVars, appCtx)
@@ -626,11 +629,12 @@ func (m *Manager) BuildAppSpecsForNode(nodeName string) ([]*agentpb.AppSpec, err
 					}
 				}
 
-				if strings.Contains(osInfo, "openwrt") {
+				switch initSystem {
+				case apps.InitSystemProcd:
 					if procdScript, err := apps.TranspileToProcd(app.Name, parsedUnit, parsedEnv); err == nil {
 						spec.MainContent = procdScript
 					}
-				} else if strings.Contains(osInfo, "alpine") || strings.Contains(osInfo, "openrc") {
+				case apps.InitSystemOpenRC:
 					if openrcScript, err := apps.TranspileToOpenRC(app.Name, parsedUnit); err == nil {
 						spec.MainContent = openrcScript
 						spec.EnvContent = apps.GenerateOpenRCConfD(app.Name, parsedEnv)
@@ -653,13 +657,13 @@ func (m *Manager) BuildAppSpecsForNode(nodeName string) ([]*agentpb.AppSpec, err
 			osName := "linux"
 
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
-			extractedFiles, err := m.artifactMgr.EnsureArtifact(ctx, rawApp, nodeArch, osName, globalVars)
+			extractedFiles, err := m.artifactMgr.EnsureArtifact(ctx, rawApp, nodeArch, osName, nodeEndian, globalVars)
 			cancel()
 			if err != nil {
 				// Failed to download or verify artifact upstream
 			} else {
 				binPath := "/usr/local/bin"
-				if strings.Contains(osInfo, "openwrt") {
+				if initSystem == apps.InitSystemProcd {
 					binPath = "/usr/bin"
 				}
 				for _, reqFile := range rawApp.Artifact.Files {

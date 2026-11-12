@@ -417,15 +417,18 @@ func (s *Server) handlePreviewInterpolate(w http.ResponseWriter, r *http.Request
 	}
 
 	nodeArch := "amd64"
+	nodeEndian := ""
 	if req.NodeName != "" {
 		osInfo := strings.ToLower(s.mgr.GetOSInfo(req.NodeName))
-		parts := strings.Fields(osInfo)
-		if len(parts) >= 2 {
-			nodeArch = parts[1]
+		if arch := apps.NodeArchFromOSInfo(osInfo); arch != "" {
+			nodeArch = arch
 		}
+		nodeEndian = apps.NodeEndianFromOSInfo(osInfo)
 	}
 	goArch := apps.NormalizeArch(nodeArch, nil)
 	contextVars["NODE_ARCH"] = nodeArch
+	contextVars["NODE_ENDIAN"] = nodeEndian
+	contextVars["node_endian"] = nodeEndian
 	contextVars["ARCH"] = goArch
 	contextVars["ARCH_GNU"] = apps.ToGNUArch(goArch)
 	contextVars["ARCH_RUST"] = apps.ToRustArch(goArch)

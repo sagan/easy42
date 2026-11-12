@@ -59,7 +59,11 @@ func NewArtifactManager(cacheDir string) *ArtifactManager {
 	}
 }
 
-// NormalizeArch standardizes an architecture string and applies any app-specific arch mappings
+// NormalizeArch standardizes an architecture string and applies any app-specific arch mappings.
+//
+// MIPS is intentionally left untouched: `mips` and `mipsel` are distinct
+// upstream targets, and a host reporting `mips` may be either endianness. Use
+// ResolveMipsEndianness with the endianness reported by the agent to settle it.
 func NormalizeArch(nodeArch string, mapping map[string]string) string {
 	arch := strings.ToLower(strings.TrimSpace(nodeArch))
 	switch arch {
@@ -79,6 +83,79 @@ func NormalizeArch(nodeArch string, mapping map[string]string) string {
 		}
 	}
 	return arch
+}
+
+// NormalizeEndianness maps the various spellings an agent or operator may use
+// for CPU byte order onto "little" or "big". It returns "" when unknown.
+func NormalizeEndianness(endian string) string {
+	switch strings.ToLower(strings.TrimSpace(endian)) {
+	case "little", "le", "little-endian", "little_endian", "littleendian", "lsb":
+		return "little"
+	case "big", "be", "big-endian", "big_endian", "bigendian", "msb":
+		return "big"
+	default:
+		return ""
+	}
+}
+
+// ResolveMipsEndianness disambiguates a generic "mips"/"mips64" architecture
+// using the endianness reported by the node agent. Architectures that already
+// encode their byte order (or are not MIPS at all) are returned unchanged.
+func ResolveMipsEndianness(arch, endian string) string {
+	clean := strings.ToLower(strings.TrimSpace(arch))
+	little := NormalizeEndianness(endian) == "little"
+	big := NormalizeEndianness(endian) == "big"
+
+	switch clean {
+	case "mips":
+		if little {
+			return "mipsel"
+		}
+		return clean
+	case "mips64":
+		if little {
+			return "mips64le"
+		}
+		return clean
+	case "mipsel", "mipsle":
+		if big {
+			return "mips"
+		}
+		return "mipsel"
+	case "mips64le", "mips64el":
+		if big {
+			return "mips64"
+		}
+		return "mips64le"
+	default:
+		return clean
+	}
+}
+
+// NodeArchFromOSInfo extracts the machine architecture from an agent-reported
+// os_info string. The expected form is "<os> <arch> [<endian>]" (e.g.
+// "linux mips little"), but legacy agents may report a bare architecture.
+func NodeArchFromOSInfo(osInfo string) string {
+	parts := strings.Fields(osInfo)
+	switch {
+	case len(parts) >= 2:
+		return parts[1]
+	case len(parts) == 1 && !strings.Contains(strings.ToLower(parts[0]), "linux"):
+		return parts[0]
+	default:
+		return ""
+	}
+}
+
+// NodeEndianFromOSInfo extracts the optional endianness field from an
+// agent-reported os_info string. It returns "" for legacy agents that do not
+// report one.
+func NodeEndianFromOSInfo(osInfo string) string {
+	parts := strings.Fields(osInfo)
+	if len(parts) >= 3 {
+		return NormalizeEndianness(parts[2])
+	}
+	return ""
 }
 
 // ToGNUArch maps standard architecture names to GNU arch / uname -m format (e.g. x86_64, aarch64, armv7l)
@@ -484,8 +561,10 @@ func copyAndHash(src io.Reader, destPath string) (*ExtractedFileInfo, error) {
 }
 
 // EnsureArtifact downloads, verifies, unpacks, and caches an app artifact for a specific architecture.
+// The endian parameter ("little"/"big", may be empty) disambiguates MIPS targets, where a host
+// reporting "mips" may be either byte order.
 // Returns a map of extracted file name -> ExtractedFileInfo.
-func (m *ArtifactManager) EnsureArtifact(ctx context.Context, app config.App, nodeArch, osName string, globalVars map[string]string) (map[string]*ExtractedFileInfo, error) {
+func (m *ArtifactManager) EnsureArtifact(ctx context.Context, app config.App, nodeArch, osName, endian string, globalVars map[string]string) (map[string]*ExtractedFileInfo, error) {
 	if app.Artifact == nil {
 		return nil, nil
 	}
@@ -496,6 +575,7 @@ func (m *ArtifactManager) EnsureArtifact(ctx context.Context, app config.App, no
 	}
 
 	arch := NormalizeArch(nodeArch, app.Artifact.ArchMapping)
+	arch = ResolveMipsEndianness(arch, endian)
 	if osName == "" {
 		osName = "linux"
 	}
@@ -528,7 +608,7 @@ func (m *ArtifactManager) EnsureArtifact(ctx context.Context, app config.App, no
 		wg.Done()
 	}()
 
-	files, err := m.doEnsureArtifact(ctx, app, version, arch, osName, globalVars)
+	files, err := m.doEnsureArtifact(ctx, app, version, arch, osName, endian, globalVars)
 	m.mu.Lock()
 	m.inFlightErr[cacheKey] = err
 	m.mu.Unlock()
@@ -555,7 +635,7 @@ func (m *ArtifactManager) loadExtractedFromCache(appName, version, arch string, 
 	return res, nil
 }
 
-func (m *ArtifactManager) doEnsureArtifact(ctx context.Context, app config.App, version, arch, osName string, globalVars map[string]string) (map[string]*ExtractedFileInfo, error) {
+func (m *ArtifactManager) doEnsureArtifact(ctx context.Context, app config.App, version, arch, osName, endian string, globalVars map[string]string) (map[string]*ExtractedFileInfo, error) {
 	destDir := filepath.Join(m.CacheDir, "extracted", app.Name, version, arch)
 
 	// Check if already extracted and valid in cache
@@ -572,7 +652,7 @@ func (m *ArtifactManager) doEnsureArtifact(ctx context.Context, app config.App, 
 	}
 
 	// 1. Resolve upstream download URL
-	downloadURL, err := ResolveArtifactURL(ctx, app.Artifact, app.Name, version, arch, osName, globalVars, m.HTTPClient)
+	downloadURL, err := ResolveArtifactURL(ctx, app.Artifact, app.Name, version, arch, osName, endian, globalVars, m.HTTPClient)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve artifact URL: %w", err)
 	}

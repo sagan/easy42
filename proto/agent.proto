@@ -38,6 +38,9 @@ message RegisterRequest {
   string hostname = 4;
   string hosts_hash = 5;
   bool disable_apps = 6;
+  // Init system detected by the agent: "systemd", "procd" (OpenWrt) or "openrc" (Alpine).
+  // Empty for agents that predate this field; the server then falls back to os_info.
+  string init_system = 7;
 }
 
 message RegisterResponse {

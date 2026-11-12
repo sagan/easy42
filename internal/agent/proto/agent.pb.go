@@ -458,13 +458,16 @@ func (*AgentMessage_SyncApps) isAgentMessage_Payload() {}
 func (*AgentMessage_SyncObfuscators) isAgentMessage_Payload() {}
 
 type RegisterRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	NodeName      string                 `protobuf:"bytes,1,opt,name=node_name,json=nodeName,proto3" json:"node_name,omitempty"`
-	AgentVersion  string                 `protobuf:"bytes,2,opt,name=agent_version,json=agentVersion,proto3" json:"agent_version,omitempty"`
-	OsInfo        string                 `protobuf:"bytes,3,opt,name=os_info,json=osInfo,proto3" json:"os_info,omitempty"`
-	Hostname      string                 `protobuf:"bytes,4,opt,name=hostname,proto3" json:"hostname,omitempty"`
-	HostsHash     string                 `protobuf:"bytes,5,opt,name=hosts_hash,json=hostsHash,proto3" json:"hosts_hash,omitempty"`
-	DisableApps   bool                   `protobuf:"varint,6,opt,name=disable_apps,json=disableApps,proto3" json:"disable_apps,omitempty"`
+	state        protoimpl.MessageState `protogen:"open.v1"`
+	NodeName     string                 `protobuf:"bytes,1,opt,name=node_name,json=nodeName,proto3" json:"node_name,omitempty"`
+	AgentVersion string                 `protobuf:"bytes,2,opt,name=agent_version,json=agentVersion,proto3" json:"agent_version,omitempty"`
+	OsInfo       string                 `protobuf:"bytes,3,opt,name=os_info,json=osInfo,proto3" json:"os_info,omitempty"`
+	Hostname     string                 `protobuf:"bytes,4,opt,name=hostname,proto3" json:"hostname,omitempty"`
+	HostsHash    string                 `protobuf:"bytes,5,opt,name=hosts_hash,json=hostsHash,proto3" json:"hosts_hash,omitempty"`
+	DisableApps  bool                   `protobuf:"varint,6,opt,name=disable_apps,json=disableApps,proto3" json:"disable_apps,omitempty"`
+	// Init system detected by the agent: "systemd", "procd" (OpenWrt) or "openrc" (Alpine).
+	// Empty for agents that predate this field; the server then falls back to os_info.
+	InitSystem    string `protobuf:"bytes,7,opt,name=init_system,json=initSystem,proto3" json:"init_system,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -539,6 +542,13 @@ func (x *RegisterRequest) GetDisableApps() bool {
 		return x.DisableApps
 	}
 	return false
+}
+
+func (x *RegisterRequest) GetInitSystem() string {
+	if x != nil {
+		return x.InitSystem
+	}
+	return ""
 }
 
 type RegisterResponse struct {
@@ -3236,7 +3246,7 @@ const file_proto_agent_proto_rawDesc = "" +
 	"sync_hosts\x18\x18 \x01(\v2\x1a.easy42.agent.v1.SyncHostsH\x00R\tsyncHosts\x128\n" +
 	"\tsync_apps\x18\x19 \x01(\v2\x19.easy42.agent.v1.SyncAppsH\x00R\bsyncApps\x12M\n" +
 	"\x10sync_obfuscators\x18\x1a \x01(\v2 .easy42.agent.v1.SyncObfuscatorsH\x00R\x0fsyncObfuscatorsB\t\n" +
-	"\apayload\"\xca\x01\n" +
+	"\apayload\"\xeb\x01\n" +
 	"\x0fRegisterRequest\x12\x1b\n" +
 	"\tnode_name\x18\x01 \x01(\tR\bnodeName\x12#\n" +
 	"\ragent_version\x18\x02 \x01(\tR\fagentVersion\x12\x17\n" +
@@ -3244,7 +3254,9 @@ const file_proto_agent_proto_rawDesc = "" +
 	"\bhostname\x18\x04 \x01(\tR\bhostname\x12\x1d\n" +
 	"\n" +
 	"hosts_hash\x18\x05 \x01(\tR\thostsHash\x12!\n" +
-	"\fdisable_apps\x18\x06 \x01(\bR\vdisableApps\"\x89\x01\n" +
+	"\fdisable_apps\x18\x06 \x01(\bR\vdisableApps\x12\x1f\n" +
+	"\vinit_system\x18\a \x01(\tR\n" +
+	"initSystem\"\x89\x01\n" +
 	"\x10RegisterResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12#\n" +
 	"\rerror_message\x18\x02 \x01(\tR\ferrorMessage\x126\n" +

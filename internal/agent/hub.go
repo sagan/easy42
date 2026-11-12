@@ -140,6 +140,17 @@ func (h *Hub) GetOSInfo(nodeName string) string {
 	return conn.OSInfo()
 }
 
+// GetInitSystem returns the init system reported by a connected node agent
+// ("systemd", "procd" or "openrc"). It returns "" for offline nodes and for
+// agents that predate the field.
+func (h *Hub) GetInitSystem(nodeName string) string {
+	conn, ok := h.GetConnection(nodeName)
+	if !ok {
+		return ""
+	}
+	return conn.InitSystem()
+}
+
 // IsAppsDisabled returns true if the node agent has disabled apps in its configuration
 func (h *Hub) IsAppsDisabled(nodeName string) bool {
 	h.mu.RLock()

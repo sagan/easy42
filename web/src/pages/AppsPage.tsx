@@ -4868,9 +4868,9 @@ ${formEnabled ? `${formCronExpr.trim() || "0 0 * * *"} ${formCronCmd.trim() || "
                         {[
                           { label: "${VERSION}", desc: "Version tag (e.g. v1.68.1)" },
                           { label: "${RAW_VERSION}", desc: "Version without 'v' prefix (e.g. 1.68.1)" },
-                          { label: "${ARCH}", desc: "Go format: amd64 / arm64 / 386 / armv7" },
-                          { label: "${ARCH_GNU}", desc: "GNU/C/Rust format: x86_64 / aarch64 / i386 / armv7l" },
-                          { label: "${ARCH_RUST}", desc: "Rust target format: x86_64 / aarch64 / armv7" },
+                          { label: "${ARCH}", desc: "Go format: amd64 / arm64 / 386 / armv7 / mipsel (MIPS endianness resolved)" },
+                          { label: "${ARCH_GNU}", desc: "GNU/C/Rust format: x86_64 / aarch64 / i386 / armv7l / mipsel" },
+                          { label: "${ARCH_RUST}", desc: "Rust target format: x86_64 / aarch64 / armv7 / mipsel (little-endian MIPS)" },
                           { label: "${ARCH_DEB}", desc: "Debian format: amd64 / arm64 / armhf" },
                           { label: "${OS}", desc: "OS name (linux)" },
                           { label: "${APP_NAME}", desc: "App name" },
@@ -4941,9 +4941,9 @@ ${formEnabled ? `${formCronExpr.trim() || "0 0 * * *"} ${formCronCmd.trim() || "
                         {[
                           { label: "${VERSION}", desc: "Version tag (e.g. v1.68.1)" },
                           { label: "${RAW_VERSION}", desc: "Version without 'v' prefix" },
-                          { label: "${ARCH}", desc: "Go format: amd64 / arm64" },
-                          { label: "${ARCH_GNU}", desc: "GNU/C/Rust format: x86_64 / aarch64" },
-                          { label: "${ARCH_RUST}", desc: "Rust target format: x86_64 / aarch64" },
+                          { label: "${ARCH}", desc: "Go format: amd64 / arm64 / mipsel" },
+                          { label: "${ARCH_GNU}", desc: "GNU/C/Rust format: x86_64 / aarch64 / mipsel" },
+                          { label: "${ARCH_RUST}", desc: "Rust target format: x86_64 / aarch64 / mipsel" },
                           { label: "${ARCH_DEB}", desc: "Debian format: amd64 / arm64" },
                           { label: "${OS}", desc: "OS name (linux)" },
                         ].map((item) => (

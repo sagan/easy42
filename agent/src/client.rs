@@ -93,7 +93,7 @@ impl AgentClient {
 
         // 2. Send RegisterRequest with timeout
         let hostname = get_system_hostname();
-        let os_info = format!("{} {}", std::env::consts::OS, std::env::consts::ARCH);
+        let os_info = crate::sysinfo::os_info();
         let node_name = self
             .config
             .node_name
@@ -102,6 +102,7 @@ impl AgentClient {
 
         let hosts_hash = crate::hosts::get_current_hosts_hash(&crate::hosts::get_hosts_path());
         let disable_apps = self.executor.is_apps_disabled();
+        let init_system = crate::apps::detect_init_system().as_str().to_string();
         let reg_msg = proto::AgentMessage {
             seq: 1,
             timestamp: now_millis(),
@@ -113,6 +114,7 @@ impl AgentClient {
                     hostname,
                     hosts_hash,
                     disable_apps,
+                    init_system,
                 },
             )),
         };

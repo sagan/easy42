@@ -5,6 +5,7 @@ mod container;
 mod cron;
 mod executor;
 mod hosts;
+mod sysinfo;
 pub mod apps;
 pub mod crontab;
 pub mod obfuscators;

@@ -3836,9 +3836,12 @@ func (m *Manager) PlanSyncWithScope(scope string, nodeNames ...string) ([]config
 		node := n
 
 		osInfo := ""
+		reportedInitSystem := ""
 		if m.agentHub != nil {
 			osInfo = strings.ToLower(m.agentHub.GetOSInfo(node.Name))
+			reportedInitSystem = m.agentHub.GetInitSystem(node.Name)
 		}
+		initSystem := apps.DetectInitSystem(reportedInitSystem, osInfo)
 
 		desiredSpecs, err := m.BuildAppSpecsForNode(node.Name)
 		if err != nil {
@@ -3923,12 +3926,12 @@ func (m *Manager) PlanSyncWithScope(scope string, nodeNames ...string) ([]config
 				// container runtime (docker, podman, or nerdctl) at apply time.
 				applyCmd = "(docker|podman|nerdctl) compose up -d"
 				mainDesc = fmt.Sprintf("Deploy app '%s' compose file on %s", spec.Name, node.Name)
-			} else if strings.Contains(osInfo, "openwrt") {
+			} else if initSystem == apps.InitSystemProcd {
 				mainTargetFile = fmt.Sprintf("/etc/init.d/ezapp-%s", spec.Name)
 				envTargetFile = ""
 				applyCmd = fmt.Sprintf("/etc/init.d/ezapp-%s restart", spec.Name)
 				mainDesc = fmt.Sprintf("Deploy app '%s' init script on %s", spec.Name, node.Name)
-			} else if strings.Contains(osInfo, "alpine") || strings.Contains(osInfo, "openrc") {
+			} else if initSystem == apps.InitSystemOpenRC {
 				mainTargetFile = fmt.Sprintf("/etc/init.d/ezapp-%s", spec.Name)
 				envTargetFile = fmt.Sprintf("/etc/conf.d/ezapp-%s", spec.Name)
 				applyCmd = fmt.Sprintf("rc-service ezapp-%s restart", spec.Name)
@@ -6346,6 +6349,15 @@ rm -f /etc/easy42/agent.json 2>/dev/null || true
 func (m *Manager) GetOSInfo(nodeName string) string {
 	if m.agentHub != nil {
 		return m.agentHub.GetOSInfo(nodeName)
+	}
+	return ""
+}
+
+// GetInitSystem returns the init system reported by a node agent
+// ("systemd", "procd" or "openrc"), or "" when unknown.
+func (m *Manager) GetInitSystem(nodeName string) string {
+	if m.agentHub != nil {
+		return m.agentHub.GetInitSystem(nodeName)
 	}
 	return ""
 }

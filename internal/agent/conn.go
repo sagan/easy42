@@ -19,6 +19,7 @@ type AgentConnection struct {
 	nodeName     string
 	agentVersion string
 	osInfo       string
+	initSystem   string
 	hostname     string
 	hostsHash    string
 	disableApps  bool
@@ -64,6 +65,12 @@ func (c *AgentConnection) Hostname() string {
 // OSInfo returns the reported operating system info
 func (c *AgentConnection) OSInfo() string {
 	return c.osInfo
+}
+
+// InitSystem returns the init system reported by the agent ("systemd", "procd" or "openrc").
+// It is empty for agents that predate the field.
+func (c *AgentConnection) InitSystem() string {
+	return c.initSystem
 }
 
 // HostsHash returns the latest reported hosts easy42 block SHA-256 hash
@@ -190,6 +197,7 @@ func (c *AgentConnection) handleIncomingMessage(msg *agentpb.AgentMessage) {
 		req := payload.RegisterReq
 		c.agentVersion = req.AgentVersion
 		c.osInfo = req.OsInfo
+		c.initSystem = req.InitSystem
 		c.hostname = req.Hostname
 		c.hostsHash = req.HostsHash
 		c.disableApps = req.DisableApps
