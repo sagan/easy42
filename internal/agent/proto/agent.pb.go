@@ -2623,6 +2623,98 @@ func (x *AppConfigFile) GetFileMode() uint32 {
 	return 0
 }
 
+type AppArtifactFile struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	TargetPath    string                 `protobuf:"bytes,2,opt,name=target_path,json=targetPath,proto3" json:"target_path,omitempty"`
+	PullPolicy    string                 `protobuf:"bytes,3,opt,name=pull_policy,json=pullPolicy,proto3" json:"pull_policy,omitempty"` // "if_changed" | "if_not_present" | "never"
+	FileSha256    string                 `protobuf:"bytes,4,opt,name=file_sha256,json=fileSha256,proto3" json:"file_sha256,omitempty"`
+	DownloadToken string                 `protobuf:"bytes,5,opt,name=download_token,json=downloadToken,proto3" json:"download_token,omitempty"`
+	FileMode      uint32                 `protobuf:"varint,6,opt,name=file_mode,json=fileMode,proto3" json:"file_mode,omitempty"`
+	FileSize      uint64                 `protobuf:"varint,7,opt,name=file_size,json=fileSize,proto3" json:"file_size,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AppArtifactFile) Reset() {
+	*x = AppArtifactFile{}
+	mi := &file_proto_agent_proto_msgTypes[31]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AppArtifactFile) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AppArtifactFile) ProtoMessage() {}
+
+func (x *AppArtifactFile) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_agent_proto_msgTypes[31]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AppArtifactFile.ProtoReflect.Descriptor instead.
+func (*AppArtifactFile) Descriptor() ([]byte, []int) {
+	return file_proto_agent_proto_rawDescGZIP(), []int{31}
+}
+
+func (x *AppArtifactFile) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *AppArtifactFile) GetTargetPath() string {
+	if x != nil {
+		return x.TargetPath
+	}
+	return ""
+}
+
+func (x *AppArtifactFile) GetPullPolicy() string {
+	if x != nil {
+		return x.PullPolicy
+	}
+	return ""
+}
+
+func (x *AppArtifactFile) GetFileSha256() string {
+	if x != nil {
+		return x.FileSha256
+	}
+	return ""
+}
+
+func (x *AppArtifactFile) GetDownloadToken() string {
+	if x != nil {
+		return x.DownloadToken
+	}
+	return ""
+}
+
+func (x *AppArtifactFile) GetFileMode() uint32 {
+	if x != nil {
+		return x.FileMode
+	}
+	return 0
+}
+
+func (x *AppArtifactFile) GetFileSize() uint64 {
+	if x != nil {
+		return x.FileSize
+	}
+	return 0
+}
+
 type AppSpec struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -2633,13 +2725,14 @@ type AppSpec struct {
 	ConfigFiles   []*AppConfigFile       `protobuf:"bytes,6,rep,name=config_files,json=configFiles,proto3" json:"config_files,omitempty"` // Auxiliary config files
 	Sha256Hash    string                 `protobuf:"bytes,7,opt,name=sha256_hash,json=sha256Hash,proto3" json:"sha256_hash,omitempty"`    // Content hash for change detection
 	Enabled       bool                   `protobuf:"varint,8,opt,name=enabled,proto3" json:"enabled,omitempty"`                           // Desired state (true = running, false = stopped)
+	Artifacts     []*AppArtifactFile     `protobuf:"bytes,9,rep,name=artifacts,proto3" json:"artifacts,omitempty"`                        // Required artifact files
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *AppSpec) Reset() {
 	*x = AppSpec{}
-	mi := &file_proto_agent_proto_msgTypes[31]
+	mi := &file_proto_agent_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2651,7 +2744,7 @@ func (x *AppSpec) String() string {
 func (*AppSpec) ProtoMessage() {}
 
 func (x *AppSpec) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_agent_proto_msgTypes[31]
+	mi := &file_proto_agent_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2664,7 +2757,7 @@ func (x *AppSpec) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AppSpec.ProtoReflect.Descriptor instead.
 func (*AppSpec) Descriptor() ([]byte, []int) {
-	return file_proto_agent_proto_rawDescGZIP(), []int{31}
+	return file_proto_agent_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *AppSpec) GetId() string {
@@ -2723,6 +2816,13 @@ func (x *AppSpec) GetEnabled() bool {
 	return false
 }
 
+func (x *AppSpec) GetArtifacts() []*AppArtifactFile {
+	if x != nil {
+		return x.Artifacts
+	}
+	return nil
+}
+
 type SyncApps struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Apps          []*AppSpec             `protobuf:"bytes,1,rep,name=apps,proto3" json:"apps,omitempty"`
@@ -2732,7 +2832,7 @@ type SyncApps struct {
 
 func (x *SyncApps) Reset() {
 	*x = SyncApps{}
-	mi := &file_proto_agent_proto_msgTypes[32]
+	mi := &file_proto_agent_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2744,7 +2844,7 @@ func (x *SyncApps) String() string {
 func (*SyncApps) ProtoMessage() {}
 
 func (x *SyncApps) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_agent_proto_msgTypes[32]
+	mi := &file_proto_agent_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2757,7 +2857,7 @@ func (x *SyncApps) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SyncApps.ProtoReflect.Descriptor instead.
 func (*SyncApps) Descriptor() ([]byte, []int) {
-	return file_proto_agent_proto_rawDescGZIP(), []int{32}
+	return file_proto_agent_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *SyncApps) GetApps() []*AppSpec {
@@ -2782,7 +2882,7 @@ type AppStatus struct {
 
 func (x *AppStatus) Reset() {
 	*x = AppStatus{}
-	mi := &file_proto_agent_proto_msgTypes[33]
+	mi := &file_proto_agent_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2794,7 +2894,7 @@ func (x *AppStatus) String() string {
 func (*AppStatus) ProtoMessage() {}
 
 func (x *AppStatus) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_agent_proto_msgTypes[33]
+	mi := &file_proto_agent_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2807,7 +2907,7 @@ func (x *AppStatus) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AppStatus.ProtoReflect.Descriptor instead.
 func (*AppStatus) Descriptor() ([]byte, []int) {
-	return file_proto_agent_proto_rawDescGZIP(), []int{33}
+	return file_proto_agent_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *AppStatus) GetAppId() string {
@@ -2871,7 +2971,7 @@ type AppActionCmd struct {
 
 func (x *AppActionCmd) Reset() {
 	*x = AppActionCmd{}
-	mi := &file_proto_agent_proto_msgTypes[34]
+	mi := &file_proto_agent_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2883,7 +2983,7 @@ func (x *AppActionCmd) String() string {
 func (*AppActionCmd) ProtoMessage() {}
 
 func (x *AppActionCmd) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_agent_proto_msgTypes[34]
+	mi := &file_proto_agent_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2896,7 +2996,7 @@ func (x *AppActionCmd) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AppActionCmd.ProtoReflect.Descriptor instead.
 func (*AppActionCmd) Descriptor() ([]byte, []int) {
-	return file_proto_agent_proto_rawDescGZIP(), []int{34}
+	return file_proto_agent_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *AppActionCmd) GetAppName() string {
@@ -2948,7 +3048,7 @@ type ObfuscatorSpec struct {
 
 func (x *ObfuscatorSpec) Reset() {
 	*x = ObfuscatorSpec{}
-	mi := &file_proto_agent_proto_msgTypes[35]
+	mi := &file_proto_agent_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2960,7 +3060,7 @@ func (x *ObfuscatorSpec) String() string {
 func (*ObfuscatorSpec) ProtoMessage() {}
 
 func (x *ObfuscatorSpec) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_agent_proto_msgTypes[35]
+	mi := &file_proto_agent_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2973,7 +3073,7 @@ func (x *ObfuscatorSpec) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ObfuscatorSpec.ProtoReflect.Descriptor instead.
 func (*ObfuscatorSpec) Descriptor() ([]byte, []int) {
-	return file_proto_agent_proto_rawDescGZIP(), []int{35}
+	return file_proto_agent_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *ObfuscatorSpec) GetInterfaceName() string {
@@ -3076,7 +3176,7 @@ type SyncObfuscators struct {
 
 func (x *SyncObfuscators) Reset() {
 	*x = SyncObfuscators{}
-	mi := &file_proto_agent_proto_msgTypes[36]
+	mi := &file_proto_agent_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3088,7 +3188,7 @@ func (x *SyncObfuscators) String() string {
 func (*SyncObfuscators) ProtoMessage() {}
 
 func (x *SyncObfuscators) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_agent_proto_msgTypes[36]
+	mi := &file_proto_agent_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3101,7 +3201,7 @@ func (x *SyncObfuscators) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SyncObfuscators.ProtoReflect.Descriptor instead.
 func (*SyncObfuscators) Descriptor() ([]byte, []int) {
-	return file_proto_agent_proto_rawDescGZIP(), []int{36}
+	return file_proto_agent_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *SyncObfuscators) GetObfuscators() []*ObfuscatorSpec {
@@ -3346,7 +3446,18 @@ const file_proto_agent_proto_rawDesc = "" +
 	"\rAppConfigFile\x12\x12\n" +
 	"\x04path\x18\x01 \x01(\tR\x04path\x12\x18\n" +
 	"\acontent\x18\x02 \x01(\fR\acontent\x12\x1b\n" +
-	"\tfile_mode\x18\x03 \x01(\rR\bfileMode\"\xa4\x02\n" +
+	"\tfile_mode\x18\x03 \x01(\rR\bfileMode\"\xe9\x01\n" +
+	"\x0fAppArtifactFile\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1f\n" +
+	"\vtarget_path\x18\x02 \x01(\tR\n" +
+	"targetPath\x12\x1f\n" +
+	"\vpull_policy\x18\x03 \x01(\tR\n" +
+	"pullPolicy\x12\x1f\n" +
+	"\vfile_sha256\x18\x04 \x01(\tR\n" +
+	"fileSha256\x12%\n" +
+	"\x0edownload_token\x18\x05 \x01(\tR\rdownloadToken\x12\x1b\n" +
+	"\tfile_mode\x18\x06 \x01(\rR\bfileMode\x12\x1b\n" +
+	"\tfile_size\x18\a \x01(\x04R\bfileSize\"\xe4\x02\n" +
 	"\aAppSpec\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x123\n" +
@@ -3357,7 +3468,8 @@ const file_proto_agent_proto_rawDesc = "" +
 	"\fconfig_files\x18\x06 \x03(\v2\x1e.easy42.agent.v1.AppConfigFileR\vconfigFiles\x12\x1f\n" +
 	"\vsha256_hash\x18\a \x01(\tR\n" +
 	"sha256Hash\x12\x18\n" +
-	"\aenabled\x18\b \x01(\bR\aenabled\"8\n" +
+	"\aenabled\x18\b \x01(\bR\aenabled\x12>\n" +
+	"\tartifacts\x18\t \x03(\v2 .easy42.agent.v1.AppArtifactFileR\tartifacts\"8\n" +
 	"\bSyncApps\x12,\n" +
 	"\x04apps\x18\x01 \x03(\v2\x18.easy42.agent.v1.AppSpecR\x04apps\"\xea\x01\n" +
 	"\tAppStatus\x12\x15\n" +
@@ -3412,7 +3524,7 @@ func file_proto_agent_proto_rawDescGZIP() []byte {
 }
 
 var file_proto_agent_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
-var file_proto_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 38)
+var file_proto_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 39)
 var file_proto_agent_proto_goTypes = []any{
 	(AppType)(0),                // 0: easy42.agent.v1.AppType
 	(ManageInterface_Action)(0), // 1: easy42.agent.v1.ManageInterface.Action
@@ -3448,13 +3560,14 @@ var file_proto_agent_proto_goTypes = []any{
 	(*SyncHosts)(nil),           // 31: easy42.agent.v1.SyncHosts
 	(*SyncHostsCmd)(nil),        // 32: easy42.agent.v1.SyncHostsCmd
 	(*AppConfigFile)(nil),       // 33: easy42.agent.v1.AppConfigFile
-	(*AppSpec)(nil),             // 34: easy42.agent.v1.AppSpec
-	(*SyncApps)(nil),            // 35: easy42.agent.v1.SyncApps
-	(*AppStatus)(nil),           // 36: easy42.agent.v1.AppStatus
-	(*AppActionCmd)(nil),        // 37: easy42.agent.v1.AppActionCmd
-	(*ObfuscatorSpec)(nil),      // 38: easy42.agent.v1.ObfuscatorSpec
-	(*SyncObfuscators)(nil),     // 39: easy42.agent.v1.SyncObfuscators
-	nil,                         // 40: easy42.agent.v1.CronTaskSpec.ParamsEntry
+	(*AppArtifactFile)(nil),     // 34: easy42.agent.v1.AppArtifactFile
+	(*AppSpec)(nil),             // 35: easy42.agent.v1.AppSpec
+	(*SyncApps)(nil),            // 36: easy42.agent.v1.SyncApps
+	(*AppStatus)(nil),           // 37: easy42.agent.v1.AppStatus
+	(*AppActionCmd)(nil),        // 38: easy42.agent.v1.AppActionCmd
+	(*ObfuscatorSpec)(nil),      // 39: easy42.agent.v1.ObfuscatorSpec
+	(*SyncObfuscators)(nil),     // 40: easy42.agent.v1.SyncObfuscators
+	nil,                         // 41: easy42.agent.v1.CronTaskSpec.ParamsEntry
 }
 var file_proto_agent_proto_depIdxs = []int32{
 	4,  // 0: easy42.agent.v1.AgentMessage.register_req:type_name -> easy42.agent.v1.RegisterRequest
@@ -3468,14 +3581,14 @@ var file_proto_agent_proto_depIdxs = []int32{
 	14, // 8: easy42.agent.v1.AgentMessage.command_req:type_name -> easy42.agent.v1.CommandRequest
 	27, // 9: easy42.agent.v1.AgentMessage.sync_cron_tasks:type_name -> easy42.agent.v1.SyncCronTasks
 	31, // 10: easy42.agent.v1.AgentMessage.sync_hosts:type_name -> easy42.agent.v1.SyncHosts
-	35, // 11: easy42.agent.v1.AgentMessage.sync_apps:type_name -> easy42.agent.v1.SyncApps
-	39, // 12: easy42.agent.v1.AgentMessage.sync_obfuscators:type_name -> easy42.agent.v1.SyncObfuscators
+	36, // 11: easy42.agent.v1.AgentMessage.sync_apps:type_name -> easy42.agent.v1.SyncApps
+	40, // 12: easy42.agent.v1.AgentMessage.sync_obfuscators:type_name -> easy42.agent.v1.SyncObfuscators
 	10, // 13: easy42.agent.v1.TelemetryReport.system:type_name -> easy42.agent.v1.SystemMetrics
 	11, // 14: easy42.agent.v1.TelemetryReport.interfaces:type_name -> easy42.agent.v1.InterfaceMetrics
 	12, // 15: easy42.agent.v1.TelemetryReport.wg_peers:type_name -> easy42.agent.v1.WgPeerMetrics
 	13, // 16: easy42.agent.v1.TelemetryReport.bird_protocols:type_name -> easy42.agent.v1.BirdProtocolStatus
 	9,  // 17: easy42.agent.v1.TelemetryReport.disks:type_name -> easy42.agent.v1.DiskMetrics
-	36, // 18: easy42.agent.v1.TelemetryReport.apps:type_name -> easy42.agent.v1.AppStatus
+	37, // 18: easy42.agent.v1.TelemetryReport.apps:type_name -> easy42.agent.v1.AppStatus
 	16, // 19: easy42.agent.v1.CommandRequest.apply_config:type_name -> easy42.agent.v1.ApplyConfigFile
 	18, // 20: easy42.agent.v1.CommandRequest.manage_iface:type_name -> easy42.agent.v1.ManageInterface
 	19, // 21: easy42.agent.v1.CommandRequest.reload_bird:type_name -> easy42.agent.v1.ReloadBirdCmd
@@ -3487,26 +3600,27 @@ var file_proto_agent_proto_depIdxs = []int32{
 	32, // 27: easy42.agent.v1.CommandRequest.sync_hosts:type_name -> easy42.agent.v1.SyncHostsCmd
 	15, // 28: easy42.agent.v1.CommandRequest.sync_action:type_name -> easy42.agent.v1.SyncActionCmd
 	17, // 29: easy42.agent.v1.CommandRequest.delete_config:type_name -> easy42.agent.v1.DeleteConfigFile
-	37, // 30: easy42.agent.v1.CommandRequest.app_action:type_name -> easy42.agent.v1.AppActionCmd
+	38, // 30: easy42.agent.v1.CommandRequest.app_action:type_name -> easy42.agent.v1.AppActionCmd
 	30, // 31: easy42.agent.v1.SyncActionCmd.hosts:type_name -> easy42.agent.v1.HostRecord
 	1,  // 32: easy42.agent.v1.ManageInterface.action:type_name -> easy42.agent.v1.ManageInterface.Action
 	2,  // 33: easy42.agent.v1.LookingGlassCmd.tool:type_name -> easy42.agent.v1.LookingGlassCmd.Tool
 	11, // 34: easy42.agent.v1.ProbeResponse.interfaces:type_name -> easy42.agent.v1.InterfaceMetrics
 	28, // 35: easy42.agent.v1.SyncCronTasks.tasks:type_name -> easy42.agent.v1.CronTaskSpec
-	40, // 36: easy42.agent.v1.CronTaskSpec.params:type_name -> easy42.agent.v1.CronTaskSpec.ParamsEntry
+	41, // 36: easy42.agent.v1.CronTaskSpec.params:type_name -> easy42.agent.v1.CronTaskSpec.ParamsEntry
 	30, // 37: easy42.agent.v1.SyncHosts.hosts:type_name -> easy42.agent.v1.HostRecord
 	30, // 38: easy42.agent.v1.SyncHostsCmd.hosts:type_name -> easy42.agent.v1.HostRecord
 	0,  // 39: easy42.agent.v1.AppSpec.app_type:type_name -> easy42.agent.v1.AppType
 	33, // 40: easy42.agent.v1.AppSpec.config_files:type_name -> easy42.agent.v1.AppConfigFile
-	34, // 41: easy42.agent.v1.SyncApps.apps:type_name -> easy42.agent.v1.AppSpec
-	0,  // 42: easy42.agent.v1.AppStatus.app_type:type_name -> easy42.agent.v1.AppType
-	0,  // 43: easy42.agent.v1.AppActionCmd.app_type:type_name -> easy42.agent.v1.AppType
-	38, // 44: easy42.agent.v1.SyncObfuscators.obfuscators:type_name -> easy42.agent.v1.ObfuscatorSpec
-	45, // [45:45] is the sub-list for method output_type
-	45, // [45:45] is the sub-list for method input_type
-	45, // [45:45] is the sub-list for extension type_name
-	45, // [45:45] is the sub-list for extension extendee
-	0,  // [0:45] is the sub-list for field type_name
+	34, // 41: easy42.agent.v1.AppSpec.artifacts:type_name -> easy42.agent.v1.AppArtifactFile
+	35, // 42: easy42.agent.v1.SyncApps.apps:type_name -> easy42.agent.v1.AppSpec
+	0,  // 43: easy42.agent.v1.AppStatus.app_type:type_name -> easy42.agent.v1.AppType
+	0,  // 44: easy42.agent.v1.AppActionCmd.app_type:type_name -> easy42.agent.v1.AppType
+	39, // 45: easy42.agent.v1.SyncObfuscators.obfuscators:type_name -> easy42.agent.v1.ObfuscatorSpec
+	46, // [46:46] is the sub-list for method output_type
+	46, // [46:46] is the sub-list for method input_type
+	46, // [46:46] is the sub-list for extension type_name
+	46, // [46:46] is the sub-list for extension extendee
+	0,  // [0:46] is the sub-list for field type_name
 }
 
 func init() { file_proto_agent_proto_init() }
@@ -3549,7 +3663,7 @@ func file_proto_agent_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_agent_proto_rawDesc), len(file_proto_agent_proto_rawDesc)),
 			NumEnums:      3,
-			NumMessages:   38,
+			NumMessages:   39,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

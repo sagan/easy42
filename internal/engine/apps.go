@@ -312,6 +312,31 @@ func (m *Manager) DuplicateApp(appID string) (config.App, error) {
 		}
 	}
 
+	if original.Artifact != nil {
+		artCopy := *original.Artifact
+		if original.Artifact.Resolver != nil {
+			resCopy := *original.Artifact.Resolver
+			artCopy.Resolver = &resCopy
+		}
+		if original.Artifact.ArchMapping != nil {
+			artCopy.ArchMapping = make(map[string]string, len(original.Artifact.ArchMapping))
+			for k, v := range original.Artifact.ArchMapping {
+				artCopy.ArchMapping[k] = v
+			}
+		}
+		if original.Artifact.Checksums != nil {
+			artCopy.Checksums = make(map[string]string, len(original.Artifact.Checksums))
+			for k, v := range original.Artifact.Checksums {
+				artCopy.Checksums[k] = v
+			}
+		}
+		if original.Artifact.Files != nil {
+			artCopy.Files = make([]config.ArtifactFile, len(original.Artifact.Files))
+			copy(artCopy.Files, original.Artifact.Files)
+		}
+		duplicated.Artifact = &artCopy
+	}
+
 	if err := config.ValidateApp(duplicated); err != nil {
 		return config.App{}, fmt.Errorf("invalid duplicated app: %w", err)
 	}
@@ -590,6 +615,60 @@ func (m *Manager) BuildAppSpecsForNode(nodeName string) ([]*agentpb.AppSpec, err
 				Content:  []byte(content),
 				FileMode: 0644,
 			})
+		}
+
+		// Process Artifacts for native (systemd) apps
+		if rawApp.Artifact != nil && strings.ToLower(rawApp.AppType) == "systemd" && m.artifactMgr != nil && m.artifactTokens != nil {
+			nodeArch := "amd64"
+			parts := strings.Fields(osInfo)
+			if len(parts) >= 2 {
+				nodeArch = parts[1]
+			} else if len(parts) == 1 && !strings.Contains(parts[0], "linux") {
+				nodeArch = parts[0]
+			}
+			osName := "linux"
+
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+			extractedFiles, err := m.artifactMgr.EnsureArtifact(ctx, rawApp, nodeArch, osName, globalVars)
+			cancel()
+			if err != nil {
+				// Failed to download or verify artifact upstream
+			} else {
+				binPath := "/usr/local/bin"
+				if strings.Contains(osInfo, "openwrt") {
+					binPath = "/usr/bin"
+				}
+				for _, reqFile := range rawApp.Artifact.Files {
+					info, ok := extractedFiles[reqFile.Name]
+					if !ok || info == nil {
+						continue
+					}
+					token := m.artifactTokens.GenerateToken(info.LocalPath, reqFile.Name, info.SHA256, nodeName, 24*time.Hour)
+
+					pullPolicy := reqFile.PullPolicy
+					if pullPolicy == "" {
+						pullPolicy = "if_changed"
+					}
+					fileMode := reqFile.FileMode
+					if fileMode == 0 {
+						fileMode = 0755
+					}
+
+					targetPath := reqFile.TargetPath
+					targetPath = strings.ReplaceAll(targetPath, "${PATH}", binPath)
+					targetPath = strings.ReplaceAll(targetPath, "${EZAPP_DATA}", "/etc/ezapp-data/"+rawApp.Name)
+
+					spec.Artifacts = append(spec.Artifacts, &agentpb.AppArtifactFile{
+						Name:          reqFile.Name,
+						TargetPath:    targetPath,
+						PullPolicy:    pullPolicy,
+						FileSha256:    info.SHA256,
+						DownloadToken: token,
+						FileMode:      fileMode,
+						FileSize:      uint64(info.Size),
+					})
+				}
+			}
 		}
 
 		spec.Sha256Hash = apps.ComputeAppSpecFilesHash(spec)

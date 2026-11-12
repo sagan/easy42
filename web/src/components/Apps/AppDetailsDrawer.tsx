@@ -23,6 +23,7 @@ import {
   FileCode,
   Calendar,
   Tag,
+  Package,
 } from "lucide-react";
 import { MarkdownView } from "../Common/MarkdownView";
 import type { App, AppStatusRecord } from "../../types/api";
@@ -428,6 +429,75 @@ export const AppDetailsDrawer: React.FC<AppDetailsDrawerProps> = ({
               >
                 {app.env_content}
               </Box>
+            </Box>
+          )}
+
+          {/* Artifact Management (Native Systemd apps) */}
+          {app.artifact && (
+            <Box sx={{ p: 2, bgcolor: "#F8FAFC", borderRadius: 2, border: "1px solid #E2E8F0" }}>
+              <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1.5 }}>
+                <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 700, display: "flex", alignItems: "center", gap: 0.8 }}>
+                  <Package size={14} color="#4F46E5" /> ARTIFACT MANAGEMENT
+                </Typography>
+                {app.version && (
+                  <Chip size="small" label={`v: ${app.version}`} sx={{ height: 20, fontSize: "0.68rem", fontWeight: 700, bgcolor: "#EEF2FF", color: "#4F46E5" }} />
+                )}
+              </Box>
+
+              {app.artifact.url && (
+                <Box sx={{ mb: 1.5 }}>
+                  <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600, display: "block" }}>
+                    URL Template:
+                  </Typography>
+                  <Typography variant="body2" className="mono-font" sx={{ color: "#334155", fontSize: "0.75rem", wordBreak: "break-all" }}>
+                    {app.artifact.url}
+                  </Typography>
+                </Box>
+              )}
+
+              {app.artifact.resolver && (
+                <Box sx={{ mb: 1.5, display: "flex", flexDirection: "column", gap: 0.5 }}>
+                  <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600 }}>
+                    Resolver ({app.artifact.resolver.type}):
+                  </Typography>
+                  <Typography variant="body2" className="mono-font" sx={{ color: "#334155", fontSize: "0.75rem" }}>
+                    Repo: <strong>{app.artifact.resolver.repo}</strong> {app.artifact.resolver.version && `(tag: ${app.artifact.resolver.version})`}
+                  </Typography>
+                  {app.artifact.resolver.asset_pattern && (
+                    <Typography variant="caption" className="mono-font" sx={{ color: "#64748B" }}>
+                      Pattern: {app.artifact.resolver.asset_pattern}
+                    </Typography>
+                  )}
+                </Box>
+              )}
+
+              {app.artifact.files && app.artifact.files.length > 0 && (
+                <Box sx={{ mt: 1 }}>
+                  <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600, display: "block", mb: 0.5 }}>
+                    Extracted Files ({app.artifact.files.length}):
+                  </Typography>
+                  <Box sx={{ display: "flex", flexDirection: "column", gap: 0.8 }}>
+                    {app.artifact.files.map((f, i) => (
+                      <Box key={i} sx={{ p: 1, bgcolor: "#FFFFFF", borderRadius: 1.5, border: "1px solid #E2E8F0" }}>
+                        <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                          <Typography variant="caption" className="mono-font" sx={{ fontWeight: 700, color: "#0F172A" }}>
+                            {f.name}
+                          </Typography>
+                          <Chip size="small" label={f.pull_policy || "if_changed"} sx={{ height: 18, fontSize: "0.62rem" }} />
+                        </Box>
+                        <Typography variant="caption" className="mono-font" sx={{ color: "#475569", display: "block", mt: 0.3 }}>
+                          Target: {f.target_path}
+                        </Typography>
+                        {f.extract_path && (
+                          <Typography variant="caption" className="mono-font" sx={{ color: "#94A3B8", display: "block" }}>
+                            Extract: {f.extract_path}
+                          </Typography>
+                        )}
+                      </Box>
+                    ))}
+                  </Box>
+                </Box>
+              )}
             </Box>
           )}
 

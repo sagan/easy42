@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -743,3 +744,46 @@ func (s *Server) handleGetFleetLiveStatus(w http.ResponseWriter, r *http.Request
 		"nodes":   nodes,
 	})
 }
+
+// handleArtifactDownload serves uncompressed native app artifact binaries to agents
+// using an ephemeral signed download token, supporting HTTP Range requests for resume.
+func (s *Server) handleArtifactDownload(w http.ResponseWriter, r *http.Request) {
+	token := r.URL.Query().Get("token")
+	if token == "" {
+		http.Error(w, "missing download token", http.StatusUnauthorized)
+		return
+	}
+
+	tokenMgr := s.mgr.GetArtifactTokenManager()
+	if tokenMgr == nil {
+		http.Error(w, "artifact token manager not initialized", http.StatusInternalServerError)
+		return
+	}
+
+	info, ok := tokenMgr.ValidateToken(token)
+	if !ok || info == nil {
+		http.Error(w, "invalid or expired download token", http.StatusNotFound)
+		return
+	}
+
+	f, err := os.Open(info.FilePath)
+	if err != nil {
+		http.Error(w, "artifact file not found on server", http.StatusNotFound)
+		return
+	}
+	defer f.Close()
+
+	stat, err := f.Stat()
+	if err != nil {
+		http.Error(w, "failed to stat artifact file", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/octet-stream")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", info.FileName))
+	w.Header().Set("X-Artifact-SHA256", info.SHA256)
+	w.Header().Set("Accept-Ranges", "bytes")
+
+	http.ServeContent(w, r, info.FileName, stat.ModTime(), f)
+}
+

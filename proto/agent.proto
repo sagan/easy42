@@ -278,6 +278,16 @@ message AppConfigFile {
   uint32 file_mode = 3;
 }
 
+message AppArtifactFile {
+  string name = 1;
+  string target_path = 2;
+  string pull_policy = 3; // "if_changed" | "if_not_present" | "never"
+  string file_sha256 = 4;
+  string download_token = 5;
+  uint32 file_mode = 6;
+  uint64 file_size = 7;
+}
+
 message AppSpec {
   string id = 1;
   string name = 2;                         // e.g. "vproxy" -> ezapp-vproxy
@@ -287,6 +297,7 @@ message AppSpec {
   repeated AppConfigFile config_files = 6; // Auxiliary config files
   string sha256_hash = 7;                  // Content hash for change detection
   bool enabled = 8;                        // Desired state (true = running, false = stopped)
+  repeated AppArtifactFile artifacts = 9;  // Required artifact files
 }
 
 message SyncApps {

@@ -158,6 +158,8 @@ func New(cfg Config) *Server {
 		r.HandleFunc("/agent/ws", s.handleAgentWebSocket)
 		r.Get("/agent/install.sh", s.handleAgentInstallScript)
 		r.Get("/agent/bin/{arch}", s.handleAgentBinary)
+		r.Get("/download", s.handleArtifactDownload)
+		r.Get("/agent/artifacts/download", s.handleArtifactDownload)
 
 		// Telegram Bot webhook route (public - called by Telegram servers)
 		r.Post("/telegram/webhook", s.handleTelegramWebhook)

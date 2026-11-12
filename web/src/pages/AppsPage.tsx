@@ -73,11 +73,12 @@ import {
   LayoutGrid,
   List,
   ExternalLink,
+  Package,
 } from "lucide-react";
 import { api } from "../api/client";
 import { useMesh } from "../context/MeshContext";
 import { Link as RouterLink, useSearchParams, useNavigate, useParams } from "react-router-dom";
-import type { App, AppVariable, TranspilePreviewResponse } from "../types/api";
+import type { App, AppVariable, TranspilePreviewResponse, ArtifactFile, ArtifactSpec } from "../types/api";
 import { dockerRunToCompose, cmdlineToSystemd, ensureSystemdEnvironmentFile } from "../utils/appGenerators";
 import { MarkdownView } from "../components/Common/MarkdownView";
 import { AppDetailsDrawer } from "../components/Apps/AppDetailsDrawer";
@@ -402,7 +403,7 @@ export const AppsPage: React.FC = () => {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingApp, setEditingApp] = useState<App | null>(null);
   const [modalTab, setModalTab] = useState<
-    "general" | "definition" | "env" | "files" | "note" | "preview" | "transpile"
+    "general" | "definition" | "env" | "files" | "note" | "preview" | "transpile" | "artifact"
   >("general");
 
   // App Details Drawer State
@@ -440,6 +441,26 @@ export const AppsPage: React.FC = () => {
   const [formEnabled, setFormEnabled] = useState(true);
   const [togglingPublishedAppIds, setTogglingPublishedAppIds] = useState<Record<string, boolean>>({});
   const [formFiles, setFormFiles] = useState<{ name: string; content: string }[]>([]);
+
+  // Artifact Form Fields (Native Systemd apps)
+  const [formVersion, setFormVersion] = useState("");
+  const [formArtifactEnabled, setFormArtifactEnabled] = useState(false);
+  const [formArtifactSourceMode, setFormArtifactSourceMode] = useState<"url" | "github">("url");
+  const [formArtifactUrl, setFormArtifactUrl] = useState("");
+  const [formArtifactGithubRepo, setFormArtifactGithubRepo] = useState("");
+  const [formArtifactGithubVersion, setFormArtifactGithubVersion] = useState("");
+  const [formArtifactGithubPattern, setFormArtifactGithubPattern] = useState("");
+  const [formArtifactFiles, setFormArtifactFiles] = useState<ArtifactFile[]>([
+    {
+      name: "",
+      extract_path: "",
+      target_path: "${PATH}/",
+      pull_policy: "if_changed",
+      file_mode: 0o755,
+    },
+  ]);
+  const [formArtifactChecksums, setFormArtifactChecksums] = useState<Record<string, string>>({});
+  const [formArtifactArchMapping, setFormArtifactArchMapping] = useState<Record<string, string>>({});
 
   // Transpile preview state
   const [targetInit, setTargetInit] = useState<"procd" | "openrc">("procd");
@@ -592,6 +613,24 @@ export const AppsPage: React.FC = () => {
     setFormNote("");
     setNoteEditMode("write");
     setFormUrl("");
+    setFormVersion("");
+    setFormArtifactEnabled(false);
+    setFormArtifactSourceMode("url");
+    setFormArtifactUrl("");
+    setFormArtifactGithubRepo("");
+    setFormArtifactGithubVersion("");
+    setFormArtifactGithubPattern("");
+    setFormArtifactFiles([
+      {
+        name: "",
+        extract_path: "",
+        target_path: "${PATH}/",
+        pull_policy: "if_changed",
+        file_mode: 0o755,
+      },
+    ]);
+    setFormArtifactChecksums({});
+    setFormArtifactArchMapping({});
     setFormType("docker");
     setFormMain(DOCKER_SAMPLE);
     setFormCronExpr("0 0 * * *");
@@ -621,6 +660,56 @@ export const AppsPage: React.FC = () => {
     setEditingApp(app);
     setFormName(app.name);
     setFormDesc(app.description || "");
+    setFormVersion(app.version || "");
+    if (app.artifact) {
+      setFormArtifactEnabled(true);
+      if (app.artifact.resolver) {
+        setFormArtifactSourceMode("github");
+        setFormArtifactGithubRepo(app.artifact.resolver.repo || "");
+        setFormArtifactGithubVersion(app.artifact.resolver.version || "");
+        setFormArtifactGithubPattern(app.artifact.resolver.asset_pattern || "");
+        setFormArtifactUrl(app.artifact.url || "");
+      } else {
+        setFormArtifactSourceMode("url");
+        setFormArtifactUrl(app.artifact.url || "");
+        setFormArtifactGithubRepo("");
+        setFormArtifactGithubVersion("");
+        setFormArtifactGithubPattern("");
+      }
+      setFormArtifactFiles(
+        app.artifact.files && app.artifact.files.length > 0
+          ? app.artifact.files.map((f) => ({ ...f }))
+          : [
+              {
+                name: app.name,
+                extract_path: "",
+                target_path: "${PATH}/" + app.name,
+                pull_policy: "if_changed",
+                file_mode: 0o755,
+              },
+            ]
+      );
+      setFormArtifactChecksums(app.artifact.checksums || {});
+      setFormArtifactArchMapping(app.artifact.arch_mapping || {});
+    } else {
+      setFormArtifactEnabled(false);
+      setFormArtifactSourceMode("url");
+      setFormArtifactUrl("");
+      setFormArtifactGithubRepo("");
+      setFormArtifactGithubVersion("");
+      setFormArtifactGithubPattern("");
+      setFormArtifactFiles([
+        {
+          name: app.name,
+          extract_path: "",
+          target_path: "${PATH}/" + app.name,
+          pull_policy: "if_changed",
+          file_mode: 0o755,
+        },
+      ]);
+      setFormArtifactChecksums({});
+      setFormArtifactArchMapping({});
+    }
     setFormNote(app.note || "");
     setNoteEditMode("write");
     setFormUrl(app.url || "");
@@ -659,7 +748,9 @@ export const AppsPage: React.FC = () => {
 
   const handleTypeChange = (newType: "docker" | "systemd" | "cron") => {
     setFormType(newType);
-    if (newType === "cron" && (modalTab === "env" || modalTab === "files" || modalTab === "transpile")) {
+    if (newType === "cron" && (modalTab === "env" || modalTab === "files" || modalTab === "transpile" || modalTab === "artifact")) {
+      setModalTab("definition");
+    } else if (newType !== "systemd" && (modalTab === "artifact" || modalTab === "transpile")) {
       setModalTab("definition");
     }
     if (!editingApp) {
@@ -720,15 +811,74 @@ export const AppsPage: React.FC = () => {
             ? `${formCronExpr.trim()} ${formCronCmd.trim()}`
             : formMain;
 
+      let artifactPayload: ArtifactSpec | undefined = undefined;
+      if (formType === "systemd" && formArtifactEnabled) {
+        const validFiles = formArtifactFiles.filter((f) => f.name.trim() && f.target_path.trim());
+        if (validFiles.length === 0) {
+          alert("Artifact is enabled: please specify at least one file to extract with name and target path");
+          setSavingApp(false);
+          return;
+        }
+        if (formArtifactSourceMode === "url" && !formArtifactUrl.trim()) {
+          alert("Artifact is enabled: URL template cannot be empty");
+          setSavingApp(false);
+          return;
+        }
+        if (formArtifactSourceMode === "github" && !formArtifactGithubRepo.trim()) {
+          alert("Artifact is enabled: GitHub repo (owner/repo) cannot be empty");
+          setSavingApp(false);
+          return;
+        }
+
+        artifactPayload = {
+          files: validFiles.map((f) => ({
+            name: f.name.trim(),
+            extract_path: f.extract_path?.trim() || undefined,
+            target_path: f.target_path.trim(),
+            pull_policy: f.pull_policy || "if_changed",
+            file_mode: Number(f.file_mode) || 0o755,
+          })),
+        };
+
+        if (formArtifactSourceMode === "url") {
+          artifactPayload.url = formArtifactUrl.trim();
+        } else {
+          artifactPayload.resolver = {
+            type: "github_release",
+            repo: formArtifactGithubRepo.trim(),
+            version: formArtifactGithubVersion.trim() || undefined,
+            asset_pattern: formArtifactGithubPattern.trim() || undefined,
+          };
+        }
+
+        const validChecksums: Record<string, string> = {};
+        for (const [k, v] of Object.entries(formArtifactChecksums)) {
+          if (k.trim() && v.trim()) validChecksums[k.trim()] = v.trim();
+        }
+        if (Object.keys(validChecksums).length > 0) {
+          artifactPayload.checksums = validChecksums;
+        }
+
+        const validArchMapping: Record<string, string> = {};
+        for (const [k, v] of Object.entries(formArtifactArchMapping)) {
+          if (k.trim() && v.trim()) validArchMapping[k.trim()] = v.trim();
+        }
+        if (Object.keys(validArchMapping).length > 0) {
+          artifactPayload.arch_mapping = validArchMapping;
+        }
+      }
+
       const payload: Partial<App> = {
         name: formName.trim(),
         description: formDesc.trim(),
+        version: formVersion.trim() || undefined,
         note: formNote,
         url: formUrl.trim(),
         app_type: formType,
         main_content: resolvedMainContent,
         env_content: formType === "cron" ? "" : formEnv,
         files: formType === "cron" ? {} : filesMap,
+        artifact: formType === "systemd" ? artifactPayload : undefined,
         selector: parsedSelector.selector,
         published: formPublished,
         enabled: formEnabled,
@@ -1720,19 +1870,38 @@ export const AppsPage: React.FC = () => {
 
                         {/* Runtime */}
                         <TableCell>
-                          <Chip
-                            size="small"
-                            label={app.app_type === "docker" ? "Docker" : app.app_type === "cron" ? "Cron" : "Systemd"}
-                            sx={{
-                              height: 22,
-                              fontSize: "0.7rem",
-                              fontWeight: 700,
-                              bgcolor:
-                                app.app_type === "docker" ? "#E0F2FE" : app.app_type === "cron" ? "#FEF3C7" : "#F3E8FF",
-                              color:
-                                app.app_type === "docker" ? "#0369A1" : app.app_type === "cron" ? "#B45309" : "#7E22CE",
-                            }}
-                          />
+                          <Box sx={{ display: "flex", alignItems: "center", gap: 0.6, flexWrap: "wrap" }}>
+                            <Chip
+                              size="small"
+                              label={app.app_type === "docker" ? "Docker" : app.app_type === "cron" ? "Cron" : "Systemd"}
+                              sx={{
+                                height: 22,
+                                fontSize: "0.7rem",
+                                fontWeight: 700,
+                                bgcolor:
+                                  app.app_type === "docker" ? "#E0F2FE" : app.app_type === "cron" ? "#FEF3C7" : "#F3E8FF",
+                                color:
+                                  app.app_type === "docker" ? "#0369A1" : app.app_type === "cron" ? "#B45309" : "#7E22CE",
+                              }}
+                            />
+                            {app.artifact && (
+                              <Tooltip title={`Artifact managed: ${app.artifact.files?.map((f) => f.name).join(", ")}`} arrow>
+                                <Chip
+                                  size="small"
+                                  icon={<Package size={11} />}
+                                  label={app.version || "Artifact"}
+                                  sx={{
+                                    height: 20,
+                                    fontSize: "0.68rem",
+                                    fontWeight: 700,
+                                    bgcolor: "#ECFDF5",
+                                    color: "#059669",
+                                    "& .MuiChip-icon": { color: "#059669" },
+                                  }}
+                                />
+                              </Tooltip>
+                            )}
+                          </Box>
                         </TableCell>
 
                         {/* Homepage URL */}
@@ -2116,30 +2285,48 @@ export const AppsPage: React.FC = () => {
                                 </IconButton>
                               </Tooltip>
                             </Box>
-                            <Chip
-                              size="small"
-                              label={
-                                app.app_type === "docker" ? "Docker" : app.app_type === "cron" ? "Cron" : "Systemd"
-                              }
-                              sx={{
-                                height: 20,
-                                fontSize: "0.68rem",
-                                fontWeight: 700,
-                                bgcolor:
-                                  app.app_type === "docker"
-                                    ? "#E0F2FE"
-                                    : app.app_type === "cron"
-                                      ? "#FEF3C7"
-                                      : "#F3E8FF",
-                                color:
-                                  app.app_type === "docker"
-                                    ? "#0369A1"
-                                    : app.app_type === "cron"
-                                      ? "#B45309"
-                                      : "#7E22CE",
-                                mt: 0.3,
-                              }}
-                            />
+                            <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, flexWrap: "wrap", mt: 0.3 }}>
+                              <Chip
+                                size="small"
+                                label={
+                                  app.app_type === "docker" ? "Docker" : app.app_type === "cron" ? "Cron" : "Systemd"
+                                }
+                                sx={{
+                                  height: 20,
+                                  fontSize: "0.68rem",
+                                  fontWeight: 700,
+                                  bgcolor:
+                                    app.app_type === "docker"
+                                      ? "#E0F2FE"
+                                      : app.app_type === "cron"
+                                        ? "#FEF3C7"
+                                        : "#F3E8FF",
+                                  color:
+                                    app.app_type === "docker"
+                                      ? "#0369A1"
+                                      : app.app_type === "cron"
+                                        ? "#B45309"
+                                        : "#7E22CE",
+                                }}
+                              />
+                              {app.artifact && (
+                                <Tooltip title={`Artifact managed: ${app.artifact.files?.map((f) => f.name).join(", ")}`} arrow>
+                                  <Chip
+                                    size="small"
+                                    icon={<Package size={11} />}
+                                    label={app.version || "Artifact"}
+                                    sx={{
+                                      height: 20,
+                                      fontSize: "0.68rem",
+                                      fontWeight: 700,
+                                      bgcolor: "#ECFDF5",
+                                      color: "#059669",
+                                      "& .MuiChip-icon": { color: "#059669" },
+                                    }}
+                                  />
+                                </Tooltip>
+                              )}
+                            </Box>
                           </Box>
                         </Box>
 
@@ -3086,6 +3273,14 @@ export const AppsPage: React.FC = () => {
             <Tab value="note" label="Note" icon={<FileText size={16} />} iconPosition="start" />
             <Tab value="preview" label="Variables Preview" icon={<Code2 size={16} />} iconPosition="start" />
             {formType === "systemd" && (
+              <Tab
+                value="artifact"
+                label={formArtifactEnabled ? "Artifact Spec (Active)" : "Artifact Spec"}
+                icon={<Package size={16} />}
+                iconPosition="start"
+              />
+            )}
+            {formType === "systemd" && (
               <Tab value="transpile" label="Transpile Preview" icon={<Eye size={16} />} iconPosition="start" />
             )}
           </Tabs>
@@ -3093,7 +3288,7 @@ export const AppsPage: React.FC = () => {
 
         <DialogContent sx={{ p: 3 }}>
           {/* Quick Variables Insert Chips Bar */}
-          {modalTab !== "general" && modalTab !== "preview" && modalTab !== "transpile" && modalTab !== "note" && (
+          {modalTab !== "general" && modalTab !== "preview" && modalTab !== "transpile" && modalTab !== "note" && modalTab !== "artifact" && (
             <Box
               sx={{
                 mb: 2,
@@ -4516,6 +4711,316 @@ ${formEnabled ? `${formCronExpr.trim() || "0 0 * * *"} ${formCronCmd.trim() || "
                   },
                 }}
               />
+            </Box>
+          )}
+
+          {/* TAB: Artifact Spec (Native Systemd only) */}
+          {modalTab === "artifact" && (
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 2.5 }}>
+              <Box
+                sx={{
+                  p: 2,
+                  bgcolor: formArtifactEnabled ? "#F0FDF4" : "#F8FAFC",
+                  borderRadius: "12px",
+                  border: `1px solid ${formArtifactEnabled ? "#BBF7D0" : "#E2E8F0"}`,
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                }}
+              >
+                <Box sx={{ pr: 2 }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 800, color: "#0F172A", display: "flex", alignItems: "center", gap: 1 }}>
+                    <Package size={18} color={formArtifactEnabled ? "#16A34A" : "#4F46E5"} />
+                    Declarative Artifact Management
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: "#64748B", display: "block", mt: 0.5 }}>
+                    Enable this to automatically download, verify, decompress, and deploy app binaries or archives to nodes. The native service will only start after all required artifacts are verified on the node.
+                  </Typography>
+                </Box>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={formArtifactEnabled}
+                      onChange={(e) => setFormArtifactEnabled(e.target.checked)}
+                      color="success"
+                    />
+                  }
+                  label={
+                    <Typography sx={{ fontWeight: 700, fontSize: "0.85rem", color: formArtifactEnabled ? "#15803D" : "#64748B" }}>
+                      {formArtifactEnabled ? "Enabled" : "Disabled"}
+                    </Typography>
+                  }
+                />
+              </Box>
+
+              {formArtifactEnabled && (
+                <>
+                  {/* Version & Source Mode Selector */}
+                  <Grid container spacing={2}>
+                    <Grid item xs={12} sm={4}>
+                      <TextField
+                        label="Version"
+                        size="small"
+                        fullWidth
+                        placeholder="e.g. v1.68.1 or latest"
+                        value={formVersion}
+                        onChange={(e) => setFormVersion(e.target.value)}
+                        helperText="Available via ${VERSION} and ${RAW_VERSION}"
+                      />
+                    </Grid>
+                    <Grid item xs={12} sm={8}>
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, height: "100%", pt: 0.5 }}>
+                        <Typography variant="caption" sx={{ fontWeight: 700, color: "#475569" }}>
+                          Source:
+                        </Typography>
+                        <ToggleButtonGroup
+                          size="small"
+                          exclusive
+                          value={formArtifactSourceMode}
+                          onChange={(_, val) => val && setFormArtifactSourceMode(val)}
+                        >
+                          <ToggleButton value="url" sx={{ textTransform: "none", fontWeight: 600, fontSize: "0.78rem", px: 2 }}>
+                            URL Template
+                          </ToggleButton>
+                          <ToggleButton value="github" sx={{ textTransform: "none", fontWeight: 600, fontSize: "0.78rem", px: 2 }}>
+                            GitHub Releases Resolver
+                          </ToggleButton>
+                        </ToggleButtonGroup>
+                      </Box>
+                    </Grid>
+                  </Grid>
+
+                  {/* Mode A: URL Template */}
+                  {formArtifactSourceMode === "url" && (
+                    <Box sx={{ p: 2, bgcolor: "#F8FAFC", borderRadius: "10px", border: "1px solid #E2E8F0" }}>
+                      <TextField
+                        label="Download URL Template"
+                        size="small"
+                        fullWidth
+                        placeholder="https://downloads.rclone.org/${VERSION}/rclone-${VERSION}-linux-${ARCH}.zip"
+                        value={formArtifactUrl}
+                        onChange={(e) => setFormArtifactUrl(e.target.value)}
+                        helperText="Supports tar.gz, zip, tar.bz2, gz, or raw binary. Easy42 Go server caches and serves files to node agents."
+                      />
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 0.8, flexWrap: "wrap", mt: 1.5 }}>
+                        <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600 }}>
+                          Insert Variables:
+                        </Typography>
+                        {["${VERSION}", "${RAW_VERSION}", "${ARCH}", "${OS}", "${APP_NAME}"].map((v) => (
+                          <Chip
+                            key={v}
+                            label={v}
+                            size="small"
+                            onClick={() => setFormArtifactUrl((prev) => prev + v)}
+                            sx={{ height: 22, fontSize: "0.7rem", fontFamily: "monospace", cursor: "pointer", bgcolor: "#EEF2FF", color: "#4F46E5" }}
+                          />
+                        ))}
+                      </Box>
+                    </Box>
+                  )}
+
+                  {/* Mode B: GitHub Releases Resolver */}
+                  {formArtifactSourceMode === "github" && (
+                    <Box sx={{ p: 2, bgcolor: "#F8FAFC", borderRadius: "10px", border: "1px solid #E2E8F0" }}>
+                      <Grid container spacing={2}>
+                        <Grid item xs={12} sm={5}>
+                          <TextField
+                            label="GitHub Repository"
+                            size="small"
+                            fullWidth
+                            placeholder="e.g. rclone/rclone"
+                            value={formArtifactGithubRepo}
+                            onChange={(e) => setFormArtifactGithubRepo(e.target.value)}
+                            helperText="GitHub owner/repo"
+                          />
+                        </Grid>
+                        <Grid item xs={12} sm={3}>
+                          <TextField
+                            label="Release Tag / Version"
+                            size="small"
+                            fullWidth
+                            placeholder="${VERSION}"
+                            value={formArtifactGithubVersion}
+                            onChange={(e) => setFormArtifactGithubVersion(e.target.value)}
+                            helperText="Default: ${VERSION} or 'latest'"
+                          />
+                        </Grid>
+                        <Grid item xs={12} sm={4}>
+                          <TextField
+                            label="Asset Pattern (Optional)"
+                            size="small"
+                            fullWidth
+                            placeholder="rclone-*-linux-${ARCH}.zip"
+                            value={formArtifactGithubPattern}
+                            onChange={(e) => setFormArtifactGithubPattern(e.target.value)}
+                            helperText="Glob / regex pattern to pick asset"
+                          />
+                        </Grid>
+                      </Grid>
+                    </Box>
+                  )}
+
+                  {/* Extracted & Deployed Files */}
+                  <Box sx={{ p: 2, bgcolor: "#FFFFFF", borderRadius: "12px", border: "1px solid #E2E8F0" }}>
+                    <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1.5 }}>
+                      <Box>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 800, color: "#0F172A" }}>
+                          Extracted & Deployed Files ({formArtifactFiles.length})
+                        </Typography>
+                        <Typography variant="caption" sx={{ color: "#64748B" }}>
+                          Specify the file(s) to unpack from the archive and deploy on the node filesystem.
+                        </Typography>
+                      </Box>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        startIcon={<Plus size={14} />}
+                        onClick={() =>
+                          setFormArtifactFiles((prev) => [
+                            ...prev,
+                            {
+                              name: "",
+                              extract_path: "",
+                              target_path: "${PATH}/",
+                              pull_policy: "if_changed",
+                              file_mode: 0o755,
+                            },
+                          ])
+                        }
+                        sx={{ textTransform: "none", fontSize: "0.78rem" }}
+                      >
+                        Add File
+                      </Button>
+                    </Box>
+
+                    <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+                      {formArtifactFiles.map((file, idx) => (
+                        <Box
+                          key={idx}
+                          sx={{
+                            p: 1.5,
+                            bgcolor: "#F8FAFC",
+                            borderRadius: "8px",
+                            border: "1px solid #E2E8F0",
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: 1.5,
+                          }}
+                        >
+                          <Grid container spacing={1.5} alignItems="center">
+                            <Grid item xs={12} sm={3}>
+                              <TextField
+                                label="File Name"
+                                size="small"
+                                fullWidth
+                                placeholder="rclone"
+                                value={file.name}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  setFormArtifactFiles((prev) =>
+                                    prev.map((f, i) => (i === idx ? { ...f, name: val } : f))
+                                  );
+                                }}
+                              />
+                            </Grid>
+                            <Grid item xs={12} sm={3}>
+                              <TextField
+                                label="Extract Path in Archive"
+                                size="small"
+                                fullWidth
+                                placeholder="rclone-*/rclone"
+                                value={file.extract_path || ""}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  setFormArtifactFiles((prev) =>
+                                    prev.map((f, i) => (i === idx ? { ...f, extract_path: val } : f))
+                                  );
+                                }}
+                                helperText="Omit if raw binary"
+                              />
+                            </Grid>
+                            <Grid item xs={12} sm={3}>
+                              <TextField
+                                label="Target Path on Node"
+                                size="small"
+                                fullWidth
+                                placeholder="${PATH}/rclone"
+                                value={file.target_path}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  setFormArtifactFiles((prev) =>
+                                    prev.map((f, i) => (i === idx ? { ...f, target_path: val } : f))
+                                  );
+                                }}
+                              />
+                            </Grid>
+                            <Grid item xs={12} sm={2}>
+                              <FormControl size="small" fullWidth>
+                                <InputLabel>Pull Policy</InputLabel>
+                                <Select
+                                  label="Pull Policy"
+                                  value={file.pull_policy || "if_changed"}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    setFormArtifactFiles((prev) =>
+                                      prev.map((f, i) => (i === idx ? { ...f, pull_policy: val } : f))
+                                    );
+                                  }}
+                                >
+                                  <MenuItem value="if_changed">if_changed (default)</MenuItem>
+                                  <MenuItem value="if_not_present">if_not_present</MenuItem>
+                                  <MenuItem value="never">never</MenuItem>
+                                </Select>
+                              </FormControl>
+                            </Grid>
+                            <Grid item xs={12} sm={1} sx={{ textAlign: "right" }}>
+                              <IconButton
+                                size="small"
+                                color="error"
+                                disabled={formArtifactFiles.length === 1}
+                                onClick={() =>
+                                  setFormArtifactFiles((prev) => prev.filter((_, i) => i !== idx))
+                                }
+                              >
+                                <Trash2 size={16} />
+                              </IconButton>
+                            </Grid>
+                          </Grid>
+                          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                            <Typography variant="caption" sx={{ color: "#64748B" }}>
+                              Target path helpers:
+                            </Typography>
+                            <Chip
+                              size="small"
+                              label="${PATH}"
+                              onClick={() => {
+                                setFormArtifactFiles((prev) =>
+                                  prev.map((f, i) =>
+                                    i === idx ? { ...f, target_path: "${PATH}/" + (f.name || "") } : f
+                                  )
+                                );
+                              }}
+                              sx={{ height: 20, fontSize: "0.68rem", cursor: "pointer" }}
+                            />
+                            <Chip
+                              size="small"
+                              label="${EZAPP_DATA}"
+                              onClick={() => {
+                                setFormArtifactFiles((prev) =>
+                                  prev.map((f, i) =>
+                                    i === idx ? { ...f, target_path: "${EZAPP_DATA}/bin/" + (f.name || "") } : f
+                                  )
+                                );
+                              }}
+                              sx={{ height: 20, fontSize: "0.68rem", cursor: "pointer" }}
+                            />
+                          </Box>
+                        </Box>
+                      ))}
+                    </Box>
+                  </Box>
+                </>
+              )}
             </Box>
           )}
 

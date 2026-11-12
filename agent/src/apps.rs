@@ -9,7 +9,7 @@ use tracing::{error, info};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-use crate::collector::proto::{AppActionCmd, AppConfigFile, AppSpec, AppStatus, AppType};
+use crate::collector::proto::{AppActionCmd, AppArtifactFile, AppConfigFile, AppSpec, AppStatus, AppType};
 use crate::container::compose_command;
 use crate::executor::{run_shell, run_shell_with_timeout};
 
@@ -64,8 +64,110 @@ pub fn hash_single_content(content: &str) -> String {
     format!("{:x}", hasher.finalize())
 }
 
+pub fn compute_sha256_of_file<P: AsRef<Path>>(path: P) -> Result<String, std::io::Error> {
+    let mut file = fs::File::open(path)?;
+    let mut hasher = Sha256::new();
+    let mut buffer = [0u8; 8192];
+    loop {
+        let n = std::io::Read::read(&mut file, &mut buffer)?;
+        if n == 0 {
+            break;
+        }
+        hasher.update(&buffer[..n]);
+    }
+    Ok(format!("{:x}", hasher.finalize()))
+}
+
+pub fn resolve_target_path(app_name: &str, raw_target_path: &str) -> PathBuf {
+    let mut resolved = raw_target_path.to_string();
+    if resolved.contains("${PATH}") {
+        let bin_dir = if Path::new("/usr/local/bin").is_dir() {
+            "/usr/local/bin"
+        } else {
+            "/usr/bin"
+        };
+        resolved = resolved.replace("${PATH}", bin_dir);
+    }
+    if resolved.contains("${EZAPP_DATA}") {
+        let data_dir = format!("{}/{}", APP_DATA_BASE_DIR, app_name);
+        resolved = resolved.replace("${EZAPP_DATA}", &data_dir);
+    }
+    PathBuf::from(resolved)
+}
+
+fn download_artifact_file(
+    download_url: &str,
+    target_path: &Path,
+    expected_sha256: &str,
+    file_mode: u32,
+) -> Result<(), String> {
+    let tmp_path = PathBuf::from(format!("{}.ezapp-tmp", target_path.display()));
+    if let Some(parent) = tmp_path.parent() {
+        fs::create_dir_all(parent).map_err(|e| format!("Failed to create parent dir: {}", e))?;
+    }
+
+    let existing_len = if tmp_path.exists() {
+        fs::metadata(&tmp_path).map(|m| m.len()).unwrap_or(0)
+    } else {
+        0
+    };
+
+    let mut req = ureq::get(download_url);
+    if existing_len > 0 {
+        req = req.header("Range", &format!("bytes={}-", existing_len));
+    }
+
+    let res = req.call().map_err(|e| format!("HTTP request to {} failed: {}", download_url, e))?;
+    let status_code = res.status().as_u16();
+
+    let mut file = if status_code == 206 {
+        fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&tmp_path)
+            .map_err(|e| format!("Failed to open temp file for append: {}", e))?
+    } else if status_code == 200 {
+        fs::OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(true)
+            .open(&tmp_path)
+            .map_err(|e| format!("Failed to open temp file for write: {}", e))?
+    } else {
+        return Err(format!("Download returned unexpected HTTP status: {}", status_code));
+    };
+
+    let mut reader = res.into_body().into_reader();
+    std::io::copy(&mut reader, &mut file).map_err(|e| format!("Failed to stream download: {}", e))?;
+    file.sync_all().map_err(|e| format!("Failed to sync file: {}", e))?;
+    drop(file);
+
+    // Verify SHA256
+    let actual_hash = compute_sha256_of_file(&tmp_path)
+        .map_err(|e| format!("Failed to compute SHA256 of downloaded file: {}", e))?;
+
+    if !expected_sha256.is_empty() && !actual_hash.eq_ignore_ascii_case(expected_sha256) {
+        let _ = fs::remove_file(&tmp_path);
+        return Err(format!(
+            "Checksum mismatch for artifact: expected {}, got {}",
+            expected_sha256, actual_hash
+        ));
+    }
+
+    // Set permissions
+    let mode = if file_mode != 0 { file_mode } else { 0o755 };
+    let _ = fs::set_permissions(&tmp_path, fs::Permissions::from_mode(mode));
+
+    // Atomic rename
+    fs::rename(&tmp_path, target_path)
+        .map_err(|e| format!("Failed to atomically rename file to {:?}: {}", target_path, e))?;
+
+    Ok(())
+}
+
 pub struct AppsManager {
     init_system: InitSystem,
+    server_url: Arc<Mutex<String>>,
     starting_apps: Arc<Mutex<HashMap<String, i64>>>,
     app_errors: Arc<Mutex<HashMap<String, String>>>,
     installed_cron_apps: Arc<Mutex<Vec<AppSpec>>>,
@@ -73,14 +175,24 @@ pub struct AppsManager {
 
 impl AppsManager {
     pub fn new() -> Self {
+        Self::new_with_server(String::new())
+    }
+
+    pub fn new_with_server(server_url: String) -> Self {
         let init_system = detect_init_system();
         info!("AppsManager initialized with init system: {:?}", init_system);
         Self {
             init_system,
+            server_url: Arc::new(Mutex::new(server_url)),
             starting_apps: Arc::new(Mutex::new(HashMap::new())),
             app_errors: Arc::new(Mutex::new(HashMap::new())),
             installed_cron_apps: Arc::new(Mutex::new(Vec::new())),
         }
+    }
+
+    pub async fn set_server_url(&self, url: String) {
+        let mut lock = self.server_url.lock().await;
+        *lock = url;
     }
 
     /// Sync apps state declaratively: install/update desired apps and garbage collect removed apps
@@ -420,11 +532,90 @@ impl AppsManager {
         let app_data_dir = PathBuf::from(APP_DATA_BASE_DIR).join(&app.name);
         self.sync_config_files(&app_data_dir, &app.config_files, &[])?;
 
+        // 1. Process and verify all required artifacts BEFORE starting the app
+        for artifact in &app.artifacts {
+            if let Err(e) = self.ensure_artifact(&app.name, artifact).await {
+                let err_msg = format!("Artifact '{}' preparation failed: {}", artifact.name, e);
+                error!("{}", err_msg);
+                let mut errors = self.app_errors.lock().await;
+                errors.insert(app.name.clone(), err_msg.clone());
+                return Err(err_msg);
+            }
+        }
+
         match self.init_system {
             InitSystem::Systemd => self.apply_systemd_app(app).await,
             InitSystem::OpenRC => self.apply_openrc_app(app).await,
             InitSystem::Procd => self.apply_procd_app(app).await,
         }
+    }
+
+    async fn ensure_artifact(&self, app_name: &str, artifact: &AppArtifactFile) -> Result<(), String> {
+        let target_path = resolve_target_path(app_name, &artifact.target_path);
+        let pull_policy = if artifact.pull_policy.is_empty() {
+            "if_changed"
+        } else {
+            artifact.pull_policy.as_str()
+        };
+
+        if pull_policy == "never" {
+            if !target_path.exists() {
+                return Err(format!(
+                    "Artifact '{}' missing at {:?} and pull_policy is 'never'",
+                    artifact.name, target_path
+                ));
+            }
+            return Ok(());
+        }
+
+        if target_path.exists() {
+            if pull_policy == "if_not_present" {
+                info!(
+                    "Artifact '{}' exists at {:?}; skipping download (pull_policy: if_not_present)",
+                    artifact.name, target_path
+                );
+                return Ok(());
+            }
+
+            // For "if_changed" (and "always"): check existing hash
+            if let Ok(existing_hash) = compute_sha256_of_file(&target_path) {
+                if !artifact.file_sha256.is_empty()
+                    && existing_hash.eq_ignore_ascii_case(&artifact.file_sha256)
+                {
+                    info!(
+                        "Artifact '{}' at {:?} is up-to-date (sha256: {}); skipping download",
+                        artifact.name, target_path, artifact.file_sha256
+                    );
+                    return Ok(());
+                }
+            }
+        }
+
+        // Needs download from Easy42 server
+        let server_url = self.server_url.lock().await.clone();
+        let download_url = if artifact.download_token.starts_with("http://")
+            || artifact.download_token.starts_with("https://")
+        {
+            artifact.download_token.clone()
+        } else {
+            let base = server_url.trim_end_matches('/');
+            format!("{}/api/download?token={}", base, artifact.download_token)
+        };
+
+        info!(
+            "Downloading artifact '{}' to {:?} from {}...",
+            artifact.name, target_path, download_url
+        );
+
+        let expected_sha256 = artifact.file_sha256.clone();
+        let file_mode = artifact.file_mode;
+        let target_clone = target_path.clone();
+
+        tokio::task::spawn_blocking(move || {
+            download_artifact_file(&download_url, &target_clone, &expected_sha256, file_mode)
+        })
+        .await
+        .map_err(|e| format!("Task join error during artifact download: {}", e))?
     }
 
     async fn apply_systemd_app(&self, app: &AppSpec) -> Result<(), String> {
@@ -1359,6 +1550,31 @@ mod tests {
         assert_eq!("ezapp-my-complex_app-1".strip_prefix("ezapp-"), Some("my-complex_app-1"));
         assert_eq!("myapp".strip_prefix("ezapp-"), None);
         assert_eq!("other-app".strip_prefix("ezapp-"), None);
+    }
+
+    #[test]
+    fn test_resolve_target_path() {
+        let p = resolve_target_path("rclone", "${PATH}/rclone");
+        assert!(p.to_str().unwrap().ends_with("/rclone"));
+
+        let p2 = resolve_target_path("rclone", "${EZAPP_DATA}/bin/rclone");
+        assert_eq!(p2, PathBuf::from("/etc/ezapp-data/rclone/bin/rclone"));
+
+        let p3 = resolve_target_path("rclone", "/opt/bin/rclone");
+        assert_eq!(p3, PathBuf::from("/opt/bin/rclone"));
+    }
+
+    #[test]
+    fn test_compute_sha256_of_file() {
+        let tmp = tempfile::tempdir().unwrap();
+        let file_path = tmp.path().join("test.bin");
+        fs::write(&file_path, b"hello easy42 artifact").unwrap();
+
+        let hash = compute_sha256_of_file(&file_path).unwrap();
+        let mut hasher = Sha256::new();
+        hasher.update(b"hello easy42 artifact");
+        let expected = format!("{:x}", hasher.finalize());
+        assert_eq!(hash, expected);
     }
 }
 

@@ -156,9 +156,10 @@ impl Default for CommandExecutor {
 
 impl CommandExecutor {
     pub fn new(config: AgentConfig) -> Self {
+        let server_url = config.server.clone();
         Self {
             config: RwLock::new(config),
-            apps_manager: std::sync::Arc::new(crate::apps::AppsManager::new()),
+            apps_manager: std::sync::Arc::new(crate::apps::AppsManager::new_with_server(server_url)),
         }
     }
 

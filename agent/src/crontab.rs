@@ -293,6 +293,7 @@ mod tests {
             config_files: vec![],
             sha256_hash: String::new(),
             enabled: true,
+            artifacts: vec![],
         };
         let app2 = AppSpec {
             id: "2".to_string(),
@@ -303,6 +304,7 @@ mod tests {
             config_files: vec![],
             sha256_hash: String::new(),
             enabled: false,
+            artifacts: vec![],
         };
         let app3 = AppSpec {
             id: "3".to_string(),
@@ -313,6 +315,7 @@ mod tests {
             config_files: vec![],
             sha256_hash: String::new(),
             enabled: true,
+            artifacts: vec![],
         };
 
         let block = build_cron_block_from_apps(&[&app1, &app2, &app3]);

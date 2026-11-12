@@ -995,16 +995,42 @@ export interface App {
   description?: string;
   note?: string;
   url?: string;
+  version?: string;
   app_type: "docker" | "systemd" | "cron";
   main_content: string;
   env_content?: string;
   files?: Record<string, string>;
+  artifact?: ArtifactSpec;
   /** Optional node scope conditions. Supported keys: name, tag, env:<NAME>. */
   selector?: Record<string, string>;
   published?: boolean;
   enabled: boolean;
   created_at: string;
   updated_at: string;
+}
+
+export interface ArtifactResolver {
+  type: string;
+  repo: string;
+  version?: string;
+  asset_pattern?: string;
+}
+
+export interface ArtifactFile {
+  name: string;
+  extract_path?: string;
+  target_path: string;
+  file_mode?: number;
+  pull_policy?: "if_changed" | "always" | "if_not_present" | "never" | string;
+}
+
+export interface ArtifactSpec {
+  url?: string;
+  resolver?: ArtifactResolver;
+  arch_mapping?: Record<string, string>;
+  checksums?: Record<string, string>;
+  checksum_url?: string;
+  files: ArtifactFile[];
 }
 
 export interface AppStatusRecord {

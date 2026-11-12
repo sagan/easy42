@@ -62,6 +62,8 @@ type Manager struct {
 	pingTableSubscribers map[chan *config.PingTableTask]struct{}
 	appStatusesMu        sync.RWMutex
 	appStatuses          map[string]map[string]AppStatusRecord
+	artifactMgr          *apps.ArtifactManager
+	artifactTokens       *apps.ArtifactTokenManager
 }
 
 // NewManager creates a new Manager instance
@@ -84,6 +86,8 @@ func NewManager(store *config.Store) *Manager {
 		runningTasks:         make(map[string]bool),
 		pingTableSubscribers: make(map[chan *config.PingTableTask]struct{}),
 		appStatuses:          make(map[string]map[string]AppStatusRecord),
+		artifactMgr:          apps.NewArtifactManager(filepath.Join(store.DataDir(), "cache", "artifacts")),
+		artifactTokens:       apps.NewArtifactTokenManager(),
 	}
 	m.prometheusExporter = NewPrometheusExporter(m)
 	m.telegramBot = telegram.NewBotService(m)
@@ -158,6 +162,16 @@ func (m *Manager) ROAManager() *roa.Manager {
 // Store returns the underlying store
 func (m *Manager) Store() *config.Store {
 	return m.store
+}
+
+// GetArtifactManager returns the artifact manager
+func (m *Manager) GetArtifactManager() *apps.ArtifactManager {
+	return m.artifactMgr
+}
+
+// GetArtifactTokenManager returns the artifact download token manager
+func (m *Manager) GetArtifactTokenManager() *apps.ArtifactTokenManager {
+	return m.artifactTokens
 }
 
 // StateStore returns the underlying state store
