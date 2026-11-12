@@ -90,7 +90,7 @@ const getActionIcon = (act: SyncAction) => {
     if (tf.endsWith(".env") || tf.includes("/conf.d/")) {
       return <FileText size={16} color="#059669" />;
     }
-    if (tf.includes("/ezapp-data/") || tf.includes("/ezappc/")) {
+    if (tf.includes("/ezapp/") || tf.includes("/ezappc/")) {
       return <FileCode size={16} color="#0284C7" />;
     }
     return <Layers size={16} color="#9333EA" />;

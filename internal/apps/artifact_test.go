@@ -144,6 +144,70 @@ func TestResolveArtifactURLTemplate(t *testing.T) {
 	}
 }
 
+func TestArchConversions(t *testing.T) {
+	// Test ToGNUArch
+	if got := ToGNUArch("amd64"); got != "x86_64" {
+		t.Errorf("ToGNUArch(amd64) = %s, want x86_64", got)
+	}
+	if got := ToGNUArch("arm64"); got != "aarch64" {
+		t.Errorf("ToGNUArch(arm64) = %s, want aarch64", got)
+	}
+	if got := ToGNUArch("armv7"); got != "armv7l" {
+		t.Errorf("ToGNUArch(armv7) = %s, want armv7l", got)
+	}
+	if got := ToGNUArch("386"); got != "i386" {
+		t.Errorf("ToGNUArch(386) = %s, want i386", got)
+	}
+	if got := ToGNUArch("x86_64"); got != "x86_64" {
+		t.Errorf("ToGNUArch(x86_64) = %s, want x86_64", got)
+	}
+
+	// Test ToRustArch
+	if got := ToRustArch("amd64"); got != "x86_64" {
+		t.Errorf("ToRustArch(amd64) = %s, want x86_64", got)
+	}
+	if got := ToRustArch("arm64"); got != "aarch64" {
+		t.Errorf("ToRustArch(arm64) = %s, want aarch64", got)
+	}
+	if got := ToRustArch("armv7"); got != "armv7" {
+		t.Errorf("ToRustArch(armv7) = %s, want armv7", got)
+	}
+
+	// Test ToDebArch
+	if got := ToDebArch("amd64"); got != "amd64" {
+		t.Errorf("ToDebArch(amd64) = %s, want amd64", got)
+	}
+	if got := ToDebArch("armv7"); got != "armhf" {
+		t.Errorf("ToDebArch(armv7) = %s, want armhf", got)
+	}
+}
+
+func TestResolveArtifactURLTemplateWithARCH_GNU(t *testing.T) {
+	spec := &config.ArtifactSpec{
+		URL: "https://github.com/fastfetch-cli/fastfetch/releases/download/${VERSION}/fastfetch-linux-${ARCH_GNU}.tar.gz",
+	}
+
+	res, err := ResolveArtifactURL(context.Background(), spec, "fastfetch", "2.28.0", "amd64", "linux", nil, http.DefaultClient)
+	if err != nil {
+		t.Fatalf("ResolveArtifactURL failed: %v", err)
+	}
+
+	expected := "https://github.com/fastfetch-cli/fastfetch/releases/download/2.28.0/fastfetch-linux-x86_64.tar.gz"
+	if res != expected {
+		t.Errorf("expected %s, got %s", expected, res)
+	}
+
+	// Test arm64
+	resArm, err := ResolveArtifactURL(context.Background(), spec, "fastfetch", "2.28.0", "arm64", "linux", nil, http.DefaultClient)
+	if err != nil {
+		t.Fatalf("ResolveArtifactURL failed: %v", err)
+	}
+	expectedArm := "https://github.com/fastfetch-cli/fastfetch/releases/download/2.28.0/fastfetch-linux-aarch64.tar.gz"
+	if resArm != expectedArm {
+		t.Errorf("expected %s, got %s", expectedArm, resArm)
+	}
+}
+
 func TestResolveArtifactURLGitHub(t *testing.T) {
 	// Mock GitHub API server
 	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

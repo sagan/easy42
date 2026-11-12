@@ -9,7 +9,9 @@ use tracing::{error, info};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-use crate::collector::proto::{AppActionCmd, AppArtifactFile, AppConfigFile, AppSpec, AppStatus, AppType};
+use crate::collector::proto::{
+    AppActionCmd, AppArtifactFile, AppConfigFile, AppSpec, AppStatus, AppType,
+};
 use crate::container::compose_command;
 use crate::executor::{run_shell, run_shell_with_timeout};
 
@@ -18,7 +20,7 @@ pub const SYSTEMD_SYSTEM_DIR: &str = "/etc/systemd/system";
 pub const OPENRC_INIT_DIR: &str = "/etc/init.d";
 pub const OPENRC_CONF_DIR: &str = "/etc/conf.d";
 pub const PROCD_INIT_DIR: &str = "/etc/init.d";
-pub const APP_DATA_BASE_DIR: &str = "/etc/ezapp-data";
+pub const APP_DATA_BASE_DIR: &str = "/etc/ezapp";
 /// Hidden manifest listing the files Easy42 generated inside an app directory.
 /// It lets the agent distinguish managed files from data created by the app
 /// (for example bind-mounted volumes) during updates and garbage collection.
@@ -88,9 +90,9 @@ pub fn resolve_target_path(app_name: &str, raw_target_path: &str) -> PathBuf {
         };
         resolved = resolved.replace("${PATH}", bin_dir);
     }
-    if resolved.contains("${EZAPP_DATA}") {
+    if resolved.contains("${EZAPP_DIR}") {
         let data_dir = format!("{}/{}", APP_DATA_BASE_DIR, app_name);
-        resolved = resolved.replace("${EZAPP_DATA}", &data_dir);
+        resolved = resolved.replace("${EZAPP_DIR}", &data_dir);
     }
     PathBuf::from(resolved)
 }
@@ -117,7 +119,9 @@ fn download_artifact_file(
         req = req.header("Range", &format!("bytes={}-", existing_len));
     }
 
-    let res = req.call().map_err(|e| format!("HTTP request to {} failed: {}", download_url, e))?;
+    let res = req
+        .call()
+        .map_err(|e| format!("HTTP request to {} failed: {}", download_url, e))?;
     let status_code = res.status().as_u16();
 
     let mut file = if status_code == 206 {
@@ -134,12 +138,17 @@ fn download_artifact_file(
             .open(&tmp_path)
             .map_err(|e| format!("Failed to open temp file for write: {}", e))?
     } else {
-        return Err(format!("Download returned unexpected HTTP status: {}", status_code));
+        return Err(format!(
+            "Download returned unexpected HTTP status: {}",
+            status_code
+        ));
     };
 
     let mut reader = res.into_body().into_reader();
-    std::io::copy(&mut reader, &mut file).map_err(|e| format!("Failed to stream download: {}", e))?;
-    file.sync_all().map_err(|e| format!("Failed to sync file: {}", e))?;
+    std::io::copy(&mut reader, &mut file)
+        .map_err(|e| format!("Failed to stream download: {}", e))?;
+    file.sync_all()
+        .map_err(|e| format!("Failed to sync file: {}", e))?;
     drop(file);
 
     // Verify SHA256
@@ -159,8 +168,12 @@ fn download_artifact_file(
     let _ = fs::set_permissions(&tmp_path, fs::Permissions::from_mode(mode));
 
     // Atomic rename
-    fs::rename(&tmp_path, target_path)
-        .map_err(|e| format!("Failed to atomically rename file to {:?}: {}", target_path, e))?;
+    fs::rename(&tmp_path, target_path).map_err(|e| {
+        format!(
+            "Failed to atomically rename file to {:?}: {}",
+            target_path, e
+        )
+    })?;
 
     Ok(())
 }
@@ -180,7 +193,10 @@ impl AppsManager {
 
     pub fn new_with_server(server_url: String) -> Self {
         let init_system = detect_init_system();
-        info!("AppsManager initialized with init system: {:?}", init_system);
+        info!(
+            "AppsManager initialized with init system: {:?}",
+            init_system
+        );
         Self {
             init_system,
             server_url: Arc::new(Mutex::new(server_url)),
@@ -235,7 +251,9 @@ impl AppsManager {
     }
 
     /// Calculate current sha256 hashes of deployed apps and collect deployed files with contents
-    pub fn get_installed_app_info(&self) -> (HashMap<String, String>, HashMap<String, AppInstalledFile>) {
+    pub fn get_installed_app_info(
+        &self,
+    ) -> (HashMap<String, String>, HashMap<String, AppInstalledFile>) {
         let mut hashes = HashMap::new();
         let mut files_map = HashMap::new();
 
@@ -251,49 +269,51 @@ impl AppsManager {
                             let compose_path = app_dir.join("compose.yaml");
                             let env_path = app_dir.join(".env");
                             if compose_path.exists() {
-                                let main_content = fs::read_to_string(&compose_path).unwrap_or_default();
+                                let main_content =
+                                    fs::read_to_string(&compose_path).unwrap_or_default();
                                 let env_content = fs::read_to_string(&env_path).unwrap_or_default();
                                 let files = read_managed_files(&app_dir);
                                 let hash = compute_files_hash(&main_content, &env_content, &files);
                                 hashes.insert(name.clone(), hash);
 
-                            let comp_path_str = compose_path.to_string_lossy().to_string();
-                            files_map.insert(
-                                comp_path_str.clone(),
-                                AppInstalledFile {
-                                    path: comp_path_str,
-                                    hash: hash_single_content(&main_content),
-                                    content: main_content,
-                                },
-                            );
-                            if env_path.exists() {
-                                let env_path_str = env_path.to_string_lossy().to_string();
+                                let comp_path_str = compose_path.to_string_lossy().to_string();
                                 files_map.insert(
-                                    env_path_str.clone(),
+                                    comp_path_str.clone(),
                                     AppInstalledFile {
-                                        path: env_path_str,
-                                        hash: hash_single_content(&env_content),
-                                        content: env_content,
+                                        path: comp_path_str,
+                                        hash: hash_single_content(&main_content),
+                                        content: main_content,
                                     },
                                 );
-                            }
-                            for (rel_path, content) in files {
-                                let abs_path = app_dir.join(&rel_path).to_string_lossy().to_string();
-                                files_map.insert(
-                                    abs_path.clone(),
-                                    AppInstalledFile {
-                                        path: abs_path,
-                                        hash: hash_single_content(&content),
-                                        content,
-                                    },
-                                );
+                                if env_path.exists() {
+                                    let env_path_str = env_path.to_string_lossy().to_string();
+                                    files_map.insert(
+                                        env_path_str.clone(),
+                                        AppInstalledFile {
+                                            path: env_path_str,
+                                            hash: hash_single_content(&env_content),
+                                            content: env_content,
+                                        },
+                                    );
+                                }
+                                for (rel_path, content) in files {
+                                    let abs_path =
+                                        app_dir.join(&rel_path).to_string_lossy().to_string();
+                                    files_map.insert(
+                                        abs_path.clone(),
+                                        AppInstalledFile {
+                                            path: abs_path,
+                                            hash: hash_single_content(&content),
+                                            content,
+                                        },
+                                    );
+                                }
                             }
                         }
                     }
                 }
             }
         }
-    }
 
         // 2. Systemd apps in /etc/systemd/system/ezapp-*.service
         if Path::new(SYSTEMD_SYSTEM_DIR).exists() {
@@ -306,7 +326,8 @@ impl AppsManager {
                             .trim_end_matches(".service")
                             .to_string();
                         let service_path = entry.path();
-                        let env_path = PathBuf::from(SYSTEMD_SYSTEM_DIR).join(format!("ezapp-{}.env", name));
+                        let env_path =
+                            PathBuf::from(SYSTEMD_SYSTEM_DIR).join(format!("ezapp-{}.env", name));
                         let data_dir = PathBuf::from(APP_DATA_BASE_DIR).join(&name);
 
                         let main_content = fs::read_to_string(&service_path).unwrap_or_default();
@@ -364,7 +385,8 @@ impl AppsManager {
                         let main_content = fs::read_to_string(&init_path).unwrap_or_default();
                         let (env_content, env_exists, env_path_str) = match self.init_system {
                             InitSystem::OpenRC => {
-                                let conf_path = PathBuf::from(OPENRC_CONF_DIR).join(format!("ezapp-{}", name));
+                                let conf_path =
+                                    PathBuf::from(OPENRC_CONF_DIR).join(format!("ezapp-{}", name));
                                 let exists = conf_path.exists();
                                 let content = fs::read_to_string(&conf_path).unwrap_or_default();
                                 (content, exists, conf_path.to_string_lossy().to_string())
@@ -433,7 +455,8 @@ impl AppsManager {
 
     async fn apply_docker_app(&self, app: &AppSpec) -> Result<(), String> {
         let app_dir = PathBuf::from(DOCKER_BASE_DIR).join(format!("ezapp-{}", app.name));
-        fs::create_dir_all(&app_dir).map_err(|e| format!("failed to create dir {:?}: {}", app_dir, e))?;
+        fs::create_dir_all(&app_dir)
+            .map_err(|e| format!("failed to create dir {:?}: {}", app_dir, e))?;
 
         let compose_file = app_dir.join("compose.yaml");
         let env_file = app_dir.join(".env");
@@ -487,8 +510,14 @@ impl AppsManager {
                 }
 
                 if !success {
-                    let err_msg = format!("{} up failed (code {}): {} {}", compose_cmd, code, stdout, stderr);
-                    error!("Container app '{}' background startup error: {}", app_name, err_msg);
+                    let err_msg = format!(
+                        "{} up failed (code {}): {} {}",
+                        compose_cmd, code, stdout, stderr
+                    );
+                    error!(
+                        "Container app '{}' background startup error: {}",
+                        app_name, err_msg
+                    );
                     let mut errors = errors_map.lock().await;
                     errors.insert(app_name, err_msg);
                 } else {
@@ -528,7 +557,7 @@ impl AppsManager {
     }
 
     async fn apply_native_app(&self, app: &AppSpec) -> Result<(), String> {
-        // Write auxiliary files to /etc/ezapp-data/<name>/
+        // Write auxiliary files to /etc/ezapp/<name>/
         let app_data_dir = PathBuf::from(APP_DATA_BASE_DIR).join(&app.name);
         self.sync_config_files(&app_data_dir, &app.config_files, &[])?;
 
@@ -550,7 +579,11 @@ impl AppsManager {
         }
     }
 
-    async fn ensure_artifact(&self, app_name: &str, artifact: &AppArtifactFile) -> Result<(), String> {
+    async fn ensure_artifact(
+        &self,
+        app_name: &str,
+        artifact: &AppArtifactFile,
+    ) -> Result<(), String> {
         let target_path = resolve_target_path(app_name, &artifact.target_path);
         let pull_policy = if artifact.pull_policy.is_empty() {
             "if_changed"
@@ -620,7 +653,8 @@ impl AppsManager {
 
     async fn apply_systemd_app(&self, app: &AppSpec) -> Result<(), String> {
         let service_name = format!("ezapp-{}", app.name);
-        let service_path = PathBuf::from(SYSTEMD_SYSTEM_DIR).join(format!("{}.service", service_name));
+        let service_path =
+            PathBuf::from(SYSTEMD_SYSTEM_DIR).join(format!("{}.service", service_name));
         let env_path = PathBuf::from(SYSTEMD_SYSTEM_DIR).join(format!("{}.env", service_name));
 
         let main_content = ensure_systemd_env_file(&app.name, &app.main_content);
@@ -638,7 +672,10 @@ impl AppsManager {
             let cmd = format!("systemctl enable --now {}", service_name);
             let (success, code, stdout, stderr) = run_shell(&cmd).await;
             if !success {
-                return Err(format!("systemctl enable --now failed (code {}): {} {}", code, stdout, stderr));
+                return Err(format!(
+                    "systemctl enable --now failed (code {}): {} {}",
+                    code, stdout, stderr
+                ));
             }
             let _ = run_shell(&format!("systemctl restart {}", service_name)).await;
         } else {
@@ -664,7 +701,11 @@ impl AppsManager {
             let _ = fs::set_permissions(&conf_path, fs::Permissions::from_mode(0o600));
         }
 
-        let _ = run_shell(&format!("rc-update add {} default 2>/dev/null", service_name)).await;
+        let _ = run_shell(&format!(
+            "rc-update add {} default 2>/dev/null",
+            service_name
+        ))
+        .await;
 
         if app.enabled {
             info!("Restarting OpenRC service '{}'...", service_name);
@@ -760,7 +801,8 @@ impl AppsManager {
             fs::write(&target_path, &file.content)
                 .map_err(|e| format!("failed to write auxiliary file {:?}: {}", target_path, e))?;
             if file.file_mode != 0 {
-                let _ = fs::set_permissions(&target_path, fs::Permissions::from_mode(file.file_mode));
+                let _ =
+                    fs::set_permissions(&target_path, fs::Permissions::from_mode(file.file_mode));
             }
         }
         Ok(())
@@ -814,15 +856,31 @@ impl AppsManager {
                 for entry in entries.flatten() {
                     let file_name = entry.file_name().to_string_lossy().to_string();
                     if file_name.starts_with("ezapp-") && file_name.ends_with(".service") {
-                        let name = file_name.trim_start_matches("ezapp-").trim_end_matches(".service");
+                        let name = file_name
+                            .trim_start_matches("ezapp-")
+                            .trim_end_matches(".service");
                         if !desired_names.contains(name) {
                             info!("Removing orphaned systemd app '{}'...", name);
                             let service_name = format!("ezapp-{}", name);
-                            let _ = run_shell(&format!("systemctl stop {} 2>/dev/null || true", service_name)).await;
-                            let _ = run_shell(&format!("systemctl disable {} 2>/dev/null || true", service_name)).await;
+                            let _ = run_shell(&format!(
+                                "systemctl stop {} 2>/dev/null || true",
+                                service_name
+                            ))
+                            .await;
+                            let _ = run_shell(&format!(
+                                "systemctl disable {} 2>/dev/null || true",
+                                service_name
+                            ))
+                            .await;
                             let _ = fs::remove_file(entry.path());
-                            let _ = fs::remove_file(PathBuf::from(SYSTEMD_SYSTEM_DIR).join(format!("{}.env", service_name)));
-                            remove_managed_app_files(&PathBuf::from(APP_DATA_BASE_DIR).join(name), &[]);
+                            let _ = fs::remove_file(
+                                PathBuf::from(SYSTEMD_SYSTEM_DIR)
+                                    .join(format!("{}.env", service_name)),
+                            );
+                            remove_managed_app_files(
+                                &PathBuf::from(APP_DATA_BASE_DIR).join(name),
+                                &[],
+                            );
                             let _ = run_shell("systemctl daemon-reload").await;
                         }
                     }
@@ -842,19 +900,40 @@ impl AppsManager {
                             let service_name = format!("ezapp-{}", name);
                             match self.init_system {
                                 InitSystem::OpenRC => {
-                                    let _ = run_shell(&format!("rc-service {} stop 2>/dev/null || true", service_name)).await;
-                                    let _ = run_shell(&format!("rc-update del {} default 2>/dev/null || true", service_name)).await;
+                                    let _ = run_shell(&format!(
+                                        "rc-service {} stop 2>/dev/null || true",
+                                        service_name
+                                    ))
+                                    .await;
+                                    let _ = run_shell(&format!(
+                                        "rc-update del {} default 2>/dev/null || true",
+                                        service_name
+                                    ))
+                                    .await;
                                     let _ = fs::remove_file(entry.path());
-                                    let _ = fs::remove_file(PathBuf::from(OPENRC_CONF_DIR).join(&service_name));
+                                    let _ = fs::remove_file(
+                                        PathBuf::from(OPENRC_CONF_DIR).join(&service_name),
+                                    );
                                 }
                                 InitSystem::Procd => {
-                                    let _ = run_shell(&format!("/etc/init.d/{} stop 2>/dev/null || true", service_name)).await;
-                                    let _ = run_shell(&format!("/etc/init.d/{} disable 2>/dev/null || true", service_name)).await;
+                                    let _ = run_shell(&format!(
+                                        "/etc/init.d/{} stop 2>/dev/null || true",
+                                        service_name
+                                    ))
+                                    .await;
+                                    let _ = run_shell(&format!(
+                                        "/etc/init.d/{} disable 2>/dev/null || true",
+                                        service_name
+                                    ))
+                                    .await;
                                     let _ = fs::remove_file(entry.path());
                                 }
                                 _ => {}
                             }
-                            remove_managed_app_files(&PathBuf::from(APP_DATA_BASE_DIR).join(name), &[]);
+                            remove_managed_app_files(
+                                &PathBuf::from(APP_DATA_BASE_DIR).join(name),
+                                &[],
+                            );
                         }
                     }
                 }
@@ -906,7 +985,10 @@ impl AppsManager {
                 for entry in entries.flatten() {
                     let file_name = entry.file_name().to_string_lossy().to_string();
                     if file_name.starts_with("ezapp-") && file_name.ends_with(".service") {
-                        let name = file_name.trim_start_matches("ezapp-").trim_end_matches(".service").to_string();
+                        let name = file_name
+                            .trim_start_matches("ezapp-")
+                            .trim_end_matches(".service")
+                            .to_string();
                         if seen.insert(name.clone()) {
                             let (state, text, err) = self.probe_systemd_status(&name).await;
                             statuses.push(AppStatus {
@@ -955,16 +1037,25 @@ impl AppsManager {
         };
 
         if !cron_apps.is_empty() {
-            let current_crontab = crate::crontab::read_system_crontab().await.unwrap_or_default();
-            let current_block = crate::crontab::extract_cron_block(&current_crontab).unwrap_or_default();
+            let current_crontab = crate::crontab::read_system_crontab()
+                .await
+                .unwrap_or_default();
+            let current_block =
+                crate::crontab::extract_cron_block(&current_crontab).unwrap_or_default();
 
             for app in cron_apps {
                 if seen.insert(app.name.clone()) {
                     let (state, text) = if !current_block.is_empty() {
                         if app.enabled {
-                            ("running".to_string(), "active (scheduled in crontab)".to_string())
+                            (
+                                "running".to_string(),
+                                "active (scheduled in crontab)".to_string(),
+                            )
                         } else {
-                            ("stopped".to_string(), "disabled (commented in crontab)".to_string())
+                            (
+                                "stopped".to_string(),
+                                "disabled (commented in crontab)".to_string(),
+                            )
                         }
                     } else {
                         ("stopped".to_string(), "not found in crontab".to_string())
@@ -1015,9 +1106,17 @@ impl AppsManager {
                 );
             }
             if !last_error.is_empty() {
-                return ("failed".to_string(), "startup failed".to_string(), last_error);
+                return (
+                    "failed".to_string(),
+                    "startup failed".to_string(),
+                    last_error,
+                );
             }
-            return ("stopped".to_string(), "stopped or not started".to_string(), stderr);
+            return (
+                "stopped".to_string(),
+                "stopped or not started".to_string(),
+                stderr,
+            );
         }
 
         let first_line = stdout.lines().next().unwrap_or("").trim();
@@ -1047,11 +1146,19 @@ impl AppsManager {
         let active_state = stdout.trim();
 
         if active_state == "active" {
-            ("running".to_string(), "active (running)".to_string(), String::new())
+            (
+                "running".to_string(),
+                "active (running)".to_string(),
+                String::new(),
+            )
         } else if active_state == "failed" {
             ("failed".to_string(), "failed".to_string(), stderr)
         } else {
-            ("stopped".to_string(), active_state.to_string(), String::new())
+            (
+                "stopped".to_string(),
+                active_state.to_string(),
+                String::new(),
+            )
         }
     }
 
@@ -1086,11 +1193,20 @@ impl AppsManager {
         };
 
         if app_type == AppType::Cron {
-            return (false, -1, String::new(), "cron apps do not support action execution".to_string());
+            return (
+                false,
+                -1,
+                String::new(),
+                "cron apps do not support action execution".to_string(),
+            );
         }
 
         let action = req.action.to_lowercase();
-        let lines = if req.log_lines > 0 { req.log_lines } else { 100 };
+        let lines = if req.log_lines > 0 {
+            req.log_lines
+        } else {
+            100
+        };
 
         if action == "stop" {
             let mut starting = self.starting_apps.lock().await;
@@ -1099,15 +1215,40 @@ impl AppsManager {
 
         match app_type {
             AppType::DockerCompose => {
-                let app_dir = PathBuf::from(DOCKER_BASE_DIR).join(format!("ezapp-{}", req.app_name));
+                let app_dir =
+                    PathBuf::from(DOCKER_BASE_DIR).join(format!("ezapp-{}", req.app_name));
                 let compose_cmd = compose_command();
 
                 let cmd = match action.as_str() {
-                    "start" => format!("cd {} && {} start", shell_quote(app_dir.to_str().unwrap_or("")), compose_cmd),
-                    "stop" => format!("cd {} && {} stop", shell_quote(app_dir.to_str().unwrap_or("")), compose_cmd),
-                    "restart" => format!("cd {} && {} restart", shell_quote(app_dir.to_str().unwrap_or("")), compose_cmd),
-                    "logs" => format!("cd {} && {} logs --tail {}", shell_quote(app_dir.to_str().unwrap_or("")), compose_cmd, lines),
-                    other => return (false, -1, String::new(), format!("unknown action '{}'", other)),
+                    "start" => format!(
+                        "cd {} && {} start",
+                        shell_quote(app_dir.to_str().unwrap_or("")),
+                        compose_cmd
+                    ),
+                    "stop" => format!(
+                        "cd {} && {} stop",
+                        shell_quote(app_dir.to_str().unwrap_or("")),
+                        compose_cmd
+                    ),
+                    "restart" => format!(
+                        "cd {} && {} restart",
+                        shell_quote(app_dir.to_str().unwrap_or("")),
+                        compose_cmd
+                    ),
+                    "logs" => format!(
+                        "cd {} && {} logs --tail {}",
+                        shell_quote(app_dir.to_str().unwrap_or("")),
+                        compose_cmd,
+                        lines
+                    ),
+                    other => {
+                        return (
+                            false,
+                            -1,
+                            String::new(),
+                            format!("unknown action '{}'", other),
+                        )
+                    }
                 };
                 run_shell(&cmd).await
             }
@@ -1120,7 +1261,14 @@ impl AppsManager {
                             "stop" => format!("systemctl stop {}", service),
                             "restart" => format!("systemctl restart {}", service),
                             "logs" => format!("journalctl -u {} -n {} --no-pager", service, lines),
-                            other => return (false, -1, String::new(), format!("unknown action '{}'", other)),
+                            other => {
+                                return (
+                                    false,
+                                    -1,
+                                    String::new(),
+                                    format!("unknown action '{}'", other),
+                                )
+                            }
                         };
                         run_shell(&cmd).await
                     }
@@ -1130,7 +1278,14 @@ impl AppsManager {
                             "stop" => format!("rc-service {} stop", service),
                             "restart" => format!("rc-service {} restart", service),
                             "logs" => format!("rc-service {} status", service),
-                            other => return (false, -1, String::new(), format!("unknown action '{}'", other)),
+                            other => {
+                                return (
+                                    false,
+                                    -1,
+                                    String::new(),
+                                    format!("unknown action '{}'", other),
+                                )
+                            }
                         };
                         run_shell(&cmd).await
                     }
@@ -1140,13 +1295,25 @@ impl AppsManager {
                             "stop" => format!("/etc/init.d/{} stop", service),
                             "restart" => format!("/etc/init.d/{} restart", service),
                             "logs" => format!("/etc/init.d/{} status", service),
-                            other => return (false, -1, String::new(), format!("unknown action '{}'", other)),
+                            other => {
+                                return (
+                                    false,
+                                    -1,
+                                    String::new(),
+                                    format!("unknown action '{}'", other),
+                                )
+                            }
                         };
                         run_shell(&cmd).await
                     }
                 }
             }
-            AppType::Cron => (false, -1, String::new(), "cron apps do not support action execution".to_string()),
+            AppType::Cron => (
+                false,
+                -1,
+                String::new(),
+                "cron apps do not support action execution".to_string(),
+            ),
         }
     }
 }
@@ -1164,7 +1331,11 @@ fn chrono_now() -> i64 {
 
 pub fn ensure_systemd_env_file(app_name: &str, content: &str) -> String {
     let app_name = app_name.trim();
-    let app_name = if app_name.is_empty() { "sample" } else { app_name };
+    let app_name = if app_name.is_empty() {
+        "sample"
+    } else {
+        app_name
+    };
     let expected_path = format!("/etc/systemd/system/ezapp-{}.env", app_name);
 
     if content.contains(&expected_path) {
@@ -1240,7 +1411,12 @@ fn write_managed_manifest(base_dir: &Path, files: &HashSet<String>) -> Result<()
         match fs::remove_file(&manifest_path) {
             Ok(()) => {}
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-            Err(e) => return Err(format!("failed to remove managed file manifest {:?}: {}", manifest_path, e)),
+            Err(e) => {
+                return Err(format!(
+                    "failed to remove managed file manifest {:?}: {}",
+                    manifest_path, e
+                ))
+            }
         }
         return Ok(());
     }
@@ -1254,10 +1430,18 @@ fn write_managed_manifest(base_dir: &Path, files: &HashSet<String>) -> Result<()
         .map_err(|e| format!("failed to serialize managed file manifest: {}", e))?;
 
     let tmp_path = base_dir.join(format!("{}.tmp", MANAGED_MANIFEST_FILE));
-    fs::write(&tmp_path, content)
-        .map_err(|e| format!("failed to write managed file manifest {:?}: {}", tmp_path, e))?;
-    fs::rename(&tmp_path, &manifest_path)
-        .map_err(|e| format!("failed to install managed file manifest {:?}: {}", manifest_path, e))?;
+    fs::write(&tmp_path, content).map_err(|e| {
+        format!(
+            "failed to write managed file manifest {:?}: {}",
+            tmp_path, e
+        )
+    })?;
+    fs::rename(&tmp_path, &manifest_path).map_err(|e| {
+        format!(
+            "failed to install managed file manifest {:?}: {}",
+            manifest_path, e
+        )
+    })?;
     Ok(())
 }
 
@@ -1319,7 +1503,10 @@ fn remove_managed_app_files(base_dir: &Path, standard_rel_paths: &[&str]) {
         match fs::remove_file(&target_path) {
             Ok(()) => info!("Removed Easy42 managed app file: {:?}", target_path),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-            Err(e) => error!("Failed to remove Easy42 managed app file {:?}: {}", target_path, e),
+            Err(e) => error!(
+                "Failed to remove Easy42 managed app file {:?}: {}",
+                target_path, e
+            ),
         }
         prune_empty_parent_dirs(base_dir, &target_path);
     }
@@ -1328,7 +1515,10 @@ fn remove_managed_app_files(base_dir: &Path, standard_rel_paths: &[&str]) {
     match fs::remove_file(&manifest_path) {
         Ok(()) => {}
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-        Err(e) => error!("Failed to remove managed file manifest {:?}: {}", manifest_path, e),
+        Err(e) => error!(
+            "Failed to remove managed file manifest {:?}: {}",
+            manifest_path, e
+        ),
     }
 
     match fs::remove_dir(base_dir) {
@@ -1368,7 +1558,10 @@ mod tests {
     fn test_compute_files_hash() {
         let main = "[Unit]\nDescription=rclone\n";
         let env = "RCLONE_PASS=123456\r\n";
-        let files = vec![("conf/rclone.conf".to_string(), "[drive]\ntype=drive\n".to_string())];
+        let files = vec![(
+            "conf/rclone.conf".to_string(),
+            "[drive]\ntype=drive\n".to_string(),
+        )];
         let h1 = compute_files_hash(main, env, &files);
         assert_eq!(h1.len(), 64);
 
@@ -1386,10 +1579,13 @@ mod tests {
 
     #[test]
     fn test_ensure_systemd_env_file_missing() {
-        let raw = "[Unit]\nDescription=rclone service\n\n[Service]\nType=simple\nExecStart=rclone\n";
+        let raw =
+            "[Unit]\nDescription=rclone service\n\n[Service]\nType=simple\nExecStart=rclone\n";
         let res = ensure_systemd_env_file("rclone", raw);
         assert!(res.contains("EnvironmentFile=/etc/systemd/system/ezapp-rclone.env"));
-        assert!(res.contains("[Service]\nEnvironmentFile=/etc/systemd/system/ezapp-rclone.env\nType=simple"));
+        assert!(res.contains(
+            "[Service]\nEnvironmentFile=/etc/systemd/system/ezapp-rclone.env\nType=simple"
+        ));
     }
 
     #[test]
@@ -1432,7 +1628,10 @@ mod tests {
             fs::read_to_string(base.join("volume/data.db")).unwrap(),
             "user data"
         );
-        assert!(base.is_dir(), "directory must be preserved while user data remains");
+        assert!(
+            base.is_dir(),
+            "directory must be preserved while user data remains"
+        );
     }
 
     #[test]
@@ -1466,7 +1665,10 @@ mod tests {
 
         assert!(!base.join("compose.yaml").exists());
         assert!(!base.join(".env").exists());
-        assert_eq!(fs::read_to_string(base.join("user.txt")).unwrap(), "user data");
+        assert_eq!(
+            fs::read_to_string(base.join("user.txt")).unwrap(),
+            "user data"
+        );
         assert!(base.is_dir());
     }
 
@@ -1495,7 +1697,10 @@ mod tests {
             fs::read_to_string(base.join("conf/new.conf")).unwrap(),
             "new"
         );
-        assert_eq!(fs::read_to_string(base.join("data.bin")).unwrap(), "user data");
+        assert_eq!(
+            fs::read_to_string(base.join("data.bin")).unwrap(),
+            "user data"
+        );
 
         let managed_after = read_managed_manifest(&base);
         assert!(managed_after.contains("conf/new.conf"));
@@ -1547,7 +1752,10 @@ mod tests {
     #[test]
     fn test_docker_app_name_from_dir() {
         assert_eq!("ezapp-myapp".strip_prefix("ezapp-"), Some("myapp"));
-        assert_eq!("ezapp-my-complex_app-1".strip_prefix("ezapp-"), Some("my-complex_app-1"));
+        assert_eq!(
+            "ezapp-my-complex_app-1".strip_prefix("ezapp-"),
+            Some("my-complex_app-1")
+        );
         assert_eq!("myapp".strip_prefix("ezapp-"), None);
         assert_eq!("other-app".strip_prefix("ezapp-"), None);
     }
@@ -1557,8 +1765,8 @@ mod tests {
         let p = resolve_target_path("rclone", "${PATH}/rclone");
         assert!(p.to_str().unwrap().ends_with("/rclone"));
 
-        let p2 = resolve_target_path("rclone", "${EZAPP_DATA}/bin/rclone");
-        assert_eq!(p2, PathBuf::from("/etc/ezapp-data/rclone/bin/rclone"));
+        let p2 = resolve_target_path("rclone", "${EZAPP_DIR}/bin/rclone");
+        assert_eq!(p2, PathBuf::from("/etc/ezapp/rclone/bin/rclone"));
 
         let p3 = resolve_target_path("rclone", "/opt/bin/rclone");
         assert_eq!(p3, PathBuf::from("/opt/bin/rclone"));
@@ -1577,5 +1785,3 @@ mod tests {
         assert_eq!(hash, expected);
     }
 }
-
-

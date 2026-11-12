@@ -365,6 +365,7 @@ type interpolatePreviewRequest struct {
 	Content  string `json:"content"`
 	NodeName string `json:"node_name,omitempty"`
 	AppName  string `json:"app_name,omitempty"`
+	AppType  string `json:"app_type,omitempty"`
 }
 
 type interpolatePreviewResponse struct {
@@ -414,6 +415,38 @@ func (s *Server) handlePreviewInterpolate(w http.ResponseWriter, r *http.Request
 	} else {
 		contextVars["APP_NAME"] = "my-app"
 	}
+
+	nodeArch := "amd64"
+	if req.NodeName != "" {
+		osInfo := strings.ToLower(s.mgr.GetOSInfo(req.NodeName))
+		parts := strings.Fields(osInfo)
+		if len(parts) >= 2 {
+			nodeArch = parts[1]
+		}
+	}
+	goArch := apps.NormalizeArch(nodeArch, nil)
+	contextVars["NODE_ARCH"] = nodeArch
+	contextVars["ARCH"] = goArch
+	contextVars["ARCH_GNU"] = apps.ToGNUArch(goArch)
+	contextVars["ARCH_RUST"] = apps.ToRustArch(goArch)
+	contextVars["ARCH_DEB"] = apps.ToDebArch(goArch)
+	contextVars["arch"] = goArch
+	contextVars["arch_gnu"] = apps.ToGNUArch(goArch)
+	contextVars["arch_rust"] = apps.ToRustArch(goArch)
+	contextVars["arch_deb"] = apps.ToDebArch(goArch)
+
+	appName := req.AppName
+	if appName == "" {
+		appName = "my-app"
+	}
+	var ezappDir string
+	if strings.ToLower(req.AppType) == "docker" {
+		ezappDir = "/etc/ezappc/ezapp-" + appName
+	} else {
+		ezappDir = "/etc/ezapp/" + appName
+	}
+	contextVars["EZAPP_DIR"] = ezappDir
+	contextVars["ezapp_dir"] = ezappDir
 
 	rendered := apps.InterpolateVariables(req.Content, globalVars, contextVars)
 	writeJSON(w, http.StatusOK, interpolatePreviewResponse{Rendered: rendered})

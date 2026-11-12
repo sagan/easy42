@@ -4034,7 +4034,7 @@ func (m *Manager) PlanSyncWithScope(scope string, nodeNames ...string) ([]config
 				if f == nil {
 					continue
 				}
-				auxTargetFile := fmt.Sprintf("/etc/ezapp-data/%s/%s", spec.Name, f.Path)
+				auxTargetFile := fmt.Sprintf("/etc/ezapp/%s/%s", spec.Name, f.Path)
 				if spec.AppType == agentpb.AppType_DOCKER_COMPOSE {
 					auxTargetFile = fmt.Sprintf("/etc/ezappc/ezapp-%s/%s", spec.Name, f.Path)
 				}
@@ -4082,7 +4082,7 @@ func (m *Manager) PlanSyncWithScope(scope string, nodeNames ...string) ([]config
 			}
 
 			// 4. Check for orphaned auxiliary config files previously deployed for this app
-			auxDirPrefix := fmt.Sprintf("/etc/ezapp-data/%s/", spec.Name)
+			auxDirPrefix := fmt.Sprintf("/etc/ezapp/%s/", spec.Name)
 			if spec.AppType == agentpb.AppType_DOCKER_COMPOSE {
 				auxDirPrefix = fmt.Sprintf("/etc/ezappc/ezapp-%s/", spec.Name)
 			}
@@ -6340,4 +6340,12 @@ rm -f /etc/easy42/agent.json 2>/dev/null || true
 	}
 
 	return nil
+}
+
+// GetOSInfo returns the reported OS info for a node from the agent hub
+func (m *Manager) GetOSInfo(nodeName string) string {
+	if m.agentHub != nil {
+		return m.agentHub.GetOSInfo(nodeName)
+	}
+	return ""
 }

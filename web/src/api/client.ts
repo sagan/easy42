@@ -701,7 +701,7 @@ export const api = {
     request<{ deleted: boolean }>(`/apps/variables/${encodeURIComponent(key)}`, {
       method: "DELETE",
     }),
-  previewInterpolate: (req: { content: string; node_name?: string; app_name?: string }) =>
+  previewInterpolate: (req: { content: string; node_name?: string; app_name?: string; app_type?: string }) =>
     request<InterpolatePreviewResponse>("/apps/preview-interpolate", {
       method: "POST",
       body: JSON.stringify(req),

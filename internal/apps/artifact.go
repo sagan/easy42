@@ -81,6 +81,117 @@ func NormalizeArch(nodeArch string, mapping map[string]string) string {
 	return arch
 }
 
+// ToGNUArch maps standard architecture names to GNU arch / uname -m format (e.g. x86_64, aarch64, armv7l)
+func ToGNUArch(arch string) string {
+	clean := strings.ToLower(strings.TrimSpace(arch))
+	switch clean {
+	case "amd64", "x64", "x86_64":
+		return "x86_64"
+	case "arm64", "arm64v8", "aarch64":
+		return "aarch64"
+	case "386", "i386", "i686", "x86":
+		return "i386"
+	case "armv7", "armv7l", "armhf":
+		return "armv7l"
+	case "armv6", "armv6l":
+		return "armv6l"
+	case "arm", "armel":
+		return "arm"
+	case "riscv64":
+		return "riscv64"
+	case "s390x":
+		return "s390x"
+	case "ppc64le":
+		return "ppc64le"
+	case "ppc64":
+		return "ppc64"
+	case "mips":
+		return "mips"
+	case "mipsel", "mipsle":
+		return "mipsel"
+	case "mips64":
+		return "mips64"
+	case "mips64le":
+		return "mips64le"
+	case "loong64", "loongarch64":
+		return "loongarch64"
+	default:
+		return clean
+	}
+}
+
+// ToRustArch maps standard architecture names to Rust target triple architecture format (e.g. x86_64, aarch64, armv7)
+func ToRustArch(arch string) string {
+	clean := strings.ToLower(strings.TrimSpace(arch))
+	switch clean {
+	case "amd64", "x64", "x86_64":
+		return "x86_64"
+	case "arm64", "arm64v8", "aarch64":
+		return "aarch64"
+	case "386", "i386", "i686", "x86":
+		return "i686"
+	case "armv7", "armv7l", "armhf":
+		return "armv7"
+	case "armv6", "armv6l":
+		return "armv6"
+	case "arm", "armel":
+		return "arm"
+	case "riscv64":
+		return "riscv64gc"
+	case "s390x":
+		return "s390x"
+	case "ppc64le":
+		return "powerpc64le"
+	case "ppc64":
+		return "powerpc64"
+	case "mips":
+		return "mips"
+	case "mipsel", "mipsle":
+		return "mipsel"
+	case "mips64":
+		return "mips64"
+	case "mips64le":
+		return "mips64le"
+	case "loong64", "loongarch64":
+		return "loongarch64"
+	default:
+		return clean
+	}
+}
+
+// ToDebArch maps standard architecture names to Debian / dpkg format (e.g. amd64, arm64, armhf)
+func ToDebArch(arch string) string {
+	clean := strings.ToLower(strings.TrimSpace(arch))
+	switch clean {
+	case "amd64", "x64", "x86_64":
+		return "amd64"
+	case "arm64", "arm64v8", "aarch64":
+		return "arm64"
+	case "386", "i386", "i686", "x86":
+		return "i386"
+	case "armv7", "armv7l", "armhf":
+		return "armhf"
+	case "armv6", "armv6l", "armel":
+		return "armel"
+	case "arm":
+		return "armhf"
+	case "riscv64":
+		return "riscv64"
+	case "s390x":
+		return "s390x"
+	case "ppc64le":
+		return "ppc64el"
+	case "mips":
+		return "mips"
+	case "mipsel", "mipsle":
+		return "mipsel"
+	case "mips64el", "mips64le":
+		return "mips64el"
+	default:
+		return clean
+	}
+}
+
 // MatchExtractPath checks if an archive entry path matches the configured extract_path
 func MatchExtractPath(entryName, extractPath string) bool {
 	cleanEntry := strings.TrimPrefix(filepath.ToSlash(entryName), "/")
@@ -486,6 +597,15 @@ func (m *ArtifactManager) doEnsureArtifact(ctx context.Context, app config.App, 
 		chk := app.Artifact.Checksums[arch]
 		if chk == "" {
 			chk = app.Artifact.Checksums[NormalizeArch(arch, nil)]
+		}
+		if chk == "" {
+			chk = app.Artifact.Checksums[ToGNUArch(arch)]
+		}
+		if chk == "" {
+			chk = app.Artifact.Checksums[ToRustArch(arch)]
+		}
+		if chk == "" {
+			chk = app.Artifact.Checksums[ToDebArch(arch)]
 		}
 		if chk != "" {
 			if err := VerifyChecksum(archivePath, chk); err != nil {

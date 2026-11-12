@@ -216,6 +216,54 @@ func TestInterpolateApp(t *testing.T) {
 	}
 }
 
+func TestInterpolateAppWithEzappDir(t *testing.T) {
+	// 1. Native systemd app
+	systemdApp := config.App{
+		AppType:    "systemd",
+		Name:       "rclone",
+		EnvContent: "RCLONE_CONFIG=${EZAPP_DIR}/rclone.conf\nDATA_DIR=${ezapp_dir}/data\n",
+		Files: map[string]string{
+			"start.sh": "#!/bin/sh\nexec ${EZAPP_DIR}/bin/rclone --config ${EZAPP_DIR}/rclone.conf\n",
+		},
+	}
+	systemdCtx := map[string]string{
+		"EZAPP_DIR": "/etc/ezapp/rclone",
+		"ezapp_dir": "/etc/ezapp/rclone",
+	}
+	resSystemd := InterpolateApp(systemdApp, nil, systemdCtx)
+	expectedEnv := "RCLONE_CONFIG=/etc/ezapp/rclone/rclone.conf\nDATA_DIR=/etc/ezapp/rclone/data\n"
+	if resSystemd.EnvContent != expectedEnv {
+		t.Errorf("Systemd EnvContent mismatch:\ngot:\n%s\nwant:\n%s", resSystemd.EnvContent, expectedEnv)
+	}
+	expectedScript := "#!/bin/sh\nexec /etc/ezapp/rclone/bin/rclone --config /etc/ezapp/rclone/rclone.conf\n"
+	if resSystemd.Files["start.sh"] != expectedScript {
+		t.Errorf("Systemd Files[start.sh] mismatch:\ngot:\n%s\nwant:\n%s", resSystemd.Files["start.sh"], expectedScript)
+	}
+
+	// 2. Docker app
+	dockerApp := config.App{
+		AppType:    "docker",
+		Name:       "web",
+		EnvContent: "STORAGE_PATH=${EZAPP_DIR}/storage\n",
+		Files: map[string]string{
+			"nginx.conf": "root ${EZAPP_DIR}/html;",
+		},
+	}
+	dockerCtx := map[string]string{
+		"EZAPP_DIR": "/etc/ezappc/ezapp-web",
+		"ezapp_dir": "/etc/ezappc/ezapp-web",
+	}
+	resDocker := InterpolateApp(dockerApp, nil, dockerCtx)
+	expectedDockerEnv := "STORAGE_PATH=/etc/ezappc/ezapp-web/storage\n"
+	if resDocker.EnvContent != expectedDockerEnv {
+		t.Errorf("Docker EnvContent mismatch:\ngot:\n%s\nwant:\n%s", resDocker.EnvContent, expectedDockerEnv)
+	}
+	expectedNginx := "root /etc/ezappc/ezapp-web/html;"
+	if resDocker.Files["nginx.conf"] != expectedNginx {
+		t.Errorf("Docker Files[nginx.conf] mismatch:\ngot:\n%s\nwant:\n%s", resDocker.Files["nginx.conf"], expectedNginx)
+	}
+}
+
 func TestSplitCronLine(t *testing.T) {
 	tests := []struct {
 		input       string

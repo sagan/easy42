@@ -37,13 +37,29 @@ func ResolveArtifactURL(ctx context.Context, spec *config.ArtifactSpec, appName,
 		osName = "linux"
 	}
 	rawVersion := strings.TrimPrefix(version, "v")
+	gnuArch := ToGNUArch(arch)
+	rustArch := ToRustArch(arch)
+	debArch := ToDebArch(arch)
 
 	contextVars := map[string]string{
 		"VERSION":     version,
 		"RAW_VERSION": rawVersion,
 		"ARCH":        arch,
+		"ARCH_GNU":    gnuArch,
+		"ARCH_RUST":   rustArch,
+		"ARCH_DEB":    debArch,
 		"OS":          osName,
 		"APP_NAME":    appName,
+
+		// Lowercase convenience aliases
+		"version":     version,
+		"raw_version": rawVersion,
+		"arch":        arch,
+		"arch_gnu":    gnuArch,
+		"arch_rust":   rustArch,
+		"arch_deb":    debArch,
+		"os":          osName,
+		"app_name":    appName,
 	}
 
 	// Mode A: Direct URL Template
@@ -153,7 +169,23 @@ func resolveGitHubRelease(ctx context.Context, resolver *config.ArtifactResolver
 	case "arm64":
 		archVariants = append(archVariants, "aarch64")
 	case "armv7":
-		archVariants = append(archVariants, "arm", "armhf", "arm-v7")
+		archVariants = append(archVariants, "arm", "armhf", "arm-v7", "armv7l")
+	case "386":
+		archVariants = append(archVariants, "i386", "i686", "x86")
+	}
+	for _, extra := range []string{ToGNUArch(cleanArch), ToRustArch(cleanArch), ToDebArch(cleanArch)} {
+		if extra != "" && extra != cleanArch {
+			found := false
+			for _, v := range archVariants {
+				if v == extra {
+					found = true
+					break
+				}
+			}
+			if !found {
+				archVariants = append(archVariants, extra)
+			}
+		}
 	}
 
 	for _, asset := range rel.Assets {

@@ -44,7 +44,7 @@ type ArtifactResolver struct {
 type ArtifactFile struct {
 	Name        string `json:"name" yaml:"name"`
 	ExtractPath string `json:"extract_path,omitempty" yaml:"extract_path,omitempty"` // path/pattern inside archive
-	TargetPath  string `json:"target_path" yaml:"target_path"`                       // destination on node, e.g. "${PATH}/rclone" or "${EZAPP_DATA}/bin/rclone"
+	TargetPath  string `json:"target_path" yaml:"target_path"`                       // destination on node, e.g. "${PATH}/rclone" or "${EZAPP_DIR}/bin/rclone"
 	FileMode    uint32 `json:"file_mode,omitempty" yaml:"file_mode,omitempty"`       // default 0755
 	PullPolicy  string `json:"pull_policy,omitempty" yaml:"pull_policy,omitempty"`   // "if_changed" (default), "if_not_present", "never"
 }

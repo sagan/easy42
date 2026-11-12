@@ -11,6 +11,7 @@ import (
 	agentpb "easy42/internal/agent/proto"
 	"easy42/internal/apps"
 	"easy42/internal/config"
+
 	"github.com/google/uuid"
 )
 
@@ -557,12 +558,42 @@ func (m *Manager) BuildAppSpecsForNode(nodeName string) ([]*agentpb.AppSpec, err
 			continue
 		}
 
+		nodeArch := "amd64"
+		parts := strings.Fields(osInfo)
+		if len(parts) >= 2 {
+			nodeArch = parts[1]
+		} else if len(parts) == 1 && !strings.Contains(parts[0], "linux") {
+			nodeArch = parts[0]
+		}
+		goArch := apps.NormalizeArch(nodeArch, nil)
+		gnuArch := apps.ToGNUArch(goArch)
+		rustArch := apps.ToRustArch(goArch)
+		debArch := apps.ToDebArch(goArch)
+
+		var ezappDir string
+		if strings.ToLower(rawApp.AppType) == "docker" {
+			ezappDir = "/etc/ezappc/ezapp-" + rawApp.Name
+		} else {
+			ezappDir = "/etc/ezapp/" + rawApp.Name
+		}
+
 		// App-specific context variables
-		appCtx := make(map[string]string, len(contextVars)+1)
+		appCtx := make(map[string]string, len(contextVars)+14)
 		for k, v := range contextVars {
 			appCtx[k] = v
 		}
 		appCtx["APP_NAME"] = rawApp.Name
+		appCtx["EZAPP_DIR"] = ezappDir
+		appCtx["ezapp_dir"] = ezappDir
+		appCtx["NODE_ARCH"] = nodeArch
+		appCtx["ARCH"] = goArch
+		appCtx["ARCH_GNU"] = gnuArch
+		appCtx["ARCH_RUST"] = rustArch
+		appCtx["ARCH_DEB"] = debArch
+		appCtx["arch"] = goArch
+		appCtx["arch_gnu"] = gnuArch
+		appCtx["arch_rust"] = rustArch
+		appCtx["arch_deb"] = debArch
 
 		// Interpolate global & context variables for this specific node
 		app := apps.InterpolateApp(rawApp, globalVars, appCtx)
@@ -619,13 +650,6 @@ func (m *Manager) BuildAppSpecsForNode(nodeName string) ([]*agentpb.AppSpec, err
 
 		// Process Artifacts for native (systemd) apps
 		if rawApp.Artifact != nil && strings.ToLower(rawApp.AppType) == "systemd" && m.artifactMgr != nil && m.artifactTokens != nil {
-			nodeArch := "amd64"
-			parts := strings.Fields(osInfo)
-			if len(parts) >= 2 {
-				nodeArch = parts[1]
-			} else if len(parts) == 1 && !strings.Contains(parts[0], "linux") {
-				nodeArch = parts[0]
-			}
 			osName := "linux"
 
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
@@ -656,7 +680,7 @@ func (m *Manager) BuildAppSpecsForNode(nodeName string) ([]*agentpb.AppSpec, err
 
 					targetPath := reqFile.TargetPath
 					targetPath = strings.ReplaceAll(targetPath, "${PATH}", binPath)
-					targetPath = strings.ReplaceAll(targetPath, "${EZAPP_DATA}", "/etc/ezapp-data/"+rawApp.Name)
+					targetPath = strings.ReplaceAll(targetPath, "${EZAPP_DIR}", ezappDir)
 
 					spec.Artifacts = append(spec.Artifacts, &agentpb.AppArtifactFile{
 						Name:          reqFile.Name,

@@ -966,8 +966,8 @@ func TestAppDeleteAuxiliaryConfigFileReconciliation(t *testing.T) {
 			Content: specs[0].MainContent,
 			Hash:    config.HashConfig(specs[0].MainContent),
 		},
-		"/etc/ezapp-data/myapp-aux/config.json": {
-			Path:    "/etc/ezapp-data/myapp-aux/config.json",
+		"/etc/ezapp/myapp-aux/config.json": {
+			Path:    "/etc/ezapp/myapp-aux/config.json",
 			Content: `{"version": 1}`,
 			Hash:    config.HashConfig(`{"version": 1}`),
 		},
@@ -998,7 +998,7 @@ func TestAppDeleteAuxiliaryConfigFileReconciliation(t *testing.T) {
 	var deleteAuxAct *config.SyncAction
 	for i := range actions {
 		act := &actions[i]
-		if act.Interface == "myapp-aux" && act.TargetFile == "/etc/ezapp-data/myapp-aux/config.json" {
+		if act.Interface == "myapp-aux" && act.TargetFile == "/etc/ezapp/myapp-aux/config.json" {
 			deleteAuxAct = act
 			break
 		}
@@ -1030,8 +1030,8 @@ func TestAppDeleteAuxiliaryConfigFileReconciliation(t *testing.T) {
 
 	// 9. Verify hub cached app files no longer has config.json
 	cachedFiles := hub.GetAppFiles("node-aux")
-	if _, ok := cachedFiles["/etc/ezapp-data/myapp-aux/config.json"]; ok {
-		t.Fatalf("expected /etc/ezapp-data/myapp-aux/config.json to be removed from agentHub appFiles, but it was still present")
+	if _, ok := cachedFiles["/etc/ezapp/myapp-aux/config.json"]; ok {
+		t.Fatalf("expected /etc/ezapp/myapp-aux/config.json to be removed from agentHub appFiles, but it was still present")
 	}
 
 	// 10. Verify PlanSyncWithScope now has no pending changes for config.json
@@ -1040,7 +1040,7 @@ func TestAppDeleteAuxiliaryConfigFileReconciliation(t *testing.T) {
 		t.Fatalf("PlanSyncWithScope after sync failed: %v", err)
 	}
 	for _, act := range actionsAfter {
-		if act.TargetFile == "/etc/ezapp-data/myapp-aux/config.json" {
+		if act.TargetFile == "/etc/ezapp/myapp-aux/config.json" {
 			t.Fatalf("orphaned config.json action still appears in plan after sync: %+v", act)
 		}
 	}

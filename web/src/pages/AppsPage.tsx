@@ -181,9 +181,24 @@ const INTERNAL_NODE_VARS = [
     tooltip: "Tag flag env set to '1' for each tag (e.g. ${NODE_TAG_VPS})",
   },
   {
-    key: "NODE_DATA_*",
+    key: "NODE_DATA_",
     label: "${NODE_DATA_*}",
-    tooltip: "Structured JSON fields from node Note (up to 1 layer hierarchy)",
+    tooltip: "The node data variables extracted from node Note markdown ``` block",
+  },
+  {
+    key: "EZAPP_DIR",
+    label: "${EZAPP_DIR}",
+    tooltip: "App managed directory (/etc/ezapp/<name> for native, /etc/ezappc/ezapp-<name> for docker)",
+  },
+  {
+    key: "ARCH",
+    label: "${ARCH}",
+    tooltip: "Target node Go architecture (amd64, arm64, 386)",
+  },
+  {
+    key: "ARCH_GNU",
+    label: "${ARCH_GNU}",
+    tooltip: "Target node GNU/C/Rust architecture (x86_64, aarch64, i386)",
   },
 ];
 
@@ -635,7 +650,7 @@ export const AppsPage: React.FC = () => {
     setFormMain(DOCKER_SAMPLE);
     setFormCronExpr("0 0 * * *");
     setFormCronCmd("");
-    setFormEnv("PORT=8080\nIP=${NODE_IP}\n");
+    setFormEnv("DIR=${EZAPP_DIR}\nIP=${NODE_IP}\n");
     setFormTargetType("manual");
     setFormSelector({ name: "" });
     setFormSelectorText('{\n  "name": ""\n}');
@@ -687,7 +702,7 @@ export const AppsPage: React.FC = () => {
                 pull_policy: "if_changed",
                 file_mode: 0o755,
               },
-            ]
+            ],
       );
       setFormArtifactChecksums(app.artifact.checksums || {});
       setFormArtifactArchMapping(app.artifact.arch_mapping || {});
@@ -748,7 +763,10 @@ export const AppsPage: React.FC = () => {
 
   const handleTypeChange = (newType: "docker" | "systemd" | "cron") => {
     setFormType(newType);
-    if (newType === "cron" && (modalTab === "env" || modalTab === "files" || modalTab === "transpile" || modalTab === "artifact")) {
+    if (
+      newType === "cron" &&
+      (modalTab === "env" || modalTab === "files" || modalTab === "transpile" || modalTab === "artifact")
+    ) {
       setModalTab("definition");
     } else if (newType !== "systemd" && (modalTab === "artifact" || modalTab === "transpile")) {
       setModalTab("definition");
@@ -1045,6 +1063,7 @@ export const AppsPage: React.FC = () => {
         content: previewContent,
         node_name: nodeName,
         app_name: formName.trim() || "sample",
+        app_type: formType,
       });
       setInterpolatedPreview(res.rendered);
     } catch (e: any) {
@@ -1873,19 +1892,32 @@ export const AppsPage: React.FC = () => {
                           <Box sx={{ display: "flex", alignItems: "center", gap: 0.6, flexWrap: "wrap" }}>
                             <Chip
                               size="small"
-                              label={app.app_type === "docker" ? "Docker" : app.app_type === "cron" ? "Cron" : "Systemd"}
+                              label={
+                                app.app_type === "docker" ? "Docker" : app.app_type === "cron" ? "Cron" : "Systemd"
+                              }
                               sx={{
                                 height: 22,
                                 fontSize: "0.7rem",
                                 fontWeight: 700,
                                 bgcolor:
-                                  app.app_type === "docker" ? "#E0F2FE" : app.app_type === "cron" ? "#FEF3C7" : "#F3E8FF",
+                                  app.app_type === "docker"
+                                    ? "#E0F2FE"
+                                    : app.app_type === "cron"
+                                      ? "#FEF3C7"
+                                      : "#F3E8FF",
                                 color:
-                                  app.app_type === "docker" ? "#0369A1" : app.app_type === "cron" ? "#B45309" : "#7E22CE",
+                                  app.app_type === "docker"
+                                    ? "#0369A1"
+                                    : app.app_type === "cron"
+                                      ? "#B45309"
+                                      : "#7E22CE",
                               }}
                             />
                             {app.artifact && (
-                              <Tooltip title={`Artifact managed: ${app.artifact.files?.map((f) => f.name).join(", ")}`} arrow>
+                              <Tooltip
+                                title={`Artifact managed: ${app.artifact.files?.map((f) => f.name).join(", ")}`}
+                                arrow
+                              >
                                 <Chip
                                   size="small"
                                   icon={<Package size={11} />}
@@ -2310,7 +2342,10 @@ export const AppsPage: React.FC = () => {
                                 }}
                               />
                               {app.artifact && (
-                                <Tooltip title={`Artifact managed: ${app.artifact.files?.map((f) => f.name).join(", ")}`} arrow>
+                                <Tooltip
+                                  title={`Artifact managed: ${app.artifact.files?.map((f) => f.name).join(", ")}`}
+                                  arrow
+                                >
                                   <Chip
                                     size="small"
                                     icon={<Package size={11} />}
@@ -2330,7 +2365,10 @@ export const AppsPage: React.FC = () => {
                           </Box>
                         </Box>
 
-                        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }} onClick={(e) => e.stopPropagation()}>
+                        <Box
+                          sx={{ display: "flex", alignItems: "center", gap: 1 }}
+                          onClick={(e) => e.stopPropagation()}
+                        >
                           <FormControlLabel
                             title={
                               app.published
@@ -3288,7 +3326,7 @@ export const AppsPage: React.FC = () => {
 
         <DialogContent sx={{ p: 3 }}>
           {/* Quick Variables Insert Chips Bar */}
-          {modalTab !== "general" && modalTab !== "preview" && modalTab !== "transpile" && modalTab !== "note" && modalTab !== "artifact" && (
+          {(modalTab === "definition" || modalTab === "env" || modalTab === "files") && (
             <Box
               sx={{
                 mb: 2,
@@ -3353,7 +3391,7 @@ export const AppsPage: React.FC = () => {
                     size="small"
                     label={nv.label}
                     onClick={() => {
-                      const tag = nv.key === "NODE_DATA_*" ? "${NODE_DATA_}" : nv.label;
+                      const tag = nv.label;
                       if (modalTab === "definition") {
                         if (formType === "cron") {
                           setFormCronCmd((prev) => {
@@ -4489,8 +4527,7 @@ ${formEnabled ? `${formCronExpr.trim() || "0 0 * * *"} ${formCronCmd.trim() || "
                     Auxiliary Config Files Map
                   </Typography>
                   <Typography variant="caption" sx={{ color: "#64748B" }}>
-                    Injected into app directory (./filename) for Docker or /etc/ezapp-data/&lt;name&gt;/ for native
-                    daemons.
+                    Injected into app directory (./filename) for Docker or /etc/ezapp/&lt;name&gt;/ for native daemons.
                   </Typography>
                 </Box>
                 <Button
@@ -4575,7 +4612,15 @@ ${formEnabled ? `${formCronExpr.trim() || "0 0 * * *"} ${formCronCmd.trim() || "
           {/* TAB 5: Note (Markdown) */}
           {modalTab === "note" && (
             <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-              <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 1 }}>
+              <Box
+                sx={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  flexWrap: "wrap",
+                  gap: 1,
+                }}
+              >
                 <Box>
                   <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0F172A" }}>
                     App Note (Markdown)
@@ -4610,7 +4655,9 @@ ${formEnabled ? `${formCronExpr.trim() || "0 0 * * *"} ${formCronCmd.trim() || "
                   multiline
                   minRows={12}
                   maxRows={22}
-                  placeholder={"# App documentation\n\nWrite deployment notes, access instructions, or operational runbooks in Markdown.\n\nUse a ```json block to store structured data (optional)."}
+                  placeholder={
+                    "# App documentation\n\nWrite deployment notes, access instructions, or operational runbooks in Markdown.\n\nUse a ```json block to store structured data (optional)."
+                  }
                   value={formNote}
                   onChange={(e) => setFormNote(e.target.value)}
                   inputProps={{
@@ -4729,12 +4776,16 @@ ${formEnabled ? `${formCronExpr.trim() || "0 0 * * *"} ${formCronCmd.trim() || "
                 }}
               >
                 <Box sx={{ pr: 2 }}>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 800, color: "#0F172A", display: "flex", alignItems: "center", gap: 1 }}>
+                  <Typography
+                    variant="subtitle2"
+                    sx={{ fontWeight: 800, color: "#0F172A", display: "flex", alignItems: "center", gap: 1 }}
+                  >
                     <Package size={18} color={formArtifactEnabled ? "#16A34A" : "#4F46E5"} />
                     Declarative Artifact Management
                   </Typography>
                   <Typography variant="caption" sx={{ color: "#64748B", display: "block", mt: 0.5 }}>
-                    Enable this to automatically download, verify, decompress, and deploy app binaries or archives to nodes. The native service will only start after all required artifacts are verified on the node.
+                    Enable this to automatically download, verify, decompress, and deploy app binaries or archives to
+                    nodes. The native service will only start after all required artifacts are verified on the node.
                   </Typography>
                 </Box>
                 <FormControlLabel
@@ -4746,7 +4797,9 @@ ${formEnabled ? `${formCronExpr.trim() || "0 0 * * *"} ${formCronCmd.trim() || "
                     />
                   }
                   label={
-                    <Typography sx={{ fontWeight: 700, fontSize: "0.85rem", color: formArtifactEnabled ? "#15803D" : "#64748B" }}>
+                    <Typography
+                      sx={{ fontWeight: 700, fontSize: "0.85rem", color: formArtifactEnabled ? "#15803D" : "#64748B" }}
+                    >
                       {formArtifactEnabled ? "Enabled" : "Disabled"}
                     </Typography>
                   }
@@ -4779,10 +4832,16 @@ ${formEnabled ? `${formCronExpr.trim() || "0 0 * * *"} ${formCronCmd.trim() || "
                           value={formArtifactSourceMode}
                           onChange={(_, val) => val && setFormArtifactSourceMode(val)}
                         >
-                          <ToggleButton value="url" sx={{ textTransform: "none", fontWeight: 600, fontSize: "0.78rem", px: 2 }}>
+                          <ToggleButton
+                            value="url"
+                            sx={{ textTransform: "none", fontWeight: 600, fontSize: "0.78rem", px: 2 }}
+                          >
                             URL Template
                           </ToggleButton>
-                          <ToggleButton value="github" sx={{ textTransform: "none", fontWeight: 600, fontSize: "0.78rem", px: 2 }}>
+                          <ToggleButton
+                            value="github"
+                            sx={{ textTransform: "none", fontWeight: 600, fontSize: "0.78rem", px: 2 }}
+                          >
                             GitHub Releases Resolver
                           </ToggleButton>
                         </ToggleButtonGroup>
@@ -4806,14 +4865,32 @@ ${formEnabled ? `${formCronExpr.trim() || "0 0 * * *"} ${formCronCmd.trim() || "
                         <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600 }}>
                           Insert Variables:
                         </Typography>
-                        {["${VERSION}", "${RAW_VERSION}", "${ARCH}", "${OS}", "${APP_NAME}"].map((v) => (
-                          <Chip
-                            key={v}
-                            label={v}
-                            size="small"
-                            onClick={() => setFormArtifactUrl((prev) => prev + v)}
-                            sx={{ height: 22, fontSize: "0.7rem", fontFamily: "monospace", cursor: "pointer", bgcolor: "#EEF2FF", color: "#4F46E5" }}
-                          />
+                        {[
+                          { label: "${VERSION}", desc: "Version tag (e.g. v1.68.1)" },
+                          { label: "${RAW_VERSION}", desc: "Version without 'v' prefix (e.g. 1.68.1)" },
+                          { label: "${ARCH}", desc: "Go format: amd64 / arm64 / 386 / armv7" },
+                          { label: "${ARCH_GNU}", desc: "GNU/C/Rust format: x86_64 / aarch64 / i386 / armv7l" },
+                          { label: "${ARCH_RUST}", desc: "Rust target format: x86_64 / aarch64 / armv7" },
+                          { label: "${ARCH_DEB}", desc: "Debian format: amd64 / arm64 / armhf" },
+                          { label: "${OS}", desc: "OS name (linux)" },
+                          { label: "${APP_NAME}", desc: "App name" },
+                        ].map((item) => (
+                          <Tooltip key={item.label} title={item.desc} arrow>
+                            <Chip
+                              label={item.label}
+                              size="small"
+                              onClick={() => setFormArtifactUrl((prev) => prev + item.label)}
+                              sx={{
+                                height: 22,
+                                fontSize: "0.7rem",
+                                fontFamily: "monospace",
+                                cursor: "pointer",
+                                bgcolor: "#EEF2FF",
+                                color: "#4F46E5",
+                                "&:hover": { bgcolor: "#E0E7FF" },
+                              }}
+                            />
+                          </Tooltip>
                         ))}
                       </Box>
                     </Box>
@@ -4850,13 +4927,44 @@ ${formEnabled ? `${formCronExpr.trim() || "0 0 * * *"} ${formCronCmd.trim() || "
                             label="Asset Pattern (Optional)"
                             size="small"
                             fullWidth
-                            placeholder="rclone-*-linux-${ARCH}.zip"
+                            placeholder="rclone-*-linux-${ARCH_GNU}.zip"
                             value={formArtifactGithubPattern}
                             onChange={(e) => setFormArtifactGithubPattern(e.target.value)}
                             helperText="Glob / regex pattern to pick asset"
                           />
                         </Grid>
                       </Grid>
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 0.8, flexWrap: "wrap", mt: 1.5 }}>
+                        <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600 }}>
+                          Insert Variables into Pattern:
+                        </Typography>
+                        {[
+                          { label: "${VERSION}", desc: "Version tag (e.g. v1.68.1)" },
+                          { label: "${RAW_VERSION}", desc: "Version without 'v' prefix" },
+                          { label: "${ARCH}", desc: "Go format: amd64 / arm64" },
+                          { label: "${ARCH_GNU}", desc: "GNU/C/Rust format: x86_64 / aarch64" },
+                          { label: "${ARCH_RUST}", desc: "Rust target format: x86_64 / aarch64" },
+                          { label: "${ARCH_DEB}", desc: "Debian format: amd64 / arm64" },
+                          { label: "${OS}", desc: "OS name (linux)" },
+                        ].map((item) => (
+                          <Tooltip key={item.label} title={item.desc} arrow>
+                            <Chip
+                              label={item.label}
+                              size="small"
+                              onClick={() => setFormArtifactGithubPattern((prev) => prev + item.label)}
+                              sx={{
+                                height: 22,
+                                fontSize: "0.7rem",
+                                fontFamily: "monospace",
+                                cursor: "pointer",
+                                bgcolor: "#EEF2FF",
+                                color: "#4F46E5",
+                                "&:hover": { bgcolor: "#E0E7FF" },
+                              }}
+                            />
+                          </Tooltip>
+                        ))}
+                      </Box>
                     </Box>
                   )}
 
@@ -4918,7 +5026,7 @@ ${formEnabled ? `${formCronExpr.trim() || "0 0 * * *"} ${formCronCmd.trim() || "
                                 onChange={(e) => {
                                   const val = e.target.value;
                                   setFormArtifactFiles((prev) =>
-                                    prev.map((f, i) => (i === idx ? { ...f, name: val } : f))
+                                    prev.map((f, i) => (i === idx ? { ...f, name: val } : f)),
                                   );
                                 }}
                               />
@@ -4933,7 +5041,7 @@ ${formEnabled ? `${formCronExpr.trim() || "0 0 * * *"} ${formCronCmd.trim() || "
                                 onChange={(e) => {
                                   const val = e.target.value;
                                   setFormArtifactFiles((prev) =>
-                                    prev.map((f, i) => (i === idx ? { ...f, extract_path: val } : f))
+                                    prev.map((f, i) => (i === idx ? { ...f, extract_path: val } : f)),
                                   );
                                 }}
                                 helperText="Omit if raw binary"
@@ -4949,7 +5057,7 @@ ${formEnabled ? `${formCronExpr.trim() || "0 0 * * *"} ${formCronCmd.trim() || "
                                 onChange={(e) => {
                                   const val = e.target.value;
                                   setFormArtifactFiles((prev) =>
-                                    prev.map((f, i) => (i === idx ? { ...f, target_path: val } : f))
+                                    prev.map((f, i) => (i === idx ? { ...f, target_path: val } : f)),
                                   );
                                 }}
                               />
@@ -4963,7 +5071,7 @@ ${formEnabled ? `${formCronExpr.trim() || "0 0 * * *"} ${formCronCmd.trim() || "
                                   onChange={(e) => {
                                     const val = e.target.value;
                                     setFormArtifactFiles((prev) =>
-                                      prev.map((f, i) => (i === idx ? { ...f, pull_policy: val } : f))
+                                      prev.map((f, i) => (i === idx ? { ...f, pull_policy: val } : f)),
                                     );
                                   }}
                                 >
@@ -4978,9 +5086,7 @@ ${formEnabled ? `${formCronExpr.trim() || "0 0 * * *"} ${formCronCmd.trim() || "
                                 size="small"
                                 color="error"
                                 disabled={formArtifactFiles.length === 1}
-                                onClick={() =>
-                                  setFormArtifactFiles((prev) => prev.filter((_, i) => i !== idx))
-                                }
+                                onClick={() => setFormArtifactFiles((prev) => prev.filter((_, i) => i !== idx))}
                               >
                                 <Trash2 size={16} />
                               </IconButton>
@@ -4996,20 +5102,20 @@ ${formEnabled ? `${formCronExpr.trim() || "0 0 * * *"} ${formCronCmd.trim() || "
                               onClick={() => {
                                 setFormArtifactFiles((prev) =>
                                   prev.map((f, i) =>
-                                    i === idx ? { ...f, target_path: "${PATH}/" + (f.name || "") } : f
-                                  )
+                                    i === idx ? { ...f, target_path: "${PATH}/" + (f.name || "") } : f,
+                                  ),
                                 );
                               }}
                               sx={{ height: 20, fontSize: "0.68rem", cursor: "pointer" }}
                             />
                             <Chip
                               size="small"
-                              label="${EZAPP_DATA}"
+                              label="${EZAPP_DIR}"
                               onClick={() => {
                                 setFormArtifactFiles((prev) =>
                                   prev.map((f, i) =>
-                                    i === idx ? { ...f, target_path: "${EZAPP_DATA}/bin/" + (f.name || "") } : f
-                                  )
+                                    i === idx ? { ...f, target_path: "${EZAPP_DIR}/bin/" + (f.name || "") } : f,
+                                  ),
                                 );
                               }}
                               sx={{ height: 20, fontSize: "0.68rem", cursor: "pointer" }}
@@ -5192,7 +5298,9 @@ ${formEnabled ? `${formCronExpr.trim() || "0 0 * * *"} ${formCronCmd.trim() || "
               })()
             : undefined
         }
-        homepageUrl={detailsApp ? (resolveHomepageUrl(detailsApp, managedNodes, variables)?.url || detailsApp.url) : undefined}
+        homepageUrl={
+          detailsApp ? resolveHomepageUrl(detailsApp, managedNodes, variables)?.url || detailsApp.url : undefined
+        }
         homepageNode={detailsApp ? resolveHomepageUrl(detailsApp, managedNodes, variables)?.node.name : undefined}
         homepageClickable={
           detailsApp
