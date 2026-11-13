@@ -3956,6 +3956,23 @@ func (m *Manager) PlanSyncWithScope(scope string, nodeNames ...string) ([]config
 			mainDiffStatus := "create"
 			mainDiff := ""
 
+			// Artifact contents are deployed as part of the app sync, but they
+			// are not part of the service/config file hash reported by the
+			// agent. Compare the artifact fingerprint against the last synced
+			// value so refreshing an upstream "latest" artifact (even when the
+			// version label stays the same) produces a pending app action.
+			desiredArtifactHash := apps.ComputeAppArtifactHash(spec)
+			recordedArtifactHash := ""
+			if stNode, ok := currentState.Nodes[node.Name]; ok && stNode.AppArtifactHashes != nil {
+				recordedArtifactHash = stNode.AppArtifactHashes[spec.Name]
+			}
+			appAlreadyDeployed := currentHash != ""
+			if !appAlreadyDeployed {
+				_, appAlreadyDeployed = deployedAppFiles[mainTargetFile]
+			}
+			artifactDrift := desiredArtifactHash != "" && desiredArtifactHash != recordedArtifactHash &&
+				(appAlreadyDeployed || recordedArtifactHash != "")
+
 			if curF, ok := deployedAppFiles[mainTargetFile]; ok {
 				curHash := config.HashConfig(compiler.NormalizeConfig(curF.Content))
 				desHash := config.HashConfig(compiler.NormalizeConfig(spec.MainContent))
@@ -3982,6 +3999,20 @@ func (m *Manager) PlanSyncWithScope(scope string, nodeNames ...string) ([]config
 				mainStatus = "pending"
 				if mainDiffStatus == "synced" {
 					mainDiffStatus = "update"
+				}
+			}
+
+			if artifactDrift {
+				mainNeedsApply = true
+				mainStatus = "pending"
+				if mainDiffStatus == "synced" {
+					mainDiffStatus = "update"
+				}
+				artifactDiff := formatAppArtifactDiff(spec.Name, recordedArtifactHash, desiredArtifactHash)
+				if mainDiff == "" {
+					mainDiff = artifactDiff
+				} else {
+					mainDiff += "\n" + artifactDiff
 				}
 			}
 
@@ -5884,6 +5915,7 @@ func (m *Manager) executeAgentSyncAction(act config.SyncAction, res *config.Sync
 					for _, s := range specs {
 						if s.Name == act.Interface {
 							_ = m.stateStore.UpdateAppState(act.NodeName, act.Host, s.Name, s.Sha256Hash, time.Now())
+							_ = m.stateStore.UpdateAppArtifactState(act.NodeName, act.Host, s.Name, apps.ComputeAppArtifactHash(s), time.Now())
 							if m.agentHub != nil {
 								m.agentHub.SetAppHash(act.NodeName, s.Name, s.Sha256Hash)
 							}
@@ -5899,6 +5931,7 @@ func (m *Manager) executeAgentSyncAction(act config.SyncAction, res *config.Sync
 				for _, s := range specs {
 					if s.Name == act.Interface {
 						_ = m.stateStore.UpdateAppState(act.NodeName, act.Host, s.Name, s.Sha256Hash, time.Now())
+						_ = m.stateStore.UpdateAppArtifactState(act.NodeName, act.Host, s.Name, apps.ComputeAppArtifactHash(s), time.Now())
 						if m.agentHub != nil {
 							m.agentHub.SetAppHash(act.NodeName, s.Name, s.Sha256Hash)
 							m.agentHub.SetAppEnabled(act.NodeName, s.Name, s.Enabled)

@@ -206,6 +206,12 @@ func ensureLegacyColumns(db *sql.DB) error {
 		}
 	}
 
+	if !cols["app_artifact_hashes"] {
+		if _, err := db.Exec("ALTER TABLE node_states ADD COLUMN app_artifact_hashes TEXT NOT NULL DEFAULT '{}'"); err != nil {
+			return fmt.Errorf("failed to add app_artifact_hashes column: %w", err)
+		}
+	}
+
 	return nil
 }
 

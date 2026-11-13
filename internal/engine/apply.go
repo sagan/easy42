@@ -1404,6 +1404,23 @@ func generateSimpleDiff(oldStr, newStr string) string {
 	return strings.Join(diffLines, "\n")
 }
 
+// formatAppArtifactDiff renders a human-readable diff for an artifact whose
+// server-side cache contents changed after the last node sync.
+func formatAppArtifactDiff(appName, oldHash, newHash string) string {
+	shortHash := func(hash string) string {
+		if hash == "" {
+			return "(not synced)"
+		}
+		if len(hash) > 16 {
+			return hash[:16]
+		}
+		return hash
+	}
+
+	return fmt.Sprintf("--- artifact:%s (last synced)\n+++ artifact:%s (server cache)\n@@ artifact content changed @@\n-%s\n+%s",
+		appName, appName, shortHash(oldHash), shortHash(newHash))
+}
+
 // ConfigChange CRUD on Manager
 
 // ListConfigChanges returns all saved config change snippets

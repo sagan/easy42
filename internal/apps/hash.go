@@ -74,3 +74,38 @@ func ComputeAppSpecFilesHash(spec *agentpb.AppSpec) string {
 	return ComputeAppFilesHash(spec.MainContent, spec.EnvContent, files)
 }
 
+// ComputeAppArtifactHash returns a deterministic SHA-256 fingerprint of the
+// artifact files that a node is expected to refresh. Artifacts using the
+// "if_not_present" or "never" pull policies are ignored because a server-side
+// cache update does not change what those nodes would deploy.
+func ComputeAppArtifactHash(spec *agentpb.AppSpec) string {
+	if spec == nil || len(spec.Artifacts) == 0 {
+		return ""
+	}
+
+	entries := make([]string, 0, len(spec.Artifacts))
+	for _, artifact := range spec.Artifacts {
+		if artifact == nil {
+			continue
+		}
+		policy := strings.ToLower(strings.TrimSpace(artifact.PullPolicy))
+		if policy == "" {
+			policy = "if_changed"
+		}
+		if policy != "if_changed" && policy != "always" {
+			continue
+		}
+		entries = append(entries, fmt.Sprintf("%s\x00%s\x00%s\x00%d",
+			artifact.Name, artifact.TargetPath, artifact.FileSha256, artifact.FileMode))
+	}
+	if len(entries) == 0 {
+		return ""
+	}
+
+	sort.Strings(entries)
+	h := sha256.New()
+	for _, entry := range entries {
+		fmt.Fprintf(h, "artifact:%s\n", entry)
+	}
+	return hex.EncodeToString(h.Sum(nil))
+}
