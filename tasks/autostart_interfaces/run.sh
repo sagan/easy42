@@ -106,6 +106,7 @@ EOF
 esac
 
 enable_service "$SERVICE_NAME"
+start_service "$SERVICE_NAME"
 
 echo "easy42 WireGuard autostart service ($INIT_SYSTEM) successfully installed and enabled"
 exit 0
