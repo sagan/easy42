@@ -2892,12 +2892,22 @@ export const AppsPage: React.FC = () => {
                   >
                     <CardContent sx={{ p: 2.5, flex: 1, display: "flex", flexDirection: "column" }}>
                       {/* Header */}
-                      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", mb: 1.5 }}>
-                        <Box sx={{ display: "flex", alignItems: "center", gap: 1.2 }}>
+                      <Box
+                        sx={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "flex-start",
+                          flexWrap: "wrap",
+                          gap: 1,
+                          mb: 1.5,
+                        }}
+                      >
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 1.2, flex: "1 1 auto", minWidth: 0 }}>
                           <Box
                             sx={{
                               width: 36,
                               height: 36,
+                              flexShrink: 0,
                               borderRadius: "8px",
                               display: "flex",
                               alignItems: "center",
@@ -2916,11 +2926,20 @@ export const AppsPage: React.FC = () => {
                               <Cpu size={18} />
                             )}
                           </Box>
-                          <Box>
-                            <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                          <Box sx={{ minWidth: 0, flex: 1 }}>
+                            <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, minWidth: 0 }}>
                               <Typography
                                 variant="subtitle1"
-                                sx={{ fontWeight: 700, color: "#0F172A", lineHeight: 1.2 }}
+                                title={app.name}
+                                sx={{
+                                  fontWeight: 700,
+                                  color: "#0F172A",
+                                  lineHeight: 1.2,
+                                  minWidth: 0,
+                                  overflow: "hidden",
+                                  textOverflow: "ellipsis",
+                                  whiteSpace: "nowrap",
+                                }}
                               >
                                 {app.name}
                               </Typography>
@@ -2931,7 +2950,12 @@ export const AppsPage: React.FC = () => {
                                     e.stopPropagation();
                                     handleOpenRenameApp(app);
                                   }}
-                                  sx={{ p: 0.3, color: "#94A3B8", "&:hover": { color: "#4F46E5", bgcolor: "#EEF2FF" } }}
+                                  sx={{
+                                    p: 0.3,
+                                    flexShrink: 0,
+                                    color: "#94A3B8",
+                                    "&:hover": { color: "#4F46E5", bgcolor: "#EEF2FF" },
+                                  }}
                                 >
                                   <Tag size={13} />
                                 </IconButton>
@@ -3015,7 +3039,15 @@ export const AppsPage: React.FC = () => {
                         </Box>
 
                         <Box
-                          sx={{ display: "flex", alignItems: "center", gap: 1 }}
+                          sx={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "flex-end",
+                            flexWrap: "wrap",
+                            gap: 1,
+                            flexShrink: 0,
+                            ml: "auto",
+                          }}
                           onClick={(e) => e.stopPropagation()}
                         >
                           <FormControlLabel

@@ -200,7 +200,8 @@ func DialSSH(hostAliasOrIP string) (*ssh.Client, error) {
 	return DialSSHWithTimeout(hostAliasOrIP, 5*time.Second)
 }
 
-// DialSSHWithTimeout connects to a host with a specified connection timeout
+// DialSSHWithTimeout connects to a host with a specified connection timeout.
+// It honors OpenSSH ProxyJump (including comma-separated and nested jump hosts).
 func DialSSHWithTimeout(hostAliasOrIP string, timeout time.Duration) (*ssh.Client, error) {
 	if timeout <= 0 {
 		timeout = 5 * time.Second
@@ -210,42 +211,139 @@ func DialSSHWithTimeout(hostAliasOrIP string, timeout time.Duration) (*ssh.Clien
 		return nil, fmt.Errorf("failed to get home directory: %w", err)
 	}
 
-	explicitUser, hostPart, explicitPort := ParseSSHHost(hostAliasOrIP)
+	cfg := loadSSHConfig(filepath.Join(home, ".ssh", "config"))
+	chain, err := resolveSSHChain(cfg, hostAliasOrIP, home, 0, make(map[string]bool))
+	if err != nil {
+		return nil, err
+	}
 
-	// 1. Resolve OpenSSH config (Host alias, User, Port, HostName, IdentityFile, HostKeyAlgorithms)
-	var realHost, user, portStr, identityFile, hostKeyAlgosConfig string
+	return dialSSHChain(chain, timeout)
+}
 
-	sshConfigPath := filepath.Join(home, ".ssh", "config")
-	if f, err := os.Open(sshConfigPath); err == nil {
-		cfg, err := ssh_config.Decode(f)
-		_ = f.Close()
-		if err == nil {
-			realHost, _ = cfg.Get(hostAliasOrIP, "HostName")
-			if (realHost == "" || realHost == "%h") && hostPart != hostAliasOrIP {
-				realHost, _ = cfg.Get(hostPart, "HostName")
-			}
-			user, _ = cfg.Get(hostAliasOrIP, "User")
-			if user == "" && hostPart != hostAliasOrIP {
-				user, _ = cfg.Get(hostPart, "User")
-			}
-			portStr, _ = cfg.Get(hostAliasOrIP, "Port")
-			if portStr == "" && hostPart != hostAliasOrIP {
-				portStr, _ = cfg.Get(hostPart, "Port")
-			}
-			identityFile, _ = cfg.Get(hostAliasOrIP, "IdentityFile")
-			if identityFile == "" && hostPart != hostAliasOrIP {
-				identityFile, _ = cfg.Get(hostPart, "IdentityFile")
-			}
-			hostKeyAlgosConfig, _ = cfg.Get(hostAliasOrIP, "HostKeyAlgorithms")
-			if hostKeyAlgosConfig == "" && hostPart != hostAliasOrIP {
-				hostKeyAlgosConfig, _ = cfg.Get(hostPart, "HostKeyAlgorithms")
+// sshHostConfig holds the resolved OpenSSH configuration for a single hop.
+type sshHostConfig struct {
+	raw          string
+	alias        string
+	realHost     string
+	user         string
+	port         int
+	identityFile string
+	hostKeyAlgos string
+	proxyJump    string
+	home         string
+}
+
+func (hc *sshHostConfig) address() string {
+	return net.JoinHostPort(hc.realHost, strconv.Itoa(hc.port))
+}
+
+func (hc *sshHostConfig) displayName() string {
+	if hc.alias != "" {
+		return hc.alias
+	}
+	return hc.raw
+}
+
+// maxProxyJumpDepth guards against pathological or cyclic ProxyJump chains.
+const maxProxyJumpDepth = 10
+
+// loadSSHConfig reads and parses ~/.ssh/config. A missing or invalid file simply
+// disables OpenSSH config resolution.
+func loadSSHConfig(path string) *ssh_config.Config {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil
+	}
+	defer f.Close()
+	cfg, err := ssh_config.Decode(f)
+	if err != nil {
+		return nil
+	}
+	return cfg
+}
+
+// resolveSSHChain resolves a host and its ProxyJump chain into dial order
+// (outermost jump host first, final target last).
+func resolveSSHChain(cfg *ssh_config.Config, raw, home string, depth int, visiting map[string]bool) ([]*sshHostConfig, error) {
+	if depth > maxProxyJumpDepth {
+		return nil, fmt.Errorf("ProxyJump chain exceeds maximum depth (%d) while resolving %q", maxProxyJumpDepth, raw)
+	}
+
+	hc := resolveSSHHostConfig(cfg, raw, home)
+	key := strings.ToLower(hc.alias)
+	if key == "" {
+		key = strings.ToLower(strings.TrimSpace(raw))
+	}
+	if visiting[key] {
+		return nil, fmt.Errorf("ProxyJump cycle detected while resolving %q", raw)
+	}
+	visiting[key] = true
+	defer delete(visiting, key)
+
+	var chain []*sshHostConfig
+	for _, jump := range parseProxyJump(hc.proxyJump) {
+		sub, err := resolveSSHChain(cfg, jump, home, depth+1, visiting)
+		if err != nil {
+			return nil, err
+		}
+		chain = append(chain, sub...)
+	}
+
+	return append(chain, hc), nil
+}
+
+// parseProxyJump splits an OpenSSH ProxyJump value into individual jump hosts.
+// An empty value or "none" disables proxying.
+func parseProxyJump(value string) []string {
+	value = strings.TrimSpace(value)
+	if value == "" || strings.EqualFold(value, "none") {
+		return nil
+	}
+
+	var hops []string
+	for _, part := range strings.Split(value, ",") {
+		part = strings.TrimSpace(part)
+		if part == "" || strings.EqualFold(part, "none") {
+			continue
+		}
+		hops = append(hops, part)
+	}
+	return hops
+}
+
+// resolveSSHHostConfig resolves a single host entry against the OpenSSH config.
+func resolveSSHHostConfig(cfg *ssh_config.Config, raw, home string) *sshHostConfig {
+	raw = strings.TrimSpace(raw)
+	explicitUser, hostPart, explicitPort := ParseSSHHost(raw)
+	if hostPart == "" {
+		hostPart = raw
+	}
+
+	get := func(key string) string {
+		if cfg == nil {
+			return ""
+		}
+		if v, _ := cfg.Get(hostPart, key); v != "" {
+			return v
+		}
+		if hostPart != raw {
+			if v, _ := cfg.Get(raw, key); v != "" {
+				return v
 			}
 		}
+		return ""
 	}
+
+	realHost := get("HostName")
+	user := get("User")
+	portStr := get("Port")
+	identityFile := get("IdentityFile")
+	hostKeyAlgos := get("HostKeyAlgorithms")
 
 	if realHost == "" || realHost == "%h" {
 		realHost = hostPart
 	} else {
+		realHost = expandSSHHostTokens(realHost, hostPart)
 		cfgUser, cleanRealHost, cfgPort := ParseSSHHost(realHost)
 		if cleanRealHost != "" {
 			realHost = cleanRealHost
@@ -278,7 +376,112 @@ func DialSSHWithTimeout(hostAliasOrIP string, timeout time.Duration) (*ssh.Clien
 		}
 	}
 
-	// 2. Discover Auth Methods
+	proxyJump := expandSSHHostTokens(get("ProxyJump"), hostPart)
+
+	return &sshHostConfig{
+		raw:          raw,
+		alias:        hostPart,
+		realHost:     realHost,
+		user:         user,
+		port:         port,
+		identityFile: identityFile,
+		hostKeyAlgos: hostKeyAlgos,
+		proxyJump:    proxyJump,
+		home:         home,
+	}
+}
+
+// expandSSHHostTokens performs the subset of OpenSSH token expansion that is
+// meaningful for HostName and ProxyJump values.
+func expandSSHHostTokens(value, host string) string {
+	if value == "" {
+		return ""
+	}
+	replacer := strings.NewReplacer(
+		"%%", "\x00",
+		"%h", host,
+		"%n", host,
+	)
+	return strings.ReplaceAll(replacer.Replace(value), "\x00", "%")
+}
+
+// dialSSHChain dials each host in the chain, tunneling subsequent hops through
+// the previous SSH connection.
+func dialSSHChain(chain []*sshHostConfig, timeout time.Duration) (*ssh.Client, error) {
+	if len(chain) == 0 {
+		return nil, fmt.Errorf("empty ssh host chain")
+	}
+
+	clients := make([]*ssh.Client, 0, len(chain))
+	closeClients := func() {
+		for i := len(clients) - 1; i >= 0; i-- {
+			_ = clients[i].Close()
+		}
+	}
+
+	var parent *ssh.Client
+	for i, hc := range chain {
+		addr := hc.address()
+
+		var conn net.Conn
+		var err error
+		if parent == nil {
+			conn, err = net.DialTimeout("tcp", addr, timeout)
+			if err != nil {
+				closeClients()
+				return nil, fmt.Errorf("ssh dial to %s (%s) failed: %w", hc.displayName(), addr, err)
+			}
+		} else {
+			ctx, cancel := context.WithTimeout(context.Background(), timeout)
+			conn, err = parent.DialContext(ctx, "tcp", addr)
+			cancel()
+			if err != nil {
+				closeClients()
+				return nil, fmt.Errorf("ssh proxy dial via %s to %s (%s) failed: %w", chain[i-1].displayName(), hc.displayName(), addr, err)
+			}
+		}
+
+		clientConfig, err := buildSSHClientConfig(hc, timeout)
+		if err != nil {
+			_ = conn.Close()
+			closeClients()
+			return nil, err
+		}
+
+		// Bound the SSH handshake by the same timeout used for dialing.
+		_ = conn.SetDeadline(time.Now().Add(timeout))
+		clientConn, chans, reqs, err := ssh.NewClientConn(conn, addr, clientConfig)
+		if err != nil {
+			_ = conn.Close()
+			closeClients()
+			return nil, fmt.Errorf("ssh handshake with %s (%s) failed: %w", hc.displayName(), addr, err)
+		}
+		_ = conn.SetDeadline(time.Time{})
+
+		client := ssh.NewClient(clientConn, chans, reqs)
+		clients = append(clients, client)
+		parent = client
+	}
+
+	target := clients[len(clients)-1]
+	if len(clients) > 1 {
+		// Keep intermediate jump connections alive while the target session is
+		// active, then tear them down once the target connection closes.
+		go func() {
+			_ = target.Wait()
+			for i := len(clients) - 2; i >= 0; i-- {
+				_ = clients[i].Close()
+			}
+		}()
+	}
+
+	return target, nil
+}
+
+// buildSSHClientConfig discovers authentication methods and host key policies
+// for a resolved host, matching OpenSSH behavior.
+func buildSSHClientConfig(hc *sshHostConfig, timeout time.Duration) (*ssh.ClientConfig, error) {
+	// 1. Discover Auth Methods
 	var authMethods []ssh.AuthMethod
 
 	// SSH Agent
@@ -291,10 +494,10 @@ func DialSSHWithTimeout(hostAliasOrIP string, timeout time.Duration) (*ssh.Clien
 
 	// Key files
 	keyCandidates := []string{
-		identityFile,
-		filepath.Join(home, ".ssh", "id_ed25519"),
-		filepath.Join(home, ".ssh", "id_rsa"),
-		filepath.Join(home, ".ssh", "id_ecdsa"),
+		hc.identityFile,
+		filepath.Join(hc.home, ".ssh", "id_ed25519"),
+		filepath.Join(hc.home, ".ssh", "id_rsa"),
+		filepath.Join(hc.home, ".ssh", "id_ecdsa"),
 	}
 
 	for _, kPath := range keyCandidates {
@@ -303,7 +506,7 @@ func DialSSHWithTimeout(hostAliasOrIP string, timeout time.Duration) (*ssh.Clien
 		}
 		// Expand ~ if needed
 		if strings.HasPrefix(kPath, "~/") {
-			kPath = filepath.Join(home, kPath[2:])
+			kPath = filepath.Join(hc.home, kPath[2:])
 		}
 		if keyBytes, err := os.ReadFile(kPath); err == nil {
 			if signer, err := ssh.ParsePrivateKey(keyBytes); err == nil {
@@ -313,15 +516,15 @@ func DialSSHWithTimeout(hostAliasOrIP string, timeout time.Duration) (*ssh.Clien
 	}
 
 	if len(authMethods) == 0 {
-		return nil, fmt.Errorf("no SSH authentication methods (keys or agent) found for %s", hostAliasOrIP)
+		return nil, fmt.Errorf("no SSH authentication methods (keys or agent) found for %s", hc.displayName())
 	}
 
-	// 3. Host Key Callback and Algorithm Discovery
-	knownHostsPath := filepath.Join(home, ".ssh", "known_hosts")
+	// 2. Host Key Callback and Algorithm Discovery
+	knownHostsPath := filepath.Join(hc.home, ".ssh", "known_hosts")
 	var khFiles []string
 	for _, p := range []string{
 		knownHostsPath,
-		filepath.Join(home, ".ssh", "known_hosts2"),
+		filepath.Join(hc.home, ".ssh", "known_hosts2"),
 		"/etc/ssh/ssh_known_hosts",
 		"/etc/ssh/ssh_known_hosts2",
 	} {
@@ -338,26 +541,26 @@ func DialSSHWithTimeout(hostAliasOrIP string, timeout time.Duration) (*ssh.Clien
 		return nil, fmt.Errorf("failed to read known_hosts (%s): %w", knownHostsPath, err)
 	}
 
-	targetAddr := net.JoinHostPort(realHost, strconv.Itoa(port))
+	targetAddr := hc.address()
 
 	// Probe known key types from known_hosts to prioritize matching algorithms
 	probeAddrs := []string{targetAddr}
-	if hostPart != "" && hostPart != realHost {
-		probeAddrs = append(probeAddrs, net.JoinHostPort(hostPart, strconv.Itoa(port)))
+	if hc.alias != "" && hc.alias != hc.realHost {
+		probeAddrs = append(probeAddrs, net.JoinHostPort(hc.alias, strconv.Itoa(hc.port)))
 	}
-	if net.ParseIP(realHost) == nil {
+	if net.ParseIP(hc.realHost) == nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
 		var r net.Resolver
-		if ips, err := r.LookupIP(ctx, "ip", realHost); err == nil {
+		if ips, err := r.LookupIP(ctx, "ip", hc.realHost); err == nil {
 			for _, ip := range ips {
-				probeAddrs = append(probeAddrs, net.JoinHostPort(ip.String(), strconv.Itoa(port)))
+				probeAddrs = append(probeAddrs, net.JoinHostPort(ip.String(), strconv.Itoa(hc.port)))
 			}
 		}
 		cancel()
 	}
 
 	knownTypes := getKnownKeyTypes(khCallback, probeAddrs...)
-	hostKeyAlgorithms := orderHostKeyAlgorithms(knownTypes, hostKeyAlgosConfig)
+	hostKeyAlgorithms := orderHostKeyAlgorithms(knownTypes, hc.hostKeyAlgos)
 
 	hostKeyCallback := func(hostname string, remote net.Addr, key ssh.PublicKey) error {
 		err := khCallback(hostname, remote, key)
@@ -365,8 +568,8 @@ func DialSSHWithTimeout(hostAliasOrIP string, timeout time.Duration) (*ssh.Clien
 			return nil
 		}
 		// 1. Try host alias if different from realHost
-		if hostPart != "" && hostPart != realHost {
-			aliasAddr := net.JoinHostPort(hostPart, strconv.Itoa(port))
+		if hc.alias != "" && hc.alias != hc.realHost {
+			aliasAddr := net.JoinHostPort(hc.alias, strconv.Itoa(hc.port))
 			if err2 := khCallback(aliasAddr, remote, key); err2 == nil {
 				return nil
 			}
@@ -380,20 +583,13 @@ func DialSSHWithTimeout(hostAliasOrIP string, timeout time.Duration) (*ssh.Clien
 		return err
 	}
 
-	clientConfig := &ssh.ClientConfig{
-		User:              user,
+	return &ssh.ClientConfig{
+		User:              hc.user,
 		Auth:              authMethods,
 		HostKeyCallback:   hostKeyCallback,
 		HostKeyAlgorithms: hostKeyAlgorithms,
 		Timeout:           timeout,
-	}
-
-	client, err := ssh.Dial("tcp", targetAddr, clientConfig)
-	if err != nil {
-		return nil, fmt.Errorf("ssh dial to %s (%s) failed: %w", hostAliasOrIP, targetAddr, err)
-	}
-
-	return client, nil
+	}, nil
 }
 
 // defaultHostKeyAlgorithms specifies OpenSSH-standard host key algorithm preference order

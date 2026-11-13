@@ -4,10 +4,14 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/rsa"
+	"encoding/pem"
+	"io"
 	"net"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -229,6 +233,273 @@ func TestGetKnownKeyTypesWithCommaSeparatedKnownHosts(t *testing.T) {
 	}
 }
 
+func TestParseProxyJump(t *testing.T) {
+	tests := []struct {
+		input string
+		want  []string
+	}{
+		{"", nil},
+		{"none", nil},
+		{"NONE", nil},
+		{"bastion", []string{"bastion"}},
+		{"root@bastion:2222", []string{"root@bastion:2222"}},
+		{"jump1, jump2", []string{"jump1", "jump2"}},
+		{"root@jump1:22,[2001:db8::1]:2222", []string{"root@jump1:22", "[2001:db8::1]:2222"}},
+		{" none , jump1 ", []string{"jump1"}},
+	}
+
+	for _, tt := range tests {
+		got := parseProxyJump(tt.input)
+		if len(got) != len(tt.want) {
+			t.Errorf("parseProxyJump(%q) = %v; want %v", tt.input, got, tt.want)
+			continue
+		}
+		for i := range got {
+			if got[i] != tt.want[i] {
+				t.Errorf("parseProxyJump(%q) = %v; want %v", tt.input, got, tt.want)
+				break
+			}
+		}
+	}
+}
+
+func TestResolveSSHChain(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfgPath := filepath.Join(tmpDir, "config")
+	content := `
+Host target
+    HostName 10.0.0.2
+    User bob
+    Port 2222
+    ProxyJump jump1,jump2
+
+Host jump1
+    HostName 10.0.0.10
+    User alice
+    ProxyJump gateway
+
+Host gateway
+    HostName 10.0.0.1
+
+Host jump2
+    HostName 10.0.0.20
+
+Host direct
+    HostName direct.example.com
+    ProxyJump none
+
+Host cycle-a
+    ProxyJump cycle-b
+
+Host cycle-b
+    ProxyJump cycle-a
+`
+	if err := os.WriteFile(cfgPath, []byte(content), 0600); err != nil {
+		t.Fatal(err)
+	}
+	cfg := loadSSHConfig(cfgPath)
+	if cfg == nil {
+		t.Fatal("failed to load ssh config")
+	}
+
+	chain, err := resolveSSHChain(cfg, "target", tmpDir, 0, make(map[string]bool))
+	if err != nil {
+		t.Fatalf("resolveSSHChain(target) failed: %v", err)
+	}
+	wantHosts := []string{"10.0.0.1", "10.0.0.10", "10.0.0.20", "10.0.0.2"}
+	if len(chain) != len(wantHosts) {
+		t.Fatalf("expected %d hops, got %d: %+v", len(wantHosts), len(chain), chain)
+	}
+	for i, want := range wantHosts {
+		if chain[i].realHost != want {
+			t.Errorf("hop %d realHost = %q; want %q", i, chain[i].realHost, want)
+		}
+	}
+	if chain[1].user != "alice" {
+		t.Errorf("jump1 user = %q; want alice", chain[1].user)
+	}
+	if chain[3].user != "bob" || chain[3].port != 2222 {
+		t.Errorf("target = %s@%s:%d; want bob@10.0.0.2:2222", chain[3].user, chain[3].realHost, chain[3].port)
+	}
+
+	direct, err := resolveSSHChain(cfg, "direct", tmpDir, 0, make(map[string]bool))
+	if err != nil {
+		t.Fatalf("resolveSSHChain(direct) failed: %v", err)
+	}
+	if len(direct) != 1 || direct[0].realHost != "direct.example.com" {
+		t.Errorf("ProxyJump none should produce a single hop, got: %+v", direct)
+	}
+
+	if _, err := resolveSSHChain(cfg, "cycle-a", tmpDir, 0, make(map[string]bool)); err == nil {
+		t.Error("expected ProxyJump cycle to be detected, got nil error")
+	}
+}
+
+// startTestSSHServer starts a minimal SSH server. When forwardTo is set, the
+// server forwards direct-tcpip channels to that address regardless of the
+// requested destination, emulating a jump host that can reach a private target.
+func startTestSSHServer(t *testing.T, forwardTo string) (addr string, hostKey ssh.PublicKey, forwards *atomic.Int32, closeFn func()) {
+	t.Helper()
+
+	_, priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	signer, err := ssh.NewSignerFromKey(priv)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	serverCfg := &ssh.ServerConfig{NoClientAuth: true}
+	serverCfg.AddHostKey(signer)
+
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var count atomic.Int32
+	go func() {
+		for {
+			conn, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			go func(c net.Conn) {
+				defer c.Close()
+				sconn, chans, reqs, err := ssh.NewServerConn(c, serverCfg)
+				if err != nil {
+					return
+				}
+				defer sconn.Close()
+				go ssh.DiscardRequests(reqs)
+
+				for newChan := range chans {
+					if newChan.ChannelType() != "direct-tcpip" {
+						_ = newChan.Reject(ssh.UnknownChannelType, "unsupported channel")
+						continue
+					}
+
+					var req struct {
+						Host       string
+						Port       uint32
+						OriginHost string
+						OriginPort uint32
+					}
+					if err := ssh.Unmarshal(newChan.ExtraData(), &req); err != nil {
+						_ = newChan.Reject(ssh.ConnectionFailed, "bad direct-tcpip payload")
+						continue
+					}
+
+					dest := net.JoinHostPort(req.Host, strconv.Itoa(int(req.Port)))
+					if forwardTo != "" {
+						dest = forwardTo
+					}
+					targetConn, err := net.Dial("tcp", dest)
+					if err != nil {
+						_ = newChan.Reject(ssh.ConnectionFailed, err.Error())
+						continue
+					}
+
+					ch, chReqs, err := newChan.Accept()
+					if err != nil {
+						_ = targetConn.Close()
+						continue
+					}
+					go ssh.DiscardRequests(chReqs)
+					count.Add(1)
+
+					go func() {
+						_, _ = io.Copy(ch, targetConn)
+						_ = ch.Close()
+					}()
+					go func() {
+						_, _ = io.Copy(targetConn, ch)
+						_ = targetConn.Close()
+					}()
+				}
+			}(conn)
+		}
+	}()
+
+	return ln.Addr().String(), signer.PublicKey(), &count, func() { _ = ln.Close() }
+}
+
+func TestDialSSHWithProxyJump(t *testing.T) {
+	home := t.TempDir()
+	sshDir := filepath.Join(home, ".ssh")
+	if err := os.MkdirAll(sshDir, 0700); err != nil {
+		t.Fatal(err)
+	}
+
+	// Client key used for authenticating to both hops (servers use NoClientAuth).
+	_, clientPriv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	block, err := ssh.MarshalPrivateKey(clientPriv, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(sshDir, "id_ed25519"), pem.EncodeToMemory(block), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	targetAddr, targetKey, _, closeTarget := startTestSSHServer(t, "")
+	defer closeTarget()
+	jumpAddr, jumpKey, jumpForwards, closeJump := startTestSSHServer(t, targetAddr)
+	defer closeJump()
+
+	_, targetPortStr, err := net.SplitHostPort(targetAddr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, jumpPortStr, err := net.SplitHostPort(jumpAddr)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// The target sits behind the jump host and is not reachable directly.
+	const fakeTargetHost = "192.0.2.1"
+	fakeTargetAddr := net.JoinHostPort(fakeTargetHost, targetPortStr)
+
+	knownHosts := knownhosts.Line([]string{jumpAddr}, jumpKey) + "\n" +
+		knownhosts.Line([]string{fakeTargetAddr}, targetKey) + "\n"
+	if err := os.WriteFile(filepath.Join(sshDir, "known_hosts"), []byte(knownHosts), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	config := `Host ggyix
+    HostName ` + fakeTargetHost + `
+    Port ` + targetPortStr + `
+    User root
+    IdentityFile ~/.ssh/id_ed25519
+    ProxyJump tcnj
+
+Host tcnj
+    HostName 127.0.0.1
+    Port ` + jumpPortStr + `
+    User root
+    IdentityFile ~/.ssh/id_ed25519
+`
+	if err := os.WriteFile(filepath.Join(sshDir, "config"), []byte(config), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Setenv("HOME", home)
+	t.Setenv("SSH_AUTH_SOCK", "")
+
+	client, err := DialSSHWithTimeout("ggyix", 3*time.Second)
+	if err != nil {
+		t.Fatalf("DialSSHWithTimeout via ProxyJump failed: %v", err)
+	}
+	defer client.Close()
+
+	if got := jumpForwards.Load(); got == 0 {
+		t.Error("expected the jump host to forward at least one direct-tcpip connection")
+	}
+}
+
 func TestSSHMultiKeyHandshakeResolution(t *testing.T) {
 	// Generate an RSA host key and an ED25519 host key for a test SSH server
 	rsaKey, err := rsa.GenerateKey(rand.Reader, 2048)
@@ -374,5 +645,3 @@ func TestSSHMultiKeyHandshakeResolution(t *testing.T) {
 		t.Fatalf("Expected 'knownhosts: key mismatch', got: %v", err)
 	}
 }
-
-

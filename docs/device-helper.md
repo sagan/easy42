@@ -104,7 +104,7 @@ Device Helper communicates with remote managed nodes strictly over SSH and SFTP.
 
 - **Client Authentication**: Reads private keys from `~/.ssh/id_ed25519` (with fallback to `~/.ssh/id_rsa`, `~/.ssh/id_ecdsa`, or an active SSH Agent via `$SSH_AUTH_SOCK`). Easy42 does not prompt for passwords or store SSH private keys within its encrypted database.
 - **Server Host Key Verification**: Strictly verifies remote host keys against `~/.ssh/known_hosts` (and `/etc/ssh/ssh_known_hosts`). Connections to unknown hosts or mismatched keys are rejected immediately to protect against man-in-the-middle attacks.
-- **Host Configuration (`~/.ssh/config`)**: Transparently respects `HostName`, `User`, `Port`, `IdentityFile`, and `HostKeyAlgorithms` directives defined in the user's `~/.ssh/config`.
+- **Host Configuration (`~/.ssh/config`)**: Transparently respects `HostName`, `User`, `Port`, `IdentityFile`, `HostKeyAlgorithms`, and `ProxyJump` directives defined in the user's `~/.ssh/config`. Jump hosts may be comma-separated or nested, and each hop is resolved through the same OpenSSH configuration and host key verification rules.
 
 **Setup for Target Nodes**:
 
