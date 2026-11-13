@@ -1,10 +1,16 @@
 package apps
 
 import (
-	"crypto/rand"
-	"encoding/hex"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/json"
+	"fmt"
+	"strings"
 	"sync"
 	"time"
+
+	"easy42/internal/crypto"
 )
 
 // ArtifactTokenInfo stores information associated with an artifact download token
@@ -17,51 +23,69 @@ type ArtifactTokenInfo struct {
 	FilePath  string    `json:"file_path"`
 	FileName  string    `json:"file_name"`
 	SHA256    string    `json:"sha256"`
-	NodeName  string    `json:"node_name"`
+	NodeName  string    `json:"node_name,omitempty"`
 	ExpiresAt time.Time `json:"expires_at"`
 }
 
-// ArtifactTokenManager securely issues and validates temporary download tokens
+type artifactTokenClaims struct {
+	ArtifactTokenInfo
+	HashPrefix string `json:"pwh"`
+}
+
+// SecretProvider supplies the session secret and password hash for artifact token signing
+type SecretProvider func() (sessionSecret, passwordHash string)
+
+// ArtifactTokenManager securely issues and validates stateless temporary download tokens
 type ArtifactTokenManager struct {
-	mu     sync.RWMutex
-	tokens map[string]ArtifactTokenInfo
+	mu             sync.RWMutex
+	secretProvider SecretProvider
+	fallbackSecret string
+	fallbackHash   string
 }
 
 // NewArtifactTokenManager creates a new token manager
-func NewArtifactTokenManager() *ArtifactTokenManager {
-	return &ArtifactTokenManager{
-		tokens: make(map[string]ArtifactTokenInfo),
+func NewArtifactTokenManager(providers ...SecretProvider) *ArtifactTokenManager {
+	fallbackSecret, _ := crypto.GenerateSessionSecret()
+	m := &ArtifactTokenManager{
+		fallbackSecret: fallbackSecret,
+		fallbackHash:   "easy42-default-hash",
 	}
+	if len(providers) > 0 && providers[0] != nil {
+		m.secretProvider = providers[0]
+	}
+	return m
 }
 
-// GenerateToken creates an ephemeral token for downloading an artifact file
+// SetSecretProvider sets or updates the secret provider callback
+func (m *ArtifactTokenManager) SetSecretProvider(provider SecretProvider) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.secretProvider = provider
+}
+
+func (m *ArtifactTokenManager) getSecrets() (string, string) {
+	m.mu.RLock()
+	provider := m.secretProvider
+	m.mu.RUnlock()
+
+	if provider != nil {
+		secret, hash := provider()
+		if secret != "" {
+			return secret, hash
+		}
+	}
+	return m.fallbackSecret, m.fallbackHash
+}
+
+// GenerateToken creates a stateless token for downloading an artifact file
 func (m *ArtifactTokenManager) GenerateToken(filePath, fileName, sha256Hash, nodeName string, ttl time.Duration) string {
 	return m.GenerateTokenWithApp("", "", "", "", "", filePath, fileName, sha256Hash, nodeName, ttl)
 }
 
-// GenerateTokenWithApp creates an ephemeral token including app context for on-demand re-download
+// GenerateTokenWithApp creates a stateless token including app context for on-demand re-download
 func (m *ArtifactTokenManager) GenerateTokenWithApp(appName, version, arch, osName, endian, filePath, fileName, sha256Hash, nodeName string, ttl time.Duration) string {
-	b := make([]byte, 24)
-	if _, err := rand.Read(b); err != nil {
-		// Fallback to timestamp-based if crypto/rand fails
-		return hex.EncodeToString([]byte(time.Now().String()))
-	}
-	token := hex.EncodeToString(b)
-
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	// Clean up expired tokens if map grows large
-	now := time.Now()
-	if len(m.tokens) > 200 {
-		for k, v := range m.tokens {
-			if now.After(v.ExpiresAt) {
-				delete(m.tokens, k)
-			}
-		}
-	}
-
-	m.tokens[token] = ArtifactTokenInfo{
+	sessionSecret, passwordHash := m.getSecrets()
+	info := ArtifactTokenInfo{
 		AppName:   appName,
 		Version:   version,
 		Arch:      arch,
@@ -71,32 +95,75 @@ func (m *ArtifactTokenManager) GenerateTokenWithApp(appName, version, arch, osNa
 		FileName:  fileName,
 		SHA256:    sha256Hash,
 		NodeName:  nodeName,
-		ExpiresAt: now.Add(ttl),
+		ExpiresAt: time.Now().Add(ttl),
 	}
-
-	return token
+	return CreateArtifactToken(sessionSecret, passwordHash, info)
 }
 
 // ValidateToken validates a download token and returns its info
 func (m *ArtifactTokenManager) ValidateToken(token string) (*ArtifactTokenInfo, bool) {
-	if token == "" {
+	sessionSecret, passwordHash := m.getSecrets()
+	return VerifyArtifactToken(token, sessionSecret, passwordHash)
+}
+
+// CreateArtifactToken creates an HMAC signed stateless token containing artifact metadata and expiration
+func CreateArtifactToken(sessionSecret, passwordHash string, info ArtifactTokenInfo) string {
+	claims := artifactTokenClaims{
+		ArtifactTokenInfo: info,
+		HashPrefix:        crypto.HashFingerprint(passwordHash),
+	}
+
+	payloadBytes, err := json.Marshal(claims)
+	if err != nil {
+		return ""
+	}
+
+	mac := hmac.New(sha256.New, []byte(sessionSecret))
+	mac.Write(payloadBytes)
+	signature := base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
+
+	b64Payload := base64.RawURLEncoding.EncodeToString(payloadBytes)
+	return fmt.Sprintf("%s.%s", b64Payload, signature)
+}
+
+// VerifyArtifactToken verifies the HMAC signature, expiration timestamp, and password hash fingerprint of an artifact token
+func VerifyArtifactToken(token, sessionSecret, passwordHash string) (*ArtifactTokenInfo, bool) {
+	if token == "" || sessionSecret == "" {
 		return nil, false
 	}
 
-	m.mu.RLock()
-	info, ok := m.tokens[token]
-	m.mu.RUnlock()
-
-	if !ok {
+	parts := strings.Split(token, ".")
+	if len(parts) != 2 {
 		return nil, false
 	}
 
-	if time.Now().After(info.ExpiresAt) {
-		m.mu.Lock()
-		delete(m.tokens, token)
-		m.mu.Unlock()
+	b64Payload, signature := parts[0], parts[1]
+	payloadBytes, err := base64.RawURLEncoding.DecodeString(b64Payload)
+	if err != nil {
 		return nil, false
 	}
 
-	return &info, true
+	mac := hmac.New(sha256.New, []byte(sessionSecret))
+	mac.Write(payloadBytes)
+	expectedSig := base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
+
+	if !hmac.Equal([]byte(signature), []byte(expectedSig)) {
+		return nil, false
+	}
+
+	var claims artifactTokenClaims
+	if err := json.Unmarshal(payloadBytes, &claims); err != nil {
+		return nil, false
+	}
+
+	if !claims.ExpiresAt.IsZero() && time.Now().After(claims.ExpiresAt) {
+		return nil, false
+	}
+
+	expectedPrefix := crypto.HashFingerprint(passwordHash)
+	if claims.HashPrefix != expectedPrefix {
+		return nil, false
+	}
+
+	return &claims.ArtifactTokenInfo, true
 }

@@ -87,8 +87,20 @@ func NewManager(store *config.Store) *Manager {
 		pingTableSubscribers: make(map[chan *config.PingTableTask]struct{}),
 		appStatuses:          make(map[string]map[string]AppStatusRecord),
 		artifactMgr:          apps.NewArtifactManager(filepath.Join(store.DataDir(), "cache", "artifacts")),
-		artifactTokens:       apps.NewArtifactTokenManager(),
 	}
+	m.artifactTokens = apps.NewArtifactTokenManager(func() (string, string) {
+		if m.store == nil {
+			return "", ""
+		}
+		cfg := m.store.Get()
+		if cfg == nil {
+			cfg, _ = m.store.Load()
+		}
+		if cfg != nil {
+			return cfg.SessionSecret, cfg.PasswordHash
+		}
+		return "", ""
+	})
 	m.prometheusExporter = NewPrometheusExporter(m)
 	m.telegramBot = telegram.NewBotService(m)
 	m.telegramBot.SetOnSecretTokenGenerated(func(token string) {

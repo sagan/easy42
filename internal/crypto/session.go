@@ -19,9 +19,14 @@ func GenerateSessionSecret() (string, error) {
 	return base64.RawURLEncoding.EncodeToString(bytes), nil
 }
 
-func hashFingerprint(passwordHash string) string {
+// HashFingerprint returns a truncated sha256 fingerprint of the password hash
+func HashFingerprint(passwordHash string) string {
 	h := sha256.Sum256([]byte(passwordHash))
 	return base64.RawURLEncoding.EncodeToString(h[:16])
+}
+
+func hashFingerprint(passwordHash string) string {
+	return HashFingerprint(passwordHash)
 }
 
 // CreateSessionToken creates an HMAC signed session token containing expiration timestamp

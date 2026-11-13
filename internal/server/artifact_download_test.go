@@ -10,6 +10,9 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"easy42/internal/config"
+	"easy42/internal/engine"
 )
 
 func TestArtifactDownloadEndpoint(t *testing.T) {
@@ -75,5 +78,32 @@ func TestArtifactDownloadEndpoint(t *testing.T) {
 	expectedRange := content[10:]
 	if string(rangeBody) != string(expectedRange) {
 		t.Fatalf("range body mismatch: %q vs %q", string(rangeBody), string(expectedRange))
+	}
+
+	// 5. Server restart simulation: new Server with same store can validate token statelessly
+	newStore := config.NewStore(tempDir)
+	newMgr := engine.NewManager(newStore)
+	defer newMgr.Close()
+	newSrv := New(Config{
+		ListenAddr: "127.0.0.1:0",
+		Manager:    newMgr,
+	})
+
+	req = httptest.NewRequest(http.MethodGet, "/api/download?token="+token, nil)
+	w = httptest.NewRecorder()
+	newSrv.handleArtifactDownload(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK on restarted server, got: %d", w.Code)
+	}
+
+	// 6. Reset session secret invalidates token
+	if err := srv.mgr.ResetSessionSecret(); err != nil {
+		t.Fatalf("ResetSessionSecret failed: %v", err)
+	}
+	req = httptest.NewRequest(http.MethodGet, "/api/download?token="+token, nil)
+	w = httptest.NewRecorder()
+	srv.handleArtifactDownload(w, req)
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 after ResetSessionSecret, got: %d", w.Code)
 	}
 }
