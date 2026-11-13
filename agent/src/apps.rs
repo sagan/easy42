@@ -1222,6 +1222,11 @@ impl AppsManager {
         if action == "stop" {
             let mut starting = self.starting_apps.lock().await;
             starting.remove(&req.app_name);
+            let mut errors = self.app_errors.lock().await;
+            errors.remove(&req.app_name);
+        } else if action == "start" || action == "restart" {
+            let mut errors = self.app_errors.lock().await;
+            errors.remove(&req.app_name);
         }
 
         match app_type {
@@ -1232,7 +1237,7 @@ impl AppsManager {
 
                 let cmd = match action.as_str() {
                     "start" => format!(
-                        "cd {} && {} start",
+                        "cd {} && {} --env-file .env up -d --remove-orphans",
                         shell_quote(app_dir.to_str().unwrap_or("")),
                         compose_cmd
                     ),
@@ -1242,7 +1247,7 @@ impl AppsManager {
                         compose_cmd
                     ),
                     "restart" => format!(
-                        "cd {} && {} restart",
+                        "cd {} && {} --env-file .env restart",
                         shell_quote(app_dir.to_str().unwrap_or("")),
                         compose_cmd
                     ),
@@ -1261,7 +1266,7 @@ impl AppsManager {
                         )
                     }
                 };
-                run_shell(&cmd).await
+                run_shell_with_timeout(&cmd, std::time::Duration::from_secs(120)).await
             }
             AppType::Systemd => {
                 let service = format!("ezapp-{}", req.app_name);
@@ -1794,5 +1799,38 @@ mod tests {
         hasher.update(b"hello easy42 artifact");
         let expected = format!("{:x}", hasher.finalize());
         assert_eq!(hash, expected);
+    }
+
+    #[tokio::test]
+    async fn test_handle_action_cron_unsupported() {
+        let mgr = AppsManager::new();
+        let cmd = AppActionCmd {
+            app_name: "test-cron".to_string(),
+            action: "start".to_string(),
+            app_type: AppType::Cron as i32,
+            log_lines: 100,
+        };
+        let (success, code, _, stderr) = mgr.handle_action(cmd).await;
+        assert!(!success);
+        assert_eq!(code, -1);
+        assert!(stderr.contains("cron apps do not support action execution"));
+    }
+
+    #[tokio::test]
+    async fn test_handle_action_clears_error() {
+        let mgr = AppsManager::new();
+        {
+            let mut errors = mgr.app_errors.lock().await;
+            errors.insert("test-app".to_string(), "previous startup error".to_string());
+        }
+        let cmd = AppActionCmd {
+            app_name: "test-app".to_string(),
+            action: "start".to_string(),
+            app_type: AppType::DockerCompose as i32,
+            log_lines: 100,
+        };
+        let _ = mgr.handle_action(cmd).await;
+        let errors = mgr.app_errors.lock().await;
+        assert!(!errors.contains_key("test-app"));
     }
 }

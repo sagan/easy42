@@ -113,7 +113,12 @@ export const NodeAppsTab: React.FC<NodeAppsTabProps> = ({ nodeName }) => {
     try {
       setActionLoading((prev) => ({ ...prev, [appName]: action }));
       setActionError(null);
-      await api.triggerNodeAppAction(nodeName, appName, action, appType);
+      const res = await api.triggerNodeAppAction(nodeName, appName, action, appType);
+      if (!res.success) {
+        setActionError(
+          res.stderr?.trim() || res.stdout?.trim() || `Failed to ${action} app '${appName}' (exit code ${res.exit_code})`
+        );
+      }
       await loadNodeApps(true);
     } catch (e: any) {
       setActionError(`Failed to ${action} app '${appName}': ${e.message}`);
