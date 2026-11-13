@@ -551,6 +551,11 @@ func TestTranspileWgWatcherUnitToProcd(t *testing.T) {
 			t.Errorf("script missing %q:\n%s", want, script)
 		}
 	}
+	expectedEnvLine := "procd_set_param env DIR='/etc/ezapp/wg-watcher' IP='192.168.50.1'"
+	if !strings.Contains(script, expectedEnvLine) {
+		t.Errorf("script missing sorted env line %q:\n%s", expectedEnvLine, script)
+	}
+
 	// The raw systemd section headers must not leak into the init script.
 	for _, unwanted := range []string{"[Unit]", "[Service]", "[Install]"} {
 		if strings.Contains(script, unwanted) {
@@ -558,3 +563,48 @@ func TestTranspileWgWatcherUnitToProcd(t *testing.T) {
 		}
 	}
 }
+
+func TestTranspileDeterministicEnv(t *testing.T) {
+	unit := &ParsedServiceUnit{
+		Description: "deterministic test",
+		ExecStart:   "/bin/app",
+	}
+	env := map[string]string{
+		"ZEBRA":  "1",
+		"ALPHA":  "2",
+		"MIDDLE": "3",
+		"BETA":   "4",
+	}
+
+	firstProcd, err := TranspileToProcd("app", unit, env)
+	if err != nil {
+		t.Fatalf("TranspileToProcd failed: %v", err)
+	}
+	firstOpenRC := GenerateOpenRCConfD("app", env)
+
+	for i := 0; i < 50; i++ {
+		procd, err := TranspileToProcd("app", unit, env)
+		if err != nil {
+			t.Fatalf("iteration %d: TranspileToProcd failed: %v", i, err)
+		}
+		if procd != firstProcd {
+			t.Fatalf("iteration %d: TranspileToProcd produced non-deterministic output:\nFirst:\n%s\nGot:\n%s", i, firstProcd, procd)
+		}
+
+		openrc := GenerateOpenRCConfD("app", env)
+		if openrc != firstOpenRC {
+			t.Fatalf("iteration %d: GenerateOpenRCConfD produced non-deterministic output:\nFirst:\n%s\nGot:\n%s", i, firstOpenRC, openrc)
+		}
+	}
+
+	wantProcdEnv := "procd_set_param env ALPHA='2' BETA='4' MIDDLE='3' ZEBRA='1'"
+	if !strings.Contains(firstProcd, wantProcdEnv) {
+		t.Errorf("expected sorted env line %q, got:\n%s", wantProcdEnv, firstProcd)
+	}
+
+	wantOpenRC := "# Easy42 environment configuration for ezapp-app\nexport ALPHA='2'\nexport BETA='4'\nexport MIDDLE='3'\nexport ZEBRA='1'\n"
+	if firstOpenRC != wantOpenRC {
+		t.Errorf("expected OpenRC conf.d:\n%q\ngot:\n%q", wantOpenRC, firstOpenRC)
+	}
+}
+

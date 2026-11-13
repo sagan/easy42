@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -696,13 +697,7 @@ func unsupportedNotes(unit *ParsedServiceUnit, target string) []string {
 		add("Service.ExecStart (specifiers)", "systemd specifiers (%n, %i, ...) are not expanded")
 	}
 	// Sorted for deterministic output.
-	for i := 0; i < len(notes); i++ {
-		for j := i + 1; j < len(notes); j++ {
-			if notes[j] < notes[i] {
-				notes[i], notes[j] = notes[j], notes[i]
-			}
-		}
-	}
+	sort.Strings(notes)
 	return notes
 }
 
@@ -1001,8 +996,13 @@ func dedupe(in []string) []string {
 func GenerateOpenRCConfD(appName string, envVars map[string]string) string {
 	var sb strings.Builder
 	sb.WriteString(fmt.Sprintf("# Easy42 environment configuration for ezapp-%s\n", appName))
-	for k, v := range envVars {
-		sb.WriteString(fmt.Sprintf("export %s=%s\n", k, ShellEscape(v)))
+	keys := make([]string, 0, len(envVars))
+	for k := range envVars {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		sb.WriteString(fmt.Sprintf("export %s=%s\n", k, ShellEscape(envVars[k])))
 	}
 	return sb.String()
 }
@@ -1117,9 +1117,14 @@ func TranspileToProcd(appName string, unit *ParsedServiceUnit, envVars map[strin
 
 	// env vars
 	if len(envVars) > 0 {
+		keys := make([]string, 0, len(envVars))
+		for k := range envVars {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
 		var envParts []string
-		for k, v := range envVars {
-			envParts = append(envParts, fmt.Sprintf("%s=%s", k, ShellEscape(v)))
+		for _, k := range keys {
+			envParts = append(envParts, fmt.Sprintf("%s=%s", k, ShellEscape(envVars[k])))
 		}
 		sb.WriteString(fmt.Sprintf("    procd_set_param env %s\n", strings.Join(envParts, " ")))
 	}

@@ -26,6 +26,7 @@ Table = off
 {{ end -}}
 
 [Peer]
+#Name = {{ .peer_node.name }}{{ if .peer_node.caption}} ({{.peer_node.caption}}){{ end }}
 PublicKey = {{ .peer_public_key }}
 {{ if .psk -}}
 PresharedKey = {{ .psk }}

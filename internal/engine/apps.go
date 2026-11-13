@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -640,12 +641,19 @@ func (m *Manager) BuildAppSpecsForNode(nodeName string) ([]*agentpb.AppSpec, err
 		}
 
 		// Convert auxiliary config files map to proto repeated AppConfigFile
-		for relPath, content := range app.Files {
-			spec.ConfigFiles = append(spec.ConfigFiles, &agentpb.AppConfigFile{
-				Path:     relPath,
-				Content:  []byte(content),
-				FileMode: 0644,
-			})
+		if len(app.Files) > 0 {
+			filePaths := make([]string, 0, len(app.Files))
+			for relPath := range app.Files {
+				filePaths = append(filePaths, relPath)
+			}
+			sort.Strings(filePaths)
+			for _, relPath := range filePaths {
+				spec.ConfigFiles = append(spec.ConfigFiles, &agentpb.AppConfigFile{
+					Path:     relPath,
+					Content:  []byte(app.Files[relPath]),
+					FileMode: 0644,
+				})
+			}
 		}
 
 		// Process Artifacts for native (systemd) apps
