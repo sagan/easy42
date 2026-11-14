@@ -12,8 +12,8 @@ This document describes Easy42's third-party integrations and advanced managemen
     - [Exported Metrics Catalog](#exported-metrics-catalog)
       - [A. Easy42 Cluster State \& Topology](#a-easy42-cluster-state--topology)
       - [B. WireGuard Telemetry (MindFlavor Compatible)](#b-wireguard-telemetry-mindflavor-compatible)
-      - [C. BIRD / BGP Dynamic Routing (bird_exporter Compatible)](#c-bird--bgp-dynamic-routing-bird_exporter-compatible)
-      - [D. Linux Host System (node_exporter Compatible)](#d-linux-host-system-node_exporter-compatible)
+      - [C. BIRD / BGP Dynamic Routing (bird\_exporter Compatible)](#c-bird--bgp-dynamic-routing-bird_exporter-compatible)
+      - [D. Linux Host System (node\_exporter Compatible)](#d-linux-host-system-node_exporter-compatible)
   - [2. `/etc/hosts` Automatic Management](#2-etchosts-automatic-management)
     - [How It Works](#how-it-works)
   - [3. WireGuard PSK (Preshared Key) Support](#3-wireguard-psk-preshared-key-support)
@@ -30,6 +30,8 @@ This document describes Easy42's third-party integrations and advanced managemen
     - [Configuration](#configuration-1)
     - [Commands](#commands)
   - [7. Config Templates Engine \& Hooks](#7-config-templates-engine--hooks)
+    - [Referencing Note JSON in Templates (`.data`)](#referencing-note-json-in-templates-data)
+    - [Looking Glass custom tasks](#looking-glass-custom-tasks)
     - [Node config hooks](#node-config-hooks)
   - [8. Events](#8-events)
   - [9. Workload Apps (`apps`)](#9-workload-apps-apps)
@@ -361,7 +363,7 @@ Workload Apps are declarative units of work deployed to agent-managed nodes from
 
 | App type  | Agent destination                                                                                                 | Notes                                                                                                                                                             |
 | :-------- | :---------------------------------------------------------------------------------------------------------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `docker`  | `/etc/ezappc/ezapp-<name>/compose.yaml` + `.env` (`0600`)                                                          | `docker compose up` runs asynchronously (900s timeout); status is probed.                                                                                         |
+| `docker`  | `/etc/ezappc/ezapp-<name>/compose.yaml` + `.env` (`0600`)                                                         | `docker compose up` runs asynchronously (900s timeout); status is probed.                                                                                         |
 | `systemd` | `/etc/systemd/system/ezapp-<name>.service` + `.env` (plus `EnvironmentFile=/etc/systemd/system/ezapp-<name>.env`) | Transpiled to OpenRC (`/etc/init.d/ezapp-*` + `/etc/conf.d/ezapp-*`) or procd on Alpine/OpenWrt; sandboxing/cgroup directives are dropped with `# NOTE:` headers. |
 | `cron`    | System crontab between `### EASY42_START`/`### EASY42_END` markers                                                | Sorted entries; disabled apps are `#`-prefixed. Distinct from cron **probes** below.                                                                              |
 

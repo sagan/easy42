@@ -14,6 +14,7 @@ This document details the internal architecture, link-local addressing schemes, 
   - [WireGuard \& Manual Links](#wireguard--manual-links)
     - [Parameter Rationale](#parameter-rationale)
     - [Manual Links (Non-WireGuard Tunnels \& Existing Interfaces)](#manual-links-non-wireguard-tunnels--existing-interfaces)
+    - [WireGuard Obfuscation (Phantun)](#wireguard-obfuscation-phantun)
   - [Entrypoint Selection Algorithm](#entrypoint-selection-algorithm)
   - [Security \& Encryption Architecture](#security--encryption-architecture)
 

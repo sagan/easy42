@@ -71,11 +71,11 @@ All commands accept the following persistent flag:
 
 The data directory contains:
 
-| File          | Description                                                                                                      |
-| :------------ | :--------------------------------------------------------------------------------------------------------------- |
-| `config.json` | Main configuration, encrypted secrets, and session secret (mode `0600`).                                         |
+| File          | Description                                                                                                                                   |
+| :------------ | :-------------------------------------------------------------------------------------------------------------------------------------------- |
+| `config.json` | Main configuration, encrypted secrets, and session secret (mode `0600`).                                                                      |
 | `data.db`     | SQLite database for telemetry history, interface traffic, cron results, fleet events, ping-table tasks, node state, and applied-state hashes. |
-| `server.url`  | Transient URL file written by `easy42 serve` so CLI commands can locate the running server. Removed on shutdown. |
+| `server.url`  | Transient URL file written by `easy42 serve` so CLI commands can locate the running server. Removed on shutdown.                              |
 
 ---
 
@@ -224,18 +224,18 @@ easy42 link add node-fra node-ext \
   --to-addr "172.20.1.2"
 ```
 
-| Flag             | Default     | Description                                                     |
-| :--------------- | :---------- | :-------------------------------------------------------------- |
-| `-t, --type`     | `wireguard` | Link type: `wireguard` or `manual`.                             |
-| `-p, --password` | —           | easy42 admin password for WireGuard key encryption.             |
-| `--from-port`    | derived     | Custom WireGuard listen port on the first node.                 |
-| `--to-port`      | derived     | Custom WireGuard listen port on the second node.                |
-| `--assign-ipv4`  | `false`     | Assign a deterministic IPv4 link-local (`169.254.X.X/32`) pair. |
-| `--from-iface`   | —           | Interface on the first node (required for manual links unless external). |
-| `--to-iface`     | —           | Interface on the second node (required for manual links unless external).|
-| `--from-addr`    | —           | Local address on the first node (required for manual links).    |
-| `--to-addr`      | —           | Local address on the second node (required for manual links).   |
-| `--disable-bfd`  | `false`     | Emit `bfd no;` for this link's BGP session.                     |
+| Flag             | Default     | Description                                                               |
+| :--------------- | :---------- | :------------------------------------------------------------------------ |
+| `-t, --type`     | `wireguard` | Link type: `wireguard` or `manual`.                                       |
+| `-p, --password` | —           | easy42 admin password for WireGuard key encryption.                       |
+| `--from-port`    | derived     | Custom WireGuard listen port on the first node.                           |
+| `--to-port`      | derived     | Custom WireGuard listen port on the second node.                          |
+| `--assign-ipv4`  | `false`     | Assign a deterministic IPv4 link-local (`169.254.X.X/32`) pair.           |
+| `--from-iface`   | —           | Interface on the first node (required for manual links unless external).  |
+| `--to-iface`     | —           | Interface on the second node (required for manual links unless external). |
+| `--from-addr`    | —           | Local address on the first node (required for manual links).              |
+| `--to-addr`      | —           | Local address on the second node (required for manual links).             |
+| `--disable-bfd`  | `false`     | Emit `bfd no;` for this link's BGP session.                               |
 
 > **Note:** There is no `--psk` flag on `link add`. Preshared keys are generated and rotated through the Web UI, the `/api/links/psk/reveal` and `/api/links/psk/reset` endpoints (private keys: `/api/links/private-key/reveal` and `/api/links/private-key/reset`), or declarative config (`links[].psk`).
 
@@ -327,13 +327,13 @@ easy42 apply --dry-run --format json patch.yaml
 easy42 apply --name "Add Static Route"
 ```
 
-| Flag         | Default | Description                                                                |
-| :----------- | :------ | :------------------------------------------------------------------------- |
-| `-f, --file` | —       | Path to a config change file (alternative to the positional argument).     |
+| Flag         | Default | Description                                                                  |
+| :----------- | :------ | :--------------------------------------------------------------------------- |
+| `-f, --file` | —       | Path to a config change file (alternative to the positional argument).       |
 | `--name`     | —       | Name of a saved config change snippet from `config.json`'s `config_changes`. |
-| `--dry-run`  | `false` | Validate and preview the planned changes without writing.                  |
-| `-s, --sync` | `false` | Trigger a sync of affected nodes after a successful apply.                 |
-| `--format`   | `text`  | Preview format: `text` or `json`.                                          |
+| `--dry-run`  | `false` | Validate and preview the planned changes without writing.                    |
+| `-s, --sync` | `false` | Trigger a sync of affected nodes after a successful apply.                   |
+| `--format`   | `text`  | Preview format: `text` or `json`.                                            |
 
 The patch may contain `network_settings`, `network_policies`, `nodes`, `links`, `blocks`, `dns`, `templates`, `server_tasks`, `cron_tasks`, `database`, and `integrations` (the latter six are accepted by the schema but not merged by the engine). `apps`, `app_variables`, `mcp`, and `looking_glass_tasks` are not in the apply schema. Unknown top-level/node/link fields are rejected. See [Configuration Specification](configuration.md#declarative-config-apply) for details and examples.
 
@@ -350,9 +350,9 @@ easy42 mcp
 easy42 mcp --role read_only
 ```
 
-| Flag      | Default        | Description                                              |
-| :-------- | :------------- | :------------------------------------------------------- |
-| `--role`  | `full_control` | Access role: `full_control` (read-write) or `read_only`. |
+| Flag     | Default        | Description                                              |
+| :------- | :------------- | :------------------------------------------------------- |
+| `--role` | `full_control` | Access role: `full_control` (read-write) or `read_only`. |
 
 See [MCP Server](integrations.md#10-mcp-server) for tokens, OAuth, and the HTTP endpoints.
 

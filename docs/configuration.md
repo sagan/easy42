@@ -31,6 +31,7 @@ This document is the reference for Easy42's state file, stored in `<data-dir>/co
     - [`config_changes`](#config_changes)
   - [Declarative Config Apply](#declarative-config-apply)
     - [Allowed patch sections](#allowed-patch-sections)
+    - [Delta operations](#delta-operations)
     - [Forbidden fields](#forbidden-fields)
     - [Merge and validation rules](#merge-and-validation-rules)
     - [Side effects](#side-effects)
@@ -51,15 +52,15 @@ This document is the reference for Easy42's state file, stored in `<data-dir>/co
 | `links`               | `object[]` | WireGuard or manual point-to-point links between nodes.                                                               |
 | `looking_glass_tasks` | `object[]` | Custom Looking Glass tasks (built-ins are added at runtime).                                                          |
 | `cron_tasks`          | `object[]` | Recurring ping / TCP-ping probes executed by agents.                                                                  |
-| `apps`                | `object[]` | Workload apps (Docker Compose, systemd, cron) deployed to agent nodes. See [Apps](#apps-and-app_variables).            |
-| `app_variables`       | `object[]` | Global variables interpolated into app manifests/env files. See [Apps](#apps-and-app_variables).                         |
+| `apps`                | `object[]` | Workload apps (Docker Compose, systemd, cron) deployed to agent nodes. See [Apps](#apps-and-app_variables).           |
+| `app_variables`       | `object[]` | Global variables interpolated into app manifests/env files. See [Apps](#apps-and-app_variables).                      |
 | `blocks`              | `object[]` | Visual grouping rectangles on the topology graph.                                                                     |
 | `dns`                 | `object`   | Cloudflare DNS synchronization settings.                                                                              |
 | `templates`           | `object[]` | Custom WireGuard, BIRD, and nftables Go templates.                                                                    |
 | `server_tasks`        | `object[]` | Schedules for the four fixed server background tasks.                                                                 |
 | `database`            | `object`   | Summarized and raw telemetry retention.                                                                               |
 | `integrations`        | `object`   | Prometheus and Telegram Bot settings.                                                                                 |
-| `mcp`                 | `object`   | Model Context Protocol server settings and tokens. See [`mcp`](#mcp).                                                  |
+| `mcp`                 | `object`   | Model Context Protocol server settings and tokens. See [`mcp`](#mcp).                                                 |
 | `config_changes`      | `object[]` | Saved declarative config snippets displayed in the UI.                                                                |
 
 ---
@@ -253,7 +254,13 @@ This document is the reference for Easy42's state file, stored in `<data-dir>/co
     }
   ],
   "app_variables": [
-    { "key": "APP_DOMAIN", "value": "example.com", "description": "", "is_secret": false, "updated_at": "2026-01-01T00:00:00Z" }
+    {
+      "key": "APP_DOMAIN",
+      "value": "example.com",
+      "description": "",
+      "is_secret": false,
+      "updated_at": "2026-01-01T00:00:00Z"
+    }
   ],
   "config_changes": [
     {
@@ -289,67 +296,67 @@ Other credentials are **not** vault-encrypted: `nodes[].agent_token`, `dns.api_t
 
 | Field                      | Type       | Description                                                                                                                                          |
 | :------------------------- | :--------- | :--------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `name`                     | `string`   | Optional network name. Defaults to `Easy42`.                                                                                                          |
+| `name`                     | `string`   | Optional network name. Defaults to `Easy42`.                                                                                                         |
 | `public_asn`               | `integer`  | Your public or DN42 ASN (for example `4242421234`).                                                                                                  |
 | `prefixes`                 | `string[]` | DN42/mesh prefix space used for peering filters and the built-in `dn42` policy allow-lists. Supports BIRD-style sets such as `172.20.0.0/14{21,29}`. |
 | `disallowed_dn42_networks` | `string[]` | CIDRs excluded from the built-in DN42 policy's import/export and firewall allow-lists.                                                               |
 | `disallowed_dn42_cidrs`    | `string[]` | Legacy alias for `disallowed_dn42_networks`. Both are normalized to the same value on load.                                                          |
 | `flapalerted_address`      | `string`   | IP address of the FlapAlerted service. Enables the FlapAlerted BGP session on nodes with `enable_fa`.                                                |
-| `flapalerted_port`         | `integer`  | FlapAlerted BGP port. Effective default `1790` (via getter; only persisted in `config.json` when `flapalerted_address` is set). |
-| `flapalerted_asn`          | `integer`  | FlapAlerted BGP ASN. Effective default `4224420000` (same persistence note as above).                                          |
+| `flapalerted_port`         | `integer`  | FlapAlerted BGP port. Effective default `1790` (via getter; only persisted in `config.json` when `flapalerted_address` is set).                      |
+| `flapalerted_asn`          | `integer`  | FlapAlerted BGP ASN. Effective default `4224420000` (same persistence note as above).                                                                |
 | `flapalerted_url`          | `string`   | Base URL of the FlapAlerted web UI. If omitted, derived from `flapalerted_address` and port `8699`.                                                  |
 
 ### `network_policies`
 
 Easy42 always provides three read-only built-in policies (`is_internal: true`):
 
-| ID        | Name                    | Behavior                                                                                                                                                                           |
-| :-------- | :---------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `default` | Default (Internal)      | Full routing, rejects Internet route leaks, no ingress filtering. Cost `100`.                                                                                                      |
+| ID        | Name                    | Behavior                                                                                                                                                                                                    |
+| :-------- | :---------------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `default` | Default (Internal)      | Full routing, rejects Internet route leaks, no ingress filtering. Cost `100`.                                                                                                                               |
 | `dn42`    | DN42 / External Peering | Full routing with DN42 prefix allow-lists and disallowed-CIDR filtering, forward/input firewall, ICMP/ICMPv6 and UDP/53 allowed, SNAT to `external_ip`, DSCP ingress/egress `0`, DN42 ROA URLs. Cost `100`. |
-| `none`    | None (Unrestricted)     | Full routing, no filters, no Internet-leak protection. Cost `100`.                                                                                                                 |
+| `none`    | None (Unrestricted)     | Full routing, no filters, no Internet-leak protection. Cost `100`.                                                                                                                                          |
 
 User-defined policies with the same ID as a built-in override that built-in at lookup time.
 
-| Field                   | Type       | Description                                                                                 |
-| :---------------------- | :--------- | :------------------------------------------------------------------------------------------ | ---------- |
-| `id`                    | `string`   | Policy identifier referenced by links.                                                      |
-| `name`                  | `string`   | Display name.                                                                               |
-| `description`           | `string`   | Optional description.                                                                       |
-| `is_internal`           | `boolean`  | `true` for built-ins; user policies leave this unset/false.                                 |
-| `cost`                  | `integer`  | Cost subtracted from BGP local preference. Default `100`; a link-level `cost` overrides it. |
-| `local_networks`        | `string[]` | Prefixes considered local for this policy.                                                  |
-| `allowed_dst_cidrs`     | `string[]` | Destination prefixes permitted on the link.                                                 |
-| `allowed_src_cidrs`     | `string[]` | Source prefixes permitted on the link.                                                      |
-| `disallowed_dst_cidrs`  | `string[]` | Destination prefixes rejected/blocked.                                                      |
-| `disallowed_src_cidrs`  | `string[]` | Source prefixes rejected/blocked.                                                           |
-| `reject_internet`       | `boolean`  | Reject Internet routes learned from the peer (route-leak protection).                       |
-| `filter_forward`        | `boolean`  | Enable the nftables forward filter.                                                         |
-| `filter_input`          | `boolean`  | Enable the nftables input filter.                                                           |
-| `input_allow_icmp`      | `boolean`  | Allow ICMP in the input filter.                                                             |
-| `input_allow_icmp6`     | `boolean`  | Allow ICMPv6 in the input filter.                                                           |
-| `input_tcp_ports`       | `string[]` | Allowed TCP ports/ranges (`"22"`, `"8000-8080"`, `"all"`, `"*"`).                           |
-| `input_udp_ports`       | `string[]` | Allowed UDP ports/ranges.                                                                   |
-| `snat`                  | `object`   | Egress SNAT configuration (see below).                                                      |
-| `forward_snat`          | `boolean`  | Enable SNAT for forwarded traffic.                                                          |
-| `forward_snat_target`   | `string`   | `masquerade`, `external_ip`, `main_ip`, or a literal IP.                                    |
+| Field                   | Type       | Description                                                                                                                  |
+| :---------------------- | :--------- | :--------------------------------------------------------------------------------------------------------------------------- | ---------- |
+| `id`                    | `string`   | Policy identifier referenced by links.                                                                                       |
+| `name`                  | `string`   | Display name.                                                                                                                |
+| `description`           | `string`   | Optional description.                                                                                                        |
+| `is_internal`           | `boolean`  | `true` for built-ins; user policies leave this unset/false.                                                                  |
+| `cost`                  | `integer`  | Cost subtracted from BGP local preference. Default `100`; a link-level `cost` overrides it.                                  |
+| `local_networks`        | `string[]` | Prefixes considered local for this policy.                                                                                   |
+| `allowed_dst_cidrs`     | `string[]` | Destination prefixes permitted on the link.                                                                                  |
+| `allowed_src_cidrs`     | `string[]` | Source prefixes permitted on the link.                                                                                       |
+| `disallowed_dst_cidrs`  | `string[]` | Destination prefixes rejected/blocked.                                                                                       |
+| `disallowed_src_cidrs`  | `string[]` | Source prefixes rejected/blocked.                                                                                            |
+| `reject_internet`       | `boolean`  | Reject Internet routes learned from the peer (route-leak protection).                                                        |
+| `filter_forward`        | `boolean`  | Enable the nftables forward filter.                                                                                          |
+| `filter_input`          | `boolean`  | Enable the nftables input filter.                                                                                            |
+| `input_allow_icmp`      | `boolean`  | Allow ICMP in the input filter.                                                                                              |
+| `input_allow_icmp6`     | `boolean`  | Allow ICMPv6 in the input filter.                                                                                            |
+| `input_tcp_ports`       | `string[]` | Allowed TCP ports/ranges (`"22"`, `"8000-8080"`, `"all"`, `"*"`).                                                            |
+| `input_udp_ports`       | `string[]` | Allowed UDP ports/ranges.                                                                                                    |
+| `snat`                  | `object`   | Egress SNAT configuration (see below).                                                                                       |
+| `forward_snat`          | `boolean`  | Enable SNAT for forwarded traffic.                                                                                           |
+| `forward_snat_target`   | `string`   | `masquerade`, `external_ip`, `main_ip`, or a literal IP.                                                                     |
 | `dscp_ingress`          | `string`   | Rewrite DSCP on packets received from the peer. Supports `value` or `value/mask` (decimal or hex, both 0-63, mask non-zero). |
-| `dscp_egress`           | `string`   | Rewrite DSCP on packets sent to the peer. Supports `value` or `value/mask` (decimal or hex, both 0-63, mask non-zero).      |
-| `block_ingress_new`     | `string`   | Block new/invalid ingress connections: `""` (disabled), `"all"`, or `"forward"`.            |
-| `ingress_new_whitelist` | `string[]` | Exceptions in `ip:port` or `ip:port/tcp                                                     | udp` form. |
-| `roa4`                  | `string`   | IPv4 ROA URL used for BIRD validation.                                                      |
-| `roa6`                  | `string`   | IPv6 ROA URL.                                                                               |
-| `roa_strict`            | `boolean`  | Reject routes without a valid ROA.                                                          |
-| `fwmark`                | `string`   | Default WireGuard `[Interface] FwMark` for links using this policy.                         |
-| `preference`            | `integer`  | Default BIRD BGP protocol preference.                                                       |
-| `mark`                  | `string`   | Default netfilter mark applied to packets received from the peer (supports `mark` or `mark/bitmask`). |
-| `routing_policy`        | `string`   | `full`, `stub`, `receive_only`, or `advertise_only` (aliases are normalized).               |
-| `add_paths`             | `string`   | BIRD BGP ADD-PATH capability (`off` [default], `on`, `rx`, or `tx`).                        |
-| `bird_import_filter`    | `string`   | Custom BIRD snippet appended to the generated import filter.                                |
-| `bird_export_filter`    | `string`   | Custom BIRD snippet appended to the generated export filter.                                |
-| `bird_export_fillter`   | `string`   | Legacy alias for `bird_export_filter` (note the historical spelling). Used only when `bird_export_filter` is empty. |
-| `bird_pre_snippet`      | `string`   | Custom BIRD snippet inserted early in `bird_easy42.conf` (before `bird_hooks_pre`).         |
-| `bird_post_snippet`     | `string`   | Custom BIRD snippet appended at the end of `bird_easy42.conf` (before `bird_hooks`).         |
+| `dscp_egress`           | `string`   | Rewrite DSCP on packets sent to the peer. Supports `value` or `value/mask` (decimal or hex, both 0-63, mask non-zero).       |
+| `block_ingress_new`     | `string`   | Block new/invalid ingress connections: `""` (disabled), `"all"`, or `"forward"`.                                             |
+| `ingress_new_whitelist` | `string[]` | Exceptions in `ip:port` or `ip:port/tcp                                                                                      | udp` form. |
+| `roa4`                  | `string`   | IPv4 ROA URL used for BIRD validation.                                                                                       |
+| `roa6`                  | `string`   | IPv6 ROA URL.                                                                                                                |
+| `roa_strict`            | `boolean`  | Reject routes without a valid ROA.                                                                                           |
+| `fwmark`                | `string`   | Default WireGuard `[Interface] FwMark` for links using this policy.                                                          |
+| `preference`            | `integer`  | Default BIRD BGP protocol preference.                                                                                        |
+| `mark`                  | `string`   | Default netfilter mark applied to packets received from the peer (supports `mark` or `mark/bitmask`).                        |
+| `routing_policy`        | `string`   | `full`, `stub`, `receive_only`, or `advertise_only` (aliases are normalized).                                                |
+| `add_paths`             | `string`   | BIRD BGP ADD-PATH capability (`off` [default], `on`, `rx`, or `tx`).                                                         |
+| `bird_import_filter`    | `string`   | Custom BIRD snippet appended to the generated import filter.                                                                 |
+| `bird_export_filter`    | `string`   | Custom BIRD snippet appended to the generated export filter.                                                                 |
+| `bird_export_fillter`   | `string`   | Legacy alias for `bird_export_filter` (note the historical spelling). Used only when `bird_export_filter` is empty.          |
+| `bird_pre_snippet`      | `string`   | Custom BIRD snippet inserted early in `bird_easy42.conf` (before `bird_hooks_pre`).                                          |
+| `bird_post_snippet`     | `string`   | Custom BIRD snippet appended at the end of `bird_easy42.conf` (before `bird_hooks`).                                         |
 
 `snat` object:
 
@@ -368,8 +375,8 @@ User-defined policies with the same ID as a built-in override that built-in at l
 | `name`                  | `string`        | Unique node name and hostname. Alphanumeric, `-`, and `_` only. WireGuard interface names are derived from it and truncated to 15 characters.                          |
 | `host`                  | `string`        | SSH host, alias, or IP. Omitted for external peers.                                                                                                                    |
 | `is_external`           | `boolean`       | Marks an unmanaged external peer (for example DN42).                                                                                                                   |
-| `caption`               | `string`        | Optional short description (plain text, one short sentence). Shown in the UI.                                                                                              |
-| `description`           | `string`        | Optional description / contact info.                                                                                                                                     |
+| `caption`               | `string`        | Optional short description (plain text, one short sentence). Shown in the UI.                                                                                          |
+| `description`           | `string`        | Optional description / contact info.                                                                                                                                   |
 | `note`                  | `string`        | Markdown note shown in the UI.                                                                                                                                         |
 | `ip`                    | `string`        | Primary overlay IPv4 address (normally bound to `interface`).                                                                                                          |
 | `ip6`                   | `string`        | Primary overlay IPv6 address.                                                                                                                                          |
@@ -383,7 +390,7 @@ User-defined policies with the same ID as a built-in override that built-in at l
 | `external_table`        | `integer`       | Optional table for routes learned from external peers.                                                                                                                 |
 | `internet_table`        | `integer`       | Optional table for Internet routes learned from peers.                                                                                                                 |
 | `metric`                | `integer\|null` | Optional kernel route metric. When `null`, the template/OS default applies.                                                                                            |
-| `static_routes`         | `string[]`      | Prefixes unconditionally advertised into BGP. Prefix with `@` (e.g. `@192.168.100.0/24`) to advertise without exporting the unreachable route to the kernel FIB. |
+| `static_routes`         | `string[]`      | Prefixes unconditionally advertised into BGP. Prefix with `@` (e.g. `@192.168.100.0/24`) to advertise without exporting the unreachable route to the kernel FIB.       |
 | `routes`                | `object[]`      | Kernel routes imported into BGP (see below).                                                                                                                           |
 | `config_hooks`          | `object[]`      | Custom config snippets injected into generated files (see below).                                                                                                      |
 | `wg_template`           | `string`        | Custom WireGuard template ID or name. Empty uses `default_wg`.                                                                                                         |
@@ -443,33 +450,33 @@ Hook content is loaded into the Go template together with the config template an
 
 Each endpoint (`from`, `to`):
 
-| Field                  | Type      | Description                                                                                              |
-| :--------------------- | :-------- | :------------------------------------------------------------------------------------------------------- |
-| `name`                 | `string`  | Node name. Required.                                                                                     |
-| `type`                 | `string`  | `wireguard` (default) or `manual`.                                                                       |
-| `interface`            | `string`  | Interface name. Auto-derived as `wg42<peer>` (`wg42-<peer>` for external peers) when empty.              |
-| `address`              | `string`  | IPv6 link-local address, for example `fe80::c0a8:6401/64`. Derived from the node's main IPv4 when empty. |
-| `address4`             | `string`  | Optional IPv4 link-local address, for example `169.254.X.X/32`.                                          |
-| `neighbor_address`     | `string`  | Peer address for manual links. Defaults to the opposite endpoint's address.                              |
-| `listen_port`          | `integer` | Local WireGuard listen port. Derived from the peer's IPv4 when `0`.                                      |
-| `endpoint`             | `string`  | Public `host:port` of the peer. Auto-resolved from the peer's entrypoints when empty.                    |
-| `private_key`          | `string`  | Encrypted base64 WireGuard private key (server-managed).                                                 |
-| `public_key`           | `string`  | WireGuard public key.                                                                                    |
-| `persistent_keepalive` | `integer` | Keepalive interval. `0` becomes `25` when an endpoint is present, otherwise `0`.                         |
-| `mtu`                  | `integer` | Link MTU. Default `1420`.                                                                                |
-| `use_ip`               | `boolean` | Resolve the peer's endpoint hostname to an IP on the server.                                             |
-| `resolved_endpoint`    | `string`  | System-derived endpoint actually used. Not accepted in apply patches.                                    |
-| `policy`               | `string`  | Policy ID. External peers default to `dn42`; internal peers default to `default`.                        |
-| `cost`                 | `integer` | Link cost override. When non-zero, overrides the policy cost.                                            |
-| `fwmark`               | `string`  | WireGuard `FwMark` override for this endpoint.                                                           |
-| `preference`           | `integer` | BIRD BGP preference override.                                                                            |
-| `mark`                 | `string`  | Netfilter mark override for received packets (supports `mark` or `mark/bitmask`).                        |
-| `routing_policy`       | `string`  | BGP routing policy override.                                                                             |
-| `add_paths`            | `string`  | BIRD BGP add paths override (`off`, `on`, `rx`, `tx`, or `inherit` to revert to policy).                 |
-| `psk`                  | `string`  | Endpoint-level encrypted PSK (legacy; link-level `psk` is preferred).                                    |
-| `note`                 | `string`  | Markdown note.                                                                                           |
-| `obfuscator`           | `string`  | Agent-mode WireGuard UDP-over-TCP obfuscation: `none`, `phantun_client`, or `phantun_server`. Both endpoints must be complementary. |
-| `obfuscator_parameters` | `object` | Generated Phantun parameters (`local_port`, `server_port`, `wireguard_port`, `tun_name`, `tun_local`, `tun_peer`, optional `extra_args`). Generated on first enable and editable thereafter. |
+| Field                   | Type      | Description                                                                                                                                                                                  |
+| :---------------------- | :-------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`                  | `string`  | Node name. Required.                                                                                                                                                                         |
+| `type`                  | `string`  | `wireguard` (default) or `manual`.                                                                                                                                                           |
+| `interface`             | `string`  | Interface name. Auto-derived as `wg42<peer>` (`wg42-<peer>` for external peers) when empty.                                                                                                  |
+| `address`               | `string`  | IPv6 link-local address, for example `fe80::c0a8:6401/64`. Derived from the node's main IPv4 when empty.                                                                                     |
+| `address4`              | `string`  | Optional IPv4 link-local address, for example `169.254.X.X/32`.                                                                                                                              |
+| `neighbor_address`      | `string`  | Peer address for manual links. Defaults to the opposite endpoint's address.                                                                                                                  |
+| `listen_port`           | `integer` | Local WireGuard listen port. Derived from the peer's IPv4 when `0`.                                                                                                                          |
+| `endpoint`              | `string`  | Public `host:port` of the peer. Auto-resolved from the peer's entrypoints when empty.                                                                                                        |
+| `private_key`           | `string`  | Encrypted base64 WireGuard private key (server-managed).                                                                                                                                     |
+| `public_key`            | `string`  | WireGuard public key.                                                                                                                                                                        |
+| `persistent_keepalive`  | `integer` | Keepalive interval. `0` becomes `25` when an endpoint is present, otherwise `0`.                                                                                                             |
+| `mtu`                   | `integer` | Link MTU. Default `1420`.                                                                                                                                                                    |
+| `use_ip`                | `boolean` | Resolve the peer's endpoint hostname to an IP on the server.                                                                                                                                 |
+| `resolved_endpoint`     | `string`  | System-derived endpoint actually used. Not accepted in apply patches.                                                                                                                        |
+| `policy`                | `string`  | Policy ID. External peers default to `dn42`; internal peers default to `default`.                                                                                                            |
+| `cost`                  | `integer` | Link cost override. When non-zero, overrides the policy cost.                                                                                                                                |
+| `fwmark`                | `string`  | WireGuard `FwMark` override for this endpoint.                                                                                                                                               |
+| `preference`            | `integer` | BIRD BGP preference override.                                                                                                                                                                |
+| `mark`                  | `string`  | Netfilter mark override for received packets (supports `mark` or `mark/bitmask`).                                                                                                            |
+| `routing_policy`        | `string`  | BGP routing policy override.                                                                                                                                                                 |
+| `add_paths`             | `string`  | BIRD BGP add paths override (`off`, `on`, `rx`, `tx`, or `inherit` to revert to policy).                                                                                                     |
+| `psk`                   | `string`  | Endpoint-level encrypted PSK (legacy; link-level `psk` is preferred).                                                                                                                        |
+| `note`                  | `string`  | Markdown note.                                                                                                                                                                               |
+| `obfuscator`            | `string`  | Agent-mode WireGuard UDP-over-TCP obfuscation: `none`, `phantun_client`, or `phantun_server`. Both endpoints must be complementary.                                                          |
+| `obfuscator_parameters` | `object`  | Generated Phantun parameters (`local_port`, `server_port`, `wireguard_port`, `tun_name`, `tun_local`, `tun_peer`, optional `extra_args`). Generated on first enable and editable thereafter. |
 
 When a link is obfuscated, the client-side WireGuard peer endpoint becomes `127.0.0.1:<local_port>` and the server-side WireGuard peer endpoint is unset. The Easy42 agent installs and supervises one service per endpoint named `<interface>-obfuscator` (for example `wg42peer-obfuscator`). Generated Phantun ports are random in `10000...19999`; generated TUN pairs use a random `198.51.100.X` with peer `X+1`. Default generation avoids ports and TUN addresses already used by obfuscated links on the node. Both generated WireGuard interface configurations use an MTU that is reduced by `12` bytes for Phantun encapsulation overhead. Sync fails if an obfuscated link must be deployed to a node without a running Easy42 agent.
 
@@ -538,7 +545,7 @@ Scheduled `ping`/`tcp_ping` probes executed by node agents on a selector-matched
 | `cron_expr`                | `string`    | 5-field (`min hour dom mon dow`) or 6-field (`sec min hour dom mon dow`) cron expression.               |
 | `selector`                 | `object`    | Node selector (`name`, `tag`, `env:<NAME>`; AND). Empty matches every managed node.                     |
 | `params`                   | `object`    | Probe parameters. `ping` uses `target` and `count`; `tcp_ping` uses `target` (`host:port`) and `count`. |
-| `timeout_sec`              | `integer`   | Optional timeout in seconds (default `15`, capped at `60`).                                              |
+| `timeout_sec`              | `integer`   | Optional timeout in seconds (default `15`, capped at `60`).                                             |
 | `enabled`                  | `boolean`   | Whether the schedule is active.                                                                         |
 | `created_at`, `updated_at` | `timestamp` | Timestamps managed by the server.                                                                       |
 
@@ -555,11 +562,11 @@ Only the predefined server tasks are valid. Missing entries are recreated with d
 | `sync_dns`      | `0 1 * * *`  | Synchronize node records to Cloudflare DNS.                                                 |
 | `backup_config` | `0 2 * * *`  | Backup easy42 configuration file (config.json) preserving at most 100 backups.              |
 
-| Field       | Type      | Description                                                |
-| :---------- | :-------- | :--------------------------------------------------------- |
-| `id`        | `string`  | One of `update_roa`, `sync`, `sync_dns`, `backup_config`.   |
+| Field       | Type      | Description                                                             |
+| :---------- | :-------- | :---------------------------------------------------------------------- |
+| `id`        | `string`  | One of `update_roa`, `sync`, `sync_dns`, `backup_config`.               |
 | `cron_expr` | `string`  | 5- or 6-field cron expression. Invalid values fall back to the default. |
-| `enabled`   | `boolean` | Enable the schedule.                                       |
+| `enabled`   | `boolean` | Enable the schedule.                                                    |
 
 All tasks are enabled by default. Schedules can be changed from the UI or the `/api/settings/tasks` API (`GET /api/settings/tasks`, `PUT /api/settings/tasks/{id}`, `POST /api/settings/tasks/{id}/run`). The apply schema accepts `server_tasks`, but the current apply engine does not merge that section.
 
@@ -588,13 +595,13 @@ Cleanup runs hourly after an initial pass, and telemetry is rolled up into 5-min
 
 Model Context Protocol (MCP) server settings. The MCP server is enabled by default and exposes cluster inspection/mutation tools over Streamable HTTP (`/mcp`, `/api/mcp`) and SSE (`/mcp/sse`, `/mcp/message`), with OAuth 2.0/2.1 discovery under `/.well-known/*` and `/oauth/*`. There is also a stdio CLI (`easy42 mcp --role full_control|read_only`). See [MCP Server](integrations.md#10-mcp-server).
 
-| Field                   | Type     | Description                                                                                   |
-| :---------------------- | :------- | :---------------------------------------------------------------------------------------------- |
-| `enabled`               | `boolean` | Enable the MCP server. Enabled by default.                                                    |
-| `read_only_token`       | `string`  | Bearer token for inspection-only tools. Auto-generated on first load if empty.                  |
-| `full_control_token`    | `string`  | Bearer token for tools that may modify configuration. Auto-generated; must differ from the read-only token. |
-| `oauth_client_id`       | `string`  | OAuth client ID for MCP OAuth flow. Default `easy42-mcp`.                                      |
-| `oauth_client_secret`   | `string`  | OAuth client secret. Auto-generated if empty.                                                  |
+| Field                 | Type      | Description                                                                                                 |
+| :-------------------- | :-------- | :---------------------------------------------------------------------------------------------------------- |
+| `enabled`             | `boolean` | Enable the MCP server. Enabled by default.                                                                  |
+| `read_only_token`     | `string`  | Bearer token for inspection-only tools. Auto-generated on first load if empty.                              |
+| `full_control_token`  | `string`  | Bearer token for tools that may modify configuration. Auto-generated; must differ from the read-only token. |
+| `oauth_client_id`     | `string`  | OAuth client ID for MCP OAuth flow. Default `easy42-mcp`.                                                   |
+| `oauth_client_secret` | `string`  | OAuth client secret. Auto-generated if empty.                                                               |
 
 Tokens are accepted as `Authorization: Bearer <token>` (or `?token=<token>`). Manage them from **Settings -> MCP** or `GET/PUT /api/settings/mcp` and `POST /api/settings/mcp/reset-token`. The apply schema does not merge `mcp`; manage it through the UI/API.
 
@@ -602,29 +609,29 @@ Tokens are accepted as `Authorization: Bearer <token>` (or `?token=<token>`). Ma
 
 Workload apps deployed to agent-managed nodes (see [Workload Apps](integrations.md#9-workload-apps-apps)). Apps are **not** part of the declarative apply schema; manage them through the UI/API (`/api/apps`, `/api/apps/variables`).
 
-| Field (`apps[]`) | Type | Description |
-| :--------------- | :--- | :---------- |
-| `id` | `string` | Server-generated UUID. |
-| `name` | `string` | App name, `^[a-zA-Z0-9_-]{1,64}$`. Used as the Docker/project and systemd unit suffix (`ezapp-<name>`). |
-| `description` | `string` | Optional description. |
-| `note` | `string` | Markdown note. A fenced ` ```json ` block is exposed as `.data` in templates, like node/link notes. |
-| `url` | `string` | Optional URL associated with the app. Interpolated like `env_content`. |
-| `app_type` | `string` | `docker`, `systemd`, or `cron`. |
-| `main_content` | `string` | Docker Compose YAML, systemd unit content, or cron expression + command. Required. |
-| `env_content` | `string` | `.env` content (`KEY=VAL` lines). Interpolated. |
-| `files` | `object` | Map of relative filename to content for auxiliary config files. Paths must not contain `..` or start with `/`. |
-| `selector` | `object` | Node selector (`name`, `tag`, `env:<NAME>`; AND). Empty matches every node. See [Selectors](device-helper.md#task-selector). |
-| `published` | `boolean` | Whether the app is published/visible. Duplicating an app forces `published: false`. |
-| `enabled` | `boolean` | Whether the app is enabled (deployed). Disabled apps are not synced. |
-| `created_at`, `updated_at` | `timestamp` | Server-managed timestamps. |
+| Field (`apps[]`)           | Type        | Description                                                                                                                  |
+| :------------------------- | :---------- | :--------------------------------------------------------------------------------------------------------------------------- |
+| `id`                       | `string`    | Server-generated UUID.                                                                                                       |
+| `name`                     | `string`    | App name, `^[a-zA-Z0-9_-]{1,64}$`. Used as the Docker/project and systemd unit suffix (`ezapp-<name>`).                      |
+| `description`              | `string`    | Optional description.                                                                                                        |
+| `note`                     | `string`    | Markdown note. A fenced ` ```json ` block is exposed as `.data` in templates, like node/link notes.                          |
+| `url`                      | `string`    | Optional URL associated with the app. Interpolated like `env_content`.                                                       |
+| `app_type`                 | `string`    | `docker`, `systemd`, or `cron`.                                                                                              |
+| `main_content`             | `string`    | Docker Compose YAML, systemd unit content, or cron expression + command. Required.                                           |
+| `env_content`              | `string`    | `.env` content (`KEY=VAL` lines). Interpolated.                                                                              |
+| `files`                    | `object`    | Map of relative filename to content for auxiliary config files. Paths must not contain `..` or start with `/`.               |
+| `selector`                 | `object`    | Node selector (`name`, `tag`, `env:<NAME>`; AND). Empty matches every node. See [Selectors](device-helper.md#task-selector). |
+| `published`                | `boolean`   | Whether the app is published/visible. Duplicating an app forces `published: false`.                                          |
+| `enabled`                  | `boolean`   | Whether the app is enabled (deployed). Disabled apps are not synced.                                                         |
+| `created_at`, `updated_at` | `timestamp` | Server-managed timestamps.                                                                                                   |
 
-| Field (`app_variables[]`) | Type | Description |
-| :------------------------ | :--- | :---------- |
-| `key` | `string` | Variable name, `^[a-zA-Z_][a-zA-Z0-9_]*$`. |
-| `value` | `string` | Variable value (stored in plaintext in `config.json`). |
-| `description` | `string` | Optional description. |
-| `is_secret` | `boolean` | Marks the variable as secret in the UI (does not encrypt the stored value). |
-| `updated_at` | `timestamp` | Server-managed timestamp. |
+| Field (`app_variables[]`) | Type        | Description                                                                 |
+| :------------------------ | :---------- | :-------------------------------------------------------------------------- |
+| `key`                     | `string`    | Variable name, `^[a-zA-Z_][a-zA-Z0-9_]*$`.                                  |
+| `value`                   | `string`    | Variable value (stored in plaintext in `config.json`).                      |
+| `description`             | `string`    | Optional description.                                                       |
+| `is_secret`               | `boolean`   | Marks the variable as secret in the UI (does not encrypt the stored value). |
+| `updated_at`              | `timestamp` | Server-managed timestamp.                                                   |
 
 Interpolation uses `{{VAR}}` / `{{.VAR}}` and `${VAR}` syntax in `url`, `env_content`, `files`, and cron-type `main_content` (Docker/systemd manifests are not interpolated). Global variables are combined with per-node context variables (plus `APP_NAME`).
 
@@ -632,14 +639,14 @@ Interpolation uses `{{VAR}}` / `{{.VAR}}` and `${VAR}` syntax in `url`, `env_con
 
 Saved snippets shown in the Config Apply UI. They are validated before being stored but are not applied until explicitly run.
 
-| Field                       | Type        | Description                                                    |
-| :-------------------------- | :---------- | :------------------------------------------------------------- |
-| `id`                        | `string`    | UUID generated by the server.                                  |
+| Field                       | Type        | Description                                                                                                                   |
+| :-------------------------- | :---------- | :---------------------------------------------------------------------------------------------------------------------------- |
+| `id`                        | `string`    | UUID generated by the server.                                                                                                 |
 | `name`                      | `string`    | Display name. If empty when saving through the API, the server generates `Snippet <date>`. Duplicate names are de-duplicated. |
-| `description`               | `string`    | Optional description.                                          |
-| `content`                   | `string`    | JSON or YAML patch content. Must pass strict apply validation. |
-| `format`                    | `string`    | `json` or `yaml`.                                              |
-| `created_at`, `modified_at` | `timestamp` | Timestamps managed by the server.                              |
+| `description`               | `string`    | Optional description.                                                                                                         |
+| `content`                   | `string`    | JSON or YAML patch content. Must pass strict apply validation.                                                                |
+| `format`                    | `string`    | `json` or `yaml`.                                                                                                             |
+| `created_at`, `modified_at` | `timestamp` | Timestamps managed by the server.                                                                                             |
 
 ---
 
@@ -649,20 +656,20 @@ Saved snippets shown in the Config Apply UI. They are validated before being sto
 
 ### Allowed patch sections
 
-| Section            | Apply behavior                                                                                                                                                                   |
-| :----------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `nodes`            | Create or partially update nodes, matched case-insensitively by `name`.                                                                                                          |
-| `links`            | Create or partially update links, matched by unordered endpoint pair. New links require both endpoint nodes to exist in the existing configuration or earlier in the same patch. |
-| `network_settings` | Merge individual fields.                                                                                                                                                         |
-| `database`         | Merge retention fields.                                                                                                                                                          |
-| `dns`              | Merge Cloudflare fields.                                                                                                                                                         |
-| `integrations`     | Merge Prometheus and Telegram fields.                                                                                                                                            |
-| `network_policies` | Accepted by the schema. The current apply engine does not merge this section; manage policies through the UI/API.                                                                |
-| `blocks`           | Accepted by the schema. The current apply engine does not merge this section; manage blocks through the UI/API.                                                                  |
-| `templates`        | Accepted by the schema. The current apply engine does not merge this section; manage templates through the UI/API.                                                               |
-| `server_tasks`     | Accepted by the schema. The current apply engine does not merge this section; manage schedules through the UI/API.                                                               |
-| `cron_tasks`       | Accepted by the schema. The current apply engine does not merge this section; manage cron tasks through the UI/API.                                                              |
-| `apps`, `app_variables`, `mcp`, `looking_glass_tasks` | **Not** in the apply schema at all; manage through the UI/API. |
+| Section                                               | Apply behavior                                                                                                                                                                   |
+| :---------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `nodes`                                               | Create or partially update nodes, matched case-insensitively by `name`.                                                                                                          |
+| `links`                                               | Create or partially update links, matched by unordered endpoint pair. New links require both endpoint nodes to exist in the existing configuration or earlier in the same patch. |
+| `network_settings`                                    | Merge individual fields.                                                                                                                                                         |
+| `database`                                            | Merge retention fields.                                                                                                                                                          |
+| `dns`                                                 | Merge Cloudflare fields.                                                                                                                                                         |
+| `integrations`                                        | Merge Prometheus and Telegram fields.                                                                                                                                            |
+| `network_policies`                                    | Accepted by the schema. The current apply engine does not merge this section; manage policies through the UI/API.                                                                |
+| `blocks`                                              | Accepted by the schema. The current apply engine does not merge this section; manage blocks through the UI/API.                                                                  |
+| `templates`                                           | Accepted by the schema. The current apply engine does not merge this section; manage templates through the UI/API.                                                               |
+| `server_tasks`                                        | Accepted by the schema. The current apply engine does not merge this section; manage schedules through the UI/API.                                                               |
+| `cron_tasks`                                          | Accepted by the schema. The current apply engine does not merge this section; manage cron tasks through the UI/API.                                                              |
+| `apps`, `app_variables`, `mcp`, `looking_glass_tasks` | **Not** in the apply schema at all; manage through the UI/API.                                                                                                                   |
 
 Unknown-field rejection is strict at the top level and for `nodes[]`/`links[]`/link endpoints, but the advertised schema defines `network_policies`, `blocks`, `templates`, `server_tasks`, and `cron_tasks` as permissive objects, so unknown keys inside those sections are not rejected by the schema (and are ignored by the engine since those sections are not merged).
 
@@ -671,6 +678,7 @@ For a section that is merged, omitted fields are left unchanged. To clear an opt
 ### Delta operations
 
 For `static_routes` and `tags`, apply patches also support incremental delta operations:
+
 - **`nodes[].static_routes_add`**: Append static routes to the node's existing routes. If the route already exists, it is ignored (idempotent).
 - **`nodes[].static_routes_del`**: Remove specified static routes from the node. If a route does not exist, it is ignored.
 - **`nodes[].tags_add` / `nodes[].tags_del`**: Add or remove tags from nodes incrementally.
@@ -678,16 +686,15 @@ For `static_routes` and `tags`, apply patches also support incremental delta ope
 
 If an attribute already contains the added items or does not contain the deleted items, applying the delta results in a no-op with 0 changes recorded.
 
-
 ### Forbidden fields
 
 The following fields are rejected even though they exist in `config.json`:
 
-| Location  | Forbidden fields                                   |
-| :-------- | :------------------------------------------------- |
-| Root      | `password_hash`, `encrypted_dek`, `session_secret` |
-| `nodes[]` | `modified_at`, `agent_version`, `agent_last_seen`  |
-| `links[]` | `modified_at`                                      |
+| Location          | Forbidden fields                                                                         |
+| :---------------- | :--------------------------------------------------------------------------------------- |
+| Root              | `password_hash`, `encrypted_dek`, `session_secret`                                       |
+| `nodes[]`         | `modified_at`, `agent_version`, `agent_last_seen`                                        |
+| `links[]`         | `modified_at`                                                                            |
 | `links[].from/to` | `resolved_endpoint` (system-derived; rejected as an unknown field in the endpoint patch) |
 
 `nodes[].agent_token`, `links[].from/to.private_key`, `links[].from/to.public_key`, and `links[].from/to.psk` are not part of the apply schema and cannot be set declaratively (only the link-level `links[].psk` is accepted). Use the UI/API to manage agent tokens and WireGuard keys — apply cannot supply them either when the vault is locked.
@@ -697,7 +704,7 @@ The following fields are rejected even though they exist in `config.json`:
 - Node names must match `^[a-zA-Z0-9_-]+$` and be unique (case-insensitive).
 - Non-external nodes must not share the same main IPv6 address.
 - Every link endpoint must reference an existing node.
-- `ip` and `external_ip` must be valid IPv4 addresses *without* a CIDR suffix; `ip6` and `external_ip6` must be valid IPv6 addresses (a CIDR suffix is stripped/ignored for IPv6 validation only).
+- `ip` and `external_ip` must be valid IPv4 addresses _without_ a CIDR suffix; `ip6` and `external_ip6` must be valid IPv6 addresses (a CIDR suffix is stripped/ignored for IPv6 validation only).
 - `asn` must be greater than zero. Tables must be non-negative. Entrypoint/link MTUs must be within `0-9000`.
 - The advertised apply schema declares link `cost >= 0`, but the Go patch validator does not enforce non-negativity, so a negative `cost` in a patch currently passes and merges. `config.json` and the UI/API accept negative costs for preference boosting.
 - A link patch cannot use the same node for both endpoints.
@@ -781,12 +788,12 @@ The preview response includes `valid`, `format`, a summary (`added_nodes`, `modi
 
 ## Data Files
 
-| Path                                | Description                                                                                           |
-| :---------------------------------- | :---------------------------------------------------------------------------------------------------- |
-| `<data-dir>/config.json`            | This file. Created with mode `0600`.                                                                  |
-| `<data-dir>/config.json.bak`        | Most recent apply backup.                                                                             |
-| `<data-dir>/config.json.bak.<unix>` | Timestamped backups written by each apply.                                                            |
+| Path                                | Description                                                                                                                                                         |
+| :---------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `<data-dir>/config.json`            | This file. Created with mode `0600`.                                                                                                                                |
+| `<data-dir>/config.json.bak`        | Most recent apply backup.                                                                                                                                           |
+| `<data-dir>/config.json.bak.<unix>` | Timestamped backups written by each apply.                                                                                                                          |
 | `<data-dir>/data.db`                | SQLite database for telemetry, interface traffic, cron results, fleet events, ping-table tasks, node state (including obfuscator state), and applied-config hashes. |
-| `<data-dir>/server.url`             | Transient URL used by the CLI to find a running `easy42 serve`; removed on shutdown.                  |
+| `<data-dir>/server.url`             | Transient URL used by the CLI to find a running `easy42 serve`; removed on shutdown.                                                                                |
 
 The database is not part of `config.json`. Deleting `data.db` resets telemetry and applied-state tracking but leaves the network configuration intact.

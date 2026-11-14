@@ -214,6 +214,7 @@ chain mangle_prerouting_mark {
 ```
 
 The mark field supports either `mark` or `mark/bitmask` format:
+
 - **Plain mark** (`0x2a` or `42`): Directly sets the packet mark (`meta mark set 0x2a`).
 - **Equal mark/bitmask** (`0x80/0x80`): Sets the specified bits via bitwise OR (`meta mark set meta mark or 0x80`).
 - **Non-equal mark/bitmask** (`0x40/0xc0`): Preserves unmasked bits via bitwise AND with `~bitmask` and sets masked bits via OR (`meta mark set meta mark and 0xffffff3f or 0x40`).

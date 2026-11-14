@@ -15,6 +15,7 @@ The **Easy42 Agent** (`easy42-agent`) is a high-performance, lightweight backgro
     - [3. Execution Environment \& Variables](#3-execution-environment--variables)
     - [4. Safety \& Failure Semantics](#4-safety--failure-semantics)
     - [5. Example Hook Scripts](#5-example-hook-scripts)
+  - [Workload Apps, Obfuscators \& `disable_apps`](#workload-apps-obfuscators--disable_apps)
   - [Service Management \& Troubleshooting](#service-management--troubleshooting)
     - [Systemd (Debian, Ubuntu, CentOS, Arch)](#systemd-debian-ubuntu-centos-arch)
     - [OpenRC (Alpine Linux)](#openrc-alpine-linux)
@@ -122,20 +123,20 @@ Sync actions are restricted to an allowlist of paths (`/etc/easy42.nft`, `/etc/b
 
 Hooks are executed with `sh -c "<command>"` under a 60-second timeout. The agent injects structured environment variables describing the sync action:
 
-| Environment Variable      |   Available In   | Description                                                                                             |
-| :------------------------ | :--------------: | :------------------------------------------------------------------------------------------------------ |
-| `EASY42_SYNC_NODE`        |       Both       | The name of the node undergoing sync (e.g. `node-frankfurt`).                                           |
+| Environment Variable      |   Available In   | Description                                                                                                                             |
+| :------------------------ | :--------------: | :-------------------------------------------------------------------------------------------------------------------------------------- |
+| `EASY42_SYNC_NODE`        |       Both       | The name of the node undergoing sync (e.g. `node-frankfurt`).                                                                           |
 | `EASY42_SYNC_ACTION`      |       Both       | Action type: `sync_wg`, `sync_bird`, `sync_nftables`, `sync_roa`, `sync_hosts`, `delete_config`, `delete_file`, `delete_wg`, `down_wg`. |
-| `EASY42_SYNC_INTERFACE`   |       Both       | Name of the network interface involved (e.g. `wg42lon`), if applicable.                                 |
-| `EASY42_SYNC_TARGET_FILE` |       Both       | Target file path on disk (e.g. `/etc/wireguard/wg42lon.conf`).                                          |
-| `EASY42_SYNC_DESCRIPTION` |       Both       | Human-readable description of the sync step.                                                            |
-| `EASY42_SYNC_DIFF_STATUS` |       Both       | Status diff: `create`, `update`, `delete`, or `synced`.                                                 |
-| `EASY42_SYNC_PHASE`       |       Both       | Current lifecycle phase: `pre` or `post`.                                                               |
-| `EASY42_HOOK`             |       Both       | Name of the executing hook: `pre_sync` or `post_sync`.                                                  |
-| `EASY42_SYNC_SUCCESS`     | `post_sync` only | `true` if the sync action succeeded, `false` otherwise.                                                 |
-| `EASY42_SYNC_STATUS`      | `post_sync` only | `success` or `failed`.                                                                                  |
-| `EASY42_SYNC_EXIT_CODE`   | `post_sync` only | Exit code of the sync action command (e.g. `0`).                                                        |
-| `EASY42_SYNC_ERROR`       | `post_sync` only | Error message or stderr string if the sync action failed.                                               |
+| `EASY42_SYNC_INTERFACE`   |       Both       | Name of the network interface involved (e.g. `wg42lon`), if applicable.                                                                 |
+| `EASY42_SYNC_TARGET_FILE` |       Both       | Target file path on disk (e.g. `/etc/wireguard/wg42lon.conf`).                                                                          |
+| `EASY42_SYNC_DESCRIPTION` |       Both       | Human-readable description of the sync step.                                                                                            |
+| `EASY42_SYNC_DIFF_STATUS` |       Both       | Status diff: `create`, `update`, `delete`, or `synced`.                                                                                 |
+| `EASY42_SYNC_PHASE`       |       Both       | Current lifecycle phase: `pre` or `post`.                                                                                               |
+| `EASY42_HOOK`             |       Both       | Name of the executing hook: `pre_sync` or `post_sync`.                                                                                  |
+| `EASY42_SYNC_SUCCESS`     | `post_sync` only | `true` if the sync action succeeded, `false` otherwise.                                                                                 |
+| `EASY42_SYNC_STATUS`      | `post_sync` only | `success` or `failed`.                                                                                                                  |
+| `EASY42_SYNC_EXIT_CODE`   | `post_sync` only | Exit code of the sync action command (e.g. `0`).                                                                                        |
+| `EASY42_SYNC_ERROR`       | `post_sync` only | Error message or stderr string if the sync action failed.                                                                               |
 
 ### 4. Safety & Failure Semantics
 

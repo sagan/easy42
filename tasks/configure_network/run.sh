@@ -174,7 +174,7 @@ if [ "$HAS_CUSTOM_SCRIPT" = "1" ] && [ -f "$SCRIPT_DIR/custom_network.sh" ]; the
     if has_systemd || [ -d /etc/systemd/system ] || (command -v systemctl >/dev/null 2>&1); then
         DISPATCHER_SCRIPT="/etc/networkd-dispatcher/routable.d/99-easy42.sh"
         OVERRIDE_FILE="/etc/systemd/system/networkd-dispatcher.service.d/90-easy42.conf"
-        NETWORKD_OVERRIDE_FILE="/etc/systemd/system/systemd-networkd.service.d/90-easy42.conf"
+        NETWORKD_OVERRIDE_FILE="/etc/systemd/networkd.conf.d/90-easy42.conf"
         if [ ! -x "$DISPATCHER_SCRIPT" ] || [ ! -f "$OVERRIDE_FILE" ] || [ ! -f "$NETWORKD_OVERRIDE_FILE" ]; then
             CUSTOM_CONFIGURED=0
         elif ! grep -q "ManageForeignRoutingPolicyRules=no" "$NETWORKD_OVERRIDE_FILE" 2>/dev/null; then
@@ -453,7 +453,7 @@ EOF
         } | $SUDO tee "$NETWORK_FILE" >/dev/null
 
         # Add override for systemd-networkd to prevent clearing foreign network rules
-        NETWORKD_CONF_DIR="/etc/systemd/system/systemd-networkd.service.d"
+        NETWORKD_CONF_DIR="/etc/systemd/networkd.conf.d"
         $SUDO mkdir -p "$NETWORKD_CONF_DIR"
         cat << 'EOF' | $SUDO tee "$NETWORKD_CONF_DIR/90-easy42.conf" >/dev/null
 [Network]
@@ -489,7 +489,7 @@ esac
 if has_systemd || [ -d /etc/systemd/system ] || (command -v systemctl >/dev/null 2>&1); then
     ROUTABLE_DIR="/etc/networkd-dispatcher/routable.d"
     OVERRIDE_DIR="/etc/systemd/system/networkd-dispatcher.service.d"
-    NETWORKD_OVERRIDE_DIR="/etc/systemd/system/systemd-networkd.service.d"
+    NETWORKD_OVERRIDE_DIR="/etc/systemd/networkd.conf.d"
 
     if [ "$HAS_CUSTOM_SCRIPT" = "1" ] && [ -f "$SCRIPT_DIR/custom_network.sh" ]; then
         TARGET_IFACE="$(get_target_iface)"
