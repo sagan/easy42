@@ -632,7 +632,7 @@ func (m *Manager) BuildAppSpecsForNode(nodeName string) ([]*agentpb.AppSpec, err
 						spec.MainContent = procdScript
 					}
 				case apps.InitSystemOpenRC:
-					if openrcScript, err := apps.TranspileToOpenRC(app.Name, parsedUnit); err == nil {
+					if openrcScript, err := apps.TranspileToOpenRC(app.Name, parsedUnit, parsedEnv); err == nil {
 						spec.MainContent = openrcScript
 						spec.EnvContent = apps.GenerateOpenRCConfD(app.Name, parsedEnv)
 					}

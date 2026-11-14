@@ -298,7 +298,7 @@ func (s *Server) handlePreviewTranspile(w http.ResponseWriter, r *http.Request) 
 
 	target := strings.ToLower(req.TargetInit)
 	if target == "openrc" {
-		script, err := apps.TranspileToOpenRC(req.AppName, parsedUnit)
+		script, err := apps.TranspileToOpenRC(req.AppName, parsedUnit, parsedEnv)
 		if err != nil {
 			writeJSON(w, http.StatusOK, transpilePreviewResponse{Error: err.Error()})
 			return

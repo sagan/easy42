@@ -701,10 +701,92 @@ func unsupportedNotes(unit *ParsedServiceUnit, target string) []string {
 	return notes
 }
 
+// bareDollarRegex matches bare $VAR (not preceded by another $) for environment expansion.
+var bareDollarRegex = regexp.MustCompile(`\$([a-zA-Z_][a-zA-Z0-9_]*)`)
+
+// expandSystemdEnv expands systemd environment variable references ($VAR, ${VAR}, ${VAR:-def})
+// using the provided envVars map, preserving $$ as literal $.
+func expandSystemdEnv(val string, envVars map[string]string) string {
+	if len(envVars) == 0 || val == "" {
+		return val
+	}
+	const dollarEscape = "\x00DOLLAR_ESC\x00"
+	s := strings.ReplaceAll(val, "$$", dollarEscape)
+	s = bareDollarRegex.ReplaceAllString(s, `${$1}`)
+	s = strings.ReplaceAll(s, dollarEscape, "$$")
+
+	res := InterpolateVariables(s, nil, envVars)
+	return strings.ReplaceAll(res, "$$", "$")
+}
+
+// cloneUnitWithEnvExpansion creates a shallow copy of unit with environment variables
+// expanded across command lines, working directory, pidfile, and stdio paths.
+func cloneUnitWithEnvExpansion(unit *ParsedServiceUnit, envVars map[string]string) *ParsedServiceUnit {
+	if len(envVars) == 0 || unit == nil {
+		return unit
+	}
+	c := *unit
+
+	c.ExecStart = expandSystemdEnv(unit.ExecStart, envVars)
+	if len(unit.ExecStartCommands) > 0 {
+		c.ExecStartCommands = make([]string, len(unit.ExecStartCommands))
+		for i, cmd := range unit.ExecStartCommands {
+			c.ExecStartCommands[i] = expandSystemdEnv(cmd, envVars)
+		}
+	}
+	if len(unit.ExecStartPre) > 0 {
+		c.ExecStartPre = make([]string, len(unit.ExecStartPre))
+		for i, cmd := range unit.ExecStartPre {
+			c.ExecStartPre[i] = expandSystemdEnv(cmd, envVars)
+		}
+	}
+	if len(unit.ExecStartPost) > 0 {
+		c.ExecStartPost = make([]string, len(unit.ExecStartPost))
+		for i, cmd := range unit.ExecStartPost {
+			c.ExecStartPost[i] = expandSystemdEnv(cmd, envVars)
+		}
+	}
+	if len(unit.ExecStop) > 0 {
+		c.ExecStop = make([]string, len(unit.ExecStop))
+		for i, cmd := range unit.ExecStop {
+			c.ExecStop[i] = expandSystemdEnv(cmd, envVars)
+		}
+	}
+	if len(unit.ExecStopPost) > 0 {
+		c.ExecStopPost = make([]string, len(unit.ExecStopPost))
+		for i, cmd := range unit.ExecStopPost {
+			c.ExecStopPost[i] = expandSystemdEnv(cmd, envVars)
+		}
+	}
+	if len(unit.ExecReload) > 0 {
+		c.ExecReload = make([]string, len(unit.ExecReload))
+		for i, cmd := range unit.ExecReload {
+			c.ExecReload[i] = expandSystemdEnv(cmd, envVars)
+		}
+	}
+	if len(unit.ExecCondition) > 0 {
+		c.ExecCondition = make([]string, len(unit.ExecCondition))
+		for i, cmd := range unit.ExecCondition {
+			c.ExecCondition[i] = expandSystemdEnv(cmd, envVars)
+		}
+	}
+	c.WorkingDirectory = expandSystemdEnv(unit.WorkingDirectory, envVars)
+	c.PIDFile = expandSystemdEnv(unit.PIDFile, envVars)
+	c.StandardOutput = expandSystemdEnv(unit.StandardOutput, envVars)
+	c.StandardError = expandSystemdEnv(unit.StandardError, envVars)
+
+	return &c
+}
+
 // --- OpenRC transpilation -------------------------------------------------
 
 // TranspileToOpenRC generates an OpenRC init script (/etc/init.d/ezapp-<name>)
-func TranspileToOpenRC(appName string, unit *ParsedServiceUnit) (string, error) {
+func TranspileToOpenRC(appName string, rawUnit *ParsedServiceUnit, optionalEnv ...map[string]string) (string, error) {
+	var envVars map[string]string
+	if len(optionalEnv) > 0 {
+		envVars = optionalEnv[0]
+	}
+	unit := cloneUnitWithEnvExpansion(rawUnit, envVars)
 	if unit.ExecStart == "" {
 		return "", fmt.Errorf("cannot transpile to OpenRC: ExecStart is missing")
 	}
@@ -1010,7 +1092,8 @@ func GenerateOpenRCConfD(appName string, envVars map[string]string) string {
 // --- procd transpilation --------------------------------------------------
 
 // TranspileToProcd generates an OpenWrt procd init script (/etc/init.d/ezapp-<name>)
-func TranspileToProcd(appName string, unit *ParsedServiceUnit, envVars map[string]string) (string, error) {
+func TranspileToProcd(appName string, rawUnit *ParsedServiceUnit, envVars map[string]string) (string, error) {
+	unit := cloneUnitWithEnvExpansion(rawUnit, envVars)
 	if unit.ExecStart == "" {
 		return "", fmt.Errorf("cannot transpile to Procd: ExecStart is missing")
 	}

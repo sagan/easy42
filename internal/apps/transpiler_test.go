@@ -608,3 +608,88 @@ func TestTranspileDeterministicEnv(t *testing.T) {
 	}
 }
 
+func TestTranspileEnvExpansionToProcd(t *testing.T) {
+	unitContent := `[Unit]
+Description=sshtun
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/var/log
+EnvironmentFile=/etc/systemd/system/ezapp-sshtun.env
+ExecStart=sshtun --config ${DIR}/config.txt --node $IP --tag ${FALLBACK:-default}
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+`
+	unit, err := ParseSystemdService(unitContent)
+	if err != nil {
+		t.Fatalf("ParseSystemdService failed: %v", err)
+	}
+
+	env := map[string]string{
+		"DIR": "/etc/ezapp/sshtun",
+		"IP":  "192.168.50.1",
+	}
+
+	procd, err := TranspileToProcd("sshtun", unit, env)
+	if err != nil {
+		t.Fatalf("TranspileToProcd failed: %v", err)
+	}
+
+	if strings.Contains(procd, "${DIR}") || strings.Contains(procd, "$IP") {
+		t.Errorf("procd script still contains unexpanded env variables:\n%s", procd)
+	}
+
+	expectedArg := "/etc/ezapp/sshtun/config.txt"
+	if !strings.Contains(procd, expectedArg) {
+		t.Errorf("procd script missing expanded path %q:\n%s", expectedArg, procd)
+	}
+
+	expectedIP := "192.168.50.1"
+	if !strings.Contains(procd, expectedIP) {
+		t.Errorf("procd script missing expanded IP %q:\n%s", expectedIP, procd)
+	}
+
+	expectedFallback := "default"
+	if !strings.Contains(procd, expectedFallback) {
+		t.Errorf("procd script missing fallback value %q:\n%s", expectedFallback, procd)
+	}
+}
+
+func TestTranspileEnvExpansionToOpenRC(t *testing.T) {
+	unitContent := `[Unit]
+Description=sshtun
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=sshtun --config ${DIR}/config.txt
+Restart=always
+`
+	unit, err := ParseSystemdService(unitContent)
+	if err != nil {
+		t.Fatalf("ParseSystemdService failed: %v", err)
+	}
+
+	env := map[string]string{
+		"DIR": "/etc/ezapp/sshtun",
+	}
+
+	openrc, err := TranspileToOpenRC("sshtun", unit, env)
+	if err != nil {
+		t.Fatalf("TranspileToOpenRC failed: %v", err)
+	}
+
+	if strings.Contains(openrc, "${DIR}") {
+		t.Errorf("openrc script still contains unexpanded env variables:\n%s", openrc)
+	}
+
+	expectedArg := "/etc/ezapp/sshtun/config.txt"
+	if !strings.Contains(openrc, expectedArg) {
+		t.Errorf("openrc script missing expanded path %q:\n%s", expectedArg, openrc)
+	}
+}
