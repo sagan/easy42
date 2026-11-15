@@ -47,7 +47,7 @@ import {
   X,
 } from "lucide-react";
 import { api } from "../../api/client";
-import { ApplyPreviewResult, ApplyResult, ConfigChange, Node, Link, LinkEnd } from "../../types/api";
+import { ApplyPreviewResult, ApplyResult, ConfigChange, Node, Link, LinkEnd, App } from "../../types/api";
 
 interface ApplyConfigModalProps {
   open: boolean;
@@ -57,6 +57,7 @@ interface ApplyConfigModalProps {
   targetNodeName?: string;
   nodes?: Node[];
   links?: Link[];
+  apps?: App[];
 }
 
 /**
@@ -147,6 +148,31 @@ export function generateLinkApplySnippet(link: Link): string {
   if (link.note !== undefined && link.note !== "") lp.note = link.note;
 
   return JSON.stringify({ links: [lp] }, null, 2);
+}
+
+/**
+ * Extracts all valid apply config fields from an app's current state.
+ * Strictly excludes system-managed timestamps like created_at, updated_at.
+ */
+export function generateAppApplySnippet(app: App): string {
+  const p: Record<string, any> = {
+    name: app.name,
+  };
+  if (app.description !== undefined && app.description !== "") p.description = app.description;
+  if (app.group !== undefined && app.group !== "") p.group = app.group;
+  if (app.note !== undefined && app.note !== "") p.note = app.note;
+  if (app.url !== undefined && app.url !== "") p.url = app.url;
+  if (app.version !== undefined && app.version !== "") p.version = app.version;
+  if (app.app_type) p.app_type = app.app_type;
+  if (app.main_content !== undefined && app.main_content !== "") p.main_content = app.main_content;
+  if (app.env_content !== undefined && app.env_content !== "") p.env_content = app.env_content;
+  if (app.files && Object.keys(app.files).length > 0) p.files = app.files;
+  if (app.artifact) p.artifact = app.artifact;
+  if (app.selector && Object.keys(app.selector).length > 0) p.selector = app.selector;
+  if (app.published !== undefined) p.published = app.published;
+  if (app.enabled !== undefined) p.enabled = app.enabled;
+
+  return JSON.stringify({ apps: [p] }, null, 2);
 }
 
 const PRESET_SNIPPETS: { label: string; description: string; content: string }[] = [
@@ -252,6 +278,21 @@ const PRESET_SNIPPETS: { label: string; description: string; content: string }[]
   ]
 }`,
   },
+  {
+    label: "Deploy / Update App Workload",
+    description: "Declaratively manage native systemd, Docker, or cron app workloads",
+    content: `{
+  "apps": [
+    {
+      "name": "web-service",
+      "app_type": "docker",
+      "main_content": "services:\\n  app:\\n    image: nginx:alpine\\n    restart: always\\n",
+      "env_content": "PORT=80\\n",
+      "enabled": true
+    }
+  ]
+}`,
+  },
 ];
 
 export const ApplyConfigModal: React.FC<ApplyConfigModalProps> = ({
@@ -262,6 +303,7 @@ export const ApplyConfigModal: React.FC<ApplyConfigModalProps> = ({
   targetNodeName,
   nodes = [],
   links = [],
+  apps = [],
 }) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
@@ -273,11 +315,13 @@ export const ApplyConfigModal: React.FC<ApplyConfigModalProps> = ({
   // Available mesh entities for snippet generator
   const [availableNodes, setAvailableNodes] = useState<Node[]>(nodes);
   const [availableLinks, setAvailableLinks] = useState<Link[]>(links);
+  const [availableApps, setAvailableApps] = useState<App[]>(apps);
 
   // Generator UI state
-  const [genType, setGenType] = useState<"node" | "link">("node");
+  const [genType, setGenType] = useState<"node" | "link" | "app">("node");
   const [selectedGenNode, setSelectedGenNode] = useState<string>("");
   const [selectedGenLink, setSelectedGenLink] = useState<string>("");
+  const [selectedGenApp, setSelectedGenApp] = useState<string>("");
 
   // Validation state
   const [validating, setValidating] = useState<boolean>(false);
@@ -307,7 +351,7 @@ export const ApplyConfigModal: React.FC<ApplyConfigModalProps> = ({
     : undefined;
   const isExistingSnippet = Boolean(existingSnippet);
 
-  // Sync available nodes & links on open
+  // Sync available nodes, links & apps on open
   useEffect(() => {
     if (open) {
       if (nodes && nodes.length > 0) {
@@ -327,8 +371,17 @@ export const ApplyConfigModal: React.FC<ApplyConfigModalProps> = ({
           .then((res) => setAvailableLinks(res || []))
           .catch(() => {});
       }
+
+      if (apps && apps.length > 0) {
+        setAvailableApps(apps);
+      } else {
+        api
+          .getApps()
+          .then((res) => setAvailableApps(res || []))
+          .catch(() => {});
+      }
     }
-  }, [open, nodes, links]);
+  }, [open, nodes, links, apps]);
 
   // Initialize content on open
   useEffect(() => {
@@ -391,17 +444,22 @@ export const ApplyConfigModal: React.FC<ApplyConfigModalProps> = ({
     return () => clearTimeout(timer);
   }, [content]);
 
-  // Generate snippet from chosen node or link current state
+  // Generate snippet from chosen node, link, or app current state
   const handleGenerateFromState = () => {
     if (genType === "node") {
       const target = availableNodes.find((n) => n.name === selectedGenNode);
       if (target) {
         setContent(generateNodeApplySnippet(target));
       }
-    } else {
+    } else if (genType === "link") {
       const target = availableLinks.find((l, idx) => `${l.from.name}<->${l.to.name}-${idx}` === selectedGenLink);
       if (target) {
         setContent(generateLinkApplySnippet(target));
+      }
+    } else if (genType === "app") {
+      const target = availableApps.find((a) => a.name === selectedGenApp || a.id === selectedGenApp);
+      if (target) {
+        setContent(generateAppApplySnippet(target));
       }
     }
   };
@@ -678,6 +736,11 @@ export const ApplyConfigModal: React.FC<ApplyConfigModalProps> = ({
                 Affected Nodes: {(applyResult.affected_nodes || []).join(", ")}
               </Typography>
             )}
+            {(applyResult.affected_apps || []).length > 0 && (
+              <Typography variant="caption" sx={{ display: "block", mt: 0.5 }}>
+                Affected Apps: {(applyResult.affected_apps || []).join(", ")}
+              </Typography>
+            )}
             {applyResult.backup_file && (
               <Typography variant="caption" sx={{ display: "block", color: "#64748B" }}>
                 Backup created: {applyResult.backup_file}
@@ -786,6 +849,9 @@ export const ApplyConfigModal: React.FC<ApplyConfigModalProps> = ({
                     <ToggleButton value="link" sx={{ textTransform: "none", px: 1.5, py: 0.5, fontSize: 13 }}>
                       Link
                     </ToggleButton>
+                    <ToggleButton value="app" sx={{ textTransform: "none", px: 1.5, py: 0.5, fontSize: 13 }}>
+                      App
+                    </ToggleButton>
                   </ToggleButtonGroup>
 
                   {genType === "node" ? (
@@ -806,7 +872,7 @@ export const ApplyConfigModal: React.FC<ApplyConfigModalProps> = ({
                         ))}
                       </Select>
                     </FormControl>
-                  ) : (
+                  ) : genType === "link" ? (
                     <FormControl size="small" sx={{ minWidth: { xs: 140, sm: 220 }, flex: 1 }}>
                       <Select
                         displayEmpty
@@ -827,13 +893,37 @@ export const ApplyConfigModal: React.FC<ApplyConfigModalProps> = ({
                         })}
                       </Select>
                     </FormControl>
+                  ) : (
+                    <FormControl size="small" sx={{ minWidth: { xs: 140, sm: 200 }, flex: 1 }}>
+                      <Select
+                        displayEmpty
+                        value={selectedGenApp}
+                        onChange={(e) => setSelectedGenApp(e.target.value)}
+                        sx={{ height: 32, fontSize: 13, backgroundColor: "#FFFFFF" }}
+                      >
+                        <MenuItem value="" disabled>
+                          <em>Select an app...</em>
+                        </MenuItem>
+                        {availableApps.map((a) => (
+                          <MenuItem key={a.id || a.name} value={a.name}>
+                            {a.name} ({a.app_type})
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
                   )}
                 </Box>
 
                 <Button
                   variant="contained"
                   size="small"
-                  disabled={genType === "node" ? !selectedGenNode : !selectedGenLink}
+                  disabled={
+                    genType === "node"
+                      ? !selectedGenNode
+                      : genType === "link"
+                      ? !selectedGenLink
+                      : !selectedGenApp
+                  }
                   onClick={handleGenerateFromState}
                   startIcon={<Sparkles size={14} />}
                   sx={{ textTransform: "none", height: 32, whiteSpace: "nowrap" }}
@@ -950,6 +1040,20 @@ export const ApplyConfigModal: React.FC<ApplyConfigModalProps> = ({
                     color="success"
                     variant="outlined"
                   />
+                  {previewResult.summary?.modified_apps !== undefined && previewResult.summary.modified_apps > 0 && (
+                    <Chip
+                      label={`${previewResult.summary.modified_apps} Apps Modified`}
+                      color="primary"
+                      variant="outlined"
+                    />
+                  )}
+                  {previewResult.summary?.added_apps !== undefined && previewResult.summary.added_apps > 0 && (
+                    <Chip
+                      label={`${previewResult.summary.added_apps} Apps Added`}
+                      color="success"
+                      variant="outlined"
+                    />
+                  )}
                   <Chip
                     label={`${previewResult.summary?.total_changes || 0} Total Attributes Changed`}
                     color="secondary"
@@ -1028,6 +1132,50 @@ export const ApplyConfigModal: React.FC<ApplyConfigModalProps> = ({
                                     size="small"
                                     label={l.action}
                                     color={l.action === "create" ? "success" : "info"}
+                                  />
+                                </TableCell>
+                                <TableCell sx={{ fontFamily: "monospace" }}>{c.field}</TableCell>
+                                <TableCell sx={{ color: "#991B1B", fontFamily: "monospace", fontSize: 12 }}>
+                                  {JSON.stringify(c.old_value) || "null"}
+                                </TableCell>
+                                <TableCell sx={{ color: "#166534", fontFamily: "monospace", fontSize: 12 }}>
+                                  {JSON.stringify(c.new_value)}
+                                </TableCell>
+                              </TableRow>
+                            )),
+                          )}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                  </Paper>
+                )}
+
+                {(previewResult.apps || []).length > 0 && (
+                  <Paper variant="outlined" sx={{ overflow: "hidden" }}>
+                    <Typography variant="subtitle2" sx={{ p: 1.5, backgroundColor: "#F8FAFC", fontWeight: 600 }}>
+                      App Modifications
+                    </Typography>
+                    <TableContainer sx={{ overflowX: "auto" }}>
+                      <Table size="small" sx={{ minWidth: 480 }}>
+                        <TableHead>
+                          <TableRow>
+                            <TableCell sx={{ fontWeight: 600 }}>App</TableCell>
+                            <TableCell sx={{ fontWeight: 600 }}>Action</TableCell>
+                            <TableCell sx={{ fontWeight: 600 }}>Field</TableCell>
+                            <TableCell sx={{ fontWeight: 600 }}>Old Value</TableCell>
+                            <TableCell sx={{ fontWeight: 600 }}>New Value</TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {(previewResult.apps || []).map((a) =>
+                            (a.changes || []).map((c, idx) => (
+                              <TableRow key={`${a.name}-${c.field}-${idx}`}>
+                                <TableCell sx={{ fontFamily: "monospace" }}>{a.name}</TableCell>
+                                <TableCell>
+                                  <Chip
+                                    size="small"
+                                    label={a.action}
+                                    color={a.action === "create" ? "success" : "info"}
                                   />
                                 </TableCell>
                                 <TableCell sx={{ fontFamily: "monospace" }}>{c.field}</TableCell>

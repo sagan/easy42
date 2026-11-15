@@ -951,6 +951,12 @@ export interface ApplyLinkDiff {
   changes: ApplyFieldDiff[];
 }
 
+export interface ApplyAppDiff {
+  name: string;
+  action: "create" | "update";
+  changes: ApplyFieldDiff[];
+}
+
 export interface ApplySettingsDiff {
   category: string;
   changes: ApplyFieldDiff[];
@@ -961,6 +967,8 @@ export interface ApplySummary {
   modified_nodes: number;
   added_links: number;
   modified_links: number;
+  added_apps?: number;
+  modified_apps?: number;
   total_changes: number;
 }
 
@@ -970,6 +978,7 @@ export interface ApplyPreviewResult {
   summary: ApplySummary;
   nodes: ApplyNodeDiff[];
   links: ApplyLinkDiff[];
+  apps?: ApplyAppDiff[];
   settings: ApplySettingsDiff[];
   unified_diff: string;
   errors?: string[];
@@ -982,6 +991,7 @@ export interface ApplyResult {
   summary: ApplySummary;
   affected_nodes: string[];
   affected_links: string[];
+  affected_apps?: string[];
   backup_file?: string;
   plan: ApplyPreviewResult;
 }

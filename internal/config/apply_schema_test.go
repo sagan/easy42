@@ -266,3 +266,55 @@ func TestParseAndValidateConfigChange_AtStaticRoutes(t *testing.T) {
 	}
 }
 
+func TestParseAndValidateConfigChange_Apps(t *testing.T) {
+	snippet := `{
+		"apps": [
+			{
+				"name": "my-nginx",
+				"app_type": "docker",
+				"main_content": "version: '3'\nservices:\n  web:\n    image: nginx:latest\n",
+				"env_content": "PORT=80\n",
+				"enabled": true
+			}
+		]
+	}`
+
+	patch, format, err := ParseAndValidateConfigChange([]byte(snippet))
+	if err != nil {
+		t.Fatalf("unexpected error parsing apps snippet: %v", err)
+	}
+	if format != "json" {
+		t.Errorf("expected format json, got %s", format)
+	}
+	if patch.Apps == nil || len(*patch.Apps) != 1 {
+		t.Fatalf("expected 1 app, got %v", patch.Apps)
+	}
+	app := (*patch.Apps)[0]
+	if app.Name != "my-nginx" {
+		t.Errorf("expected name my-nginx, got %s", app.Name)
+	}
+	if app.AppType == nil || *app.AppType != "docker" {
+		t.Errorf("expected app_type docker, got %v", app.AppType)
+	}
+	if app.Enabled == nil || !*app.Enabled {
+		t.Errorf("expected enabled true, got %v", app.Enabled)
+	}
+}
+
+func TestParseAndValidateConfigChange_AppsForbidden(t *testing.T) {
+	snippet := `{
+		"apps": [
+			{
+				"name": "my-nginx",
+				"created_at": "2026-01-01T00:00:00Z"
+			}
+		]
+	}`
+
+	_, _, err := ParseAndValidateConfigChange([]byte(snippet))
+	if err == nil {
+		t.Fatalf("expected error for forbidden created_at in app patch, got nil")
+	}
+}
+
+

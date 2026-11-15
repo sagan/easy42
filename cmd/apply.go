@@ -144,13 +144,19 @@ func handleApplyPreview(content, serverURL string, store *config.Store, cfg *con
 
 	fmt.Printf("\n🔍 Config Change Preview (Dry-Run):\n")
 	fmt.Printf("Status: Valid (Detected format: %s)\n", preview.Format)
-	fmt.Printf("Summary: %d modified node(s), %d added node(s), %d modified link(s), %d added link(s) (Total changes: %d)\n\n",
-		preview.Summary.ModifiedNodes,
-		preview.Summary.AddedNodes,
-		preview.Summary.ModifiedLinks,
-		preview.Summary.AddedLinks,
-		preview.Summary.TotalChanges,
-	)
+	summaryParts := []string{
+		fmt.Sprintf("%d modified node(s)", preview.Summary.ModifiedNodes),
+		fmt.Sprintf("%d added node(s)", preview.Summary.AddedNodes),
+		fmt.Sprintf("%d modified link(s)", preview.Summary.ModifiedLinks),
+		fmt.Sprintf("%d added link(s)", preview.Summary.AddedLinks),
+	}
+	if preview.Summary.ModifiedApps > 0 {
+		summaryParts = append(summaryParts, fmt.Sprintf("%d modified app(s)", preview.Summary.ModifiedApps))
+	}
+	if preview.Summary.AddedApps > 0 {
+		summaryParts = append(summaryParts, fmt.Sprintf("%d added app(s)", preview.Summary.AddedApps))
+	}
+	fmt.Printf("Summary: %s (Total changes: %d)\n\n", strings.Join(summaryParts, ", "), preview.Summary.TotalChanges)
 
 	if len(preview.Nodes) > 0 {
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
@@ -170,6 +176,18 @@ func handleApplyPreview(content, serverURL string, store *config.Store, cfg *con
 		for _, ld := range preview.Links {
 			for _, ch := range ld.Changes {
 				fmt.Fprintf(w, "%s <-> %s\t%s\t%s\t%v\t%v\n", ld.From, ld.To, ld.Action, ch.Field, ch.OldValue, ch.NewValue)
+			}
+		}
+		w.Flush()
+		fmt.Println()
+	}
+
+	if len(preview.Apps) > 0 {
+		w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
+		fmt.Fprintln(w, "APP\tACTION\tFIELD\tOLD VALUE\tNEW VALUE")
+		for _, ad := range preview.Apps {
+			for _, ch := range ad.Changes {
+				fmt.Fprintf(w, "%s\t%s\t%s\t%v\t%v\n", ad.Name, ad.Action, ch.Field, ch.OldValue, ch.NewValue)
 			}
 		}
 		w.Flush()
@@ -219,6 +237,9 @@ func handleApplyExecute(content, serverURL string, store *config.Store, cfg *con
 	}
 	if len(result.AffectedLinks) > 0 {
 		fmt.Printf("Affected Links: %s\n", strings.Join(result.AffectedLinks, ", "))
+	}
+	if len(result.AffectedApps) > 0 {
+		fmt.Printf("Affected Apps: %s\n", strings.Join(result.AffectedApps, ", "))
 	}
 	if result.BackupFile != "" {
 		fmt.Printf("Config backup saved to: %s\n", result.BackupFile)

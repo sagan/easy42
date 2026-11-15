@@ -591,4 +591,100 @@ func TestApply_AtStaticRoutes(t *testing.T) {
 	}
 }
 
+func TestApply_CreateAndUpdateApp(t *testing.T) {
+	mgr, tmpDir := setupTestManager(t)
+	defer os.RemoveAll(tmpDir)
+	defer mgr.Close()
+
+	// 1. Preview creating an app
+	patchCreate := `{
+		"apps": [
+			{
+				"name": "myapp",
+				"app_type": "docker",
+				"main_content": "services:\n  web:\n    image: nginx\n",
+				"env_content": "PORT=80\n",
+				"description": "My Web App",
+				"enabled": true
+			}
+		]
+	}`
+
+	preview, err := mgr.PreviewApply(patchCreate)
+	if err != nil {
+		t.Fatalf("PreviewApply failed: %v", err)
+	}
+	if !preview.Valid {
+		t.Fatalf("expected preview to be valid")
+	}
+	if preview.Summary.AddedApps != 1 {
+		t.Errorf("expected 1 added app, got %d", preview.Summary.AddedApps)
+	}
+	if len(preview.Apps) != 1 || preview.Apps[0].Name != "myapp" || preview.Apps[0].Action != "create" {
+		t.Fatalf("unexpected apps preview: %+v", preview.Apps)
+	}
+
+	// 2. Execute apply creating the app
+	res, err := mgr.ApplyConfigChange(patchCreate)
+	if err != nil {
+		t.Fatalf("ApplyConfigChange failed: %v", err)
+	}
+	if !res.Success {
+		t.Fatalf("expected success = true")
+	}
+	if res.Summary.AddedApps != 1 {
+		t.Errorf("expected 1 added app, got %d", res.Summary.AddedApps)
+	}
+	if len(res.AffectedApps) != 1 || res.AffectedApps[0] != "myapp" {
+		t.Errorf("expected affected apps ['myapp'], got %v", res.AffectedApps)
+	}
+
+	app, err := mgr.FindAppByName("myapp")
+	if err != nil {
+		t.Fatalf("FindAppByName failed: %v", err)
+	}
+	if app.Description != "My Web App" || !app.Enabled {
+		t.Errorf("unexpected app state: %+v", app)
+	}
+
+	// 3. Update existing app
+	patchUpdate := `{
+		"apps": [
+			{
+				"name": "myapp",
+				"description": "Updated Web App",
+				"enabled": false
+			}
+		]
+	}`
+
+	previewUpdate, err := mgr.PreviewApply(patchUpdate)
+	if err != nil {
+		t.Fatalf("PreviewApply update failed: %v", err)
+	}
+	if previewUpdate.Summary.ModifiedApps != 1 {
+		t.Errorf("expected 1 modified app, got %d", previewUpdate.Summary.ModifiedApps)
+	}
+	if len(previewUpdate.Apps) != 1 || previewUpdate.Apps[0].Action != "update" {
+		t.Fatalf("unexpected apps update preview: %+v", previewUpdate.Apps)
+	}
+
+	resUpdate, err := mgr.ApplyConfigChange(patchUpdate)
+	if err != nil {
+		t.Fatalf("ApplyConfigChange update failed: %v", err)
+	}
+	if resUpdate.Summary.ModifiedApps != 1 {
+		t.Errorf("expected 1 modified app, got %d", resUpdate.Summary.ModifiedApps)
+	}
+
+	updatedApp, err := mgr.FindAppByName("myapp")
+	if err != nil {
+		t.Fatalf("FindAppByName after update failed: %v", err)
+	}
+	if updatedApp.Description != "Updated Web App" || updatedApp.Enabled {
+		t.Errorf("expected description 'Updated Web App' and enabled=false, got %+v", updatedApp)
+	}
+}
+
+
 

@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"easy42/internal/apps"
 	"easy42/internal/compiler"
 	"easy42/internal/config"
 	"easy42/internal/crypto"
@@ -40,6 +41,13 @@ type ApplyLinkDiff struct {
 	Changes []ApplyFieldDiff `json:"changes"`
 }
 
+// ApplyAppDiff represents modifications to an app
+type ApplyAppDiff struct {
+	Name    string           `json:"name"`
+	Action  string           `json:"action"` // "create" or "update"
+	Changes []ApplyFieldDiff `json:"changes"`
+}
+
 // ApplySettingsDiff represents modifications to global settings
 type ApplySettingsDiff struct {
 	Category string           `json:"category"`
@@ -52,6 +60,8 @@ type ApplySummary struct {
 	ModifiedNodes int `json:"modified_nodes"`
 	AddedLinks    int `json:"added_links"`
 	ModifiedLinks int `json:"modified_links"`
+	AddedApps     int `json:"added_apps,omitempty"`
+	ModifiedApps  int `json:"modified_apps,omitempty"`
 	TotalChanges  int `json:"total_changes"`
 }
 
@@ -62,6 +72,7 @@ type ApplyPreviewResult struct {
 	Summary        ApplySummary        `json:"summary"`
 	Nodes          []ApplyNodeDiff     `json:"nodes"`
 	Links          []ApplyLinkDiff     `json:"links"`
+	Apps           []ApplyAppDiff      `json:"apps"`
 	Settings       []ApplySettingsDiff `json:"settings"`
 	UnifiedDiff    string              `json:"unified_diff"`
 	Errors         []string            `json:"errors,omitempty"`
@@ -75,6 +86,7 @@ type ApplyResult struct {
 	Summary       ApplySummary       `json:"summary"`
 	AffectedNodes []string           `json:"affected_nodes"`
 	AffectedLinks []string           `json:"affected_links"`
+	AffectedApps  []string           `json:"affected_apps,omitempty"`
 	BackupFile    string             `json:"backup_file,omitempty"`
 	Plan          ApplyPreviewResult `json:"plan"`
 }
@@ -227,12 +239,20 @@ func (m *Manager) ApplyConfigChange(content string) (*ApplyResult, error) {
 		}
 	}
 
+	affectedApps := make([]string, 0)
+	if preview.Apps != nil {
+		for _, a := range preview.Apps {
+			affectedApps = append(affectedApps, a.Name)
+		}
+	}
+
 	return &ApplyResult{
 		Success:       true,
 		AppliedAt:     now,
 		Summary:       preview.Summary,
 		AffectedNodes: affectedNodes,
 		AffectedLinks: affectedLinks,
+		AffectedApps:  affectedApps,
 		BackupFile:    backupFile,
 		Plan:          *preview,
 	}, nil
@@ -243,6 +263,7 @@ func (m *Manager) simulateApply(cfg *config.Config, patch *config.ConfigPatch) (
 	result := &ApplyPreviewResult{
 		Nodes:    make([]ApplyNodeDiff, 0),
 		Links:    make([]ApplyLinkDiff, 0),
+		Apps:     make([]ApplyAppDiff, 0),
 		Settings: make([]ApplySettingsDiff, 0),
 		Errors:   make([]string, 0),
 	}
@@ -371,7 +392,51 @@ func (m *Manager) simulateApply(cfg *config.Config, patch *config.ConfigPatch) (
 		}
 	}
 
-	// 3. Apply NetworkSettings
+	// 3. Apply Apps
+	if patch.Apps != nil {
+		for _, ap := range *patch.Apps {
+			existingIdx := -1
+			for i, a := range cfg.Apps {
+				if (ap.ID != nil && *ap.ID != "" && strings.EqualFold(a.ID, *ap.ID)) || strings.EqualFold(a.Name, ap.Name) {
+					existingIdx = i
+					break
+				}
+			}
+
+			if existingIdx >= 0 {
+				// Update existing app
+				diffs, err := mergeApp(&cfg.Apps[existingIdx], ap, now)
+				if err != nil {
+					return nil, nil, err
+				}
+				if len(diffs) > 0 {
+					result.Apps = append(result.Apps, ApplyAppDiff{
+						Name:    cfg.Apps[existingIdx].Name,
+						Action:  "update",
+						Changes: diffs,
+					})
+					result.Summary.ModifiedApps++
+					result.Summary.TotalChanges += len(diffs)
+				}
+			} else {
+				// Create new app
+				newApp, diffs, err := createAppFromPatch(ap, now)
+				if err != nil {
+					return nil, nil, err
+				}
+				cfg.Apps = append(cfg.Apps, *newApp)
+				result.Apps = append(result.Apps, ApplyAppDiff{
+					Name:    newApp.Name,
+					Action:  "create",
+					Changes: diffs,
+				})
+				result.Summary.AddedApps++
+				result.Summary.TotalChanges += len(diffs)
+			}
+		}
+	}
+
+	// 4. Apply NetworkSettings
 	if patch.NetworkSettings != nil {
 		diffs := mergeNetworkSettings(&cfg.NetworkSettings, patch.NetworkSettings)
 		if len(diffs) > 0 {
@@ -1046,6 +1111,160 @@ func createLinkFromPatch(patch config.LinkPatch, now time.Time) (*config.Link, [
 	return &link, diffs, nil
 }
 
+func mergeApp(target *config.App, patch config.AppPatch, now time.Time) ([]ApplyFieldDiff, error) {
+	var diffs []ApplyFieldDiff
+
+	checkField := func(name string, oldVal, newVal interface{}) {
+		if !reflect.DeepEqual(oldVal, newVal) {
+			diffs = append(diffs, ApplyFieldDiff{
+				Field:    name,
+				OldValue: oldVal,
+				NewValue: newVal,
+			})
+		}
+	}
+
+	if patch.Description != nil && *patch.Description != target.Description {
+		checkField("description", target.Description, *patch.Description)
+		target.Description = *patch.Description
+	}
+	if patch.Group != nil && *patch.Group != target.Group {
+		checkField("group", target.Group, *patch.Group)
+		target.Group = *patch.Group
+	}
+	if patch.Note != nil && *patch.Note != target.Note {
+		checkField("note", target.Note, *patch.Note)
+		target.Note = *patch.Note
+	}
+	if patch.URL != nil && *patch.URL != target.URL {
+		checkField("url", target.URL, *patch.URL)
+		target.URL = *patch.URL
+	}
+	if patch.Version != nil && *patch.Version != target.Version {
+		checkField("version", target.Version, *patch.Version)
+		target.Version = *patch.Version
+	}
+	if patch.AppType != nil && *patch.AppType != target.AppType {
+		checkField("app_type", target.AppType, *patch.AppType)
+		target.AppType = *patch.AppType
+	}
+	if patch.MainContent != nil && *patch.MainContent != target.MainContent {
+		checkField("main_content", target.MainContent, *patch.MainContent)
+		target.MainContent = *patch.MainContent
+	}
+	if patch.EnvContent != nil && *patch.EnvContent != target.EnvContent {
+		checkField("env_content", target.EnvContent, *patch.EnvContent)
+		target.EnvContent = *patch.EnvContent
+	}
+	if patch.Files != nil && !reflect.DeepEqual(*patch.Files, target.Files) {
+		checkField("files", target.Files, *patch.Files)
+		target.Files = *patch.Files
+	}
+	if patch.Artifact != nil && !reflect.DeepEqual(patch.Artifact, target.Artifact) {
+		checkField("artifact", target.Artifact, patch.Artifact)
+		target.Artifact = patch.Artifact
+	}
+	if patch.Selector != nil && !reflect.DeepEqual(*patch.Selector, target.Selector) {
+		checkField("selector", target.Selector, *patch.Selector)
+		target.Selector = *patch.Selector
+	}
+	if patch.Published != nil && *patch.Published != target.Published {
+		checkField("published", target.Published, *patch.Published)
+		target.Published = *patch.Published
+	}
+	if patch.Enabled != nil && *patch.Enabled != target.Enabled {
+		checkField("enabled", target.Enabled, *patch.Enabled)
+		target.Enabled = *patch.Enabled
+	}
+
+	if strings.ToLower(target.AppType) == "systemd" && target.MainContent != "" {
+		target.MainContent = apps.EnsureSystemdEnvironmentFile(target.Name, target.MainContent)
+	}
+
+	if err := config.ValidateApp(*target); err != nil {
+		return nil, err
+	}
+
+	if len(diffs) > 0 {
+		target.UpdatedAt = now
+	}
+	return diffs, nil
+}
+
+func createAppFromPatch(patch config.AppPatch, now time.Time) (*config.App, []ApplyFieldDiff, error) {
+	appID := ""
+	if patch.ID != nil && *patch.ID != "" {
+		appID = *patch.ID
+	} else {
+		appID = "app_" + uuid.New().String()[:8]
+	}
+
+	app := config.App{
+		ID:        appID,
+		Name:      patch.Name,
+		Enabled:   true,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+
+	if patch.Description != nil {
+		app.Description = *patch.Description
+	}
+	if patch.Group != nil {
+		app.Group = *patch.Group
+	}
+	if patch.Note != nil {
+		app.Note = *patch.Note
+	}
+	if patch.URL != nil {
+		app.URL = *patch.URL
+	}
+	if patch.Version != nil {
+		app.Version = *patch.Version
+	}
+	if patch.AppType != nil {
+		app.AppType = *patch.AppType
+	}
+	if patch.MainContent != nil {
+		app.MainContent = *patch.MainContent
+	}
+	if patch.EnvContent != nil {
+		app.EnvContent = *patch.EnvContent
+	}
+	if patch.Files != nil {
+		app.Files = *patch.Files
+	}
+	if patch.Artifact != nil {
+		app.Artifact = patch.Artifact
+	}
+	if patch.Selector != nil {
+		app.Selector = *patch.Selector
+	}
+	if patch.Published != nil {
+		app.Published = *patch.Published
+	}
+	if patch.Enabled != nil {
+		app.Enabled = *patch.Enabled
+	}
+
+	if strings.ToLower(app.AppType) == "systemd" && app.MainContent != "" {
+		app.MainContent = apps.EnsureSystemdEnvironmentFile(app.Name, app.MainContent)
+	}
+
+	if err := config.ValidateApp(app); err != nil {
+		return nil, nil, err
+	}
+
+	var diffs []ApplyFieldDiff
+	diffs = append(diffs, ApplyFieldDiff{
+		Field:    "app",
+		OldValue: nil,
+		NewValue: app.Name,
+	})
+
+	return &app, diffs, nil
+}
+
 func mergeNetworkSettings(target *config.NetworkSettings, patch *config.NetworkSettingsPatch) []ApplyFieldDiff {
 	var diffs []ApplyFieldDiff
 	checkField := func(name string, oldVal, newVal interface{}) {
@@ -1369,6 +1588,18 @@ func filterDiffConfig(c *config.Config) map[string]interface{} {
 			}
 		}
 		m["links"] = links
+	}
+	if len(c.Apps) > 0 {
+		appsList := make([]map[string]interface{}, len(c.Apps))
+		for i, a := range c.Apps {
+			appsList[i] = map[string]interface{}{
+				"name":        a.Name,
+				"app_type":    a.AppType,
+				"enabled":     a.Enabled,
+				"description": a.Description,
+			}
+		}
+		m["apps"] = appsList
 	}
 	return m
 }

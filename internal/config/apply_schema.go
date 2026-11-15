@@ -39,6 +39,10 @@ const ConfigChangeJSONSchema = `{
           "type": "array",
           "items": { "$ref": "#/definitions/LinkPatch" }
         },
+        "apps": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/AppPatch" }
+        },
         "blocks": {
           "type": "array",
           "items": { "$ref": "#/definitions/Block" }
@@ -253,6 +257,78 @@ const ConfigChangeJSONSchema = `{
         "target": { "type": "string" },
         "content": { "type": "string" }
       }
+    },
+    "ArtifactFile": {
+      "type": "object",
+      "required": ["name", "target_path"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string" },
+        "extract_path": { "type": "string" },
+        "target_path": { "type": "string" },
+        "file_mode": { "type": "integer" },
+        "pull_policy": { "type": "string" }
+      }
+    },
+    "ArtifactResolver": {
+      "type": "object",
+      "required": ["type", "repo"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "type": "string" },
+        "repo": { "type": "string" },
+        "version": { "type": "string" },
+        "asset_pattern": { "type": "string" }
+      }
+    },
+    "ArtifactSpec": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "url": { "type": "string" },
+        "resolver": { "$ref": "#/definitions/ArtifactResolver" },
+        "arch_mapping": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        },
+        "checksums": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        },
+        "checksum_url": { "type": "string" },
+        "files": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/ArtifactFile" }
+        }
+      }
+    },
+    "AppPatch": {
+      "type": "object",
+      "required": ["name"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string", "pattern": "^[a-zA-Z0-9_-]+$", "minLength": 1, "maxLength": 64 },
+        "description": { "type": "string" },
+        "group": { "type": "string" },
+        "note": { "type": "string" },
+        "url": { "type": "string" },
+        "version": { "type": "string" },
+        "app_type": { "type": "string", "enum": ["docker", "systemd", "cron"] },
+        "main_content": { "type": "string" },
+        "env_content": { "type": "string" },
+        "files": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        },
+        "artifact": { "$ref": "#/definitions/ArtifactSpec" },
+        "selector": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        },
+        "published": { "type": "boolean" },
+        "enabled": { "type": "boolean" }
+      }
     }
   }
 }`
@@ -263,6 +339,7 @@ type ConfigPatch struct {
 	NetworkPolicies *[]NetworkPolicy           `json:"network_policies,omitempty" yaml:"network_policies,omitempty"`
 	Nodes           *[]NodePatch               `json:"nodes,omitempty" yaml:"nodes,omitempty"`
 	Links           *[]LinkPatch               `json:"links,omitempty" yaml:"links,omitempty"`
+	Apps            *[]AppPatch                `json:"apps,omitempty" yaml:"apps,omitempty"`
 	Blocks          *[]Block                   `json:"blocks,omitempty" yaml:"blocks,omitempty"`
 	DNS             *DNSPatch                  `json:"dns,omitempty" yaml:"dns,omitempty"`
 	Templates       *[]ConfigTemplate          `json:"templates,omitempty" yaml:"templates,omitempty"`
@@ -270,6 +347,25 @@ type ConfigPatch struct {
 	CronTasks       *[]CronTask                `json:"cron_tasks,omitempty" yaml:"cron_tasks,omitempty"`
 	Database        *DatabaseSettingsPatch     `json:"database,omitempty" yaml:"database,omitempty"`
 	Integrations    *IntegrationsSettingsPatch `json:"integrations,omitempty" yaml:"integrations,omitempty"`
+}
+
+// AppPatch holds partial changes to an app
+type AppPatch struct {
+	ID          *string            `json:"id,omitempty" yaml:"id,omitempty"`
+	Name        string             `json:"name" yaml:"name"`
+	Description *string            `json:"description,omitempty" yaml:"description,omitempty"`
+	Group       *string            `json:"group,omitempty" yaml:"group,omitempty"`
+	Note        *string            `json:"note,omitempty" yaml:"note,omitempty"`
+	URL         *string            `json:"url,omitempty" yaml:"url,omitempty"`
+	Version     *string            `json:"version,omitempty" yaml:"version,omitempty"`
+	AppType     *string            `json:"app_type,omitempty" yaml:"app_type,omitempty"`
+	MainContent *string            `json:"main_content,omitempty" yaml:"main_content,omitempty"`
+	EnvContent  *string            `json:"env_content,omitempty" yaml:"env_content,omitempty"`
+	Files       *map[string]string `json:"files,omitempty" yaml:"files,omitempty"`
+	Artifact    *ArtifactSpec      `json:"artifact,omitempty" yaml:"artifact,omitempty"`
+	Selector    *map[string]string `json:"selector,omitempty" yaml:"selector,omitempty"`
+	Published   *bool              `json:"published,omitempty" yaml:"published,omitempty"`
+	Enabled     *bool              `json:"enabled,omitempty" yaml:"enabled,omitempty"`
 }
 
 // NetworkSettingsPatch holds partial changes to global network settings
@@ -414,6 +510,11 @@ var forbiddenLinkKeys = map[string]string{
 	"resolved_endpoint": "system-derived peer endpoint",
 }
 
+var forbiddenAppKeys = map[string]string{
+	"created_at": "system-managed timestamp",
+	"updated_at": "system-managed timestamp",
+}
+
 // ParseAndValidateConfigChange parses a JSON or YAML config snippet and performs strict schema verification
 func ParseAndValidateConfigChange(raw []byte) (*ConfigPatch, string, error) {
 	trimmed := bytes.TrimSpace(raw)
@@ -496,6 +597,26 @@ func ParseAndValidateConfigChange(raw []byte) (*ConfigPatch, string, error) {
 		for i := range *patch.Links {
 			if err := validateLinkPatch(&(*patch.Links)[i]); err != nil {
 				return nil, format, fmt.Errorf("links[%d]: %w", i, err)
+			}
+		}
+	}
+
+	// Check forbidden fields inside apps
+	if patch.Apps != nil {
+		if rawApps, ok := genericMap["apps"].([]interface{}); ok {
+			for i, ra := range rawApps {
+				if ram, ok := ra.(map[string]interface{}); ok {
+					for k, reason := range forbiddenAppKeys {
+						if _, exists := ram[k]; exists {
+							return nil, format, fmt.Errorf("apps[%d]: forbidden field '%s': %s cannot be modified via config change", i, k, reason)
+						}
+					}
+				}
+			}
+		}
+		for i := range *patch.Apps {
+			if err := validateAppPatch(&(*patch.Apps)[i]); err != nil {
+				return nil, format, fmt.Errorf("apps[%d] (%s): %w", i, (*patch.Apps)[i].Name, err)
 			}
 		}
 	}
@@ -698,3 +819,64 @@ func validateNetworkSettingsPatch(s *NetworkSettingsPatch) error {
 	}
 	return nil
 }
+
+func validateAppPatch(a *AppPatch) error {
+	a.Name = strings.TrimSpace(a.Name)
+	if err := ValidateAppName(a.Name); err != nil {
+		return err
+	}
+
+	if a.AppType != nil {
+		appType := strings.TrimSpace(strings.ToLower(*a.AppType))
+		if appType != "docker" && appType != "systemd" && appType != "cron" {
+			return fmt.Errorf("unsupported app type '%s': must be 'docker', 'systemd', or 'cron'", *a.AppType)
+		}
+	}
+
+	if a.Selector != nil {
+		if err := ValidateSelector(*a.Selector); err != nil {
+			return err
+		}
+	}
+
+	if a.Files != nil {
+		for filename := range *a.Files {
+			filename = strings.TrimSpace(filename)
+			if filename == "" {
+				return fmt.Errorf("config filename cannot be empty")
+			}
+			if strings.Contains(filename, "..") || strings.HasPrefix(filename, "/") || strings.HasPrefix(filename, "\\") {
+				return fmt.Errorf("invalid config file path '%s': must be a relative path without '..'", filename)
+			}
+		}
+	}
+
+	if a.Artifact != nil {
+		if strings.TrimSpace(a.Artifact.URL) == "" && a.Artifact.Resolver == nil {
+			return fmt.Errorf("artifact must specify either url or resolver")
+		}
+		if a.Artifact.Resolver != nil {
+			if strings.TrimSpace(a.Artifact.Resolver.Repo) == "" {
+				return fmt.Errorf("artifact resolver repo cannot be empty")
+			}
+		}
+		if len(a.Artifact.Files) == 0 {
+			return fmt.Errorf("artifact must specify at least one file to extract")
+		}
+		for i, f := range a.Artifact.Files {
+			if strings.TrimSpace(f.Name) == "" {
+				return fmt.Errorf("artifact file #%d name cannot be empty", i+1)
+			}
+			if strings.TrimSpace(f.TargetPath) == "" {
+				return fmt.Errorf("artifact file '%s' target_path cannot be empty", f.Name)
+			}
+			policy := strings.ToLower(strings.TrimSpace(f.PullPolicy))
+			if policy != "" && policy != "if_changed" && policy != "always" && policy != "if_not_present" && policy != "never" {
+				return fmt.Errorf("artifact file '%s' pull_policy '%s' is invalid", f.Name, f.PullPolicy)
+			}
+		}
+	}
+
+	return nil
+}
+
