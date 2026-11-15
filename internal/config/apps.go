@@ -97,8 +97,8 @@ func ValidateApp(app App) error {
 	}
 
 	if app.Artifact != nil {
-		if appType != "systemd" {
-			return fmt.Errorf("artifacts are only supported for native (systemd) apps")
+		if appType != "systemd" && appType != "cron" {
+			return fmt.Errorf("artifacts are only supported for native (systemd) and cron apps")
 		}
 		if strings.TrimSpace(app.Artifact.URL) == "" && app.Artifact.Resolver == nil {
 			return fmt.Errorf("artifact must specify either url or resolver")

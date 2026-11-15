@@ -159,4 +159,30 @@ func TestValidateCronApp(t *testing.T) {
 	if err := ValidateApp(cronEmpty); err == nil {
 		t.Errorf("expected error for empty main_content in cron app")
 	}
+
+	cronWithArtifactAndFiles := cronApp
+	cronWithArtifactAndFiles.Files = map[string]string{
+		"config.yaml": "key: value\n",
+	}
+	cronWithArtifactAndFiles.Artifact = &ArtifactSpec{
+		URL: "https://example.com/backup-${ARCH}.tar.gz",
+		Files: []ArtifactFile{
+			{
+				Name:       "backup-job",
+				TargetPath: "${PATH}/backup-job",
+				PullPolicy: "if_changed",
+				FileMode:   0755,
+			},
+		},
+	}
+	if err := ValidateApp(cronWithArtifactAndFiles); err != nil {
+		t.Fatalf("expected valid cron app with artifact and files, got: %v", err)
+	}
+
+	dockerWithArtifact := cronWithArtifactAndFiles
+	dockerWithArtifact.AppType = "docker"
+	if err := ValidateApp(dockerWithArtifact); err == nil {
+		t.Errorf("expected error for artifact on docker app")
+	}
 }
+

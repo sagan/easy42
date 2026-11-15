@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	agentpb "easy42/internal/agent/proto"
 	"easy42/internal/apps"
 	"easy42/internal/config"
 )
@@ -303,3 +304,171 @@ func TestArtifactRefreshProducesPendingAppSync(t *testing.T) {
 		t.Fatalf("expected app to be synced after recording refreshed artifact, got needs_apply=true diff_status=%s", act.DiffStatus)
 	}
 }
+
+func TestCronAppWithArtifactAndConfigFiles(t *testing.T) {
+	srv, tempDir, _ := setupTestServer(t)
+	defer func() {
+		srv.mgr.Close()
+		_ = os.RemoveAll(tempDir)
+	}()
+
+	// 1. Build an archive to serve
+	tarContent := []byte("#!/bin/sh\necho backup done\n")
+	h := sha256.Sum256(tarContent)
+	fileHash := hex.EncodeToString(h[:])
+
+	buf := new(bytes.Buffer)
+	gzw := gzip.NewWriter(buf)
+	tw := tar.NewWriter(gzw)
+	hdr := &tar.Header{
+		Name:     "backup-tool-linux-amd64/backup-tool",
+		Mode:     0755,
+		Size:     int64(len(tarContent)),
+		Typeflag: tar.TypeReg,
+	}
+	_ = tw.WriteHeader(hdr)
+	_, _ = tw.Write(tarContent)
+	_ = tw.Close()
+	_ = gzw.Close()
+	archiveBytes := buf.Bytes()
+
+	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/gzip")
+		_, _ = w.Write(archiveBytes)
+	}))
+	defer mockServer.Close()
+
+	// 2. Add node to config
+	cfg := srv.mgr.Store().Get()
+	cfg.Nodes = append(cfg.Nodes, config.Node{
+		Name: "cron-node",
+		Host: "192.168.1.70",
+		IP:   "10.42.0.88/24",
+	})
+	_ = srv.mgr.Store().Save(cfg)
+
+	// 3. Create cron app with Artifact and Config Files
+	app := config.App{
+		ID:          "app_cron_backup",
+		Name:        "backup-cron",
+		Version:     "v1.0.0",
+		AppType:     "cron",
+		MainContent: "0 2 * * * ${PATH}/backup-tool --config ${EZAPP_DIR}/config.yaml",
+		Files: map[string]string{
+			"config.yaml": "retention_days: 7\n",
+		},
+		Artifact: &config.ArtifactSpec{
+			URL: mockServer.URL + "/backup-tool-linux-${ARCH}.tar.gz",
+			Files: []config.ArtifactFile{
+				{
+					Name:        "backup-tool",
+					ExtractPath: "backup-tool-linux-*/backup-tool",
+					TargetPath:  "${PATH}/backup-tool",
+					FileMode:    0755,
+					PullPolicy:  "if_changed",
+				},
+			},
+		},
+		Selector:  map[string]string{"name": "cron-node"},
+		Published: true,
+		Enabled:   true,
+	}
+
+	saved, err := srv.mgr.SaveApp(app)
+	if err != nil {
+		t.Fatalf("SaveApp failed: %v", err)
+	}
+	if saved.Artifact == nil {
+		t.Fatalf("expected saved cron app to retain Artifact")
+	}
+	if len(saved.Files) != 1 {
+		t.Fatalf("expected saved cron app to retain Files")
+	}
+
+	// 4. Build specs for node
+	specs, err := srv.mgr.BuildAppSpecsForNode("cron-node")
+	if err != nil {
+		t.Fatalf("BuildAppSpecsForNode failed: %v", err)
+	}
+	if len(specs) != 1 {
+		t.Fatalf("expected 1 app spec, got %d", len(specs))
+	}
+
+	spec := specs[0]
+	if spec.AppType != agentpb.AppType_CRON {
+		t.Errorf("expected AppType_CRON, got %v", spec.AppType)
+	}
+	if len(spec.Artifacts) != 1 {
+		t.Fatalf("expected 1 artifact in cron AppSpec, got %d", len(spec.Artifacts))
+	}
+	art := spec.Artifacts[0]
+	if art.Name != "backup-tool" {
+		t.Errorf("expected artifact name 'backup-tool', got %s", art.Name)
+	}
+	if !strings.HasSuffix(art.TargetPath, "/backup-tool") {
+		t.Errorf("expected target_path ending with /backup-tool, got %s", art.TargetPath)
+	}
+	if art.FileSha256 != fileHash {
+		t.Errorf("expected file_sha256 %s, got %s", fileHash, art.FileSha256)
+	}
+	if art.DownloadToken == "" {
+		t.Errorf("download_token cannot be empty")
+	}
+
+	// Check ConfigFiles
+	if len(spec.ConfigFiles) != 1 {
+		t.Fatalf("expected 1 config file in cron AppSpec, got %d", len(spec.ConfigFiles))
+	}
+	cf := spec.ConfigFiles[0]
+	if cf.Path != "config.yaml" {
+		t.Errorf("expected config file path 'config.yaml', got %s", cf.Path)
+	}
+	if string(cf.Content) != "retention_days: 7\n" {
+		t.Errorf("unexpected config file content: %s", string(cf.Content))
+	}
+
+	// 5. Test download endpoint with token
+	req := httptest.NewRequest(http.MethodGet, "/api/download?token="+art.DownloadToken, nil)
+	w := httptest.NewRecorder()
+	srv.handleArtifactDownload(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK from download, got %d", w.Code)
+	}
+	downloaded, _ := io.ReadAll(w.Body)
+	if string(downloaded) != string(tarContent) {
+		t.Fatalf("downloaded binary mismatch")
+	}
+
+	// 6. Plan sync and verify actions
+	actions, err := srv.mgr.PlanSyncWithScope("", "cron-node")
+	if err != nil {
+		t.Fatalf("PlanSyncWithScope failed: %v", err)
+	}
+
+	var cronMainAction, cronAuxAction *config.SyncAction
+	for i := range actions {
+		act := &actions[i]
+		if act.Interface == "backup-cron" && act.Type == config.ActionSyncApp {
+			if strings.HasPrefix(act.TargetFile, "crontab:ezapp-") {
+				cronMainAction = act
+			} else if act.TargetFile == "/etc/ezapp/backup-cron/config.yaml" {
+				cronAuxAction = act
+			}
+		}
+	}
+
+	if cronMainAction == nil {
+		t.Fatalf("expected cron main action with TargetFile crontab:ezapp-backup-cron")
+	}
+	if !cronMainAction.NeedsApply || cronMainAction.DiffStatus != "create" {
+		t.Errorf("expected cronMainAction needs_apply=true diff_status=create, got %+v", cronMainAction)
+	}
+
+	if cronAuxAction == nil {
+		t.Fatalf("expected cron auxiliary config file action for /etc/ezapp/backup-cron/config.yaml")
+	}
+	if !cronAuxAction.NeedsApply || cronAuxAction.DiffStatus != "create" {
+		t.Errorf("expected cronAuxAction needs_apply=true diff_status=create, got %+v", cronAuxAction)
+	}
+}
+

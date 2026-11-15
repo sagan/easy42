@@ -551,7 +551,7 @@ func TestTranspileWgWatcherUnitToProcd(t *testing.T) {
 			t.Errorf("script missing %q:\n%s", want, script)
 		}
 	}
-	expectedEnvLine := "procd_set_param env DIR='/etc/ezapp/wg-watcher' IP='192.168.50.1'"
+	expectedEnvLine := "procd_set_param env DIR='/etc/ezapp/wg-watcher' HOME='/root' IP='192.168.50.1'"
 	if !strings.Contains(script, expectedEnvLine) {
 		t.Errorf("script missing sorted env line %q:\n%s", expectedEnvLine, script)
 	}

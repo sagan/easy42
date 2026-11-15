@@ -248,12 +248,10 @@ impl AppsManager {
                 .collect();
         }
 
-        // 2. Install or update non-cron desired apps
+        // 2. Install or update desired apps
         for app in &desired_apps {
-            if app.app_type != AppType::Cron as i32 {
-                if let Err(e) = self.apply_app(app).await {
-                    error!("Failed to apply app '{}': {}", app.name, e);
-                }
+            if let Err(e) = self.apply_app(app).await {
+                error!("Failed to apply app '{}': {}", app.name, e);
             }
         }
 
@@ -443,6 +441,55 @@ impl AppsManager {
             }
         }
 
+        // 4. Cron apps and auxiliary files in /etc/ezapp/
+        if let Ok(cron_lock) = self.installed_cron_apps.try_lock() {
+            for app in cron_lock.iter() {
+                let data_dir = PathBuf::from(APP_DATA_BASE_DIR).join(&app.name);
+                let files = read_managed_files(&data_dir);
+                let hash = compute_files_hash(&app.main_content, &app.env_content, &files);
+                hashes.insert(app.name.clone(), hash);
+
+                for (rel_path, content) in files {
+                    let abs_path = data_dir.join(&rel_path).to_string_lossy().to_string();
+                    files_map.insert(
+                        abs_path.clone(),
+                        AppInstalledFile {
+                            path: abs_path,
+                            hash: hash_single_content(&content),
+                            content,
+                        },
+                    );
+                }
+            }
+        }
+
+        // Also discover any managed files in /etc/ezapp/<name> not yet in files_map
+        if Path::new(APP_DATA_BASE_DIR).exists() {
+            if let Ok(entries) = fs::read_dir(APP_DATA_BASE_DIR) {
+                for entry in entries.flatten() {
+                    if let Ok(ft) = entry.file_type() {
+                        if ft.is_dir() {
+                            let data_dir = entry.path();
+                            if data_dir.join(MANAGED_MANIFEST_FILE).exists() {
+                                let files = read_managed_files(&data_dir);
+                                for (rel_path, content) in files {
+                                    let abs_path =
+                                        data_dir.join(&rel_path).to_string_lossy().to_string();
+                                    files_map.entry(abs_path.clone()).or_insert_with(|| {
+                                        AppInstalledFile {
+                                            path: abs_path,
+                                            hash: hash_single_content(&content),
+                                            content,
+                                        }
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         (hashes, files_map)
     }
 
@@ -460,8 +507,30 @@ impl AppsManager {
         match app_type {
             AppType::DockerCompose => self.apply_docker_app(app).await,
             AppType::Systemd => self.apply_native_app(app).await,
-            AppType::Cron => Ok(()),
+            AppType::Cron => self.apply_cron_app(app).await,
         }
+    }
+
+    async fn apply_cron_app(&self, app: &AppSpec) -> Result<(), String> {
+        // Write auxiliary config files to /etc/ezapp/<name>/
+        let app_data_dir = PathBuf::from(APP_DATA_BASE_DIR).join(&app.name);
+        self.sync_config_files(&app_data_dir, &app.config_files, &[])?;
+
+        // Process and verify all required artifacts
+        for artifact in &app.artifacts {
+            if let Err(e) = self.ensure_artifact(&app.name, artifact).await {
+                let err_msg = format!("Artifact '{}' preparation failed: {}", artifact.name, e);
+                error!("{}", err_msg);
+                let mut errors = self.app_errors.lock().await;
+                errors.insert(app.name.clone(), err_msg.clone());
+                return Err(err_msg);
+            }
+        }
+
+        let mut errors = self.app_errors.lock().await;
+        errors.remove(&app.name);
+
+        Ok(())
     }
 
     async fn apply_docker_app(&self, app: &AppSpec) -> Result<(), String> {
@@ -950,6 +1019,29 @@ impl AppsManager {
                 }
             }
         }
+
+        // 4. App data directories in /etc/ezapp/
+        if Path::new(APP_DATA_BASE_DIR).exists() {
+            if let Ok(entries) = fs::read_dir(APP_DATA_BASE_DIR) {
+                for entry in entries.flatten() {
+                    if let Ok(ft) = entry.file_type() {
+                        if ft.is_dir() {
+                            let name = entry.file_name().to_string_lossy().to_string();
+                            if !desired_names.contains(&name) {
+                                let app_data_dir = entry.path();
+                                if app_data_dir.join(MANAGED_MANIFEST_FILE).exists() {
+                                    info!(
+                                        "Removing orphaned app data directory in ezapp for '{}'...",
+                                        name
+                                    );
+                                    remove_managed_app_files(&app_data_dir, &[]);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     /// Query live status of all installed apps on the host
@@ -1056,7 +1148,14 @@ impl AppsManager {
 
             for app in cron_apps {
                 if seen.insert(app.name.clone()) {
-                    let (state, text) = if !current_block.is_empty() {
+                    let last_error = {
+                        let errors = self.app_errors.lock().await;
+                        errors.get(&app.name).cloned().unwrap_or_default()
+                    };
+
+                    let (state, text) = if !last_error.is_empty() {
+                        ("failed".to_string(), "artifact preparation failed".to_string())
+                    } else if !current_block.is_empty() {
                         if app.enabled {
                             (
                                 "running".to_string(),
@@ -1079,7 +1178,7 @@ impl AppsManager {
                         state,
                         status_text: text,
                         last_updated: chrono_now(),
-                        error_message: String::new(),
+                        error_message: last_error,
                     });
                 }
             }
@@ -1833,4 +1932,33 @@ mod tests {
         let errors = mgr.app_errors.lock().await;
         assert!(!errors.contains_key("test-app"));
     }
+
+    #[tokio::test]
+    async fn test_cron_app_status_with_artifact_error() {
+        let mgr = AppsManager::new();
+        {
+            let mut cron_lock = mgr.installed_cron_apps.lock().await;
+            cron_lock.push(AppSpec {
+                id: "cron-1".to_string(),
+                name: "backup-job".to_string(),
+                app_type: AppType::Cron as i32,
+                main_content: "0 0 * * * /root/backup.sh".to_string(),
+                enabled: true,
+                ..Default::default()
+            });
+        }
+        {
+            let mut errors = mgr.app_errors.lock().await;
+            errors.insert(
+                "backup-job".to_string(),
+                "Artifact 'backup-bin' preparation failed: download failed".to_string(),
+            );
+        }
+
+        let statuses = mgr.collect_app_statuses().await;
+        let cron_st = statuses.iter().find(|s| s.name == "backup-job").unwrap();
+        assert_eq!(cron_st.state, "failed");
+        assert!(cron_st.error_message.contains("download failed"));
+    }
 }
+

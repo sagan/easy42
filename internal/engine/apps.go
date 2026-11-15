@@ -656,8 +656,8 @@ func (m *Manager) BuildAppSpecsForNode(nodeName string) ([]*agentpb.AppSpec, err
 			}
 		}
 
-		// Process Artifacts for native (systemd) apps
-		if rawApp.Artifact != nil && strings.ToLower(rawApp.AppType) == "systemd" && m.artifactMgr != nil && m.artifactTokens != nil {
+		// Process Artifacts for native (systemd) and cron apps
+		if rawApp.Artifact != nil && (strings.ToLower(rawApp.AppType) == "systemd" || strings.ToLower(rawApp.AppType) == "cron") && m.artifactMgr != nil && m.artifactTokens != nil {
 			osName := "linux"
 
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)

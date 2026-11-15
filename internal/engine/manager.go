@@ -3938,6 +3938,11 @@ func (m *Manager) PlanSyncWithScope(scope string, nodeNames ...string) ([]config
 				// container runtime (docker, podman, or nerdctl) at apply time.
 				applyCmd = "(docker|podman|nerdctl) compose up -d"
 				mainDesc = fmt.Sprintf("Deploy app '%s' compose file on %s", spec.Name, node.Name)
+			} else if spec.AppType == agentpb.AppType_CRON {
+				mainTargetFile = fmt.Sprintf("crontab:ezapp-%s", spec.Name)
+				envTargetFile = ""
+				applyCmd = "crontab"
+				mainDesc = fmt.Sprintf("Deploy app '%s' cron job on %s", spec.Name, node.Name)
 			} else if initSystem == apps.InitSystemProcd {
 				mainTargetFile = fmt.Sprintf("/etc/init.d/ezapp-%s", spec.Name)
 				envTargetFile = ""
@@ -5897,7 +5902,8 @@ func (m *Manager) executeAgentSyncAction(act config.SyncAction, res *config.Sync
 
 			isWholeAppDelete := strings.HasSuffix(act.TargetFile, ".service") ||
 				strings.HasSuffix(act.TargetFile, "compose.yaml") ||
-				strings.HasPrefix(act.TargetFile, "/etc/init.d/ezapp-")
+				strings.HasPrefix(act.TargetFile, "/etc/init.d/ezapp-") ||
+				strings.HasPrefix(act.TargetFile, "crontab:ezapp-")
 
 			if isWholeAppDelete {
 				_ = m.stateStore.RemoveAppState(act.NodeName, act.Interface)

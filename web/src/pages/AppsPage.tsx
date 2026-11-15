@@ -799,10 +799,10 @@ export const AppsPage: React.FC = () => {
     setFormType(newType);
     if (
       newType === "cron" &&
-      (modalTab === "env" || modalTab === "files" || modalTab === "transpile" || modalTab === "artifact")
+      (modalTab === "env" || modalTab === "transpile")
     ) {
       setModalTab("definition");
-    } else if (newType !== "systemd" && (modalTab === "artifact" || modalTab === "transpile")) {
+    } else if (newType === "docker" && (modalTab === "artifact" || modalTab === "transpile")) {
       setModalTab("definition");
     }
     if (!editingApp) {
@@ -864,7 +864,7 @@ export const AppsPage: React.FC = () => {
             : formMain;
 
       let artifactPayload: ArtifactSpec | undefined = undefined;
-      if (formType === "systemd" && formArtifactEnabled) {
+      if ((formType === "systemd" || formType === "cron") && formArtifactEnabled) {
         const validFiles = formArtifactFiles.filter((f) => f.name.trim() && f.target_path.trim());
         if (validFiles.length === 0) {
           alert("Artifact is enabled: please specify at least one file to extract with name and target path");
@@ -930,8 +930,8 @@ export const AppsPage: React.FC = () => {
         app_type: formType,
         main_content: resolvedMainContent,
         env_content: formType === "cron" ? "" : formEnv,
-        files: formType === "cron" ? {} : filesMap,
-        artifact: formType === "systemd" ? artifactPayload : undefined,
+        files: filesMap,
+        artifact: (formType === "systemd" || formType === "cron") ? artifactPayload : undefined,
         selector: parsedSelector.selector,
         published: formPublished,
         enabled: formEnabled,
@@ -1091,8 +1091,15 @@ export const AppsPage: React.FC = () => {
       if (formType === "cron") {
         const fullCron = `${formCronExpr.trim()} ${formCronCmd.trim()}`.trim();
         previewContent = `--- [cron schedule & command] ---\n${fullCron}\n\n--- [installed crontab entry] ---\n${formEnabled ? fullCron : `#${fullCron}`}`;
+        if (formFiles.length > 0) {
+          previewContent += "\n\n" + formFiles.map((f) => `--- [file: /etc/ezapp/${formName.trim() || "<name>"}/${f.name}] ---\n${f.content}`).join("\n\n");
+        }
       } else {
         previewContent = `--- [compose / service manifest] ---\n${formMain}\n\n--- [.env] ---\n${formEnv}`;
+        if (formFiles.length > 0) {
+          const dir = formType === "docker" ? `./` : `/etc/ezapp/${formName.trim() || "<name>"}/`;
+          previewContent += "\n\n" + formFiles.map((f) => `--- [file: ${dir}${f.name}] ---\n${f.content}`).join("\n\n");
+        }
       }
       const res = await api.previewInterpolate({
         content: previewContent,
@@ -3981,17 +3988,15 @@ export const AppsPage: React.FC = () => {
             {formType !== "cron" && (
               <Tab value="env" label="Environment (.env)" icon={<FileText size={16} />} iconPosition="start" />
             )}
-            {formType !== "cron" && (
-              <Tab
-                value="files"
-                label={`Config Files (${formFiles.length})`}
-                icon={<FilePlus size={16} />}
-                iconPosition="start"
-              />
-            )}
+            <Tab
+              value="files"
+              label={`Config Files (${formFiles.length})`}
+              icon={<FilePlus size={16} />}
+              iconPosition="start"
+            />
             <Tab value="note" label="Note" icon={<FileText size={16} />} iconPosition="start" />
             <Tab value="preview" label="Variables Preview" icon={<Code2 size={16} />} iconPosition="start" />
-            {formType === "systemd" && (
+            {(formType === "systemd" || formType === "cron") && (
               <Tab
                 value="artifact"
                 label={formArtifactEnabled ? "Artifact Spec (Active)" : "Artifact Spec"}
@@ -5224,7 +5229,7 @@ ${formEnabled ? `${formCronExpr.trim() || "0 0 * * *"} ${formCronCmd.trim() || "
                     Auxiliary Config Files Map
                   </Typography>
                   <Typography variant="caption" sx={{ color: "#64748B" }}>
-                    Injected into app directory (./filename) for Docker or /etc/ezapp/&lt;name&gt;/ for native daemons.
+                    Injected into app directory (./filename) for Docker or /etc/ezapp/&lt;name&gt;/ for native daemons and cron apps.
                   </Typography>
                 </Box>
                 <Button
@@ -5482,7 +5487,7 @@ ${formEnabled ? `${formCronExpr.trim() || "0 0 * * *"} ${formCronCmd.trim() || "
                   </Typography>
                   <Typography variant="caption" sx={{ color: "#64748B", display: "block", mt: 0.5 }}>
                     Enable this to automatically download, verify, decompress, and deploy app binaries or archives to
-                    nodes. The native service will only start after all required artifacts are verified on the node.
+                    nodes. The native service or cron task will only execute after all required artifacts are verified on the node.
                   </Typography>
                 </Box>
                 <FormControlLabel
