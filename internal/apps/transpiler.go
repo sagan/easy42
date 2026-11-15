@@ -1198,6 +1198,11 @@ func TranspileToProcd(appName string, rawUnit *ParsedServiceUnit, envVars map[st
 		sb.WriteString("    procd_set_param stderr 1\n")
 	}
 
+	// OpenWrt Procd doesn't set HOME env to user home path so we must do it manually
+	// To keep it simple we only support root user and use hardcoded path
+	if _, ok := envVars["HOME"]; !ok && unit.User == "root" {
+		envVars["HOME"] = "/root"
+	}
 	// env vars
 	if len(envVars) > 0 {
 		keys := make([]string, 0, len(envVars))

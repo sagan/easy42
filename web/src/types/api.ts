@@ -121,6 +121,36 @@ export interface ConfigTemplate {
   modified_at?: string;
 }
 
+export interface CustomAPI {
+  id: string;
+  name?: string;
+  description?: string;
+  content_type: string;
+  token?: string;
+  extra_headers?: Record<string, string>;
+  template: string;
+  disabled?: boolean;
+  created_at?: string;
+  modified_at?: string;
+}
+
+export interface CustomAPITestRequest {
+  api: CustomAPI;
+  request?: {
+    method?: string;
+    path?: string;
+    query?: Record<string, string>;
+    headers?: Record<string, string>;
+    body?: string;
+  };
+}
+
+export interface CustomAPITestResponse {
+  output: string;
+  content_type: string;
+  headers?: Record<string, string>;
+}
+
 export interface Node {
   name: string;
   host?: string;

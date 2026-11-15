@@ -211,6 +211,7 @@ type Config struct {
 	Database          DatabaseSettings     `json:"database,omitempty"`
 	Integrations      IntegrationsSettings `json:"integrations,omitempty"`
 	MCP               MCPSettings          `json:"mcp,omitempty"`
+	CustomAPIs        []CustomAPI          `json:"custom_apis,omitempty"`
 	ConfigChanges     []ConfigChange       `json:"config_changes,omitempty"`
 }
 

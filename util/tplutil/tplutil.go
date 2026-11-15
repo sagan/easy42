@@ -100,6 +100,8 @@ func getTemplate(tpl string, strict bool, hooks map[string]string, extraFuncs ma
 	templateInstance := template.New("template").Funcs(templateFuncs).Funcs(funcs)
 	if strict {
 		templateInstance = templateInstance.Option("missingkey=error")
+	} else {
+		templateInstance = templateInstance.Option("missingkey=zero")
 	}
 
 	var jsvm *goja.Runtime

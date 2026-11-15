@@ -164,6 +164,10 @@ func New(cfg Config) *Server {
 		// Telegram Bot webhook route (public - called by Telegram servers)
 		r.Post("/telegram/webhook", s.handleTelegramWebhook)
 
+		// Custom programmable API route (public / token-authenticated per API configuration)
+		r.HandleFunc("/custom/{id}", s.handleExecuteCustomAPI)
+		r.HandleFunc("/custom/{id}/*", s.handleExecuteCustomAPI)
+
 		// Protected routes
 		r.Group(func(r chi.Router) {
 			r.Use(s.authMiddleware)
@@ -272,6 +276,14 @@ func New(cfg Config) *Server {
 			r.Get("/templates/{id}", s.handleGetTemplate)
 			r.Put("/templates/{id}", s.handleUpdateTemplate)
 			r.Delete("/templates/{id}", s.handleDeleteTemplate)
+
+			// Custom Programmable APIs
+			r.Get("/custom-apis", s.handleGetCustomAPIs)
+			r.Post("/custom-apis", s.handleCreateCustomAPI)
+			r.Get("/custom-apis/{id}", s.handleGetCustomAPI)
+			r.Put("/custom-apis/{id}", s.handleUpdateCustomAPI)
+			r.Delete("/custom-apis/{id}", s.handleDeleteCustomAPI)
+			r.Post("/custom-apis/test", s.handleTestCustomAPI)
 
 			// ROA Cache
 			r.Post("/roa/refresh", s.handleRefreshAllROA)

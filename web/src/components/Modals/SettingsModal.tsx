@@ -45,6 +45,7 @@ import {
   RefreshCw,
   Zap,
   FileCode,
+  Code,
   Search,
   Check,
   Activity,
@@ -85,6 +86,7 @@ import TextFieldWithCopy from "../Common/TextFieldWithCopy";
 import { Easy42Logo } from "../Logo/Easy42Logo";
 import { flushCacheAndServiceWorker } from "../../utils/pwa";
 import { MCPSettingsTab } from "../Settings/MCPSettingsTab";
+import { APISettingsTab } from "../Settings/APISettingsTab";
 
 export const parsePrefixList = (input: string): string[] => {
   const result: string[] = [];
@@ -179,7 +181,7 @@ export const EXPORT_FILTER_EXAMPLES = [
 ];
 
 export type SettingsTab =
-  "network" | "security" | "policies" | "templates" | "dns" | "tasks" | "database" | "integrations" | "mcp" | "about";
+  "network" | "security" | "policies" | "templates" | "dns" | "tasks" | "database" | "integrations" | "mcp" | "api" | "about";
 
 const VALID_TABS: Record<string, SettingsTab> = {
   network: "network",
@@ -193,6 +195,7 @@ const VALID_TABS: Record<string, SettingsTab> = {
   database: "database",
   integrations: "integrations",
   mcp: "mcp",
+  api: "api",
   about: "about",
 };
 
@@ -1568,6 +1571,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
               iconPosition="start"
               label="MCP"
               title="Model Context Protocol (AI Agent)"
+            />
+            <Tab
+              value="api"
+              icon={<Code size={16} />}
+              iconPosition="start"
+              label="API"
+              title="Programmable API"
             />
             <Tab value="about" icon={<Info size={16} />} iconPosition="start" label="About" title="About" />
           </Tabs>
@@ -5691,6 +5701,25 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
               }}
             >
               <MCPSettingsTab />
+            </DialogContent>
+          </Box>
+        )}
+
+        {activeTab === "api" && (
+          <Box sx={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, overflow: "hidden" }}>
+            <DialogContent
+              sx={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 3.5,
+                py: 3,
+                px: 3,
+                flex: 1,
+                minHeight: 0,
+                overflowY: "auto",
+              }}
+            >
+              <APISettingsTab />
             </DialogContent>
           </Box>
         )}

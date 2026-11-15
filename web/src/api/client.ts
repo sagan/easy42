@@ -56,6 +56,9 @@ import type {
   AppArtifactStatus,
   ArtifactValidationResult,
   ArtifactClearCacheResult,
+  CustomAPI,
+  CustomAPITestRequest,
+  CustomAPITestResponse,
 } from "../types/api";
 
 const API_BASE = "/api";
@@ -434,6 +437,29 @@ export const api = {
   deleteTemplate: (id: string) =>
     request<{ message: string }>(`/templates/${encodeURIComponent(id)}`, {
       method: "DELETE",
+    }),
+
+  // Programmable Custom APIs
+  getCustomAPIs: () => request<CustomAPI[]>("/custom-apis"),
+  getCustomAPI: (id: string) => request<CustomAPI>(`/custom-apis/${encodeURIComponent(id)}`),
+  createCustomAPI: (data: Partial<CustomAPI>) =>
+    request<CustomAPI>("/custom-apis", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  updateCustomAPI: (id: string, data: Partial<CustomAPI>) =>
+    request<CustomAPI>(`/custom-apis/${encodeURIComponent(id)}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+  deleteCustomAPI: (id: string) =>
+    request<{ message: string }>(`/custom-apis/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    }),
+  testCustomAPI: (data: CustomAPITestRequest) =>
+    request<CustomAPITestResponse>("/custom-apis/test", {
+      method: "POST",
+      body: JSON.stringify(data),
     }),
 
   refreshAllROA: () =>
