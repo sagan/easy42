@@ -21,10 +21,22 @@ pub const OPENRC_INIT_DIR: &str = "/etc/init.d";
 pub const OPENRC_CONF_DIR: &str = "/etc/conf.d";
 pub const PROCD_INIT_DIR: &str = "/etc/init.d";
 pub const APP_DATA_BASE_DIR: &str = "/etc/ezapp";
+pub const EZSCRIPT_BASE_DIR: &str = "/etc/ezscript";
 /// Hidden manifest listing the files Easy42 generated inside an app directory.
 /// It lets the agent distinguish managed files from data created by the app
 /// (for example bind-mounted volumes) during updates and garbage collection.
 pub const MANAGED_MANIFEST_FILE: &str = ".easy42-managed.json";
+
+#[derive(Debug)]
+pub struct ScriptExecutionRecord {
+    pub pid: u32,
+    pub started_at: i64,
+    pub ended_at: Option<i64>,
+    pub exit_code: Option<i32>,
+    pub is_running: bool,
+    pub logs: Arc<Mutex<Vec<String>>>,
+    pub stop_sender: Option<tokio::sync::oneshot::Sender<()>>,
+}
 
 #[derive(Serialize, Deserialize, Default)]
 struct ManagedFilesManifest {
@@ -195,6 +207,8 @@ pub struct AppsManager {
     starting_apps: Arc<Mutex<HashMap<String, i64>>>,
     app_errors: Arc<Mutex<HashMap<String, String>>>,
     installed_cron_apps: Arc<Mutex<Vec<AppSpec>>>,
+    installed_script_apps: Arc<Mutex<Vec<AppSpec>>>,
+    script_executions: Arc<Mutex<HashMap<String, ScriptExecutionRecord>>>,
 }
 
 impl AppsManager {
@@ -214,6 +228,8 @@ impl AppsManager {
             starting_apps: Arc::new(Mutex::new(HashMap::new())),
             app_errors: Arc::new(Mutex::new(HashMap::new())),
             installed_cron_apps: Arc::new(Mutex::new(Vec::new())),
+            installed_script_apps: Arc::new(Mutex::new(Vec::new())),
+            script_executions: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -228,10 +244,13 @@ impl AppsManager {
 
         let mut desired_names = HashSet::new();
         let mut cron_apps = Vec::new();
+        let mut script_apps = Vec::new();
         for app in &desired_apps {
             desired_names.insert(app.name.clone());
             if app.app_type == AppType::Cron as i32 {
                 cron_apps.push(app);
+            } else if app.app_type == AppType::Script as i32 {
+                script_apps.push(app.clone());
             }
         }
 
@@ -246,6 +265,10 @@ impl AppsManager {
                 .filter(|a| a.app_type == AppType::Cron as i32)
                 .cloned()
                 .collect();
+        }
+        {
+            let mut lock = self.installed_script_apps.lock().await;
+            *lock = script_apps;
         }
 
         // 2. Install or update desired apps
@@ -490,6 +513,32 @@ impl AppsManager {
             }
         }
 
+        // 5. Script apps in /etc/ezscript/<name>
+        if Path::new(EZSCRIPT_BASE_DIR).exists() {
+            if let Ok(entries) = fs::read_dir(EZSCRIPT_BASE_DIR) {
+                for entry in entries.flatten() {
+                    if let Ok(ft) = entry.file_type() {
+                        if ft.is_file() {
+                            let name = entry.file_name().to_string_lossy().to_string();
+                            let path = entry.path();
+                            let content = fs::read_to_string(&path).unwrap_or_default();
+                            let hash = hash_single_content(&content);
+                            hashes.insert(name.clone(), hash.clone());
+                            let path_str = path.to_string_lossy().to_string();
+                            files_map.insert(
+                                path_str.clone(),
+                                AppInstalledFile {
+                                    path: path_str,
+                                    hash,
+                                    content,
+                                },
+                            );
+                        }
+                    }
+                }
+            }
+        }
+
         (hashes, files_map)
     }
 
@@ -508,7 +557,21 @@ impl AppsManager {
             AppType::DockerCompose => self.apply_docker_app(app).await,
             AppType::Systemd => self.apply_native_app(app).await,
             AppType::Cron => self.apply_cron_app(app).await,
+            AppType::Script => self.apply_script_app(app).await,
         }
+    }
+
+    async fn apply_script_app(&self, app: &AppSpec) -> Result<(), String> {
+        let dir = Path::new(EZSCRIPT_BASE_DIR);
+        if !dir.exists() {
+            fs::create_dir_all(dir)
+                .map_err(|e| format!("failed to create dir {:?}: {}", dir, e))?;
+        }
+        let script_file = dir.join(&app.name);
+        fs::write(&script_file, &app.main_content)
+            .map_err(|e| format!("failed to write script {:?}: {}", script_file, e))?;
+        let _ = fs::set_permissions(&script_file, fs::Permissions::from_mode(0o755));
+        Ok(())
     }
 
     async fn apply_cron_app(&self, app: &AppSpec) -> Result<(), String> {
@@ -1042,6 +1105,39 @@ impl AppsManager {
                 }
             }
         }
+
+        // 5. Script apps in /etc/ezscript/<name>
+        if Path::new(EZSCRIPT_BASE_DIR).exists() {
+            if let Ok(entries) = fs::read_dir(EZSCRIPT_BASE_DIR) {
+                for entry in entries.flatten() {
+                    if let Ok(ft) = entry.file_type() {
+                        if ft.is_file() {
+                            let name = entry.file_name().to_string_lossy().to_string();
+                            if !desired_names.contains(&name) {
+                                info!("Removing orphaned script app '{}'...", name);
+                                {
+                                    let mut exec_lock = self.script_executions.lock().await;
+                                    if let Some(record) = exec_lock.get_mut(&name) {
+                                        if record.is_running {
+                                            if let Some(tx) = record.stop_sender.take() {
+                                                let _ = tx.send(());
+                                            }
+                                            unsafe {
+                                                if record.pid > 0 {
+                                                    libc::kill(-(record.pid as i32), libc::SIGKILL);
+                                                }
+                                            }
+                                            record.is_running = false;
+                                        }
+                                    }
+                                }
+                                let _ = fs::remove_file(entry.path());
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     /// Query live status of all installed apps on the host
@@ -1180,6 +1276,47 @@ impl AppsManager {
                         last_updated: chrono_now(),
                         error_message: last_error,
                     });
+                }
+            }
+        }
+
+        // 5. Check Script apps
+        if Path::new(EZSCRIPT_BASE_DIR).exists() {
+            if let Ok(entries) = fs::read_dir(EZSCRIPT_BASE_DIR) {
+                for entry in entries.flatten() {
+                    if let Ok(ft) = entry.file_type() {
+                        if ft.is_file() {
+                            let name = entry.file_name().to_string_lossy().to_string();
+                            if seen.insert(name.clone()) {
+                                let exec_lock = self.script_executions.lock().await;
+                                let (state, status_text) = if let Some(rec) = exec_lock.get(&name) {
+                                    if rec.is_running {
+                                        ("running".to_string(), format!("running (PID {})", rec.pid))
+                                    } else if let Some(code) = rec.exit_code {
+                                        if code == 0 {
+                                            ("stopped".to_string(), "exited (code 0)".to_string())
+                                        } else {
+                                            ("failed".to_string(), format!("exited (code {})", code))
+                                        }
+                                    } else {
+                                        ("stopped".to_string(), "ready".to_string())
+                                    }
+                                } else {
+                                    ("stopped".to_string(), "ready".to_string())
+                                };
+
+                                statuses.push(AppStatus {
+                                    app_id: String::new(),
+                                    name,
+                                    app_type: AppType::Script as i32,
+                                    state,
+                                    status_text,
+                                    last_updated: chrono_now(),
+                                    error_message: String::new(),
+                                });
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -1429,6 +1566,330 @@ impl AppsManager {
                 String::new(),
                 "cron apps do not support action execution".to_string(),
             ),
+            AppType::Script => {
+                self.handle_script_action(&req.app_name, &action, lines).await
+            }
+        }
+    }
+
+    async fn handle_script_action(
+        &self,
+        app_name: &str,
+        action: &str,
+        lines: u32,
+    ) -> (bool, i32, String, String) {
+        if app_name.is_empty() || app_name.contains('/') || app_name.contains("..") {
+            return (
+                false,
+                -1,
+                String::new(),
+                format!("invalid script name '{}'", app_name),
+            );
+        }
+
+        match action {
+            "start" => self.start_script(app_name).await,
+            "stop" => self.stop_script(app_name).await,
+            "restart" => {
+                let _ = self.stop_script(app_name).await;
+                tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+                self.start_script(app_name).await
+            }
+            "logs" => self.get_script_logs(app_name, lines).await,
+            other => (
+                false,
+                -1,
+                String::new(),
+                format!("unknown action '{}' for script app", other),
+            ),
+        }
+    }
+
+    async fn start_script(&self, app_name: &str) -> (bool, i32, String, String) {
+        let script_path = PathBuf::from(EZSCRIPT_BASE_DIR).join(app_name);
+        if !script_path.exists() {
+            return (
+                false,
+                -1,
+                String::new(),
+                format!("script file '/etc/ezscript/{}' does not exist", app_name),
+            );
+        }
+
+        {
+            let exec_lock = self.script_executions.lock().await;
+            if let Some(record) = exec_lock.get(app_name) {
+                if record.is_running {
+                    return (
+                        false,
+                        -1,
+                        String::new(),
+                        format!("script '{}' is already running (PID {})", app_name, record.pid),
+                    );
+                }
+            }
+        }
+
+        let mut cmd = tokio::process::Command::new(&script_path);
+        cmd.current_dir(EZSCRIPT_BASE_DIR);
+        cmd.stdout(std::process::Stdio::piped());
+        cmd.stderr(std::process::Stdio::piped());
+        unsafe {
+            cmd.pre_exec(|| {
+                libc::setpgid(0, 0);
+                Ok(())
+            });
+        }
+
+        let mut child = match cmd.spawn() {
+            Ok(c) => c,
+            Err(e) => {
+                return (
+                    false,
+                    -1,
+                    String::new(),
+                    format!("failed to spawn script '{}': {}", app_name, e),
+                );
+            }
+        };
+
+        let pid = child.id().unwrap_or(0);
+        let mut stdout = child.stdout.take();
+        let mut stderr = child.stderr.take();
+
+        let logs = Arc::new(Mutex::new(Vec::<String>::new()));
+        let (stop_tx, mut stop_rx) = tokio::sync::oneshot::channel::<()>();
+
+        {
+            let mut log_lock = logs.lock().await;
+            log_lock.push(format!(
+                "[easy42] script '{}' started at {} (PID {})",
+                app_name,
+                chrono_now(),
+                pid
+            ));
+        }
+
+        {
+            let mut exec_lock = self.script_executions.lock().await;
+            exec_lock.insert(
+                app_name.to_string(),
+                ScriptExecutionRecord {
+                    pid,
+                    started_at: chrono_now(),
+                    ended_at: None,
+                    exit_code: None,
+                    is_running: true,
+                    logs: logs.clone(),
+                    stop_sender: Some(stop_tx),
+                },
+            );
+        }
+
+        let app_name_owned = app_name.to_string();
+        let executions_ref = self.script_executions.clone();
+        let logs_ref = logs.clone();
+
+        tokio::spawn(async move {
+            use tokio::io::{AsyncBufReadExt, BufReader};
+
+            let mut stdout_lines = stdout.take().map(|s| BufReader::new(s).lines());
+            let mut stderr_lines = stderr.take().map(|s| BufReader::new(s).lines());
+
+            let mut running = true;
+            let mut exit_code = -1;
+
+            while running {
+                tokio::select! {
+                    biased;
+                    _ = &mut stop_rx => {
+                        let _ = child.start_kill();
+                        unsafe {
+                            if pid > 0 {
+                                libc::kill(-(pid as i32), libc::SIGTERM);
+                            }
+                        }
+                        {
+                            let mut l = logs_ref.lock().await;
+                            if l.len() >= 2000 { l.remove(0); }
+                            l.push(format!("[easy42] script '{}' stopped by user", app_name_owned));
+                        }
+                    }
+                    line_res = async {
+                        match &mut stdout_lines {
+                            Some(r) => r.next_line().await,
+                            None => std::future::pending().await,
+                        }
+                    } => {
+                        match line_res {
+                            Ok(Some(line)) => {
+                                let mut l = logs_ref.lock().await;
+                                if l.len() >= 2000 { l.remove(0); }
+                                l.push(line);
+                            }
+                            _ => {
+                                stdout_lines = None;
+                            }
+                        }
+                    }
+                    err_res = async {
+                        match &mut stderr_lines {
+                            Some(r) => r.next_line().await,
+                            None => std::future::pending().await,
+                        }
+                    } => {
+                        match err_res {
+                            Ok(Some(line)) => {
+                                let mut l = logs_ref.lock().await;
+                                if l.len() >= 2000 { l.remove(0); }
+                                l.push(line);
+                            }
+                            _ => {
+                                stderr_lines = None;
+                            }
+                        }
+                    }
+                    wait_res = child.wait() => {
+                        exit_code = match wait_res {
+                            Ok(st) => st.code().unwrap_or(-1),
+                            Err(_) => -1,
+                        };
+                        running = false;
+                    }
+                }
+
+                if stdout_lines.is_none() && stderr_lines.is_none() && !running {
+                    break;
+                }
+            }
+
+            if let Some(mut r) = stdout_lines {
+                while let Ok(Some(line)) = r.next_line().await {
+                    let mut l = logs_ref.lock().await;
+                    if l.len() >= 2000 { l.remove(0); }
+                    l.push(line);
+                }
+            }
+            if let Some(mut r) = stderr_lines {
+                while let Ok(Some(line)) = r.next_line().await {
+                    let mut l = logs_ref.lock().await;
+                    if l.len() >= 2000 { l.remove(0); }
+                    l.push(line);
+                }
+            }
+
+            {
+                let mut l = logs_ref.lock().await;
+                if l.len() >= 2000 { l.remove(0); }
+                l.push(format!(
+                    "[easy42] script '{}' exited with code {}",
+                    app_name_owned, exit_code
+                ));
+            }
+
+            {
+                let mut exec_lock = executions_ref.lock().await;
+                if let Some(record) = exec_lock.get_mut(&app_name_owned) {
+                    if record.pid == pid {
+                        record.is_running = false;
+                        record.exit_code = Some(exit_code);
+                        record.ended_at = Some(chrono_now());
+                        record.stop_sender = None;
+                    }
+                }
+            }
+        });
+
+        (
+            true,
+            0,
+            format!("Script '{}' started with PID {}", app_name, pid),
+            String::new(),
+        )
+    }
+
+    async fn stop_script(&self, app_name: &str) -> (bool, i32, String, String) {
+        let mut exec_lock = self.script_executions.lock().await;
+        if let Some(record) = exec_lock.get_mut(app_name) {
+            if record.is_running {
+                let pid = record.pid;
+                if let Some(tx) = record.stop_sender.take() {
+                    let _ = tx.send(());
+                }
+                unsafe {
+                    if pid > 0 {
+                        libc::kill(-(pid as i32), libc::SIGTERM);
+                    }
+                }
+                (
+                    true,
+                    0,
+                    format!("Script '{}' (PID {}) stop signal sent", app_name, pid),
+                    String::new(),
+                )
+            } else {
+                (
+                    false,
+                    -1,
+                    String::new(),
+                    format!("script '{}' is not running", app_name),
+                )
+            }
+        } else {
+            (
+                false,
+                -1,
+                String::new(),
+                format!("script '{}' is not running", app_name),
+            )
+        }
+    }
+
+    async fn get_script_logs(&self, app_name: &str, lines: u32) -> (bool, i32, String, String) {
+        let exec_lock = self.script_executions.lock().await;
+        if let Some(record) = exec_lock.get(app_name) {
+            let log_lock = record.logs.lock().await;
+            let total = log_lock.len();
+            let requested = if lines > 0 { lines as usize } else { 100 };
+            let start_idx = if total > requested { total - requested } else { 0 };
+            let slice = &log_lock[start_idx..];
+            let code = record.exit_code.unwrap_or(0);
+            let content = if slice.is_empty() {
+                if record.is_running {
+                    format!(
+                        "(Script '{}' is running with PID {}, no output yet)",
+                        app_name, record.pid
+                    )
+                } else {
+                    format!(
+                        "(Script '{}' exited with code {}, no output recorded)",
+                        app_name, code
+                    )
+                }
+            } else {
+                slice.join("\n")
+            };
+            (true, code, content, String::new())
+        } else {
+            let script_path = PathBuf::from(EZSCRIPT_BASE_DIR).join(app_name);
+            if script_path.exists() {
+                (
+                    true,
+                    0,
+                    format!(
+                        "(Script '{}' is deployed at /etc/ezscript/{} but has not been executed yet)",
+                        app_name, app_name
+                    ),
+                    String::new(),
+                )
+            } else {
+                (
+                    false,
+                    -1,
+                    String::new(),
+                    format!("script '{}' not found", app_name),
+                )
+            }
         }
     }
 }
@@ -1959,6 +2420,77 @@ mod tests {
         let cron_st = statuses.iter().find(|s| s.name == "backup-job").unwrap();
         assert_eq!(cron_st.state, "failed");
         assert!(cron_st.error_message.contains("download failed"));
+    }
+
+    #[tokio::test]
+    async fn test_script_app_apply_and_actions() {
+        let mgr = AppsManager::new();
+        let app_name = "test-script-hello";
+        let script_content = "#!/bin/sh\necho 'hello easy42'\nsleep 2\necho 'done'\n";
+
+        let spec = AppSpec {
+            id: "script-1".to_string(),
+            name: app_name.to_string(),
+            app_type: AppType::Script as i32,
+            main_content: script_content.to_string(),
+            enabled: true,
+            ..Default::default()
+        };
+
+        // 1. Apply script app
+        let res = mgr.apply_script_app(&spec).await;
+        assert!(res.is_ok(), "apply_script_app failed: {:?}", res);
+
+        let script_file = PathBuf::from(EZSCRIPT_BASE_DIR).join(app_name);
+        assert!(script_file.exists());
+
+        // 2. Initial status: ready
+        let statuses = mgr.collect_app_statuses().await;
+        let st = statuses.iter().find(|s| s.name == app_name).expect("script app not found in statuses");
+        assert_eq!(st.state, "stopped");
+        assert_eq!(st.status_text, "ready");
+
+        // 3. Start script
+        let start_cmd = AppActionCmd {
+            app_name: app_name.to_string(),
+            action: "start".to_string(),
+            app_type: AppType::Script as i32,
+            log_lines: 100,
+        };
+        let (success, code, stdout, _) = mgr.handle_action(start_cmd.clone()).await;
+        assert!(success);
+        assert_eq!(code, 0);
+        assert!(stdout.contains("started with PID"));
+
+        // 4. Repeated start should fail while running
+        let (rep_success, _, _, rep_stderr) = mgr.handle_action(start_cmd).await;
+        assert!(!rep_success);
+        assert!(rep_stderr.contains("already running"));
+
+        // 5. Query logs while running
+        let logs_cmd = AppActionCmd {
+            app_name: app_name.to_string(),
+            action: "logs".to_string(),
+            app_type: AppType::Script as i32,
+            log_lines: 50,
+        };
+        let (log_ok, _, log_out, _) = mgr.handle_action(logs_cmd).await;
+        assert!(log_ok);
+        assert!(log_out.contains("test-script-hello"));
+
+        // 6. Stop script
+        let stop_cmd = AppActionCmd {
+            app_name: app_name.to_string(),
+            action: "stop".to_string(),
+            app_type: AppType::Script as i32,
+            log_lines: 100,
+        };
+        let (stop_ok, _, stop_out, _) = mgr.handle_action(stop_cmd).await;
+        assert!(stop_ok);
+        assert!(stop_out.contains("stop signal sent"));
+
+        // Cleanup test script file
+        let _ = fs::remove_file(script_file);
     }
 }
 

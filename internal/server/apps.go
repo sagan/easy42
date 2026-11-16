@@ -2,8 +2,10 @@ package server
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
+	"sync"
 
 	"easy42/internal/apps"
 	"easy42/internal/config"
@@ -255,6 +257,125 @@ func (s *Server) handleNodeAppAction(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, resp)
+}
+
+type appClusterActionResult struct {
+	NodeName   string `json:"node_name"`
+	Success    bool   `json:"success"`
+	ExitCode   int32  `json:"exit_code"`
+	Stdout     string `json:"stdout,omitempty"`
+	Stderr     string `json:"stderr,omitempty"`
+	DurationMs uint64 `json:"duration_ms,omitempty"`
+	Error      string `json:"error,omitempty"`
+}
+
+type appClusterActionResponse struct {
+	AppID   string                   `json:"app_id"`
+	AppName string                   `json:"app_name"`
+	Action  string                   `json:"action"`
+	Results []appClusterActionResult `json:"results"`
+}
+
+func (s *Server) handleAppClusterAction(w http.ResponseWriter, r *http.Request) {
+	appID := chi.URLParam(r, "id")
+
+	var req appActionRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid JSON body: "+err.Error())
+		return
+	}
+
+	appsList, err := s.mgr.GetApps()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to load apps: "+err.Error())
+		return
+	}
+
+	var targetApp *config.App
+	for _, a := range appsList {
+		if a.ID == appID || a.Name == appID {
+			targetApp = &a
+			break
+		}
+	}
+	if targetApp == nil {
+		writeError(w, http.StatusNotFound, fmt.Sprintf("App '%s' not found", appID))
+		return
+	}
+
+	if req.Action == "" {
+		req.Action = "start"
+	}
+	if req.LogLines == 0 {
+		req.LogLines = 100
+	}
+	if req.AppType == "" {
+		req.AppType = targetApp.AppType
+	}
+
+	// Find all target nodes
+	cfg := s.mgr.Store().Get()
+	if cfg == nil {
+		cfg, _ = s.mgr.Store().Load()
+	}
+
+	var targetNodes []config.Node
+	if cfg != nil {
+		for _, n := range cfg.Nodes {
+			if n.IsExternal {
+				continue
+			}
+			if config.AppTargetsNode(*targetApp, &n, n.Name) {
+				targetNodes = append(targetNodes, n)
+			}
+		}
+	}
+
+	if len(targetNodes) == 0 {
+		writeJSON(w, http.StatusOK, appClusterActionResponse{
+			AppID:   targetApp.ID,
+			AppName: targetApp.Name,
+			Action:  req.Action,
+			Results: []appClusterActionResult{},
+		})
+		return
+	}
+
+	results := make([]appClusterActionResult, len(targetNodes))
+	var wg sync.WaitGroup
+
+	for i, node := range targetNodes {
+		wg.Add(1)
+		go func(idx int, n config.Node) {
+			defer wg.Done()
+			resp, err := s.mgr.TriggerAppAction(r.Context(), n.Name, targetApp.Name, req.Action, req.AppType, req.LogLines)
+			if err != nil {
+				results[idx] = appClusterActionResult{
+					NodeName: n.Name,
+					Success:  false,
+					ExitCode: -1,
+					Error:    err.Error(),
+				}
+				return
+			}
+			results[idx] = appClusterActionResult{
+				NodeName:   n.Name,
+				Success:    resp.Success,
+				ExitCode:   resp.ExitCode,
+				Stdout:     resp.Stdout,
+				Stderr:     resp.Stderr,
+				DurationMs: resp.DurationMs,
+			}
+		}(i, node)
+	}
+	wg.Wait()
+
+	writeJSON(w, http.StatusOK, appClusterActionResponse{
+		AppID:   targetApp.ID,
+		AppName: targetApp.Name,
+		Action:  req.Action,
+		Results: results,
+	})
 }
 
 type transpilePreviewRequest struct {

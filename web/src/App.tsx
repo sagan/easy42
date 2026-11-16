@@ -36,6 +36,8 @@ const AppContent: React.FC = () => {
       document.title = `Topology - ${netName}`;
     } else if (path === "/apps/variables") {
       document.title = `Global Variables - ${netName}`;
+    } else if (path === "/apps/scripts") {
+      document.title = `Scripts - ${netName}`;
     } else if (path.startsWith("/apps")) {
       document.title = `Apps - ${netName}`;
     } else if (path.startsWith("/looking-glass")) {

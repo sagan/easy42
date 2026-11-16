@@ -273,6 +273,7 @@ enum AppType {
   DOCKER_COMPOSE = 0;
   SYSTEMD = 1;
   CRON = 2;
+  SCRIPT = 3;
 }
 
 message AppConfigFile {

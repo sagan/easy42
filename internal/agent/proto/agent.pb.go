@@ -27,6 +27,7 @@ const (
 	AppType_DOCKER_COMPOSE AppType = 0
 	AppType_SYSTEMD        AppType = 1
 	AppType_CRON           AppType = 2
+	AppType_SCRIPT         AppType = 3
 )
 
 // Enum value maps for AppType.
@@ -35,11 +36,13 @@ var (
 		0: "DOCKER_COMPOSE",
 		1: "SYSTEMD",
 		2: "CRON",
+		3: "SCRIPT",
 	}
 	AppType_value = map[string]int32{
 		"DOCKER_COMPOSE": 0,
 		"SYSTEMD":        1,
 		"CRON":           2,
+		"SCRIPT":         3,
 	}
 )
 
@@ -3517,11 +3520,13 @@ const file_proto_agent_proto_rawDesc = "" +
 	"extra_args\x18\f \x03(\tR\textraArgs\x12\x18\n" +
 	"\aenabled\x18\r \x01(\bR\aenabled\"T\n" +
 	"\x0fSyncObfuscators\x12A\n" +
-	"\vobfuscators\x18\x01 \x03(\v2\x1f.easy42.agent.v1.ObfuscatorSpecR\vobfuscators*4\n" +
+	"\vobfuscators\x18\x01 \x03(\v2\x1f.easy42.agent.v1.ObfuscatorSpecR\vobfuscators*@\n" +
 	"\aAppType\x12\x12\n" +
 	"\x0eDOCKER_COMPOSE\x10\x00\x12\v\n" +
 	"\aSYSTEMD\x10\x01\x12\b\n" +
-	"\x04CRON\x10\x02B%Z#easy42/internal/agent/proto;agentpbb\x06proto3"
+	"\x04CRON\x10\x02\x12\n" +
+	"\n" +
+	"\x06SCRIPT\x10\x03B%Z#easy42/internal/agent/proto;agentpbb\x06proto3"
 
 var (
 	file_proto_agent_proto_rawDescOnce sync.Once

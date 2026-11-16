@@ -50,6 +50,7 @@ import {
   Edit,
   Square,
   RefreshCw,
+  RotateCw,
   Box as BoxIcon,
   Cpu,
   FileCode,
@@ -79,6 +80,7 @@ import {
   Package,
   HardDrive,
   ShieldCheck,
+  Play,
 } from "lucide-react";
 import { api } from "../api/client";
 import { useMesh } from "../context/MeshContext";
@@ -90,6 +92,8 @@ import type {
   ArtifactFile,
   ArtifactSpec,
   AppArtifactStatus,
+  AppClusterActionResponse,
+  AppClusterActionResult,
 } from "../types/api";
 import { dockerRunToCompose, cmdlineToSystemd, ensureSystemdEnvironmentFile } from "../utils/appGenerators";
 import { MarkdownView } from "../components/Common/MarkdownView";
@@ -135,6 +139,13 @@ RestartSec=5
 
 [Install]
 WantedBy=multi-user.target
+`;
+
+const SCRIPT_SAMPLE = `#!/bin/sh
+set -e
+
+echo "Executing script on $(hostname)..."
+echo "Node IP: \${NODE_IP:-unknown}"
 `;
 
 export function parseCronMainContent(mainContent: string): { cronExpr: string; cronCmd: string } {
@@ -223,14 +234,21 @@ const APP_TYPE_FILTERS = ["all", "docker", "systemd", "cron"] as const;
 export const AppsPage: React.FC = () => {
   const { nodes, setStateToast } = useMesh();
 
-  // Top-level Navigation: separated URLs /apps (Workload Apps) and /apps/variables (Global Variables)
+  // Top-level Navigation: separated URLs /apps (Workload Apps), /apps/scripts (Scripts), and /apps/variables (Global Variables)
   const { tab: tabParam } = useParams<{ tab?: string }>();
   const navigate = useNavigate();
-  const activeTab: "apps" | "variables" = tabParam === "variables" ? "variables" : "apps";
+  const activeTab: "apps" | "scripts" | "variables" =
+    tabParam === "variables" ? "variables" : tabParam === "scripts" ? "scripts" : "apps";
 
   const handleTabChange = (_: React.SyntheticEvent, newValue: string) => {
     if (newValue === activeTab) return;
-    navigate(newValue === "variables" ? "/apps/variables" : "/apps");
+    if (newValue === "variables") {
+      navigate("/apps/variables");
+    } else if (newValue === "scripts") {
+      navigate("/apps/scripts");
+    } else {
+      navigate("/apps");
+    }
   };
 
   // Apps State
@@ -238,6 +256,15 @@ export const AppsPage: React.FC = () => {
   const [loadingApps, setLoadingApps] = useState(true);
   const [appsError, setAppsError] = useState<string | null>(null);
   const [togglingAppIds, setTogglingAppIds] = useState<Record<string, boolean>>({});
+
+  // Script Cluster Actions State
+  const [clusterActionLoading, setClusterActionLoading] = useState<Record<string, string>>({}); // appId -> "start" | "stop"
+  const [clusterLogsModalScript, setClusterLogsModalScript] = useState<App | null>(null);
+  const [clusterLogsLoading, setClusterLogsLoading] = useState(false);
+  const [clusterLogsData, setClusterLogsData] = useState<AppClusterActionResponse | null>(null);
+  const [clusterLogsSelectedNode, setClusterLogsSelectedNode] = useState<string>("");
+  const [clusterLogsLines, setClusterLogsLines] = useState<number>(100);
+  const [clusterLogsCopied, setClusterLogsCopied] = useState(false);
 
   // Variables State
   const [variables, setVariables] = useState<AppVariable[]>([]);
@@ -261,13 +288,15 @@ export const AppsPage: React.FC = () => {
   const sortOrder = (searchParams.get("order") === "desc" ? "desc" : "asc") as "asc" | "desc";
 
   // Local search terms (per-tab, synced to that tab's `?search` via replaceState)
-  // `?search` means app search on /apps and variable search on /apps/variables.
   const [search, setSearch] = useState(() => (activeTab === "apps" ? urlSearch : ""));
+  const [scriptSearch, setScriptSearch] = useState(() => (activeTab === "scripts" ? urlSearch : ""));
+  const [scriptNodeFilter, setScriptNodeFilter] = useState("all");
+  const [scriptGroupFilter, setScriptGroupFilter] = useState("all");
   const [varSearch, setVarSearch] = useState(() => (activeTab === "variables" ? urlSearch : ""));
 
   // Normalize unknown sub-paths and legacy ?tab= params to canonical separated URLs
   useEffect(() => {
-    if (tabParam && tabParam !== "variables") {
+    if (tabParam && tabParam !== "variables" && tabParam !== "scripts") {
       navigate("/apps", { replace: true });
       return;
     }
@@ -276,10 +305,13 @@ export const AppsPage: React.FC = () => {
     if (queryTab === "variables" && activeTab !== "variables") {
       setVarSearch(urlSearch);
       navigate(`/apps/variables${urlSearch ? `?search=${encodeURIComponent(urlSearch)}` : ""}`, { replace: true });
+    } else if (queryTab === "scripts" && activeTab !== "scripts") {
+      setScriptSearch(urlSearch);
+      navigate(`/apps/scripts${urlSearch ? `?search=${encodeURIComponent(urlSearch)}` : ""}`, { replace: true });
     } else if (queryTab === "apps" && activeTab !== "apps") {
       setSearch(urlSearch);
       navigate(`/apps${urlSearch ? `?search=${encodeURIComponent(urlSearch)}` : ""}`, { replace: true });
-    } else if (queryTab !== "variables" && queryTab !== "apps") {
+    } else if (queryTab !== "variables" && queryTab !== "scripts" && queryTab !== "apps") {
       setSearchParams(
         (prev) => {
           const next = new URLSearchParams(prev);
@@ -310,6 +342,8 @@ export const AppsPage: React.FC = () => {
     }
     if (activeTab === "apps") {
       setSearch(urlSearch);
+    } else if (activeTab === "scripts") {
+      setScriptSearch(urlSearch);
     } else {
       setVarSearch(urlSearch);
     }
@@ -335,6 +369,27 @@ export const AppsPage: React.FC = () => {
     }, 250);
     return () => clearTimeout(timer);
   }, [search, activeTab, setSearchParams]);
+
+  // Debounce script search updates to URL (replaceState) — scripts tab only
+  useEffect(() => {
+    if (activeTab !== "scripts") return;
+    const timer = setTimeout(() => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          const trimmed = scriptSearch.trim();
+          if (trimmed) {
+            if (next.get("search") !== trimmed) next.set("search", trimmed);
+          } else {
+            next.delete("search");
+          }
+          return next;
+        },
+        { replace: true },
+      );
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [scriptSearch, activeTab, setSearchParams]);
 
   // Debounce variable search updates to URL (replaceState) — variables tab only
   useEffect(() => {
@@ -466,7 +521,7 @@ export const AppsPage: React.FC = () => {
   const [formGroup, setFormGroup] = useState("");
   const [formNote, setFormNote] = useState("");
   const [formUrl, setFormUrl] = useState("");
-  const [formType, setFormType] = useState<"docker" | "systemd" | "cron">("docker");
+  const [formType, setFormType] = useState<"docker" | "systemd" | "cron" | "script">("docker");
   const [formMain, setFormMain] = useState(DOCKER_SAMPLE);
   const [formCronExpr, setFormCronExpr] = useState("0 0 * * *");
   const [formCronCmd, setFormCronCmd] = useState("");
@@ -653,7 +708,7 @@ export const AppsPage: React.FC = () => {
     setPreviewNodeName((match || managedNodes[0]).name);
   }, [formSelector, managedNodes, previewNodeName]);
 
-  const openCreateAppModal = () => {
+  const openCreateAppModal = (initialType: "docker" | "systemd" | "cron" | "script" = "docker") => {
     setEditingApp(null);
     setFormName("");
     setFormDesc("");
@@ -679,8 +734,16 @@ export const AppsPage: React.FC = () => {
     ]);
     setFormArtifactChecksums({});
     setFormArtifactArchMapping({});
-    setFormType("docker");
-    setFormMain(DOCKER_SAMPLE);
+    setFormType(initialType);
+    if (initialType === "script") {
+      setFormMain(SCRIPT_SAMPLE);
+    } else if (initialType === "systemd") {
+      setFormMain(SYSTEMD_SAMPLE);
+    } else if (initialType === "cron") {
+      setFormMain("0 0 * * *");
+    } else {
+      setFormMain(DOCKER_SAMPLE);
+    }
     setFormCronExpr("0 0 * * *");
     setFormCronCmd("");
     setFormEnv("DIR=${EZAPP_DIR}\nIP=${NODE_IP}\n");
@@ -795,14 +858,13 @@ export const AppsPage: React.FC = () => {
     setModalOpen(true);
   };
 
-  const handleTypeChange = (newType: "docker" | "systemd" | "cron") => {
+  const handleTypeChange = (newType: "docker" | "systemd" | "cron" | "script") => {
     setFormType(newType);
-    if (
-      newType === "cron" &&
-      (modalTab === "env" || modalTab === "transpile")
-    ) {
+    if (newType === "cron" && (modalTab === "env" || modalTab === "transpile")) {
       setModalTab("definition");
     } else if (newType === "docker" && (modalTab === "artifact" || modalTab === "transpile")) {
+      setModalTab("definition");
+    } else if (newType === "script" && (modalTab === "files" || modalTab === "artifact" || modalTab === "transpile")) {
       setModalTab("definition");
     }
     if (!editingApp) {
@@ -810,10 +872,76 @@ export const AppsPage: React.FC = () => {
         setFormMain(DOCKER_SAMPLE);
       } else if (newType === "systemd") {
         setFormMain(SYSTEMD_SAMPLE);
+      } else if (newType === "script") {
+        setFormMain(SCRIPT_SAMPLE);
       } else {
         const cronStr = `${formCronExpr.trim()} ${formCronCmd.trim()}`.trim() || "0 0 * * *";
         setFormMain(cronStr);
       }
+    }
+  };
+
+  const handleTriggerClusterAction = async (script: App, action: "start" | "stop") => {
+    try {
+      setClusterActionLoading((prev) => ({ ...prev, [script.id]: action }));
+      const res = await api.triggerAppClusterAction(script.id, action);
+      const results: AppClusterActionResult[] = res.results || [];
+      if (results.length === 0) {
+        setStateToast({
+          message: `No target online nodes found for script "${script.name}".`,
+          severity: "warning",
+        });
+        return;
+      }
+      const succeeded = results.filter((r) => r.success).length;
+      const failed = results.length - succeeded;
+      if (failed === 0) {
+        setStateToast({
+          message: `${action === "start" ? "Started" : "Stopped"} script "${script.name}" on all ${succeeded} node(s).`,
+          severity: "success",
+        });
+      } else {
+        setStateToast({
+          message: `${action === "start" ? "Start" : "Stop"} "${script.name}": ${succeeded} succeeded, ${failed} failed.`,
+          severity: "warning",
+        });
+      }
+    } catch (err: any) {
+      setStateToast({
+        message: `Failed to trigger ${action} on script "${script.name}": ${err.message || err}`,
+        severity: "error",
+      });
+    } finally {
+      setClusterActionLoading((prev) => {
+        const next = { ...prev };
+        delete next[script.id];
+        return next;
+      });
+    }
+  };
+
+  const handleOpenClusterLogs = async (script: App, linesCount: number = clusterLogsLines) => {
+    setClusterLogsModalScript(script);
+    setClusterLogsLoading(true);
+    setClusterLogsLines(linesCount);
+    try {
+      const res = await api.triggerAppClusterAction(script.id, "logs", undefined, linesCount);
+      setClusterLogsData(res);
+      const results: AppClusterActionResult[] = res.results || [];
+      if (results.length > 0) {
+        if (!clusterLogsSelectedNode || !results.some((r) => r.node_name === clusterLogsSelectedNode)) {
+          setClusterLogsSelectedNode(results[0].node_name);
+        }
+      } else {
+        setClusterLogsSelectedNode("");
+      }
+    } catch (err: any) {
+      setStateToast({
+        message: `Failed to fetch logs for script "${script.name}": ${err.message || err}`,
+        severity: "error",
+      });
+    } finally {
+      setClusterLogsLoading(false);
     }
   };
 
@@ -851,6 +979,14 @@ export const AppsPage: React.FC = () => {
         }
         if (!formCronCmd.trim()) {
           alert("Command line cannot be empty");
+          setSavingApp(false);
+          return;
+        }
+      }
+
+      if (formType === "script") {
+        if (!formMain.trim()) {
+          alert("Script snippet content cannot be empty");
           setSavingApp(false);
           return;
         }
@@ -930,7 +1066,7 @@ export const AppsPage: React.FC = () => {
         app_type: formType,
         main_content: resolvedMainContent,
         env_content: formType === "cron" ? "" : formEnv,
-        files: filesMap,
+        files: formType === "script" ? undefined : filesMap,
         artifact: (formType === "systemd" || formType === "cron") ? artifactPayload : undefined,
         selector: parsedSelector.selector,
         published: formPublished,
@@ -1286,8 +1422,11 @@ export const AppsPage: React.FC = () => {
     setTimeout(() => setCopiedKey(null), 2000);
   };
 
+  const workloadApps = useMemo(() => apps.filter((a) => a.app_type !== "script"), [apps]);
+  const scriptApps = useMemo(() => apps.filter((a) => a.app_type === "script"), [apps]);
+
   const filteredApps = useMemo(() => {
-    return apps.filter((a) => {
+    return workloadApps.filter((a) => {
       if (search.trim()) {
         const q = search.trim().toLowerCase();
         const matchName = a.name.toLowerCase().includes(q);
@@ -1312,21 +1451,60 @@ export const AppsPage: React.FC = () => {
       }
       return true;
     });
-  }, [apps, search, typeFilter, nodeFilter, groupFilter, nodes]);
+  }, [workloadApps, search, typeFilter, nodeFilter, groupFilter, nodes]);
+
+  const filteredScripts = useMemo(() => {
+    return scriptApps.filter((a) => {
+      if (scriptSearch.trim()) {
+        const q = scriptSearch.trim().toLowerCase();
+        const matchName = a.name.toLowerCase().includes(q);
+        const matchDesc = a.description?.toLowerCase().includes(q);
+        const matchNote = a.note?.toLowerCase().includes(q);
+        const matchGroup = a.group?.toLowerCase().includes(q);
+        if (!matchName && !matchDesc && !matchNote && !matchGroup) return false;
+      }
+      if (scriptNodeFilter !== "all") {
+        const nodeObj = nodes.find((n) => n.name === scriptNodeFilter);
+        if (!nodeObj || !matchesTaskSelector(nodeObj, a.selector)) return false;
+      }
+      if (scriptGroupFilter !== "all") {
+        if (scriptGroupFilter === "ungrouped") {
+          if (a.group && a.group.trim()) return false;
+        } else {
+          if ((a.group || "").trim().toLowerCase() !== scriptGroupFilter.trim().toLowerCase()) return false;
+        }
+      }
+      return true;
+    });
+  }, [scriptApps, scriptSearch, scriptNodeFilter, scriptGroupFilter, nodes]);
 
   const appGroups = useMemo(() => {
     const set = new Set<string>();
-    apps.forEach((a) => {
+    workloadApps.forEach((a) => {
       if (a.group && a.group.trim()) {
         set.add(a.group.trim());
       }
     });
     return Array.from(set).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
-  }, [apps]);
+  }, [workloadApps]);
+
+  const scriptGroups = useMemo(() => {
+    const set = new Set<string>();
+    scriptApps.forEach((a) => {
+      if (a.group && a.group.trim()) {
+        set.add(a.group.trim());
+      }
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+  }, [scriptApps]);
 
   const ungroupedAppsCount = useMemo(() => {
-    return apps.filter((a) => !a.group || !a.group.trim()).length;
-  }, [apps]);
+    return workloadApps.filter((a) => !a.group || !a.group.trim()).length;
+  }, [workloadApps]);
+
+  const ungroupedScriptsCount = useMemo(() => {
+    return scriptApps.filter((a) => !a.group || !a.group.trim()).length;
+  }, [scriptApps]);
 
   // Sorted apps for the list (table) view; card view keeps API order
   const sortedApps = useMemo(() => {
@@ -1368,10 +1546,10 @@ export const AppsPage: React.FC = () => {
     });
   }, [variables, varSearch]);
 
-  const dockerCount = apps.filter((a) => a.app_type === "docker").length;
-  const systemdCount = apps.filter((a) => a.app_type === "systemd").length;
-  const cronCount = apps.filter((a) => a.app_type === "cron").length;
-  const enabledCount = apps.filter((a) => a.enabled).length;
+  const dockerCount = workloadApps.filter((a) => a.app_type === "docker").length;
+  const systemdCount = workloadApps.filter((a) => a.app_type === "systemd").length;
+  const cronCount = workloadApps.filter((a) => a.app_type === "cron").length;
+  const enabledCount = workloadApps.filter((a) => a.enabled).length;
 
   const renderArtifactCacheCard = (app: App) => {
     const status = artifactStatusMap[app.id];
@@ -1725,11 +1903,11 @@ export const AppsPage: React.FC = () => {
             </>
           )}
 
-          {activeTab === "apps" ? (
+          {activeTab === "apps" && (
             <Button
               variant="contained"
               startIcon={<Plus size={16} />}
-              onClick={openCreateAppModal}
+              onClick={() => openCreateAppModal("docker")}
               sx={{
                 bgcolor: "#4F46E5",
                 color: "#FFFFFF",
@@ -1742,7 +1920,28 @@ export const AppsPage: React.FC = () => {
             >
               New App
             </Button>
-          ) : (
+          )}
+
+          {activeTab === "scripts" && (
+            <Button
+              variant="contained"
+              startIcon={<Plus size={16} />}
+              onClick={() => openCreateAppModal("script")}
+              sx={{
+                bgcolor: "#0F766E",
+                color: "#FFFFFF",
+                textTransform: "none",
+                fontWeight: 600,
+                fontSize: "0.85rem",
+                boxShadow: "0 4px 12px rgba(15, 118, 110, 0.25)",
+                "&:hover": { bgcolor: "#0D9488" },
+              }}
+            >
+              New Script
+            </Button>
+          )}
+
+          {activeTab === "variables" && (
             <Button
               variant="contained"
               startIcon={<Plus size={16} />}
@@ -1797,7 +1996,28 @@ export const AppsPage: React.FC = () => {
             label={
               <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                 <span>Workload Apps</span>
-                <Chip size="small" label={apps.length} sx={{ height: 20, fontSize: "0.72rem", fontWeight: 700 }} />
+                <Chip size="small" label={workloadApps.length} sx={{ height: 20, fontSize: "0.72rem", fontWeight: 700 }} />
+              </Box>
+            }
+          />
+          <Tab
+            value="scripts"
+            icon={<Terminal size={18} />}
+            iconPosition="start"
+            label={
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                <span>Scripts</span>
+                <Chip
+                  size="small"
+                  label={scriptApps.length}
+                  sx={{
+                    height: 20,
+                    fontSize: "0.72rem",
+                    fontWeight: 700,
+                    bgcolor: activeTab === "scripts" ? "#CCFBF1" : undefined,
+                    color: activeTab === "scripts" ? "#0F766E" : undefined,
+                  }}
+                />
               </Box>
             }
           />
@@ -1864,7 +2084,7 @@ export const AppsPage: React.FC = () => {
                     Apps (Active/Total)
                   </Typography>
                   <Typography variant="h6" sx={{ fontWeight: 800, color: "#0F172A", lineHeight: 1.2 }}>
-                    {enabledCount} / {apps.length}
+                    {enabledCount} / {workloadApps.length}
                   </Typography>
                 </Box>
               </Paper>
@@ -2051,7 +2271,7 @@ export const AppsPage: React.FC = () => {
                   startIcon={<X size={14} />}
                   sx={{ color: "#64748B", fontSize: "0.75rem", textTransform: "none", py: 0.4 }}
                 >
-                  Clear ({filteredApps.length}/{apps.length})
+                  Clear ({filteredApps.length}/{workloadApps.length})
                 </Button>
                 <Tooltip title={view === "cards" ? "Card view" : "List (table) view"}>
                   <ToggleButtonGroup
@@ -2104,7 +2324,7 @@ export const AppsPage: React.FC = () => {
 
                 <Chip
                   size="small"
-                  label={`All (${apps.length})`}
+                  label={`All (${workloadApps.length})`}
                   onClick={() => handleSelectGroup("all")}
                   color={groupFilter === "all" ? "primary" : "default"}
                   variant={groupFilter === "all" ? "filled" : "outlined"}
@@ -2131,7 +2351,7 @@ export const AppsPage: React.FC = () => {
                 />
 
                 {appGroups.map((grp) => {
-                  const count = apps.filter((a) => (a.group || "").trim() === grp).length;
+                  const count = workloadApps.filter((a) => (a.group || "").trim() === grp).length;
                   const isSelected = groupFilter.toLowerCase() === grp.toLowerCase();
                   return (
                     <Chip
@@ -2240,15 +2460,15 @@ export const AppsPage: React.FC = () => {
                 No Applications Found
               </Typography>
               <Typography variant="body2" sx={{ color: "#64748B", maxWidth: 460, mx: "auto", mb: 3 }}>
-                {apps.length === 0
+                {workloadApps.length === 0
                   ? "Define your first workload application to deploy containers or native daemons across cluster nodes."
                   : "No applications match your active search filters."}
               </Typography>
-              {apps.length === 0 && (
+              {workloadApps.length === 0 && (
                 <Button
                   variant="contained"
                   startIcon={<Plus size={16} />}
-                  onClick={openCreateAppModal}
+                  onClick={() => openCreateAppModal("docker")}
                   sx={{ bgcolor: "#4F46E5", fontWeight: 600, textTransform: "none", "&:hover": { bgcolor: "#4338CA" } }}
                 >
                   Create First App
@@ -3490,7 +3710,696 @@ export const AppsPage: React.FC = () => {
       )}
 
       {/* ========================================================================================= */}
-      {/* TAB 2: GLOBAL VARIABLES KV STORE VIEW                                                     */}
+      {/* TAB 2: SCRIPTS APPLICATIONS VIEW                                                          */}
+      {/* ========================================================================================= */}
+      {activeTab === "scripts" && (
+        <Box>
+          {/* Scripts Guide Banner */}
+          <Paper
+            elevation={0}
+            sx={{
+              p: 2.5,
+              mb: 3,
+              borderRadius: "14px",
+              bgcolor: "#F0FDFA",
+              border: "1px solid #99F6E4",
+              display: "flex",
+              alignItems: "flex-start",
+              gap: 2,
+              overflowX: "auto",
+            }}
+          >
+            <Box sx={{ color: "#0F766E", mt: 0.2 }}>
+              <Terminal size={22} />
+            </Box>
+            <Box>
+              <Typography variant="subtitle2" sx={{ fontWeight: 800, color: "#134E4A", mb: 0.5 }}>
+                On-Demand Script Applications (/etc/ezscript)
+              </Typography>
+              <Typography variant="body2" sx={{ color: "#115E59", fontSize: "0.85rem", lineHeight: 1.5 }}>
+                Script Apps are single executable snippets deployed to <code>/etc/ezscript/&lt;name&gt;</code> without system service daemons.
+                Environment variables (<code>.env</code>) are automatically injected into the script header. Use the <strong>Start</strong>, <strong>Stop</strong>,
+                and <strong>Logs</strong> buttons below to execute scripts on all target nodes on demand and inspect execution output and exit codes.
+              </Typography>
+            </Box>
+          </Paper>
+
+          {/* Scripts Filters Toolbar */}
+          {/* Scripts Filters Toolbar */}
+          <Paper
+            elevation={0}
+            sx={{
+              p: 2,
+              mb: 3,
+              borderRadius: "14px",
+              border: "1px solid #E2E8F0",
+              bgcolor: "#FFFFFF",
+              display: "flex",
+              flexDirection: "column",
+              gap: 1.5,
+            }}
+          >
+            <Box
+              sx={{
+                display: "flex",
+                gap: 2,
+                flexWrap: "wrap",
+                alignItems: "center",
+                width: "100%",
+              }}
+            >
+              <TextField
+                size="small"
+                placeholder="Search scripts by name, description, group..."
+                value={scriptSearch}
+                onChange={(e) => setScriptSearch(e.target.value)}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <Search size={18} color="#94A3B8" />
+                    </InputAdornment>
+                  ),
+                }}
+                sx={{ minWidth: { xs: "100%", sm: 280 }, flexGrow: 1 }}
+              />
+
+              <FormControl size="small" sx={{ minWidth: 160 }}>
+                <InputLabel>Target Node</InputLabel>
+                <Select
+                  value={scriptNodeFilter}
+                  label="Target Node"
+                  onChange={(e) => setScriptNodeFilter(e.target.value)}
+                >
+                  <MenuItem value="all">All Target Nodes</MenuItem>
+                  {nodes.map((n) => (
+                    <MenuItem key={n.name} value={n.name}>
+                      {n.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+
+              <Box sx={{ ml: "auto", display: "flex", alignItems: "center", gap: 1 }}>
+                {(scriptSearch || scriptNodeFilter !== "all" || scriptGroupFilter !== "all") && (
+                  <Button
+                    size="small"
+                    onClick={() => {
+                      setScriptSearch("");
+                      setScriptNodeFilter("all");
+                      setScriptGroupFilter("all");
+                    }}
+                    startIcon={<X size={14} />}
+                    sx={{ textTransform: "none", color: "#64748B", fontSize: "0.78rem" }}
+                  >
+                    Clear ({filteredScripts.length}/{scriptApps.length})
+                  </Button>
+                )}
+
+                <Button
+                  size="small"
+                  variant="outlined"
+                  startIcon={<RefreshCw size={14} className={loadingApps ? "rotating" : ""} />}
+                  onClick={loadApps}
+                  sx={{
+                    borderColor: "#CBD5E1",
+                    color: "#475569",
+                    textTransform: "none",
+                    fontWeight: 600,
+                    fontSize: "0.78rem",
+                    "&:hover": { borderColor: "#94A3B8", bgcolor: "#F8FAFC" },
+                  }}
+                >
+                  Refresh
+                </Button>
+              </Box>
+            </Box>
+
+            {/* Clickable Groups Filter Chips */}
+            {scriptGroups.length > 0 && (
+              <Box
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 1,
+                  flexWrap: "wrap",
+                  pt: 1.5,
+                  mt: 0.5,
+                  borderTop: "1px solid #F1F5F9",
+                  width: "100%",
+                }}
+              >
+                <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, mr: 0.5 }}>
+                  <Bookmark size={14} color="#0F766E" />
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      color: "#0F766E",
+                      fontWeight: 700,
+                      textTransform: "uppercase",
+                      letterSpacing: "0.5px",
+                      fontSize: "0.7rem",
+                    }}
+                  >
+                    Groups:
+                  </Typography>
+                </Box>
+
+                <Chip
+                  size="small"
+                  label={`All (${scriptApps.length})`}
+                  onClick={() => setScriptGroupFilter("all")}
+                  color={scriptGroupFilter === "all" ? "primary" : "default"}
+                  variant={scriptGroupFilter === "all" ? "filled" : "outlined"}
+                  clickable
+                  sx={{
+                    fontWeight: 600,
+                    fontSize: "0.75rem",
+                    height: 26,
+                    cursor: "pointer",
+                    transition: "all 0.15s ease",
+                    ...(scriptGroupFilter === "all"
+                      ? {
+                          bgcolor: "#0F766E",
+                          color: "#FFFFFF",
+                          "&:hover": { bgcolor: "#0D9488" },
+                        }
+                      : {
+                          bgcolor: "#F8FAFC",
+                          color: "#475569",
+                          borderColor: "#E2E8F0",
+                          "&:hover": { bgcolor: "#F1F5F9", borderColor: "#CBD5E1" },
+                        }),
+                  }}
+                />
+
+                {scriptGroups.map((grp) => {
+                  const count = scriptApps.filter((a) => (a.group || "").trim() === grp).length;
+                  const isSelected = scriptGroupFilter.toLowerCase() === grp.toLowerCase();
+                  return (
+                    <Chip
+                      key={grp}
+                      size="small"
+                      label={`${grp} (${count})`}
+                      onClick={() => setScriptGroupFilter(isSelected ? "all" : grp)}
+                      color={isSelected ? "primary" : "default"}
+                      variant={isSelected ? "filled" : "outlined"}
+                      clickable
+                      sx={{
+                        fontWeight: 600,
+                        fontSize: "0.75rem",
+                        height: 26,
+                        cursor: "pointer",
+                        transition: "all 0.15s ease",
+                        ...(isSelected
+                          ? {
+                              bgcolor: "#0F766E",
+                              color: "#FFFFFF",
+                              "&:hover": { bgcolor: "#0D9488" },
+                            }
+                          : {
+                              bgcolor: "#F8FAFC",
+                              color: "#475569",
+                              borderColor: "#E2E8F0",
+                              "&:hover": { bgcolor: "#F1F5F9", borderColor: "#CBD5E1" },
+                            }),
+                      }}
+                    />
+                  );
+                })}
+
+                {ungroupedScriptsCount > 0 && (
+                  <Chip
+                    size="small"
+                    label={`Ungrouped (${ungroupedScriptsCount})`}
+                    onClick={() => setScriptGroupFilter(scriptGroupFilter === "ungrouped" ? "all" : "ungrouped")}
+                    color={scriptGroupFilter === "ungrouped" ? "primary" : "default"}
+                    variant={scriptGroupFilter === "ungrouped" ? "filled" : "outlined"}
+                    clickable
+                    sx={{
+                      fontWeight: 600,
+                      fontSize: "0.75rem",
+                      height: 26,
+                      cursor: "pointer",
+                      transition: "all 0.15s ease",
+                      fontStyle: "italic",
+                      ...(scriptGroupFilter === "ungrouped"
+                        ? {
+                            bgcolor: "#0F766E",
+                            color: "#FFFFFF",
+                            "&:hover": { bgcolor: "#0D9488" },
+                          }
+                        : {
+                            bgcolor: "#F8FAFC",
+                            color: "#64748B",
+                            borderColor: "#E2E8F0",
+                            "&:hover": { bgcolor: "#F1F5F9", borderColor: "#CBD5E1" },
+                          }),
+                    }}
+                  />
+                )}
+              </Box>
+            )}
+          </Paper>
+
+          {/* Scripts Content (List View Only) */}
+          {loadingApps ? (
+            <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
+              <CircularProgress size={36} sx={{ color: "#0F766E" }} />
+            </Box>
+          ) : scriptApps.length === 0 ? (
+            <Paper
+              elevation={0}
+              sx={{
+                p: 6,
+                borderRadius: "14px",
+                border: "1px dashed #CBD5E1",
+                textAlign: "center",
+                bgcolor: "#F8FAFC",
+              }}
+            >
+              <Box
+                sx={{
+                  width: 56,
+                  height: 56,
+                  borderRadius: "16px",
+                  bgcolor: "#CCFBF1",
+                  color: "#0F766E",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  mx: "auto",
+                  mb: 2,
+                }}
+              >
+                <Terminal size={28} />
+              </Box>
+              <Typography variant="h6" sx={{ fontWeight: 800, color: "#0F172A", mb: 0.5 }}>
+                No Script Applications Yet
+              </Typography>
+              <Typography variant="body2" sx={{ color: "#64748B", maxWidth: 480, mx: "auto", mb: 3 }}>
+                Script applications are standalone executables deployed to <code>/etc/ezscript/&lt;name&gt;</code> that can be triggered on-demand across target nodes.
+              </Typography>
+              <Button
+                variant="contained"
+                startIcon={<Plus size={16} />}
+                onClick={() => openCreateAppModal("script")}
+                sx={{
+                  bgcolor: "#0F766E",
+                  textTransform: "none",
+                  fontWeight: 700,
+                  px: 3,
+                  py: 1,
+                  borderRadius: "10px",
+                  "&:hover": { bgcolor: "#0D9488" },
+                }}
+              >
+                Create First Script
+              </Button>
+            </Paper>
+          ) : filteredScripts.length === 0 ? (
+            <Paper
+              elevation={0}
+              sx={{
+                p: 4,
+                borderRadius: "14px",
+                border: "1px dashed #CBD5E1",
+                textAlign: "center",
+                bgcolor: "#F8FAFC",
+              }}
+            >
+              <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#475569" }}>
+                No script applications found matching your filters.
+              </Typography>
+              <Button
+                size="small"
+                onClick={() => {
+                  setScriptSearch("");
+                  setScriptNodeFilter("all");
+                  setScriptGroupFilter("all");
+                }}
+                sx={{ mt: 1, textTransform: "none" }}
+              >
+                Clear Filters
+              </Button>
+            </Paper>
+          ) : (
+            <TableContainer
+              component={Paper}
+              elevation={0}
+              sx={{
+                borderRadius: "14px",
+                border: "1px solid #E2E8F0",
+                bgcolor: "#FFFFFF",
+                overflowX: "auto",
+              }}
+            >
+              <Table size="small" sx={{ minWidth: 950 }}>
+                <TableHead sx={{ bgcolor: "#F8FAFC" }}>
+                  <TableRow>
+                    <TableCell sx={{ fontWeight: 800, color: "#475569", minWidth: 220 }}>
+                      Script
+                    </TableCell>
+                    <TableCell sx={{ fontWeight: 800, color: "#475569", minWidth: 240 }}>
+                      Description
+                    </TableCell>
+                    <TableCell sx={{ fontWeight: 800, color: "#475569", minWidth: 200 }}>
+                      Target Nodes
+                    </TableCell>
+                    <TableCell align="center" sx={{ fontWeight: 800, color: "#475569", minWidth: 100 }}>
+                      Published
+                    </TableCell>
+                    <TableCell align="center" sx={{ fontWeight: 800, color: "#475569", minWidth: 240 }}>
+                      Execution (Cluster Action)
+                    </TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 800, color: "#475569", minWidth: 140 }}>
+                      Actions
+                    </TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {filteredScripts.map((script) => {
+                    const target = getTargetNodeInfo(script);
+                    const chipColors = targetChipColors(target.mode);
+                    const isRunningAction = Boolean(clusterActionLoading[script.id]);
+                    return (
+                      <TableRow
+                        key={script.id}
+                        hover
+                        sx={{
+                          "&:hover": { bgcolor: "#F8FAFC" },
+                          "& td": { borderColor: "#F1F5F9" },
+                          verticalAlign: "middle",
+                        }}
+                      >
+                        {/* Script Identity */}
+                        <TableCell>
+                          <Box sx={{ display: "flex", alignItems: "center", gap: 1.2 }}>
+                            <Box
+                              sx={{
+                                width: 34,
+                                height: 34,
+                                borderRadius: "8px",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                flexShrink: 0,
+                                bgcolor: "#CCFBF1",
+                                color: "#0F766E",
+                              }}
+                            >
+                              <Terminal size={17} />
+                            </Box>
+                            <Box sx={{ minWidth: 0 }}>
+                              <Typography
+                                variant="body2"
+                                onClick={() => setDetailsApp(script)}
+                                sx={{
+                                  fontWeight: 700,
+                                  color: "#0F766E",
+                                  lineHeight: 1.2,
+                                  cursor: "pointer",
+                                  "&:hover": { textDecoration: "underline" },
+                                }}
+                              >
+                                {script.name}
+                              </Typography>
+                              <Box sx={{ display: "flex", alignItems: "center", gap: 0.6, mt: 0.3, flexWrap: "wrap" }}>
+                                <Typography variant="caption" className="mono-font" sx={{ color: "#64748B", fontSize: "0.7rem" }}>
+                                  /etc/ezscript/{script.name}
+                                </Typography>
+                                {script.group && (
+                                  <Chip
+                                    size="small"
+                                    label={script.group}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setScriptGroupFilter(
+                                        scriptGroupFilter.toLowerCase() === script.group!.trim().toLowerCase()
+                                          ? "all"
+                                          : script.group!.trim()
+                                      );
+                                    }}
+                                    clickable
+                                    sx={{
+                                      height: 18,
+                                      fontSize: "0.65rem",
+                                      fontWeight: 700,
+                                      bgcolor: scriptGroupFilter.toLowerCase() === script.group.trim().toLowerCase() ? "#CCFBF1" : "#F1F5F9",
+                                      color: scriptGroupFilter.toLowerCase() === script.group.trim().toLowerCase() ? "#0F766E" : "#475569",
+                                      cursor: "pointer",
+                                      "&:hover": { bgcolor: "#E2E8F0" },
+                                    }}
+                                  />
+                                )}
+                              </Box>
+                            </Box>
+                          </Box>
+                        </TableCell>
+
+                        {/* Description */}
+                        <TableCell>
+                          <Typography
+                            variant="body2"
+                            sx={{
+                              color: "#475569",
+                              fontSize: "0.82rem",
+                              display: "-webkit-box",
+                              WebkitLineClamp: 2,
+                              WebkitBoxOrient: "vertical",
+                              overflow: "hidden",
+                            }}
+                          >
+                            {script.description || "No description provided."}
+                          </Typography>
+                        </TableCell>
+
+                        {/* Target Nodes */}
+                        <TableCell>
+                          <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
+                            <Box>
+                              <Chip
+                                size="small"
+                                label={
+                                  target.mode === "manual"
+                                    ? `Manual (${target.manualNodes.length})`
+                                    : target.mode === "tag"
+                                      ? `Tag: #${getSelectorValue(script.selector || {}, "tag")}`
+                                      : target.mode === "custom"
+                                        ? "Selector"
+                                        : "All Nodes"
+                                }
+                                sx={{
+                                  height: 20,
+                                  fontSize: "0.68rem",
+                                  fontWeight: 700,
+                                  bgcolor: chipColors.bgcolor,
+                                  color: chipColors.color,
+                                }}
+                              />
+                            </Box>
+                            <Typography
+                              variant="caption"
+                              sx={{
+                                color: "#64748B",
+                                display: "block",
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                                whiteSpace: "nowrap",
+                                maxWidth: 220,
+                              }}
+                              title={target.nodeNames.join(", ")}
+                            >
+                              {target.nodeNames.length === 0
+                                ? "No target nodes match"
+                                : `${target.nodeNames.length} node(s): ${target.nodeNames.join(", ")}`}
+                            </Typography>
+                          </Box>
+                        </TableCell>
+
+                        {/* Published */}
+                        <TableCell align="center">
+                          <FormControlLabel
+                            title={
+                              script.published
+                                ? "Published (script deployed to nodes on sync)"
+                                : "Draft (script will not be deployed to nodes)"
+                            }
+                            control={
+                              <Checkbox
+                                size="small"
+                                checked={Boolean(script.published)}
+                                disabled={Boolean(togglingPublishedAppIds[script.id])}
+                                onChange={() => handleTogglePublished(script)}
+                                sx={{
+                                  p: 0.4,
+                                  color: "#94A3B8",
+                                  "&.Mui-checked": { color: "#059669" },
+                                }}
+                              />
+                            }
+                            label={
+                              <Typography
+                                variant="caption"
+                                sx={{
+                                  fontWeight: 600,
+                                  fontSize: "0.75rem",
+                                  color: script.published ? "#059669" : "#64748B",
+                                  userSelect: "none",
+                                }}
+                              >
+                                {script.published ? "Yes" : "Draft"}
+                              </Typography>
+                            }
+                            sx={{ m: 0 }}
+                          />
+                        </TableCell>
+
+                        {/* Execution: Start, Stop, Logs */}
+                        <TableCell align="center">
+                          <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 1 }}>
+                            <Tooltip title={!script.published ? "Publish script first to deploy and execute on nodes" : "Execute script on all target nodes"}>
+                              <span>
+                                <Button
+                                  size="small"
+                                  variant="contained"
+                                  disabled={isRunningAction || !script.published}
+                                  startIcon={clusterActionLoading[script.id] === "start" ? <CircularProgress size={12} color="inherit" /> : <Play size={13} />}
+                                  onClick={() => handleTriggerClusterAction(script, "start")}
+                                  sx={{
+                                    bgcolor: "#059669",
+                                    color: "#FFFFFF",
+                                    textTransform: "none",
+                                    fontWeight: 700,
+                                    fontSize: "0.75rem",
+                                    py: 0.4,
+                                    px: 1.2,
+                                    boxShadow: "none",
+                                    "&:hover": { bgcolor: "#047857" },
+                                    "&.Mui-disabled": { bgcolor: "#E2E8F0", color: "#94A3B8" },
+                                  }}
+                                >
+                                  Start
+                                </Button>
+                              </span>
+                            </Tooltip>
+
+                            <Tooltip title="Stop script execution on all target nodes">
+                              <span>
+                                <Button
+                                  size="small"
+                                  variant="outlined"
+                                  disabled={isRunningAction}
+                                  startIcon={clusterActionLoading[script.id] === "stop" ? <CircularProgress size={12} color="inherit" /> : <Square size={13} />}
+                                  onClick={() => handleTriggerClusterAction(script, "stop")}
+                                  sx={{
+                                    borderColor: "#FCA5A5",
+                                    color: "#DC2626",
+                                    textTransform: "none",
+                                    fontWeight: 700,
+                                    fontSize: "0.75rem",
+                                    py: 0.4,
+                                    px: 1.2,
+                                    bgcolor: "#FFFFFF",
+                                    "&:hover": { bgcolor: "#FEF2F2", borderColor: "#EF4444" },
+                                  }}
+                                >
+                                  Stop
+                                </Button>
+                              </span>
+                            </Tooltip>
+
+                            <Tooltip title="View execution logs and exit codes across target nodes">
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                startIcon={<Terminal size={13} />}
+                                onClick={() => handleOpenClusterLogs(script)}
+                                sx={{
+                                  borderColor: "#CBD5E1",
+                                  color: "#334155",
+                                  textTransform: "none",
+                                  fontWeight: 700,
+                                  fontSize: "0.75rem",
+                                  py: 0.4,
+                                  px: 1.2,
+                                  bgcolor: "#FFFFFF",
+                                  "&:hover": { borderColor: "#94A3B8", bgcolor: "#F8FAFC" },
+                                }}
+                              >
+                                Logs
+                              </Button>
+                            </Tooltip>
+                          </Box>
+                        </TableCell>
+
+                        {/* Actions */}
+                        <TableCell align="right">
+                          <Box sx={{ display: "flex", justifyContent: "flex-end", gap: 0.5 }}>
+                            <Tooltip title="Script Details">
+                              <IconButton
+                                size="small"
+                                onClick={() => setDetailsApp(script)}
+                                sx={{
+                                  color: "#64748B",
+                                  "&:hover": { color: "#0F766E", bgcolor: "#CCFBF1" },
+                                }}
+                              >
+                                <Info size={16} />
+                              </IconButton>
+                            </Tooltip>
+                            <Tooltip title="Rename Script">
+                              <IconButton
+                                size="small"
+                                onClick={() => handleOpenRenameApp(script)}
+                                sx={{
+                                  color: "#64748B",
+                                  "&:hover": { color: "#0F766E", bgcolor: "#CCFBF1" },
+                                }}
+                              >
+                                <Tag size={16} />
+                              </IconButton>
+                            </Tooltip>
+                            <Tooltip title="Duplicate Script">
+                              <IconButton
+                                size="small"
+                                disabled={duplicatingAppId === script.id}
+                                onClick={() => handleDuplicateApp(script)}
+                                sx={{
+                                  color: "#64748B",
+                                  "&:hover": { color: "#0F766E", bgcolor: "#CCFBF1" },
+                                }}
+                              >
+                                {duplicatingAppId === script.id ? (
+                                  <CircularProgress size={16} sx={{ color: "inherit" }} />
+                                ) : (
+                                  <Copy size={16} />
+                                )}
+                              </IconButton>
+                            </Tooltip>
+                            <Tooltip title="Edit Script">
+                              <IconButton size="small" onClick={() => openEditAppModal(script)} sx={{ color: "#64748B" }}>
+                                <Edit size={16} />
+                              </IconButton>
+                            </Tooltip>
+                            <Tooltip title="Delete Script">
+                              <IconButton size="small" onClick={() => setDeleteApp(script)} sx={{ color: "#EF4444" }}>
+                                <Trash2 size={16} />
+                              </IconButton>
+                            </Tooltip>
+                          </Box>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
+        </Box>
+      )}
+
+      {/* ========================================================================================= */}
+      {/* TAB 3: GLOBAL VARIABLES KV STORE VIEW                                                     */}
       {/* ========================================================================================= */}
       {activeTab === "variables" && (
         <Box>
@@ -3980,7 +4889,9 @@ export const AppsPage: React.FC = () => {
                   ? "Compose Manifest"
                   : formType === "cron"
                     ? "Cron Schedule & Command"
-                    : "Systemd Unit"
+                    : formType === "script"
+                      ? "Script Snippet"
+                      : "Systemd Unit"
               }
               icon={<FileCode size={16} />}
               iconPosition="start"
@@ -3988,14 +4899,18 @@ export const AppsPage: React.FC = () => {
             {formType !== "cron" && (
               <Tab value="env" label="Environment (.env)" icon={<FileText size={16} />} iconPosition="start" />
             )}
-            <Tab
-              value="files"
-              label={`Config Files (${formFiles.length})`}
-              icon={<FilePlus size={16} />}
-              iconPosition="start"
-            />
+            {formType !== "script" && (
+              <Tab
+                value="files"
+                label={`Config Files (${formFiles.length})`}
+                icon={<FilePlus size={16} />}
+                iconPosition="start"
+              />
+            )}
             <Tab value="note" label="Note" icon={<FileText size={16} />} iconPosition="start" />
-            <Tab value="preview" label="Variables Preview" icon={<Code2 size={16} />} iconPosition="start" />
+            {formType !== "script" && (
+              <Tab value="preview" label="Variables Preview" icon={<Code2 size={16} />} iconPosition="start" />
+            )}
             {(formType === "systemd" || formType === "cron") && (
               <Tab
                 value="artifact"
@@ -4138,11 +5053,12 @@ export const AppsPage: React.FC = () => {
                     <Select
                       value={formType}
                       label="Runtime Type"
-                      onChange={(e) => handleTypeChange(e.target.value as "docker" | "systemd" | "cron")}
+                      onChange={(e) => handleTypeChange(e.target.value as "docker" | "systemd" | "cron" | "script")}
                     >
                       <MenuItem value="docker">Docker Compose (Container)</MenuItem>
                       <MenuItem value="systemd">Systemd / Native Service (Daemon)</MenuItem>
                       <MenuItem value="cron">Cron Job (Crontab Scheduled Task)</MenuItem>
+                      <MenuItem value="script">Script (On-demand Executable)</MenuItem>
                     </Select>
                   </FormControl>
                 </Grid>
@@ -4782,10 +5698,14 @@ ${formEnabled ? `${formCronExpr.trim() || "0 0 * * *"} ${formCronCmd.trim() || "
                 }}
               >
                 <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0F172A" }}>
-                  {formType === "docker" ? "compose.yaml Manifest" : "Systemd .service Unit File"}
+                  {formType === "docker"
+                    ? "compose.yaml Manifest"
+                    : formType === "script"
+                      ? "Script Snippet (/etc/ezscript/<name>)"
+                      : "Systemd .service Unit File"}
                 </Typography>
                 <Box sx={{ display: "flex", gap: 1 }}>
-                  {formType === "docker" ? (
+                  {formType === "docker" && (
                     <Button
                       size="small"
                       variant={showGenerator ? "contained" : "outlined"}
@@ -4801,7 +5721,8 @@ ${formEnabled ? `${formCronExpr.trim() || "0 0 * * *"} ${formCronCmd.trim() || "
                     >
                       Convert from 'docker run'
                     </Button>
-                  ) : (
+                  )}
+                  {formType === "systemd" && (
                     <Button
                       size="small"
                       variant={showGenerator ? "contained" : "outlined"}
@@ -4820,7 +5741,15 @@ ${formEnabled ? `${formCronExpr.trim() || "0 0 * * *"} ${formCronCmd.trim() || "
                   )}
                   <Button
                     size="small"
-                    onClick={() => setFormMain(formType === "docker" ? DOCKER_SAMPLE : SYSTEMD_SAMPLE)}
+                    onClick={() =>
+                      setFormMain(
+                        formType === "docker"
+                          ? DOCKER_SAMPLE
+                          : formType === "script"
+                            ? SCRIPT_SAMPLE
+                            : SYSTEMD_SAMPLE
+                      )
+                    }
                     sx={{ textTransform: "none", fontSize: "0.75rem", color: "#64748B" }}
                   >
                     Reset Template
@@ -6040,6 +6969,261 @@ ${formEnabled ? `${formCronExpr.trim() || "0 0 * * *"} ${formCronCmd.trim() || "
         <DialogActions sx={{ px: 2.5, py: 1.5, borderTop: "1px solid #F1F5F9" }}>
           <Button
             onClick={() => setArtifactCacheModalApp(null)}
+            sx={{ textTransform: "none", fontWeight: 600, color: "#64748B" }}
+          >
+            Close
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Cluster Script Execution Logs Dialog */}
+      <Dialog
+        open={Boolean(clusterLogsModalScript)}
+        onClose={() => setClusterLogsModalScript(null)}
+        maxWidth="md"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: "16px",
+            boxShadow: "0 20px 40px rgba(0,0,0,0.15)",
+            border: "1px solid #E2E8F0",
+          },
+        }}
+      >
+        <DialogTitle
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            pb: 1.5,
+            borderBottom: "1px solid #F1F5F9",
+          }}
+        >
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1.2 }}>
+            <Box
+              sx={{
+                width: 34,
+                height: 34,
+                borderRadius: "8px",
+                bgcolor: "#CCFBF1",
+                color: "#0F766E",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Terminal size={18} />
+            </Box>
+            <Box>
+              <Typography variant="subtitle1" sx={{ fontWeight: 800, color: "#0F172A", lineHeight: 1.2 }}>
+                Script Logs: {clusterLogsModalScript?.name}
+              </Typography>
+              <Typography variant="caption" sx={{ color: "#64748B" }}>
+                Execution logs & exit codes across target nodes (/etc/ezscript/{clusterLogsModalScript?.name})
+              </Typography>
+            </Box>
+          </Box>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+            <FormControl size="small" sx={{ minWidth: 105 }}>
+              <Select
+                value={clusterLogsLines}
+                onChange={(e) => {
+                  const val = Number(e.target.value);
+                  setClusterLogsLines(val);
+                  if (clusterLogsModalScript) {
+                    handleOpenClusterLogs(clusterLogsModalScript, val);
+                  }
+                }}
+                sx={{ height: 32, fontSize: "0.75rem", fontWeight: 600 }}
+              >
+                <MenuItem value={50}>50 lines</MenuItem>
+                <MenuItem value={100}>100 lines</MenuItem>
+                <MenuItem value={200}>200 lines</MenuItem>
+                <MenuItem value={500}>500 lines</MenuItem>
+              </Select>
+            </FormControl>
+            <Tooltip title="Refresh Logs">
+              <IconButton
+                size="small"
+                onClick={() => clusterLogsModalScript && handleOpenClusterLogs(clusterLogsModalScript, clusterLogsLines)}
+                disabled={clusterLogsLoading}
+                sx={{ color: "#0F766E" }}
+              >
+                <RefreshCw size={16} className={clusterLogsLoading ? "rotating" : ""} />
+              </IconButton>
+            </Tooltip>
+            <IconButton size="small" onClick={() => setClusterLogsModalScript(null)}>
+              <X size={18} />
+            </IconButton>
+          </Box>
+        </DialogTitle>
+
+        <DialogContent sx={{ p: 2.5 }}>
+          {clusterLogsLoading && !clusterLogsData ? (
+            <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", py: 8 }}>
+              <CircularProgress size={32} sx={{ color: "#0F766E" }} />
+            </Box>
+          ) : !clusterLogsData || Object.keys(clusterLogsData.results || {}).length === 0 ? (
+            <Alert severity="info" sx={{ borderRadius: "10px" }}>
+              No target nodes responded. Make sure target nodes are online with connected agents.
+            </Alert>
+          ) : (
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+              {/* Node selector tabs */}
+              <Tabs
+                value={clusterLogsSelectedNode}
+                onChange={(_, val) => setClusterLogsSelectedNode(val)}
+                variant="scrollable"
+                sx={{
+                  borderBottom: "1px solid #E2E8F0",
+                  "& .MuiTab-root": { textTransform: "none", fontWeight: 700, fontSize: "0.82rem", minHeight: 42, px: 2 },
+                  "& .Mui-selected": { color: "#0F766E" },
+                  "& .MuiTabs-indicator": { bgcolor: "#0F766E" },
+                }}
+              >
+                {(clusterLogsData.results || []).map((result) => {
+                  const isRunning = result.stderr === "running" || (result as any).is_running;
+                  return (
+                    <Tab
+                      key={result.node_name}
+                      value={result.node_name}
+                      label={
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                          <span>{result.node_name}</span>
+                          {isRunning ? (
+                            <Chip
+                              size="small"
+                              label="Running"
+                              sx={{ height: 18, fontSize: "0.65rem", fontWeight: 700, bgcolor: "#DBEAFE", color: "#1E40AF" }}
+                            />
+                          ) : result.exit_code !== undefined && result.exit_code >= 0 ? (
+                            <Chip
+                              size="small"
+                              label={`Exit ${result.exit_code}`}
+                              sx={{
+                                height: 18,
+                                fontSize: "0.65rem",
+                                fontWeight: 700,
+                                bgcolor: result.exit_code === 0 ? "#DCFCE7" : "#FEE2E2",
+                                color: result.exit_code === 0 ? "#15803D" : "#B91C1C",
+                              }}
+                            />
+                          ) : !result.success ? (
+                            <Chip
+                              size="small"
+                              label="Error"
+                              sx={{ height: 18, fontSize: "0.65rem", fontWeight: 700, bgcolor: "#FEE2E2", color: "#B91C1C" }}
+                            />
+                          ) : null}
+                        </Box>
+                      }
+                    />
+                  );
+                })}
+              </Tabs>
+
+              {/* Selected Node Log Details */}
+              {(() => {
+                const nodeResult = (clusterLogsData.results || []).find((r) => r.node_name === clusterLogsSelectedNode);
+                if (!nodeResult) return null;
+                const isRunning = nodeResult.stderr === "running" || (nodeResult as any).is_running;
+                const logsText = (nodeResult as any).logs || nodeResult.stdout || "";
+                return (
+                  <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+                    {/* Status header */}
+                    <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 1 }}>
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                        <Typography variant="body2" sx={{ fontWeight: 700, color: "#1E293B" }}>
+                          Node: {clusterLogsSelectedNode}
+                        </Typography>
+                        {isRunning ? (
+                          <Chip
+                            size="small"
+                            icon={<RotateCw size={12} className="rotating" />}
+                            label="Currently Executing"
+                            sx={{ height: 22, fontSize: "0.72rem", fontWeight: 700, bgcolor: "#DBEAFE", color: "#1D4ED8" }}
+                          />
+                        ) : nodeResult.exit_code !== undefined && nodeResult.exit_code >= 0 ? (
+                          <Chip
+                            size="small"
+                            label={`Terminated (Exit Code: ${nodeResult.exit_code})`}
+                            sx={{
+                              height: 22,
+                              fontSize: "0.72rem",
+                              fontWeight: 700,
+                              bgcolor: nodeResult.exit_code === 0 ? "#DCFCE7" : "#FEE2E2",
+                              color: nodeResult.exit_code === 0 ? "#15803D" : "#B91C1C",
+                            }}
+                          />
+                        ) : (
+                          <Chip
+                            size="small"
+                            label={nodeResult.success ? "Ready" : "Unknown"}
+                            sx={{ height: 22, fontSize: "0.72rem", fontWeight: 700, bgcolor: "#F1F5F9", color: "#475569" }}
+                          />
+                        )}
+                      </Box>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        startIcon={clusterLogsCopied ? <Check size={14} color="#059669" /> : <Copy size={14} />}
+                        onClick={() => {
+                          navigator.clipboard.writeText(logsText);
+                          setClusterLogsCopied(true);
+                          setTimeout(() => setClusterLogsCopied(false), 2000);
+                        }}
+                        sx={{
+                          textTransform: "none",
+                          fontSize: "0.75rem",
+                          fontWeight: 600,
+                          borderColor: "#CBD5E1",
+                          color: "#475569",
+                        }}
+                      >
+                        {clusterLogsCopied ? "Copied" : "Copy Output"}
+                      </Button>
+                    </Box>
+
+                    {/* Error alert if any */}
+                    {!nodeResult.success && nodeResult.error && (
+                      <Alert severity="error" sx={{ borderRadius: "8px" }}>
+                        {nodeResult.error}
+                      </Alert>
+                    )}
+
+                    {/* Logs output viewer */}
+                    <Box
+                      component="pre"
+                      sx={{
+                        m: 0,
+                        p: 2,
+                        bgcolor: "#0F172A",
+                        color: "#F8FAFC",
+                        borderRadius: "10px",
+                        fontFamily: "monospace",
+                        fontSize: "0.78rem",
+                        lineHeight: 1.5,
+                        minHeight: 180,
+                        maxHeight: 460,
+                        overflowY: "auto",
+                        overflowX: "auto",
+                        whiteSpace: "pre-wrap",
+                        wordBreak: "break-all",
+                        border: "1px solid #1E293B",
+                      }}
+                    >
+                      {logsText || "(No stdout/stderr output captured for this execution)"}
+                    </Box>
+                  </Box>
+                );
+              })()}
+            </Box>
+          )}
+        </DialogContent>
+
+        <DialogActions sx={{ px: 2.5, py: 1.5, borderTop: "1px solid #F1F5F9" }}>
+          <Button
+            onClick={() => setClusterLogsModalScript(null)}
             sx={{ textTransform: "none", fontWeight: 600, color: "#64748B" }}
           >
             Close

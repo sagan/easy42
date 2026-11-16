@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -1320,3 +1321,99 @@ func TestDockerAppDeployPathAndCommand(t *testing.T) {
 		t.Fatalf("expected action for /etc/ezappc/ezapp-testservice/conf/extra.conf, got none")
 	}
 }
+
+func TestScriptAppDeploymentAndAction(t *testing.T) {
+	srv, tempDir, _ := setupTestServer(t)
+	defer func() {
+		srv.mgr.Close()
+		os.RemoveAll(tempDir)
+	}()
+
+	// 0. Add node1
+	cfg := srv.mgr.Store().Get()
+	cfg.Nodes = append(cfg.Nodes, config.Node{
+		Name: "node1",
+		Host: "192.168.1.50",
+		IP:   "10.42.0.77/24",
+	})
+	_ = srv.mgr.Store().Save(cfg)
+
+	// 1. Create a script app
+	scriptBody := `{"name":"ez-backup","app_type":"script","main_content":"#!/bin/sh\necho \"backup $VAR\"","env_content":"VAR=daily_backup","published":true,"enabled":true}`
+	req := httptest.NewRequest(http.MethodPost, "/api/apps", strings.NewReader(scriptBody))
+	w := httptest.NewRecorder()
+	srv.handleCreateApp(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected 201 Created, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var createdApp config.App
+	if err := json.Unmarshal(w.Body.Bytes(), &createdApp); err != nil {
+		t.Fatalf("failed to decode created app: %v", err)
+	}
+
+	// 2. BuildAppSpecsForNode should have AppType_SCRIPT and injected environment
+	specs, err := srv.mgr.BuildAppSpecsForNode("node1")
+	if err != nil {
+		t.Fatalf("BuildAppSpecsForNode failed: %v", err)
+	}
+
+	var scriptSpec *agentpb.AppSpec
+	for _, s := range specs {
+		if s.Name == "ez-backup" {
+			scriptSpec = s
+			break
+		}
+	}
+	if scriptSpec == nil {
+		t.Fatalf("expected ez-backup in specs, got none")
+	}
+	if scriptSpec.AppType != agentpb.AppType_SCRIPT {
+		t.Fatalf("expected AppType_SCRIPT, got %v", scriptSpec.AppType)
+	}
+	if !strings.Contains(scriptSpec.MainContent, "export VAR=daily_backup") {
+		t.Fatalf("expected injected env in MainContent, got:\n%s", scriptSpec.MainContent)
+	}
+
+	// 3. PlanSyncWithScope should target /etc/ezscript/ez-backup
+	actions, err := srv.mgr.PlanSyncWithScope("")
+	if err != nil {
+		t.Fatalf("PlanSyncWithScope failed: %v", err)
+	}
+
+	var scriptAct *config.SyncAction
+	for i := range actions {
+		if actions[i].Interface == "ez-backup" {
+			scriptAct = &actions[i]
+			break
+		}
+	}
+	if scriptAct == nil {
+		t.Fatalf("expected sync action for ez-backup, got none in %+v", actions)
+	}
+	if scriptAct.TargetFile != "/etc/ezscript/ez-backup" {
+		t.Fatalf("expected target file /etc/ezscript/ez-backup, got %s", scriptAct.TargetFile)
+	}
+
+	// 4. Test POST /apps/{id}/action
+	actionBody := `{"action":"start"}`
+	actReq := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/apps/%s/action", createdApp.ID), strings.NewReader(actionBody))
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", createdApp.ID)
+	actReq = actReq.WithContext(context.WithValue(actReq.Context(), chi.RouteCtxKey, rctx))
+	actW := httptest.NewRecorder()
+	srv.handleAppClusterAction(actW, actReq)
+
+	if actW.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK from /apps/{id}/action, got %d: %s", actW.Code, actW.Body.String())
+	}
+	var actResp appClusterActionResponse
+	if err := json.Unmarshal(actW.Body.Bytes(), &actResp); err != nil {
+		t.Fatalf("failed to parse appClusterActionResponse: %v", err)
+	}
+	if actResp.AppName != "ez-backup" || actResp.Action != "start" {
+		t.Fatalf("unexpected action response: %+v", actResp)
+	}
+}
+

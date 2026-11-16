@@ -79,8 +79,8 @@ func ValidateApp(app App) error {
 	}
 
 	appType := strings.TrimSpace(strings.ToLower(app.AppType))
-	if appType != "docker" && appType != "systemd" && appType != "cron" {
-		return fmt.Errorf("unsupported app type '%s': must be 'docker', 'systemd', or 'cron'", app.AppType)
+	if appType != "docker" && appType != "systemd" && appType != "cron" && appType != "script" {
+		return fmt.Errorf("unsupported app type '%s': must be 'docker', 'systemd', 'cron', or 'script'", app.AppType)
 	}
 
 	if err := ValidateSelector(app.Selector); err != nil {
@@ -92,8 +92,19 @@ func ValidateApp(app App) error {
 			return fmt.Errorf("docker compose file content cannot be empty")
 		} else if appType == "systemd" {
 			return fmt.Errorf("systemd service unit content cannot be empty")
+		} else if appType == "script" {
+			return fmt.Errorf("script content cannot be empty")
 		}
 		return fmt.Errorf("cron expression and command cannot be empty")
+	}
+
+	if appType == "script" {
+		if len(app.Files) > 0 {
+			return fmt.Errorf("config files are not supported for script apps")
+		}
+		if app.Artifact != nil {
+			return fmt.Errorf("artifacts are not supported for script apps")
+		}
 	}
 
 	if app.Artifact != nil {

@@ -358,6 +358,7 @@ func New(cfg Config) *Server {
 			r.Put("/apps/{id}/rename", s.handleRenameApp)
 			r.Post("/apps/{id}/duplicate", s.handleDuplicateApp)
 			r.Put("/apps/{id}/duplicate", s.handleDuplicateApp)
+			r.Post("/apps/{id}/action", s.handleAppClusterAction)
 			r.Post("/apps/preview-transpile", s.handlePreviewTranspile)
 			r.Post("/apps/preview-interpolate", s.handlePreviewInterpolate)
 			r.Get("/apps/variables", s.handleGetAppVariables)

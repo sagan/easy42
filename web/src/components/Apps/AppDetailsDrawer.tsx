@@ -24,6 +24,7 @@ import {
   Calendar,
   Tag,
   Package,
+  Terminal,
 } from "lucide-react";
 import { MarkdownView } from "../Common/MarkdownView";
 import type { App, AppStatusRecord } from "../../types/api";
@@ -49,7 +50,7 @@ const formatDate = (iso?: string): string => {
 };
 
 const getTypeLabel = (t: string) =>
-  t === "docker" ? "Docker" : t === "cron" ? "Cron" : "Systemd";
+  t === "docker" ? "Docker" : t === "cron" ? "Cron" : t === "script" ? "Script" : "Systemd";
 
 export const AppDetailsDrawer: React.FC<AppDetailsDrawerProps> = ({
   app,
@@ -112,6 +113,8 @@ export const AppDetailsDrawer: React.FC<AppDetailsDrawerProps> = ({
               <BoxIcon size={20} />
             ) : app.app_type === "cron" ? (
               <Clock size={20} />
+            ) : app.app_type === "script" ? (
+              <Terminal size={20} />
             ) : (
               <Cpu size={20} />
             )}
@@ -157,9 +160,21 @@ export const AppDetailsDrawer: React.FC<AppDetailsDrawerProps> = ({
                 fontSize: "0.72rem",
                 fontWeight: 700,
                 bgcolor:
-                  app.app_type === "docker" ? "#E0F2FE" : app.app_type === "cron" ? "#FEF3C7" : "#F3E8FF",
+                  app.app_type === "docker"
+                    ? "#E0F2FE"
+                    : app.app_type === "cron"
+                      ? "#FEF3C7"
+                      : app.app_type === "script"
+                        ? "#CCFBF1"
+                        : "#F3E8FF",
                 color:
-                  app.app_type === "docker" ? "#0369A1" : app.app_type === "cron" ? "#B45309" : "#7E22CE",
+                  app.app_type === "docker"
+                    ? "#0369A1"
+                    : app.app_type === "cron"
+                      ? "#B45309"
+                      : app.app_type === "script"
+                        ? "#0F766E"
+                        : "#7E22CE",
               }}
             />
             <Chip
@@ -396,7 +411,13 @@ export const AppDetailsDrawer: React.FC<AppDetailsDrawerProps> = ({
 
           <Box>
             <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600, display: "block", mb: 0.5 }}>
-              {app.app_type === "docker" ? "compose.yaml" : app.app_type === "cron" ? "Cron schedule & command" : "Systemd unit"}
+              {app.app_type === "docker"
+                ? "compose.yaml"
+                : app.app_type === "cron"
+                  ? "Cron schedule & command"
+                  : app.app_type === "script"
+                    ? "Script snippet"
+                    : "Systemd unit"}
             </Typography>
             <Box
               component="pre"
@@ -561,7 +582,9 @@ export const AppDetailsDrawer: React.FC<AppDetailsDrawerProps> = ({
         <Box sx={{ display: "flex", alignItems: "center", gap: 0.8, pb: 1 }}>
           <Layers size={13} color="#94A3B8" />
           <Typography variant="caption" sx={{ color: "#94A3B8" }}>
-            Service name on nodes: ezapp-{app.name}
+            {app.app_type === "script"
+              ? `Script file on nodes: /etc/ezscript/${app.name}`
+              : `Service name on nodes: ezapp-${app.name}`}
           </Typography>
         </Box>
       </Box>

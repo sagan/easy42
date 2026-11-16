@@ -3943,6 +3943,11 @@ func (m *Manager) PlanSyncWithScope(scope string, nodeNames ...string) ([]config
 				envTargetFile = ""
 				applyCmd = "crontab"
 				mainDesc = fmt.Sprintf("Deploy app '%s' cron job on %s", spec.Name, node.Name)
+			} else if spec.AppType == agentpb.AppType_SCRIPT {
+				mainTargetFile = fmt.Sprintf("/etc/ezscript/%s", spec.Name)
+				envTargetFile = ""
+				applyCmd = ""
+				mainDesc = fmt.Sprintf("Deploy script '%s' on %s", spec.Name, node.Name)
 			} else if initSystem == apps.InitSystemProcd {
 				mainTargetFile = fmt.Sprintf("/etc/init.d/ezapp-%s", spec.Name)
 				envTargetFile = ""
@@ -4178,13 +4183,19 @@ func (m *Manager) PlanSyncWithScope(scope string, nodeNames ...string) ([]config
 		sort.Strings(orphanedAppNames)
 
 		for _, appName := range orphanedAppNames {
+			targetFile := fmt.Sprintf("/etc/systemd/system/ezapp-%s.service", appName)
+			desc := fmt.Sprintf("Remove unassigned app '%s' service unit from %s", appName, node.Name)
+			if _, ok := deployedAppFiles[fmt.Sprintf("/etc/ezscript/%s", appName)]; ok {
+				targetFile = fmt.Sprintf("/etc/ezscript/%s", appName)
+				desc = fmt.Sprintf("Remove unassigned script '%s' from %s", appName, node.Name)
+			}
 			actions = append(actions, config.SyncAction{
 				NodeName:    node.Name,
 				Host:        node.Host,
 				Type:        config.ActionDeleteApp,
 				Interface:   appName,
-				TargetFile:  fmt.Sprintf("/etc/systemd/system/ezapp-%s.service", appName),
-				Description: fmt.Sprintf("Remove unassigned app '%s' service unit from %s", appName, node.Name),
+				TargetFile:  targetFile,
+				Description: desc,
 				NeedsApply:  true,
 				Status:      "pending",
 				DiffStatus:  "delete",

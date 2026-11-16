@@ -1037,7 +1037,7 @@ export interface App {
   note?: string;
   url?: string;
   version?: string;
-  app_type: "docker" | "systemd" | "cron";
+  app_type: "docker" | "systemd" | "cron" | "script";
   main_content: string;
   env_content?: string;
   files?: Record<string, string>;
@@ -1160,6 +1160,23 @@ export interface AppActionResponse {
   stdout: string;
   stderr: string;
   duration_ms: number;
+}
+
+export interface AppClusterActionResult {
+  node_name: string;
+  success: boolean;
+  exit_code: number;
+  stdout?: string;
+  stderr?: string;
+  duration_ms?: number;
+  error?: string;
+}
+
+export interface AppClusterActionResponse {
+  app_id: string;
+  app_name: string;
+  action: string;
+  results: AppClusterActionResult[];
 }
 
 export interface AppVariable {

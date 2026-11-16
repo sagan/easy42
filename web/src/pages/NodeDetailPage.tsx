@@ -81,6 +81,7 @@ import { MetricAreaChart } from "../components/Nodes/MetricAreaChart";
 import { MarkdownView } from "../components/Common/MarkdownView";
 import { NodeCronTasksTab } from "../components/Nodes/NodeCronTasksTab";
 import { NodeAppsTab } from "../components/Nodes/NodeAppsTab";
+import { NodeScriptsTab } from "../components/Nodes/NodeScriptsTab";
 import { NodeNoteDataView } from "../components/Nodes/NodeNoteDataView";
 import { parseNoteData } from "../utils/taskSelector";
 import { Dn42InfoCard } from "../components/Nodes/Dn42InfoCard";
@@ -203,7 +204,18 @@ export const NodeDetailPage: React.FC = () => {
   const tabParam = searchParams.get("tab") || "overview";
   const validTabs = node?.is_external
     ? ["overview", "networking"]
-    : ["overview", "metrics", "telemetry", "networking", "routing", "firewall", "agent", "apps", "cron_tasks"];
+    : [
+        "overview",
+        "metrics",
+        "telemetry",
+        "networking",
+        "routing",
+        "firewall",
+        "agent",
+        "apps",
+        "scripts",
+        "cron_tasks",
+      ];
   const currentTab = validTabs.includes(tabParam) ? (tabParam === "telemetry" ? "metrics" : tabParam) : "overview";
 
   useEffect(() => {
@@ -1650,6 +1662,9 @@ export const NodeDetailPage: React.FC = () => {
               />
             )}
             {!node?.is_external && (
+              <Tab value="scripts" icon={<Terminal size={16} />} iconPosition="start" label="Scripts" title="Scripts" />
+            )}
+            {!node?.is_external && (
               <Tab
                 value="cron_tasks"
                 icon={<Clock size={16} />}
@@ -2106,10 +2121,12 @@ export const NodeDetailPage: React.FC = () => {
                             easy42 Agent Version:
                           </Typography>
                           <Box sx={{ display: "flex", alignItems: "center", gap: 0.8 }}>
-                            <Typography variant="body2" className="mono-font" sx={{ fontWeight: 600, color: "#0F172A" }}>
-                              {currentAgentVer
-                                ? `v${currentAgentVer.replace(/^[vV]/, "")}`
-                                : "Not reported"}
+                            <Typography
+                              variant="body2"
+                              className="mono-font"
+                              sx={{ fontWeight: 600, color: "#0F172A" }}
+                            >
+                              {currentAgentVer ? `v${currentAgentVer.replace(/^[vV]/, "")}` : "Not reported"}
                             </Typography>
                             {isOutdated && (
                               <Tooltip
@@ -3228,11 +3245,7 @@ export const NodeDetailPage: React.FC = () => {
                         onClick={() => handleCopy("node_extra_hosts", node.extra_hosts!)}
                         sx={{ p: 0.3, color: "#64748B" }}
                       >
-                        {copiedKey === "node_extra_hosts" ? (
-                          <Check size={14} color="#059669" />
-                        ) : (
-                          <Copy size={14} />
-                        )}
+                        {copiedKey === "node_extra_hosts" ? <Check size={14} color="#059669" /> : <Copy size={14} />}
                       </IconButton>
                     </Tooltip>
                   </Box>
@@ -3546,14 +3559,8 @@ export const NodeDetailPage: React.FC = () => {
                       Agent Version
                     </Typography>
                     <Box sx={{ display: "flex", alignItems: "center", gap: 0.8, mt: 0.5 }}>
-                      <Typography
-                        variant="body1"
-                        className="mono-font"
-                        sx={{ fontWeight: 700, color: "#0F172A" }}
-                      >
-                        {currentAgentVer
-                          ? `v${currentAgentVer.replace(/^[vV]/, "")}`
-                          : "Not Reported"}
+                      <Typography variant="body1" className="mono-font" sx={{ fontWeight: 700, color: "#0F172A" }}>
+                        {currentAgentVer ? `v${currentAgentVer.replace(/^[vV]/, "")}` : "Not Reported"}
                       </Typography>
                       {isOutdated && (
                         <Tooltip
@@ -3846,6 +3853,9 @@ export const NodeDetailPage: React.FC = () => {
 
         {/* Tab: Workload Apps */}
         {currentTab === "apps" && node && !node.is_external && <NodeAppsTab nodeName={node.name} />}
+
+        {/* Tab: Scripts */}
+        {currentTab === "scripts" && node && !node.is_external && <NodeScriptsTab nodeName={node.name} />}
 
         {/* Tab 7: Cron Tasks */}
         {currentTab === "cron_tasks" && node && !node.is_external && <NodeCronTasksTab nodeName={node.name} />}

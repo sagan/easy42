@@ -90,7 +90,7 @@ export const NodeAppsTab: React.FC<NodeAppsTabProps> = ({ nodeName }) => {
       }
       setError(null);
       const res = await api.getNodeApps(nodeName);
-      setApps(res.apps || []);
+      setApps((res.apps || []).filter((a: App) => a.app_type !== "script"));
       setStatuses(res.statuses || []);
       setAppsDisabled(!!res.disable_apps);
     } catch (e: any) {

@@ -186,3 +186,41 @@ func TestValidateCronApp(t *testing.T) {
 	}
 }
 
+func TestValidateScriptApp(t *testing.T) {
+	scriptApp := App{
+		Name:        "cleanup-job",
+		AppType:     "script",
+		MainContent: "#!/bin/sh\necho 'clean'",
+		EnvContent:  "RETENTION_DAYS=7",
+	}
+	if err := ValidateApp(scriptApp); err != nil {
+		t.Fatalf("expected valid script app, got error: %v", err)
+	}
+
+	scriptEmpty := scriptApp
+	scriptEmpty.MainContent = "   "
+	if err := ValidateApp(scriptEmpty); err == nil {
+		t.Errorf("expected error for empty main_content in script app")
+	}
+
+	scriptWithFiles := scriptApp
+	scriptWithFiles.Files = map[string]string{
+		"config.yaml": "key: value",
+	}
+	if err := ValidateApp(scriptWithFiles); err == nil {
+		t.Errorf("expected error for config files on script app")
+	}
+
+	scriptWithArtifact := scriptApp
+	scriptWithArtifact.Artifact = &ArtifactSpec{
+		URL: "https://example.com/bin.tar.gz",
+		Files: []ArtifactFile{
+			{Name: "bin", TargetPath: "${PATH}/bin"},
+		},
+	}
+	if err := ValidateApp(scriptWithArtifact); err == nil {
+		t.Errorf("expected error for artifact on script app")
+	}
+}
+
+

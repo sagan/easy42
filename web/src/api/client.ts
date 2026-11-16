@@ -59,6 +59,7 @@ import type {
   CustomAPI,
   CustomAPITestRequest,
   CustomAPITestResponse,
+  AppClusterActionResponse,
 } from "../types/api";
 
 const API_BASE = "/api";
@@ -715,6 +716,11 @@ export const api = {
     request<NodeAppsResponse>(`/nodes/${encodeURIComponent(nodeName)}/apps`),
   triggerNodeAppAction: (nodeName: string, appName: string, action: string, appType: string, logLines?: number) =>
     request<AppActionResponse>(`/nodes/${encodeURIComponent(nodeName)}/apps/${encodeURIComponent(appName)}/action`, {
+      method: "POST",
+      body: JSON.stringify({ action, app_type: appType, log_lines: logLines }),
+    }),
+  triggerAppClusterAction: (appId: string, action: string, appType?: string, logLines?: number) =>
+    request<AppClusterActionResponse>(`/apps/${encodeURIComponent(appId)}/action`, {
       method: "POST",
       body: JSON.stringify({ action, app_type: appType, log_lines: logLines }),
     }),

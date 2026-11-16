@@ -62,6 +62,8 @@ func (m *Manager) setupAgentAppsListeners() {
 				appType = "systemd"
 			} else if a.AppType == agentpb.AppType_CRON {
 				appType = "cron"
+			} else if a.AppType == agentpb.AppType_SCRIPT {
+				appType = "script"
 			}
 			nodeMap[a.Name] = AppStatusRecord{
 				AppID:        a.AppId,
@@ -577,6 +579,8 @@ func (m *Manager) BuildAppSpecsForNode(nodeName string) ([]*agentpb.AppSpec, err
 		var ezappDir string
 		if strings.ToLower(rawApp.AppType) == "docker" {
 			ezappDir = "/etc/ezappc/ezapp-" + rawApp.Name
+		} else if strings.ToLower(rawApp.AppType) == "script" {
+			ezappDir = "/etc/ezscript"
 		} else {
 			ezappDir = "/etc/ezapp/" + rawApp.Name
 		}
@@ -611,6 +615,9 @@ func (m *Manager) BuildAppSpecsForNode(nodeName string) ([]*agentpb.AppSpec, err
 			spec.AppType = agentpb.AppType_DOCKER_COMPOSE
 		} else if strings.ToLower(app.AppType) == "cron" {
 			spec.AppType = agentpb.AppType_CRON
+		} else if strings.ToLower(app.AppType) == "script" {
+			spec.AppType = agentpb.AppType_SCRIPT
+			spec.MainContent = apps.InjectScriptEnvironment(spec.MainContent, app.EnvContent)
 		} else {
 			spec.AppType = agentpb.AppType_SYSTEMD
 			spec.MainContent = apps.EnsureSystemdEnvironmentFile(app.Name, spec.MainContent)
@@ -796,6 +803,8 @@ func (m *Manager) TriggerAppAction(ctx context.Context, nodeName string, appName
 		protoType = agentpb.AppType_SYSTEMD
 	} else if strings.ToLower(appType) == "cron" {
 		protoType = agentpb.AppType_CRON
+	} else if strings.ToLower(appType) == "script" {
+		protoType = agentpb.AppType_SCRIPT
 	}
 
 	if logLines == 0 {
