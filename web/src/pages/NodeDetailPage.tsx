@@ -1905,7 +1905,7 @@ export const NodeDetailPage: React.FC = () => {
                               variant="outlined"
                               startIcon={<Wrench size={13} />}
                               onClick={() =>
-                                navigate(`/helper?node=${encodeURIComponent(node.name)}&task=configure_network`)
+                                navigate(`/helper?node=${encodeURIComponent(node.name)}&task=config_network`)
                               }
                               sx={{ fontSize: "0.72rem", py: 0.2, px: 1, borderColor: "#CBD5E1", color: "#334155" }}
                             >

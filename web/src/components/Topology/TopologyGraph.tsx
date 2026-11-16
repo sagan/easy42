@@ -2242,7 +2242,7 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
         }
       });
 
-      let isHealthy = isOnline && nodeLinks.length > 0 && downLinks === 0 && upLinks === nodeLinks.length;
+      let isHealthy = isOnline && downLinks === 0 && upLinks === nodeLinks.length;
       let reason = "All links active & normal";
       if (!isOnline) {
         isHealthy = false;

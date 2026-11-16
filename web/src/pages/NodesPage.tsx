@@ -407,6 +407,19 @@ export const NodesPage: React.FC = () => {
     return set;
   }, [managedNodes, liveMap, nodeStatuses]);
 
+  const nodeLinksCountMap = useMemo(() => {
+    const map = new Map<string, number>();
+    (links || []).forEach((l) => {
+      if (l.from?.name) {
+        map.set(l.from.name, (map.get(l.from.name) || 0) + 1);
+      }
+      if (l.to?.name && l.to.name !== l.from?.name) {
+        map.set(l.to.name, (map.get(l.to.name) || 0) + 1);
+      }
+    });
+    return map;
+  }, [links]);
+
   // Map of node name to count of links that are currently down
   const nodeDownLinksCountMap = useMemo(() => {
     const map = new Map<string, number>();
@@ -435,6 +448,17 @@ export const NodesPage: React.FC = () => {
     });
     return set;
   }, [managedNodes, nodeDownLinksCountMap]);
+
+  const noLinkNodeNames = useMemo(() => {
+    const set = new Set<string>();
+    const managedNames = new Set(managedNodes.map((n) => n.name));
+    managedNames.forEach((name) => {
+      if (!nodeLinksCountMap.get(name)) {
+        set.add(name);
+      }
+    });
+    return set;
+  }, [managedNodes, nodeLinksCountMap]);
 
   // Unique tags from managed (non-external) nodes only, excluding "external" and special tags
   const managedTags = useMemo(() => {
@@ -468,6 +492,11 @@ export const NodesPage: React.FC = () => {
         label: "Unhealthy",
         count: unhealthyNodeNames.size,
       },
+      {
+        id: "$nolink",
+        label: "NoLink",
+        count: noLinkNodeNames.size,
+      },
     ];
 
     managedTags.forEach((tag) => {
@@ -480,7 +509,7 @@ export const NodesPage: React.FC = () => {
     });
 
     return items;
-  }, [managedNodes, offlineNodeNames, unhealthyNodeNames, managedTags]);
+  }, [managedNodes, offlineNodeNames, unhealthyNodeNames, noLinkNodeNames, managedTags]);
 
   // Requirement 3: Filter nodes by tag, block, and search term
   const filteredNodes = useMemo(() => {
@@ -490,6 +519,8 @@ export const NodesPage: React.FC = () => {
         matchTag = offlineNodeNames.has(n.name);
       } else if (urlTag === "$unhealthy") {
         matchTag = unhealthyNodeNames.has(n.name);
+      } else if (urlTag === "$nolink") {
+        matchTag = noLinkNodeNames.has(n.name);
       } else if (urlTag !== "All" && managedTags.includes(urlTag)) {
         matchTag = Boolean(n.tags && n.tags.includes(urlTag));
       }
@@ -522,11 +553,12 @@ export const NodesPage: React.FC = () => {
     managedBlocks,
     offlineNodeNames,
     unhealthyNodeNames,
+    noLinkNodeNames,
   ]);
 
-  const activeTag = urlTag === "$offline" || urlTag === "$unhealthy" || managedTags.includes(urlTag) ? urlTag : "All";
+  const activeTag = urlTag.startsWith("$") || managedTags.includes(urlTag) ? urlTag : "All";
 
-  const isSpecialTag = urlTag === "$offline" || urlTag === "$unhealthy";
+  const isSpecialTag = urlTag.startsWith("$");
   const isValidTag = isSpecialTag || (urlTag !== "All" && managedTags.includes(urlTag));
 
   const isFiltering = Boolean(
@@ -996,6 +1028,7 @@ export const NodesPage: React.FC = () => {
             const isSelected = activeTag === item.id;
             const isOfflineTag = item.id === "$offline";
             const isUnhealthyTag = item.id === "$unhealthy";
+            const isNolinkTag = item.id === "$nolink";
 
             let bg = "#F1F5F9";
             let color = "#475569";
@@ -1010,6 +1043,10 @@ export const NodesPage: React.FC = () => {
                 bg = "#D97706";
                 color = "#FFFFFF";
                 hoverBg = "#B45309";
+              } else if (isNolinkTag) {
+                bg = "#9b9b08";
+                color = "#FFFFFF";
+                hoverBg = "#969668";
               } else {
                 bg = "#4F46E5";
                 color = "#FFFFFF";
@@ -1023,6 +1060,10 @@ export const NodesPage: React.FC = () => {
               } else if (isUnhealthyTag && item.count > 0) {
                 bg = "#FFFBEB";
                 color = "#B45309";
+                hoverBg = "#FEF3C7";
+              } else if (isNolinkTag && item.count > 0) {
+                bg = "#FFFBEB";
+                color = "#9b9b08";
                 hoverBg = "#FEF3C7";
               }
             }

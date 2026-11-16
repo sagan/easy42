@@ -96,7 +96,7 @@ Device Helper packages these operational workflows into **embedded tasks**. Each
 3. **Privilege Elevation**: The shared `common.sh` detects whether the SSH session runs as `root`. If not, it uses `sudo` and fails with a clear error when `sudo` is unavailable.
 4. **Targeted Fleet Filtering**: Nodes can be filtered by user-defined tags (`#cloud`, `#edge`, `#eu`, etc.) or selected individually for precise, progressive rollouts. External nodes are never eligible for helper tasks.
 5. **Non-Destructive Status Inspection**: Before applying any change, Device Helper queries target nodes to determine whether a task is already satisfied, ready to apply, or incompatible.
-6. **Payload-Aware Tasks**: `deploy_agent` and `configure_network` receive generated files at execution time (`easy42-agent`, `agent.json`, `node_ip.env`, and optionally `custom_network.sh`) rather than relying on static scripts alone.
+6. **Payload-Aware Tasks**: `deploy_agent` and `config_network` receive generated files at execution time (`easy42-agent`, `agent.json`, `node_ip.env`, and optionally `custom_network.sh`) rather than relying on static scripts alone.
 
 ### SSH Authentication & Host Key Verification
 
@@ -126,7 +126,7 @@ Tasks are sorted by weight and categorized into logical operational domains:
 | Task ID                   | Category         | Title                            | Weight | Actions Performed                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | :------------------------ | :--------------- | :------------------------------- | :----: | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `deploy_agent`            | Services         | **Deploy Agent**                 |  `5`   | Detects remote CPU architecture, obtains or reuses the node agent token, uploads the bundled `easy42-agent` binary, writes `agent.json` only when none exists, creates and enables a system service (`systemd`, `openrc`, or `procd`), and refreshes node status.                                                                                                                                                                                                                                           |
-| `configure_network`       | System & Network | **Configure Network**            |  `6`   | Persists the node's main/external IPv4 and IPv6 addresses (and optional custom network script) through netplan, `/etc/network/interfaces`, systemd-networkd, or OpenWrt UCI. See [Network Configuration Task](#network-configuration-task).                                                                                                                                                                                                                                                                 |
+| `config_network`          | System & Network | **Configure Network**            |  `6`   | Persists the node's main/external IPv4 and IPv6 addresses (and optional custom network script) through netplan, `/etc/network/interfaces`, systemd-networkd, or OpenWrt UCI. See [Network Configuration Task](#network-configuration-task).                                                                                                                                                                                                                                                                 |
 | `install_wireguard`       | Packages         | **Install WireGuard**            |  `10`  | Installs WireGuard and `wireguard-tools` using native package managers (`apt`, `apk`, `pacman`, `dnf`/`yum`, `opkg`).                                                                                                                                                                                                                                                                                                                                                                                       |
 | `install_wgquick_openwrt` | Packages         | **Install wg-quick (OpenWrt)**   |  `12`  | Downloads and installs the third-party Golang `wg-quick` implementation (`wg-quick-op`) into `/usr/bin/wg-quick` for OpenWrt or other systems where package managers do not supply `wg-quick`.                                                                                                                                                                                                                                                                                                              |
 | `install_phantun`         | Packages         | **Install Phantun**              |  `15`  | Resolves the latest `sagan/phantun` release through the GitHub API (falling back to `v0.8.1-fix8`), downloads the matching musl ZIP, verifies its SHA-256 digest when available, and installs `phantun_client` and `phantun_server` into `/usr/local/bin` when that directory exists and is in `PATH`, otherwise `/usr/bin`. If neither `unzip` nor Python is present, it installs `unzip` with the system package manager.                                                                                 |
@@ -144,7 +144,7 @@ The task list API returns the manifest fields exactly as stored in each `task.js
 
 ## Network Configuration Task
 
-`configure_network` is the only task that changes the node's persistent interface addressing. It is intended to make the addresses managed by Easy42 survive a reboot rather than only existing in the live kernel.
+`config_network` is the only task that changes the node's persistent interface addressing. It is intended to make the addresses managed by Easy42 survive a reboot rather than only existing in the live kernel.
 
 ### Inputs
 
@@ -221,7 +221,7 @@ Existing managed files are backed up first with a timestamped suffix:
 
 ### Status semantics
 
-`configure_network` reports `done` when all desired addresses already exist on **any** interface and the custom script (if any) matches the expected markers and target interface. It reports `ready` with a human-readable list of missing addresses and/or script problems otherwise.
+`config_network` reports `done` when all desired addresses already exist on **any** interface and the custom script (if any) matches the expected markers and target interface. It reports `ready` with a human-readable list of missing addresses and/or script problems otherwise.
 
 ---
 
@@ -258,7 +258,7 @@ Each task's `status.sh` script executes a series of non-destructive checks and t
 |  **`20`**   | `incompatible` | **Not Applicable**     | The OS distribution, init system, interface name, or node configuration does not match the task prerequisites.         |
 | **`Other`** | `error`        | **Check Failed**       | Script execution failed, SSH connection dropped, or root elevation failed.                                             |
 
-When a task is executed (`run.sh`), an exit code of `0` denotes success, while any non-zero exit code denotes failure. The full stdout and stderr output stream is captured, returned in the API response, and displayed in the UI terminal log viewer. For `deploy_agent` and `configure_network`, a successful run also triggers an asynchronous node status refresh.
+When a task is executed (`run.sh`), an exit code of `0` denotes success, while any non-zero exit code denotes failure. The full stdout and stderr output stream is captured, returned in the API response, and displayed in the UI terminal log viewer. For `deploy_agent` and `config_network`, a successful run also triggers an asynchronous node status refresh.
 
 ---
 
@@ -336,7 +336,7 @@ GET /api/tasks
     "weight": 5
   },
   {
-    "id": "configure_network",
+    "id": "config_network",
     "title": "Configure Network",
     "description": "Configures permanent node IP addresses and custom network rules (e.g. policy routing) using native network managers (systemd-networkd/networkd-dispatcher, /etc/network/interfaces).",
     "category": "System & Network",
@@ -369,20 +369,20 @@ Both routes return the same payload: the task's own embedded files followed by s
 [
   {
     "name": "run.sh",
-    "path": "configure_network/run.sh",
+    "path": "config_network/run.sh",
     "content": "#!/bin/sh\n...",
     "shared": false
   },
   {
     "name": "status.sh",
-    "path": "configure_network/status.sh",
+    "path": "config_network/status.sh",
     "content": "#!/bin/sh\n...",
     "shared": false
   },
   {
     "name": "task.json",
-    "path": "configure_network/task.json",
-    "content": "{\n  \"id\": \"configure_network\",\n...",
+    "path": "config_network/task.json",
+    "content": "{\n  \"id\": \"config_network\",\n...",
     "shared": false
   },
   {
@@ -611,7 +611,7 @@ _(Default: `~/.config/easy42/tasks/<task_id>/`, or overridden by the `--data-dir
 
 ### Payload-based tasks
 
-Tasks that need controller-generated files can be supported by extending the execution engine, which already special-cases `deploy_agent` and `configure_network`. Uploaded payload files are written into the same temporary directory as the scripts; only `easy42-agent`, `status.sh`, and `run.sh` receive `0755`, `agent.json` receives `0600`, and other files default to `0644`. To generate dynamic status checks, override `status.sh` in the payload as the built-in payload tasks do.
+Tasks that need controller-generated files can be supported by extending the execution engine, which already special-cases `deploy_agent` and `config_network`. Uploaded payload files are written into the same temporary directory as the scripts; only `easy42-agent`, `status.sh`, and `run.sh` receive `0755`, `agent.json` receives `0600`, and other files default to `0644`. To generate dynamic status checks, override `status.sh` in the payload as the built-in payload tasks do.
 
 ---
 

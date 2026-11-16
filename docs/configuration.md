@@ -404,7 +404,7 @@ User-defined policies with the same ID as a built-in override that built-in at l
 | `agent_last_seen`       | `timestamp`     | Last agent heartbeat/report.                                                                                                                                           |
 | `enable_fa`             | `boolean`       | Enable the FlapAlerted BGP telemetry session.                                                                                                                          |
 | `update_hosts`          | `boolean`       | Manage the `/etc/hosts` Easy42 block on this node (agent mode only).                                                                                                   |
-| `custom_network_script` | `string`        | Shell script persisted and applied by the `configure_network` Device Helper task (for example policy-routing rules).                                                   |
+| `custom_network_script` | `string`        | Shell script persisted and applied by the `config_network` Device Helper task (for example policy-routing rules).                                                      |
 | `route_reflector`       | `boolean`       | When true, marks the node as a BGP Route Reflector for internal iBGP peers, appending `rr client;` to internal BGP peer blocks that share the same ASN in `bird.conf`. |
 
 #### Entrypoints

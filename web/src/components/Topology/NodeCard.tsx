@@ -16,6 +16,7 @@ import {
   Activity,
   Camera,
   Radio,
+  AlertOctagon,
 } from "lucide-react";
 import { Node, NodeStatus } from "../../types/api";
 import { NodeCentralityInfo } from "../../utils/graphCentrality";
@@ -107,25 +108,27 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
           width: 155,
           height: 44,
           backgroundColor: !isOnline ? "#FEF2F2" : "#FFFFFF",
-          border: isFocused || isHighlighted
-            ? "2px solid #4F46E5"
-            : isExternal
-              ? "2px dashed #8B5CF6"
-              : !isOnline
-                ? "1.5px solid #EF4444"
-                : isRouteReflector
-                  ? "1.5px solid #6366F1"
-                  : isCore
-                    ? "2px solid #059669"
-                    : "1.5px solid #CBD5E1",
+          border:
+            isFocused || isHighlighted
+              ? "2px solid #4F46E5"
+              : isExternal
+                ? "2px dashed #8B5CF6"
+                : !isOnline
+                  ? "1.5px solid #EF4444"
+                  : isRouteReflector
+                    ? "1.5px solid #6366F1"
+                    : isCore
+                      ? "2px solid #059669"
+                      : "1.5px solid #CBD5E1",
           borderRadius: 2,
-          boxShadow: isFocused || isHighlighted
-            ? "0 0 0 3px rgba(79, 70, 229, 0.25)"
-            : isCore
-              ? "0 0 0 2px rgba(16, 185, 129, 0.25), 0 2px 6px rgba(16, 185, 129, 0.15)"
-              : isRouteReflector
-                ? "0 0 0 1px rgba(99, 102, 241, 0.3), 0 2px 6px rgba(99, 102, 241, 0.15)"
-                : "0 2px 6px rgba(0,0,0,0.06)",
+          boxShadow:
+            isFocused || isHighlighted
+              ? "0 0 0 3px rgba(79, 70, 229, 0.25)"
+              : isCore
+                ? "0 0 0 2px rgba(16, 185, 129, 0.25), 0 2px 6px rgba(16, 185, 129, 0.15)"
+                : isRouteReflector
+                  ? "0 0 0 1px rgba(99, 102, 241, 0.3), 0 2px 6px rgba(99, 102, 241, 0.15)"
+                  : "0 2px 6px rgba(0,0,0,0.06)",
           display: "flex",
           alignItems: "center",
           px: 1,
@@ -227,31 +230,32 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
               : inBlock && !isBlockFullMesh
                 ? "#FAFBFD"
                 : "#FFFFFF",
-        border: isFocused || isHighlighted
-          ? "2px solid #4F46E5"
-          : isExternal
-            ? "2px dashed #8B5CF6"
-            : inBlock
-              ? isBlockFullMesh
-                ? isHealthy
-                  ? isCore
-                    ? `2.5px solid ${blockColor || "#059669"}`
-                    : `2px solid ${blockColor || "#6366F1"}`
-                  : "2px solid #EF4444"
-                : isHealthy
-                  ? isCore
-                    ? "2.5px solid #059669"
-                    : "2px dashed #94A3B8"
-                  : "2px dashed #EF4444"
-              : !isOnline
-                ? "1.5px solid #EF4444"
-                : isRouteReflector
-                  ? "2px solid #6366F1"
-                  : isCore
-                    ? "2.5px solid #059669"
-                    : isAgentWorking
-                      ? "1.5px solid #10B981"
-                      : "1.5px solid #E2E8F0",
+        border:
+          isFocused || isHighlighted
+            ? "2px solid #4F46E5"
+            : isExternal
+              ? "2px dashed #8B5CF6"
+              : inBlock
+                ? isBlockFullMesh
+                  ? isHealthy
+                    ? isCore
+                      ? `2.5px solid ${blockColor || "#059669"}`
+                      : `2px solid ${blockColor || "#6366F1"}`
+                    : "2px solid #EF4444"
+                  : isHealthy
+                    ? isCore
+                      ? "2.5px solid #059669"
+                      : "2px dashed #94A3B8"
+                    : "2px dashed #EF4444"
+                : !isOnline
+                  ? "1.5px solid #EF4444"
+                  : isRouteReflector
+                    ? "2px solid #6366F1"
+                    : isCore
+                      ? "2.5px solid #059669"
+                      : isAgentWorking
+                        ? "1.5px solid #10B981"
+                        : "1.5px solid #E2E8F0",
         borderTop:
           inBlock && isBlockFullMesh
             ? `4px solid ${isFocused || isHighlighted ? "#4F46E5" : !isHealthy ? "#EF4444" : blockColor || "#6366F1"}`
@@ -265,23 +269,24 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
         borderRadius: 2.5,
         opacity: isDimmed ? 0.3 : 1,
         filter: isDimmed ? "grayscale(40%)" : "none",
-        boxShadow: isFocused || isHighlighted
-          ? "0 0 0 3px rgba(79, 70, 229, 0.25), 0 12px 28px rgba(79, 70, 229, 0.2)"
-          : isCore
-            ? "0 0 0 2px rgba(16, 185, 129, 0.25), 0 8px 20px rgba(16, 185, 129, 0.15)"
-            : inBlock && isBlockFullMesh && isHealthy
-              ? `0 4px 14px ${blockColor || "#6366F1"}25, 0 1px 3px rgba(0, 0, 0, 0.05)`
-              : inBlock && !isHealthy
-                ? "0 4px 14px rgba(239, 68, 68, 0.15), 0 1px 3px rgba(239, 68, 68, 0.08)"
-                : isExternal
-                  ? "0 4px 6px -1px rgba(139, 92, 246, 0.08), 0 2px 4px -2px rgba(139, 92, 246, 0.05)"
-                  : !isOnline
-                    ? "0 4px 10px rgba(239, 68, 68, 0.15), 0 2px 4px rgba(239, 68, 68, 0.1)"
-                    : isRouteReflector
-                      ? "0 4px 14px rgba(79, 70, 229, 0.15), 0 2px 5px rgba(79, 70, 229, 0.08)"
-                      : isAgentWorking
-                        ? "0 4px 12px -1px rgba(16, 185, 129, 0.12), 0 2px 4px -2px rgba(16, 185, 129, 0.08)"
-                        : "0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05)",
+        boxShadow:
+          isFocused || isHighlighted
+            ? "0 0 0 3px rgba(79, 70, 229, 0.25), 0 12px 28px rgba(79, 70, 229, 0.2)"
+            : isCore
+              ? "0 0 0 2px rgba(16, 185, 129, 0.25), 0 8px 20px rgba(16, 185, 129, 0.15)"
+              : inBlock && isBlockFullMesh && isHealthy
+                ? `0 4px 14px ${blockColor || "#6366F1"}25, 0 1px 3px rgba(0, 0, 0, 0.05)`
+                : inBlock && !isHealthy
+                  ? "0 4px 14px rgba(239, 68, 68, 0.15), 0 1px 3px rgba(239, 68, 68, 0.08)"
+                  : isExternal
+                    ? "0 4px 6px -1px rgba(139, 92, 246, 0.08), 0 2px 4px -2px rgba(139, 92, 246, 0.05)"
+                    : !isOnline
+                      ? "0 4px 10px rgba(239, 68, 68, 0.15), 0 2px 4px rgba(239, 68, 68, 0.1)"
+                      : isRouteReflector
+                        ? "0 4px 14px rgba(79, 70, 229, 0.15), 0 2px 5px rgba(79, 70, 229, 0.08)"
+                        : isAgentWorking
+                          ? "0 4px 12px -1px rgba(16, 185, 129, 0.12), 0 2px 4px -2px rgba(16, 185, 129, 0.08)"
+                          : "0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05)",
         overflow: "hidden",
         cursor: "pointer",
         transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
@@ -601,23 +606,43 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
 
                 {/* Healthy / Unhealthy */}
                 {isHealthy ? (
-                  <Tooltip title={`Healthy: All ${healthDetails?.totalLinks ?? 0} link(s) are active and normal.`}>
-                    <Chip
-                      icon={<CheckCircle2 size={10} style={{ color: "#059669", marginLeft: 4 }} />}
-                      label="Healthy"
-                      size="small"
-                      sx={{
-                        height: 18,
-                        fontSize: "0.62rem",
-                        fontWeight: 800,
-                        backgroundColor: "#ECFDF5",
-                        color: "#059669",
-                        border: "1px solid #A7F3D0",
-                        letterSpacing: "0.2px",
-                        "& .MuiChip-label": { px: 0.5 },
-                      }}
-                    />
-                  </Tooltip>
+                  healthDetails?.totalLinks !== 0 ? (
+                    <Tooltip title={`Healthy: All ${healthDetails?.totalLinks ?? 0} link(s) are active and normal.`}>
+                      <Chip
+                        icon={<CheckCircle2 size={10} style={{ color: "#059669", marginLeft: 4 }} />}
+                        label="Healthy"
+                        size="small"
+                        sx={{
+                          height: 18,
+                          fontSize: "0.62rem",
+                          fontWeight: 800,
+                          backgroundColor: "#ECFDF5",
+                          color: "#059669",
+                          border: "1px solid #A7F3D0",
+                          letterSpacing: "0.2px",
+                          "& .MuiChip-label": { px: 0.5 },
+                        }}
+                      />
+                    </Tooltip>
+                  ) : (
+                    <Tooltip title="No link exists in the node">
+                      <Chip
+                        icon={<AlertOctagon size={10} style={{ color: "#9b9b08", marginLeft: 4 }} />}
+                        label="No Link"
+                        size="small"
+                        sx={{
+                          height: 18,
+                          fontSize: "0.62rem",
+                          fontWeight: 800,
+                          backgroundColor: "#ECFDF5",
+                          color: "#9b9b08",
+                          border: "1px solid #ccf210",
+                          letterSpacing: "0.2px",
+                          "& .MuiChip-label": { px: 0.5 },
+                        }}
+                      />
+                    </Tooltip>
+                  )
                 ) : (
                   <Tooltip title={healthDetails?.reason || "Unhealthy: One or more links down or node offline."}>
                     <Chip

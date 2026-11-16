@@ -144,17 +144,17 @@ easy42 node add \
   --asn 4224420001
 ```
 
-| Flag                      | Default      | Required | Description                                                    |
-| :------------------------ | :----------- | :------: | :------------------------------------------------------------- |
-| `-n, --name`              | —            |   Yes    | Unique node name.                                              |
-| `-H, --host`              | —            |   Yes    | SSH host, alias, or IP.                                        |
-| `-i, --ip`                | —            |   Yes    | Primary overlay IPv4 address.                                  |
-| `--ip6`                   | —            |    No    | Primary overlay IPv6 address.                                  |
-| `--external-ip`           | —            |    No    | External/DN42 IPv4 address.                                    |
-| `--external-ip6`          | —            |    No    | External/DN42 IPv6 address.                                    |
-| `--iface`                 | `lo`         |    No    | Interface holding the primary IP.                              |
-| `-a, --asn`               | `4224420001` |    No    | Private or external AS number.                                 |
-| `--custom-network-script` | —            |    No    | Shell script persisted by the `configure_network` helper task. |
+| Flag                      | Default      | Required | Description                                                 |
+| :------------------------ | :----------- | :------: | :---------------------------------------------------------- |
+| `-n, --name`              | —            |   Yes    | Unique node name.                                           |
+| `-H, --host`              | —            |   Yes    | SSH host, alias, or IP.                                     |
+| `-i, --ip`                | —            |   Yes    | Primary overlay IPv4 address.                               |
+| `--ip6`                   | —            |    No    | Primary overlay IPv6 address.                               |
+| `--external-ip`           | —            |    No    | External/DN42 IPv4 address.                                 |
+| `--external-ip6`          | —            |    No    | External/DN42 IPv6 address.                                 |
+| `--iface`                 | `lo`         |    No    | Interface holding the primary IP.                           |
+| `-a, --asn`               | `4224420001` |    No    | Private or external AS number.                              |
+| `--custom-network-script` | —            |    No    | Shell script persisted by the `config_network` helper task. |
 
 The CLI creates SSH-mode nodes (no `mode`/`agent_token` is set; an implicit `nat` entrypoint with an empty IP is appended). To use agent mode, generate an agent token and deploy the agent from the Web UI or API; the node then reports its mode as `agent`.
 

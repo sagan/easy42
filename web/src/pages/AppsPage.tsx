@@ -3832,7 +3832,7 @@ export const AppsPage: React.FC = () => {
             <Box
               sx={{
                 display: "flex",
-                gap: 2,
+                gap: 1,
                 flexWrap: "wrap",
                 alignItems: "center",
                 width: "100%",
@@ -3872,21 +3872,19 @@ export const AppsPage: React.FC = () => {
                 </Select>
               </FormControl>
 
-              <Box sx={{ ml: "auto", display: "flex", alignItems: "center", gap: 1 }}>
-                <Button
-                  size="small"
-                  onClick={() => {
-                    setScriptSearch("");
-                    setScriptNodeFilter("all");
-                    setScriptGroupFilter("all");
-                  }}
-                  disabled={!scriptSearch && scriptNodeFilter === "all" && scriptGroupFilter === "all"}
-                  startIcon={<X size={14} />}
-                  sx={{ textTransform: "none", color: "#64748B", fontSize: "0.78rem" }}
-                >
-                  Clear ({filteredScripts.length}/{scriptApps.length})
-                </Button>
-              </Box>
+              <Button
+                size="small"
+                onClick={() => {
+                  setScriptSearch("");
+                  setScriptNodeFilter("all");
+                  setScriptGroupFilter("all");
+                }}
+                disabled={!scriptSearch && scriptNodeFilter === "all" && scriptGroupFilter === "all"}
+                startIcon={<X size={14} />}
+                sx={{ textTransform: "none", color: "#64748B", fontSize: "0.78rem" }}
+              >
+                Clear ({filteredScripts.length}/{scriptApps.length})
+              </Button>
             </Box>
 
             {/* Clickable Groups Filter Chips */}
