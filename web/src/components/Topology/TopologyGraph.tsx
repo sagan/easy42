@@ -62,7 +62,7 @@ import { Node, Link, NodeStatus, NetworkState, GraphBlock, NetworkPolicy } from 
 import { api } from "../../api/client";
 import { getEffectiveLinkCost } from "../../utils/cost";
 import { calculateGraphCentrality } from "../../utils/graphCentrality";
-import { findInitialNodePosition } from "../../utils/nodePlacement";
+import { findInitialNodePosition, findInitialBlockPosition } from "../../utils/nodePlacement";
 
 const STORAGE_KEY_VIEWPORT = "easy42_graph_viewport";
 const STORAGE_KEY_ZOOM = "easy42_graph_zoom";
@@ -1553,6 +1553,8 @@ const NodeInternalsSync: React.FC<{ nodes: FlowNode[] }> = ({ nodes }) => {
 interface AutoLocateEffectProps {
   locateNodeName?: string | null;
   onClearLocate?: () => void;
+  locateBlockId?: string | null;
+  onClearLocateBlock?: () => void;
   nodes: Node[];
   flowNodes: FlowNode[];
   onSelectNode?: (node: Node) => void;
@@ -1562,6 +1564,8 @@ interface AutoLocateEffectProps {
 const AutoLocateEffect: React.FC<AutoLocateEffectProps> = ({
   locateNodeName,
   onClearLocate,
+  locateBlockId,
+  onClearLocateBlock,
   nodes,
   flowNodes,
   onSelectNode,
@@ -1569,6 +1573,7 @@ const AutoLocateEffect: React.FC<AutoLocateEffectProps> = ({
 }) => {
   const { fitView } = useReactFlow();
   const lastLocatedRef = useRef<string | null>(null);
+  const lastLocatedBlockRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!locateNodeName) {
@@ -1611,6 +1616,40 @@ const AutoLocateEffect: React.FC<AutoLocateEffectProps> = ({
     return () => clearTimeout(timer);
   }, [locateNodeName, nodes, flowNodes, fitView, onFocusNode, onSelectNode, onClearLocate]);
 
+  useEffect(() => {
+    if (!locateBlockId) {
+      lastLocatedBlockRef.current = null;
+      return;
+    }
+
+    if (lastLocatedBlockRef.current === locateBlockId) {
+      return;
+    }
+
+    const flowBlockExists = flowNodes.some((fn) => fn.id === locateBlockId);
+
+    if (!flowBlockExists) {
+      return;
+    }
+
+    lastLocatedBlockRef.current = locateBlockId;
+
+    const timer = setTimeout(() => {
+      fitView({
+        nodes: [{ id: locateBlockId }],
+        duration: 600,
+        maxZoom: 1.1,
+        padding: 0.35,
+      });
+
+      if (onClearLocateBlock) {
+        onClearLocateBlock();
+      }
+    }, 80);
+
+    return () => clearTimeout(timer);
+  }, [locateBlockId, flowNodes, fitView, onClearLocateBlock]);
+
   return null;
 };
 
@@ -1646,6 +1685,7 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
   const [pinnedNodeNames, setPinnedNodeNames] = useState<Set<string>>(new Set());
   const [hoveredNodeName, setHoveredNodeName] = useState<string | null>(null);
   const [focusedBlockId, setFocusedBlockId] = useState<string | null>(null);
+  const [locateBlockId, setLocateBlockId] = useState<string | null>(null);
   const [hopDepth, setHopDepth] = useState<1 | 2 | 3>(1);
   const [draggingNodeId, setDraggingNodeId] = useState<string | null>(null);
   const [currentZoom, setCurrentZoom] = useState<number>(() => getStoredViewport()?.zoom ?? 1);
@@ -1825,24 +1865,74 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [handleClearFocus]);
 
+  // Compute consistent node positions and block containment map
+  const { nodePosMap, effectiveNodeBlockMap } = useMemo(() => {
+    const posMap = new Map<string, { x: number; y: number }>();
+    const placedNodes: Node[] = [];
+
+    // First collect all nodes that already have valid saved positions
+    nodes.forEach((node) => {
+      if (typeof node.x === "number" && !isNaN(node.x) && typeof node.y === "number" && !isNaN(node.y)) {
+        posMap.set(node.name, { x: node.x, y: node.y });
+        placedNodes.push(node);
+      }
+    });
+
+    // For any unpositioned nodes, iteratively compute an optimal non-overlapping initial position in global scope
+    nodes.forEach((node) => {
+      if (!posMap.has(node.name)) {
+        const nextPos = findInitialNodePosition(placedNodes, blocks);
+        posMap.set(node.name, nextPos);
+        placedNodes.push({ ...node, x: nextPos.x, y: nextPos.y });
+      }
+    });
+
+    const effMap: Record<string, string> = {};
+    nodes.forEach((node) => {
+      const explicitId = nodeBlockMap[node.name];
+      if (explicitId && blocks.some((b) => b.id === explicitId)) {
+        effMap[node.name] = explicitId;
+        return;
+      }
+      if (explicitId === "") {
+        return;
+      }
+      const pos = posMap.get(node.name);
+      if (pos) {
+        const cx = pos.x + 130;
+        const cy = pos.y + 90;
+        const target = blocks.find((b) => cx >= b.x && cx <= b.x + b.width && cy >= b.y && cy <= b.y + b.height);
+        if (target) {
+          effMap[node.name] = target.id;
+        }
+      }
+    });
+
+    return { nodePosMap: posMap, effectiveNodeBlockMap: effMap };
+  }, [nodes, blocks, nodeBlockMap]);
+
   // Block management actions
   const handleAddBlock = useCallback(() => {
-    setBlocks((prev) => {
-      const nextIndex = prev.length + 1;
-      const paletteItem = BLOCK_PALETTE[(nextIndex - 1) % BLOCK_PALETTE.length];
-      const offset = (prev.length % 5) * 40;
-      const newBlock: GraphBlock = {
-        id: `block-${Date.now()}`,
-        name: `Block ${nextIndex}`,
-        color: paletteItem.color,
-        x: 180 + offset,
-        y: 120 + offset,
-        width: 440,
-        height: 320,
-      };
-      return [...prev, newBlock];
+    const effectiveNodes = nodes.map((n) => {
+      const pos = nodePosMap.get(n.name);
+      return pos ? { ...n, x: pos.x, y: pos.y } : n;
     });
-  }, []);
+    const newPos = findInitialBlockPosition(effectiveNodes, blocks, 440, 320);
+    const nextIndex = blocks.length + 1;
+    const paletteItem = BLOCK_PALETTE[(nextIndex - 1) % BLOCK_PALETTE.length];
+    const newBlockId = `block-${Date.now()}`;
+    const newBlock: GraphBlock = {
+      id: newBlockId,
+      name: `Block ${nextIndex}`,
+      color: paletteItem.color,
+      x: newPos.x,
+      y: newPos.y,
+      width: 440,
+      height: 320,
+    };
+    setBlocks((prev) => [...prev, newBlock]);
+    setLocateBlockId(newBlockId);
+  }, [nodes, nodePosMap, blocks]);
 
   // Toggle collapsing of a block into a compact super-node
   const handleToggleCollapseBlock = useCallback((blockId: string) => {
@@ -1918,51 +2008,6 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
     setBlocks((prev) => prev.map((b) => (b.id === id ? { ...b, color } : b)));
   }, []);
 
-  // Compute consistent node positions and block containment map
-  const { nodePosMap, effectiveNodeBlockMap } = useMemo(() => {
-    const posMap = new Map<string, { x: number; y: number }>();
-    const placedNodes: Node[] = [];
-
-    // First collect all nodes that already have valid saved positions
-    nodes.forEach((node) => {
-      if (typeof node.x === "number" && !isNaN(node.x) && typeof node.y === "number" && !isNaN(node.y)) {
-        posMap.set(node.name, { x: node.x, y: node.y });
-        placedNodes.push(node);
-      }
-    });
-
-    // For any unpositioned nodes, iteratively compute an optimal non-overlapping initial position in global scope
-    nodes.forEach((node) => {
-      if (!posMap.has(node.name)) {
-        const nextPos = findInitialNodePosition(placedNodes, blocks);
-        posMap.set(node.name, nextPos);
-        placedNodes.push({ ...node, x: nextPos.x, y: nextPos.y });
-      }
-    });
-
-    const effMap: Record<string, string> = {};
-    nodes.forEach((node) => {
-      const explicitId = nodeBlockMap[node.name];
-      if (explicitId && blocks.some((b) => b.id === explicitId)) {
-        effMap[node.name] = explicitId;
-        return;
-      }
-      if (explicitId === "") {
-        return;
-      }
-      const pos = posMap.get(node.name);
-      if (pos) {
-        const cx = pos.x + 130;
-        const cy = pos.y + 90;
-        const target = blocks.find((b) => cx >= b.x && cx <= b.x + b.width && cy >= b.y && cy <= b.y + b.height);
-        if (target) {
-          effMap[node.name] = target.id;
-        }
-      }
-    });
-
-    return { nodePosMap: posMap, effectiveNodeBlockMap: effMap };
-  }, [nodes, blocks, nodeBlockMap]);
 
   // Expand all cross-group bundles into individual line pairs
   const handleExpandAllBundles = useCallback(() => {
@@ -3029,6 +3074,8 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
         <AutoLocateEffect
           locateNodeName={locateNodeName}
           onClearLocate={onClearLocate}
+          locateBlockId={locateBlockId}
+          onClearLocateBlock={() => setLocateBlockId(null)}
           nodes={nodes}
           flowNodes={flowNodes}
           onSelectNode={onSelectNode}

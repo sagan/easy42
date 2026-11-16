@@ -289,16 +289,16 @@ export const NodeAppsTab: React.FC<NodeAppsTabProps> = ({ nodeName }) => {
                     p: 2.5,
                     borderRadius: "12px",
                     border: "1px solid #E2E8F0",
-                    display: "flex",
-                    flexDirection: { xs: "column", md: "row" },
-                    alignItems: { xs: "stretch", md: "center" },
-                    justifyContent: "space-between",
+                    display: { xs: "flex", md: "grid" },
+                    flexDirection: { xs: "column" },
+                    gridTemplateColumns: { md: "minmax(0, 1fr) 140px minmax(0, 1fr)" },
+                    alignItems: "center",
                     gap: 2,
                     bgcolor: "#FFFFFF",
                   }}
                 >
                   {/* Left: App Info & Status */}
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 2, minWidth: 0 }}>
                     <Box
                       sx={{
                         width: 44,
@@ -331,7 +331,7 @@ export const NodeAppsTab: React.FC<NodeAppsTabProps> = ({ nodeName }) => {
                       )}
                     </Box>
 
-                    <Box>
+                    <Box sx={{ minWidth: 0, flex: 1 }}>
                       <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                         <Typography
                           variant="subtitle1"
@@ -474,7 +474,14 @@ export const NodeAppsTab: React.FC<NodeAppsTabProps> = ({ nodeName }) => {
                   </Box>
 
                   {/* Middle: Live State Chip */}
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                  <Box
+                    sx={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: { xs: "flex-start", md: "center" },
+                      width: "100%",
+                    }}
+                  >
                     <Chip
                       size="small"
                       icon={
@@ -501,7 +508,15 @@ export const NodeAppsTab: React.FC<NodeAppsTabProps> = ({ nodeName }) => {
                   </Box>
 
                   {/* Right: Actions */}
-                  <Box sx={{ display: "flex", gap: 1, alignItems: "center", flexWrap: "wrap" }}>
+                  <Box
+                    sx={{
+                      display: "flex",
+                      gap: 1,
+                      alignItems: "center",
+                      flexWrap: "wrap",
+                      justifyContent: { xs: "flex-start", md: "flex-end" },
+                    }}
+                  >
                     {app.app_type === "cron" ? (
                       <Chip
                         size="small"
