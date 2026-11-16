@@ -5143,7 +5143,7 @@ export const AppsPage: React.FC = () => {
 
               <Autocomplete
                 freeSolo
-                options={appGroups}
+                options={formType === "script" ? scriptGroups : appGroups}
                 value={formGroup}
                 onInputChange={(_, newValue) => setFormGroup(newValue)}
                 renderInput={(params) => (

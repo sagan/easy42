@@ -3575,6 +3575,18 @@ func (m *Manager) PlanSyncWithScope(scope string, nodeNames ...string) ([]config
 		}
 		node := n
 
+		// Skip BIRD & ROA config if the node doesn't have any links in Easy42
+		hasLink := false
+		for _, l := range links {
+			if l.From.Name == node.Name || l.To.Name == node.Name {
+				hasLink = true
+				break
+			}
+		}
+		if !hasLink {
+			continue
+		}
+
 		// Determine policies used by links on this node
 		usedPolicies := make(map[string]config.NetworkPolicy)
 		for _, l := range links {
@@ -3905,8 +3917,10 @@ func (m *Manager) PlanSyncWithScope(scope string, nodeNames ...string) ([]config
 			// The enabled/disabled state is not part of the deployed file contents,
 			// so it must be tracked separately. Otherwise toggling an app would not
 			// produce a sync action and the agent would never stop/start it.
+			// Script apps are standalone executable scripts without a background daemon service,
+			// so they do not participate in daemon enable/disable tracking.
 			enabledDrift := false
-			if m.agentHub != nil {
+			if spec.AppType != agentpb.AppType_SCRIPT && m.agentHub != nil {
 				if recordedEnabled, known := m.agentHub.GetAppEnabled(node.Name, spec.Name); known {
 					enabledDrift = recordedEnabled != spec.Enabled
 				} else if currentHash != "" {
@@ -3984,8 +3998,14 @@ func (m *Manager) PlanSyncWithScope(scope string, nodeNames ...string) ([]config
 				(appAlreadyDeployed || recordedArtifactHash != "")
 
 			if curF, ok := deployedAppFiles[mainTargetFile]; ok {
-				curHash := config.HashConfig(compiler.NormalizeConfig(curF.Content))
-				desHash := config.HashConfig(compiler.NormalizeConfig(spec.MainContent))
+				var curHash, desHash string
+				if spec.AppType == agentpb.AppType_SCRIPT {
+					curHash = apps.HashSingleContent(curF.Content)
+					desHash = apps.HashSingleContent(spec.MainContent)
+				} else {
+					curHash = config.HashConfig(compiler.NormalizeConfig(curF.Content))
+					desHash = config.HashConfig(compiler.NormalizeConfig(spec.MainContent))
+				}
 				if curHash == desHash {
 					mainNeedsApply = false
 					mainStatus = "synced"
@@ -3995,7 +4015,7 @@ func (m *Manager) PlanSyncWithScope(scope string, nodeNames ...string) ([]config
 					mainDiff = generateSimpleDiff(curF.Content, spec.MainContent)
 				}
 			} else if currentHash != "" {
-				if currentHash == desiredHash {
+				if currentHash == desiredHash || (spec.AppType == agentpb.AppType_SCRIPT && currentHash == apps.HashSingleContent(spec.MainContent)) {
 					mainNeedsApply = false
 					mainStatus = "synced"
 					mainDiffStatus = "synced"

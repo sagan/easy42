@@ -522,14 +522,15 @@ impl AppsManager {
                             let name = entry.file_name().to_string_lossy().to_string();
                             let path = entry.path();
                             let content = fs::read_to_string(&path).unwrap_or_default();
-                            let hash = hash_single_content(&content);
-                            hashes.insert(name.clone(), hash.clone());
+                            let file_hash = hash_single_content(&content);
+                            let app_hash = compute_files_hash(&content, "", &[]);
+                            hashes.insert(name.clone(), app_hash);
                             let path_str = path.to_string_lossy().to_string();
                             files_map.insert(
                                 path_str.clone(),
                                 AppInstalledFile {
                                     path: path_str,
-                                    hash,
+                                    hash: file_hash,
                                     content,
                                 },
                             );

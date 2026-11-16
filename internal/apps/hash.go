@@ -60,10 +60,21 @@ func ComputeAppFilesHash(mainContent, envContent string, files map[string]string
 	return hex.EncodeToString(h.Sum(nil))
 }
 
+// HashSingleContent returns a deterministic SHA-256 hash of single file content normalized for CRLF and trailing whitespace.
+func HashSingleContent(content string) string {
+	h := sha256.New()
+	norm := strings.TrimRight(strings.ReplaceAll(content, "\r\n", "\n"), " \t\r\n")
+	h.Write([]byte(norm))
+	return hex.EncodeToString(h.Sum(nil))
+}
+
 // ComputeAppSpecFilesHash computes the files hash for a proto AppSpec
 func ComputeAppSpecFilesHash(spec *agentpb.AppSpec) string {
 	if spec == nil {
 		return ""
+	}
+	if spec.AppType == agentpb.AppType_SCRIPT {
+		return ComputeAppFilesHash(spec.MainContent, "", nil)
 	}
 	files := make(map[string]string, len(spec.ConfigFiles))
 	for _, f := range spec.ConfigFiles {

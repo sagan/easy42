@@ -210,6 +210,20 @@ func TestPlanSyncBirdConfigDiffing(t *testing.T) {
 		t.Fatalf("AddNode failed: %v", err)
 	}
 
+	peer := config.Node{
+		Name:      "peer-node",
+		Host:      "127.0.0.2",
+		IP:        "192.168.100.6",
+		Interface: "lo",
+		ASN:       4224420006,
+	}
+	if err := mgr.AddNode(peer); err != nil {
+		t.Fatalf("AddNode peer failed: %v", err)
+	}
+	if _, err := mgr.AddLink("bird-node", "peer-node", 51820, 51821, nil); err != nil {
+		t.Fatalf("AddLink failed: %v", err)
+	}
+
 	actions, err := mgr.PlanSync()
 	if err != nil {
 		t.Fatalf("PlanSync failed: %v", err)
@@ -713,6 +727,80 @@ func TestPlanSyncTargetNode(t *testing.T) {
 		if act.NodeName != "node-2" {
 			t.Errorf("Expected action for node-2, got %s", act.NodeName)
 		}
+	}
+}
+
+func TestPlanSyncSkipBirdConfigWithoutLinks(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "easy42-bird-skip-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	store := config.NewStore(tempDir)
+	pass, err := store.Initialize()
+	if err != nil {
+		t.Fatalf("Failed to init store: %v", err)
+	}
+
+	mgr := NewManager(store)
+	if err := mgr.Unlock(pass); err != nil {
+		t.Fatalf("Failed to unlock: %v", err)
+	}
+
+	// 1. Add node "pandatestpc" with NO links
+	node := config.Node{
+		Name:      "pandatestpc",
+		Host:      "192.168.1.100",
+		IP:        "10.0.0.1",
+		Interface: "lo",
+		ASN:       4224420099,
+	}
+	if err := mgr.AddNode(node); err != nil {
+		t.Fatalf("AddNode failed: %v", err)
+	}
+
+	actions, err := mgr.PlanSync()
+	if err != nil {
+		t.Fatalf("PlanSync failed: %v", err)
+	}
+
+	// Verify that NO BIRD config sync action is created for pandatestpc
+	for _, act := range actions {
+		if act.NodeName == "pandatestpc" && act.Type == config.ActionSyncBirdConfig {
+			t.Fatalf("Expected BIRD config to be completely skipped for node without links, got action: %+v", act)
+		}
+	}
+
+	// 2. Add peer node and link to pandatestpc
+	peer := config.Node{
+		Name:      "peer-node",
+		Host:      "192.168.1.101",
+		IP:        "10.0.0.2",
+		Interface: "lo",
+		ASN:       4224420100,
+	}
+	if err := mgr.AddNode(peer); err != nil {
+		t.Fatalf("AddNode peer failed: %v", err)
+	}
+	if _, err := mgr.AddLink("pandatestpc", "peer-node", 51820, 51821, nil); err != nil {
+		t.Fatalf("AddLink failed: %v", err)
+	}
+
+	actionsWithLink, err := mgr.PlanSync()
+	if err != nil {
+		t.Fatalf("PlanSync with link failed: %v", err)
+	}
+
+	hasBirdAction := false
+	for _, act := range actionsWithLink {
+		if act.NodeName == "pandatestpc" && act.Type == config.ActionSyncBirdConfig {
+			hasBirdAction = true
+			break
+		}
+	}
+	if !hasBirdAction {
+		t.Fatalf("Expected BIRD config action for pandatestpc after adding a link")
 	}
 }
 

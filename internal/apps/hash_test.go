@@ -77,3 +77,28 @@ func TestComputeAppArtifactHash(t *testing.T) {
 		}
 	}
 }
+
+func TestComputeAppSpecFilesHash_Script(t *testing.T) {
+	scriptSpec := &agentpb.AppSpec{
+		Name:        "my-script",
+		AppType:     agentpb.AppType_SCRIPT,
+		MainContent: "#!/bin/sh\necho test\n",
+		EnvContent:  "IGNORED_FOR_SCRIPT=1",
+	}
+
+	hash := ComputeAppSpecFilesHash(scriptSpec)
+	expected := ComputeAppFilesHash(scriptSpec.MainContent, "", nil)
+	if hash != expected {
+		t.Fatalf("expected script hash to ignore EnvContent and match main content only: %s != %s", hash, expected)
+	}
+}
+
+func TestHashSingleContent(t *testing.T) {
+	c1 := "#!/bin/sh\r\necho hi\r\n\r\n"
+	c2 := "#!/bin/sh\necho hi\n"
+	h1 := HashSingleContent(c1)
+	h2 := HashSingleContent(c2)
+	if h1 != h2 {
+		t.Fatalf("expected CRLF and trailing whitespace normalization: %s != %s", h1, h2)
+	}
+}

@@ -14,6 +14,7 @@ import (
 
 	"easy42/internal/agent"
 	agentpb "easy42/internal/agent/proto"
+	"easy42/internal/apps"
 	"easy42/internal/config"
 	"github.com/go-chi/chi/v5"
 	"github.com/gorilla/websocket"
@@ -1414,6 +1415,60 @@ func TestScriptAppDeploymentAndAction(t *testing.T) {
 	}
 	if actResp.AppName != "ez-backup" || actResp.Action != "start" {
 		t.Fatalf("unexpected action response: %+v", actResp)
+	}
+
+	// 5. Test that after deploying the script, simulating a Go server restart
+	// (where agentHub.appEnabled is reset, and node agent reports live status "stopped")
+	// does NOT cause PlanSyncWithScope to report pending "Deploy script" actions.
+
+	// Record script as deployed in stateStore
+	appHash := apps.ComputeAppSpecFilesHash(scriptSpec)
+	if err := srv.mgr.StateStore().UpdateAppState("node1", "192.168.1.10", "ez-backup", appHash, time.Now()); err != nil {
+		t.Fatalf("UpdateAppState failed: %v", err)
+	}
+	// Simulate agent probe reporting installed file and hash
+	srv.mgr.AgentHub().SetAppFiles("node1", map[string]agent.ProbeConfigFile{
+		"/etc/ezscript/ez-backup": {
+			Path:    "/etc/ezscript/ez-backup",
+			Content: scriptSpec.MainContent,
+			Hash:    apps.HashSingleContent(scriptSpec.MainContent),
+		},
+	})
+	srv.mgr.AgentHub().SetAppHashes("node1", map[string]string{
+		"ez-backup": appHash,
+	})
+
+	// Simulate agent telemetry reporting live app status with state "stopped"
+	// (which scripts report when ready / exited)
+	srv.mgr.AgentHub().UpdateTelemetry("node1", &agentpb.TelemetryReport{
+		Apps: []*agentpb.AppStatus{
+			{
+				Name:       "ez-backup",
+				AppType:    agentpb.AppType_SCRIPT,
+				State:      "stopped",
+				StatusText: "ready",
+			},
+		},
+	})
+
+	// Ensure in-memory agentHub appEnabled cache is cleared to simulate Go server restart
+	srv.mgr.AgentHub().RemoveAppEnabled("node1", "ez-backup")
+
+	// PlanSyncWithScope should see script is already deployed and synced, NOT pending
+	actionsRestart, err := srv.mgr.PlanSyncWithScope("")
+	if err != nil {
+		t.Fatalf("PlanSyncWithScope after restart simulation failed: %v", err)
+	}
+
+	for _, act := range actionsRestart {
+		if act.Interface == "ez-backup" && act.Type == config.ActionSyncApp {
+			if act.NeedsApply {
+				t.Fatalf("expected script ez-backup to be synced (NeedsApply: false) after restart, but was pending: %+v", act)
+			}
+			if act.Status != "synced" {
+				t.Fatalf("expected script ez-backup to have status 'synced', got %s", act.Status)
+			}
+		}
 	}
 }
 

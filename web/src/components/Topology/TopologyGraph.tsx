@@ -2008,7 +2008,6 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
     setBlocks((prev) => prev.map((b) => (b.id === id ? { ...b, color } : b)));
   }, []);
 
-
   // Expand all cross-group bundles into individual line pairs
   const handleExpandAllBundles = useCallback(() => {
     const keys = new Set<string>();
@@ -2251,9 +2250,6 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
       } else if (downLinks > 0) {
         isHealthy = false;
         reason = `${downLinks} of ${nodeLinks.length} link(s) down`;
-      } else if (nodeLinks.length === 0) {
-        isHealthy = false;
-        reason = "No links configured";
       } else if (unknownLinks > 0) {
         isHealthy = false;
         reason = `${unknownLinks} link(s) pending/unknown`;

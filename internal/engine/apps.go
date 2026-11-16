@@ -618,6 +618,7 @@ func (m *Manager) BuildAppSpecsForNode(nodeName string) ([]*agentpb.AppSpec, err
 		} else if strings.ToLower(app.AppType) == "script" {
 			spec.AppType = agentpb.AppType_SCRIPT
 			spec.MainContent = apps.InjectScriptEnvironment(spec.MainContent, app.EnvContent)
+			spec.EnvContent = ""
 		} else {
 			spec.AppType = agentpb.AppType_SYSTEMD
 			spec.MainContent = apps.EnsureSystemdEnvironmentFile(app.Name, spec.MainContent)
