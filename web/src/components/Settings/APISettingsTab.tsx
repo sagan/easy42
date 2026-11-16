@@ -441,7 +441,7 @@ export const APISettingsTab: React.FC = () => {
         }}
       >
         <Box sx={{ maxWidth: 720 }}>
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, mb: 1 }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
             <Box
               sx={{
                 bgcolor: "#4F46E5",
@@ -591,7 +591,7 @@ export const APISettingsTab: React.FC = () => {
                   }}
                 >
                   <Box sx={{ flex: 1, minWidth: 260 }}>
-                    <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, flexWrap: "wrap", mb: 0.75 }}>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap", mb: 0.75 }}>
                       <Typography
                         variant="subtitle1"
                         sx={{ fontWeight: 700, color: item.disabled ? "#64748B" : "#0F172A" }}
@@ -830,7 +830,7 @@ export const APISettingsTab: React.FC = () => {
         }}
       >
         <DialogTitle sx={{ fontWeight: 700, pb: 1, borderBottom: "1px solid #E2E8F0" }}>
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
             <Box
               sx={{
                 bgcolor: "#EEF2FF",
@@ -849,7 +849,7 @@ export const APISettingsTab: React.FC = () => {
           </Box>
         </DialogTitle>
 
-        <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2.5, pt: 2.5, pb: 2 }}>
+        <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2, pt: 2.5, pb: 2 }}>
           {/* Top row: ID and Content Type */}
           <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap" }}>
             <Box sx={{ flex: 1, minWidth: 240 }}>
@@ -1184,7 +1184,7 @@ export const APISettingsTab: React.FC = () => {
               </Box>
             </AccordionSummary>
             <AccordionDetails sx={{ pt: 0 }}>
-              <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, fontSize: "0.82rem", color: "#475569" }}>
+              <Box sx={{ display: "flex", flexDirection: "column", gap: 1, fontSize: "0.82rem", color: "#475569" }}>
                 <Typography variant="body2" sx={{ fontWeight: 600, color: "#1E293B" }}>
                   Available in Context:
                 </Typography>
@@ -1265,7 +1265,7 @@ export const APISettingsTab: React.FC = () => {
             </Box>
 
             {/* Test input controls */}
-            <Box sx={{ display: "flex", gap: 1.5, flexWrap: "wrap", mb: 1.5 }}>
+            <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mb: 1.5 }}>
               <TextField
                 select
                 size="small"

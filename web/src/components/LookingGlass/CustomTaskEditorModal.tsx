@@ -140,7 +140,7 @@ export const CustomTaskEditorModal: React.FC<CustomTaskEditorModalProps> = ({ op
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
       <DialogTitle sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", pb: 1 }}>
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
           <Box
             sx={{
               display: "flex",
@@ -171,7 +171,7 @@ export const CustomTaskEditorModal: React.FC<CustomTaskEditorModalProps> = ({ op
 
       <Divider />
 
-      <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2.5, py: 2.5 }}>
+      <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2, py: 2.5 }}>
         {error && <Alert severity="error">{error}</Alert>}
 
         {/* Basic Info */}
@@ -279,7 +279,7 @@ export const CustomTaskEditorModal: React.FC<CustomTaskEditorModalProps> = ({ op
         <Divider />
 
         {/* Parameters Section */}
-        <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+        <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
           <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <Box>
               <Typography variant="subtitle2" sx={{ fontWeight: 600, color: "#1E293B" }}>
@@ -316,7 +316,7 @@ export const CustomTaskEditorModal: React.FC<CustomTaskEditorModalProps> = ({ op
               </Typography>
             </Paper>
           ) : (
-            <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
               {params.map((p, idx) => (
                 <Paper
                   key={idx}
@@ -328,7 +328,7 @@ export const CustomTaskEditorModal: React.FC<CustomTaskEditorModalProps> = ({ op
                     backgroundColor: "#FAFBFD",
                     display: "grid",
                     gridTemplateColumns: { xs: "1fr", sm: "1fr 1.5fr 1fr 1fr auto" },
-                    gap: 1.5,
+                    gap: 1,
                     alignItems: "center",
                   }}
                 >

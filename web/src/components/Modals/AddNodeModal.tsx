@@ -675,7 +675,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth fullScreen={isMobile}>
-      <DialogTitle sx={{ display: "flex", alignItems: "center", gap: 1.5, pb: 1, borderBottom: "1px solid #E2E8F0" }}>
+      <DialogTitle sx={{ display: "flex", alignItems: "center", gap: 1, pb: 1, borderBottom: "1px solid #E2E8F0" }}>
         <Box
           sx={{
             width: 34,
@@ -702,7 +702,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
       </DialogTitle>
 
       <form onSubmit={handleSubmit}>
-        <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2.5, pt: 2.5 }}>
+        <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2, pt: 2.5 }}>
           {/* Node Type Selector */}
           {!nodeToEdit && (
             <Box sx={{ display: "flex", gap: 1 }}>
@@ -932,7 +932,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                   </Button>
                 </Box>
 
-                <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+                <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
                   {entrypoints.map((ep, idx) => (
                     <Box
                       key={ep.id}
@@ -943,7 +943,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                         border: "1px solid #DDD6FE",
                         display: "flex",
                         flexDirection: "column",
-                        gap: 1.5,
+                        gap: 1,
                       }}
                     >
                       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -966,7 +966,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                         )}
                       </Box>
 
-                      <Box sx={{ display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: 1.5 }}>
+                      <Box sx={{ display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: 1 }}>
                         <TextFieldWithCopy
                           label="Endpoint Host / IP"
                           size="small"
@@ -987,7 +987,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                         />
                       </Box>
 
-                      <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}>
+                      <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1 }}>
                         <TextFieldWithCopy
                           label="Tags"
                           size="small"
@@ -1281,7 +1281,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                   </Button>
                 </Box>
 
-                <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+                <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
                   {entrypoints.map((ep) => {
                     if (ep.isNone) {
                       return (
@@ -1292,7 +1292,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                             flexDirection: { xs: "column", sm: "row" },
                             alignItems: { xs: "flex-start", sm: "center" },
                             justifyContent: "space-between",
-                            gap: 1.5,
+                            gap: 1,
                             p: 1.5,
                             borderRadius: 2,
                             backgroundColor: "#FFFBEB",
@@ -1789,12 +1789,15 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                               fontWeight: 700,
                               bgcolor: enableDynamicBirdConfig ? "#EEF2FF" : "#F1F5F9",
                               color: enableDynamicBirdConfig ? "#4F46E5" : "#64748B",
-                              border: enableDynamicBirdConfig ? "1px solid rgba(79, 70, 229, 0.3)" : "1px solid #CBD5E1",
+                              border: enableDynamicBirdConfig
+                                ? "1px solid rgba(79, 70, 229, 0.3)"
+                                : "1px solid #CBD5E1",
                             }}
                           />
                         </Box>
                         <Typography variant="caption" sx={{ color: "#64748B" }}>
-                          When enabled, includes /etc/bird_easy42_dynamic.conf and injects dynamic import/export filter functions into peer filters for 3rd-party runtime modifications.
+                          When enabled, includes /etc/bird_easy42_dynamic.conf and injects dynamic import/export filter
+                          functions into peer filters for 3rd-party runtime modifications.
                         </Typography>
                       </Box>
                     }
@@ -1838,7 +1841,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                       </Typography>
                     </Box>
                   ) : (
-                    <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+                    <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
                       {kernelRoutes.map((kr) => (
                         <Box
                           key={kr.id}
@@ -1850,7 +1853,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                             display: "flex",
                             flexDirection: { xs: "column", sm: "row" },
                             alignItems: { xs: "stretch", sm: "center" },
-                            gap: 1.5,
+                            gap: 1,
                           }}
                         >
                           <Box sx={{ width: { xs: "100%", sm: 130 }, flexShrink: 0 }}>
@@ -1937,7 +1940,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                       </Typography>
                     </Box>
                   ) : (
-                    <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+                    <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
                       {configHooks.map((hook) => {
                         const isWg = hook.type.startsWith("wg.");
                         return (
@@ -1958,7 +1961,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                                 display: "flex",
                                 flexDirection: { xs: "column", sm: "row" },
                                 alignItems: { xs: "stretch", sm: "center" },
-                                gap: 1.5,
+                                gap: 1,
                               }}
                             >
                               <Box sx={{ width: { xs: "100%", sm: 260 }, flexShrink: 0 }}>

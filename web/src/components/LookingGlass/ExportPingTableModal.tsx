@@ -169,7 +169,7 @@ export const ExportPingTableModal: React.FC<ExportPingTableModalProps> = ({ open
           flexShrink: 0,
         }}
       >
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
           <Box
             sx={{
               width: 38,
@@ -516,7 +516,7 @@ export const ExportPingTableModal: React.FC<ExportPingTableModalProps> = ({ open
             p: { xs: 2, sm: 3 },
             display: "flex",
             flexDirection: "column",
-            gap: 1.5,
+            gap: 1,
             minHeight: { xs: 340, md: 0 },
             height: { xs: "auto", md: "100%" },
             overflow: "hidden",

@@ -540,7 +540,7 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
     >
       {/* Header */}
       <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 2 }}>
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
           <Box
             sx={{
               width: 38,
@@ -698,7 +698,9 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
               disabled={togglingDisabled}
               sx={{
                 color: link.disabled ? "#10B981" : "#64748B",
-                "&:hover": { backgroundColor: link.disabled ? "rgba(16, 185, 129, 0.08)" : "rgba(100, 116, 139, 0.08)" },
+                "&:hover": {
+                  backgroundColor: link.disabled ? "rgba(16, 185, 129, 0.08)" : "rgba(100, 116, 139, 0.08)",
+                },
               }}
             >
               {link.disabled ? <Check size={18} /> : <EyeOff size={18} />}
@@ -735,7 +737,7 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
             display: "flex",
             alignItems: "flex-start",
             justifyContent: "space-between",
-            gap: 1.5,
+            gap: 1,
           }}
         >
           <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1.2 }}>
@@ -745,7 +747,8 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
                 Link is Disabled
               </Typography>
               <Typography variant="caption" sx={{ color: "#64748B", display: "block", mt: 0.5, lineHeight: 1.4 }}>
-                This link is disabled and treated as deleted when syncing to nodes. Its configuration remains safely stored in Easy42.
+                This link is disabled and treated as deleted when syncing to nodes. Its configuration remains safely
+                stored in Easy42.
               </Typography>
             </Box>
           </Box>
@@ -1160,7 +1163,7 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
       </Box>
 
       {/* Specifications */}
-      <Box sx={{ display: "flex", flexDirection: "column", gap: 2.5 }}>
+      <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
         {/* End 1 */}
         <Box
           sx={{
@@ -2569,7 +2572,7 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
       </Box>
 
       {/* Actions */}
-      <Box sx={{ mt: "auto", pt: 3, display: "flex", flexDirection: "column", gap: 1.5 }}>
+      <Box sx={{ mt: "auto", pt: 3, display: "flex", flexDirection: "column", gap: 1 }}>
         {isExternalLink && (
           <Button
             id="btn-copy-peering-info"
@@ -2643,11 +2646,7 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
             },
           }}
         >
-          {togglingDisabled
-            ? "Updating..."
-            : link.disabled
-              ? "Enable Link"
-              : "Disable Link"}
+          {togglingDisabled ? "Updating..." : link.disabled ? "Enable Link" : "Disable Link"}
         </Button>
         <Button
           fullWidth
@@ -2696,7 +2695,7 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
           sx={{
             display: "flex",
             alignItems: "center",
-            gap: 1.5,
+            gap: 1,
             pb: 1.5,
             borderBottom: "1px solid #E2E8F0",
           }}

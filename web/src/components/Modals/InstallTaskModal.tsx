@@ -186,7 +186,7 @@ export const InstallTaskModal: React.FC<InstallTaskModalProps> = ({
             borderColor: "divider",
           }}
         >
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
             <Box
               sx={{
                 width: 38,
@@ -237,7 +237,7 @@ export const InstallTaskModal: React.FC<InstallTaskModalProps> = ({
               display: "flex",
               flexDirection: { xs: "column", sm: "row" },
               alignItems: { xs: "stretch", sm: "center" },
-              gap: 1.5,
+              gap: 1,
             }}
           >
             <Box sx={{ flex: 1 }}>
@@ -382,7 +382,7 @@ export const InstallTaskModal: React.FC<InstallTaskModalProps> = ({
                 <Typography variant="body2">No tasks match "{searchFilter}"</Typography>
               </Box>
             ) : (
-              <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+              <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
                 {filteredTasks.map((task) => {
                   const isInstalled = installedTaskMap.has(task.id);
                   const isActioning = Boolean(actionInProgress[task.id]);

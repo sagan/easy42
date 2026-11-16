@@ -914,7 +914,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth fullScreen={isMobile}>
-      <DialogTitle sx={{ display: "flex", alignItems: "center", gap: 1.5, pb: 1, borderBottom: "1px solid #E2E8F0" }}>
+      <DialogTitle sx={{ display: "flex", alignItems: "center", gap: 1, pb: 1, borderBottom: "1px solid #E2E8F0" }}>
         <Box
           sx={{
             width: 34,
@@ -969,9 +969,9 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
       </DialogTitle>
 
       <form onSubmit={handleSubmit}>
-        <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2.5, pt: 2.5 }}>
+        <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2, pt: 2.5 }}>
           {/* Node Selection */}
-          <Box sx={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", gap: 1.5, alignItems: "center" }}>
+          <Box sx={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", gap: 1, alignItems: "center" }}>
             <TextField
               select
               label="Source Node (From)"
@@ -1066,7 +1066,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
               <Typography variant="caption" sx={{ color: "#475569", fontWeight: 700, letterSpacing: "0.5px" }}>
                 LINK TYPE
               </Typography>
-              <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}>
+              <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1 }}>
                 <Box
                   id="link-type-wireguard"
                   onClick={() => !linkToEdit && setLinkType("wireguard")}
@@ -1242,7 +1242,8 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                     variant="caption"
                     sx={{ color: "#64748B", display: "block", fontSize: "0.72rem", lineHeight: 1.4, mt: 0.3 }}
                   >
-                    When disabled, this link is treated as deleted when syncing to nodes (interfaces and BGP sessions will be removed on nodes), but its configuration is preserved in Easy42.
+                    When disabled, this link is treated as deleted when syncing to nodes (interfaces and BGP sessions
+                    will be removed on nodes), but its configuration is preserved in Easy42.
                   </Typography>
                 </Box>
               }
@@ -1369,7 +1370,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                 sx={{ alignItems: "flex-start", ml: 0, m: 0 }}
               />
               {obfuscatorEnabled && (
-                <Box sx={{ mt: 1.5, display: "flex", flexDirection: "column", gap: 1.5 }}>
+                <Box sx={{ mt: 1.5, display: "flex", flexDirection: "column", gap: 1 }}>
                   <TextField
                     select
                     size="small"
@@ -1607,7 +1608,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                 <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#3730A3", mb: 1.2 }}>
                   Local Interface: {managedNode.name}
                 </Typography>
-                <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5, mb: 1.5 }}>
+                <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1, mb: 1.5 }}>
                   <TextFieldWithCopy
                     label="Interface Name"
                     size="small"
@@ -1634,7 +1635,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                     required
                   />
                 </Box>
-                <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}>
+                <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1 }}>
                   <TextFieldWithCopy
                     label="Local WG Address"
                     size="small"
@@ -1683,7 +1684,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                   sx={{ alignItems: "flex-start", ml: 0, mt: 1.5 }}
                 />
 
-                <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 1.5 }}>
+                <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 1 }}>
                   <TextField
                     select
                     fullWidth
@@ -1735,7 +1736,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                     helperText="Overrides policy cost if set (non-zero)"
                   />
                 </Box>
-                <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 1.5 }}>
+                <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 1 }}>
                   <TextFieldWithCopy
                     fullWidth
                     size="small"
@@ -1977,7 +1978,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                   )}
                 </Box>
 
-                <Box sx={{ display: "grid", gridTemplateColumns: "1.2fr 0.8fr", gap: 1.5, mb: 1.5 }}>
+                <Box sx={{ display: "grid", gridTemplateColumns: "1.2fr 0.8fr", gap: 1, mb: 1.5 }}>
                   <TextFieldWithCopy
                     label="Resolved Entrypoint (IP / Host)"
                     size="small"
@@ -2020,7 +2021,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                   />
                 </Box>
 
-                <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5, mb: 1.5 }}>
+                <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1, mb: 1.5 }}>
                   <TextFieldWithCopy
                     label="Remote WG Address"
                     size="small"
@@ -2111,7 +2112,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                   End 1: {fromNode.name} {fromNode.is_external ? "(External Peer)" : ""}
                 </Typography>
 
-                <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5, mb: 1.5 }}>
+                <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1, mb: 1.5 }}>
                   <TextFieldWithCopy
                     id="manual-from-interface"
                     label="Interface Name"
@@ -2140,7 +2141,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
 
                 {!fromNode.is_external && (
                   <>
-                    <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 1.5 }}>
+                    <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 1 }}>
                       <TextField
                         select
                         fullWidth
@@ -2183,7 +2184,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                       />
                     </Box>
 
-                    <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 1.5 }}>
+                    <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 1 }}>
                       <TextFieldWithCopy
                         fullWidth
                         size="small"
@@ -2301,7 +2302,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                   End 2: {toNode.name} {toNode.is_external ? "(External Peer)" : ""}
                 </Typography>
 
-                <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5, mb: 1.5 }}>
+                <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1, mb: 1.5 }}>
                   <TextFieldWithCopy
                     id="manual-to-interface"
                     label="Interface Name"
@@ -2330,7 +2331,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
 
                 {!toNode.is_external && (
                   <>
-                    <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 1.5 }}>
+                    <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 1 }}>
                       <TextField
                         select
                         fullWidth
@@ -2373,7 +2374,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                       />
                     </Box>
 
-                    <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 1.5 }}>
+                    <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 1 }}>
                       <TextFieldWithCopy
                         fullWidth
                         size="small"
@@ -2500,7 +2501,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                   <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#3730A3", mb: 1.2 }}>
                     End 1: {fromNode.name}
                   </Typography>
-                  <Box sx={{ display: "grid", gridTemplateColumns: "1.2fr 1fr 1fr", gap: 1.5 }}>
+                  <Box sx={{ display: "grid", gridTemplateColumns: "1.2fr 1fr 1fr", gap: 1 }}>
                     <TextFieldWithCopy
                       label="Interface"
                       size="small"
@@ -2611,7 +2612,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                     />
                   </Box>
 
-                  <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 1.5 }}>
+                  <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 1 }}>
                     <TextField
                       select
                       fullWidth
@@ -2653,7 +2654,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                       helperText="Overrides policy cost if set (non-zero)"
                     />
                   </Box>
-                  <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 1.5 }}>
+                  <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 1 }}>
                     <TextFieldWithCopy
                       fullWidth
                       size="small"
@@ -2777,7 +2778,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                   <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0E7490", mb: 1.2 }}>
                     End 2: {toNode.name}
                   </Typography>
-                  <Box sx={{ display: "grid", gridTemplateColumns: "1.2fr 1fr 1fr", gap: 1.5 }}>
+                  <Box sx={{ display: "grid", gridTemplateColumns: "1.2fr 1fr 1fr", gap: 1 }}>
                     <TextFieldWithCopy
                       label="Interface"
                       size="small"
@@ -2888,7 +2889,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                     />
                   </Box>
 
-                  <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 1.5 }}>
+                  <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 1 }}>
                     <TextField
                       select
                       fullWidth
@@ -2930,7 +2931,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                       helperText="Overrides policy cost if set (non-zero)"
                     />
                   </Box>
-                  <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 1.5 }}>
+                  <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 1 }}>
                     <TextFieldWithCopy
                       fullWidth
                       size="small"

@@ -24,13 +24,7 @@ interface RenameAppModalProps {
   onAppRenamed: (oldName: string, updatedApp: App) => void;
 }
 
-export const RenameAppModal: React.FC<RenameAppModalProps> = ({
-  app,
-  existingApps,
-  open,
-  onClose,
-  onAppRenamed,
-}) => {
+export const RenameAppModal: React.FC<RenameAppModalProps> = ({ app, existingApps, open, onClose, onAppRenamed }) => {
   const [newName, setNewName] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -46,9 +40,7 @@ export const RenameAppModal: React.FC<RenameAppModalProps> = ({
 
   const trimmedNewName = newName.trim();
   const isSameName = trimmedNewName.toLowerCase() === app.name.toLowerCase();
-  const nameExists = existingApps.some(
-    (a) => a.id !== app.id && a.name.toLowerCase() === trimmedNewName.toLowerCase()
-  );
+  const nameExists = existingApps.some((a) => a.id !== app.id && a.name.toLowerCase() === trimmedNewName.toLowerCase());
   const isValidFormat = /^[a-zA-Z0-9_-]+$/.test(trimmedNewName);
   const isValidLength = trimmedNewName.length >= 1 && trimmedNewName.length <= 64;
   const canSubmit = isValidLength && isValidFormat && !isSameName && !nameExists && !saving;
@@ -99,7 +91,7 @@ export const RenameAppModal: React.FC<RenameAppModalProps> = ({
           sx={{
             display: "flex",
             alignItems: "center",
-            gap: 1.5,
+            gap: 1,
             pb: 1.5,
             borderBottom: "1px solid #E2E8F0",
           }}
@@ -112,8 +104,8 @@ export const RenameAppModal: React.FC<RenameAppModalProps> = ({
               backgroundColor: isDocker
                 ? "rgba(2, 132, 199, 0.1)"
                 : isCron
-                ? "rgba(217, 119, 6, 0.1)"
-                : "rgba(147, 51, 234, 0.1)",
+                  ? "rgba(217, 119, 6, 0.1)"
+                  : "rgba(147, 51, 234, 0.1)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -199,17 +191,16 @@ export const RenameAppModal: React.FC<RenameAppModalProps> = ({
               placeholder="e.g. vproxy or coredns"
               value={newName}
               onChange={handleNameChange}
-              error={Boolean(
-                trimmedNewName &&
-                  (nameExists || isSameName || !isValidFormat || !isValidLength)
-              )}
+              error={Boolean(trimmedNewName && (nameExists || isSameName || !isValidFormat || !isValidLength))}
               helperText={
                 nameExists ? (
                   <span style={{ color: "#DC2626" }}>App name &quot;{trimmedNewName}&quot; already exists!</span>
                 ) : isSameName ? (
                   "Please enter a different name"
                 ) : !isValidFormat && trimmedNewName ? (
-                  <span style={{ color: "#DC2626" }}>Only lowercase letters, numbers, hyphens, and underscores allowed</span>
+                  <span style={{ color: "#DC2626" }}>
+                    Only lowercase letters, numbers, hyphens, and underscores allowed
+                  </span>
                 ) : (
                   "Workload prefix 'ezapp-' will be used on host nodes"
                 )
@@ -258,7 +249,8 @@ export const RenameAppModal: React.FC<RenameAppModalProps> = ({
               Workload Impact:
             </Typography>
             <Typography variant="caption" sx={{ color: "#475569", lineHeight: 1.4, display: "block" }}>
-              Renaming updates the app identifier across all assigned nodes. On next agent sync, nodes will transition workloads from <code>ezapp-{app.name}</code> to <code>ezapp-{trimmedNewName || "..."}</code>.
+              Renaming updates the app identifier across all assigned nodes. On next agent sync, nodes will transition
+              workloads from <code>ezapp-{app.name}</code> to <code>ezapp-{trimmedNewName || "..."}</code>.
             </Typography>
           </Box>
         </DialogContent>

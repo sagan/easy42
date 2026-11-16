@@ -119,7 +119,7 @@ const ActionItemAccordion: React.FC<{ act: SyncAction }> = ({ act }) => {
       }}
     >
       <AccordionSummary expandIcon={<ChevronDown size={18} color="#64748B" />}>
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, flex: 1, minWidth: 0, pr: 1 }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1, flex: 1, minWidth: 0, pr: 1 }}>
           {getActionIcon(act)}
           <Box sx={{ flex: 1, minWidth: 0 }}>
             <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
@@ -450,12 +450,12 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
           flexWrap: "wrap",
           alignItems: "center",
           justifyContent: "space-between",
-          gap: 1.5,
+          gap: 1,
           pb: 1.5,
           borderBottom: "1px solid #E2E8F0",
         }}
       >
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, minWidth: 0, flex: "1 1 auto" }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1, minWidth: 0, flex: "1 1 auto" }}>
           <Box
             sx={{
               width: 34,
@@ -547,7 +547,7 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
           </Alert>
         ) : safeResults ? (
           /* Execution Results */
-          <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
             <Alert severity={safeResults.every((r) => r.success) ? "success" : "warning"} sx={{ borderRadius: 2 }}>
               {safeResults.every((r) => r.success)
                 ? targetNode
@@ -584,7 +584,7 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
                     justifyContent: "space-between",
                   }}
                 >
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                     {res.success ? <CheckCircle2 size={18} color="#059669" /> : <XCircle size={18} color="#E11D48" />}
                     <Box>
                       <Typography variant="body2" sx={{ fontWeight: 600, color: "#0F172A" }}>
@@ -870,7 +870,7 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
                 }}
               >
                 <AccordionSummary expandIcon={<ChevronDown size={18} color="#64748B" />}>
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, flex: 1 }}>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1, flex: 1 }}>
                     <CheckCheck size={18} color="#059669" />
                     <Typography variant="body2" sx={{ fontWeight: 600, color: "#334155" }}>
                       Already Synchronized on Nodes ({syncedActions.length})
@@ -906,7 +906,7 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
                             display: "flex",
                             alignItems: "center",
                             justifyContent: "space-between",
-                            gap: 1.5,
+                            gap: 1,
                           }}
                         >
                           <Box sx={{ display: "flex", alignItems: "center", gap: 1.25, minWidth: 0, flex: 1 }}>
@@ -988,7 +988,7 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
         </Button>
 
         {!safeResults && (
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, flexWrap: "wrap" }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
             {/* Force Apply Button */}
             {safeActions.length > 0 && (
               <Tooltip

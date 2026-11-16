@@ -656,7 +656,7 @@ export const BlockNode: React.FC<NodeProps> = memo(({ data, selected }) => {
                 sx={{
                   display: "flex",
                   alignItems: "center",
-                  gap: 1.5,
+                  gap: 1,
                   py: 0.75,
                   px: 1.5,
                   borderRadius: 1,

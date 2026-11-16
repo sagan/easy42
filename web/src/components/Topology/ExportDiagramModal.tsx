@@ -166,7 +166,7 @@ export const ExportDiagramModal: React.FC<ExportDiagramModalProps> = ({
           flexShrink: 0,
         }}
       >
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
           <Box
             sx={{
               width: 38,
@@ -741,7 +741,7 @@ export const ExportDiagramModal: React.FC<ExportDiagramModalProps> = ({
             p: { xs: 2, sm: 3 },
             display: "flex",
             flexDirection: "column",
-            gap: 1.5,
+            gap: 1,
             minHeight: { xs: 340, md: 0 },
             height: { xs: "auto", md: "100%" },
             overflow: "hidden",
@@ -827,7 +827,7 @@ export const ExportDiagramModal: React.FC<ExportDiagramModalProps> = ({
           Cancel
         </Button>
 
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
           {exportSuccess && (
             <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, color: "#10B981" }}>
               <CheckCircle2 size={16} />

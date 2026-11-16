@@ -297,7 +297,7 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
     >
       {/* Header */}
       <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 2 }}>
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
           <Box
             sx={{
               width: 38,
@@ -408,7 +408,7 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
           NODE CONFIGURATION
         </Typography>
 
-        <Box sx={{ display: "grid", gridTemplateColumns: node.ip6 ? "1fr 1fr" : "1fr 1fr", gap: 1.5 }}>
+        <Box sx={{ display: "grid", gridTemplateColumns: node.ip6 ? "1fr 1fr" : "1fr 1fr", gap: 1 }}>
           <Box sx={{ p: 1.5, borderRadius: 2, backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
             <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <Typography variant="caption" sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}>
@@ -1644,7 +1644,7 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
       </Box>
 
       {/* Footer Actions */}
-      <Box sx={{ mt: "auto", pt: 3, display: "flex", flexDirection: "column", gap: 1.5 }}>
+      <Box sx={{ mt: "auto", pt: 3, display: "flex", flexDirection: "column", gap: 1 }}>
         {!node.is_external && onSyncNode && (
           <Button
             id="sync-node-btn"
@@ -1756,7 +1756,7 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
         )}
 
         {!node.is_external && (
-          <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}>
+          <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1 }}>
             <Button
               id="restart-all-wg-btn"
               title="Restart all wg interfaces using wg-quick"
@@ -1807,7 +1807,7 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
             </Button>
           </Box>
         )}
-        <Box sx={{ display: "grid", gridTemplateColumns: onRenameNode ? "1fr 1fr" : "1fr", gap: 1.5 }}>
+        <Box sx={{ display: "grid", gridTemplateColumns: onRenameNode ? "1fr 1fr" : "1fr", gap: 1 }}>
           {onRenameNode && (
             <Button
               id="rename-node-footer-btn"
@@ -1840,7 +1840,7 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
             Edit Node
           </Button>
         </Box>
-        <Box sx={{ display: "flex", gap: 1.5 }}>
+        <Box sx={{ display: "flex", gap: 1 }}>
           <Button
             fullWidth
             variant="outlined"

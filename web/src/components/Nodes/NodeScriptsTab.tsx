@@ -99,7 +99,9 @@ export const NodeScriptsTab: React.FC<NodeScriptsTabProps> = ({ nodeName }) => {
       const res = await api.triggerNodeAppAction(nodeName, appName, action, "script");
       if (!res.success) {
         setActionError(
-          res.stderr?.trim() || res.stdout?.trim() || `Failed to ${action} script '${appName}' (exit code ${res.exit_code})`
+          res.stderr?.trim() ||
+            res.stdout?.trim() ||
+            `Failed to ${action} script '${appName}' (exit code ${res.exit_code})`,
         );
       }
       await loadNodeScripts(true);
@@ -160,7 +162,7 @@ export const NodeScriptsTab: React.FC<NodeScriptsTabProps> = ({ nodeName }) => {
       {/* Header bar */}
       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 2 }}>
         <Box>
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
             <Typography variant="h6" sx={{ fontWeight: 800, color: "#0F172A", fontSize: "1.1rem" }}>
               Scripts on {nodeName}
             </Typography>
@@ -171,19 +173,20 @@ export const NodeScriptsTab: React.FC<NodeScriptsTabProps> = ({ nodeName }) => {
             />
           </Box>
           <Typography variant="body2" sx={{ color: "#64748B", fontSize: "0.85rem" }}>
-            Executable on-demand scripts deployed to <code style={{ backgroundColor: "#F1F5F9", padding: "2px 6px", borderRadius: "4px" }}>/etc/ezscript/&lt;name&gt;</code>
+            Executable on-demand scripts deployed to{" "}
+            <code style={{ backgroundColor: "#F1F5F9", padding: "2px 6px", borderRadius: "4px" }}>
+              /etc/ezscript/&lt;name&gt;
+            </code>
           </Typography>
         </Box>
 
-        <Box sx={{ display: "flex", gap: 1.5, alignItems: "center" }}>
+        <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
           <Button
             size="small"
             variant="outlined"
             onClick={() => loadNodeScripts(true)}
             disabled={refreshing}
-            startIcon={
-              refreshing ? <CircularProgress size={14} color="inherit" /> : <RefreshCw size={14} />
-            }
+            startIcon={refreshing ? <CircularProgress size={14} color="inherit" /> : <RefreshCw size={14} />}
             sx={{ textTransform: "none", fontWeight: 600, color: "#64748B", borderColor: "#CBD5E1" }}
           >
             Refresh
@@ -217,7 +220,8 @@ export const NodeScriptsTab: React.FC<NodeScriptsTabProps> = ({ nodeName }) => {
       {/* Disabled apps warning */}
       {appsDisabled && (
         <Alert severity="warning" sx={{ borderRadius: "10px" }}>
-          App & script management is disabled on this node (<code>disable_apps: true</code> in <code>/etc/easy42/agent.json</code>).
+          App & script management is disabled on this node (<code>disable_apps: true</code> in{" "}
+          <code>/etc/easy42/agent.json</code>).
         </Alert>
       )}
 
@@ -259,7 +263,10 @@ export const NodeScriptsTab: React.FC<NodeScriptsTabProps> = ({ nodeName }) => {
           <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#1E293B", mb: 0.5 }}>
             No Scripts Assigned to this Node
           </Typography>
-          <Typography variant="body2" sx={{ color: "#64748B", maxWidth: 440, mx: "auto", mb: 2.5, fontSize: "0.85rem" }}>
+          <Typography
+            variant="body2"
+            sx={{ color: "#64748B", maxWidth: 440, mx: "auto", mb: 2.5, fontSize: "0.85rem" }}
+          >
             Scripts target nodes via node name or selector tags. Create or configure a script on the Apps page.
           </Typography>
           <Button
@@ -292,7 +299,7 @@ export const NodeScriptsTab: React.FC<NodeScriptsTabProps> = ({ nodeName }) => {
                     flexDirection: { xs: "column" },
                     gridTemplateColumns: { md: "minmax(0, 1fr) 200px auto" },
                     alignItems: "center",
-                    gap: 2.5,
+                    gap: 2,
                     bgcolor: isRunning ? "#F0FDF4" : "#FFFFFF",
                     transition: "all 0.15s ease",
                   }}
@@ -344,7 +351,13 @@ export const NodeScriptsTab: React.FC<NodeScriptsTabProps> = ({ nodeName }) => {
                           <Chip
                             size="small"
                             label="Rendered .env"
-                            sx={{ height: 20, fontSize: "0.7rem", bgcolor: "#EFF6FF", color: "#2563EB", fontWeight: 600 }}
+                            sx={{
+                              height: 20,
+                              fontSize: "0.7rem",
+                              bgcolor: "#EFF6FF",
+                              color: "#2563EB",
+                              fontWeight: 600,
+                            }}
                           />
                         )}
                         {app.group && (
@@ -414,7 +427,10 @@ export const NodeScriptsTab: React.FC<NodeScriptsTabProps> = ({ nodeName }) => {
                       )}
                     </Box>
                     {st?.last_updated ? (
-                      <Typography variant="caption" sx={{ color: "#94A3B8", fontSize: "0.7rem", display: "block", mt: 0.5 }}>
+                      <Typography
+                        variant="caption"
+                        sx={{ color: "#94A3B8", fontSize: "0.7rem", display: "block", mt: 0.5 }}
+                      >
                         Reported {new Date(st.last_updated * 1000).toLocaleTimeString()}
                       </Typography>
                     ) : null}
@@ -516,7 +532,7 @@ export const NodeScriptsTab: React.FC<NodeScriptsTabProps> = ({ nodeName }) => {
         PaperProps={{ sx: { borderRadius: "14px", bgcolor: "#0F172A", color: "#F8FAFC" } }}
       >
         <DialogTitle sx={{ pb: 1, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
             <Terminal size={20} color="#10B981" />
             <Typography variant="h6" sx={{ fontWeight: 800, color: "#F8FAFC", fontSize: "1.05rem" }}>
               Execution Logs: {activeLogApp}
@@ -645,7 +661,7 @@ export const NodeScriptsTab: React.FC<NodeScriptsTabProps> = ({ nodeName }) => {
           fullWidth
           PaperProps={{ sx: { borderRadius: "14px" } }}
         >
-          <DialogTitle sx={{ display: "flex", alignItems: "center", gap: 1.5, pb: 1 }}>
+          <DialogTitle sx={{ display: "flex", alignItems: "center", gap: 1, pb: 1 }}>
             <Code2 size={20} color="#059669" />
             <Box>
               <Typography variant="h6" sx={{ fontWeight: 800, fontSize: "1.05rem" }}>

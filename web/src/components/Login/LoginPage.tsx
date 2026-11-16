@@ -146,7 +146,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
 
           {/* Login Form */}
           <form onSubmit={handleSubmit}>
-            <Box sx={{ display: "flex", flexDirection: "column", gap: 2.5 }}>
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
               <TextField
                 fullWidth
                 type="password"
@@ -184,7 +184,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
             </Box>
           </form>
 
-          <Box sx={{ pt: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 1.5 }}>
+          <Box sx={{ pt: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 1 }}>
             {flushMsg && (
               <Alert severity={flushMsg.severity} sx={{ width: "100%", borderRadius: 2, fontSize: "0.75rem", py: 0.5 }}>
                 {flushMsg.text}

@@ -145,7 +145,7 @@ const SCRIPT_SAMPLE = `#!/bin/sh
 set -e
 
 echo "Executing script on $(hostname)..."
-echo "Node IP: \${NODE_IP:-unknown}"
+echo "Node IP: \${IP:-unknown}"
 `;
 
 export function parseCronMainContent(mainContent: string): { cronExpr: string; cronCmd: string } {
@@ -1067,7 +1067,7 @@ export const AppsPage: React.FC = () => {
         main_content: resolvedMainContent,
         env_content: formType === "cron" ? "" : formEnv,
         files: formType === "script" ? undefined : filesMap,
-        artifact: (formType === "systemd" || formType === "cron") ? artifactPayload : undefined,
+        artifact: formType === "systemd" || formType === "cron" ? artifactPayload : undefined,
         selector: parsedSelector.selector,
         published: formPublished,
         enabled: formEnabled,
@@ -1228,7 +1228,11 @@ export const AppsPage: React.FC = () => {
         const fullCron = `${formCronExpr.trim()} ${formCronCmd.trim()}`.trim();
         previewContent = `--- [cron schedule & command] ---\n${fullCron}\n\n--- [installed crontab entry] ---\n${formEnabled ? fullCron : `#${fullCron}`}`;
         if (formFiles.length > 0) {
-          previewContent += "\n\n" + formFiles.map((f) => `--- [file: /etc/ezapp/${formName.trim() || "<name>"}/${f.name}] ---\n${f.content}`).join("\n\n");
+          previewContent +=
+            "\n\n" +
+            formFiles
+              .map((f) => `--- [file: /etc/ezapp/${formName.trim() || "<name>"}/${f.name}] ---\n${f.content}`)
+              .join("\n\n");
         }
       } else {
         previewContent = `--- [compose / service manifest] ---\n${formMain}\n\n--- [.env] ---\n${formEnv}`;
@@ -1571,14 +1575,26 @@ export const AppsPage: React.FC = () => {
         }}
       >
         {/* Header with Title and Status Badges */}
-        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 1.5 }}>
+        <Box
+          sx={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "flex-start",
+            flexWrap: "wrap",
+            gap: 1,
+          }}
+        >
           <Box>
-            <Typography variant="subtitle2" sx={{ fontWeight: 800, color: "#0F172A", display: "flex", alignItems: "center", gap: 1 }}>
+            <Typography
+              variant="subtitle2"
+              sx={{ fontWeight: 800, color: "#0F172A", display: "flex", alignItems: "center", gap: 1 }}
+            >
               <HardDrive size={18} color="#4F46E5" />
               Server Artifact Cache & Storage
             </Typography>
             <Typography variant="caption" sx={{ color: "#64748B", display: "block", mt: 0.5 }}>
-              Cached under <code>~/.config/easy42/cache/artifacts</code>. Metadata is stored in a separate persistent cache meta file so disk files can be purged while node sync continues seamlessly.
+              Cached under <code>~/.config/easy42/cache/artifacts</code>. Metadata is stored in a separate persistent
+              cache meta file so disk files can be purged while node sync continues seamlessly.
             </Typography>
           </Box>
 
@@ -1628,7 +1644,12 @@ export const AppsPage: React.FC = () => {
               />
             )}
             <Tooltip title="Refresh Cache Status">
-              <IconButton size="small" onClick={() => fetchAppArtifactStatus(app.id)} disabled={isLoading} sx={{ p: 0.5 }}>
+              <IconButton
+                size="small"
+                onClick={() => fetchAppArtifactStatus(app.id)}
+                disabled={isLoading}
+                sx={{ p: 0.5 }}
+              >
                 <RefreshCw size={13} className={isLoading ? "spin" : ""} />
               </IconButton>
             </Tooltip>
@@ -1644,11 +1665,14 @@ export const AppsPage: React.FC = () => {
             border: "1px solid #EDF2F7",
             display: "grid",
             gridTemplateColumns: { xs: "1fr", sm: "repeat(4, 1fr)" },
-            gap: 1.5,
+            gap: 1,
           }}
         >
           <Box>
-            <Typography variant="caption" sx={{ color: "#94A3B8", fontWeight: 700, textTransform: "uppercase", fontSize: "0.65rem" }}>
+            <Typography
+              variant="caption"
+              sx={{ color: "#94A3B8", fontWeight: 700, textTransform: "uppercase", fontSize: "0.65rem" }}
+            >
               App / Version
             </Typography>
             <Typography variant="body2" sx={{ fontWeight: 700, color: "#1E293B", mt: 0.2 }}>
@@ -1656,27 +1680,51 @@ export const AppsPage: React.FC = () => {
             </Typography>
           </Box>
           <Box>
-            <Typography variant="caption" sx={{ color: "#94A3B8", fontWeight: 700, textTransform: "uppercase", fontSize: "0.65rem" }}>
+            <Typography
+              variant="caption"
+              sx={{ color: "#94A3B8", fontWeight: 700, textTransform: "uppercase", fontSize: "0.65rem" }}
+            >
               Server Disk Usage
             </Typography>
-            <Typography variant="body2" sx={{ fontWeight: 700, color: status?.files_on_disk ? "#15803D" : "#64748B", mt: 0.2 }}>
+            <Typography
+              variant="body2"
+              sx={{ fontWeight: 700, color: status?.files_on_disk ? "#15803D" : "#64748B", mt: 0.2 }}
+            >
               {status?.disk_size_human || "0 B"}
             </Typography>
           </Box>
           <Box>
-            <Typography variant="caption" sx={{ color: "#94A3B8", fontWeight: 700, textTransform: "uppercase", fontSize: "0.65rem" }}>
+            <Typography
+              variant="caption"
+              sx={{ color: "#94A3B8", fontWeight: 700, textTransform: "uppercase", fontSize: "0.65rem" }}
+            >
               Last Origin Check
             </Typography>
             <Typography variant="body2" sx={{ fontWeight: 600, color: "#475569", mt: 0.2 }}>
-              {status?.last_checked ? new Date(status.last_checked).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : "Never"}
+              {status?.last_checked
+                ? new Date(status.last_checked).toLocaleTimeString([], {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    second: "2-digit",
+                  })
+                : "Never"}
             </Typography>
           </Box>
           <Box>
-            <Typography variant="caption" sx={{ color: "#94A3B8", fontWeight: 700, textTransform: "uppercase", fontSize: "0.65rem" }}>
+            <Typography
+              variant="caption"
+              sx={{ color: "#94A3B8", fontWeight: 700, textTransform: "uppercase", fontSize: "0.65rem" }}
+            >
               Last Validated
             </Typography>
             <Typography variant="body2" sx={{ fontWeight: 600, color: "#475569", mt: 0.2 }}>
-              {status?.last_validated ? new Date(status.last_validated).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : "Never"}
+              {status?.last_validated
+                ? new Date(status.last_validated).toLocaleTimeString([], {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    second: "2-digit",
+                  })
+                : "Never"}
             </Typography>
           </Box>
         </Box>
@@ -1690,16 +1738,25 @@ export const AppsPage: React.FC = () => {
             {Object.entries(status.versions).map(([verKey, verStatus]) => (
               <Box key={verKey} sx={{ bgcolor: "#FFFFFF", borderRadius: "8px", p: 1.5, border: "1px solid #E2E8F0" }}>
                 <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1, flexWrap: "wrap" }}>
-                  <Chip size="small" label={`Version: ${verKey}`} sx={{ height: 20, fontSize: "0.7rem", fontWeight: 700 }} />
+                  <Chip
+                    size="small"
+                    label={`Version: ${verKey}`}
+                    sx={{ height: 20, fontSize: "0.7rem", fontWeight: 700 }}
+                  />
                   {verStatus.resolved_version && verStatus.resolved_version !== verKey && (
-                    <Chip size="small" label={`Resolved Tag: ${verStatus.resolved_version}`} sx={{ height: 20, fontSize: "0.7rem", fontWeight: 600, bgcolor: "#EEF2FF", color: "#4F46E5" }} />
+                    <Chip
+                      size="small"
+                      label={`Resolved Tag: ${verStatus.resolved_version}`}
+                      sx={{ height: 20, fontSize: "0.7rem", fontWeight: 600, bgcolor: "#EEF2FF", color: "#4F46E5" }}
+                    />
                   )}
                 </Box>
                 {Object.entries(verStatus.architectures || {}).map(([archKey, archStatus]) => (
                   <Box key={archKey} sx={{ mt: 1, pt: 1, borderTop: "1px dashed #F1F5F9" }}>
                     <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 0.5 }}>
                       <Typography variant="caption" sx={{ fontWeight: 700, color: "#334155" }}>
-                        Arch: <span style={{ color: "#2563EB" }}>{archKey}</span> ({archStatus.files_on_disk ? "files present on disk" : "metadata preserved, disk freed"})
+                        Arch: <span style={{ color: "#2563EB" }}>{archKey}</span> (
+                        {archStatus.files_on_disk ? "files present on disk" : "metadata preserved, disk freed"})
                       </Typography>
                       {archStatus.archive_size > 0 && (
                         <Typography variant="caption" sx={{ color: "#64748B" }}>
@@ -1732,7 +1789,12 @@ export const AppsPage: React.FC = () => {
                               label={`SHA256: ${ef.sha256.slice(0, 14)}...`}
                               onClick={() => handleCopySha(ef.sha256)}
                               icon={copiedSha === ef.sha256 ? <Check size={11} /> : <Copy size={11} />}
-                              sx={{ height: 20, fontSize: "0.68rem", cursor: "pointer", bgcolor: copiedSha === ef.sha256 ? "#DCFCE7" : undefined }}
+                              sx={{
+                                height: 20,
+                                fontSize: "0.68rem",
+                                cursor: "pointer",
+                                bgcolor: copiedSha === ef.sha256 ? "#DCFCE7" : undefined,
+                              }}
                             />
                           </Tooltip>
                         </Box>
@@ -1744,15 +1806,27 @@ export const AppsPage: React.FC = () => {
             ))}
           </Box>
         ) : (
-          <Box sx={{ bgcolor: "#FFFFFF", p: 2, borderRadius: "8px", border: "1px dashed #CBD5E1", textAlign: "center" }}>
+          <Box
+            sx={{ bgcolor: "#FFFFFF", p: 2, borderRadius: "8px", border: "1px dashed #CBD5E1", textAlign: "center" }}
+          >
             <Typography variant="caption" sx={{ color: "#64748B" }}>
-              No artifact has been downloaded or cached on server yet. Click "Check & Validate Origin" to download and cache now.
+              No artifact has been downloaded or cached on server yet. Click "Check & Validate Origin" to download and
+              cache now.
             </Typography>
           </Box>
         )}
 
         {/* Action Buttons Row */}
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, pt: 1, borderTop: "1px solid #E2E8F0", flexWrap: "wrap" }}>
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            gap: 1,
+            pt: 1,
+            borderTop: "1px solid #E2E8F0",
+            flexWrap: "wrap",
+          }}
+        >
           <Button
             size="small"
             variant="contained"
@@ -1811,7 +1885,7 @@ export const AppsPage: React.FC = () => {
         }}
       >
         <Box>
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
             <Box
               sx={{
                 width: 42,
@@ -1838,7 +1912,7 @@ export const AppsPage: React.FC = () => {
         </Box>
 
         {/* Global Action Buttons */}
-        <Box sx={{ display: "flex", gap: 1.5, alignItems: "center" }}>
+        <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
           <Button
             variant="outlined"
             startIcon={<RefreshCw size={15} />}
@@ -1876,7 +1950,7 @@ export const AppsPage: React.FC = () => {
                   "&:hover": { borderColor: "#94A3B8", bgcolor: "#F8FAFC" },
                 }}
               >
-                Artifact Cache
+                More
               </Button>
               <Menu
                 anchorEl={artifactToolbarMenuAnchor}
@@ -1891,11 +1965,17 @@ export const AppsPage: React.FC = () => {
                   },
                 }}
               >
-                <MenuItem onClick={handleValidateAllArtifacts} sx={{ fontSize: "0.82rem", fontWeight: 600, py: 1, gap: 1.2 }}>
+                <MenuItem
+                  onClick={handleValidateAllArtifacts}
+                  sx={{ fontSize: "0.82rem", fontWeight: 600, py: 1, gap: 1.2 }}
+                >
                   <RefreshCw size={15} color="#4F46E5" />
                   Check All Artifacts for Origin Updates
                 </MenuItem>
-                <MenuItem onClick={handleClearAllArtifactCache} sx={{ fontSize: "0.82rem", fontWeight: 600, py: 1, gap: 1.2, color: "#DC2626" }}>
+                <MenuItem
+                  onClick={handleClearAllArtifactCache}
+                  sx={{ fontSize: "0.82rem", fontWeight: 600, py: 1, gap: 1.2, color: "#DC2626" }}
+                >
                   <Trash2 size={15} color="#DC2626" />
                   Clear All Server Caches (Free Disk Space)
                 </MenuItem>
@@ -1956,7 +2036,7 @@ export const AppsPage: React.FC = () => {
                 "&:hover": { bgcolor: "#4338CA" },
               }}
             >
-              Add Variable
+              New Variable
             </Button>
           )}
         </Box>
@@ -1995,8 +2075,12 @@ export const AppsPage: React.FC = () => {
             iconPosition="start"
             label={
               <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                <span>Workload Apps</span>
-                <Chip size="small" label={workloadApps.length} sx={{ height: 20, fontSize: "0.72rem", fontWeight: 700 }} />
+                <span>Apps</span>
+                <Chip
+                  size="small"
+                  label={workloadApps.length}
+                  sx={{ height: 20, fontSize: "0.72rem", fontWeight: 700 }}
+                />
               </Box>
             }
           />
@@ -2027,7 +2111,7 @@ export const AppsPage: React.FC = () => {
             iconPosition="start"
             label={
               <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                <span>Global Variables</span>
+                <span>Variables</span>
                 <Chip
                   size="small"
                   label={variables.length}
@@ -2215,7 +2299,7 @@ export const AppsPage: React.FC = () => {
               border: "1px solid #E2E8F0",
               display: "flex",
               flexDirection: "column",
-              gap: 1.5,
+              gap: 1,
               bgcolor: "#FFFFFF",
             }}
           >
@@ -2888,48 +2972,31 @@ export const AppsPage: React.FC = () => {
                               }}
                             >
                               {target.nodeNames.length > 0 ? (
-                                <>
-                                  {target.nodeNames.slice(0, 3).map((nodeName) => (
-                                    <Chip
-                                      key={nodeName}
-                                      component={RouterLink}
-                                      to={`/nodes/${encodeURIComponent(nodeName)}?tab=apps`}
-                                      clickable
-                                      onClick={(e) => e.stopPropagation()}
-                                      size="small"
-                                      label={nodeName}
-                                      sx={{
-                                        height: 20,
-                                        fontSize: "0.7rem",
-                                        fontWeight: 600,
-                                        bgcolor: chipColors.bgcolor,
-                                        color: chipColors.color,
-                                        textDecoration: "none",
-                                        cursor: "pointer",
-                                        transition: "all 0.15s ease",
-                                        "&:hover": {
-                                          bgcolor: chipColors.hoverBg,
-                                          color: chipColors.hoverColor,
-                                        },
-                                      }}
-                                    />
-                                  ))}
-                                  {target.nodeNames.length > 3 && (
-                                    <Tooltip title={target.nodeNames.join(", ")} arrow placement="top">
-                                      <Chip
-                                        size="small"
-                                        label={`+${target.nodeNames.length - 3} more`}
-                                        sx={{
-                                          height: 20,
-                                          fontSize: "0.7rem",
-                                          fontWeight: 700,
-                                          bgcolor: "#F1F5F9",
-                                          color: "#475569",
-                                        }}
-                                      />
-                                    </Tooltip>
-                                  )}
-                                </>
+                                target.nodeNames.map((nodeName) => (
+                                  <Chip
+                                    key={nodeName}
+                                    component={RouterLink}
+                                    to={`/nodes/${encodeURIComponent(nodeName)}?tab=apps`}
+                                    clickable
+                                    onClick={(e) => e.stopPropagation()}
+                                    size="small"
+                                    label={nodeName}
+                                    sx={{
+                                      height: 20,
+                                      fontSize: "0.7rem",
+                                      fontWeight: 600,
+                                      bgcolor: chipColors.bgcolor,
+                                      color: chipColors.color,
+                                      textDecoration: "none",
+                                      cursor: "pointer",
+                                      transition: "all 0.15s ease",
+                                      "&:hover": {
+                                        bgcolor: chipColors.hoverBg,
+                                        color: chipColors.hoverColor,
+                                      },
+                                    }}
+                                  />
+                                ))
                               ) : (
                                 <Typography variant="caption" sx={{ color: "#94A3B8", fontStyle: "italic" }}>
                                   {target.mode === "all"
@@ -3737,9 +3804,10 @@ export const AppsPage: React.FC = () => {
                 On-Demand Script Applications (/etc/ezscript)
               </Typography>
               <Typography variant="body2" sx={{ color: "#115E59", fontSize: "0.85rem", lineHeight: 1.5 }}>
-                Script Apps are single executable snippets deployed to <code>/etc/ezscript/&lt;name&gt;</code> without system service daemons.
-                Environment variables (<code>.env</code>) are automatically injected into the script header. Use the <strong>Start</strong>, <strong>Stop</strong>,
-                and <strong>Logs</strong> buttons below to execute scripts on all target nodes on demand and inspect execution output and exit codes.
+                Script Apps are single executable snippets deployed to <code>/etc/ezscript/&lt;name&gt;</code> without
+                system service daemons. Environment variables (<code>.env</code>) are automatically injected into the
+                script header. Use the <strong>Start</strong>, <strong>Stop</strong>, and <strong>Logs</strong> buttons
+                below to execute scripts on all target nodes on demand and inspect execution output and exit codes.
               </Typography>
             </Box>
           </Paper>
@@ -3756,7 +3824,7 @@ export const AppsPage: React.FC = () => {
               bgcolor: "#FFFFFF",
               display: "flex",
               flexDirection: "column",
-              gap: 1.5,
+              gap: 1,
             }}
           >
             <Box
@@ -3997,7 +4065,8 @@ export const AppsPage: React.FC = () => {
                 No Script Applications Yet
               </Typography>
               <Typography variant="body2" sx={{ color: "#64748B", maxWidth: 480, mx: "auto", mb: 3 }}>
-                Script applications are standalone executables deployed to <code>/etc/ezscript/&lt;name&gt;</code> that can be triggered on-demand across target nodes.
+                Script applications are standalone executables deployed to <code>/etc/ezscript/&lt;name&gt;</code> that
+                can be triggered on-demand across target nodes.
               </Typography>
               <Button
                 variant="contained"
@@ -4056,15 +4125,9 @@ export const AppsPage: React.FC = () => {
               <Table size="small" sx={{ minWidth: 950 }}>
                 <TableHead sx={{ bgcolor: "#F8FAFC" }}>
                   <TableRow>
-                    <TableCell sx={{ fontWeight: 800, color: "#475569", minWidth: 220 }}>
-                      Script
-                    </TableCell>
-                    <TableCell sx={{ fontWeight: 800, color: "#475569", minWidth: 240 }}>
-                      Description
-                    </TableCell>
-                    <TableCell sx={{ fontWeight: 800, color: "#475569", minWidth: 200 }}>
-                      Target Nodes
-                    </TableCell>
+                    <TableCell sx={{ fontWeight: 800, color: "#475569", minWidth: 220 }}>Script</TableCell>
+                    <TableCell sx={{ fontWeight: 800, color: "#475569", minWidth: 240 }}>Description</TableCell>
+                    <TableCell sx={{ fontWeight: 800, color: "#475569", minWidth: 200 }}>Target Nodes</TableCell>
                     <TableCell align="center" sx={{ fontWeight: 800, color: "#475569", minWidth: 100 }}>
                       Published
                     </TableCell>
@@ -4124,7 +4187,11 @@ export const AppsPage: React.FC = () => {
                                 {script.name}
                               </Typography>
                               <Box sx={{ display: "flex", alignItems: "center", gap: 0.6, mt: 0.3, flexWrap: "wrap" }}>
-                                <Typography variant="caption" className="mono-font" sx={{ color: "#64748B", fontSize: "0.7rem" }}>
+                                <Typography
+                                  variant="caption"
+                                  className="mono-font"
+                                  sx={{ color: "#64748B", fontSize: "0.7rem" }}
+                                >
                                   /etc/ezscript/{script.name}
                                 </Typography>
                                 {script.group && (
@@ -4136,7 +4203,7 @@ export const AppsPage: React.FC = () => {
                                       setScriptGroupFilter(
                                         scriptGroupFilter.toLowerCase() === script.group!.trim().toLowerCase()
                                           ? "all"
-                                          : script.group!.trim()
+                                          : script.group!.trim(),
                                       );
                                     }}
                                     clickable
@@ -4144,8 +4211,14 @@ export const AppsPage: React.FC = () => {
                                       height: 18,
                                       fontSize: "0.65rem",
                                       fontWeight: 700,
-                                      bgcolor: scriptGroupFilter.toLowerCase() === script.group.trim().toLowerCase() ? "#CCFBF1" : "#F1F5F9",
-                                      color: scriptGroupFilter.toLowerCase() === script.group.trim().toLowerCase() ? "#0F766E" : "#475569",
+                                      bgcolor:
+                                        scriptGroupFilter.toLowerCase() === script.group.trim().toLowerCase()
+                                          ? "#CCFBF1"
+                                          : "#F1F5F9",
+                                      color:
+                                        scriptGroupFilter.toLowerCase() === script.group.trim().toLowerCase()
+                                          ? "#0F766E"
+                                          : "#475569",
                                       cursor: "pointer",
                                       "&:hover": { bgcolor: "#E2E8F0" },
                                     }}
@@ -4211,7 +4284,31 @@ export const AppsPage: React.FC = () => {
                             >
                               {target.nodeNames.length === 0
                                 ? "No target nodes match"
-                                : `${target.nodeNames.length} node(s): ${target.nodeNames.join(", ")}`}
+                                : target.nodeNames.map((nodeName) => (
+                                    <Chip
+                                      key={nodeName}
+                                      component={RouterLink}
+                                      to={`/nodes/${encodeURIComponent(nodeName)}?tab=scripts`}
+                                      clickable
+                                      onClick={(e) => e.stopPropagation()}
+                                      size="small"
+                                      label={nodeName}
+                                      sx={{
+                                        height: 20,
+                                        fontSize: "0.7rem",
+                                        fontWeight: 600,
+                                        bgcolor: chipColors.bgcolor,
+                                        color: chipColors.color,
+                                        textDecoration: "none",
+                                        cursor: "pointer",
+                                        transition: "all 0.15s ease",
+                                        "&:hover": {
+                                          bgcolor: chipColors.hoverBg,
+                                          color: chipColors.hoverColor,
+                                        },
+                                      }}
+                                    />
+                                  ))}
                             </Typography>
                           </Box>
                         </TableCell>
@@ -4257,13 +4354,25 @@ export const AppsPage: React.FC = () => {
                         {/* Execution: Start, Stop, Logs */}
                         <TableCell align="center">
                           <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 1 }}>
-                            <Tooltip title={!script.published ? "Publish script first to deploy and execute on nodes" : "Execute script on all target nodes"}>
+                            <Tooltip
+                              title={
+                                !script.published
+                                  ? "Publish script first to deploy and execute on nodes"
+                                  : "Execute script on all target nodes"
+                              }
+                            >
                               <span>
                                 <Button
                                   size="small"
                                   variant="contained"
                                   disabled={isRunningAction || !script.published}
-                                  startIcon={clusterActionLoading[script.id] === "start" ? <CircularProgress size={12} color="inherit" /> : <Play size={13} />}
+                                  startIcon={
+                                    clusterActionLoading[script.id] === "start" ? (
+                                      <CircularProgress size={12} color="inherit" />
+                                    ) : (
+                                      <Play size={13} />
+                                    )
+                                  }
                                   onClick={() => handleTriggerClusterAction(script, "start")}
                                   sx={{
                                     bgcolor: "#059669",
@@ -4289,7 +4398,13 @@ export const AppsPage: React.FC = () => {
                                   size="small"
                                   variant="outlined"
                                   disabled={isRunningAction}
-                                  startIcon={clusterActionLoading[script.id] === "stop" ? <CircularProgress size={12} color="inherit" /> : <Square size={13} />}
+                                  startIcon={
+                                    clusterActionLoading[script.id] === "stop" ? (
+                                      <CircularProgress size={12} color="inherit" />
+                                    ) : (
+                                      <Square size={13} />
+                                    )
+                                  }
                                   onClick={() => handleTriggerClusterAction(script, "stop")}
                                   sx={{
                                     borderColor: "#FCA5A5",
@@ -4377,7 +4492,11 @@ export const AppsPage: React.FC = () => {
                               </IconButton>
                             </Tooltip>
                             <Tooltip title="Edit Script">
-                              <IconButton size="small" onClick={() => openEditAppModal(script)} sx={{ color: "#64748B" }}>
+                              <IconButton
+                                size="small"
+                                onClick={() => openEditAppModal(script)}
+                                sx={{ color: "#64748B" }}
+                              >
                                 <Edit size={16} />
                               </IconButton>
                             </Tooltip>
@@ -4430,7 +4549,7 @@ export const AppsPage: React.FC = () => {
                 and auxiliary config files. Systemd units and Docker Compose manifests are excluded to prevent conflicts
                 with their native variable interpolation.
               </Typography>
-              <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1.5, mt: 1.2 }}>
+              <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, mt: 1.2 }}>
                 <Chip
                   size="small"
                   label="${VAR_NAME} or {{VAR_NAME}}"
@@ -4690,7 +4809,7 @@ export const AppsPage: React.FC = () => {
       {/* VARIABLE CREATE / EDIT MODAL                                                              */}
       {/* ========================================================================================= */}
       <Dialog open={varModalOpen} onClose={() => setVarModalOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle sx={{ display: "flex", alignItems: "center", gap: 1.5, pb: 1 }}>
+        <DialogTitle sx={{ display: "flex", alignItems: "center", gap: 1, pb: 1 }}>
           <Box
             sx={{
               width: 36,
@@ -4709,7 +4828,7 @@ export const AppsPage: React.FC = () => {
             {variables.some((v) => v.key === varKey) ? `Edit Variable: ${varKey}` : "Add Global Variable"}
           </Typography>
         </DialogTitle>
-        <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2.5, pt: 2 }}>
+        <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2, pt: 2 }}>
           <TextField
             fullWidth
             label="Variable Key"
@@ -4845,7 +4964,7 @@ export const AppsPage: React.FC = () => {
         }}
       >
         <DialogTitle sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", pb: 1 }}>
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
             <Box
               sx={{
                 width: 36,
@@ -5031,7 +5150,7 @@ export const AppsPage: React.FC = () => {
 
           {/* TAB 1: General & Nodes */}
           {modalTab === "general" && (
-            <Box sx={{ display: "flex", flexDirection: "column", gap: 2.5 }}>
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
               <Grid container spacing={2}>
                 <Grid item xs={12} sm={6}>
                   <TextField
@@ -5484,7 +5603,7 @@ export const AppsPage: React.FC = () => {
                 </Box>
               </Box>
 
-              <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, mt: 1 }}>
+              <Box sx={{ display: "flex", flexDirection: "column", gap: 1, mt: 1 }}>
                 <FormControlLabel
                   control={
                     <Switch
@@ -5506,28 +5625,34 @@ export const AppsPage: React.FC = () => {
                   }
                 />
 
-                <FormControlLabel
-                  control={
-                    <Switch checked={formEnabled} onChange={(e) => setFormEnabled(e.target.checked)} color="primary" />
-                  }
-                  label={
-                    <Box>
-                      <Typography variant="body2" sx={{ fontWeight: 600, color: "#1E293B" }}>
-                        Enabled
-                      </Typography>
-                      <Typography variant="caption" sx={{ color: "#64748B" }}>
-                        When enabled, agents will actively run the service upon synchronization.
-                      </Typography>
-                    </Box>
-                  }
-                />
+                {formType !== "script" && (
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={formEnabled}
+                        onChange={(e) => setFormEnabled(e.target.checked)}
+                        color="primary"
+                      />
+                    }
+                    label={
+                      <Box>
+                        <Typography variant="body2" sx={{ fontWeight: 600, color: "#1E293B" }}>
+                          Enabled
+                        </Typography>
+                        <Typography variant="caption" sx={{ color: "#64748B" }}>
+                          When enabled, agents will actively run the service upon synchronization.
+                        </Typography>
+                      </Box>
+                    }
+                  />
+                )}
               </Box>
             </Box>
           )}
 
           {/* TAB 2: Definition Editor (Cron) */}
           {modalTab === "definition" && formType === "cron" && (
-            <Box sx={{ display: "flex", flexDirection: "column", gap: 2.5 }}>
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
               <Box
                 sx={{
                   display: "flex",
@@ -5687,7 +5812,7 @@ ${formEnabled ? `${formCronExpr.trim() || "0 0 * * *"} ${formCronCmd.trim() || "
 
           {/* TAB 2: Definition Editor (Docker / Systemd) */}
           {modalTab === "definition" && formType !== "cron" && (
-            <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
               <Box
                 sx={{
                   display: "flex",
@@ -5743,11 +5868,7 @@ ${formEnabled ? `${formCronExpr.trim() || "0 0 * * *"} ${formCronCmd.trim() || "
                     size="small"
                     onClick={() =>
                       setFormMain(
-                        formType === "docker"
-                          ? DOCKER_SAMPLE
-                          : formType === "script"
-                            ? SCRIPT_SAMPLE
-                            : SYSTEMD_SAMPLE
+                        formType === "docker" ? DOCKER_SAMPLE : formType === "script" ? SCRIPT_SAMPLE : SYSTEMD_SAMPLE,
                       )
                     }
                     sx={{ textTransform: "none", fontSize: "0.75rem", color: "#64748B" }}
@@ -5768,7 +5889,7 @@ ${formEnabled ? `${formCronExpr.trim() || "0 0 * * *"} ${formCronCmd.trim() || "
                     bgcolor: "#EEF2FF",
                     display: "flex",
                     flexDirection: "column",
-                    gap: 1.5,
+                    gap: 1,
                   }}
                 >
                   {formType === "docker" ? (
@@ -6106,7 +6227,7 @@ ${formEnabled ? `${formCronExpr.trim() || "0 0 * * *"} ${formCronCmd.trim() || "
 
           {/* TAB 3: Environment .env Editor */}
           {modalTab === "env" && (
-            <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
               <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0F172A" }}>
                 Environment Configuration (.env)
               </Typography>
@@ -6158,7 +6279,8 @@ ${formEnabled ? `${formCronExpr.trim() || "0 0 * * *"} ${formCronCmd.trim() || "
                     Auxiliary Config Files Map
                   </Typography>
                   <Typography variant="caption" sx={{ color: "#64748B" }}>
-                    Injected into app directory (./filename) for Docker or /etc/ezapp/&lt;name&gt;/ for native daemons and cron apps.
+                    Injected into app directory (./filename) for Docker or /etc/ezapp/&lt;name&gt;/ for native daemons
+                    and cron apps.
                   </Typography>
                 </Box>
                 <Button
@@ -6191,7 +6313,7 @@ ${formEnabled ? `${formCronExpr.trim() || "0 0 * * *"} ${formCronCmd.trim() || "
               ) : (
                 formFiles.map((file, idx) => (
                   <Paper key={idx} elevation={0} sx={{ p: 2, border: "1px solid #E2E8F0", borderRadius: "10px" }}>
-                    <Box sx={{ display: "flex", gap: 1.5, alignItems: "center", mb: 1.5 }}>
+                    <Box sx={{ display: "flex", gap: 1, alignItems: "center", mb: 1.5 }}>
                       <TextField
                         size="small"
                         label="Relative Filename / Path"
@@ -6342,7 +6464,7 @@ ${formEnabled ? `${formCronExpr.trim() || "0 0 * * *"} ${formCronCmd.trim() || "
                     values.
                   </Typography>
                 </Box>
-                <Box sx={{ display: "flex", gap: 1.5, alignItems: "center" }}>
+                <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
                   <FormControl size="small" sx={{ minWidth: 170 }}>
                     <InputLabel>Simulated Node</InputLabel>
                     <Select
@@ -6394,7 +6516,7 @@ ${formEnabled ? `${formCronExpr.trim() || "0 0 * * *"} ${formCronCmd.trim() || "
 
           {/* TAB: Artifact Spec (Native Systemd only) */}
           {modalTab === "artifact" && (
-            <Box sx={{ display: "flex", flexDirection: "column", gap: 2.5 }}>
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
               <Box
                 sx={{
                   p: 2,
@@ -6416,7 +6538,8 @@ ${formEnabled ? `${formCronExpr.trim() || "0 0 * * *"} ${formCronCmd.trim() || "
                   </Typography>
                   <Typography variant="caption" sx={{ color: "#64748B", display: "block", mt: 0.5 }}>
                     Enable this to automatically download, verify, decompress, and deploy app binaries or archives to
-                    nodes. The native service or cron task will only execute after all required artifacts are verified on the node.
+                    nodes. The native service or cron task will only execute after all required artifacts are verified
+                    on the node.
                   </Typography>
                 </Box>
                 <FormControlLabel
@@ -6453,7 +6576,7 @@ ${formEnabled ? `${formCronExpr.trim() || "0 0 * * *"} ${formCronCmd.trim() || "
                       />
                     </Grid>
                     <Grid item xs={12} sm={8}>
-                      <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, height: "100%", pt: 0.5 }}>
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 1, height: "100%", pt: 0.5 }}>
                         <Typography variant="caption" sx={{ fontWeight: 700, color: "#475569" }}>
                           Source:
                         </Typography>
@@ -6499,9 +6622,18 @@ ${formEnabled ? `${formCronExpr.trim() || "0 0 * * *"} ${formCronCmd.trim() || "
                         {[
                           { label: "${VERSION}", desc: "Version tag (e.g. v1.68.1)" },
                           { label: "${RAW_VERSION}", desc: "Version without 'v' prefix (e.g. 1.68.1)" },
-                          { label: "${ARCH}", desc: "Go format: amd64 / arm64 / 386 / armv7 / mipsel (MIPS endianness resolved)" },
-                          { label: "${ARCH_GNU}", desc: "GNU/C/Rust format: x86_64 / aarch64 / i386 / armv7l / mipsel" },
-                          { label: "${ARCH_RUST}", desc: "Rust target format: x86_64 / aarch64 / armv7 / mipsel (little-endian MIPS)" },
+                          {
+                            label: "${ARCH}",
+                            desc: "Go format: amd64 / arm64 / 386 / armv7 / mipsel (MIPS endianness resolved)",
+                          },
+                          {
+                            label: "${ARCH_GNU}",
+                            desc: "GNU/C/Rust format: x86_64 / aarch64 / i386 / armv7l / mipsel",
+                          },
+                          {
+                            label: "${ARCH_RUST}",
+                            desc: "Rust target format: x86_64 / aarch64 / armv7 / mipsel (little-endian MIPS)",
+                          },
                           { label: "${ARCH_DEB}", desc: "Debian format: amd64 / arm64 / armhf" },
                           { label: "${OS}", desc: "OS name (linux)" },
                           { label: "${APP_NAME}", desc: "App name" },
@@ -6632,7 +6764,7 @@ ${formEnabled ? `${formCronExpr.trim() || "0 0 * * *"} ${formCronCmd.trim() || "
                       </Button>
                     </Box>
 
-                    <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+                    <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
                       {formArtifactFiles.map((file, idx) => (
                         <Box
                           key={idx}
@@ -6643,7 +6775,7 @@ ${formEnabled ? `${formCronExpr.trim() || "0 0 * * *"} ${formCronCmd.trim() || "
                             border: "1px solid #E2E8F0",
                             display: "flex",
                             flexDirection: "column",
-                            gap: 1.5,
+                            gap: 1,
                           }}
                         >
                           <Grid container spacing={1.5} alignItems="center">
@@ -6802,7 +6934,7 @@ ${formEnabled ? `${formCronExpr.trim() || "0 0 * * *"} ${formCronCmd.trim() || "
               )}
 
               {previewResult?.script ? (
-                <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+                <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
                   <Typography variant="caption" sx={{ fontWeight: 700, color: "#334155" }}>
                     Generated Init Script (/etc/init.d/ezapp-{formName.trim() || "sample"}):
                   </Typography>
@@ -7045,7 +7177,9 @@ ${formEnabled ? `${formCronExpr.trim() || "0 0 * * *"} ${formCronCmd.trim() || "
             <Tooltip title="Refresh Logs">
               <IconButton
                 size="small"
-                onClick={() => clusterLogsModalScript && handleOpenClusterLogs(clusterLogsModalScript, clusterLogsLines)}
+                onClick={() =>
+                  clusterLogsModalScript && handleOpenClusterLogs(clusterLogsModalScript, clusterLogsLines)
+                }
                 disabled={clusterLogsLoading}
                 sx={{ color: "#0F766E" }}
               >
@@ -7076,7 +7210,13 @@ ${formEnabled ? `${formCronExpr.trim() || "0 0 * * *"} ${formCronCmd.trim() || "
                 variant="scrollable"
                 sx={{
                   borderBottom: "1px solid #E2E8F0",
-                  "& .MuiTab-root": { textTransform: "none", fontWeight: 700, fontSize: "0.82rem", minHeight: 42, px: 2 },
+                  "& .MuiTab-root": {
+                    textTransform: "none",
+                    fontWeight: 700,
+                    fontSize: "0.82rem",
+                    minHeight: 42,
+                    px: 2,
+                  },
                   "& .Mui-selected": { color: "#0F766E" },
                   "& .MuiTabs-indicator": { bgcolor: "#0F766E" },
                 }}
@@ -7094,7 +7234,13 @@ ${formEnabled ? `${formCronExpr.trim() || "0 0 * * *"} ${formCronCmd.trim() || "
                             <Chip
                               size="small"
                               label="Running"
-                              sx={{ height: 18, fontSize: "0.65rem", fontWeight: 700, bgcolor: "#DBEAFE", color: "#1E40AF" }}
+                              sx={{
+                                height: 18,
+                                fontSize: "0.65rem",
+                                fontWeight: 700,
+                                bgcolor: "#DBEAFE",
+                                color: "#1E40AF",
+                              }}
                             />
                           ) : result.exit_code !== undefined && result.exit_code >= 0 ? (
                             <Chip
@@ -7112,7 +7258,13 @@ ${formEnabled ? `${formCronExpr.trim() || "0 0 * * *"} ${formCronCmd.trim() || "
                             <Chip
                               size="small"
                               label="Error"
-                              sx={{ height: 18, fontSize: "0.65rem", fontWeight: 700, bgcolor: "#FEE2E2", color: "#B91C1C" }}
+                              sx={{
+                                height: 18,
+                                fontSize: "0.65rem",
+                                fontWeight: 700,
+                                bgcolor: "#FEE2E2",
+                                color: "#B91C1C",
+                              }}
                             />
                           ) : null}
                         </Box>
@@ -7129,9 +7281,17 @@ ${formEnabled ? `${formCronExpr.trim() || "0 0 * * *"} ${formCronCmd.trim() || "
                 const isRunning = nodeResult.stderr === "running" || (nodeResult as any).is_running;
                 const logsText = (nodeResult as any).logs || nodeResult.stdout || "";
                 return (
-                  <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+                  <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
                     {/* Status header */}
-                    <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 1 }}>
+                    <Box
+                      sx={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        flexWrap: "wrap",
+                        gap: 1,
+                      }}
+                    >
                       <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                         <Typography variant="body2" sx={{ fontWeight: 700, color: "#1E293B" }}>
                           Node: {clusterLogsSelectedNode}
@@ -7141,7 +7301,13 @@ ${formEnabled ? `${formCronExpr.trim() || "0 0 * * *"} ${formCronCmd.trim() || "
                             size="small"
                             icon={<RotateCw size={12} className="rotating" />}
                             label="Currently Executing"
-                            sx={{ height: 22, fontSize: "0.72rem", fontWeight: 700, bgcolor: "#DBEAFE", color: "#1D4ED8" }}
+                            sx={{
+                              height: 22,
+                              fontSize: "0.72rem",
+                              fontWeight: 700,
+                              bgcolor: "#DBEAFE",
+                              color: "#1D4ED8",
+                            }}
                           />
                         ) : nodeResult.exit_code !== undefined && nodeResult.exit_code >= 0 ? (
                           <Chip
@@ -7159,7 +7325,13 @@ ${formEnabled ? `${formCronExpr.trim() || "0 0 * * *"} ${formCronCmd.trim() || "
                           <Chip
                             size="small"
                             label={nodeResult.success ? "Ready" : "Unknown"}
-                            sx={{ height: 22, fontSize: "0.72rem", fontWeight: 700, bgcolor: "#F1F5F9", color: "#475569" }}
+                            sx={{
+                              height: 22,
+                              fontSize: "0.72rem",
+                              fontWeight: 700,
+                              bgcolor: "#F1F5F9",
+                              color: "#475569",
+                            }}
                           />
                         )}
                       </Box>

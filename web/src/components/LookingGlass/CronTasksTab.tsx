@@ -183,7 +183,7 @@ export const CronTasksTab: React.FC<CronTasksTabProps> = ({ nodes, onExecuteNow 
         (n.description && n.description.toLowerCase().includes(q)) ||
         (n.host && n.host.toLowerCase().includes(q)) ||
         (n.ip && n.ip.toLowerCase().includes(q)) ||
-        (n.tags && n.tags.some((t) => t.toLowerCase().includes(q)))
+        (n.tags && n.tags.some((t) => t.toLowerCase().includes(q))),
     );
   }, [availableNodes, nodeFilter]);
 
@@ -348,7 +348,7 @@ export const CronTasksTab: React.FC<CronTasksTabProps> = ({ nodes, onExecuteNow 
           </Box>
         </Box>
 
-        <Box sx={{ display: "flex", gap: 1.5 }}>
+        <Box sx={{ display: "flex", gap: 1 }}>
           <Button
             variant="outlined"
             size="small"
@@ -531,21 +531,21 @@ export const CronTasksTab: React.FC<CronTasksTabProps> = ({ nodes, onExecuteNow 
                                   `/nodes/${encodeURIComponent(matchedNode.name)}?tab=cron_tasks&task=${encodeURIComponent(task.id)}`,
                                 )
                               }
-                            variant="outlined"
-                            sx={{
-                              fontSize: "0.7rem",
-                              height: 22,
-                              borderColor: "#CBD5E1",
-                              color: "#4F46E5",
-                              bgcolor: "#F8FAFC",
-                              cursor: "pointer",
-                              fontWeight: 500,
-                              "&:hover": {
-                                borderColor: "#818CF8",
-                                bgcolor: "#EEF2FF",
-                                color: "#3730A3",
-                              },
-                            }}
+                              variant="outlined"
+                              sx={{
+                                fontSize: "0.7rem",
+                                height: 22,
+                                borderColor: "#CBD5E1",
+                                color: "#4F46E5",
+                                bgcolor: "#F8FAFC",
+                                cursor: "pointer",
+                                fontWeight: 500,
+                                "&:hover": {
+                                  borderColor: "#818CF8",
+                                  bgcolor: "#EEF2FF",
+                                  color: "#3730A3",
+                                },
+                              }}
                             />
                           ))
                         ) : (
@@ -601,12 +601,12 @@ export const CronTasksTab: React.FC<CronTasksTabProps> = ({ nodes, onExecuteNow 
         fullWidth
         PaperProps={{ sx: { borderRadius: 3, p: 1 } }}
       >
-        <DialogTitle sx={{ fontWeight: 700, color: "#0F172A", display: "flex", alignItems: "center", gap: 1.5 }}>
+        <DialogTitle sx={{ fontWeight: 700, color: "#0F172A", display: "flex", alignItems: "center", gap: 1 }}>
           <Clock size={20} color="#4F46E5" />
           {editingTask ? "Edit Cron Task" : "Create New Cron Task"}
         </DialogTitle>
 
-        <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2.5, pt: 1 }}>
+        <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2, pt: 1 }}>
           {formError && (
             <Alert severity="error" onClose={() => setFormError(null)}>
               {formError}
@@ -749,36 +749,25 @@ export const CronTasksTab: React.FC<CronTasksTabProps> = ({ nodes, onExecuteNow 
               border: "1px solid #E2E8F0",
             }}
           >
-            <Typography
-              variant="subtitle2"
-              sx={{ fontWeight: 700, color: "#1E293B", mb: 0.5 }}
-            >
+            <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#1E293B", mb: 0.5 }}>
               Target Nodes
             </Typography>
-            <Typography
-              variant="caption"
-              sx={{ color: "#64748B", display: "block", mb: 1.5 }}
-            >
-              Choose nodes with the shortcuts below or edit the selector JSON
-              directly. An empty selector matches every managed node. All
-              selector conditions must match (AND).
+            <Typography variant="caption" sx={{ color: "#64748B", display: "block", mb: 1.5 }}>
+              Choose nodes with the shortcuts below or edit the selector JSON directly. An empty selector matches every
+              managed node. All selector conditions must match (AND).
             </Typography>
 
             <FormControl component="fieldset" fullWidth sx={{ mb: 2 }}>
               <RadioGroup
                 row
                 value={formTargetType}
-                onChange={(e) =>
-                  handleTargetModeChange(e.target.value as SelectorTargetMode)
-                }
+                onChange={(e) => handleTargetModeChange(e.target.value as SelectorTargetMode)}
               >
                 <FormControlLabel
                   value="manual"
                   control={<Radio size="small" />}
                   label={
-                    <Box
-                      sx={{ display: "flex", alignItems: "center", gap: 0.8 }}
-                    >
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 0.8 }}>
                       <Sliders size={16} color="#6366F1" />
                       <Typography variant="body2" sx={{ fontWeight: 600 }}>
                         Manually Select Nodes
@@ -790,9 +779,7 @@ export const CronTasksTab: React.FC<CronTasksTabProps> = ({ nodes, onExecuteNow 
                   value="all"
                   control={<Radio size="small" />}
                   label={
-                    <Box
-                      sx={{ display: "flex", alignItems: "center", gap: 0.8 }}
-                    >
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 0.8 }}>
                       <Globe size={16} color="#0EA5E9" />
                       <Typography variant="body2" sx={{ fontWeight: 600 }}>
                         All Nodes
@@ -804,9 +791,7 @@ export const CronTasksTab: React.FC<CronTasksTabProps> = ({ nodes, onExecuteNow 
                   value="tag"
                   control={<Radio size="small" />}
                   label={
-                    <Box
-                      sx={{ display: "flex", alignItems: "center", gap: 0.8 }}
-                    >
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 0.8 }}>
                       <Tag size={16} color="#8B5CF6" />
                       <Typography variant="body2" sx={{ fontWeight: 600 }}>
                         Nodes of Selected Tag(s)
@@ -818,9 +803,7 @@ export const CronTasksTab: React.FC<CronTasksTabProps> = ({ nodes, onExecuteNow 
                   value="custom"
                   control={<Radio size="small" />}
                   label={
-                    <Box
-                      sx={{ display: "flex", alignItems: "center", gap: 0.8 }}
-                    >
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 0.8 }}>
                       <Code2 size={16} color="#0F766E" />
                       <Typography variant="body2" sx={{ fontWeight: 600 }}>
                         Advanced Selector
@@ -850,9 +833,7 @@ export const CronTasksTab: React.FC<CronTasksTabProps> = ({ nodes, onExecuteNow 
                       onClick={() => {
                         const toAdd = filteredAvailableNodes.map((n) => n.name);
                         applyFormSelector({
-                          name: Array.from(
-                            new Set([...formSelectedNodes, ...toAdd]),
-                          ).join(","),
+                          name: Array.from(new Set([...formSelectedNodes, ...toAdd])).join(","),
                         });
                       }}
                       sx={{ textTransform: "none", fontSize: "0.75rem" }}
@@ -863,13 +844,9 @@ export const CronTasksTab: React.FC<CronTasksTabProps> = ({ nodes, onExecuteNow 
                       size="small"
                       onClick={() => {
                         if (nodeFilter.trim()) {
-                          const toRemove = new Set(
-                            filteredAvailableNodes.map((n) => n.name),
-                          );
+                          const toRemove = new Set(filteredAvailableNodes.map((n) => n.name));
                           applyFormSelector({
-                            name: formSelectedNodes
-                              .filter((name) => !toRemove.has(name))
-                              .join(","),
+                            name: formSelectedNodes.filter((name) => !toRemove.has(name)).join(","),
                           });
                         } else {
                           applyFormSelector({ name: "" });
@@ -896,12 +873,7 @@ export const CronTasksTab: React.FC<CronTasksTabProps> = ({ nodes, onExecuteNow 
                     ),
                     endAdornment: nodeFilter ? (
                       <InputAdornment position="end">
-                        <IconButton
-                          size="small"
-                          onClick={() => setNodeFilter("")}
-                          edge="end"
-                          sx={{ p: 0.5 }}
-                        >
+                        <IconButton size="small" onClick={() => setNodeFilter("")} edge="end" sx={{ p: 0.5 }}>
                           <X size={14} color="#94A3B8" />
                         </IconButton>
                       </InputAdornment>
@@ -914,9 +886,8 @@ export const CronTasksTab: React.FC<CronTasksTabProps> = ({ nodes, onExecuteNow 
                 <Box
                   sx={{
                     display: "grid",
-                    gridTemplateColumns:
-                      "repeat(auto-fill, minmax(180px, 1fr))",
-                    gap: 1.5,
+                    gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))",
+                    gap: 1,
                     maxHeight: 180,
                     overflowY: "auto",
                     p: 1.5,
@@ -943,8 +914,7 @@ export const CronTasksTab: React.FC<CronTasksTabProps> = ({ nodes, onExecuteNow 
                   ) : (
                     filteredAvailableNodes.map((n) => {
                       const isSelected = formSelectedNodes.includes(n.name);
-                      const isAgent =
-                        n.mode === "agent" || Boolean(n.agent_token);
+                      const isAgent = n.mode === "agent" || Boolean(n.agent_token);
                       return (
                         <Paper
                           key={n.name}
@@ -974,16 +944,11 @@ export const CronTasksTab: React.FC<CronTasksTabProps> = ({ nodes, onExecuteNow 
                             >
                               {n.name}
                             </Typography>
-                            <Typography
-                              variant="caption"
-                              sx={{ color: isAgent ? "#16A34A" : "#D97706" }}
-                            >
+                            <Typography variant="caption" sx={{ color: isAgent ? "#16A34A" : "#D97706" }}>
                               {isAgent ? "Agent Node" : "No Agent"}
                             </Typography>
                           </Box>
-                          {isSelected && (
-                            <CheckCircle2 size={16} color="#4F46E5" />
-                          )}
+                          {isSelected && <CheckCircle2 size={16} color="#4F46E5" />}
                         </Paper>
                       );
                     })
@@ -992,8 +957,7 @@ export const CronTasksTab: React.FC<CronTasksTabProps> = ({ nodes, onExecuteNow 
                 <Typography
                   variant="caption"
                   sx={{
-                    color:
-                      formSelectedNodes.length === 0 ? "#D97706" : "#64748B",
+                    color: formSelectedNodes.length === 0 ? "#D97706" : "#64748B",
                     mt: 0.5,
                     display: "block",
                   }}
@@ -1014,25 +978,15 @@ export const CronTasksTab: React.FC<CronTasksTabProps> = ({ nodes, onExecuteNow 
                   border: "1px solid #BAE6FD",
                 }}
               >
-                <Box
-                  sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}
-                >
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
                   <Globe size={18} color="#0284C7" />
-                  <Typography
-                    variant="body2"
-                    sx={{ fontWeight: 700, color: "#0369A1" }}
-                  >
-                    Automatic Execution on All Agent Nodes (
-                    {availableNodes.length})
+                  <Typography variant="body2" sx={{ fontWeight: 700, color: "#0369A1" }}>
+                    Automatic Execution on All Agent Nodes ({availableNodes.length})
                   </Typography>
                 </Box>
-                <Typography
-                  variant="caption"
-                  sx={{ color: "#0C4A6E", display: "block", mb: 1.5 }}
-                >
-                  An empty selector runs this task on all cluster nodes running
-                  in agent mode. Any new agent node added in the future will
-                  automatically receive this task.
+                <Typography variant="caption" sx={{ color: "#0C4A6E", display: "block", mb: 1.5 }}>
+                  An empty selector runs this task on all cluster nodes running in agent mode. Any new agent node added
+                  in the future will automatically receive this task.
                 </Typography>
                 <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.6 }}>
                   {availableNodes.map((n) => (
@@ -1071,38 +1025,25 @@ export const CronTasksTab: React.FC<CronTasksTabProps> = ({ nodes, onExecuteNow 
                       label="Select from Existing Tags"
                       onChange={(e) => {
                         const val = e.target.value;
-                        const selected =
-                          typeof val === "string" ? val.split(",") : val;
+                        const selected = typeof val === "string" ? val.split(",") : val;
                         applyFormSelector({ tag: selected.join(",") });
                       }}
                       renderValue={(selected) => (
-                        <Box
-                          sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}
-                        >
+                        <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
                           {selected.length === 0 ? (
-                            <Typography
-                              variant="body2"
-                              sx={{ color: "#94A3B8", fontStyle: "italic" }}
-                            >
+                            <Typography variant="body2" sx={{ color: "#94A3B8", fontStyle: "italic" }}>
                               None selected
                             </Typography>
                           ) : (
                             selected.map((tag) => (
-                              <Chip
-                                key={tag}
-                                label={`#${tag}`}
-                                size="small"
-                                sx={{ height: 22, fontSize: "0.75rem" }}
-                              />
+                              <Chip key={tag} label={`#${tag}`} size="small" sx={{ height: 22, fontSize: "0.75rem" }} />
                             ))
                           )}
                         </Box>
                       )}
                     >
                       {availableTags.map((tag) => {
-                        const matchCount = availableNodes.filter((n) =>
-                          n.tags?.includes(tag),
-                        ).length;
+                        const matchCount = availableNodes.filter((n) => n.tags?.includes(tag)).length;
                         return (
                           <MenuItem key={tag} value={tag}>
                             <Box
@@ -1113,10 +1054,7 @@ export const CronTasksTab: React.FC<CronTasksTabProps> = ({ nodes, onExecuteNow 
                                 alignItems: "center",
                               }}
                             >
-                              <Typography
-                                variant="body2"
-                                sx={{ fontWeight: 600, color: "#7C3AED" }}
-                              >
+                              <Typography variant="body2" sx={{ fontWeight: 600, color: "#7C3AED" }}>
                                 #{tag}
                               </Typography>
                               <Chip
@@ -1136,16 +1074,9 @@ export const CronTasksTab: React.FC<CronTasksTabProps> = ({ nodes, onExecuteNow 
                     label="Or Enter Tags (comma-separated)"
                     placeholder="e.g. edge, ingress, prod"
                     value={formTargetTag}
-                    onChange={(e) =>
-                      applyFormSelector({ tag: e.target.value.toLowerCase() })
-                    }
+                    onChange={(e) => applyFormSelector({ tag: e.target.value.toLowerCase() })}
                     InputProps={{
-                      startAdornment: (
-                        <Tag
-                          size={16}
-                          style={{ marginRight: 6, color: "#8B5CF6" }}
-                        />
-                      ),
+                      startAdornment: <Tag size={16} style={{ marginRight: 6, color: "#8B5CF6" }} />,
                     }}
                   />
                 </Box>
@@ -1160,30 +1091,21 @@ export const CronTasksTab: React.FC<CronTasksTabProps> = ({ nodes, onExecuteNow 
                   }}
                 >
                   {(() => {
-                    const matchingNodes = availableNodes.filter((n) =>
-                      matchesTaskSelector(n, { tag: formTargetTag }),
-                    );
+                    const matchingNodes = availableNodes.filter((n) => matchesTaskSelector(n, { tag: formTargetTag }));
                     if (!formTargetTag) {
                       return (
                         <Typography variant="caption" sx={{ color: "#6D28D9" }}>
-                          Please select or enter at least one tag above to see
-                          matching nodes.
+                          Please select or enter at least one tag above to see matching nodes.
                         </Typography>
                       );
                     }
                     if (matchingNodes.length === 0) {
                       return (
-                        <Box
-                          sx={{ display: "flex", alignItems: "center", gap: 1 }}
-                        >
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                           <Info size={16} color="#8B5CF6" />
-                          <Typography
-                            variant="caption"
-                            sx={{ color: "#6D28D9" }}
-                          >
-                            No nodes currently have any of these tags. The task
-                            will automatically run on any node tagged with{" "}
-                            <strong>#{formTargetTag}</strong>.
+                          <Typography variant="caption" sx={{ color: "#6D28D9" }}>
+                            No nodes currently have any of these tags. The task will automatically run on any node
+                            tagged with <strong>#{formTargetTag}</strong>.
                           </Typography>
                         </Box>
                       );
@@ -1199,12 +1121,9 @@ export const CronTasksTab: React.FC<CronTasksTabProps> = ({ nodes, onExecuteNow 
                             mb: 0.8,
                           }}
                         >
-                          {matchingNodes.length} node(s) currently match tag
-                          selection:
+                          {matchingNodes.length} node(s) currently match tag selection:
                         </Typography>
-                        <Box
-                          sx={{ display: "flex", flexWrap: "wrap", gap: 0.6 }}
-                        >
+                        <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.6 }}>
                           {matchingNodes.map((n) => (
                             <Chip
                               key={n.name}
@@ -1239,8 +1158,7 @@ export const CronTasksTab: React.FC<CronTasksTabProps> = ({ nodes, onExecuteNow 
                 <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                   <Code2 size={16} color="#0F766E" />
                   <Typography variant="caption" sx={{ color: "#115E59" }}>
-                    Build an arbitrary selector below. Supported keys are{" "}
-                    <code>name</code>, <code>tag</code>, and{" "}
+                    Build an arbitrary selector below. Supported keys are <code>name</code>, <code>tag</code>, and{" "}
                     <code>env:&lt;NAME&gt;</code>.
                   </Typography>
                 </Box>
@@ -1256,17 +1174,13 @@ export const CronTasksTab: React.FC<CronTasksTabProps> = ({ nodes, onExecuteNow 
                   mb: 0.8,
                 }}
               >
-                <Typography
-                  variant="caption"
-                  sx={{ color: "#475569", fontWeight: 700 }}
-                >
+                <Typography variant="caption" sx={{ color: "#475569", fontWeight: 700 }}>
                   Selector JSON
                 </Typography>
                 <Typography
                   variant="caption"
                   sx={{
-                    color:
-                      selectorMatchedNodes.length > 0 ? "#059669" : "#D97706",
+                    color: selectorMatchedNodes.length > 0 ? "#059669" : "#D97706",
                   }}
                 >
                   {selectorMatchedNodes.length} node(s) match
@@ -1294,10 +1208,7 @@ export const CronTasksTab: React.FC<CronTasksTabProps> = ({ nodes, onExecuteNow 
               />
               <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.6, mt: 1 }}>
                 {selectorMatchedNodes.length === 0 ? (
-                  <Typography
-                    variant="caption"
-                    sx={{ color: "#94A3B8", fontStyle: "italic" }}
-                  >
+                  <Typography variant="caption" sx={{ color: "#94A3B8", fontStyle: "italic" }}>
                     No managed nodes match this selector.
                   </Typography>
                 ) : (
@@ -1318,13 +1229,9 @@ export const CronTasksTab: React.FC<CronTasksTabProps> = ({ nodes, onExecuteNow 
               </Box>
             </Box>
 
-            <Typography
-              variant="caption"
-              sx={{ color: "#64748B", display: "block", mt: 1 }}
-            >
-              * Cron tasks are executed solely by node agents. If a node does
-              not have an active agent, the task will automatically execute once
-              the agent comes online.
+            <Typography variant="caption" sx={{ color: "#64748B", display: "block", mt: 1 }}>
+              * Cron tasks are executed solely by node agents. If a node does not have an active agent, the task will
+              automatically execute once the agent comes online.
             </Typography>
           </Paper>
         </DialogContent>

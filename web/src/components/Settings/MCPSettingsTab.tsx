@@ -736,7 +736,7 @@ export const MCPSettingsTab: React.FC = () => {
               <Bot size={26} />
             </Box>
             <Box>
-              <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, flexWrap: "wrap" }}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
                 <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#0F172A", fontSize: "1.05rem" }}>
                   Model Context Protocol (MCP) Server
                 </Typography>
@@ -972,7 +972,7 @@ export const MCPSettingsTab: React.FC = () => {
                 or <code>?token=</code> query parameter.
               </Typography>
 
-              <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" }, gap: 2.5 }}>
+              <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" }, gap: 2 }}>
                 {/* 1. Full-Control Token */}
                 <Box
                   sx={{
@@ -982,7 +982,7 @@ export const MCPSettingsTab: React.FC = () => {
                     border: "1px solid #FECACA",
                     display: "flex",
                     flexDirection: "column",
-                    gap: 1.5,
+                    gap: 1,
                   }}
                 >
                   <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
@@ -1088,7 +1088,7 @@ export const MCPSettingsTab: React.FC = () => {
                     border: "1px solid #BAE6FD",
                     display: "flex",
                     flexDirection: "column",
-                    gap: 1.5,
+                    gap: 1,
                   }}
                 >
                   <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
@@ -1204,7 +1204,7 @@ export const MCPSettingsTab: React.FC = () => {
                   justifyContent: "space-between",
                   alignItems: "flex-start",
                   flexWrap: "wrap",
-                  gap: 1.5,
+                  gap: 1,
                 }}
               >
                 <Box>
@@ -1439,7 +1439,7 @@ export const MCPSettingsTab: React.FC = () => {
                     gap: 2,
                   }}
                 >
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                     <Box
                       sx={{
                         width: 36,
@@ -1465,7 +1465,7 @@ export const MCPSettingsTab: React.FC = () => {
                     </Box>
                   </Box>
 
-                  <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr 1fr" }, gap: 1.5 }}>
+                  <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr 1fr" }, gap: 1 }}>
                     <Box>
                       <Typography
                         variant="caption"
@@ -1657,7 +1657,7 @@ export const MCPSettingsTab: React.FC = () => {
                 }}
                 onClick={() => setShowToolsCatalog(!showToolsCatalog)}
               >
-                <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                   <Box
                     sx={{
                       width: 36,
@@ -1694,7 +1694,7 @@ export const MCPSettingsTab: React.FC = () => {
 
               {showToolsCatalog && (
                 <Box sx={{ mt: 3, pt: 2, borderTop: "1px solid #E2E8F0" }}>
-                  <Box sx={{ display: "flex", gap: 1.5, flexWrap: "wrap", mb: 2 }}>
+                  <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mb: 2 }}>
                     <TextField
                       size="small"
                       placeholder="Search tools..."
@@ -1722,7 +1722,7 @@ export const MCPSettingsTab: React.FC = () => {
                     sx={{
                       display: "grid",
                       gridTemplateColumns: { xs: "1fr", sm: "repeat(auto-fill, minmax(320px, 1fr))" },
-                      gap: 1.5,
+                      gap: 1,
                       maxHeight: 380,
                       overflowY: "auto",
                       pr: 0.5,

@@ -27,7 +27,25 @@ import {
   DialogContent,
   DialogActions,
 } from "@mui/material";
-import { CheckCircle2, XCircle, Play, RotateCw, Terminal, Server, HelpCircle, Tag, CheckCheck, Search, X, Code2, Plus, DownloadCloud, Trash2, ChevronDown, ChevronUp } from "lucide-react";
+import {
+  CheckCircle2,
+  XCircle,
+  Play,
+  RotateCw,
+  Terminal,
+  Server,
+  HelpCircle,
+  Tag,
+  CheckCheck,
+  Search,
+  X,
+  Code2,
+  Plus,
+  DownloadCloud,
+  Trash2,
+  ChevronDown,
+  ChevronUp,
+} from "lucide-react";
 import { api } from "../../api/client";
 import { Node, TaskMeta, TaskStatusResult, TaskRunResult } from "../../types/api";
 import { TaskSourceModal } from "./TaskSourceModal";
@@ -338,7 +356,8 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
     return selectableFilteredNodes.filter((n) => selectedSet.has(n.name)).length;
   }, [selectableFilteredNodes, selectedNodes]);
 
-  const isAllFilteredSelected = selectableFilteredNodes.length > 0 && selectedFilteredCount === selectableFilteredNodes.length;
+  const isAllFilteredSelected =
+    selectableFilteredNodes.length > 0 && selectedFilteredCount === selectableFilteredNodes.length;
   const isSomeFilteredSelected = selectedFilteredCount > 0 && selectedFilteredCount < selectableFilteredNodes.length;
 
   const toggleSelectNode = (name: string) => {
@@ -418,11 +437,7 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
   const isAnyChecking = Object.values(checkingNodes).some(Boolean);
   const isAnyRunning = Object.values(runningNodes).some(Boolean);
 
-  const canAutoSelect =
-    hasCheckedStatus &&
-    Object.keys(statuses).length > 0 &&
-    !isAnyChecking &&
-    !isAnyRunning;
+  const canAutoSelect = hasCheckedStatus && Object.keys(statuses).length > 0 && !isAnyChecking && !isAnyRunning;
 
   const needsExecutionCount = useMemo(() => {
     const targetPool = selectedTag === "All" ? managedNodes : filteredNodes;
@@ -550,7 +565,14 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
             flexShrink: 0,
           }}
         >
-          <Box sx={{ p: 1.5, pb: { xs: mobileTasksOpen ? 1 : 1.5, md: 1 }, borderBottom: { xs: mobileTasksOpen ? 1 : 0, md: 1 }, borderColor: "divider" }}>
+          <Box
+            sx={{
+              p: 1.5,
+              pb: { xs: mobileTasksOpen ? 1 : 1.5, md: 1 },
+              borderBottom: { xs: mobileTasksOpen ? 1 : 0, md: 1 },
+              borderColor: "divider",
+            }}
+          >
             <Box
               sx={{
                 display: "flex",
@@ -561,10 +583,19 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
               }}
               onClick={() => setMobileTasksOpen((prev) => !prev)}
             >
-              <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap", flex: 1, minWidth: 0, mr: 1 }}>
+              <Box
+                sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap", flex: 1, minWidth: 0, mr: 1 }}
+              >
                 <Typography
                   variant="subtitle2"
-                  sx={{ fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, color: "text.secondary", fontSize: "0.75rem", whiteSpace: "nowrap" }}
+                  sx={{
+                    fontWeight: 700,
+                    textTransform: "uppercase",
+                    letterSpacing: 0.5,
+                    color: "text.secondary",
+                    fontSize: "0.75rem",
+                    whiteSpace: "nowrap",
+                  }}
                 >
                   Tasks
                 </Typography>
@@ -640,7 +671,11 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
                   ),
                   endAdornment: taskFilter ? (
                     <InputAdornment position="end">
-                      <IconButton size="small" onClick={() => setTaskFilter("")} sx={{ p: 0.25, color: "text.secondary" }}>
+                      <IconButton
+                        size="small"
+                        onClick={() => setTaskFilter("")}
+                        sx={{ p: 0.25, color: "text.secondary" }}
+                      >
                         <X size={12} />
                       </IconButton>
                     </InputAdornment>
@@ -822,7 +857,12 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
                           <Chip
                             size="small"
                             label={task.category || "Custom"}
-                            sx={{ fontSize: "0.65rem", height: 18, bgcolor: "rgba(124, 58, 237, 0.1)", color: "#7c3aed" }}
+                            sx={{
+                              fontSize: "0.65rem",
+                              height: 18,
+                              bgcolor: "rgba(124, 58, 237, 0.1)",
+                              color: "#7c3aed",
+                            }}
                           />
                         </Box>
                         <Typography
@@ -901,7 +941,15 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
         </Box>
 
         {/* Right Main Area: Task Details, Node Selection & Status Matrix */}
-        <Box sx={{ flex: 1, display: "flex", flexDirection: "column", overflow: { xs: "visible", md: "hidden" }, minHeight: 0 }}>
+        <Box
+          sx={{
+            flex: 1,
+            display: "flex",
+            flexDirection: "column",
+            overflow: { xs: "visible", md: "hidden" },
+            minHeight: 0,
+          }}
+        >
           {isCustomTaskHelp ? (
             <CustomTaskHelp
               onRefreshTasks={loadTasks}
@@ -928,7 +976,7 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
                     flexDirection: { xs: "column", sm: "row" },
                     alignItems: { xs: "flex-start", sm: "center" },
                     justifyContent: "space-between",
-                    gap: 1.5,
+                    gap: 1,
                     mb: 1,
                   }}
                 >
@@ -951,7 +999,9 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
                       />
                     )}
                   </Box>
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 1, alignSelf: { xs: "flex-end", sm: "center" } }}>
+                  <Box
+                    sx={{ display: "flex", alignItems: "center", gap: 1, alignSelf: { xs: "flex-end", sm: "center" } }}
+                  >
                     {selectedTask.custom && (
                       <Button
                         size="small"
@@ -1002,8 +1052,8 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
                       }}
                     />
                     <Typography variant="caption" sx={{ color: "text.secondary" }}>
-                      Only {selectorMatchedNodes.length} of {managedNodes.length} managed device(s) match this task&apos;s
-                      selector. Other devices are disabled.
+                      Only {selectorMatchedNodes.length} of {managedNodes.length} managed device(s) match this
+                      task&apos;s selector. Other devices are disabled.
                     </Typography>
                   </Box>
                 )}
@@ -1022,7 +1072,7 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
                   flexDirection: { xs: "column", sm: "row" },
                   alignItems: { xs: "stretch", sm: "center" },
                   justifyContent: "space-between",
-                  gap: 1.5,
+                  gap: 1,
                   mb: 1.5,
                 }}
               >
@@ -1031,13 +1081,13 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "space-between",
-                    gap: 1.5,
+                    gap: 1,
                     flexWrap: "wrap",
                   }}
                 >
                   <Typography variant="subtitle2" sx={{ fontWeight: 700, fontSize: { xs: "0.8rem", sm: "0.875rem" } }}>
-                    Target Devices ({selectedNodes.length} / {hasSelector ? selectorMatchedNodes.length : managedNodes.length}{" "}
-                    selected)
+                    Target Devices ({selectedNodes.length} /{" "}
+                    {hasSelector ? selectorMatchedNodes.length : managedNodes.length} selected)
                   </Typography>
 
                   {/* Tag Filter Selector */}
@@ -1210,7 +1260,9 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
                         >
                           <TableCell padding="checkbox">
                             <Tooltip
-                              title={isEligible ? "" : "This device does not match the task selector and cannot be selected"}
+                              title={
+                                isEligible ? "" : "This device does not match the task selector and cannot be selected"
+                              }
                             >
                               <span>
                                 <Checkbox
@@ -1399,11 +1451,7 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
       </Paper>
 
       {/* Task Source Modal */}
-      <TaskSourceModal
-        open={sourceModalOpen}
-        onClose={() => setSourceModalOpen(false)}
-        task={selectedTask || null}
-      />
+      <TaskSourceModal open={sourceModalOpen} onClose={() => setSourceModalOpen(false)} task={selectedTask || null} />
 
       {/* Online Task Installer Modal */}
       <InstallTaskModal
@@ -1423,15 +1471,12 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
         <DialogTitle sx={{ fontWeight: 600 }}>Delete Custom Task?</DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="text.secondary">
-            Are you sure you want to delete custom task <strong>{confirmDeleteTask}</strong>? This will permanently delete the task directory and its scripts from the server.
+            Are you sure you want to delete custom task <strong>{confirmDeleteTask}</strong>? This will permanently
+            delete the task directory and its scripts from the server.
           </Typography>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button
-            onClick={() => setConfirmDeleteTask(null)}
-            disabled={deletingTask}
-            color="inherit"
-          >
+          <Button onClick={() => setConfirmDeleteTask(null)} disabled={deletingTask} color="inherit">
             Cancel
           </Button>
           <Button

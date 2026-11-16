@@ -46,7 +46,7 @@ export const TcpPingView: React.FC<TcpPingViewProps> = ({ tcpPing }) => {
   const remoteEstMtu = tcpPing.remote_mss ? tcpPing.remote_mss + totalOverhead : undefined;
 
   return (
-    <Box sx={{ display: "flex", flexDirection: "column", gap: 2.5 }}>
+    <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
       {/* Target & Resolution Summary Banner */}
       <Paper
         elevation={0}
@@ -59,10 +59,10 @@ export const TcpPingView: React.FC<TcpPingViewProps> = ({ tcpPing }) => {
           flexWrap: "wrap",
           alignItems: "center",
           justifyContent: "space-between",
-          gap: 1.5,
+          gap: 1,
         }}
       >
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, flexWrap: "wrap" }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
           <Box
             sx={{
               width: 36,
@@ -119,7 +119,7 @@ export const TcpPingView: React.FC<TcpPingViewProps> = ({ tcpPing }) => {
         sx={{
           display: "grid",
           gridTemplateColumns: { xs: "repeat(2, 1fr)", sm: "repeat(4, 1fr)" },
-          gap: 1.5,
+          gap: 1,
         }}
       >
         {/* Packet / Connection Loss */}
@@ -246,8 +246,10 @@ export const TcpPingView: React.FC<TcpPingViewProps> = ({ tcpPing }) => {
           }}
         >
           {/* Header */}
-          <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 1 }}>
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+          <Box
+            sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 1 }}
+          >
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
               <Box
                 sx={{
                   width: 34,
@@ -264,7 +266,10 @@ export const TcpPingView: React.FC<TcpPingViewProps> = ({ tcpPing }) => {
                 <Layers size={18} />
               </Box>
               <Box>
-                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0F172A", display: "flex", alignItems: "center", gap: 1 }}>
+                <Typography
+                  variant="subtitle2"
+                  sx={{ fontWeight: 700, color: "#0F172A", display: "flex", alignItems: "center", gap: 1 }}
+                >
                   TCP MSS Negotiation & MTU Analysis
                   <Tooltip title="Maximum Segment Size (MSS) negotiated during the TCP 3-way handshake. Helps identify Path MTU issues, tunnel encapsulation overhead, and firewall/router MSS clamping.">
                     <Info size={14} color="#94A3B8" style={{ cursor: "pointer" }} />

@@ -161,7 +161,7 @@ chmod +x ~/.config/easy42/tasks/hello_world/*.sh`;
         }}
       >
         <Box>
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, mb: 0.5 }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 0.5 }}>
             <Box
               sx={{
                 width: 38,
@@ -456,19 +456,18 @@ chmod +x ~/.config/easy42/tasks/hello_world/*.sh`;
             <strong>
               <code>env:&lt;NAME&gt;</code>
             </strong>{" "}
-            — requires an exact node metadata value. Supported variables include built-ins such as <code>NODE_NAME</code>,{" "}
-            <code>NODE_INTERFACE</code>, <code>NODE_IP</code>, <code>NODE_IP6</code>, <code>NODE_EXTERNAL_IP</code>,{" "}
-            <code>NODE_EXTERNAL_IP6</code>, <code>NODE_TAGS</code>, and <code>NODE_DATA_*</code> fields extracted from
-            the node Note <code>```json</code> block.
+            — requires an exact node metadata value. Supported variables include built-ins such as{" "}
+            <code>NODE_NAME</code>, <code>NODE_INTERFACE</code>, <code>NODE_IP</code>, <code>NODE_IP6</code>,{" "}
+            <code>NODE_EXTERNAL_IP</code>, <code>NODE_EXTERNAL_IP6</code>, <code>NODE_TAGS</code>, and{" "}
+            <code>NODE_DATA_*</code> fields extracted from the node Note <code>```json</code> block.
           </Typography>
         </Box>
 
         <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1, mt: 2, color: "#64748b" }}>
           <Info size={15} style={{ marginTop: 2, flexShrink: 0 }} />
           <Typography variant="caption" sx={{ lineHeight: 1.6 }}>
-            When multiple keys are present, <strong>all of them must match (AND)</strong>. If a selector key is
-            invalid, no node matches. Omit the <code>selector</code> field entirely to allow the task on every managed
-            node.
+            When multiple keys are present, <strong>all of them must match (AND)</strong>. If a selector key is invalid,
+            no node matches. Omit the <code>selector</code> field entirely to allow the task on every managed node.
           </Typography>
         </Box>
       </Paper>

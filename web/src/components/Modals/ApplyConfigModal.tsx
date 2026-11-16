@@ -604,10 +604,10 @@ export const ApplyConfigModal: React.FC<ApplyConfigModalProps> = ({
             flexDirection: { xs: "column", sm: "row" },
             alignItems: { xs: "flex-start", sm: "center" },
             justifyContent: "space-between",
-            gap: 1.5,
+            gap: 1,
           }}
         >
-          <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1.5, width: "100%" }}>
+          <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1, width: "100%" }}>
             <Box
               sx={{
                 width: 38,
@@ -759,7 +759,7 @@ export const ApplyConfigModal: React.FC<ApplyConfigModalProps> = ({
                 flexDirection: { xs: "column", sm: "row" },
                 alignItems: { xs: "stretch", sm: "center" },
                 justifyContent: "space-between",
-                gap: 1.5,
+                gap: 1,
               }}
             >
               <FormControl size="small" sx={{ minWidth: { xs: "100%", sm: 260 } }}>
@@ -813,7 +813,7 @@ export const ApplyConfigModal: React.FC<ApplyConfigModalProps> = ({
                 flexDirection: { xs: "column", sm: "row" },
                 alignItems: { xs: "stretch", sm: "center" },
                 justifyContent: "space-between",
-                gap: 1.5,
+                gap: 1,
               }}
             >
               <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
@@ -828,12 +828,12 @@ export const ApplyConfigModal: React.FC<ApplyConfigModalProps> = ({
                   display: "flex",
                   alignItems: { xs: "stretch", sm: "center" },
                   flexDirection: { xs: "column", sm: "row" },
-                  gap: 1.5,
+                  gap: 1,
                   flex: 1,
                   justifyContent: "flex-end",
                 }}
               >
-                <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                   <ToggleButtonGroup
                     size="small"
                     value={genType}
@@ -918,11 +918,7 @@ export const ApplyConfigModal: React.FC<ApplyConfigModalProps> = ({
                   variant="contained"
                   size="small"
                   disabled={
-                    genType === "node"
-                      ? !selectedGenNode
-                      : genType === "link"
-                      ? !selectedGenLink
-                      : !selectedGenApp
+                    genType === "node" ? !selectedGenNode : genType === "link" ? !selectedGenLink : !selectedGenApp
                   }
                   onClick={handleGenerateFromState}
                   startIcon={<Sparkles size={14} />}
@@ -968,7 +964,7 @@ export const ApplyConfigModal: React.FC<ApplyConfigModalProps> = ({
                 display: "flex",
                 flexDirection: { xs: "column", sm: "row" },
                 alignItems: { xs: "stretch", sm: "center" },
-                gap: 1.5,
+                gap: 1,
               }}
             >
               <Typography variant="body2" sx={{ fontWeight: 600, color: "#334155", minWidth: { xs: "auto", sm: 100 } }}>
@@ -1019,7 +1015,7 @@ export const ApplyConfigModal: React.FC<ApplyConfigModalProps> = ({
               </Box>
             ) : (
               <>
-                <Box sx={{ display: "flex", gap: 1.5, flexWrap: "wrap" }}>
+                <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
                   <Chip
                     label={`${previewResult.summary?.modified_nodes || 0} Nodes Modified`}
                     color="primary"
@@ -1048,11 +1044,7 @@ export const ApplyConfigModal: React.FC<ApplyConfigModalProps> = ({
                     />
                   )}
                   {previewResult.summary?.added_apps !== undefined && previewResult.summary.added_apps > 0 && (
-                    <Chip
-                      label={`${previewResult.summary.added_apps} Apps Added`}
-                      color="success"
-                      variant="outlined"
-                    />
+                    <Chip label={`${previewResult.summary.added_apps} Apps Added`} color="success" variant="outlined" />
                   )}
                   <Chip
                     label={`${previewResult.summary?.total_changes || 0} Total Attributes Changed`}
@@ -1279,7 +1271,7 @@ export const ApplyConfigModal: React.FC<ApplyConfigModalProps> = ({
                 </Typography>
               </Box>
             ) : (
-              <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+              <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
                 {(savedSnippets || []).map((s) => (
                   <Paper
                     key={s.id}
@@ -1290,7 +1282,7 @@ export const ApplyConfigModal: React.FC<ApplyConfigModalProps> = ({
                       flexDirection: { xs: "column", sm: "row" },
                       alignItems: { xs: "flex-start", sm: "center" },
                       justifyContent: "space-between",
-                      gap: 1.5,
+                      gap: 1,
                       "&:hover": { backgroundColor: "#F8FAFC" },
                     }}
                   >
@@ -1366,7 +1358,7 @@ export const ApplyConfigModal: React.FC<ApplyConfigModalProps> = ({
           flexDirection: { xs: "column", sm: "row" },
           alignItems: { xs: "stretch", sm: "center" },
           justifyContent: "space-between",
-          gap: 1.5,
+          gap: 1,
         }}
       >
         <FormControlLabel

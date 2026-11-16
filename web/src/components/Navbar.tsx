@@ -113,7 +113,7 @@ export const Navbar: React.FC<NavbarProps> = ({
     >
       <Toolbar sx={{ justifyContent: "space-between", minHeight: 64 }}>
         {/* Brand */}
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
           <Box
             sx={{
               display: "flex",
@@ -156,7 +156,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         </Box>
 
         {/* Mesh Stats & Tag Filter */}
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
           <Chip
             icon={<Server size={14} color="#4F46E5" />}
             label={selectedTag === "All" ? `${totalNodeCount} Nodes` : `${nodeCount}/${totalNodeCount} Nodes`}
@@ -249,7 +249,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         </Box>
 
         {/* Action Controls */}
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
           {/* Multiple Options Add Dropdown Menu */}
           <Button
             variant="outlined"

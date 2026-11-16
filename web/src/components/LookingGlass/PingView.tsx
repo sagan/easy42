@@ -17,13 +17,13 @@ export const PingView: React.FC<PingViewProps> = ({ ping }) => {
         : { bg: "#FEF2F2", text: "#991B1B", border: "#FECACA" };
 
   return (
-    <Box sx={{ display: "flex", flexDirection: "column", gap: 2.5 }}>
+    <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
       {/* KPI Cards Grid */}
       <Box
         sx={{
           display: "grid",
           gridTemplateColumns: { xs: "repeat(2, 1fr)", sm: "repeat(4, 1fr)" },
-          gap: 1.5,
+          gap: 1,
         }}
       >
         {/* Packet Loss Card */}

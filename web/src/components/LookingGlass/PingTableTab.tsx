@@ -21,17 +21,7 @@ import {
   ToggleButtonGroup,
   Alert,
 } from "@mui/material";
-import {
-  Play,
-  Square,
-  History,
-  Trash2,
-  Zap,
-  Network,
-  Download,
-  ChevronDown,
-  Check,
-} from "lucide-react";
+import { Play, Square, History, Trash2, Zap, Network, Download, ChevronDown, Check } from "lucide-react";
 import { api } from "../../api/client";
 import { Node, PingTableTask, PingTableTaskSummary, PingTableItem } from "../../types/api";
 import { ExportPingTableModal } from "./ExportPingTableModal";
@@ -140,11 +130,14 @@ export const PingTableTab: React.FC<PingTableTabProps> = ({ nodes }) => {
         const otherType: "e2e" | "link" = initialType === "e2e" ? "link" : "e2e";
         const otherLatest = (history || []).find((h) => h.latency_type === otherType);
         if (otherLatest && !taskCacheRef.current.has(otherLatest.id)) {
-          api.getPingTableTask(otherLatest.id).then((otherDetail) => {
-            if (otherDetail && !cancelled) {
-              taskCacheRef.current.set(otherLatest.id, otherDetail);
-            }
-          }).catch(() => {});
+          api
+            .getPingTableTask(otherLatest.id)
+            .then((otherDetail) => {
+              if (otherDetail && !cancelled) {
+                taskCacheRef.current.set(otherLatest.id, otherDetail);
+              }
+            })
+            .catch(() => {});
         }
       } catch (err: any) {
         if (!cancelled) {
@@ -360,15 +353,18 @@ export const PingTableTab: React.FC<PingTableTabProps> = ({ nodes }) => {
     }
   };
 
-
   // Matrix and metrics calculation
-  const matrixNodes = currentTask?.nodes && currentTask.nodes.length > 0
-    ? currentTask.nodes
-    : internalNodes.map((n) => n.name);
+  const matrixNodes =
+    currentTask?.nodes && currentTask.nodes.length > 0 ? currentTask.nodes : internalNodes.map((n) => n.name);
 
   const stats = useMemo(() => {
     if (!currentTask || !currentTask.results) {
-      return { totalValid: 0, avgLat: null as number | null, minLat: null as number | null, maxLat: null as number | null };
+      return {
+        totalValid: 0,
+        avgLat: null as number | null,
+        minLat: null as number | null,
+        maxLat: null as number | null,
+      };
     }
     const latencies: number[] = [];
 
@@ -399,12 +395,13 @@ export const PingTableTab: React.FC<PingTableTabProps> = ({ nodes }) => {
     };
   }, [currentTask, matrixNodes]);
 
-  const progressPercent = currentTask?.total_pairs && currentTask.total_pairs > 0
-    ? Math.round((currentTask.completed_pairs / currentTask.total_pairs) * 100)
-    : 0;
+  const progressPercent =
+    currentTask?.total_pairs && currentTask.total_pairs > 0
+      ? Math.round((currentTask.completed_pairs / currentTask.total_pairs) * 100)
+      : 0;
 
   return (
-    <Box sx={{ display: "flex", flexDirection: "column", gap: 2.5 }}>
+    <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
       {/* 1. Control & Configuration Card */}
       <Paper
         elevation={0}
@@ -472,7 +469,15 @@ export const PingTableTab: React.FC<PingTableTabProps> = ({ nodes }) => {
           </Box>
 
           {/* Action Buttons */}
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, flexWrap: "wrap", width: { xs: "100%", md: "auto" } }}>
+          <Box
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              gap: 1,
+              flexWrap: "wrap",
+              width: { xs: "100%", md: "auto" },
+            }}
+          >
             {/* History Dropdown Button */}
             <Button
               variant="outlined"
@@ -535,7 +540,7 @@ export const PingTableTab: React.FC<PingTableTabProps> = ({ nodes }) => {
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "space-between",
-                        gap: 1.5,
+                        gap: 1,
                         "&.Mui-selected": {
                           backgroundColor: "#EEF2FF",
                           "&:hover": {
@@ -574,7 +579,9 @@ export const PingTableTab: React.FC<PingTableTabProps> = ({ nodes }) => {
                         </Box>
                         <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
                           <Typography variant="caption" sx={{ fontSize: "0.7rem", color: "#64748B" }}>
-                            {isLatest ? dateText : `${item.node_count} nodes · ${item.completed_pairs}/${item.total_pairs} pairs`}
+                            {isLatest
+                              ? dateText
+                              : `${item.node_count} nodes · ${item.completed_pairs}/${item.total_pairs} pairs`}
                           </Typography>
                           {item.status !== "completed" && (
                             <Chip
@@ -714,7 +721,6 @@ export const PingTableTab: React.FC<PingTableTabProps> = ({ nodes }) => {
           </Box>
         )}
 
-
         {error && (
           <Alert severity="error" onClose={() => setError(null)} sx={{ mt: 1 }}>
             {error}
@@ -733,7 +739,8 @@ export const PingTableTab: React.FC<PingTableTabProps> = ({ nodes }) => {
               "& .MuiAlert-icon": { color: "#4F46E5" },
             }}
           >
-            No ping table measurements recorded yet. Select latency measurement type above and click <strong>Run Ping Table</strong> to measure cluster latencies in real time.
+            No ping table measurements recorded yet. Select latency measurement type above and click{" "}
+            <strong>Run Ping Table</strong> to measure cluster latencies in real time.
           </Alert>
         )}
       </Paper>
@@ -760,7 +767,9 @@ export const PingTableTab: React.FC<PingTableTabProps> = ({ nodes }) => {
             Completed / Total Pairs
           </Typography>
           <Typography variant="h6" sx={{ fontWeight: 700, color: "#0F172A", mt: 0.5 }}>
-            {currentTask ? `${currentTask.completed_pairs} / ${currentTask.total_pairs}` : `0 / ${matrixNodes.length >= 2 ? (matrixNodes.length * (matrixNodes.length - 1)) / 2 : 0}`}
+            {currentTask
+              ? `${currentTask.completed_pairs} / ${currentTask.total_pairs}`
+              : `0 / ${matrixNodes.length >= 2 ? (matrixNodes.length * (matrixNodes.length - 1)) / 2 : 0}`}
           </Typography>
         </Paper>
 
@@ -795,8 +804,16 @@ export const PingTableTab: React.FC<PingTableTabProps> = ({ nodes }) => {
           overflow: "hidden",
         }}
       >
-        <Box sx={{ p: 2, borderBottom: "1px solid #E2E8F0", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+        <Box
+          sx={{
+            p: 2,
+            borderBottom: "1px solid #E2E8F0",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+        >
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
             <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#0F172A" }}>
               {currentTask?.latency_type === "link" ? "Direct Link Latency Matrix" : "End-to-End Latency Matrix"}
             </Typography>
@@ -808,10 +825,10 @@ export const PingTableTab: React.FC<PingTableTabProps> = ({ nodes }) => {
                   currentTask.status === "completed"
                     ? "success"
                     : currentTask.status === "running"
-                    ? "primary"
-                    : currentTask.status === "cancelled"
-                    ? "warning"
-                    : "default"
+                      ? "primary"
+                      : currentTask.status === "cancelled"
+                        ? "warning"
+                        : "default"
                 }
                 variant="outlined"
                 sx={{ height: 22, fontSize: "0.72rem", fontWeight: 700 }}
@@ -820,25 +837,33 @@ export const PingTableTab: React.FC<PingTableTabProps> = ({ nodes }) => {
           </Box>
 
           {/* Color Scale Legend */}
-          <Box sx={{ display: { xs: "none", lg: "flex" }, alignItems: "center", gap: 1.5 }}>
+          <Box sx={{ display: { xs: "none", lg: "flex" }, alignItems: "center", gap: 1 }}>
             <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600 }}>
               Legend:
             </Typography>
             <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
               <Box sx={{ width: 12, height: 12, borderRadius: 0.5, bgcolor: "#ECFDF5", border: "1px solid #A7F3D0" }} />
-              <Typography variant="caption" sx={{ color: "#065F46", fontSize: "0.72rem" }}>&lt;30ms</Typography>
+              <Typography variant="caption" sx={{ color: "#065F46", fontSize: "0.72rem" }}>
+                &lt;30ms
+              </Typography>
             </Box>
             <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
               <Box sx={{ width: 12, height: 12, borderRadius: 0.5, bgcolor: "#F0F9FF", border: "1px solid #BAE6FD" }} />
-              <Typography variant="caption" sx={{ color: "#0369A1", fontSize: "0.72rem" }}>30-70ms</Typography>
+              <Typography variant="caption" sx={{ color: "#0369A1", fontSize: "0.72rem" }}>
+                30-70ms
+              </Typography>
             </Box>
             <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
               <Box sx={{ width: 12, height: 12, borderRadius: 0.5, bgcolor: "#FFFBEB", border: "1px solid #FDE68A" }} />
-              <Typography variant="caption" sx={{ color: "#B45309", fontSize: "0.72rem" }}>70-150ms</Typography>
+              <Typography variant="caption" sx={{ color: "#B45309", fontSize: "0.72rem" }}>
+                70-150ms
+              </Typography>
             </Box>
             <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
               <Box sx={{ width: 12, height: 12, borderRadius: 0.5, bgcolor: "#FEF2F2", border: "1px solid #FECACA" }} />
-              <Typography variant="caption" sx={{ color: "#B91C1C", fontSize: "0.72rem" }}>&gt;150ms</Typography>
+              <Typography variant="caption" sx={{ color: "#B91C1C", fontSize: "0.72rem" }}>
+                &gt;150ms
+              </Typography>
             </Box>
           </Box>
         </Box>
@@ -985,11 +1010,7 @@ const MatrixCell: React.FC<MatrixCellProps> = ({ fromNode, toNode, item, latency
           borderRight: "1px solid #E2E8F0",
         }}
       >
-        {isRunning ? (
-          <CircularProgress size={12} sx={{ color: "#4F46E5" }} />
-        ) : (
-          "—"
-        )}
+        {isRunning ? <CircularProgress size={12} sx={{ color: "#4F46E5" }} /> : "—"}
       </TableCell>
     );
   }
@@ -1035,13 +1056,37 @@ const MatrixCell: React.FC<MatrixCellProps> = ({ fromNode, toNode, item, latency
         {tooltipTitle}
       </Typography>
       <Box sx={{ mt: 0.5, color: "#E2E8F0" }}>
-        <div>Type: <strong>{latencyType === "link" ? "Direct Link" : "End-to-End"}</strong></div>
-        <div>Status: <strong>{item.status}</strong></div>
-        {item.latency_ms != null && <div>Latency: <strong>{item.latency_ms.toFixed(2)} ms</strong></div>}
-        {item.packet_loss_pct != null && <div>Packet Loss: <strong>{item.packet_loss_pct}%</strong></div>}
-        {item.target_ip && <div>Target IP: <code>{item.target_ip}</code></div>}
-        {item.interface && <div>Interface: <code>{item.interface}</code></div>}
-        {item.from_node && <div>Measured From: <strong>{item.from_node}</strong></div>}
+        <div>
+          Type: <strong>{latencyType === "link" ? "Direct Link" : "End-to-End"}</strong>
+        </div>
+        <div>
+          Status: <strong>{item.status}</strong>
+        </div>
+        {item.latency_ms != null && (
+          <div>
+            Latency: <strong>{item.latency_ms.toFixed(2)} ms</strong>
+          </div>
+        )}
+        {item.packet_loss_pct != null && (
+          <div>
+            Packet Loss: <strong>{item.packet_loss_pct}%</strong>
+          </div>
+        )}
+        {item.target_ip && (
+          <div>
+            Target IP: <code>{item.target_ip}</code>
+          </div>
+        )}
+        {item.interface && (
+          <div>
+            Interface: <code>{item.interface}</code>
+          </div>
+        )}
+        {item.from_node && (
+          <div>
+            Measured From: <strong>{item.from_node}</strong>
+          </div>
+        )}
         {item.error && <div style={{ color: "#FCA5A5", marginTop: 4 }}>Error: {item.error}</div>}
       </Box>
     </Box>

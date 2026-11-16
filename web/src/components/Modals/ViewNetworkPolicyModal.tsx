@@ -12,17 +12,7 @@ import {
   Alert,
   Divider,
 } from "@mui/material";
-import {
-  Shield,
-  X,
-  Lock,
-  Route,
-  Sliders,
-  Filter,
-  CheckCircle2,
-  XCircle,
-  FileCode,
-} from "lucide-react";
+import { Shield, X, Lock, Route, Sliders, Filter, CheckCircle2, XCircle, FileCode } from "lucide-react";
 import { NetworkPolicy } from "../../types/api";
 
 interface ViewNetworkPolicyModalProps {
@@ -39,12 +29,7 @@ const routingPolicyLabels: Record<string, string> = {
   advertise_only: "Advertise Only — Export local routes only, import none",
 };
 
-export const ViewNetworkPolicyModal: React.FC<ViewNetworkPolicyModalProps> = ({
-  open,
-  onClose,
-  policy,
-  onEdit,
-}) => {
+export const ViewNetworkPolicyModal: React.FC<ViewNetworkPolicyModalProps> = ({ open, onClose, policy, onEdit }) => {
   if (!policy) return null;
 
   const isBuiltin = policy.is_internal || policy.id === "default" || policy.id === "external";
@@ -90,7 +75,7 @@ export const ViewNetworkPolicyModal: React.FC<ViewNetworkPolicyModalProps> = ({
         </IconButton>
       </DialogTitle>
 
-      <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2.5, py: 2.5, px: 3 }}>
+      <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2, py: 2.5, px: 3 }}>
         {isBuiltin && (
           <Alert icon={<Lock size={16} />} severity="info" sx={{ py: 0.8, borderRadius: 2 }}>
             Built-in policies are managed by easy42 and are read-only.
@@ -142,7 +127,7 @@ export const ViewNetworkPolicyModal: React.FC<ViewNetworkPolicyModalProps> = ({
           sx={{
             display: "flex",
             flexDirection: "column",
-            gap: 1.5,
+            gap: 1,
             p: 2,
             borderRadius: 2,
             bgcolor: "#FFFFFF",
@@ -229,7 +214,7 @@ export const ViewNetworkPolicyModal: React.FC<ViewNetworkPolicyModalProps> = ({
           sx={{
             display: "flex",
             flexDirection: "column",
-            gap: 1.5,
+            gap: 1,
             p: 2,
             borderRadius: 2,
             bgcolor: "#F8FAFC",
@@ -285,7 +270,13 @@ export const ViewNetworkPolicyModal: React.FC<ViewNetworkPolicyModalProps> = ({
               {policy.disallowed_dst_cidrs && policy.disallowed_dst_cidrs.length > 0 ? (
                 <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5, mt: 0.5 }}>
                   {policy.disallowed_dst_cidrs.map((c, i) => (
-                    <Chip key={i} label={c} size="small" className="mono-font" sx={{ fontSize: "0.72rem", color: "#DC2626", bgcolor: "#FEF2F2" }} />
+                    <Chip
+                      key={i}
+                      label={c}
+                      size="small"
+                      className="mono-font"
+                      sx={{ fontSize: "0.72rem", color: "#DC2626", bgcolor: "#FEF2F2" }}
+                    />
                   ))}
                 </Box>
               ) : (
@@ -302,7 +293,13 @@ export const ViewNetworkPolicyModal: React.FC<ViewNetworkPolicyModalProps> = ({
               {policy.disallowed_src_cidrs && policy.disallowed_src_cidrs.length > 0 ? (
                 <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5, mt: 0.5 }}>
                   {policy.disallowed_src_cidrs.map((c, i) => (
-                    <Chip key={i} label={c} size="small" className="mono-font" sx={{ fontSize: "0.72rem", color: "#DC2626", bgcolor: "#FEF2F2" }} />
+                    <Chip
+                      key={i}
+                      label={c}
+                      size="small"
+                      className="mono-font"
+                      sx={{ fontSize: "0.72rem", color: "#DC2626", bgcolor: "#FEF2F2" }}
+                    />
                   ))}
                 </Box>
               ) : (
@@ -411,7 +408,10 @@ export const ViewNetworkPolicyModal: React.FC<ViewNetworkPolicyModalProps> = ({
                   <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600 }}>
                     ICMP (IPv4 Ping)
                   </Typography>
-                  <Typography variant="body2" sx={{ fontWeight: 600, color: policy.input_allow_icmp ? "#16A34A" : "#DC2626" }}>
+                  <Typography
+                    variant="body2"
+                    sx={{ fontWeight: 600, color: policy.input_allow_icmp ? "#16A34A" : "#DC2626" }}
+                  >
                     {policy.input_allow_icmp ? "Allowed" : "Blocked"}
                   </Typography>
                 </Box>
@@ -419,7 +419,10 @@ export const ViewNetworkPolicyModal: React.FC<ViewNetworkPolicyModalProps> = ({
                   <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600 }}>
                     ICMPv6 (IPv6 Ping & NDP)
                   </Typography>
-                  <Typography variant="body2" sx={{ fontWeight: 600, color: policy.input_allow_icmp6 ? "#16A34A" : "#DC2626" }}>
+                  <Typography
+                    variant="body2"
+                    sx={{ fontWeight: 600, color: policy.input_allow_icmp6 ? "#16A34A" : "#DC2626" }}
+                  >
                     {policy.input_allow_icmp6 ? "Allowed" : "Blocked"}
                   </Typography>
                 </Box>
@@ -435,7 +438,11 @@ export const ViewNetworkPolicyModal: React.FC<ViewNetworkPolicyModalProps> = ({
                   <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600 }}>
                     ALLOWED UDP PORTS
                   </Typography>
-                  <Typography variant="body2" className="mono-font" sx={{ color: policy.input_udp_ports?.length ? policy.input_udp_ports.join(", ") : "None" }}>
+                  <Typography
+                    variant="body2"
+                    className="mono-font"
+                    sx={{ color: policy.input_udp_ports?.length ? policy.input_udp_ports.join(", ") : "None" }}
+                  >
                     {policy.input_udp_ports?.length ? policy.input_udp_ports.join(", ") : "None"}
                   </Typography>
                 </Box>
@@ -457,7 +464,8 @@ export const ViewNetworkPolicyModal: React.FC<ViewNetworkPolicyModalProps> = ({
           ) : (
             <Alert severity="success" icon={<CheckCircle2 size={16} />} sx={{ py: 0.5, borderRadius: 2 }}>
               <Typography variant="body2" sx={{ fontSize: "0.85rem" }}>
-                Host firewall is disabled on this link — ICMP (IPv4 Ping), ICMPv6, and all TCP/UDP ports are <strong>unrestricted and allowed</strong>.
+                Host firewall is disabled on this link — ICMP (IPv4 Ping), ICMPv6, and all TCP/UDP ports are{" "}
+                <strong>unrestricted and allowed</strong>.
               </Typography>
             </Alert>
           )}
@@ -482,12 +490,17 @@ export const ViewNetworkPolicyModal: React.FC<ViewNetworkPolicyModalProps> = ({
         </Box>
 
         {/* Section 5: ROA, NAT & DSCP */}
-        {(policy.roa4 || policy.roa6 || policy.snat?.enabled || policy.forward_snat || policy.dscp_ingress !== undefined || policy.dscp_egress !== undefined) && (
+        {(policy.roa4 ||
+          policy.roa6 ||
+          policy.snat?.enabled ||
+          policy.forward_snat ||
+          policy.dscp_ingress !== undefined ||
+          policy.dscp_egress !== undefined) && (
           <Box
             sx={{
               display: "flex",
               flexDirection: "column",
-              gap: 1.5,
+              gap: 1,
               p: 2,
               borderRadius: 2,
               bgcolor: "#F8FAFC",
@@ -528,7 +541,9 @@ export const ViewNetworkPolicyModal: React.FC<ViewNetworkPolicyModalProps> = ({
                     ROA VALIDATION MODE
                   </Typography>
                   <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                    {policy.roa_strict ? "Strict (Rejects UNKNOWN)" : "Standard (Permits VALID & UNKNOWN, rejects INVALID)"}
+                    {policy.roa_strict
+                      ? "Strict (Rejects UNKNOWN)"
+                      : "Standard (Permits VALID & UNKNOWN, rejects INVALID)"}
                   </Typography>
                 </Box>
               )}
@@ -538,7 +553,8 @@ export const ViewNetworkPolicyModal: React.FC<ViewNetworkPolicyModalProps> = ({
                     OUTBOUND SNAT
                   </Typography>
                   <Typography variant="body2">
-                    Enabled (Condition: {policy.snat.condition || "not_dst"}, Target: {policy.snat.target || "masquerade"})
+                    Enabled (Condition: {policy.snat.condition || "not_dst"}, Target:{" "}
+                    {policy.snat.target || "masquerade"})
                   </Typography>
                 </Box>
               )}
@@ -572,7 +588,7 @@ export const ViewNetworkPolicyModal: React.FC<ViewNetworkPolicyModalProps> = ({
             sx={{
               display: "flex",
               flexDirection: "column",
-              gap: 1.5,
+              gap: 1,
               p: 2,
               borderRadius: 2,
               bgcolor: "#FFFFFF",

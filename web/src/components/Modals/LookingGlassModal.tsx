@@ -466,7 +466,7 @@ export const LookingGlassModal: React.FC<LookingGlassModalProps> = ({ nodes, ini
           p: { xs: 2, sm: 3 },
           display: "flex",
           flexDirection: "column",
-          gap: 2.5,
+          gap: 2,
         }}
       >
         {/* Navigation Tabs */}
@@ -533,7 +533,7 @@ export const LookingGlassModal: React.FC<LookingGlassModalProps> = ({ nodes, ini
                 backgroundColor: "#F8FAFC",
                 display: "flex",
                 flexDirection: "column",
-                gap: 1.5,
+                gap: 1,
               }}
             >
               <Box
@@ -845,7 +845,7 @@ export const LookingGlassModal: React.FC<LookingGlassModalProps> = ({ nodes, ini
 
             {/* Results Section */}
             {runResponse && (
-              <Box sx={{ mt: 1, display: "flex", flexDirection: "column", gap: 1.5 }}>
+              <Box sx={{ mt: 1, display: "flex", flexDirection: "column", gap: 1 }}>
                 <Divider />
 
                 {/* Node Result Tabs & View Mode Switch */}
@@ -966,7 +966,7 @@ export const LookingGlassModal: React.FC<LookingGlassModalProps> = ({ nodes, ini
 
         {/* Tab 2: Manage Tasks Catalog */}
         {activeTab === 2 && (
-          <Box sx={{ display: "flex", flexDirection: "column", gap: 2.5 }}>
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
             <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <Box>
                 <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#1E293B" }}>
@@ -1028,7 +1028,7 @@ export const LookingGlassModal: React.FC<LookingGlassModalProps> = ({ nodes, ini
                       display: "flex",
                       flexDirection: "column",
                       justifyContent: "space-between",
-                      gap: 1.5,
+                      gap: 1,
                       "&:hover": { borderColor: "#6366F1" },
                     }}
                   >

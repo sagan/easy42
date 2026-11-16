@@ -1064,7 +1064,7 @@ export const NodeDetailPage: React.FC = () => {
           flexDirection: "column",
           overflowY: "auto",
           p: { xs: 1.5, sm: 2.5, md: 3 },
-          gap: 2.5,
+          gap: 2,
         }}
       >
         {/* Navigation Breadcrumbs & Mobile Bar */}
@@ -1284,7 +1284,7 @@ export const NodeDetailPage: React.FC = () => {
             border: "1px solid #E2E8F0",
             display: "flex",
             flexDirection: "column",
-            gap: 2.5,
+            gap: 2,
             boxShadow: "0 4px 20px -2px rgba(15, 23, 42, 0.04)",
           }}
         >
@@ -1409,7 +1409,7 @@ export const NodeDetailPage: React.FC = () => {
                   )}
                 </Box>
 
-                <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, flexWrap: "wrap" }}>
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
                   <Typography
                     variant="body2"
                     className="mono-font"
@@ -1485,7 +1485,7 @@ export const NodeDetailPage: React.FC = () => {
               sx={{
                 display: "grid",
                 gridTemplateColumns: { xs: "1fr 1fr", sm: "repeat(4, 1fr)" },
-                gap: 1.5,
+                gap: 1,
                 pt: 1,
                 borderTop: "1px dashed #E2E8F0",
               }}
@@ -1691,7 +1691,7 @@ export const NodeDetailPage: React.FC = () => {
                   borderLeft: "4px solid #4F46E5",
                   display: "flex",
                   alignItems: "center",
-                  gap: 1.5,
+                  gap: 1,
                 }}
               >
                 <Info size={18} color="#4F46E5" style={{ flexShrink: 0 }} />
@@ -2059,7 +2059,7 @@ export const NodeDetailPage: React.FC = () => {
                     Host & Management Details
                   </Typography>
 
-                  <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+                  <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
                     {node.caption && node.caption.trim() !== "" && (
                       <>
                         <Box
@@ -2270,7 +2270,7 @@ export const NodeDetailPage: React.FC = () => {
                   <NodeNoteDataView note={node.note} />
                 </>
               ) : (
-                <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+                <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
                   {noteTab === "write" ? (
                     <TextField
                       fullWidth
@@ -2345,7 +2345,7 @@ export const NodeDetailPage: React.FC = () => {
                 gap: 2,
               }}
             >
-              <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                 <Activity size={20} color="#4F46E5" />
                 <Box>
                   <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0F172A" }}>
@@ -2357,7 +2357,7 @@ export const NodeDetailPage: React.FC = () => {
                 </Box>
               </Box>
 
-              <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, flexWrap: "wrap" }}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
                 {availableInterfaces.length > 0 && (
                   <Autocomplete
                     size="small"
@@ -3457,7 +3457,7 @@ export const NodeDetailPage: React.FC = () => {
                 border: "1px solid #E2E8F0",
                 display: "flex",
                 flexDirection: "column",
-                gap: 2.5,
+                gap: 2,
               }}
             >
               <Box
@@ -3466,10 +3466,10 @@ export const NodeDetailPage: React.FC = () => {
                   justifyContent: "space-between",
                   alignItems: "center",
                   flexWrap: "wrap",
-                  gap: 1.5,
+                  gap: 1,
                 }}
               >
-                <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                   <Box
                     sx={{
                       p: 1.2,
@@ -4012,7 +4012,7 @@ export const NodeDetailPage: React.FC = () => {
           sx={{
             display: "flex",
             alignItems: "center",
-            gap: 1.5,
+            gap: 1,
             borderBottom: "1px solid #E2E8F0",
           }}
         >

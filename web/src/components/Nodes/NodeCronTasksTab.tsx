@@ -193,7 +193,7 @@ export const NodeCronTasksTab: React.FC<NodeCronTasksTabProps> = ({ nodeName }) 
           </FormControl>
         </Box>
 
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, flexWrap: "wrap" }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
           {/* View mode buttons */}
           <ButtonGroup size="small" variant="outlined" sx={{ bgcolor: "#F8FAFC" }}>
             <Button

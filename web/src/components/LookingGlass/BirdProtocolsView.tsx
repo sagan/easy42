@@ -121,7 +121,7 @@ export const BirdProtocolsView: React.FC<BirdProtocolsViewProps> = ({ protocols 
           alignItems: "center",
           justifyContent: "space-between",
           flexWrap: "wrap",
-          gap: 1.5,
+          gap: 1,
           p: 1.5,
           borderRadius: 2,
           backgroundColor: "#F8FAFC",

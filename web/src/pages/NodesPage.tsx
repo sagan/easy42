@@ -140,10 +140,7 @@ export const NodesPage: React.FC = () => {
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      await Promise.all([
-        refreshFleetLive(true),
-        handleUpdateState(),
-      ]);
+      await Promise.all([refreshFleetLive(true), handleUpdateState()]);
     } catch {
       // Errors handled internally in refreshFleetLive & handleUpdateState
     } finally {
@@ -673,7 +670,16 @@ export const NodesPage: React.FC = () => {
   }, [filteredNodes, sortField, sortOrder, liveMap, nodeStatuses, nodeBlocksMap]);
 
   return (
-    <Box sx={{ width: "100%", boxSizing: "border-box", p: { xs: 1.5, sm: 2.5, md: 3 }, display: "flex", flexDirection: "column", gap: 2.5 }}>
+    <Box
+      sx={{
+        width: "100%",
+        boxSizing: "border-box",
+        p: { xs: 1.5, sm: 2.5, md: 3 },
+        display: "flex",
+        flexDirection: "column",
+        gap: 2,
+      }}
+    >
       {/* Fleet Overview Top Summary Banner */}
       <Grid container spacing={{ xs: 1.5, sm: 2 }}>
         <Grid item xs={12} sm={6} md={3}>
@@ -916,7 +922,7 @@ export const NodesPage: React.FC = () => {
           flexWrap: "wrap",
           alignItems: "center",
           justifyContent: "space-between",
-          gap: 1.5,
+          gap: 1,
           bgcolor: "#FFFFFF",
           p: 1.5,
           borderRadius: 2.5,

@@ -27,12 +27,7 @@ interface NodeMetricsDrawerProps {
   nodeLive?: NodeLiveStatus | null;
 }
 
-export const NodeMetricsDrawer: React.FC<NodeMetricsDrawerProps> = ({
-  open,
-  onClose,
-  nodeName,
-  nodeLive,
-}) => {
+export const NodeMetricsDrawer: React.FC<NodeMetricsDrawerProps> = ({ open, onClose, nodeName, nodeLive }) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const [range, setRange] = useState<string>("24h");
@@ -40,19 +35,22 @@ export const NodeMetricsDrawer: React.FC<NodeMetricsDrawerProps> = ({
   const [metricsFetchTime, setMetricsFetchTime] = useState<number>(() => Math.floor(Date.now() / 1000));
   const [points, setPoints] = useState<NodeMetricPoint[]>([]);
 
-  const fetchMetrics = useCallback(async (flush = false) => {
-    if (!nodeName) return;
-    setLoading(true);
-    try {
-      const res = await api.getNodeMetrics(nodeName, range, flush);
-      setPoints(res.points || []);
-      setMetricsFetchTime(Math.floor(Date.now() / 1000));
-    } catch {
-      setPoints([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [nodeName, range]);
+  const fetchMetrics = useCallback(
+    async (flush = false) => {
+      if (!nodeName) return;
+      setLoading(true);
+      try {
+        const res = await api.getNodeMetrics(nodeName, range, flush);
+        setPoints(res.points || []);
+        setMetricsFetchTime(Math.floor(Date.now() / 1000));
+      } catch {
+        setPoints([]);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [nodeName, range],
+  );
 
   useEffect(() => {
     if (open && nodeName) {
@@ -98,7 +96,7 @@ export const NodeMetricsDrawer: React.FC<NodeMetricsDrawerProps> = ({
     <Box sx={{ p: { xs: 2, sm: 3 }, height: "100%", display: "flex", flexDirection: "column" }}>
       {/* Header */}
       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
           <Box
             sx={{
               p: 1,
@@ -148,7 +146,16 @@ export const NodeMetricsDrawer: React.FC<NodeMetricsDrawerProps> = ({
       </Box>
 
       {/* Range Filter Buttons */}
-      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2.5, flexWrap: "wrap", gap: 1 }}>
+      <Box
+        sx={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          mb: 2.5,
+          flexWrap: "wrap",
+          gap: 1,
+        }}
+      >
         <Typography variant="body2" sx={{ fontWeight: 600, color: "#334155" }}>
           Telemetry Range
         </Typography>
@@ -199,7 +206,8 @@ export const NodeMetricsDrawer: React.FC<NodeMetricsDrawerProps> = ({
           <Grid item xs={6} sm={3}>
             <Box sx={{ p: 1.5, bgcolor: "#F8FAFC", borderRadius: 2, border: "1px solid #E2E8F0" }}>
               <Typography variant="caption" sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}>
-                <ArrowDown size={14} color="#059669" /> Inbound{nodeLive.primary_interface ? ` (${nodeLive.primary_interface})` : ""}
+                <ArrowDown size={14} color="#059669" /> Inbound
+                {nodeLive.primary_interface ? ` (${nodeLive.primary_interface})` : ""}
               </Typography>
               <Typography variant="h6" sx={{ fontWeight: 700, color: "#0F172A" }}>
                 {formatNetRate(nodeLive.metrics.net_rx_rate)}
@@ -209,7 +217,8 @@ export const NodeMetricsDrawer: React.FC<NodeMetricsDrawerProps> = ({
           <Grid item xs={6} sm={3}>
             <Box sx={{ p: 1.5, bgcolor: "#F8FAFC", borderRadius: 2, border: "1px solid #E2E8F0" }}>
               <Typography variant="caption" sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}>
-                <ArrowUp size={14} color="#0891B2" /> Outbound{nodeLive.primary_interface ? ` (${nodeLive.primary_interface})` : ""}
+                <ArrowUp size={14} color="#0891B2" /> Outbound
+                {nodeLive.primary_interface ? ` (${nodeLive.primary_interface})` : ""}
               </Typography>
               <Typography variant="h6" sx={{ fontWeight: 700, color: "#0F172A" }}>
                 {formatNetRate(nodeLive.metrics.net_tx_rate)}
@@ -252,7 +261,9 @@ export const NodeMetricsDrawer: React.FC<NodeMetricsDrawerProps> = ({
             />
 
             <MetricAreaChart
-              title={nodeLive?.primary_interface ? `Network Bandwidth (${nodeLive.primary_interface})` : "Network Bandwidth"}
+              title={
+                nodeLive?.primary_interface ? `Network Bandwidth (${nodeLive.primary_interface})` : "Network Bandwidth"
+              }
               data={netData}
               range={range}
               endTime={metricsFetchTime}

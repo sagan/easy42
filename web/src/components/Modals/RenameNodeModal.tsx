@@ -105,7 +105,7 @@ export const RenameNodeModal: React.FC<RenameNodeModalProps> = ({
           sx={{
             display: "flex",
             alignItems: "center",
-            gap: 1.5,
+            gap: 1,
             pb: 1.5,
             borderBottom: "1px solid #E2E8F0",
           }}

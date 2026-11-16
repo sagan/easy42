@@ -203,7 +203,7 @@ export const LinkKeyActionModal: React.FC<LinkKeyActionModalProps> = ({
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth sx={{ zIndex: 1400 }}>
-      <DialogTitle sx={{ display: "flex", alignItems: "center", gap: 1.5, pb: 1.5, borderBottom: "1px solid #E2E8F0" }}>
+      <DialogTitle sx={{ display: "flex", alignItems: "center", gap: 1, pb: 1.5, borderBottom: "1px solid #E2E8F0" }}>
         <Box
           sx={{
             width: 38,
@@ -229,7 +229,7 @@ export const LinkKeyActionModal: React.FC<LinkKeyActionModalProps> = ({
       </DialogTitle>
 
       <form onSubmit={handleSubmit}>
-        <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2.5, pt: 2.5 }}>
+        <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2, pt: 2.5 }}>
           {error && (
             <Alert severity="error" sx={{ borderRadius: 2 }}>
               {error}

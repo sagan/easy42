@@ -263,7 +263,7 @@ export const EventsPage: React.FC = () => {
         p: { xs: 1.5, sm: 2.5, md: 3 },
         display: "flex",
         flexDirection: "column",
-        gap: 2.5,
+        gap: 2,
       }}
     >
       {/* Top Header Bar */}
@@ -277,7 +277,7 @@ export const EventsPage: React.FC = () => {
         }}
       >
         <Box>
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
             <Box
               sx={{
                 width: 40,
@@ -409,7 +409,7 @@ export const EventsPage: React.FC = () => {
             bgcolor: "#FFFFFF",
             display: "flex",
             alignItems: "center",
-            gap: 1.5,
+            gap: 1,
           }}
         >
           <Box
@@ -445,7 +445,7 @@ export const EventsPage: React.FC = () => {
             bgcolor: "#FFFFFF",
             display: "flex",
             alignItems: "center",
-            gap: 1.5,
+            gap: 1,
           }}
         >
           <Box
@@ -481,7 +481,7 @@ export const EventsPage: React.FC = () => {
             bgcolor: "#FFFFFF",
             display: "flex",
             alignItems: "center",
-            gap: 1.5,
+            gap: 1,
           }}
         >
           <Box
@@ -517,7 +517,7 @@ export const EventsPage: React.FC = () => {
             bgcolor: "#FFFFFF",
             display: "flex",
             alignItems: "center",
-            gap: 1.5,
+            gap: 1,
           }}
         >
           <Box
@@ -744,7 +744,7 @@ export const EventsPage: React.FC = () => {
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "space-between",
-                      gap: 1.5,
+                      gap: 1,
                       flexWrap: "wrap",
                     }}
                   >
@@ -864,7 +864,7 @@ export const EventsPage: React.FC = () => {
                         borderColor: isUnread ? "rgba(245, 158, 11, 0.25)" : "#E2E8F0",
                         display: "flex",
                         alignItems: "center",
-                        gap: 1.5,
+                        gap: 1,
                         flexWrap: "wrap",
                         fontSize: "0.78rem",
                       }}

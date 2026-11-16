@@ -56,7 +56,7 @@ export const BirdRouteView: React.FC<BirdRouteViewProps> = ({ routeResult, onQue
           border: "1px solid #E2E8F0",
         }}
       >
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
           <Network size={18} color="#4F46E5" />
           <Typography variant="subtitle2" sx={{ fontWeight: 600, color: "#1E293B" }}>
             Query Target:{" "}
@@ -90,14 +90,14 @@ export const BirdRouteView: React.FC<BirdRouteViewProps> = ({ routeResult, onQue
             boxShadow: route.best ? "0 4px 14px rgba(99, 102, 241, 0.08)" : "none",
             display: "flex",
             flexDirection: "column",
-            gap: 1.5,
+            gap: 1,
           }}
         >
           {/* Top Bar: Prefix, Best Badge, Protocol, Metric */}
           <Box
             sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 1 }}
           >
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
               <Typography
                 variant="h6"
                 sx={{

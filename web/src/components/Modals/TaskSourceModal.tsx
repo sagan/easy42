@@ -15,16 +15,7 @@ import {
   useTheme,
   useMediaQuery,
 } from "@mui/material";
-import {
-  Code2,
-  FileCode,
-  FileText,
-  Copy,
-  Check,
-  X,
-  Layers,
-  Sparkles,
-} from "lucide-react";
+import { Code2, FileCode, FileText, Copy, Check, X, Layers, Sparkles } from "lucide-react";
 import { api } from "../../api/client";
 import { TaskMeta, TaskSourceFile } from "../../types/api";
 
@@ -131,7 +122,7 @@ export const TaskSourceModal: React.FC<TaskSourceModalProps> = ({ open, onClose,
           bgcolor: "background.paper",
         }}
       >
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, minWidth: 0 }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1, minWidth: 0 }}>
           <Box
             sx={{
               width: 36,
@@ -182,7 +173,9 @@ export const TaskSourceModal: React.FC<TaskSourceModalProps> = ({ open, onClose,
       </DialogTitle>
 
       {/* Dialog Body */}
-      <DialogContent sx={{ p: 0, display: "flex", flexDirection: { xs: "column", md: "row" }, overflow: "hidden", flex: 1 }}>
+      <DialogContent
+        sx={{ p: 0, display: "flex", flexDirection: { xs: "column", md: "row" }, overflow: "hidden", flex: 1 }}
+      >
         {/* Left Sidebar: File List (Desktop) */}
         <Box
           sx={{
@@ -198,7 +191,15 @@ export const TaskSourceModal: React.FC<TaskSourceModalProps> = ({ open, onClose,
           <Box sx={{ p: 1.5, pb: 1 }}>
             <Typography
               variant="caption"
-              sx={{ fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, color: "#64748B", px: 1, display: "block", mb: 0.5 }}
+              sx={{
+                fontWeight: 700,
+                textTransform: "uppercase",
+                letterSpacing: 0.5,
+                color: "#64748B",
+                px: 1,
+                display: "block",
+                mb: 0.5,
+              }}
             >
               Source Files
             </Typography>
@@ -217,7 +218,10 @@ export const TaskSourceModal: React.FC<TaskSourceModalProps> = ({ open, onClose,
               {/* Task Scripts */}
               {taskFiles.length > 0 && (
                 <>
-                  <Typography variant="caption" sx={{ fontSize: "0.68rem", fontWeight: 700, color: "#94A3B8", px: 1, pt: 0.5 }}>
+                  <Typography
+                    variant="caption"
+                    sx={{ fontSize: "0.68rem", fontWeight: 700, color: "#94A3B8", px: 1, pt: 0.5 }}
+                  >
                     Task Scripts
                   </Typography>
                   {taskFiles.map((f) => {
@@ -269,7 +273,10 @@ export const TaskSourceModal: React.FC<TaskSourceModalProps> = ({ open, onClose,
               {/* Shared Scripts */}
               {sharedFiles.length > 0 && (
                 <>
-                  <Typography variant="caption" sx={{ fontSize: "0.68rem", fontWeight: 700, color: "#94A3B8", px: 1, pt: 1.5 }}>
+                  <Typography
+                    variant="caption"
+                    sx={{ fontSize: "0.68rem", fontWeight: 700, color: "#94A3B8", px: 1, pt: 1.5 }}
+                  >
                     Shared Libraries
                   </Typography>
                   {sharedFiles.map((f) => {
@@ -332,7 +339,10 @@ export const TaskSourceModal: React.FC<TaskSourceModalProps> = ({ open, onClose,
               {/* Configuration Files */}
               {configFiles.length > 0 && (
                 <>
-                  <Typography variant="caption" sx={{ fontSize: "0.68rem", fontWeight: 700, color: "#94A3B8", px: 1, pt: 1.5 }}>
+                  <Typography
+                    variant="caption"
+                    sx={{ fontSize: "0.68rem", fontWeight: 700, color: "#94A3B8", px: 1, pt: 1.5 }}
+                  >
                     Configuration
                   </Typography>
                   {configFiles.map((f) => {
@@ -385,7 +395,16 @@ export const TaskSourceModal: React.FC<TaskSourceModalProps> = ({ open, onClose,
         </Box>
 
         {/* Right Main Area: Code Viewer */}
-        <Box sx={{ flex: 1, display: "flex", flexDirection: "column", bgcolor: "#0B0F19", minWidth: 0, overflow: "hidden" }}>
+        <Box
+          sx={{
+            flex: 1,
+            display: "flex",
+            flexDirection: "column",
+            bgcolor: "#0B0F19",
+            minWidth: 0,
+            overflow: "hidden",
+          }}
+        >
           {/* Mobile Horizontal File Switcher */}
           {sources.length > 0 && (
             <Box
@@ -472,7 +491,16 @@ export const TaskSourceModal: React.FC<TaskSourceModalProps> = ({ open, onClose,
           )}
 
           {loading ? (
-            <Box sx={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 2 }}>
+            <Box
+              sx={{
+                flex: 1,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 2,
+              }}
+            >
               <CircularProgress size={32} />
               <Typography variant="body2" sx={{ color: "#94A3B8" }}>
                 Loading source code...
@@ -559,7 +587,8 @@ export const TaskSourceModal: React.FC<TaskSourceModalProps> = ({ open, onClose,
                   overflow: "auto",
                   display: "flex",
                   p: { xs: 1.5, sm: 2 },
-                  fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
+                  fontFamily:
+                    "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
                   fontSize: { xs: "0.75rem", sm: "0.82rem" },
                   lineHeight: "1.55",
                 }}
@@ -609,7 +638,9 @@ export const TaskSourceModal: React.FC<TaskSourceModalProps> = ({ open, onClose,
       </DialogContent>
 
       {/* Dialog Footer */}
-      <DialogActions sx={{ px: { xs: 2, sm: 2.5 }, py: 1.25, borderTop: "1px solid #E2E8F0", bgcolor: "background.paper" }}>
+      <DialogActions
+        sx={{ px: { xs: 2, sm: 2.5 }, py: 1.25, borderTop: "1px solid #E2E8F0", bgcolor: "background.paper" }}
+      >
         <Button onClick={onClose} variant="outlined" sx={{ color: "text.secondary", borderColor: "divider" }}>
           Close
         </Button>

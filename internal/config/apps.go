@@ -18,7 +18,7 @@ type App struct {
 	Note        string            `json:"note,omitempty"` // Markdown format text note
 	URL         string            `json:"url,omitempty" yaml:"url,omitempty"`
 	Version     string            `json:"version,omitempty" yaml:"version,omitempty"`
-	AppType     string            `json:"app_type"`              // "docker", "systemd", or "cron"
+	AppType     string            `json:"app_type"`              // "docker", "systemd", "script", or "cron"
 	MainContent string            `json:"main_content"`          // compose.yaml or service unit
 	EnvContent  string            `json:"env_content,omitempty"` // .env content KEY=VAL
 	Files       map[string]string `json:"files,omitempty"`       // relative_filename -> content

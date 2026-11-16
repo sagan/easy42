@@ -1,14 +1,5 @@
 import React from "react";
-import {
-  Drawer,
-  Box,
-  Typography,
-  IconButton,
-  Chip,
-  Divider,
-  Tooltip,
-  Button,
-} from "@mui/material";
+import { Drawer, Box, Typography, IconButton, Chip, Divider, Tooltip, Button } from "@mui/material";
 import {
   X,
   Layers,
@@ -75,7 +66,8 @@ export const AppDetailsDrawer: React.FC<AppDetailsDrawerProps> = ({
   if (!app) return null;
 
   const displayUrl = homepageUrl !== undefined ? homepageUrl : app.url;
-  const isClickable = homepageClickable !== undefined ? homepageClickable : !!displayUrl && /^https?:\/\//i.test(displayUrl);
+  const isClickable =
+    homepageClickable !== undefined ? homepageClickable : !!displayUrl && /^https?:\/\//i.test(displayUrl);
   const fileEntries = Object.entries(app.files || {});
   const selectorEntries = Object.entries(app.selector || {});
 
@@ -95,7 +87,7 @@ export const AppDetailsDrawer: React.FC<AppDetailsDrawerProps> = ({
     >
       {/* Header */}
       <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 2 }}>
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, minWidth: 0 }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1, minWidth: 0 }}>
           <Box
             sx={{
               width: 38,
@@ -148,9 +140,9 @@ export const AppDetailsDrawer: React.FC<AppDetailsDrawerProps> = ({
 
       <Divider sx={{ borderColor: "#E2E8F0", mb: 2.5 }} />
 
-      <Box sx={{ display: "flex", flexDirection: "column", gap: 2.5 }}>
+      <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
         {/* Identity & Status */}
-        <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+        <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
           <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
             <Chip
               size="small"
@@ -257,7 +249,10 @@ export const AppDetailsDrawer: React.FC<AppDetailsDrawerProps> = ({
           {displayUrl && (
             <Box sx={{ p: 1.5, bgcolor: "#F8FAFC", borderRadius: 2, border: "1px solid #E2E8F0" }}>
               <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1, mb: 0.5 }}>
-                <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 700, display: "flex", alignItems: "center", gap: 0.5 }}>
+                <Typography
+                  variant="caption"
+                  sx={{ color: "#64748B", fontWeight: 700, display: "flex", alignItems: "center", gap: 0.5 }}
+                >
                   <Globe size={12} /> HOMEPAGE URL
                 </Typography>
                 <Tooltip title={copied === "url" ? "Copied!" : "Copy URL"}>
@@ -293,7 +288,11 @@ export const AppDetailsDrawer: React.FC<AppDetailsDrawerProps> = ({
                   <ExternalLink size={13} />
                 </Box>
               ) : (
-                <Typography variant="body2" className="mono-font" sx={{ color: "#334155", fontSize: "0.8rem", wordBreak: "break-all" }}>
+                <Typography
+                  variant="body2"
+                  className="mono-font"
+                  sx={{ color: "#334155", fontSize: "0.8rem", wordBreak: "break-all" }}
+                >
                   {displayUrl}
                 </Typography>
               )}
@@ -302,16 +301,28 @@ export const AppDetailsDrawer: React.FC<AppDetailsDrawerProps> = ({
 
           {/* Target Nodes */}
           <Box sx={{ p: 1.5, bgcolor: "#F8FAFC", borderRadius: 2, border: "1px solid #E2E8F0" }}>
-            <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 700, display: "flex", alignItems: "center", gap: 0.5, mb: 0.8 }}>
+            <Typography
+              variant="caption"
+              sx={{ color: "#64748B", fontWeight: 700, display: "flex", alignItems: "center", gap: 0.5, mb: 0.8 }}
+            >
               <Tag size={12} /> TARGET NODES
               {targetModeLabel && (
-                <Chip size="small" label={targetModeLabel} sx={{ height: 18, fontSize: "0.65rem", fontWeight: 700, ml: 1 }} />
+                <Chip
+                  size="small"
+                  label={targetModeLabel}
+                  sx={{ height: 18, fontSize: "0.65rem", fontWeight: 700, ml: 1 }}
+                />
               )}
             </Typography>
             {targetNodeNames && targetNodeNames.length > 0 ? (
               <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
                 {targetNodeNames.map((n) => (
-                  <Chip key={n} label={n} size="small" sx={{ height: 22, fontSize: "0.72rem", fontWeight: 600, bgcolor: "#EEF2FF", color: "#4338CA" }} />
+                  <Chip
+                    key={n}
+                    label={n}
+                    size="small"
+                    sx={{ height: 22, fontSize: "0.72rem", fontWeight: 600, bgcolor: "#EEF2FF", color: "#4338CA" }}
+                  />
                 ))}
               </Box>
             ) : (
@@ -321,7 +332,9 @@ export const AppDetailsDrawer: React.FC<AppDetailsDrawerProps> = ({
             )}
             {selectorEntries.length > 0 && (
               <Box sx={{ mt: 1 }}>
-                <Typography variant="caption" sx={{ color: "#94A3B8", fontWeight: 600 }}>Selector:</Typography>
+                <Typography variant="caption" sx={{ color: "#94A3B8", fontWeight: 600 }}>
+                  Selector:
+                </Typography>
                 <Box
                   component="pre"
                   sx={{
@@ -404,8 +417,18 @@ export const AppDetailsDrawer: React.FC<AppDetailsDrawerProps> = ({
         </Box>
 
         {/* Definition */}
-        <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
-          <Typography variant="caption" sx={{ color: "#475569", fontWeight: 700, letterSpacing: "0.5px", display: "flex", alignItems: "center", gap: 0.8 }}>
+        <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+          <Typography
+            variant="caption"
+            sx={{
+              color: "#475569",
+              fontWeight: 700,
+              letterSpacing: "0.5px",
+              display: "flex",
+              alignItems: "center",
+              gap: 0.8,
+            }}
+          >
             <FileCode size={14} color="#4F46E5" /> DEFINITION
           </Typography>
 
@@ -471,11 +494,18 @@ export const AppDetailsDrawer: React.FC<AppDetailsDrawerProps> = ({
           {app.artifact && (
             <Box sx={{ p: 2, bgcolor: "#F8FAFC", borderRadius: 2, border: "1px solid #E2E8F0" }}>
               <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1.5 }}>
-                <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 700, display: "flex", alignItems: "center", gap: 0.8 }}>
+                <Typography
+                  variant="caption"
+                  sx={{ color: "#64748B", fontWeight: 700, display: "flex", alignItems: "center", gap: 0.8 }}
+                >
                   <Package size={14} color="#4F46E5" /> ARTIFACT MANAGEMENT
                 </Typography>
                 {app.version && (
-                  <Chip size="small" label={`v: ${app.version}`} sx={{ height: 20, fontSize: "0.68rem", fontWeight: 700, bgcolor: "#EEF2FF", color: "#4F46E5" }} />
+                  <Chip
+                    size="small"
+                    label={`v: ${app.version}`}
+                    sx={{ height: 20, fontSize: "0.68rem", fontWeight: 700, bgcolor: "#EEF2FF", color: "#4F46E5" }}
+                  />
                 )}
               </Box>
 
@@ -484,7 +514,11 @@ export const AppDetailsDrawer: React.FC<AppDetailsDrawerProps> = ({
                   <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600, display: "block" }}>
                     URL Template:
                   </Typography>
-                  <Typography variant="body2" className="mono-font" sx={{ color: "#334155", fontSize: "0.75rem", wordBreak: "break-all" }}>
+                  <Typography
+                    variant="body2"
+                    className="mono-font"
+                    sx={{ color: "#334155", fontSize: "0.75rem", wordBreak: "break-all" }}
+                  >
                     {app.artifact.url}
                   </Typography>
                 </Box>
@@ -496,7 +530,8 @@ export const AppDetailsDrawer: React.FC<AppDetailsDrawerProps> = ({
                     Resolver ({app.artifact.resolver.type}):
                   </Typography>
                   <Typography variant="body2" className="mono-font" sx={{ color: "#334155", fontSize: "0.75rem" }}>
-                    Repo: <strong>{app.artifact.resolver.repo}</strong> {app.artifact.resolver.version && `(tag: ${app.artifact.resolver.version})`}
+                    Repo: <strong>{app.artifact.resolver.repo}</strong>{" "}
+                    {app.artifact.resolver.version && `(tag: ${app.artifact.resolver.version})`}
                   </Typography>
                   {app.artifact.resolver.asset_pattern && (
                     <Typography variant="caption" className="mono-font" sx={{ color: "#64748B" }}>
@@ -515,16 +550,32 @@ export const AppDetailsDrawer: React.FC<AppDetailsDrawerProps> = ({
                     {app.artifact.files.map((f, i) => (
                       <Box key={i} sx={{ p: 1, bgcolor: "#FFFFFF", borderRadius: 1.5, border: "1px solid #E2E8F0" }}>
                         <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                          <Typography variant="caption" className="mono-font" sx={{ fontWeight: 700, color: "#0F172A" }}>
+                          <Typography
+                            variant="caption"
+                            className="mono-font"
+                            sx={{ fontWeight: 700, color: "#0F172A" }}
+                          >
                             {f.name}
                           </Typography>
-                          <Chip size="small" label={f.pull_policy || "if_changed"} sx={{ height: 18, fontSize: "0.62rem" }} />
+                          <Chip
+                            size="small"
+                            label={f.pull_policy || "if_changed"}
+                            sx={{ height: 18, fontSize: "0.62rem" }}
+                          />
                         </Box>
-                        <Typography variant="caption" className="mono-font" sx={{ color: "#475569", display: "block", mt: 0.3 }}>
+                        <Typography
+                          variant="caption"
+                          className="mono-font"
+                          sx={{ color: "#475569", display: "block", mt: 0.3 }}
+                        >
                           Target: {f.target_path}
                         </Typography>
                         {f.extract_path && (
-                          <Typography variant="caption" className="mono-font" sx={{ color: "#94A3B8", display: "block" }}>
+                          <Typography
+                            variant="caption"
+                            className="mono-font"
+                            sx={{ color: "#94A3B8", display: "block" }}
+                          >
                             Extract: {f.extract_path}
                           </Typography>
                         )}

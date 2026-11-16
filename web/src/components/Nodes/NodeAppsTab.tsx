@@ -116,7 +116,9 @@ export const NodeAppsTab: React.FC<NodeAppsTabProps> = ({ nodeName }) => {
       const res = await api.triggerNodeAppAction(nodeName, appName, action, appType);
       if (!res.success) {
         setActionError(
-          res.stderr?.trim() || res.stdout?.trim() || `Failed to ${action} app '${appName}' (exit code ${res.exit_code})`
+          res.stderr?.trim() ||
+            res.stdout?.trim() ||
+            `Failed to ${action} app '${appName}' (exit code ${res.exit_code})`,
         );
       }
       await loadNodeApps(true);
@@ -181,14 +183,20 @@ export const NodeAppsTab: React.FC<NodeAppsTabProps> = ({ nodeName }) => {
             Live status of Easy42 managed apps running on {nodeName}
           </Typography>
         </Box>
-        <Box sx={{ display: "flex", gap: 1.5 }}>
+        <Box sx={{ display: "flex", gap: 1 }}>
           <Button
             size="small"
             variant="outlined"
             startIcon={<RefreshCw size={14} className={refreshing ? "animate-spin" : ""} />}
             onClick={() => loadNodeApps(true)}
             disabled={refreshing}
-            sx={{ textTransform: "none", fontWeight: 600, fontSize: "0.8rem", color: "#475569", borderColor: "#CBD5E1" }}
+            sx={{
+              textTransform: "none",
+              fontWeight: 600,
+              fontSize: "0.8rem",
+              color: "#475569",
+              borderColor: "#CBD5E1",
+            }}
           >
             Refresh
           </Button>
@@ -213,7 +221,9 @@ export const NodeAppsTab: React.FC<NodeAppsTabProps> = ({ nodeName }) => {
 
       {appsDisabled && (
         <Alert severity="warning" sx={{ mb: 2.5, fontWeight: 500 }}>
-          App management is disabled on this node (<code>disable_apps: true</code> in <code>/etc/easy42/agent.json</code>). Easy42 will not deploy or sync apps to this node, and app actions cannot be triggered.
+          App management is disabled on this node (<code>disable_apps: true</code> in{" "}
+          <code>/etc/easy42/agent.json</code>). Easy42 will not deploy or sync apps to this node, and app actions cannot
+          be triggered.
         </Alert>
       )}
 
@@ -259,7 +269,10 @@ export const NodeAppsTab: React.FC<NodeAppsTabProps> = ({ nodeName }) => {
           <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#1E293B", mb: 0.5 }}>
             No Workloads Assigned to this Node
           </Typography>
-          <Typography variant="body2" sx={{ color: "#64748B", maxWidth: 440, mx: "auto", mb: 2.5, fontSize: "0.85rem" }}>
+          <Typography
+            variant="body2"
+            sx={{ color: "#64748B", maxWidth: 440, mx: "auto", mb: 2.5, fontSize: "0.85rem" }}
+          >
             Assign this node to one or more Docker Compose or Native Systemd apps in the top-level Apps page.
           </Typography>
           <Button
@@ -305,17 +318,8 @@ export const NodeAppsTab: React.FC<NodeAppsTabProps> = ({ nodeName }) => {
                         height: 44,
                         borderRadius: "10px",
                         bgcolor:
-                          app.app_type === "docker"
-                            ? "#E0F2FE"
-                            : app.app_type === "cron"
-                            ? "#FEF3C7"
-                            : "#F3E8FF",
-                        color:
-                          app.app_type === "docker"
-                            ? "#0284C7"
-                            : app.app_type === "cron"
-                            ? "#D97706"
-                            : "#9333EA",
+                          app.app_type === "docker" ? "#E0F2FE" : app.app_type === "cron" ? "#FEF3C7" : "#F3E8FF",
+                        color: app.app_type === "docker" ? "#0284C7" : app.app_type === "cron" ? "#D97706" : "#9333EA",
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
@@ -357,42 +361,29 @@ export const NodeAppsTab: React.FC<NodeAppsTabProps> = ({ nodeName }) => {
                         </Tooltip>
                         <Chip
                           size="small"
-                          label={
-                            app.app_type === "docker"
-                              ? "Docker"
-                              : app.app_type === "cron"
-                              ? "Cron"
-                              : "Systemd"
-                          }
+                          label={app.app_type === "docker" ? "Docker" : app.app_type === "cron" ? "Cron" : "Systemd"}
                           sx={{
                             height: 20,
                             fontSize: "0.68rem",
                             fontWeight: 700,
                             bgcolor:
-                              app.app_type === "docker"
-                                ? "#E0F2FE"
-                                : app.app_type === "cron"
-                                ? "#FEF3C7"
-                                : "#F3E8FF",
+                              app.app_type === "docker" ? "#E0F2FE" : app.app_type === "cron" ? "#FEF3C7" : "#F3E8FF",
                             color:
-                              app.app_type === "docker"
-                                ? "#0369A1"
-                                : app.app_type === "cron"
-                                ? "#B45309"
-                                : "#7E22CE",
+                              app.app_type === "docker" ? "#0369A1" : app.app_type === "cron" ? "#B45309" : "#7E22CE",
                           }}
                         />
                       </Box>
 
                       <Typography variant="body2" sx={{ color: "#64748B", fontSize: "0.82rem", mt: 0.3 }}>
                         {app.description ||
-                          (app.app_type === "cron"
-                            ? "Scheduled via crontab"
-                            : `Installed as ezapp-${app.name}`)}
+                          (app.app_type === "cron" ? "Scheduled via crontab" : `Installed as ezapp-${app.name}`)}
                       </Typography>
 
                       {st?.status_text && (
-                        <Typography variant="caption" sx={{ color: isStarting ? "#2563EB" : "#94A3B8", display: "block", mt: 0.2 }}>
+                        <Typography
+                          variant="caption"
+                          sx={{ color: isStarting ? "#2563EB" : "#94A3B8", display: "block", mt: 0.2 }}
+                        >
                           Status: {st.status_text}
                         </Typography>
                       )}
@@ -547,11 +538,7 @@ export const NodeAppsTab: React.FC<NodeAppsTabProps> = ({ nodeName }) => {
                           size="small"
                           variant="outlined"
                           startIcon={
-                            currentAction === "restart" ? (
-                              <CircularProgress size={14} />
-                            ) : (
-                              <RotateCw size={14} />
-                            )
+                            currentAction === "restart" ? <CircularProgress size={14} /> : <RotateCw size={14} />
                           }
                           disabled={appsDisabled || !!currentAction}
                           onClick={() => handleAction(app.name, "restart", app.app_type)}
@@ -618,7 +605,7 @@ export const NodeAppsTab: React.FC<NodeAppsTabProps> = ({ nodeName }) => {
         }}
       >
         <DialogTitle sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", pb: 1.5 }}>
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
             <Terminal size={20} style={{ color: "#818CF8" }} />
             <Typography variant="h6" sx={{ fontWeight: 800, color: "#F8FAFC" }}>
               Workload Logs: {activeLogApp}
