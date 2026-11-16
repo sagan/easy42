@@ -211,37 +211,49 @@ impl CommandExecutor {
         let req_id = cmd.request_id;
         let start = Instant::now();
 
-        let (success, exit_code, stdout, stderr) = match cmd.command {
+        let (success, exit_code, stdout, stderr, started_at, ended_at) = match cmd.command {
             Some(proto::command_request::Command::ApplyConfig(apply)) => {
-                self.apply_config_file(apply)
+                let (s, c, o, e) = self.apply_config_file(apply);
+                (s, c, o, e, 0, 0)
             }
             Some(proto::command_request::Command::ManageIface(manage)) => {
-                self.manage_interface(manage).await
+                let (s, c, o, e) = self.manage_interface(manage).await;
+                (s, c, o, e, 0, 0)
             }
             Some(proto::command_request::Command::ReloadBird(reload)) => {
-                self.reload_bird(reload).await
+                let (s, c, o, e) = self.reload_bird(reload).await;
+                (s, c, o, e, 0, 0)
             }
             Some(proto::command_request::Command::ApplyNft(apply_nft)) => {
-                self.apply_nftables(apply_nft).await
+                let (s, c, o, e) = self.apply_nftables(apply_nft).await;
+                (s, c, o, e, 0, 0)
             }
             Some(proto::command_request::Command::RestartService(svc)) => {
-                self.restart_service(svc).await
+                let (s, c, o, e) = self.restart_service(svc).await;
+                (s, c, o, e, 0, 0)
             }
             Some(proto::command_request::Command::LookingGlass(lg)) => {
-                self.run_looking_glass(lg).await
+                let (s, c, o, e) = self.run_looking_glass(lg).await;
+                (s, c, o, e, 0, 0)
             }
-            Some(proto::command_request::Command::ProbeSystem(_)) => self.probe_system(),
+            Some(proto::command_request::Command::ProbeSystem(_)) => {
+                let (s, c, o, e) = self.probe_system();
+                (s, c, o, e, 0, 0)
+            }
             Some(proto::command_request::Command::FlushCache(_)) => {
-                (true, 0, "interface cache flushed".to_string(), String::new())
+                (true, 0, "interface cache flushed".to_string(), String::new(), 0, 0)
             }
             Some(proto::command_request::Command::SyncHosts(sync)) => {
-                self.sync_hosts(sync)
+                let (s, c, o, e) = self.sync_hosts(sync);
+                (s, c, o, e, 0, 0)
             }
             Some(proto::command_request::Command::SyncAction(sync_act)) => {
-                self.execute_sync_action(sync_act).await
+                let (s, c, o, e) = self.execute_sync_action(sync_act).await;
+                (s, c, o, e, 0, 0)
             }
             Some(proto::command_request::Command::DeleteConfig(del)) => {
-                self.delete_config_file(del).await
+                let (s, c, o, e) = self.delete_config_file(del).await;
+                (s, c, o, e, 0, 0)
             }
             Some(proto::command_request::Command::AppAction(app_act)) => {
                 if self.is_apps_disabled() {
@@ -250,12 +262,14 @@ impl CommandExecutor {
                         1,
                         String::new(),
                         "App management is disabled on this node (disable_apps = true in agent.json)".to_string(),
+                        0,
+                        0,
                     )
                 } else {
                     self.apps_manager.handle_action(app_act).await
                 }
             }
-            None => (false, -1, String::new(), "unknown command".to_string()),
+            None => (false, -1, String::new(), "unknown command".to_string(), 0, 0),
         };
 
         let duration_ms = start.elapsed().as_millis() as u64;
@@ -267,6 +281,8 @@ impl CommandExecutor {
             stdout,
             stderr,
             duration_ms,
+            started_at,
+            ended_at,
         }
     }
 

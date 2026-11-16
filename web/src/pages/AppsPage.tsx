@@ -265,6 +265,7 @@ export const AppsPage: React.FC = () => {
   const [clusterLogsSelectedNode, setClusterLogsSelectedNode] = useState<string>("");
   const [clusterLogsLines, setClusterLogsLines] = useState<number>(100);
   const [clusterLogsCopied, setClusterLogsCopied] = useState(false);
+  const [clusterLogsNodeFilter, setClusterLogsNodeFilter] = useState<string>("");
 
   // Variables State
   const [variables, setVariables] = useState<AppVariable[]>([]);
@@ -924,6 +925,7 @@ export const AppsPage: React.FC = () => {
     setClusterLogsModalScript(script);
     setClusterLogsLoading(true);
     setClusterLogsLines(linesCount);
+    setClusterLogsNodeFilter("");
     try {
       const res = await api.triggerAppClusterAction(script.id, "logs", undefined, linesCount);
       setClusterLogsData(res);
@@ -2335,8 +2337,8 @@ export const AppsPage: React.FC = () => {
               </FormControl>
 
               <FormControl size="small" sx={{ minWidth: 180 }}>
-                <InputLabel>Deployed Node</InputLabel>
-                <Select value={nodeFilter} label="Deployed Node" onChange={(e) => handleSelectNode(e.target.value)}>
+                <InputLabel>Target Node</InputLabel>
+                <Select value={nodeFilter} label="Target Node" onChange={(e) => handleSelectNode(e.target.value)}>
                   <MenuItem value="all">All Nodes</MenuItem>
                   {managedNodes.map((n) => (
                     <MenuItem key={n.name} value={n.name}>
@@ -3840,6 +3842,7 @@ export const AppsPage: React.FC = () => {
                 size="small"
                 placeholder="Search scripts by name, description, group..."
                 value={scriptSearch}
+                type="search"
                 onChange={(e) => setScriptSearch(e.target.value)}
                 InputProps={{
                   startAdornment: (
@@ -3858,46 +3861,30 @@ export const AppsPage: React.FC = () => {
                   label="Target Node"
                   onChange={(e) => setScriptNodeFilter(e.target.value)}
                 >
-                  <MenuItem value="all">All Target Nodes</MenuItem>
-                  {nodes.map((n) => (
-                    <MenuItem key={n.name} value={n.name}>
-                      {n.name}
-                    </MenuItem>
-                  ))}
+                  <MenuItem value="all">All Nodes</MenuItem>
+                  {nodes
+                    .filter((n) => !n.is_external)
+                    .map((n) => (
+                      <MenuItem key={n.name} value={n.name}>
+                        {n.name}
+                      </MenuItem>
+                    ))}
                 </Select>
               </FormControl>
 
               <Box sx={{ ml: "auto", display: "flex", alignItems: "center", gap: 1 }}>
-                {(scriptSearch || scriptNodeFilter !== "all" || scriptGroupFilter !== "all") && (
-                  <Button
-                    size="small"
-                    onClick={() => {
-                      setScriptSearch("");
-                      setScriptNodeFilter("all");
-                      setScriptGroupFilter("all");
-                    }}
-                    startIcon={<X size={14} />}
-                    sx={{ textTransform: "none", color: "#64748B", fontSize: "0.78rem" }}
-                  >
-                    Clear ({filteredScripts.length}/{scriptApps.length})
-                  </Button>
-                )}
-
                 <Button
                   size="small"
-                  variant="outlined"
-                  startIcon={<RefreshCw size={14} className={loadingApps ? "rotating" : ""} />}
-                  onClick={loadApps}
-                  sx={{
-                    borderColor: "#CBD5E1",
-                    color: "#475569",
-                    textTransform: "none",
-                    fontWeight: 600,
-                    fontSize: "0.78rem",
-                    "&:hover": { borderColor: "#94A3B8", bgcolor: "#F8FAFC" },
+                  onClick={() => {
+                    setScriptSearch("");
+                    setScriptNodeFilter("all");
+                    setScriptGroupFilter("all");
                   }}
+                  disabled={!scriptSearch && scriptNodeFilter === "all" && scriptGroupFilter === "all"}
+                  startIcon={<X size={14} />}
+                  sx={{ textTransform: "none", color: "#64748B", fontSize: "0.78rem" }}
                 >
-                  Refresh
+                  Clear ({filteredScripts.length}/{scriptApps.length})
                 </Button>
               </Box>
             </Box>
@@ -4125,14 +4112,14 @@ export const AppsPage: React.FC = () => {
               <Table size="small" sx={{ minWidth: 950 }}>
                 <TableHead sx={{ bgcolor: "#F8FAFC" }}>
                   <TableRow>
-                    <TableCell sx={{ fontWeight: 800, color: "#475569", minWidth: 220 }}>Script</TableCell>
-                    <TableCell sx={{ fontWeight: 800, color: "#475569", minWidth: 240 }}>Description</TableCell>
-                    <TableCell sx={{ fontWeight: 800, color: "#475569", minWidth: 200 }}>Target Nodes</TableCell>
-                    <TableCell align="center" sx={{ fontWeight: 800, color: "#475569", minWidth: 100 }}>
-                      Published
-                    </TableCell>
-                    <TableCell align="center" sx={{ fontWeight: 800, color: "#475569", minWidth: 240 }}>
+                    <TableCell sx={{ fontWeight: 800, color: "#475569", minWidth: 100 }}>Script</TableCell>
+                    <TableCell align="center" sx={{ fontWeight: 800, color: "#475569", minWidth: 200 }}>
                       Execution (Cluster Action)
+                    </TableCell>
+                    <TableCell sx={{ fontWeight: 800, color: "#475569", minWidth: 200 }}>Target Nodes</TableCell>
+                    <TableCell sx={{ fontWeight: 800, color: "#475569", minWidth: 150 }}>Description</TableCell>
+                    <TableCell align="center" sx={{ fontWeight: 800, color: "#475569", minWidth: 50 }}>
+                      Published
                     </TableCell>
                     <TableCell align="right" sx={{ fontWeight: 800, color: "#475569", minWidth: 140 }}>
                       Actions
@@ -4187,13 +4174,6 @@ export const AppsPage: React.FC = () => {
                                 {script.name}
                               </Typography>
                               <Box sx={{ display: "flex", alignItems: "center", gap: 0.6, mt: 0.3, flexWrap: "wrap" }}>
-                                <Typography
-                                  variant="caption"
-                                  className="mono-font"
-                                  sx={{ color: "#64748B", fontSize: "0.7rem" }}
-                                >
-                                  /etc/ezscript/{script.name}
-                                </Typography>
                                 {script.group && (
                                   <Chip
                                     size="small"
@@ -4227,128 +4207,6 @@ export const AppsPage: React.FC = () => {
                               </Box>
                             </Box>
                           </Box>
-                        </TableCell>
-
-                        {/* Description */}
-                        <TableCell>
-                          <Typography
-                            variant="body2"
-                            sx={{
-                              color: "#475569",
-                              fontSize: "0.82rem",
-                              display: "-webkit-box",
-                              WebkitLineClamp: 2,
-                              WebkitBoxOrient: "vertical",
-                              overflow: "hidden",
-                            }}
-                          >
-                            {script.description || "No description provided."}
-                          </Typography>
-                        </TableCell>
-
-                        {/* Target Nodes */}
-                        <TableCell>
-                          <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
-                            <Box>
-                              <Chip
-                                size="small"
-                                label={
-                                  target.mode === "manual"
-                                    ? `Manual (${target.manualNodes.length})`
-                                    : target.mode === "tag"
-                                      ? `Tag: #${getSelectorValue(script.selector || {}, "tag")}`
-                                      : target.mode === "custom"
-                                        ? "Selector"
-                                        : "All Nodes"
-                                }
-                                sx={{
-                                  height: 20,
-                                  fontSize: "0.68rem",
-                                  fontWeight: 700,
-                                  bgcolor: chipColors.bgcolor,
-                                  color: chipColors.color,
-                                }}
-                              />
-                            </Box>
-                            <Typography
-                              variant="caption"
-                              sx={{
-                                color: "#64748B",
-                                display: "block",
-                                overflow: "hidden",
-                                textOverflow: "ellipsis",
-                                whiteSpace: "nowrap",
-                                maxWidth: 220,
-                              }}
-                              title={target.nodeNames.join(", ")}
-                            >
-                              {target.nodeNames.length === 0
-                                ? "No target nodes match"
-                                : target.nodeNames.map((nodeName) => (
-                                    <Chip
-                                      key={nodeName}
-                                      component={RouterLink}
-                                      to={`/nodes/${encodeURIComponent(nodeName)}?tab=scripts`}
-                                      clickable
-                                      onClick={(e) => e.stopPropagation()}
-                                      size="small"
-                                      label={nodeName}
-                                      sx={{
-                                        height: 20,
-                                        fontSize: "0.7rem",
-                                        fontWeight: 600,
-                                        bgcolor: chipColors.bgcolor,
-                                        color: chipColors.color,
-                                        textDecoration: "none",
-                                        cursor: "pointer",
-                                        transition: "all 0.15s ease",
-                                        "&:hover": {
-                                          bgcolor: chipColors.hoverBg,
-                                          color: chipColors.hoverColor,
-                                        },
-                                      }}
-                                    />
-                                  ))}
-                            </Typography>
-                          </Box>
-                        </TableCell>
-
-                        {/* Published */}
-                        <TableCell align="center">
-                          <FormControlLabel
-                            title={
-                              script.published
-                                ? "Published (script deployed to nodes on sync)"
-                                : "Draft (script will not be deployed to nodes)"
-                            }
-                            control={
-                              <Checkbox
-                                size="small"
-                                checked={Boolean(script.published)}
-                                disabled={Boolean(togglingPublishedAppIds[script.id])}
-                                onChange={() => handleTogglePublished(script)}
-                                sx={{
-                                  p: 0.4,
-                                  color: "#94A3B8",
-                                  "&.Mui-checked": { color: "#059669" },
-                                }}
-                              />
-                            }
-                            label={
-                              <Typography
-                                variant="caption"
-                                sx={{
-                                  fontWeight: 600,
-                                  fontSize: "0.75rem",
-                                  color: script.published ? "#059669" : "#64748B",
-                                  userSelect: "none",
-                                }}
-                              >
-                                {script.published ? "Yes" : "Draft"}
-                              </Typography>
-                            }
-                            sx={{ m: 0 }}
-                          />
                         </TableCell>
 
                         {/* Execution: Start, Stop, Logs */}
@@ -4445,6 +4303,125 @@ export const AppsPage: React.FC = () => {
                               </Button>
                             </Tooltip>
                           </Box>
+                        </TableCell>
+
+                        {/* Target Nodes */}
+                        <TableCell>
+                          <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
+                            <Box>
+                              <Chip
+                                size="small"
+                                label={
+                                  target.mode === "manual"
+                                    ? `Manual (${target.manualNodes.length})`
+                                    : target.mode === "tag"
+                                      ? `Tag: #${getSelectorValue(script.selector || {}, "tag")}`
+                                      : target.mode === "custom"
+                                        ? "Selector"
+                                        : "All Nodes"
+                                }
+                                sx={{
+                                  height: 20,
+                                  fontSize: "0.68rem",
+                                  fontWeight: 700,
+                                  bgcolor: chipColors.bgcolor,
+                                  color: chipColors.color,
+                                }}
+                              />
+                            </Box>
+                            <Typography
+                              variant="caption"
+                              sx={{
+                                color: "#64748B",
+                                display: "flex",
+                                flexWrap: "wrap",
+                                maxWidth: 220,
+                              }}
+                            >
+                              {target.nodeNames.length === 0
+                                ? "No target nodes match"
+                                : target.nodeNames.map((nodeName) => (
+                                    <Chip
+                                      key={nodeName}
+                                      component={RouterLink}
+                                      to={`/nodes/${encodeURIComponent(nodeName)}?tab=scripts`}
+                                      clickable
+                                      onClick={(e) => e.stopPropagation()}
+                                      size="small"
+                                      label={nodeName}
+                                      sx={{
+                                        height: 20,
+                                        fontSize: "0.7rem",
+                                        fontWeight: 600,
+                                        bgcolor: chipColors.bgcolor,
+                                        color: chipColors.color,
+                                        textDecoration: "none",
+                                        cursor: "pointer",
+                                        transition: "all 0.15s ease",
+                                        "&:hover": {
+                                          bgcolor: chipColors.hoverBg,
+                                          color: chipColors.hoverColor,
+                                        },
+                                      }}
+                                    />
+                                  ))}
+                            </Typography>
+                          </Box>
+                        </TableCell>
+
+                        {/* Description */}
+                        <TableCell>
+                          <Typography
+                            variant="body2"
+                            sx={{
+                              color: "#475569",
+                              fontSize: "0.82rem",
+                              display: "-webkit-box",
+                              WebkitLineClamp: 2,
+                              WebkitBoxOrient: "vertical",
+                              overflow: "hidden",
+                            }}
+                          >
+                            {script.description || "No description provided."}
+                          </Typography>
+                        </TableCell>
+
+                        {/* Published */}
+                        <TableCell align="center">
+                          <FormControlLabel
+                            title={
+                              script.published
+                                ? "Published (script deployed to nodes on sync)"
+                                : "Draft (script will not be deployed to nodes)"
+                            }
+                            control={
+                              <Checkbox
+                                size="small"
+                                checked={Boolean(script.published)}
+                                disabled={Boolean(togglingPublishedAppIds[script.id])}
+                                onChange={() => handleTogglePublished(script)}
+                                sx={{
+                                  p: 0.4,
+                                  color: "#94A3B8",
+                                  "&.Mui-checked": { color: "#059669" },
+                                }}
+                              />
+                            }
+                            label={
+                              <Typography
+                                variant="caption"
+                                sx={{
+                                  fontWeight: 600,
+                                  fontSize: "0.75rem",
+                                  color: script.published ? "#059669" : "#64748B",
+                                  userSelect: "none",
+                                }}
+                              >
+                                {script.published ? "Yes" : "Draft"}
+                              </Typography>
+                            }
+                            sx={{ m: 0 }}
+                          />
                         </TableCell>
 
                         {/* Actions */}
@@ -4592,6 +4569,7 @@ export const AppsPage: React.FC = () => {
           >
             <TextField
               size="small"
+              type="search"
               placeholder="Search variables by key or description..."
               value={varSearch}
               onChange={(e) => setVarSearch(e.target.value)}
@@ -4960,7 +4938,7 @@ export const AppsPage: React.FC = () => {
         maxWidth="lg"
         fullWidth
         PaperProps={{
-          sx: { borderRadius: "16px", minHeight: 680 },
+          sx: { borderRadius: "16px", minHeight: "80dvh" },
         }}
       >
         <DialogTitle sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", pb: 1 }}>
@@ -5046,7 +5024,7 @@ export const AppsPage: React.FC = () => {
 
         <DialogContent sx={{ p: 3 }}>
           {/* Quick Variables Insert Chips Bar */}
-          {(modalTab === "definition" || modalTab === "env" || modalTab === "files") && (
+          {(modalTab === "env" || modalTab === "files") && (
             <Box
               sx={{
                 mb: 2,
@@ -5070,17 +5048,7 @@ export const AppsPage: React.FC = () => {
                   label={`\${${v.key}}`}
                   onClick={() => {
                     const tag = `\${${v.key}}`;
-                    if (modalTab === "definition") {
-                      if (formType === "cron") {
-                        setFormCronCmd((prev) => {
-                          const updated = prev ? (prev.endsWith(" ") ? prev + tag : prev + " " + tag) : tag;
-                          setFormMain(`${formCronExpr.trim()} ${updated}`.trim());
-                          return updated;
-                        });
-                      } else {
-                        setFormMain((prev) => prev + tag);
-                      }
-                    } else if (modalTab === "env") {
+                    if (modalTab === "env") {
                       setFormEnv((prev) => prev + tag);
                     } else {
                       copyText(`\${${v.key}}`, "env:" + v.key);
@@ -5112,17 +5080,7 @@ export const AppsPage: React.FC = () => {
                     label={nv.label}
                     onClick={() => {
                       const tag = nv.label;
-                      if (modalTab === "definition") {
-                        if (formType === "cron") {
-                          setFormCronCmd((prev) => {
-                            const updated = prev ? (prev.endsWith(" ") ? prev + tag : prev + " " + tag) : tag;
-                            setFormMain(`${formCronExpr.trim()} ${updated}`.trim());
-                            return updated;
-                          });
-                        } else {
-                          setFormMain((prev) => prev + tag);
-                        }
-                      } else if (modalTab === "env") {
+                      if (modalTab === "env") {
                         setFormEnv((prev) => prev + tag);
                       } else {
                         copyText(`\${${nv.key}}`, "env:" + nv.key);
@@ -7111,7 +7069,10 @@ ${formEnabled ? `${formCronExpr.trim() || "0 0 * * *"} ${formCronCmd.trim() || "
       {/* Cluster Script Execution Logs Dialog */}
       <Dialog
         open={Boolean(clusterLogsModalScript)}
-        onClose={() => setClusterLogsModalScript(null)}
+        onClose={() => {
+          setClusterLogsModalScript(null);
+          setClusterLogsNodeFilter("");
+        }}
         maxWidth="md"
         fullWidth
         PaperProps={{
@@ -7186,7 +7147,13 @@ ${formEnabled ? `${formCronExpr.trim() || "0 0 * * *"} ${formCronCmd.trim() || "
                 <RefreshCw size={16} className={clusterLogsLoading ? "rotating" : ""} />
               </IconButton>
             </Tooltip>
-            <IconButton size="small" onClick={() => setClusterLogsModalScript(null)}>
+            <IconButton
+              size="small"
+              onClick={() => {
+                setClusterLogsModalScript(null);
+                setClusterLogsNodeFilter("");
+              }}
+            >
               <X size={18} />
             </IconButton>
           </Box>
@@ -7203,76 +7170,194 @@ ${formEnabled ? `${formCronExpr.trim() || "0 0 * * *"} ${formCronCmd.trim() || "
             </Alert>
           ) : (
             <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-              {/* Node selector tabs */}
-              <Tabs
-                value={clusterLogsSelectedNode}
-                onChange={(_, val) => setClusterLogsSelectedNode(val)}
-                variant="scrollable"
-                sx={{
-                  borderBottom: "1px solid #E2E8F0",
-                  "& .MuiTab-root": {
-                    textTransform: "none",
-                    fontWeight: 700,
-                    fontSize: "0.82rem",
-                    minHeight: 42,
-                    px: 2,
-                  },
-                  "& .Mui-selected": { color: "#0F766E" },
-                  "& .MuiTabs-indicator": { bgcolor: "#0F766E" },
-                }}
-              >
-                {(clusterLogsData.results || []).map((result) => {
-                  const isRunning = result.stderr === "running" || (result as any).is_running;
-                  return (
-                    <Tab
-                      key={result.node_name}
-                      value={result.node_name}
-                      label={
-                        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                          <span>{result.node_name}</span>
-                          {isRunning ? (
-                            <Chip
-                              size="small"
-                              label="Running"
-                              sx={{
-                                height: 18,
-                                fontSize: "0.65rem",
-                                fontWeight: 700,
-                                bgcolor: "#DBEAFE",
-                                color: "#1E40AF",
-                              }}
-                            />
-                          ) : result.exit_code !== undefined && result.exit_code >= 0 ? (
-                            <Chip
-                              size="small"
-                              label={`Exit ${result.exit_code}`}
-                              sx={{
-                                height: 18,
-                                fontSize: "0.65rem",
-                                fontWeight: 700,
-                                bgcolor: result.exit_code === 0 ? "#DCFCE7" : "#FEE2E2",
-                                color: result.exit_code === 0 ? "#15803D" : "#B91C1C",
-                              }}
-                            />
-                          ) : !result.success ? (
-                            <Chip
-                              size="small"
-                              label="Error"
-                              sx={{
-                                height: 18,
-                                fontSize: "0.65rem",
-                                fontWeight: 700,
-                                bgcolor: "#FEE2E2",
-                                color: "#B91C1C",
-                              }}
-                            />
-                          ) : null}
-                        </Box>
-                      }
+              {/* Target Nodes clickable chip list */}
+              <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                <Box
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    flexWrap: "wrap",
+                    gap: 1,
+                  }}
+                >
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      fontWeight: 700,
+                      color: "#64748B",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.05em",
+                      fontSize: "0.72rem",
+                    }}
+                  >
+                    Target Nodes ({clusterLogsData.results?.length || 0})
+                  </Typography>
+                  {(clusterLogsData.results || []).length > 6 && (
+                    <TextField
+                      size="small"
+                      placeholder="Filter nodes..."
+                      value={clusterLogsNodeFilter}
+                      onChange={(e) => setClusterLogsNodeFilter(e.target.value)}
+                      sx={{
+                        width: 180,
+                        "& .MuiInputBase-root": {
+                          height: 28,
+                          fontSize: "0.75rem",
+                          bgcolor: "#FFFFFF",
+                        },
+                      }}
+                      InputProps={{
+                        startAdornment: (
+                          <InputAdornment position="start">
+                            <Search size={14} color="#94A3B8" />
+                          </InputAdornment>
+                        ),
+                        endAdornment: clusterLogsNodeFilter ? (
+                          <InputAdornment position="end">
+                            <IconButton size="small" onClick={() => setClusterLogsNodeFilter("")} sx={{ p: 0.2 }}>
+                              <X size={12} />
+                            </IconButton>
+                          </InputAdornment>
+                        ) : null,
+                      }}
                     />
-                  );
-                })}
-              </Tabs>
+                  )}
+                </Box>
+
+                <Box
+                  sx={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    gap: 1,
+                    maxHeight: 140,
+                    overflowY: "auto",
+                    p: 1.25,
+                    bgcolor: "#F8FAFC",
+                    borderRadius: "10px",
+                    border: "1px solid #E2E8F0",
+                  }}
+                >
+                  {(() => {
+                    const filteredResults = (clusterLogsData.results || []).filter((result) =>
+                      clusterLogsNodeFilter
+                        ? result.node_name.toLowerCase().includes(clusterLogsNodeFilter.toLowerCase())
+                        : true,
+                    );
+                    if (filteredResults.length === 0) {
+                      return (
+                        <Typography variant="caption" sx={{ color: "#94A3B8", fontStyle: "italic", py: 0.5, px: 0.5 }}>
+                          No nodes match filter "{clusterLogsNodeFilter}"
+                        </Typography>
+                      );
+                    }
+                    return filteredResults.map((result) => {
+                      const isRunning = result.stderr === "running" || (result as any).is_running;
+                      const isSelected = result.node_name === clusterLogsSelectedNode;
+                      return (
+                        <Chip
+                          key={result.node_name}
+                          size="small"
+                          clickable
+                          onClick={() => setClusterLogsSelectedNode(result.node_name)}
+                          label={
+                            <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
+                              <Typography
+                                component="span"
+                                sx={{
+                                  fontSize: "0.78rem",
+                                  fontWeight: isSelected ? 700 : 600,
+                                }}
+                              >
+                                {result.node_name}
+                              </Typography>
+                              {isRunning ? (
+                                <Box
+                                  component="span"
+                                  sx={{
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: 0.4,
+                                    px: 0.75,
+                                    py: 0.1,
+                                    borderRadius: "4px",
+                                    fontSize: "0.65rem",
+                                    fontWeight: 700,
+                                    bgcolor: isSelected ? "rgba(255,255,255,0.25)" : "#DBEAFE",
+                                    color: isSelected ? "#FFFFFF" : "#1E40AF",
+                                  }}
+                                >
+                                  <RotateCw size={10} className="rotating" />
+                                  Running
+                                </Box>
+                              ) : result.exit_code !== undefined && result.exit_code >= 0 ? (
+                                <Box
+                                  component="span"
+                                  sx={{
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    px: 0.75,
+                                    py: 0.1,
+                                    borderRadius: "4px",
+                                    fontSize: "0.65rem",
+                                    fontWeight: 700,
+                                    bgcolor: isSelected
+                                      ? result.exit_code === 0
+                                        ? "rgba(255,255,255,0.25)"
+                                        : "#EF4444"
+                                      : result.exit_code === 0
+                                        ? "#DCFCE7"
+                                        : "#FEE2E2",
+                                    color: isSelected ? "#FFFFFF" : result.exit_code === 0 ? "#15803D" : "#B91C1C",
+                                  }}
+                                >
+                                  Exit {result.exit_code}
+                                </Box>
+                              ) : !result.success ? (
+                                <Box
+                                  component="span"
+                                  sx={{
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    px: 0.75,
+                                    py: 0.1,
+                                    borderRadius: "4px",
+                                    fontSize: "0.65rem",
+                                    fontWeight: 700,
+                                    bgcolor: isSelected ? "#EF4444" : "#FEE2E2",
+                                    color: isSelected ? "#FFFFFF" : "#B91C1C",
+                                  }}
+                                >
+                                  Error
+                                </Box>
+                              ) : null}
+                            </Box>
+                          }
+                          sx={{
+                            height: 30,
+                            cursor: "pointer",
+                            transition: "all 0.15s ease",
+                            ...(isSelected
+                              ? {
+                                  bgcolor: "#0F766E",
+                                  color: "#FFFFFF",
+                                  borderColor: "#0F766E",
+                                  boxShadow: "0 2px 4px rgba(15, 118, 110, 0.25)",
+                                  "&:hover": { bgcolor: "#0D9488" },
+                                }
+                              : {
+                                  bgcolor: "#FFFFFF",
+                                  color: "#334155",
+                                  border: "1px solid #E2E8F0",
+                                  "&:hover": { bgcolor: "#F1F5F9", borderColor: "#CBD5E1" },
+                                }),
+                          }}
+                        />
+                      );
+                    });
+                  })()}
+                </Box>
+              </Box>
 
               {/* Selected Node Log Details */}
               {(() => {
@@ -7292,7 +7377,7 @@ ${formEnabled ? `${formCronExpr.trim() || "0 0 * * *"} ${formCronCmd.trim() || "
                         gap: 1,
                       }}
                     >
-                      <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
                         <Typography variant="body2" sx={{ fontWeight: 700, color: "#1E293B" }}>
                           Node: {clusterLogsSelectedNode}
                         </Typography>
@@ -7334,6 +7419,36 @@ ${formEnabled ? `${formCronExpr.trim() || "0 0 * * *"} ${formCronCmd.trim() || "
                             }}
                           />
                         )}
+                        {nodeResult.started_at ? (
+                          <Chip
+                            size="small"
+                            icon={<Clock size={12} color="#64748B" />}
+                            label={`Started: ${new Date(nodeResult.started_at * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}`}
+                            sx={{ height: 22, fontSize: "0.72rem", bgcolor: "#F1F5F9", color: "#475569" }}
+                          />
+                        ) : null}
+                        {nodeResult.ended_at ? (
+                          <Chip
+                            size="small"
+                            label={`Ended: ${new Date(nodeResult.ended_at * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}`}
+                            sx={{ height: 22, fontSize: "0.72rem", bgcolor: "#F1F5F9", color: "#475569" }}
+                          />
+                        ) : null}
+                        {nodeResult.started_at &&
+                        nodeResult.ended_at &&
+                        nodeResult.ended_at >= nodeResult.started_at ? (
+                          <Chip
+                            size="small"
+                            label={`Duration: ${nodeResult.ended_at - nodeResult.started_at}s`}
+                            sx={{
+                              height: 22,
+                              fontSize: "0.72rem",
+                              bgcolor: "#F1F5F9",
+                              color: "#64748B",
+                              fontWeight: 600,
+                            }}
+                          />
+                        ) : null}
                       </Box>
                       <Button
                         size="small"
@@ -7395,7 +7510,10 @@ ${formEnabled ? `${formCronExpr.trim() || "0 0 * * *"} ${formCronCmd.trim() || "
 
         <DialogActions sx={{ px: 2.5, py: 1.5, borderTop: "1px solid #F1F5F9" }}>
           <Button
-            onClick={() => setClusterLogsModalScript(null)}
+            onClick={() => {
+              setClusterLogsModalScript(null);
+              setClusterLogsNodeFilter("");
+            }}
             sx={{ textTransform: "none", fontWeight: 600, color: "#64748B" }}
           >
             Close

@@ -1433,7 +1433,10 @@ impl AppsManager {
     }
 
     /// Execute app action (start, stop, restart, logs)
-    pub async fn handle_action(&self, req: AppActionCmd) -> (bool, i32, String, String) {
+    pub async fn handle_action(
+        &self,
+        req: AppActionCmd,
+    ) -> (bool, i32, String, String, i64, i64) {
         let app_type = match AppType::try_from(req.app_type) {
             Ok(t) => t,
             Err(_) => AppType::DockerCompose,
@@ -1445,6 +1448,8 @@ impl AppsManager {
                 -1,
                 String::new(),
                 "cron apps do not support action execution".to_string(),
+                0,
+                0,
             );
         }
 
@@ -1499,10 +1504,14 @@ impl AppsManager {
                             -1,
                             String::new(),
                             format!("unknown action '{}'", other),
+                            0,
+                            0,
                         )
                     }
                 };
-                run_shell_with_timeout(&cmd, std::time::Duration::from_secs(120)).await
+                let (s, c, o, e) =
+                    run_shell_with_timeout(&cmd, std::time::Duration::from_secs(120)).await;
+                (s, c, o, e, 0, 0)
             }
             AppType::Systemd => {
                 let service = format!("ezapp-{}", req.app_name);
@@ -1519,10 +1528,13 @@ impl AppsManager {
                                     -1,
                                     String::new(),
                                     format!("unknown action '{}'", other),
+                                    0,
+                                    0,
                                 )
                             }
                         };
-                        run_shell(&cmd).await
+                        let (s, c, o, e) = run_shell(&cmd).await;
+                        (s, c, o, e, 0, 0)
                     }
                     InitSystem::OpenRC => {
                         let cmd = match action.as_str() {
@@ -1536,10 +1548,13 @@ impl AppsManager {
                                     -1,
                                     String::new(),
                                     format!("unknown action '{}'", other),
+                                    0,
+                                    0,
                                 )
                             }
                         };
-                        run_shell(&cmd).await
+                        let (s, c, o, e) = run_shell(&cmd).await;
+                        (s, c, o, e, 0, 0)
                     }
                     InitSystem::Procd => {
                         let cmd = match action.as_str() {
@@ -1553,10 +1568,13 @@ impl AppsManager {
                                     -1,
                                     String::new(),
                                     format!("unknown action '{}'", other),
+                                    0,
+                                    0,
                                 )
                             }
                         };
-                        run_shell(&cmd).await
+                        let (s, c, o, e) = run_shell(&cmd).await;
+                        (s, c, o, e, 0, 0)
                     }
                 }
             }
@@ -1565,6 +1583,8 @@ impl AppsManager {
                 -1,
                 String::new(),
                 "cron apps do not support action execution".to_string(),
+                0,
+                0,
             ),
             AppType::Script => {
                 self.handle_script_action(&req.app_name, &action, lines).await
@@ -1577,13 +1597,15 @@ impl AppsManager {
         app_name: &str,
         action: &str,
         lines: u32,
-    ) -> (bool, i32, String, String) {
+    ) -> (bool, i32, String, String, i64, i64) {
         if app_name.is_empty() || app_name.contains('/') || app_name.contains("..") {
             return (
                 false,
                 -1,
                 String::new(),
                 format!("invalid script name '{}'", app_name),
+                0,
+                0,
             );
         }
 
@@ -1601,11 +1623,13 @@ impl AppsManager {
                 -1,
                 String::new(),
                 format!("unknown action '{}' for script app", other),
+                0,
+                0,
             ),
         }
     }
 
-    async fn start_script(&self, app_name: &str) -> (bool, i32, String, String) {
+    async fn start_script(&self, app_name: &str) -> (bool, i32, String, String, i64, i64) {
         let script_path = PathBuf::from(EZSCRIPT_BASE_DIR).join(app_name);
         if !script_path.exists() {
             return (
@@ -1613,6 +1637,8 @@ impl AppsManager {
                 -1,
                 String::new(),
                 format!("script file '/etc/ezscript/{}' does not exist", app_name),
+                0,
+                0,
             );
         }
 
@@ -1625,6 +1651,8 @@ impl AppsManager {
                         -1,
                         String::new(),
                         format!("script '{}' is already running (PID {})", app_name, record.pid),
+                        record.started_at,
+                        0,
                     );
                 }
             }
@@ -1649,6 +1677,8 @@ impl AppsManager {
                     -1,
                     String::new(),
                     format!("failed to spawn script '{}': {}", app_name, e),
+                    0,
+                    0,
                 );
             }
         };
@@ -1660,12 +1690,14 @@ impl AppsManager {
         let logs = Arc::new(Mutex::new(Vec::<String>::new()));
         let (stop_tx, mut stop_rx) = tokio::sync::oneshot::channel::<()>();
 
+        let start_time = chrono_now();
+
         {
             let mut log_lock = logs.lock().await;
             log_lock.push(format!(
-                "[easy42] script '{}' started at {} (PID {})",
+                "[easy42] {} - script '{}' started (PID {})",
+                format_timestamp(start_time),
                 app_name,
-                chrono_now(),
                 pid
             ));
         }
@@ -1676,7 +1708,7 @@ impl AppsManager {
                 app_name.to_string(),
                 ScriptExecutionRecord {
                     pid,
-                    started_at: chrono_now(),
+                    started_at: start_time,
                     ended_at: None,
                     exit_code: None,
                     is_running: true,
@@ -1703,6 +1735,7 @@ impl AppsManager {
                 tokio::select! {
                     biased;
                     _ = &mut stop_rx => {
+                        let stop_time = chrono_now();
                         let _ = child.start_kill();
                         unsafe {
                             if pid > 0 {
@@ -1712,7 +1745,11 @@ impl AppsManager {
                         {
                             let mut l = logs_ref.lock().await;
                             if l.len() >= 2000 { l.remove(0); }
-                            l.push(format!("[easy42] script '{}' stopped by user", app_name_owned));
+                            l.push(format!(
+                                "[easy42] {} - script '{}' stopped by user",
+                                format_timestamp(stop_time),
+                                app_name_owned
+                            ));
                         }
                     }
                     line_res = async {
@@ -1778,12 +1815,22 @@ impl AppsManager {
                 }
             }
 
+            let exit_time = chrono_now();
+            let duration_secs = if exit_time >= start_time {
+                exit_time - start_time
+            } else {
+                0
+            };
+
             {
                 let mut l = logs_ref.lock().await;
                 if l.len() >= 2000 { l.remove(0); }
                 l.push(format!(
-                    "[easy42] script '{}' exited with code {}",
-                    app_name_owned, exit_code
+                    "[easy42] {} - script '{}' exited with code {} (duration: {}s)",
+                    format_timestamp(exit_time),
+                    app_name_owned,
+                    exit_code,
+                    duration_secs
                 ));
             }
 
@@ -1793,7 +1840,7 @@ impl AppsManager {
                     if record.pid == pid {
                         record.is_running = false;
                         record.exit_code = Some(exit_code);
-                        record.ended_at = Some(chrono_now());
+                        record.ended_at = Some(exit_time);
                         record.stop_sender = None;
                     }
                 }
@@ -1805,14 +1852,19 @@ impl AppsManager {
             0,
             format!("Script '{}' started with PID {}", app_name, pid),
             String::new(),
+            start_time,
+            0,
         )
     }
 
-    async fn stop_script(&self, app_name: &str) -> (bool, i32, String, String) {
+    async fn stop_script(&self, app_name: &str) -> (bool, i32, String, String, i64, i64) {
         let mut exec_lock = self.script_executions.lock().await;
         if let Some(record) = exec_lock.get_mut(app_name) {
+            let start = record.started_at;
             if record.is_running {
                 let pid = record.pid;
+                let now = chrono_now();
+                record.ended_at = Some(now);
                 if let Some(tx) = record.stop_sender.take() {
                     let _ = tx.send(());
                 }
@@ -1826,6 +1878,8 @@ impl AppsManager {
                     0,
                     format!("Script '{}' (PID {}) stop signal sent", app_name, pid),
                     String::new(),
+                    start,
+                    now,
                 )
             } else {
                 (
@@ -1833,6 +1887,8 @@ impl AppsManager {
                     -1,
                     String::new(),
                     format!("script '{}' is not running", app_name),
+                    start,
+                    record.ended_at.unwrap_or(0),
                 )
             }
         } else {
@@ -1841,11 +1897,17 @@ impl AppsManager {
                 -1,
                 String::new(),
                 format!("script '{}' is not running", app_name),
+                0,
+                0,
             )
         }
     }
 
-    async fn get_script_logs(&self, app_name: &str, lines: u32) -> (bool, i32, String, String) {
+    async fn get_script_logs(
+        &self,
+        app_name: &str,
+        lines: u32,
+    ) -> (bool, i32, String, String, i64, i64) {
         let exec_lock = self.script_executions.lock().await;
         if let Some(record) = exec_lock.get(app_name) {
             let log_lock = record.logs.lock().await;
@@ -1854,22 +1916,28 @@ impl AppsManager {
             let start_idx = if total > requested { total - requested } else { 0 };
             let slice = &log_lock[start_idx..];
             let code = record.exit_code.unwrap_or(0);
+            let start = record.started_at;
+            let end = record.ended_at.unwrap_or(0);
             let content = if slice.is_empty() {
                 if record.is_running {
                     format!(
-                        "(Script '{}' is running with PID {}, no output yet)",
-                        app_name, record.pid
+                        "(Script '{}' is running with PID {}, started at {}, no output yet)",
+                        app_name,
+                        record.pid,
+                        format_timestamp(start)
                     )
                 } else {
                     format!(
-                        "(Script '{}' exited with code {}, no output recorded)",
-                        app_name, code
+                        "(Script '{}' exited with code {} at {}, no output recorded)",
+                        app_name,
+                        code,
+                        format_timestamp(if end > 0 { end } else { start })
                     )
                 }
             } else {
                 slice.join("\n")
             };
-            (true, code, content, String::new())
+            (true, code, content, String::new(), start, end)
         } else {
             let script_path = PathBuf::from(EZSCRIPT_BASE_DIR).join(app_name);
             if script_path.exists() {
@@ -1881,13 +1949,17 @@ impl AppsManager {
                         app_name, app_name
                     ),
                     String::new(),
+                    0,
+                    0,
                 )
             } else {
                 (
                     false,
                     -1,
                     String::new(),
-                    format!("script '{}' not found", app_name),
+                    format!("script '{}' does not exist", app_name),
+                    0,
+                    0,
                 )
             }
         }
@@ -1903,6 +1975,26 @@ fn chrono_now() -> i64 {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs() as i64)
         .unwrap_or(0)
+}
+
+pub fn format_timestamp(epoch_secs: i64) -> String {
+    if epoch_secs <= 0 {
+        return "N/A".to_string();
+    }
+    let mut tm: libc::tm = unsafe { std::mem::zeroed() };
+    let t = epoch_secs as libc::time_t;
+    unsafe {
+        libc::gmtime_r(&t, &mut tm);
+    }
+    format!(
+        "{:04}-{:02}-{:02} {:02}:{:02}:{:02} UTC",
+        tm.tm_year + 1900,
+        tm.tm_mon + 1,
+        tm.tm_mday,
+        tm.tm_hour,
+        tm.tm_min,
+        tm.tm_sec
+    )
 }
 
 pub fn ensure_systemd_env_file(app_name: &str, content: &str) -> String {
@@ -2370,7 +2462,7 @@ mod tests {
             app_type: AppType::Cron as i32,
             log_lines: 100,
         };
-        let (success, code, _, stderr) = mgr.handle_action(cmd).await;
+        let (success, code, _, stderr, _, _) = mgr.handle_action(cmd).await;
         assert!(!success);
         assert_eq!(code, -1);
         assert!(stderr.contains("cron apps do not support action execution"));
@@ -2457,13 +2549,14 @@ mod tests {
             app_type: AppType::Script as i32,
             log_lines: 100,
         };
-        let (success, code, stdout, _) = mgr.handle_action(start_cmd.clone()).await;
+        let (success, code, stdout, _, start_ts, _) = mgr.handle_action(start_cmd.clone()).await;
         assert!(success);
         assert_eq!(code, 0);
         assert!(stdout.contains("started with PID"));
+        assert!(start_ts > 0);
 
         // 4. Repeated start should fail while running
-        let (rep_success, _, _, rep_stderr) = mgr.handle_action(start_cmd).await;
+        let (rep_success, _, _, rep_stderr, _, _) = mgr.handle_action(start_cmd).await;
         assert!(!rep_success);
         assert!(rep_stderr.contains("already running"));
 
@@ -2474,9 +2567,11 @@ mod tests {
             app_type: AppType::Script as i32,
             log_lines: 50,
         };
-        let (log_ok, _, log_out, _) = mgr.handle_action(logs_cmd).await;
+        let (log_ok, _, log_out, _, log_start_ts, _) = mgr.handle_action(logs_cmd).await;
         assert!(log_ok);
         assert!(log_out.contains("test-script-hello"));
+        assert!(log_out.contains("started"));
+        assert!(log_start_ts > 0);
 
         // 6. Stop script
         let stop_cmd = AppActionCmd {
@@ -2485,9 +2580,10 @@ mod tests {
             app_type: AppType::Script as i32,
             log_lines: 100,
         };
-        let (stop_ok, _, stop_out, _) = mgr.handle_action(stop_cmd).await;
+        let (stop_ok, _, stop_out, _, _, stop_end_ts) = mgr.handle_action(stop_cmd).await;
         assert!(stop_ok);
         assert!(stop_out.contains("stop signal sent"));
+        assert!(stop_end_ts > 0);
 
         // Cleanup test script file
         let _ = fs::remove_file(script_file);

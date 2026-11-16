@@ -2056,6 +2056,8 @@ type CommandResponse struct {
 	Stdout        string                 `protobuf:"bytes,4,opt,name=stdout,proto3" json:"stdout,omitempty"`
 	Stderr        string                 `protobuf:"bytes,5,opt,name=stderr,proto3" json:"stderr,omitempty"`
 	DurationMs    uint64                 `protobuf:"varint,6,opt,name=duration_ms,json=durationMs,proto3" json:"duration_ms,omitempty"`
+	StartedAt     int64                  `protobuf:"varint,7,opt,name=started_at,json=startedAt,proto3" json:"started_at,omitempty"` // Unix timestamp in seconds
+	EndedAt       int64                  `protobuf:"varint,8,opt,name=ended_at,json=endedAt,proto3" json:"ended_at,omitempty"`       // Unix timestamp in seconds
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2128,6 +2130,20 @@ func (x *CommandResponse) GetStderr() string {
 func (x *CommandResponse) GetDurationMs() uint64 {
 	if x != nil {
 		return x.DurationMs
+	}
+	return 0
+}
+
+func (x *CommandResponse) GetStartedAt() int64 {
+	if x != nil {
+		return x.StartedAt
+	}
+	return 0
+}
+
+func (x *CommandResponse) GetEndedAt() int64 {
+	if x != nil {
+		return x.EndedAt
 	}
 	return 0
 }
@@ -3407,7 +3423,7 @@ const file_proto_agent_proto_rawDesc = "" +
 	"\x0eProbeSystemCmd\"\x0f\n" +
 	"\rFlushCacheCmd\"6\n" +
 	"\x11RestartServiceCmd\x12!\n" +
-	"\fservice_name\x18\x01 \x01(\tR\vserviceName\"\xb8\x01\n" +
+	"\fservice_name\x18\x01 \x01(\tR\vserviceName\"\xf2\x01\n" +
 	"\x0fCommandResponse\x12\x1d\n" +
 	"\n" +
 	"request_id\x18\x01 \x01(\tR\trequestId\x12\x18\n" +
@@ -3416,7 +3432,10 @@ const file_proto_agent_proto_rawDesc = "" +
 	"\x06stdout\x18\x04 \x01(\tR\x06stdout\x12\x16\n" +
 	"\x06stderr\x18\x05 \x01(\tR\x06stderr\x12\x1f\n" +
 	"\vduration_ms\x18\x06 \x01(\x04R\n" +
-	"durationMs\"\x8d\x01\n" +
+	"durationMs\x12\x1d\n" +
+	"\n" +
+	"started_at\x18\a \x01(\x03R\tstartedAt\x12\x19\n" +
+	"\bended_at\x18\b \x01(\x03R\aendedAt\"\x8d\x01\n" +
 	"\rProbeResponse\x12\x1d\n" +
 	"\n" +
 	"request_id\x18\x01 \x01(\tR\trequestId\x12\x1a\n" +

@@ -57,7 +57,8 @@ export const NodeScriptsTab: React.FC<NodeScriptsTabProps> = ({ nodeName }) => {
   const [activeLogApp, setActiveLogApp] = useState<string>("");
   const [logLines, setLogLines] = useState<number>(100);
   const [logContent, setLogContent] = useState<string>("");
-  const [logExitCode, setLogExitCode] = useState<number | null>(null);
+  const [logStartedAt, setLogStartedAt] = useState<number | null>(null);
+  const [logEndedAt, setLogEndedAt] = useState<number | null>(null);
   const [loadingLogs, setLoadingLogs] = useState(false);
   const [copied, setCopied] = useState(false);
 
@@ -128,10 +129,12 @@ export const NodeScriptsTab: React.FC<NodeScriptsTabProps> = ({ nodeName }) => {
       const res = await api.triggerNodeAppAction(nodeName, appName, "logs", "script", lines);
       const out = res.stdout || res.stderr || "(No logs emitted)";
       setLogContent(out);
-      setLogExitCode(res.exit_code);
+      setLogStartedAt(res.started_at || null);
+      setLogEndedAt(res.ended_at || null);
     } catch (e: any) {
       setLogContent(`Error fetching logs: ${e.message}`);
-      setLogExitCode(null);
+      setLogStartedAt(null);
+      setLogEndedAt(null);
     } finally {
       setLoadingLogs(false);
     }
@@ -531,29 +534,48 @@ export const NodeScriptsTab: React.FC<NodeScriptsTabProps> = ({ nodeName }) => {
         fullWidth
         PaperProps={{ sx: { borderRadius: "14px", bgcolor: "#0F172A", color: "#F8FAFC" } }}
       >
-        <DialogTitle sx={{ pb: 1, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+        <DialogTitle
+          sx={{
+            pb: 1,
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            flexWrap: "wrap",
+            gap: 1,
+          }}
+        >
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
             <Terminal size={20} color="#10B981" />
             <Typography variant="h6" sx={{ fontWeight: 800, color: "#F8FAFC", fontSize: "1.05rem" }}>
-              Execution Logs: {activeLogApp}
+              Script Logs: {activeLogApp}
             </Typography>
             <Chip
               size="small"
               label={`Node: ${nodeName}`}
               sx={{ bgcolor: "#1E293B", color: "#94A3B8", fontWeight: 600, fontSize: "0.72rem" }}
             />
-            {logExitCode !== null && (
+            {logStartedAt ? (
               <Chip
                 size="small"
-                label={`Exit Code: ${logExitCode}`}
-                sx={{
-                  bgcolor: logExitCode === 0 ? "#064E3B" : "#7F1D1D",
-                  color: logExitCode === 0 ? "#6EE7B7" : "#FCA5A5",
-                  fontWeight: 700,
-                  fontSize: "0.72rem",
-                }}
+                icon={<Clock size={12} color="#94A3B8" />}
+                label={`Started: ${new Date(logStartedAt * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}`}
+                sx={{ bgcolor: "#1E293B", color: "#E2E8F0", fontSize: "0.72rem" }}
               />
-            )}
+            ) : null}
+            {logEndedAt ? (
+              <Chip
+                size="small"
+                label={`Ended: ${new Date(logEndedAt * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}`}
+                sx={{ bgcolor: "#1E293B", color: "#E2E8F0", fontSize: "0.72rem" }}
+              />
+            ) : null}
+            {logStartedAt && logEndedAt && logEndedAt >= logStartedAt ? (
+              <Chip
+                size="small"
+                label={`Duration: ${logEndedAt - logStartedAt}s`}
+                sx={{ bgcolor: "#1E293B", color: "#94A3B8", fontSize: "0.72rem" }}
+              />
+            ) : null}
           </Box>
           <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
             <FormControl size="small" sx={{ minWidth: 100 }}>

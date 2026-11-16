@@ -1160,6 +1160,8 @@ export interface AppActionResponse {
   stdout: string;
   stderr: string;
   duration_ms: number;
+  started_at?: number;
+  ended_at?: number;
 }
 
 export interface AppClusterActionResult {
@@ -1169,6 +1171,8 @@ export interface AppClusterActionResult {
   stdout?: string;
   stderr?: string;
   duration_ms?: number;
+  started_at?: number;
+  ended_at?: number;
   error?: string;
 }
 

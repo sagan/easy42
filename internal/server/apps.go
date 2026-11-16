@@ -266,6 +266,8 @@ type appClusterActionResult struct {
 	Stdout     string `json:"stdout,omitempty"`
 	Stderr     string `json:"stderr,omitempty"`
 	DurationMs uint64 `json:"duration_ms,omitempty"`
+	StartedAt  int64  `json:"started_at,omitempty"`
+	EndedAt    int64  `json:"ended_at,omitempty"`
 	Error      string `json:"error,omitempty"`
 }
 
@@ -365,6 +367,8 @@ func (s *Server) handleAppClusterAction(w http.ResponseWriter, r *http.Request) 
 				Stdout:     resp.Stdout,
 				Stderr:     resp.Stderr,
 				DurationMs: resp.DurationMs,
+				StartedAt:  resp.StartedAt,
+				EndedAt:    resp.EndedAt,
 			}
 		}(i, node)
 	}
