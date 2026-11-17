@@ -613,8 +613,8 @@ func TestTasksAPI(t *testing.T) {
 		t.Fatalf("Expected 400 for unknown task, got %d", wBadTask.Code)
 	}
 
-	// 3. GET /api/tasks/configure_network/source
-	reqSource := httptest.NewRequest("GET", "/api/tasks/configure_network/source", nil)
+	// 3. GET /api/tasks/config_network/source
+	reqSource := httptest.NewRequest("GET", "/api/tasks/config_network/source", nil)
 	reqSource.AddCookie(cookie)
 	wSource := httptest.NewRecorder()
 	srv.router.ServeHTTP(wSource, reqSource)

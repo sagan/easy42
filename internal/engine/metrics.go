@@ -452,8 +452,10 @@ func (m *Manager) GetFleetLiveStatus() (config.FleetMetricsSummary, []config.Nod
 			}
 		}
 
-		// Check if agent was ever installed or connected
-		agentInstalled := connected || info.AgentVersion != "" || !info.LastSeen.IsZero() || hasMetrics
+		// Check if agent was ever installed or connected. Nodes configured for SSH
+		// management are never reported as having an agent, even if stale telemetry
+		// was recorded before the agent was uninstalled from the node details page.
+		agentInstalled := connected || (n.IsAgentMode() && (info.AgentVersion != "" || !info.LastSeen.IsZero() || hasMetrics))
 		status.AgentInstalled = agentInstalled
 
 		if connected {

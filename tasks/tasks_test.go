@@ -26,7 +26,7 @@ func TestGetTasks(t *testing.T) {
 		"config_nftables",
 		"sysctl_params",
 		"autostart_interfaces",
-		"configure_network",
+		"config_network",
 	}
 
 	foundMap := make(map[string]bool)
@@ -65,7 +65,7 @@ func TestGetTasks(t *testing.T) {
 }
 
 func TestGetTaskSources(t *testing.T) {
-	sources, err := GetTaskSources("configure_network")
+	sources, err := GetTaskSources("config_network")
 	if err != nil {
 		t.Fatalf("GetTaskSources failed: %v", err)
 	}

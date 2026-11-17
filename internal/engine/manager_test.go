@@ -15,6 +15,7 @@ import (
 
 	"easy42/internal/agent"
 	agentpb "easy42/internal/agent/proto"
+	"easy42/internal/apps"
 	"easy42/internal/compiler"
 	"easy42/internal/config"
 	"easy42/internal/crypto"
@@ -1058,6 +1059,88 @@ func TestUpdateStatePartialNodeFilter(t *testing.T) {
 	// Ensure node-b was NOT deleted from recorded state during partial update
 	if _, exists := stPartial.Nodes["node-b"]; !exists {
 		t.Errorf("Partial update for node-a should have preserved node-b in state store")
+	}
+}
+
+func TestUpdateStatePreservesRecordedConfigHashes(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "easy42-state-preserve-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	store := config.NewStore(tempDir)
+	if _, err := store.Initialize(); err != nil {
+		t.Fatalf("Failed to init store: %v", err)
+	}
+
+	mgr := NewManager(store)
+	defer mgr.Close()
+
+	// Unreachable SSH node: UpdateState cannot probe it.
+	if err := mgr.AddNode(config.Node{Name: "unreachable-node", Host: "192.0.2.50", IP: "10.42.0.50/24"}); err != nil {
+		t.Fatalf("Failed to add node: %v", err)
+	}
+
+	birdApplied := time.Now().Add(-time.Hour).Truncate(time.Second)
+	nftApplied := time.Now().Add(-2 * time.Hour).Truncate(time.Second)
+	state := &config.NetworkState{Nodes: map[string]config.StateNode{
+		"unreachable-node": {
+			Name:               "unreachable-node",
+			Host:               "192.0.2.50",
+			BirdConfigHash:     "bird-hash",
+			BirdAppliedAt:      &birdApplied,
+			NftablesConfigHash: "nft-hash",
+			NftablesAppliedAt:  &nftApplied,
+			RoaConfigHashes:    map[string]string{"/etc/easy42_default_roa4.conf": "roa-hash"},
+			HostsConfigHash:    "hosts-hash",
+			AppConfigHashes:    map[string]string{"my-app": "app-hash"},
+			Interfaces: map[string]config.StateInterface{
+				"wg42peer": {Name: "wg42peer", TargetFile: "/etc/wireguard/wg42peer.conf", ConfigHash: "wg-hash", Status: "active"},
+			},
+		},
+	}}
+	if err := mgr.stateStore.Save(state); err != nil {
+		t.Fatalf("Failed to save state: %v", err)
+	}
+
+	if _, _, err := mgr.UpdateState(); err != nil {
+		t.Fatalf("UpdateState failed: %v", err)
+	}
+
+	st := mgr.GetNetworkState()
+	node, ok := st.Nodes["unreachable-node"]
+	if !ok {
+		t.Fatalf("UpdateState dropped recorded state for unreachable node")
+	}
+	if node.BirdConfigHash != "bird-hash" || node.NftablesConfigHash != "nft-hash" {
+		t.Errorf("UpdateState discarded BIRD/nftables hashes: bird=%q nft=%q", node.BirdConfigHash, node.NftablesConfigHash)
+	}
+	if node.RoaConfigHashes["/etc/easy42_default_roa4.conf"] != "roa-hash" {
+		t.Errorf("UpdateState discarded ROA hashes: %+v", node.RoaConfigHashes)
+	}
+	if node.HostsConfigHash != "hosts-hash" {
+		t.Errorf("UpdateState discarded hosts hash: %q", node.HostsConfigHash)
+	}
+	if node.AppConfigHashes["my-app"] != "app-hash" {
+		t.Errorf("UpdateState discarded app hashes: %+v", node.AppConfigHashes)
+	}
+	if node.BirdAppliedAt == nil || node.NftablesAppliedAt == nil {
+		t.Errorf("UpdateState discarded applied timestamps")
+	}
+	if iface, ok := node.Interfaces["wg42peer"]; !ok || iface.ConfigHash != "wg-hash" || iface.TargetFile != "/etc/wireguard/wg42peer.conf" {
+		t.Errorf("UpdateState discarded recorded interface state: %+v", node.Interfaces)
+	}
+
+	// The sync plan must not report recorded configurations as pending.
+	actions, err := mgr.PlanSync()
+	if err != nil {
+		t.Fatalf("PlanSync failed: %v", err)
+	}
+	for _, act := range actions {
+		if act.Type == config.ActionSyncConfig && act.NeedsApply {
+			t.Errorf("recorded WireGuard interface reported as pending after UpdateState: %s", act.Interface)
+		}
 	}
 }
 
@@ -2840,6 +2923,7 @@ func TestPlanSyncAppsWhenVaultLockedOnRestart(t *testing.T) {
 		Name: "agent-node-1",
 		Host: "192.168.10.10",
 		IP:   "10.42.0.10/24",
+		Mode: "agent",
 	}
 	if err := mgr.AddNode(node); err != nil {
 		t.Fatalf("Failed to add node: %v", err)
@@ -2946,7 +3030,13 @@ func TestPlanSyncAppsWhenVaultLockedOnRestart(t *testing.T) {
 		t.Fatalf("Vault should be locked")
 	}
 
-	// 3. PlanSync while vault is locked should probe connected agent and find apps synced!
+	// 3. UpdateState while the vault is locked probes the connected agent and
+	// refreshes the cached app state (PlanSync itself never contacts devices).
+	if _, _, err := mgr.UpdateState(); err != nil {
+		t.Fatalf("UpdateState failed: %v", err)
+	}
+
+	// 4. PlanSync while vault is locked should use the cached agent state and find apps synced!
 	actions, err := mgr.PlanSync()
 	if err != nil {
 		t.Fatalf("PlanSync failed: %v", err)
@@ -2967,6 +3057,250 @@ func TestPlanSyncAppsWhenVaultLockedOnRestart(t *testing.T) {
 	}
 	if !appActionFound {
 		t.Errorf("Expected to find app action for my-service in sync plan")
+	}
+}
+
+func TestPlanSyncUsesCachedStateWithoutContactingDevices(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "easy42-cached-plan-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	store := config.NewStore(tempDir)
+	if _, err := store.Initialize(); err != nil {
+		t.Fatalf("Failed to init store: %v", err)
+	}
+
+	mgr := NewManager(store)
+	defer mgr.Close()
+
+	// Two managed nodes: one configured for agent mode, one managed via SSH.
+	// Both hosts are unreachable, so any SSH attempt would be slow / fail.
+	if err := mgr.AddNode(config.Node{Name: "agent-node", Host: "192.0.2.10", IP: "10.42.0.10/24", Mode: "agent"}); err != nil {
+		t.Fatalf("Failed to add agent node: %v", err)
+	}
+	if err := mgr.AddNode(config.Node{Name: "ssh-node", Host: "192.0.2.11", IP: "10.42.0.11/24"}); err != nil {
+		t.Fatalf("Failed to add ssh node: %v", err)
+	}
+
+	// Simulate a connected agent that never answers commands: any command sent
+	// to it would block until the timeout, so a fast PlanSync proves the agent
+	// is not contacted.
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ws, err := testUpgrader.Upgrade(w, r, nil)
+		if err != nil {
+			return
+		}
+		conn := agent.NewConnection("agent-node", ws, mgr.AgentHub())
+		mgr.AgentHub().Register(conn)
+		go conn.ReadLoop()
+	}))
+	defer server.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http")
+	clientWs, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("Failed to connect mock agent: %v", err)
+	}
+	defer clientWs.Close()
+
+	// Drain incoming messages without ever replying.
+	go func() {
+		for {
+			if _, _, err := clientWs.ReadMessage(); err != nil {
+				return
+			}
+		}
+	}()
+
+	time.Sleep(100 * time.Millisecond)
+	if !mgr.AgentHub().IsConnected("agent-node") {
+		t.Fatalf("expected mock agent to be connected")
+	}
+
+	start := time.Now()
+	actions, err := mgr.PlanSync()
+	if err != nil {
+		t.Fatalf("PlanSync failed: %v", err)
+	}
+	if elapsed := time.Since(start); elapsed > 2*time.Second {
+		t.Fatalf("PlanSync took %v, expected it to use cached state only", elapsed)
+	}
+	if len(actions) == 0 {
+		t.Fatalf("expected cached plan to contain actions")
+	}
+}
+
+func TestPlanSyncAppsAfterServerRestart(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "easy42-apps-restart-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	store := config.NewStore(tempDir)
+	if _, err := store.Initialize(); err != nil {
+		t.Fatalf("Failed to init store: %v", err)
+	}
+
+	mgr := NewManager(store)
+	if err := mgr.AddNode(config.Node{Name: "app-node", Host: "192.168.10.30", IP: "10.42.0.30/24", Mode: "agent"}); err != nil {
+		t.Fatalf("Failed to add node: %v", err)
+	}
+
+	enabledApp := config.App{
+		ID:          "app-enabled",
+		Name:        "enabled-app",
+		AppType:     "docker",
+		Enabled:     true,
+		Published:   true,
+		Selector:    map[string]string{"name": "app-node"},
+		MainContent: "version: '3'\nservices:\n  app:\n    image: my-image:latest\n",
+	}
+	disabledApp := config.App{
+		ID:          "app-disabled",
+		Name:        "disabled-app",
+		AppType:     "docker",
+		Enabled:     false,
+		Published:   true,
+		Selector:    map[string]string{"name": "app-node"},
+		MainContent: "version: '3'\nservices:\n  app:\n    image: other-image:latest\n",
+	}
+	for _, app := range []config.App{enabledApp, disabledApp} {
+		if _, err := mgr.SaveApp(app); err != nil {
+			t.Fatalf("Failed to save app: %v", err)
+		}
+	}
+
+	// Simulate a successful sync: record hashes, artifacts and the applied
+	// enabled state exactly like the agent sync path does.
+	specs, err := mgr.BuildAppSpecsForNode("app-node")
+	if err != nil || len(specs) != 2 {
+		t.Fatalf("Failed to build app specs: %v (got %d)", err, len(specs))
+	}
+	for _, spec := range specs {
+		enabled := spec.Name == enabledApp.Name
+		if err := mgr.StateStore().UpdateAppState("app-node", "192.168.10.30", spec.Name, spec.Sha256Hash, time.Now()); err != nil {
+			t.Fatalf("UpdateAppState failed: %v", err)
+		}
+		if err := mgr.StateStore().UpdateAppArtifactState("app-node", "192.168.10.30", spec.Name, apps.ComputeAppArtifactHash(spec), time.Now()); err != nil {
+			t.Fatalf("UpdateAppArtifactState failed: %v", err)
+		}
+		if err := mgr.StateStore().UpdateAppEnabledState("app-node", "192.168.10.30", spec.Name, enabled); err != nil {
+			t.Fatalf("UpdateAppEnabledState failed: %v", err)
+		}
+	}
+	mgr.Close()
+
+	// Restart: new manager, same data directory. The agent is offline and all
+	// in-memory caches (app hashes/files/enabled state) are gone.
+	restartedStore := config.NewStore(tempDir)
+	if _, err := restartedStore.Load(); err != nil {
+		t.Fatalf("Failed to load store after restart: %v", err)
+	}
+	restarted := NewManager(restartedStore)
+	defer restarted.Close()
+
+	actions, err := restarted.PlanSync()
+	if err != nil {
+		t.Fatalf("PlanSync failed: %v", err)
+	}
+	for _, act := range actions {
+		if (act.Type == config.ActionSyncApp || act.Type == config.ActionDeleteApp) && act.NeedsApply {
+			t.Errorf("app action reported as pending after restart: %s (%s) diff_status=%s",
+				act.Interface, act.TargetFile, act.DiffStatus)
+		}
+	}
+
+	// The agent reconnects after the restart and reports the apps it runs. The
+	// plan must stay clean (no "Deploy app" actions) once live data arrives.
+	restarted.AgentHub().UpdateTelemetry("app-node", &agentpb.TelemetryReport{
+		Apps: []*agentpb.AppStatus{
+			{Name: enabledApp.Name, State: "running"},
+			{Name: disabledApp.Name, State: "stopped"},
+		},
+	})
+	time.Sleep(100 * time.Millisecond)
+
+	actions, err = restarted.PlanSync()
+	if err != nil {
+		t.Fatalf("PlanSync failed: %v", err)
+	}
+	for _, act := range actions {
+		if (act.Type == config.ActionSyncApp || act.Type == config.ActionDeleteApp) && act.NeedsApply {
+			t.Errorf("app action reported as pending after agent reconnect: %s (%s) diff_status=%s",
+				act.Interface, act.TargetFile, act.DiffStatus)
+		}
+	}
+}
+
+func TestPlanSyncSkipsAppActionsForSSHNodes(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "easy42-apps-ssh-sync-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	store := config.NewStore(tempDir)
+	if _, err := store.Initialize(); err != nil {
+		t.Fatalf("Failed to init store: %v", err)
+	}
+
+	mgr := NewManager(store)
+	defer mgr.Close()
+
+	// Node without an installed agent (default SSH management mode)
+	if err := mgr.AddNode(config.Node{
+		Name: "ssh-node-1",
+		Host: "192.168.10.20",
+		IP:   "10.42.0.20/24",
+	}); err != nil {
+		t.Fatalf("Failed to add node: %v", err)
+	}
+
+	app := config.App{
+		ID:          "app-ssh-1",
+		Name:        "ssh-app",
+		AppType:     "docker",
+		Enabled:     true,
+		Published:   true,
+		Selector:    map[string]string{"name": "ssh-node-1"},
+		MainContent: "version: '3'\nservices:\n  app:\n    image: my-image:latest\n",
+	}
+	if _, err := mgr.SaveApp(app); err != nil {
+		t.Fatalf("Failed to save app: %v", err)
+	}
+
+	actions, err := mgr.PlanSync()
+	if err != nil {
+		t.Fatalf("PlanSync failed: %v", err)
+	}
+	for _, act := range actions {
+		if act.Type == config.ActionSyncApp || act.Type == config.ActionDeleteApp {
+			t.Errorf("Expected no app actions for SSH-managed node, got: %+v", act)
+		}
+	}
+
+	// Once the node is switched to agent mode, the app must show up as pending.
+	if err := mgr.SetNodeMode("ssh-node-1", "agent"); err != nil {
+		t.Fatalf("SetNodeMode failed: %v", err)
+	}
+	actions, err = mgr.PlanSync()
+	if err != nil {
+		t.Fatalf("PlanSync failed: %v", err)
+	}
+	found := false
+	for _, act := range actions {
+		if act.Type == config.ActionSyncApp && act.Interface == "ssh-app" {
+			found = true
+			if !act.NeedsApply {
+				t.Errorf("Expected app action to be pending on agent node, got: %+v", act)
+			}
+		}
+	}
+	if !found {
+		t.Errorf("Expected app action for ssh-app when node is in agent mode")
 	}
 }
 
@@ -3385,4 +3719,3 @@ func TestLinkDisabled(t *testing.T) {
 		t.Fatalf("Expected ActionSyncConfig for re-enabled link interface %s", link.From.Interface)
 	}
 }
-

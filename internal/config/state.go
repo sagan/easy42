@@ -42,6 +42,13 @@ type StateInterface struct {
 	AppliedAt       time.Time  `json:"applied_at,omitempty"`
 }
 
+// AppStateRecord is the last observed live state of an app on a node.
+type AppStateRecord struct {
+	State      string    `json:"state"` // "running" | "stopped" | "failed" | "unknown"
+	StatusText string    `json:"status_text,omitempty"`
+	ObservedAt time.Time `json:"observed_at,omitempty"`
+}
+
 // StateNode represents the actual applied/observed state of a node
 type StateNode struct {
 	Name                 string                    `json:"name"`
@@ -58,6 +65,8 @@ type StateNode struct {
 	AppConfigHashes      map[string]string         `json:"app_config_hashes,omitempty"`   // key: app name, val: sha256 hash
 	AppArtifactHashes    map[string]string         `json:"app_artifact_hashes,omitempty"` // key: app name, val: sha256 of the synced artifact set
 	AppAppliedAt         map[string]time.Time      `json:"app_applied_at,omitempty"`
+	AppEnabled           map[string]bool           `json:"app_enabled,omitempty"`  // key: app name, val: enabled state last applied by Easy42
+	AppStatuses          map[string]AppStateRecord `json:"app_statuses,omitempty"` // key: app name, val: last observed live state
 	ObfuscatorConfigHash string                    `json:"obfuscator_config_hash,omitempty"`
 	ObfuscatorAppliedAt  *time.Time                `json:"obfuscator_applied_at,omitempty"`
 	Interfaces           map[string]StateInterface `json:"interfaces"` // key: interface name e.g. "wg42node2"
@@ -314,7 +323,7 @@ func (s *StateStore) Load() (*NetworkState, error) {
 		SELECT node_name, host, last_seen, bird_config_hash, bird_applied_at,
 		       nftables_config_hash, nftables_applied_at, roa_config_hashes,
 		       roa_applied_at, hosts_config_hash, hosts_applied_at, interfaces,
-		       app_config_hashes, app_artifact_hashes, app_applied_at,
+		       app_config_hashes, app_artifact_hashes, app_applied_at, app_enabled, app_statuses,
 		       obfuscator_config_hash, obfuscator_applied_at
 		FROM node_states
 	`)
@@ -334,7 +343,8 @@ func (s *StateStore) Load() (*NetworkState, error) {
 			obfuscatorAppliedUnix                        sql.NullInt64
 			roaHashesJSON, roaAppliedJSON                string
 			appHashesJSON, appArtifactHashesJSON         string
-			appAppliedJSON                               string
+			appAppliedJSON, appEnabledJSON               string
+			appStatusesJSON                              string
 			ifacesJSON                                   string
 		)
 
@@ -342,7 +352,7 @@ func (s *StateStore) Load() (*NetworkState, error) {
 			&nodeName, &host, &lastSeenUnix, &birdHash, &birdAppliedUnix,
 			&nftHash, &nftAppliedUnix, &roaHashesJSON, &roaAppliedJSON,
 			&hostsHash, &hostsAppliedUnix, &ifacesJSON,
-			&appHashesJSON, &appArtifactHashesJSON, &appAppliedJSON,
+			&appHashesJSON, &appArtifactHashesJSON, &appAppliedJSON, &appEnabledJSON, &appStatusesJSON,
 			&obfuscatorHash, &obfuscatorAppliedUnix,
 		); err != nil {
 			continue
@@ -360,6 +370,8 @@ func (s *StateStore) Load() (*NetworkState, error) {
 			AppConfigHashes:      make(map[string]string),
 			AppArtifactHashes:    make(map[string]string),
 			AppAppliedAt:         make(map[string]time.Time),
+			AppEnabled:           make(map[string]bool),
+			AppStatuses:          make(map[string]AppStateRecord),
 			Interfaces:           make(map[string]StateInterface),
 		}
 
@@ -398,6 +410,12 @@ func (s *StateStore) Load() (*NetworkState, error) {
 		if appAppliedJSON != "" {
 			_ = json.Unmarshal([]byte(appAppliedJSON), &node.AppAppliedAt)
 		}
+		if appEnabledJSON != "" {
+			_ = json.Unmarshal([]byte(appEnabledJSON), &node.AppEnabled)
+		}
+		if appStatusesJSON != "" {
+			_ = json.Unmarshal([]byte(appStatusesJSON), &node.AppStatuses)
+		}
 		if ifacesJSON != "" {
 			_ = json.Unmarshal([]byte(ifacesJSON), &node.Interfaces)
 		}
@@ -430,6 +448,8 @@ func (s *StateStore) saveNodeLocked(node StateNode) error {
 	appHashesJSON, _ := json.Marshal(node.AppConfigHashes)
 	appArtifactHashesJSON, _ := json.Marshal(node.AppArtifactHashes)
 	appAppliedJSON, _ := json.Marshal(node.AppAppliedAt)
+	appEnabledJSON, _ := json.Marshal(node.AppEnabled)
+	appStatusesJSON, _ := json.Marshal(node.AppStatuses)
 	ifacesJSON, _ := json.Marshal(node.Interfaces)
 
 	var lastSeenUnix *int64
@@ -467,9 +487,9 @@ func (s *StateStore) saveNodeLocked(node StateNode) error {
 		node_name, host, last_seen, bird_config_hash, bird_applied_at,
 		nftables_config_hash, nftables_applied_at, roa_config_hashes,
 		roa_applied_at, hosts_config_hash, hosts_applied_at, interfaces,
-		app_config_hashes, app_artifact_hashes, app_applied_at,
+		app_config_hashes, app_artifact_hashes, app_applied_at, app_enabled, app_statuses,
 		obfuscator_config_hash, obfuscator_applied_at
-	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	ON CONFLICT(node_name) DO UPDATE SET
 		host=excluded.host,
 		last_seen=excluded.last_seen,
@@ -485,6 +505,8 @@ func (s *StateStore) saveNodeLocked(node StateNode) error {
 		app_config_hashes=excluded.app_config_hashes,
 		app_artifact_hashes=excluded.app_artifact_hashes,
 		app_applied_at=excluded.app_applied_at,
+		app_enabled=excluded.app_enabled,
+		app_statuses=excluded.app_statuses,
 		obfuscator_config_hash=excluded.obfuscator_config_hash,
 		obfuscator_applied_at=excluded.obfuscator_applied_at;
 	`
@@ -493,7 +515,7 @@ func (s *StateStore) saveNodeLocked(node StateNode) error {
 		node.Name, node.Host, lastSeenUnix, node.BirdConfigHash, birdUnix,
 		node.NftablesConfigHash, nftUnix, string(roaHashesJSON), string(roaAppliedJSON),
 		node.HostsConfigHash, hostsUnix, string(ifacesJSON),
-		string(appHashesJSON), string(appArtifactHashesJSON), string(appAppliedJSON),
+		string(appHashesJSON), string(appArtifactHashesJSON), string(appAppliedJSON), string(appEnabledJSON), string(appStatusesJSON),
 		node.ObfuscatorConfigHash, obfuscatorUnix,
 	)
 	return err
@@ -531,6 +553,8 @@ func (s *StateStore) Save(st *NetworkState) (err error) {
 		appHashesJSON, _ := json.Marshal(node.AppConfigHashes)
 		appArtifactHashesJSON, _ := json.Marshal(node.AppArtifactHashes)
 		appAppliedJSON, _ := json.Marshal(node.AppAppliedAt)
+		appEnabledJSON, _ := json.Marshal(node.AppEnabled)
+		appStatusesJSON, _ := json.Marshal(node.AppStatuses)
 		ifacesJSON, _ := json.Marshal(node.Interfaces)
 
 		var lastSeenUnix *int64
@@ -568,15 +592,15 @@ func (s *StateStore) Save(st *NetworkState) (err error) {
 			node_name, host, last_seen, bird_config_hash, bird_applied_at,
 			nftables_config_hash, nftables_applied_at, roa_config_hashes,
 			roa_applied_at, hosts_config_hash, hosts_applied_at, interfaces,
-			app_config_hashes, app_artifact_hashes, app_applied_at,
+			app_config_hashes, app_artifact_hashes, app_applied_at, app_enabled, app_statuses,
 			obfuscator_config_hash, obfuscator_applied_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 		`
 		if _, err := tx.Exec(query,
 			node.Name, node.Host, lastSeenUnix, node.BirdConfigHash, birdUnix,
 			node.NftablesConfigHash, nftUnix, string(roaHashesJSON), string(roaAppliedJSON),
 			node.HostsConfigHash, hostsUnix, string(ifacesJSON),
-			string(appHashesJSON), string(appArtifactHashesJSON), string(appAppliedJSON),
+			string(appHashesJSON), string(appArtifactHashesJSON), string(appAppliedJSON), string(appEnabledJSON), string(appStatusesJSON),
 			node.ObfuscatorConfigHash, obfuscatorUnix,
 		); err != nil {
 			return err
@@ -1042,8 +1066,10 @@ func (s *StateStore) UpdateAppArtifactState(nodeName, host, appName, artifactHas
 	return s.saveNodeLocked(node)
 }
 
-// UpdateAppStates records or updates multiple app hashes reported for a node
-func (s *StateStore) UpdateAppStates(nodeName, host string, hashes map[string]string, appliedAt time.Time) error {
+// UpdateAppStates records or updates multiple app hashes reported for a node.
+// When enabled is non-nil, the recorded enabled state of the reported apps is
+// updated as well.
+func (s *StateStore) UpdateAppStates(nodeName, host string, hashes map[string]string, enabled map[string]bool, appliedAt time.Time) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -1082,6 +1108,9 @@ func (s *StateStore) UpdateAppStates(nodeName, host string, hashes map[string]st
 	if node.AppAppliedAt == nil {
 		node.AppAppliedAt = make(map[string]time.Time)
 	}
+	if node.AppEnabled == nil {
+		node.AppEnabled = make(map[string]bool)
+	}
 	if host != "" {
 		node.Host = host
 	}
@@ -1089,6 +1118,108 @@ func (s *StateStore) UpdateAppStates(nodeName, host string, hashes map[string]st
 	for k, v := range hashes {
 		node.AppConfigHashes[k] = v
 		node.AppAppliedAt[k] = appliedAt
+	}
+	for k, v := range enabled {
+		node.AppEnabled[k] = v
+	}
+	s.state.Nodes[nodeName] = node
+	s.state.UpdatedAt = time.Now()
+
+	return s.saveNodeLocked(node)
+}
+
+// UpdateAppEnabledState records the enabled state that was last applied for an
+// app on a node. The enabled state is not part of the deployed files, so it must
+// be tracked separately to detect enable/disable drift during sync planning.
+func (s *StateStore) UpdateAppEnabledState(nodeName, host, appName string, enabled bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if err := s.initDBLocked(); err != nil {
+		return err
+	}
+
+	if s.state == nil {
+		s.state = &NetworkState{
+			Version:   1,
+			UpdatedAt: time.Now(),
+			Nodes:     make(map[string]StateNode),
+		}
+	}
+
+	node, exists := s.state.Nodes[nodeName]
+	if !exists {
+		node = StateNode{
+			Name:              nodeName,
+			Host:              host,
+			LastSeen:          time.Now(),
+			Interfaces:        make(map[string]StateInterface),
+			RoaConfigHashes:   make(map[string]string),
+			RoaAppliedAt:      make(map[string]time.Time),
+			AppConfigHashes:   make(map[string]string),
+			AppArtifactHashes: make(map[string]string),
+			AppAppliedAt:      make(map[string]time.Time),
+			AppEnabled:        make(map[string]bool),
+		}
+	}
+	if node.AppEnabled == nil {
+		node.AppEnabled = make(map[string]bool)
+	}
+	if host != "" {
+		node.Host = host
+	}
+	node.AppEnabled[appName] = enabled
+	s.state.Nodes[nodeName] = node
+	s.state.UpdatedAt = time.Now()
+
+	return s.saveNodeLocked(node)
+}
+
+// UpdateAppStatusStates records the last observed live states of apps on a node.
+// These are persisted so the sync plan stays stable across restarts.
+func (s *StateStore) UpdateAppStatusStates(nodeName, host string, statuses map[string]AppStateRecord) error {
+	if len(statuses) == 0 {
+		return nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if err := s.initDBLocked(); err != nil {
+		return err
+	}
+
+	if s.state == nil {
+		s.state = &NetworkState{
+			Version:   1,
+			UpdatedAt: time.Now(),
+			Nodes:     make(map[string]StateNode),
+		}
+	}
+
+	node, exists := s.state.Nodes[nodeName]
+	if !exists {
+		node = StateNode{
+			Name:              nodeName,
+			Host:              host,
+			LastSeen:          time.Now(),
+			Interfaces:        make(map[string]StateInterface),
+			RoaConfigHashes:   make(map[string]string),
+			RoaAppliedAt:      make(map[string]time.Time),
+			AppConfigHashes:   make(map[string]string),
+			AppArtifactHashes: make(map[string]string),
+			AppAppliedAt:      make(map[string]time.Time),
+			AppEnabled:        make(map[string]bool),
+			AppStatuses:       make(map[string]AppStateRecord),
+		}
+	}
+	if node.AppStatuses == nil {
+		node.AppStatuses = make(map[string]AppStateRecord)
+	}
+	if host != "" {
+		node.Host = host
+	}
+	for name, st := range statuses {
+		node.AppStatuses[name] = st
 	}
 	s.state.Nodes[nodeName] = node
 	s.state.UpdatedAt = time.Now()
@@ -1122,6 +1253,12 @@ func (s *StateStore) RemoveAppState(nodeName, appName string) error {
 	}
 	if node.AppAppliedAt != nil {
 		delete(node.AppAppliedAt, appName)
+	}
+	if node.AppEnabled != nil {
+		delete(node.AppEnabled, appName)
+	}
+	if node.AppStatuses != nil {
+		delete(node.AppStatuses, appName)
 	}
 	node.LastSeen = time.Now()
 	s.state.Nodes[nodeName] = node

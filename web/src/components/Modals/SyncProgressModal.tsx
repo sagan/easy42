@@ -424,6 +424,9 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
     try {
       const res = await api.executeSync(force, targetNode || undefined);
       setResults(res || []);
+      // Apply / Force Sync refresh live device state on the backend before
+      // planning, so reload the (cached) plan to reflect what was applied.
+      await loadPreview();
       onSyncComplete();
     } catch (err: unknown) {
       const e = err as Error & { status?: number };
@@ -538,7 +541,7 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
           <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", py: 6, gap: 2 }}>
             <CircularProgress size={24} color="primary" />
             <Typography variant="body2" sx={{ color: "#64748B" }}>
-              Computing WireGuard peer configurations, state diffs, and deleted interfaces...
+              Computing configuration diffs from cached state...
             </Typography>
           </Box>
         ) : previewError ? (
@@ -700,8 +703,8 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
                   </Typography>
                   <Typography variant="caption" sx={{ color: "#B45309", display: "block", mt: 0.25 }}>
                     {targetNode
-                      ? "Preview diffs for this device are computed from recorded state.json. Live interfaces could not be queried directly."
-                      : "Preview diffs for unreachable devices are computed from recorded state.json. Live interfaces could not be queried directly."}
+                      ? "Preview diffs for this device are computed from cached state. Click \"Update State from Devices\" to refresh live interfaces."
+                      : "Preview diffs for unreachable devices are computed from cached state. Click \"Update State from Devices\" to refresh live interfaces."}
                   </Typography>
                 </Alert>
               );
@@ -727,8 +730,8 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
                 </Typography>
                 <Typography variant="caption" sx={{ color: "#64748B" }}>
                   {targetNode
-                    ? `Diff calculated against recorded state and live interfaces on ${targetNode}`
-                    : "Diff calculated against recorded state and live device interfaces"}
+                    ? `Diff calculated against cached state for ${targetNode}. Use "Update State from Devices" to refresh live data.`
+                    : "Diff calculated against cached recorded state. Use \"Update State from Devices\" to refresh live data."}
                 </Typography>
               </Box>
               <Box sx={{ display: "flex", gap: 1, alignItems: "center", flexWrap: "wrap" }}>

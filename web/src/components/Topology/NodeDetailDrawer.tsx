@@ -1260,7 +1260,7 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
                 <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600 }}>
                   Mode:
                 </Typography>
-                {status.mode === "agent" || node.mode === "agent" ? (
+                {status.mode === "agent" || node.mode === "agent" || status.connected ? (
                   <Chip
                     icon={
                       status.connected ? (
@@ -1307,7 +1307,7 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
               </Box>
 
               {/* Informational note when in SSH Snapshot mode */}
-              {status.mode !== "agent" && node.mode !== "agent" && !node.is_external && (
+              {status.mode !== "agent" && node.mode !== "agent" && !status.connected && !node.is_external && (
                 <Box
                   sx={{
                     p: 1,

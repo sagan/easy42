@@ -60,6 +60,7 @@ func TestAppWithArtifactSpec(t *testing.T) {
 		Name: "node1",
 		Host: "192.168.1.50",
 		IP:   "10.42.0.77/24",
+		Mode: "agent",
 	})
 	_ = srv.mgr.Store().Save(cfg)
 
@@ -344,6 +345,7 @@ func TestCronAppWithArtifactAndConfigFiles(t *testing.T) {
 		Name: "cron-node",
 		Host: "192.168.1.70",
 		IP:   "10.42.0.88/24",
+		Mode: "agent",
 	})
 	_ = srv.mgr.Store().Save(cfg)
 

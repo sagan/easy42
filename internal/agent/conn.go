@@ -201,6 +201,7 @@ func (c *AgentConnection) handleIncomingMessage(msg *agentpb.AgentMessage) {
 		c.hostname = req.Hostname
 		c.hostsHash = req.HostsHash
 		c.disableApps = req.DisableApps
+		c.hub.RecordLiveReport(c.nodeName)
 
 		// Acknowledge registration
 		_ = c.SendMessage(&agentpb.AgentMessage{
@@ -232,6 +233,7 @@ func (c *AgentConnection) handleIncomingMessage(msg *agentpb.AgentMessage) {
 			c.hostsHash = payload.Telemetry.HostsHash
 		}
 		c.disableApps = payload.Telemetry.DisableApps
+		c.hub.RecordLiveReport(c.nodeName)
 		c.hub.UpdateTelemetry(c.nodeName, payload.Telemetry)
 
 	case *agentpb.AgentMessage_CommandResp:

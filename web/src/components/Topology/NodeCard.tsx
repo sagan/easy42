@@ -95,7 +95,7 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
   const isOnline = isExternal ? true : Boolean(status?.connected);
   const isRefreshing = refreshingNodeName === node.name;
   const isAgentConfigured = node.mode === "agent" || Boolean(node.agent_token);
-  const isAgentMode = status?.mode === "agent" || isAgentConfigured;
+  const isAgentMode = status?.mode === "agent" || isAgentConfigured || Boolean(status?.connected);
   const isAgentWorking = isAgentMode && isOnline && !isExternal;
   const isRouteReflector = Boolean(node.route_reflector);
   const isCore = Boolean(isCentralityActive && centralityInfo?.isCore);

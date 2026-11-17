@@ -116,7 +116,7 @@ func (m *Manager) CheckTaskStatus(ctx context.Context, taskID string, nodeNames 
 			}
 
 			var res tasks.TaskStatusResult
-			if taskID == "configure_network" || taskID == "configure_ip" {
+			if taskID == "config_network" || taskID == "configure_network" || taskID == "configure_ip" {
 				payload := buildConfigureNetworkPayload(n)
 				res = tasks.CheckStatusWithPayload(sshClient, sftpClient, taskID, n.Name, payload, m.customTasksDir())
 			} else {
@@ -278,7 +278,7 @@ func (m *Manager) RunTask(ctx context.Context, taskID string, nodeNames []string
 						_, _ = m.RefreshNodeStatus(n.Name)
 					}()
 				}
-			} else if taskID == "configure_network" || taskID == "configure_ip" {
+			} else if taskID == "config_network" || taskID == "configure_network" || taskID == "configure_ip" {
 				payload := buildConfigureNetworkPayload(n)
 				res = tasks.RunTaskWithPayload(sshClient, sftpClient, taskID, n.Name, payload, m.customTasksDir())
 				if res.Success {
@@ -485,7 +485,7 @@ func buildConfigureNetworkPayload(n config.Node) map[string][]byte {
 		payload["custom_network.sh"] = []byte(customScript)
 	}
 
-	taskID := "configure_network"
+	taskID := "config_network"
 	if baseStatus, err := tasks.ReadTaskScript(taskID, "status.sh"); err == nil {
 		dynamicStatus := injectEnvIntoScript(baseStatus, envContent)
 		payload["status.sh"] = []byte(dynamicStatus)

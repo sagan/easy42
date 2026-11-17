@@ -2,7 +2,6 @@ package engine
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"regexp"
 	"sort"
@@ -10,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"easy42/internal/agent"
 	agentpb "easy42/internal/agent/proto"
 	"easy42/internal/apps"
 	"easy42/internal/config"
@@ -35,33 +33,9 @@ func (m *Manager) setupAgentAppsListeners() {
 		return
 	}
 
-	// 1. When agent registers, immediately probe installed apps and cache their hashes and files
-	m.agentHub.OnRegister(func(conn *agent.AgentConnection) {
-		nodeName := conn.NodeName()
-		go func() {
-			cmdCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
-			var probeRes agentProbeResult
-			cmdResp, err := m.agentHub.SendCommand(cmdCtx, nodeName, &agentpb.CommandRequest{
-				Command: &agentpb.CommandRequest_ProbeSystem{
-					ProbeSystem: &agentpb.ProbeSystemCmd{},
-				},
-			})
-			if err == nil && cmdResp.Success && cmdResp.Stdout != "" {
-				if err := json.Unmarshal([]byte(cmdResp.Stdout), &probeRes); err == nil {
-					if len(probeRes.AppHashes) > 0 {
-						m.agentHub.SetAppHashes(nodeName, probeRes.AppHashes)
-						if m.stateStore != nil {
-							_ = m.stateStore.UpdateAppStates(nodeName, "", probeRes.AppHashes, time.Now())
-						}
-					}
-					if len(probeRes.AppFiles) > 0 {
-						m.agentHub.SetAppFiles(nodeName, probeRes.AppFiles)
-					}
-				}
-			}
-		}()
-	})
+	// NOTE: app state is discovered from the probe performed during state
+	// collection (UpdateState / agent registration) and from telemetry. No extra
+	// probe is sent here so a reconnect does not race with state collection.
 
 	// 2. When telemetry report arrives, cache reported app statuses
 	m.agentHub.OnTelemetry(func(nodeName string, t *agentpb.TelemetryReport) {
@@ -70,7 +44,6 @@ func (m *Manager) setupAgentAppsListeners() {
 		}
 
 		m.appStatusesMu.Lock()
-		defer m.appStatusesMu.Unlock()
 
 		if m.appStatuses == nil {
 			m.appStatuses = make(map[string]map[string]AppStatusRecord)
@@ -83,6 +56,7 @@ func (m *Manager) setupAgentAppsListeners() {
 		}
 
 		now := time.Now().Unix()
+		observed := make(map[string]config.AppStateRecord, len(t.Apps))
 		for _, a := range t.Apps {
 			if a == nil {
 				continue
@@ -104,8 +78,56 @@ func (m *Manager) setupAgentAppsListeners() {
 				LastUpdated:  now,
 				ErrorMessage: a.ErrorMessage,
 			}
+			observed[a.Name] = config.AppStateRecord{
+				State:      a.State,
+				StatusText: a.StatusText,
+				ObservedAt: time.Unix(now, 0),
+			}
+		}
+		m.appStatusesMu.Unlock()
+
+		// Persist the observed states so the sync plan stays stable across restarts.
+		if m.stateStore != nil {
+			host := ""
+			if node := m.FindNode(nodeName); node != nil {
+				host = node.Host
+			}
+			_ = m.stateStore.UpdateAppStatusStates(nodeName, host, observed)
 		}
 	})
+}
+
+// applyAgentAppProbe caches the app state reported by an agent probe and
+// reconciles it with the recorded state. Apps that Easy42 deployed but that are
+// no longer present on the device are removed from the recorded state so they
+// are not reported as deployed (and can be re-deployed) after a restart.
+func (m *Manager) applyAgentAppProbe(nodeName string, probeRes agentProbeResult) {
+	if m.agentHub == nil {
+		return
+	}
+	m.agentHub.SetAppHashes(nodeName, probeRes.AppHashes)
+	if probeRes.AppFiles != nil {
+		m.agentHub.SetAppFiles(nodeName, probeRes.AppFiles)
+	}
+
+	host := ""
+	if node := m.FindNode(nodeName); node != nil {
+		host = node.Host
+	}
+
+	if m.stateStore != nil {
+		if len(probeRes.AppHashes) > 0 {
+			_ = m.stateStore.UpdateAppStates(nodeName, host, probeRes.AppHashes, nil, time.Now())
+		}
+		st := m.stateStore.Get()
+		if stNode, ok := st.Nodes[nodeName]; ok {
+			for appName := range stNode.AppConfigHashes {
+				if _, present := probeRes.AppHashes[appName]; !present {
+					_ = m.stateStore.RemoveAppState(nodeName, appName)
+				}
+			}
+		}
+	}
 }
 
 // GetApps returns all configured apps
@@ -810,6 +832,18 @@ func (m *Manager) GetNodeAppsStatus(nodeName string) []AppStatusRecord {
 
 	for _, st := range nodeMap {
 		res = append(res, st)
+	}
+	return res
+}
+
+// GetNodeAppsStatusMap returns the latest reported app statuses for nodeName keyed by app name
+func (m *Manager) GetNodeAppsStatusMap(nodeName string) map[string]AppStatusRecord {
+	m.appStatusesMu.RLock()
+	defer m.appStatusesMu.RUnlock()
+
+	res := make(map[string]AppStatusRecord)
+	for name, st := range m.appStatuses[nodeName] {
+		res[name] = st
 	}
 	return res
 }

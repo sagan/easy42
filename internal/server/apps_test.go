@@ -34,6 +34,7 @@ func TestAppsAPI(t *testing.T) {
 		Name: "node1",
 		Host: "192.168.1.50",
 		IP:   "10.42.0.77/24",
+		Mode: "agent",
 	})
 	_ = srv.mgr.Store().Save(cfg)
 
@@ -653,6 +654,9 @@ func TestAppMutationsDoNotAutoSyncToConnectedAgent(t *testing.T) {
 		},
 	})
 	srv.mgr.AgentHub().SetAppHash("berohost", "rclone", specs[0].Sha256Hash)
+	if err := srv.mgr.StateStore().UpdateAppState("berohost", "192.168.1.100", "rclone", specs[0].Sha256Hash, time.Now()); err != nil {
+		t.Fatalf("failed to record app state: %v", err)
+	}
 
 	// Initially plan sync should show synced
 	actions, err := srv.mgr.PlanSyncWithScope("")
@@ -981,6 +985,9 @@ func TestAppDeleteAuxiliaryConfigFileReconciliation(t *testing.T) {
 			Hash:    config.HashConfig(`{"version": 1}`),
 		},
 	})
+	if err := srv.mgr.StateStore().UpdateAppState("node-aux", "192.168.1.101", "myapp-aux", specs[0].Sha256Hash, time.Now()); err != nil {
+		t.Fatalf("failed to record app state: %v", err)
+	}
 
 	// 5. Verify initial PlanSyncWithScope: everything is synced (NeedsApply: false)
 	actions, err := srv.mgr.PlanSyncWithScope("")
@@ -1082,6 +1089,11 @@ func recordDeployedDockerApp(t *testing.T, srv *Server, nodeName string, spec *a
 	})
 	if err := srv.mgr.StateStore().UpdateAppState(nodeName, "192.168.1.210", spec.Name, spec.Sha256Hash, time.Now()); err != nil {
 		t.Fatalf("failed to update app state: %v", err)
+	}
+	// The app was deployed while enabled; record the applied enabled state so
+	// the planner does not treat it as a legacy deployment of unknown state.
+	if err := srv.mgr.StateStore().UpdateAppEnabledState(nodeName, "192.168.1.210", spec.Name, true); err != nil {
+		t.Fatalf("failed to update app enabled state: %v", err)
 	}
 }
 
@@ -1336,6 +1348,7 @@ func TestScriptAppDeploymentAndAction(t *testing.T) {
 		Name: "node1",
 		Host: "192.168.1.50",
 		IP:   "10.42.0.77/24",
+		Mode: "agent",
 	})
 	_ = srv.mgr.Store().Save(cfg)
 
@@ -1471,4 +1484,3 @@ func TestScriptAppDeploymentAndAction(t *testing.T) {
 		}
 	}
 }
-

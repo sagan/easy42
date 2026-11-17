@@ -195,8 +195,13 @@ export const NodeDetailPage: React.FC = () => {
   const live = fleetLive?.nodes?.find((n) => n.name === decodedNodeName);
 
   const isOnline = live?.connected ?? status?.connected ?? false;
+  // A node is managed by the agent only if it is configured for agent mode or
+  // an agent is actually connected/reporting. Nodes without an installed agent
+  // fall back to SSH management.
+  const isAgentMode = Boolean(node?.mode === "agent" || node?.agent_token || status?.mode === "agent" || live?.connected);
   const agentInstalled = Boolean(
-    live?.agent_installed ?? (status?.agent_version != null || status?.mode === "agent" || node?.mode === "agent"),
+    live?.agent_installed ??
+      (isAgentMode && (status?.agent_version != null || status?.mode === "agent" || node?.mode === "agent")),
   );
   const currentAgentVer = live?.agent_version || status?.agent_version || node?.agent_version;
   const isOutdated = isAgentVersionOutdated(currentAgentVer, serverAgentVersion);
@@ -2133,14 +2138,14 @@ export const NodeDetailPage: React.FC = () => {
                         Management Mode:
                       </Typography>
                       <Chip
-                        label={node.is_external ? "EXTERNAL" : node.mode ? node.mode.toUpperCase() : "AGENT"}
+                        label={node.is_external ? "EXTERNAL" : isAgentMode ? "AGENT" : "SSH"}
                         size="small"
                         sx={{
                           height: 20,
                           fontSize: "0.68rem",
                           fontWeight: 700,
-                          bgcolor: node.is_external ? "#FEF3C7" : node.mode === "ssh" ? "#F1F5F9" : "#EEF2FF",
-                          color: node.is_external ? "#92400E" : node.mode === "ssh" ? "#475569" : "#4F46E5",
+                          bgcolor: node.is_external ? "#FEF3C7" : isAgentMode ? "#EEF2FF" : "#F1F5F9",
+                          color: node.is_external ? "#92400E" : isAgentMode ? "#4F46E5" : "#475569",
                         }}
                       />
                     </Box>
@@ -3634,7 +3639,7 @@ export const NodeDetailPage: React.FC = () => {
                       Operating Mode
                     </Typography>
                     <Typography variant="body1" sx={{ fontWeight: 700, color: "#4F46E5", mt: 0.5 }}>
-                      {node.mode === "agent" ? "Agent (WebSocket)" : "SSH Standard"}
+                      {isAgentMode ? "Agent (WebSocket)" : "SSH Standard"}
                     </Typography>
                   </Box>
                 </Grid>

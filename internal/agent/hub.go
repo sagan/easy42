@@ -37,6 +37,8 @@ type Hub struct {
 	appHashes        map[string]map[string]string          // nodeName -> appName -> sha256
 	appFiles         map[string]map[string]ProbeConfigFile // nodeName -> filePath -> ProbeConfigFile
 	appEnabled       map[string]map[string]bool            // nodeName -> appName -> last applied enabled state
+	probeConfigs     map[string]map[string]ProbeConfigFile // nodeName -> interface -> last probed WireGuard config
+	lastLiveReport   map[string]time.Time                  // nodeName -> last agent-initiated report (register/telemetry)
 	onTelemetry      []TelemetryListener
 	onRegister       []RegisterListener
 	onCronTaskReport []CronTaskReportListener
@@ -45,12 +47,14 @@ type Hub struct {
 // NewHub creates a new Hub instance
 func NewHub() *Hub {
 	return &Hub{
-		connections: make(map[string]*AgentConnection),
-		telemetry:   make(map[string]*agentpb.TelemetryReport),
-		lastSeen:    make(map[string]time.Time),
-		appHashes:   make(map[string]map[string]string),
-		appFiles:    make(map[string]map[string]ProbeConfigFile),
-		appEnabled:  make(map[string]map[string]bool),
+		connections:    make(map[string]*AgentConnection),
+		telemetry:      make(map[string]*agentpb.TelemetryReport),
+		lastSeen:       make(map[string]time.Time),
+		appHashes:      make(map[string]map[string]string),
+		appFiles:       make(map[string]map[string]ProbeConfigFile),
+		appEnabled:     make(map[string]map[string]bool),
+		probeConfigs:   make(map[string]map[string]ProbeConfigFile),
+		lastLiveReport: make(map[string]time.Time),
 	}
 }
 
@@ -306,6 +310,58 @@ func (h *Hub) GetAppFiles(nodeName string) map[string]ProbeConfigFile {
 		return nil
 	}
 	orig := h.appFiles[nodeName]
+	if orig == nil {
+		return nil
+	}
+	cp := make(map[string]ProbeConfigFile, len(orig))
+	for k, v := range orig {
+		cp[k] = v
+	}
+	return cp
+}
+
+// RecordLiveReport marks that the agent for nodeName has pushed live data
+// (registration or telemetry) at the current time.
+func (h *Hub) RecordLiveReport(nodeName string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.lastLiveReport == nil {
+		h.lastLiveReport = make(map[string]time.Time)
+	}
+	h.lastLiveReport[nodeName] = time.Now()
+}
+
+// LastLiveReport returns when the agent for nodeName last pushed live data.
+// The zero time means the agent has not reported since the server started.
+func (h *Hub) LastLiveReport(nodeName string) time.Time {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	return h.lastLiveReport[nodeName]
+}
+
+// SetProbeConfigs caches the WireGuard config files reported by a node agent
+func (h *Hub) SetProbeConfigs(nodeName string, configs map[string]ProbeConfigFile) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.probeConfigs == nil {
+		h.probeConfigs = make(map[string]map[string]ProbeConfigFile)
+	}
+	if len(configs) == 0 {
+		delete(h.probeConfigs, nodeName)
+		return
+	}
+	cp := make(map[string]ProbeConfigFile, len(configs))
+	for k, v := range configs {
+		cp[k] = v
+	}
+	h.probeConfigs[nodeName] = cp
+}
+
+// GetProbeConfigs returns a copy of the cached WireGuard config files for a node
+func (h *Hub) GetProbeConfigs(nodeName string) map[string]ProbeConfigFile {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	orig := h.probeConfigs[nodeName]
 	if orig == nil {
 		return nil
 	}

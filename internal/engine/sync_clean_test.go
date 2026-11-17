@@ -83,6 +83,12 @@ func TestLiveSyncCleanUnusedInterface(t *testing.T) {
 		t.Fatalf("Failed to add node: %v", err)
 	}
 
+	// PlanSync only uses cached state, so refresh live device state first
+	// (this is what the sync dialog's "Update State from Devices" does).
+	if _, _, err := mgr.UpdateState(); err != nil {
+		t.Fatalf("UpdateState failed: %v", err)
+	}
+
 	// Run PlanSync
 	actions, err := mgr.PlanSync()
 	if err != nil {

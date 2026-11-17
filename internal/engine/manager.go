@@ -3170,6 +3170,31 @@ func (m *Manager) GetNodeStatuses() map[string]config.NodeStatus {
 	return res
 }
 
+// cachedProbeConfigs returns the WireGuard config files already reported by
+// connected agents. It never contacts the agents; it only reads the caches that
+// are populated when agents push telemetry or when live state is collected.
+func (m *Manager) cachedProbeConfigs(nodes []config.Node, targetMap map[string]bool, isPartial bool) map[string]map[string]agent.ProbeConfigFile {
+	res := make(map[string]map[string]agent.ProbeConfigFile)
+	if m.agentHub == nil {
+		return res
+	}
+	for _, n := range nodes {
+		if n.IsExternal {
+			continue
+		}
+		if isPartial && !targetMap[n.Name] {
+			continue
+		}
+		if !m.agentHub.IsConnected(n.Name) {
+			continue
+		}
+		if configs := m.agentHub.GetProbeConfigs(n.Name); len(configs) > 0 {
+			res[n.Name] = configs
+		}
+	}
+	return res
+}
+
 // PlanSync computes the sync actions required to bring remote devices up to date.
 // If nodeNames are provided, only changes for those target nodes are computed.
 func (m *Manager) PlanSync(nodeNames ...string) ([]config.SyncAction, error) {
@@ -3209,54 +3234,24 @@ func (m *Manager) PlanSyncWithScope(scope string, nodeNames ...string) ([]config
 
 	currentState := m.stateStore.Get()
 	actions := make([]config.SyncAction, 0)
-	probedConfigsPerNode := make(map[string]map[string]agent.ProbeConfigFile)
 
-	// Probe connected agents to collect current app hashes, app files, and existing configs.
-	// This runs regardless of vault lock status because agent probing does not require vault keys,
-	// and app sync actions / status previews rely on probed app files and hashes.
-	var probeWg sync.WaitGroup
-	var probeMu sync.Mutex
-
-	for _, n := range nodes {
-		if n.IsExternal {
-			continue
-		}
-		if isPartial && !targetMap[n.Name] {
-			continue
-		}
-		node := n
-		if m.agentHub != nil && m.agentHub.IsConnected(node.Name) {
-			probeWg.Add(1)
-			go func(targetNode config.Node) {
-				defer probeWg.Done()
-
-				cmdCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-				var probeRes agentProbeResult
-				cmdResp, err := m.agentHub.SendCommand(cmdCtx, targetNode.Name, &agentpb.CommandRequest{
-					Command: &agentpb.CommandRequest_ProbeSystem{
-						ProbeSystem: &agentpb.ProbeSystemCmd{},
-					},
-				})
-				cancel()
-				if err == nil && cmdResp.Success && cmdResp.Stdout != "" {
-					_ = json.Unmarshal([]byte(cmdResp.Stdout), &probeRes)
-					if len(probeRes.AppHashes) > 0 {
-						m.agentHub.SetAppHashes(targetNode.Name, probeRes.AppHashes)
-						if m.stateStore != nil {
-							_ = m.stateStore.UpdateAppStates(targetNode.Name, targetNode.Host, probeRes.AppHashes, time.Now())
-						}
-					}
-					if len(probeRes.AppFiles) > 0 {
-						m.agentHub.SetAppFiles(targetNode.Name, probeRes.AppFiles)
-					}
-					probeMu.Lock()
-					probedConfigsPerNode[targetNode.Name] = probeRes.Configs
-					probeMu.Unlock()
-				}
-			}(node)
+	// The sync plan is computed exclusively from cached state (recorded device
+	// state plus data already reported by connected agents). It never opens SSH
+	// sessions nor sends commands to agents, so opening the sync dialog is
+	// immediate. Live device data is collected by UpdateState (triggered by the
+	// "Update State from Devices" / apply / force sync flows) which refreshes the
+	// cached state used here.
+	probedConfigsPerNode := m.cachedProbeConfigs(nodes, targetMap, isPartial)
+	// Recorded interface state is used as a fallback to locate the live config
+	// path when the full content is not cached.
+	recordedIfacesPerNode := make(map[string]map[string]config.StateInterface)
+	if currentState != nil {
+		for name, stNode := range currentState.Nodes {
+			if len(stNode.Interfaces) > 0 {
+				recordedIfacesPerNode[name] = stNode.Interfaces
+			}
 		}
 	}
-	probeWg.Wait()
 
 	// 1. Detect unused/deleted wg42* interfaces on remote devices by running `wg`
 	// WireGuard tasks require the vault to be unlocked to decrypt private keys and manage interfaces.
@@ -3284,10 +3279,13 @@ func (m *Manager) PlanSyncWithScope(scope string, nodeNames ...string) ([]config
 			}
 		}
 
-		var wg sync.WaitGroup
-		var cleanActionsMu sync.Mutex
 		var cleanActions []config.SyncAction
 
+		// Detect interfaces that are no longer expected using cached data only:
+		// - interfaces reported by connected agents (probe cache / telemetry)
+		// - interfaces recorded in the state store
+		// No SSH connections are opened here; live interface discovery happens
+		// during UpdateState.
 		for _, n := range nodes {
 			if n.IsExternal {
 				continue
@@ -3295,136 +3293,66 @@ func (m *Manager) PlanSyncWithScope(scope string, nodeNames ...string) ([]config
 			if isPartial && !targetMap[n.Name] {
 				continue
 			}
-			node := n
-			wg.Add(1)
-			go func(targetNode config.Node) {
-				defer wg.Done()
+			expected := expectedIfacesPerNode[n.Name]
+			manualIfs := manualIfacesPerNode[n.Name]
 
-				expected := expectedIfacesPerNode[targetNode.Name]
-				manualIfs := manualIfacesPerNode[targetNode.Name]
+			if m.agentHub != nil && m.agentHub.IsConnected(n.Name) {
+				nodeStatus := m.agentHub.NodeStatus(n.Name)
+				telemetry := m.agentHub.GetTelemetry(n.Name)
 
-				// 1. If agent is connected, detect unused interfaces from probed configs and telemetry
-				if m.agentHub != nil && m.agentHub.IsConnected(targetNode.Name) {
-					nodeStatus := m.agentHub.NodeStatus(targetNode.Name)
-					telemetry := m.agentHub.GetTelemetry(targetNode.Name)
-
-					candidateIfaces := make(map[string]string)
-					probeMu.Lock()
-					pConfigs := probedConfigsPerNode[targetNode.Name]
-					probeMu.Unlock()
-					for cfgIface, cfgFile := range pConfigs {
-						if strings.HasPrefix(cfgIface, "wg42") {
-							targetFile := cfgFile.Path
-							if targetFile == "" {
-								targetFile = fmt.Sprintf("/etc/wireguard/%s.conf", cfgIface)
-							}
-							candidateIfaces[cfgIface] = targetFile
+				candidateIfaces := make(map[string]string)
+				for cfgIface, cfgFile := range probedConfigsPerNode[n.Name] {
+					if strings.HasPrefix(cfgIface, "wg42") {
+						targetFile := cfgFile.Path
+						if targetFile == "" {
+							targetFile = fmt.Sprintf("/etc/wireguard/%s.conf", cfgIface)
+						}
+						candidateIfaces[cfgIface] = targetFile
+					}
+				}
+				for _, wgInfo := range nodeStatus.WgInterfaces {
+					if strings.HasPrefix(wgInfo.Name, "wg42") {
+						if _, exists := candidateIfaces[wgInfo.Name]; !exists {
+							candidateIfaces[wgInfo.Name] = fmt.Sprintf("/etc/wireguard/%s.conf", wgInfo.Name)
 						}
 					}
-					for _, wgInfo := range nodeStatus.WgInterfaces {
-						if strings.HasPrefix(wgInfo.Name, "wg42") {
-							if _, exists := candidateIfaces[wgInfo.Name]; !exists {
-								candidateIfaces[wgInfo.Name] = fmt.Sprintf("/etc/wireguard/%s.conf", wgInfo.Name)
-							}
-						}
-					}
-					if telemetry != nil {
-						for _, iface := range telemetry.Interfaces {
-							if strings.HasPrefix(iface.Name, "wg42") {
-								if _, exists := candidateIfaces[iface.Name]; !exists {
-									candidateIfaces[iface.Name] = fmt.Sprintf("/etc/wireguard/%s.conf", iface.Name)
-								}
-							}
-						}
-						for _, peer := range telemetry.WgPeers {
-							if strings.HasPrefix(peer.InterfaceName, "wg42") {
-								if _, exists := candidateIfaces[peer.InterfaceName]; !exists {
-									candidateIfaces[peer.InterfaceName] = fmt.Sprintf("/etc/wireguard/%s.conf", peer.InterfaceName)
-								}
+				}
+				if telemetry != nil {
+					for _, iface := range telemetry.Interfaces {
+						if strings.HasPrefix(iface.Name, "wg42") {
+							if _, exists := candidateIfaces[iface.Name]; !exists {
+								candidateIfaces[iface.Name] = fmt.Sprintf("/etc/wireguard/%s.conf", iface.Name)
 							}
 						}
 					}
-
-					for iface, targetFile := range candidateIfaces {
-						if !expected[iface] && !manualIfs[iface] {
-							cleanActionsMu.Lock()
-							cleanActions = append(cleanActions, config.SyncAction{
-								NodeName:    targetNode.Name,
-								Host:        targetNode.Host,
-								Type:        config.ActionDeleteConfig,
-								Interface:   iface,
-								TargetFile:  targetFile,
-								Command:     fmt.Sprintf("wg-quick down %s && rm -f %s", iface, targetFile),
-								Description: fmt.Sprintf("Remove deleted interface %s on %s", iface, targetNode.Name),
-								FileContent: fmt.Sprintf("# Deleted interface %s is no longer in graph.\n# Action: wg-quick down %s && rm -f %s\n", iface, iface, targetFile),
-								NeedsApply:  true,
-								Status:      "pending",
-								DiffStatus:  "delete",
-							})
-							cleanActionsMu.Unlock()
-						}
-					}
-					return
-				}
-
-				// If node is configured for agent mode but currently disconnected, do not attempt SSH
-				if targetNode.IsAgentMode() {
-					m.mu.Lock()
-					m.statuses[targetNode.Name] = &config.NodeStatus{
-						Name:      targetNode.Name,
-						Host:      targetNode.Host,
-						LastSeen:  time.Now(),
-						Connected: false,
-						Error:     "agent is disconnected",
-						Mode:      "agent",
-					}
-					m.mu.Unlock()
-					return
-				}
-
-				sshClient, _, err := m.pool.GetClientWithTimeout(targetNode.Host, 3*time.Second)
-				if err != nil {
-					m.mu.Lock()
-					m.statuses[targetNode.Name] = &config.NodeStatus{
-						Name:      targetNode.Name,
-						Host:      targetNode.Host,
-						LastSeen:  time.Now(),
-						Connected: false,
-						Error:     err.Error(),
-					}
-					m.mu.Unlock()
-					return
-				}
-				runningIfaces, err := ssh.GetRunningWgInterfaces(sshClient)
-				if err != nil {
-					return
-				}
-				for _, iface := range runningIfaces {
-					// We only manage wg42* prefix wireguard interfaces
-					if strings.HasPrefix(iface, "wg42") {
-						if !expected[iface] && !manualIfs[iface] {
-							targetFile := fmt.Sprintf("/etc/wireguard/%s.conf", iface)
-							cleanActionsMu.Lock()
-							cleanActions = append(cleanActions, config.SyncAction{
-								NodeName:    targetNode.Name,
-								Host:        targetNode.Host,
-								Type:        config.ActionDeleteConfig,
-								Interface:   iface,
-								TargetFile:  targetFile,
-								Command:     fmt.Sprintf("wg-quick down %s && rm -f %s", iface, targetFile),
-								Description: fmt.Sprintf("Remove deleted interface %s on %s", iface, targetNode.Name),
-								FileContent: fmt.Sprintf("# Deleted interface %s is no longer in graph.\n# Action: wg-quick down %s && rm -f %s\n", iface, iface, targetFile),
-								NeedsApply:  true,
-								Status:      "pending",
-								DiffStatus:  "delete",
-							})
-							cleanActionsMu.Unlock()
+					for _, peer := range telemetry.WgPeers {
+						if strings.HasPrefix(peer.InterfaceName, "wg42") {
+							if _, exists := candidateIfaces[peer.InterfaceName]; !exists {
+								candidateIfaces[peer.InterfaceName] = fmt.Sprintf("/etc/wireguard/%s.conf", peer.InterfaceName)
+							}
 						}
 					}
 				}
-			}(node)
+
+				for iface, targetFile := range candidateIfaces {
+					if !expected[iface] && !manualIfs[iface] {
+						cleanActions = append(cleanActions, config.SyncAction{
+							NodeName:    n.Name,
+							Host:        n.Host,
+							Type:        config.ActionDeleteConfig,
+							Interface:   iface,
+							TargetFile:  targetFile,
+							Command:     fmt.Sprintf("wg-quick down %s && rm -f %s", iface, targetFile),
+							Description: fmt.Sprintf("Remove deleted interface %s on %s", iface, n.Name),
+							FileContent: fmt.Sprintf("# Deleted interface %s is no longer in graph.\n# Action: wg-quick down %s && rm -f %s\n", iface, iface, targetFile),
+							NeedsApply:  true,
+							Status:      "pending",
+							DiffStatus:  "delete",
+						})
+					}
+				}
+			}
 		}
-		wg.Wait()
 
 		// Also check stateStore for recorded interfaces that are no longer expected
 		for _, n := range nodes {
@@ -3521,7 +3449,9 @@ func (m *Manager) PlanSyncWithScope(scope string, nodeNames ...string) ([]config
 							}
 						}
 					}
-
+					if stIface, ok := recordedIfacesPerNode[fromNode.Name][link.From.Interface]; ok && stIface.TargetFile != "" {
+						targetFile = stIface.TargetFile
+					}
 					actions = append(actions, config.SyncAction{
 						NodeName:    fromNode.Name,
 						Host:        fromNode.Host,
@@ -3568,6 +3498,9 @@ func (m *Manager) PlanSyncWithScope(scope string, nodeNames ...string) ([]config
 								diff = generateSimpleDiff(pCfg.Content, toConf)
 							}
 						}
+					}
+					if stIface, ok := recordedIfacesPerNode[toNode.Name][link.To.Interface]; ok && stIface.TargetFile != "" {
+						targetFile = stIface.TargetFile
 					}
 
 					actions = append(actions, config.SyncAction{
@@ -3900,6 +3833,12 @@ func (m *Manager) PlanSyncWithScope(scope string, nodeNames ...string) ([]config
 		if m.agentHub != nil && m.agentHub.IsAppsDisabled(n.Name) {
 			continue
 		}
+		// Apps can only be deployed and managed through the node agent. Nodes
+		// without an agent (SSH mode) do not support app tasks, so they must not
+		// show up as pending changes in the sync plan.
+		if !n.IsAgentMode() {
+			continue
+		}
 		node := n
 
 		osInfo := ""
@@ -3920,27 +3859,57 @@ func (m *Manager) PlanSyncWithScope(scope string, nodeNames ...string) ([]config
 			desiredMap[spec.Name] = spec
 		}
 
-		deployedHashes := make(map[string]string)
+		// Live data observed on the device: hashes/files probed from the agent and
+		// app statuses reported in telemetry. These are only available while the
+		// node is online and are used to detect real drift (e.g. an app modified
+		// or removed outside Easy42).
+		liveAppHashes := make(map[string]string)
 		if m.agentHub != nil {
 			for k, v := range m.agentHub.GetAppHashes(node.Name) {
-				deployedHashes[k] = v
+				liveAppHashes[k] = v
 			}
 		}
-		if stNode, ok := currentState.Nodes[node.Name]; ok && stNode.AppConfigHashes != nil {
+
+		// Recorded state: what Easy42 last applied to the node. This survives
+		// restarts and is the baseline for the sync plan, so a restart never
+		// makes already deployed apps look pending.
+		recordedAppHashes := make(map[string]string)
+		recordedAppEnabled := make(map[string]bool)
+		recordedAppEnabledKnown := make(map[string]bool)
+		if stNode, ok := currentState.Nodes[node.Name]; ok {
 			for k, v := range stNode.AppConfigHashes {
-				if _, exists := deployedHashes[k]; !exists {
-					deployedHashes[k] = v
-				}
+				recordedAppHashes[k] = v
 			}
+			for k, v := range stNode.AppEnabled {
+				recordedAppEnabled[k] = v
+				recordedAppEnabledKnown[k] = true
+			}
+		}
+
+		deployedHashes := make(map[string]string)
+		for k, v := range recordedAppHashes {
+			deployedHashes[k] = v
+		}
+		for k, v := range liveAppHashes {
+			deployedHashes[k] = v
 		}
 		// Also consider live app statuses reported by the agent. This ensures a
 		// deleted app is garbage collected even if its hash was not cached, and
 		// lets us infer the enabled state of apps deployed before it was tracked.
+		// The persisted snapshot is used first so the plan stays stable across
+		// restarts (the in-memory map is only populated while the agent reports).
 		liveStatuses := make(map[string]AppStatusRecord)
-		for _, st := range m.GetNodeAppsStatus(node.Name) {
-			liveStatuses[st.Name] = st
-			if _, exists := deployedHashes[st.Name]; !exists {
-				deployedHashes[st.Name] = ""
+		for name, st := range m.GetNodeAppsStatusMap(node.Name) {
+			liveStatuses[name] = st
+			if _, exists := deployedHashes[name]; !exists {
+				deployedHashes[name] = ""
+			}
+		}
+		if stNode, ok := currentState.Nodes[node.Name]; ok {
+			for name, st := range stNode.AppStatuses {
+				if _, exists := liveStatuses[name]; !exists {
+					liveStatuses[name] = AppStatusRecord{Name: name, State: st.State}
+				}
 			}
 		}
 
@@ -3966,10 +3935,14 @@ func (m *Manager) PlanSyncWithScope(scope string, nodeNames ...string) ([]config
 			if spec.AppType != agentpb.AppType_SCRIPT && m.agentHub != nil {
 				if recordedEnabled, known := m.agentHub.GetAppEnabled(node.Name, spec.Name); known {
 					enabledDrift = recordedEnabled != spec.Enabled
-				} else if currentHash != "" {
+				} else if recordedAppEnabledKnown[spec.Name] {
+					// Persisted across restarts in the state store.
+					enabledDrift = recordedAppEnabled[spec.Name] != spec.Enabled
+				} else if currentHash != "" && (m.agentHub.IsConnected(node.Name) || len(liveStatuses) > 0) {
 					// Apps deployed before enabled-state tracking existed have no
-					// recorded value. Infer it from the live status when possible,
-					// otherwise assume they were running (the historical default).
+					// recorded value. Infer it from the live status when the node is
+					// actually reporting, otherwise assume they were running (the
+					// historical default). Never infer from stale/offline data.
 					recordedEnabled := true
 					if st, ok := liveStatuses[spec.Name]; ok {
 						switch st.State {
@@ -4040,6 +4013,12 @@ func (m *Manager) PlanSyncWithScope(scope string, nodeNames ...string) ([]config
 			artifactDrift := desiredArtifactHash != "" && desiredArtifactHash != recordedArtifactHash &&
 				(appAlreadyDeployed || recordedArtifactHash != "")
 
+			// Live drift: the device was actually observed (probed files or live
+			// status) and its content no longer matches what Easy42 recorded as
+			// applied. Only real drift is reported as pending; missing cached data
+			// (e.g. right after a server restart) is not drift.
+			liveMainDiff := ""
+			liveDrift := false
 			if curF, ok := deployedAppFiles[mainTargetFile]; ok {
 				var curHash, desHash string
 				if spec.AppType == agentpb.AppType_SCRIPT {
@@ -4049,22 +4028,35 @@ func (m *Manager) PlanSyncWithScope(scope string, nodeNames ...string) ([]config
 					curHash = config.HashConfig(compiler.NormalizeConfig(curF.Content))
 					desHash = config.HashConfig(compiler.NormalizeConfig(spec.MainContent))
 				}
-				if curHash == desHash {
-					mainNeedsApply = false
-					mainStatus = "synced"
-					mainDiffStatus = "synced"
-				} else {
-					mainDiffStatus = "update"
-					mainDiff = generateSimpleDiff(curF.Content, spec.MainContent)
+				if curHash != desHash {
+					liveDrift = true
+					liveMainDiff = generateSimpleDiff(curF.Content, spec.MainContent)
 				}
-			} else if currentHash != "" {
-				if currentHash == desiredHash || (spec.AppType == agentpb.AppType_SCRIPT && currentHash == apps.HashSingleContent(spec.MainContent)) {
-					mainNeedsApply = false
-					mainStatus = "synced"
-					mainDiffStatus = "synced"
-				} else {
-					mainDiffStatus = "update"
+			} else if liveHash, ok := liveAppHashes[spec.Name]; ok && liveHash != "" {
+				if liveHash != desiredHash && !(spec.AppType == agentpb.AppType_SCRIPT && liveHash == apps.HashSingleContent(spec.MainContent)) {
+					liveDrift = true
 				}
+			}
+
+			recordedHash, hasRecorded := recordedAppHashes[spec.Name]
+			recordedMatch := hasRecorded && (recordedHash == desiredHash ||
+				(spec.AppType == agentpb.AppType_SCRIPT && recordedHash == apps.HashSingleContent(spec.MainContent)))
+
+			switch {
+			case liveDrift:
+				mainDiffStatus = "update"
+				mainDiff = liveMainDiff
+			case recordedMatch:
+				mainNeedsApply = false
+				mainStatus = "synced"
+				mainDiffStatus = "synced"
+			case hasRecorded:
+				// Recorded as applied, but the desired definition changed since.
+				mainDiffStatus = "update"
+			default:
+				// Never deployed through Easy42 (or deployed before state tracking
+				// existed): treat as a new deployment.
+				mainDiffStatus = "create"
 			}
 
 			if enabledDrift {
@@ -4122,14 +4114,12 @@ func (m *Manager) PlanSyncWithScope(scope string, nodeNames ...string) ([]config
 						envDiffStatus = "update"
 						envDiff = generateSimpleDiff(curF.Content, spec.EnvContent)
 					}
-				} else if currentHash != "" {
-					if currentHash == desiredHash {
-						envNeedsApply = false
-						envStatus = "synced"
-						envDiffStatus = "synced"
-					} else {
-						envDiffStatus = "update"
-					}
+				} else if recordedMatch {
+					envNeedsApply = false
+					envStatus = "synced"
+					envDiffStatus = "synced"
+				} else if hasRecorded {
+					envDiffStatus = "update"
 				}
 
 				actions = append(actions, config.SyncAction{
@@ -4175,14 +4165,12 @@ func (m *Manager) PlanSyncWithScope(scope string, nodeNames ...string) ([]config
 						auxDiffStatus = "update"
 						auxDiff = generateSimpleDiff(curF.Content, auxContent)
 					}
-				} else if currentHash != "" {
-					if currentHash == desiredHash {
-						auxNeedsApply = false
-						auxStatus = "synced"
-						auxDiffStatus = "synced"
-					} else {
-						auxDiffStatus = "update"
-					}
+				} else if recordedMatch {
+					auxNeedsApply = false
+					auxStatus = "synced"
+					auxDiffStatus = "synced"
+				} else if hasRecorded {
+					auxDiffStatus = "update"
 				}
 
 				actions = append(actions, config.SyncAction{
@@ -4303,8 +4291,14 @@ func (m *Manager) ExecuteSyncNodes(isForce bool, nodeNames ...string) ([]config.
 	return m.ExecuteSyncNodesWithScope(isForce, "", nodeNames...)
 }
 
-// ExecuteSyncNodesWithScope executes planned actions across specified nodes with a scope filter
+// ExecuteSyncNodesWithScope executes planned actions across specified nodes with a scope filter.
+// Live device state is refreshed first so the plan is computed against accurate
+// data (the cached plan shown in the UI never contacts devices).
 func (m *Manager) ExecuteSyncNodesWithScope(isForce bool, scope string, nodeNames ...string) ([]config.SyncResult, error) {
+	if _, _, err := m.UpdateState(nodeNames...); err != nil && err != crypto.ErrVaultLocked {
+		return nil, err
+	}
+
 	actions, err := m.PlanSyncWithScope(scope, nodeNames...)
 	if err != nil {
 		return nil, err
@@ -4618,6 +4612,10 @@ type linkMetaInfo struct {
 	persistentKeepalive int
 }
 
+// agentLiveReportFreshness is how recent an agent-initiated report (registration
+// or telemetry) must be for UpdateState to reuse it instead of probing the agent.
+const agentLiveReportFreshness = 30 * time.Second
+
 func (m *Manager) collectStateFromAgent(targetNode config.Node, meta map[string]linkMetaInfo, existingIfaces map[string]config.StateInterface) (probeOutput, error) {
 	if m.agentHub == nil || !m.agentHub.IsConnected(targetNode.Name) {
 		return probeOutput{}, fmt.Errorf("agent not connected")
@@ -4638,15 +4636,8 @@ func (m *Manager) collectStateFromAgent(targetNode config.Node, meta map[string]
 		if probeRes.HostsHash != "" && m.stateStore != nil {
 			_ = m.stateStore.UpdateHostsState(targetNode.Name, targetNode.Host, probeRes.HostsHash, time.Now())
 		}
-		if len(probeRes.AppHashes) > 0 {
-			m.agentHub.SetAppHashes(targetNode.Name, probeRes.AppHashes)
-			if m.stateStore != nil {
-				_ = m.stateStore.UpdateAppStates(targetNode.Name, targetNode.Host, probeRes.AppHashes, time.Now())
-			}
-		}
-		if len(probeRes.AppFiles) > 0 {
-			m.agentHub.SetAppFiles(targetNode.Name, probeRes.AppFiles)
-		}
+		// Reconcile app state with what is actually present on the device.
+		m.applyAgentAppProbe(targetNode.Name, probeRes)
 	}
 
 	// 2. Fetch live node status and telemetry
@@ -4798,6 +4789,12 @@ func (m *Manager) collectStateFromAgent(targetNode config.Node, meta map[string]
 	}
 	m.mu.Unlock()
 
+	// Cache the probed WireGuard config files so that subsequent sync plans can
+	// compute accurate diffs without contacting the agent again.
+	if m.agentHub != nil && probeRes.Configs != nil {
+		m.agentHub.SetProbeConfigs(targetNode.Name, probeRes.Configs)
+	}
+
 	return probeOutput{
 		ifaces:   nodeIfaces,
 		hostname: hostname,
@@ -4900,8 +4897,21 @@ func (m *Manager) UpdateState(nodeNames ...string) (*config.NetworkState, []stri
 				existingNodeIfaces = exNode.Interfaces
 			}
 
-			// 1. If agent is connected, collect latest state directly via agent
+			// 1. If agent is connected, collect latest state directly via agent.
+			// Skip the probe when the agent already pushed fresh live data
+			// (registration/telemetry) so state refreshes stay cheap and do not
+			// block on agents that are connected but not answering commands.
 			if m.agentHub != nil && m.agentHub.IsConnected(targetNode.Name) {
+				if last := m.agentHub.LastLiveReport(targetNode.Name); time.Since(last) < agentLiveReportFreshness {
+					mu.Lock()
+					results = append(results, nodeIfaceResult{
+						nodeName: targetNode.Name,
+						host:     targetNode.Host,
+						ifaces:   existingNodeIfaces,
+					})
+					mu.Unlock()
+					return
+				}
 				out, err := m.collectStateFromAgent(targetNode, linkMeta[targetNode.Name], existingNodeIfaces)
 				if err == nil {
 					mu.Lock()
@@ -5085,6 +5095,16 @@ func (m *Manager) UpdateState(nodeNames ...string) (*config.NetworkState, []stri
 						Error:     out.err.Error(),
 					}
 					m.mu.Unlock()
+					// Keep the previously recorded state for unreachable nodes
+					// instead of discarding it, so the sync plan keeps showing
+					// accurate (last known) diffs.
+					mu.Lock()
+					results = append(results, nodeIfaceResult{
+						nodeName: targetNode.Name,
+						host:     targetNode.Host,
+						ifaces:   existingNodeIfaces,
+					})
+					mu.Unlock()
 					return
 				}
 
@@ -5120,6 +5140,14 @@ func (m *Manager) UpdateState(nodeNames ...string) (*config.NetworkState, []stri
 					Error:     "probe timed out",
 				}
 				m.mu.Unlock()
+				// Preserve the previously recorded state for this node.
+				mu.Lock()
+				results = append(results, nodeIfaceResult{
+					nodeName: targetNode.Name,
+					host:     targetNode.Host,
+					ifaces:   existingNodeIfaces,
+				})
+				mu.Unlock()
 				return
 			}
 		}(node)
@@ -5155,25 +5183,17 @@ func (m *Manager) UpdateState(nodeNames ...string) (*config.NetworkState, []stri
 		m.mu.Unlock()
 	}
 
-	// Merge probed node interfaces
+	// Merge probed node interfaces. All other recorded values (BIRD, nftables,
+	// ROA, hosts, app and obfuscator hashes) are preserved: a state refresh only
+	// observes live interfaces and must never discard what was recorded as
+	// applied, otherwise every configuration would show up as pending.
 	for _, res := range results {
 		existingNode := currentState.Nodes[res.nodeName]
-		currentState.Nodes[res.nodeName] = config.StateNode{
-			Name:               res.nodeName,
-			Host:               res.host,
-			LastSeen:           time.Now(),
-			BirdConfigHash:     existingNode.BirdConfigHash,
-			BirdAppliedAt:      existingNode.BirdAppliedAt,
-			NftablesConfigHash: existingNode.NftablesConfigHash,
-			NftablesAppliedAt:  existingNode.NftablesAppliedAt,
-			RoaConfigHashes:    existingNode.RoaConfigHashes,
-			RoaAppliedAt:       existingNode.RoaAppliedAt,
-			HostsConfigHash:    existingNode.HostsConfigHash,
-			HostsAppliedAt:     existingNode.HostsAppliedAt,
-			AppConfigHashes:    existingNode.AppConfigHashes,
-			AppAppliedAt:       existingNode.AppAppliedAt,
-			Interfaces:         res.ifaces,
-		}
+		existingNode.Name = res.nodeName
+		existingNode.Host = res.host
+		existingNode.LastSeen = time.Now()
+		existingNode.Interfaces = res.ifaces
+		currentState.Nodes[res.nodeName] = existingNode
 	}
 
 	if err := m.stateStore.Save(currentState); err != nil {
@@ -6012,6 +6032,7 @@ func (m *Manager) executeAgentSyncAction(act config.SyncAction, res *config.Sync
 					if s.Name == act.Interface {
 						_ = m.stateStore.UpdateAppState(act.NodeName, act.Host, s.Name, s.Sha256Hash, time.Now())
 						_ = m.stateStore.UpdateAppArtifactState(act.NodeName, act.Host, s.Name, apps.ComputeAppArtifactHash(s), time.Now())
+						_ = m.stateStore.UpdateAppEnabledState(act.NodeName, act.Host, s.Name, s.Enabled)
 						if m.agentHub != nil {
 							m.agentHub.SetAppHash(act.NodeName, s.Name, s.Sha256Hash)
 							m.agentHub.SetAppEnabled(act.NodeName, s.Name, s.Enabled)
