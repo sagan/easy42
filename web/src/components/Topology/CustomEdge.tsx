@@ -4,7 +4,7 @@ import { Box, Typography } from "@mui/material";
 import { FileText } from "lucide-react";
 import { Link } from "../../types/api";
 import { getEffectiveLinkCost } from "../../utils/cost";
-import { isManualLink } from "../../utils/link";
+import { isManualLink, isVirtualLink } from "../../utils/link";
 import { LinkCentralityInfo } from "../../utils/graphCentrality";
 
 export type LinkWorkingState = "working" | "not_working" | "unknown";
@@ -65,6 +65,7 @@ export const CustomEdge: React.FC<EdgeProps> = ({
   const isExternal = Boolean(edgeData?.isExternal);
   const fromIsExternal = Boolean(edgeData?.fromIsExternal);
   const toIsExternal = Boolean(edgeData?.toIsExternal);
+  const isVirtual = isVirtualLink(link);
   const isManual = isManualLink(link);
   const totalLinksInPair = (edgeData?.totalLinksInPair as number) || 1;
   const linkIndexInPair = (edgeData?.linkIndexInPair as number) || 0;
@@ -195,7 +196,15 @@ export const CustomEdge: React.FC<EdgeProps> = ({
     pillBorderColor = "#CBD5E1";
     pillBgColor = "#F8FAFC";
     dotColor = "#94A3B8";
-    statusText = isExternal ? "Disabled (Ext)" : isManual ? "Disabled (Manual)" : "Disabled";
+    statusText = isExternal ? "Disabled (Ext)" : isManual ? "Disabled (Manual)" : isVirtual ? "Disabled (Virtual)" : "Disabled";
+  } else if (isVirtual) {
+    strokeColor = workingState === "not_working" ? "#EF4444" : "#0284C7";
+    strokeDasharray = "6 3";
+    strokeWidth = 2.2;
+    pillBorderColor = workingState === "not_working" ? "#FCA5A5" : "#BAE6FD";
+    pillBgColor = workingState === "not_working" ? "#FEF2F2" : "#F0F9FF";
+    dotColor = workingState === "not_working" ? "#EF4444" : "#0284C7";
+    statusText = workingState === "not_working" ? "Down (Virtual)" : "Virtual";
   } else if (isManual) {
     strokeColor = workingState === "not_working" ? "#EF4444" : "#7C3AED";
     strokeDasharray = "5 3";
@@ -286,6 +295,10 @@ export const CustomEdge: React.FC<EdgeProps> = ({
       strokeColor = "#94A3B8";
       strokeWidth = 1.6;
       strokeDasharray = "5 4";
+    } else if (isVirtual) {
+      strokeColor = workingState === "not_working" ? "#EF4444" : "#0284C7";
+      strokeWidth = 1.6;
+      strokeDasharray = "6 3";
     } else if (isManual) {
       strokeColor = workingState === "not_working" ? "#EF4444" : "#7C3AED"; // Consistent Violet for manual links
       strokeWidth = 1.6;
@@ -316,7 +329,7 @@ export const CustomEdge: React.FC<EdgeProps> = ({
   if (isCentralityActive && centralityInfo && !isDimmed && !isGhostDrag) {
     strokeWidth = Math.max(strokeWidth, centralityInfo.strokeWidth);
     if (isCoreLink) {
-      if (!isExternal && !isManual && !isDisabled && workingState !== "not_working") {
+      if (!isExternal && !isManual && !isVirtual && !isDisabled && workingState !== "not_working") {
         strokeColor = "#059669";
       }
       edgeOpacity = Math.max(edgeOpacity, 0.95);
@@ -429,7 +442,7 @@ export const CustomEdge: React.FC<EdgeProps> = ({
                       className="mono-font"
                       sx={{ fontSize: "0.66rem", fontWeight: 600, color: "#1E293B", lineHeight: 1.2 }}
                     >
-                      {link.from.interface}
+                      {link.from.interface || (isVirtual ? "direct" : link.from.name)}
                     </Typography>
                     <Typography variant="caption" sx={{ color: "#94A3B8", fontSize: "0.55rem", lineHeight: 1.2 }}>
                       ↔
@@ -439,13 +452,14 @@ export const CustomEdge: React.FC<EdgeProps> = ({
                       className="mono-font"
                       sx={{ fontSize: "0.66rem", fontWeight: 600, color: "#1E293B", lineHeight: 1.2 }}
                     >
-                      {link.to.interface}
+                      {link.to.interface || (isVirtual ? "direct" : link.to.name)}
                     </Typography>
                   </Box>
 
-                  {/* Link Cost display below the wg42foo <-> wg42bar label */}
-                  <Box
-                    data-testid="link-cost"
+                  {/* Link Cost display below the wg42foo <-> wg42bar label (omitted for virtual links unless overridden) */}
+                  {(!isVirtual || isLeftCostOverridden || isRightCostOverridden) && (
+                    <Box
+                      data-testid="link-cost"
                     sx={{
                       display: "flex",
                       alignItems: "center",
@@ -540,6 +554,7 @@ export const CustomEdge: React.FC<EdgeProps> = ({
                       </>
                     )}
                   </Box>
+                  )}
                 </Box>
 
                 {/* Status Badge */}

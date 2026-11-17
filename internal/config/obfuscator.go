@@ -149,10 +149,10 @@ func ValidateLinkObfuscator(link *Link, fromNode, toNode *Node) error {
 	if ComplementObfuscatorRole(fromRole) != toRole {
 		return fmt.Errorf("obfuscator roles must be complementary (%s <-> %s)", ObfuscatorPhantunClient, ObfuscatorPhantunServer)
 	}
-	if link.IsManual() {
+	if link.IsManual() || link.IsVirtual() {
 		return fmt.Errorf("obfuscator is only supported for WireGuard links")
 	}
-	if link.From.IsManual() || link.To.IsManual() {
+	if link.From.IsManual() || link.From.IsVirtual() || link.To.IsManual() || link.To.IsVirtual() {
 		return fmt.Errorf("obfuscator is only supported for WireGuard links")
 	}
 	if fromNode == nil || toNode == nil {

@@ -1,6 +1,6 @@
 import { Node, Link, NetworkPolicy, GraphBlock } from "../types/api";
 import { getEffectiveLinkCost } from "./cost";
-import { isManualLink } from "./link";
+import { isManualLink, isVirtualLink } from "./link";
 import { calculateGraphCentrality, getLinkId, CentralityMetric, WeightingMode } from "./graphCentrality";
 
 export type NodeNameSource = "name" | "caption" | "none";
@@ -391,6 +391,7 @@ export function generateTopologySvg(
       const nodeFrom = nodeMap.get(link.from.name);
       const nodeTo = nodeMap.get(link.to.name);
       const isExternal = Boolean(nodeFrom?.is_external || nodeTo?.is_external);
+      const isVirtual = isVirtualLink(link);
       const isManual = isManualLink(link);
 
       const linkId = getLinkId(link);
@@ -406,6 +407,9 @@ export function generateTopologySvg(
       if (link.disabled) {
         strokeColor = "#94A3B8"; // Grey for disabled links
         strokeDash = 'stroke-dasharray="5 4"';
+      } else if (isVirtual) {
+        strokeColor = "#0284C7"; // Sky blue for virtual links
+        strokeDash = 'stroke-dasharray="6 3"';
       } else if (isManual) {
         strokeColor = "#7C3AED"; // Consistent Violet
         strokeDash = 'stroke-dasharray="5 3"';
@@ -444,7 +448,7 @@ export function generateTopologySvg(
 
       linksSvg += `    <path d="${pathD}" fill="none" stroke="${strokeColor}" stroke-width="${strokeWidth.toFixed(1)}" stroke-linecap="round" stroke-opacity="${strokeOpacity.toFixed(2)}" ${strokeDash} />\n`;
 
-      if (options.displayLinkCost) {
+      if (options.displayLinkCost && (!isVirtual || Boolean((link.from?.cost && link.from.cost !== 0) || (link.to?.cost && link.to.cost !== 0)))) {
         const fromIsRemoteExternal = Boolean(nodeTo?.is_external);
         const toIsRemoteExternal = Boolean(nodeFrom?.is_external);
         const fromCost = getEffectiveLinkCost(link.from, fromIsRemoteExternal, networkPolicies);

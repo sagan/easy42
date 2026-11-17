@@ -206,7 +206,7 @@ func BuildNftablesNodeContext(
 	// Collect easy42 interface names: defaults to "wg42*", plus manual link interfaces on this node
 	easy42Ifnames := []string{`"wg42*"`}
 	for _, l := range links {
-		if l.Disabled {
+		if l.Disabled || l.IsVirtual() {
 			continue
 		}
 		var localEnd *config.LinkEnd

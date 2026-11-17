@@ -144,8 +144,8 @@ const getStoredNodeBlocks = (): Record<string, string> => {
   return {};
 };
 
-import { isManualLink, isWireGuardLink } from "../../utils/link";
-export { isManualLink, isWireGuardLink };
+import { isManualLink, isWireGuardLink, isVirtualLink } from "../../utils/link";
+export { isManualLink, isWireGuardLink, isVirtualLink };
 
 export interface MaximumCliqueResult {
   cliqueNodes: Set<string>;
@@ -280,9 +280,10 @@ export function getLinkWorkingState(
   networkState?: NetworkState | null,
   nodeStatuses?: Record<string, NodeStatus>,
 ): "working" | "not_working" | "unknown" {
+  const isVirtual = isVirtualLink(link);
   const isManual = isManualLink(link);
 
-  if (isManual) {
+  if (isVirtual || isManual) {
     const fromHasStatus = Boolean(nodeStatuses && link.from.name in nodeStatuses);
     const toHasStatus = Boolean(nodeStatuses && link.to.name in nodeStatuses);
     const fromOnline = Boolean(nodeStatuses?.[link.from.name]?.connected);
@@ -1017,6 +1018,22 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = ({
                           fontWeight: 700,
                           backgroundColor: "rgba(79, 70, 229, 0.1)",
                           color: "#4F46E5",
+                          borderRadius: 1,
+                          flexShrink: 0,
+                        }}
+                      />
+                    )}
+                    {option.is_external && (
+                      <Chip
+                        label="Ext"
+                        title="External"
+                        size="small"
+                        sx={{
+                          height: 18,
+                          fontSize: "0.62rem",
+                          fontWeight: 700,
+                          backgroundColor: "rgba(139, 92, 246, 0.15)",
+                          color: "#7C3AED",
                           borderRadius: 1,
                           flexShrink: 0,
                         }}

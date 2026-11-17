@@ -31,6 +31,7 @@ import {
   FileText,
   Network,
   AlertCircle,
+  Activity,
 } from "lucide-react";
 import { api } from "../../api/client";
 import { Node, Link, NetworkPolicy, NetworkSettings } from "../../types/api";
@@ -117,8 +118,8 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
   const [toObfuscatorParams, setToObfuscatorParams] = useState<string>("");
   const linkHadPsk = Boolean(linkToEdit?.psk || linkToEdit?.from?.psk || linkToEdit?.to?.psk);
 
-  // Manual link fields
-  const [linkType, setLinkType] = useState<"wireguard" | "manual">("wireguard");
+  // Link type
+  const [linkType, setLinkType] = useState<"wireguard" | "manual" | "virtual">("wireguard");
   const [fromInterface, setFromInterface] = useState<string>("");
   const [toInterface, setToInterface] = useState<string>("");
   const [fromAddress, setFromAddress] = useState<string>("");
@@ -196,9 +197,12 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
   useEffect(() => {
     if (!open) return;
     if (linkToEdit) {
+      const isVirt =
+        linkToEdit.type === "virtual" || linkToEdit.from?.type === "virtual" || linkToEdit.to?.type === "virtual";
       const isMan =
-        linkToEdit.type === "manual" || linkToEdit.from?.type === "manual" || linkToEdit.to?.type === "manual";
-      setLinkType(isMan ? "manual" : "wireguard");
+        !isVirt &&
+        (linkToEdit.type === "manual" || linkToEdit.from?.type === "manual" || linkToEdit.to?.type === "manual");
+      setLinkType(isVirt ? "virtual" : isMan ? "manual" : "wireguard");
       setFromInterface(linkToEdit.from?.interface || "");
       setToInterface(linkToEdit.to?.interface || "");
       setFromAddress(linkToEdit.from?.address || "");
@@ -509,6 +513,54 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
         : "phantun_server";
 
     try {
+      if (linkType === "virtual") {
+        const reqFrom = {
+          name: fromNodeName,
+          type: "virtual",
+          interface: fromInterface.trim() || undefined,
+          address: fromAddress.trim() || undefined,
+          note: fromNote.trim() || undefined,
+        };
+
+        const reqTo = {
+          name: toNodeName,
+          type: "virtual",
+          interface: toInterface.trim() || undefined,
+          address: toAddress.trim() || undefined,
+          note: toNote.trim() || undefined,
+        };
+
+        if (linkToEdit) {
+          const updated = await api.updateLink({
+            type: "virtual",
+            from_node: fromNodeName,
+            to_node: toNodeName,
+            from: reqFrom,
+            to: reqTo,
+            from_note: reqFrom.note || "",
+            to_note: reqTo.note || "",
+            disabled: linkDisabled,
+            note: linkNote.trim(),
+          });
+          onLinkUpdated?.(updated);
+        } else {
+          const link = await api.addLink({
+            type: "virtual",
+            from_node: fromNodeName,
+            to_node: toNodeName,
+            from: reqFrom,
+            to: reqTo,
+            from_note: reqFrom.note,
+            to_note: reqTo.note,
+            disabled: linkDisabled,
+            note: linkNote.trim() || undefined,
+          });
+          onLinkAdded?.(link);
+        }
+        onClose();
+        return;
+      }
+
       if (linkType === "manual") {
         const isFromExt = Boolean(fromNode?.is_external);
         const isToExt = Boolean(toNode?.is_external);
@@ -924,9 +976,11 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
               ? "rgba(239, 68, 68, 0.1)"
               : isExternalLink
                 ? "rgba(139, 92, 246, 0.1)"
-                : linkType === "manual"
-                  ? "rgba(124, 58, 237, 0.1)"
-                  : "rgba(8, 145, 178, 0.1)",
+                : linkType === "virtual"
+                  ? "rgba(2, 132, 199, 0.1)"
+                  : linkType === "manual"
+                    ? "rgba(124, 58, 237, 0.1)"
+                    : "rgba(8, 145, 178, 0.1)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -934,15 +988,19 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
               ? "#EF4444"
               : isExternalLink
                 ? "#8B5CF6"
-                : linkType === "manual"
-                  ? "#7C3AED"
-                  : "#0891B2",
+                : linkType === "virtual"
+                  ? "#0284C7"
+                  : linkType === "manual"
+                    ? "#7C3AED"
+                    : "#0891B2",
           }}
         >
           {isBothExternal ? (
             <AlertCircle size={18} />
           ) : isExternalLink ? (
             <Globe size={18} />
+          ) : linkType === "virtual" ? (
+            <Activity size={18} />
           ) : linkType === "manual" ? (
             <Network size={18} />
           ) : linkToEdit ? (
@@ -953,18 +1011,22 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
         </Box>
         <Typography variant="h6" sx={{ fontWeight: 700, color: "#0F172A" }}>
           {linkToEdit
-            ? linkType === "manual"
-              ? `Edit Manual Link: ${linkToEdit.from.name} ↔ ${linkToEdit.to.name}`
-              : `Edit WireGuard Link: ${linkToEdit.from.name} ↔ ${linkToEdit.to.name}`
+            ? linkType === "virtual"
+              ? `Edit Virtual Link: ${linkToEdit.from.name} ↔ ${linkToEdit.to.name}`
+              : linkType === "manual"
+                ? `Edit Manual Link: ${linkToEdit.from.name} ↔ ${linkToEdit.to.name}`
+                : `Edit WireGuard Link: ${linkToEdit.from.name} ↔ ${linkToEdit.to.name}`
             : isBothExternal
               ? "Invalid Link (Both External)"
-              : linkType === "manual"
-                ? isExternalLink
-                  ? "Create Manual External Peering Link"
-                  : "Create Manual (BGP Only) Link"
-                : isExternalLink
-                  ? "Create External Peering Link"
-                  : "Create WireGuard Link"}
+              : linkType === "virtual"
+                ? "Create Virtual Link (Unmanaged)"
+                : linkType === "manual"
+                  ? isExternalLink
+                    ? "Create Manual External Peering Link"
+                    : "Create Manual (BGP Only) Link"
+                  : isExternalLink
+                    ? "Create External Peering Link"
+                    : "Create WireGuard Link"}
         </Typography>
       </DialogTitle>
 
@@ -1054,9 +1116,11 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
 
           {linkToEdit && (
             <Typography variant="caption" sx={{ color: "#64748B", fontStyle: "italic", mt: -1.5 }}>
-              {linkType === "manual"
-                ? "Editing manual link interfaces and peering settings."
-                : "Endpoints are fixed for this WireGuard link. You can configure listen ports and MTUs below."}
+              {linkType === "virtual"
+                ? "Editing virtual link reference parameters."
+                : linkType === "manual"
+                  ? "Editing manual link interfaces and peering settings."
+                  : "Endpoints are fixed for this WireGuard link. You can configure listen ports and MTUs below."}
             </Typography>
           )}
 
@@ -1066,7 +1130,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
               <Typography variant="caption" sx={{ color: "#475569", fontWeight: 700, letterSpacing: "0.5px" }}>
                 LINK TYPE
               </Typography>
-              <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1 }}>
+              <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(3, 1fr)" }, gap: 1 }}>
                 <Box
                   id="link-type-wireguard"
                   onClick={() => !linkToEdit && setLinkType("wireguard")}
@@ -1134,6 +1198,40 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                     Data plane managed manually (ethernet/tunnel). easy42 manages BGP peering & nftables.
                   </Typography>
                 </Box>
+
+                <Box
+                  id="link-type-virtual"
+                  onClick={() => !linkToEdit && setLinkType("virtual")}
+                  sx={{
+                    p: 1.5,
+                    borderRadius: 2,
+                    border: "2px solid",
+                    borderColor: linkType === "virtual" ? "#0284C7" : "#E2E8F0",
+                    backgroundColor: linkType === "virtual" ? "rgba(2, 132, 199, 0.05)" : "#F8FAFC",
+                    cursor: linkToEdit ? "default" : "pointer",
+                    transition: "all 0.15s ease",
+                  }}
+                >
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 0.5 }}>
+                    <Box
+                      sx={{
+                        width: 10,
+                        height: 10,
+                        borderRadius: "50%",
+                        backgroundColor: linkType === "virtual" ? "#0284C7" : "#CBD5E1",
+                      }}
+                    />
+                    <Typography
+                      variant="subtitle2"
+                      sx={{ fontWeight: 700, color: linkType === "virtual" ? "#0369A1" : "#475569" }}
+                    >
+                      Virtual Link (Unmanaged)
+                    </Typography>
+                  </Box>
+                  <Typography variant="caption" sx={{ color: "#64748B", display: "block", lineHeight: 1.3 }}>
+                    Existing physical or logical direct link (LAN/cable). No wg/bird/nft managed by easy42.
+                  </Typography>
+                </Box>
               </Box>
             </Box>
           )}
@@ -1141,57 +1239,59 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
           <Divider sx={{ borderColor: "#E2E8F0" }} />
 
           {/* BFD Option: Enable BFD */}
-          <Box
-            sx={{
-              p: 1.75,
-              borderRadius: 2,
-              backgroundColor: enableBFD ? "rgba(16, 185, 129, 0.05)" : "#F8FAFC",
-              border: "1px solid",
-              borderColor: enableBFD ? "rgba(16, 185, 129, 0.35)" : "#E2E8F0",
-              transition: "all 0.2s ease",
-            }}
-          >
-            <FormControlLabel
-              control={
-                <Checkbox
-                  id="link-enable-bfd-checkbox"
-                  size="small"
-                  checked={enableBFD}
-                  onChange={(e) => setEnableBFD(e.target.checked)}
-                  color="primary"
-                />
-              }
-              label={
-                <Box>
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                    <Typography variant="body2" sx={{ fontSize: "0.85rem", fontWeight: 700, color: "#1E293B" }}>
-                      Enable BFD
+          {linkType !== "virtual" && (
+            <Box
+              sx={{
+                p: 1.75,
+                borderRadius: 2,
+                backgroundColor: enableBFD ? "rgba(16, 185, 129, 0.05)" : "#F8FAFC",
+                border: "1px solid",
+                borderColor: enableBFD ? "rgba(16, 185, 129, 0.35)" : "#E2E8F0",
+                transition: "all 0.2s ease",
+              }}
+            >
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    id="link-enable-bfd-checkbox"
+                    size="small"
+                    checked={enableBFD}
+                    onChange={(e) => setEnableBFD(e.target.checked)}
+                    color="primary"
+                  />
+                }
+                label={
+                  <Box>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                      <Typography variant="body2" sx={{ fontSize: "0.85rem", fontWeight: 700, color: "#1E293B" }}>
+                        Enable BFD
+                      </Typography>
+                      <Chip
+                        label={enableBFD ? "Enabled (Default)" : "Disabled (bfd no)"}
+                        size="small"
+                        sx={{
+                          height: 18,
+                          fontSize: "0.62rem",
+                          fontWeight: 800,
+                          bgcolor: enableBFD ? "rgba(16, 185, 129, 0.15)" : "#E2E8F0",
+                          color: enableBFD ? "#059669" : "#64748B",
+                          borderRadius: "4px",
+                        }}
+                      />
+                    </Box>
+                    <Typography
+                      variant="caption"
+                      sx={{ color: "#64748B", display: "block", fontSize: "0.72rem", lineHeight: 1.4, mt: 0.3 }}
+                    >
+                      Bidirectional Forwarding Detection (BFD) provides sub-second link failure detection for BGP peering
+                      sessions. When disabled, adds &quot;bfd no;&quot; to BIRD link configuration on both link ends.
                     </Typography>
-                    <Chip
-                      label={enableBFD ? "Enabled (Default)" : "Disabled (bfd no)"}
-                      size="small"
-                      sx={{
-                        height: 18,
-                        fontSize: "0.62rem",
-                        fontWeight: 800,
-                        bgcolor: enableBFD ? "rgba(16, 185, 129, 0.15)" : "#E2E8F0",
-                        color: enableBFD ? "#059669" : "#64748B",
-                        borderRadius: "4px",
-                      }}
-                    />
                   </Box>
-                  <Typography
-                    variant="caption"
-                    sx={{ color: "#64748B", display: "block", fontSize: "0.72rem", lineHeight: 1.4, mt: 0.3 }}
-                  >
-                    Bidirectional Forwarding Detection (BFD) provides sub-second link failure detection for BGP peering
-                    sessions. When disabled, adds &quot;bfd no;&quot; to BIRD link configuration on both link ends.
-                  </Typography>
-                </Box>
-              }
-              sx={{ alignItems: "flex-start", ml: 0, m: 0 }}
-            />
-          </Box>
+                }
+                sx={{ alignItems: "flex-start", ml: 0, m: 0 }}
+              />
+            </Box>
+          )}
 
           {/* Link Status: Disable Link */}
           <Box
@@ -2073,6 +2173,230 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                     </Tooltip>
                   </Box>
                 )}
+              </Box>
+            </Box>
+          ) : fromNode && toNode && linkType === "virtual" ? (
+            /* Virtual Link Form */
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+              <Alert
+                icon={<Activity size={18} />}
+                severity="info"
+                sx={{
+                  borderRadius: 2,
+                  backgroundColor: "#F0F9FF",
+                  borderColor: "rgba(2, 132, 199, 0.3)",
+                  color: "#0369A1",
+                  "& .MuiAlert-icon": { color: "#0284C7" },
+                }}
+              >
+                <strong>Virtual Link Mode:</strong> Represents an existing physical or logical direct link (e.g. direct
+                cable, switch/LAN, or unmanaged tunnel) between these two nodes. easy42 will <em>not</em> configure
+                WireGuard keys, BIRD BGP peering sessions, or nftables interfaces for this link. All interface, IP, and
+                note fields below are <strong>optional</strong> and saved for your reference only.
+              </Alert>
+
+              <Typography variant="caption" sx={{ color: "#475569", fontWeight: 700, letterSpacing: "0.5px" }}>
+                OPTIONAL REFERENCE PARAMETERS
+              </Typography>
+
+              {/* End 1: fromNode */}
+              <Box
+                sx={{
+                  p: 2,
+                  borderRadius: 2,
+                  backgroundColor: "#F0F9FF",
+                  border: "1px solid #BAE6FD",
+                }}
+              >
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0284C7", mb: 1.2 }}>
+                  End 1: {fromNode.name} {fromNode.is_external ? "(External Peer)" : ""}
+                </Typography>
+
+                <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1, mb: 1.5 }}>
+                  <TextFieldWithCopy
+                    id="virtual-from-interface"
+                    label="Interface Name (Optional)"
+                    size="small"
+                    placeholder="e.g. eth0, lan0 (optional)"
+                    value={fromInterface}
+                    onChange={(e) => setFromInterface(e.target.value)}
+                    helperText="Reference only: physical or local interface name on this node"
+                  />
+                  <TextFieldWithCopy
+                    id="virtual-from-address"
+                    label="Local IP Address (Optional)"
+                    size="small"
+                    placeholder="e.g. 192.168.1.1/24 (optional)"
+                    value={fromAddress}
+                    onChange={(e) => setFromAddress(e.target.value)}
+                    helperText="Reference only: local IP address on this link"
+                  />
+                </Box>
+
+                {/* Node 1 Endpoint Note */}
+                <Box
+                  sx={{ mt: 1.5, p: 1.5, borderRadius: 1.5, backgroundColor: "#FFFFFF", border: "1px solid #BAE6FD" }}
+                >
+                  <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 0.8 }}>
+                    <Typography
+                      variant="caption"
+                      sx={{ color: "#0369A1", fontWeight: 700, display: "flex", alignItems: "center", gap: 0.6 }}
+                    >
+                      <FileText size={13} color="#0284C7" /> {fromNode.name} ENDPOINT NOTE (MARKDOWN)
+                    </Typography>
+                    <Box sx={{ display: "flex", gap: 0.5 }}>
+                      <Button
+                        size="small"
+                        variant={fromNoteTab === "write" ? "contained" : "text"}
+                        onClick={() => setFromNoteTab("write")}
+                        sx={{ minWidth: "auto", px: 1, py: 0.2, fontSize: "0.7rem", textTransform: "none" }}
+                      >
+                        Write
+                      </Button>
+                      <Button
+                        size="small"
+                        variant={fromNoteTab === "preview" ? "contained" : "text"}
+                        onClick={() => setFromNoteTab("preview")}
+                        sx={{ minWidth: "auto", px: 1, py: 0.2, fontSize: "0.7rem", textTransform: "none" }}
+                      >
+                        Preview
+                      </Button>
+                    </Box>
+                  </Box>
+                  {fromNoteTab === "write" ? (
+                    <TextField
+                      fullWidth
+                      multiline
+                      minRows={2}
+                      maxRows={5}
+                      size="small"
+                      placeholder="Arbitrary reference note for this endpoint..."
+                      value={fromNote}
+                      onChange={(e) => setFromNote(e.target.value)}
+                      disabled={submitting}
+                      sx={{
+                        "& .MuiInputBase-root": {
+                          fontSize: "0.8rem",
+                          fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+                        },
+                      }}
+                    />
+                  ) : (
+                    <Box
+                      sx={{
+                        p: 1,
+                        minHeight: 60,
+                        maxHeight: 150,
+                        overflowY: "auto",
+                        backgroundColor: "#F8FAFC",
+                        borderRadius: 1,
+                        border: "1px solid #E2E8F0",
+                      }}
+                    >
+                      <MarkdownView content={fromNote} emptyText="No note written yet" />
+                    </Box>
+                  )}
+                </Box>
+              </Box>
+
+              {/* End 2: toNode */}
+              <Box
+                sx={{
+                  p: 2,
+                  borderRadius: 2,
+                  backgroundColor: "#F0F9FF",
+                  border: "1px solid #BAE6FD",
+                }}
+              >
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0284C7", mb: 1.2 }}>
+                  End 2: {toNode.name} {toNode.is_external ? "(External Peer)" : ""}
+                </Typography>
+
+                <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1, mb: 1.5 }}>
+                  <TextFieldWithCopy
+                    id="virtual-to-interface"
+                    label="Interface Name (Optional)"
+                    size="small"
+                    placeholder="e.g. eth1, lan1 (optional)"
+                    value={toInterface}
+                    onChange={(e) => setToInterface(e.target.value)}
+                    helperText="Reference only: physical or local interface name on this node"
+                  />
+                  <TextFieldWithCopy
+                    id="virtual-to-address"
+                    label="Local IP Address (Optional)"
+                    size="small"
+                    placeholder="e.g. 192.168.1.2/24 (optional)"
+                    value={toAddress}
+                    onChange={(e) => setToAddress(e.target.value)}
+                    helperText="Reference only: local IP address on this link"
+                  />
+                </Box>
+
+                {/* Node 2 Endpoint Note */}
+                <Box
+                  sx={{ mt: 1.5, p: 1.5, borderRadius: 1.5, backgroundColor: "#FFFFFF", border: "1px solid #BAE6FD" }}
+                >
+                  <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 0.8 }}>
+                    <Typography
+                      variant="caption"
+                      sx={{ color: "#0369A1", fontWeight: 700, display: "flex", alignItems: "center", gap: 0.6 }}
+                    >
+                      <FileText size={13} color="#0284C7" /> {toNode.name} ENDPOINT NOTE (MARKDOWN)
+                    </Typography>
+                    <Box sx={{ display: "flex", gap: 0.5 }}>
+                      <Button
+                        size="small"
+                        variant={toNoteTab === "write" ? "contained" : "text"}
+                        onClick={() => setToNoteTab("write")}
+                        sx={{ minWidth: "auto", px: 1, py: 0.2, fontSize: "0.7rem", textTransform: "none" }}
+                      >
+                        Write
+                      </Button>
+                      <Button
+                        size="small"
+                        variant={toNoteTab === "preview" ? "contained" : "text"}
+                        onClick={() => setToNoteTab("preview")}
+                        sx={{ minWidth: "auto", px: 1, py: 0.2, fontSize: "0.7rem", textTransform: "none" }}
+                      >
+                        Preview
+                      </Button>
+                    </Box>
+                  </Box>
+                  {toNoteTab === "write" ? (
+                    <TextField
+                      fullWidth
+                      multiline
+                      minRows={2}
+                      maxRows={5}
+                      size="small"
+                      placeholder="Arbitrary reference note for this endpoint..."
+                      value={toNote}
+                      onChange={(e) => setToNote(e.target.value)}
+                      disabled={submitting}
+                      sx={{
+                        "& .MuiInputBase-root": {
+                          fontSize: "0.8rem",
+                          fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+                        },
+                      }}
+                    />
+                  ) : (
+                    <Box
+                      sx={{
+                        p: 1,
+                        minHeight: 60,
+                        maxHeight: 150,
+                        overflowY: "auto",
+                        backgroundColor: "#F8FAFC",
+                        borderRadius: 1,
+                        border: "1px solid #E2E8F0",
+                      }}
+                    >
+                      <MarkdownView content={toNote} emptyText="No note written yet" />
+                    </Box>
+                  )}
+                </Box>
               </Box>
             </Box>
           ) : fromNode && toNode && linkType === "manual" ? (

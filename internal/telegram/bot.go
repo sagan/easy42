@@ -573,7 +573,7 @@ func buildNodeSelectionKeyboard(nodes []config.Node) tgbotapi.InlineKeyboardMark
 
 // isLinkUp determines if a link is currently up/working
 func isLinkUp(link config.Link, netState *config.NetworkState, liveMap map[string]config.NodeLiveStatus) bool {
-	if link.IsManual() {
+	if link.IsManual() || link.IsVirtual() {
 		fromLive, fromOk := liveMap[link.From.Name]
 		toLive, toOk := liveMap[link.To.Name]
 		if fromOk && toOk {

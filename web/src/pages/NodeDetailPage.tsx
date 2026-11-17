@@ -86,7 +86,7 @@ import { NodeNoteDataView } from "../components/Nodes/NodeNoteDataView";
 import { parseNoteData } from "../utils/taskSelector";
 import { Dn42InfoCard } from "../components/Nodes/Dn42InfoCard";
 import { isDn42ExternalNode } from "../utils/dn42";
-import { getLinkWorkingState, isManualLink } from "../components/Topology/TopologyGraph";
+import { getLinkWorkingState, isManualLink, isVirtualLink } from "../components/Topology/TopologyGraph";
 import { extractPort } from "../utils/endpoint";
 import { ViewNetworkPolicyModal } from "../components/Modals/ViewNetworkPolicyModal";
 import { LinkKeyActionModal, LinkKeyActionMode } from "../components/Modals/LinkKeyActionModal";
@@ -941,6 +941,7 @@ export const NodeDetailPage: React.FC = () => {
                           {n.is_external && (
                             <Chip
                               label="Ext"
+                              title="External"
                               size="small"
                               sx={{ height: 16, fontSize: "0.6rem", bgcolor: "#FEF3C7", color: "#B45309" }}
                             />
@@ -2605,7 +2606,9 @@ export const NodeDetailPage: React.FC = () => {
                           cost: selfEnd.cost ?? 100,
                         };
 
-                        const isWg = !isManualLink(link);
+                        const isVirt = isVirtualLink(link);
+                        const isMan = isManualLink(link);
+                        const isWg = !isMan && !isVirt;
                         const localKey =
                           selfEnd.public_key ||
                           sortedWgInterfaces.find((w) => w.name === selfEnd.interface)?.public_key ||

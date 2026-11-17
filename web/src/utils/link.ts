@@ -34,6 +34,34 @@ export function isSameLink(a?: Link | null, b?: Link | null): boolean {
 }
 
 /**
+ * Helper to determine whether a link is a virtual link (existing physical or logical direct link,
+ * unmanaged by easy42 control plane).
+ */
+export function isVirtualLink(
+  link?: {
+    type?: string;
+    from?: { type?: string; interface?: string };
+    to?: { type?: string; interface?: string };
+    tags?: string[];
+  } | null,
+): boolean {
+  if (!link) return false;
+  // 1. Explicit link type
+  const lType = link.type?.toLowerCase().trim();
+  if (lType === "virtual") return true;
+
+  // 2. Explicit endpoint type
+  const fromType = link.from?.type?.toLowerCase().trim();
+  const toType = link.to?.type?.toLowerCase().trim();
+  if (fromType === "virtual" || toType === "virtual") return true;
+
+  // 3. Tags containing "virtual"
+  if (link.tags && link.tags.some((t) => t.toLowerCase().trim() === "virtual")) return true;
+
+  return false;
+}
+
+/**
  * Helper to determine whether a link is manual (BGP-only / non-WireGuard data plane).
  */
 export function isManualLink(
@@ -45,6 +73,8 @@ export function isManualLink(
   } | null,
 ): boolean {
   if (!link) return false;
+  if (isVirtualLink(link)) return false;
+
   // 1. Explicit link type
   const lType = link.type?.toLowerCase().trim();
   if (lType === "manual") return true;
@@ -71,7 +101,7 @@ export function isManualLink(
 
 /**
  * Helper to determine whether a link is a WireGuard link (managed data plane).
- * Manual links and non-WireGuard links are excluded.
+ * Manual links, virtual links, and non-WireGuard links are excluded.
  */
 export function isWireGuardLink(
   link?: {
@@ -82,6 +112,7 @@ export function isWireGuardLink(
   } | null,
 ): boolean {
   if (!link) return false;
+  if (isVirtualLink(link)) return false;
   if (isManualLink(link)) return false;
   const lType = link.type?.toLowerCase().trim();
   if (lType && lType !== "wireguard") return false;
@@ -90,5 +121,21 @@ export function isWireGuardLink(
   const toType = link.to?.type?.toLowerCase().trim();
   if (toType && toType !== "wireguard") return false;
   return true;
+}
+
+/**
+ * Returns the normalized link type ("wireguard", "manual", or "virtual").
+ */
+export function getLinkType(
+  link?: {
+    type?: string;
+    from?: { type?: string; interface?: string };
+    to?: { type?: string; interface?: string };
+    tags?: string[];
+  } | null,
+): "wireguard" | "manual" | "virtual" {
+  if (isVirtualLink(link)) return "virtual";
+  if (isManualLink(link)) return "manual";
+  return "wireguard";
 }
 

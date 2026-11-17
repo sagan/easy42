@@ -63,7 +63,7 @@ var linkListCmd = &cobra.Command{
 
 var linkAddCmd = &cobra.Command{
 	Use:   "add [node1] [node2]",
-	Short: "Add a new link between two nodes (wireguard or manual)",
+	Short: "Add a new link between two nodes (wireguard, manual, or virtual)",
 	Args:  cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		node1, node2 := args[0], args[1]
@@ -72,6 +72,32 @@ var linkAddCmd = &cobra.Command{
 			return err
 		}
 		mgr := engine.NewManager(store)
+
+		if strings.EqualFold(linkType, config.LinkTypeVirtual) {
+			n1 := mgr.FindNode(node1)
+			n2 := mgr.FindNode(node2)
+			if n1 == nil || n2 == nil {
+				return errors.New("one or both nodes not found")
+			}
+			fromEnd := &config.LinkEnd{
+				Name:      node1,
+				Type:      config.LinkTypeVirtual,
+				Interface: fromIface,
+				Address:   fromAddr,
+			}
+			toEnd := &config.LinkEnd{
+				Name:      node2,
+				Type:      config.LinkTypeVirtual,
+				Interface: toIface,
+				Address:   toAddr,
+			}
+			link, err := mgr.AddLinkAdvanced(node1, node2, fromEnd, toEnd, nil)
+			if err != nil {
+				return err
+			}
+			fmt.Printf("Successfully created virtual link between %s and %s\n", link.From.Name, link.To.Name)
+			return nil
+		}
 
 		if strings.EqualFold(linkType, config.LinkTypeManual) {
 			n1 := mgr.FindNode(node1)
@@ -197,7 +223,7 @@ var linkRemoveCmd = &cobra.Command{
 }
 
 func init() {
-	linkAddCmd.Flags().StringVarP(&linkType, "type", "t", "wireguard", "Link type ('wireguard' or 'manual')")
+	linkAddCmd.Flags().StringVarP(&linkType, "type", "t", "wireguard", "Link type ('wireguard', 'manual', or 'virtual')")
 	linkAddCmd.Flags().StringVarP(&linkPassword, "password", "p", "", "easy42 password (for wireguard links)")
 	linkAddCmd.Flags().IntVar(&fromPort, "from-port", 0, "Custom listen port for node1")
 	linkAddCmd.Flags().IntVar(&toPort, "to-port", 0, "Custom listen port for node2")

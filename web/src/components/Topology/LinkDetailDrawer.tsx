@@ -46,6 +46,7 @@ import { Link, NetworkState, Node, NetworkPolicy, NodeStatus, NetworkSettings } 
 import { MarkdownView } from "../Common/MarkdownView";
 import { getEffectiveLinkCost } from "../../utils/cost";
 import { getLinkWorkingState } from "./TopologyGraph";
+import { isVirtualLink } from "../../utils/link";
 import { LinkKeyActionModal, LinkKeyActionMode } from "../Modals/LinkKeyActionModal";
 import { MeshContext } from "../../context/MeshContext";
 
@@ -162,11 +163,12 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
 
   if (!link) return null;
 
+  const isVirtual = isVirtualLink(link);
   const fromNode = effectiveNodes.find((n) => n.name === link.from.name);
   const toNode = effectiveNodes.find((n) => n.name === link.to.name);
   const isFromExternal = fromNode?.is_external;
   const isToExternal = toNode?.is_external;
-  const isManual = link.type === "manual" || link.from.type === "manual" || link.to.type === "manual";
+  const isManual = !isVirtual && (link.type === "manual" || link.from.type === "manual" || link.to.type === "manual");
 
   const isExternalLink = Boolean(isFromExternal || isToExternal);
   const globalAsn =
@@ -492,7 +494,7 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
   const handleDelete = async () => {
     if (
       !window.confirm(
-        `Are you sure you want to delete the ${isManual ? "manual" : "WireGuard"} link between "${link.from.name}" and "${link.to.name}"?`,
+        `Are you sure you want to delete the ${isVirtual ? "virtual" : isManual ? "manual" : "WireGuard"} link between "${link.from.name}" and "${link.to.name}"?`,
       )
     ) {
       return;
@@ -546,21 +548,39 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
               width: 38,
               height: 38,
               borderRadius: 2,
-              backgroundColor: isManual ? "rgba(124, 58, 237, 0.1)" : "rgba(8, 145, 178, 0.1)",
+              backgroundColor: isVirtual
+                ? "rgba(2, 132, 199, 0.1)"
+                : isManual
+                  ? "rgba(124, 58, 237, 0.1)"
+                  : "rgba(8, 145, 178, 0.1)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              color: isManual ? "#7C3AED" : "#0891B2",
+              color: isVirtual ? "#0284C7" : isManual ? "#7C3AED" : "#0891B2",
             }}
           >
-            {isManual ? <Network size={20} /> : <LinkIcon size={20} />}
+            {isVirtual ? <Activity size={20} /> : isManual ? <Network size={20} /> : <LinkIcon size={20} />}
           </Box>
           <Box>
             <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
               <Typography variant="h6" sx={{ fontWeight: 700, lineHeight: 1.2, color: "#0F172A" }}>
-                {isManual ? "Manual Link" : "WireGuard Link"}
+                {isVirtual ? "Virtual Link" : isManual ? "Manual Link" : "WireGuard Link"}
               </Typography>
-              {isManual && (
+              {isVirtual ? (
+                <Chip
+                  label="VIRTUAL"
+                  size="small"
+                  sx={{
+                    height: 18,
+                    fontSize: "0.6rem",
+                    fontWeight: 800,
+                    bgcolor: "rgba(2, 132, 199, 0.12)",
+                    color: "#0284C7",
+                    border: "1px solid rgba(2, 132, 199, 0.25)",
+                    borderRadius: "4px",
+                  }}
+                />
+              ) : isManual ? (
                 <Chip
                   label="MANUAL"
                   size="small"
@@ -574,8 +594,8 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
                     borderRadius: "4px",
                   }}
                 />
-              )}
-              {link.assign_ipv4 && (
+              ) : null}
+              {!isVirtual && link.assign_ipv4 && (
                 <Chip
                   label="IPv4 169.254.X.X"
                   size="small"
@@ -590,19 +610,21 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
                   }}
                 />
               )}
-              <Chip
-                label={link.disable_bfd ? "BFD Disabled" : "BFD Enabled"}
-                size="small"
-                sx={{
-                  height: 18,
-                  fontSize: "0.6rem",
-                  fontWeight: 800,
-                  bgcolor: link.disable_bfd ? "rgba(239, 68, 68, 0.12)" : "rgba(16, 185, 129, 0.12)",
-                  color: link.disable_bfd ? "#DC2626" : "#059669",
-                  border: link.disable_bfd ? "1px solid rgba(239, 68, 68, 0.25)" : "1px solid rgba(16, 185, 129, 0.25)",
-                  borderRadius: "4px",
-                }}
-              />
+              {!isVirtual && (
+                <Chip
+                  label={link.disable_bfd ? "BFD Disabled" : "BFD Enabled"}
+                  size="small"
+                  sx={{
+                    height: 18,
+                    fontSize: "0.6rem",
+                    fontWeight: 800,
+                    bgcolor: link.disable_bfd ? "rgba(239, 68, 68, 0.12)" : "rgba(16, 185, 129, 0.12)",
+                    color: link.disable_bfd ? "#DC2626" : "#059669",
+                    border: link.disable_bfd ? "1px solid rgba(239, 68, 68, 0.25)" : "1px solid rgba(16, 185, 129, 0.25)",
+                    borderRadius: "4px",
+                  }}
+                />
+              )}
               {link.note && (
                 <Chip
                   icon={<FileText size={10} color="#0D9488" />}
@@ -711,8 +733,14 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
               size="small"
               onClick={() => onEditLink(link)}
               sx={{
-                color: isManual ? "#7C3AED" : "#0891B2",
-                "&:hover": { backgroundColor: isManual ? "rgba(124, 58, 237, 0.08)" : "rgba(8, 145, 178, 0.08)" },
+                color: isVirtual ? "#0284C7" : isManual ? "#7C3AED" : "#0891B2",
+                "&:hover": {
+                  backgroundColor: isVirtual
+                    ? "rgba(2, 132, 199, 0.08)"
+                    : isManual
+                      ? "rgba(124, 58, 237, 0.08)"
+                      : "rgba(8, 145, 178, 0.08)",
+                },
               }}
             >
               <Edit2 size={18} />
@@ -769,6 +797,44 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
 
       {/* Live Connection Health Card */}
       {(() => {
+        if (isVirtual) {
+          return (
+            <Box
+              sx={{
+                p: 2,
+                mb: 2.5,
+                borderRadius: 2,
+                backgroundColor: "#F0F9FF",
+                border: "1px solid #BAE6FD",
+              }}
+            >
+              <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1 }}>
+                <Typography
+                  variant="subtitle2"
+                  sx={{ fontWeight: 700, color: "#0284C7", display: "flex", alignItems: "center", gap: 1 }}
+                >
+                  <Activity size={16} color="#0284C7" />
+                  Virtual Direct Link
+                </Typography>
+                <Chip
+                  label="UNMANAGED"
+                  size="small"
+                  sx={{
+                    fontWeight: 800,
+                    fontSize: "0.62rem",
+                    bgcolor: "#0284C7",
+                    color: "#FFFFFF",
+                  }}
+                />
+              </Box>
+              <Typography variant="caption" sx={{ color: "#0369A1", display: "block", lineHeight: 1.4 }}>
+                Existing direct physical or logical link (e.g. LAN, direct cable, or unmanaged tunnel) between{" "}
+                {link.from.name} and {link.to.name}. easy42 does not manage WireGuard interfaces, BIRD BGP sessions, or
+                nftables for this link.
+              </Typography>
+            </Box>
+          );
+        }
         if (isManual) {
           return (
             <Box
@@ -928,7 +994,7 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
       })()}
 
       {/* WireGuard PSK Card */}
-      {!isManual && (
+      {!isManual && !isVirtual && (
         <Box
           sx={{
             p: 2,
@@ -1194,7 +1260,7 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
                 />
               )}
             </Box>
-            {!isManual && (
+            {!isManual && !isVirtual && (
               <Tooltip
                 title={
                   isFromExternal
@@ -1237,60 +1303,70 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
           <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
             <Box sx={{ display: "flex", justifyContent: "space-between" }}>
               <Typography variant="caption" sx={{ color: "#64748B" }}>
-                Interface:
+                {isVirtual ? "Interface (Reference):" : "Interface:"}
               </Typography>
               <Typography variant="caption" className="mono-font" sx={{ color: "#0F172A", fontWeight: 600 }}>
-                {link.from.interface}
+                {link.from.interface || (isVirtual ? "Not specified" : "—")}
               </Typography>
             </Box>
 
-            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <Typography variant="caption" sx={{ color: "#64748B" }}>
-                ASN:
-              </Typography>
-              <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-                <Typography variant="caption" className="mono-font" sx={{ color: "#0F172A", fontWeight: 600 }}>
-                  {fromDisplayedAsn !== undefined && fromDisplayedAsn !== null ? `AS${fromDisplayedAsn}` : "—"}
+            {!isVirtual && (
+              <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <Typography variant="caption" sx={{ color: "#64748B" }}>
+                  ASN:
                 </Typography>
-                {fromIsGlobalAsn && (
-                  <Chip
-                    label="Global ASN"
-                    size="small"
-                    sx={{
-                      height: 18,
-                      fontSize: "0.62rem",
-                      fontWeight: 700,
-                      bgcolor: "rgba(79, 70, 229, 0.12)",
-                      color: "#4F46E5",
-                      border: "1px solid rgba(79, 70, 229, 0.25)",
-                      borderRadius: "4px",
-                    }}
-                  />
-                )}
-                {fromDisplayedAsn !== undefined && fromDisplayedAsn !== null && (
-                  <Tooltip title={copiedField === "from_asn" ? "Copied!" : "Copy ASN"}>
-                    <IconButton
+                <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                  <Typography variant="caption" className="mono-font" sx={{ color: "#0F172A", fontWeight: 600 }}>
+                    {fromDisplayedAsn !== undefined && fromDisplayedAsn !== null ? `AS${fromDisplayedAsn}` : "—"}
+                  </Typography>
+                  {fromIsGlobalAsn && (
+                    <Chip
+                      label="Global ASN"
                       size="small"
-                      onClick={() => copyFieldToClipboard(String(fromDisplayedAsn), "from_asn")}
-                      sx={{ p: 0.3, color: copiedField === "from_asn" ? "#10B981" : "#64748B" }}
-                    >
-                      {copiedField === "from_asn" ? <Check size={13} /> : <Copy size={13} />}
-                    </IconButton>
-                  </Tooltip>
-                )}
+                      sx={{
+                        height: 18,
+                        fontSize: "0.62rem",
+                        fontWeight: 700,
+                        bgcolor: "rgba(79, 70, 229, 0.12)",
+                        color: "#4F46E5",
+                        border: "1px solid rgba(79, 70, 229, 0.25)",
+                        borderRadius: "4px",
+                      }}
+                    />
+                  )}
+                  {fromDisplayedAsn !== undefined && fromDisplayedAsn !== null && (
+                    <Tooltip title={copiedField === "from_asn" ? "Copied!" : "Copy ASN"}>
+                      <IconButton
+                        size="small"
+                        onClick={() => copyFieldToClipboard(String(fromDisplayedAsn), "from_asn")}
+                        sx={{ p: 0.3, color: copiedField === "from_asn" ? "#10B981" : "#64748B" }}
+                      >
+                        {copiedField === "from_asn" ? <Check size={13} /> : <Copy size={13} />}
+                      </IconButton>
+                    </Tooltip>
+                  )}
+                </Box>
               </Box>
-            </Box>
+            )}
 
             <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <Typography variant="caption" sx={{ color: "#64748B" }}>
-                {isManual ? "Local Address:" : "Link-Local IPv6:"}
+                {isVirtual ? "Local IP (Reference):" : isManual ? "Local Address:" : "Link-Local IPv6:"}
               </Typography>
               <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
                 <Typography variant="caption" className="mono-font" sx={{ color: "#0891B2", fontWeight: 600 }}>
-                  {link.from.address}
+                  {link.from.address || (isVirtual ? "Not specified" : "—")}
                 </Typography>
                 {link.from.address && (
-                  <Tooltip title={copiedField === "from_ipv6" ? "Copied!" : "Copy Link-Local IPv6"}>
+                  <Tooltip
+                    title={
+                      copiedField === "from_ipv6"
+                        ? "Copied!"
+                        : isVirtual
+                          ? "Copy Local IP"
+                          : "Copy Link-Local IPv6"
+                    }
+                  >
                     <IconButton
                       size="small"
                       onClick={() => copyFieldToClipboard(getLinkLocalIpv6CopyText(link.from.address), "from_ipv6")}
@@ -1303,7 +1379,7 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
               </Box>
             </Box>
 
-            {link.assign_ipv4 && (
+            {!isVirtual && link.assign_ipv4 && (
               <Box sx={{ display: "flex", justifyContent: "space-between" }}>
                 <Typography variant="caption" sx={{ color: "#64748B" }}>
                   Link-Local IPv4:
@@ -1314,7 +1390,7 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
               </Box>
             )}
 
-            {!isManual && (
+            {!isManual && !isVirtual && (
               <>
                 <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <Typography variant="caption" sx={{ color: "#64748B" }}>
@@ -1422,7 +1498,7 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
               </>
             )}
 
-            {!isFromExternal && (
+            {!isFromExternal && !isVirtual && (
               <>
                 <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <Typography
@@ -1611,7 +1687,7 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
               </>
             )}
 
-            {!isManual && (
+            {!isManual && !isVirtual && (
               <Box sx={{ mt: 0.5 }}>
                 <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                   <Typography
@@ -1652,7 +1728,7 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
               </Box>
             )}
 
-            {!isManual && !isFromExternal && (
+            {!isManual && !isVirtual && !isFromExternal && (
               <Box sx={{ mt: 1 }}>
                 <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                   <Typography
@@ -1901,7 +1977,7 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
                 />
               )}
             </Box>
-            {!isManual && (
+            {!isManual && !isVirtual && (
               <Tooltip
                 title={
                   isToExternal
@@ -1942,60 +2018,70 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
           <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
             <Box sx={{ display: "flex", justifyContent: "space-between" }}>
               <Typography variant="caption" sx={{ color: "#64748B" }}>
-                Interface:
+                {isVirtual ? "Interface (Reference):" : "Interface:"}
               </Typography>
               <Typography variant="caption" className="mono-font" sx={{ color: "#0F172A", fontWeight: 600 }}>
-                {link.to.interface}
+                {link.to.interface || (isVirtual ? "Not specified" : "—")}
               </Typography>
             </Box>
 
-            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <Typography variant="caption" sx={{ color: "#64748B" }}>
-                ASN:
-              </Typography>
-              <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-                <Typography variant="caption" className="mono-font" sx={{ color: "#0F172A", fontWeight: 600 }}>
-                  {toDisplayedAsn !== undefined && toDisplayedAsn !== null ? `AS${toDisplayedAsn}` : "—"}
+            {!isVirtual && (
+              <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <Typography variant="caption" sx={{ color: "#64748B" }}>
+                  ASN:
                 </Typography>
-                {toIsGlobalAsn && (
-                  <Chip
-                    label="Global ASN"
-                    size="small"
-                    sx={{
-                      height: 18,
-                      fontSize: "0.62rem",
-                      fontWeight: 700,
-                      bgcolor: "rgba(79, 70, 229, 0.12)",
-                      color: "#4F46E5",
-                      border: "1px solid rgba(79, 70, 229, 0.25)",
-                      borderRadius: "4px",
-                    }}
-                  />
-                )}
-                {toDisplayedAsn !== undefined && toDisplayedAsn !== null && (
-                  <Tooltip title={copiedField === "to_asn" ? "Copied!" : "Copy ASN"}>
-                    <IconButton
+                <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                  <Typography variant="caption" className="mono-font" sx={{ color: "#0F172A", fontWeight: 600 }}>
+                    {toDisplayedAsn !== undefined && toDisplayedAsn !== null ? `AS${toDisplayedAsn}` : "—"}
+                  </Typography>
+                  {toIsGlobalAsn && (
+                    <Chip
+                      label="Global ASN"
                       size="small"
-                      onClick={() => copyFieldToClipboard(String(toDisplayedAsn), "to_asn")}
-                      sx={{ p: 0.3, color: copiedField === "to_asn" ? "#10B981" : "#64748B" }}
-                    >
-                      {copiedField === "to_asn" ? <Check size={13} /> : <Copy size={13} />}
-                    </IconButton>
-                  </Tooltip>
-                )}
+                      sx={{
+                        height: 18,
+                        fontSize: "0.62rem",
+                        fontWeight: 700,
+                        bgcolor: "rgba(79, 70, 229, 0.12)",
+                        color: "#4F46E5",
+                        border: "1px solid rgba(79, 70, 229, 0.25)",
+                        borderRadius: "4px",
+                      }}
+                    />
+                  )}
+                  {toDisplayedAsn !== undefined && toDisplayedAsn !== null && (
+                    <Tooltip title={copiedField === "to_asn" ? "Copied!" : "Copy ASN"}>
+                      <IconButton
+                        size="small"
+                        onClick={() => copyFieldToClipboard(String(toDisplayedAsn), "to_asn")}
+                        sx={{ p: 0.3, color: copiedField === "to_asn" ? "#10B981" : "#64748B" }}
+                      >
+                        {copiedField === "to_asn" ? <Check size={13} /> : <Copy size={13} />}
+                      </IconButton>
+                    </Tooltip>
+                  )}
+                </Box>
               </Box>
-            </Box>
+            )}
 
             <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <Typography variant="caption" sx={{ color: "#64748B" }}>
-                {isManual ? "Local Address:" : "Link-Local IPv6:"}
+                {isVirtual ? "Local IP (Reference):" : isManual ? "Local Address:" : "Link-Local IPv6:"}
               </Typography>
               <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
                 <Typography variant="caption" className="mono-font" sx={{ color: "#0891B2", fontWeight: 600 }}>
-                  {link.to.address}
+                  {link.to.address || (isVirtual ? "Not specified" : "—")}
                 </Typography>
                 {link.to.address && (
-                  <Tooltip title={copiedField === "to_ipv6" ? "Copied!" : "Copy Link-Local IPv6"}>
+                  <Tooltip
+                    title={
+                      copiedField === "to_ipv6"
+                        ? "Copied!"
+                        : isVirtual
+                          ? "Copy Local IP"
+                          : "Copy Link-Local IPv6"
+                    }
+                  >
                     <IconButton
                       size="small"
                       onClick={() => copyFieldToClipboard(getLinkLocalIpv6CopyText(link.to.address), "to_ipv6")}
@@ -2008,7 +2094,7 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
               </Box>
             </Box>
 
-            {link.assign_ipv4 && (
+            {!isVirtual && link.assign_ipv4 && (
               <Box sx={{ display: "flex", justifyContent: "space-between" }}>
                 <Typography variant="caption" sx={{ color: "#64748B" }}>
                   Link-Local IPv4:
@@ -2019,7 +2105,7 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
               </Box>
             )}
 
-            {!isManual && (
+            {!isManual && !isVirtual && (
               <>
                 <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <Typography variant="caption" sx={{ color: "#64748B" }}>
@@ -2127,7 +2213,7 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
               </>
             )}
 
-            {!isToExternal && (
+            {!isToExternal && !isVirtual && (
               <>
                 <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <Typography
@@ -2313,7 +2399,7 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
               </>
             )}
 
-            {!isManual && (
+            {!isManual && !isVirtual && (
               <Box sx={{ mt: 0.5 }}>
                 <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                   <Typography
@@ -2354,7 +2440,7 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
               </Box>
             )}
 
-            {!isManual && !isToExternal && (
+            {!isManual && !isVirtual && !isToExternal && (
               <Box sx={{ mt: 1 }}>
                 <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                   <Typography

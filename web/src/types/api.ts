@@ -203,7 +203,7 @@ export interface ObfuscatorParameters {
 
 export interface LinkEnd {
   name: string;
-  type?: "wireguard" | "manual" | string;
+  type?: "wireguard" | "manual" | "virtual" | string;
   interface: string;
   address: string;
   address4?: string;
@@ -231,7 +231,7 @@ export interface LinkEnd {
 }
 
 export interface Link {
-  type?: "wireguard" | "manual" | string;
+  type?: "wireguard" | "manual" | "virtual" | string;
   from: LinkEnd;
   to: LinkEnd;
   tags?: string[];

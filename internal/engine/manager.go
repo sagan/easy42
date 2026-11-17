@@ -1097,12 +1097,13 @@ func (m *Manager) buildLink(cfg *config.Config, n1, n2 *config.Node, listenPort1
 		linkType = customToEnd.Type
 	}
 	isManual := (linkType == config.LinkTypeManual)
+	isVirtual := (linkType == config.LinkTypeVirtual)
 
 	var encPrivFrom, pubKeyFrom string
 	var encPrivTo, pubKeyTo string
 	var encPsk string
 
-	if !isManual {
+	if !isManual && !isVirtual {
 		if fromNode.IsExternal {
 			if customFromEnd != nil && customFromEnd.PublicKey != "" {
 				pubKeyFrom = customFromEnd.PublicKey
@@ -1230,6 +1231,8 @@ func (m *Manager) buildLink(cfg *config.Config, n1, n2 *config.Node, listenPort1
 		// NeighborAddress is a system-managed derivative: always mirror the peer's local address
 		fromNeighborAddr = toAddr
 		toNeighborAddr = fromAddr
+	} else if isVirtual {
+		// Virtual links do not auto-generate link-local addresses
 	} else {
 		if fromAddr == "" && fromNode.IP != "" {
 			fromAddr, _ = compiler.DeriveIPv6LinkLocal(fromNode.IP)
@@ -1253,32 +1256,32 @@ func (m *Manager) buildLink(cfg *config.Config, n1, n2 *config.Node, listenPort1
 	for _, l := range cfg.Links {
 		if l.From.Name == fromNode.Name {
 			usedIfacesFrom[l.From.Interface] = true
-			if !l.IsManual() {
+			if !l.IsManual() && !l.IsVirtual() {
 				wgIfacesFrom[l.From.Interface] = true
 			}
 		}
 		if l.To.Name == fromNode.Name {
-			usedIfacesFrom[l.To.Interface] = true
-			if !l.IsManual() {
+			usedIfacesTo[l.To.Interface] = true
+			if !l.IsManual() && !l.IsVirtual() {
 				wgIfacesFrom[l.To.Interface] = true
 			}
 		}
 		if l.From.Name == toNode.Name {
 			usedIfacesTo[l.From.Interface] = true
-			if !l.IsManual() {
+			if !l.IsManual() && !l.IsVirtual() {
 				wgIfacesTo[l.From.Interface] = true
 			}
 		}
 		if l.To.Name == toNode.Name {
 			usedIfacesTo[l.To.Interface] = true
-			if !l.IsManual() {
+			if !l.IsManual() && !l.IsVirtual() {
 				wgIfacesTo[l.To.Interface] = true
 			}
 		}
 	}
 
 	var linkIndex int
-	if !isManual {
+	if !isManual && !isVirtual {
 		// Find the lowest deterministic index k (0, 1, 2...) such that default interface names don't collide
 		var candFromIface, candToIface string
 		for k := 0; ; k++ {
@@ -1333,7 +1336,7 @@ func (m *Manager) buildLink(cfg *config.Config, n1, n2 *config.Node, listenPort1
 		if !toNode.IsExternal && toIface != "" && wgIfacesTo[toIface] {
 			return nil, fmt.Errorf("interface %s already exists on node %s", toIface, toNode.Name)
 		}
-	} else {
+	} else if !isVirtual {
 		if !fromNode.IsExternal && fromIface != "" && usedIfacesFrom[fromIface] {
 			return nil, fmt.Errorf("interface %s already exists on node %s", fromIface, fromNode.Name)
 		}
@@ -1348,7 +1351,7 @@ func (m *Manager) buildLink(cfg *config.Config, n1, n2 *config.Node, listenPort1
 	toKeepalive := 0
 	var epTo, epFrom *config.Entrypoint
 
-	if isManual {
+	if isManual || isVirtual {
 		if customFromEnd != nil {
 			fromPort = customFromEnd.ListenPort
 			fromEP = customFromEnd.Endpoint
@@ -1471,6 +1474,9 @@ func (m *Manager) buildLink(cfg *config.Config, n1, n2 *config.Node, listenPort1
 	if isManual {
 		fromMTU = 1500
 		toMTU = 1500
+	} else if isVirtual {
+		fromMTU = 0
+		toMTU = 0
 	} else {
 		fromMTU = resolveUsedMTU(epTo, epFrom, fromNode, toNode)
 		toMTU = resolveUsedMTU(epFrom, epTo, toNode, fromNode)
@@ -1502,7 +1508,7 @@ func (m *Manager) buildLink(cfg *config.Config, n1, n2 *config.Node, listenPort1
 		fromPolicy = customFromEnd.Policy
 	} else if toNode.IsExternal {
 		fromPolicy = config.PolicyDN42
-	} else {
+	} else if !isVirtual {
 		fromPolicy = config.PolicyDefault
 	}
 
@@ -1511,7 +1517,7 @@ func (m *Manager) buildLink(cfg *config.Config, n1, n2 *config.Node, listenPort1
 		toPolicy = customToEnd.Policy
 	} else if fromNode.IsExternal {
 		toPolicy = config.PolicyDN42
-	} else {
+	} else if !isVirtual {
 		toPolicy = config.PolicyDefault
 	}
 
@@ -1677,7 +1683,7 @@ func (m *Manager) buildLink(cfg *config.Config, n1, n2 *config.Node, listenPort1
 		link.To.ObfuscatorParameters = customToEnd.ObfuscatorParameters.Clone()
 	}
 
-	if !isManual {
+	if !isManual && !isVirtual {
 		if err := m.prepareLinkObfuscator(cfg, link, fromNode, toNode, true); err != nil {
 			return nil, err
 		}
@@ -1729,7 +1735,8 @@ func (m *Manager) AddLinkWithAllOptionsAndNote(node1Name, node2Name string, from
 	defer m.mu.Unlock()
 
 	isManual := (fromEnd != nil && fromEnd.IsManual()) || (toEnd != nil && toEnd.IsManual())
-	if !isManual && !m.vault.IsUnlocked() {
+	isVirtual := (fromEnd != nil && fromEnd.IsVirtual()) || (toEnd != nil && toEnd.IsVirtual())
+	if !isManual && !isVirtual && !m.vault.IsUnlocked() {
 		return nil, crypto.ErrVaultLocked
 	}
 
@@ -1763,7 +1770,7 @@ func (m *Manager) AddLinkWithAllOptionsAndNote(node1Name, node2Name string, from
 	}
 
 	var lp *config.Link
-	if fromEnd != nil || toEnd != nil || assignIPv4 || disableBFD || note != "" {
+	if fromEnd != nil || toEnd != nil || assignIPv4 || disableBFD || note != "" || isVirtual {
 		lp = &config.Link{
 			AssignIPv4: assignIPv4,
 			DisableBFD: disableBFD,
@@ -1771,6 +1778,8 @@ func (m *Manager) AddLinkWithAllOptionsAndNote(node1Name, node2Name string, from
 		}
 		if isManual {
 			lp.Type = config.LinkTypeManual
+		} else if isVirtual {
+			lp.Type = config.LinkTypeVirtual
 		}
 		if fromEnd != nil {
 			lp.From = *fromEnd
@@ -2061,8 +2070,12 @@ func (m *Manager) UpdateLinkWithAllOptions(node1Name, node2Name string, customFr
 	}
 
 	linkIdx := -1
+	singleCandidateIdx := -1
+	candidateCount := 0
 	for i, l := range cfg.Links {
 		if l.From.Name == fromNode.Name && l.To.Name == toNode.Name {
+			candidateCount++
+			singleCandidateIdx = i
 			if target1 != "" || target2 != "" {
 				match := (target1 == "" || l.From.Interface == target1 || l.To.Interface == target1) &&
 					(target2 == "" || l.From.Interface == target2 || l.To.Interface == target2)
@@ -2073,6 +2086,9 @@ func (m *Manager) UpdateLinkWithAllOptions(node1Name, node2Name string, customFr
 			linkIdx = i
 			break
 		}
+	}
+	if linkIdx == -1 && candidateCount == 1 {
+		linkIdx = singleCandidateIdx
 	}
 	if linkIdx == -1 {
 		return nil, ErrLinkNotFound
@@ -2270,7 +2286,11 @@ func (m *Manager) UpdateLinkWithAllOptions(node1Name, node2Name string, customFr
 		}
 	}
 
-	if link.From.IsManual() || link.To.IsManual() || link.Type == config.LinkTypeManual || (fromEnd != nil && fromEnd.IsManual()) || (toEnd != nil && toEnd.IsManual()) {
+	if link.From.IsVirtual() || link.To.IsVirtual() || link.Type == config.LinkTypeVirtual || (fromEnd != nil && fromEnd.IsVirtual()) || (toEnd != nil && toEnd.IsVirtual()) {
+		link.Type = config.LinkTypeVirtual
+		link.From.Type = config.LinkTypeVirtual
+		link.To.Type = config.LinkTypeVirtual
+	} else if link.From.IsManual() || link.To.IsManual() || link.Type == config.LinkTypeManual || (fromEnd != nil && fromEnd.IsManual()) || (toEnd != nil && toEnd.IsManual()) {
 		link.Type = config.LinkTypeManual
 		link.From.Type = config.LinkTypeManual
 		link.To.Type = config.LinkTypeManual
@@ -2392,7 +2412,7 @@ func (m *Manager) UpdateLinkWithAllOptions(node1Name, node2Name string, customFr
 	}
 
 	isExternalLink := fromNode.IsExternal || toNode.IsExternal
-	if !isExternalLink && !link.IsManual() {
+	if !isExternalLink && !link.IsManual() && !link.IsVirtual() {
 		fromEP, _, _ := compiler.ResolvePeerEndpointWithEntrypoint(fromNode, toNode, nil, link.To.ListenPort)
 		toEP, _, _ := compiler.ResolvePeerEndpointWithEntrypoint(toNode, fromNode, nil, link.From.ListenPort)
 		link.From.Endpoint = fromEP
@@ -2415,7 +2435,7 @@ func (m *Manager) UpdateLinkWithAllOptions(node1Name, node2Name string, customFr
 		} else {
 			link.To.PersistentKeepalive = 0
 		}
-	} else if toNode.IsExternal && !link.IsManual() {
+	} else if toNode.IsExternal && !link.IsManual() && !link.IsVirtual() {
 		toEP, _, _ := compiler.ResolvePeerEndpointWithEntrypoint(toNode, fromNode, nil, link.From.ListenPort)
 		if toEP != "" {
 			link.To.Endpoint = toEP
@@ -2432,7 +2452,7 @@ func (m *Manager) UpdateLinkWithAllOptions(node1Name, node2Name string, customFr
 		if link.From.Endpoint != "" && link.From.PersistentKeepalive == 0 {
 			link.From.PersistentKeepalive = 25
 		}
-	} else if fromNode.IsExternal && !link.IsManual() {
+	} else if fromNode.IsExternal && !link.IsManual() && !link.IsVirtual() {
 		fromEP, _, _ := compiler.ResolvePeerEndpointWithEntrypoint(fromNode, toNode, nil, link.To.ListenPort)
 		if fromEP != "" {
 			link.From.Endpoint = fromEP
@@ -2454,7 +2474,7 @@ func (m *Manager) UpdateLinkWithAllOptions(node1Name, node2Name string, customFr
 	explicitObfuscatorDisable :=
 		(fromEnd != nil && fromEnd.Obfuscator != "" && config.NormalizeObfuscatorRole(fromEnd.Obfuscator) == config.ObfuscatorNone) ||
 			(toEnd != nil && toEnd.Obfuscator != "" && config.NormalizeObfuscatorRole(toEnd.Obfuscator) == config.ObfuscatorNone)
-	if explicitObfuscatorDisable || link.IsManual() {
+	if explicitObfuscatorDisable || link.IsManual() || link.IsVirtual() {
 		link.From.Obfuscator = ""
 		link.From.ObfuscatorParameters = nil
 		link.To.Obfuscator = ""
@@ -2466,7 +2486,7 @@ func (m *Manager) UpdateLinkWithAllOptions(node1Name, node2Name string, customFr
 	}
 
 	link.ModifiedAt = time.Now().UTC()
-	if !link.IsManual() {
+	if !link.IsManual() && !link.IsVirtual() {
 		link.From.ResolvedEndpoint = compiler.ResolveLinkEndpoint(fromNode, toNode, &link.From, &link.To)
 		link.To.ResolvedEndpoint = compiler.ResolveLinkEndpoint(toNode, fromNode, &link.To, &link.From)
 	}
@@ -3201,7 +3221,7 @@ func (m *Manager) PlanSyncWithScope(scope string, nodeNames ...string) ([]config
 			manualIfacesPerNode[n.Name] = make(map[string]bool)
 		}
 		for _, link := range links {
-			if link.Disabled {
+			if link.Disabled || link.IsVirtual() {
 				continue
 			}
 			if link.IsManual() {
@@ -3438,7 +3458,7 @@ func (m *Manager) PlanSyncWithScope(scope string, nodeNames ...string) ([]config
 	// Skipped if vault is locked since WireGuard private keys cannot be decrypted.
 	if isVaultUnlocked {
 		for _, link := range links {
-			if link.IsManual() || link.Disabled {
+			if link.IsManual() || link.IsVirtual() || link.Disabled {
 				continue
 			}
 			fromNode := nodeMap[link.From.Name]

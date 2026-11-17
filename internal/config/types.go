@@ -450,6 +450,7 @@ func (n *Node) ExternalIp6() string {
 const (
 	LinkTypeWireGuard = "wireguard"
 	LinkTypeManual    = "manual"
+	LinkTypeVirtual   = "virtual"
 )
 
 // LinkEnd represents one endpoint of a link
@@ -581,6 +582,11 @@ func (l *LinkEnd) IsManual() bool {
 	return l != nil && l.LinkType() == LinkTypeManual
 }
 
+// IsVirtual returns whether this LinkEnd is virtual
+func (l *LinkEnd) IsVirtual() bool {
+	return l != nil && l.LinkType() == LinkTypeVirtual
+}
+
 // UseIP returns whether UseIp is enabled on the LinkEnd
 func (l *LinkEnd) UseIP() bool {
 	if l == nil {
@@ -591,7 +597,7 @@ func (l *LinkEnd) UseIP() bool {
 
 // Link represents a link between two nodes
 type Link struct {
-	Type       string    `json:"type,omitempty"` // "wireguard" (default) or "manual"
+	Type       string    `json:"type,omitempty"` // "wireguard" (default), "manual", or "virtual"
 	From       LinkEnd   `json:"from"`
 	To         LinkEnd   `json:"to"`
 	Tags       []string  `json:"tags,omitempty"`
@@ -603,13 +609,16 @@ type Link struct {
 	ModifiedAt time.Time `json:"modified_at,omitempty"` // Last updated timestamp
 }
 
-// LinkType returns the link type for Link ("wireguard" by default, or "manual")
+// LinkType returns the link type for Link ("wireguard" by default, "manual", or "virtual")
 func (l *Link) LinkType() string {
 	if l == nil {
 		return LinkTypeWireGuard
 	}
 	if strings.TrimSpace(l.Type) != "" {
 		return strings.ToLower(strings.TrimSpace(l.Type))
+	}
+	if l.From.IsVirtual() || l.To.IsVirtual() {
+		return LinkTypeVirtual
 	}
 	if l.From.IsManual() || l.To.IsManual() {
 		return LinkTypeManual
@@ -620,6 +629,11 @@ func (l *Link) LinkType() string {
 // IsManual returns whether this link is manual
 func (l *Link) IsManual() bool {
 	return l != nil && l.LinkType() == LinkTypeManual
+}
+
+// IsVirtual returns whether this link is virtual
+func (l *Link) IsVirtual() bool {
+	return l != nil && l.LinkType() == LinkTypeVirtual
 }
 
 // InterfaceInfo represents an interface on a remote machine

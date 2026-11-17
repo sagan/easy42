@@ -178,7 +178,7 @@ func (m *Manager) ApplyConfigChange(content string) (*ApplyResult, error) {
 	// Handle cryptographic keys for newly created links
 	for i := range cloned.Links {
 		l := &cloned.Links[i]
-		if l.Type != config.LinkTypeManual && l.From.PublicKey == "" && l.To.PublicKey == "" {
+		if l.Type != config.LinkTypeManual && l.Type != config.LinkTypeVirtual && !l.IsVirtual() && l.From.PublicKey == "" && l.To.PublicKey == "" {
 			// Needs key generation
 			fromN := findNodeInSlice(cloned.Nodes, l.From.Name)
 			toN := findNodeInSlice(cloned.Nodes, l.To.Name)
@@ -1458,6 +1458,9 @@ func mergeIntegrationsSettings(target *config.IntegrationsSettings, patch *confi
 func (m *Manager) recomputeLinksAndEndpoints(cfg *config.Config, now time.Time) {
 	for i := range cfg.Links {
 		l := &cfg.Links[i]
+		if l.IsVirtual() {
+			continue
+		}
 		fromN := findNodeInSlice(cfg.Nodes, l.From.Name)
 		toN := findNodeInSlice(cfg.Nodes, l.To.Name)
 		if fromN == nil || toN == nil {
