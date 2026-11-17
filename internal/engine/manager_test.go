@@ -2819,6 +2819,157 @@ func TestPlanSyncWhenVaultLocked(t *testing.T) {
 	}
 }
 
+func TestPlanSyncAppsWhenVaultLockedOnRestart(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "easy42-apps-vault-sync-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	store := config.NewStore(tempDir)
+	_, err = store.Initialize()
+	if err != nil {
+		t.Fatalf("Failed to init store: %v", err)
+	}
+
+	mgr := NewManager(store)
+	defer mgr.Close()
+
+	// 1. Add agent node
+	node := config.Node{
+		Name: "agent-node-1",
+		Host: "192.168.10.10",
+		IP:   "10.42.0.10/24",
+	}
+	if err := mgr.AddNode(node); err != nil {
+		t.Fatalf("Failed to add node: %v", err)
+	}
+
+	// 2. Add an app
+	app := config.App{
+		ID:          "app-1",
+		Name:        "my-service",
+		AppType:     "docker",
+		Enabled:     true,
+		Published:   true,
+		Selector:    map[string]string{"name": "agent-node-1"},
+		MainContent: "version: '3'\nservices:\n  app:\n    image: my-image:latest\n",
+		EnvContent:  "ENV_VAR=value\n",
+	}
+	if _, err := mgr.SaveApp(app); err != nil {
+		t.Fatalf("Failed to save app: %v", err)
+	}
+
+	specs, err := mgr.BuildAppSpecsForNode("agent-node-1")
+	if err != nil || len(specs) == 0 {
+		t.Fatalf("Failed to build app specs: %v", err)
+	}
+	desiredSpec := specs[0]
+	mainTargetFile := fmt.Sprintf("/etc/ezappc/ezapp-%s/compose.yaml", desiredSpec.Name)
+	envTargetFile := fmt.Sprintf("/etc/ezappc/ezapp-%s/.env", desiredSpec.Name)
+
+	probeResult := agentProbeResult{
+		Hostname: "agent-node-1",
+		AppHashes: map[string]string{
+			desiredSpec.Name: desiredSpec.Sha256Hash,
+		},
+		AppFiles: map[string]agent.ProbeConfigFile{
+			mainTargetFile: {
+				Path:    mainTargetFile,
+				Content: desiredSpec.MainContent,
+				Hash:    config.HashConfig(desiredSpec.MainContent),
+			},
+			envTargetFile: {
+				Path:    envTargetFile,
+				Content: desiredSpec.EnvContent,
+				Hash:    config.HashConfig(desiredSpec.EnvContent),
+			},
+		},
+	}
+	probeJSON, _ := json.Marshal(probeResult)
+
+	// Set up mock websocket server to simulate agent connection
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ws, err := testUpgrader.Upgrade(w, r, nil)
+		if err != nil {
+			return
+		}
+		conn := agent.NewConnection("agent-node-1", ws, mgr.AgentHub())
+		mgr.AgentHub().Register(conn)
+		go conn.ReadLoop()
+	}))
+	defer server.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http")
+	clientWs, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("Failed to connect mock agent: %v", err)
+	}
+	defer clientWs.Close()
+
+	// Mock agent command handler loop: answer ProbeSystemCmd
+	go func() {
+		for {
+			_, data, err := clientWs.ReadMessage()
+			if err != nil {
+				return
+			}
+			var msg agentpb.AgentMessage
+			if err := proto.Unmarshal(data, &msg); err != nil {
+				continue
+			}
+			if req, ok := msg.Payload.(*agentpb.AgentMessage_CommandReq); ok {
+				cmd := req.CommandReq
+				if _, isProbe := cmd.Command.(*agentpb.CommandRequest_ProbeSystem); isProbe {
+					resp := &agentpb.AgentMessage{
+						Payload: &agentpb.AgentMessage_CommandResp{
+							CommandResp: &agentpb.CommandResponse{
+								RequestId: cmd.RequestId,
+								Success:   true,
+								Stdout:    string(probeJSON),
+							},
+						},
+					}
+					respBytes, _ := proto.Marshal(resp)
+					_ = clientWs.WriteMessage(websocket.BinaryMessage, respBytes)
+				}
+			}
+		}
+	}()
+
+	// Wait for agent to register in hub
+	time.Sleep(100 * time.Millisecond)
+
+	// Ensure vault is locked (simulating server restart before vault unlock)
+	mgr.Lock()
+	if mgr.IsUnlocked() {
+		t.Fatalf("Vault should be locked")
+	}
+
+	// 3. PlanSync while vault is locked should probe connected agent and find apps synced!
+	actions, err := mgr.PlanSync()
+	if err != nil {
+		t.Fatalf("PlanSync failed: %v", err)
+	}
+
+	// Verify that the app sync actions are NOT pending
+	appActionFound := false
+	for _, act := range actions {
+		if act.Type == config.ActionSyncApp && act.Interface == "my-service" {
+			appActionFound = true
+			if act.NeedsApply {
+				t.Errorf("App action should NOT need apply when files match on node, but was pending: %+v", act)
+			}
+			if act.Status != "synced" {
+				t.Errorf("App status should be 'synced', got %s", act.Status)
+			}
+		}
+	}
+	if !appActionFound {
+		t.Errorf("Expected to find app action for my-service in sync plan")
+	}
+}
+
 func TestRevealAndResetPsk(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "mgr-psk-test-*")
 	if err != nil {

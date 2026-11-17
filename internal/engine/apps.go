@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"regexp"
 	"sort"
@@ -9,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"easy42/internal/agent"
 	agentpb "easy42/internal/agent/proto"
 	"easy42/internal/apps"
 	"easy42/internal/config"
@@ -33,7 +35,35 @@ func (m *Manager) setupAgentAppsListeners() {
 		return
 	}
 
-	// When telemetry report arrives, cache reported app statuses
+	// 1. When agent registers, immediately probe installed apps and cache their hashes and files
+	m.agentHub.OnRegister(func(conn *agent.AgentConnection) {
+		nodeName := conn.NodeName()
+		go func() {
+			cmdCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			var probeRes agentProbeResult
+			cmdResp, err := m.agentHub.SendCommand(cmdCtx, nodeName, &agentpb.CommandRequest{
+				Command: &agentpb.CommandRequest_ProbeSystem{
+					ProbeSystem: &agentpb.ProbeSystemCmd{},
+				},
+			})
+			if err == nil && cmdResp.Success && cmdResp.Stdout != "" {
+				if err := json.Unmarshal([]byte(cmdResp.Stdout), &probeRes); err == nil {
+					if len(probeRes.AppHashes) > 0 {
+						m.agentHub.SetAppHashes(nodeName, probeRes.AppHashes)
+						if m.stateStore != nil {
+							_ = m.stateStore.UpdateAppStates(nodeName, "", probeRes.AppHashes, time.Now())
+						}
+					}
+					if len(probeRes.AppFiles) > 0 {
+						m.agentHub.SetAppFiles(nodeName, probeRes.AppFiles)
+					}
+				}
+			}
+		}()
+	})
+
+	// 2. When telemetry report arrives, cache reported app statuses
 	m.agentHub.OnTelemetry(func(nodeName string, t *agentpb.TelemetryReport) {
 		if t == nil || len(t.Apps) == 0 {
 			return

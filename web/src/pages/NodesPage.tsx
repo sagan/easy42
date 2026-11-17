@@ -44,6 +44,7 @@ import {
   Check,
   Radio,
   FileCode,
+  Terminal,
 } from "lucide-react";
 import { useMesh } from "../context/MeshContext";
 import { NodeLiveStatus } from "../types/api";
@@ -110,6 +111,7 @@ export const NodesPage: React.FC = () => {
     links,
     nodeStatuses,
     networkState,
+    networkSettings,
     fleetLive,
     refreshFleetLive,
     selectedTag,
@@ -1669,14 +1671,37 @@ export const NodesPage: React.FC = () => {
 
                     {/* Actions */}
                     <Box sx={{ display: "flex", gap: 0.8 }}>
+                      {!!n.ip && !!networkSettings?.data?.node_web_terminal_url && (
+                        <Tooltip title="Web Terminal">
+                          <span>
+                            <IconButton
+                              size="small"
+                              href={(networkSettings?.data?.node_web_terminal_url as string).replace("%i", n.ip)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              sx={{
+                                color: "#4F46E5",
+                                bgcolor: "#EEF2FF",
+                                "&:hover": { bgcolor: "#E0E7FF" },
+                                "&.Mui-disabled": { bgcolor: "#F1F5F9", color: "#CBD5E1" },
+                                p: 0.7,
+                              }}
+                            >
+                              <Terminal size={15} />
+                            </IconButton>
+                          </span>
+                        </Tooltip>
+                      )}
                       <Tooltip title={agentInstalled ? "Historical Charts & Telemetry" : "Agent not installed"}>
                         <span>
                           <IconButton
                             size="small"
                             onClick={(e) => {
                               e.stopPropagation();
+                              e.preventDefault();
                               navigate(`/nodes/${encodeURIComponent(n.name)}?tab=metrics`);
                             }}
+                            href={`/nodes/${encodeURIComponent(n.name)}?tab=metrics`}
                             disabled={!agentInstalled}
                             sx={{
                               color: "#4F46E5",
@@ -1696,8 +1721,10 @@ export const NodesPage: React.FC = () => {
                           size="small"
                           onClick={(e) => {
                             e.stopPropagation();
+                            e.preventDefault();
                             navigate(`/looking-glass/presets?node=${encodeURIComponent(n.name)}`);
                           }}
+                          href={`/looking-glass/presets?node=${encodeURIComponent(n.name)}`}
                           sx={{
                             color: "#0891B2",
                             bgcolor: "#ECFEFF",
@@ -1714,8 +1741,10 @@ export const NodesPage: React.FC = () => {
                           size="small"
                           onClick={(e) => {
                             e.stopPropagation();
+                            e.preventDefault();
                             navigate(`/nodes/${encodeURIComponent(n.name)}`);
                           }}
+                          href={`/nodes/${encodeURIComponent(n.name)}`}
                           sx={{
                             color: "#64748B",
                             bgcolor: "#F1F5F9",
@@ -2442,6 +2471,24 @@ export const NodesPage: React.FC = () => {
                     )}
 
                     <TableCell align="right">
+                      {!!n.ip && !!networkSettings?.data?.node_web_terminal_url && (
+                        <Tooltip title="Web Terminal">
+                          <span>
+                            <IconButton
+                              size="small"
+                              href={(networkSettings?.data?.node_web_terminal_url as string).replace("%i", n.ip)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              sx={{
+                                color: "#4F46E5",
+                                "&.Mui-disabled": { color: "#CBD5E1" },
+                              }}
+                            >
+                              <Terminal size={16} />
+                            </IconButton>
+                          </span>
+                        </Tooltip>
+                      )}
                       <Tooltip title={agentInstalled ? "Historical Charts & Telemetry" : "Agent not installed"}>
                         <span>
                           <IconButton

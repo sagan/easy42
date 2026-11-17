@@ -3211,6 +3211,53 @@ func (m *Manager) PlanSyncWithScope(scope string, nodeNames ...string) ([]config
 	actions := make([]config.SyncAction, 0)
 	probedConfigsPerNode := make(map[string]map[string]agent.ProbeConfigFile)
 
+	// Probe connected agents to collect current app hashes, app files, and existing configs.
+	// This runs regardless of vault lock status because agent probing does not require vault keys,
+	// and app sync actions / status previews rely on probed app files and hashes.
+	var probeWg sync.WaitGroup
+	var probeMu sync.Mutex
+
+	for _, n := range nodes {
+		if n.IsExternal {
+			continue
+		}
+		if isPartial && !targetMap[n.Name] {
+			continue
+		}
+		node := n
+		if m.agentHub != nil && m.agentHub.IsConnected(node.Name) {
+			probeWg.Add(1)
+			go func(targetNode config.Node) {
+				defer probeWg.Done()
+
+				cmdCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+				var probeRes agentProbeResult
+				cmdResp, err := m.agentHub.SendCommand(cmdCtx, targetNode.Name, &agentpb.CommandRequest{
+					Command: &agentpb.CommandRequest_ProbeSystem{
+						ProbeSystem: &agentpb.ProbeSystemCmd{},
+					},
+				})
+				cancel()
+				if err == nil && cmdResp.Success && cmdResp.Stdout != "" {
+					_ = json.Unmarshal([]byte(cmdResp.Stdout), &probeRes)
+					if len(probeRes.AppHashes) > 0 {
+						m.agentHub.SetAppHashes(targetNode.Name, probeRes.AppHashes)
+						if m.stateStore != nil {
+							_ = m.stateStore.UpdateAppStates(targetNode.Name, targetNode.Host, probeRes.AppHashes, time.Now())
+						}
+					}
+					if len(probeRes.AppFiles) > 0 {
+						m.agentHub.SetAppFiles(targetNode.Name, probeRes.AppFiles)
+					}
+					probeMu.Lock()
+					probedConfigsPerNode[targetNode.Name] = probeRes.Configs
+					probeMu.Unlock()
+				}
+			}(node)
+		}
+	}
+	probeWg.Wait()
+
 	// 1. Detect unused/deleted wg42* interfaces on remote devices by running `wg`
 	// WireGuard tasks require the vault to be unlocked to decrypt private keys and manage interfaces.
 	if isVaultUnlocked {
@@ -3240,7 +3287,6 @@ func (m *Manager) PlanSyncWithScope(scope string, nodeNames ...string) ([]config
 		var wg sync.WaitGroup
 		var cleanActionsMu sync.Mutex
 		var cleanActions []config.SyncAction
-		var probeMu sync.Mutex
 
 		for _, n := range nodes {
 			if n.IsExternal {
@@ -3254,40 +3300,19 @@ func (m *Manager) PlanSyncWithScope(scope string, nodeNames ...string) ([]config
 			go func(targetNode config.Node) {
 				defer wg.Done()
 
-				// 1. If agent is connected, probe running interfaces & configs directly via agent
+				expected := expectedIfacesPerNode[targetNode.Name]
+				manualIfs := manualIfacesPerNode[targetNode.Name]
+
+				// 1. If agent is connected, detect unused interfaces from probed configs and telemetry
 				if m.agentHub != nil && m.agentHub.IsConnected(targetNode.Name) {
-					expected := expectedIfacesPerNode[targetNode.Name]
-					manualIfs := manualIfacesPerNode[targetNode.Name]
-
-					cmdCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-					var probeRes agentProbeResult
-					cmdResp, err := m.agentHub.SendCommand(cmdCtx, targetNode.Name, &agentpb.CommandRequest{
-						Command: &agentpb.CommandRequest_ProbeSystem{
-							ProbeSystem: &agentpb.ProbeSystemCmd{},
-						},
-					})
-					cancel()
-					if err == nil && cmdResp.Success && cmdResp.Stdout != "" {
-						_ = json.Unmarshal([]byte(cmdResp.Stdout), &probeRes)
-						if len(probeRes.AppHashes) > 0 {
-							m.agentHub.SetAppHashes(targetNode.Name, probeRes.AppHashes)
-							if m.stateStore != nil {
-								_ = m.stateStore.UpdateAppStates(targetNode.Name, targetNode.Host, probeRes.AppHashes, time.Now())
-							}
-						}
-						if len(probeRes.AppFiles) > 0 {
-							m.agentHub.SetAppFiles(targetNode.Name, probeRes.AppFiles)
-						}
-						probeMu.Lock()
-						probedConfigsPerNode[targetNode.Name] = probeRes.Configs
-						probeMu.Unlock()
-					}
-
 					nodeStatus := m.agentHub.NodeStatus(targetNode.Name)
 					telemetry := m.agentHub.GetTelemetry(targetNode.Name)
 
 					candidateIfaces := make(map[string]string)
-					for cfgIface, cfgFile := range probeRes.Configs {
+					probeMu.Lock()
+					pConfigs := probedConfigsPerNode[targetNode.Name]
+					probeMu.Unlock()
+					for cfgIface, cfgFile := range pConfigs {
 						if strings.HasPrefix(cfgIface, "wg42") {
 							targetFile := cfgFile.Path
 							if targetFile == "" {
@@ -3374,8 +3399,6 @@ func (m *Manager) PlanSyncWithScope(scope string, nodeNames ...string) ([]config
 				if err != nil {
 					return
 				}
-				expected := expectedIfacesPerNode[targetNode.Name]
-				manualIfs := manualIfacesPerNode[targetNode.Name]
 				for _, iface := range runningIfaces {
 					// We only manage wg42* prefix wireguard interfaces
 					if strings.HasPrefix(iface, "wg42") {

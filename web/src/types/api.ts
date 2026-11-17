@@ -39,6 +39,7 @@ export interface NetworkSettings {
   bird_export_filter?: string;
   bird_pre_snippet?: string;
   bird_post_snippet?: string;
+  data?: Record<string, unknown>;
 }
 
 export interface FlapAlertedMetrics {
@@ -1214,7 +1215,3 @@ export interface EventsResponse {
   total: number;
   unread_count: number;
 }
-
-
-
-

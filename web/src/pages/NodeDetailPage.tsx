@@ -164,6 +164,7 @@ export const NodeDetailPage: React.FC = () => {
     links,
     nodeStatuses,
     networkState,
+    networkSettings,
     networkPolicies,
     fleetLive,
     loadData,
@@ -1444,11 +1445,36 @@ export const NodeDetailPage: React.FC = () => {
             {/* Quick action buttons row */}
             {!node?.is_external && (
               <Box sx={{ display: "flex", gap: 1 }}>
+                {!!node?.ip && !!networkSettings?.data?.node_web_terminal_url && (
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    startIcon={<Terminal size={15} />}
+                    href={(networkSettings?.data?.node_web_terminal_url as string).replace("%i", node.ip)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    sx={{
+                      color: "#0891B2",
+                      borderColor: "#CFFAFE",
+                      bgcolor: "#ECFEFF",
+                      fontWeight: 600,
+                      fontSize: "0.78rem",
+                      "&:hover": { bgcolor: "#CFFAFE", borderColor: "#A5F3FC" },
+                    }}
+                  >
+                    Web Terminal
+                  </Button>
+                )}
                 <Button
                   variant="outlined"
                   size="small"
                   startIcon={<Compass size={15} />}
-                  onClick={() => navigate(`/looking-glass/presets?node=${encodeURIComponent(node?.name || "")}`)}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    navigate(`/looking-glass/presets?node=${encodeURIComponent(node?.name || "")}`);
+                  }}
+                  href={`/looking-glass/presets?node=${encodeURIComponent(node?.name || "")}`}
                   sx={{
                     color: "#0891B2",
                     borderColor: "#CFFAFE",
@@ -1464,7 +1490,12 @@ export const NodeDetailPage: React.FC = () => {
                   variant="outlined"
                   size="small"
                   startIcon={<Wrench size={15} />}
-                  onClick={() => navigate(`/helper?node=${encodeURIComponent(node?.name || "")}`)}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    navigate(`/helper?node=${encodeURIComponent(node?.name || "")}`);
+                  }}
+                  href={`/helper?node=${encodeURIComponent(node?.name || "")}`}
                   sx={{
                     color: "#475569",
                     borderColor: "#E2E8F0",

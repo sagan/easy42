@@ -378,6 +378,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
   const [faAsn, setFaAsn] = useState<number | "">(4224420000);
   const [faUrl, setFaUrl] = useState("");
   const [extraHosts, setExtraHosts] = useState("");
+  const [dataText, setDataText] = useState("{}");
   const [globalBirdPreSnippet, setGlobalBirdPreSnippet] = useState("");
   const [globalBirdImportFilter, setGlobalBirdImportFilter] = useState("");
   const [globalBirdExportFilter, setGlobalBirdExportFilter] = useState("");
@@ -1115,6 +1116,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
       );
       setFaUrl(settings.flapalerted_url || "");
       setExtraHosts(settings.extra_hosts || "");
+      setDataText(settings.data ? JSON.stringify(settings.data, undefined, 2) : "{}");
       setGlobalBirdPreSnippet(settings.bird_pre_snippet || "");
       setGlobalBirdImportFilter(settings.bird_import_filter || "");
       setGlobalBirdExportFilter(settings.bird_export_filter || "");
@@ -1133,6 +1135,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
     setNetworkError(null);
     setNetworkSuccess(null);
 
+    let data: Record<string, unknown> = {};
+    try {
+      data = JSON.parse(dataText) || {};
+    } catch {}
+    setDataText(JSON.stringify(data, null, 2));
     const payload: NetworkSettings = {
       name: networkNameInput.trim() || "Easy42",
       public_asn: publicAsn === "" ? 0 : Number(publicAsn),
@@ -1148,6 +1155,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
       bird_import_filter: globalBirdImportFilter.trim() || undefined,
       bird_export_filter: globalBirdExportFilter.trim() || undefined,
       bird_post_snippet: globalBirdPostSnippet.trim() || undefined,
+      data,
     };
 
     try {
@@ -1938,6 +1946,21 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                     value={extraHosts}
                     onChange={(e) => setExtraHosts(e.target.value)}
                     helperText="Global custom /etc/hosts records injected into all cluster nodes with Update Hosts enabled. Merged with node extra hosts and cluster node IP hosts (priority: node extra hosts > global extra hosts > easy42 node IP hosts). Use '-' as IP to unset host(s)."
+                    disabled={networkSaving}
+                  />
+
+                  <Divider sx={{ my: 0.5 }} />
+
+                  <TextFieldWithCopy
+                    fullWidth
+                    size="small"
+                    multiline
+                    rows={3}
+                    label="Advanced Config (json)"
+                    placeholder={"{}"}
+                    value={dataText}
+                    onChange={(e) => setDataText(e.target.value)}
+                    helperText="Advanced network config json object."
                     disabled={networkSaving}
                   />
 
