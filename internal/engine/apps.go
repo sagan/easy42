@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"easy42/internal/agent"
 	agentpb "easy42/internal/agent/proto"
 	"easy42/internal/apps"
 	"easy42/internal/config"
@@ -27,6 +28,55 @@ type AppStatusRecord struct {
 	ErrorMessage string `json:"error_message,omitempty"`
 }
 
+// loadAppStatuses restores the cached live app statuses from SQLite so they are
+// available right after a server restart (the agent status map is in-memory).
+func (m *Manager) loadAppStatuses() {
+	if m.stateStore == nil {
+		return
+	}
+	st := m.stateStore.Get()
+	if st == nil {
+		return
+	}
+	m.appStatusesMu.Lock()
+	defer m.appStatusesMu.Unlock()
+	if m.appStatuses == nil {
+		m.appStatuses = make(map[string]map[string]AppStatusRecord)
+	}
+	for nodeName, stNode := range st.Nodes {
+		for appName, rec := range stNode.AppStatuses {
+			if m.appStatuses[nodeName] == nil {
+				m.appStatuses[nodeName] = make(map[string]AppStatusRecord)
+			}
+			m.appStatuses[nodeName][appName] = AppStatusRecord{
+				Name:       appName,
+				State:      rec.State,
+				StatusText: rec.StatusText,
+			}
+		}
+	}
+}
+
+// persistAppStatuses writes the cached live app statuses of a node to SQLite.
+func (m *Manager) persistAppStatuses(nodeName string, statuses map[string]AppStatusRecord) {
+	if m.stateStore == nil || len(statuses) == 0 {
+		return
+	}
+	records := make(map[string]config.AppStateRecord, len(statuses))
+	for name, rec := range statuses {
+		records[name] = config.AppStateRecord{
+			State:      rec.State,
+			StatusText: rec.StatusText,
+			ObservedAt: time.Unix(rec.LastUpdated, 0),
+		}
+	}
+	host := ""
+	if node := m.FindNode(nodeName); node != nil {
+		host = node.Host
+	}
+	_ = m.stateStore.UpdateAppStatusStates(nodeName, host, records)
+}
+
 // setupAgentAppsListeners initializes hooks for agent registration and app status reporting
 func (m *Manager) setupAgentAppsListeners() {
 	if m.agentHub == nil {
@@ -36,6 +86,37 @@ func (m *Manager) setupAgentAppsListeners() {
 	// NOTE: app state is discovered from the probe performed during state
 	// collection (UpdateState / agent registration) and from telemetry. No extra
 	// probe is sent here so a reconnect does not race with state collection.
+
+	// 1. When an agent registers, record its reported app statuses so the sync
+	// plan has live data even before the first telemetry report arrives.
+	m.agentHub.OnRegister(func(conn *agent.AgentConnection) {
+		statuses := m.agentHub.GetTelemetry(conn.NodeName())
+		if statuses == nil || len(statuses.Apps) == 0 {
+			return
+		}
+		m.appStatusesMu.Lock()
+		nodeMap := m.appStatuses[conn.NodeName()]
+		if nodeMap == nil {
+			nodeMap = make(map[string]AppStatusRecord)
+			m.appStatuses[conn.NodeName()] = nodeMap
+		}
+		now := time.Now().Unix()
+		for _, a := range statuses.Apps {
+			if a == nil {
+				continue
+			}
+			nodeMap[a.Name] = AppStatusRecord{
+				AppID:        a.AppId,
+				Name:         a.Name,
+				State:        a.State,
+				StatusText:   a.StatusText,
+				LastUpdated:  now,
+				ErrorMessage: a.ErrorMessage,
+			}
+		}
+		m.appStatusesMu.Unlock()
+		m.persistAppStatuses(conn.NodeName(), nodeMap)
+	})
 
 	// 2. When telemetry report arrives, cache reported app statuses
 	m.agentHub.OnTelemetry(func(nodeName string, t *agentpb.TelemetryReport) {
@@ -56,7 +137,6 @@ func (m *Manager) setupAgentAppsListeners() {
 		}
 
 		now := time.Now().Unix()
-		observed := make(map[string]config.AppStateRecord, len(t.Apps))
 		for _, a := range t.Apps {
 			if a == nil {
 				continue
@@ -78,22 +158,11 @@ func (m *Manager) setupAgentAppsListeners() {
 				LastUpdated:  now,
 				ErrorMessage: a.ErrorMessage,
 			}
-			observed[a.Name] = config.AppStateRecord{
-				State:      a.State,
-				StatusText: a.StatusText,
-				ObservedAt: time.Unix(now, 0),
-			}
 		}
 		m.appStatusesMu.Unlock()
 
 		// Persist the observed states so the sync plan stays stable across restarts.
-		if m.stateStore != nil {
-			host := ""
-			if node := m.FindNode(nodeName); node != nil {
-				host = node.Host
-			}
-			_ = m.stateStore.UpdateAppStatusStates(nodeName, host, observed)
-		}
+		m.persistAppStatuses(nodeName, nodeMap)
 	})
 }
 

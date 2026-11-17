@@ -201,6 +201,16 @@ func (c *AgentConnection) handleIncomingMessage(msg *agentpb.AgentMessage) {
 		c.hostname = req.Hostname
 		c.hostsHash = req.HostsHash
 		c.disableApps = req.DisableApps
+		// Persist the registration metadata so it stays available while the
+		// agent is offline (e.g. after a server restart, before reconnect).
+		c.hub.SetNodeMeta(c.nodeName, NodeMeta{
+			AgentVersion: req.AgentVersion,
+			OSInfo:       req.OsInfo,
+			InitSystem:   req.InitSystem,
+			Hostname:     req.Hostname,
+			HostsHash:    req.HostsHash,
+			DisableApps:  req.DisableApps,
+		})
 		c.hub.RecordLiveReport(c.nodeName)
 
 		// Acknowledge registration
@@ -217,6 +227,7 @@ func (c *AgentConnection) handleIncomingMessage(msg *agentpb.AgentMessage) {
 	case *agentpb.AgentMessage_Heartbeat:
 		if payload.Heartbeat.HostsHash != "" {
 			c.hostsHash = payload.Heartbeat.HostsHash
+			c.hub.UpdateHostsHash(c.nodeName, payload.Heartbeat.HostsHash)
 		}
 		// Heartbeat response
 		_ = c.SendMessage(&agentpb.AgentMessage{

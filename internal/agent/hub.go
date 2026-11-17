@@ -4,12 +4,17 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
 	agentpb "easy42/internal/agent/proto"
 	"easy42/internal/config"
+
+	"google.golang.org/protobuf/proto"
 )
 
 // TelemetryListener handles telemetry reports received by the hub
@@ -28,6 +33,21 @@ type ProbeConfigFile struct {
 	Hash    string `json:"hash"`
 }
 
+// NodeMeta holds agent-reported registration metadata (OS info, init system,
+// hostname, hosts hash, ...). It is persisted in the cache store so the values
+// remain available while the agent is offline — e.g. right after a server
+// restart, before the agent reconnects and re-registers. The sync plan needs
+// os_info / init_system to build app specs identical to the deployed ones;
+// without them every app would look pending after a restart.
+type NodeMeta struct {
+	AgentVersion string `json:"agent_version,omitempty"`
+	OSInfo       string `json:"os_info,omitempty"`
+	InitSystem   string `json:"init_system,omitempty"`
+	Hostname     string `json:"hostname,omitempty"`
+	HostsHash    string `json:"hosts_hash,omitempty"`
+	DisableApps  bool   `json:"disable_apps,omitempty"`
+}
+
 // Hub manages active agent connections and cached telemetry
 type Hub struct {
 	mu               sync.RWMutex
@@ -39,10 +59,23 @@ type Hub struct {
 	appEnabled       map[string]map[string]bool            // nodeName -> appName -> last applied enabled state
 	probeConfigs     map[string]map[string]ProbeConfigFile // nodeName -> interface -> last probed WireGuard config
 	lastLiveReport   map[string]time.Time                  // nodeName -> last agent-initiated report (register/telemetry)
+	nodeMeta         map[string]*NodeMeta                  // nodeName -> persisted agent registration metadata
+	store            *CacheStore                           // optional persistent cache (survives restarts)
 	onTelemetry      []TelemetryListener
 	onRegister       []RegisterListener
 	onCronTaskReport []CronTaskReportListener
 }
+
+// Cache key prefixes used by the persistent hub cache.
+const (
+	cacheKeyAppHashPrefix     = "app_hash:"
+	cacheKeyAppFilePrefix     = "app_file:"
+	cacheKeyAppEnabledPrefix  = "app_enabled:"
+	cacheKeyProbeConfigPrefix = "probe_config:"
+	cacheKeyLastLiveReport    = "last_live_report"
+	cacheKeyTelemetry         = "telemetry"
+	cacheKeyNodeMeta          = "meta"
+)
 
 // NewHub creates a new Hub instance
 func NewHub() *Hub {
@@ -55,7 +88,160 @@ func NewHub() *Hub {
 		appEnabled:     make(map[string]map[string]bool),
 		probeConfigs:   make(map[string]map[string]ProbeConfigFile),
 		lastLiveReport: make(map[string]time.Time),
+		nodeMeta:       make(map[string]*NodeMeta),
 	}
+}
+
+// SetCacheStore attaches a persistent cache store and loads previously cached
+// entries into memory. Every subsequent cache mutation is written through to
+// the store so the caches survive a server restart.
+func (h *Hub) SetCacheStore(store *CacheStore) error {
+	if store == nil {
+		return nil
+	}
+	all, err := store.LoadAll()
+	if err != nil {
+		return err
+	}
+
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.store = store
+
+	for nodeName, entries := range all {
+		for key, value := range entries {
+			switch {
+			case strings.HasPrefix(key, cacheKeyAppHashPrefix):
+				if h.appHashes[nodeName] == nil {
+					h.appHashes[nodeName] = make(map[string]string)
+				}
+				h.appHashes[nodeName][strings.TrimPrefix(key, cacheKeyAppHashPrefix)] = value
+			case strings.HasPrefix(key, cacheKeyAppEnabledPrefix):
+				if h.appEnabled[nodeName] == nil {
+					h.appEnabled[nodeName] = make(map[string]bool)
+				}
+				h.appEnabled[nodeName][strings.TrimPrefix(key, cacheKeyAppEnabledPrefix)] = value == "true"
+			case strings.HasPrefix(key, cacheKeyAppFilePrefix):
+				var f ProbeConfigFile
+				if json.Unmarshal([]byte(value), &f) == nil {
+					if h.appFiles[nodeName] == nil {
+						h.appFiles[nodeName] = make(map[string]ProbeConfigFile)
+					}
+					h.appFiles[nodeName][strings.TrimPrefix(key, cacheKeyAppFilePrefix)] = f
+				}
+			case strings.HasPrefix(key, cacheKeyProbeConfigPrefix):
+				var f ProbeConfigFile
+				if json.Unmarshal([]byte(value), &f) == nil {
+					if h.probeConfigs[nodeName] == nil {
+						h.probeConfigs[nodeName] = make(map[string]ProbeConfigFile)
+					}
+					h.probeConfigs[nodeName][strings.TrimPrefix(key, cacheKeyProbeConfigPrefix)] = f
+				}
+			case key == cacheKeyLastLiveReport:
+				if unix, err := strconv.ParseInt(value, 10, 64); err == nil && unix > 0 {
+					h.lastLiveReport[nodeName] = time.Unix(unix, 0)
+				}
+			case key == cacheKeyTelemetry:
+				var t agentpb.TelemetryReport
+				if proto.Unmarshal([]byte(value), &t) == nil {
+					h.telemetry[nodeName] = &t
+				}
+			case key == cacheKeyNodeMeta:
+				var meta NodeMeta
+				if json.Unmarshal([]byte(value), &meta) == nil {
+					h.nodeMeta[nodeName] = &meta
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// persistLocked writes a cache entry to the persistent store. Caller holds mu.
+func (h *Hub) persistLocked(nodeName, key, value string) {
+	if h.store == nil {
+		return
+	}
+	_ = h.store.Set(nodeName, key, value)
+}
+
+// deletePersistedLocked removes a cache entry from the persistent store. Caller holds mu.
+func (h *Hub) deletePersistedLocked(nodeName, key string) {
+	if h.store == nil {
+		return
+	}
+	_ = h.store.Delete(nodeName, key)
+}
+
+// deletePersistedPrefixLocked removes cache entries with a key prefix. Caller holds mu.
+func (h *Hub) deletePersistedPrefixLocked(nodeName, prefix string) {
+	if h.store == nil {
+		return
+	}
+	_ = h.store.DeletePrefix(nodeName, prefix)
+}
+
+// deletePersistedNodeLocked removes every cache entry of a node. Caller holds mu.
+func (h *Hub) deletePersistedNodeLocked(nodeName string) {
+	if h.store == nil {
+		return
+	}
+	_ = h.store.DeleteNode(nodeName)
+}
+
+// persistMetaLocked writes the node metadata entry to the persistent store. Caller holds mu.
+func (h *Hub) persistMetaLocked(nodeName string, meta *NodeMeta) {
+	if data, err := json.Marshal(meta); err == nil {
+		h.persistLocked(nodeName, cacheKeyNodeMeta, string(data))
+	}
+}
+
+// SetNodeMeta replaces the registration metadata of a node (called on agent
+// registration) and persists it so it survives a server restart.
+func (h *Hub) SetNodeMeta(nodeName string, meta NodeMeta) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.nodeMeta == nil {
+		h.nodeMeta = make(map[string]*NodeMeta)
+	}
+	cp := meta
+	h.nodeMeta[nodeName] = &cp
+	h.persistMetaLocked(nodeName, &cp)
+}
+
+// GetNodeMeta returns a copy of the persisted registration metadata of a node,
+// or nil if the agent never registered (even before a restart).
+func (h *Hub) GetNodeMeta(nodeName string) *NodeMeta {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	if meta := h.nodeMeta[nodeName]; meta != nil {
+		cp := *meta
+		return &cp
+	}
+	return nil
+}
+
+// UpdateHostsHash records the latest hosts hash reported by a node (via
+// heartbeat or telemetry) and persists it so it is available while offline.
+func (h *Hub) UpdateHostsHash(nodeName, hash string) {
+	if hash == "" {
+		return
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.nodeMeta == nil {
+		h.nodeMeta = make(map[string]*NodeMeta)
+	}
+	meta := h.nodeMeta[nodeName]
+	if meta == nil {
+		meta = &NodeMeta{}
+		h.nodeMeta[nodeName] = meta
+	}
+	if meta.HostsHash == hash {
+		return
+	}
+	meta.HostsHash = hash
+	h.persistMetaLocked(nodeName, meta)
 }
 
 // OnTelemetry registers a listener invoked when telemetry is received
@@ -126,33 +312,89 @@ func (h *Hub) SyncObfuscators(nodeName string, specs []*agentpb.ObfuscatorSpec) 
 	return conn.SyncObfuscators(specs)
 }
 
-// GetHostsHash returns the latest reported hosts hash for a connected node agent
+// GetHostsHash returns the latest reported hosts hash for a node, falling back
+// to the persisted metadata (and telemetry) when the agent is offline.
 func (h *Hub) GetHostsHash(nodeName string) string {
-	conn, ok := h.GetConnection(nodeName)
-	if !ok {
-		return ""
+	if conn, ok := h.GetConnection(nodeName); ok {
+		if hash := conn.HostsHash(); hash != "" {
+			return hash
+		}
 	}
-	return conn.HostsHash()
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	if meta := h.nodeMeta[nodeName]; meta != nil && meta.HostsHash != "" {
+		return meta.HostsHash
+	}
+	if t := h.telemetry[nodeName]; t != nil {
+		return t.HostsHash
+	}
+	return ""
 }
 
-// GetOSInfo returns the reported OS info for a connected node agent
+// GetOSInfo returns the reported OS info for a node agent, falling back to the
+// persisted registration metadata when the agent is offline.
 func (h *Hub) GetOSInfo(nodeName string) string {
-	conn, ok := h.GetConnection(nodeName)
-	if !ok {
-		return ""
+	if conn, ok := h.GetConnection(nodeName); ok {
+		if v := conn.OSInfo(); v != "" {
+			return v
+		}
 	}
-	return conn.OSInfo()
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	if meta := h.nodeMeta[nodeName]; meta != nil {
+		return meta.OSInfo
+	}
+	return ""
 }
 
-// GetInitSystem returns the init system reported by a connected node agent
-// ("systemd", "procd" or "openrc"). It returns "" for offline nodes and for
-// agents that predate the field.
+// GetInitSystem returns the init system reported by a node agent
+// ("systemd", "procd" or "openrc"), falling back to the persisted registration
+// metadata when the agent is offline. It returns "" for nodes that never
+// reported and for agents that predate the field.
 func (h *Hub) GetInitSystem(nodeName string) string {
-	conn, ok := h.GetConnection(nodeName)
-	if !ok {
-		return ""
+	if conn, ok := h.GetConnection(nodeName); ok {
+		if v := conn.InitSystem(); v != "" {
+			return v
+		}
 	}
-	return conn.InitSystem()
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	if meta := h.nodeMeta[nodeName]; meta != nil {
+		return meta.InitSystem
+	}
+	return ""
+}
+
+// GetHostname returns the reported hostname of a node agent, falling back to
+// the persisted registration metadata when the agent is offline.
+func (h *Hub) GetHostname(nodeName string) string {
+	if conn, ok := h.GetConnection(nodeName); ok {
+		if v := conn.Hostname(); v != "" {
+			return v
+		}
+	}
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	if meta := h.nodeMeta[nodeName]; meta != nil {
+		return meta.Hostname
+	}
+	return ""
+}
+
+// GetAgentVersion returns the reported agent version of a node, falling back to
+// the persisted registration metadata when the agent is offline.
+func (h *Hub) GetAgentVersion(nodeName string) string {
+	if conn, ok := h.GetConnection(nodeName); ok {
+		if v := conn.AgentVersion(); v != "" {
+			return v
+		}
+	}
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	if meta := h.nodeMeta[nodeName]; meta != nil {
+		return meta.AgentVersion
+	}
+	return ""
 }
 
 // IsAppsDisabled returns true if the node agent has disabled apps in its configuration
@@ -161,6 +403,9 @@ func (h *Hub) IsAppsDisabled(nodeName string) bool {
 	defer h.mu.RUnlock()
 	if conn, ok := h.connections[nodeName]; ok {
 		return conn.DisableApps()
+	}
+	if meta := h.nodeMeta[nodeName]; meta != nil {
+		return meta.DisableApps
 	}
 	if t, ok := h.telemetry[nodeName]; ok {
 		return t.DisableApps
@@ -176,10 +421,16 @@ func (h *Hub) SetAppHashes(nodeName string, hashes map[string]string) {
 		h.appHashes = make(map[string]map[string]string)
 	}
 	cp := make(map[string]string, len(hashes))
+	persist := make(map[string]string, len(hashes))
 	for k, v := range hashes {
 		cp[k] = v
+		persist[cacheKeyAppHashPrefix+k] = v
 	}
 	h.appHashes[nodeName] = cp
+	h.deletePersistedPrefixLocked(nodeName, cacheKeyAppHashPrefix)
+	if h.store != nil && len(persist) > 0 {
+		_ = h.store.SetMany(nodeName, persist)
+	}
 }
 
 // GetAppHashes returns a copy of the cached deployed app hashes for a node
@@ -207,6 +458,7 @@ func (h *Hub) SetAppHash(nodeName, appName, hash string) {
 		h.appHashes[nodeName] = make(map[string]string)
 	}
 	h.appHashes[nodeName][appName] = hash
+	h.persistLocked(nodeName, cacheKeyAppHashPrefix+appName, hash)
 }
 
 // RemoveAppHash removes the cached deployed hash of a specific app on a node
@@ -217,6 +469,7 @@ func (h *Hub) RemoveAppHash(nodeName, appName string) {
 		return
 	}
 	delete(h.appHashes[nodeName], appName)
+	h.deletePersistedLocked(nodeName, cacheKeyAppHashPrefix+appName)
 }
 
 // GetAppHash returns the cached deployed hash of a specific app on a node
@@ -242,6 +495,7 @@ func (h *Hub) SetAppEnabled(nodeName, appName string, enabled bool) {
 		h.appEnabled[nodeName] = make(map[string]bool)
 	}
 	h.appEnabled[nodeName][appName] = enabled
+	h.persistLocked(nodeName, cacheKeyAppEnabledPrefix+appName, strconv.FormatBool(enabled))
 }
 
 // GetAppEnabled returns the last applied enabled state and whether it is known.
@@ -255,6 +509,17 @@ func (h *Hub) GetAppEnabled(nodeName, appName string) (bool, bool) {
 	return enabled, ok
 }
 
+// GetAppEnabledMap returns a copy of the last applied enabled states for a node.
+func (h *Hub) GetAppEnabledMap(nodeName string) map[string]bool {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	res := make(map[string]bool)
+	for k, v := range h.appEnabled[nodeName] {
+		res[k] = v
+	}
+	return res
+}
+
 // RemoveAppEnabled clears the recorded enabled state for an app on a node.
 func (h *Hub) RemoveAppEnabled(nodeName, appName string) {
 	h.mu.Lock()
@@ -263,6 +528,7 @@ func (h *Hub) RemoveAppEnabled(nodeName, appName string) {
 		return
 	}
 	delete(h.appEnabled[nodeName], appName)
+	h.deletePersistedLocked(nodeName, cacheKeyAppEnabledPrefix+appName)
 }
 
 // SetAppFiles updates the cached deployed app files for a node
@@ -273,10 +539,18 @@ func (h *Hub) SetAppFiles(nodeName string, files map[string]ProbeConfigFile) {
 		h.appFiles = make(map[string]map[string]ProbeConfigFile)
 	}
 	cp := make(map[string]ProbeConfigFile, len(files))
+	persist := make(map[string]string, len(files))
 	for k, v := range files {
 		cp[k] = v
+		if data, err := json.Marshal(v); err == nil {
+			persist[cacheKeyAppFilePrefix+k] = string(data)
+		}
 	}
 	h.appFiles[nodeName] = cp
+	h.deletePersistedPrefixLocked(nodeName, cacheKeyAppFilePrefix)
+	if h.store != nil && len(persist) > 0 {
+		_ = h.store.SetMany(nodeName, persist)
+	}
 }
 
 // SetAppFile updates or adds a single cached deployed app file for a node
@@ -290,6 +564,9 @@ func (h *Hub) SetAppFile(nodeName string, filePath string, file ProbeConfigFile)
 		h.appFiles[nodeName] = make(map[string]ProbeConfigFile)
 	}
 	h.appFiles[nodeName][filePath] = file
+	if data, err := json.Marshal(file); err == nil {
+		h.persistLocked(nodeName, cacheKeyAppFilePrefix+filePath, string(data))
+	}
 }
 
 // RemoveAppFile removes a cached deployed app file for a node
@@ -300,6 +577,7 @@ func (h *Hub) RemoveAppFile(nodeName string, filePath string) {
 		return
 	}
 	delete(h.appFiles[nodeName], filePath)
+	h.deletePersistedLocked(nodeName, cacheKeyAppFilePrefix+filePath)
 }
 
 // GetAppFiles returns a copy of the cached deployed app files for a node
@@ -328,7 +606,9 @@ func (h *Hub) RecordLiveReport(nodeName string) {
 	if h.lastLiveReport == nil {
 		h.lastLiveReport = make(map[string]time.Time)
 	}
-	h.lastLiveReport[nodeName] = time.Now()
+	now := time.Now()
+	h.lastLiveReport[nodeName] = now
+	h.persistLocked(nodeName, cacheKeyLastLiveReport, strconv.FormatInt(now.Unix(), 10))
 }
 
 // LastLiveReport returns when the agent for nodeName last pushed live data.
@@ -346,15 +626,23 @@ func (h *Hub) SetProbeConfigs(nodeName string, configs map[string]ProbeConfigFil
 	if h.probeConfigs == nil {
 		h.probeConfigs = make(map[string]map[string]ProbeConfigFile)
 	}
+	h.deletePersistedPrefixLocked(nodeName, cacheKeyProbeConfigPrefix)
 	if len(configs) == 0 {
 		delete(h.probeConfigs, nodeName)
 		return
 	}
 	cp := make(map[string]ProbeConfigFile, len(configs))
+	persist := make(map[string]string, len(configs))
 	for k, v := range configs {
 		cp[k] = v
+		if data, err := json.Marshal(v); err == nil {
+			persist[cacheKeyProbeConfigPrefix+k] = string(data)
+		}
 	}
 	h.probeConfigs[nodeName] = cp
+	if h.store != nil && len(persist) > 0 {
+		_ = h.store.SetMany(nodeName, persist)
+	}
 }
 
 // GetProbeConfigs returns a copy of the cached WireGuard config files for a node
@@ -423,6 +711,13 @@ func (h *Hub) RemoveNode(nodeName string) {
 	}
 	delete(h.telemetry, nodeName)
 	delete(h.lastSeen, nodeName)
+	delete(h.appHashes, nodeName)
+	delete(h.appFiles, nodeName)
+	delete(h.appEnabled, nodeName)
+	delete(h.probeConfigs, nodeName)
+	delete(h.lastLiveReport, nodeName)
+	delete(h.nodeMeta, nodeName)
+	h.deletePersistedNodeLocked(nodeName)
 }
 
 // IsConnected returns whether the node agent is currently connected and active
@@ -469,6 +764,33 @@ func (h *Hub) UpdateTelemetry(nodeName string, t *agentpb.TelemetryReport) {
 	h.mu.Lock()
 	h.telemetry[nodeName] = t
 	h.lastSeen[nodeName] = time.Now()
+	if data, err := proto.Marshal(t); err == nil {
+		h.persistLocked(nodeName, cacheKeyTelemetry, string(data))
+	}
+	// Keep the persisted registration metadata in sync with the fields carried
+	// by telemetry so they remain available while the agent is offline.
+	if h.nodeMeta == nil {
+		h.nodeMeta = make(map[string]*NodeMeta)
+	}
+	meta := h.nodeMeta[nodeName]
+	if meta == nil && (t.HostsHash != "" || t.DisableApps) {
+		meta = &NodeMeta{}
+		h.nodeMeta[nodeName] = meta
+	}
+	if meta != nil {
+		metaChanged := false
+		if t.HostsHash != "" && meta.HostsHash != t.HostsHash {
+			meta.HostsHash = t.HostsHash
+			metaChanged = true
+		}
+		if meta.DisableApps != t.DisableApps {
+			meta.DisableApps = t.DisableApps
+			metaChanged = true
+		}
+		if metaChanged {
+			h.persistMetaLocked(nodeName, meta)
+		}
+	}
 	listeners := append([]TelemetryListener(nil), h.onTelemetry...)
 	h.mu.Unlock()
 
@@ -543,6 +865,10 @@ func (h *Hub) NodeStatus(nodeName string) *config.NodeStatus {
 	if conn != nil {
 		status.Hostname = conn.Hostname()
 		status.AgentVersion = conn.AgentVersion()
+	} else if meta := h.nodeMeta[nodeName]; meta != nil {
+		// Offline agent: fall back to the persisted registration metadata.
+		status.Hostname = meta.Hostname
+		status.AgentVersion = meta.AgentVersion
 	}
 
 	if telemetry != nil {

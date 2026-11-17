@@ -101,6 +101,16 @@ func NewManager(store *config.Store) *Manager {
 		}
 		return "", ""
 	})
+
+	// Persist the agent hub caches (app hashes/files/enabled state, probed
+	// WireGuard configs, telemetry, registration metadata) in the shared state
+	// database (data.db, see migration 0006_agent_cache.sql) so a server restart
+	// does not lose them and make already deployed apps look pending.
+	if db, err := stateStore.DB(); err != nil {
+		log.Printf("[Manager] Warning: failed to open state database for agent cache: %v", err)
+	} else if err := m.agentHub.SetCacheStore(agent.NewCacheStore(db)); err != nil {
+		log.Printf("[Manager] Warning: failed to load agent cache: %v", err)
+	}
 	m.prometheusExporter = NewPrometheusExporter(m)
 	m.telegramBot = telegram.NewBotService(m)
 	m.telegramBot.SetOnSecretTokenGenerated(func(token string) {
@@ -120,6 +130,7 @@ func NewManager(store *config.Store) *Manager {
 	m.setupAgentCronTasksListeners()
 	m.setupAgentHostsListeners()
 	m.setupAgentObfuscatorListeners()
+	m.loadAppStatuses()
 	m.setupAgentAppsListeners()
 	m.startRetentionWorker()
 	return m
@@ -3860,19 +3871,25 @@ func (m *Manager) PlanSyncWithScope(scope string, nodeNames ...string) ([]config
 		}
 
 		// Live data observed on the device: hashes/files probed from the agent and
-		// app statuses reported in telemetry. These are only available while the
-		// node is online and are used to detect real drift (e.g. an app modified
-		// or removed outside Easy42).
+		// app statuses reported in telemetry. These are used to detect real drift
+		// (e.g. an app modified or removed outside Easy42). The hub caches are
+		// persisted in SQLite, so they are still available after a restart.
 		liveAppHashes := make(map[string]string)
+		hubAppEnabled := make(map[string]bool)
+		hubAppEnabledKnown := make(map[string]bool)
 		if m.agentHub != nil {
 			for k, v := range m.agentHub.GetAppHashes(node.Name) {
 				liveAppHashes[k] = v
 			}
+			for k, v := range m.agentHub.GetAppEnabledMap(node.Name) {
+				hubAppEnabled[k] = v
+				hubAppEnabledKnown[k] = true
+			}
 		}
 
-		// Recorded state: what Easy42 last applied to the node. This survives
-		// restarts and is the baseline for the sync plan, so a restart never
-		// makes already deployed apps look pending.
+		// Recorded state: what Easy42 last applied to the node. The hub caches are
+		// persisted in SQLite, so they survive restarts; the state store is kept
+		// as a secondary source for nodes whose hub cache was cleared.
 		recordedAppHashes := make(map[string]string)
 		recordedAppEnabled := make(map[string]bool)
 		recordedAppEnabledKnown := make(map[string]bool)
@@ -3885,6 +3902,13 @@ func (m *Manager) PlanSyncWithScope(scope string, nodeNames ...string) ([]config
 				recordedAppEnabledKnown[k] = true
 			}
 		}
+		for k, v := range liveAppHashes {
+			recordedAppHashes[k] = v
+		}
+		for k, v := range hubAppEnabled {
+			recordedAppEnabled[k] = v
+			recordedAppEnabledKnown[k] = true
+		}
 
 		deployedHashes := make(map[string]string)
 		for k, v := range recordedAppHashes {
@@ -3896,20 +3920,12 @@ func (m *Manager) PlanSyncWithScope(scope string, nodeNames ...string) ([]config
 		// Also consider live app statuses reported by the agent. This ensures a
 		// deleted app is garbage collected even if its hash was not cached, and
 		// lets us infer the enabled state of apps deployed before it was tracked.
-		// The persisted snapshot is used first so the plan stays stable across
-		// restarts (the in-memory map is only populated while the agent reports).
-		liveStatuses := make(map[string]AppStatusRecord)
-		for name, st := range m.GetNodeAppsStatusMap(node.Name) {
-			liveStatuses[name] = st
+		// The status map is persisted in SQLite, so it is available right after
+		// a restart even before the agent reconnects.
+		liveStatuses := m.GetNodeAppsStatusMap(node.Name)
+		for name := range liveStatuses {
 			if _, exists := deployedHashes[name]; !exists {
 				deployedHashes[name] = ""
-			}
-		}
-		if stNode, ok := currentState.Nodes[node.Name]; ok {
-			for name, st := range stNode.AppStatuses {
-				if _, exists := liveStatuses[name]; !exists {
-					liveStatuses[name] = AppStatusRecord{Name: name, State: st.State}
-				}
 			}
 		}
 
@@ -3933,8 +3949,9 @@ func (m *Manager) PlanSyncWithScope(scope string, nodeNames ...string) ([]config
 			// so they do not participate in daemon enable/disable tracking.
 			enabledDrift := false
 			if spec.AppType != agentpb.AppType_SCRIPT && m.agentHub != nil {
-				if recordedEnabled, known := m.agentHub.GetAppEnabled(node.Name, spec.Name); known {
-					enabledDrift = recordedEnabled != spec.Enabled
+				if hubAppEnabledKnown[spec.Name] {
+					// Applied enabled state, persisted in SQLite across restarts.
+					enabledDrift = hubAppEnabled[spec.Name] != spec.Enabled
 				} else if recordedAppEnabledKnown[spec.Name] {
 					// Persisted across restarts in the state store.
 					enabledDrift = recordedAppEnabled[spec.Name] != spec.Enabled
@@ -4017,6 +4034,16 @@ func (m *Manager) PlanSyncWithScope(scope string, nodeNames ...string) ([]config
 			// status) and its content no longer matches what Easy42 recorded as
 			// applied. Only real drift is reported as pending; missing cached data
 			// (e.g. right after a server restart) is not drift.
+			//
+			// The per-file comparison uses the recorded state as the baseline:
+			// a probed file is only "drifted" when the recorded state knows the
+			// app was deployed and the recorded aggregate hash differs from the
+			// desired one. A probed file that differs while the recorded hash
+			// still matches the desired hash is just a stale probe.
+			recordedHash, hasRecorded := recordedAppHashes[spec.Name]
+			recordedMatch := hasRecorded && (recordedHash == desiredHash ||
+				(spec.AppType == agentpb.AppType_SCRIPT && recordedHash == apps.HashSingleContent(spec.MainContent)))
+
 			liveMainDiff := ""
 			liveDrift := false
 			if curF, ok := deployedAppFiles[mainTargetFile]; ok {
@@ -4028,19 +4055,16 @@ func (m *Manager) PlanSyncWithScope(scope string, nodeNames ...string) ([]config
 					curHash = config.HashConfig(compiler.NormalizeConfig(curF.Content))
 					desHash = config.HashConfig(compiler.NormalizeConfig(spec.MainContent))
 				}
-				if curHash != desHash {
+				if curHash != desHash && !recordedMatch {
 					liveDrift = true
 					liveMainDiff = generateSimpleDiff(curF.Content, spec.MainContent)
 				}
 			} else if liveHash, ok := liveAppHashes[spec.Name]; ok && liveHash != "" {
-				if liveHash != desiredHash && !(spec.AppType == agentpb.AppType_SCRIPT && liveHash == apps.HashSingleContent(spec.MainContent)) {
+				if liveHash != desiredHash && !recordedMatch &&
+					!(spec.AppType == agentpb.AppType_SCRIPT && liveHash == apps.HashSingleContent(spec.MainContent)) {
 					liveDrift = true
 				}
 			}
-
-			recordedHash, hasRecorded := recordedAppHashes[spec.Name]
-			recordedMatch := hasRecorded && (recordedHash == desiredHash ||
-				(spec.AppType == agentpb.AppType_SCRIPT && recordedHash == apps.HashSingleContent(spec.MainContent)))
 
 			switch {
 			case liveDrift:
@@ -4103,7 +4127,14 @@ func (m *Manager) PlanSyncWithScope(scope string, nodeNames ...string) ([]config
 				envDiffStatus := "create"
 				envDiff := ""
 
-				if curF, ok := deployedAppFiles[envTargetFile]; ok {
+				if recordedMatch {
+					// The recorded aggregate hash matches the desired state: the app
+					// (including its env file) is already deployed. A probed file that
+					// differs is a stale probe, not drift.
+					envNeedsApply = false
+					envStatus = "synced"
+					envDiffStatus = "synced"
+				} else if curF, ok := deployedAppFiles[envTargetFile]; ok {
 					curHash := config.HashConfig(compiler.NormalizeConfig(curF.Content))
 					desHash := config.HashConfig(compiler.NormalizeConfig(spec.EnvContent))
 					if curHash == desHash {
@@ -4154,7 +4185,12 @@ func (m *Manager) PlanSyncWithScope(scope string, nodeNames ...string) ([]config
 				auxDiffStatus := "create"
 				auxDiff := ""
 
-				if curF, ok := deployedAppFiles[auxTargetFile]; ok {
+				if recordedMatch {
+					// Recorded as applied: a differing probed file is a stale probe.
+					auxNeedsApply = false
+					auxStatus = "synced"
+					auxDiffStatus = "synced"
+				} else if curF, ok := deployedAppFiles[auxTargetFile]; ok {
 					curHash := config.HashConfig(compiler.NormalizeConfig(curF.Content))
 					desHash := config.HashConfig(compiler.NormalizeConfig(auxContent))
 					if curHash == desHash {

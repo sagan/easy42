@@ -228,6 +228,18 @@ func (s *StateStore) FilePath() string {
 	return s.filePath
 }
 
+// DB returns the underlying database handle, opening and migrating data.db on
+// first use. The StateStore keeps ownership of the handle; callers must not
+// close it.
+func (s *StateStore) DB() (*sql.DB, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := s.initDBLocked(); err != nil {
+		return nil, err
+	}
+	return s.db, nil
+}
+
 // Exists checks if data.db exists
 func (s *StateStore) Exists() bool {
 	_, err := os.Stat(s.filePath)
