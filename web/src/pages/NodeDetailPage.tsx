@@ -2565,6 +2565,7 @@ export const NodeDetailPage: React.FC = () => {
                     <TableHead sx={{ bgcolor: "#F8FAFC" }}>
                       <TableRow>
                         <TableCell sx={{ fontWeight: 700, color: "#475569" }}>Peer Node</TableCell>
+                        <TableCell sx={{ fontWeight: 700, color: "#475569" }}>Link Type</TableCell>
                         <TableCell sx={{ fontWeight: 700, color: "#475569" }}>State</TableCell>
                         <TableCell sx={{ fontWeight: 700, color: "#475569" }}>Interface</TableCell>
                         <TableCell sx={{ fontWeight: 700, color: "#475569" }}>Tunnel Address</TableCell>
@@ -2591,10 +2592,12 @@ export const NodeDetailPage: React.FC = () => {
                         const rawPeerAddress = peerEnd.address || peerEnd.address4 || "";
                         const cleanPeerAddress = rawPeerAddress ? rawPeerAddress.replace(/\/64$/, "") : "—";
                         const peerPort =
-                          peerEnd.listen_port ||
-                          extractPort(peerEnd.endpoint) ||
-                          extractPort(peerEnd.resolved_endpoint) ||
-                          "—";
+                          link.type === "virtual"
+                            ? "-"
+                            : peerEnd.listen_port ||
+                              extractPort(peerEnd.endpoint) ||
+                              extractPort(peerEnd.resolved_endpoint) ||
+                              "—";
 
                         const policyId = selfEnd.policy || "default";
                         const matchedPolicy =
@@ -2674,6 +2677,7 @@ export const NodeDetailPage: React.FC = () => {
                                 )}
                               </Box>
                             </TableCell>
+                            <TableCell>{link.type || "wireguard"}</TableCell>
                             <TableCell>
                               {link.disabled ? (
                                 <Chip
@@ -2737,46 +2741,50 @@ export const NodeDetailPage: React.FC = () => {
                               </Typography>
                             </TableCell>
                             <TableCell>
-                              <Box sx={{ display: "flex", alignItems: "center", gap: 0.8 }}>
-                                {selfEnd.cost !== undefined && selfEnd.cost !== null ? (
-                                  <Typography
-                                    variant="caption"
-                                    className="mono-font"
-                                    sx={{ color: "#475569", fontWeight: 700 }}
-                                  >
-                                    {selfEnd.cost}
-                                  </Typography>
-                                ) : matchedPolicy?.cost !== undefined ? (
-                                  <Typography variant="caption" className="mono-font" sx={{ color: "#94A3B8" }}>
-                                    {matchedPolicy.cost}
-                                  </Typography>
-                                ) : null}
-                                <Tooltip title="Click to view network policy details">
-                                  <Chip
-                                    icon={<Shield size={12} color="#4F46E5" />}
-                                    label={matchedPolicy?.name || selfEnd.policy || "Default (Internal)"}
-                                    size="small"
-                                    onClick={() => {
-                                      setPolicyToView(matchedPolicy || fallbackPolicy);
-                                      setViewPolicyModalOpen(true);
-                                    }}
-                                    clickable
-                                    sx={{
-                                      height: 22,
-                                      fontSize: "0.72rem",
-                                      fontWeight: 600,
-                                      bgcolor: "#EEF2FF",
-                                      color: "#4F46E5",
-                                      border: "1px solid #C7D2FE",
-                                      cursor: "pointer",
-                                      "&:hover": {
-                                        bgcolor: "#E0E7FF",
-                                        borderColor: "#818CF8",
-                                      },
-                                    }}
-                                  />
-                                </Tooltip>
-                              </Box>
+                              {link.type === "virtual" ? (
+                                "-"
+                              ) : (
+                                <Box sx={{ display: "flex", alignItems: "center", gap: 0.8 }}>
+                                  {selfEnd.cost !== undefined && selfEnd.cost !== null ? (
+                                    <Typography
+                                      variant="caption"
+                                      className="mono-font"
+                                      sx={{ color: "#475569", fontWeight: 700 }}
+                                    >
+                                      {selfEnd.cost}
+                                    </Typography>
+                                  ) : matchedPolicy?.cost !== undefined ? (
+                                    <Typography variant="caption" className="mono-font" sx={{ color: "#94A3B8" }}>
+                                      {matchedPolicy.cost}
+                                    </Typography>
+                                  ) : null}
+                                  <Tooltip title="Click to view network policy details">
+                                    <Chip
+                                      icon={<Shield size={12} color="#4F46E5" />}
+                                      label={matchedPolicy?.name || selfEnd.policy || "Default (Internal)"}
+                                      size="small"
+                                      onClick={() => {
+                                        setPolicyToView(matchedPolicy || fallbackPolicy);
+                                        setViewPolicyModalOpen(true);
+                                      }}
+                                      clickable
+                                      sx={{
+                                        height: 22,
+                                        fontSize: "0.72rem",
+                                        fontWeight: 600,
+                                        bgcolor: "#EEF2FF",
+                                        color: "#4F46E5",
+                                        border: "1px solid #C7D2FE",
+                                        cursor: "pointer",
+                                        "&:hover": {
+                                          bgcolor: "#E0E7FF",
+                                          borderColor: "#818CF8",
+                                        },
+                                      }}
+                                    />
+                                  </Tooltip>
+                                </Box>
+                              )}
                             </TableCell>
                             <TableCell align="right">
                               <Box sx={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 0.8 }}>

@@ -3595,10 +3595,10 @@ func (m *Manager) PlanSyncWithScope(scope string, nodeNames ...string) ([]config
 		}
 		node := n
 
-		// Skip BIRD & ROA config if the node doesn't have any links in Easy42
+		// Skip BIRD & ROA config if the node doesn't have any non-virtual links in Easy42
 		hasLink := false
 		for _, l := range links {
-			if l.From.Name == node.Name || l.To.Name == node.Name {
+			if l.Type != "virtual" && (l.From.Name == node.Name || l.To.Name == node.Name) {
 				hasLink = true
 				break
 			}
