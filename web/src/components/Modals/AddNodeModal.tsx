@@ -41,6 +41,7 @@ import { getInterfaceName } from "../../utils/interface";
 import TextFieldWithCopy from "../Common/TextFieldWithCopy";
 import { findInitialNodePosition } from "../../utils/nodePlacement";
 import { useMesh } from "../../context/MeshContext";
+import FreeTextField from "../Common/FreeTextField";
 
 const HOOK_TYPES = [
   { value: "bird", label: "BIRD: Global / Post (e.g. protocol direct)" },
@@ -1141,12 +1142,13 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                 </Box>
 
                 <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
-                  <TextFieldWithCopy
+                  <FreeTextField
                     label="Interface Name"
                     size="small"
                     value={iface}
-                    onChange={(e) => setIface(e.target.value)}
-                    placeholder="e.g. lo, dn42, eth0"
+                    onChange={(value) => setIface(value)}
+                    placeholder="e.g. lo, dummy0, eth0"
+                    options={["lo", "dummy0", "eth0"]}
                     required
                     disabled={saving}
                   />
