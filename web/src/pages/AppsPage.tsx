@@ -4964,7 +4964,7 @@ export const AppsPage: React.FC = () => {
               <Layers size={20} />
             </Box>
             <Typography variant="h6" sx={{ fontWeight: 800, color: "#0F172A" }}>
-              {editingApp ? `Edit App: ${editingApp.name}` : "Create Workload App"}
+              {editingApp ? `Edit ${editingApp.name}` : formType === "script" ? "Create Script" : "Create App"}
             </Typography>
           </Box>
           <IconButton size="small" onClick={() => setModalOpen(false)}>

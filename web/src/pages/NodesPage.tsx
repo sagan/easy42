@@ -823,7 +823,7 @@ export const NodesPage: React.FC = () => {
                     display: "flex",
                     alignItems: "center",
                     gap: 1,
-                    fontSize: { xs: "0.75rem", sm: "0.875rem" },
+                    fontSize: { xs: "0.75rem", sm: "1rem" },
                   }}
                 >
                   <ArrowDown size={13} /> {formatNetRate(fleetLive?.summary.total_rx_rate)}
@@ -836,7 +836,7 @@ export const NodesPage: React.FC = () => {
                     display: "flex",
                     alignItems: "center",
                     gap: 1,
-                    fontSize: { xs: "0.75rem", sm: "0.875rem" },
+                    fontSize: { xs: "0.75rem", sm: "1rem" },
                   }}
                 >
                   <ArrowUp size={13} /> {formatNetRate(fleetLive?.summary.total_tx_rate)}
@@ -939,13 +939,10 @@ export const NodesPage: React.FC = () => {
         </Grid>
       </Grid>
 
-      {/* Control Bar: Search, Block Filter, Tags, View Mode, Refresh */}
       <Box
         sx={{
           display: "flex",
-          flexWrap: "wrap",
-          alignItems: "center",
-          justifyContent: "space-between",
+          flexDirection: "column",
           gap: 1,
           bgcolor: "#FFFFFF",
           p: 1,
@@ -953,55 +950,213 @@ export const NodesPage: React.FC = () => {
           border: "1px solid #E2E8F0",
         }}
       >
-        {/* Search input */}
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1, flex: { xs: "1 1 100%", sm: "0 1 240px" } }}>
-          <TextField
-            size="small"
-            type="search"
-            placeholder="Search servers, IP, tags..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            fullWidth
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <Search size={16} color="#94A3B8" />
-                </InputAdornment>
-              ),
-              sx: { borderRadius: 1, bgcolor: "#F8FAFC", fontSize: "0.875rem" },
+        {/* Control Bar: Search, Block Filter, Tags, View Mode, Refresh */}
+        <Box
+          sx={{
+            display: "flex",
+            flexWrap: "wrap",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 1,
+          }}
+        >
+          {/* Search input */}
+          <Box
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              gap: 1,
+              flex: { xs: "1 1 100%", sm: "1 1 240px" },
             }}
-          />
-        </Box>
-
-        {/* Block Filter Dropdown (rendered only if managed nodes belong to blocks) */}
-        {managedBlocks.length > 0 && (
-          <FormControl size="small" sx={{ minWidth: { xs: "100%", sm: 150 } }}>
-            <Select
-              value={managedBlocks.includes(urlBlock) ? urlBlock : "All"}
-              onChange={(e) => handleSelectBlock(e.target.value)}
-              displayEmpty
-              sx={{
-                height: 36,
-                fontSize: "0.85rem",
-                borderRadius: 1,
-                bgcolor: "#F8FAFC",
+          >
+            <TextField
+              size="small"
+              type="search"
+              placeholder="Search servers, IP, tags..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              fullWidth
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <Search size={16} color="#94A3B8" />
+                  </InputAdornment>
+                ),
+                sx: { borderRadius: 1, bgcolor: "#F8FAFC", fontSize: "0.875rem" },
               }}
-              startAdornment={
-                <InputAdornment position="start" sx={{ mr: 0.5 }}>
-                  <Layers size={15} color="#64748B" />
-                </InputAdornment>
-              }
-            >
-              <MenuItem value="All">All Blocks</MenuItem>
-              {managedBlocks.map((bName) => (
-                <MenuItem key={bName} value={bName}>
-                  {bName}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-        )}
+            />
+          </Box>
 
+          {/* Block Filter Dropdown (rendered only if managed nodes belong to blocks) */}
+          {managedBlocks.length > 0 && (
+            <FormControl size="small" sx={{ minWidth: { xs: "100%", sm: 150 } }}>
+              <Select
+                value={managedBlocks.includes(urlBlock) ? urlBlock : "All"}
+                onChange={(e) => handleSelectBlock(e.target.value)}
+                displayEmpty
+                sx={{
+                  height: 36,
+                  fontSize: "0.85rem",
+                  borderRadius: 1,
+                  bgcolor: "#F8FAFC",
+                }}
+                startAdornment={
+                  <InputAdornment position="start" sx={{ mr: 0.5 }}>
+                    <Layers size={15} color="#64748B" />
+                  </InputAdornment>
+                }
+              >
+                <MenuItem value="All">All Blocks</MenuItem>
+                {managedBlocks.map((bName) => (
+                  <MenuItem key={bName} value={bName}>
+                    {bName}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          )}
+
+          {/* Clear filter indicator if filtering */}
+          <Button
+            size="small"
+            variant="text"
+            disabled={!isFiltering}
+            onClick={handleClearFilters}
+            startIcon={<X size={14} />}
+            sx={{ color: "#64748B", fontSize: "0.75rem", textTransform: "none", py: 0.4 }}
+          >
+            Clear ({filteredNodes.length}/{managedNodes.length})
+          </Button>
+
+          {/* Actions & View Toggle */}
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1, ml: "auto", flexWrap: "wrap" }}>
+            {/* Sort field dropdown */}
+            <FormControl size="small" sx={{ minWidth: { xs: 110, sm: 130 } }}>
+              <Select
+                value={sortField}
+                onChange={(e) => handleSelectSortField(e.target.value as SortField)}
+                size="small"
+                renderValue={(val) => SORT_FIELD_LABELS[val as SortField] || val}
+                sx={{
+                  height: 32,
+                  fontSize: "0.8rem",
+                  borderRadius: 1,
+                  bgcolor: "#F8FAFC",
+                  "& .MuiSelect-select": {
+                    py: 0,
+                    display: "flex",
+                    alignItems: "center",
+                  },
+                }}
+                startAdornment={
+                  <InputAdornment
+                    position="start"
+                    sx={{ mr: 0.5, cursor: "pointer" }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleToggleSortOrder();
+                    }}
+                    onMouseDown={(e) => e.stopPropagation()}
+                  >
+                    <Tooltip
+                      title={
+                        sortOrder === "asc" ? "Sort ascending (click to reverse)" : "Sort descending (click to reverse)"
+                      }
+                    >
+                      <Box sx={{ display: "flex", alignItems: "center" }}>
+                        {sortOrder === "asc" ? (
+                          <ArrowUp size={14} color="#64748B" />
+                        ) : (
+                          <ArrowDown size={14} color="#64748B" />
+                        )}
+                      </Box>
+                    </Tooltip>
+                  </InputAdornment>
+                }
+              >
+                {SORT_OPTIONS.map((opt) => {
+                  const isCurrent = opt.value === sortField;
+                  return (
+                    <MenuItem
+                      key={opt.value}
+                      value={opt.value}
+                      onClick={() => {
+                        if (isCurrent) {
+                          handleToggleSortOrder();
+                        }
+                      }}
+                      sx={{
+                        fontSize: "0.85rem",
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                      }}
+                    >
+                      <span>{opt.label}</span>
+                      {isCurrent && (
+                        <Typography
+                          component="span"
+                          sx={{
+                            fontSize: "0.85rem",
+                            color: "#64748B",
+                            fontWeight: 700,
+                            ml: 1,
+                          }}
+                        >
+                          {sortOrder === "asc" ? "↑" : "↓"}
+                        </Typography>
+                      )}
+                    </MenuItem>
+                  );
+                })}
+              </Select>
+            </FormControl>
+
+            <ToggleButtonGroup
+              value={urlView}
+              exclusive
+              onChange={(_, val) => val && handleToggleView(val)}
+              size="small"
+              sx={{ height: 32 }}
+            >
+              <ToggleButton value="cards" sx={{ px: 1 }}>
+                <LayoutGrid size={16} />
+              </ToggleButton>
+              <ToggleButton value="table" sx={{ px: 1 }}>
+                <List size={16} />
+              </ToggleButton>
+            </ToggleButtonGroup>
+
+            <Tooltip title="Refresh live telemetry and probe node states">
+              <span>
+                <Button
+                  id="refresh-nodes-btn"
+                  size="small"
+                  variant="outlined"
+                  onClick={handleRefresh}
+                  disabled={isRefreshing}
+                  startIcon={<RefreshCw size={14} className={isRefreshing ? "spin" : ""} />}
+                  sx={{
+                    height: 32,
+                    fontSize: "0.8rem",
+                    borderRadius: 1,
+                    bgcolor: "#FFFFFF",
+                    color: "#475569",
+                    borderColor: "#CBD5E1",
+                    textTransform: "none",
+                    fontWeight: 600,
+                    "&:hover": {
+                      bgcolor: "#F8FAFC",
+                      borderColor: "#94A3B8",
+                    },
+                  }}
+                >
+                  {isRefreshing ? "Refreshing..." : "Refresh"}
+                </Button>
+              </span>
+            </Tooltip>
+          </Box>
+        </Box>
         {/* Tag Filters (Always displays All, Offline, Unhealthy, plus managed tags) */}
         <Box
           sx={{
@@ -1086,147 +1241,6 @@ export const NodesPage: React.FC = () => {
               />
             );
           })}
-        </Box>
-
-        {/* Clear filter indicator if filtering */}
-        <Button
-          size="small"
-          variant="text"
-          disabled={!isFiltering}
-          onClick={handleClearFilters}
-          startIcon={<X size={14} />}
-          sx={{ color: "#64748B", fontSize: "0.75rem", textTransform: "none", py: 0.4 }}
-        >
-          Clear ({filteredNodes.length}/{managedNodes.length})
-        </Button>
-
-        {/* Actions & View Toggle */}
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1, ml: "auto", flexWrap: "wrap" }}>
-          {/* Sort field dropdown */}
-          <FormControl size="small" sx={{ minWidth: { xs: 110, sm: 130 } }}>
-            <Select
-              value={sortField}
-              onChange={(e) => handleSelectSortField(e.target.value as SortField)}
-              size="small"
-              renderValue={(val) => SORT_FIELD_LABELS[val as SortField] || val}
-              sx={{
-                height: 32,
-                fontSize: "0.8rem",
-                borderRadius: 1,
-                bgcolor: "#F8FAFC",
-                "& .MuiSelect-select": {
-                  py: 0,
-                  display: "flex",
-                  alignItems: "center",
-                },
-              }}
-              startAdornment={
-                <InputAdornment
-                  position="start"
-                  sx={{ mr: 0.5, cursor: "pointer" }}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleToggleSortOrder();
-                  }}
-                  onMouseDown={(e) => e.stopPropagation()}
-                >
-                  <Tooltip
-                    title={
-                      sortOrder === "asc" ? "Sort ascending (click to reverse)" : "Sort descending (click to reverse)"
-                    }
-                  >
-                    <Box sx={{ display: "flex", alignItems: "center" }}>
-                      {sortOrder === "asc" ? (
-                        <ArrowUp size={14} color="#64748B" />
-                      ) : (
-                        <ArrowDown size={14} color="#64748B" />
-                      )}
-                    </Box>
-                  </Tooltip>
-                </InputAdornment>
-              }
-            >
-              {SORT_OPTIONS.map((opt) => {
-                const isCurrent = opt.value === sortField;
-                return (
-                  <MenuItem
-                    key={opt.value}
-                    value={opt.value}
-                    onClick={() => {
-                      if (isCurrent) {
-                        handleToggleSortOrder();
-                      }
-                    }}
-                    sx={{
-                      fontSize: "0.85rem",
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                    }}
-                  >
-                    <span>{opt.label}</span>
-                    {isCurrent && (
-                      <Typography
-                        component="span"
-                        sx={{
-                          fontSize: "0.85rem",
-                          color: "#64748B",
-                          fontWeight: 700,
-                          ml: 1,
-                        }}
-                      >
-                        {sortOrder === "asc" ? "↑" : "↓"}
-                      </Typography>
-                    )}
-                  </MenuItem>
-                );
-              })}
-            </Select>
-          </FormControl>
-
-          <ToggleButtonGroup
-            value={urlView}
-            exclusive
-            onChange={(_, val) => val && handleToggleView(val)}
-            size="small"
-            sx={{ height: 32 }}
-          >
-            <ToggleButton value="cards" sx={{ px: 1 }}>
-              <LayoutGrid size={16} />
-            </ToggleButton>
-            <ToggleButton value="table" sx={{ px: 1 }}>
-              <List size={16} />
-            </ToggleButton>
-          </ToggleButtonGroup>
-
-          <Tooltip title="Refresh live telemetry and probe node states">
-            <span>
-              <Button
-                id="refresh-nodes-btn"
-                size="small"
-                variant="outlined"
-                onClick={handleRefresh}
-                disabled={isRefreshing}
-                startIcon={<RefreshCw size={14} className={isRefreshing ? "spin" : ""} />}
-                sx={{
-                  height: 32,
-                  fontSize: "0.8rem",
-                  borderRadius: 1,
-                  bgcolor: "#FFFFFF",
-                  color: "#475569",
-                  borderColor: "#CBD5E1",
-                  textTransform: "none",
-                  fontWeight: 600,
-                  "&:hover": {
-                    bgcolor: "#F8FAFC",
-                    borderColor: "#94A3B8",
-                  },
-                }}
-              >
-                {isRefreshing ? "Refreshing..." : "Refresh"}
-              </Button>
-            </span>
-          </Tooltip>
         </Box>
       </Box>
 

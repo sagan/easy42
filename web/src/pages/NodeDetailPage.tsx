@@ -1456,6 +1456,7 @@ export const NodeDetailPage: React.FC = () => {
                   <Button
                     variant="outlined"
                     size="small"
+                    title="Web Terminal"
                     startIcon={<Terminal size={15} />}
                     href={(networkSettings?.data?.node_web_terminal_url as string).replace("%i", node.ip)}
                     target="_blank"
@@ -1469,12 +1470,13 @@ export const NodeDetailPage: React.FC = () => {
                       "&:hover": { bgcolor: "#CFFAFE", borderColor: "#A5F3FC" },
                     }}
                   >
-                    Web Terminal
+                    Shell
                   </Button>
                 )}
                 <Button
                   variant="outlined"
                   size="small"
+                  title="Looking Glass"
                   startIcon={<Compass size={15} />}
                   onClick={(e) => {
                     e.preventDefault();
@@ -1491,11 +1493,12 @@ export const NodeDetailPage: React.FC = () => {
                     "&:hover": { bgcolor: "#CFFAFE", borderColor: "#A5F3FC" },
                   }}
                 >
-                  Looking Glass
+                  {isMobile ? "LG" : "Looking Glass"}
                 </Button>
                 <Button
                   variant="outlined"
                   size="small"
+                  title="Device Helper"
                   startIcon={<Wrench size={15} />}
                   onClick={(e) => {
                     e.preventDefault();
@@ -1512,7 +1515,7 @@ export const NodeDetailPage: React.FC = () => {
                     "&:hover": { bgcolor: "#F1F5F9", borderColor: "#CBD5E1" },
                   }}
                 >
-                  Device Helper
+                  {isMobile ? "Helper" : "Device Helper"}
                 </Button>
               </Box>
             )}
