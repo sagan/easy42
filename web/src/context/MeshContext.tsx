@@ -222,9 +222,13 @@ export const MeshProvider: React.FC<{ children: React.ReactNode }> = ({ children
     severity: "success" | "warning" | "error" | "info";
   } | null>(null);
 
-  // Unreachable nodes
+  // Unreachable nodes (only applies to agent mode nodes)
   const unreachableNodes = useMemo(() => {
-    return nodes.filter((n) => !n.is_external && nodeStatuses[n.name] && !nodeStatuses[n.name].connected);
+    return nodes.filter((n) => {
+      if (n.is_external) return false;
+      const isAgent = n.mode === "agent" || Boolean(n.agent_token) || nodeStatuses[n.name]?.mode === "agent";
+      return isAgent && nodeStatuses[n.name] && !nodeStatuses[n.name].connected;
+    });
   }, [nodes, nodeStatuses]);
 
   // Tag filter

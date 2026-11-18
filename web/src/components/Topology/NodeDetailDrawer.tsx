@@ -101,6 +101,12 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
   onNodeUpdated,
 }) => {
   const { serverAgentVersion } = useMesh();
+  const isAgentMode = Boolean(
+    node?.mode === "agent" ||
+      node?.agent_token ||
+      status?.mode === "agent" ||
+      status?.connected,
+  );
   const [refreshing, setRefreshing] = useState(false);
   const [updatingState, setUpdatingState] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -1231,9 +1237,9 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
               sx={{
                 p: 1,
                 borderRadius: 1,
-                backgroundColor: !status.connected ? "#FEF2F2" : "#F8FAFC",
+                backgroundColor: isAgentMode && !status.connected ? "#FEF2F2" : "#F8FAFC",
                 border: "1px solid",
-                borderColor: !status.connected ? "#FECDD3" : "#E2E8F0",
+                borderColor: isAgentMode && !status.connected ? "#FECDD3" : "#E2E8F0",
                 display: "flex",
                 flexDirection: "column",
                 gap: 1,
@@ -1242,17 +1248,32 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
               <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <Typography
                   variant="caption"
-                  sx={{ color: !status.connected ? "#991B1B" : "#64748B", fontWeight: 600 }}
+                  sx={{ color: isAgentMode && !status.connected ? "#991B1B" : "#64748B", fontWeight: 600 }}
                 >
                   Connectivity:
                 </Typography>
-                <Chip
-                  icon={<Activity size={12} />}
-                  label={status.connected ? "Online" : "Unreachable"}
-                  size="small"
-                  color={status.connected ? "success" : "error"}
-                  sx={{ height: 20, fontSize: "0.7rem", fontWeight: 700 }}
-                />
+                {isAgentMode ? (
+                  <Chip
+                    icon={<Activity size={12} />}
+                    label={status.connected ? "Online" : "Unreachable"}
+                    size="small"
+                    color={status.connected ? "success" : "error"}
+                    sx={{ height: 20, fontSize: "0.7rem", fontWeight: 700 }}
+                  />
+                ) : (
+                  <Chip
+                    label="SSH Standard"
+                    size="small"
+                    sx={{
+                      height: 20,
+                      fontSize: "0.7rem",
+                      fontWeight: 600,
+                      backgroundColor: "#F1F5F9",
+                      color: "#475569",
+                      border: "1px solid #E2E8F0",
+                    }}
+                  />
+                )}
               </Box>
 
               {/* Monitoring Mode Row */}
@@ -1260,7 +1281,7 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
                 <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600 }}>
                   Mode:
                 </Typography>
-                {status.mode === "agent" || node.mode === "agent" || status.connected ? (
+                {isAgentMode ? (
                   <Chip
                     icon={
                       status.connected ? (
@@ -1307,7 +1328,7 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
               </Box>
 
               {/* Informational note when in SSH Snapshot mode */}
-              {status.mode !== "agent" && node.mode !== "agent" && !status.connected && !node.is_external && (
+              {!isAgentMode && !node.is_external && (
                 <Box
                   sx={{
                     p: 1,

@@ -2241,7 +2241,14 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
     > = {};
 
     nodes.forEach((node) => {
-      const isOnline = Boolean(node.is_external || nodeStatuses[node.name]?.connected);
+      const isExternal = Boolean(node.is_external);
+      const isAgentMode = Boolean(
+        node.mode === "agent" ||
+          node.agent_token ||
+          nodeStatuses[node.name]?.mode === "agent" ||
+          nodeStatuses[node.name]?.connected,
+      );
+      const isOnline = isExternal ? true : Boolean(nodeStatuses[node.name]?.connected);
       const nodeLinks = links.filter((l) => l.from.name === node.name || l.to.name === node.name);
 
       let upLinks = 0;
@@ -2259,9 +2266,9 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
         }
       });
 
-      let isHealthy = isOnline && downLinks === 0 && upLinks === nodeLinks.length;
+      let isHealthy = false;
       let reason = "All links active & normal";
-      if (!isOnline) {
+      if (!isExternal && isAgentMode && !isOnline) {
         isHealthy = false;
         reason = "Node is offline";
       } else if (downLinks > 0) {
@@ -2270,6 +2277,9 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
       } else if (unknownLinks > 0) {
         isHealthy = false;
         reason = `${unknownLinks} link(s) pending/unknown`;
+      } else {
+        isHealthy = true;
+        reason = "All links active & normal";
       }
 
       nodeHealthMap[node.name] = {

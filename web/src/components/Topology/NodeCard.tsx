@@ -96,6 +96,7 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
   const isRefreshing = refreshingNodeName === node.name;
   const isAgentConfigured = node.mode === "agent" || Boolean(node.agent_token);
   const isAgentMode = status?.mode === "agent" || isAgentConfigured || Boolean(status?.connected);
+  const isOffline = !isExternal && isAgentMode && !isOnline;
   const isAgentWorking = isAgentMode && isOnline && !isExternal;
   const isRouteReflector = Boolean(node.route_reflector);
   const isCore = Boolean(isCentralityActive && centralityInfo?.isCore);
@@ -107,13 +108,13 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
         sx={{
           width: 155,
           height: 44,
-          backgroundColor: !isOnline ? "#FEF2F2" : "#FFFFFF",
+          backgroundColor: isOffline ? "#FEF2F2" : "#FFFFFF",
           border:
             isFocused || isHighlighted
               ? "2px solid #4F46E5"
               : isExternal
                 ? "2px dashed #8B5CF6"
-                : !isOnline
+                : isOffline
                   ? "1.5px solid #EF4444"
                   : isRouteReflector
                     ? "1.5px solid #6366F1"
@@ -155,7 +156,15 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
             width: 8,
             height: 8,
             borderRadius: "50%",
-            backgroundColor: isExternal ? "#8B5CF6" : isOnline ? (isCore ? "#059669" : "#10B981") : "#EF4444",
+            backgroundColor: isExternal
+              ? "#8B5CF6"
+              : isOffline
+                ? "#EF4444"
+                : isCore
+                  ? "#059669"
+                  : isAgentWorking
+                    ? "#10B981"
+                    : "#64748B",
             flexShrink: 0,
           }}
         />
@@ -223,7 +232,7 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
       sx={{
         width: 260,
         backgroundColor:
-          !isOnline && !isExternal
+          isOffline
             ? "#FFFDFD"
             : inBlock && !isHealthy
               ? "#FFFDFD"
@@ -247,7 +256,7 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
                       ? "2.5px solid #059669"
                       : "2px dashed #94A3B8"
                     : "2px dashed #EF4444"
-                : !isOnline
+                : isOffline
                   ? "1.5px solid #EF4444"
                   : isRouteReflector
                     ? "2px solid #6366F1"
@@ -280,7 +289,7 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
                   ? "0 4px 14px rgba(239, 68, 68, 0.15), 0 1px 3px rgba(239, 68, 68, 0.08)"
                   : isExternal
                     ? "0 4px 6px -1px rgba(139, 92, 246, 0.08), 0 2px 4px -2px rgba(139, 92, 246, 0.05)"
-                    : !isOnline
+                    : isOffline
                       ? "0 4px 10px rgba(239, 68, 68, 0.15), 0 2px 4px rgba(239, 68, 68, 0.1)"
                       : isRouteReflector
                         ? "0 4px 14px rgba(79, 70, 229, 0.15), 0 2px 5px rgba(79, 70, 229, 0.08)"
@@ -298,7 +307,7 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
               ? blockColor || "#4F46E5"
               : isExternal
                 ? "#7C3AED"
-                : !isOnline
+                : isOffline
                   ? "#DC2626"
                   : isAgentWorking
                     ? "#059669"
@@ -321,7 +330,7 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
         style={{
           width: 10,
           height: 10,
-          backgroundColor: isExternal ? "#8B5CF6" : !isOnline ? "#EF4444" : "#4F46E5",
+          backgroundColor: isExternal ? "#8B5CF6" : isOffline ? "#EF4444" : "#4F46E5",
           border: "2px solid #FFFFFF",
         }}
       />
@@ -332,7 +341,7 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
         style={{
           width: 10,
           height: 10,
-          backgroundColor: isExternal ? "#8B5CF6" : !isOnline ? "#EF4444" : "#0891B2",
+          backgroundColor: isExternal ? "#8B5CF6" : isOffline ? "#EF4444" : "#0891B2",
           border: "2px solid #FFFFFF",
         }}
       />
@@ -341,9 +350,9 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
       <Box
         sx={{
           p: 1,
-          backgroundColor: isExternal ? "#FAF5FF" : !isOnline ? "#FEF2F2" : "#F8FAFC",
+          backgroundColor: isExternal ? "#FAF5FF" : isOffline ? "#FEF2F2" : "#F8FAFC",
           borderBottom: "1px solid",
-          borderColor: isExternal ? "rgba(139, 92, 246, 0.2)" : !isOnline ? "#FECDD3" : "#E2E8F0",
+          borderColor: isExternal ? "rgba(139, 92, 246, 0.2)" : isOffline ? "#FECDD3" : "#E2E8F0",
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
@@ -357,14 +366,14 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
               borderRadius: 1,
               backgroundColor: isExternal
                 ? "rgba(139, 92, 246, 0.15)"
-                : !isOnline || (inBlock && !isHealthy)
+                : isOffline || (inBlock && !isHealthy)
                   ? "rgba(239, 68, 68, 0.15)"
                   : inBlock && isHealthy
                     ? "rgba(16, 185, 129, 0.12)"
                     : "rgba(79, 70, 229, 0.1)",
               color: isExternal
                 ? "#7C3AED"
-                : !isOnline || (inBlock && !isHealthy)
+                : isOffline || (inBlock && !isHealthy)
                   ? "#DC2626"
                   : inBlock && isHealthy
                     ? "#059669"
@@ -472,21 +481,17 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
                     px: 0,
                   }}
                 />
-              ) : !isOnline ? (
+              ) : isOffline ? (
                 <Tooltip
-                  title={
-                    isAgentMode
-                      ? `Agent offline or unreachable. Last seen: ${
-                          status?.last_seen
-                            ? new Date(status.last_seen).toISOString()
-                            : node.agent_last_seen || "Unknown"
-                        }`
-                      : status?.error || "Device is offline or unreachable"
-                  }
+                  title={`Agent offline or unreachable. Last seen: ${
+                    status?.last_seen
+                      ? new Date(status.last_seen).toISOString()
+                      : node.agent_last_seen || "Unknown"
+                  }`}
                 >
                   <Chip
                     icon={<AlertTriangle size={10} color="#DC2626" />}
-                    label={isAgentMode ? "AGENT OFFLINE" : "OFFLINE"}
+                    label="AGENT OFFLINE"
                     size="small"
                     sx={{
                       height: 16,
@@ -532,20 +537,20 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
                 </Tooltip>
               ) : (
                 <Tooltip
-                  title={`SSH Snapshot (refreshed: ${
-                    status?.last_seen ? new Date(status.last_seen).toISOString() : "manual"
-                  }). Not reporting live telemetry; for reference only.`}
+                  title={`SSH Node: Managed via SSH standard connection. Status refreshed: ${
+                    status?.last_seen ? new Date(status.last_seen).toISOString() : "manual snapshot"
+                  }.`}
                 >
                   <Chip
                     icon={<Camera size={9} style={{ color: "#64748B", marginLeft: 4 }} />}
-                    label="SNAPSHOT"
+                    label="SSH"
                     size="small"
                     sx={{
                       height: 16,
-                      fontSize: "0.52rem",
+                      fontSize: "0.55rem",
                       fontWeight: 700,
                       backgroundColor: "#F1F5F9",
-                      color: "#64748B",
+                      color: "#475569",
                       border: "1px solid #CBD5E1",
                       letterSpacing: "0.3px",
                       px: 0,
@@ -557,7 +562,7 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
             </Box>
             <Typography
               variant="caption"
-              sx={{ color: isExternal ? "#7C3AED" : !isOnline ? "#DC2626" : "#64748B", fontSize: "0.7rem" }}
+              sx={{ color: isExternal ? "#7C3AED" : isOffline ? "#DC2626" : "#64748B", fontSize: "0.7rem" }}
             >
               {isExternal ? node.description || "Unmanaged Peer" : node.host || "No SSH Host"}
             </Typography>
@@ -1067,7 +1072,7 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
       )}
 
       {/* Offline Alert Strip */}
-      {!isExternal && !isOnline && (
+      {!isExternal && isOffline && (
         <Box
           sx={{
             px: 1,
