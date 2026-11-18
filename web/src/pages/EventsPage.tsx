@@ -260,10 +260,10 @@ export const EventsPage: React.FC = () => {
       sx={{
         width: "100%",
         boxSizing: "border-box",
-        p: { xs: 1.5, sm: 2.5, md: 3 },
+        p: 1,
         display: "flex",
         flexDirection: "column",
-        gap: 2,
+        gap: 1,
       }}
     >
       {/* Top Header Bar */}
@@ -273,7 +273,7 @@ export const EventsPage: React.FC = () => {
           flexDirection: { xs: "column", sm: "row" },
           alignItems: { xs: "flex-start", sm: "center" },
           justifyContent: "space-between",
-          gap: 2,
+          gap: 1,
         }}
       >
         <Box>
@@ -397,13 +397,13 @@ export const EventsPage: React.FC = () => {
         sx={{
           display: "grid",
           gridTemplateColumns: { xs: "1fr 1fr", sm: "repeat(4, 1fr)" },
-          gap: 2,
+          gap: 1,
         }}
       >
         <Paper
           elevation={0}
           sx={{
-            p: 2,
+            p: 1,
             borderRadius: "12px",
             border: "1px solid #E2E8F0",
             bgcolor: "#FFFFFF",
@@ -439,7 +439,7 @@ export const EventsPage: React.FC = () => {
         <Paper
           elevation={0}
           sx={{
-            p: 2,
+            p: 1,
             borderRadius: "12px",
             border: "1px solid #E2E8F0",
             bgcolor: "#FFFFFF",
@@ -475,7 +475,7 @@ export const EventsPage: React.FC = () => {
         <Paper
           elevation={0}
           sx={{
-            p: 2,
+            p: 1,
             borderRadius: "12px",
             border: "1px solid #E2E8F0",
             bgcolor: "#FFFFFF",
@@ -511,7 +511,7 @@ export const EventsPage: React.FC = () => {
         <Paper
           elevation={0}
           sx={{
-            p: 2,
+            p: 1,
             borderRadius: "12px",
             border: "1px solid #E2E8F0",
             bgcolor: "#FFFFFF",

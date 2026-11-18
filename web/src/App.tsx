@@ -63,7 +63,7 @@ const AppContent: React.FC = () => {
           alignItems: "center",
           justifyContent: "center",
           flexDirection: "column",
-          gap: 2,
+          gap: 1,
           bgcolor: "#F8FAFC",
         }}
       >

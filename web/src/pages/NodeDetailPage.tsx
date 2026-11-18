@@ -198,10 +198,12 @@ export const NodeDetailPage: React.FC = () => {
   // A node is managed by the agent only if it is configured for agent mode or
   // an agent is actually connected/reporting. Nodes without an installed agent
   // fall back to SSH management.
-  const isAgentMode = Boolean(node?.mode === "agent" || node?.agent_token || status?.mode === "agent" || live?.connected);
+  const isAgentMode = Boolean(
+    node?.mode === "agent" || node?.agent_token || status?.mode === "agent" || live?.connected,
+  );
   const agentInstalled = Boolean(
     live?.agent_installed ??
-      (isAgentMode && (status?.agent_version != null || status?.mode === "agent" || node?.mode === "agent")),
+    (isAgentMode && (status?.agent_version != null || status?.mode === "agent" || node?.mode === "agent")),
   );
   const currentAgentVer = live?.agent_version || status?.agent_version || node?.agent_version;
   const isOutdated = isAgentVersionOutdated(currentAgentVer, serverAgentVersion);
@@ -775,8 +777,8 @@ export const NodeDetailPage: React.FC = () => {
   const sidebarContent = (
     <Box sx={{ display: "flex", flexDirection: "column", height: "100%", width: "100%" }}>
       {/* Sidebar Header & Search */}
-      <Box sx={{ p: 2, borderBottom: "1px solid #E2E8F0" }}>
-        <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1.5 }}>
+      <Box sx={{ p: 1, borderBottom: "1px solid #E2E8F0" }}>
+        <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1 }}>
           <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
             <Server size={18} color="#4F46E5" />
             <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0F172A" }}>
@@ -807,9 +809,9 @@ export const NodeDetailPage: React.FC = () => {
       </Box>
 
       {/* Grouped Nodes List */}
-      <Box sx={{ flex: 1, overflowY: "auto", p: 1.5, display: "flex", flexDirection: "column", gap: 2 }}>
+      <Box sx={{ flex: 1, overflowY: "auto", p: 1, display: "flex", flexDirection: "column", gap: 1 }}>
         {groupedSidebarNodes.length === 0 ? (
-          <Box sx={{ p: 3, textAlign: "center" }}>
+          <Box sx={{ p: 1, textAlign: "center" }}>
             <Typography variant="caption" sx={{ color: "#94A3B8" }}>
               No nodes match search
             </Typography>
@@ -828,7 +830,7 @@ export const NodeDetailPage: React.FC = () => {
                     px: 1,
                     py: 0.6,
                     mb: 0.6,
-                    borderRadius: 1.5,
+                    borderRadius: 1,
                     bgcolor: "rgba(241, 245, 249, 0.6)",
                   }}
                 >
@@ -882,7 +884,7 @@ export const NodeDetailPage: React.FC = () => {
                         sx={{
                           p: 1.2,
                           px: 1.4,
-                          borderRadius: 2,
+                          borderRadius: 1,
                           cursor: "pointer",
                           transition: "all 0.15s ease",
                           display: "flex",
@@ -964,7 +966,7 @@ export const NodeDetailPage: React.FC = () => {
       </Box>
 
       {/* Sidebar Footer Link */}
-      <Box sx={{ p: 1.5, borderTop: "1px solid #E2E8F0", bgcolor: "#F8FAFC" }}>
+      <Box sx={{ p: 1, borderTop: "1px solid #E2E8F0", bgcolor: "#F8FAFC" }}>
         <Button
           fullWidth
           size="small"
@@ -1070,8 +1072,8 @@ export const NodeDetailPage: React.FC = () => {
           display: "flex",
           flexDirection: "column",
           overflowY: "auto",
-          p: { xs: 1.5, sm: 2.5, md: 3 },
-          gap: 2,
+          p: 1,
+          gap: 1,
         }}
       >
         {/* Navigation Breadcrumbs & Mobile Bar */}
@@ -1171,7 +1173,7 @@ export const NodeDetailPage: React.FC = () => {
               anchorEl={moreMenuAnchor}
               open={Boolean(moreMenuAnchor)}
               onClose={() => setMoreMenuAnchor(null)}
-              PaperProps={{ sx: { minWidth: 200, borderRadius: 2, p: 0.5, boxShadow: "0 10px 25px rgba(0,0,0,0.1)" } }}
+              PaperProps={{ sx: { minWidth: 200, borderRadius: 1, p: 0.5, boxShadow: "0 10px 25px rgba(0,0,0,0.1)" } }}
             >
               <MenuItem
                 onClick={() => {
@@ -1285,13 +1287,13 @@ export const NodeDetailPage: React.FC = () => {
         <Paper
           elevation={0}
           sx={{
-            p: { xs: 2.5, sm: 3 },
-            borderRadius: 3.5,
+            p: 1,
+            borderRadius: 1,
             bgcolor: "#FFFFFF",
             border: "1px solid #E2E8F0",
             display: "flex",
             flexDirection: "column",
-            gap: 2,
+            gap: 1,
             boxShadow: "0 4px 20px -2px rgba(15, 23, 42, 0.04)",
           }}
         >
@@ -1301,15 +1303,15 @@ export const NodeDetailPage: React.FC = () => {
               justifyContent: "space-between",
               alignItems: "flex-start",
               flexWrap: "wrap",
-              gap: 2,
+              gap: 1,
             }}
           >
             {/* Identity and Badges */}
-            <Box sx={{ display: "flex", alignItems: "flex-start", gap: 2 }}>
+            <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1 }}>
               <Box
                 sx={{
                   p: 1.8,
-                  borderRadius: 3,
+                  borderRadius: 1,
                   bgcolor: "#EEF2FF",
                   color: "#4F46E5",
                   display: "flex",
@@ -1527,7 +1529,7 @@ export const NodeDetailPage: React.FC = () => {
                 borderTop: "1px dashed #E2E8F0",
               }}
             >
-              <Box sx={{ p: 1.5, bgcolor: "#F8FAFC", borderRadius: 2.5, border: "1px solid #E2E8F0" }}>
+              <Box sx={{ p: 1, bgcolor: "#F8FAFC", borderRadius: 1, border: "1px solid #E2E8F0" }}>
                 <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 0.5 }}>
                   <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600 }}>
                     CPU Load
@@ -1542,7 +1544,7 @@ export const NodeDetailPage: React.FC = () => {
                   value={Math.min(100, Math.max(0, cpuPercent))}
                   sx={{
                     height: 5,
-                    borderRadius: 3,
+                    borderRadius: 1,
                     mt: 1,
                     bgcolor: "#E2E8F0",
                     "& .MuiLinearProgress-bar": {
@@ -1552,7 +1554,7 @@ export const NodeDetailPage: React.FC = () => {
                 />
               </Box>
 
-              <Box sx={{ p: 1.5, bgcolor: "#F8FAFC", borderRadius: 2.5, border: "1px solid #E2E8F0" }}>
+              <Box sx={{ p: 1, bgcolor: "#F8FAFC", borderRadius: 1, border: "1px solid #E2E8F0" }}>
                 <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 0.5 }}>
                   <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600 }}>
                     RAM Usage
@@ -1570,7 +1572,7 @@ export const NodeDetailPage: React.FC = () => {
                   value={Math.min(100, Math.max(0, memPercent))}
                   sx={{
                     height: 5,
-                    borderRadius: 3,
+                    borderRadius: 1,
                     mt: 1,
                     bgcolor: "#E2E8F0",
                     "& .MuiLinearProgress-bar": {
@@ -1580,7 +1582,7 @@ export const NodeDetailPage: React.FC = () => {
                 />
               </Box>
 
-              <Box sx={{ p: 1.5, bgcolor: "#F8FAFC", borderRadius: 2.5, border: "1px solid #E2E8F0" }}>
+              <Box sx={{ p: 1, bgcolor: "#F8FAFC", borderRadius: 1, border: "1px solid #E2E8F0" }}>
                 <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 0.5 }}>
                   <Typography
                     variant="caption"
@@ -1597,7 +1599,7 @@ export const NodeDetailPage: React.FC = () => {
                 </Typography>
               </Box>
 
-              <Box sx={{ p: 1.5, bgcolor: "#F8FAFC", borderRadius: 2.5, border: "1px solid #E2E8F0" }}>
+              <Box sx={{ p: 1, bgcolor: "#F8FAFC", borderRadius: 1, border: "1px solid #E2E8F0" }}>
                 <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 0.5 }}>
                   <Typography
                     variant="caption"
@@ -1618,7 +1620,7 @@ export const NodeDetailPage: React.FC = () => {
         </Paper>
 
         {/* Tab Controls */}
-        <Box sx={{ borderBottom: "1px solid #E2E8F0", bgcolor: "#FFFFFF", borderRadius: 2.5, px: 2 }}>
+        <Box sx={{ borderBottom: "1px solid #E2E8F0", bgcolor: "#FFFFFF", borderRadius: 1, px: 1 }}>
           <Tabs
             value={currentTab}
             onChange={handleTabChange}
@@ -1715,14 +1717,14 @@ export const NodeDetailPage: React.FC = () => {
 
         {/* Tab 1: Overview & Specs */}
         {currentTab === "overview" && node && (
-          <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
             {node.caption && node.caption.trim() !== "" && (
               <Paper
                 elevation={0}
                 sx={{
-                  p: 2,
-                  px: 2.5,
-                  borderRadius: 2.5,
+                  p: 1,
+                  px: 1,
+                  borderRadius: 1,
                   bgcolor: "#FFFFFF",
                   border: "1px solid #E2E8F0",
                   borderLeft: "4px solid #4F46E5",
@@ -1758,14 +1760,14 @@ export const NodeDetailPage: React.FC = () => {
               <Grid item xs={12} md={7}>
                 <Paper
                   elevation={0}
-                  sx={{ p: 3, borderRadius: 3, bgcolor: "#FFFFFF", border: "1px solid #E2E8F0", height: "100%" }}
+                  sx={{ p: 1, borderRadius: 1, bgcolor: "#FFFFFF", border: "1px solid #E2E8F0", height: "100%" }}
                 >
-                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0F172A", mb: 2 }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0F172A", mb: 1 }}>
                     Network Addressing & Routing Tables
                   </Typography>
 
-                  <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" }, gap: 2 }}>
-                    <Box sx={{ p: 1.8, bgcolor: "#F8FAFC", borderRadius: 2, border: "1px solid #E2E8F0" }}>
+                  <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" }, gap: 1 }}>
+                    <Box sx={{ p: 1.8, bgcolor: "#F8FAFC", borderRadius: 1, border: "1px solid #E2E8F0" }}>
                       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                         <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600 }}>
                           Main IPv4
@@ -1787,7 +1789,7 @@ export const NodeDetailPage: React.FC = () => {
                       </Typography>
                     </Box>
 
-                    <Box sx={{ p: 1.8, bgcolor: "#F8FAFC", borderRadius: 2, border: "1px solid #E2E8F0" }}>
+                    <Box sx={{ p: 1.8, bgcolor: "#F8FAFC", borderRadius: 1, border: "1px solid #E2E8F0" }}>
                       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                         <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600 }}>
                           Main IPv6
@@ -1816,7 +1818,7 @@ export const NodeDetailPage: React.FC = () => {
                       </Typography>
                     </Box>
 
-                    <Box sx={{ p: 1.8, bgcolor: "#F8FAFC", borderRadius: 2, border: "1px solid #E2E8F0" }}>
+                    <Box sx={{ p: 1.8, bgcolor: "#F8FAFC", borderRadius: 1, border: "1px solid #E2E8F0" }}>
                       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                         <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600 }}>
                           ASN
@@ -1838,7 +1840,7 @@ export const NodeDetailPage: React.FC = () => {
                       </Typography>
                     </Box>
 
-                    <Box sx={{ p: 1.8, bgcolor: "#F8FAFC", borderRadius: 2, border: "1px solid #E2E8F0" }}>
+                    <Box sx={{ p: 1.8, bgcolor: "#F8FAFC", borderRadius: 1, border: "1px solid #E2E8F0" }}>
                       <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600 }}>
                         Kernel Export Table
                       </Typography>
@@ -1854,11 +1856,11 @@ export const NodeDetailPage: React.FC = () => {
 
                   {/* External IPs if configured */}
                   {(node.external_ip || node.external_ip6) && (
-                    <Box sx={{ mt: 2.5, p: 2, bgcolor: "#FFFBEB", borderRadius: 2, border: "1px solid #FDE68A" }}>
+                    <Box sx={{ mt: 1, p: 1, bgcolor: "#FFFBEB", borderRadius: 1, border: "1px solid #FDE68A" }}>
                       <Typography variant="caption" sx={{ color: "#B45309", fontWeight: 700, display: "block", mb: 1 }}>
                         EXTERNAL CLEARED IPS (PUBLIC INTERNET)
                       </Typography>
-                      <Box sx={{ display: "flex", gap: 3, flexWrap: "wrap", alignItems: "center" }}>
+                      <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", alignItems: "center" }}>
                         {node.external_ip && (
                           <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
                             <Typography variant="body2" className="mono-font" sx={{ color: "#92400E" }}>
@@ -1904,7 +1906,7 @@ export const NodeDetailPage: React.FC = () => {
                   )}
                   {/* Custom Network Script */}
                   {node.custom_network_script && (
-                    <Box sx={{ mt: 2.5, p: 2, bgcolor: "#F8FAFC", borderRadius: 2, border: "1px solid #E2E8F0" }}>
+                    <Box sx={{ mt: 1, p: 1, bgcolor: "#F8FAFC", borderRadius: 1, border: "1px solid #E2E8F0" }}>
                       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
                         <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                           <Typography variant="caption" sx={{ color: "#475569", fontWeight: 700 }}>
@@ -1955,8 +1957,8 @@ export const NodeDetailPage: React.FC = () => {
                         component="pre"
                         sx={{
                           m: 0,
-                          p: 1.5,
-                          borderRadius: 1.5,
+                          p: 1,
+                          borderRadius: 1,
                           bgcolor: "#0F172A",
                           color: "#F8FAFC",
                           fontSize: "0.75rem",
@@ -1972,7 +1974,7 @@ export const NodeDetailPage: React.FC = () => {
 
                   {/* Node Extra Hosts */}
                   {node.extra_hosts && node.extra_hosts.trim() !== "" && (
-                    <Box sx={{ mt: 2.5, p: 2, bgcolor: "#F8FAFC", borderRadius: 2, border: "1px solid #E2E8F0" }}>
+                    <Box sx={{ mt: 1, p: 1, bgcolor: "#F8FAFC", borderRadius: 1, border: "1px solid #E2E8F0" }}>
                       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
                         <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                           <Typography variant="caption" sx={{ color: "#475569", fontWeight: 700 }}>
@@ -2022,8 +2024,8 @@ export const NodeDetailPage: React.FC = () => {
                         component="pre"
                         sx={{
                           m: 0,
-                          p: 1.5,
-                          borderRadius: 1.5,
+                          p: 1,
+                          borderRadius: 1,
                           bgcolor: "#0F172A",
                           color: "#38BDF8",
                           fontSize: "0.75rem",
@@ -2081,18 +2083,18 @@ export const NodeDetailPage: React.FC = () => {
               </Grid>
 
               {/* Host & Agent Details */}
-              <Grid item xs={12} md={5} sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
+              <Grid item xs={12} md={5} sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
                 <Paper
                   elevation={0}
                   sx={{
-                    p: 3,
-                    borderRadius: 3,
+                    p: 1,
+                    borderRadius: 1,
                     bgcolor: "#FFFFFF",
                     border: "1px solid #E2E8F0",
                     height: isDn42ExternalNode(node) ? "auto" : "100%",
                   }}
                 >
-                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0F172A", mb: 2 }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0F172A", mb: 1 }}>
                     Host & Management Details
                   </Typography>
 
@@ -2100,7 +2102,7 @@ export const NodeDetailPage: React.FC = () => {
                     {node.caption && node.caption.trim() !== "" && (
                       <>
                         <Box
-                          sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 2 }}
+                          sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 1 }}
                         >
                           <Typography variant="body2" sx={{ color: "#64748B", flexShrink: 0 }}>
                             Caption:
@@ -2203,7 +2205,7 @@ export const NodeDetailPage: React.FC = () => {
 
                   {/* Primary Disk info */}
                   {primaryDisk && (
-                    <Box sx={{ mt: 3, p: 2, bgcolor: "#F8FAFC", borderRadius: 2, border: "1px solid #E2E8F0" }}>
+                    <Box sx={{ mt: 3, p: 1, bgcolor: "#F8FAFC", borderRadius: 1, border: "1px solid #E2E8F0" }}>
                       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 0.5 }}>
                         <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 700 }}>
                           ROOT STORAGE (/)
@@ -2217,7 +2219,7 @@ export const NodeDetailPage: React.FC = () => {
                         value={diskPercent}
                         sx={{
                           height: 6,
-                          borderRadius: 3,
+                          borderRadius: 1,
                           my: 1,
                           bgcolor: "#E2E8F0",
                           "& .MuiLinearProgress-bar": {
@@ -2243,8 +2245,8 @@ export const NodeDetailPage: React.FC = () => {
             </Grid>
 
             {/* Node Documentation & Notes */}
-            <Paper elevation={0} sx={{ p: 3, borderRadius: 3, bgcolor: "#FFFFFF", border: "1px solid #E2E8F0" }}>
-              <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
+            <Paper elevation={0} sx={{ p: 1, borderRadius: 1, bgcolor: "#FFFFFF", border: "1px solid #E2E8F0" }}>
+              <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
                 <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                   <FileText size={18} color="#4F46E5" />
                   <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0F172A" }}>
@@ -2262,7 +2264,7 @@ export const NodeDetailPage: React.FC = () => {
                       setIsEditingNote(true);
                       setNoteTab("write");
                     }}
-                    sx={{ fontSize: "0.78rem", py: 0.4, px: 1.5, borderColor: "#CBD5E1", color: "#4F46E5" }}
+                    sx={{ fontSize: "0.78rem", py: 0.4, px: 1, borderColor: "#CBD5E1", color: "#4F46E5" }}
                   >
                     {node.note ? "Edit Notes" : "Add Notes"}
                   </Button>
@@ -2292,8 +2294,8 @@ export const NodeDetailPage: React.FC = () => {
                 <>
                   <Box
                     sx={{
-                      p: 2,
-                      borderRadius: 2,
+                      p: 1,
+                      borderRadius: 1,
                       bgcolor: "#F8FAFC",
                       border: "1px solid #E2E8F0",
                       minHeight: 100,
@@ -2329,8 +2331,8 @@ export const NodeDetailPage: React.FC = () => {
                   ) : (
                     <Box
                       sx={{
-                        p: 2,
-                        borderRadius: 2,
+                        p: 1,
+                        borderRadius: 1,
                         bgcolor: "#F8FAFC",
                         border: "1px solid #E2E8F0",
                         minHeight: 120,
@@ -2366,20 +2368,20 @@ export const NodeDetailPage: React.FC = () => {
 
         {/* Tab 2: Telemetry & Historical Charts */}
         {currentTab === "metrics" && !node?.is_external && (
-          <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
             {/* Range and controls */}
             <Paper
               elevation={0}
               sx={{
-                p: 2,
-                borderRadius: 3,
+                p: 1,
+                borderRadius: 1,
                 bgcolor: "#FFFFFF",
                 border: "1px solid #E2E8F0",
                 display: "flex",
                 justifyContent: "space-between",
                 alignItems: "center",
                 flexWrap: "wrap",
-                gap: 2,
+                gap: 1,
               }}
             >
               <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
@@ -2469,7 +2471,7 @@ export const NodeDetailPage: React.FC = () => {
                 sx={{
                   p: 6,
                   textAlign: "center",
-                  borderRadius: 3,
+                  borderRadius: 1,
                   bgcolor: "#FFFFFF",
                   border: "1px dashed #CBD5E1",
                 }}
@@ -2577,10 +2579,10 @@ export const NodeDetailPage: React.FC = () => {
 
         {/* Tab 3: Network & Links */}
         {currentTab === "networking" && (
-          <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
             {/* Connected Links Table */}
-            <Paper elevation={0} sx={{ p: 3, borderRadius: 3, bgcolor: "#FFFFFF", border: "1px solid #E2E8F0" }}>
-              <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
+            <Paper elevation={0} sx={{ p: 1, borderRadius: 1, bgcolor: "#FFFFFF", border: "1px solid #E2E8F0" }}>
+              <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
                 <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                   <Network size={18} color="#4F46E5" />
                   <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0F172A" }}>
@@ -2870,8 +2872,8 @@ export const NodeDetailPage: React.FC = () => {
 
             {/* WireGuard Interfaces & Handshake Status */}
             {sortedWgInterfaces.length > 0 && (
-              <Paper elevation={0} sx={{ p: 3, borderRadius: 3, bgcolor: "#FFFFFF", border: "1px solid #E2E8F0" }}>
-                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
+              <Paper elevation={0} sx={{ p: 1, borderRadius: 1, bgcolor: "#FFFFFF", border: "1px solid #E2E8F0" }}>
+                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
                   <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0F172A" }}>
                     WireGuard Kernel Interfaces Status
                   </Typography>
@@ -2889,10 +2891,10 @@ export const NodeDetailPage: React.FC = () => {
                   )}
                 </Box>
 
-                <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
                   {sortedWgInterfaces.map((wg) => (
-                    <Box key={wg.name} sx={{ p: 2, bgcolor: "#F8FAFC", borderRadius: 2, border: "1px solid #E2E8F0" }}>
-                      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1.5 }}>
+                    <Box key={wg.name} sx={{ p: 1, bgcolor: "#F8FAFC", borderRadius: 1, border: "1px solid #E2E8F0" }}>
+                      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
                         <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                           <Chip
                             label={wg.name}
@@ -2916,7 +2918,7 @@ export const NodeDetailPage: React.FC = () => {
                               sx={{
                                 p: 1.2,
                                 bgcolor: "#FFFFFF",
-                                borderRadius: 1.5,
+                                borderRadius: 1,
                                 border: "1px solid #E2E8F0",
                                 display: "flex",
                                 justifyContent: "space-between",
@@ -2988,8 +2990,8 @@ export const NodeDetailPage: React.FC = () => {
 
             {/* Network Interfaces on Host */}
             {sortedHostInterfaces.length > 0 && (
-              <Paper elevation={0} sx={{ p: 3, borderRadius: 3, bgcolor: "#FFFFFF", border: "1px solid #E2E8F0" }}>
-                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0F172A", mb: 2 }}>
+              <Paper elevation={0} sx={{ p: 1, borderRadius: 1, bgcolor: "#FFFFFF", border: "1px solid #E2E8F0" }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0F172A", mb: 1 }}>
                   Host Physical & Virtual Interfaces ({sortedHostInterfaces.length})
                 </Typography>
                 <Grid container spacing={1.5}>
@@ -3001,8 +3003,8 @@ export const NodeDetailPage: React.FC = () => {
                       <Grid item xs={12} sm={6} md={4} key={inf.name}>
                         <Box
                           sx={{
-                            p: 1.5,
-                            borderRadius: 2,
+                            p: 1,
+                            borderRadius: 1,
                             bgcolor: isPrimary ? "#EFF6FF" : "#F8FAFC",
                             border: "1px solid",
                             borderColor: isPrimary ? "#BFDBFE" : "#E2E8F0",
@@ -3080,9 +3082,9 @@ export const NodeDetailPage: React.FC = () => {
 
         {/* Tab 4: Routing & BIRD */}
         {currentTab === "routing" && node && !node.is_external && (
-          <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
-            <Paper elevation={0} sx={{ p: 3, borderRadius: 3, bgcolor: "#FFFFFF", border: "1px solid #E2E8F0" }}>
-              <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2.5 }}>
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+            <Paper elevation={0} sx={{ p: 1, borderRadius: 1, bgcolor: "#FFFFFF", border: "1px solid #E2E8F0" }}>
+              <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
                 <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                   <Radio size={18} color="#4F46E5" />
                   <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0F172A" }}>
@@ -3116,7 +3118,7 @@ export const NodeDetailPage: React.FC = () => {
 
               <Grid container spacing={2}>
                 <Grid item xs={12} sm={3}>
-                  <Box sx={{ p: 2, bgcolor: "#F8FAFC", borderRadius: 2, border: "1px solid #E2E8F0" }}>
+                  <Box sx={{ p: 1, bgcolor: "#F8FAFC", borderRadius: 1, border: "1px solid #E2E8F0" }}>
                     <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600 }}>
                       Export Table
                     </Typography>
@@ -3127,7 +3129,7 @@ export const NodeDetailPage: React.FC = () => {
                 </Grid>
 
                 <Grid item xs={12} sm={3}>
-                  <Box sx={{ p: 2, bgcolor: "#F8FAFC", borderRadius: 2, border: "1px solid #E2E8F0" }}>
+                  <Box sx={{ p: 1, bgcolor: "#F8FAFC", borderRadius: 1, border: "1px solid #E2E8F0" }}>
                     <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600 }}>
                       External Export Table
                     </Typography>
@@ -3138,7 +3140,7 @@ export const NodeDetailPage: React.FC = () => {
                 </Grid>
 
                 <Grid item xs={12} sm={3}>
-                  <Box sx={{ p: 2, bgcolor: "#F8FAFC", borderRadius: 2, border: "1px solid #E2E8F0" }}>
+                  <Box sx={{ p: 1, bgcolor: "#F8FAFC", borderRadius: 1, border: "1px solid #E2E8F0" }}>
                     <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600 }}>
                       Target Config Path
                     </Typography>
@@ -3149,7 +3151,7 @@ export const NodeDetailPage: React.FC = () => {
                 </Grid>
 
                 <Grid item xs={12} sm={3}>
-                  <Box sx={{ p: 2, bgcolor: "#F8FAFC", borderRadius: 2, border: "1px solid #E2E8F0" }}>
+                  <Box sx={{ p: 1, bgcolor: "#F8FAFC", borderRadius: 1, border: "1px solid #E2E8F0" }}>
                     <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600 }}>
                       FlapAlerted Peering
                     </Typography>
@@ -3170,7 +3172,7 @@ export const NodeDetailPage: React.FC = () => {
                 </Grid>
 
                 <Grid item xs={12} sm={3}>
-                  <Box sx={{ p: 2, bgcolor: "#F8FAFC", borderRadius: 2, border: "1px solid #E2E8F0" }}>
+                  <Box sx={{ p: 1, bgcolor: "#F8FAFC", borderRadius: 1, border: "1px solid #E2E8F0" }}>
                     <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600 }}>
                       Manage /etc/hosts
                     </Typography>
@@ -3206,9 +3208,9 @@ export const NodeDetailPage: React.FC = () => {
                 <Grid item xs={12} sm={3}>
                   <Box
                     sx={{
-                      p: 2,
+                      p: 1,
                       bgcolor: node.route_reflector ? "#EEF2FF" : "#F8FAFC",
-                      borderRadius: 2,
+                      borderRadius: 1,
                       border: node.route_reflector ? "1px solid #C7D2FE" : "1px solid #E2E8F0",
                     }}
                   >
@@ -3237,9 +3239,9 @@ export const NodeDetailPage: React.FC = () => {
                 <Grid item xs={12} sm={3}>
                   <Box
                     sx={{
-                      p: 2,
+                      p: 1,
                       bgcolor: node.enable_dynamic_bird_config ? "#F0FDFA" : "#F8FAFC",
-                      borderRadius: 2,
+                      borderRadius: 1,
                       border: node.enable_dynamic_bird_config ? "1px solid #99F6E4" : "1px solid #E2E8F0",
                     }}
                   >
@@ -3268,7 +3270,7 @@ export const NodeDetailPage: React.FC = () => {
 
               {/* Node Extra Hosts */}
               {node.extra_hosts && (
-                <Box sx={{ mt: 3, p: 2, bgcolor: "#F8FAFC", borderRadius: 2, border: "1px solid #E2E8F0" }}>
+                <Box sx={{ mt: 3, p: 1, bgcolor: "#F8FAFC", borderRadius: 1, border: "1px solid #E2E8F0" }}>
                   <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
                     <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                       <Typography variant="caption" sx={{ color: "#475569", fontWeight: 700 }}>
@@ -3300,8 +3302,8 @@ export const NodeDetailPage: React.FC = () => {
                     component="pre"
                     sx={{
                       m: 0,
-                      p: 1.5,
-                      borderRadius: 1.5,
+                      p: 1,
+                      borderRadius: 1,
                       bgcolor: "#0F172A",
                       color: "#38BDF8",
                       fontSize: "0.75rem",
@@ -3326,8 +3328,8 @@ export const NodeDetailPage: React.FC = () => {
                       <Box
                         key={idx}
                         sx={{
-                          p: 1.5,
-                          borderRadius: 2,
+                          p: 1,
+                          borderRadius: 1,
                           bgcolor: "#F8FAFC",
                           border: "1px solid #E2E8F0",
                           display: "flex",
@@ -3391,9 +3393,9 @@ export const NodeDetailPage: React.FC = () => {
 
         {/* Tab 5: Firewall & Security */}
         {currentTab === "firewall" && node && !node.is_external && (
-          <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
-            <Paper elevation={0} sx={{ p: 3, borderRadius: 3, bgcolor: "#FFFFFF", border: "1px solid #E2E8F0" }}>
-              <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2.5 }}>
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+            <Paper elevation={0} sx={{ p: 1, borderRadius: 1, bgcolor: "#FFFFFF", border: "1px solid #E2E8F0" }}>
+              <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
                 <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                   <Shield size={18} color="#E11D48" />
                   <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0F172A" }}>
@@ -3413,7 +3415,7 @@ export const NodeDetailPage: React.FC = () => {
 
               <Grid container spacing={2}>
                 <Grid item xs={12} sm={6}>
-                  <Box sx={{ p: 2, bgcolor: "#F8FAFC", borderRadius: 2, border: "1px solid #E2E8F0" }}>
+                  <Box sx={{ p: 1, bgcolor: "#F8FAFC", borderRadius: 1, border: "1px solid #E2E8F0" }}>
                     <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600 }}>
                       Target Rules File
                     </Typography>
@@ -3424,7 +3426,7 @@ export const NodeDetailPage: React.FC = () => {
                 </Grid>
 
                 <Grid item xs={12} sm={6}>
-                  <Box sx={{ p: 2, bgcolor: "#F8FAFC", borderRadius: 2, border: "1px solid #E2E8F0" }}>
+                  <Box sx={{ p: 1, bgcolor: "#F8FAFC", borderRadius: 1, border: "1px solid #E2E8F0" }}>
                     <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600 }}>
                       Firewall Backend Status
                     </Typography>
@@ -3446,8 +3448,8 @@ export const NodeDetailPage: React.FC = () => {
                       <Box
                         key={idx}
                         sx={{
-                          p: 1.5,
-                          borderRadius: 2,
+                          p: 1,
+                          borderRadius: 1,
                           bgcolor: "#F8FAFC",
                           border: "1px solid #E2E8F0",
                           display: "flex",
@@ -3493,18 +3495,18 @@ export const NodeDetailPage: React.FC = () => {
 
         {/* Tab 6: Agent Management */}
         {currentTab === "agent" && node && !node.is_external && (
-          <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
             {/* Status Hero Card */}
             <Paper
               elevation={0}
               sx={{
-                p: 3,
-                borderRadius: 3,
+                p: 1,
+                borderRadius: 1,
                 bgcolor: "#FFFFFF",
                 border: "1px solid #E2E8F0",
                 display: "flex",
                 flexDirection: "column",
-                gap: 2,
+                gap: 1,
               }}
             >
               <Box
@@ -3520,7 +3522,7 @@ export const NodeDetailPage: React.FC = () => {
                   <Box
                     sx={{
                       p: 1.2,
-                      borderRadius: 2,
+                      borderRadius: 1,
                       bgcolor: agentInstalled && isOnline ? "#ECFDF5" : agentInstalled ? "#FEF3C7" : "#F1F5F9",
                       color: agentInstalled && isOnline ? "#059669" : agentInstalled ? "#D97706" : "#64748B",
                       display: "flex",
@@ -3587,7 +3589,7 @@ export const NodeDetailPage: React.FC = () => {
               {/* Status Details Grid */}
               <Grid container spacing={2}>
                 <Grid item xs={12} sm={6} md={3}>
-                  <Box sx={{ p: 2, bgcolor: "#F8FAFC", borderRadius: 2, border: "1px solid #E2E8F0" }}>
+                  <Box sx={{ p: 1, bgcolor: "#F8FAFC", borderRadius: 1, border: "1px solid #E2E8F0" }}>
                     <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600 }}>
                       Installation Status
                     </Typography>
@@ -3601,7 +3603,7 @@ export const NodeDetailPage: React.FC = () => {
                 </Grid>
 
                 <Grid item xs={12} sm={6} md={3}>
-                  <Box sx={{ p: 2, bgcolor: "#F8FAFC", borderRadius: 2, border: "1px solid #E2E8F0" }}>
+                  <Box sx={{ p: 1, bgcolor: "#F8FAFC", borderRadius: 1, border: "1px solid #E2E8F0" }}>
                     <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600 }}>
                       Agent Version
                     </Typography>
@@ -3634,7 +3636,7 @@ export const NodeDetailPage: React.FC = () => {
                 </Grid>
 
                 <Grid item xs={12} sm={6} md={3}>
-                  <Box sx={{ p: 2, bgcolor: "#F8FAFC", borderRadius: 2, border: "1px solid #E2E8F0" }}>
+                  <Box sx={{ p: 1, bgcolor: "#F8FAFC", borderRadius: 1, border: "1px solid #E2E8F0" }}>
                     <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600 }}>
                       Operating Mode
                     </Typography>
@@ -3645,7 +3647,7 @@ export const NodeDetailPage: React.FC = () => {
                 </Grid>
 
                 <Grid item xs={12} sm={6} md={3}>
-                  <Box sx={{ p: 2, bgcolor: "#F8FAFC", borderRadius: 2, border: "1px solid #E2E8F0" }}>
+                  <Box sx={{ p: 1, bgcolor: "#F8FAFC", borderRadius: 1, border: "1px solid #E2E8F0" }}>
                     <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600 }}>
                       Last Communication
                     </Typography>
@@ -3660,13 +3662,13 @@ export const NodeDetailPage: React.FC = () => {
             </Paper>
 
             {/* Install / Re-install Shell Snippet Card */}
-            <Paper elevation={0} sx={{ p: 3, borderRadius: 3, bgcolor: "#FFFFFF", border: "1px solid #E2E8F0" }}>
+            <Paper elevation={0} sx={{ p: 1, borderRadius: 1, bgcolor: "#FFFFFF", border: "1px solid #E2E8F0" }}>
               <Box
                 sx={{
                   display: "flex",
                   justifyContent: "space-between",
                   alignItems: "center",
-                  mb: 2,
+                  mb: 1,
                   flexWrap: "wrap",
                   gap: 1,
                 }}
@@ -3695,7 +3697,7 @@ export const NodeDetailPage: React.FC = () => {
                 </Button>
               </Box>
 
-              <Typography variant="body2" sx={{ color: "#64748B", mb: 2 }}>
+              <Typography variant="body2" sx={{ color: "#64748B", mb: 1 }}>
                 Run the command below directly on the node via console or SSH. The installer script detects the CPU
                 architecture (<code>x86_64</code>, <code>aarch64</code>, <code>armv7</code>, <code>mipsel</code>) and
                 system service manager (<code>systemd</code>, <code>openrc</code>, <code>procd</code>) automatically.
@@ -3704,10 +3706,10 @@ export const NodeDetailPage: React.FC = () => {
               {/* Overwrite config & Disable apps options */}
               <Box
                 sx={{
-                  mb: 2,
-                  p: 1.5,
+                  mb: 1,
+                  p: 1,
                   bgcolor: "#F8FAFC",
-                  borderRadius: 2,
+                  borderRadius: 1,
                   border: "1px solid #E2E8F0",
                   display: "flex",
                   flexDirection: "column",
@@ -3791,15 +3793,15 @@ export const NodeDetailPage: React.FC = () => {
               {/* Code Snippet Box */}
               <Box
                 sx={{
-                  p: 2,
-                  borderRadius: 2.5,
+                  p: 1,
+                  borderRadius: 1,
                   bgcolor: "#0F172A",
                   color: "#F8FAFC",
                   border: "1px solid #1E293B",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "space-between",
-                  gap: 2,
+                  gap: 1,
                   flexWrap: { xs: "wrap", md: "nowrap" },
                 }}
               >
@@ -3843,13 +3845,13 @@ export const NodeDetailPage: React.FC = () => {
             <Paper
               elevation={0}
               sx={{
-                p: 3,
-                borderRadius: 3,
+                p: 1,
+                borderRadius: 1,
                 bgcolor: "#FFFFFF",
                 border: "1px solid #FEE2E2",
                 display: "flex",
                 flexDirection: "column",
-                gap: 2,
+                gap: 1,
               }}
             >
               <Box
@@ -3928,8 +3930,8 @@ export const NodeDetailPage: React.FC = () => {
             <X size={18} />
           </IconButton>
         </DialogTitle>
-        <DialogContent sx={{ pt: 2.5 }}>
-          <Alert severity="info" sx={{ mb: 2, borderRadius: 2 }}>
+        <DialogContent sx={{ pt: 1 }}>
+          <Alert severity="info" sx={{ mb: 1, borderRadius: 2 }}>
             Deployed to <code>/etc/bird_easy42.conf</code>. Ensure your main BIRD config includes:
             <Box
               component="pre"
@@ -3955,8 +3957,8 @@ export const NodeDetailPage: React.FC = () => {
               component="pre"
               className="mono-font"
               sx={{
-                p: 2,
-                borderRadius: 2,
+                p: 1,
+                borderRadius: 1,
                 bgcolor: "#0F172A",
                 color: "#38BDF8",
                 fontSize: "0.8rem",
@@ -3968,7 +3970,7 @@ export const NodeDetailPage: React.FC = () => {
             </Box>
           )}
         </DialogContent>
-        <DialogActions sx={{ px: 3, py: 1.5, borderTop: "1px solid #E2E8F0", bgcolor: "#F8FAFC" }}>
+        <DialogActions sx={{ px: 3, py: 1, borderTop: "1px solid #E2E8F0", bgcolor: "#F8FAFC" }}>
           <Button
             size="small"
             variant="outlined"
@@ -4005,8 +4007,8 @@ export const NodeDetailPage: React.FC = () => {
             <X size={18} />
           </IconButton>
         </DialogTitle>
-        <DialogContent sx={{ pt: 2.5 }}>
-          <Alert severity="info" sx={{ mb: 2, borderRadius: 2 }}>
+        <DialogContent sx={{ pt: 1 }}>
+          <Alert severity="info" sx={{ mb: 1, borderRadius: 2 }}>
             Deployed to <code>/etc/easy42.nft</code> during sync. Executed via <code>nft -f /etc/easy42.nft</code>.
           </Alert>
           {loadingNftables ? (
@@ -4018,8 +4020,8 @@ export const NodeDetailPage: React.FC = () => {
               component="pre"
               className="mono-font"
               sx={{
-                p: 2,
-                borderRadius: 2,
+                p: 1,
+                borderRadius: 1,
                 bgcolor: "#0F172A",
                 color: "#F43F5E",
                 fontSize: "0.8rem",
@@ -4031,7 +4033,7 @@ export const NodeDetailPage: React.FC = () => {
             </Box>
           )}
         </DialogContent>
-        <DialogActions sx={{ px: 3, py: 1.5, borderTop: "1px solid #E2E8F0", bgcolor: "#F8FAFC" }}>
+        <DialogActions sx={{ px: 3, py: 1, borderTop: "1px solid #E2E8F0", bgcolor: "#F8FAFC" }}>
           <Button
             size="small"
             variant="outlined"
@@ -4068,8 +4070,8 @@ export const NodeDetailPage: React.FC = () => {
             Uninstall Agent: {node?.name}
           </Typography>
         </DialogTitle>
-        <DialogContent sx={{ pt: 2.5 }}>
-          <Alert severity="warning" sx={{ mb: 2, borderRadius: 2 }}>
+        <DialogContent sx={{ pt: 1 }}>
+          <Alert severity="warning" sx={{ mb: 1, borderRadius: 2 }}>
             This will immediately remove the agent token and mode records for <strong>{node?.name}</strong> from Easy42.
             If SSH is configured on this node, Easy42 will also execute a background best-effort cleanup to stop the
             service and remove agent files.
@@ -4078,7 +4080,7 @@ export const NodeDetailPage: React.FC = () => {
             Are you sure you want to uninstall the agent from this node?
           </Typography>
         </DialogContent>
-        <DialogActions sx={{ px: 3, py: 1.5, borderTop: "1px solid #E2E8F0", bgcolor: "#F8FAFC" }}>
+        <DialogActions sx={{ px: 3, py: 1, borderTop: "1px solid #E2E8F0", bgcolor: "#F8FAFC" }}>
           <Button
             size="small"
             variant="outlined"
@@ -4107,7 +4109,7 @@ export const NodeDetailPage: React.FC = () => {
         onClose={() => setLinkMenuAnchor(null)}
         PaperProps={{
           sx: {
-            borderRadius: 2,
+            borderRadius: 1,
             boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)",
             border: "1px solid #E2E8F0",
             minWidth: 200,

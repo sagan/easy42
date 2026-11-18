@@ -530,7 +530,7 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
   return (
     <Box
       sx={{
-        p: { xs: 1, sm: 2, md: 3 },
+        p: 1,
         height: { xs: "auto", md: "100%" },
         minHeight: 0,
         overflowY: { xs: "visible", md: "auto" },
@@ -544,7 +544,7 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
         sx={{
           flex: 1,
           minHeight: { xs: "auto", md: 600 },
-          borderRadius: { xs: 2, md: 3 },
+          borderRadius: 1,
           border: "1px solid #E2E8F0",
           bgcolor: "#FFFFFF",
           overflow: { xs: "visible", md: "hidden" },
@@ -567,7 +567,7 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
         >
           <Box
             sx={{
-              p: 1.5,
+              p: 1,
               pb: { xs: mobileTasksOpen ? 1 : 1.5, md: 1 },
               borderBottom: { xs: mobileTasksOpen ? 1 : 0, md: 1 },
               borderColor: "divider",
@@ -684,7 +684,7 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
                     height: 32,
                     fontSize: "0.8rem",
                     bgcolor: "background.paper",
-                    borderRadius: 1.5,
+                    borderRadius: 1,
                     "& .MuiOutlinedInput-input": {
                       py: 0.5,
                       px: 0.5,
@@ -699,7 +699,7 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
             sx={{
               flex: 1,
               overflowY: "auto",
-              p: 1.5,
+              p: 1,
               display: { xs: mobileTasksOpen ? "block" : "none", md: "block" },
               maxHeight: { xs: 260, md: "none" },
             }}
@@ -709,17 +709,17 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
                 <CircularProgress size={24} />
               </Box>
             ) : tasks.length === 0 && !matchesHelpFilter ? (
-              <Typography variant="body2" color="text.secondary" sx={{ p: 2, textAlign: "center" }}>
+              <Typography variant="body2" color="text.secondary" sx={{ p: 1, textAlign: "center" }}>
                 No tasks available
               </Typography>
             ) : filteredTasks.length === 0 && !matchesHelpFilter ? (
-              <Typography variant="body2" color="text.secondary" sx={{ p: 2, textAlign: "center" }}>
+              <Typography variant="body2" color="text.secondary" sx={{ p: 1, textAlign: "center" }}>
                 No tasks match "{taskFilter}"
               </Typography>
             ) : (
               <>
                 {/* Built-in Tasks Section */}
-                <Box sx={{ mb: 2 }}>
+                <Box sx={{ mb: 1 }}>
                   <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", px: 0.5, mb: 1 }}>
                     <Typography
                       variant="caption"
@@ -749,9 +749,9 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
                             setMobileTasksOpen(false);
                           }}
                           sx={{
-                            p: 1.5,
+                            p: 1,
                             mb: 1,
-                            borderRadius: 1.5,
+                            borderRadius: 1,
                             cursor: "pointer",
                             border: 1,
                             borderColor: isSelected ? "primary.main" : "divider",
@@ -836,9 +836,9 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
                           setMobileTasksOpen(false);
                         }}
                         sx={{
-                          p: 1.5,
+                          p: 1,
                           mb: 1,
-                          borderRadius: 1.5,
+                          borderRadius: 1,
                           cursor: "pointer",
                           border: 1,
                           borderColor: isSelected ? "primary.main" : "divider",
@@ -890,9 +890,9 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
                         setMobileTasksOpen(false);
                       }}
                       sx={{
-                        p: 1.5,
+                        p: 1,
                         mb: 1,
-                        borderRadius: 1.5,
+                        borderRadius: 1,
                         cursor: "pointer",
                         border: "1.5px dashed",
                         borderColor: isCustomTaskHelp ? "primary.main" : "#cbd5e1",
@@ -963,12 +963,12 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
                 display: "flex",
                 flexDirection: "column",
                 overflowY: { xs: "visible", md: "auto" },
-                p: { xs: 1.5, sm: 2, md: 2.5 },
+                p: 1,
               }}
             >
               {/* Task Header */}
               <Box
-                sx={{ mb: 2, p: 2, borderRadius: 2, bgcolor: "background.default", border: 1, borderColor: "divider" }}
+                sx={{ mb: 1, p: 1, borderRadius: 1, bgcolor: "background.default", border: 1, borderColor: "divider" }}
               >
                 <Box
                   sx={{
@@ -1060,7 +1060,7 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
               </Box>
 
               {error && (
-                <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
+                <Alert severity="error" sx={{ mb: 1 }} onClose={() => setError(null)}>
                   {error}
                 </Alert>
               )}
@@ -1073,7 +1073,7 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
                   alignItems: { xs: "stretch", sm: "center" },
                   justifyContent: "space-between",
                   gap: 1,
-                  mb: 1.5,
+                  mb: 1,
                 }}
               >
                 <Box
@@ -1113,7 +1113,7 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
                           height: 28,
                           fontSize: "0.75rem",
                           fontWeight: 600,
-                          borderRadius: 1.5,
+                          borderRadius: 1,
                           backgroundColor: selectedTag === "All" ? "background.paper" : "rgba(79, 70, 229, 0.08)",
                           color: selectedTag === "All" ? "text.primary" : "primary.main",
                           "& .MuiSelect-select": { py: 0.3, pr: 3, pl: 0.5 },
@@ -1209,7 +1209,7 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
                   maxHeight: { xs: 450, md: "none" },
                   overflowY: "auto",
                   overflowX: "auto",
-                  mb: 2,
+                  mb: 1,
                 }}
               >
                 <Table size="small" stickyHeader sx={{ minWidth: 480 }}>
@@ -1346,12 +1346,12 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
               {Object.keys(runResults).length > 0 && (
                 <Box
                   sx={{
-                    borderRadius: 2,
+                    borderRadius: 1,
                     border: 1,
                     borderColor: "divider",
                     bgcolor: "#0f172a",
                     color: "#f8fafc",
-                    p: 1.5,
+                    p: 1,
                     maxHeight: 220,
                     display: "flex",
                     flexDirection: "column",
@@ -1409,7 +1409,7 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
                       flex: 1,
                       overflowY: "auto",
                       bgcolor: "#020617",
-                      p: 1.5,
+                      p: 1,
                       borderRadius: 1,
                       fontFamily: "monospace",
                       fontSize: "0.8rem",

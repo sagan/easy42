@@ -111,7 +111,7 @@ export const BlockNode: React.FC<NodeProps> = memo(({ data, selected }) => {
           width: 310,
           height: 76,
           position: "relative",
-          borderRadius: 2.5,
+          borderRadius: 1,
           border: `2px solid ${blockColor}`,
           backgroundColor: "#FFFFFF",
           boxShadow: isGroupFocused
@@ -286,7 +286,7 @@ export const BlockNode: React.FC<NodeProps> = memo(({ data, selected }) => {
         minWidth: 260,
         minHeight: 180,
         position: "relative",
-        borderRadius: 3,
+        borderRadius: 1,
         border: isGroupFocused
           ? `2.5px solid ${blockColor}`
           : selected
@@ -310,7 +310,7 @@ export const BlockNode: React.FC<NodeProps> = memo(({ data, selected }) => {
         isVisible={Boolean(selected) && !isLocked}
         minWidth={260}
         minHeight={180}
-        handleStyle={{ width: 8, height: 8, borderRadius: 2, pointerEvents: isLocked ? "none" : "all" }}
+        handleStyle={{ width: 8, height: 8, borderRadius: 1, pointerEvents: isLocked ? "none" : "all" }}
         lineStyle={{ borderColor: blockColor, pointerEvents: isLocked ? "none" : "all" }}
       />
 
@@ -640,7 +640,7 @@ export const BlockNode: React.FC<NodeProps> = memo(({ data, selected }) => {
               paper: {
                 sx: {
                   p: 0.5,
-                  borderRadius: 2,
+                  borderRadius: 1,
                   boxShadow: "0 8px 16px rgba(0,0,0,0.1)",
                 },
               },
@@ -658,7 +658,7 @@ export const BlockNode: React.FC<NodeProps> = memo(({ data, selected }) => {
                   alignItems: "center",
                   gap: 1,
                   py: 0.75,
-                  px: 1.5,
+                  px: 1,
                   borderRadius: 1,
                 }}
               >
@@ -705,7 +705,7 @@ export const BlockNode: React.FC<NodeProps> = memo(({ data, selected }) => {
       <Box
         sx={{
           flex: 1,
-          p: 1.5,
+          p: 1,
           position: "relative",
           display: "flex",
           alignItems: "center",

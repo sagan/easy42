@@ -32,7 +32,7 @@ export const TaskParamForm: React.FC<TaskParamFormProps> = ({ params, values, on
           xs: "1fr",
           sm: params.length === 1 ? "1fr" : params.length === 2 ? "repeat(2, 1fr)" : "repeat(3, 1fr)",
         },
-        gap: 2,
+        gap: 1,
         alignItems: "center",
       }}
     >

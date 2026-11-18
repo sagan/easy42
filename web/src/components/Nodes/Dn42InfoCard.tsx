@@ -71,7 +71,7 @@ export const Dn42InfoCard: React.FC<Dn42InfoCardProps> = ({ asn, variant = "page
               justifyContent: "center",
               width: isPage ? 28 : 22,
               height: isPage ? 28 : 22,
-              borderRadius: 1.5,
+              borderRadius: 1,
               background: "linear-gradient(135deg, rgba(79, 70, 229, 0.12) 0%, rgba(14, 165, 233, 0.12) 100%)",
               border: "1px solid rgba(79, 70, 229, 0.2)",
             }}
@@ -126,7 +126,7 @@ export const Dn42InfoCard: React.FC<Dn42InfoCardProps> = ({ asn, variant = "page
         sx={{
           color: "#64748B",
           display: "block",
-          mb: 1.5,
+          mb: 1,
           fontSize: isPage ? "0.78rem" : "0.7rem",
         }}
       >
@@ -149,8 +149,8 @@ export const Dn42InfoCard: React.FC<Dn42InfoCardProps> = ({ asn, variant = "page
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "space-between",
-                p: isPage ? 1.5 : 1.2,
-                borderRadius: 2,
+                p: 1,
+                borderRadius: 1,
                 bgcolor: isPage ? "#F8FAFC" : "#FFFFFF",
                 border: "1px solid #E2E8F0",
                 textDecoration: "none",
@@ -180,7 +180,7 @@ export const Dn42InfoCard: React.FC<Dn42InfoCardProps> = ({ asn, variant = "page
                     justifyContent: "center",
                     width: isPage ? 32 : 28,
                     height: isPage ? 32 : 28,
-                    borderRadius: 1.5,
+                    borderRadius: 1,
                     bgcolor: getIconBg(link.id),
                     flexShrink: 0,
                   }}

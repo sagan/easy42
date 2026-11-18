@@ -167,7 +167,7 @@ export const InstallTaskModal: React.FC<InstallTaskModalProps> = ({
         fullWidth
         PaperProps={{
           sx: {
-            borderRadius: 3,
+            borderRadius: 1,
             bgcolor: "background.paper",
             maxHeight: "85vh",
             display: "flex",
@@ -177,8 +177,8 @@ export const InstallTaskModal: React.FC<InstallTaskModalProps> = ({
       >
         <DialogTitle
           sx={{
-            p: 2.5,
-            pb: 1.5,
+            p: 1,
+            pb: 1,
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
@@ -191,7 +191,7 @@ export const InstallTaskModal: React.FC<InstallTaskModalProps> = ({
               sx={{
                 width: 38,
                 height: 38,
-                borderRadius: 2,
+                borderRadius: 1,
                 bgcolor: "primary.main",
                 color: "#ffffff",
                 display: "flex",
@@ -224,13 +224,13 @@ export const InstallTaskModal: React.FC<InstallTaskModalProps> = ({
           </IconButton>
         </DialogTitle>
 
-        <DialogContent sx={{ p: 2.5, display: "flex", flexDirection: "column", gap: 2 }}>
+        <DialogContent sx={{ p: 1, display: "flex", flexDirection: "column", gap: 1 }}>
           {/* Source Selection & Refresh Toolbar */}
           <Paper
             elevation={0}
             sx={{
-              p: 2,
-              borderRadius: 2,
+              p: 1,
+              borderRadius: 1,
               border: "1px solid",
               borderColor: "divider",
               bgcolor: "background.default",
@@ -263,7 +263,7 @@ export const InstallTaskModal: React.FC<InstallTaskModalProps> = ({
                   disabled={loadingSources || loadingManifest}
                   sx={{
                     bgcolor: "background.paper",
-                    borderRadius: 1.5,
+                    borderRadius: 1,
                     fontSize: "0.82rem",
                     fontFamily: "monospace",
                   }}
@@ -335,7 +335,7 @@ export const InstallTaskModal: React.FC<InstallTaskModalProps> = ({
                 </InputAdornment>
               ) : null,
               sx: {
-                borderRadius: 1.5,
+                borderRadius: 1,
                 bgcolor: "background.paper",
                 fontSize: "0.85rem",
               },
@@ -348,7 +348,7 @@ export const InstallTaskModal: React.FC<InstallTaskModalProps> = ({
               <Box
                 sx={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", py: 8 }}
               >
-                <CircularProgress size={32} sx={{ mb: 1.5 }} />
+                <CircularProgress size={32} sx={{ mb: 1 }} />
                 <Typography variant="body2" color="text.secondary">
                   Loading repository manifest...
                 </Typography>
@@ -358,9 +358,9 @@ export const InstallTaskModal: React.FC<InstallTaskModalProps> = ({
                 sx={{
                   textAlign: "center",
                   py: 6,
-                  px: 2,
+                  px: 1,
                   bgcolor: "background.default",
-                  borderRadius: 2,
+                  borderRadius: 1,
                   border: "1px dashed",
                   borderColor: "divider",
                 }}
@@ -393,8 +393,8 @@ export const InstallTaskModal: React.FC<InstallTaskModalProps> = ({
                       key={task.id}
                       elevation={0}
                       sx={{
-                        p: 2,
-                        borderRadius: 2,
+                        p: 1,
+                        borderRadius: 1,
                         border: "1px solid",
                         borderColor: isInstalled ? "success.light" : "divider",
                         bgcolor: isInstalled ? "rgba(34, 197, 94, 0.02)" : "background.paper",
@@ -402,7 +402,7 @@ export const InstallTaskModal: React.FC<InstallTaskModalProps> = ({
                         flexDirection: { xs: "column", sm: "row" },
                         alignItems: { xs: "flex-start", sm: "center" },
                         justifyContent: "space-between",
-                        gap: 2,
+                        gap: 1,
                         transition: "all 0.15s ease",
                         "&:hover": {
                           borderColor: isInstalled ? "success.main" : "primary.light",
@@ -524,7 +524,7 @@ export const InstallTaskModal: React.FC<InstallTaskModalProps> = ({
           </Box>
         </DialogContent>
 
-        <DialogActions sx={{ p: 2, px: 2.5, borderTop: 1, borderColor: "divider", justifyContent: "space-between" }}>
+        <DialogActions sx={{ p: 1, px: 1, borderTop: 1, borderColor: "divider", justifyContent: "space-between" }}>
           <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
             <Typography variant="caption" color="text.secondary">
               Default repository:
@@ -554,7 +554,7 @@ export const InstallTaskModal: React.FC<InstallTaskModalProps> = ({
             remove the task directory from your server's filesystem.
           </Typography>
         </DialogContent>
-        <DialogActions sx={{ p: 2 }}>
+        <DialogActions sx={{ p: 1 }}>
           <Button onClick={() => setConfirmDeleteTask(null)} size="small" sx={{ textTransform: "none" }}>
             Cancel
           </Button>

@@ -274,7 +274,7 @@ const ActionItemAccordion: React.FC<{ act: SyncAction }> = ({ act }) => {
           <Box
             sx={{
               p: 1.25,
-              borderRadius: 1.5,
+              borderRadius: 1,
               backgroundColor: "#0F172A",
               border: "1px solid #1E293B",
               maxHeight: 280,
@@ -320,9 +320,9 @@ const ActionItemAccordion: React.FC<{ act: SyncAction }> = ({ act }) => {
             component="pre"
             className="mono-font"
             sx={{
-              p: 1.5,
+              p: 1,
               m: 0,
-              borderRadius: 1.5,
+              borderRadius: 1,
               backgroundColor: "#F8FAFC",
               border: "1px solid #E2E8F0",
               fontSize: "0.75rem",
@@ -454,7 +454,8 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
           alignItems: "center",
           justifyContent: "space-between",
           gap: 1,
-          pb: 1.5,
+          pb: 1,
+          px: 1,
           borderBottom: "1px solid #E2E8F0",
         }}
       >
@@ -463,7 +464,7 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
             sx={{
               width: 34,
               height: 34,
-              borderRadius: 2,
+              borderRadius: 1,
               backgroundColor: "rgba(79, 70, 229, 0.1)",
               display: "flex",
               alignItems: "center",
@@ -479,7 +480,7 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
               variant="h6"
               sx={{ fontWeight: 700, color: "#0F172A", lineHeight: 1.2, fontSize: { xs: "1.05rem", sm: "1.25rem" } }}
             >
-              {targetNode ? `Synchronize Node: ${targetNode}` : "Synchronize Mesh Topology"}
+              {targetNode ? `Sync Node ${targetNode}` : "Sync Topology"}
             </Typography>
             {targetNode && (
               <Typography variant="caption" sx={{ color: "#64748B", display: "block" }}>
@@ -493,13 +494,14 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
           <Tooltip
             title={
               targetNode
-                ? `Connect to ${targetNode} via Agent / SSH to probe live state and update state.json`
-                : "Connect to devices via Agent / SSH to probe live state and update state.json"
+                ? `Connect to ${targetNode} via Agent / SSH to probe live state and update state`
+                : "Connect to devices via Agent / SSH to probe live state and update state"
             }
           >
             <Button
               size="small"
               variant="outlined"
+              title="Update State From Devices"
               onClick={handleUpdateLiveState}
               disabled={updatingState || syncing}
               startIcon={updatingState ? <CircularProgress size={14} color="inherit" /> : <Radio size={14} />}
@@ -521,16 +523,16 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
               {updatingState
                 ? targetNode
                   ? `Probing ${targetNode}...`
-                  : "Probing Devices..."
+                  : "Probing..."
                 : targetNode
-                  ? `Update State for ${targetNode}`
-                  : "Update State from Devices"}
+                  ? `Update ${targetNode} State`
+                  : "Update State"}
             </Button>
           </Tooltip>
         )}
       </DialogTitle>
 
-      <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2, pt: 2.5, px: { xs: 2, sm: 3 } }}>
+      <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 1, pt: 2, px: 1 }}>
         {stateMessage && (
           <Alert severity="info" onClose={() => setStateMessage(null)} sx={{ borderRadius: 2 }}>
             {stateMessage}
@@ -538,7 +540,7 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
         )}
 
         {loadingPreview ? (
-          <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", py: 6, gap: 2 }}>
+          <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", py: 6, gap: 1 }}>
             <CircularProgress size={24} color="primary" />
             <Typography variant="body2" sx={{ color: "#64748B" }}>
               Computing configuration diffs from cached state...
@@ -563,7 +565,7 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
               <Alert
                 severity="info"
                 icon={<Lock size={18} color="#D97706" />}
-                sx={{ borderRadius: 2, backgroundColor: "#FFFBEB", border: "1px solid #FDE68A" }}
+                sx={{ borderRadius: 1, backgroundColor: "#FFFBEB", border: "1px solid #FDE68A" }}
               >
                 <Typography variant="body2" sx={{ fontWeight: 600, color: "#92400E" }}>
                   Vault was locked during sync: only BIRD routing, ROA, and firewall rules were applied. WireGuard
@@ -577,8 +579,8 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
                 <Box
                   key={i}
                   sx={{
-                    p: 1.5,
-                    borderRadius: 2,
+                    p: 1,
+                    borderRadius: 1,
                     backgroundColor: "#FFFFFF",
                     border: "1px solid",
                     borderColor: res.success ? "#A7F3D0" : "#FECDD3",
@@ -620,14 +622,14 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
           </Box>
         ) : (
           /* Action Plan Preview */
-          <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
             {/* Vault Locked Warning / Notice */}
             {!isUnlocked && (
               <Alert
                 severity="warning"
                 icon={<Lock size={20} color="#D97706" />}
                 sx={{
-                  borderRadius: 2,
+                  borderRadius: 1,
                   backgroundColor: "#FFFBEB",
                   border: "1px solid #FDE68A",
                   "& .MuiAlert-message": { width: "100%", pr: 0 },
@@ -639,7 +641,7 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
                     flexDirection: { xs: "column", sm: "row" },
                     alignItems: { xs: "flex-start", sm: "flex-start" },
                     justifyContent: "space-between",
-                    gap: { xs: 1.5, sm: 2 },
+                    gap: 1,
                   }}
                 >
                   <Box sx={{ flex: 1, minWidth: 0 }}>
@@ -694,7 +696,7 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
                 <Alert
                   severity="warning"
                   icon={<AlertTriangle size={18} color="#D97706" />}
-                  sx={{ borderRadius: 2, backgroundColor: "#FFFBEB", border: "1px solid #FDE68A" }}
+                  sx={{ borderRadius: 1, backgroundColor: "#FFFBEB", border: "1px solid #FDE68A" }}
                 >
                   <Typography variant="body2" sx={{ fontWeight: 700, color: "#92400E" }}>
                     {targetNode
@@ -703,8 +705,8 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
                   </Typography>
                   <Typography variant="caption" sx={{ color: "#B45309", display: "block", mt: 0.25 }}>
                     {targetNode
-                      ? "Preview diffs for this device are computed from cached state. Click \"Update State from Devices\" to refresh live interfaces."
-                      : "Preview diffs for unreachable devices are computed from cached state. Click \"Update State from Devices\" to refresh live interfaces."}
+                      ? 'Preview diffs for this device are computed from cached state. Click "Update State" to refresh live interfaces.'
+                      : 'Preview diffs for unreachable devices are computed from cached state. Click "Update State" to refresh live interfaces.'}
                   </Typography>
                 </Alert>
               );
@@ -717,10 +719,10 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
                 flexDirection: { xs: "column", sm: "row" },
                 alignItems: { xs: "flex-start", sm: "center" },
                 justifyContent: "space-between",
-                gap: { xs: 1.25, sm: 1.5 },
+                gap: 1,
                 backgroundColor: "#F8FAFC",
-                p: 1.5,
-                borderRadius: 2,
+                p: 1,
+                borderRadius: 1,
                 border: "1px solid #E2E8F0",
               }}
             >
@@ -730,8 +732,8 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
                 </Typography>
                 <Typography variant="caption" sx={{ color: "#64748B" }}>
                   {targetNode
-                    ? `Diff calculated against cached state for ${targetNode}. Use "Update State from Devices" to refresh live data.`
-                    : "Diff calculated against cached recorded state. Use \"Update State from Devices\" to refresh live data."}
+                    ? `Diff calculated against cached state for ${targetNode}. Use "Update State" to refresh live data.`
+                    : 'Diff calculated against cached recorded state. Use "Update State" to refresh live data.'}
                 </Typography>
               </Box>
               <Box sx={{ display: "flex", gap: 1, alignItems: "center", flexWrap: "wrap" }}>
@@ -902,8 +904,8 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
                           key={i}
                           sx={{
                             p: 1,
-                            px: 1.5,
-                            borderRadius: 1.5,
+                            px: 1,
+                            borderRadius: 1,
                             backgroundColor: "#FFFFFF",
                             border: "1px solid #E2E8F0",
                             display: "flex",
@@ -976,8 +978,8 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
 
       <DialogActions
         sx={{
-          px: { xs: 2, sm: 3 },
-          py: 2,
+          px: 1,
+          py: 1,
           borderTop: "1px solid #E2E8F0",
           backgroundColor: "#F8FAFC",
           display: "flex",
@@ -1014,7 +1016,7 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
                     fontSize: { xs: "0.75rem", sm: "0.82rem" },
                     textTransform: "none",
                     whiteSpace: "nowrap",
-                    px: { xs: 1.5, sm: 2 },
+                    px: 1,
                     "&:hover": {
                       borderColor: "#D97706",
                       backgroundColor: "rgba(245, 158, 11, 0.08)",
@@ -1039,7 +1041,7 @@ export const SyncProgressModal: React.FC<SyncProgressModalProps> = ({
                 fontSize: { xs: "0.75rem", sm: "0.82rem" },
                 textTransform: "none",
                 whiteSpace: "nowrap",
-                px: { xs: 1.5, sm: 2.5 },
+                px: 1,
               }}
             >
               {syncing

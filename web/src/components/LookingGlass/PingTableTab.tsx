@@ -401,18 +401,18 @@ export const PingTableTab: React.FC<PingTableTabProps> = ({ nodes }) => {
       : 0;
 
   return (
-    <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+    <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
       {/* 1. Control & Configuration Card */}
       <Paper
         elevation={0}
         sx={{
-          p: 2.5,
-          borderRadius: 2,
+          p: 1,
+          borderRadius: 1,
           border: "1px solid #E2E8F0",
           backgroundColor: "#FFFFFF",
           display: "flex",
           flexDirection: "column",
-          gap: 2,
+          gap: 1,
         }}
       >
         <Box
@@ -421,7 +421,7 @@ export const PingTableTab: React.FC<PingTableTabProps> = ({ nodes }) => {
             flexDirection: { xs: "column", md: "row" },
             alignItems: { xs: "flex-start", md: "center" },
             justifyContent: "space-between",
-            gap: 2,
+            gap: 1,
           }}
         >
           {/* Latency Type Selector */}
@@ -441,7 +441,7 @@ export const PingTableTab: React.FC<PingTableTabProps> = ({ nodes }) => {
                 "& .MuiToggleButton-root": {
                   textTransform: "none",
                   fontWeight: 600,
-                  px: 2,
+                  px: 1,
                   py: 0.8,
                   fontSize: "0.85rem",
                   borderColor: "#CBD5E1",
@@ -508,7 +508,7 @@ export const PingTableTab: React.FC<PingTableTabProps> = ({ nodes }) => {
                   minWidth: 260,
                   maxWidth: 380,
                   maxHeight: 380,
-                  borderRadius: 2,
+                  borderRadius: 1,
                   boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)",
                   border: "1px solid #E2E8F0",
                   py: 0.5,
@@ -518,7 +518,7 @@ export const PingTableTab: React.FC<PingTableTabProps> = ({ nodes }) => {
               anchorOrigin={{ horizontal: "left", vertical: "bottom" }}
             >
               {filteredHistory.length === 0 ? (
-                <MenuItem disabled sx={{ fontSize: "0.82rem", py: 1.5 }}>
+                <MenuItem disabled sx={{ fontSize: "0.82rem", py: 1 }}>
                   <Typography variant="body2" sx={{ color: "#94A3B8" }}>
                     No {latencyType === "link" ? "Direct Link" : "End-to-End"} history yet
                   </Typography>
@@ -536,7 +536,7 @@ export const PingTableTab: React.FC<PingTableTabProps> = ({ nodes }) => {
                       selected={isSelected}
                       sx={{
                         py: 0.85,
-                        px: 1.5,
+                        px: 1,
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "space-between",
@@ -681,7 +681,7 @@ export const PingTableTab: React.FC<PingTableTabProps> = ({ nodes }) => {
 
         {/* Progress & Status Indicator */}
         {isRunning && (
-          <Box sx={{ mt: 1, p: 2, borderRadius: 2, backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
+          <Box sx={{ mt: 1, p: 1, borderRadius: 1, backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
             <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1 }}>
               <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                 <CircularProgress size={16} sx={{ color: "#4F46E5" }} />
@@ -733,7 +733,7 @@ export const PingTableTab: React.FC<PingTableTabProps> = ({ nodes }) => {
             variant="outlined"
             sx={{
               mt: 1,
-              borderRadius: 2,
+              borderRadius: 1,
               backgroundColor: "#F8FAFC",
               borderColor: "#CBD5E1",
               "& .MuiAlert-icon": { color: "#4F46E5" },
@@ -750,10 +750,10 @@ export const PingTableTab: React.FC<PingTableTabProps> = ({ nodes }) => {
         sx={{
           display: "grid",
           gridTemplateColumns: { xs: "repeat(2, 1fr)", md: "repeat(4, 1fr)" },
-          gap: 2,
+          gap: 1,
         }}
       >
-        <Paper elevation={0} sx={{ p: 2, borderRadius: 2, border: "1px solid #E2E8F0", bgcolor: "#FFFFFF" }}>
+        <Paper elevation={0} sx={{ p: 1, borderRadius: 1, border: "1px solid #E2E8F0", bgcolor: "#FFFFFF" }}>
           <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 500 }}>
             Cluster Internal Nodes
           </Typography>
@@ -762,7 +762,7 @@ export const PingTableTab: React.FC<PingTableTabProps> = ({ nodes }) => {
           </Typography>
         </Paper>
 
-        <Paper elevation={0} sx={{ p: 2, borderRadius: 2, border: "1px solid #E2E8F0", bgcolor: "#FFFFFF" }}>
+        <Paper elevation={0} sx={{ p: 1, borderRadius: 1, border: "1px solid #E2E8F0", bgcolor: "#FFFFFF" }}>
           <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 500 }}>
             Completed / Total Pairs
           </Typography>
@@ -773,7 +773,7 @@ export const PingTableTab: React.FC<PingTableTabProps> = ({ nodes }) => {
           </Typography>
         </Paper>
 
-        <Paper elevation={0} sx={{ p: 2, borderRadius: 2, border: "1px solid #E2E8F0", bgcolor: "#FFFFFF" }}>
+        <Paper elevation={0} sx={{ p: 1, borderRadius: 1, border: "1px solid #E2E8F0", bgcolor: "#FFFFFF" }}>
           <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 500 }}>
             Avg Latency (Mesh)
           </Typography>
@@ -782,7 +782,7 @@ export const PingTableTab: React.FC<PingTableTabProps> = ({ nodes }) => {
           </Typography>
         </Paper>
 
-        <Paper elevation={0} sx={{ p: 2, borderRadius: 2, border: "1px solid #E2E8F0", bgcolor: "#FFFFFF" }}>
+        <Paper elevation={0} sx={{ p: 1, borderRadius: 1, border: "1px solid #E2E8F0", bgcolor: "#FFFFFF" }}>
           <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 500 }}>
             Min / Max Latency
           </Typography>
@@ -798,7 +798,7 @@ export const PingTableTab: React.FC<PingTableTabProps> = ({ nodes }) => {
       <Paper
         elevation={0}
         sx={{
-          borderRadius: 2,
+          borderRadius: 1,
           border: "1px solid #E2E8F0",
           backgroundColor: "#FFFFFF",
           overflow: "hidden",
@@ -806,7 +806,7 @@ export const PingTableTab: React.FC<PingTableTabProps> = ({ nodes }) => {
       >
         <Box
           sx={{
-            p: 2,
+            p: 1,
             borderBottom: "1px solid #E2E8F0",
             display: "flex",
             alignItems: "center",

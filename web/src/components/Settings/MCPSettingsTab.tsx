@@ -703,27 +703,27 @@ export const MCPSettingsTab: React.FC = () => {
 
   return (
     <>
-      <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
+      <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
         {/* HEADER DESCRIPTION */}
         <Box
           sx={{
-            p: 2.5,
-            borderRadius: 2.5,
+            p: 1,
+            borderRadius: 1,
             bgcolor: "#F8FAFC",
             border: "1px solid #E2E8F0",
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            gap: 2,
+            gap: 1,
             flexWrap: { xs: "wrap", md: "nowrap" },
           }}
         >
-          <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
             <Box
               sx={{
                 width: 46,
                 height: 46,
-                borderRadius: 2,
+                borderRadius: 1,
                 bgcolor: "#EEF2FF",
                 color: "#4F46E5",
                 display: "flex",
@@ -761,7 +761,7 @@ export const MCPSettingsTab: React.FC = () => {
             </Box>
           </Box>
 
-          <Box sx={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0 }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexShrink: 0 }}>
             <Box sx={{ textAlign: "right" }}>
               <Typography
                 variant="caption"
@@ -800,7 +800,7 @@ export const MCPSettingsTab: React.FC = () => {
                 fontWeight: 600,
                 borderColor: "#CBD5E1",
                 color: "#334155",
-                borderRadius: 2,
+                borderRadius: 1,
                 "&:hover": { borderColor: "#94A3B8", bgcolor: "#F1F5F9" },
               }}
             >
@@ -831,8 +831,8 @@ export const MCPSettingsTab: React.FC = () => {
             <Paper
               elevation={0}
               sx={{
-                p: 3,
-                borderRadius: 2.5,
+                p: 1,
+                borderRadius: 1,
                 bgcolor: "#FFFFFF",
                 border: "1px solid #E2E8F0",
                 boxShadow: "0 1px 3px rgba(0, 0, 0, 0.05)",
@@ -844,16 +844,16 @@ export const MCPSettingsTab: React.FC = () => {
               >
                 <Globe size={18} color="#4F46E5" /> Connection Endpoints
               </Typography>
-              <Typography variant="body2" sx={{ color: "#64748B", fontSize: "0.85rem", mt: 0.5, mb: 2 }}>
+              <Typography variant="body2" sx={{ color: "#64748B", fontSize: "0.85rem", mt: 0.5, mb: 1 }}>
                 Configure these endpoints in your AI client. Streamable HTTP is the modern MCP specification standard.
               </Typography>
 
-              <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" }, gap: 2 }}>
+              <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" }, gap: 1 }}>
                 {/* Streamable HTTP URL */}
                 <Box
                   sx={{
-                    p: 2,
-                    borderRadius: 2,
+                    p: 1,
+                    borderRadius: 1,
                     bgcolor: "#F8FAFC",
                     border: "1px solid #E2E8F0",
                   }}
@@ -904,8 +904,8 @@ export const MCPSettingsTab: React.FC = () => {
                 {/* Classic SSE Endpoint */}
                 <Box
                   sx={{
-                    p: 2,
-                    borderRadius: 2,
+                    p: 1,
+                    borderRadius: 1,
                     bgcolor: "#F8FAFC",
                     border: "1px solid #E2E8F0",
                   }}
@@ -954,8 +954,8 @@ export const MCPSettingsTab: React.FC = () => {
             <Paper
               elevation={0}
               sx={{
-                p: 3,
-                borderRadius: 2.5,
+                p: 1,
+                borderRadius: 1,
                 bgcolor: "#FFFFFF",
                 border: "1px solid #E2E8F0",
                 boxShadow: "0 1px 3px rgba(0, 0, 0, 0.05)",
@@ -967,17 +967,17 @@ export const MCPSettingsTab: React.FC = () => {
               >
                 <Shield size={18} color="#4F46E5" /> Access Tokens & Credentials
               </Typography>
-              <Typography variant="body2" sx={{ color: "#64748B", fontSize: "0.85rem", mt: 0.5, mb: 2 }}>
+              <Typography variant="body2" sx={{ color: "#64748B", fontSize: "0.85rem", mt: 0.5, mb: 1 }}>
                 Easy42 enforces role-based security with two distinct token tiers. Pass via Bearer Authorization header
                 or <code>?token=</code> query parameter.
               </Typography>
 
-              <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" }, gap: 2 }}>
+              <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" }, gap: 1 }}>
                 {/* 1. Full-Control Token */}
                 <Box
                   sx={{
-                    p: 2.5,
-                    borderRadius: 2,
+                    p: 1,
+                    borderRadius: 1,
                     bgcolor: "rgba(239, 68, 68, 0.03)",
                     border: "1px solid #FECACA",
                     display: "flex",
@@ -991,7 +991,7 @@ export const MCPSettingsTab: React.FC = () => {
                         sx={{
                           width: 32,
                           height: 32,
-                          borderRadius: 1.5,
+                          borderRadius: 1,
                           bgcolor: "#FEE2E2",
                           color: "#DC2626",
                           display: "flex",
@@ -1069,7 +1069,7 @@ export const MCPSettingsTab: React.FC = () => {
                       sx={{
                         textTransform: "none",
                         fontWeight: 600,
-                        borderRadius: 1.5,
+                        borderRadius: 1,
                         borderColor: "#FCA5A5",
                         color: "#B91C1C",
                       }}
@@ -1082,8 +1082,8 @@ export const MCPSettingsTab: React.FC = () => {
                 {/* 2. Read-Only Token */}
                 <Box
                   sx={{
-                    p: 2.5,
-                    borderRadius: 2,
+                    p: 1,
+                    borderRadius: 1,
                     bgcolor: "rgba(14, 165, 233, 0.03)",
                     border: "1px solid #BAE6FD",
                     display: "flex",
@@ -1097,7 +1097,7 @@ export const MCPSettingsTab: React.FC = () => {
                         sx={{
                           width: 32,
                           height: 32,
-                          borderRadius: 1.5,
+                          borderRadius: 1,
                           bgcolor: "#E0F2FE",
                           color: "#0284C7",
                           display: "flex",
@@ -1175,7 +1175,7 @@ export const MCPSettingsTab: React.FC = () => {
                       sx={{
                         textTransform: "none",
                         fontWeight: 600,
-                        borderRadius: 1.5,
+                        borderRadius: 1,
                         borderColor: "#7DD3FC",
                         color: "#0369A1",
                       }}
@@ -1191,8 +1191,8 @@ export const MCPSettingsTab: React.FC = () => {
             <Paper
               elevation={0}
               sx={{
-                p: 3,
-                borderRadius: 2.5,
+                p: 1,
+                borderRadius: 1,
                 bgcolor: "#FFFFFF",
                 border: "1px solid #E2E8F0",
                 boxShadow: "0 1px 3px rgba(0, 0, 0, 0.05)",
@@ -1214,7 +1214,7 @@ export const MCPSettingsTab: React.FC = () => {
                   >
                     <KeyRound size={18} color="#4F46E5" /> OAuth 2.0 Client Credentials
                   </Typography>
-                  <Typography variant="body2" sx={{ color: "#64748B", fontSize: "0.85rem", mt: 0.5, mb: 2 }}>
+                  <Typography variant="body2" sx={{ color: "#64748B", fontSize: "0.85rem", mt: 0.5, mb: 1 }}>
                     Used by AI platforms requiring standard OAuth 2.0 authentication such as{" "}
                     <strong>Google Gemini Web App</strong> (Settings &gt; Personal Intelligence &gt; Connect to an MCP
                     server).
@@ -1227,9 +1227,9 @@ export const MCPSettingsTab: React.FC = () => {
                 />
               </Box>
 
-              <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" }, gap: 2 }}>
+              <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" }, gap: 1 }}>
                 {/* OAuth Client ID */}
-                <Box sx={{ p: 2, borderRadius: 2, bgcolor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
+                <Box sx={{ p: 1, borderRadius: 1, bgcolor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
                   <Typography
                     variant="caption"
                     sx={{
@@ -1269,7 +1269,7 @@ export const MCPSettingsTab: React.FC = () => {
                 </Box>
 
                 {/* OAuth Client Secret */}
-                <Box sx={{ p: 2, borderRadius: 2, bgcolor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
+                <Box sx={{ p: 1, borderRadius: 1, bgcolor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
                   <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
                     <Typography
                       variant="caption"
@@ -1328,8 +1328,8 @@ export const MCPSettingsTab: React.FC = () => {
             <Paper
               elevation={0}
               sx={{
-                p: 3,
-                borderRadius: 2.5,
+                p: 1,
+                borderRadius: 1,
                 bgcolor: "#FFFFFF",
                 border: "1px solid #E2E8F0",
                 boxShadow: "0 1px 3px rgba(0, 0, 0, 0.05)",
@@ -1341,8 +1341,8 @@ export const MCPSettingsTab: React.FC = () => {
                   justifyContent: "space-between",
                   alignItems: "flex-start",
                   flexWrap: "wrap",
-                  gap: 2,
-                  mb: 2,
+                  gap: 1,
+                  mb: 1,
                 }}
               >
                 <Box>
@@ -1364,7 +1364,7 @@ export const MCPSettingsTab: React.FC = () => {
                     alignItems: "center",
                     gap: 1,
                     p: 0.5,
-                    borderRadius: 2,
+                    borderRadius: 1,
                     bgcolor: "#F1F5F9",
                     border: "1px solid #E2E8F0",
                   }}
@@ -1383,7 +1383,7 @@ export const MCPSettingsTab: React.FC = () => {
                       fontSize: "0.75rem",
                       py: 0.4,
                       px: 1.2,
-                      borderRadius: 1.5,
+                      borderRadius: 1,
                     }}
                   >
                     Full Control
@@ -1399,7 +1399,7 @@ export const MCPSettingsTab: React.FC = () => {
                       fontSize: "0.75rem",
                       py: 0.4,
                       px: 1.2,
-                      borderRadius: 1.5,
+                      borderRadius: 1,
                     }}
                   >
                     Read Only
@@ -1429,14 +1429,14 @@ export const MCPSettingsTab: React.FC = () => {
               {selectedClient === "gemini" && (
                 <Box
                   sx={{
-                    p: 2.5,
-                    mt: 2,
-                    borderRadius: 2,
+                    p: 1,
+                    mt: 1,
+                    borderRadius: 1,
                     bgcolor: "rgba(79, 70, 229, 0.04)",
                     border: "1px solid #C7D2FE",
                     display: "flex",
                     flexDirection: "column",
-                    gap: 2,
+                    gap: 1,
                   }}
                 >
                   <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
@@ -1444,7 +1444,7 @@ export const MCPSettingsTab: React.FC = () => {
                       sx={{
                         width: 36,
                         height: 36,
-                        borderRadius: 1.5,
+                        borderRadius: 1,
                         bgcolor: "#EEF2FF",
                         color: "#4F46E5",
                         display: "flex",
@@ -1583,7 +1583,7 @@ export const MCPSettingsTab: React.FC = () => {
                 </Box>
               )}
 
-              <Box sx={{ mt: 2.5 }}>
+              <Box sx={{ mt: 1 }}>
                 <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
                   <Typography variant="caption" sx={{ fontWeight: 700, color: "#475569" }}>
                     {currentSnippet.filename}
@@ -1593,7 +1593,7 @@ export const MCPSettingsTab: React.FC = () => {
                     variant="contained"
                     startIcon={copiedKey === "snippet" ? <Check size={14} /> : <Copy size={14} />}
                     onClick={() => handleCopy(currentSnippet.code, "snippet")}
-                    sx={{ textTransform: "none", fontWeight: 600, borderRadius: 1.5, py: 0.5 }}
+                    sx={{ textTransform: "none", fontWeight: 600, borderRadius: 1, py: 0.5 }}
                   >
                     {copiedKey === "snippet" ? "Copied!" : "Copy Snippet"}
                   </Button>
@@ -1603,9 +1603,9 @@ export const MCPSettingsTab: React.FC = () => {
                   <Paper
                     elevation={0}
                     sx={{
-                      p: 1.5,
-                      mb: 1.5,
-                      borderRadius: 1.5,
+                      p: 1,
+                      mb: 1,
+                      borderRadius: 1,
                       bgcolor: "#F8FAFC",
                       border: "1px solid #E2E8F0",
                       fontFamily: "monospace",
@@ -1621,8 +1621,8 @@ export const MCPSettingsTab: React.FC = () => {
                 <Paper
                   elevation={0}
                   sx={{
-                    p: 2,
-                    borderRadius: 2,
+                    p: 1,
+                    borderRadius: 1,
                     bgcolor: "#0F172A",
                     color: "#F8FAFC",
                     fontFamily: "monospace",
@@ -1641,8 +1641,8 @@ export const MCPSettingsTab: React.FC = () => {
             <Paper
               elevation={0}
               sx={{
-                p: 3,
-                borderRadius: 2.5,
+                p: 1,
+                borderRadius: 1,
                 bgcolor: "#FFFFFF",
                 border: "1px solid #E2E8F0",
                 boxShadow: "0 1px 3px rgba(0, 0, 0, 0.05)",
@@ -1662,7 +1662,7 @@ export const MCPSettingsTab: React.FC = () => {
                     sx={{
                       width: 36,
                       height: 36,
-                      borderRadius: 2,
+                      borderRadius: 1,
                       bgcolor: "#EEF2FF",
                       color: "#4F46E5",
                       display: "flex",
@@ -1694,7 +1694,7 @@ export const MCPSettingsTab: React.FC = () => {
 
               {showToolsCatalog && (
                 <Box sx={{ mt: 3, pt: 2, borderTop: "1px solid #E2E8F0" }}>
-                  <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mb: 2 }}>
+                  <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mb: 1 }}>
                     <TextField
                       size="small"
                       placeholder="Search tools..."
@@ -1733,8 +1733,8 @@ export const MCPSettingsTab: React.FC = () => {
                         key={t.name}
                         elevation={0}
                         sx={{
-                          p: 1.5,
-                          borderRadius: 2,
+                          p: 1,
+                          borderRadius: 1,
                           bgcolor: "#F8FAFC",
                           border: "1px solid #E2E8F0",
                           display: "flex",
@@ -1806,12 +1806,12 @@ export const MCPSettingsTab: React.FC = () => {
             </strong>{" "}
             credential?
           </Typography>
-          <Alert severity="warning" sx={{ mt: 2, borderRadius: 2, fontSize: "0.82rem" }}>
+          <Alert severity="warning" sx={{ mt: 1, borderRadius: 1, fontSize: "0.82rem" }}>
             Any AI tools or background agents currently using this token will lose access until updated with the new
             token.
           </Alert>
         </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2.5 }}>
+        <DialogActions sx={{ px: 1, pb: 2 }}>
           <Button
             onClick={() => setResetDialogOpen(false)}
             disabled={resetting}

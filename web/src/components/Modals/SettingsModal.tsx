@@ -1486,7 +1486,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
   return (
     <Box
       sx={{
-        p: { xs: 1.5, sm: 2.5, md: 3 },
+        p: 1,
         height: "100%",
         minHeight: 0,
         overflowY: "auto",
@@ -1498,7 +1498,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
       <Paper
         elevation={0}
         sx={{
-          borderRadius: 3,
+          borderRadius: 1,
           border: "1px solid #E2E8F0",
           bgcolor: "#FFFFFF",
           overflow: "hidden",
@@ -1511,7 +1511,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
         <Box
           sx={{
             borderBottom: "1px solid #E2E8F0",
-            px: { xs: 1, sm: 3 },
+            px: 1,
             pt: 1,
             backgroundColor: "#F8FAFC",
             flexShrink: 0,
@@ -1602,7 +1602,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
               sx={{
                 display: "flex",
                 flexDirection: "column",
-                gap: 3,
+                gap: 1,
                 py: 3,
                 px: 3,
                 flex: 1,
@@ -1614,7 +1614,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
               <Box
                 component="form"
                 onSubmit={handleChangePassword}
-                sx={{ display: "flex", flexDirection: "column", gap: 2 }}
+                sx={{ display: "flex", flexDirection: "column", gap: 1 }}
               >
                 <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                   <KeyRound size={18} color="#4F46E5" />
@@ -1744,7 +1744,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
               <Divider />
 
               {/* Section 2: Active Sessions & Invalidation */}
-              <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+              <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
                 <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                   <ShieldAlert size={18} color="#DC2626" />
                   <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#0F172A" }}>
@@ -1760,8 +1760,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
 
                 <Box
                   sx={{
-                    p: 2.5,
-                    borderRadius: 2,
+                    p: 1,
+                    borderRadius: 1,
                     border: "1px solid #FEE2E2",
                     backgroundColor: "#FEF2F2",
                     display: "flex",
@@ -1810,8 +1810,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                 ) : (
                   <Box
                     sx={{
-                      p: 2,
-                      borderRadius: 2,
+                      p: 1,
+                      borderRadius: 1,
                       border: "1px solid #CBD5E1",
                       backgroundColor: "#F8FAFC",
                       display: "flex",
@@ -1866,9 +1866,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
               sx={{
                 display: "flex",
                 flexDirection: "column",
-                gap: 2,
-                py: 3,
-                px: 3,
+                gap: 1,
+                py: 1,
+                px: 1,
                 flex: 1,
                 minHeight: 0,
                 overflowY: "auto",
@@ -1971,9 +1971,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                     sx={{
                       display: "flex",
                       flexDirection: "column",
-                      gap: 2,
-                      p: 2,
-                      borderRadius: 2,
+                      gap: 1,
+                      p: 1,
+                      borderRadius: 1,
                       bgcolor: "#F8FAFC",
                       border: "1px solid #E2E8F0",
                     }}
@@ -2267,7 +2267,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                       })()}
                     </Typography>
 
-                    <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "2fr 1fr 1fr" }, gap: 2 }}>
+                    <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "2fr 1fr 1fr" }, gap: 1 }}>
                       <TextFieldWithCopy
                         fullWidth
                         size="small"
@@ -2339,7 +2339,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
               sx={{
                 display: "flex",
                 flexDirection: "column",
-                gap: 2,
+                gap: 1,
                 py: 3,
                 px: 3,
                 flex: 1,
@@ -2347,7 +2347,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                 overflowY: "auto",
               }}
             >
-              <Box sx={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 2 }}>
+              <Box sx={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 1 }}>
                 <Box>
                   <Typography variant="body2" sx={{ color: "#475569", lineHeight: 1.5 }}>
                     Define link-level firewall and routing policies. Network policies restrict ingress allowed
@@ -2395,8 +2395,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                       <Box
                         key={p.id}
                         sx={{
-                          p: 2,
-                          borderRadius: 2,
+                          p: 1,
+                          borderRadius: 1,
                           border: "1px solid",
                           borderColor: isBuiltin ? "#E0E7FF" : "#E2E8F0",
                           bgcolor: isBuiltin ? "#F8FAFC" : "#FFFFFF",
@@ -2824,7 +2824,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
               sx={{
                 display: "flex",
                 flexDirection: "column",
-                gap: 2,
+                gap: 1,
                 py: 3,
                 px: 3,
                 flex: 1,
@@ -2837,7 +2837,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                   display: "flex",
                   alignItems: "flex-start",
                   justifyContent: "space-between",
-                  gap: 2,
+                  gap: 1,
                   flexWrap: "wrap",
                 }}
               >
@@ -2953,7 +2953,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                       sx={{
                         p: 4,
                         textAlign: "center",
-                        borderRadius: 2,
+                        borderRadius: 1,
                         border: "1px dashed #CBD5E1",
                         bgcolor: "#F8FAFC",
                       }}
@@ -2971,8 +2971,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                         <Box
                           key={t.id}
                           sx={{
-                            p: 2,
-                            borderRadius: 2,
+                            p: 1,
+                            borderRadius: 1,
                             border: "1px solid",
                             borderColor: isBuiltin ? "#E0E7FF" : "#E2E8F0",
                             bgcolor: isBuiltin ? "#F8FAFC" : "#FFFFFF",
@@ -3107,7 +3107,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
               sx={{
                 display: "flex",
                 flexDirection: "column",
-                gap: 2,
+                gap: 1,
                 py: 3,
                 px: 3,
                 flex: 1,
@@ -3118,8 +3118,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
               {/* Informative Header / Description */}
               <Box
                 sx={{
-                  p: 2,
-                  borderRadius: 2,
+                  p: 1,
+                  borderRadius: 1,
                   bgcolor: "#F0F9FF",
                   border: "1px solid #BAE6FD",
                   display: "flex",
@@ -3156,7 +3156,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                 <Box
                   sx={{
                     p: 1.8,
-                    borderRadius: 2,
+                    borderRadius: 1,
                     bgcolor: "#F8FAFC",
                     border: "1px solid #E2E8F0",
                     display: "flex",
@@ -3254,8 +3254,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                   {/* Toggle: Publish main ipv6 to it's own name */}
                   <Box
                     sx={{
-                      p: 2,
-                      borderRadius: 2,
+                      p: 1,
+                      borderRadius: 1,
                       border: "1px solid #E2E8F0",
                       bgcolor: "#FFFFFF",
                       display: "flex",
@@ -3278,7 +3278,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                         </Typography>
                       }
                     />
-                    <Typography variant="caption" sx={{ color: "#64748B", ml: 3.5, mt: -0.5 }}>
+                    <Typography variant="caption" sx={{ color: "#64748B", ml: 1, mt: -0.5 }}>
                       {cfPublishIPv6OwnName
                         ? "When enabled, main IPv6 is published to <name>6.<domain> (separate AAAA record), while main IPv4 is published to <name>.<domain> and *.<name>.<domain> (A records)."
                         : "When disabled, main IPv4 (A) and main IPv6 (AAAA) are both published under <name>.<domain> and *.<name>.<domain>."}
@@ -3288,8 +3288,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                   {/* Live DNS Record Preview */}
                   <Box
                     sx={{
-                      p: 2,
-                      borderRadius: 2,
+                      p: 1,
+                      borderRadius: 1,
                       border: "1px dashed #CBD5E1",
                       bgcolor: "#F8FAFC",
                       display: "flex",
@@ -3399,7 +3399,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                       display: "flex",
                       justifyContent: "space-between",
                       alignItems: "center",
-                      pt: 2,
+                      pt: 1,
                       flexWrap: "wrap",
                       gap: 1,
                     }}
@@ -3481,9 +3481,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
               sx={{
                 display: "flex",
                 flexDirection: "column",
-                gap: 2,
-                py: 3,
-                px: 3,
+                gap: 1,
+                py: 1,
+                px: 1,
                 flex: 1,
                 minHeight: 0,
                 overflowY: "auto",
@@ -3492,14 +3492,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
               {/* Header description */}
               <Box
                 sx={{
-                  p: 2,
-                  borderRadius: 2,
+                  p: 1,
+                  borderRadius: 1,
                   bgcolor: "#F8FAFC",
                   border: "1px solid #E2E8F0",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "space-between",
-                  gap: 2,
+                  gap: 1,
                 }}
               >
                 <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
@@ -3507,7 +3507,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                     sx={{
                       width: 40,
                       height: 40,
-                      borderRadius: 2,
+                      borderRadius: 1,
                       bgcolor: "#EEF2FF",
                       color: "#4F46E5",
                       display: "flex",
@@ -3564,7 +3564,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                   <CircularProgress size={32} />
                 </Box>
               ) : (
-                <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
                   {serverTasks.map((task) => {
                     const isRunning = runningTaskId === task.id || task.last_status === "running";
                     const isSaving = savingTaskId === task.id;
@@ -3608,26 +3608,26 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                         key={task.id}
                         elevation={0}
                         sx={{
-                          p: 2.5,
-                          borderRadius: 2.5,
+                          p: 1,
+                          borderRadius: 1,
                           border: "1px solid #E2E8F0",
                           bgcolor: "#FFFFFF",
                           display: "flex",
                           flexDirection: "column",
-                          gap: 2,
+                          gap: 1,
                           boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
                         }}
                       >
                         {/* Task Card Header */}
                         <Box
-                          sx={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 2 }}
+                          sx={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 1 }}
                         >
                           <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                             <Box
                               sx={{
                                 width: 40,
                                 height: 40,
-                                borderRadius: 2,
+                                borderRadius: 1,
                                 bgcolor: getTaskBg(task.id),
                                 display: "flex",
                                 alignItems: "center",
@@ -3735,8 +3735,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                         {/* Schedule Configuration Box */}
                         <Box
                           sx={{
-                            p: 2,
-                            borderRadius: 2,
+                            p: 1,
+                            borderRadius: 1,
                             bgcolor: "#F8FAFC",
                             border: "1px solid #E2E8F0",
                             display: "flex",
@@ -3857,8 +3857,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                           >
                             <Box
                               sx={{
-                                p: 1.5,
-                                borderRadius: 1.5,
+                                p: 1,
+                                borderRadius: 1,
                                 bgcolor: "#F8FAFC",
                                 border: "1px solid #E2E8F0",
                                 display: "flex",
@@ -3886,8 +3886,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
 
                             <Box
                               sx={{
-                                p: 1.5,
-                                borderRadius: 1.5,
+                                p: 1,
+                                borderRadius: 1,
                                 bgcolor: "#F8FAFC",
                                 border: "1px solid #E2E8F0",
                                 display: "flex",
@@ -3920,8 +3920,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
 
                             <Box
                               sx={{
-                                p: 1.5,
-                                borderRadius: 1.5,
+                                p: 1,
+                                borderRadius: 1,
                                 bgcolor: "#F8FAFC",
                                 border: "1px solid #E2E8F0",
                                 display: "flex",
@@ -3948,8 +3948,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                           {task.last_message && (
                             <Box
                               sx={{
-                                p: 1.5,
-                                borderRadius: 1.5,
+                                p: 1,
+                                borderRadius: 1,
                                 bgcolor:
                                   task.last_status === "error"
                                     ? "#FEF2F2"
@@ -4029,7 +4029,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
               sx={{
                 display: "flex",
                 flexDirection: "column",
-                gap: 2,
+                gap: 1,
                 py: 3,
                 px: 3,
                 flex: 1,
@@ -4040,14 +4040,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
               {/* Header description */}
               <Box
                 sx={{
-                  p: 2,
-                  borderRadius: 2,
+                  p: 1,
+                  borderRadius: 1,
                   bgcolor: "#F8FAFC",
                   border: "1px solid #E2E8F0",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "space-between",
-                  gap: 2,
+                  gap: 1,
                 }}
               >
                 <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
@@ -4055,7 +4055,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                     sx={{
                       width: 40,
                       height: 40,
-                      borderRadius: 2,
+                      borderRadius: 1,
                       bgcolor: "#EEF2FF",
                       color: "#4F46E5",
                       display: "flex",
@@ -4112,18 +4112,18 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                   <CircularProgress size={32} />
                 </Box>
               ) : dbInfo ? (
-                <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
                   {/* Card 1: Storage Overview & Statistics */}
                   <Paper
                     elevation={0}
                     sx={{
-                      p: 2.5,
-                      borderRadius: 2.5,
+                      p: 1,
+                      borderRadius: 1,
                       border: "1px solid #E2E8F0",
                       bgcolor: "#FFFFFF",
                       display: "flex",
                       flexDirection: "column",
-                      gap: 2,
+                      gap: 1,
                     }}
                   >
                     <Box
@@ -4153,10 +4153,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                       sx={{
                         display: "grid",
                         gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr", md: "1fr 1fr 1fr 1fr" },
-                        gap: 2,
+                        gap: 1,
                       }}
                     >
-                      <Box sx={{ p: 2, borderRadius: 2, bgcolor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
+                      <Box sx={{ p: 1, borderRadius: 1, bgcolor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
                         <Typography
                           variant="caption"
                           sx={{
@@ -4193,7 +4193,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                         )}
                       </Box>
 
-                      <Box sx={{ p: 2, borderRadius: 2, bgcolor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
+                      <Box sx={{ p: 1, borderRadius: 1, bgcolor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
                         <Typography
                           variant="caption"
                           sx={{
@@ -4215,7 +4215,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                         </Typography>
                       </Box>
 
-                      <Box sx={{ p: 2, borderRadius: 2, bgcolor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
+                      <Box sx={{ p: 1, borderRadius: 1, bgcolor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
                         <Typography
                           variant="caption"
                           sx={{
@@ -4245,7 +4245,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                         </Typography>
                       </Box>
 
-                      <Box sx={{ p: 2, borderRadius: 2, bgcolor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
+                      <Box sx={{ p: 1, borderRadius: 1, bgcolor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
                         <Typography
                           variant="caption"
                           sx={{
@@ -4272,8 +4272,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                     {/* Detailed Properties Row */}
                     <Box
                       sx={{
-                        p: 2,
-                        borderRadius: 2,
+                        p: 1,
+                        borderRadius: 1,
                         bgcolor: "#F8FAFC",
                         border: "1px solid #E2E8F0",
                         display: "flex",
@@ -4380,13 +4380,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                   <Paper
                     elevation={0}
                     sx={{
-                      p: 2.5,
-                      borderRadius: 2.5,
+                      p: 1,
+                      borderRadius: 1,
                       border: "1px solid #E2E8F0",
                       bgcolor: "#FFFFFF",
                       display: "flex",
                       flexDirection: "column",
-                      gap: 2,
+                      gap: 1,
                     }}
                   >
                     <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
@@ -4404,13 +4404,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
 
                     <Box
                       sx={{
-                        p: 2,
-                        borderRadius: 2,
+                        p: 1,
+                        borderRadius: 1,
                         bgcolor: "#F8FAFC",
                         border: "1px solid #E2E8F0",
                         display: "flex",
                         flexDirection: "column",
-                        gap: 2,
+                        gap: 1,
                       }}
                     >
                       {/* Setting 1: Raw Data Retention */}
@@ -4422,7 +4422,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                           Duration to retain granular raw telemetry metrics and raw probe outputs before summarizing
                           into 5-minute windows.
                         </Typography>
-                        <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 2, mt: 0.5 }}>
+                        <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 1, mt: 0.5 }}>
                           <TextField
                             label="Raw Retention"
                             type="number"
@@ -4475,7 +4475,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                         <Typography variant="caption" sx={{ color: "#64748B" }}>
                           Duration to keep summarized 5-minute statistical windows for long-term historical trends.
                         </Typography>
-                        <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 2, mt: 0.5 }}>
+                        <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 1, mt: 0.5 }}>
                           <TextField
                             label="Summary Retention"
                             type="number"
@@ -4548,13 +4548,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                   <Paper
                     elevation={0}
                     sx={{
-                      p: 2.5,
-                      borderRadius: 2.5,
+                      p: 1,
+                      borderRadius: 1,
                       border: "1px solid #E2E8F0",
                       bgcolor: "#FFFFFF",
                       display: "flex",
                       flexDirection: "column",
-                      gap: 2,
+                      gap: 1,
                     }}
                   >
                     <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
@@ -4572,15 +4572,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
 
                     <Box
                       sx={{
-                        p: 2,
-                        borderRadius: 2,
+                        p: 1,
+                        borderRadius: 1,
                         bgcolor: "#F8FAFC",
                         border: "1px solid #E2E8F0",
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "space-between",
                         flexWrap: "wrap",
-                        gap: 2,
+                        gap: 1,
                       }}
                     >
                       <Box>
@@ -4623,7 +4623,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
               sx={{
                 display: "flex",
                 flexDirection: "column",
-                gap: 2,
+                gap: 1,
                 py: 3,
                 px: 3,
                 flex: 1,
@@ -4634,14 +4634,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
               {/* Header description */}
               <Box
                 sx={{
-                  p: 2,
-                  borderRadius: 2,
+                  p: 1,
+                  borderRadius: 1,
                   bgcolor: "#F8FAFC",
                   border: "1px solid #E2E8F0",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "space-between",
-                  gap: 2,
+                  gap: 1,
                 }}
               >
                 <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
@@ -4649,7 +4649,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                     sx={{
                       width: 40,
                       height: 40,
-                      borderRadius: 2,
+                      borderRadius: 1,
                       bgcolor: "#EEF2FF",
                       color: "#4F46E5",
                       display: "flex",
@@ -4706,18 +4706,18 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                   <CircularProgress size={32} />
                 </Box>
               ) : integrations ? (
-                <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
                   {/* SECTION 1: Telegram Bot Integration */}
                   <Paper
                     elevation={0}
                     sx={{
-                      p: 3,
-                      borderRadius: 2.5,
+                      p: 1,
+                      borderRadius: 1,
                       border: "1px solid #E2E8F0",
                       bgcolor: "#FFFFFF",
                       display: "flex",
                       flexDirection: "column",
-                      gap: 2,
+                      gap: 1,
                       boxShadow: "0 1px 3px rgba(0,0,0,0.02)",
                     }}
                   >
@@ -4729,7 +4729,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                         justifyContent: "space-between",
                         flexWrap: "wrap",
                         gap: 1,
-                        pb: 2,
+                        pb: 1,
                         borderBottom: "1px solid #F1F5F9",
                       }}
                     >
@@ -4856,7 +4856,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                     )}
 
                     {/* Form Fields Grid */}
-                    <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                    <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
                       {/* Field 1: Bot API Token */}
                       <Box>
                         <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 0.75 }}>
@@ -5015,7 +5015,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                         justifyContent: "space-between",
                         flexWrap: "wrap",
                         gap: 1,
-                        pt: 1.5,
+                        pt: 1,
                         borderTop: "1px solid #F1F5F9",
                       }}
                     >
@@ -5075,12 +5075,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                       <Box
                         sx={{
                           bgcolor: "#F8FAFC",
-                          p: 2.5,
-                          borderRadius: 2,
+                          p: 1,
+                          borderRadius: 1,
                           border: "1px solid #E2E8F0",
                           display: "flex",
                           flexDirection: "column",
-                          gap: 2,
+                          gap: 1,
                         }}
                       >
                         <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
@@ -5095,7 +5095,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
 
                         <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" }, gap: 1 }}>
                           {/* Step 1 */}
-                          <Box sx={{ p: 1.5, bgcolor: "#FFFFFF", borderRadius: 1.5, border: "1px solid #E2E8F0" }}>
+                          <Box sx={{ p: 1, bgcolor: "#FFFFFF", borderRadius: 1, border: "1px solid #E2E8F0" }}>
                             <Typography
                               variant="caption"
                               sx={{ fontWeight: 700, color: "#0284C7", display: "block", mb: 0.5 }}
@@ -5110,7 +5110,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                           </Box>
 
                           {/* Step 2 */}
-                          <Box sx={{ p: 1.5, bgcolor: "#FFFFFF", borderRadius: 1.5, border: "1px solid #E2E8F0" }}>
+                          <Box sx={{ p: 1, bgcolor: "#FFFFFF", borderRadius: 1, border: "1px solid #E2E8F0" }}>
                             <Typography
                               variant="caption"
                               sx={{ fontWeight: 700, color: "#0284C7", display: "block", mb: 0.5 }}
@@ -5124,7 +5124,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                           </Box>
 
                           {/* Step 3 */}
-                          <Box sx={{ p: 1.5, bgcolor: "#FFFFFF", borderRadius: 1.5, border: "1px solid #E2E8F0" }}>
+                          <Box sx={{ p: 1, bgcolor: "#FFFFFF", borderRadius: 1, border: "1px solid #E2E8F0" }}>
                             <Typography
                               variant="caption"
                               sx={{ fontWeight: 700, color: "#0284C7", display: "block", mb: 0.5 }}
@@ -5138,7 +5138,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                           </Box>
 
                           {/* Step 4 */}
-                          <Box sx={{ p: 1.5, bgcolor: "#FFFFFF", borderRadius: 1.5, border: "1px solid #E2E8F0" }}>
+                          <Box sx={{ p: 1, bgcolor: "#FFFFFF", borderRadius: 1, border: "1px solid #E2E8F0" }}>
                             <Typography
                               variant="caption"
                               sx={{ fontWeight: 700, color: "#0284C7", display: "block", mb: 0.5 }}
@@ -5174,7 +5174,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                               label="/status"
                               sx={{ fontFamily: "monospace", fontWeight: 700, bgcolor: "#E0F2FE", color: "#0369A1" }}
                             />
-                            <Typography variant="caption" sx={{ color: "#64748B", alignSelf: "center", mr: 1.5 }}>
+                            <Typography variant="caption" sx={{ color: "#64748B", alignSelf: "center", mr: 1 }}>
                               Cluster overview, node online/offline counts, bandwidth
                             </Typography>
 
@@ -5183,7 +5183,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                               label="/nodes"
                               sx={{ fontFamily: "monospace", fontWeight: 700, bgcolor: "#E0F2FE", color: "#0369A1" }}
                             />
-                            <Typography variant="caption" sx={{ color: "#64748B", alignSelf: "center", mr: 1.5 }}>
+                            <Typography variant="caption" sx={{ color: "#64748B", alignSelf: "center", mr: 1 }}>
                               Detailed node health, CPU, memory, and uptime
                             </Typography>
 
@@ -5202,7 +5202,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                   </Paper>
 
                   {/* Section Divider */}
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 2, my: 1 }}>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1, my: 1 }}>
                     <Divider sx={{ flex: 1 }} />
                     <Chip
                       size="small"
@@ -5216,13 +5216,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                   <Paper
                     elevation={0}
                     sx={{
-                      p: 2.5,
-                      borderRadius: 2.5,
+                      p: 1,
+                      borderRadius: 1,
                       border: "1px solid #E2E8F0",
                       bgcolor: "#FFFFFF",
                       display: "flex",
                       flexDirection: "column",
-                      gap: 2,
+                      gap: 1,
                     }}
                   >
                     <Box
@@ -5317,13 +5317,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                   <Paper
                     elevation={0}
                     sx={{
-                      p: 2.5,
-                      borderRadius: 2.5,
+                      p: 1,
+                      borderRadius: 1,
                       border: "1px solid #E2E8F0",
                       bgcolor: "#FFFFFF",
                       display: "flex",
                       flexDirection: "column",
-                      gap: 2,
+                      gap: 1,
                     }}
                   >
                     <Box
@@ -5404,13 +5404,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                   <Paper
                     elevation={0}
                     sx={{
-                      p: 2.5,
-                      borderRadius: 2.5,
+                      p: 1,
+                      borderRadius: 1,
                       border: "1px solid #E2E8F0",
                       bgcolor: "#FFFFFF",
                       display: "flex",
                       flexDirection: "column",
-                      gap: 2,
+                      gap: 1,
                     }}
                   >
                     <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
@@ -5428,8 +5428,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                       sx={{
                         position: "relative",
                         bgcolor: "#0F172A",
-                        borderRadius: 2,
-                        p: 2,
+                        borderRadius: 1,
+                        p: 1,
                         fontFamily: "monospace",
                         fontSize: "0.82rem",
                         color: "#E2E8F0",
@@ -5477,8 +5477,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                       sx={{
                         position: "relative",
                         bgcolor: "#0F172A",
-                        borderRadius: 2,
-                        p: 2,
+                        borderRadius: 1,
+                        p: 1,
                         fontFamily: "monospace",
                         fontSize: "0.82rem",
                         color: "#E2E8F0",
@@ -5517,13 +5517,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                   <Paper
                     elevation={0}
                     sx={{
-                      p: 2.5,
-                      borderRadius: 2.5,
+                      p: 1,
+                      borderRadius: 1,
                       border: "1px solid #E2E8F0",
                       bgcolor: "#FFFFFF",
                       display: "flex",
                       flexDirection: "column",
-                      gap: 2,
+                      gap: 1,
                     }}
                   >
                     <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
@@ -5538,9 +5538,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                       out-of-the-box compatibility with existing Grafana community dashboards.
                     </Typography>
 
-                    <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" }, gap: 2 }}>
+                    <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" }, gap: 1 }}>
                       {/* Subcard A: Linux System */}
-                      <Box sx={{ p: 2, borderRadius: 2, bgcolor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
+                      <Box sx={{ p: 1, borderRadius: 1, bgcolor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
                         <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
                           <Cpu size={16} color="#0284C7" />
                           <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0F172A" }}>
@@ -5577,7 +5577,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                       </Box>
 
                       {/* Subcard B: WireGuard */}
-                      <Box sx={{ p: 2, borderRadius: 2, bgcolor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
+                      <Box sx={{ p: 1, borderRadius: 1, bgcolor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
                         <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
                           <Shield size={16} color="#16A34A" />
                           <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0F172A" }}>
@@ -5611,7 +5611,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                       </Box>
 
                       {/* Subcard C: BIRD & BGP */}
-                      <Box sx={{ p: 2, borderRadius: 2, bgcolor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
+                      <Box sx={{ p: 1, borderRadius: 1, bgcolor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
                         <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
                           <Zap size={16} color="#D97706" />
                           <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0F172A" }}>
@@ -5639,7 +5639,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                       </Box>
 
                       {/* Subcard D: easy42 Fleet */}
-                      <Box sx={{ p: 2, borderRadius: 2, bgcolor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
+                      <Box sx={{ p: 1, borderRadius: 1, bgcolor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
                         <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
                           <Activity size={16} color="#7C3AED" />
                           <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0F172A" }}>
@@ -5686,7 +5686,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
           onClose={() => !resettingToken && setResetTokenConfirmOpen(false)}
           maxWidth="xs"
           fullWidth
-          PaperProps={{ sx: { borderRadius: 3, p: 1 } }}
+          PaperProps={{ sx: { borderRadius: 1, p: 1 } }}
         >
           <DialogTitle sx={{ fontWeight: 700, display: "flex", alignItems: "center", gap: 1, color: "#0F172A" }}>
             <AlertCircle size={22} color="#D97706" />
@@ -5696,7 +5696,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
             <Typography variant="body2" sx={{ color: "#475569", lineHeight: 1.5 }}>
               Are you sure you want to regenerate the Prometheus auth token?
             </Typography>
-            <Alert severity="warning" sx={{ mt: 2, borderRadius: 2 }}>
+            <Alert severity="warning" sx={{ mt: 1, borderRadius: 2 }}>
               <Typography variant="caption" sx={{ fontWeight: 600, display: "block" }}>
                 Important notice:
               </Typography>
@@ -5732,7 +5732,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
               sx={{
                 display: "flex",
                 flexDirection: "column",
-                gap: 3,
+                gap: 1,
                 py: 3,
                 px: 3,
                 flex: 1,
@@ -5751,7 +5751,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
               sx={{
                 display: "flex",
                 flexDirection: "column",
-                gap: 3,
+                gap: 1,
                 py: 3,
                 px: 3,
                 flex: 1,
@@ -5770,7 +5770,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
               sx={{
                 display: "flex",
                 flexDirection: "column",
-                gap: 2,
+                gap: 1,
                 py: 3,
                 px: 3,
                 flex: 1,
@@ -5781,18 +5781,18 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
               {/* Header Description & Logo Card */}
               <Box
                 sx={{
-                  p: 2.5,
-                  borderRadius: 2,
+                  p: 1,
+                  borderRadius: 1,
                   bgcolor: "#F8FAFC",
                   border: "1px solid #E2E8F0",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "space-between",
-                  gap: 2,
+                  gap: 1,
                   flexWrap: { xs: "wrap", sm: "nowrap" },
                 }}
               >
-                <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                   <Easy42Logo
                     size={48}
                     sx={{
@@ -5853,12 +5853,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
               <Paper
                 elevation={0}
                 sx={{
-                  p: 2.5,
-                  borderRadius: 2,
+                  p: 1,
+                  borderRadius: 1,
                   border: "1px solid #E2E8F0",
                   display: "flex",
                   flexDirection: "column",
-                  gap: 2,
+                  gap: 1,
                 }}
               >
                 <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
@@ -5879,7 +5879,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                     gap: 1,
                   }}
                 >
-                  <Box sx={{ p: 1.5, borderRadius: 1.5, bgcolor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
+                  <Box sx={{ p: 1, borderRadius: 1, bgcolor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
                     <Typography
                       variant="caption"
                       sx={{ color: "#64748B", fontWeight: 600, textTransform: "uppercase" }}
@@ -5891,7 +5891,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                     </Typography>
                   </Box>
 
-                  <Box sx={{ p: 1.5, borderRadius: 1.5, bgcolor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
+                  <Box sx={{ p: 1, borderRadius: 1, bgcolor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
                     <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
                       <GitCommit size={12} color="#64748B" />
                       <Typography
@@ -5935,7 +5935,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                     </Box>
                   </Box>
 
-                  <Box sx={{ p: 1.5, borderRadius: 1.5, bgcolor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
+                  <Box sx={{ p: 1, borderRadius: 1, bgcolor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
                     <Typography
                       variant="caption"
                       sx={{ color: "#64748B", fontWeight: 600, textTransform: "uppercase" }}
@@ -5947,7 +5947,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                     </Typography>
                   </Box>
 
-                  <Box sx={{ p: 1.5, borderRadius: 1.5, bgcolor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
+                  <Box sx={{ p: 1, borderRadius: 1, bgcolor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
                     <Typography
                       variant="caption"
                       sx={{ color: "#64748B", fontWeight: 600, textTransform: "uppercase" }}
@@ -5959,7 +5959,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                     </Typography>
                   </Box>
 
-                  <Box sx={{ p: 1.5, borderRadius: 1.5, bgcolor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
+                  <Box sx={{ p: 1, borderRadius: 1, bgcolor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
                     <Typography
                       variant="caption"
                       sx={{ color: "#64748B", fontWeight: 600, textTransform: "uppercase" }}
@@ -5971,7 +5971,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                     </Typography>
                   </Box>
 
-                  <Box sx={{ p: 1.5, borderRadius: 1.5, bgcolor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
+                  <Box sx={{ p: 1, borderRadius: 1, bgcolor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
                     <Typography
                       variant="caption"
                       sx={{ color: "#64748B", fontWeight: 600, textTransform: "uppercase" }}
@@ -5989,12 +5989,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
               <Paper
                 elevation={0}
                 sx={{
-                  p: 2.5,
-                  borderRadius: 2,
+                  p: 1,
+                  borderRadius: 1,
                   border: "1px solid #E2E8F0",
                   display: "flex",
                   flexDirection: "column",
-                  gap: 2,
+                  gap: 1,
                 }}
               >
                 <Box
@@ -6035,8 +6035,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                   {/* Listen Address */}
                   <Box
                     sx={{
-                      p: 1.5,
-                      borderRadius: 1.5,
+                      p: 1,
+                      borderRadius: 1,
                       bgcolor: "#F8FAFC",
                       border: "1px solid #E2E8F0",
                       display: "flex",
@@ -6106,8 +6106,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                   {/* Data Directory */}
                   <Box
                     sx={{
-                      p: 1.5,
-                      borderRadius: 1.5,
+                      p: 1,
+                      borderRadius: 1,
                       bgcolor: "#F8FAFC",
                       border: "1px solid #E2E8F0",
                       display: "flex",
@@ -6177,8 +6177,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                   {/* Main Config File */}
                   <Box
                     sx={{
-                      p: 1.5,
-                      borderRadius: 1.5,
+                      p: 1,
+                      borderRadius: 1,
                       bgcolor: "#F8FAFC",
                       border: "1px solid #E2E8F0",
                       display: "flex",
@@ -6251,12 +6251,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
               <Paper
                 elevation={0}
                 sx={{
-                  p: 2.5,
-                  borderRadius: 2,
+                  p: 1,
+                  borderRadius: 1,
                   border: "1px solid #E2E8F0",
                   display: "flex",
                   flexDirection: "column",
-                  gap: 2,
+                  gap: 1,
                 }}
               >
                 <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -6318,7 +6318,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                   </Box>
 
                   {/* One-line Install Script helper */}
-                  <Box sx={{ mt: 1, p: 1.5, borderRadius: 1.5, bgcolor: "#F1F5F9", border: "1px solid #E2E8F0" }}>
+                  <Box sx={{ mt: 1, p: 1, borderRadius: 1, bgcolor: "#F1F5F9", border: "1px solid #E2E8F0" }}>
                     <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600, display: "block", mb: 0.5 }}>
                       Automated Node Installation Script:
                     </Typography>
@@ -6356,12 +6356,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
               <Paper
                 elevation={0}
                 sx={{
-                  p: 2.5,
-                  borderRadius: 2,
+                  p: 1,
+                  borderRadius: 1,
                   border: "1px solid #E2E8F0",
                   display: "flex",
                   flexDirection: "column",
-                  gap: 2,
+                  gap: 1,
                 }}
               >
                 <Box
@@ -6400,8 +6400,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
 
                 <Box
                   sx={{
-                    p: 1.5,
-                    borderRadius: 1.5,
+                    p: 1,
+                    borderRadius: 1,
                     bgcolor: "#F8FAFC",
                     border: "1px solid #E2E8F0",
                     display: "flex",
@@ -6458,12 +6458,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
               <Paper
                 elevation={0}
                 sx={{
-                  p: 2.5,
-                  borderRadius: 2,
+                  p: 1,
+                  borderRadius: 1,
                   border: "1px solid #E2E8F0",
                   display: "flex",
                   flexDirection: "column",
-                  gap: 2,
+                  gap: 1,
                 }}
               >
                 <Box
@@ -6503,7 +6503,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                 </Typography>
 
                 {swFlushResult && (
-                  <Alert severity={swFlushResult.severity} sx={{ borderRadius: 1.5, py: 0.5, fontSize: "0.8rem" }}>
+                  <Alert severity={swFlushResult.severity} sx={{ borderRadius: 1, py: 0.5, fontSize: "0.8rem" }}>
                     {swFlushResult.text}
                   </Alert>
                 )}
@@ -6539,7 +6539,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
               </IconButton>
             </DialogTitle>
 
-            <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2, py: 2.5, px: 3 }}>
+            <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 1, py: 1, px: 3 }}>
               {policyDialogMode === "view" && (
                 <Alert icon={<Lock size={16} />} severity="info" sx={{ py: 0.5, borderRadius: 2 }}>
                   Built-in policies are managed by easy42 and are read-only.
@@ -6552,7 +6552,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                 </Alert>
               )}
 
-              <Box sx={{ display: "flex", gap: 2 }}>
+              <Box sx={{ display: "flex", gap: 1 }}>
                 <TextField
                   fullWidth
                   size="small"
@@ -6586,7 +6586,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                 disabled={policyDialogMode === "view" || policyDialogSaving}
               />
 
-              <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 2 }}>
+              <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 1 }}>
                 <TextField
                   fullWidth
                   size="small"
@@ -6630,7 +6630,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                 </TextField>
               </Box>
 
-              <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 2 }}>
+              <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 1 }}>
                 <TextField
                   fullWidth
                   size="small"
@@ -6721,8 +6721,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                   display: "flex",
                   flexDirection: "column",
                   gap: 1,
-                  p: 2,
-                  borderRadius: 2,
+                  p: 1,
+                  borderRadius: 1,
                   bgcolor: "#F8FAFC",
                   border: "1px solid #E2E8F0",
                 }}
@@ -6759,8 +6759,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                   display: "flex",
                   flexDirection: "column",
                   gap: 1,
-                  p: 2,
-                  borderRadius: 2,
+                  p: 1,
+                  borderRadius: 1,
                   bgcolor: "#F8FAFC",
                   border: "1px solid #E2E8F0",
                 }}
@@ -6826,8 +6826,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                   display: "flex",
                   flexDirection: "column",
                   gap: 1,
-                  p: 2,
-                  borderRadius: 2,
+                  p: 1,
+                  borderRadius: 1,
                   bgcolor: "#F8FAFC",
                   border: "1px solid #E2E8F0",
                 }}
@@ -6885,7 +6885,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
 
                 {policyFilterInput && (
                   <Box sx={{ display: "flex", flexDirection: "column", gap: 1, pl: 4, pt: 0.5 }}>
-                    <Box sx={{ display: "flex", gap: 3 }}>
+                    <Box sx={{ display: "flex", gap: 1 }}>
                       <FormControlLabel
                         control={
                           <Checkbox
@@ -6996,8 +6996,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                   display: "flex",
                   flexDirection: "column",
                   gap: 1,
-                  p: 2,
-                  borderRadius: 2,
+                  p: 1,
+                  borderRadius: 1,
                   bgcolor: "#F8FAFC",
                   border: "1px solid #E2E8F0",
                 }}
@@ -7056,8 +7056,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                   display: "flex",
                   flexDirection: "column",
                   gap: 1,
-                  p: 2,
-                  borderRadius: 2,
+                  p: 1,
+                  borderRadius: 1,
                   bgcolor: "#F8FAFC",
                   border: "1px solid #E2E8F0",
                 }}
@@ -7108,8 +7108,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                   display: "flex",
                   flexDirection: "column",
                   gap: 1,
-                  p: 2,
-                  borderRadius: 2,
+                  p: 1,
+                  borderRadius: 1,
                   bgcolor: "#F8FAFC",
                   border: "1px solid #E2E8F0",
                 }}
@@ -7126,7 +7126,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                   bits). Leave empty to disable.
                 </Typography>
 
-                <Box sx={{ display: "flex", gap: 2 }}>
+                <Box sx={{ display: "flex", gap: 1 }}>
                   <TextField
                     fullWidth
                     size="small"
@@ -7156,8 +7156,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                   display: "flex",
                   flexDirection: "column",
                   gap: 1,
-                  p: 2,
-                  borderRadius: 2,
+                  p: 1,
+                  borderRadius: 1,
                   bgcolor: "#F8FAFC",
                   border: "1px solid #E2E8F0",
                 }}
@@ -7364,7 +7364,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
               </Box>
             </DialogContent>
 
-            <DialogActions sx={{ px: 3, py: 2, borderTop: "1px solid #E2E8F0", backgroundColor: "#F8FAFC" }}>
+            <DialogActions sx={{ px: 3, py: 1, borderTop: "1px solid #E2E8F0", backgroundColor: "#F8FAFC" }}>
               <Button onClick={() => setPolicyDialogOpen(false)} sx={{ color: "#64748B" }}>
                 {policyDialogMode === "view" ? "Close" : "Cancel"}
               </Button>
@@ -7394,7 +7394,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
         {/* Template Create / Edit / View Dialog */}
         <Dialog open={templateDialogOpen} onClose={() => setTemplateDialogOpen(false)} maxWidth="md" fullWidth>
           <form onSubmit={handleSaveTemplate}>
-            <DialogTitle sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", pb: 1.5 }}>
+            <DialogTitle sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", pb: 1 }}>
               <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                 <FileCode size={20} color="#4F46E5" />
                 <Typography variant="h6" sx={{ fontWeight: 700, fontSize: "1.1rem" }}>
@@ -7410,14 +7410,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
               </IconButton>
             </DialogTitle>
 
-            <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2, py: 2 }}>
+            <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 1, py: 1 }}>
               {templateDialogError && (
                 <Alert severity="error" sx={{ borderRadius: 2 }}>
                   {templateDialogError}
                 </Alert>
               )}
 
-              <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" }, gap: 2 }}>
+              <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" }, gap: 1 }}>
                 <TextField
                   select
                   label="Template Type"
@@ -7507,7 +7507,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                     "& .MuiInputBase-root": {
                       backgroundColor: "#0F172A",
                       borderRadius: "6px",
-                      p: 1.5,
+                      p: 1,
                       border: "1px solid #334155",
                       "&:hover": {
                         borderColor: templateDialogMode === "view" ? "#334155" : "#64748B",
@@ -7560,7 +7560,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
               </Box>
             </DialogContent>
 
-            <DialogActions sx={{ px: 3, py: 2, borderTop: "1px solid #E2E8F0", backgroundColor: "#F8FAFC" }}>
+            <DialogActions sx={{ px: 3, py: 1, borderTop: "1px solid #E2E8F0", backgroundColor: "#F8FAFC" }}>
               {templateDialogMode === "view" ? (
                 <>
                   <Button
@@ -7621,7 +7621,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
               <code>{templateToDelete?.id}</code>)? This action cannot be undone.
             </Typography>
           </DialogContent>
-          <DialogActions sx={{ px: 3, py: 2, borderTop: "1px solid #E2E8F0", backgroundColor: "#F8FAFC" }}>
+          <DialogActions sx={{ px: 3, py: 1, borderTop: "1px solid #E2E8F0", backgroundColor: "#F8FAFC" }}>
             <Button onClick={() => setTemplateToDelete(null)} disabled={templateDeleting} sx={{ color: "#64748B" }}>
               Cancel
             </Button>

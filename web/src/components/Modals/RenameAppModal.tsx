@@ -81,7 +81,7 @@ export const RenameAppModal: React.FC<RenameAppModalProps> = ({ app, existingApp
       fullWidth
       PaperProps={{
         sx: {
-          borderRadius: 3,
+          borderRadius: 1,
           boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)",
         },
       }}
@@ -92,7 +92,7 @@ export const RenameAppModal: React.FC<RenameAppModalProps> = ({ app, existingApp
             display: "flex",
             alignItems: "center",
             gap: 1,
-            pb: 1.5,
+            pb: 1,
             borderBottom: "1px solid #E2E8F0",
           }}
         >
@@ -100,7 +100,7 @@ export const RenameAppModal: React.FC<RenameAppModalProps> = ({ app, existingApp
             sx={{
               width: 38,
               height: 38,
-              borderRadius: 2,
+              borderRadius: 1,
               backgroundColor: isDocker
                 ? "rgba(2, 132, 199, 0.1)"
                 : isCron
@@ -124,7 +124,7 @@ export const RenameAppModal: React.FC<RenameAppModalProps> = ({ app, existingApp
           </Box>
         </DialogTitle>
 
-        <DialogContent sx={{ pt: 2.5, display: "flex", flexDirection: "column", gap: 2 }}>
+        <DialogContent sx={{ pt: 2, display: "flex", flexDirection: "column", gap: 1 }}>
           {error && (
             <Alert severity="error" icon={<AlertCircle size={18} />} sx={{ borderRadius: 2 }}>
               {error}
@@ -134,8 +134,8 @@ export const RenameAppModal: React.FC<RenameAppModalProps> = ({ app, existingApp
           {/* Current App Info */}
           <Box
             sx={{
-              p: 1.5,
-              borderRadius: 2,
+              p: 1,
+              borderRadius: 1,
               backgroundColor: "#F8FAFC",
               border: "1px solid #E2E8F0",
               display: "flex",
@@ -239,8 +239,8 @@ export const RenameAppModal: React.FC<RenameAppModalProps> = ({ app, existingApp
           {/* Explanation / Impact details */}
           <Box
             sx={{
-              p: 1.5,
-              borderRadius: 2,
+              p: 1,
+              borderRadius: 1,
               backgroundColor: "rgba(79, 70, 229, 0.04)",
               border: "1px dashed rgba(79, 70, 229, 0.25)",
             }}
@@ -255,7 +255,7 @@ export const RenameAppModal: React.FC<RenameAppModalProps> = ({ app, existingApp
           </Box>
         </DialogContent>
 
-        <DialogActions sx={{ px: 3, pb: 2.5, pt: 1, borderTop: "1px solid #E2E8F0" }}>
+        <DialogActions sx={{ px: 3, pb: 2, pt: 1, borderTop: "1px solid #E2E8F0" }}>
           <Button onClick={onClose} disabled={saving} sx={{ color: "#64748B" }}>
             Cancel
           </Button>

@@ -203,12 +203,12 @@ export const LinkKeyActionModal: React.FC<LinkKeyActionModalProps> = ({
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth sx={{ zIndex: 1400 }}>
-      <DialogTitle sx={{ display: "flex", alignItems: "center", gap: 1, pb: 1.5, borderBottom: "1px solid #E2E8F0" }}>
+      <DialogTitle sx={{ display: "flex", alignItems: "center", gap: 1, pb: 1, borderBottom: "1px solid #E2E8F0" }}>
         <Box
           sx={{
             width: 38,
             height: 38,
-            borderRadius: 2,
+            borderRadius: 1,
             backgroundColor: isReveal ? "rgba(99, 102, 241, 0.1)" : "rgba(217, 119, 6, 0.1)",
             display: "flex",
             alignItems: "center",
@@ -229,7 +229,7 @@ export const LinkKeyActionModal: React.FC<LinkKeyActionModalProps> = ({
       </DialogTitle>
 
       <form onSubmit={handleSubmit}>
-        <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2, pt: 2.5 }}>
+        <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 1, pt: 1 }}>
           {error && (
             <Alert severity="error" sx={{ borderRadius: 2 }}>
               {error}
@@ -238,14 +238,14 @@ export const LinkKeyActionModal: React.FC<LinkKeyActionModalProps> = ({
 
           {/* Results State */}
           {isDone && revealedValue !== null ? (
-            <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
               <Alert severity="success" sx={{ borderRadius: 2 }}>
                 {isReveal
                   ? `${isPsk ? "Pre-shared Key (PSK)" : "WireGuard Private Key"} revealed successfully.`
                   : `${isPsk ? "Pre-shared Key (PSK)" : "WireGuard Private Key"} has been reset successfully. Save and sync the network to apply.`}
               </Alert>
 
-              <Box sx={{ p: 2, borderRadius: 2, backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
+              <Box sx={{ p: 1, borderRadius: 1, backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
                 <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 0.5 }}>
                   <Typography variant="caption" sx={{ fontWeight: 700, color: "#475569" }}>
                     {isPsk ? "PLAIN TEXT PSK" : `PRIVATE KEY (${targetNode})`}
@@ -265,7 +265,7 @@ export const LinkKeyActionModal: React.FC<LinkKeyActionModalProps> = ({
                   sx={{
                     p: 1.2,
                     backgroundColor: "#FFFFFF",
-                    borderRadius: 1.5,
+                    borderRadius: 1,
                     border: "1px solid #CBD5E1",
                     wordBreak: "break-all",
                     color: "#0F172A",
@@ -277,7 +277,7 @@ export const LinkKeyActionModal: React.FC<LinkKeyActionModalProps> = ({
               </Box>
 
               {revealedPublicKey && (
-                <Box sx={{ p: 2, borderRadius: 2, backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
+                <Box sx={{ p: 1, borderRadius: 1, backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
                   <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 0.5 }}>
                     <Typography variant="caption" sx={{ fontWeight: 700, color: "#475569" }}>
                       CORRESPONDING PUBLIC KEY
@@ -297,7 +297,7 @@ export const LinkKeyActionModal: React.FC<LinkKeyActionModalProps> = ({
                     sx={{
                       p: 1.2,
                       backgroundColor: "#FFFFFF",
-                      borderRadius: 1.5,
+                      borderRadius: 1,
                       border: "1px solid #CBD5E1",
                       wordBreak: "break-all",
                       color: "#0F172A",
@@ -313,7 +313,7 @@ export const LinkKeyActionModal: React.FC<LinkKeyActionModalProps> = ({
             <>
               {/* Reveal Flow: Password Required */}
               {isReveal && (
-                <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
                   <Typography variant="body2" sx={{ color: "#475569" }}>
                     To decrypt and view this sensitive WireGuard secret, please authenticate with your easy42
                     administrator password:
@@ -345,7 +345,7 @@ export const LinkKeyActionModal: React.FC<LinkKeyActionModalProps> = ({
 
               {/* Reset Flow: Method Selection */}
               {!isReveal && (
-                <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
                   <Typography variant="body2" sx={{ color: "#475569" }}>
                     Choose how you would like to reset the {isPsk ? "WireGuard PSK" : "WireGuard Private Key"}:
                   </Typography>
@@ -358,8 +358,8 @@ export const LinkKeyActionModal: React.FC<LinkKeyActionModalProps> = ({
                     <Box
                       onClick={() => setResetMethod("random")}
                       sx={{
-                        p: 1.5,
-                        borderRadius: 2,
+                        p: 1,
+                        borderRadius: 1,
                         border: "1px solid",
                         borderColor: resetMethod === "random" ? "#4F46E5" : "#E2E8F0",
                         backgroundColor: resetMethod === "random" ? "rgba(99, 102, 241, 0.04)" : "#FFFFFF",
@@ -398,8 +398,8 @@ export const LinkKeyActionModal: React.FC<LinkKeyActionModalProps> = ({
                     <Box
                       onClick={() => setResetMethod("custom")}
                       sx={{
-                        p: 1.5,
-                        borderRadius: 2,
+                        p: 1,
+                        borderRadius: 1,
                         border: "1px solid",
                         borderColor: resetMethod === "custom" ? "#4F46E5" : "#E2E8F0",
                         backgroundColor: resetMethod === "custom" ? "rgba(99, 102, 241, 0.04)" : "#FFFFFF",
@@ -456,7 +456,7 @@ export const LinkKeyActionModal: React.FC<LinkKeyActionModalProps> = ({
           )}
         </DialogContent>
 
-        <DialogActions sx={{ px: 3, py: 2, borderTop: "1px solid #E2E8F0", backgroundColor: "#F8FAFC" }}>
+        <DialogActions sx={{ px: 3, py: 1, borderTop: "1px solid #E2E8F0", backgroundColor: "#F8FAFC" }}>
           {isDone ? (
             <Button onClick={onClose} variant="contained" sx={{ fontWeight: 600, backgroundColor: "#4F46E5" }}>
               Close

@@ -161,9 +161,9 @@ export const NodeScriptsTab: React.FC<NodeScriptsTabProps> = ({ nodeName }) => {
   }
 
   return (
-    <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
+    <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
       {/* Header bar */}
-      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 2 }}>
+      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 1 }}>
         <Box>
           <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
             <Typography variant="h6" sx={{ fontWeight: 800, color: "#0F172A", fontSize: "1.1rem" }}>
@@ -258,7 +258,7 @@ export const NodeScriptsTab: React.FC<NodeScriptsTabProps> = ({ nodeName }) => {
               alignItems: "center",
               justifyContent: "center",
               mx: "auto",
-              mb: 1.5,
+              mb: 1,
             }}
           >
             <Terminal size={26} />
@@ -266,10 +266,7 @@ export const NodeScriptsTab: React.FC<NodeScriptsTabProps> = ({ nodeName }) => {
           <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#1E293B", mb: 0.5 }}>
             No Scripts Assigned to this Node
           </Typography>
-          <Typography
-            variant="body2"
-            sx={{ color: "#64748B", maxWidth: 440, mx: "auto", mb: 2.5, fontSize: "0.85rem" }}
-          >
+          <Typography variant="body2" sx={{ color: "#64748B", maxWidth: 440, mx: "auto", mb: 1, fontSize: "0.85rem" }}>
             Scripts target nodes via node name or selector tags. Create or configure a script on the Apps page.
           </Typography>
           <Button
@@ -295,20 +292,20 @@ export const NodeScriptsTab: React.FC<NodeScriptsTabProps> = ({ nodeName }) => {
                 <Paper
                   elevation={0}
                   sx={{
-                    p: 2.5,
+                    p: 1,
                     borderRadius: "12px",
                     border: isRunning ? "1px solid #A7F3D0" : "1px solid #E2E8F0",
                     display: { xs: "flex", md: "grid" },
                     flexDirection: { xs: "column" },
                     gridTemplateColumns: { md: "minmax(0, 1fr) 200px auto" },
                     alignItems: "center",
-                    gap: 2,
+                    gap: 1,
                     bgcolor: isRunning ? "#F0FDF4" : "#FFFFFF",
                     transition: "all 0.15s ease",
                   }}
                 >
                   {/* Left: Info */}
-                  <Box sx={{ display: "flex", alignItems: "flex-start", gap: 2 }}>
+                  <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1 }}>
                     <Box
                       sx={{
                         width: 44,
@@ -634,7 +631,7 @@ export const NodeScriptsTab: React.FC<NodeScriptsTabProps> = ({ nodeName }) => {
           </Box>
         </DialogTitle>
 
-        <DialogContent sx={{ p: 2, pt: 1 }}>
+        <DialogContent sx={{ p: 1, pt: 1 }}>
           {loadingLogs ? (
             <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
               <CircularProgress size={28} sx={{ color: "#10B981" }} />
@@ -644,7 +641,7 @@ export const NodeScriptsTab: React.FC<NodeScriptsTabProps> = ({ nodeName }) => {
               component="pre"
               sx={{
                 m: 0,
-                p: 2,
+                p: 1,
                 borderRadius: "8px",
                 bgcolor: "#020617",
                 color: "#E2E8F0",
@@ -696,7 +693,7 @@ export const NodeScriptsTab: React.FC<NodeScriptsTabProps> = ({ nodeName }) => {
           </DialogTitle>
           <DialogContent>
             {previewApp.description && (
-              <Typography variant="body2" sx={{ color: "#475569", mb: 2 }}>
+              <Typography variant="body2" sx={{ color: "#475569", mb: 1 }}>
                 {previewApp.description}
               </Typography>
             )}
@@ -707,8 +704,8 @@ export const NodeScriptsTab: React.FC<NodeScriptsTabProps> = ({ nodeName }) => {
               component="pre"
               sx={{
                 mt: 1,
-                mb: 2,
-                p: 2,
+                mb: 1,
+                p: 1,
                 borderRadius: "8px",
                 bgcolor: "#0F172A",
                 color: "#F8FAFC",
@@ -731,7 +728,7 @@ export const NodeScriptsTab: React.FC<NodeScriptsTabProps> = ({ nodeName }) => {
                   component="pre"
                   sx={{
                     mt: 1,
-                    p: 2,
+                    p: 1,
                     borderRadius: "8px",
                     bgcolor: "#F8FAFC",
                     border: "1px solid #E2E8F0",

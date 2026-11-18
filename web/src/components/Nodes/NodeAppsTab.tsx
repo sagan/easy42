@@ -174,7 +174,7 @@ export const NodeAppsTab: React.FC<NodeAppsTabProps> = ({ nodeName }) => {
   return (
     <Box sx={{ py: 2 }}>
       {/* Tab Header Bar */}
-      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2.5 }}>
+      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
         <Box>
           <Typography variant="subtitle1" sx={{ fontWeight: 800, color: "#0F172A" }}>
             Node Workloads & Services
@@ -220,7 +220,7 @@ export const NodeAppsTab: React.FC<NodeAppsTabProps> = ({ nodeName }) => {
       </Box>
 
       {appsDisabled && (
-        <Alert severity="warning" sx={{ mb: 2.5, fontWeight: 500 }}>
+        <Alert severity="warning" sx={{ mb: 1, fontWeight: 500 }}>
           App management is disabled on this node (<code>disable_apps: true</code> in{" "}
           <code>/etc/easy42/agent.json</code>). Easy42 will not deploy or sync apps to this node, and app actions cannot
           be triggered.
@@ -228,12 +228,12 @@ export const NodeAppsTab: React.FC<NodeAppsTabProps> = ({ nodeName }) => {
       )}
 
       {error && (
-        <Alert severity="error" sx={{ mb: 2.5 }}>
+        <Alert severity="error" sx={{ mb: 1 }}>
           {error}
         </Alert>
       )}
       {actionError && (
-        <Alert severity="error" sx={{ mb: 2.5 }}>
+        <Alert severity="error" sx={{ mb: 1 }}>
           {actionError}
         </Alert>
       )}
@@ -261,7 +261,7 @@ export const NodeAppsTab: React.FC<NodeAppsTabProps> = ({ nodeName }) => {
               alignItems: "center",
               justifyContent: "center",
               mx: "auto",
-              mb: 1.5,
+              mb: 1,
             }}
           >
             <Layers size={24} />
@@ -269,10 +269,7 @@ export const NodeAppsTab: React.FC<NodeAppsTabProps> = ({ nodeName }) => {
           <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#1E293B", mb: 0.5 }}>
             No Workloads Assigned to this Node
           </Typography>
-          <Typography
-            variant="body2"
-            sx={{ color: "#64748B", maxWidth: 440, mx: "auto", mb: 2.5, fontSize: "0.85rem" }}
-          >
+          <Typography variant="body2" sx={{ color: "#64748B", maxWidth: 440, mx: "auto", mb: 1, fontSize: "0.85rem" }}>
             Assign this node to one or more Docker Compose or Native Systemd apps in the top-level Apps page.
           </Typography>
           <Button
@@ -299,19 +296,19 @@ export const NodeAppsTab: React.FC<NodeAppsTabProps> = ({ nodeName }) => {
                 <Paper
                   elevation={0}
                   sx={{
-                    p: 2.5,
+                    p: 1,
                     borderRadius: "12px",
                     border: "1px solid #E2E8F0",
                     display: { xs: "flex", md: "grid" },
                     flexDirection: { xs: "column" },
                     gridTemplateColumns: { md: "minmax(0, 1fr) 140px minmax(0, 1fr)" },
                     alignItems: "center",
-                    gap: 2,
+                    gap: 1,
                     bgcolor: "#FFFFFF",
                   }}
                 >
                   {/* Left: App Info & Status */}
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 2, minWidth: 0 }}>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1, minWidth: 0 }}>
                     <Box
                       sx={{
                         width: 44,
@@ -604,7 +601,7 @@ export const NodeAppsTab: React.FC<NodeAppsTabProps> = ({ nodeName }) => {
           sx: { borderRadius: "16px", bgcolor: "#0F172A", color: "#F8FAFC" },
         }}
       >
-        <DialogTitle sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", pb: 1.5 }}>
+        <DialogTitle sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", pb: 1 }}>
           <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
             <Terminal size={20} style={{ color: "#818CF8" }} />
             <Typography variant="h6" sx={{ fontWeight: 800, color: "#F8FAFC" }}>
@@ -659,7 +656,7 @@ export const NodeAppsTab: React.FC<NodeAppsTabProps> = ({ nodeName }) => {
             </Button>
           </Box>
         </DialogTitle>
-        <DialogContent sx={{ p: 2 }}>
+        <DialogContent sx={{ p: 1 }}>
           {loadingLogs ? (
             <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
               <CircularProgress size={28} sx={{ color: "#818CF8" }} />
@@ -669,7 +666,7 @@ export const NodeAppsTab: React.FC<NodeAppsTabProps> = ({ nodeName }) => {
               component="pre"
               sx={{
                 m: 0,
-                p: 2,
+                p: 1,
                 borderRadius: "8px",
                 bgcolor: "#020617",
                 color: "#E2E8F0",

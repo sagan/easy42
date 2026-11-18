@@ -63,7 +63,7 @@ export const MarkdownView: React.FC<MarkdownViewProps> = ({ content, emptyText =
         "& h1, & h2, & h3, & h4, & h5, & h6": {
           color: "#0F172A",
           fontWeight: 700,
-          mt: 1.5,
+          mt: 1,
           mb: 0.75,
           lineHeight: 1.3,
         },
@@ -83,7 +83,7 @@ export const MarkdownView: React.FC<MarkdownViewProps> = ({ content, emptyText =
           "&:hover": { color: "#3730A3" },
         },
         "& ul, & ol": {
-          pl: 2.5,
+          pl: 1,
           mb: 1,
           "& li": {
             mb: 0.25,
@@ -111,8 +111,8 @@ export const MarkdownView: React.FC<MarkdownViewProps> = ({ content, emptyText =
         "& pre": {
           backgroundColor: "#0F172A",
           color: "#F8FAFC",
-          p: 1.5,
-          borderRadius: 1.5,
+          p: 1,
+          borderRadius: 1,
           overflowX: "auto",
           my: 1,
           "& code": {
@@ -145,7 +145,7 @@ export const MarkdownView: React.FC<MarkdownViewProps> = ({ content, emptyText =
         "& hr": {
           border: "none",
           borderTop: "1px solid #E2E8F0",
-          my: 1.5,
+          my: 1,
         },
         ...sx,
       }}

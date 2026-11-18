@@ -291,18 +291,18 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
           width: { xs: "100%", sm: 420 },
           backgroundColor: "#FFFFFF",
           borderLeft: "1px solid #E2E8F0",
-          p: 3,
+          p: 1,
         },
       }}
     >
       {/* Header */}
-      <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 2 }}>
+      <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1 }}>
         <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
           <Box
             sx={{
               width: 38,
               height: 38,
-              borderRadius: 2,
+              borderRadius: 1,
               backgroundColor: "rgba(79, 70, 229, 0.1)",
               display: "flex",
               alignItems: "center",
@@ -400,16 +400,16 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
         </Box>
       </Box>
 
-      <Divider sx={{ borderColor: "#E2E8F0", mb: 2.5 }} />
+      <Divider sx={{ borderColor: "#E2E8F0", mb: 1 }} />
 
       {/* Quick Specs */}
-      <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+      <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
         <Typography variant="caption" sx={{ color: "#475569", fontWeight: 700, letterSpacing: "0.5px" }}>
           NODE CONFIGURATION
         </Typography>
 
         <Box sx={{ display: "grid", gridTemplateColumns: node.ip6 ? "1fr 1fr" : "1fr 1fr", gap: 1 }}>
-          <Box sx={{ p: 1.5, borderRadius: 2, backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
+          <Box sx={{ p: 1, borderRadius: 1, backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
             <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <Typography variant="caption" sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}>
                 <Globe size={12} /> Main IPv4
@@ -427,7 +427,7 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
             </Typography>
           </Box>
 
-          <Box sx={{ p: 1.5, borderRadius: 2, backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
+          <Box sx={{ p: 1, borderRadius: 1, backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
             <Typography variant="caption" sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}>
               <HardDrive size={12} /> Interface
             </Typography>
@@ -438,7 +438,7 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
         </Box>
 
         {node.ip6 ? (
-          <Box sx={{ p: 1.5, borderRadius: 2, backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
+          <Box sx={{ p: 1, borderRadius: 1, backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
             <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <Typography variant="caption" sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}>
                 <Globe size={12} /> Main IPv6
@@ -456,7 +456,7 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
         ) : null}
 
         {node.external_ip ? (
-          <Box sx={{ p: 1.5, borderRadius: 2, backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
+          <Box sx={{ p: 1, borderRadius: 1, backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
             <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <Typography variant="caption" sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}>
                 <Globe size={12} /> External IPv4 (DN42)
@@ -474,7 +474,7 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
         ) : null}
 
         {node.external_ip6 ? (
-          <Box sx={{ p: 1.5, borderRadius: 2, backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
+          <Box sx={{ p: 1, borderRadius: 1, backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
             <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <Typography variant="caption" sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}>
                 <Globe size={12} /> External IPv6 (DN42)
@@ -491,7 +491,7 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
           </Box>
         ) : null}
 
-        <Box sx={{ p: 1.5, borderRadius: 2, backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
+        <Box sx={{ p: 1, borderRadius: 1, backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
           <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <Typography variant="caption" sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}>
               <Shield size={12} /> AS Number
@@ -510,7 +510,7 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
         </Box>
 
         {/* Node Tags */}
-        <Box sx={{ p: 1.5, borderRadius: 2, backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
+        <Box sx={{ p: 1, borderRadius: 1, backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
           <Typography
             variant="caption"
             sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5, mb: 0.5 }}
@@ -546,7 +546,7 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
         {isDn42ExternalNode(node) && <Dn42InfoCard asn={node.asn} variant="drawer" />}
 
         {/* Node Markdown Note Card */}
-        <Box sx={{ p: 2, borderRadius: 2, backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
+        <Box sx={{ p: 1, borderRadius: 1, backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
           <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1.2 }}>
             <Typography
               variant="caption"
@@ -579,7 +579,7 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
                   px: 1,
                   textTransform: "none",
                   fontWeight: 600,
-                  borderRadius: 1.5,
+                  borderRadius: 1,
                   borderColor: "#CBD5E1",
                   color: "#4F46E5",
                   "&:hover": { borderColor: "#4F46E5", backgroundColor: "rgba(79, 70, 229, 0.04)" },
@@ -612,8 +612,8 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
           {!isEditingNote ? (
             <Box
               sx={{
-                p: 1.5,
-                borderRadius: 1.5,
+                p: 1,
+                borderRadius: 1,
                 backgroundColor: "#FFFFFF",
                 border: "1px solid #E2E8F0",
                 maxHeight: 280,
@@ -650,8 +650,8 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
               ) : (
                 <Box
                   sx={{
-                    p: 1.5,
-                    borderRadius: 1.5,
+                    p: 1,
+                    borderRadius: 1,
                     backgroundColor: "#FFFFFF",
                     border: "1px solid #E2E8F0",
                     minHeight: 80,
@@ -679,7 +679,7 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
                   onClick={handleSaveNote}
                   disabled={savingNote}
                   startIcon={savingNote ? <CircularProgress size={12} color="inherit" /> : <Check size={12} />}
-                  sx={{ fontSize: "0.75rem", textTransform: "none", fontWeight: 600, px: 1.5 }}
+                  sx={{ fontSize: "0.75rem", textTransform: "none", fontWeight: 600, px: 1 }}
                 >
                   {savingNote ? "Saving..." : "Save Note"}
                 </Button>
@@ -703,7 +703,7 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
                   key={i}
                   sx={{
                     p: 1.2,
-                    borderRadius: 1.5,
+                    borderRadius: 1,
                     backgroundColor: "#F8FAFC",
                     border: "1px solid #E2E8F0",
                     display: "flex",
@@ -779,7 +779,7 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
             <Box
               sx={{
                 p: 1.2,
-                borderRadius: 1.5,
+                borderRadius: 1,
                 backgroundColor: "#F8FAFC",
                 border: "1px solid #E2E8F0",
                 display: "flex",
@@ -807,7 +807,7 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
               <Box
                 sx={{
                   p: 1.2,
-                  borderRadius: 1.5,
+                  borderRadius: 1,
                   backgroundColor: "#F8FAFC",
                   border: "1px solid #E2E8F0",
                   display: "flex",
@@ -836,7 +836,7 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
               <Box
                 sx={{
                   p: 1.2,
-                  borderRadius: 1.5,
+                  borderRadius: 1,
                   backgroundColor: "#F8FAFC",
                   border: "1px solid #E2E8F0",
                   display: "flex",
@@ -865,7 +865,7 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
               <Box
                 sx={{
                   p: 1.2,
-                  borderRadius: 1.5,
+                  borderRadius: 1,
                   backgroundColor: "#F8FAFC",
                   border: "1px solid #E2E8F0",
                   display: "flex",
@@ -894,7 +894,7 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
               <Box
                 sx={{
                   p: 1.2,
-                  borderRadius: 1.5,
+                  borderRadius: 1,
                   backgroundColor: "#F8FAFC",
                   border: "1px solid #E2E8F0",
                   display: "flex",
@@ -923,7 +923,7 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
               <Box
                 sx={{
                   p: 1.2,
-                  borderRadius: 1.5,
+                  borderRadius: 1,
                   backgroundColor: "#F8FAFC",
                   border: "1px solid #E2E8F0",
                   display: "flex",
@@ -952,7 +952,7 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
               <Box
                 sx={{
                   p: 1.2,
-                  borderRadius: 1.5,
+                  borderRadius: 1,
                   backgroundColor: "#F8FAFC",
                   border: "1px solid #E2E8F0",
                   display: "flex",
@@ -999,7 +999,7 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
               <Box
                 sx={{
                   p: 1.2,
-                  borderRadius: 1.5,
+                  borderRadius: 1,
                   backgroundColor: "#EEF2FF",
                   border: "1px solid #C7D2FE",
                   display: "flex",
@@ -1031,7 +1031,7 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
               <Box
                 sx={{
                   p: 1.2,
-                  borderRadius: 1.5,
+                  borderRadius: 1,
                   backgroundColor: "#F0FDFA",
                   border: "1px solid #99F6E4",
                   display: "flex",
@@ -1063,7 +1063,7 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
               <Box
                 sx={{
                   p: 1.2,
-                  borderRadius: 1.5,
+                  borderRadius: 1,
                   backgroundColor: "#F8FAFC",
                   border: "1px solid #E2E8F0",
                   display: "flex",
@@ -1089,7 +1089,7 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
             ) : null}
 
             {/* Static Routes */}
-            <Box sx={{ p: 1.2, borderRadius: 1.5, backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
+            <Box sx={{ p: 1.2, borderRadius: 1, backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
               <Typography variant="caption" sx={{ color: "#64748B", display: "block", mb: 0.5 }}>
                 Static BGP Prefixes:
               </Typography>
@@ -1113,7 +1113,7 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
             </Box>
 
             {/* Kernel Route Imports */}
-            <Box sx={{ p: 1.2, borderRadius: 1.5, backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
+            <Box sx={{ p: 1.2, borderRadius: 1, backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
               <Typography variant="caption" sx={{ color: "#64748B", display: "block", mb: 0.5 }}>
                 Kernel Table Imports ({node.routes?.length || 0}):
               </Typography>
@@ -1157,7 +1157,7 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
 
         {/* Nftables Firewall & NAT */}
         {!node.is_external && (
-          <Box sx={{ mt: 2 }}>
+          <Box sx={{ mt: 1 }}>
             <Box
               sx={{
                 display: "flex",
@@ -1194,7 +1194,7 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
               <Box
                 sx={{
                   p: 1.2,
-                  borderRadius: 1.5,
+                  borderRadius: 1,
                   backgroundColor: "#F8FAFC",
                   border: "1px solid #E2E8F0",
                   display: "flex",
@@ -1229,8 +1229,8 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
             </Typography>
             <Box
               sx={{
-                p: 1.5,
-                borderRadius: 2,
+                p: 1,
+                borderRadius: 1,
                 backgroundColor: !status.connected ? "#FEF2F2" : "#F8FAFC",
                 border: "1px solid",
                 borderColor: !status.connected ? "#FECDD3" : "#E2E8F0",
@@ -1312,7 +1312,7 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
                   sx={{
                     p: 1,
                     backgroundColor: "rgba(241, 245, 249, 0.7)",
-                    borderRadius: 1.5,
+                    borderRadius: 1,
                     border: "1px dashed #CBD5E1",
                   }}
                 >
@@ -1367,7 +1367,7 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
                     mt: 0.5,
                     p: 1.25,
                     backgroundColor: "#FFFFFF",
-                    borderRadius: 1.5,
+                    borderRadius: 1,
                     border: "1px solid #A7F3D0",
                     display: "flex",
                     flexDirection: "column",
@@ -1416,7 +1416,7 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
                       value={Math.min(100, Math.max(0, status.metrics.cpu_percent))}
                       sx={{
                         height: 6,
-                        borderRadius: 3,
+                        borderRadius: 1,
                         backgroundColor: "#E2E8F0",
                         "& .MuiLinearProgress-bar": {
                           backgroundColor:
@@ -1455,7 +1455,7 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
                         )}
                         sx={{
                           height: 6,
-                          borderRadius: 3,
+                          borderRadius: 1,
                           backgroundColor: "#E2E8F0",
                           "& .MuiLinearProgress-bar": { backgroundColor: "#0284C7" },
                         }}
@@ -1485,7 +1485,7 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
                           value={Math.min(100, Math.max(0, pct))}
                           sx={{
                             height: 6,
-                            borderRadius: 3,
+                            borderRadius: 1,
                             backgroundColor: "#E2E8F0",
                             "& .MuiLinearProgress-bar": {
                               backgroundColor: pct > 85 ? "#E11D48" : pct > 70 ? "#F59E0B" : "#10B981",
@@ -1515,7 +1515,7 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
               )}
 
               {!status.connected && status.error && (
-                <Box sx={{ mt: 0.5, p: 1, backgroundColor: "#FFFFFF", borderRadius: 1.5, border: "1px solid #FECDD3" }}>
+                <Box sx={{ mt: 0.5, p: 1, backgroundColor: "#FFFFFF", borderRadius: 1, border: "1px solid #FECDD3" }}>
                   <Typography variant="caption" sx={{ color: "#991B1B", fontWeight: 700, display: "block", mb: 0.25 }}>
                     SSH Connection Error:
                   </Typography>
@@ -1885,7 +1885,7 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
           </IconButton>
         </DialogTitle>
         <DialogContent sx={{ pt: 2, pb: 1 }}>
-          <Alert severity="info" sx={{ mb: 2, fontSize: "0.8rem", borderRadius: 2 }}>
+          <Alert severity="info" sx={{ mb: 1, fontSize: "0.8rem", borderRadius: 2 }}>
             <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.5 }}>
               Standard Device Path: <code>/etc/bird_easy42.conf</code>
             </Typography>
@@ -1925,8 +1925,8 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
               className="mono-font"
               sx={{
                 m: 0,
-                p: 2,
-                borderRadius: 2,
+                p: 1,
+                borderRadius: 1,
                 backgroundColor: "#0F172A",
                 color: "#38BDF8",
                 fontSize: "0.78rem",
@@ -1940,7 +1940,7 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
             </Box>
           )}
         </DialogContent>
-        <DialogActions sx={{ px: 3, py: 1.5, borderTop: "1px solid #E2E8F0", backgroundColor: "#F8FAFC" }}>
+        <DialogActions sx={{ px: 3, py: 1, borderTop: "1px solid #E2E8F0", backgroundColor: "#F8FAFC" }}>
           <Button
             size="small"
             variant="outlined"
@@ -1967,7 +1967,7 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
             justifyContent: "space-between",
             alignItems: "center",
             borderBottom: "1px solid #E2E8F0",
-            pb: 1.5,
+            pb: 1,
           }}
         >
           <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
@@ -1981,7 +1981,7 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
           </IconButton>
         </DialogTitle>
         <DialogContent sx={{ pt: 2, pb: 1 }}>
-          <Alert severity="info" sx={{ mb: 2, fontSize: "0.8rem", borderRadius: 2 }}>
+          <Alert severity="info" sx={{ mb: 1, fontSize: "0.8rem", borderRadius: 2 }}>
             <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.5 }}>
               Standard Device Path: <code>/etc/easy42.nft</code>
             </Typography>
@@ -2021,8 +2021,8 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
               className="mono-font"
               sx={{
                 m: 0,
-                p: 2,
-                borderRadius: 2,
+                p: 1,
+                borderRadius: 1,
                 backgroundColor: "#0F172A",
                 color: "#38BDF8",
                 fontSize: "0.78rem",
@@ -2036,7 +2036,7 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
             </Box>
           )}
         </DialogContent>
-        <DialogActions sx={{ px: 3, py: 1.5, borderTop: "1px solid #E2E8F0", backgroundColor: "#F8FAFC" }}>
+        <DialogActions sx={{ px: 3, py: 1, borderTop: "1px solid #E2E8F0", backgroundColor: "#F8FAFC" }}>
           <Button
             size="small"
             variant="outlined"

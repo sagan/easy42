@@ -52,7 +52,7 @@ export const UnlockModal: React.FC<UnlockModalProps> = ({ open, onClose, onUnloc
           sx={{
             width: 34,
             height: 34,
-            borderRadius: 2,
+            borderRadius: 1,
             backgroundColor: "rgba(217, 119, 6, 0.1)",
             display: "flex",
             alignItems: "center",
@@ -68,7 +68,7 @@ export const UnlockModal: React.FC<UnlockModalProps> = ({ open, onClose, onUnloc
       </DialogTitle>
 
       <form onSubmit={handleUnlock}>
-        <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2, pt: 2.5 }}>
+        <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 1, pt: 1 }}>
           <Typography variant="body2" sx={{ color: "#64748B" }}>
             The master key vault is locked in memory. Please enter your administrator password to unlock sensitive
             WireGuard keys.
@@ -93,7 +93,7 @@ export const UnlockModal: React.FC<UnlockModalProps> = ({ open, onClose, onUnloc
           )}
         </DialogContent>
 
-        <DialogActions sx={{ px: 3, py: 2, borderTop: "1px solid #E2E8F0", backgroundColor: "#F8FAFC" }}>
+        <DialogActions sx={{ px: 3, py: 1, borderTop: "1px solid #E2E8F0", backgroundColor: "#F8FAFC" }}>
           <Button onClick={onClose} disabled={loading} sx={{ color: "#64748B" }}>
             Cancel
           </Button>

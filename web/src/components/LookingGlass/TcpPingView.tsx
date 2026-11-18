@@ -46,13 +46,13 @@ export const TcpPingView: React.FC<TcpPingViewProps> = ({ tcpPing }) => {
   const remoteEstMtu = tcpPing.remote_mss ? tcpPing.remote_mss + totalOverhead : undefined;
 
   return (
-    <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+    <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
       {/* Target & Resolution Summary Banner */}
       <Paper
         elevation={0}
         sx={{
-          p: 2,
-          borderRadius: 2,
+          p: 1,
+          borderRadius: 1,
           border: "1px solid #E2E8F0",
           backgroundColor: "#F8FAFC",
           display: "flex",
@@ -67,7 +67,7 @@ export const TcpPingView: React.FC<TcpPingViewProps> = ({ tcpPing }) => {
             sx={{
               width: 36,
               height: 36,
-              borderRadius: 1.5,
+              borderRadius: 1,
               backgroundColor: isReachable ? "#DCFCE7" : "#FEE2E2",
               display: "flex",
               alignItems: "center",
@@ -126,8 +126,8 @@ export const TcpPingView: React.FC<TcpPingViewProps> = ({ tcpPing }) => {
         <Paper
           elevation={0}
           sx={{
-            p: 2,
-            borderRadius: 2,
+            p: 1,
+            borderRadius: 1,
             border: `1px solid ${lossColor.border}`,
             backgroundColor: lossColor.bg,
             display: "flex",
@@ -153,8 +153,8 @@ export const TcpPingView: React.FC<TcpPingViewProps> = ({ tcpPing }) => {
         <Paper
           elevation={0}
           sx={{
-            p: 2,
-            borderRadius: 2,
+            p: 1,
+            borderRadius: 1,
             border: "1px solid #E2E8F0",
             backgroundColor: "#FFFFFF",
             display: "flex",
@@ -180,8 +180,8 @@ export const TcpPingView: React.FC<TcpPingViewProps> = ({ tcpPing }) => {
         <Paper
           elevation={0}
           sx={{
-            p: 2,
-            borderRadius: 2,
+            p: 1,
+            borderRadius: 1,
             border: "1.5px solid #6366F1",
             backgroundColor: "#FAFBFF",
             display: "flex",
@@ -207,8 +207,8 @@ export const TcpPingView: React.FC<TcpPingViewProps> = ({ tcpPing }) => {
         <Paper
           elevation={0}
           sx={{
-            p: 2,
-            borderRadius: 2,
+            p: 1,
+            borderRadius: 1,
             border: "1px solid #E2E8F0",
             backgroundColor: "#FFFFFF",
             display: "flex",
@@ -236,13 +236,13 @@ export const TcpPingView: React.FC<TcpPingViewProps> = ({ tcpPing }) => {
         <Paper
           elevation={0}
           sx={{
-            p: 2.5,
-            borderRadius: 2,
+            p: 1,
+            borderRadius: 1,
             border: "1px solid #E2E8F0",
             backgroundColor: "#FFFFFF",
             display: "flex",
             flexDirection: "column",
-            gap: 2,
+            gap: 1,
           }}
         >
           {/* Header */}
@@ -254,7 +254,7 @@ export const TcpPingView: React.FC<TcpPingViewProps> = ({ tcpPing }) => {
                 sx={{
                   width: 34,
                   height: 34,
-                  borderRadius: 1.5,
+                  borderRadius: 1,
                   backgroundColor: "#F0F9FF",
                   border: "1px solid #BAE6FD",
                   display: "flex",
@@ -317,15 +317,15 @@ export const TcpPingView: React.FC<TcpPingViewProps> = ({ tcpPing }) => {
             sx={{
               display: "grid",
               gridTemplateColumns: { xs: "1fr", sm: "repeat(2, 1fr)" },
-              gap: 2,
+              gap: 1,
             }}
           >
             {/* Local Agent Node MSS */}
             <Paper
               elevation={0}
               sx={{
-                p: 2,
-                borderRadius: 2,
+                p: 1,
+                borderRadius: 1,
                 border: "1px solid #E0F2FE",
                 backgroundColor: "#F8FAFC",
                 display: "flex",
@@ -382,8 +382,8 @@ export const TcpPingView: React.FC<TcpPingViewProps> = ({ tcpPing }) => {
             <Paper
               elevation={0}
               sx={{
-                p: 2,
-                borderRadius: 2,
+                p: 1,
+                borderRadius: 1,
                 border: "1px solid #F3E8FF",
                 backgroundColor: "#FAF5FF",
                 display: "flex",
@@ -441,8 +441,8 @@ export const TcpPingView: React.FC<TcpPingViewProps> = ({ tcpPing }) => {
           {tcpPing.local_mss && tcpPing.remote_mss && (
             <Box
               sx={{
-                p: 1.5,
-                borderRadius: 1.5,
+                p: 1,
+                borderRadius: 1,
                 backgroundColor:
                   tcpPing.remote_mss === tcpPing.local_mss
                     ? "#F0FDF4"
@@ -506,8 +506,8 @@ export const TcpPingView: React.FC<TcpPingViewProps> = ({ tcpPing }) => {
 
       {/* Per-Probe Latency Chart */}
       {tcpPing.rtts && tcpPing.rtts.length > 0 && (
-        <Paper elevation={0} sx={{ p: 2, border: "1px solid #E2E8F0", borderRadius: 2 }}>
-          <Typography variant="subtitle2" sx={{ fontWeight: 600, color: "#1E293B", mb: 1.5 }}>
+        <Paper elevation={0} sx={{ p: 1, border: "1px solid #E2E8F0", borderRadius: 2 }}>
+          <Typography variant="subtitle2" sx={{ fontWeight: 600, color: "#1E293B", mb: 1 }}>
             Individual TCP Probes
           </Typography>
 
@@ -522,9 +522,9 @@ export const TcpPingView: React.FC<TcpPingViewProps> = ({ tcpPing }) => {
                   sx={{
                     display: "flex",
                     alignItems: "center",
-                    gap: 2,
+                    gap: 1,
                     p: 1,
-                    borderRadius: 1.5,
+                    borderRadius: 1,
                     backgroundColor: "#F8FAFC",
                   }}
                 >

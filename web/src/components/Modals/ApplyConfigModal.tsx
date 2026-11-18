@@ -585,16 +585,15 @@ export const ApplyConfigModal: React.FC<ApplyConfigModalProps> = ({
       fullScreen={isMobile}
       PaperProps={{
         sx: {
-          borderRadius: { xs: 0, sm: 2 },
+          borderRadius: { xs: 0, sm: 1 },
           height: { xs: "100%", sm: "85vh" },
-          m: { xs: 0, sm: 2 },
+          m: { xs: 0, sm: 1 },
         },
       }}
     >
       <DialogTitle
         sx={{
-          p: { xs: 2, sm: 2.5 },
-          pb: 1.5,
+          p: 1,
           borderBottom: "1px solid #E2E8F0",
         }}
       >
@@ -612,7 +611,7 @@ export const ApplyConfigModal: React.FC<ApplyConfigModalProps> = ({
               sx={{
                 width: 38,
                 height: 38,
-                borderRadius: 2,
+                borderRadius: 1,
                 bgcolor: "rgba(37, 99, 235, 0.1)",
                 display: "flex",
                 alignItems: "center",
@@ -683,7 +682,7 @@ export const ApplyConfigModal: React.FC<ApplyConfigModalProps> = ({
         </Box>
       </DialogTitle>
 
-      <Box sx={{ borderBottom: 1, borderColor: "divider", px: { xs: 1.5, sm: 3 }, pt: 1 }}>
+      <Box sx={{ borderBottom: 1, borderColor: "divider", px: 1, pt: 1 }}>
         <Tabs
           value={activeTab}
           onChange={(_, val) => setActiveTab(val)}
@@ -717,9 +716,7 @@ export const ApplyConfigModal: React.FC<ApplyConfigModalProps> = ({
         </Tabs>
       </Box>
 
-      <DialogContent
-        sx={{ p: { xs: 1.5, sm: 3 }, display: "flex", flexDirection: "column", gap: 2, overflowY: "auto" }}
-      >
+      <DialogContent sx={{ p: 1, display: "flex", flexDirection: "column", gap: 1, overflowY: "auto" }}>
         {applyError && (
           <Alert severity="error" onClose={() => setApplyError(null)}>
             {applyError}
@@ -751,7 +748,7 @@ export const ApplyConfigModal: React.FC<ApplyConfigModalProps> = ({
 
         {/* TAB 0: EDITOR */}
         {activeTab === 0 && (
-          <Box sx={{ display: "flex", flexDirection: "column", gap: 2, flex: 1 }}>
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 1, flex: 1 }}>
             {/* Top Toolbar: Preset Templates & Format Actions */}
             <Box
               sx={{
@@ -807,7 +804,7 @@ export const ApplyConfigModal: React.FC<ApplyConfigModalProps> = ({
             <Paper
               variant="outlined"
               sx={{
-                p: 1.5,
+                p: 1,
                 backgroundColor: "#F8FAFC",
                 display: "flex",
                 flexDirection: { xs: "column", sm: "row" },
@@ -843,13 +840,13 @@ export const ApplyConfigModal: React.FC<ApplyConfigModalProps> = ({
                     }}
                     sx={{ height: 32 }}
                   >
-                    <ToggleButton value="node" sx={{ textTransform: "none", px: 1.5, py: 0.5, fontSize: 13 }}>
+                    <ToggleButton value="node" sx={{ textTransform: "none", px: 1, py: 0.5, fontSize: 13 }}>
                       Node
                     </ToggleButton>
-                    <ToggleButton value="link" sx={{ textTransform: "none", px: 1.5, py: 0.5, fontSize: 13 }}>
+                    <ToggleButton value="link" sx={{ textTransform: "none", px: 1, py: 0.5, fontSize: 13 }}>
                       Link
                     </ToggleButton>
-                    <ToggleButton value="app" sx={{ textTransform: "none", px: 1.5, py: 0.5, fontSize: 13 }}>
+                    <ToggleButton value="app" sx={{ textTransform: "none", px: 1, py: 0.5, fontSize: 13 }}>
                       App
                     </ToggleButton>
                   </ToggleButtonGroup>
@@ -958,9 +955,9 @@ export const ApplyConfigModal: React.FC<ApplyConfigModalProps> = ({
             {/* Quick Save Snippet Bar */}
             <Box
               sx={{
-                p: { xs: 1.5, sm: 2 },
+                p: 1,
                 backgroundColor: "#F1F5F9",
-                borderRadius: 1.5,
+                borderRadius: 1,
                 display: "flex",
                 flexDirection: { xs: "column", sm: "row" },
                 alignItems: { xs: "stretch", sm: "center" },
@@ -1003,10 +1000,10 @@ export const ApplyConfigModal: React.FC<ApplyConfigModalProps> = ({
 
         {/* TAB 1: PREVIEW & DIFF */}
         {activeTab === 1 && (
-          <Box sx={{ display: "flex", flexDirection: "column", gap: 2, flex: 1 }}>
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 1, flex: 1 }}>
             {!previewResult ? (
               <Box sx={{ textAlign: "center", py: 8 }}>
-                <Typography variant="body2" sx={{ color: "#64748B", mb: 2 }}>
+                <Typography variant="body2" sx={{ color: "#64748B", mb: 1 }}>
                   No preview generated yet. Click "Preview Changes" to inspect what will be modified.
                 </Typography>
                 <Button variant="contained" onClick={handlePreview} disabled={previewing || !validationResult?.valid}>
@@ -1054,7 +1051,7 @@ export const ApplyConfigModal: React.FC<ApplyConfigModalProps> = ({
 
                 {(previewResult.nodes || []).length > 0 && (
                   <Paper variant="outlined" sx={{ overflow: "hidden" }}>
-                    <Typography variant="subtitle2" sx={{ p: 1.5, backgroundColor: "#F8FAFC", fontWeight: 600 }}>
+                    <Typography variant="subtitle2" sx={{ p: 1, backgroundColor: "#F8FAFC", fontWeight: 600 }}>
                       Node Modifications
                     </Typography>
                     <TableContainer sx={{ overflowX: "auto" }}>
@@ -1098,7 +1095,7 @@ export const ApplyConfigModal: React.FC<ApplyConfigModalProps> = ({
 
                 {(previewResult.links || []).length > 0 && (
                   <Paper variant="outlined" sx={{ overflow: "hidden" }}>
-                    <Typography variant="subtitle2" sx={{ p: 1.5, backgroundColor: "#F8FAFC", fontWeight: 600 }}>
+                    <Typography variant="subtitle2" sx={{ p: 1, backgroundColor: "#F8FAFC", fontWeight: 600 }}>
                       Link Modifications
                     </Typography>
                     <TableContainer sx={{ overflowX: "auto" }}>
@@ -1144,7 +1141,7 @@ export const ApplyConfigModal: React.FC<ApplyConfigModalProps> = ({
 
                 {(previewResult.apps || []).length > 0 && (
                   <Paper variant="outlined" sx={{ overflow: "hidden" }}>
-                    <Typography variant="subtitle2" sx={{ p: 1.5, backgroundColor: "#F8FAFC", fontWeight: 600 }}>
+                    <Typography variant="subtitle2" sx={{ p: 1, backgroundColor: "#F8FAFC", fontWeight: 600 }}>
                       App Modifications
                     </Typography>
                     <TableContainer sx={{ overflowX: "auto" }}>
@@ -1188,7 +1185,7 @@ export const ApplyConfigModal: React.FC<ApplyConfigModalProps> = ({
 
                 {(previewResult.settings || []).length > 0 && (
                   <Paper variant="outlined" sx={{ overflow: "hidden" }}>
-                    <Typography variant="subtitle2" sx={{ p: 1.5, backgroundColor: "#F8FAFC", fontWeight: 600 }}>
+                    <Typography variant="subtitle2" sx={{ p: 1, backgroundColor: "#F8FAFC", fontWeight: 600 }}>
                       Settings Modifications
                     </Typography>
                     <TableContainer sx={{ overflowX: "auto" }}>
@@ -1223,7 +1220,7 @@ export const ApplyConfigModal: React.FC<ApplyConfigModalProps> = ({
                 )}
 
                 {previewResult.unified_diff && (
-                  <Paper variant="outlined" sx={{ p: 2, backgroundColor: "#0F172A", color: "#F8FAFC" }}>
+                  <Paper variant="outlined" sx={{ p: 1, backgroundColor: "#0F172A", color: "#F8FAFC" }}>
                     <Typography variant="caption" sx={{ color: "#94A3B8", display: "block", mb: 1 }}>
                       Unified JSON Diff
                     </Typography>
@@ -1259,7 +1256,7 @@ export const ApplyConfigModal: React.FC<ApplyConfigModalProps> = ({
 
         {/* TAB 2: SAVED SNIPPETS */}
         {activeTab === 2 && (
-          <Box sx={{ display: "flex", flexDirection: "column", gap: 2, flex: 1 }}>
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 1, flex: 1 }}>
             {loadingSnippets ? (
               <Box sx={{ display: "flex", justifyContent: "center", py: 6 }}>
                 <CircularProgress size={32} />
@@ -1277,7 +1274,7 @@ export const ApplyConfigModal: React.FC<ApplyConfigModalProps> = ({
                     key={s.id}
                     variant="outlined"
                     sx={{
-                      p: 2,
+                      p: 1,
                       display: "flex",
                       flexDirection: { xs: "column", sm: "row" },
                       alignItems: { xs: "flex-start", sm: "center" },
@@ -1351,8 +1348,8 @@ export const ApplyConfigModal: React.FC<ApplyConfigModalProps> = ({
 
       <DialogActions
         sx={{
-          px: { xs: 2, sm: 3 },
-          py: 2,
+          px: 1,
+          py: 1,
           borderTop: "1px solid #E2E8F0",
           display: "flex",
           flexDirection: { xs: "column", sm: "row" },

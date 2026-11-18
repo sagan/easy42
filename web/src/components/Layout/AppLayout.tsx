@@ -158,7 +158,7 @@ export const AppLayout: React.FC = () => {
           overflowX: "auto",
         }}
       >
-        <Toolbar sx={{ px: { xs: 1.5, sm: 2.5 }, minHeight: { xs: 56, sm: 62 }, justifyContent: "space-between" }}>
+        <Toolbar sx={{ px: 1, minHeight: { xs: 56, sm: 62 }, justifyContent: "space-between" }}>
           {/* Brand Logo & Title */}
           <Box sx={{ display: "flex", alignItems: "center" }}>
             {isMobile && (
@@ -208,7 +208,7 @@ export const AppLayout: React.FC = () => {
 
             {/* Desktop Navigation Tabs */}
             {!isMobile && (
-              <Box sx={{ display: "flex", alignItems: "center", gap: 0.8, ml: 2 }}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 0.8, ml: 1 }}>
                 {navItems.map((item) => {
                   const isActive = currentPath === item.path || currentPath.startsWith(item.path + "/");
                   return (
@@ -218,9 +218,9 @@ export const AppLayout: React.FC = () => {
                       startIcon={item.icon}
                       title={item.title}
                       sx={{
-                        px: 1.8,
-                        py: 0.8,
-                        borderRadius: 2,
+                        px: 1,
+                        py: 1,
+                        borderRadius: 1,
                         fontSize: "0.85rem",
                         fontWeight: isActive ? 700 : 500,
                         color: isActive ? "#4F46E5" : "#64748B",
@@ -246,8 +246,8 @@ export const AppLayout: React.FC = () => {
                             bgcolor: "#0F172A",
                             color: "#F8FAFC",
                             boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.3), 0 8px 10px -6px rgba(0, 0, 0, 0.3)",
-                            p: 1.5,
-                            borderRadius: 2,
+                            p: 1,
+                            borderRadius: 1,
                             border: "1px solid rgba(255, 255, 255, 0.1)",
                             maxWidth: 280,
                           },
@@ -276,7 +276,7 @@ export const AppLayout: React.FC = () => {
                             </Typography>
                           </Box>
                           <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5, fontSize: "0.78rem" }}>
-                            <Box sx={{ display: "flex", justifyContent: "space-between", gap: 2 }}>
+                            <Box sx={{ display: "flex", justifyContent: "space-between", gap: 1 }}>
                               <Typography variant="caption" sx={{ color: "#94A3B8" }}>
                                 Avg Route Changes (90m):
                               </Typography>
@@ -284,7 +284,7 @@ export const AppLayout: React.FC = () => {
                                 {flapAlertedMetrics?.AverageRouteChanges90}
                               </Typography>
                             </Box>
-                            <Box sx={{ display: "flex", justifyContent: "space-between", gap: 2 }}>
+                            <Box sx={{ display: "flex", justifyContent: "space-between", gap: 1 }}>
                               <Typography variant="caption" sx={{ color: "#94A3B8" }}>
                                 Active Flaps:
                               </Typography>
@@ -298,7 +298,7 @@ export const AppLayout: React.FC = () => {
                                 {flapAlertedMetrics?.ActiveFlapCount ?? 0}
                               </Typography>
                             </Box>
-                            <Box sx={{ display: "flex", justifyContent: "space-between", gap: 2 }}>
+                            <Box sx={{ display: "flex", justifyContent: "space-between", gap: 1 }}>
                               <Typography variant="caption" sx={{ color: "#94A3B8" }}>
                                 Active Flap Path Changes:
                               </Typography>
@@ -306,7 +306,7 @@ export const AppLayout: React.FC = () => {
                                 {flapAlertedMetrics?.ActiveFlapTotalPathChangeCount ?? 0}
                               </Typography>
                             </Box>
-                            <Box sx={{ display: "flex", justifyContent: "space-between", gap: 2 }}>
+                            <Box sx={{ display: "flex", justifyContent: "space-between", gap: 1 }}>
                               <Typography variant="caption" sx={{ color: "#94A3B8" }}>
                                 Total Path Changes:
                               </Typography>
@@ -314,7 +314,7 @@ export const AppLayout: React.FC = () => {
                                 {flapAlertedMetrics?.TotalPathChangeCount ?? 0}
                               </Typography>
                             </Box>
-                            <Box sx={{ display: "flex", justifyContent: "space-between", gap: 2 }}>
+                            <Box sx={{ display: "flex", justifyContent: "space-between", gap: 1 }}>
                               <Typography variant="caption" sx={{ color: "#94A3B8" }}>
                                 Sessions:
                               </Typography>
@@ -333,7 +333,7 @@ export const AppLayout: React.FC = () => {
                           gap: 0.5,
                           px: 1.2,
                           py: 0.7,
-                          borderRadius: 2,
+                          borderRadius: 1,
                           bgcolor: "rgba(8, 145, 178, 0.08)",
                           border: "1px solid rgba(8, 145, 178, 0.25)",
                           textDecoration: "none",
@@ -385,7 +385,7 @@ export const AppLayout: React.FC = () => {
           </Box>
 
           {/* Right Action Tools */}
-          <Box sx={{ display: "flex", alignItems: "center", gap: { xs: 0.8, sm: 1.5 } }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
             {/* Live Fleet Pill */}
             {fleetLive && (
               <Tooltip
@@ -462,7 +462,7 @@ export const AppLayout: React.FC = () => {
                   color: currentPath === "/events" ? "#4F46E5" : "#64748B",
                   bgcolor: currentPath === "/events" ? "#EEF2FF" : "transparent",
                   p: 0.8,
-                  borderRadius: 2,
+                  borderRadius: 1,
                   display: { xs: "none", sm: "inline-flex" },
                   position: "relative",
                   "&:hover": {
@@ -502,7 +502,7 @@ export const AppLayout: React.FC = () => {
                   color: isUnlocked ? "#059669" : "#E11D48",
                   bgcolor: isUnlocked ? "#ECFDF5" : "#FEF2F2",
                   p: 0.8,
-                  borderRadius: 2,
+                  borderRadius: 1,
                 }}
               >
                 {isUnlocked ? <Unlock size={17} /> : <Lock size={17} />}
@@ -586,8 +586,8 @@ export const AppLayout: React.FC = () => {
 
       {/* Mobile Side Drawer */}
       <Drawer anchor="left" open={mobileDrawerOpen} onClose={() => setMobileDrawerOpen(false)}>
-        <Box sx={{ width: 260, p: 2, display: "flex", flexDirection: "column", height: "100%" }}>
-          <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
+        <Box sx={{ width: 260, p: 1, display: "flex", flexDirection: "column", height: "100%" }}>
+          <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
             <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
               <Easy42Logo size={30} sx={{ borderRadius: "7px" }} />
               <Typography variant="h6" sx={{ fontWeight: 800, color: "#0F172A" }}>
@@ -599,7 +599,7 @@ export const AppLayout: React.FC = () => {
             </IconButton>
           </Box>
 
-          <Divider sx={{ mb: 2 }} />
+          <Divider sx={{ mb: 1 }} />
 
           <List sx={{ p: 0 }}>
             {navItems.map((item) => {
@@ -612,7 +612,7 @@ export const AppLayout: React.FC = () => {
                       setMobileDrawerOpen(false);
                     }}
                     sx={{
-                      borderRadius: 2,
+                      borderRadius: 1,
                       bgcolor: isActive ? "#EEF2FF" : "transparent",
                       color: isActive ? "#4F46E5" : "#334155",
                       fontWeight: isActive ? 700 : 500,
@@ -638,7 +638,7 @@ export const AppLayout: React.FC = () => {
                   setMobileDrawerOpen(false);
                 }}
                 sx={{
-                  borderRadius: 2,
+                  borderRadius: 1,
                   bgcolor: currentPath === "/events" ? "#EEF2FF" : "transparent",
                   color: currentPath === "/events" ? "#4F46E5" : "#334155",
                   fontWeight: currentPath === "/events" ? 700 : 500,
@@ -691,7 +691,7 @@ export const AppLayout: React.FC = () => {
                   rel="noopener noreferrer"
                   onClick={() => setMobileDrawerOpen(false)}
                   sx={{
-                    borderRadius: 2,
+                    borderRadius: 1,
                     bgcolor: "rgba(8, 145, 178, 0.08)",
                     color: "#0891B2",
                     fontWeight: 700,
@@ -729,7 +729,7 @@ export const AppLayout: React.FC = () => {
             )}
           </List>
 
-          <Box sx={{ mt: "auto", pt: 2, borderTop: "1px solid #E2E8F0" }}>
+          <Box sx={{ mt: "auto", pt: 1, borderTop: "1px solid #E2E8F0" }}>
             <Button
               fullWidth
               variant="outlined"

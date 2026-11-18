@@ -50,9 +50,9 @@ export const NodeNoteDataView: React.FC<NodeNoteDataViewProps> = ({ note }) => {
   return (
     <Box
       sx={{
-        mt: 2,
-        p: 2,
-        borderRadius: 2,
+        mt: 1,
+        p: 1,
+        borderRadius: 1,
         bgcolor: "#FFFFFF",
         border: "1px solid #E2E8F0",
       }}
@@ -106,7 +106,7 @@ export const NodeNoteDataView: React.FC<NodeNoteDataViewProps> = ({ note }) => {
         environment variables.
       </Typography>
 
-      <Box sx={{ display: "flex", flexWrap: "wrap", gap: 2, mt: 1.5 }}>
+      <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, mt: 1 }}>
         {/* Parsed structured data object */}
         <Box sx={{ flex: "1 1 300px", minWidth: 0 }}>
           <Box
@@ -142,8 +142,8 @@ export const NodeNoteDataView: React.FC<NodeNoteDataViewProps> = ({ note }) => {
             className="mono-font"
             sx={{
               m: 0,
-              p: 1.5,
-              borderRadius: 1.5,
+              p: 1,
+              borderRadius: 1,
               bgcolor: "#0F172A",
               color: "#F8FAFC",
               fontSize: "0.76rem",
@@ -174,7 +174,7 @@ export const NodeNoteDataView: React.FC<NodeNoteDataViewProps> = ({ note }) => {
             <TableContainer
               sx={{
                 border: "1px solid #E2E8F0",
-                borderRadius: 1.5,
+                borderRadius: 1,
                 maxHeight: 320,
                 overflow: "auto",
               }}
@@ -266,8 +266,8 @@ export const NodeNoteDataView: React.FC<NodeNoteDataViewProps> = ({ note }) => {
           ) : (
             <Box
               sx={{
-                p: 1.5,
-                borderRadius: 1.5,
+                p: 1,
+                borderRadius: 1,
                 bgcolor: "#F8FAFC",
                 border: "1px dashed #CBD5E1",
                 color: "#64748B",

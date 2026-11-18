@@ -95,7 +95,7 @@ export const RenameNodeModal: React.FC<RenameNodeModalProps> = ({
       fullWidth
       PaperProps={{
         sx: {
-          borderRadius: 3,
+          borderRadius: 1,
           boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)",
         },
       }}
@@ -106,7 +106,7 @@ export const RenameNodeModal: React.FC<RenameNodeModalProps> = ({
             display: "flex",
             alignItems: "center",
             gap: 1,
-            pb: 1.5,
+            pb: 1,
             borderBottom: "1px solid #E2E8F0",
           }}
         >
@@ -114,7 +114,7 @@ export const RenameNodeModal: React.FC<RenameNodeModalProps> = ({
             sx={{
               width: 38,
               height: 38,
-              borderRadius: 2,
+              borderRadius: 1,
               backgroundColor: isExternal ? "rgba(139, 92, 246, 0.12)" : "rgba(79, 70, 229, 0.1)",
               display: "flex",
               alignItems: "center",
@@ -134,7 +134,7 @@ export const RenameNodeModal: React.FC<RenameNodeModalProps> = ({
           </Box>
         </DialogTitle>
 
-        <DialogContent sx={{ pt: 2.5, display: "flex", flexDirection: "column", gap: 2 }}>
+        <DialogContent sx={{ pt: 2, display: "flex", flexDirection: "column", gap: 1 }}>
           {error && (
             <Alert severity="error" icon={<AlertCircle size={18} />} sx={{ borderRadius: 2 }}>
               {error}
@@ -144,8 +144,8 @@ export const RenameNodeModal: React.FC<RenameNodeModalProps> = ({
           {/* Current Node Info */}
           <Box
             sx={{
-              p: 1.5,
-              borderRadius: 2,
+              p: 1,
+              borderRadius: 1,
               backgroundColor: "#F8FAFC",
               border: "1px solid #E2E8F0",
               display: "flex",
@@ -232,8 +232,8 @@ export const RenameNodeModal: React.FC<RenameNodeModalProps> = ({
           {/* Explanation / Impact details */}
           <Box
             sx={{
-              p: 1.5,
-              borderRadius: 2,
+              p: 1,
+              borderRadius: 1,
               backgroundColor: "rgba(79, 70, 229, 0.04)",
               border: "1px dashed rgba(79, 70, 229, 0.25)",
             }}
@@ -248,7 +248,7 @@ export const RenameNodeModal: React.FC<RenameNodeModalProps> = ({
           </Box>
         </DialogContent>
 
-        <DialogActions sx={{ px: 3, pb: 2.5, pt: 1, borderTop: "1px solid #E2E8F0" }}>
+        <DialogActions sx={{ px: 3, pb: 2, pt: 1, borderTop: "1px solid #E2E8F0" }}>
           <Button onClick={onClose} disabled={saving} sx={{ color: "#64748B" }}>
             Cancel
           </Button>

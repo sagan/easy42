@@ -138,26 +138,26 @@ chmod +x ~/.config/easy42/tasks/hello_world/*.sh`;
       sx={{
         flex: 1,
         overflowY: "auto",
-        p: { xs: 2, sm: 3 },
+        p: 1,
         bgcolor: "#f8fafc",
         display: "flex",
         flexDirection: "column",
-        gap: 3,
+        gap: 1,
       }}
     >
       {/* Top Banner */}
       <Paper
         elevation={0}
         sx={{
-          p: 3,
-          borderRadius: 3,
+          p: 1,
+          borderRadius: 1,
           border: "1px solid #e2e8f0",
           background: "linear-gradient(135deg, #ffffff 0%, #f1f5f9 100%)",
           display: "flex",
           flexDirection: { xs: "column", sm: "row" },
           alignItems: { xs: "flex-start", sm: "center" },
           justifyContent: "space-between",
-          gap: 2,
+          gap: 1,
         }}
       >
         <Box>
@@ -166,7 +166,7 @@ chmod +x ~/.config/easy42/tasks/hello_world/*.sh`;
               sx={{
                 width: 38,
                 height: 38,
-                borderRadius: 2,
+                borderRadius: 1,
                 bgcolor: "primary.main",
                 color: "#ffffff",
                 display: "flex",
@@ -235,8 +235,8 @@ chmod +x ~/.config/easy42/tasks/hello_world/*.sh`;
       <Paper
         elevation={0}
         sx={{
-          p: 3,
-          borderRadius: 3,
+          p: 1,
+          borderRadius: 1,
           border: "1px solid #e2e8f0",
           bgcolor: "#ffffff",
         }}
@@ -244,7 +244,7 @@ chmod +x ~/.config/easy42/tasks/hello_world/*.sh`;
         <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1, color: "#0f172a" }}>
           How Custom Tasks Work
         </Typography>
-        <Typography variant="body2" sx={{ color: "#475569", mb: 2 }}>
+        <Typography variant="body2" sx={{ color: "#475569", mb: 1 }}>
           For safety and simplicity, custom tasks are managed directly in your easy42 data directory:
         </Typography>
 
@@ -252,11 +252,11 @@ chmod +x ~/.config/easy42/tasks/hello_world/*.sh`;
           sx={{
             bgcolor: "#0f172a",
             color: "#38bdf8",
-            p: 2,
-            borderRadius: 2,
+            p: 1,
+            borderRadius: 1,
             fontFamily: "monospace",
             fontSize: "0.85rem",
-            mb: 2.5,
+            mb: 1,
             border: "1px solid #1e293b",
           }}
         >
@@ -271,14 +271,14 @@ chmod +x ~/.config/easy42/tasks/hello_world/*.sh`;
           sx={{
             display: "grid",
             gridTemplateColumns: { xs: "1fr", md: "repeat(3, 1fr)" },
-            gap: 2,
+            gap: 1,
           }}
         >
           {/* run.sh card */}
           <Box
             sx={{
-              p: 2,
-              borderRadius: 2,
+              p: 1,
+              borderRadius: 1,
               border: "1px solid #e2e8f0",
               bgcolor: "#f8fafc",
             }}
@@ -304,8 +304,8 @@ chmod +x ~/.config/easy42/tasks/hello_world/*.sh`;
           {/* status.sh card */}
           <Box
             sx={{
-              p: 2,
-              borderRadius: 2,
+              p: 1,
+              borderRadius: 1,
               border: "1px solid #e2e8f0",
               bgcolor: "#f8fafc",
             }}
@@ -331,8 +331,8 @@ chmod +x ~/.config/easy42/tasks/hello_world/*.sh`;
           {/* task.json card */}
           <Box
             sx={{
-              p: 2,
-              borderRadius: 2,
+              p: 1,
+              borderRadius: 1,
               border: "1px solid #e2e8f0",
               bgcolor: "#f8fafc",
             }}
@@ -357,7 +357,7 @@ chmod +x ~/.config/easy42/tasks/hello_world/*.sh`;
           </Box>
         </Box>
 
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1, mt: 2, color: "#64748b" }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1, mt: 1, color: "#64748b" }}>
           <Info size={15} />
           <Typography variant="caption">
             <strong>Shared Helpers:</strong> All custom tasks automatically have access to <code>common.sh</code> in
@@ -374,8 +374,8 @@ chmod +x ~/.config/easy42/tasks/hello_world/*.sh`;
       <Paper
         elevation={0}
         sx={{
-          p: 3,
-          borderRadius: 3,
+          p: 1,
+          borderRadius: 1,
           border: "1px solid #e2e8f0",
           bgcolor: "#ffffff",
         }}
@@ -385,7 +385,7 @@ chmod +x ~/.config/easy42/tasks/hello_world/*.sh`;
             sx={{
               width: 30,
               height: 30,
-              borderRadius: 1.5,
+              borderRadius: 1,
               bgcolor: "rgba(79, 70, 229, 0.1)",
               color: "primary.main",
               display: "flex",
@@ -406,7 +406,7 @@ chmod +x ~/.config/easy42/tasks/hello_world/*.sh`;
             sx={{ height: 20, fontSize: "0.65rem", fontWeight: 700 }}
           />
         </Box>
-        <Typography variant="body2" sx={{ color: "#475569", mb: 2 }}>
+        <Typography variant="body2" sx={{ color: "#475569", mb: 1 }}>
           Add an optional <code>selector</code> object to <code>task.json</code> to restrict which nodes the task can
           run on. This is useful for custom Device Helper tasks that only make sense on specific hosts. When a selector
           is present, non-matching nodes are automatically deselected and disabled in the Device Helper page, and the
@@ -417,12 +417,12 @@ chmod +x ~/.config/easy42/tasks/hello_world/*.sh`;
           sx={{
             bgcolor: "#0f172a",
             color: "#e2e8f0",
-            p: 2,
-            borderRadius: 2,
+            p: 1,
+            borderRadius: 1,
             fontFamily: "monospace",
             fontSize: "0.8rem",
             whiteSpace: "pre-wrap",
-            mb: 2,
+            mb: 1,
             border: "1px solid #1e293b",
           }}
         >
@@ -463,7 +463,7 @@ chmod +x ~/.config/easy42/tasks/hello_world/*.sh`;
           </Typography>
         </Box>
 
-        <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1, mt: 2, color: "#64748b" }}>
+        <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1, mt: 1, color: "#64748b" }}>
           <Info size={15} style={{ marginTop: 2, flexShrink: 0 }} />
           <Typography variant="caption" sx={{ lineHeight: 1.6 }}>
             When multiple keys are present, <strong>all of them must match (AND)</strong>. If a selector key is invalid,
@@ -476,13 +476,13 @@ chmod +x ~/.config/easy42/tasks/hello_world/*.sh`;
       <Paper
         elevation={0}
         sx={{
-          p: 3,
-          borderRadius: 3,
+          p: 1,
+          borderRadius: 1,
           border: "1px solid #c7d2fe",
           bgcolor: "#f5f3ff",
         }}
       >
-        <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1.5 }}>
+        <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1 }}>
           <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
             <Sparkles size={18} color="#7c3aed" />
             <Typography variant="subtitle1" sx={{ fontWeight: 800, color: "#4c1d95" }}>
@@ -507,7 +507,7 @@ chmod +x ~/.config/easy42/tasks/hello_world/*.sh`;
           </Button>
         </Box>
 
-        <Typography variant="body2" sx={{ color: "#5b21b6", mb: 2 }}>
+        <Typography variant="body2" sx={{ color: "#5b21b6", mb: 1 }}>
           Describe what you want to achieve on your devices, then copy the prompt into any AI (ChatGPT, Claude, Gemini,
           DeepSeek) to generate production-ready task scripts!
         </Typography>
@@ -520,11 +520,11 @@ chmod +x ~/.config/easy42/tasks/hello_world/*.sh`;
           onChange={(e) => setTaskGoal(e.target.value)}
           placeholder="e.g. Install and configure chrony NTP, or configure Docker and Compose..."
           sx={{
-            mb: 2,
+            mb: 1,
             bgcolor: "#ffffff",
-            borderRadius: 1.5,
+            borderRadius: 1,
             "& .MuiOutlinedInput-root": {
-              borderRadius: 1.5,
+              borderRadius: 1,
             },
           }}
         />
@@ -535,8 +535,8 @@ chmod +x ~/.config/easy42/tasks/hello_world/*.sh`;
             position: "relative",
             bgcolor: "#0f172a",
             color: "#e2e8f0",
-            borderRadius: 2,
-            p: 2,
+            borderRadius: 1,
+            p: 1,
             maxHeight: 220,
             overflowY: "auto",
             fontFamily: "monospace",
@@ -553,13 +553,13 @@ chmod +x ~/.config/easy42/tasks/hello_world/*.sh`;
       <Paper
         elevation={0}
         sx={{
-          p: 3,
-          borderRadius: 3,
+          p: 1,
+          borderRadius: 1,
           border: "1px solid #e2e8f0",
           bgcolor: "#ffffff",
         }}
       >
-        <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1.5 }}>
+        <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1 }}>
           <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
             <Terminal size={18} color="#0f172a" />
             <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#0f172a" }}>
@@ -573,7 +573,7 @@ chmod +x ~/.config/easy42/tasks/hello_world/*.sh`;
           </Tooltip>
         </Box>
 
-        <Typography variant="body2" sx={{ color: "#475569", mb: 1.5 }}>
+        <Typography variant="body2" sx={{ color: "#475569", mb: 1 }}>
           Paste this snippet into your server terminal to create an instant <code>hello_world</code> task:
         </Typography>
 
@@ -581,8 +581,8 @@ chmod +x ~/.config/easy42/tasks/hello_world/*.sh`;
           sx={{
             bgcolor: "#0f172a",
             color: "#38bdf8",
-            borderRadius: 2,
-            p: 2,
+            borderRadius: 1,
+            p: 1,
             fontFamily: "monospace",
             fontSize: "0.8rem",
             whiteSpace: "pre-wrap",

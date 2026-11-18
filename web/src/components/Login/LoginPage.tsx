@@ -88,7 +88,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
           radial-gradient(circle at 15% 15%, rgba(79, 70, 229, 0.08), transparent 35%),
           radial-gradient(circle at 85% 85%, rgba(8, 145, 178, 0.08), transparent 35%)
         `,
-        p: 2,
+        p: 1,
       }}
     >
       <Card
@@ -110,7 +110,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
           }}
         />
 
-        <CardContent sx={{ p: 4, display: "flex", flexDirection: "column", gap: 3 }}>
+        <CardContent sx={{ p: 4, display: "flex", flexDirection: "column", gap: 1 }}>
           {/* Header */}
           <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", gap: 1 }}>
             <Easy42Logo
@@ -146,7 +146,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
 
           {/* Login Form */}
           <form onSubmit={handleSubmit}>
-            <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
               <TextField
                 fullWidth
                 type="password"
@@ -186,7 +186,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
 
           <Box sx={{ pt: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 1 }}>
             {flushMsg && (
-              <Alert severity={flushMsg.severity} sx={{ width: "100%", borderRadius: 2, fontSize: "0.75rem", py: 0.5 }}>
+              <Alert severity={flushMsg.severity} sx={{ width: "100%", borderRadius: 1, fontSize: "0.75rem", py: 0.5 }}>
                 {flushMsg.text}
               </Alert>
             )}

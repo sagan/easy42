@@ -81,18 +81,18 @@ export const AppDetailsDrawer: React.FC<AppDetailsDrawerProps> = ({
           width: { xs: "100%", sm: 480 },
           backgroundColor: "#FFFFFF",
           borderLeft: "1px solid #E2E8F0",
-          p: 3,
+          p: 1,
         },
       }}
     >
       {/* Header */}
-      <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 2 }}>
+      <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1 }}>
         <Box sx={{ display: "flex", alignItems: "center", gap: 1, minWidth: 0 }}>
           <Box
             sx={{
               width: 38,
               height: 38,
-              borderRadius: 2,
+              borderRadius: 1,
               backgroundColor: "rgba(79, 70, 229, 0.1)",
               display: "flex",
               alignItems: "center",
@@ -138,9 +138,9 @@ export const AppDetailsDrawer: React.FC<AppDetailsDrawerProps> = ({
         </Box>
       </Box>
 
-      <Divider sx={{ borderColor: "#E2E8F0", mb: 2.5 }} />
+      <Divider sx={{ borderColor: "#E2E8F0", mb: 1 }} />
 
-      <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+      <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
         {/* Identity & Status */}
         <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
           <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
@@ -231,7 +231,7 @@ export const AppDetailsDrawer: React.FC<AppDetailsDrawerProps> = ({
           </Box>
 
           {app.description ? (
-            <Box sx={{ p: 1.5, bgcolor: "#F8FAFC", borderRadius: 2, border: "1px solid #E2E8F0" }}>
+            <Box sx={{ p: 1, bgcolor: "#F8FAFC", borderRadius: 1, border: "1px solid #E2E8F0" }}>
               <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 700, display: "block", mb: 0.5 }}>
                 DESCRIPTION
               </Typography>
@@ -247,7 +247,7 @@ export const AppDetailsDrawer: React.FC<AppDetailsDrawerProps> = ({
 
           {/* Homepage URL */}
           {displayUrl && (
-            <Box sx={{ p: 1.5, bgcolor: "#F8FAFC", borderRadius: 2, border: "1px solid #E2E8F0" }}>
+            <Box sx={{ p: 1, bgcolor: "#F8FAFC", borderRadius: 1, border: "1px solid #E2E8F0" }}>
               <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1, mb: 0.5 }}>
                 <Typography
                   variant="caption"
@@ -300,7 +300,7 @@ export const AppDetailsDrawer: React.FC<AppDetailsDrawerProps> = ({
           )}
 
           {/* Target Nodes */}
-          <Box sx={{ p: 1.5, bgcolor: "#F8FAFC", borderRadius: 2, border: "1px solid #E2E8F0" }}>
+          <Box sx={{ p: 1, bgcolor: "#F8FAFC", borderRadius: 1, border: "1px solid #E2E8F0" }}>
             <Typography
               variant="caption"
               sx={{ color: "#64748B", fontWeight: 700, display: "flex", alignItems: "center", gap: 0.5, mb: 0.8 }}
@@ -367,7 +367,7 @@ export const AppDetailsDrawer: React.FC<AppDetailsDrawerProps> = ({
           </Box>
 
           {/* Created / Updated */}
-          <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap" }}>
+          <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
             <Box sx={{ display: "flex", alignItems: "center", gap: 0.8 }}>
               <Calendar size={13} color="#64748B" />
               <Typography variant="caption" sx={{ color: "#64748B" }}>
@@ -387,7 +387,7 @@ export const AppDetailsDrawer: React.FC<AppDetailsDrawerProps> = ({
         </Box>
 
         {/* Note (Markdown) */}
-        <Box sx={{ p: 2, borderRadius: 2, bgcolor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
+        <Box sx={{ p: 1, borderRadius: 1, bgcolor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
           <Typography
             variant="caption"
             sx={{
@@ -404,8 +404,8 @@ export const AppDetailsDrawer: React.FC<AppDetailsDrawerProps> = ({
           </Typography>
           <Box
             sx={{
-              p: 1.5,
-              borderRadius: 1.5,
+              p: 1,
+              borderRadius: 1,
               bgcolor: "#FFFFFF",
               border: "1px solid #E2E8F0",
               maxHeight: 400,
@@ -446,10 +446,10 @@ export const AppDetailsDrawer: React.FC<AppDetailsDrawerProps> = ({
               component="pre"
               sx={{
                 m: 0,
-                p: 1.5,
+                p: 1,
                 bgcolor: "#0F172A",
                 color: "#F8FAFC",
-                borderRadius: 1.5,
+                borderRadius: 1,
                 fontFamily: "monospace",
                 fontSize: "0.75rem",
                 lineHeight: 1.5,
@@ -472,10 +472,10 @@ export const AppDetailsDrawer: React.FC<AppDetailsDrawerProps> = ({
                 component="pre"
                 sx={{
                   m: 0,
-                  p: 1.5,
+                  p: 1,
                   bgcolor: "#1E293B",
                   color: "#F1F5F9",
-                  borderRadius: 1.5,
+                  borderRadius: 1,
                   fontFamily: "monospace",
                   fontSize: "0.75rem",
                   lineHeight: 1.5,
@@ -492,7 +492,7 @@ export const AppDetailsDrawer: React.FC<AppDetailsDrawerProps> = ({
 
           {/* Artifact Management (Native Systemd apps) */}
           {app.artifact && (
-            <Box sx={{ p: 2, bgcolor: "#F8FAFC", borderRadius: 2, border: "1px solid #E2E8F0" }}>
+            <Box sx={{ p: 1, bgcolor: "#F8FAFC", borderRadius: 1, border: "1px solid #E2E8F0" }}>
               <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1.5 }}>
                 <Typography
                   variant="caption"
@@ -510,7 +510,7 @@ export const AppDetailsDrawer: React.FC<AppDetailsDrawerProps> = ({
               </Box>
 
               {app.artifact.url && (
-                <Box sx={{ mb: 1.5 }}>
+                <Box sx={{ mb: 1 }}>
                   <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600, display: "block" }}>
                     URL Template:
                   </Typography>
@@ -525,7 +525,7 @@ export const AppDetailsDrawer: React.FC<AppDetailsDrawerProps> = ({
               )}
 
               {app.artifact.resolver && (
-                <Box sx={{ mb: 1.5, display: "flex", flexDirection: "column", gap: 0.5 }}>
+                <Box sx={{ mb: 1, display: "flex", flexDirection: "column", gap: 0.5 }}>
                   <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600 }}>
                     Resolver ({app.artifact.resolver.type}):
                   </Typography>
@@ -548,7 +548,7 @@ export const AppDetailsDrawer: React.FC<AppDetailsDrawerProps> = ({
                   </Typography>
                   <Box sx={{ display: "flex", flexDirection: "column", gap: 0.8 }}>
                     {app.artifact.files.map((f, i) => (
-                      <Box key={i} sx={{ p: 1, bgcolor: "#FFFFFF", borderRadius: 1.5, border: "1px solid #E2E8F0" }}>
+                      <Box key={i} sx={{ p: 1, bgcolor: "#FFFFFF", borderRadius: 1, border: "1px solid #E2E8F0" }}>
                         <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                           <Typography
                             variant="caption"
@@ -611,7 +611,7 @@ export const AppDetailsDrawer: React.FC<AppDetailsDrawerProps> = ({
                       p: 1.2,
                       bgcolor: "#F8FAFC",
                       color: "#1E293B",
-                      borderRadius: 1.5,
+                      borderRadius: 1,
                       border: "1px solid #E2E8F0",
                       fontFamily: "monospace",
                       fontSize: "0.72rem",

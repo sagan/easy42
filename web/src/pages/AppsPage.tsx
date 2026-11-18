@@ -1567,13 +1567,13 @@ export const AppsPage: React.FC = () => {
       <Paper
         elevation={0}
         sx={{
-          p: 2.5,
+          p: 1,
           borderRadius: "14px",
           bgcolor: "#F8FAFC",
           border: "1px solid #E2E8F0",
           display: "flex",
           flexDirection: "column",
-          gap: 2,
+          gap: 1,
         }}
       >
         {/* Header with Title and Status Badges */}
@@ -1663,7 +1663,7 @@ export const AppsPage: React.FC = () => {
           sx={{
             bgcolor: "#FFFFFF",
             borderRadius: "10px",
-            p: 1.5,
+            p: 1,
             border: "1px solid #EDF2F7",
             display: "grid",
             gridTemplateColumns: { xs: "1fr", sm: "repeat(4, 1fr)" },
@@ -1738,7 +1738,7 @@ export const AppsPage: React.FC = () => {
               Cached Targets & Extracted Binaries:
             </Typography>
             {Object.entries(status.versions).map(([verKey, verStatus]) => (
-              <Box key={verKey} sx={{ bgcolor: "#FFFFFF", borderRadius: "8px", p: 1.5, border: "1px solid #E2E8F0" }}>
+              <Box key={verKey} sx={{ bgcolor: "#FFFFFF", borderRadius: "8px", p: 1, border: "1px solid #E2E8F0" }}>
                 <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1, flexWrap: "wrap" }}>
                   <Chip
                     size="small"
@@ -1809,7 +1809,7 @@ export const AppsPage: React.FC = () => {
           </Box>
         ) : (
           <Box
-            sx={{ bgcolor: "#FFFFFF", p: 2, borderRadius: "8px", border: "1px dashed #CBD5E1", textAlign: "center" }}
+            sx={{ bgcolor: "#FFFFFF", p: 1, borderRadius: "8px", border: "1px dashed #CBD5E1", textAlign: "center" }}
           >
             <Typography variant="caption" sx={{ color: "#64748B" }}>
               No artifact has been downloaded or cached on server yet. Click "Check & Validate Origin" to download and
@@ -1874,7 +1874,7 @@ export const AppsPage: React.FC = () => {
   };
 
   return (
-    <Box sx={{ width: "100%", px: { xs: 1.5, sm: 2.5, md: 3 }, py: 2.5, boxSizing: "border-box" }}>
+    <Box sx={{ width: "100%", p: 1, boxSizing: "border-box" }}>
       {/* Top Header & Breadcrumbs Bar */}
       <Box
         sx={{
@@ -1883,7 +1883,7 @@ export const AppsPage: React.FC = () => {
           alignItems: "center",
           mb: 3,
           flexWrap: "wrap",
-          gap: 2,
+          gap: 1,
         }}
       >
         <Box>
@@ -2052,7 +2052,7 @@ export const AppsPage: React.FC = () => {
           border: "1px solid #E2E8F0",
           bgcolor: "#FFFFFF",
           mb: 3,
-          px: 2,
+          px: 1,
         }}
       >
         <Tabs
@@ -2138,7 +2138,7 @@ export const AppsPage: React.FC = () => {
         <Box>
           {/* Stats Summary Cards (Full-Width Grid) */}
           <Grid container spacing={2.5} sx={{ mb: 3 }}>
-            <Grid item xs={12} sm={6} md={3}>
+            <Grid item xs={6} sm={6} md={3}>
               <Paper
                 elevation={0}
                 sx={{
@@ -2147,7 +2147,7 @@ export const AppsPage: React.FC = () => {
                   border: "1px solid #E2E8F0",
                   display: "flex",
                   alignItems: "center",
-                  gap: 2,
+                  gap: 1,
                   bgcolor: "#FFFFFF",
                 }}
               >
@@ -2166,8 +2166,8 @@ export const AppsPage: React.FC = () => {
                   <Layers size={22} />
                 </Box>
                 <Box>
-                  <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600 }}>
-                    Apps (Active/Total)
+                  <Typography variant="caption" title="All Apps" sx={{ color: "#64748B", fontWeight: 600 }}>
+                    Active/Total
                   </Typography>
                   <Typography variant="h6" sx={{ fontWeight: 800, color: "#0F172A", lineHeight: 1.2 }}>
                     {enabledCount} / {workloadApps.length}
@@ -2176,7 +2176,7 @@ export const AppsPage: React.FC = () => {
               </Paper>
             </Grid>
 
-            <Grid item xs={12} sm={6} md={3}>
+            <Grid item xs={6} sm={6} md={3}>
               <Paper
                 elevation={0}
                 sx={{
@@ -2185,7 +2185,7 @@ export const AppsPage: React.FC = () => {
                   border: "1px solid #E2E8F0",
                   display: "flex",
                   alignItems: "center",
-                  gap: 2,
+                  gap: 1,
                   bgcolor: "#FFFFFF",
                 }}
               >
@@ -2204,8 +2204,12 @@ export const AppsPage: React.FC = () => {
                   <BoxIcon size={22} />
                 </Box>
                 <Box>
-                  <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600 }}>
-                    Docker Compose
+                  <Typography
+                    variant="caption"
+                    title="Docker / Podman / Nerdctl compose"
+                    sx={{ color: "#64748B", fontWeight: 600 }}
+                  >
+                    Container
                   </Typography>
                   <Typography variant="h6" sx={{ fontWeight: 800, color: "#0F172A", lineHeight: 1.2 }}>
                     {dockerCount}
@@ -2214,7 +2218,7 @@ export const AppsPage: React.FC = () => {
               </Paper>
             </Grid>
 
-            <Grid item xs={12} sm={6} md={3}>
+            <Grid item xs={6} sm={6} md={3}>
               <Paper
                 elevation={0}
                 sx={{
@@ -2223,7 +2227,7 @@ export const AppsPage: React.FC = () => {
                   border: "1px solid #E2E8F0",
                   display: "flex",
                   alignItems: "center",
-                  gap: 2,
+                  gap: 1,
                   bgcolor: "#FFFFFF",
                 }}
               >
@@ -2242,8 +2246,12 @@ export const AppsPage: React.FC = () => {
                   <Cpu size={22} />
                 </Box>
                 <Box>
-                  <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600 }}>
-                    Native (Systemd / OpenRC)
+                  <Typography
+                    variant="caption"
+                    title="Systemd / OpenRC / Procd"
+                    sx={{ color: "#64748B", fontWeight: 600 }}
+                  >
+                    Native
                   </Typography>
                   <Typography variant="h6" sx={{ fontWeight: 800, color: "#0F172A", lineHeight: 1.2 }}>
                     {systemdCount}
@@ -2252,7 +2260,7 @@ export const AppsPage: React.FC = () => {
               </Paper>
             </Grid>
 
-            <Grid item xs={12} sm={6} md={3}>
+            <Grid item xs={6} sm={6} md={3}>
               <Paper
                 elevation={0}
                 sx={{
@@ -2261,7 +2269,7 @@ export const AppsPage: React.FC = () => {
                   border: "1px solid #E2E8F0",
                   display: "flex",
                   alignItems: "center",
-                  gap: 2,
+                  gap: 1,
                   bgcolor: "#FFFFFF",
                 }}
               >
@@ -2280,8 +2288,8 @@ export const AppsPage: React.FC = () => {
                   <Clock size={22} />
                 </Box>
                 <Box>
-                  <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600 }}>
-                    Cron Jobs (Crontab)
+                  <Typography variant="caption" title="Cron Jobs (Crontab)" sx={{ color: "#64748B", fontWeight: 600 }}>
+                    Cron
                   </Typography>
                   <Typography variant="h6" sx={{ fontWeight: 800, color: "#0F172A", lineHeight: 1.2 }}>
                     {cronCount}
@@ -2295,7 +2303,7 @@ export const AppsPage: React.FC = () => {
           <Paper
             elevation={0}
             sx={{
-              p: 2,
+              p: 1,
               mb: 3,
               borderRadius: "12px",
               border: "1px solid #E2E8F0",
@@ -2308,7 +2316,7 @@ export const AppsPage: React.FC = () => {
             <Box
               sx={{
                 display: "flex",
-                gap: 2,
+                gap: 1,
                 flexWrap: "wrap",
                 alignItems: "center",
                 width: "100%",
@@ -2330,9 +2338,9 @@ export const AppsPage: React.FC = () => {
                 <InputLabel>Runtime Type</InputLabel>
                 <Select value={typeFilter} label="Runtime Type" onChange={(e) => handleSelectType(e.target.value)}>
                   <MenuItem value="all">All Types</MenuItem>
-                  <MenuItem value="docker">Docker Compose ({dockerCount})</MenuItem>
-                  <MenuItem value="systemd">Native Systemd ({systemdCount})</MenuItem>
-                  <MenuItem value="cron">Cron Jobs ({cronCount})</MenuItem>
+                  <MenuItem value="docker">Container ({dockerCount})</MenuItem>
+                  <MenuItem value="systemd">Native ({systemdCount})</MenuItem>
+                  <MenuItem value="cron">Cron ({cronCount})</MenuItem>
                 </Select>
               </FormControl>
 
@@ -2367,10 +2375,10 @@ export const AppsPage: React.FC = () => {
                     size="small"
                     sx={{ height: 36 }}
                   >
-                    <ToggleButton value="cards" aria-label="card view" sx={{ px: 1.5 }}>
+                    <ToggleButton value="cards" aria-label="card view" sx={{ px: 1 }}>
                       <LayoutGrid size={16} />
                     </ToggleButton>
-                    <ToggleButton value="table" aria-label="list view" sx={{ px: 1.5 }}>
+                    <ToggleButton value="table" aria-label="list view" sx={{ px: 1 }}>
                       <List size={16} />
                     </ToggleButton>
                   </ToggleButtonGroup>
@@ -2386,7 +2394,7 @@ export const AppsPage: React.FC = () => {
                   alignItems: "center",
                   gap: 1,
                   flexWrap: "wrap",
-                  pt: 1.5,
+                  pt: 1,
                   mt: 0.5,
                   borderTop: "1px solid #F1F5F9",
                   width: "100%",
@@ -2537,7 +2545,7 @@ export const AppsPage: React.FC = () => {
                   alignItems: "center",
                   justifyContent: "center",
                   mx: "auto",
-                  mb: 2,
+                  mb: 1,
                 }}
               >
                 <Layers size={28} />
@@ -3186,7 +3194,7 @@ export const AppsPage: React.FC = () => {
                       },
                     }}
                   >
-                    <CardContent sx={{ p: 2.5, flex: 1, display: "flex", flexDirection: "column" }}>
+                    <CardContent sx={{ p: 1, flex: 1, display: "flex", flexDirection: "column" }}>
                       {/* Header */}
                       <Box
                         sx={{
@@ -3195,7 +3203,7 @@ export const AppsPage: React.FC = () => {
                           alignItems: "flex-start",
                           flexWrap: "wrap",
                           gap: 1,
-                          mb: 1.5,
+                          mb: 1,
                         }}
                       >
                         <Box sx={{ display: "flex", alignItems: "center", gap: 1.2, flex: "1 1 auto", minWidth: 0 }}>
@@ -3422,7 +3430,7 @@ export const AppsPage: React.FC = () => {
                         sx={{
                           color: "#64748B",
                           fontSize: "0.85rem",
-                          mb: 2,
+                          mb: 1,
                           minHeight: 36,
                           lineHeight: 1.4,
                           display: "-webkit-box",
@@ -3435,7 +3443,7 @@ export const AppsPage: React.FC = () => {
                       </Typography>
 
                       {app.url && (
-                        <Box sx={{ mb: 1.5 }}>
+                        <Box sx={{ mb: 1 }}>
                           {(() => {
                             const resolved = resolveHomepageUrl(app, managedNodes, variables);
                             const isClickable = !!resolved && !resolved.containsTemplate && isHttpUrl(resolved.url);
@@ -3525,7 +3533,7 @@ export const AppsPage: React.FC = () => {
                       <Divider sx={{ my: 1.2, borderColor: "#F1F5F9" }} />
 
                       {/* Target Nodes */}
-                      <Box sx={{ mb: 1.5 }}>
+                      <Box sx={{ mb: 1 }}>
                         {(() => {
                           const selector = app.selector || {};
                           const mode = detectTargetMode(selector);
@@ -3787,14 +3795,14 @@ export const AppsPage: React.FC = () => {
           <Paper
             elevation={0}
             sx={{
-              p: 2.5,
+              p: 1,
               mb: 3,
               borderRadius: "14px",
               bgcolor: "#F0FDFA",
               border: "1px solid #99F6E4",
               display: "flex",
               alignItems: "flex-start",
-              gap: 2,
+              gap: 1,
               overflowX: "auto",
             }}
           >
@@ -3803,13 +3811,13 @@ export const AppsPage: React.FC = () => {
             </Box>
             <Box>
               <Typography variant="subtitle2" sx={{ fontWeight: 800, color: "#134E4A", mb: 0.5 }}>
-                On-Demand Script Applications (/etc/ezscript)
+                On-Demand Scripts
               </Typography>
               <Typography variant="body2" sx={{ color: "#115E59", fontSize: "0.85rem", lineHeight: 1.5 }}>
-                Script Apps are single executable snippets deployed to <code>/etc/ezscript/&lt;name&gt;</code> without
-                system service daemons. Environment variables (<code>.env</code>) are automatically injected into the
-                script header. Use the <strong>Start</strong>, <strong>Stop</strong>, and <strong>Logs</strong> buttons
-                below to execute scripts on all target nodes on demand and inspect execution output and exit codes.
+                Script are single executable snippets deployed to <code>/etc/ezscript/&lt;name&gt;</code> without system
+                service daemons. Environment variables (<code>.env</code>) are automatically injected into the script
+                header. Use the <strong>Start</strong>, <strong>Stop</strong>, and <strong>Logs</strong> buttons below
+                to execute scripts on all target nodes on demand and inspect execution output and exit codes.
               </Typography>
             </Box>
           </Paper>
@@ -3819,7 +3827,7 @@ export const AppsPage: React.FC = () => {
           <Paper
             elevation={0}
             sx={{
-              p: 2,
+              p: 1,
               mb: 3,
               borderRadius: "14px",
               border: "1px solid #E2E8F0",
@@ -3895,7 +3903,7 @@ export const AppsPage: React.FC = () => {
                   alignItems: "center",
                   gap: 1,
                   flexWrap: "wrap",
-                  pt: 1.5,
+                  pt: 1,
                   mt: 0.5,
                   borderTop: "1px solid #F1F5F9",
                   width: "100%",
@@ -4041,17 +4049,17 @@ export const AppsPage: React.FC = () => {
                   alignItems: "center",
                   justifyContent: "center",
                   mx: "auto",
-                  mb: 2,
+                  mb: 1,
                 }}
               >
                 <Terminal size={28} />
               </Box>
               <Typography variant="h6" sx={{ fontWeight: 800, color: "#0F172A", mb: 0.5 }}>
-                No Script Applications Yet
+                No Scripts Yet
               </Typography>
               <Typography variant="body2" sx={{ color: "#64748B", maxWidth: 480, mx: "auto", mb: 3 }}>
-                Script applications are standalone executables deployed to <code>/etc/ezscript/&lt;name&gt;</code> that
-                can be triggered on-demand across target nodes.
+                Scripts are standalone executables deployed to <code>/etc/ezscript/&lt;name&gt;</code> that can be
+                triggered on-demand across target nodes.
               </Typography>
               <Button
                 variant="contained"
@@ -4501,14 +4509,14 @@ export const AppsPage: React.FC = () => {
           <Paper
             elevation={0}
             sx={{
-              p: 2.5,
+              p: 1,
               mb: 3,
               borderRadius: "14px",
               bgcolor: "#EEF2FF",
               border: "1px solid #C7D2FE",
               display: "flex",
               alignItems: "flex-start",
-              gap: 2,
+              gap: 1,
               overflowX: "auto",
             }}
           >
@@ -4521,8 +4529,8 @@ export const AppsPage: React.FC = () => {
               </Typography>
               <Typography variant="body2" sx={{ color: "#4338CA", fontSize: "0.85rem", lineHeight: 1.5 }}>
                 Variables are cluster-wide key-value entries automatically substituted in your <code>.env</code> files
-                and auxiliary config files. Systemd units and Docker Compose manifests are excluded to prevent conflicts
-                with their native variable interpolation.
+                and auxiliary config files. Systemd units and Container manifests are excluded to prevent conflicts with
+                their native variable interpolation.
               </Typography>
               <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, mt: 1.2 }}>
                 <Chip
@@ -4553,7 +4561,7 @@ export const AppsPage: React.FC = () => {
           <Paper
             elevation={0}
             sx={{
-              p: 2,
+              p: 1,
               mb: 3,
               borderRadius: "12px",
               border: "1px solid #E2E8F0",
@@ -4562,7 +4570,7 @@ export const AppsPage: React.FC = () => {
               alignItems: "center",
               bgcolor: "#FFFFFF",
               flexWrap: "wrap",
-              gap: 2,
+              gap: 1,
             }}
           >
             <TextField
@@ -4613,7 +4621,7 @@ export const AppsPage: React.FC = () => {
                   alignItems: "center",
                   justifyContent: "center",
                   mx: "auto",
-                  mb: 2,
+                  mb: 1,
                 }}
               >
                 <Database size={28} />
@@ -4804,7 +4812,7 @@ export const AppsPage: React.FC = () => {
             {variables.some((v) => v.key === varKey) ? `Edit Variable: ${varKey}` : "Add Global Variable"}
           </Typography>
         </DialogTitle>
-        <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2, pt: 2 }}>
+        <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 1, pt: 2 }}>
           <TextField
             fullWidth
             label="Variable Key"
@@ -4846,7 +4854,7 @@ export const AppsPage: React.FC = () => {
             }
           />
         </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2.5 }}>
+        <DialogActions sx={{ px: 1, pb: 2 }}>
           <Button onClick={() => setVarModalOpen(false)} sx={{ textTransform: "none", color: "#64748B" }}>
             Cancel
           </Button>
@@ -5020,13 +5028,13 @@ export const AppsPage: React.FC = () => {
           </Tabs>
         </Box>
 
-        <DialogContent sx={{ p: 3 }}>
+        <DialogContent sx={{ p: 1 }}>
           {/* Quick Variables Insert Chips Bar */}
           {(modalTab === "env" || modalTab === "files") && (
             <Box
               sx={{
-                mb: 2,
-                p: 1.5,
+                mb: 1,
+                p: 1,
                 bgcolor: "#F8FAFC",
                 borderRadius: "10px",
                 border: "1px solid #E2E8F0",
@@ -5106,7 +5114,7 @@ export const AppsPage: React.FC = () => {
 
           {/* TAB 1: General & Nodes */}
           {modalTab === "general" && (
-            <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
               <Grid container spacing={2}>
                 <Grid item xs={12} sm={6}>
                   <TextField
@@ -5179,16 +5187,16 @@ export const AppsPage: React.FC = () => {
                 }}
               />
 
-              <Box sx={{ p: 2, bgcolor: "#F8FAFC", borderRadius: "10px", border: "1px solid #E2E8F0" }}>
+              <Box sx={{ p: 1, bgcolor: "#F8FAFC", borderRadius: "10px", border: "1px solid #E2E8F0" }}>
                 <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#1E293B", mb: 0.5 }}>
                   Target Nodes
                 </Typography>
-                <Typography variant="caption" sx={{ color: "#64748B", display: "block", mb: 1.5 }}>
+                <Typography variant="caption" sx={{ color: "#64748B", display: "block", mb: 1 }}>
                   Choose nodes with the shortcuts below or edit the selector JSON directly. An empty selector matches
                   every managed node. All selector conditions must match (AND).
                 </Typography>
 
-                <FormControl component="fieldset" fullWidth sx={{ mb: 2 }}>
+                <FormControl component="fieldset" fullWidth sx={{ mb: 1 }}>
                   <RadioGroup
                     row
                     value={formTargetType}
@@ -5338,14 +5346,14 @@ export const AppsPage: React.FC = () => {
 
                 {/* Option 2: All Nodes */}
                 {formTargetType === "all" && (
-                  <Box sx={{ p: 2, bgcolor: "#E0F2FE", borderRadius: "8px", border: "1px solid #BAE6FD" }}>
+                  <Box sx={{ p: 1, bgcolor: "#E0F2FE", borderRadius: "8px", border: "1px solid #BAE6FD" }}>
                     <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
                       <Globe size={18} color="#0284C7" />
                       <Typography variant="body2" sx={{ fontWeight: 700, color: "#0369A1" }}>
                         Automatic Deployment to All Agent Nodes ({managedNodes.length})
                       </Typography>
                     </Box>
-                    <Typography variant="caption" sx={{ color: "#0C4A6E", display: "block", mb: 1.5 }}>
+                    <Typography variant="caption" sx={{ color: "#0C4A6E", display: "block", mb: 1 }}>
                       An empty selector deploys this app to all cluster nodes running in agent mode. Any new agent node
                       added in the future will automatically receive this app.
                     </Typography>
@@ -5446,7 +5454,7 @@ export const AppsPage: React.FC = () => {
                     </Grid>
 
                     {/* Tag match preview */}
-                    <Box sx={{ mt: 1.5, p: 1.5, bgcolor: "#F5F3FF", borderRadius: "8px", border: "1px solid #DDD6FE" }}>
+                    <Box sx={{ mt: 1, p: 1, bgcolor: "#F5F3FF", borderRadius: "8px", border: "1px solid #DDD6FE" }}>
                       {(() => {
                         const matchingNodes = managedNodes.filter((n) =>
                           matchesTaskSelector(n, { tag: formTargetTag }),
@@ -5501,7 +5509,7 @@ export const AppsPage: React.FC = () => {
                 )}
 
                 {formTargetType === "custom" && (
-                  <Box sx={{ p: 2, bgcolor: "#F0FDFA", borderRadius: "8px", border: "1px solid #99F6E4" }}>
+                  <Box sx={{ p: 1, bgcolor: "#F0FDFA", borderRadius: "8px", border: "1px solid #99F6E4" }}>
                     <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                       <Code2 size={16} color="#0F766E" />
                       <Typography variant="caption" sx={{ color: "#115E59" }}>
@@ -5512,7 +5520,7 @@ export const AppsPage: React.FC = () => {
                   </Box>
                 )}
 
-                <Box sx={{ mt: 2 }}>
+                <Box sx={{ mt: 1 }}>
                   <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 0.8 }}>
                     <Typography variant="caption" sx={{ color: "#475569", fontWeight: 700 }}>
                       Selector JSON
@@ -5608,7 +5616,7 @@ export const AppsPage: React.FC = () => {
 
           {/* TAB 2: Definition Editor (Cron) */}
           {modalTab === "definition" && formType === "cron" && (
-            <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
               <Box
                 sx={{
                   display: "flex",
@@ -5640,7 +5648,7 @@ export const AppsPage: React.FC = () => {
               </Box>
 
               {/* Schedule Presets */}
-              <Box sx={{ p: 2, bgcolor: "#FEF3C7", borderRadius: "10px", border: "1px solid #FDE68A" }}>
+              <Box sx={{ p: 1, bgcolor: "#FEF3C7", borderRadius: "10px", border: "1px solid #FDE68A" }}>
                 <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
                   <Clock size={16} color="#B45309" />
                   <Typography variant="caption" sx={{ fontWeight: 700, color: "#92400E" }}>
@@ -5719,7 +5727,7 @@ export const AppsPage: React.FC = () => {
               <Paper
                 elevation={0}
                 sx={{
-                  p: 2,
+                  p: 1,
                   borderRadius: "10px",
                   bgcolor: "#0F172A",
                   color: "#F8FAFC",
@@ -5746,7 +5754,7 @@ export const AppsPage: React.FC = () => {
                   component="pre"
                   sx={{
                     m: 0,
-                    p: 1.5,
+                    p: 1,
                     bgcolor: "#020617",
                     borderRadius: "6px",
                     fontFamily: "monospace",
@@ -5839,7 +5847,7 @@ ${formEnabled ? `${formCronExpr.trim() || "0 0 * * *"} ${formCronCmd.trim() || "
                 <Paper
                   elevation={0}
                   sx={{
-                    p: 2,
+                    p: 1,
                     borderRadius: "10px",
                     border: "1px solid #C7D2FE",
                     bgcolor: "#EEF2FF",
@@ -6228,7 +6236,7 @@ ${formEnabled ? `${formCronExpr.trim() || "0 0 * * *"} ${formCronCmd.trim() || "
 
           {/* TAB 4: Config File Map */}
           {modalTab === "files" && (
-            <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
               <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <Box>
                   <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0F172A" }}>
@@ -6268,8 +6276,8 @@ ${formEnabled ? `${formCronExpr.trim() || "0 0 * * *"} ${formCronCmd.trim() || "
                 </Paper>
               ) : (
                 formFiles.map((file, idx) => (
-                  <Paper key={idx} elevation={0} sx={{ p: 2, border: "1px solid #E2E8F0", borderRadius: "10px" }}>
-                    <Box sx={{ display: "flex", gap: 1, alignItems: "center", mb: 1.5 }}>
+                  <Paper key={idx} elevation={0} sx={{ p: 1, border: "1px solid #E2E8F0", borderRadius: "10px" }}>
+                    <Box sx={{ display: "flex", gap: 1, alignItems: "center", mb: 1 }}>
                       <TextField
                         size="small"
                         label="Relative Filename / Path"
@@ -6320,7 +6328,7 @@ ${formEnabled ? `${formCronExpr.trim() || "0 0 * * *"} ${formCronCmd.trim() || "
 
           {/* TAB 5: Note (Markdown) */}
           {modalTab === "note" && (
-            <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
               <Box
                 sx={{
                   display: "flex",
@@ -6384,7 +6392,7 @@ ${formEnabled ? `${formCronExpr.trim() || "0 0 * * *"} ${formCronCmd.trim() || "
               ) : (
                 <Box
                   sx={{
-                    p: 2,
+                    p: 1,
                     bgcolor: "#F8FAFC",
                     borderRadius: "10px",
                     border: "1px solid #E2E8F0",
@@ -6401,14 +6409,14 @@ ${formEnabled ? `${formCronExpr.trim() || "0 0 * * *"} ${formCronCmd.trim() || "
 
           {/* TAB 6: Variables Interpolation Live Preview */}
           {modalTab === "preview" && (
-            <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
               <Box
                 sx={{
                   display: "flex",
                   justifyContent: "space-between",
                   alignItems: "center",
                   flexWrap: "wrap",
-                  gap: 2,
+                  gap: 1,
                 }}
               >
                 <Box>
@@ -6472,10 +6480,10 @@ ${formEnabled ? `${formCronExpr.trim() || "0 0 * * *"} ${formCronCmd.trim() || "
 
           {/* TAB: Artifact Spec (Native Systemd only) */}
           {modalTab === "artifact" && (
-            <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
               <Box
                 sx={{
-                  p: 2,
+                  p: 1,
                   bgcolor: formArtifactEnabled ? "#F0FDF4" : "#F8FAFC",
                   borderRadius: "12px",
                   border: `1px solid ${formArtifactEnabled ? "#BBF7D0" : "#E2E8F0"}`,
@@ -6544,13 +6552,13 @@ ${formEnabled ? `${formCronExpr.trim() || "0 0 * * *"} ${formCronCmd.trim() || "
                         >
                           <ToggleButton
                             value="url"
-                            sx={{ textTransform: "none", fontWeight: 600, fontSize: "0.78rem", px: 2 }}
+                            sx={{ textTransform: "none", fontWeight: 600, fontSize: "0.78rem", px: 1 }}
                           >
                             URL Template
                           </ToggleButton>
                           <ToggleButton
                             value="github"
-                            sx={{ textTransform: "none", fontWeight: 600, fontSize: "0.78rem", px: 2 }}
+                            sx={{ textTransform: "none", fontWeight: 600, fontSize: "0.78rem", px: 1 }}
                           >
                             GitHub Releases Resolver
                           </ToggleButton>
@@ -6561,7 +6569,7 @@ ${formEnabled ? `${formCronExpr.trim() || "0 0 * * *"} ${formCronCmd.trim() || "
 
                   {/* Mode A: URL Template */}
                   {formArtifactSourceMode === "url" && (
-                    <Box sx={{ p: 2, bgcolor: "#F8FAFC", borderRadius: "10px", border: "1px solid #E2E8F0" }}>
+                    <Box sx={{ p: 1, bgcolor: "#F8FAFC", borderRadius: "10px", border: "1px solid #E2E8F0" }}>
                       <TextField
                         label="Download URL Template"
                         size="small"
@@ -6571,7 +6579,7 @@ ${formEnabled ? `${formCronExpr.trim() || "0 0 * * *"} ${formCronCmd.trim() || "
                         onChange={(e) => setFormArtifactUrl(e.target.value)}
                         helperText="Supports tar.gz, zip, tar.bz2, gz, or raw binary. Easy42 Go server caches and serves files to node agents."
                       />
-                      <Box sx={{ display: "flex", alignItems: "center", gap: 0.8, flexWrap: "wrap", mt: 1.5 }}>
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 0.8, flexWrap: "wrap", mt: 1 }}>
                         <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600 }}>
                           Insert Variables:
                         </Typography>
@@ -6617,7 +6625,7 @@ ${formEnabled ? `${formCronExpr.trim() || "0 0 * * *"} ${formCronCmd.trim() || "
 
                   {/* Mode B: GitHub Releases Resolver */}
                   {formArtifactSourceMode === "github" && (
-                    <Box sx={{ p: 2, bgcolor: "#F8FAFC", borderRadius: "10px", border: "1px solid #E2E8F0" }}>
+                    <Box sx={{ p: 1, bgcolor: "#F8FAFC", borderRadius: "10px", border: "1px solid #E2E8F0" }}>
                       <Grid container spacing={2}>
                         <Grid item xs={12} sm={5}>
                           <TextField
@@ -6653,7 +6661,7 @@ ${formEnabled ? `${formCronExpr.trim() || "0 0 * * *"} ${formCronCmd.trim() || "
                           />
                         </Grid>
                       </Grid>
-                      <Box sx={{ display: "flex", alignItems: "center", gap: 0.8, flexWrap: "wrap", mt: 1.5 }}>
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 0.8, flexWrap: "wrap", mt: 1 }}>
                         <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600 }}>
                           Insert Variables into Pattern:
                         </Typography>
@@ -6688,8 +6696,8 @@ ${formEnabled ? `${formCronExpr.trim() || "0 0 * * *"} ${formCronCmd.trim() || "
                   )}
 
                   {/* Extracted & Deployed Files */}
-                  <Box sx={{ p: 2, bgcolor: "#FFFFFF", borderRadius: "12px", border: "1px solid #E2E8F0" }}>
-                    <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1.5 }}>
+                  <Box sx={{ p: 1, bgcolor: "#FFFFFF", borderRadius: "12px", border: "1px solid #E2E8F0" }}>
+                    <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
                       <Box>
                         <Typography variant="subtitle2" sx={{ fontWeight: 800, color: "#0F172A" }}>
                           Extracted & Deployed Files ({formArtifactFiles.length})
@@ -6725,7 +6733,7 @@ ${formEnabled ? `${formCronExpr.trim() || "0 0 * * *"} ${formCronCmd.trim() || "
                         <Box
                           key={idx}
                           sx={{
-                            p: 1.5,
+                            p: 1,
                             bgcolor: "#F8FAFC",
                             borderRadius: "8px",
                             border: "1px solid #E2E8F0",
@@ -6854,7 +6862,7 @@ ${formEnabled ? `${formCronExpr.trim() || "0 0 * * *"} ${formCronCmd.trim() || "
 
           {/* TAB 6: Transpile Preview (Native Systemd only) */}
           {modalTab === "transpile" && (
-            <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
               <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <Box>
                   <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0F172A" }}>
@@ -6954,7 +6962,7 @@ ${formEnabled ? `${formCronExpr.trim() || "0 0 * * *"} ${formCronCmd.trim() || "
           )}
         </DialogContent>
 
-        <DialogActions sx={{ px: 3, pb: 2.5, pt: 1.5, borderTop: "1px solid #E2E8F0" }}>
+        <DialogActions sx={{ px: 3, pb: 2, pt: 1, borderTop: "1px solid #E2E8F0" }}>
           {editingApp && (
             <Button
               startIcon={
@@ -7019,7 +7027,7 @@ ${formEnabled ? `${formCronExpr.trim() || "0 0 * * *"} ${formCronCmd.trim() || "
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            pb: 1.5,
+            pb: 1,
             borderBottom: "1px solid #F1F5F9",
           }}
         >
@@ -7051,10 +7059,10 @@ ${formEnabled ? `${formCronExpr.trim() || "0 0 * * *"} ${formCronCmd.trim() || "
             <X size={16} />
           </IconButton>
         </DialogTitle>
-        <DialogContent sx={{ p: 2.5 }}>
+        <DialogContent sx={{ p: 1 }}>
           {artifactCacheModalApp && renderArtifactCacheCard(artifactCacheModalApp)}
         </DialogContent>
-        <DialogActions sx={{ px: 2.5, py: 1.5, borderTop: "1px solid #F1F5F9" }}>
+        <DialogActions sx={{ px: 1, py: 1, borderTop: "1px solid #F1F5F9" }}>
           <Button
             onClick={() => setArtifactCacheModalApp(null)}
             sx={{ textTransform: "none", fontWeight: 600, color: "#64748B" }}
@@ -7086,7 +7094,7 @@ ${formEnabled ? `${formCronExpr.trim() || "0 0 * * *"} ${formCronCmd.trim() || "
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            pb: 1.5,
+            pb: 1,
             borderBottom: "1px solid #F1F5F9",
           }}
         >
@@ -7157,7 +7165,7 @@ ${formEnabled ? `${formCronExpr.trim() || "0 0 * * *"} ${formCronCmd.trim() || "
           </Box>
         </DialogTitle>
 
-        <DialogContent sx={{ p: 2.5 }}>
+        <DialogContent sx={{ p: 1 }}>
           {clusterLogsLoading && !clusterLogsData ? (
             <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", py: 8 }}>
               <CircularProgress size={32} sx={{ color: "#0F766E" }} />
@@ -7167,7 +7175,7 @@ ${formEnabled ? `${formCronExpr.trim() || "0 0 * * *"} ${formCronCmd.trim() || "
               No target nodes responded. Make sure target nodes are online with connected agents.
             </Alert>
           ) : (
-            <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
               {/* Target Nodes clickable chip list */}
               <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
                 <Box
@@ -7481,7 +7489,7 @@ ${formEnabled ? `${formCronExpr.trim() || "0 0 * * *"} ${formCronCmd.trim() || "
                       component="pre"
                       sx={{
                         m: 0,
-                        p: 2,
+                        p: 1,
                         bgcolor: "#0F172A",
                         color: "#F8FAFC",
                         borderRadius: "10px",
@@ -7506,7 +7514,7 @@ ${formEnabled ? `${formCronExpr.trim() || "0 0 * * *"} ${formCronCmd.trim() || "
           )}
         </DialogContent>
 
-        <DialogActions sx={{ px: 2.5, py: 1.5, borderTop: "1px solid #F1F5F9" }}>
+        <DialogActions sx={{ px: 1, py: 1, borderTop: "1px solid #F1F5F9" }}>
           <Button
             onClick={() => {
               setClusterLogsModalScript(null);

@@ -424,19 +424,19 @@ export const APISettingsTab: React.FC = () => {
   };
 
   return (
-    <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
+    <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
       {/* Header Banner */}
       <Paper
         elevation={0}
         sx={{
-          p: 3,
-          borderRadius: 3,
+          p: 1,
+          borderRadius: 1,
           background: "linear-gradient(135deg, #EEF2FF 0%, #F5F3FF 50%, #F8FAFC 100%)",
           border: "1px solid #E0E7FF",
           display: "flex",
           alignItems: "flex-start",
           justifyContent: "space-between",
-          gap: 2,
+          gap: 1,
           flexWrap: "wrap",
         }}
       >
@@ -447,7 +447,7 @@ export const APISettingsTab: React.FC = () => {
                 bgcolor: "#4F46E5",
                 color: "#FFFFFF",
                 p: 1,
-                borderRadius: 2,
+                borderRadius: 1,
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
@@ -475,8 +475,8 @@ export const APISettingsTab: React.FC = () => {
             "&:hover": { bgcolor: "#4338CA" },
             fontWeight: 600,
             textTransform: "none",
-            borderRadius: 2,
-            px: 2.5,
+            borderRadius: 1,
+            px: 1,
             py: 1,
             boxShadow: "0 2px 8px rgba(79, 70, 229, 0.25)",
           }}
@@ -493,7 +493,7 @@ export const APISettingsTab: React.FC = () => {
       )}
 
       {/* Search and Action Bar */}
-      <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 2, flexWrap: "wrap" }}>
+      <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1, flexWrap: "wrap" }}>
         <TextField
           size="small"
           placeholder="Search APIs by ID, name, content-type..."
@@ -533,7 +533,7 @@ export const APISettingsTab: React.FC = () => {
             py: 8,
             px: 3,
             textAlign: "center",
-            borderRadius: 3,
+            borderRadius: 1,
             border: "1px dashed #CBD5E1",
             bgcolor: "#F8FAFC",
           }}
@@ -542,7 +542,7 @@ export const APISettingsTab: React.FC = () => {
           <Typography variant="subtitle1" sx={{ fontWeight: 600, color: "#334155" }}>
             {searchTerm ? "No matching APIs found" : "No programmable APIs configured yet"}
           </Typography>
-          <Typography variant="body2" sx={{ color: "#64748B", maxWidth: 460, mx: "auto", mt: 0.5, mb: 2.5 }}>
+          <Typography variant="body2" sx={{ color: "#64748B", maxWidth: 460, mx: "auto", mt: 0.5, mb: 1 }}>
             Create custom programmable endpoints to integrate Easy42 with Prometheus, custom webhooks, bash scripts, or
             third-party monitoring systems.
           </Typography>
@@ -557,7 +557,7 @@ export const APISettingsTab: React.FC = () => {
           </Button>
         </Paper>
       ) : (
-        <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+        <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
           {filteredApis.map((item) => {
             const origin = window.location.origin;
             const fullUrl = `${origin}/api/custom/${item.id}`;
@@ -569,8 +569,8 @@ export const APISettingsTab: React.FC = () => {
                 key={item.id}
                 elevation={0}
                 sx={{
-                  p: 2.5,
-                  borderRadius: 2.5,
+                  p: 1,
+                  borderRadius: 1,
                   border: item.disabled ? "1px dashed #CBD5E1" : "1px solid #E2E8F0",
                   bgcolor: item.disabled ? "#F8FAFC" : "#FFFFFF",
                   opacity: item.disabled ? 0.9 : 1,
@@ -586,7 +586,7 @@ export const APISettingsTab: React.FC = () => {
                     display: "flex",
                     alignItems: "flex-start",
                     justifyContent: "space-between",
-                    gap: 2,
+                    gap: 1,
                     flexWrap: "wrap",
                   }}
                 >
@@ -688,7 +688,7 @@ export const APISettingsTab: React.FC = () => {
                     </Box>
 
                     {item.description && (
-                      <Typography variant="body2" sx={{ color: "#64748B", mb: 1.5 }}>
+                      <Typography variant="body2" sx={{ color: "#64748B", mb: 1 }}>
                         {item.description}
                       </Typography>
                     )}
@@ -701,7 +701,7 @@ export const APISettingsTab: React.FC = () => {
                           alignItems: "center",
                           bgcolor: "#F8FAFC",
                           border: "1px solid #E2E8F0",
-                          borderRadius: 1.5,
+                          borderRadius: 1,
                           px: 1.25,
                           py: 0.5,
                           fontSize: "0.8rem",
@@ -826,7 +826,7 @@ export const APISettingsTab: React.FC = () => {
         maxWidth="md"
         fullWidth
         PaperProps={{
-          sx: { borderRadius: 3, maxHeight: "90vh" },
+          sx: { borderRadius: 1, maxHeight: "90vh" },
         }}
       >
         <DialogTitle sx={{ fontWeight: 700, pb: 1, borderBottom: "1px solid #E2E8F0" }}>
@@ -836,7 +836,7 @@ export const APISettingsTab: React.FC = () => {
                 bgcolor: "#EEF2FF",
                 color: "#4F46E5",
                 p: 0.75,
-                borderRadius: 1.5,
+                borderRadius: 1,
                 display: "flex",
                 alignItems: "center",
               }}
@@ -849,9 +849,9 @@ export const APISettingsTab: React.FC = () => {
           </Box>
         </DialogTitle>
 
-        <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2, pt: 2.5, pb: 2 }}>
+        <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 1, pt: 2, pb: 2 }}>
           {/* Top row: ID and Content Type */}
-          <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap" }}>
+          <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
             <Box sx={{ flex: 1, minWidth: 240 }}>
               <TextField
                 label="API ID *"
@@ -899,7 +899,7 @@ export const APISettingsTab: React.FC = () => {
           </Box>
 
           {/* Optional Name & Description */}
-          <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap" }}>
+          <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
             <TextField
               label="Display Name (optional)"
               placeholder="e.g. Fleet Overview for External Dashboard"
@@ -927,7 +927,7 @@ export const APISettingsTab: React.FC = () => {
               alignItems: "center",
               justifyContent: "space-between",
               p: 1.75,
-              borderRadius: 2,
+              borderRadius: 1,
               border: `1px solid ${formDisabled ? "#FECACA" : "#E2E8F0"}`,
               bgcolor: formDisabled ? "#FEF2F2" : "#F8FAFC",
               transition: "all 0.15s ease",
@@ -1028,8 +1028,8 @@ export const APISettingsTab: React.FC = () => {
           </Box>
 
           {/* Extra Headers Section */}
-          <Box sx={{ border: "1px solid #E2E8F0", borderRadius: 2, p: 2, bgcolor: "#F8FAFC" }}>
-            <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1.5 }}>
+          <Box sx={{ border: "1px solid #E2E8F0", borderRadius: 1, p: 1, bgcolor: "#F8FAFC" }}>
+            <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1 }}>
               <Box>
                 <Typography variant="subtitle2" sx={{ fontWeight: 600, color: "#1E293B" }}>
                   Extra Response Headers (optional)
@@ -1126,7 +1126,7 @@ export const APISettingsTab: React.FC = () => {
                 "& .MuiInputBase-root": {
                   backgroundColor: "#0F172A !important",
                   borderRadius: "8px",
-                  p: 1.5,
+                  p: 1,
                   border: "1px solid #334155",
                   "&:hover": {
                     borderColor: "#64748B",
@@ -1238,8 +1238,8 @@ export const APISettingsTab: React.FC = () => {
           </Accordion>
 
           {/* Test / Preview Runner */}
-          <Box sx={{ border: "1px solid #E2E8F0", borderRadius: 2, p: 2, bgcolor: "#FFFFFF" }}>
-            <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1.5 }}>
+          <Box sx={{ border: "1px solid #E2E8F0", borderRadius: 1, p: 1, bgcolor: "#FFFFFF" }}>
+            <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1 }}>
               <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                 <Play size={16} color="#16A34A" />
                 <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#1E293B" }}>
@@ -1265,7 +1265,7 @@ export const APISettingsTab: React.FC = () => {
             </Box>
 
             {/* Test input controls */}
-            <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mb: 1.5 }}>
+            <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mb: 1 }}>
               <TextField
                 select
                 size="small"
@@ -1304,7 +1304,7 @@ export const APISettingsTab: React.FC = () => {
 
             {/* Test output display */}
             {testError && (
-              <Alert severity="error" sx={{ borderRadius: 1.5, fontSize: "0.85rem" }}>
+              <Alert severity="error" sx={{ borderRadius: 1, fontSize: "0.85rem" }}>
                 {testError}
               </Alert>
             )}
@@ -1326,8 +1326,8 @@ export const APISettingsTab: React.FC = () => {
                 </Box>
                 <Box
                   sx={{
-                    p: 1.5,
-                    borderRadius: 1.5,
+                    p: 1,
+                    borderRadius: 1,
                     bgcolor: "#0F172A",
                     color: "#38BDF8",
                     fontFamily: "monospace",
@@ -1345,7 +1345,7 @@ export const APISettingsTab: React.FC = () => {
           </Box>
         </DialogContent>
 
-        <DialogActions sx={{ px: 3, py: 2, borderTop: "1px solid #E2E8F0" }}>
+        <DialogActions sx={{ px: 3, py: 1, borderTop: "1px solid #E2E8F0" }}>
           <Button
             onClick={() => setDialogOpen(false)}
             disabled={saving}

@@ -515,7 +515,7 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = ({
           backgroundColor: "rgba(255, 255, 255, 0.94)",
           backdropFilter: "blur(8px)",
           border: "1px solid #E2E8F0",
-          borderRadius: 2.5,
+          borderRadius: 1,
           p: "6px 10px",
           boxShadow: "0 4px 16px -2px rgba(15, 23, 42, 0.08), 0 2px 6px -1px rgba(15, 23, 42, 0.04)",
           maxWidth: "calc(100dvw - 32px)",
@@ -530,7 +530,7 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = ({
               gap: 1,
               backgroundColor: "#EEF2FF",
               border: "1px solid #C7D2FE",
-              borderRadius: 2,
+              borderRadius: 1,
               px: 1.25,
               py: 0.35,
             }}
@@ -611,7 +611,7 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = ({
                 fontWeight: 600,
                 backgroundColor: "#F1F5F9",
                 color: "#475569",
-                borderRadius: 1.5,
+                borderRadius: 1,
                 border: "1px solid #E2E8F0",
               }}
             />
@@ -651,7 +651,7 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = ({
             sx: {
               mt: 0.75,
               minWidth: 160,
-              borderRadius: 2,
+              borderRadius: 1,
               boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05)",
               border: "1px solid #E2E8F0",
               p: 0.5,
@@ -812,7 +812,7 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = ({
               mt: 0.75,
               minWidth: 260,
               maxWidth: 320,
-              borderRadius: 2,
+              borderRadius: 1,
               boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05)",
               border: "1px solid #E2E8F0",
               p: 0.5,
@@ -946,7 +946,7 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = ({
                   sx={{
                     "& .MuiOutlinedInput-root": {
                       fontSize: "0.82rem",
-                      borderRadius: 1.5,
+                      borderRadius: 1,
                       backgroundColor: "#F8FAFC",
                       "& fieldset": {
                         borderColor: "#CBD5E1",
@@ -1085,7 +1085,7 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = ({
               gap: 0.75,
               backgroundColor: "#FAF5FF",
               border: "1px solid #E9D5FF",
-              borderRadius: 2,
+              borderRadius: 1,
               px: 1.25,
               py: 0.35,
             }}
@@ -1212,7 +1212,7 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = ({
             sx: {
               mt: 0.75,
               minWidth: 230,
-              borderRadius: 2,
+              borderRadius: 1,
               boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05)",
               border: "1px solid #E2E8F0",
               p: 0.75,
@@ -2991,7 +2991,7 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
             flexDirection: "column",
             alignItems: "center",
             justifyContent: "center",
-            gap: 2,
+            gap: 1,
             zIndex: 5,
             pointerEvents: "none",
           }}

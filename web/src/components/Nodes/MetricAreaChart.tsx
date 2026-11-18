@@ -151,7 +151,7 @@ export const MetricAreaChart: React.FC<MetricAreaChartProps> = ({
 
   // Threshold to identify empty data intervals (node offline, missed samples, etc.)
   const gapThreshold = useMemo(() => {
-    const rangeDur = timeSpan > 0 ? timeSpan : (range ? parseMetricRangeDuration(range) : 86400);
+    const rangeDur = timeSpan > 0 ? timeSpan : range ? parseMetricRangeDuration(range) : 86400;
     const baseGap = Math.max(60, rangeDur / 120);
 
     if (data.length < 2) {
@@ -220,9 +220,7 @@ export const MetricAreaChart: React.FC<MetricAreaChartProps> = ({
       const endX = getX(seg[seg.length - 1].timestamp);
       const area1 = `M ${startX},${bottomY} L ${points1.replace(/ /g, " L ")} L ${endX},${bottomY} Z`;
 
-      const points2 = hasDualSeries
-        ? seg.map((p) => `${getX(p.timestamp)},${getY(p.value2 ?? 0)}`).join(" ")
-        : "";
+      const points2 = hasDualSeries ? seg.map((p) => `${getX(p.timestamp)},${getY(p.value2 ?? 0)}`).join(" ") : "";
 
       return {
         id: idx,
@@ -297,8 +295,8 @@ export const MetricAreaChart: React.FC<MetricAreaChartProps> = ({
     <Paper
       elevation={0}
       sx={{
-        p: 2,
-        borderRadius: 2.5,
+        p: 1,
+        borderRadius: 1,
         border: "1px solid #E2E8F0",
         bgcolor: "#FFFFFF",
         position: "relative",
@@ -312,11 +310,7 @@ export const MetricAreaChart: React.FC<MetricAreaChartProps> = ({
           </Typography>
           <Box sx={{ display: "flex", alignItems: "baseline", gap: 1 }}>
             <Typography variant="h6" sx={{ fontWeight: 700, color: "#0F172A", fontSize: "1.2rem" }}>
-              {hoverState
-                ? activePoint
-                  ? defaultFormat(activePoint.value)
-                  : "No data"
-                : defaultFormat(stats.current)}
+              {hoverState ? (activePoint ? defaultFormat(activePoint.value) : "No data") : defaultFormat(stats.current)}
             </Typography>
             {hasDualSeries && (
               <Typography variant="body2" sx={{ fontWeight: 600, color: color2 }}>
@@ -405,8 +399,7 @@ export const MetricAreaChart: React.FC<MetricAreaChartProps> = ({
             {/* Area fill for each continuous segment (broken across empty data gaps) */}
             {segmentPaths.map(
               (sp) =>
-                !sp.isSingle &&
-                sp.area1 && <path key={`area-${sp.id}`} d={sp.area1} fill={`url(#${gradientId})`} />,
+                !sp.isSingle && sp.area1 && <path key={`area-${sp.id}`} d={sp.area1} fill={`url(#${gradientId})`} />,
             )}
 
             {/* Series 1 Line and isolated points */}
@@ -513,7 +506,7 @@ export const MetricAreaChart: React.FC<MetricAreaChartProps> = ({
 
       {/* Legend if dual series */}
       {hasDualSeries && (
-        <Box sx={{ display: "flex", gap: 2, mt: 1, justifyContent: "flex-end" }}>
+        <Box sx={{ display: "flex", gap: 1, mt: 1, justifyContent: "flex-end" }}>
           <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
             <Box sx={{ width: 10, height: 10, borderRadius: "50%", bgcolor: color }} />
             <Typography variant="caption" sx={{ color: "#64748B", fontSize: "0.75rem" }}>

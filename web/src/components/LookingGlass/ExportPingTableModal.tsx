@@ -145,14 +145,14 @@ export const ExportPingTableModal: React.FC<ExportPingTableModalProps> = ({ open
       fullScreen={isMobile}
       PaperProps={{
         sx: {
-          borderRadius: { xs: 0, md: 3 },
+          borderRadius: { xs: 0, md: 1 },
           boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
           overflow: "hidden",
           maxHeight: { xs: "100%", md: "calc(100dvh - 64px)" },
           height: { xs: "100%", md: 680 },
           display: "flex",
           flexDirection: "column",
-          my: { xs: 0, sm: 3 },
+          my: { xs: 0, sm: 1 },
         },
       }}
     >
@@ -160,7 +160,7 @@ export const ExportPingTableModal: React.FC<ExportPingTableModalProps> = ({ open
       <DialogTitle
         sx={{
           px: 3,
-          py: 2,
+          py: 1,
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
@@ -174,7 +174,7 @@ export const ExportPingTableModal: React.FC<ExportPingTableModalProps> = ({ open
             sx={{
               width: 38,
               height: 38,
-              borderRadius: 2,
+              borderRadius: 1,
               bgcolor: "#EEF2FF",
               color: "#4F46E5",
               display: "flex",
@@ -216,10 +216,10 @@ export const ExportPingTableModal: React.FC<ExportPingTableModalProps> = ({ open
             width: { xs: "100%", md: 360 },
             borderRight: { xs: "none", md: "1px solid #E2E8F0" },
             borderBottom: { xs: "1px solid #E2E8F0", md: "none" },
-            p: { xs: 2.25, sm: 3 },
+            p: 1,
             display: "flex",
             flexDirection: "column",
-            gap: 2.25,
+            gap: 1,
             overflowY: { xs: "visible", md: "auto" },
             flexShrink: 0,
             bgcolor: "#FFFFFF",
@@ -244,7 +244,7 @@ export const ExportPingTableModal: React.FC<ExportPingTableModalProps> = ({ open
                   sx: {
                     fontSize: "0.82rem",
                     bgcolor: "#F8FAFC",
-                    borderRadius: 1.5,
+                    borderRadius: 1,
                     "& .MuiOutlinedInput-input": { py: 0.8, px: 1.2 },
                   },
                 },
@@ -365,7 +365,7 @@ export const ExportPingTableModal: React.FC<ExportPingTableModalProps> = ({ open
 
             {/* Tag Select Dropdown (shown when tag filter is selected) */}
             {nodeFilter === "tag" && (
-              <Box sx={{ mt: 1.25, pl: 3.5 }}>
+              <Box sx={{ mt: 1, pl: 1 }}>
                 {uniqueTags.length > 0 ? (
                   <FormControl fullWidth size="small">
                     <Select
@@ -374,7 +374,7 @@ export const ExportPingTableModal: React.FC<ExportPingTableModalProps> = ({ open
                       sx={{
                         fontSize: "0.82rem",
                         bgcolor: "#F8FAFC",
-                        borderRadius: 1.5,
+                        borderRadius: 1,
                         "& .MuiSelect-select": { py: 0.8, px: 1.2 },
                       }}
                     >
@@ -513,7 +513,7 @@ export const ExportPingTableModal: React.FC<ExportPingTableModalProps> = ({ open
           sx={{
             flex: "1 1 auto",
             bgcolor: "#F8FAFC",
-            p: { xs: 2, sm: 3 },
+            p: 1,
             display: "flex",
             flexDirection: "column",
             gap: 1,
@@ -543,14 +543,14 @@ export const ExportPingTableModal: React.FC<ExportPingTableModalProps> = ({ open
               height: { xs: 320, md: "100%" },
               minHeight: { xs: 280, md: 0 },
               border: "1px solid #E2E8F0",
-              borderRadius: 2,
+              borderRadius: 1,
               bgcolor: "#FFFFFF",
               overflow: "auto",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
               position: "relative",
-              p: 2,
+              p: 1,
             }}
           >
             {previewSvg ? (
@@ -570,7 +570,7 @@ export const ExportPingTableModal: React.FC<ExportPingTableModalProps> = ({ open
                   "& svg": {
                     maxWidth: "100%",
                     height: "auto",
-                    borderRadius: 1.5,
+                    borderRadius: 1,
                     boxShadow: "0 4px 14px rgba(0, 0, 0, 0.06)",
                   },
                 }}
@@ -588,7 +588,7 @@ export const ExportPingTableModal: React.FC<ExportPingTableModalProps> = ({ open
       <DialogActions
         sx={{
           px: 3,
-          py: 1.5,
+          py: 1,
           borderTop: "1px solid #E2E8F0",
           bgcolor: "#F8FAFC",
           display: "flex",

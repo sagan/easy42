@@ -17,7 +17,7 @@ export const PingView: React.FC<PingViewProps> = ({ ping }) => {
         : { bg: "#FEF2F2", text: "#991B1B", border: "#FECACA" };
 
   return (
-    <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+    <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
       {/* KPI Cards Grid */}
       <Box
         sx={{
@@ -30,8 +30,8 @@ export const PingView: React.FC<PingViewProps> = ({ ping }) => {
         <Paper
           elevation={0}
           sx={{
-            p: 2,
-            borderRadius: 2,
+            p: 1,
+            borderRadius: 1,
             border: `1px solid ${lossColor.border}`,
             backgroundColor: lossColor.bg,
             display: "flex",
@@ -57,8 +57,8 @@ export const PingView: React.FC<PingViewProps> = ({ ping }) => {
         <Paper
           elevation={0}
           sx={{
-            p: 2,
-            borderRadius: 2,
+            p: 1,
+            borderRadius: 1,
             border: "1px solid #E2E8F0",
             backgroundColor: "#FFFFFF",
             display: "flex",
@@ -84,8 +84,8 @@ export const PingView: React.FC<PingViewProps> = ({ ping }) => {
         <Paper
           elevation={0}
           sx={{
-            p: 2,
-            borderRadius: 2,
+            p: 1,
+            borderRadius: 1,
             border: "1.5px solid #6366F1",
             backgroundColor: "#FAFBFF",
             display: "flex",
@@ -111,8 +111,8 @@ export const PingView: React.FC<PingViewProps> = ({ ping }) => {
         <Paper
           elevation={0}
           sx={{
-            p: 2,
-            borderRadius: 2,
+            p: 1,
+            borderRadius: 1,
             border: "1px solid #E2E8F0",
             backgroundColor: "#FFFFFF",
             display: "flex",
@@ -137,8 +137,8 @@ export const PingView: React.FC<PingViewProps> = ({ ping }) => {
 
       {/* Per-Packet Table */}
       {ping.packets && ping.packets.length > 0 && (
-        <Paper elevation={0} sx={{ p: 2, border: "1px solid #E2E8F0", borderRadius: 2 }}>
-          <Typography variant="subtitle2" sx={{ fontWeight: 600, color: "#1E293B", mb: 1.5 }}>
+        <Paper elevation={0} sx={{ p: 1, border: "1px solid #E2E8F0", borderRadius: 2 }}>
+          <Typography variant="subtitle2" sx={{ fontWeight: 600, color: "#1E293B", mb: 1 }}>
             Individual Packet Probes
           </Typography>
 
@@ -153,9 +153,9 @@ export const PingView: React.FC<PingViewProps> = ({ ping }) => {
                   sx={{
                     display: "flex",
                     alignItems: "center",
-                    gap: 2,
+                    gap: 1,
                     p: 1,
-                    borderRadius: 1.5,
+                    borderRadius: 1,
                     backgroundColor: "#F8FAFC",
                   }}
                 >

@@ -681,7 +681,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
           sx={{
             width: 34,
             height: 34,
-            borderRadius: 2,
+            borderRadius: 1,
             backgroundColor: isExternal ? "rgba(139, 92, 246, 0.1)" : "rgba(79, 70, 229, 0.1)",
             display: "flex",
             alignItems: "center",
@@ -703,7 +703,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
       </DialogTitle>
 
       <form onSubmit={handleSubmit}>
-        <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2, pt: 2.5 }}>
+        <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 1, pt: 1 }}>
           {/* Node Type Selector */}
           {!nodeToEdit && (
             <Box sx={{ display: "flex", gap: 1 }}>
@@ -764,13 +764,13 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
           )}
 
           {isExternal ? (
-            <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
               <Alert severity="info" sx={{ borderRadius: 2 }}>
                 External peers represent unmanaged private or DN42 network nodes. easy42 does not connect via SSH to
                 this node; it is only used to configure WireGuard and BGP peering on your managed nodes.
               </Alert>
 
-              <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
+              <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1 }}>
                 <TextFieldWithCopy
                   label="Peer Name"
                   size="small"
@@ -819,7 +819,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
               />
 
               {/* External Peer Markdown Note */}
-              <Box sx={{ p: 1.5, borderRadius: 2, backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
+              <Box sx={{ p: 1, borderRadius: 1, backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
                 <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1 }}>
                   <Typography
                     variant="caption"
@@ -867,7 +867,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                 ) : (
                   <Box
                     sx={{
-                      p: 1.5,
+                      p: 1,
                       minHeight: 75,
                       maxHeight: 200,
                       overflowY: "auto",
@@ -881,7 +881,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                 )}
               </Box>
 
-              <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
+              <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1 }}>
                 <TextFieldWithCopy
                   label="Router IPv4 (Optional)"
                   size="small"
@@ -938,8 +938,8 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                     <Box
                       key={ep.id}
                       sx={{
-                        p: 1.5,
-                        borderRadius: 2,
+                        p: 1,
+                        borderRadius: 1,
                         backgroundColor: "#FAF5FF",
                         border: "1px solid #DDD6FE",
                         display: "flex",
@@ -1039,20 +1039,20 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                     onClick={handleProbe}
                     disabled={probing || !sshHost.trim() || saving}
                     startIcon={probing ? <CircularProgress size={16} color="inherit" /> : <Search size={16} />}
-                    sx={{ whiteSpace: "nowrap", px: 2.5 }}
+                    sx={{ whiteSpace: "nowrap", px: 1 }}
                   >
-                    {probing ? "Probing..." : "Probe via SSH"}
+                    {probing ? "Probing..." : "Probe"}
                   </Button>
                 </Box>
                 {probeError && (
-                  <Alert severity="error" sx={{ mt: 1.5, borderRadius: 2 }}>
+                  <Alert severity="error" sx={{ mt: 1, borderRadius: 2 }}>
                     {probeError}
                   </Alert>
                 )}
               </Box>
 
               {/* Step 2: Node Properties */}
-              <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+              <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
                 <Typography
                   variant="caption"
                   sx={{ color: "#475569", fontWeight: 700, display: "block", letterSpacing: "0.5px" }}
@@ -1060,7 +1060,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                   STEP 2: NODE SPECIFICATION
                 </Typography>
 
-                <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
+                <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1 }}>
                   <TextFieldWithCopy
                     label="Node Name"
                     size="small"
@@ -1097,7 +1097,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                   />
                 </Box>
 
-                <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
+                <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1 }}>
                   {discoveredIps.length > 0 ? (
                     <TextFieldWithCopy
                       select
@@ -1141,7 +1141,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                   />
                 </Box>
 
-                <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
+                <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1 }}>
                   <FreeTextField
                     label="Interface Name"
                     size="small"
@@ -1203,7 +1203,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                 />
 
                 {/* Managed Node Markdown Note */}
-                <Box sx={{ p: 1.5, borderRadius: 2, backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
+                <Box sx={{ p: 1, borderRadius: 1, backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
                   <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1 }}>
                     <Typography
                       variant="caption"
@@ -1251,7 +1251,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                   ) : (
                     <Box
                       sx={{
-                        p: 1.5,
+                        p: 1,
                         minHeight: 75,
                         maxHeight: 200,
                         overflowY: "auto",
@@ -1295,8 +1295,8 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                             alignItems: { xs: "flex-start", sm: "center" },
                             justifyContent: "space-between",
                             gap: 1,
-                            p: 1.5,
-                            borderRadius: 2,
+                            p: 1,
+                            borderRadius: 1,
                             backgroundColor: "#FFFBEB",
                             border: "1px solid #FDE68A",
                           }}
@@ -1350,8 +1350,8 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                       <Box
                         key={ep.id}
                         sx={{
-                          p: 1.5,
-                          borderRadius: 2,
+                          p: 1,
+                          borderRadius: 1,
                           backgroundColor: "#F8FAFC",
                           border: "1px solid #E2E8F0",
                           display: "flex",
@@ -1425,7 +1425,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
               </Box>
 
               {/* Step 4: BIRD / BGP Routing */}
-              <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+              <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
                 <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                   <Network size={16} color="#4F46E5" />
                   <Typography variant="caption" sx={{ color: "#475569", fontWeight: 700, letterSpacing: "0.5px" }}>
@@ -1433,7 +1433,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                   </Typography>
                 </Box>
 
-                <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr 1fr" }, gap: 2 }}>
+                <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr 1fr" }, gap: 1 }}>
                   <TextFieldWithCopy
                     label="Kernel Routing Table ID"
                     type="number"
@@ -1545,7 +1545,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                 )}
 
                 {/* Custom Network Script (Policy Routing) */}
-                <Box sx={{ mt: 2 }}>
+                <Box sx={{ mt: 1 }}>
                   <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 0.8 }}>
                     <Typography variant="body2" sx={{ fontWeight: 600, color: "#1E293B" }}>
                       Custom Network Script
@@ -1588,8 +1588,8 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                 {/* FlapAlerted BGP Peering Switch */}
                 <Box
                   sx={{
-                    p: 1.5,
-                    borderRadius: 2,
+                    p: 1,
+                    borderRadius: 1,
                     bgcolor: enableFa ? "rgba(79, 70, 229, 0.04)" : "#F8FAFC",
                     border: enableFa ? "1px solid rgba(79, 70, 229, 0.3)" : "1px solid #E2E8F0",
                     transition: "all 0.2s ease",
@@ -1634,12 +1634,12 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                 {/* Manage /etc/hosts Checkbox */}
                 <Box
                   sx={{
-                    p: 1.5,
-                    borderRadius: 2,
+                    p: 1,
+                    borderRadius: 1,
                     bgcolor: updateHosts ? "rgba(79, 70, 229, 0.04)" : "#F8FAFC",
                     border: updateHosts ? "1px solid rgba(79, 70, 229, 0.3)" : "1px solid #E2E8F0",
                     transition: "all 0.2s ease",
-                    mt: 1.5,
+                    mt: 1,
                   }}
                 >
                   <FormControlLabel
@@ -1680,7 +1680,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                 </Box>
 
                 {/* Node Extra Hosts Field */}
-                <Box sx={{ mt: 1.5 }}>
+                <Box sx={{ mt: 1 }}>
                   <TextField
                     id="node-extra-hosts-input"
                     label="Extra Hosts"
@@ -1708,12 +1708,12 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                 {/* BGP Route Reflector Checkbox */}
                 <Box
                   sx={{
-                    p: 1.5,
-                    borderRadius: 2,
+                    p: 1,
+                    borderRadius: 1,
                     bgcolor: routeReflector ? "rgba(79, 70, 229, 0.05)" : "#F8FAFC",
                     border: routeReflector ? "1px solid rgba(79, 70, 229, 0.35)" : "1px solid #E2E8F0",
                     transition: "all 0.2s ease",
-                    mt: 1.5,
+                    mt: 1,
                   }}
                 >
                   <FormControlLabel
@@ -1758,12 +1758,12 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                 {/* Dynamic BIRD Config Checkbox */}
                 <Box
                   sx={{
-                    p: 1.5,
-                    borderRadius: 2,
+                    p: 1,
+                    borderRadius: 1,
                     bgcolor: enableDynamicBirdConfig ? "rgba(79, 70, 229, 0.05)" : "#F8FAFC",
                     border: enableDynamicBirdConfig ? "1px solid rgba(79, 70, 229, 0.35)" : "1px solid #E2E8F0",
                     transition: "all 0.2s ease",
-                    mt: 1.5,
+                    mt: 1,
                   }}
                 >
                   <FormControlLabel
@@ -1831,8 +1831,8 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                   {kernelRoutes.length === 0 ? (
                     <Box
                       sx={{
-                        p: 1.5,
-                        borderRadius: 2,
+                        p: 1,
+                        borderRadius: 1,
                         backgroundColor: "#F8FAFC",
                         border: "1px dashed #CBD5E1",
                         textAlign: "center",
@@ -1848,8 +1848,8 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                         <Box
                           key={kr.id}
                           sx={{
-                            p: 1.5,
-                            borderRadius: 2,
+                            p: 1,
+                            borderRadius: 1,
                             backgroundColor: "#F8FAFC",
                             border: "1px solid #E2E8F0",
                             display: "flex",
@@ -1902,7 +1902,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                 </Box>
 
                 {/* Custom Config Hooks */}
-                <Box sx={{ mt: 2 }}>
+                <Box sx={{ mt: 1 }}>
                   <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1.2 }}>
                     <Box>
                       <Typography
@@ -1929,8 +1929,8 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                   {configHooks.length === 0 ? (
                     <Box
                       sx={{
-                        p: 1.5,
-                        borderRadius: 2,
+                        p: 1,
+                        borderRadius: 1,
                         backgroundColor: "#F8FAFC",
                         border: "1px dashed #CBD5E1",
                         textAlign: "center",
@@ -1949,8 +1949,8 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                           <Box
                             key={hook.id}
                             sx={{
-                              p: 1.5,
-                              borderRadius: 2,
+                              p: 1,
+                              borderRadius: 1,
                               backgroundColor: "#F8FAFC",
                               border: "1px solid #E2E8F0",
                               display: "flex",
@@ -2030,7 +2030,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
               </Box>
 
               {/* Step 5: Config Templates (Optional) */}
-              <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+              <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
                 <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                   <FileCode size={16} color="#4F46E5" />
                   <Typography variant="caption" sx={{ color: "#475569", fontWeight: 700, letterSpacing: "0.5px" }}>
@@ -2042,7 +2042,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                   this node.
                 </Typography>
 
-                <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr 1fr" }, gap: 2 }}>
+                <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr 1fr" }, gap: 1 }}>
                   <TextField
                     select
                     label="WireGuard Template"
@@ -2117,7 +2117,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
           )}
         </DialogContent>
 
-        <DialogActions sx={{ px: 3, py: 2, borderTop: "1px solid #E2E8F0", backgroundColor: "#F8FAFC" }}>
+        <DialogActions sx={{ px: 3, py: 1, borderTop: "1px solid #E2E8F0", backgroundColor: "#F8FAFC" }}>
           <Button onClick={onClose} disabled={saving} sx={{ color: "#64748B" }}>
             Cancel
           </Button>

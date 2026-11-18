@@ -971,7 +971,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
           sx={{
             width: 34,
             height: 34,
-            borderRadius: 2,
+            borderRadius: 1,
             backgroundColor: isBothExternal
               ? "rgba(239, 68, 68, 0.1)"
               : isExternalLink
@@ -1031,7 +1031,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
       </DialogTitle>
 
       <form onSubmit={handleSubmit}>
-        <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2, pt: 2.5 }}>
+        <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 1, pt: 1 }}>
           {/* Node Selection */}
           <Box sx={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", gap: 1, alignItems: "center" }}>
             <TextField
@@ -1115,7 +1115,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
           )}
 
           {linkToEdit && (
-            <Typography variant="caption" sx={{ color: "#64748B", fontStyle: "italic", mt: -1.5 }}>
+            <Typography variant="caption" sx={{ color: "#64748B", fontStyle: "italic", mt: -1 }}>
               {linkType === "virtual"
                 ? "Editing virtual link reference parameters."
                 : linkType === "manual"
@@ -1135,8 +1135,8 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                   id="link-type-wireguard"
                   onClick={() => !linkToEdit && setLinkType("wireguard")}
                   sx={{
-                    p: 1.5,
-                    borderRadius: 2,
+                    p: 1,
+                    borderRadius: 1,
                     border: "2px solid",
                     borderColor: linkType === "wireguard" ? "#0891B2" : "#E2E8F0",
                     backgroundColor: linkType === "wireguard" ? "rgba(8, 145, 178, 0.05)" : "#F8FAFC",
@@ -1169,8 +1169,8 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                   id="link-type-manual"
                   onClick={() => !linkToEdit && setLinkType("manual")}
                   sx={{
-                    p: 1.5,
-                    borderRadius: 2,
+                    p: 1,
+                    borderRadius: 1,
                     border: "2px solid",
                     borderColor: linkType === "manual" ? "#7C3AED" : "#E2E8F0",
                     backgroundColor: linkType === "manual" ? "rgba(124, 58, 237, 0.05)" : "#F8FAFC",
@@ -1203,8 +1203,8 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                   id="link-type-virtual"
                   onClick={() => !linkToEdit && setLinkType("virtual")}
                   sx={{
-                    p: 1.5,
-                    borderRadius: 2,
+                    p: 1,
+                    borderRadius: 1,
                     border: "2px solid",
                     borderColor: linkType === "virtual" ? "#0284C7" : "#E2E8F0",
                     backgroundColor: linkType === "virtual" ? "rgba(2, 132, 199, 0.05)" : "#F8FAFC",
@@ -1243,7 +1243,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
             <Box
               sx={{
                 p: 1.75,
-                borderRadius: 2,
+                borderRadius: 1,
                 backgroundColor: enableBFD ? "rgba(16, 185, 129, 0.05)" : "#F8FAFC",
                 border: "1px solid",
                 borderColor: enableBFD ? "rgba(16, 185, 129, 0.35)" : "#E2E8F0",
@@ -1283,8 +1283,9 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                       variant="caption"
                       sx={{ color: "#64748B", display: "block", fontSize: "0.72rem", lineHeight: 1.4, mt: 0.3 }}
                     >
-                      Bidirectional Forwarding Detection (BFD) provides sub-second link failure detection for BGP peering
-                      sessions. When disabled, adds &quot;bfd no;&quot; to BIRD link configuration on both link ends.
+                      Bidirectional Forwarding Detection (BFD) provides sub-second link failure detection for BGP
+                      peering sessions. When disabled, adds &quot;bfd no;&quot; to BIRD link configuration on both link
+                      ends.
                     </Typography>
                   </Box>
                 }
@@ -1297,7 +1298,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
           <Box
             sx={{
               p: 1.75,
-              borderRadius: 2,
+              borderRadius: 1,
               backgroundColor: linkDisabled ? "rgba(100, 116, 139, 0.08)" : "#F8FAFC",
               border: "1px solid",
               borderColor: linkDisabled ? "rgba(100, 116, 139, 0.4)" : "#E2E8F0",
@@ -1356,7 +1357,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
             <Box
               sx={{
                 p: 1.75,
-                borderRadius: 2,
+                borderRadius: 1,
                 backgroundColor: assignIPv4 ? "rgba(8, 145, 178, 0.05)" : "#F8FAFC",
                 border: "1px solid",
                 borderColor: assignIPv4 ? "rgba(8, 145, 178, 0.35)" : "#E2E8F0",
@@ -1412,7 +1413,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
             <Box
               sx={{
                 p: 1.75,
-                borderRadius: 2,
+                borderRadius: 1,
                 backgroundColor: obfuscatorEnabled ? "rgba(124, 58, 237, 0.05)" : "#F8FAFC",
                 border: "1px solid",
                 borderColor: obfuscatorEnabled ? "rgba(124, 58, 237, 0.35)" : "#E2E8F0",
@@ -1470,7 +1471,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                 sx={{ alignItems: "flex-start", ml: 0, m: 0 }}
               />
               {obfuscatorEnabled && (
-                <Box sx={{ mt: 1.5, display: "flex", flexDirection: "column", gap: 1 }}>
+                <Box sx={{ mt: 1, display: "flex", flexDirection: "column", gap: 1 }}>
                   <TextField
                     select
                     size="small"
@@ -1512,7 +1513,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
             <Box
               sx={{
                 p: 1.75,
-                borderRadius: 2,
+                borderRadius: 1,
                 backgroundColor: enablePsk ? "rgba(99, 102, 241, 0.05)" : "#F8FAFC",
                 border: "1px solid",
                 borderColor: enablePsk ? "rgba(99, 102, 241, 0.35)" : "#E2E8F0",
@@ -1557,7 +1558,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                     </Typography>
 
                     {enablePsk && (
-                      <Box sx={{ mt: 1.5 }}>
+                      <Box sx={{ mt: 1 }}>
                         <TextFieldWithCopy
                           id="link-custom-psk-input"
                           fullWidth
@@ -1587,7 +1588,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
           <Box
             sx={{
               p: 1.75,
-              borderRadius: 2,
+              borderRadius: 1,
               backgroundColor: "#F8FAFC",
               border: "1px solid",
               borderColor: "#E2E8F0",
@@ -1680,12 +1681,12 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
 
           {/* External Peering Configuration Form (WireGuard) */}
           {linkType === "wireguard" && isExternalLink && managedNode && externalNode ? (
-            <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
               <Alert
                 icon={<Globe size={18} />}
                 severity="info"
                 sx={{
-                  borderRadius: 2,
+                  borderRadius: 1,
                   backgroundColor: "#FAF5FF",
                   borderColor: "rgba(139, 92, 246, 0.3)",
                   color: "#5B21B6",
@@ -1699,8 +1700,8 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
               {/* Local Managed Node Configuration */}
               <Box
                 sx={{
-                  p: 2,
-                  borderRadius: 2,
+                  p: 1,
+                  borderRadius: 1,
                   backgroundColor: "#EEF2FF",
                   border: "1px solid #C7D2FE",
                 }}
@@ -1708,7 +1709,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                 <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#3730A3", mb: 1.2 }}>
                   Local Interface: {managedNode.name}
                 </Typography>
-                <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1, mb: 1.5 }}>
+                <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1, mb: 1 }}>
                   <TextFieldWithCopy
                     label="Interface Name"
                     size="small"
@@ -1781,10 +1782,10 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                       </Typography>
                     </Box>
                   }
-                  sx={{ alignItems: "flex-start", ml: 0, mt: 1.5 }}
+                  sx={{ alignItems: "flex-start", ml: 0, mt: 1 }}
                 />
 
-                <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 1 }}>
+                <Box sx={{ mt: 1, display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 1 }}>
                   <TextField
                     select
                     fullWidth
@@ -1836,7 +1837,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                     helperText="Overrides policy cost if set (non-zero)"
                   />
                 </Box>
-                <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 1 }}>
+                <Box sx={{ mt: 1, display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 1 }}>
                   <TextFieldWithCopy
                     fullWidth
                     size="small"
@@ -1899,9 +1900,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                 </Box>
 
                 {/* Managed Node Endpoint Note */}
-                <Box
-                  sx={{ mt: 1.5, p: 1.5, borderRadius: 1.5, backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0" }}
-                >
+                <Box sx={{ mt: 1, p: 1, borderRadius: 1, backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
                   <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 0.8 }}>
                     <Typography
                       variant="caption"
@@ -1973,9 +1972,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                 </Box>
 
                 {/* External Peer Endpoint Note */}
-                <Box
-                  sx={{ mt: 1.5, p: 1.5, borderRadius: 1.5, backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0" }}
-                >
+                <Box sx={{ mt: 1, p: 1, borderRadius: 1, backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
                   <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 0.8 }}>
                     <Typography
                       variant="caption"
@@ -2052,8 +2049,8 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
               {/* External Peer Configuration */}
               <Box
                 sx={{
-                  p: 2,
-                  borderRadius: 2,
+                  p: 1,
+                  borderRadius: 1,
                   backgroundColor: "#FAF5FF",
                   border: "1px solid #DDD6FE",
                 }}
@@ -2078,7 +2075,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                   )}
                 </Box>
 
-                <Box sx={{ display: "grid", gridTemplateColumns: "1.2fr 0.8fr", gap: 1, mb: 1.5 }}>
+                <Box sx={{ display: "grid", gridTemplateColumns: "1.2fr 0.8fr", gap: 1, mb: 1 }}>
                   <TextFieldWithCopy
                     label="Resolved Entrypoint (IP / Host)"
                     size="small"
@@ -2121,7 +2118,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                   />
                 </Box>
 
-                <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1, mb: 1.5 }}>
+                <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1, mb: 1 }}>
                   <TextFieldWithCopy
                     label="Remote WG Address"
                     size="small"
@@ -2144,9 +2141,9 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                 {managedPeerEndpoint && (
                   <Box
                     sx={{
-                      mt: 1.5,
-                      p: 1.5,
-                      borderRadius: 1.5,
+                      mt: 1,
+                      p: 1,
+                      borderRadius: 1,
                       bgcolor: "#FFFFFF",
                       border: "1px solid #DDD6FE",
                       display: "flex",
@@ -2177,12 +2174,12 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
             </Box>
           ) : fromNode && toNode && linkType === "virtual" ? (
             /* Virtual Link Form */
-            <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
               <Alert
                 icon={<Activity size={18} />}
                 severity="info"
                 sx={{
-                  borderRadius: 2,
+                  borderRadius: 1,
                   backgroundColor: "#F0F9FF",
                   borderColor: "rgba(2, 132, 199, 0.3)",
                   color: "#0369A1",
@@ -2202,8 +2199,8 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
               {/* End 1: fromNode */}
               <Box
                 sx={{
-                  p: 2,
-                  borderRadius: 2,
+                  p: 1,
+                  borderRadius: 1,
                   backgroundColor: "#F0F9FF",
                   border: "1px solid #BAE6FD",
                 }}
@@ -2212,7 +2209,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                   End 1: {fromNode.name} {fromNode.is_external ? "(External Peer)" : ""}
                 </Typography>
 
-                <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1, mb: 1.5 }}>
+                <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1, mb: 1 }}>
                   <TextFieldWithCopy
                     id="virtual-from-interface"
                     label="Interface Name (Optional)"
@@ -2234,9 +2231,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                 </Box>
 
                 {/* Node 1 Endpoint Note */}
-                <Box
-                  sx={{ mt: 1.5, p: 1.5, borderRadius: 1.5, backgroundColor: "#FFFFFF", border: "1px solid #BAE6FD" }}
-                >
+                <Box sx={{ mt: 1, p: 1, borderRadius: 1, backgroundColor: "#FFFFFF", border: "1px solid #BAE6FD" }}>
                   <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 0.8 }}>
                     <Typography
                       variant="caption"
@@ -2302,8 +2297,8 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
               {/* End 2: toNode */}
               <Box
                 sx={{
-                  p: 2,
-                  borderRadius: 2,
+                  p: 1,
+                  borderRadius: 1,
                   backgroundColor: "#F0F9FF",
                   border: "1px solid #BAE6FD",
                 }}
@@ -2312,7 +2307,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                   End 2: {toNode.name} {toNode.is_external ? "(External Peer)" : ""}
                 </Typography>
 
-                <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1, mb: 1.5 }}>
+                <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1, mb: 1 }}>
                   <TextFieldWithCopy
                     id="virtual-to-interface"
                     label="Interface Name (Optional)"
@@ -2334,9 +2329,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                 </Box>
 
                 {/* Node 2 Endpoint Note */}
-                <Box
-                  sx={{ mt: 1.5, p: 1.5, borderRadius: 1.5, backgroundColor: "#FFFFFF", border: "1px solid #BAE6FD" }}
-                >
+                <Box sx={{ mt: 1, p: 1, borderRadius: 1, backgroundColor: "#FFFFFF", border: "1px solid #BAE6FD" }}>
                   <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 0.8 }}>
                     <Typography
                       variant="caption"
@@ -2401,12 +2394,12 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
             </Box>
           ) : fromNode && toNode && linkType === "manual" ? (
             /* Manual Link Form */
-            <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
               <Alert
                 icon={<Network size={18} />}
                 severity="info"
                 sx={{
-                  borderRadius: 2,
+                  borderRadius: 1,
                   backgroundColor: "#FAF5FF",
                   borderColor: "rgba(124, 58, 237, 0.3)",
                   color: "#5B21B6",
@@ -2426,8 +2419,8 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
               {/* End 1: fromNode */}
               <Box
                 sx={{
-                  p: 2,
-                  borderRadius: 2,
+                  p: 1,
+                  borderRadius: 1,
                   backgroundColor: "#FAF5FF",
                   border: "1px solid #DDD6FE",
                 }}
@@ -2436,7 +2429,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                   End 1: {fromNode.name} {fromNode.is_external ? "(External Peer)" : ""}
                 </Typography>
 
-                <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1, mb: 1.5 }}>
+                <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1, mb: 1 }}>
                   <TextFieldWithCopy
                     id="manual-from-interface"
                     label="Interface Name"
@@ -2465,7 +2458,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
 
                 {!fromNode.is_external && (
                   <>
-                    <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 1 }}>
+                    <Box sx={{ mt: 1, display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 1 }}>
                       <TextField
                         select
                         fullWidth
@@ -2508,7 +2501,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                       />
                     </Box>
 
-                    <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 1 }}>
+                    <Box sx={{ mt: 1, display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 1 }}>
                       <TextFieldWithCopy
                         fullWidth
                         size="small"
@@ -2548,9 +2541,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                 )}
 
                 {/* End 1 Note */}
-                <Box
-                  sx={{ mt: 1.5, p: 1.5, borderRadius: 1.5, backgroundColor: "#FFFFFF", border: "1px solid #DDD6FE" }}
-                >
+                <Box sx={{ mt: 1, p: 1, borderRadius: 1, backgroundColor: "#FFFFFF", border: "1px solid #DDD6FE" }}>
                   <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 0.8 }}>
                     <Typography
                       variant="caption"
@@ -2616,8 +2607,8 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
               {/* End 2: toNode */}
               <Box
                 sx={{
-                  p: 2,
-                  borderRadius: 2,
+                  p: 1,
+                  borderRadius: 1,
                   backgroundColor: "#FAF5FF",
                   border: "1px solid #DDD6FE",
                 }}
@@ -2626,7 +2617,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                   End 2: {toNode.name} {toNode.is_external ? "(External Peer)" : ""}
                 </Typography>
 
-                <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1, mb: 1.5 }}>
+                <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1, mb: 1 }}>
                   <TextFieldWithCopy
                     id="manual-to-interface"
                     label="Interface Name"
@@ -2655,7 +2646,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
 
                 {!toNode.is_external && (
                   <>
-                    <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 1 }}>
+                    <Box sx={{ mt: 1, display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 1 }}>
                       <TextField
                         select
                         fullWidth
@@ -2698,7 +2689,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                       />
                     </Box>
 
-                    <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 1 }}>
+                    <Box sx={{ mt: 1, display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 1 }}>
                       <TextFieldWithCopy
                         fullWidth
                         size="small"
@@ -2738,9 +2729,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                 )}
 
                 {/* End 2 Note */}
-                <Box
-                  sx={{ mt: 1.5, p: 1.5, borderRadius: 1.5, backgroundColor: "#FFFFFF", border: "1px solid #DDD6FE" }}
-                >
+                <Box sx={{ mt: 1, p: 1, borderRadius: 1, backgroundColor: "#FFFFFF", border: "1px solid #DDD6FE" }}>
                   <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 0.8 }}>
                     <Typography
                       variant="caption"
@@ -2808,7 +2797,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
             fromNode &&
             toNode &&
             !isBothExternal && (
-              <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+              <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
                 <Typography variant="caption" sx={{ color: "#475569", fontWeight: 700, letterSpacing: "0.5px" }}>
                   WIREGUARD INTERFACE SPECIFICATIONS
                 </Typography>
@@ -2816,8 +2805,8 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                 {/* From Node End */}
                 <Box
                   sx={{
-                    p: 2,
-                    borderRadius: 2,
+                    p: 1,
+                    borderRadius: 1,
                     backgroundColor: "#EEF2FF",
                     border: "1px solid #C7D2FE",
                   }}
@@ -2858,9 +2847,9 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
 
                   <Box
                     sx={{
-                      mt: 1.5,
-                      p: 1.5,
-                      borderRadius: 1.5,
+                      mt: 1,
+                      p: 1,
+                      borderRadius: 1,
                       backgroundColor: "rgba(255, 255, 255, 0.7)",
                       border: "1px solid #C7D2FE",
                       display: "flex",
@@ -2936,7 +2925,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                     />
                   </Box>
 
-                  <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 1 }}>
+                  <Box sx={{ mt: 1, display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 1 }}>
                     <TextField
                       select
                       fullWidth
@@ -2978,7 +2967,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                       helperText="Overrides policy cost if set (non-zero)"
                     />
                   </Box>
-                  <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 1 }}>
+                  <Box sx={{ mt: 1, display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 1 }}>
                     <TextFieldWithCopy
                       fullWidth
                       size="small"
@@ -3025,9 +3014,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                   </Box>
 
                   {/* Node 1 Endpoint Note */}
-                  <Box
-                    sx={{ mt: 1.5, p: 1.5, borderRadius: 1.5, backgroundColor: "#FFFFFF", border: "1px solid #C7D2FE" }}
-                  >
+                  <Box sx={{ mt: 1, p: 1, borderRadius: 1, backgroundColor: "#FFFFFF", border: "1px solid #C7D2FE" }}>
                     <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 0.8 }}>
                       <Typography
                         variant="caption"
@@ -3093,8 +3080,8 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                 {/* To Node End */}
                 <Box
                   sx={{
-                    p: 2,
-                    borderRadius: 2,
+                    p: 1,
+                    borderRadius: 1,
                     backgroundColor: "#ECFEFF",
                     border: "1px solid #A5F3FC",
                   }}
@@ -3135,9 +3122,9 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
 
                   <Box
                     sx={{
-                      mt: 1.5,
-                      p: 1.5,
-                      borderRadius: 1.5,
+                      mt: 1,
+                      p: 1,
+                      borderRadius: 1,
                       backgroundColor: "rgba(255, 255, 255, 0.7)",
                       border: "1px solid #A5F3FC",
                       display: "flex",
@@ -3213,7 +3200,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                     />
                   </Box>
 
-                  <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 1 }}>
+                  <Box sx={{ mt: 1, display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 1 }}>
                     <TextField
                       select
                       fullWidth
@@ -3255,7 +3242,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                       helperText="Overrides policy cost if set (non-zero)"
                     />
                   </Box>
-                  <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 1 }}>
+                  <Box sx={{ mt: 1, display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 1 }}>
                     <TextFieldWithCopy
                       fullWidth
                       size="small"
@@ -3302,9 +3289,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                   </Box>
 
                   {/* Node 2 Endpoint Note */}
-                  <Box
-                    sx={{ mt: 1.5, p: 1.5, borderRadius: 1.5, backgroundColor: "#FFFFFF", border: "1px solid #A5F3FC" }}
-                  >
+                  <Box sx={{ mt: 1, p: 1, borderRadius: 1, backgroundColor: "#FFFFFF", border: "1px solid #A5F3FC" }}>
                     <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 0.8 }}>
                       <Typography
                         variant="caption"
@@ -3377,7 +3362,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
           )}
         </DialogContent>
 
-        <DialogActions sx={{ px: 3, py: 2, borderTop: "1px solid #E2E8F0", backgroundColor: "#F8FAFC" }}>
+        <DialogActions sx={{ px: 3, py: 1, borderTop: "1px solid #E2E8F0", backgroundColor: "#F8FAFC" }}>
           <Button onClick={onClose} disabled={submitting} sx={{ color: "#64748B" }}>
             Cancel
           </Button>

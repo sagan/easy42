@@ -536,18 +536,18 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
           width: { xs: "100%", sm: 440 },
           backgroundColor: "#FFFFFF",
           borderLeft: "1px solid #E2E8F0",
-          p: 3,
+          p: 1,
         },
       }}
     >
       {/* Header */}
-      <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 2 }}>
+      <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1 }}>
         <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
           <Box
             sx={{
               width: 38,
               height: 38,
-              borderRadius: 2,
+              borderRadius: 1,
               backgroundColor: isVirtual
                 ? "rgba(2, 132, 199, 0.1)"
                 : isManual
@@ -620,7 +620,9 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
                     fontWeight: 800,
                     bgcolor: link.disable_bfd ? "rgba(239, 68, 68, 0.12)" : "rgba(16, 185, 129, 0.12)",
                     color: link.disable_bfd ? "#DC2626" : "#059669",
-                    border: link.disable_bfd ? "1px solid rgba(239, 68, 68, 0.25)" : "1px solid rgba(16, 185, 129, 0.25)",
+                    border: link.disable_bfd
+                      ? "1px solid rgba(239, 68, 68, 0.25)"
+                      : "1px solid rgba(16, 185, 129, 0.25)",
                     borderRadius: "4px",
                   }}
                 />
@@ -752,14 +754,14 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
         </Box>
       </Box>
 
-      <Divider sx={{ borderColor: "#E2E8F0", mb: 2.5 }} />
+      <Divider sx={{ borderColor: "#E2E8F0", mb: 1 }} />
 
       {link.disabled && (
         <Box
           sx={{
-            p: 1.75,
-            mb: 2.5,
-            borderRadius: 2,
+            p: 1,
+            mb: 1,
+            borderRadius: 1,
             backgroundColor: "#F1F5F9",
             border: "1px solid #CBD5E1",
             display: "flex",
@@ -801,9 +803,9 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
           return (
             <Box
               sx={{
-                p: 2,
-                mb: 2.5,
-                borderRadius: 2,
+                p: 1,
+                mb: 1,
+                borderRadius: 1,
                 backgroundColor: "#F0F9FF",
                 border: "1px solid #BAE6FD",
               }}
@@ -839,9 +841,9 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
           return (
             <Box
               sx={{
-                p: 2,
-                mb: 2.5,
-                borderRadius: 2,
+                p: 1,
+                mb: 1,
+                borderRadius: 1,
                 backgroundColor: "#FAF5FF",
                 border: "1px solid #DDD6FE",
               }}
@@ -915,9 +917,9 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
         return (
           <Box
             sx={{
-              p: 2,
-              mb: 2.5,
-              borderRadius: 2,
+              p: 1,
+              mb: 1,
+              borderRadius: 1,
               backgroundColor:
                 workingState === "working" ? "#ECFDF5" : workingState === "not_working" ? "#FEF2F2" : "#F8FAFC",
               border: "1px solid",
@@ -925,7 +927,7 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
                 workingState === "working" ? "#A7F3D0" : workingState === "not_working" ? "#FECDD3" : "#E2E8F0",
             }}
           >
-            <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1.5 }}>
+            <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1 }}>
               <Typography
                 variant="subtitle2"
                 sx={{ fontWeight: 700, color: "#1E293B", display: "flex", alignItems: "center", gap: 1 }}
@@ -997,8 +999,8 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
       {!isManual && !isVirtual && (
         <Box
           sx={{
-            p: 2,
-            borderRadius: 2,
+            p: 1,
+            borderRadius: 1,
             backgroundColor: "#F8FAFC",
             border: "1px solid #E2E8F0",
           }}
@@ -1022,7 +1024,7 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
               }}
             />
           </Box>
-          <Typography variant="caption" sx={{ color: "#64748B", display: "block", mb: 1.5 }}>
+          <Typography variant="caption" sx={{ color: "#64748B", display: "block", mb: 1 }}>
             Symmetric 256-bit PSK provides post-quantum security and peer authentication.
           </Typography>
           <Box sx={{ display: "flex", gap: 1 }}>
@@ -1039,7 +1041,7 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
                 px: 1.2,
                 textTransform: "none",
                 fontWeight: 600,
-                borderRadius: 1.5,
+                borderRadius: 1,
                 borderColor: "#CBD5E1",
                 color: "#334155",
                 "&:hover": { borderColor: "#4F46E5", color: "#4F46E5", backgroundColor: "rgba(99, 102, 241, 0.04)" },
@@ -1059,7 +1061,7 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
                 px: 1.2,
                 textTransform: "none",
                 fontWeight: 600,
-                borderRadius: 1.5,
+                borderRadius: 1,
                 borderColor: "#CBD5E1",
                 color: "#D97706",
                 "&:hover": { borderColor: "#D97706", backgroundColor: "rgba(217, 119, 6, 0.05)" },
@@ -1074,8 +1076,8 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
       {/* Link-Scope Note Card */}
       <Box
         sx={{
-          p: 2,
-          borderRadius: 2,
+          p: 1,
+          borderRadius: 1,
           backgroundColor: "#F8FAFC",
           border: "1px solid #E2E8F0",
         }}
@@ -1229,17 +1231,17 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
       </Box>
 
       {/* Specifications */}
-      <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+      <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
         {/* End 1 */}
         <Box
           sx={{
-            p: 2,
-            borderRadius: 2,
+            p: 1,
+            borderRadius: 1,
             backgroundColor: "#EEF2FF",
             border: "1px solid #C7D2FE",
           }}
         >
-          <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1.5 }}>
+          <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
             <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
               <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#3730A3" }}>
                 Node 1: {link.from.name}
@@ -1284,7 +1286,7 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
                       px: 1,
                       textTransform: "none",
                       fontWeight: 600,
-                      borderRadius: 1.5,
+                      borderRadius: 1,
                       borderColor: "#A5B4FC",
                       color: "#4338CA",
                       "&:hover": {
@@ -1360,11 +1362,7 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
                 {link.from.address && (
                   <Tooltip
                     title={
-                      copiedField === "from_ipv6"
-                        ? "Copied!"
-                        : isVirtual
-                          ? "Copy Local IP"
-                          : "Copy Link-Local IPv6"
+                      copiedField === "from_ipv6" ? "Copied!" : isVirtual ? "Copy Local IP" : "Copy Link-Local IPv6"
                     }
                   >
                     <IconButton
@@ -1796,7 +1794,7 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
             )}
 
             {/* Node 1 LinkEnd Note */}
-            <Box sx={{ mt: 1.5, p: 1.5, borderRadius: 1.5, backgroundColor: "#FFFFFF", border: "1px solid #C7D2FE" }}>
+            <Box sx={{ mt: 1, p: 1, borderRadius: 1, backgroundColor: "#FFFFFF", border: "1px solid #C7D2FE" }}>
               <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1 }}>
                 <Typography
                   variant="caption"
@@ -1950,13 +1948,13 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
         {/* End 2 */}
         <Box
           sx={{
-            p: 2,
-            borderRadius: 2,
+            p: 1,
+            borderRadius: 1,
             backgroundColor: "#ECFEFF",
             border: "1px solid #A5F3FC",
           }}
         >
-          <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1.5 }}>
+          <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
             <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
               <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0E7490" }}>
                 Node 2: {link.to.name}
@@ -1999,7 +1997,7 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
                       px: 1,
                       textTransform: "none",
                       fontWeight: 600,
-                      borderRadius: 1.5,
+                      borderRadius: 1,
                       borderColor: "#A5F3FC",
                       color: "#0891B2",
                       "&:hover": {
@@ -2074,13 +2072,7 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
                 </Typography>
                 {link.to.address && (
                   <Tooltip
-                    title={
-                      copiedField === "to_ipv6"
-                        ? "Copied!"
-                        : isVirtual
-                          ? "Copy Local IP"
-                          : "Copy Link-Local IPv6"
-                    }
+                    title={copiedField === "to_ipv6" ? "Copied!" : isVirtual ? "Copy Local IP" : "Copy Link-Local IPv6"}
                   >
                     <IconButton
                       size="small"
@@ -2508,7 +2500,7 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
             )}
 
             {/* Node 2 LinkEnd Note */}
-            <Box sx={{ mt: 1.5, p: 1.5, borderRadius: 1.5, backgroundColor: "#FFFFFF", border: "1px solid #A5F3FC" }}>
+            <Box sx={{ mt: 1, p: 1, borderRadius: 1, backgroundColor: "#FFFFFF", border: "1px solid #A5F3FC" }}>
               <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1 }}>
                 <Typography
                   variant="caption"
@@ -2674,7 +2666,7 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
               fontWeight: 700,
               textTransform: "none",
               py: 0.9,
-              borderRadius: 1.5,
+              borderRadius: 1,
               "&:hover": {
                 borderColor: copiedPeeringInfo ? "#059669" : "#4F46E5",
                 backgroundColor: copiedPeeringInfo ? "rgba(16, 185, 129, 0.12)" : "rgba(99, 102, 241, 0.1)",
@@ -2782,7 +2774,7 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
             display: "flex",
             alignItems: "center",
             gap: 1,
-            pb: 1.5,
+            pb: 1,
             borderBottom: "1px solid #E2E8F0",
           }}
         >
@@ -2790,7 +2782,7 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
             sx={{
               width: 38,
               height: 38,
-              borderRadius: 2,
+              borderRadius: 1,
               backgroundColor: "rgba(99, 102, 241, 0.1)",
               display: "flex",
               alignItems: "center",
@@ -2811,14 +2803,14 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
         </DialogTitle>
 
         {peeringPreviewText ? (
-          <Box sx={{ p: 2.5, display: "flex", flexDirection: "column", gap: 2 }}>
+          <Box sx={{ p: 1, display: "flex", flexDirection: "column", gap: 1 }}>
             <Alert severity="success" sx={{ borderRadius: 2 }}>
               Peering info copied to clipboard successfully!
             </Alert>
             <Box
               sx={{
-                p: 2,
-                borderRadius: 2,
+                p: 1,
+                borderRadius: 1,
                 backgroundColor: "#F8FAFC",
                 border: "1px solid #E2E8F0",
                 maxHeight: 280,
@@ -2861,7 +2853,7 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
           </Box>
         ) : (
           <form onSubmit={handleVerifyAndCopyPeeringInfo}>
-            <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2, pt: 2.5 }}>
+            <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 1, pt: 1 }}>
               {peeringAuthError && (
                 <Alert severity="error" sx={{ borderRadius: 2 }}>
                   {peeringAuthError}
@@ -2893,7 +2885,7 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
                 }}
               />
             </DialogContent>
-            <DialogActions sx={{ px: 3, pb: 2.5 }}>
+            <DialogActions sx={{ px: 1, pb: 2 }}>
               <Button
                 onClick={() => setPeeringAuthModalOpen(false)}
                 disabled={peeringAuthLoading}

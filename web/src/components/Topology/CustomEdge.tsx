@@ -138,7 +138,11 @@ export const CustomEdge: React.FC<EdgeProps> = ({
   const rightNodeName = leftRepresentsTo ? link?.from?.name || "Right" : link?.to?.name || "Right";
 
   const internalCost = fromIsExternal ? toCost : toIsExternal ? fromCost : fromCost;
-  const isInternalCostOverridden = fromIsExternal ? isToCostOverridden : toIsExternal ? isFromCostOverridden : isFromCostOverridden;
+  const isInternalCostOverridden = fromIsExternal
+    ? isToCostOverridden
+    : toIsExternal
+      ? isFromCostOverridden
+      : isFromCostOverridden;
 
   // Distance calculation for distance-based fading of long crossing links
   const euclideanDist = Math.hypot(targetX - sourceX, targetY - sourceY);
@@ -196,7 +200,13 @@ export const CustomEdge: React.FC<EdgeProps> = ({
     pillBorderColor = "#CBD5E1";
     pillBgColor = "#F8FAFC";
     dotColor = "#94A3B8";
-    statusText = isExternal ? "Disabled (Ext)" : isManual ? "Disabled (Manual)" : isVirtual ? "Disabled (Virtual)" : "Disabled";
+    statusText = isExternal
+      ? "Disabled (Ext)"
+      : isManual
+        ? "Disabled (Manual)"
+        : isVirtual
+          ? "Disabled (Virtual)"
+          : "Disabled";
   } else if (isVirtual) {
     strokeColor = workingState === "not_working" ? "#EF4444" : "#0284C7";
     strokeDasharray = "6 3";
@@ -281,9 +291,9 @@ export const CustomEdge: React.FC<EdgeProps> = ({
     // Default displayed intra-group & expanded inter-group links:
     // Retain semantic health status color (emerald for active, red for down, violet for manual),
     // rendered with clean, distinct visibility rather than a faint dingy gray.
-    let baseSubtleOpacity = 0.40;
+    let baseSubtleOpacity = 0.4;
     if (euclideanDist > 350) {
-      baseSubtleOpacity = Math.max(0.24, 0.40 - ((euclideanDist - 350) / 600) * 0.16);
+      baseSubtleOpacity = Math.max(0.24, 0.4 - ((euclideanDist - 350) / 600) * 0.16);
     }
     // In Micro zoom (zoom > 1.0), increase clarity of intra-group links
     if (zoomLevel > 1.0) {
@@ -336,7 +346,8 @@ export const CustomEdge: React.FC<EdgeProps> = ({
     }
   }
 
-  const shouldRenderPill = (!isSubtle || isHighlighted || isHovered || isGhostDrag || (isCentralityActive && isCoreLink)) && !isDimmed;
+  const shouldRenderPill =
+    (!isSubtle || isHighlighted || isHovered || isGhostDrag || (isCentralityActive && isCoreLink)) && !isDimmed;
 
   return (
     <>
@@ -397,7 +408,7 @@ export const CustomEdge: React.FC<EdgeProps> = ({
               backgroundColor: pillBgColor,
               border: "1px solid",
               borderColor: isHighlighted || isHovered ? strokeColor : pillBorderColor,
-              borderRadius: 2,
+              borderRadius: 1,
               px: 1.2,
               py: 0.4,
               boxShadow: isHighlighted || isHovered ? `0 4px 14px ${strokeColor}40` : "0 2px 5px rgba(0, 0, 0, 0.06)",
@@ -460,100 +471,100 @@ export const CustomEdge: React.FC<EdgeProps> = ({
                   {(!isVirtual || isLeftCostOverridden || isRightCostOverridden) && (
                     <Box
                       data-testid="link-cost"
-                    sx={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 0.35,
-                      mt: 0.15,
-                      lineHeight: 1,
-                    }}
-                    title={
-                      isExternal
-                        ? `Cost: ${internalCost} (Internal egress)`
-                        : leftCost === rightCost
-                          ? `Cost: ${leftCost}`
-                          : `Cost: ${leftNodeName} → ${rightNodeName}: ${leftCost}, ${rightNodeName} → ${leftNodeName}: ${rightCost}`
-                    }
-                  >
-                    {isExternal ? (
-                      <Typography
-                        variant="caption"
-                        className="mono-font"
-                        sx={{
-                          fontSize: "0.60rem",
-                          fontWeight: 600,
-                          color: isInternalCostOverridden ? "#D97706" : "#64748B",
-                          lineHeight: 1,
-                        }}
-                      >
-                        {internalCost}
-                      </Typography>
-                    ) : leftCost === rightCost ? (
-                      <Typography
-                        variant="caption"
-                        className="mono-font"
-                        sx={{
-                          fontSize: "0.60rem",
-                          fontWeight: 600,
-                          color: isLeftCostOverridden || isRightCostOverridden ? "#D97706" : "#64748B",
-                          lineHeight: 1,
-                        }}
-                      >
-                        {leftCost}
-                      </Typography>
-                    ) : (
-                      <>
+                      sx={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 0.35,
+                        mt: 0.15,
+                        lineHeight: 1,
+                      }}
+                      title={
+                        isExternal
+                          ? `Cost: ${internalCost} (Internal egress)`
+                          : leftCost === rightCost
+                            ? `Cost: ${leftCost}`
+                            : `Cost: ${leftNodeName} → ${rightNodeName}: ${leftCost}, ${rightNodeName} → ${leftNodeName}: ${rightCost}`
+                      }
+                    >
+                      {isExternal ? (
                         <Typography
                           variant="caption"
                           className="mono-font"
                           sx={{
                             fontSize: "0.60rem",
                             fontWeight: 600,
-                            color: isLeftCostOverridden ? "#D97706" : "#64748B",
+                            color: isInternalCostOverridden ? "#D97706" : "#64748B",
+                            lineHeight: 1,
+                          }}
+                        >
+                          {internalCost}
+                        </Typography>
+                      ) : leftCost === rightCost ? (
+                        <Typography
+                          variant="caption"
+                          className="mono-font"
+                          sx={{
+                            fontSize: "0.60rem",
+                            fontWeight: 600,
+                            color: isLeftCostOverridden || isRightCostOverridden ? "#D97706" : "#64748B",
                             lineHeight: 1,
                           }}
                         >
                           {leftCost}
                         </Typography>
-                        <Typography
-                          variant="caption"
-                          sx={{
-                            fontSize: "0.55rem",
-                            fontWeight: 700,
-                            color: "#94A3B8",
-                            lineHeight: 1,
-                            userSelect: "none",
-                          }}
-                        >
-                          →
-                        </Typography>
-                        <Typography
-                          variant="caption"
-                          sx={{
-                            fontSize: "0.55rem",
-                            fontWeight: 700,
-                            color: "#94A3B8",
-                            lineHeight: 1,
-                            userSelect: "none",
-                          }}
-                        >
-                          ←
-                        </Typography>
-                        <Typography
-                          variant="caption"
-                          className="mono-font"
-                          sx={{
-                            fontSize: "0.60rem",
-                            fontWeight: 600,
-                            color: isRightCostOverridden ? "#D97706" : "#64748B",
-                            lineHeight: 1,
-                          }}
-                        >
-                          {rightCost}
-                        </Typography>
-                      </>
-                    )}
-                  </Box>
+                      ) : (
+                        <>
+                          <Typography
+                            variant="caption"
+                            className="mono-font"
+                            sx={{
+                              fontSize: "0.60rem",
+                              fontWeight: 600,
+                              color: isLeftCostOverridden ? "#D97706" : "#64748B",
+                              lineHeight: 1,
+                            }}
+                          >
+                            {leftCost}
+                          </Typography>
+                          <Typography
+                            variant="caption"
+                            sx={{
+                              fontSize: "0.55rem",
+                              fontWeight: 700,
+                              color: "#94A3B8",
+                              lineHeight: 1,
+                              userSelect: "none",
+                            }}
+                          >
+                            →
+                          </Typography>
+                          <Typography
+                            variant="caption"
+                            sx={{
+                              fontSize: "0.55rem",
+                              fontWeight: 700,
+                              color: "#94A3B8",
+                              lineHeight: 1,
+                              userSelect: "none",
+                            }}
+                          >
+                            ←
+                          </Typography>
+                          <Typography
+                            variant="caption"
+                            className="mono-font"
+                            sx={{
+                              fontSize: "0.60rem",
+                              fontWeight: 600,
+                              color: isRightCostOverridden ? "#D97706" : "#64748B",
+                              lineHeight: 1,
+                            }}
+                          >
+                            {rightCost}
+                          </Typography>
+                        </>
+                      )}
+                    </Box>
                   )}
                 </Box>
 

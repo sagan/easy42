@@ -148,7 +148,7 @@ export const CustomTaskEditorModal: React.FC<CustomTaskEditorModalProps> = ({ op
               justifyContent: "center",
               width: 36,
               height: 36,
-              borderRadius: 1.5,
+              borderRadius: 1,
               background: "linear-gradient(135deg, #6366F1 0%, #06B6D4 100%)",
               color: "#FFFFFF",
             }}
@@ -171,11 +171,11 @@ export const CustomTaskEditorModal: React.FC<CustomTaskEditorModalProps> = ({ op
 
       <Divider />
 
-      <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2, py: 2.5 }}>
+      <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 1, py: 1 }}>
         {error && <Alert severity="error">{error}</Alert>}
 
         {/* Basic Info */}
-        <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "2fr 1fr" }, gap: 2 }}>
+        <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "2fr 1fr" }, gap: 1 }}>
           <TextField
             label="Task Name"
             size="small"
@@ -247,7 +247,7 @@ export const CustomTaskEditorModal: React.FC<CustomTaskEditorModalProps> = ({ op
         </Box>
 
         {/* Parser & Timeout */}
-        <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" }, gap: 2 }}>
+        <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" }, gap: 1 }}>
           <FormControl size="small" fullWidth>
             <InputLabel id="parser-select-label">Output Visualizer</InputLabel>
             <Select
@@ -304,11 +304,11 @@ export const CustomTaskEditorModal: React.FC<CustomTaskEditorModalProps> = ({ op
             <Paper
               elevation={0}
               sx={{
-                p: 2,
+                p: 1,
                 textAlign: "center",
                 backgroundColor: "#F8FAFC",
                 border: "1px dashed #CBD5E1",
-                borderRadius: 2,
+                borderRadius: 1,
               }}
             >
               <Typography variant="caption" sx={{ color: "#94A3B8" }}>
@@ -322,9 +322,9 @@ export const CustomTaskEditorModal: React.FC<CustomTaskEditorModalProps> = ({ op
                   key={idx}
                   elevation={0}
                   sx={{
-                    p: 1.5,
+                    p: 1,
                     border: "1px solid #E2E8F0",
-                    borderRadius: 2,
+                    borderRadius: 1,
                     backgroundColor: "#FAFBFD",
                     display: "grid",
                     gridTemplateColumns: { xs: "1fr", sm: "1fr 1.5fr 1fr 1fr auto" },

@@ -104,7 +104,7 @@ export const TaskSourceModal: React.FC<TaskSourceModalProps> = ({ open, onClose,
       fullScreen={isMobile}
       PaperProps={{
         sx: {
-          borderRadius: { xs: 0, sm: 3 },
+          borderRadius: { xs: 0, sm: 1 },
           height: { xs: "100%", sm: "85vh" },
           maxHeight: { xs: "100%", sm: 850 },
         },
@@ -116,8 +116,7 @@ export const TaskSourceModal: React.FC<TaskSourceModalProps> = ({ open, onClose,
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          py: 1.5,
-          px: { xs: 2, sm: 2.5 },
+          p: 1,
           borderBottom: "1px solid #E2E8F0",
           bgcolor: "background.paper",
         }}
@@ -127,7 +126,7 @@ export const TaskSourceModal: React.FC<TaskSourceModalProps> = ({ open, onClose,
             sx={{
               width: 36,
               height: 36,
-              borderRadius: 2,
+              borderRadius: 1,
               bgcolor: "primary.50",
               color: "primary.main",
               display: "flex",
@@ -188,7 +187,7 @@ export const TaskSourceModal: React.FC<TaskSourceModalProps> = ({ open, onClose,
             overflowY: "auto",
           }}
         >
-          <Box sx={{ p: 1.5, pb: 1 }}>
+          <Box sx={{ p: 1, pb: 1 }}>
             <Typography
               variant="caption"
               sx={{
@@ -210,7 +209,7 @@ export const TaskSourceModal: React.FC<TaskSourceModalProps> = ({ open, onClose,
               <CircularProgress size={20} />
             </Box>
           ) : sources.length === 0 ? (
-            <Typography variant="caption" color="text.secondary" sx={{ p: 2, textAlign: "center" }}>
+            <Typography variant="caption" color="text.secondary" sx={{ p: 1, textAlign: "center" }}>
               No source files found
             </Typography>
           ) : (
@@ -236,7 +235,7 @@ export const TaskSourceModal: React.FC<TaskSourceModalProps> = ({ open, onClose,
                           justifyContent: "space-between",
                           px: 1.2,
                           py: 0.8,
-                          borderRadius: 1.5,
+                          borderRadius: 1,
                           cursor: "pointer",
                           bgcolor: isSelected ? "rgba(79, 70, 229, 0.1)" : "transparent",
                           color: isSelected ? "primary.main" : "#334155",
@@ -275,7 +274,7 @@ export const TaskSourceModal: React.FC<TaskSourceModalProps> = ({ open, onClose,
                 <>
                   <Typography
                     variant="caption"
-                    sx={{ fontSize: "0.68rem", fontWeight: 700, color: "#94A3B8", px: 1, pt: 1.5 }}
+                    sx={{ fontSize: "0.68rem", fontWeight: 700, color: "#94A3B8", px: 1, pt: 1 }}
                   >
                     Shared Libraries
                   </Typography>
@@ -291,7 +290,7 @@ export const TaskSourceModal: React.FC<TaskSourceModalProps> = ({ open, onClose,
                           justifyContent: "space-between",
                           px: 1.2,
                           py: 0.8,
-                          borderRadius: 1.5,
+                          borderRadius: 1,
                           cursor: "pointer",
                           bgcolor: isSelected ? "rgba(79, 70, 229, 0.1)" : "transparent",
                           color: isSelected ? "primary.main" : "#334155",
@@ -341,7 +340,7 @@ export const TaskSourceModal: React.FC<TaskSourceModalProps> = ({ open, onClose,
                 <>
                   <Typography
                     variant="caption"
-                    sx={{ fontSize: "0.68rem", fontWeight: 700, color: "#94A3B8", px: 1, pt: 1.5 }}
+                    sx={{ fontSize: "0.68rem", fontWeight: 700, color: "#94A3B8", px: 1, pt: 1 }}
                   >
                     Configuration
                   </Typography>
@@ -357,7 +356,7 @@ export const TaskSourceModal: React.FC<TaskSourceModalProps> = ({ open, onClose,
                           justifyContent: "space-between",
                           px: 1.2,
                           py: 0.8,
-                          borderRadius: 1.5,
+                          borderRadius: 1,
                           cursor: "pointer",
                           bgcolor: isSelected ? "rgba(79, 70, 229, 0.1)" : "transparent",
                           color: isSelected ? "primary.main" : "#334155",
@@ -413,7 +412,7 @@ export const TaskSourceModal: React.FC<TaskSourceModalProps> = ({ open, onClose,
                 alignItems: "center",
                 overflowX: "auto",
                 py: 1,
-                px: 1.5,
+                px: 1,
                 gap: 1,
                 bgcolor: "#F8FAFC",
                 borderBottom: "1px solid #E2E8F0",
@@ -434,7 +433,7 @@ export const TaskSourceModal: React.FC<TaskSourceModalProps> = ({ open, onClose,
                       gap: 0.75,
                       px: 1.25,
                       py: 0.6,
-                      borderRadius: 1.5,
+                      borderRadius: 1,
                       cursor: "pointer",
                       whiteSpace: "nowrap",
                       flexShrink: 0,
@@ -485,7 +484,7 @@ export const TaskSourceModal: React.FC<TaskSourceModalProps> = ({ open, onClose,
           )}
 
           {error && (
-            <Alert severity="error" sx={{ m: 2 }} onClose={() => setError(null)}>
+            <Alert severity="error" sx={{ m: 1 }} onClose={() => setError(null)}>
               {error}
             </Alert>
           )}
@@ -498,7 +497,7 @@ export const TaskSourceModal: React.FC<TaskSourceModalProps> = ({ open, onClose,
                 flexDirection: "column",
                 alignItems: "center",
                 justifyContent: "center",
-                gap: 2,
+                gap: 1,
               }}
             >
               <CircularProgress size={32} />
@@ -514,7 +513,7 @@ export const TaskSourceModal: React.FC<TaskSourceModalProps> = ({ open, onClose,
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "space-between",
-                  px: { xs: 1.5, sm: 2 },
+                  px: 1,
                   py: 1,
                   bgcolor: "#111827",
                   borderBottom: "1px solid #1F2937",
@@ -586,7 +585,7 @@ export const TaskSourceModal: React.FC<TaskSourceModalProps> = ({ open, onClose,
                   flex: 1,
                   overflow: "auto",
                   display: "flex",
-                  p: { xs: 1.5, sm: 2 },
+                  p: 1,
                   fontFamily:
                     "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
                   fontSize: { xs: "0.75rem", sm: "0.82rem" },
@@ -597,8 +596,8 @@ export const TaskSourceModal: React.FC<TaskSourceModalProps> = ({ open, onClose,
                 <Box
                   sx={{
                     userSelect: "none",
-                    pr: { xs: 1.25, sm: 2 },
-                    mr: { xs: 1.25, sm: 2 },
+                    pr: 1,
+                    mr: 1,
                     borderRight: "1px solid #1E293B",
                     color: "#475569",
                     textAlign: "right",
@@ -638,9 +637,7 @@ export const TaskSourceModal: React.FC<TaskSourceModalProps> = ({ open, onClose,
       </DialogContent>
 
       {/* Dialog Footer */}
-      <DialogActions
-        sx={{ px: { xs: 2, sm: 2.5 }, py: 1.25, borderTop: "1px solid #E2E8F0", bgcolor: "background.paper" }}
-      >
+      <DialogActions sx={{ px: 1, py: 1, borderTop: "1px solid #E2E8F0", bgcolor: "background.paper" }}>
         <Button onClick={onClose} variant="outlined" sx={{ color: "text.secondary", borderColor: "divider" }}>
           Close
         </Button>

@@ -142,23 +142,23 @@ export const NodeCronTasksTab: React.FC<NodeCronTasksTabProps> = ({ nodeName }) 
   };
 
   return (
-    <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
+    <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
       {/* Top Filter and Controls Bar */}
       <Paper
         elevation={0}
         sx={{
-          p: 2,
-          borderRadius: 3,
+          p: 1,
+          borderRadius: 1,
           bgcolor: "#FFFFFF",
           border: "1px solid #E2E8F0",
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
           flexWrap: "wrap",
-          gap: 2,
+          gap: 1,
         }}
       >
-        <Box sx={{ display: "flex", alignItems: "center", gap: 2, flexWrap: "wrap" }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
           <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
             <Clock size={20} color="#4F46E5" />
             <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0F172A" }}>
@@ -286,19 +286,19 @@ export const NodeCronTasksTab: React.FC<NodeCronTasksTabProps> = ({ nodeName }) 
           <Paper
             elevation={0}
             sx={{
-              p: 2,
-              borderRadius: 2.5,
+              p: 1,
+              borderRadius: 1,
               bgcolor: "#FFFFFF",
               border: "1px solid #E2E8F0",
               display: "flex",
               alignItems: "center",
-              gap: 2,
+              gap: 1,
             }}
           >
             <Box
               sx={{
                 p: 1.25,
-                borderRadius: 2,
+                borderRadius: 1,
                 bgcolor: "#EEF2FF",
                 color: "#4F46E5",
                 display: "flex",
@@ -323,19 +323,19 @@ export const NodeCronTasksTab: React.FC<NodeCronTasksTabProps> = ({ nodeName }) 
           <Paper
             elevation={0}
             sx={{
-              p: 2,
-              borderRadius: 2.5,
+              p: 1,
+              borderRadius: 1,
               bgcolor: "#FFFFFF",
               border: "1px solid #E2E8F0",
               display: "flex",
               alignItems: "center",
-              gap: 2,
+              gap: 1,
             }}
           >
             <Box
               sx={{
                 p: 1.25,
-                borderRadius: 2,
+                borderRadius: 1,
                 bgcolor: "#ECFDF5",
                 color: "#059669",
                 display: "flex",
@@ -360,19 +360,19 @@ export const NodeCronTasksTab: React.FC<NodeCronTasksTabProps> = ({ nodeName }) 
           <Paper
             elevation={0}
             sx={{
-              p: 2,
-              borderRadius: 2.5,
+              p: 1,
+              borderRadius: 1,
               bgcolor: "#FFFFFF",
               border: "1px solid #E2E8F0",
               display: "flex",
               alignItems: "center",
-              gap: 2,
+              gap: 1,
             }}
           >
             <Box
               sx={{
                 p: 1.25,
-                borderRadius: 2,
+                borderRadius: 1,
                 bgcolor: "#F0F9FF",
                 color: "#0284C7",
                 display: "flex",
@@ -397,19 +397,19 @@ export const NodeCronTasksTab: React.FC<NodeCronTasksTabProps> = ({ nodeName }) 
           <Paper
             elevation={0}
             sx={{
-              p: 2,
-              borderRadius: 2.5,
+              p: 1,
+              borderRadius: 1,
               bgcolor: "#FFFFFF",
               border: "1px solid #E2E8F0",
               display: "flex",
               alignItems: "center",
-              gap: 2,
+              gap: 1,
             }}
           >
             <Box
               sx={{
                 p: 1.25,
-                borderRadius: 2,
+                borderRadius: 1,
                 bgcolor: overallKPIs.avgLoss === 0 ? "#F0FDF4" : "#FEF2F2",
                 color: overallKPIs.avgLoss === 0 ? "#16A34A" : "#DC2626",
                 display: "flex",
@@ -449,7 +449,7 @@ export const NodeCronTasksTab: React.FC<NodeCronTasksTabProps> = ({ nodeName }) 
           sx={{
             p: 6,
             textAlign: "center",
-            borderRadius: 3,
+            borderRadius: 1,
             bgcolor: "#FFFFFF",
             border: "1px dashed #CBD5E1",
           }}
@@ -458,7 +458,7 @@ export const NodeCronTasksTab: React.FC<NodeCronTasksTabProps> = ({ nodeName }) 
           <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#334155" }}>
             No Cron Task Results Recorded for {nodeName}
           </Typography>
-          <Typography variant="body2" sx={{ color: "#64748B", mt: 0.5, maxWidth: 500, mx: "auto", mb: 2 }}>
+          <Typography variant="body2" sx={{ color: "#64748B", mt: 0.5, maxWidth: 500, mx: "auto", mb: 1 }}>
             {assignedTasks.length === 0
               ? `There are currently no cron tasks assigned to node "${nodeName}". Visit Looking Glass -> Cron Tasks to assign recurring ping tests.`
               : `Cron tasks are assigned to this node, but no reports have been collected in the past ${range}. Verify that easy42-agent is running on the node.`}
@@ -499,7 +499,7 @@ export const NodeCronTasksTab: React.FC<NodeCronTasksTabProps> = ({ nodeName }) 
             <Paper
               elevation={0}
               sx={{
-                borderRadius: 3,
+                borderRadius: 1,
                 border: "1px solid #E2E8F0",
                 bgcolor: "#FFFFFF",
                 overflow: "hidden",
@@ -507,7 +507,7 @@ export const NodeCronTasksTab: React.FC<NodeCronTasksTabProps> = ({ nodeName }) 
             >
               <Box
                 sx={{
-                  p: 2,
+                  p: 1,
                   bgcolor: "#F8FAFC",
                   borderBottom: "1px solid #E2E8F0",
                   display: "flex",
@@ -666,7 +666,7 @@ export const NodeCronTasksTab: React.FC<NodeCronTasksTabProps> = ({ nodeName }) 
         onClose={() => setInspectRecord(null)}
         maxWidth="md"
         fullWidth
-        PaperProps={{ sx: { borderRadius: 3, p: 1 } }}
+        PaperProps={{ sx: { borderRadius: 1, p: 1 } }}
       >
         <DialogTitle
           sx={{
@@ -688,7 +688,7 @@ export const NodeCronTasksTab: React.FC<NodeCronTasksTabProps> = ({ nodeName }) 
           </Button>
         </DialogTitle>
         <DialogContent>
-          <Box sx={{ display: "flex", gap: 2, mb: 1.5, flexWrap: "wrap" }}>
+          <Box sx={{ display: "flex", gap: 1, mb: 1, flexWrap: "wrap" }}>
             <Typography variant="caption" sx={{ color: "#64748B" }}>
               Executed: <strong>{inspectRecord ? new Date(inspectRecord.executed_at * 1000).toISOString() : ""}</strong>
             </Typography>
@@ -706,10 +706,10 @@ export const NodeCronTasksTab: React.FC<NodeCronTasksTabProps> = ({ nodeName }) 
           <Paper
             elevation={0}
             sx={{
-              p: 2,
+              p: 1,
               bgcolor: "#0F172A",
               color: "#F8FAFC",
-              borderRadius: 2,
+              borderRadius: 1,
               fontFamily: "monospace",
               fontSize: "0.85rem",
               whiteSpace: "pre-wrap",
@@ -721,7 +721,7 @@ export const NodeCronTasksTab: React.FC<NodeCronTasksTabProps> = ({ nodeName }) 
             {inspectRecord?.raw_output || inspectRecord?.error || "No stdout produced"}
           </Paper>
         </DialogContent>
-        <DialogActions sx={{ p: 2, pt: 1 }}>
+        <DialogActions sx={{ p: 1, pt: 1 }}>
           <Button onClick={() => setInspectRecord(null)} sx={{ color: "#475569" }}>
             Close
           </Button>
@@ -823,8 +823,8 @@ const CronLatencyChart: React.FC<CronLatencyChartProps> = ({
     <Paper
       elevation={0}
       sx={{
-        p: 2,
-        borderRadius: 2.5,
+        p: 1,
+        borderRadius: 1,
         border: "1px solid #E2E8F0",
         bgcolor: "#FFFFFF",
       }}
@@ -975,7 +975,7 @@ const CronLatencyChart: React.FC<CronLatencyChartProps> = ({
       </Box>
 
       {/* Legend */}
-      <Box sx={{ display: "flex", gap: 2, mt: 0.5, justifyContent: "flex-end" }}>
+      <Box sx={{ display: "flex", gap: 1, mt: 0.5, justifyContent: "flex-end" }}>
         <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
           <Box sx={{ width: 10, height: 10, borderRadius: "50%", bgcolor: color }} />
           <Typography variant="caption" sx={{ color: "#64748B", fontSize: "0.7rem" }}>
@@ -1059,8 +1059,8 @@ const CronPacketLossChart: React.FC<CronPacketLossChartProps> = ({ title, points
     <Paper
       elevation={0}
       sx={{
-        p: 2,
-        borderRadius: 2.5,
+        p: 1,
+        borderRadius: 1,
         border: "1px solid #E2E8F0",
         bgcolor: "#FFFFFF",
       }}
@@ -1196,7 +1196,7 @@ const CronPacketLossChart: React.FC<CronPacketLossChartProps> = ({ title, points
       </Box>
 
       {/* Legend */}
-      <Box sx={{ display: "flex", gap: 2, mt: 0.5, justifyContent: "flex-end" }}>
+      <Box sx={{ display: "flex", gap: 1, mt: 0.5, justifyContent: "flex-end" }}>
         <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
           <Box sx={{ width: 10, height: 10, borderRadius: "50%", bgcolor: color }} />
           <Typography variant="caption" sx={{ color: "#64748B", fontSize: "0.7rem" }}>

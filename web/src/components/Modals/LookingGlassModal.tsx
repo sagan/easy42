@@ -448,7 +448,7 @@ export const LookingGlassModal: React.FC<LookingGlassModalProps> = ({ nodes, ini
   return (
     <Box
       sx={{
-        p: { xs: 1.5, sm: 2.5, md: 3 },
+        p: 1,
         height: "100%",
         minHeight: 0,
         overflowY: "auto",
@@ -460,13 +460,13 @@ export const LookingGlassModal: React.FC<LookingGlassModalProps> = ({ nodes, ini
       <Paper
         elevation={0}
         sx={{
-          borderRadius: 3,
+          borderRadius: 1,
           border: "1px solid #E2E8F0",
           bgcolor: "#FFFFFF",
-          p: { xs: 2, sm: 3 },
+          p: 1,
           display: "flex",
           flexDirection: "column",
-          gap: 2,
+          gap: 1,
         }}
       >
         {/* Navigation Tabs */}
@@ -522,13 +522,13 @@ export const LookingGlassModal: React.FC<LookingGlassModalProps> = ({ nodes, ini
 
         {/* Tab 0: Preset Tasks & Tab 1: Ad-Hoc -> Configuration & Execution Controls */}
         {activeTab < 2 && (
-          <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
             {/* 1. Target Node Selector Bar */}
             <Paper
               elevation={0}
               sx={{
-                p: 2,
-                borderRadius: 2,
+                p: 1,
+                borderRadius: 1,
                 border: "1px solid #E2E8F0",
                 backgroundColor: "#F8FAFC",
                 display: "flex",
@@ -640,20 +640,20 @@ export const LookingGlassModal: React.FC<LookingGlassModalProps> = ({ nodes, ini
               <Paper
                 elevation={0}
                 sx={{
-                  p: 2,
-                  borderRadius: 2,
+                  p: 1,
+                  borderRadius: 1,
                   border: "1px solid #E2E8F0",
                   backgroundColor: "#FFFFFF",
                   display: "flex",
                   flexDirection: "column",
-                  gap: 2,
+                  gap: 1,
                 }}
               >
                 <Box
                   sx={{
                     display: "grid",
                     gridTemplateColumns: { xs: "1fr", sm: "1.5fr 2fr" },
-                    gap: 2,
+                    gap: 1,
                     alignItems: "center",
                   }}
                 >
@@ -746,13 +746,13 @@ export const LookingGlassModal: React.FC<LookingGlassModalProps> = ({ nodes, ini
               <Paper
                 elevation={0}
                 sx={{
-                  p: 2,
-                  borderRadius: 2,
+                  p: 1,
+                  borderRadius: 1,
                   border: "1px solid #E2E8F0",
                   backgroundColor: "#FFFFFF",
                   display: "flex",
                   flexDirection: "column",
-                  gap: 2,
+                  gap: 1,
                 }}
               >
                 {/* Ad-Hoc Tool Presets */}
@@ -783,7 +783,7 @@ export const LookingGlassModal: React.FC<LookingGlassModalProps> = ({ nodes, ini
                 </Box>
 
                 {/* Command Input & Visualizer Selector */}
-                <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "3fr 1fr" }, gap: 2 }}>
+                <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "3fr 1fr" }, gap: 1 }}>
                   <TextField
                     label="CLI Command"
                     size="small"
@@ -821,7 +821,7 @@ export const LookingGlassModal: React.FC<LookingGlassModalProps> = ({ nodes, ini
             {/* Run Button Bar */}
             <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <Typography variant="caption" sx={{ color: "#64748B" }}>
-                Targeting <strong>{selectedNodes.length}</strong> node(s) via SSH connection pool
+                Targeting <strong>{selectedNodes.length}</strong> nodes
               </Typography>
 
               <Button
@@ -834,12 +834,12 @@ export const LookingGlassModal: React.FC<LookingGlassModalProps> = ({ nodes, ini
                   py: 1,
                   fontWeight: 600,
                   textTransform: "none",
-                  borderRadius: 2,
+                  borderRadius: 1,
                   background: "linear-gradient(135deg, #4F46E5 0%, #0891B2 100%)",
                   boxShadow: "0 2px 8px rgba(79, 70, 229, 0.3)",
                 }}
               >
-                {running ? "Executing Query..." : "Run Looking Glass"}
+                {running ? "Running..." : "Run"}
               </Button>
             </Box>
 
@@ -966,7 +966,7 @@ export const LookingGlassModal: React.FC<LookingGlassModalProps> = ({ nodes, ini
 
         {/* Tab 2: Manage Tasks Catalog */}
         {activeTab === 2 && (
-          <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
             <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <Box>
                 <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#1E293B" }}>
@@ -980,6 +980,7 @@ export const LookingGlassModal: React.FC<LookingGlassModalProps> = ({ nodes, ini
               <Button
                 variant="contained"
                 size="small"
+                title="Create New Custom Task"
                 startIcon={<Plus size={16} />}
                 onClick={() => {
                   setTaskToEdit(null);
@@ -991,7 +992,7 @@ export const LookingGlassModal: React.FC<LookingGlassModalProps> = ({ nodes, ini
                   background: "linear-gradient(135deg, #4F46E5 0%, #0891B2 100%)",
                 }}
               >
-                New Custom Task
+                New Task
               </Button>
             </Box>
 
@@ -1004,26 +1005,26 @@ export const LookingGlassModal: React.FC<LookingGlassModalProps> = ({ nodes, ini
               <Paper
                 elevation={0}
                 sx={{
-                  p: 3,
+                  p: 1,
                   textAlign: "center",
                   backgroundColor: "#F8FAFC",
                   border: "1px dashed #CBD5E1",
-                  borderRadius: 2,
+                  borderRadius: 1,
                 }}
               >
                 <Typography variant="body2" sx={{ color: "#94A3B8" }}>
-                  No custom tasks saved yet. Click "New Custom Task" above to create one.
+                  No custom tasks saved yet. Click "New Task" above to create one.
                 </Typography>
               </Paper>
             ) : (
-              <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" }, gap: 2 }}>
+              <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" }, gap: 1 }}>
                 {customTasks.map((t) => (
                   <Paper
                     key={t.id}
                     elevation={0}
                     sx={{
-                      p: 2,
-                      borderRadius: 2,
+                      p: 1,
+                      borderRadius: 1,
                       border: "1px solid #E2E8F0",
                       display: "flex",
                       flexDirection: "column",
@@ -1100,14 +1101,14 @@ export const LookingGlassModal: React.FC<LookingGlassModalProps> = ({ nodes, ini
               Standard Built-in Tasks ({builtinTasks.length})
             </Typography>
 
-            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" }, gap: 2 }}>
+            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" }, gap: 1 }}>
               {builtinTasks.map((t) => (
                 <Paper
                   key={t.id}
                   elevation={0}
                   sx={{
-                    p: 2,
-                    borderRadius: 2,
+                    p: 1,
+                    borderRadius: 1,
                     border: "1px solid #E2E8F0",
                     backgroundColor: "#FAFBFD",
                     display: "flex",

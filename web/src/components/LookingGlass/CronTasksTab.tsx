@@ -308,27 +308,27 @@ export const CronTasksTab: React.FC<CronTasksTabProps> = ({ nodes, onExecuteNow 
   };
 
   return (
-    <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
+    <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
       {/* Banner / Header */}
       <Paper
         elevation={0}
         sx={{
-          p: 2.5,
-          borderRadius: 3,
+          p: 1,
+          borderRadius: 1,
           bgcolor: "#FFFFFF",
           border: "1px solid #E2E8F0",
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
           flexWrap: "wrap",
-          gap: 2,
+          gap: 1,
         }}
       >
-        <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
           <Box
             sx={{
-              p: 1.5,
-              borderRadius: 2.5,
+              p: 1,
+              borderRadius: 1,
               bgcolor: "#EEF2FF",
               color: "#4F46E5",
               display: "flex",
@@ -368,7 +368,7 @@ export const CronTasksTab: React.FC<CronTasksTabProps> = ({ nodes, onExecuteNow 
               bgcolor: "#4F46E5",
               fontWeight: 600,
               textTransform: "none",
-              px: 2,
+              px: 1,
               "&:hover": { bgcolor: "#4338CA" },
             }}
           >
@@ -382,7 +382,7 @@ export const CronTasksTab: React.FC<CronTasksTabProps> = ({ nodes, onExecuteNow 
         severity="info"
         icon={<Activity size={18} />}
         sx={{
-          borderRadius: 2.5,
+          borderRadius: 1,
           bgcolor: "#F0FDF4",
           color: "#166534",
           border: "1px solid #BBF7D0",
@@ -417,7 +417,7 @@ export const CronTasksTab: React.FC<CronTasksTabProps> = ({ nodes, onExecuteNow 
           sx={{
             p: 6,
             textAlign: "center",
-            borderRadius: 3,
+            borderRadius: 1,
             bgcolor: "#FFFFFF",
             border: "1px dashed #CBD5E1",
           }}
@@ -426,7 +426,7 @@ export const CronTasksTab: React.FC<CronTasksTabProps> = ({ nodes, onExecuteNow 
           <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#334155" }}>
             No Cron Tasks Configured
           </Typography>
-          <Typography variant="body2" sx={{ color: "#64748B", mt: 0.5, maxWidth: 450, mx: "auto", mb: 2 }}>
+          <Typography variant="body2" sx={{ color: "#64748B", mt: 0.5, maxWidth: 450, mx: "auto", mb: 1 }}>
             Create automated recurring ping or TCP ping checks to continuously monitor connectivity and latency across
             your nodes.
           </Typography>
@@ -443,7 +443,7 @@ export const CronTasksTab: React.FC<CronTasksTabProps> = ({ nodes, onExecuteNow 
         <TableContainer
           component={Paper}
           elevation={0}
-          sx={{ borderRadius: 3, border: "1px solid #E2E8F0", bgcolor: "#FFFFFF" }}
+          sx={{ borderRadius: 1, border: "1px solid #E2E8F0", bgcolor: "#FFFFFF" }}
         >
           <Table>
             <TableHead sx={{ bgcolor: "#F8FAFC" }}>
@@ -599,14 +599,14 @@ export const CronTasksTab: React.FC<CronTasksTabProps> = ({ nodes, onExecuteNow 
         onClose={() => !saving && setModalOpen(false)}
         maxWidth="md"
         fullWidth
-        PaperProps={{ sx: { borderRadius: 3, p: 1 } }}
+        PaperProps={{ sx: { borderRadius: 1, p: 1 } }}
       >
         <DialogTitle sx={{ fontWeight: 700, color: "#0F172A", display: "flex", alignItems: "center", gap: 1 }}>
           <Clock size={20} color="#4F46E5" />
           {editingTask ? "Edit Cron Task" : "Create New Cron Task"}
         </DialogTitle>
 
-        <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2, pt: 1 }}>
+        <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 1, pt: 1 }}>
           {formError && (
             <Alert severity="error" onClose={() => setFormError(null)}>
               {formError}
@@ -614,7 +614,7 @@ export const CronTasksTab: React.FC<CronTasksTabProps> = ({ nodes, onExecuteNow 
           )}
 
           {/* Task Name & Description */}
-          <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
+          <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1 }}>
             <TextField
               label="Task Name"
               required
@@ -635,7 +635,7 @@ export const CronTasksTab: React.FC<CronTasksTabProps> = ({ nodes, onExecuteNow 
           </Box>
 
           {/* Task Type & Target */}
-          <Box sx={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: 2 }}>
+          <Box sx={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: 1 }}>
             <FormControl size="small" fullWidth>
               <InputLabel id="task-type-label">Task Type</InputLabel>
               <Select
@@ -676,7 +676,7 @@ export const CronTasksTab: React.FC<CronTasksTabProps> = ({ nodes, onExecuteNow 
           </Box>
 
           {/* Packet count & timeout */}
-          <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
+          <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1 }}>
             <TextField
               label="Probe / Packet Count"
               type="number"
@@ -700,12 +700,12 @@ export const CronTasksTab: React.FC<CronTasksTabProps> = ({ nodes, onExecuteNow 
           </Box>
 
           {/* Cron Expression & Presets */}
-          <Paper elevation={0} sx={{ p: 2, bgcolor: "#F8FAFC", borderRadius: 2, border: "1px solid #E2E8F0" }}>
+          <Paper elevation={0} sx={{ p: 1, bgcolor: "#F8FAFC", borderRadius: 1, border: "1px solid #E2E8F0" }}>
             <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#1E293B", mb: 1 }}>
               Schedule Frequency (Cron Expression)
             </Typography>
 
-            <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, mb: 1.5 }}>
+            <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, mb: 1 }}>
               {[
                 { label: "Every 1 min", expr: "*/1 * * * *" },
                 { label: "Every 5 mins", expr: "*/5 * * * *" },
@@ -743,21 +743,21 @@ export const CronTasksTab: React.FC<CronTasksTabProps> = ({ nodes, onExecuteNow 
           <Paper
             elevation={0}
             sx={{
-              p: 2,
+              p: 1,
               bgcolor: "#F8FAFC",
-              borderRadius: 2,
+              borderRadius: 1,
               border: "1px solid #E2E8F0",
             }}
           >
             <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#1E293B", mb: 0.5 }}>
               Target Nodes
             </Typography>
-            <Typography variant="caption" sx={{ color: "#64748B", display: "block", mb: 1.5 }}>
+            <Typography variant="caption" sx={{ color: "#64748B", display: "block", mb: 1 }}>
               Choose nodes with the shortcuts below or edit the selector JSON directly. An empty selector matches every
               managed node. All selector conditions must match (AND).
             </Typography>
 
-            <FormControl component="fieldset" fullWidth sx={{ mb: 2 }}>
+            <FormControl component="fieldset" fullWidth sx={{ mb: 1 }}>
               <RadioGroup
                 row
                 value={formTargetType}
@@ -880,7 +880,7 @@ export const CronTasksTab: React.FC<CronTasksTabProps> = ({ nodes, onExecuteNow 
                     ) : undefined,
                     sx: { height: 34, fontSize: "0.8rem", bgcolor: "#FFFFFF" },
                   }}
-                  sx={{ mb: 1.5 }}
+                  sx={{ mb: 1 }}
                 />
 
                 <Box
@@ -890,9 +890,9 @@ export const CronTasksTab: React.FC<CronTasksTabProps> = ({ nodes, onExecuteNow 
                     gap: 1,
                     maxHeight: 180,
                     overflowY: "auto",
-                    p: 1.5,
+                    p: 1,
                     bgcolor: "#FFFFFF",
-                    borderRadius: 2,
+                    borderRadius: 1,
                     border: "1px solid #E2E8F0",
                   }}
                 >
@@ -922,7 +922,7 @@ export const CronTasksTab: React.FC<CronTasksTabProps> = ({ nodes, onExecuteNow 
                           onClick={() => toggleNodeSelection(n.name)}
                           sx={{
                             p: 1.25,
-                            borderRadius: 2,
+                            borderRadius: 1,
                             border: "1px solid",
                             borderColor: isSelected ? "#4F46E5" : "#E2E8F0",
                             bgcolor: isSelected ? "#EEF2FF" : "#F8FAFC",
@@ -972,7 +972,7 @@ export const CronTasksTab: React.FC<CronTasksTabProps> = ({ nodes, onExecuteNow 
             {formTargetType === "all" && (
               <Box
                 sx={{
-                  p: 2,
+                  p: 1,
                   bgcolor: "#E0F2FE",
                   borderRadius: "8px",
                   border: "1px solid #BAE6FD",
@@ -984,7 +984,7 @@ export const CronTasksTab: React.FC<CronTasksTabProps> = ({ nodes, onExecuteNow 
                     Automatic Execution on All Agent Nodes ({availableNodes.length})
                   </Typography>
                 </Box>
-                <Typography variant="caption" sx={{ color: "#0C4A6E", display: "block", mb: 1.5 }}>
+                <Typography variant="caption" sx={{ color: "#0C4A6E", display: "block", mb: 1 }}>
                   An empty selector runs this task on all cluster nodes running in agent mode. Any new agent node added
                   in the future will automatically receive this task.
                 </Typography>
@@ -1013,7 +1013,7 @@ export const CronTasksTab: React.FC<CronTasksTabProps> = ({ nodes, onExecuteNow 
                   sx={{
                     display: "grid",
                     gridTemplateColumns: "1fr 1fr",
-                    gap: 2,
+                    gap: 1,
                     alignItems: "center",
                   }}
                 >
@@ -1083,8 +1083,8 @@ export const CronTasksTab: React.FC<CronTasksTabProps> = ({ nodes, onExecuteNow 
 
                 <Box
                   sx={{
-                    mt: 1.5,
-                    p: 1.5,
+                    mt: 1,
+                    p: 1,
                     bgcolor: "#F5F3FF",
                     borderRadius: "8px",
                     border: "1px solid #DDD6FE",
@@ -1149,7 +1149,7 @@ export const CronTasksTab: React.FC<CronTasksTabProps> = ({ nodes, onExecuteNow 
             {formTargetType === "custom" && (
               <Box
                 sx={{
-                  p: 2,
+                  p: 1,
                   bgcolor: "#F0FDFA",
                   borderRadius: "8px",
                   border: "1px solid #99F6E4",
@@ -1165,7 +1165,7 @@ export const CronTasksTab: React.FC<CronTasksTabProps> = ({ nodes, onExecuteNow 
               </Box>
             )}
 
-            <Box sx={{ mt: 2 }}>
+            <Box sx={{ mt: 1 }}>
               <Box
                 sx={{
                   display: "flex",
@@ -1236,7 +1236,7 @@ export const CronTasksTab: React.FC<CronTasksTabProps> = ({ nodes, onExecuteNow 
           </Paper>
         </DialogContent>
 
-        <DialogActions sx={{ p: 2, pt: 1 }}>
+        <DialogActions sx={{ p: 1, pt: 1 }}>
           <Button onClick={() => setModalOpen(false)} disabled={saving} sx={{ color: "#64748B" }}>
             Cancel
           </Button>

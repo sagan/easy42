@@ -708,32 +708,32 @@ export const NodesPage: React.FC = () => {
       sx={{
         width: "100%",
         boxSizing: "border-box",
-        p: { xs: 1.5, sm: 2.5, md: 3 },
+        p: 1,
         display: "flex",
         flexDirection: "column",
-        gap: 2,
+        gap: 1,
       }}
     >
       {/* Fleet Overview Top Summary Banner */}
-      <Grid container spacing={{ xs: 1.5, sm: 2 }}>
-        <Grid item xs={12} sm={6} md={3}>
+      <Grid container spacing={1}>
+        <Grid item xs={6} sm={6} md={3}>
           <Paper
             elevation={0}
             sx={{
-              p: { xs: 1.5, sm: 2 },
-              borderRadius: 2.5,
+              p: 1,
+              borderRadius: 1,
               border: "1px solid #E2E8F0",
               bgcolor: "#FFFFFF",
               display: "flex",
               alignItems: "center",
-              gap: { xs: 1.2, sm: 2 },
+              gap: 1,
             }}
           >
             <Box
               sx={{
                 width: { xs: 38, sm: 44 },
                 height: { xs: 38, sm: 44 },
-                borderRadius: 2,
+                borderRadius: 1,
                 bgcolor: "#EEF2FF",
                 color: "#4F46E5",
                 display: "flex",
@@ -749,7 +749,7 @@ export const NodesPage: React.FC = () => {
                 variant="caption"
                 sx={{ color: "#64748B", fontWeight: 600, fontSize: { xs: "0.65rem", sm: "0.75rem" } }}
               >
-                SERVERS FLEET
+                Servers
               </Typography>
               <Box sx={{ display: "flex", alignItems: "baseline", gap: 0.8 }}>
                 <Typography
@@ -763,19 +763,6 @@ export const NodesPage: React.FC = () => {
                 </Typography>
               </Box>
               <Box sx={{ display: "flex", gap: 0.8, mt: 0.3, alignItems: "center", flexWrap: "wrap" }}>
-                <Typography
-                  variant="caption"
-                  sx={{
-                    color: fleetLive?.summary.offline_nodes ? "#E11D48" : "#64748B",
-                    fontWeight: 600,
-                    fontSize: "0.7rem",
-                  }}
-                >
-                  {fleetLive?.summary.offline_nodes ?? 0} Offline
-                </Typography>
-                <Typography variant="caption" sx={{ color: "#CBD5E1", fontSize: "0.7rem" }}>
-                  •
-                </Typography>
                 <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600, fontSize: "0.7rem" }}>
                   {fleetLive?.summary.no_agent_nodes ?? 0} No Agent
                 </Typography>
@@ -784,24 +771,24 @@ export const NodesPage: React.FC = () => {
           </Paper>
         </Grid>
 
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={6} sm={6} md={3}>
           <Paper
             elevation={0}
             sx={{
-              p: { xs: 1.5, sm: 2 },
-              borderRadius: 2.5,
+              p: 1,
+              borderRadius: 1,
               border: "1px solid #E2E8F0",
               bgcolor: "#FFFFFF",
               display: "flex",
               alignItems: "center",
-              gap: { xs: 1.2, sm: 2 },
+              gap: 1,
             }}
           >
             <Box
               sx={{
                 width: { xs: 38, sm: 44 },
                 height: { xs: 38, sm: 44 },
-                borderRadius: 2,
+                borderRadius: 1,
                 bgcolor: "#ECFDF5",
                 color: "#059669",
                 display: "flex",
@@ -815,16 +802,17 @@ export const NodesPage: React.FC = () => {
             <Box sx={{ minWidth: 0 }}>
               <Typography
                 variant="caption"
+                title="Realtime Traffic"
                 sx={{ color: "#64748B", fontWeight: 600, fontSize: { xs: "0.65rem", sm: "0.75rem" } }}
               >
-                REALTIME TRAFFIC
+                Live Traffic
               </Typography>
               <Box
                 sx={{
                   display: "flex",
                   flexDirection: { xs: "column", sm: "row" },
                   alignItems: { xs: "flex-start", sm: "center" },
-                  gap: { xs: 0.2, sm: 1 },
+                  gap: 1,
                 }}
               >
                 <Typography
@@ -834,7 +822,7 @@ export const NodesPage: React.FC = () => {
                     color: "#059669",
                     display: "flex",
                     alignItems: "center",
-                    gap: 0.2,
+                    gap: 1,
                     fontSize: { xs: "0.75rem", sm: "0.875rem" },
                   }}
                 >
@@ -847,7 +835,7 @@ export const NodesPage: React.FC = () => {
                     color: "#0891B2",
                     display: "flex",
                     alignItems: "center",
-                    gap: 0.2,
+                    gap: 1,
                     fontSize: { xs: "0.75rem", sm: "0.875rem" },
                   }}
                 >
@@ -858,24 +846,24 @@ export const NodesPage: React.FC = () => {
           </Paper>
         </Grid>
 
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={6} sm={6} md={3}>
           <Paper
             elevation={0}
             sx={{
-              p: { xs: 1.5, sm: 2 },
-              borderRadius: 2.5,
+              p: 1,
+              borderRadius: 1,
               border: "1px solid #E2E8F0",
               bgcolor: "#FFFFFF",
               display: "flex",
               alignItems: "center",
-              gap: { xs: 1.2, sm: 2 },
+              gap: 1,
             }}
           >
             <Box
               sx={{
                 width: { xs: 38, sm: 44 },
                 height: { xs: 38, sm: 44 },
-                borderRadius: 2,
+                borderRadius: 1,
                 bgcolor: "#FEF3C7",
                 color: "#D97706",
                 display: "flex",
@@ -889,9 +877,10 @@ export const NodesPage: React.FC = () => {
             <Box sx={{ minWidth: 0 }}>
               <Typography
                 variant="caption"
+                title="Average CPU"
                 sx={{ color: "#64748B", fontWeight: 600, fontSize: { xs: "0.65rem", sm: "0.75rem" } }}
               >
-                AVERAGE CPU
+                CPU
               </Typography>
               <Typography
                 variant="h5"
@@ -903,24 +892,24 @@ export const NodesPage: React.FC = () => {
           </Paper>
         </Grid>
 
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={6} sm={6} md={3}>
           <Paper
             elevation={0}
             sx={{
-              p: { xs: 1.5, sm: 2 },
-              borderRadius: 2.5,
+              p: 1,
+              borderRadius: 1,
               border: "1px solid #E2E8F0",
               bgcolor: "#FFFFFF",
               display: "flex",
               alignItems: "center",
-              gap: { xs: 1.2, sm: 2 },
+              gap: 1,
             }}
           >
             <Box
               sx={{
                 width: { xs: 38, sm: 44 },
                 height: { xs: 38, sm: 44 },
-                borderRadius: 2,
+                borderRadius: 1,
                 bgcolor: "#F0FDF4",
                 color: "#16A34A",
                 display: "flex",
@@ -934,9 +923,10 @@ export const NodesPage: React.FC = () => {
             <Box sx={{ minWidth: 0 }}>
               <Typography
                 variant="caption"
+                title="Average Memory"
                 sx={{ color: "#64748B", fontWeight: 600, fontSize: { xs: "0.65rem", sm: "0.75rem" } }}
               >
-                AVERAGE MEMORY
+                Memory
               </Typography>
               <Typography
                 variant="h5"
@@ -958,8 +948,8 @@ export const NodesPage: React.FC = () => {
           justifyContent: "space-between",
           gap: 1,
           bgcolor: "#FFFFFF",
-          p: 1.5,
-          borderRadius: 2.5,
+          p: 1,
+          borderRadius: 1,
           border: "1px solid #E2E8F0",
         }}
       >
@@ -978,7 +968,7 @@ export const NodesPage: React.FC = () => {
                   <Search size={16} color="#94A3B8" />
                 </InputAdornment>
               ),
-              sx: { borderRadius: 2, bgcolor: "#F8FAFC", fontSize: "0.875rem" },
+              sx: { borderRadius: 1, bgcolor: "#F8FAFC", fontSize: "0.875rem" },
             }}
           />
         </Box>
@@ -993,7 +983,7 @@ export const NodesPage: React.FC = () => {
               sx={{
                 height: 36,
                 fontSize: "0.85rem",
-                borderRadius: 2,
+                borderRadius: 1,
                 bgcolor: "#F8FAFC",
               }}
               startAdornment={
@@ -1080,7 +1070,7 @@ export const NodesPage: React.FC = () => {
                   fontWeight: 500,
                   bgcolor: bg,
                   color: color,
-                  borderRadius: 1.5,
+                  borderRadius: 1,
                   cursor: "pointer",
                   transition: "all 0.15s ease-in-out",
                   border:
@@ -1122,7 +1112,7 @@ export const NodesPage: React.FC = () => {
               sx={{
                 height: 32,
                 fontSize: "0.8rem",
-                borderRadius: 2,
+                borderRadius: 1,
                 bgcolor: "#F8FAFC",
                 "& .MuiSelect-select": {
                   py: 0,
@@ -1182,7 +1172,7 @@ export const NodesPage: React.FC = () => {
                           fontSize: "0.85rem",
                           color: "#64748B",
                           fontWeight: 700,
-                          ml: 1.5,
+                          ml: 1,
                         }}
                       >
                         {sortOrder === "asc" ? "↑" : "↓"}
@@ -1201,10 +1191,10 @@ export const NodesPage: React.FC = () => {
             size="small"
             sx={{ height: 32 }}
           >
-            <ToggleButton value="cards" sx={{ px: 1.5 }}>
+            <ToggleButton value="cards" sx={{ px: 1 }}>
               <LayoutGrid size={16} />
             </ToggleButton>
-            <ToggleButton value="table" sx={{ px: 1.5 }}>
+            <ToggleButton value="table" sx={{ px: 1 }}>
               <List size={16} />
             </ToggleButton>
           </ToggleButtonGroup>
@@ -1221,7 +1211,7 @@ export const NodesPage: React.FC = () => {
                 sx={{
                   height: 32,
                   fontSize: "0.8rem",
-                  borderRadius: 2,
+                  borderRadius: 1,
                   bgcolor: "#FFFFFF",
                   color: "#475569",
                   borderColor: "#CBD5E1",
@@ -1250,7 +1240,7 @@ export const NodesPage: React.FC = () => {
                 sx={{
                   p: 4,
                   textAlign: "center",
-                  borderRadius: 3,
+                  borderRadius: 1,
                   border: "1px dashed #CBD5E1",
                   bgcolor: "#FFFFFF",
                 }}
@@ -1263,7 +1253,7 @@ export const NodesPage: React.FC = () => {
                   Try resetting tags or changing your search criteria.
                 </Typography>
                 {isFiltering && (
-                  <Button size="small" variant="outlined" onClick={handleClearFilters} sx={{ mt: 2, borderRadius: 2 }}>
+                  <Button size="small" variant="outlined" onClick={handleClearFilters} sx={{ mt: 1, borderRadius: 2 }}>
                     Reset Filters
                   </Button>
                 )}
@@ -1310,7 +1300,7 @@ export const NodesPage: React.FC = () => {
                   onClick={() => navigate(`/nodes/${encodeURIComponent(n.name)}`)}
                   sx={{
                     p: 2.2,
-                    borderRadius: 3,
+                    borderRadius: 1,
                     border: "1px solid #E2E8F0",
                     bgcolor: "#FFFFFF",
                     display: "flex",
@@ -1484,11 +1474,11 @@ export const NodesPage: React.FC = () => {
                             value={Math.min(100, Math.max(0, cpuPercent))}
                             sx={{
                               height: 6,
-                              borderRadius: 3,
+                              borderRadius: 1,
                               bgcolor: "#F1F5F9",
                               "& .MuiLinearProgress-bar": {
                                 bgcolor: getCpuColor(cpuPercent),
-                                borderRadius: 3,
+                                borderRadius: 1,
                               },
                             }}
                           />
@@ -1509,11 +1499,11 @@ export const NodesPage: React.FC = () => {
                             value={Math.min(100, Math.max(0, memPercent))}
                             sx={{
                               height: 6,
-                              borderRadius: 3,
+                              borderRadius: 1,
                               bgcolor: "#F1F5F9",
                               "& .MuiLinearProgress-bar": {
                                 bgcolor: memPercent > 85 ? "#E11D48" : "#4F46E5",
-                                borderRadius: 3,
+                                borderRadius: 1,
                               },
                             }}
                           />
@@ -1541,11 +1531,11 @@ export const NodesPage: React.FC = () => {
                               value={Math.min(100, Math.max(0, diskPercent))}
                               sx={{
                                 height: 6,
-                                borderRadius: 3,
+                                borderRadius: 1,
                                 bgcolor: "#F1F5F9",
                                 "& .MuiLinearProgress-bar": {
                                   bgcolor: diskPercent > 85 ? "#E11D48" : diskPercent > 70 ? "#F59E0B" : "#10B981",
-                                  borderRadius: 3,
+                                  borderRadius: 1,
                                 },
                               }}
                             />
@@ -1558,7 +1548,7 @@ export const NodesPage: React.FC = () => {
                         sx={{
                           p: 1.2,
                           bgcolor: "#F8FAFC",
-                          borderRadius: 2,
+                          borderRadius: 1,
                           border: "1px solid #F1F5F9",
                           display: "flex",
                           justifyContent: "space-between",
@@ -1615,9 +1605,9 @@ export const NodesPage: React.FC = () => {
                     /* Distinct No Agent banner */
                     <Box
                       sx={{
-                        p: 2,
+                        p: 1,
                         bgcolor: "#F8FAFC",
-                        borderRadius: 2.5,
+                        borderRadius: 1,
                         border: "1px dashed #CBD5E1",
                         display: "flex",
                         flexDirection: "column",
@@ -1770,7 +1760,7 @@ export const NodesPage: React.FC = () => {
           component={Paper}
           elevation={0}
           sx={{
-            borderRadius: 3,
+            borderRadius: 1,
             border: "1px solid #E2E8F0",
             overflowX: "auto",
           }}
@@ -1805,7 +1795,7 @@ export const NodesPage: React.FC = () => {
                           bgcolor: subView === "network" ? "#ECFEFF" : "#EEF2FF",
                           border: "1px solid",
                           borderColor: subView === "network" ? "#A5F3FC" : "#C7D2FE",
-                          borderRadius: 1.5,
+                          borderRadius: 1,
                           px: 1,
                           py: 0.2,
                           "& .MuiSelect-select": {
@@ -2255,11 +2245,11 @@ export const NodesPage: React.FC = () => {
                                 value={Math.min(100, Math.max(0, diskPercent))}
                                 sx={{
                                   height: 4,
-                                  borderRadius: 2,
+                                  borderRadius: 1,
                                   bgcolor: "#F1F5F9",
                                   "& .MuiLinearProgress-bar": {
                                     bgcolor: diskPercent > 85 ? "#E11D48" : diskPercent > 70 ? "#F59E0B" : "#10B981",
-                                    borderRadius: 2,
+                                    borderRadius: 1,
                                   },
                                 }}
                               />

@@ -42,7 +42,7 @@ export const ViewNetworkPolicyModal: React.FC<ViewNetworkPolicyModalProps> = ({ 
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          pb: 1.5,
+          pb: 1,
           borderBottom: "1px solid #E2E8F0",
         }}
       >
@@ -51,7 +51,7 @@ export const ViewNetworkPolicyModal: React.FC<ViewNetworkPolicyModalProps> = ({ 
             sx={{
               width: 36,
               height: 36,
-              borderRadius: 2,
+              borderRadius: 1,
               bgcolor: "#EEF2FF",
               display: "flex",
               alignItems: "center",
@@ -75,7 +75,7 @@ export const ViewNetworkPolicyModal: React.FC<ViewNetworkPolicyModalProps> = ({ 
         </IconButton>
       </DialogTitle>
 
-      <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2, py: 2.5, px: 3 }}>
+      <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 1, py: 1, px: 3 }}>
         {isBuiltin && (
           <Alert icon={<Lock size={16} />} severity="info" sx={{ py: 0.8, borderRadius: 2 }}>
             Built-in policies are managed by easy42 and are read-only.
@@ -87,9 +87,9 @@ export const ViewNetworkPolicyModal: React.FC<ViewNetworkPolicyModalProps> = ({ 
           sx={{
             display: "grid",
             gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" },
-            gap: 2,
-            p: 2,
-            borderRadius: 2,
+            gap: 1,
+            p: 1,
+            borderRadius: 1,
             bgcolor: "#F8FAFC",
             border: "1px solid #E2E8F0",
           }}
@@ -128,8 +128,8 @@ export const ViewNetworkPolicyModal: React.FC<ViewNetworkPolicyModalProps> = ({ 
             display: "flex",
             flexDirection: "column",
             gap: 1,
-            p: 2,
-            borderRadius: 2,
+            p: 1,
+            borderRadius: 1,
             bgcolor: "#FFFFFF",
             border: "1px solid #E2E8F0",
           }}
@@ -141,7 +141,7 @@ export const ViewNetworkPolicyModal: React.FC<ViewNetworkPolicyModalProps> = ({ 
             <Route size={16} color="#4F46E5" /> Routing & BGP Configuration
           </Typography>
 
-          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr 1fr", sm: "1fr 1fr 1fr 1fr" }, gap: 2 }}>
+          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr 1fr", sm: "1fr 1fr 1fr 1fr" }, gap: 1 }}>
             <Box>
               <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600 }}>
                 INTERNAL BGP COST
@@ -176,7 +176,7 @@ export const ViewNetworkPolicyModal: React.FC<ViewNetworkPolicyModalProps> = ({ 
             </Box>
           </Box>
 
-          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" }, gap: 2, pt: 1 }}>
+          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" }, gap: 1, pt: 1 }}>
             <Box>
               <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600 }}>
                 WIREGUARD FWMARK
@@ -215,8 +215,8 @@ export const ViewNetworkPolicyModal: React.FC<ViewNetworkPolicyModalProps> = ({ 
             display: "flex",
             flexDirection: "column",
             gap: 1,
-            p: 2,
-            borderRadius: 2,
+            p: 1,
+            borderRadius: 1,
             bgcolor: "#F8FAFC",
             border: "1px solid #E2E8F0",
           }}
@@ -228,7 +228,7 @@ export const ViewNetworkPolicyModal: React.FC<ViewNetworkPolicyModalProps> = ({ 
             <Filter size={16} color="#4F46E5" /> Ingress Subnet & Anti-Spoofing Filters
           </Typography>
 
-          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" }, gap: 2 }}>
+          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" }, gap: 1 }}>
             <Box>
               <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600 }}>
                 ALLOWED DESTINATION CIDRs
@@ -316,9 +316,9 @@ export const ViewNetworkPolicyModal: React.FC<ViewNetworkPolicyModalProps> = ({ 
           sx={{
             display: "flex",
             flexDirection: "column",
-            gap: 2,
-            p: 2,
-            borderRadius: 2,
+            gap: 1,
+            p: 1,
+            borderRadius: 1,
             bgcolor: "#FFFFFF",
             border: "1px solid #E2E8F0",
           }}
@@ -331,11 +331,11 @@ export const ViewNetworkPolicyModal: React.FC<ViewNetworkPolicyModalProps> = ({ 
           </Typography>
 
           {/* Master Filtering Switches */}
-          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" }, gap: 2 }}>
+          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" }, gap: 1 }}>
             <Box
               sx={{
-                p: 1.5,
-                borderRadius: 1.5,
+                p: 1,
+                borderRadius: 1,
                 bgcolor: policy.filter_forward ? "#F0FDF4" : "#F8FAFC",
                 border: "1px solid",
                 borderColor: policy.filter_forward ? "#BBF7D0" : "#E2E8F0",
@@ -366,8 +366,8 @@ export const ViewNetworkPolicyModal: React.FC<ViewNetworkPolicyModalProps> = ({ 
 
             <Box
               sx={{
-                p: 1.5,
-                borderRadius: 1.5,
+                p: 1,
+                borderRadius: 1,
                 bgcolor: policy.filter_input ? "#F0FDF4" : "#F8FAFC",
                 border: "1px solid",
                 borderColor: policy.filter_input ? "#BBF7D0" : "#E2E8F0",
@@ -399,11 +399,11 @@ export const ViewNetworkPolicyModal: React.FC<ViewNetworkPolicyModalProps> = ({ 
 
           {/* Sub-rules: When filter_input is Enabled vs Disabled */}
           {policy.filter_input ? (
-            <Box sx={{ p: 2, borderRadius: 1.5, bgcolor: "#F8FAFC", border: "1px dashed #CBD5E1" }}>
-              <Typography variant="caption" sx={{ fontWeight: 700, color: "#475569", display: "block", mb: 1.5 }}>
+            <Box sx={{ p: 1, borderRadius: 1, bgcolor: "#F8FAFC", border: "1px dashed #CBD5E1" }}>
+              <Typography variant="caption" sx={{ fontWeight: 700, color: "#475569", display: "block", mb: 1 }}>
                 ACTIVE HOST FIREWALL RULES (FILTER INPUT ENABLED)
               </Typography>
-              <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" }, gap: 2 }}>
+              <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" }, gap: 1 }}>
                 <Box>
                   <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600 }}>
                     ICMP (IPv4 Ping)
@@ -449,7 +449,7 @@ export const ViewNetworkPolicyModal: React.FC<ViewNetworkPolicyModalProps> = ({ 
               </Box>
 
               {policy.local_networks && policy.local_networks.length > 0 && (
-                <Box sx={{ mt: 1.5 }}>
+                <Box sx={{ mt: 1 }}>
                   <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600 }}>
                     PROTECTED LOCAL NETWORKS
                   </Typography>
@@ -471,7 +471,7 @@ export const ViewNetworkPolicyModal: React.FC<ViewNetworkPolicyModalProps> = ({ 
           )}
 
           {policy.block_ingress_new && (
-            <Box sx={{ p: 1.5, borderRadius: 1.5, bgcolor: "#FEF2F2", border: "1px solid #FECDD3" }}>
+            <Box sx={{ p: 1, borderRadius: 1, bgcolor: "#FEF2F2", border: "1px solid #FECDD3" }}>
               <Typography variant="caption" sx={{ color: "#991B1B", fontWeight: 700 }}>
                 BLOCK INGRESS NEW CONNECTIONS
               </Typography>
@@ -501,8 +501,8 @@ export const ViewNetworkPolicyModal: React.FC<ViewNetworkPolicyModalProps> = ({ 
               display: "flex",
               flexDirection: "column",
               gap: 1,
-              p: 2,
-              borderRadius: 2,
+              p: 1,
+              borderRadius: 1,
               bgcolor: "#F8FAFC",
               border: "1px solid #E2E8F0",
             }}
@@ -514,7 +514,7 @@ export const ViewNetworkPolicyModal: React.FC<ViewNetworkPolicyModalProps> = ({ 
               <Sliders size={16} color="#4F46E5" /> ROA, NAT & DSCP
             </Typography>
 
-            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" }, gap: 2 }}>
+            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" }, gap: 1 }}>
               {policy.roa4 && (
                 <Box>
                   <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600 }}>
@@ -589,8 +589,8 @@ export const ViewNetworkPolicyModal: React.FC<ViewNetworkPolicyModalProps> = ({ 
               display: "flex",
               flexDirection: "column",
               gap: 1,
-              p: 2,
-              borderRadius: 2,
+              p: 1,
+              borderRadius: 1,
               bgcolor: "#FFFFFF",
               border: "1px solid #E2E8F0",
             }}
@@ -610,12 +610,12 @@ export const ViewNetworkPolicyModal: React.FC<ViewNetworkPolicyModalProps> = ({ 
                 <Box
                   component="pre"
                   sx={{
-                    p: 1.5,
+                    p: 1,
                     m: 0,
                     mt: 0.5,
                     bgcolor: "#F8FAFC",
                     border: "1px solid #E2E8F0",
-                    borderRadius: 1.5,
+                    borderRadius: 1,
                     fontFamily: "monospace",
                     fontSize: "0.8rem",
                     overflowX: "auto",
@@ -634,12 +634,12 @@ export const ViewNetworkPolicyModal: React.FC<ViewNetworkPolicyModalProps> = ({ 
                 <Box
                   component="pre"
                   sx={{
-                    p: 1.5,
+                    p: 1,
                     m: 0,
                     mt: 0.5,
                     bgcolor: "#F8FAFC",
                     border: "1px solid #E2E8F0",
-                    borderRadius: 1.5,
+                    borderRadius: 1,
                     fontFamily: "monospace",
                     fontSize: "0.8rem",
                     overflowX: "auto",
@@ -658,12 +658,12 @@ export const ViewNetworkPolicyModal: React.FC<ViewNetworkPolicyModalProps> = ({ 
                 <Box
                   component="pre"
                   sx={{
-                    p: 1.5,
+                    p: 1,
                     m: 0,
                     mt: 0.5,
                     bgcolor: "#F8FAFC",
                     border: "1px solid #E2E8F0",
-                    borderRadius: 1.5,
+                    borderRadius: 1,
                     fontFamily: "monospace",
                     fontSize: "0.8rem",
                     overflowX: "auto",
@@ -682,12 +682,12 @@ export const ViewNetworkPolicyModal: React.FC<ViewNetworkPolicyModalProps> = ({ 
                 <Box
                   component="pre"
                   sx={{
-                    p: 1.5,
+                    p: 1,
                     m: 0,
                     mt: 0.5,
                     bgcolor: "#F8FAFC",
                     border: "1px solid #E2E8F0",
-                    borderRadius: 1.5,
+                    borderRadius: 1,
                     fontFamily: "monospace",
                     fontSize: "0.8rem",
                     overflowX: "auto",
@@ -701,7 +701,7 @@ export const ViewNetworkPolicyModal: React.FC<ViewNetworkPolicyModalProps> = ({ 
         )}
       </DialogContent>
 
-      <DialogActions sx={{ px: 3, py: 2, borderTop: "1px solid #E2E8F0", backgroundColor: "#F8FAFC" }}>
+      <DialogActions sx={{ px: 3, py: 1, borderTop: "1px solid #E2E8F0", backgroundColor: "#F8FAFC" }}>
         <Button onClick={onClose} variant="outlined" sx={{ color: "#64748B", borderColor: "#CBD5E1" }}>
           Close
         </Button>

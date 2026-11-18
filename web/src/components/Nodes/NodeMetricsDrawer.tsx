@@ -93,16 +93,16 @@ export const NodeMetricsDrawer: React.FC<NodeMetricsDrawerProps> = ({ open, onCl
   };
 
   const content = (
-    <Box sx={{ p: { xs: 2, sm: 3 }, height: "100%", display: "flex", flexDirection: "column" }}>
+    <Box sx={{ p: 1, height: "100%", display: "flex", flexDirection: "column" }}>
       {/* Header */}
-      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
+      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
         <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
           <Box
             sx={{
               p: 1,
               bgcolor: "#EEF2FF",
               color: "#4F46E5",
-              borderRadius: 2,
+              borderRadius: 1,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -151,7 +151,7 @@ export const NodeMetricsDrawer: React.FC<NodeMetricsDrawerProps> = ({ open, onCl
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
-          mb: 2.5,
+          mb: 1,
           flexWrap: "wrap",
           gap: 1,
         }}
@@ -182,9 +182,9 @@ export const NodeMetricsDrawer: React.FC<NodeMetricsDrawerProps> = ({ open, onCl
 
       {/* Metrics Quick Bar */}
       {nodeLive?.metrics && (
-        <Grid container spacing={1.5} sx={{ mb: 2.5 }}>
+        <Grid container spacing={1.5} sx={{ mb: 1 }}>
           <Grid item xs={6} sm={3}>
-            <Box sx={{ p: 1.5, bgcolor: "#F8FAFC", borderRadius: 2, border: "1px solid #E2E8F0" }}>
+            <Box sx={{ p: 1, bgcolor: "#F8FAFC", borderRadius: 1, border: "1px solid #E2E8F0" }}>
               <Typography variant="caption" sx={{ color: "#64748B" }}>
                 CPU Load
               </Typography>
@@ -194,7 +194,7 @@ export const NodeMetricsDrawer: React.FC<NodeMetricsDrawerProps> = ({ open, onCl
             </Box>
           </Grid>
           <Grid item xs={6} sm={3}>
-            <Box sx={{ p: 1.5, bgcolor: "#F8FAFC", borderRadius: 2, border: "1px solid #E2E8F0" }}>
+            <Box sx={{ p: 1, bgcolor: "#F8FAFC", borderRadius: 1, border: "1px solid #E2E8F0" }}>
               <Typography variant="caption" sx={{ color: "#64748B" }}>
                 RAM Usage
               </Typography>
@@ -204,7 +204,7 @@ export const NodeMetricsDrawer: React.FC<NodeMetricsDrawerProps> = ({ open, onCl
             </Box>
           </Grid>
           <Grid item xs={6} sm={3}>
-            <Box sx={{ p: 1.5, bgcolor: "#F8FAFC", borderRadius: 2, border: "1px solid #E2E8F0" }}>
+            <Box sx={{ p: 1, bgcolor: "#F8FAFC", borderRadius: 1, border: "1px solid #E2E8F0" }}>
               <Typography variant="caption" sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}>
                 <ArrowDown size={14} color="#059669" /> Inbound
                 {nodeLive.primary_interface ? ` (${nodeLive.primary_interface})` : ""}
@@ -215,7 +215,7 @@ export const NodeMetricsDrawer: React.FC<NodeMetricsDrawerProps> = ({ open, onCl
             </Box>
           </Grid>
           <Grid item xs={6} sm={3}>
-            <Box sx={{ p: 1.5, bgcolor: "#F8FAFC", borderRadius: 2, border: "1px solid #E2E8F0" }}>
+            <Box sx={{ p: 1, bgcolor: "#F8FAFC", borderRadius: 1, border: "1px solid #E2E8F0" }}>
               <Typography variant="caption" sx={{ color: "#64748B", display: "flex", alignItems: "center", gap: 0.5 }}>
                 <ArrowUp size={14} color="#0891B2" /> Outbound
                 {nodeLive.primary_interface ? ` (${nodeLive.primary_interface})` : ""}
@@ -229,7 +229,7 @@ export const NodeMetricsDrawer: React.FC<NodeMetricsDrawerProps> = ({ open, onCl
       )}
 
       {/* Charts Section */}
-      <Box sx={{ flex: 1, overflowY: "auto", pr: 0.5, display: "flex", flexDirection: "column", gap: 2 }}>
+      <Box sx={{ flex: 1, overflowY: "auto", pr: 0.5, display: "flex", flexDirection: "column", gap: 1 }}>
         {loading && points.length === 0 ? (
           <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
             <CircularProgress size={32} />

@@ -121,7 +121,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               justifyContent: "center",
               width: 38,
               height: 38,
-              borderRadius: 2,
+              borderRadius: 1,
               background: "linear-gradient(135deg, #4F46E5 0%, #0891B2 100%)",
               boxShadow: "0 2px 8px rgba(79, 70, 229, 0.3)",
             }}
@@ -224,7 +224,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 height: 28,
                 fontSize: "0.75rem",
                 fontWeight: 600,
-                borderRadius: 1.5,
+                borderRadius: 1,
                 backgroundColor: selectedTag === "All" ? "#F8FAFC" : "rgba(8, 145, 178, 0.08)",
                 color: selectedTag === "All" ? "#334155" : "#0891B2",
                 "& .MuiSelect-select": { py: 0.3, pr: 3, pl: 0.5 },
@@ -278,7 +278,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               sx: {
                 minWidth: 270,
                 p: 0.5,
-                borderRadius: 2,
+                borderRadius: 1,
                 boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)",
                 border: "1px solid #E2E8F0",
               },
@@ -289,7 +289,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 setAddMenuAnchor(null);
                 onAddNode();
               }}
-              sx={{ borderRadius: 1.5, py: 1 }}
+              sx={{ borderRadius: 1, py: 1 }}
             >
               <ListItemIcon sx={{ minWidth: 32, color: "#4F46E5" }}>
                 <Server size={18} />
@@ -315,7 +315,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 setAddMenuAnchor(null);
                 onAddLink();
               }}
-              sx={{ borderRadius: 1.5, py: 1 }}
+              sx={{ borderRadius: 1, py: 1 }}
             >
               <ListItemIcon sx={{ minWidth: 32, color: "#0891B2" }}>
                 <LinkIcon size={18} />
@@ -340,7 +340,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   setAddMenuAnchor(null);
                   onAddBlock();
                 }}
-                sx={{ borderRadius: 1.5, py: 1 }}
+                sx={{ borderRadius: 1, py: 1 }}
               >
                 <ListItemIcon sx={{ minWidth: 32, color: "#6366F1" }}>
                   <Layers size={18} />
@@ -368,7 +368,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 onCreateFullMesh();
               }}
               disabled={displayedNodeCount < 2}
-              sx={{ borderRadius: 1.5, py: 1 }}
+              sx={{ borderRadius: 1, py: 1 }}
             >
               <ListItemIcon sx={{ minWidth: 32, color: "#4F46E5" }}>
                 <Share2 size={18} />
@@ -471,7 +471,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               sx: {
                 width: 250,
                 maxHeight: 360,
-                borderRadius: 2,
+                borderRadius: 1,
                 boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1)",
                 border: "1px solid #E2E8F0",
               },
@@ -489,7 +489,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               <ListItemText primary="Update All Nodes" secondary="Probes all cluster devices" />
             </MenuItem>
             <Divider sx={{ my: 0.5 }} />
-            <Box sx={{ px: 2, py: 0.5 }}>
+            <Box sx={{ px: 1, py: 0.5 }}>
               <Typography variant="caption" sx={{ fontWeight: 700, color: "#64748B", letterSpacing: "0.5px" }}>
                 REFRESH SPECIFIC NODE
               </Typography>
@@ -531,13 +531,13 @@ export const Navbar: React.FC<NavbarProps> = ({
               sx: {
                 width: 320,
                 maxHeight: 400,
-                borderRadius: 2,
+                borderRadius: 1,
                 boxShadow: "0 10px 15px -3px rgba(220, 38, 38, 0.15)",
                 border: "1px solid #FECDD3",
               },
             }}
           >
-            <Box sx={{ p: 1.5, borderBottom: "1px solid #FECDD3", backgroundColor: "#FEF2F2" }}>
+            <Box sx={{ p: 1, borderBottom: "1px solid #FECDD3", backgroundColor: "#FEF2F2" }}>
               <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                 <AlertTriangle size={16} color="#DC2626" />
                 <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#991B1B" }}>

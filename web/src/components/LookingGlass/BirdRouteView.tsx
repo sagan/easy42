@@ -28,7 +28,7 @@ export const BirdRouteView: React.FC<BirdRouteViewProps> = ({ routeResult, onQue
           textAlign: "center",
           backgroundColor: "#F8FAFC",
           border: "1px dashed #CBD5E1",
-          borderRadius: 2,
+          borderRadius: 1,
         }}
       >
         <Network size={32} color="#94A3B8" style={{ marginBottom: 8 }} />
@@ -43,15 +43,15 @@ export const BirdRouteView: React.FC<BirdRouteViewProps> = ({ routeResult, onQue
   }
 
   return (
-    <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+    <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
       {/* Route Count Header */}
       <Box
         sx={{
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          p: 1.5,
-          borderRadius: 2,
+          p: 1,
+          borderRadius: 1,
           backgroundColor: "#F8FAFC",
           border: "1px solid #E2E8F0",
         }}
@@ -83,8 +83,8 @@ export const BirdRouteView: React.FC<BirdRouteViewProps> = ({ routeResult, onQue
           key={idx}
           elevation={0}
           sx={{
-            p: 2.5,
-            borderRadius: 2,
+            p: 1,
+            borderRadius: 1,
             border: route.best ? "1.5px solid #6366F1" : "1px solid #E2E8F0",
             backgroundColor: route.best ? "#FAFBFF" : "#FFFFFF",
             boxShadow: route.best ? "0 4px 14px rgba(99, 102, 241, 0.08)" : "none",
@@ -176,7 +176,7 @@ export const BirdRouteView: React.FC<BirdRouteViewProps> = ({ routeResult, onQue
           <Divider sx={{ my: 0.5 }} />
 
           {/* Middle: Next-Hop & Interface */}
-          <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 3 }}>
+          <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 1 }}>
             <Box>
               <Typography
                 variant="caption"

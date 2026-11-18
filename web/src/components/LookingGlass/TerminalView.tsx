@@ -114,7 +114,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ output, command, dur
       sx={{
         position: "relative",
         backgroundColor: "#0F172A",
-        borderRadius: 2,
+        borderRadius: 1,
         overflow: "hidden",
         border: "1px solid #334155",
         boxShadow: "0 4px 20px rgba(0,0,0,0.3)",
@@ -126,7 +126,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ output, command, dur
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          px: 2,
+          px: 1,
           py: 1,
           backgroundColor: "#1E293B",
           borderBottom: "1px solid #334155",
@@ -140,7 +140,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ output, command, dur
             <Typography
               variant="caption"
               sx={{
-                ml: 1.5,
+                ml: 1,
                 fontFamily: "monospace",
                 color: "#94A3B8",
                 maxWidth: 450,
@@ -197,7 +197,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ output, command, dur
       {/* Terminal Screen */}
       <Box
         sx={{
-          p: 2,
+          p: 1,
           maxHeight: 480,
           overflowY: "auto",
           fontFamily: "'JetBrains Mono', 'Fira Code', 'Courier New', monospace",

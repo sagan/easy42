@@ -113,7 +113,7 @@ export const BirdProtocolsView: React.FC<BirdProtocolsViewProps> = ({ protocols 
   };
 
   return (
-    <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+    <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
       {/* Quick Stats Bar */}
       <Box
         sx={{
@@ -122,13 +122,13 @@ export const BirdProtocolsView: React.FC<BirdProtocolsViewProps> = ({ protocols 
           justifyContent: "space-between",
           flexWrap: "wrap",
           gap: 1,
-          p: 1.5,
-          borderRadius: 2,
+          p: 1,
+          borderRadius: 1,
           backgroundColor: "#F8FAFC",
           border: "1px solid #E2E8F0",
         }}
       >
-        <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
           <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
             <Activity size={16} color="#4F46E5" />
             <Typography variant="body2" sx={{ fontWeight: 600, color: "#1E293B" }}>

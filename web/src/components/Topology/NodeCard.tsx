@@ -120,7 +120,7 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
                     : isCore
                       ? "2px solid #059669"
                       : "1.5px solid #CBD5E1",
-          borderRadius: 2,
+          borderRadius: 1,
           boxShadow:
             isFocused || isHighlighted
               ? "0 0 0 3px rgba(79, 70, 229, 0.25)"
@@ -266,7 +266,7 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
                 : isAgentWorking && (!inBlock || !isBlockFullMesh)
                   ? "3px solid #10B981"
                   : undefined,
-        borderRadius: 2.5,
+        borderRadius: 1,
         opacity: isDimmed ? 0.3 : 1,
         filter: isDimmed ? "grayscale(40%)" : "none",
         boxShadow:
@@ -340,7 +340,7 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
       {/* Header */}
       <Box
         sx={{
-          p: 1.5,
+          p: 1,
           backgroundColor: isExternal ? "#FAF5FF" : !isOnline ? "#FEF2F2" : "#F8FAFC",
           borderBottom: "1px solid",
           borderColor: isExternal ? "rgba(139, 92, 246, 0.2)" : !isOnline ? "#FECDD3" : "#E2E8F0",
@@ -354,7 +354,7 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
             sx={{
               width: 28,
               height: 28,
-              borderRadius: 1.5,
+              borderRadius: 1,
               backgroundColor: isExternal
                 ? "rgba(139, 92, 246, 0.15)"
                 : !isOnline || (inBlock && !isHealthy)
@@ -718,7 +718,7 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
       </Box>
 
       {/* Body */}
-      <Box sx={{ p: 1.5, display: "flex", flexDirection: "column", gap: 1 }}>
+      <Box sx={{ p: 1, display: "flex", flexDirection: "column", gap: 1 }}>
         {/* Main IP & Iface */}
         <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, minWidth: 0 }}>
@@ -1070,7 +1070,7 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
       {!isExternal && !isOnline && (
         <Box
           sx={{
-            px: 1.5,
+            px: 1,
             py: 0.75,
             backgroundColor: "#FEF2F2",
             borderTop: "1px solid #FECDD3",

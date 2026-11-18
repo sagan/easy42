@@ -171,7 +171,7 @@ export const BlockVirtualEdge: React.FC<EdgeProps> = memo(
               backdropFilter: "blur(6px)",
               border: "1.5px solid",
               borderColor: isExpanded ? `${color1}60` : `${color1}90`,
-              borderRadius: 2,
+              borderRadius: 1,
               px: 1.25,
               py: 0.45,
               boxShadow: isExpanded ? "0 1px 4px rgba(0, 0, 0, 0.05)" : "0 2px 8px rgba(0, 0, 0, 0.08)",
@@ -235,7 +235,7 @@ export const BlockVirtualEdge: React.FC<EdgeProps> = memo(
                 sx: {
                   width: 380,
                   maxHeight: 420,
-                  borderRadius: 2.5,
+                  borderRadius: 1,
                   boxShadow: "0 12px 32px rgba(0,0,0,0.18)",
                   border: "1px solid #E2E8F0",
                   overflow: "hidden",
@@ -249,7 +249,7 @@ export const BlockVirtualEdge: React.FC<EdgeProps> = memo(
             {/* Header */}
             <Box
               sx={{
-                p: 1.5,
+                p: 1,
                 backgroundColor: "#F8FAFC",
                 borderBottom: "1px solid #E2E8F0",
                 display: "flex",
@@ -262,7 +262,7 @@ export const BlockVirtualEdge: React.FC<EdgeProps> = memo(
                   sx={{
                     width: 28,
                     height: 28,
-                    borderRadius: 1.5,
+                    borderRadius: 1,
                     backgroundColor: `${color1}15`,
                     display: "flex",
                     alignItems: "center",
@@ -294,7 +294,7 @@ export const BlockVirtualEdge: React.FC<EdgeProps> = memo(
                     fontSize: "0.7rem",
                     fontWeight: 700,
                     textTransform: "none",
-                    borderRadius: 1.5,
+                    borderRadius: 1,
                     py: 0.4,
                     px: 1,
                     boxShadow: "none",

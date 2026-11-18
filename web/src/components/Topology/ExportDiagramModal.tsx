@@ -142,14 +142,14 @@ export const ExportDiagramModal: React.FC<ExportDiagramModalProps> = ({
       fullScreen={isMobile}
       PaperProps={{
         sx: {
-          borderRadius: { xs: 0, md: 3 },
+          borderRadius: { xs: 0, md: 1 },
           boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
           overflow: "hidden",
           maxHeight: { xs: "100%", md: "calc(100dvh - 64px)" },
           height: { xs: "100%", md: 680 },
           display: "flex",
           flexDirection: "column",
-          my: { xs: 0, sm: 3 },
+          my: { xs: 0, sm: 1 },
         },
       }}
     >
@@ -157,7 +157,7 @@ export const ExportDiagramModal: React.FC<ExportDiagramModalProps> = ({
       <DialogTitle
         sx={{
           px: 3,
-          py: 2,
+          py: 1,
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
@@ -171,7 +171,7 @@ export const ExportDiagramModal: React.FC<ExportDiagramModalProps> = ({
             sx={{
               width: 38,
               height: 38,
-              borderRadius: 2,
+              borderRadius: 1,
               bgcolor: "#EEF2FF",
               color: "#4F46E5",
               display: "flex",
@@ -213,10 +213,10 @@ export const ExportDiagramModal: React.FC<ExportDiagramModalProps> = ({
             width: { xs: "100%", md: 360 },
             borderRight: { xs: "none", md: "1px solid #E2E8F0" },
             borderBottom: { xs: "1px solid #E2E8F0", md: "none" },
-            p: { xs: 2.25, sm: 3 },
+            p: 1,
             display: "flex",
             flexDirection: "column",
-            gap: 2.25,
+            gap: 1,
             overflowY: { xs: "visible", md: "auto" },
             flexShrink: 0,
             bgcolor: "#FFFFFF",
@@ -241,7 +241,7 @@ export const ExportDiagramModal: React.FC<ExportDiagramModalProps> = ({
                   sx: {
                     fontSize: "0.82rem",
                     bgcolor: "#F8FAFC",
-                    borderRadius: 1.5,
+                    borderRadius: 1,
                     "& .MuiOutlinedInput-input": { py: 0.8, px: 1.2 },
                   },
                 },
@@ -423,7 +423,7 @@ export const ExportDiagramModal: React.FC<ExportDiagramModalProps> = ({
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
-              pl: 1.5,
+              pl: 1,
               opacity: displayBlocks ? 1 : 0.45,
               transition: "opacity 0.2s ease",
             }}
@@ -492,8 +492,8 @@ export const ExportDiagramModal: React.FC<ExportDiagramModalProps> = ({
           {/* Option: Graph Centrality & Importance Emphasis */}
           <Box
             sx={{
-              p: 1.5,
-              borderRadius: 2,
+              p: 1,
+              borderRadius: 1,
               bgcolor: emphasizeCentrality ? "#F8FAFC" : "transparent",
               border: emphasizeCentrality ? "1px solid #E2E8F0" : "1px dashed #E2E8F0",
               transition: "all 0.2s ease",
@@ -738,7 +738,7 @@ export const ExportDiagramModal: React.FC<ExportDiagramModalProps> = ({
           sx={{
             flex: "1 1 auto",
             bgcolor: "#F8FAFC",
-            p: { xs: 2, sm: 3 },
+            p: 1,
             display: "flex",
             flexDirection: "column",
             gap: 1,
@@ -770,14 +770,14 @@ export const ExportDiagramModal: React.FC<ExportDiagramModalProps> = ({
               height: { xs: 320, md: "100%" },
               minHeight: { xs: 280, md: 0 },
               border: "1px solid #E2E8F0",
-              borderRadius: 2,
+              borderRadius: 1,
               bgcolor: "#FFFFFF",
               overflow: "auto",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
               position: "relative",
-              p: 2,
+              p: 1,
             }}
           >
             {previewSvg ? (
@@ -797,7 +797,7 @@ export const ExportDiagramModal: React.FC<ExportDiagramModalProps> = ({
                   "& svg": {
                     maxWidth: "100%",
                     height: "auto",
-                    borderRadius: 1.5,
+                    borderRadius: 1,
                     boxShadow: "0 4px 14px rgba(0, 0, 0, 0.06)",
                   },
                 }}
@@ -815,7 +815,7 @@ export const ExportDiagramModal: React.FC<ExportDiagramModalProps> = ({
       <DialogActions
         sx={{
           px: 3,
-          py: 2,
+          py: 1,
           pb: 2.75,
           borderTop: "1px solid #E2E8F0",
           bgcolor: "#F8FAFC",
@@ -851,7 +851,7 @@ export const ExportDiagramModal: React.FC<ExportDiagramModalProps> = ({
                 borderRadius: 1.75,
                 borderColor: "#CBD5E1",
                 color: "#475569",
-                px: 2,
+                px: 1,
                 "&:hover": {
                   borderColor: "#94A3B8",
                   bgcolor: "#F1F5F9",
@@ -873,7 +873,7 @@ export const ExportDiagramModal: React.FC<ExportDiagramModalProps> = ({
               fontWeight: 700,
               fontSize: "0.82rem",
               borderRadius: 1.75,
-              px: 2.5,
+              px: 1,
               py: 0.75,
               bgcolor: "#4F46E5",
               boxShadow: "0 4px 12px rgba(79, 70, 229, 0.25)",
