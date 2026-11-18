@@ -52,16 +52,24 @@ import {
   Activity,
   Lock,
   Unlock,
+  GitBranch,
 } from "lucide-react";
 import { NodeCard } from "./NodeCard";
 import { CustomEdge } from "./CustomEdge";
 import { BlockNode, BLOCK_PALETTE } from "./BlockNode";
 import { BlockVirtualEdge } from "./BlockVirtualEdge";
 import { ExportDiagramModal } from "./ExportDiagramModal";
+import { BestPathOverlay } from "./BestPathOverlay";
 import { Node, Link, NodeStatus, NetworkState, GraphBlock, NetworkPolicy } from "../../types/api";
 import { api } from "../../api/client";
 import { getEffectiveLinkCost } from "../../utils/cost";
-import { calculateGraphCentrality } from "../../utils/graphCentrality";
+import { calculateGraphCentrality, getLinkId } from "../../utils/graphCentrality";
+import {
+  BestPathPair,
+  buildDirectedLinkGraph,
+  findBestPathPair,
+  getNodePairKey,
+} from "../../utils/pathFinder";
 import { findInitialNodePosition, findInitialBlockPosition } from "../../utils/nodePlacement";
 
 const STORAGE_KEY_VIEWPORT = "easy42_graph_viewport";
@@ -71,6 +79,7 @@ const STORAGE_KEY_NODE_BLOCKS = "easy42_node_blocks_v1";
 const STORAGE_KEY_EXPANDED_PAIRS = "easy42_expanded_virtual_edge_pairs_v1";
 const STORAGE_KEY_CENTRALITY_VIEW = "easy42_topology_centrality_view";
 const STORAGE_KEY_DIAGRAM_LOCKED = "easy42_topology_diagram_locked";
+const STORAGE_KEY_BEST_PATH = "easy42_topology_best_path_enabled";
 
 const getStoredExpandedPairs = (): Set<string> => {
   try {
@@ -408,6 +417,8 @@ interface FloatingToolbarProps {
   onOpenExportDiagram?: () => void;
   centralityViewEnabled?: boolean;
   onToggleCentralityView?: () => void;
+  bestPathEnabled?: boolean;
+  onToggleBestPath?: () => void;
   isLocked?: boolean;
   onToggleLock?: () => void;
 }
@@ -440,6 +451,8 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = ({
   onOpenExportDiagram,
   centralityViewEnabled = false,
   onToggleCentralityView,
+  bestPathEnabled = true,
+  onToggleBestPath,
   isLocked = false,
   onToggleLock,
 }) => {
@@ -1483,6 +1496,41 @@ const FloatingToolbar: React.FC<FloatingToolbarProps> = ({
             {centralityViewEnabled && <Check size={15} color="#047857" />}
           </MenuItem>
 
+          {onToggleBestPath && (
+            <MenuItem
+              onClick={() => {
+                setLodMenuAnchor(null);
+                onToggleBestPath();
+              }}
+              sx={{
+                borderRadius: 1.25,
+                py: 0.75,
+                px: 1,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                fontSize: "0.82rem",
+                fontWeight: bestPathEnabled ? 700 : 500,
+                color: bestPathEnabled ? "#065F46" : "#1E293B",
+                backgroundColor: bestPathEnabled ? "rgba(5, 150, 105, 0.08)" : "transparent",
+                "&:hover": { bgcolor: "#ECFDF5" },
+              }}
+            >
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1.25 }}>
+                <GitBranch size={15} color={bestPathEnabled ? "#065F46" : "#64748B"} />
+                <Box>
+                  <Typography sx={{ fontSize: "0.82rem", fontWeight: bestPathEnabled ? 700 : 600 }}>
+                    Best Path Hover
+                  </Typography>
+                  <Typography variant="caption" sx={{ fontSize: "0.7rem", color: "#64748B", display: "block" }}>
+                    Hover a node while one is pinned to trace the cheapest path
+                  </Typography>
+                </Box>
+              </Box>
+              {bestPathEnabled && <Check size={15} color="#047857" />}
+            </MenuItem>
+          )}
+
           <MenuItem
             onClick={() => {
               setLodMenuAnchor(null);
@@ -1741,6 +1789,27 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
     }
   });
 
+  // Best Path mode: hover another node while a node is pinned to highlight the cheapest
+  // link path between the two nodes in both directions.
+  const [bestPathEnabled, setBestPathEnabled] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(STORAGE_KEY_BEST_PATH) !== "false";
+    } catch {
+      return true;
+    }
+  });
+  // The node pair whose path is currently drawn (kept after the pointer leaves the target
+  // node, so the highlighted path can be inspected). Cleared on pane click / Esc / new hover.
+  const [bestPathTarget, setBestPathTarget] = useState<string | null>(null);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY_BEST_PATH, String(bestPathEnabled));
+    } catch (e) {
+      console.error("Failed to persist bestPathEnabled to localStorage", e);
+    }
+  }, [bestPathEnabled]);
+
   // Automatically synchronize diagram lock state to localStorage
   useEffect(() => {
     try {
@@ -1869,6 +1938,7 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
     setPinnedNodeNames(new Set());
     setFocusedBlockId(null);
     setHoveredNodeName(null);
+    setBestPathTarget(null);
   }, []);
 
   // Escape key to reset focus
@@ -2201,6 +2271,78 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
     return { activeFocusNodeSet: null, activeFocusEdgeSet: null };
   }, [pinnedNodeNames, hopDepth, hoveredNodeName, focusedBlockId, links, nodes, effectiveNodeBlockMap]);
 
+  // ---------------------------------------------------------------------------------------
+  // Best Path mode
+  //   - Focus node  : the single pinned node (click a node to pin it)
+  //   - Target node : whichever node the pointer is over (or the last hovered node)
+  // Both directed best paths are computed and highlighted; if the directions disagree they
+  // are drawn with distinct colors/patterns and a legend explains which is which.
+  // ---------------------------------------------------------------------------------------
+  const bestPathWorkingStates = useMemo(() => {
+    const map = new Map<string, "working" | "not_working" | "unknown">();
+    links.forEach((l) => map.set(getLinkId(l), getLinkWorkingState(l, networkState, nodeStatuses)));
+    return map;
+  }, [links, networkState, nodeStatuses]);
+
+  const bestPathAdjacency = useMemo(
+    () => buildDirectedLinkGraph(links, nodes, networkPolicies, bestPathWorkingStates),
+    [links, nodes, networkPolicies, bestPathWorkingStates],
+  );
+
+  const bestPathFocusNode = pinnedNodeNames.size === 1 ? Array.from(pinnedNodeNames)[0] : null;
+
+  const bestPathRequested =
+    Boolean(bestPathEnabled && bestPathFocusNode) &&
+    Boolean(hoveredNodeName && hoveredNodeName !== bestPathFocusNode);
+
+  // Latch the hovered node so the path stays visible when the pointer moves onto an edge or
+  // the legend; a new hover replaces it.
+  useEffect(() => {
+    if (bestPathRequested && hoveredNodeName) {
+      setBestPathTarget(hoveredNodeName);
+    }
+  }, [bestPathRequested, hoveredNodeName]);
+
+  // Drop the latched target when the focus node changes, so the previous pair's path is not
+  // kept on screen against the new focus.
+  useEffect(() => {
+    setBestPathTarget(null);
+  }, [bestPathFocusNode]);
+
+  const bestPathPair: BestPathPair | null = useMemo(() => {
+    if (!bestPathEnabled || !bestPathFocusNode || !bestPathTarget) return null;
+    if (bestPathTarget === bestPathFocusNode) return null;
+    return findBestPathPair(bestPathAdjacency, bestPathFocusNode, bestPathTarget);
+  }, [bestPathEnabled, bestPathFocusNode, bestPathTarget, bestPathAdjacency]);
+
+  // Every node that appears on either direction of the best path: these are never dimmed, so
+  // a multi-hop path stays legible regardless of the current N-hop focus depth.
+  const bestPathNodeNames = useMemo(() => {
+    const names = new Set<string>();
+    [bestPathPair?.forward, bestPathPair?.reverse].forEach((path) => {
+      path?.hops.forEach((hop) => names.add(hop.node));
+    });
+    return names;
+  }, [bestPathPair]);
+
+  // Adjacency reachable from the focus node; used to detect nodes unreachable from it.
+  const bestPathReachable = useMemo(() => {
+    const reachable = new Set<string>();
+    if (!bestPathFocusNode) return reachable;
+    const stack = [bestPathFocusNode];
+    reachable.add(bestPathFocusNode);
+    while (stack.length > 0) {
+      const current = stack.pop()!;
+      (bestPathAdjacency.get(current) || []).forEach((edge) => {
+        if (!reachable.has(edge.to)) {
+          reachable.add(edge.to);
+          stack.push(edge.to);
+        }
+      });
+    }
+    return reachable;
+  }, [bestPathFocusNode, bestPathAdjacency]);
+
   // Compute node link statistics for stub indicators
   const nodeLinksCountMap = useMemo(() => {
     const countMap = new Map<string, { total: number; intra: number; inter: number }>();
@@ -2384,8 +2526,18 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
       const health = nodeHealthMap[node.name];
       const isBlockCollapsed = Boolean(assignedBlockId && collapsedBlockIds.has(assignedBlockId));
       const linkCounts = nodeLinksCountMap.get(node.name) || { total: 0, intra: 0, inter: 0 };
-      const isHighlighted = activeFocusNodeSet ? activeFocusNodeSet.has(node.name) : false;
-      const isDimmed = activeFocusNodeSet ? !activeFocusNodeSet.has(node.name) : false;
+      const isFocusNode = bestPathFocusNode === node.name;
+      const isBestPathNode = bestPathNodeNames.has(node.name);
+      const isHighlighted = isBestPathNode || (activeFocusNodeSet ? activeFocusNodeSet.has(node.name) : false);
+      const isDimmed = isBestPathNode
+        ? false
+        : activeFocusNodeSet
+          ? !activeFocusNodeSet.has(node.name)
+          : false;
+      // In best path mode, mark nodes that cannot reach (or be reached by) the focus node.
+      const isBestPathUnreachable = Boolean(
+        bestPathFocusNode && !isBestPathNode && bestPathEnabled && !bestPathReachable.has(node.name),
+      );
 
       const cardW = lodMode === "macro" ? 155 : 260;
       const cardH = lodMode === "macro" ? 44 : 180;
@@ -2421,6 +2573,9 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
           isFocused: pinnedNodeNames.has(node.name),
           isHighlighted,
           isDimmed,
+          isBestPathFocus: isFocusNode,
+          isBestPathNode,
+          isBestPathUnreachable,
           lodMode,
           totalLinksCount: linkCounts.total,
           intraBlockLinksCount: linkCounts.intra,
@@ -2451,6 +2606,10 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
     nodeLinksCountMap,
     centralityResult,
     centralityViewEnabled,
+    bestPathFocusNode,
+    bestPathNodeNames,
+    bestPathEnabled,
+    bestPathReachable,
     onSelectNode,
     onRefreshNode,
     refreshingNodeName,
@@ -2463,6 +2622,12 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
     handleFocusBlock,
     isDiagramLocked,
   ]);
+
+  // Best path edge styling comes straight from the computed pair: `linkDirections` is keyed
+  // by the exact rendered link id, so parallel interfaces between two nodes are attributed to
+  // the direction that actually uses them.
+  const bestPathLinkDirections = bestPathPair?.linkDirections ?? null;
+  const bestPathNodePairKeys = bestPathPair?.nodePairKeys ?? null;
 
   // Convert links to React Flow edges with filtering rules
   const initialEdges: Edge[] = useMemo(() => {
@@ -2485,6 +2650,9 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
     // Create exactly one virtual edge per pair of blocks with cross-block links
     const blockVirtualEdges: Edge[] = [];
     blockPairLinksMap.forEach(({ block1Id, block2Id, links: pairLinks }, pairKey) => {
+      // Best path mode: don't draw bundle edges over the focused sub-graph.
+      if (bestPathFocusNode) return;
+
       const b1 = blocks.find((b) => b.id === block1Id);
       const b2 = blocks.find((b) => b.id === block2Id);
       if (!b1 || !b2) return;
@@ -2534,17 +2702,29 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
       const fromBlock = effectiveNodeBlockMap[link.from.name];
       const toBlock = effectiveNodeBlockMap[link.to.name];
 
-      // If either block is collapsed, intra-links within it are hidden
-      if (fromBlock && collapsedBlockIds.has(fromBlock) && fromBlock === toBlock) {
-        return false;
-      }
+      const edgeId = `link-${link.from.name}-${link.from.interface}-${link.to.name}-${link.to.interface}`;
 
       // Ghost link when dragging: always show
       if (draggingNodeId && (link.from.name === draggingNodeId || link.to.name === draggingNodeId)) {
         return true;
       }
 
-      const edgeId = `link-${link.from.name}-${link.from.interface}-${link.to.name}-${link.to.interface}`;
+      // Pinned nodes (focus): only the best path links (plus edges already expanded by the
+      // N-hop focus set) stay visible. Best path links are forced visible so a multi-hop path
+      // is drawn in full regardless of block bundling or the current hop depth.
+      if (bestPathFocusNode) {
+        if (bestPathNodePairKeys && bestPathNodePairKeys.has(getNodePairKey(link.from.name, link.to.name))) {
+          return true;
+        }
+        if (!activeFocusEdgeSet || !activeFocusEdgeSet.has(edgeId)) {
+          return false;
+        }
+      }
+
+      // If either block is collapsed, intra-links within it are hidden
+      if (fromBlock && collapsedBlockIds.has(fromBlock) && fromBlock === toBlock) {
+        return false;
+      }
 
       // If in active focus, show it!
       if (activeFocusEdgeSet && activeFocusEdgeSet.has(edgeId)) {
@@ -2624,8 +2804,21 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
       const isGhostDrag = Boolean(
         draggingNodeId && (link.from.name === draggingNodeId || link.to.name === draggingNodeId),
       );
-      const isHighlighted = Boolean(activeFocusEdgeSet?.has(edgeId) || isGhostDrag);
-      const isDimmed = Boolean(activeFocusEdgeSet && !activeFocusEdgeSet.has(edgeId) && !isGhostDrag);
+
+      const linkDirections = bestPathLinkDirections?.get(edgeId);
+      const isBestPathEdge = Boolean(linkDirections);
+      // Both directions may traverse the same physical link: forward is the primary (emerald)
+      // stroke and reverse is added as a dashed (indigo) overlay in CustomEdge.
+      const isBestPathForwardEdge = Boolean(linkDirections?.forward);
+      const isBestPathReverseEdge = Boolean(linkDirections?.reverse);
+      const isBestPathDimmed = Boolean(bestPathFocusNode && !isBestPathEdge);
+
+      // A best path link is always treated as highlighted, never dimmed or subtle, so hops
+      // outside the current N-hop focus depth still render as part of the path.
+      const isHighlighted = Boolean(isBestPathEdge || activeFocusEdgeSet?.has(edgeId) || isGhostDrag);
+      const isDimmed = Boolean(
+        isBestPathDimmed || (activeFocusEdgeSet && !activeFocusEdgeSet.has(edgeId) && !isGhostDrag),
+      );
       const isSubtle = Boolean((isIntraBlock || isExpandedInterBlock) && !isHighlighted && !isGhostDrag);
       const linkCentrality = centralityResult?.links.get(edgeId);
       const isCoreLink = Boolean(centralityViewEnabled && linkCentrality?.isCore);
@@ -2637,7 +2830,7 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
         sourceHandle: "source",
         targetHandle: "target",
         type: "customEdge",
-        zIndex: isHighlighted || isGhostDrag ? 100 : isCoreLink ? 20 : isSubtle ? 2 : 5,
+        zIndex: isBestPathEdge ? 150 : isHighlighted || isGhostDrag ? 100 : isCoreLink ? 20 : isSubtle ? 2 : 5,
         data: {
           link,
           workingState,
@@ -2661,6 +2854,9 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
           zoomLevel: currentZoom,
           centralityInfo: linkCentrality,
           isCentralityActive: centralityViewEnabled,
+          isBestPathForward: isBestPathForwardEdge,
+          isBestPathReverse: isBestPathReverseEdge,
+          isBestPathDimmed,
           onSelect: onSelectLink,
         } as unknown as Record<string, unknown>,
       };
@@ -2684,6 +2880,10 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
     centralityViewEnabled,
     handleToggleExpandBundle,
     nodeStatuses,
+    bestPathPair,
+    bestPathFocusNode,
+    bestPathLinkDirections,
+    bestPathNodePairKeys,
   ]);
 
   const [flowNodes, setNodes, onNodesChange] = useNodesState(initialNodes);
@@ -2955,6 +3155,12 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
     }
   }, []);
 
+  // Re-focus the pinned node from the on-canvas best path panel.
+  const handleFocusBestPathNode = useCallback((nodeName: string) => {
+    setPinnedNodeNames(new Set([nodeName]));
+    setBestPathTarget(null);
+  }, []);
+
   const handleNodeClick = useCallback(
     (event: React.MouseEvent, flowNode: FlowNode) => {
       if (flowNode.type === "customNode") {
@@ -3090,9 +3296,47 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
           onOpenExportDiagram={() => setExportDiagramOpen(true)}
           centralityViewEnabled={centralityViewEnabled}
           onToggleCentralityView={() => setCentralityViewEnabled((v) => !v)}
+          bestPathEnabled={bestPathEnabled}
+          onToggleBestPath={() => setBestPathEnabled((v) => !v)}
           isLocked={isDiagramLocked}
           onToggleLock={() => setIsDiagramLocked((v) => !v)}
         />
+
+        {/* Best Path summary: pinned focus node ⇄ hovered node */}
+        {bestPathPair && bestPathEnabled ? (
+          <Panel position="bottom-center" style={{ margin: 14 }}>
+            <BestPathOverlay pair={bestPathPair} adjacency={bestPathAdjacency} onFocusHop={handleFocusBestPathNode} />
+          </Panel>
+        ) : bestPathEnabled && bestPathFocusNode && !bestPathTarget ? (
+          <Panel position="bottom-center" style={{ margin: 14 }}>
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                gap: 0.75,
+                backgroundColor: "rgba(255, 255, 255, 0.92)",
+                backdropFilter: "blur(8px)",
+                border: "1px dashed #A7F3D0",
+                borderRadius: 1,
+                px: 1.1,
+                py: 0.6,
+                boxShadow: "0 2px 10px -2px rgba(15, 23, 42, 0.08)",
+              }}
+            >
+              <GitBranch size={13} color="#059669" />
+              <Typography variant="caption" sx={{ fontSize: "0.68rem", color: "#475569", fontWeight: 600 }}>
+                Hover another node to highlight the best path from
+              </Typography>
+              <Typography
+                variant="caption"
+                className="mono-font"
+                sx={{ fontSize: "0.68rem", fontWeight: 800, color: "#0F172A" }}
+              >
+                {bestPathFocusNode}
+              </Typography>
+            </Box>
+          </Panel>
+        ) : null}
 
         <AutoLocateEffect
           locateNodeName={locateNodeName}

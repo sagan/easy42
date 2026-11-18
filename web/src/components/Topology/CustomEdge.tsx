@@ -31,6 +31,12 @@ export interface CustomEdgeData {
   zoomLevel?: number;
   centralityInfo?: LinkCentralityInfo;
   isCentralityActive?: boolean;
+  /** Link carries the focus → hover best path. */
+  isBestPathForward?: boolean;
+  /** Link carries the hover → focus best path (drawn as a dashed overlay). */
+  isBestPathReverse?: boolean;
+  /** Link is not part of the best path while best path mode is active. */
+  isBestPathDimmed?: boolean;
   [key: string]: unknown;
 }
 
@@ -346,8 +352,29 @@ export const CustomEdge: React.FC<EdgeProps> = ({
     }
   }
 
+  const isBestPathForward = Boolean(edgeData?.isBestPathForward);
+  const isBestPathReverse = Boolean(edgeData?.isBestPathReverse);
+  const isBestPathDimmed = Boolean(edgeData?.isBestPathDimmed);
+  const isOnBestPath = isBestPathForward || isBestPathReverse;
+
+  if (isOnBestPath) {
+    // Best path always wins over status/centrality colours: it is a "what would BIRD pick"
+    // overlay rather than a health indicator.
+    strokeColor = isBestPathForward ? "#059669" : "#4F46E5";
+    strokeWidth = 3.4;
+    strokeDasharray = undefined;
+    pillBorderColor = isBestPathForward ? "#6EE7B7" : "#C7D2FE";
+    pillBgColor = isBestPathForward ? "#ECFDF5" : "#EEF2FF";
+    dotColor = strokeColor;
+    edgeOpacity = 1;
+  } else if (isBestPathDimmed) {
+    edgeOpacity = 0.06;
+    strokeWidth = 1;
+  }
+
   const shouldRenderPill =
-    (!isSubtle || isHighlighted || isHovered || isGhostDrag || (isCentralityActive && isCoreLink)) && !isDimmed;
+    (!isSubtle || isHighlighted || isHovered || isGhostDrag || isOnBestPath || (isCentralityActive && isCoreLink)) &&
+    !isDimmed;
 
   return (
     <>
@@ -367,6 +394,20 @@ export const CustomEdge: React.FC<EdgeProps> = ({
           transition: "stroke 0.2s ease, stroke-width 0.2s ease, stroke-opacity 0.2s ease",
         }}
       />
+
+      {/* Best path: both directions share this link, draw a thinner dashed indigo line on top
+          of the solid emerald forward line so each direction remains distinguishable. */}
+      {isBestPathForward && isBestPathReverse && (
+        <path
+          d={edgePath}
+          fill="none"
+          stroke="#4F46E5"
+          strokeWidth={1.6}
+          strokeDasharray="6 5"
+          strokeLinecap="round"
+          style={{ pointerEvents: "none", transition: "stroke-opacity 0.2s ease" }}
+        />
+      )}
 
       {/* Invisible wider stroke for reliable hover detection and click interaction along the edge */}
       <path
@@ -601,6 +642,31 @@ export const CustomEdge: React.FC<EdgeProps> = ({
                     title={`Link Note: ${link.note}`}
                   >
                     <FileText size={10} color="#0D9488" />
+                  </Box>
+                )}
+
+                {isOnBestPath && (
+                  <Box
+                    sx={{
+                      fontSize: "0.56rem",
+                      fontWeight: 800,
+                      letterSpacing: 0.4,
+                      color: isBestPathForward ? "#047857" : "#4338CA",
+                      borderRadius: 0.75,
+                      px: 0.45,
+                      py: 0.1,
+                      backgroundColor: isBestPathForward ? "#D1FAE5" : "#E0E7FF",
+                      border: `1px solid ${isBestPathForward ? "#6EE7B7" : "#C7D2FE"}`,
+                    }}
+                    title={
+                      isBestPathForward && isBestPathReverse
+                        ? "Both directions of the best path use this link"
+                        : isBestPathForward
+                          ? "Best path: focus → hovered node"
+                          : "Best path: hovered node → focus"
+                    }
+                  >
+                    {isBestPathForward && isBestPathReverse ? "PATH ⇄" : isBestPathForward ? "PATH →" : "PATH ←"}
                   </Box>
                 )}
 

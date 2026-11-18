@@ -56,6 +56,12 @@ export interface NodeData {
   isFocused?: boolean;
   isDimmed?: boolean;
   isHighlighted?: boolean;
+  /** Node is the focus (first) end of the highlighted best path. */
+  isBestPathFocus?: boolean;
+  /** Node is the focus or the hovered end of the highlighted best path. */
+  isBestPathNode?: boolean;
+  /** Node cannot be reached from the focus node using enabled links. */
+  isBestPathUnreachable?: boolean;
   lodMode?: "macro" | "meso" | "micro";
   totalLinksCount?: number;
   intraBlockLinksCount?: number;
@@ -82,6 +88,9 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
     isFocused,
     isDimmed = false,
     isHighlighted = false,
+    isBestPathUnreachable = false,
+    isBestPathFocus = false,
+    isBestPathNode = false,
     lodMode = "meso",
     totalLinksCount = 0,
     intraBlockLinksCount = 0,
@@ -110,32 +119,38 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
           height: 44,
           backgroundColor: isOffline ? "#FEF2F2" : "#FFFFFF",
           border:
-            isFocused || isHighlighted
-              ? "2px solid #4F46E5"
-              : isExternal
-                ? "2px dashed #8B5CF6"
-                : isOffline
-                  ? "1.5px solid #EF4444"
-                  : isRouteReflector
-                    ? "1.5px solid #6366F1"
-                    : isCore
-                      ? "2px solid #059669"
-                      : "1.5px solid #CBD5E1",
+            isBestPathFocus
+              ? "2px solid #059669"
+              : isFocused || isHighlighted
+                ? "2px solid #4F46E5"
+                : isExternal
+                  ? "2px dashed #8B5CF6"
+                  : isOffline
+                    ? "1.5px solid #EF4444"
+                    : isRouteReflector
+                      ? "1.5px solid #6366F1"
+                      : isCore
+                        ? "2px solid #059669"
+                        : "1.5px solid #CBD5E1",
           borderRadius: 1,
           boxShadow:
-            isFocused || isHighlighted
-              ? "0 0 0 3px rgba(79, 70, 229, 0.25)"
-              : isCore
-                ? "0 0 0 2px rgba(16, 185, 129, 0.25), 0 2px 6px rgba(16, 185, 129, 0.15)"
-                : isRouteReflector
-                  ? "0 0 0 1px rgba(99, 102, 241, 0.3), 0 2px 6px rgba(99, 102, 241, 0.15)"
-                  : "0 2px 6px rgba(0,0,0,0.06)",
+            isBestPathFocus
+              ? "0 0 0 3px rgba(5, 150, 105, 0.3)"
+              : isBestPathNode
+                ? "0 0 0 3px rgba(16, 185, 129, 0.25)"
+                : isFocused || isHighlighted
+                  ? "0 0 0 3px rgba(79, 70, 229, 0.25)"
+                  : isCore
+                    ? "0 0 0 2px rgba(16, 185, 129, 0.25), 0 2px 6px rgba(16, 185, 129, 0.15)"
+                    : isRouteReflector
+                      ? "0 0 0 1px rgba(99, 102, 241, 0.3), 0 2px 6px rgba(99, 102, 241, 0.15)"
+                      : "0 2px 6px rgba(0,0,0,0.06)",
+          opacity: isDimmed ? 0.3 : isBestPathUnreachable ? 0.35 : 1,
           display: "flex",
           alignItems: "center",
           px: 1,
           gap: 0.75,
           cursor: "pointer",
-          opacity: isDimmed ? 0.3 : 1,
           transition: "all 0.2s ease",
         }}
       >
@@ -227,6 +242,49 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
     );
   }
 
+  const cardBorder = isBestPathFocus
+    ? "2.5px solid #059669"
+    : isBestPathNode
+      ? "2.5px solid #10B981"
+      : isFocused || isHighlighted
+        ? "2px solid #4F46E5"
+        : isExternal
+          ? "2px dashed #8B5CF6"
+          : inBlock
+            ? isBlockFullMesh
+              ? isHealthy
+                ? isCore
+                  ? `2.5px solid ${blockColor || "#059669"}`
+                  : `2px solid ${blockColor || "#6366F1"}`
+                : "2px solid #EF4444"
+              : isHealthy
+                ? isCore
+                  ? "2.5px solid #059669"
+                  : "2px dashed #94A3B8"
+                : "2px dashed #EF4444"
+            : isOffline
+              ? "1.5px solid #EF4444"
+              : isRouteReflector
+                ? "2px solid #6366F1"
+                : isCore
+                  ? "2.5px solid #059669"
+                  : isAgentWorking
+                    ? "1.5px solid #10B981"
+                    : "1.5px solid #E2E8F0";
+
+  const cardBorderTop =
+    isBestPathFocus || isBestPathNode
+      ? `4px solid ${isBestPathFocus ? "#059669" : "#10B981"}`
+      : inBlock && isBlockFullMesh
+        ? `4px solid ${isFocused || isHighlighted ? "#4F46E5" : !isHealthy ? "#EF4444" : blockColor || "#6366F1"}`
+        : isRouteReflector
+          ? "3.5px solid #4F46E5"
+          : isCore
+            ? "3.5px solid #059669"
+            : isAgentWorking && (!inBlock || !isBlockFullMesh)
+              ? "3px solid #10B981"
+              : undefined;
+
   return (
     <Box
       sx={{
@@ -239,49 +297,19 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
               : inBlock && !isBlockFullMesh
                 ? "#FAFBFD"
                 : "#FFFFFF",
-        border:
-          isFocused || isHighlighted
-            ? "2px solid #4F46E5"
-            : isExternal
-              ? "2px dashed #8B5CF6"
-              : inBlock
-                ? isBlockFullMesh
-                  ? isHealthy
-                    ? isCore
-                      ? `2.5px solid ${blockColor || "#059669"}`
-                      : `2px solid ${blockColor || "#6366F1"}`
-                    : "2px solid #EF4444"
-                  : isHealthy
-                    ? isCore
-                      ? "2.5px solid #059669"
-                      : "2px dashed #94A3B8"
-                    : "2px dashed #EF4444"
-                : isOffline
-                  ? "1.5px solid #EF4444"
-                  : isRouteReflector
-                    ? "2px solid #6366F1"
-                    : isCore
-                      ? "2.5px solid #059669"
-                      : isAgentWorking
-                        ? "1.5px solid #10B981"
-                        : "1.5px solid #E2E8F0",
-        borderTop:
-          inBlock && isBlockFullMesh
-            ? `4px solid ${isFocused || isHighlighted ? "#4F46E5" : !isHealthy ? "#EF4444" : blockColor || "#6366F1"}`
-            : isRouteReflector
-              ? "3.5px solid #4F46E5"
-              : isCore
-                ? "3.5px solid #059669"
-                : isAgentWorking && (!inBlock || !isBlockFullMesh)
-                  ? "3px solid #10B981"
-                  : undefined,
+        border: cardBorder,
+        borderTop: cardBorderTop,
         borderRadius: 1,
-        opacity: isDimmed ? 0.3 : 1,
+        opacity: isBestPathUnreachable ? 0.35 : isDimmed ? 0.3 : 1,
         filter: isDimmed ? "grayscale(40%)" : "none",
         boxShadow:
-          isFocused || isHighlighted
-            ? "0 0 0 3px rgba(79, 70, 229, 0.25), 0 12px 28px rgba(79, 70, 229, 0.2)"
-            : isCore
+          isBestPathFocus
+            ? "0 0 0 3px rgba(5, 150, 105, 0.3), 0 12px 28px rgba(5, 150, 105, 0.22)"
+            : isBestPathNode
+              ? "0 0 0 3px rgba(16, 185, 129, 0.24), 0 10px 24px rgba(16, 185, 129, 0.18)"
+              : isFocused || isHighlighted
+                ? "0 0 0 3px rgba(79, 70, 229, 0.25), 0 12px 28px rgba(79, 70, 229, 0.2)"
+                : isCore
               ? "0 0 0 2px rgba(16, 185, 129, 0.25), 0 8px 20px rgba(16, 185, 129, 0.15)"
               : inBlock && isBlockFullMesh && isHealthy
                 ? `0 4px 14px ${blockColor || "#6366F1"}25, 0 1px 3px rgba(0, 0, 0, 0.05)`
