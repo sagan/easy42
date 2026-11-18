@@ -54,6 +54,34 @@ func TestLookingGlassAPI(t *testing.T) {
 	if !foundTCPPing {
 		t.Fatalf("expected tcp_ping in built-in tasks, but not found")
 	}
+	foundHTTP := false
+	for _, bt := range tasksResp.Builtin {
+		if bt.ID == "http" {
+			foundHTTP = true
+			if bt.Parser != "http" {
+				t.Fatalf("expected http task parser to be 'http', got %q", bt.Parser)
+			}
+			var targetType, countDefault string
+			for _, p := range bt.Params {
+				switch p.Key {
+				case "target":
+					targetType = string(p.Type)
+				case "count":
+					countDefault = p.DefaultValue
+				}
+			}
+			if targetType != string(config.ParamTypeURL) {
+				t.Fatalf("expected http target param to have ParamTypeURL, got %q", targetType)
+			}
+			if countDefault != "1" {
+				t.Fatalf("expected http count default to be 1, got %q", countDefault)
+			}
+			break
+		}
+	}
+	if !foundHTTP {
+		t.Fatalf("expected http in built-in tasks, but not found")
+	}
 
 	// 2. Create Custom Task
 	newTask := config.LookingGlassTask{

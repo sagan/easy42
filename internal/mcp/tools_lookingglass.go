@@ -31,7 +31,7 @@ func registerLookingGlassTools(s *server.MCPServer, mgr *engine.Manager) {
 
 	// 2. run_looking_glass
 	s.AddTool(mcp.NewTool("run_looking_glass",
-		mcp.WithDescription("Execute diagnostic commands (ping, traceroute, bird route show, mtr) on one or more nodes. Requires full-control token."),
+		mcp.WithDescription("Execute diagnostic commands (ping, tcp_ping, http, traceroute, bird route show, mtr) on one or more nodes. The 'http' task sends a GET request to an http(s) URL, measures TTFB latency and success rate, does not follow redirects and reports the status code (4xx/5xx are recorded but not treated as failures). Requires full-control token."),
 		mcp.WithTitleAnnotation("Run Looking Glass"),
 		mcp.WithReadOnlyHintAnnotation(false),
 		mcp.WithDestructiveHintAnnotation(false),
@@ -39,8 +39,8 @@ func registerLookingGlassTools(s *server.MCPServer, mgr *engine.Manager) {
 		mcp.WithOpenWorldHintAnnotation(true),
 		mcp.WithOutputSchema[lookingglass.RunResponse](),
 		mcp.WithArray("nodes", mcp.WithStringItems(), mcp.Required(), mcp.Description("Node names to execute the diagnostic from")),
-		mcp.WithString("task_id", mcp.Description("Task template ID (e.g. 'ping', 'traceroute', 'bird_route')")),
-		mcp.WithString("target", mcp.Description("Target host or IP address to diagnose")),
+		mcp.WithString("task_id", mcp.Description("Task template ID (e.g. 'ping', 'tcp_ping', 'http', 'traceroute', 'bird_route')")),
+		mcp.WithString("target", mcp.Description("Target host, IP address, or http(s) URL (for 'http' tasks) to diagnose")),
 		mcp.WithString("custom_command", mcp.Description("Direct sanitized command to run if task_id is not specified")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		if err := RequireFullControl(ctx); err != nil {
@@ -92,7 +92,7 @@ func registerLookingGlassTools(s *server.MCPServer, mgr *engine.Manager) {
 		mcp.WithString("name", mcp.Required(), mcp.Description("Human-readable task name")),
 		mcp.WithString("command", mcp.Required(), mcp.Description("CLI command template")),
 		mcp.WithString("description", mcp.Description("Optional description")),
-		mcp.WithString("parser", mcp.Description("Parser type ('raw', 'ping', 'bird_route', 'bird_protocols')")),
+		mcp.WithString("parser", mcp.Description("Parser type ('raw', 'ping', 'tcp_ping', 'http', 'bird_route', 'bird_protocols')")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		if err := RequireFullControl(ctx); err != nil {
 			return errorResult(err)

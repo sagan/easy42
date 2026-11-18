@@ -125,6 +125,32 @@ type MTRResult struct {
 	Hops   []MTRHop `json:"hops"`
 }
 
+// HTTPProbe is a single HTTP request attempt with its time-to-first-byte
+type HTTPProbe struct {
+	StatusCode   int     `json:"status_code"`
+	Status       string  `json:"status"`
+	TTFBMs       float64 `json:"ttfb_ms"`
+	RemoteAddr   string  `json:"remote_addr,omitempty"`
+	ErrorMessage string  `json:"error,omitempty"`
+}
+
+// HTTPResult represents parsed HTTP request results produced by the agent.
+// Latency is measured as time to first byte (TTFB) and success means the HTTP
+// response header was received, regardless of the status code.
+type HTTPResult struct {
+	Target          string      `json:"target"`
+	ResolvedAddr    string      `json:"resolved_addr,omitempty"`
+	PacketsSent     int         `json:"packets_sent"`
+	PacketsReceived int         `json:"packets_received"`
+	PacketLossPct   float64     `json:"packet_loss_pct"`
+	MinTTFBMs       float64     `json:"min_ttfb_ms"`
+	AvgTTFBMs       float64     `json:"avg_ttfb_ms"`
+	MaxTTFBMs       float64     `json:"max_ttfb_ms"`
+	MdevTTFBMs      float64     `json:"mdev_ttfb_ms"`
+	StatusCodes     []int       `json:"status_codes"`
+	Probes          []HTTPProbe `json:"probes"`
+}
+
 // TasksResponse represents the list of all available tasks
 type TasksResponse struct {
 	Builtin []config.LookingGlassTask `json:"builtin"`

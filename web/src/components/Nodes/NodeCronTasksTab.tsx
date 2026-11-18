@@ -38,6 +38,7 @@ import {
 import { Link as RouterLink, useSearchParams } from "react-router-dom";
 import { api } from "../../api/client";
 import type { CronTaskResultRecord, NodeCronTasksResultsResponse } from "../../types/api";
+import { getCronTaskTypeStyle } from "../../utils/cronTaskType";
 
 interface NodeCronTasksTabProps {
   nodeName: string;
@@ -181,7 +182,7 @@ export const NodeCronTasksTab: React.FC<NodeCronTasksTabProps> = ({ nodeName }) 
               </MenuItem>
               {assignedTasks.map((t) => (
                 <MenuItem key={t.id} value={t.id}>
-                  {t.name} ({t.task_type === "tcp_ping" ? "TCP" : "ICMP"})
+                  {t.name} ({getCronTaskTypeStyle(t.task_type).short})
                 </MenuItem>
               ))}
               {selectedTask && !assignedTasks.some((t) => t.id === selectedTask) && (
@@ -555,12 +556,12 @@ export const NodeCronTasksTab: React.FC<NodeCronTasksTabProps> = ({ nodeName }) 
                               </Typography>
                               <Chip
                                 size="small"
-                                label={r.task_type === "tcp_ping" ? "TCP" : "ICMP"}
+                                label={getCronTaskTypeStyle(r.task_type).short}
                                 sx={{
                                   fontSize: "0.65rem",
                                   height: 18,
-                                  bgcolor: r.task_type === "tcp_ping" ? "#F5F3FF" : "#EFF6FF",
-                                  color: r.task_type === "tcp_ping" ? "#7C3AED" : "#2563EB",
+                                  bgcolor: getCronTaskTypeStyle(r.task_type).bgcolor,
+                                  color: getCronTaskTypeStyle(r.task_type).color,
                                 }}
                               />
                               {Boolean(r.runs_count && r.runs_count > 1) && (

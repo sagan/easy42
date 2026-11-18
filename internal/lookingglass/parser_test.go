@@ -229,4 +229,61 @@ func TestParseTCPPing(t *testing.T) {
 	}
 }
 
+func TestParseHTTP(t *testing.T) {
+	raw := `{"target":"https://example.com/","packets_sent":2,"packets_received":2,"packet_loss_pct":0.0,` +
+		`"min_ttfb_ms":41.2,"avg_ttfb_ms":45.6,"max_ttfb_ms":50.0,"mdev_ttfb_ms":4.4,` +
+		`"status_codes":[200],"probes":[` +
+		`{"status_code":200,"status":"200 OK","ttfb_ms":41.2},` +
+		`{"status_code":200,"status":"200 OK","ttfb_ms":50.0}]}`
+
+	res := ParseOutput("http", raw, "https://example.com/")
+	httpRes, ok := res.(*HTTPResult)
+	if !ok || httpRes == nil {
+		t.Fatalf("expected *HTTPResult from ParseOutput")
+	}
+	if httpRes.Target != "https://example.com/" {
+		t.Errorf("unexpected target: %s", httpRes.Target)
+	}
+	if httpRes.PacketsSent != 2 || httpRes.PacketsReceived != 2 {
+		t.Errorf("unexpected packet counts: sent=%d, recv=%d", httpRes.PacketsSent, httpRes.PacketsReceived)
+	}
+	if httpRes.AvgTTFBMs != 45.6 {
+		t.Errorf("expected AvgTTFBMs 45.6, got %f", httpRes.AvgTTFBMs)
+	}
+	if len(httpRes.StatusCodes) != 1 || httpRes.StatusCodes[0] != 200 {
+		t.Errorf("unexpected status codes: %v", httpRes.StatusCodes)
+	}
+	if len(httpRes.Probes) != 2 || httpRes.Probes[0].StatusCode != 200 {
+		t.Errorf("unexpected probes: %+v", httpRes.Probes)
+	}
+
+	// Noise around the JSON payload is tolerated
+	noisy := "agent output\n" + raw + "\n"
+	if parsed := ParseHTTP(noisy, ""); parsed == nil || parsed.Target != "https://example.com/" {
+		t.Errorf("expected ParseHTTP to tolerate surrounding noise")
+	}
+
+	// Non-JSON output yields nil
+	if parsed := ParseHTTP("request failed: connection refused", ""); parsed != nil {
+		t.Errorf("expected nil for non-JSON output, got %+v", parsed)
+	}
+}
+
+func TestParseHTTPRecordsErrorStatus(t *testing.T) {
+	// 4xx/5xx status codes are successful responses and must still be recorded
+	raw := `{"target":"https://example.com/missing","packets_sent":1,"packets_received":1,"packet_loss_pct":0,` +
+		`"min_ttfb_ms":10,"avg_ttfb_ms":10,"max_ttfb_ms":10,"mdev_ttfb_ms":0,"status_codes":[404],` +
+		`"probes":[{"status_code":404,"status":"404 Not Found","ttfb_ms":10}]}`
+	res := ParseHTTP(raw, "")
+	if res == nil {
+		t.Fatal("expected non-nil result")
+	}
+	if res.PacketsReceived != 1 || res.PacketLossPct != 0 {
+		t.Errorf("404 must count as a received response, got recv=%d loss=%f", res.PacketsReceived, res.PacketLossPct)
+	}
+	if len(res.StatusCodes) != 1 || res.StatusCodes[0] != 404 {
+		t.Errorf("expected status code 404 to be recorded, got %v", res.StatusCodes)
+	}
+}
+
 

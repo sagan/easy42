@@ -57,6 +57,8 @@ import {
   parseSelectorJSON,
   type SelectorTargetMode,
 } from "../../utils/taskSelector";
+import { getCronTaskTypeStyle } from "../../utils/cronTaskType";
+import type { CronTaskType } from "../../utils/cronTaskType";
 
 interface CronTasksTabProps {
   nodes: Node[];
@@ -92,9 +94,12 @@ export const CronTasksTab: React.FC<CronTasksTabProps> = ({ nodes, onExecuteNow 
   // Form fields
   const [formName, setFormName] = useState("");
   const [formDesc, setFormDesc] = useState("");
-  const [formType, setFormType] = useState<"ping" | "tcp_ping">("ping");
+  const [formType, setFormType] = useState<CronTaskType>("ping");
   const [formTarget, setFormTarget] = useState("");
   const [formCount, setFormCount] = useState("4");
+  const isHTTPType = formType === "http";
+  const maxProbeCount = isHTTPType ? 5 : 20;
+  const defaultProbeCount = isHTTPType ? "1" : "4";
   const [formTimeout, setFormTimeout] = useState("15");
   const [formCronExpr, setFormCronExpr] = useState("*/5 * * * *");
   const [formTargetType, setFormTargetType] = useState<SelectorTargetMode>("manual");
@@ -211,7 +216,7 @@ export const CronTasksTab: React.FC<CronTasksTabProps> = ({ nodes, onExecuteNow 
     setFormDesc(task.description || "");
     setFormType(task.task_type);
     setFormTarget(task.params?.target || "");
-    setFormCount(task.params?.count || "4");
+    setFormCount(task.params?.count || (task.task_type === "http" ? "1" : "4"));
     setFormTimeout(task.timeout_sec ? String(task.timeout_sec) : "15");
     setFormCronExpr(task.cron_expr);
     applyFormSelector(task.selector || {});
@@ -226,7 +231,16 @@ export const CronTasksTab: React.FC<CronTasksTabProps> = ({ nodes, onExecuteNow 
       return;
     }
     if (!formTarget.trim()) {
-      setFormError("Target host or address is required");
+      setFormError(isHTTPType ? "Target URL is required" : "Target host or address is required");
+      return;
+    }
+    if (isHTTPType && !/^https?:\/\/[^\s/]+/i.test(formTarget.trim())) {
+      setFormError("Target URL must start with http:// or https:// and include a host");
+      return;
+    }
+    const parsedCount = parseInt(formCount.trim() || defaultProbeCount, 10);
+    if (Number.isNaN(parsedCount) || parsedCount < 1 || parsedCount > maxProbeCount) {
+      setFormError(`Probe count must be between 1 and ${maxProbeCount}`);
       return;
     }
     const parsedSelector = parseSelectorJSON(formSelectorText);
@@ -255,7 +269,7 @@ export const CronTasksTab: React.FC<CronTasksTabProps> = ({ nodes, onExecuteNow 
         selector: parsedSelector.selector,
         params: {
           target: formTarget.trim(),
-          count: formCount.trim() || "4",
+          count: formCount.trim() || defaultProbeCount,
         },
         timeout_sec: parseInt(formTimeout, 10) || 15,
         enabled: editingTask ? editingTask.enabled : true,
@@ -480,18 +494,30 @@ export const CronTasksTab: React.FC<CronTasksTabProps> = ({ nodes, onExecuteNow 
                   <TableCell>
                     <Chip
                       size="small"
-                      label={task.task_type === "tcp_ping" ? "TCP Ping" : "ICMP Ping"}
+                      label={getCronTaskTypeStyle(task.task_type).label}
                       sx={{
                         fontWeight: 600,
                         fontSize: "0.75rem",
-                        bgcolor: task.task_type === "tcp_ping" ? "#F5F3FF" : "#EFF6FF",
-                        color: task.task_type === "tcp_ping" ? "#7C3AED" : "#2563EB",
-                        border: `1px solid ${task.task_type === "tcp_ping" ? "#DDD6FE" : "#BFDBFE"}`,
+                        bgcolor: getCronTaskTypeStyle(task.task_type).bgcolor,
+                        color: getCronTaskTypeStyle(task.task_type).color,
+                        border: `1px solid ${getCronTaskTypeStyle(task.task_type).border}`,
                       }}
                     />
                   </TableCell>
                   <TableCell>
-                    <Typography variant="body2" sx={{ fontFamily: "monospace", fontWeight: 600, color: "#334155" }}>
+                    <Typography
+                      variant="body2"
+                      title={task.params?.target}
+                      sx={{
+                        fontFamily: "monospace",
+                        fontWeight: 600,
+                        color: "#334155",
+                        maxWidth: 260,
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
                       {task.params?.target || "—"}
                     </Typography>
                   </TableCell>
@@ -643,8 +669,19 @@ export const CronTasksTab: React.FC<CronTasksTabProps> = ({ nodes, onExecuteNow 
                 value={formType}
                 label="Task Type"
                 onChange={(e) => {
-                  const val = e.target.value as "ping" | "tcp_ping";
+                  const val = e.target.value as CronTaskType;
                   setFormType(val);
+                  if (val === "http") {
+                    // HTTP tasks default to a single probe per run
+                    setFormCount("1");
+                    if (!/^https?:\/\//i.test(formTarget)) {
+                      setFormTarget(formTarget ? `https://${formTarget}` : "https://example.com/");
+                    }
+                    return;
+                  }
+                  if (formTarget.startsWith("http://") || formTarget.startsWith("https://")) {
+                    setFormTarget("1.1.1.1");
+                  }
                   if (val === "tcp_ping" && !formTarget.includes(":")) {
                     setFormTarget(formTarget ? `${formTarget}:443` : "1.1.1.1:443");
                   } else if (val === "ping" && formTarget.includes(":")) {
@@ -654,23 +691,36 @@ export const CronTasksTab: React.FC<CronTasksTabProps> = ({ nodes, onExecuteNow 
               >
                 <MenuItem value="ping">Ping (ICMP)</MenuItem>
                 <MenuItem value="tcp_ping">TCP Ping (Port Probe)</MenuItem>
+                <MenuItem value="http">HTTP(S) Request</MenuItem>
               </Select>
             </FormControl>
 
             <TextField
-              label={formType === "tcp_ping" ? "Target (<host>:<port>)" : "Target Host or IP"}
+              label={
+                isHTTPType
+                  ? "Target URL"
+                  : formType === "tcp_ping"
+                    ? "Target (<host>:<port>)"
+                    : "Target Host or IP"
+              }
               required
               fullWidth
               size="small"
               value={formTarget}
               onChange={(e) => setFormTarget(e.target.value)}
               placeholder={
-                formType === "tcp_ping" ? "e.g. 1.1.1.1:443 or example.com:80" : "e.g. 1.1.1.1 or example.com"
+                isHTTPType
+                  ? "e.g. https://example.com/"
+                  : formType === "tcp_ping"
+                    ? "e.g. 1.1.1.1:443 or example.com:80"
+                    : "e.g. 1.1.1.1 or example.com"
               }
               helperText={
-                formType === "tcp_ping"
-                  ? "Requires easy42-agent on nodes. Measures TCP handshake RTT."
-                  : "Standard ICMP echo request probe."
+                isHTTPType
+                  ? "Requires easy42-agent on nodes. Sends a GET request, no redirects, measures TTFB."
+                  : formType === "tcp_ping"
+                    ? "Requires easy42-agent on nodes. Measures TCP handshake RTT."
+                    : "Standard ICMP echo request probe."
               }
             />
           </Box>
@@ -684,8 +734,12 @@ export const CronTasksTab: React.FC<CronTasksTabProps> = ({ nodes, onExecuteNow 
               fullWidth
               value={formCount}
               onChange={(e) => setFormCount(e.target.value)}
-              inputProps={{ min: 1, max: 20 }}
-              helperText="Number of packets to send (1-20, default 4)"
+              inputProps={{ min: 1, max: maxProbeCount }}
+              helperText={
+                isHTTPType
+                  ? `Number of HTTP requests per run (1-${maxProbeCount}, default 1)`
+                  : `Number of packets to send (1-${maxProbeCount}, default 4)`
+              }
             />
             <TextField
               label="Timeout (seconds)"

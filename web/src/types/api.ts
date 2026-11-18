@@ -532,7 +532,7 @@ export interface TaskSourceFile {
 }
 
 // Looking Glass Types
-export type ParameterType = "string" | "ip_or_cidr" | "number" | "select" | "boolean" | "host_port";
+export type ParameterType = "string" | "ip_or_cidr" | "number" | "select" | "boolean" | "host_port" | "url";
 
 export interface TaskParam {
   key: string;
@@ -636,6 +636,28 @@ export interface TcpPingResult {
   local_mss?: number;
   remote_mss?: number;
   tcp_timestamps?: boolean;
+}
+
+export interface HttpProbe {
+  status_code: number;
+  status: string;
+  ttfb_ms: number;
+  remote_addr?: string;
+  error?: string;
+}
+
+export interface HttpResult {
+  target: string;
+  resolved_addr?: string;
+  packets_sent: number;
+  packets_received: number;
+  packet_loss_pct: number;
+  min_ttfb_ms: number;
+  avg_ttfb_ms: number;
+  max_ttfb_ms: number;
+  mdev_ttfb_ms: number;
+  status_codes: number[];
+  probes: HttpProbe[];
 }
 
 export interface PingTableItem {
@@ -818,7 +840,7 @@ export interface CronTask {
   id: string;
   name: string;
   description?: string;
-  task_type: "ping" | "tcp_ping";
+  task_type: "ping" | "tcp_ping" | "http";
   cron_expr: string;
   /** Optional node scope conditions. Supported keys: name, tag, env:<NAME>. Empty matches all nodes. */
   selector?: Record<string, string>;

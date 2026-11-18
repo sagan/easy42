@@ -136,6 +136,7 @@ const (
 	LookingGlassCmd_BIRDC      LookingGlassCmd_Tool = 2
 	LookingGlassCmd_CUSTOM     LookingGlassCmd_Tool = 3
 	LookingGlassCmd_TCP_PING   LookingGlassCmd_Tool = 4
+	LookingGlassCmd_HTTP       LookingGlassCmd_Tool = 5
 )
 
 // Enum value maps for LookingGlassCmd_Tool.
@@ -146,6 +147,7 @@ var (
 		2: "BIRDC",
 		3: "CUSTOM",
 		4: "TCP_PING",
+		5: "HTTP",
 	}
 	LookingGlassCmd_Tool_value = map[string]int32{
 		"PING":       0,
@@ -153,6 +155,7 @@ var (
 		"BIRDC":      2,
 		"CUSTOM":     3,
 		"TCP_PING":   4,
+		"HTTP":       5,
 	}
 )
 
@@ -2256,7 +2259,7 @@ type CronTaskSpec struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	TaskId         string                 `protobuf:"bytes,1,opt,name=task_id,json=taskId,proto3" json:"task_id,omitempty"`
 	Name           string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
-	TaskType       string                 `protobuf:"bytes,3,opt,name=task_type,json=taskType,proto3" json:"task_type,omitempty"` // "ping" or "tcp_ping"
+	TaskType       string                 `protobuf:"bytes,3,opt,name=task_type,json=taskType,proto3" json:"task_type,omitempty"` // "ping", "tcp_ping" or "http"
 	CronExpr       string                 `protobuf:"bytes,4,opt,name=cron_expr,json=cronExpr,proto3" json:"cron_expr,omitempty"`
 	Target         string                 `protobuf:"bytes,5,opt,name=target,proto3" json:"target,omitempty"`
 	Count          uint32                 `protobuf:"varint,6,opt,name=count,proto3" json:"count,omitempty"`
@@ -3404,14 +3407,14 @@ const file_proto_agent_proto_rawDesc = "" +
 	"check_only\x18\x01 \x01(\bR\tcheckOnly\"3\n" +
 	"\x10ApplyNftablesCmd\x12\x1f\n" +
 	"\vscript_path\x18\x01 \x01(\tR\n" +
-	"scriptPath\"\xa0\x02\n" +
+	"scriptPath\"\xaa\x02\n" +
 	"\x0fLookingGlassCmd\x129\n" +
 	"\x04tool\x18\x01 \x01(\x0e2%.easy42.agent.v1.LookingGlassCmd.ToolR\x04tool\x12\x16\n" +
 	"\x06target\x18\x02 \x01(\tR\x06target\x12\x12\n" +
 	"\x04args\x18\x03 \x03(\tR\x04args\x12'\n" +
 	"\x0ftimeout_seconds\x18\x04 \x01(\rR\x0etimeoutSeconds\x12\x18\n" +
 	"\acommand\x18\x05 \x01(\tR\acommand\x12\x1c\n" +
-	"\tinterface\x18\x06 \x01(\tR\tinterface\"E\n" +
+	"\tinterface\x18\x06 \x01(\tR\tinterface\"O\n" +
 	"\x04Tool\x12\b\n" +
 	"\x04PING\x10\x00\x12\x0e\n" +
 	"\n" +
@@ -3419,7 +3422,8 @@ const file_proto_agent_proto_rawDesc = "" +
 	"\x05BIRDC\x10\x02\x12\n" +
 	"\n" +
 	"\x06CUSTOM\x10\x03\x12\f\n" +
-	"\bTCP_PING\x10\x04\"\x10\n" +
+	"\bTCP_PING\x10\x04\x12\b\n" +
+	"\x04HTTP\x10\x05\"\x10\n" +
 	"\x0eProbeSystemCmd\"\x0f\n" +
 	"\rFlushCacheCmd\"6\n" +
 	"\x11RestartServiceCmd\x12!\n" +

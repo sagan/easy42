@@ -321,7 +321,9 @@ You can reference these properties in custom BIRD, WireGuard, and nftables templ
 
 ### Looking Glass custom tasks
 
-Built-in Looking Glass tasks are `ping`, `tcp_ping`, `traceroute`, `mtr`, `bird_show_protocols`, `bird_show_route`, `bird_show_route_where`, `bird_show_status`, `ip_route_get`, and `whois_dn42`. Custom tasks can be created/edited via `GET/POST /api/looking-glass/tasks` and `PUT/DELETE /api/looking-glass/tasks/{id}` (stored in `looking_glass_tasks`), and ad-hoc runs use `POST /api/looking-glass/run` (timeout clamped to `1`–`60s`; SSH fallback for non-agent nodes, while `tcp_ping` requires an agent).
+Built-in Looking Glass tasks are `ping`, `tcp_ping`, `http`, `traceroute`, `mtr`, `bird_show_protocols`, `bird_show_route`, `bird_show_route_where`, `bird_show_status`, `ip_route_get`, and `whois_dn42`. Custom tasks can be created/edited via `GET/POST /api/looking-glass/tasks` and `PUT/DELETE /api/looking-glass/tasks/{id}` (stored in `looking_glass_tasks`), and ad-hoc runs use `POST /api/looking-glass/run` (timeout clamped to `1`–`60s`; SSH fallback for non-agent nodes, while `tcp_ping` and `http` require an agent).
+
+The `http` task and the ad-hoc `http <url> [count]` command run natively inside the agent: a single `GET` with no redirects, stopping at the response header (the body is never read). Latency is TTFB, a probe succeeds as soon as a response header is received (`4xx`/`5xx` are recorded, not failed), `count` defaults to `1` (max `5`), and results render in the `HTTP Metrics` visualizer with per-probe status codes.
 
 ### Node config hooks
 
@@ -409,7 +411,7 @@ Schedules use 5- or 6-field cron syntax and can be changed from **Settings -> Ta
 
 ### Cron probes (`cron_tasks`)
 
-User-defined `ping` or `tcp_ping` probes run on selector-matched node agents on a cron schedule (`task_type` is only `ping`/`tcp_ping`, not arbitrary Looking Glass IDs). `params.count` defaults to `4` (`1`–`20`), `timeout_sec` defaults to `15` (capped at `60`). Results are stored in `data.db` (with parsed RTT/loss and `ParsedJSON`), rolled up into 5-minute summaries (`ok`/`degraded`/`failed`), shown on the node's Cron Tasks page, and repeated failures record a fleet event. Cron tasks are managed from **Cron Tasks** or `/api/cron-tasks` (`GET/POST /api/cron-tasks`, `PUT/DELETE /api/cron-tasks/{id}`, `POST …/toggle`, `GET /api/nodes/{name}/cron-tasks/results`); the apply schema accepts `cron_tasks`, but the current apply engine does not merge that section. A task whose selector matches no managed node is rejected on save.
+User-defined `ping`, `tcp_ping`, or `http` probes run on selector-matched node agents on a cron schedule (`task_type` is only `ping`/`tcp_ping`/`http`, not arbitrary Looking Glass IDs). `params.count` defaults to `4` (`1`–`20`); for `http` tasks it defaults to `1` (max `5`) and `target` is a validated `http(s)://` URL, `timeout_sec` defaults to `15` (capped at `60`). Results are stored in `data.db` (with parsed RTT/loss and `ParsedJSON`), rolled up into 5-minute summaries (`ok`/`degraded`/`failed`), shown on the node's Cron Tasks page, and repeated failures record a fleet event. Cron tasks are managed from **Cron Tasks** or `/api/cron-tasks` (`GET/POST /api/cron-tasks`, `PUT/DELETE /api/cron-tasks/{id}`, `POST …/toggle`, `GET /api/nodes/{name}/cron-tasks/results`); the apply schema accepts `cron_tasks`, but the current apply engine does not merge that section. A task whose selector matches no managed node is rejected on save.
 
 ### Ping Table
 

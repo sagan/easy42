@@ -42,6 +42,7 @@ import { BirdRouteView } from "../LookingGlass/BirdRouteView";
 import { PingView } from "../LookingGlass/PingView";
 import { TracerouteView } from "../LookingGlass/TracerouteView";
 import { TcpPingView } from "../LookingGlass/TcpPingView";
+import { HttpView } from "../LookingGlass/HttpView";
 import { CustomTaskEditorModal } from "../LookingGlass/CustomTaskEditorModal";
 import { CronTasksTab } from "../LookingGlass/CronTasksTab";
 import { matchesTaskSelector } from "../../utils/taskSelector";
@@ -305,6 +306,10 @@ export const LookingGlassModal: React.FC<LookingGlassModalProps> = ({ nodes, ini
       case "tcp_ping":
         setAdHocCommand("tcp_ping 1.1.1.1:80 4");
         setAdHocParser("tcp_ping");
+        break;
+      case "http":
+        setAdHocCommand("http https://example.com/ 1");
+        setAdHocParser("http");
         break;
       case "traceroute":
         setAdHocCommand("traceroute -m 30 -w 2 172.20.0.53");
@@ -763,6 +768,7 @@ export const LookingGlassModal: React.FC<LookingGlassModalProps> = ({ nodes, ini
                   {[
                     { id: "ping", label: "Ping" },
                     { id: "tcp_ping", label: "TCP Ping" },
+                    { id: "http", label: "HTTP(S)" },
                     { id: "traceroute", label: "Traceroute" },
                     { id: "mtr", label: "MTR" },
                     { id: "bird_protocols", label: "BIRD Protocols" },
@@ -808,6 +814,7 @@ export const LookingGlassModal: React.FC<LookingGlassModalProps> = ({ nodes, ini
                       <MenuItem value="raw">Raw Terminal</MenuItem>
                       <MenuItem value="ping">Ping Metrics</MenuItem>
                       <MenuItem value="tcp_ping">TCP Ping Metrics</MenuItem>
+                      <MenuItem value="http">HTTP Metrics</MenuItem>
                       <MenuItem value="traceroute">Traceroute</MenuItem>
                       <MenuItem value="mtr">MTR Report</MenuItem>
                       <MenuItem value="bird_protocols">BIRD Protocols</MenuItem>
@@ -937,6 +944,8 @@ export const LookingGlassModal: React.FC<LookingGlassModalProps> = ({ nodes, ini
                         <PingView ping={activeResult.parsed} />
                       ) : activeResult.parser === "tcp_ping" ? (
                         <TcpPingView tcpPing={activeResult.parsed} />
+                      ) : activeResult.parser === "http" ? (
+                        <HttpView http={activeResult.parsed} />
                       ) : activeResult.parser === "traceroute" ? (
                         <TracerouteView traceResult={activeResult.parsed} nodes={nodes} />
                       ) : activeResult.parser === "mtr" ? (
@@ -1174,7 +1183,9 @@ export const LookingGlassModal: React.FC<LookingGlassModalProps> = ({ nodes, ini
           <CronTasksTab
             nodes={managedNodes}
             onExecuteNow={(task) => {
-              setSelectedTaskId(task.task_type === "tcp_ping" ? "tcp_ping" : "ping");
+              setSelectedTaskId(
+                task.task_type === "tcp_ping" || task.task_type === "http" ? task.task_type : "ping",
+              );
               setSelectedNodes(
                 managedNodes
                   .filter((n) => matchesTaskSelector(n, task.selector || {}))

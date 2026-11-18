@@ -98,6 +98,7 @@ export const TaskParamForm: React.FC<TaskParamFormProps> = ({ params, values, on
             type={p.type === "number" ? "number" : "text"}
             value={val}
             onChange={(e) => onChange(p.key, e.target.value)}
+            inputProps={p.type === "number" ? { min: p.key === "count" ? 1 : 0 } : undefined}
             placeholder={p.default_value}
             helperText={p.description}
             FormHelperTextProps={{ sx: { fontSize: "0.72rem", color: "#64748B" } }}

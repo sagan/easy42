@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -219,6 +220,7 @@ func (m *Manager) RunLookingGlass(ctx context.Context, req lookingglass.RunReque
 	var agentMu sync.Mutex
 
 	isTCPPing := parser == "tcp_ping" || req.TaskID == "tcp_ping" || strings.HasPrefix(cmd, "tcp_ping ")
+	isHTTP := parser == "http" || req.TaskID == "http" || strings.HasPrefix(cmd, "http ")
 
 	for _, node := range targetNodes {
 		if isTCPPing && !node.IsAgentMode() {
@@ -228,6 +230,18 @@ func (m *Manager) RunLookingGlass(ctx context.Context, req lookingglass.RunReque
 				Parser:     parser,
 				ExitCode:   -1,
 				Error:      "TCP ping requires the easy42 agent to be running on the node",
+				DurationMs: 0,
+			}
+			continue
+		}
+
+		if isHTTP && !node.IsAgentMode() {
+			results[node.Name] = lookingglass.NodeResult{
+				NodeName:   node.Name,
+				Command:    cmd,
+				Parser:     parser,
+				ExitCode:   -1,
+				Error:      "HTTP tasks require the easy42 agent to be running on the node",
 				DurationMs: 0,
 			}
 			continue
@@ -271,6 +285,23 @@ func (m *Manager) RunLookingGlass(ctx context.Context, req lookingglass.RunReque
 							Tool:           agentpb.LookingGlassCmd_TCP_PING,
 							Target:         target,
 							Args:           []string{countStr},
+							TimeoutSeconds: uint32(timeout.Seconds()),
+						}
+					} else if isHTTP {
+						target, count, parseErr := resolveHTTPParams(cmd, req.Params)
+						if parseErr != nil {
+							nr.ExitCode = -1
+							nr.Error = parseErr.Error()
+							nr.DurationMs = time.Since(start).Milliseconds()
+							agentMu.Lock()
+							results[n.Name] = nr
+							agentMu.Unlock()
+							return
+						}
+						lgCmd = &agentpb.LookingGlassCmd{
+							Tool:           agentpb.LookingGlassCmd_HTTP,
+							Target:         target,
+							Args:           []string{strconv.Itoa(count)},
 							TimeoutSeconds: uint32(timeout.Seconds()),
 						}
 					} else {
@@ -324,4 +355,44 @@ func (m *Manager) RunLookingGlass(ctx context.Context, req lookingglass.RunReque
 		Command: cmd,
 		Results: results,
 	}, nil
+}
+
+// resolveHTTPParams derives the target URL and probe count for an HTTP Looking Glass task.
+// Values come from the request params when present, otherwise they are parsed from the
+// interpolated `http <url> [count]` command so ad-hoc commands work too.
+func resolveHTTPParams(cmd string, params map[string]string) (string, int, error) {
+	count := 1
+	if params != nil {
+		if v := strings.TrimSpace(params["count"]); v != "" {
+			if parsed, err := strconv.Atoi(v); err == nil {
+				count = parsed
+			}
+		}
+	}
+	if count < 1 {
+		count = 1
+	}
+	if count > config.HTTPProbeMaxCount {
+		count = config.HTTPProbeMaxCount
+	}
+
+	target := ""
+	if params != nil {
+		target = strings.TrimSpace(params["target"])
+	}
+	if target == "" {
+		parsedTarget, parsedCount, err := lookingglass.ParseHTTPCommand(cmd)
+		if err != nil {
+			return "", 0, fmt.Errorf("invalid http task: %w", err)
+		}
+		target = parsedTarget
+		// Only use the command count when the caller did not provide one explicitly
+		if params == nil || strings.TrimSpace(params["count"]) == "" {
+			count = parsedCount
+		}
+	}
+	if err := lookingglass.ValidateHTTPURL(target); err != nil {
+		return "", 0, fmt.Errorf("invalid target URL '%s': %w", target, err)
+	}
+	return target, count, nil
 }

@@ -133,6 +133,8 @@ func TestValidateAdHocCommand(t *testing.T) {
 		"ip route get 1.1.1.1",
 		"whois -h whois.dn42 AS4242420000",
 		"tcp_ping 1.1.1.1:80 4",
+		"http https://example.com/ 1",
+		"http http://1.1.1.1:8080/path?q=1",
 	}
 	for _, c := range valid {
 		if err := ValidateAdHocCommand(c); err != nil {
@@ -157,10 +159,103 @@ func TestValidateAdHocCommand(t *testing.T) {
 		"ping -c 50 1.1.1.1",
 		"ping '1.1.1.1'",
 		"ping \\1.1.1.1",
+		"http ftp://example.com",
+		"http example.com",
+		"http",
 	}
 	for _, c := range invalid {
 		if err := ValidateAdHocCommand(c); err == nil {
 			t.Errorf("expected '%s' to be rejected, but it passed", c)
+		}
+	}
+}
+
+func TestSanitizeURLParam(t *testing.T) {
+	spec := config.TaskParam{
+		Key:          "target",
+		Label:        "Target URL",
+		Type:         config.ParamTypeURL,
+		Required:     true,
+		DefaultValue: "https://example.com/",
+	}
+
+	valid := []string{
+		"https://example.com/",
+		"http://1.1.1.1:8080/path?q=1",
+		"HTTPS://example.com/path#frag",
+		"http://[2001:db8::1]:80/",
+	}
+	for _, v := range valid {
+		if _, err := SanitizeParam(spec, v); err != nil {
+			t.Errorf("expected %q to be valid, got: %v", v, err)
+		}
+	}
+
+	invalid := []string{
+		"ftp://example.com",
+		"example.com",
+		"https://",
+		"http:///path",
+		"https://exa mple.com/",
+	}
+	for _, v := range invalid {
+		if _, err := SanitizeParam(spec, v); err == nil {
+			t.Errorf("expected %q to be rejected, but it passed", v)
+		}
+	}
+}
+
+func TestBuildCommandHTTPTemplate(t *testing.T) {
+	tmpl := "http {{target}} {{count}}"
+	params := []config.TaskParam{
+		{Key: "target", Label: "Target URL", Type: config.ParamTypeURL, Required: true, DefaultValue: "https://example.com/"},
+		{Key: "count", Label: "Probe Count", Type: config.ParamTypeNumber, Required: false, DefaultValue: "1"},
+	}
+
+	cmd, err := BuildCommand(tmpl, params, map[string]string{"target": "https://example.com/api", "count": "2"})
+	if err != nil {
+		t.Fatalf("BuildCommand failed: %v", err)
+	}
+	if cmd != "http https://example.com/api 2" {
+		t.Errorf("unexpected command: %s", cmd)
+	}
+
+	// Defaults are applied when params are absent
+	cmd, err = BuildCommand(tmpl, params, nil)
+	if err != nil {
+		t.Fatalf("BuildCommand with defaults failed: %v", err)
+	}
+	if cmd != "http https://example.com/ 1" {
+		t.Errorf("unexpected command with defaults: %s", cmd)
+	}
+
+	// Invalid URL is rejected
+	if _, err := BuildCommand(tmpl, params, map[string]string{"target": "example.com"}); err == nil {
+		t.Errorf("expected invalid URL to be rejected")
+	}
+}
+
+func TestParseHTTPCommand(t *testing.T) {
+	target, count, err := ParseHTTPCommand("http https://example.com/ 3")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if target != "https://example.com/" || count != 3 {
+		t.Errorf("unexpected result: target=%q count=%d", target, count)
+	}
+
+	// Count defaults to 1 and is clamped to the HTTP maximum
+	if _, count, err := ParseHTTPCommand("http https://example.com/"); err != nil || count != 1 {
+		t.Errorf("expected default count 1, got %d (err=%v)", count, err)
+	}
+	if _, count, err := ParseHTTPCommand("http https://example.com/ 50"); err != nil || count != config.HTTPProbeMaxCount {
+		t.Errorf("expected count clamped to %d, got %d (err=%v)", config.HTTPProbeMaxCount, count, err)
+	}
+
+	// Invalid inputs
+	for _, c := range []string{"http", "http example.com", "http https://example.com/ abc"} {
+		if _, _, err := ParseHTTPCommand(c); err == nil {
+			t.Errorf("expected %q to be rejected", c)
 		}
 	}
 }

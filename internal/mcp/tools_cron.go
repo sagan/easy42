@@ -67,7 +67,7 @@ func registerCronTaskTools(s *server.MCPServer, mgr *engine.Manager) {
 		mcp.WithOutputSchema[CronTaskMutationOutput](),
 		mcp.WithString("id", mcp.Required(), mcp.Description("Unique cron task ID")),
 		mcp.WithString("name", mcp.Required(), mcp.Description("Descriptive name")),
-		mcp.WithString("task_type", mcp.Required(), mcp.Description("Task type: 'ping' or 'tcp_ping'")),
+		mcp.WithString("task_type", mcp.Required(), mcp.Description("Task type: 'ping', 'tcp_ping' or 'http'")),
 		mcp.WithString("cron_expr", mcp.Required(), mcp.Description("Standard cron expression (e.g. '*/5 * * * *')")),
 		mcp.WithObject("selector", mcp.Description("Optional node selector object (e.g. {\"name\":\"node-a,node-b\"}, {\"tag\":\"edge,prod\"}, or {\"env:NODE_IP\":\"10.0.0.1\"}). All conditions must match (AND). An empty selector matches every managed node."), mcp.AdditionalProperties(map[string]any{"type": "string"})),
 		mcp.WithString("target", mcp.Required(), mcp.Description("Target host or IP address to test")),

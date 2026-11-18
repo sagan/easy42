@@ -695,6 +695,14 @@ done"#;
 
                 run_tcp_ping(&target, count, timeout_secs).await
             }
+            proto::looking_glass_cmd::Tool::Http => {
+                // Native HTTP probe: GET the URL, measure TTFB until response headers arrive.
+                let timeout_secs = if req.timeout_seconds > 0 { req.timeout_seconds.min(30) } else { 10 };
+                let count: u32 = req.args.first()
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or(1);
+                run_http_probe(&req.target, count, timeout_secs).await
+            }
         }
     }
 
@@ -1165,6 +1173,209 @@ pub(crate) async fn run_tcp_ping(target: &str, count: u32, timeout_secs: u32) ->
     (success, exit_code, json, String::new())
 }
 
+/// Validates that `raw` is an http:// or https:// URL with a host and no embedded
+/// credentials / control characters, mirroring the server-side validation.
+pub(crate) fn is_valid_http_url(raw: &str) -> bool {
+    let s = raw.trim();
+    if s.is_empty() || s.len() > 2048 {
+        return false;
+    }
+    // Reject control characters and whitespace up front
+    if s.chars().any(|c| c.is_control() || c.is_whitespace()) {
+        return false;
+    }
+    let rest = match s.get(..8).filter(|p| p.eq_ignore_ascii_case("https://")) {
+        Some(_) => &s[8..],
+        None => match s.get(..7).filter(|p| p.eq_ignore_ascii_case("http://")) {
+            Some(_) => &s[7..],
+            None => return false,
+        },
+    };
+    // No userinfo (user:pass@) is permitted
+    if rest.contains('@') {
+        return false;
+    }
+    let authority = rest.split(['/', '?', '#']).next().unwrap_or("");
+    if authority.is_empty() {
+        return false;
+    }
+    // Validate the host portion, dropping an optional port suffix.
+    if let Some(bracketed) = authority.strip_prefix('[') {
+        // [ipv6] or [ipv6]:port
+        let Some((_, after)) = bracketed.split_once(']') else {
+            return false;
+        };
+        return match after {
+            "" => true,
+            _ => match after.strip_prefix(':') {
+                Some(port) => !port.is_empty() && port.chars().all(|c| c.is_ascii_digit()),
+                None => false,
+            },
+        };
+    }
+    let host = match authority.rsplit_once(':') {
+        Some((h, port)) => {
+            if port.is_empty() || !port.chars().all(|c| c.is_ascii_digit()) {
+                return false;
+            }
+            h
+        }
+        None => authority,
+    };
+    !host.is_empty()
+}
+
+struct HttpProbeOutcome {
+    status_code: u16,
+    status: String,
+    ttfb_ms: f64,
+}
+
+/// Performs a single GET request and measures time-to-first-byte.
+/// The request is a plain GET, redirects are not followed, and the response
+/// body is never read: only the status code from the response header is used.
+fn http_probe_once(url: &str, timeout: Duration) -> Result<HttpProbeOutcome, String> {
+    let started = Instant::now();
+    let response = ureq::get(url)
+        .config()
+        .http_status_as_error(false)
+        .max_redirects(0)
+        .timeout_global(Some(timeout))
+        .build()
+        .call();
+    let res = match response {
+        Ok(r) => r,
+        Err(e) => return Err(format!("request failed: {}", e)),
+    };
+    let ttfb_ms = started.elapsed().as_secs_f64() * 1000.0;
+
+    let status = res.status();
+    let status_code = status.as_u16();
+    let reason = status.canonical_reason().unwrap_or("").to_string();
+    // Drop the response/connection immediately without reading the body.
+    drop(res);
+
+    Ok(HttpProbeOutcome {
+        status_code,
+        status: format!("{} {}", status_code, reason).trim().to_string(),
+        ttfb_ms,
+    })
+}
+
+/// run_http_probe sends `count` GET requests to `url`, measuring time-to-first-byte
+/// for each response. Redirects are not followed and response bodies are not read.
+/// Returns JSON-encoded HTTPResult on stdout, or an error message on stderr.
+pub(crate) async fn run_http_probe(url: &str, count: u32, timeout_secs: u32) -> (bool, i32, String, String) {
+    if !is_valid_http_url(url) {
+        return (
+            false,
+            -1,
+            String::new(),
+            format!("invalid http(s) URL: {}", url),
+        );
+    }
+
+    let count = count.clamp(1, 5);
+    let timeout = Duration::from_secs(timeout_secs.max(1) as u64);
+
+    let mut probes: Vec<(Option<HttpProbeOutcome>, Option<String>)> = Vec::new();
+    for _ in 0..count {
+        let url_owned = url.to_string();
+        let result = tokio::task::spawn_blocking(move || http_probe_once(&url_owned, timeout)).await;
+        match result {
+            Ok(Ok(outcome)) => probes.push((Some(outcome), None)),
+            Ok(Err(e)) => probes.push((None, Some(e))),
+            Err(e) => probes.push((None, Some(format!("probe task failed: {}", e)))),
+        }
+        if count > 1 {
+            tokio::time::sleep(Duration::from_millis(200)).await;
+        }
+    }
+
+    let packets_sent = count;
+    let ttfb_samples: Vec<f64> = probes
+        .iter()
+        .filter_map(|(o, _)| o.as_ref().map(|o| o.ttfb_ms))
+        .collect();
+    let packets_received = ttfb_samples.len() as u32;
+    let loss_pct = if packets_sent > 0 {
+        ((packets_sent - packets_received) as f64 / packets_sent as f64) * 100.0
+    } else {
+        100.0
+    };
+
+    let (min_ttfb, max_ttfb, avg_ttfb, mdev_ttfb) = if !ttfb_samples.is_empty() {
+        let min = ttfb_samples.iter().cloned().fold(f64::INFINITY, f64::min);
+        let max = ttfb_samples.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+        let avg = ttfb_samples.iter().sum::<f64>() / ttfb_samples.len() as f64;
+        let variance = ttfb_samples.iter().map(|&r| (r - avg).powi(2)).sum::<f64>() / ttfb_samples.len() as f64;
+        (min, max, avg, variance.sqrt())
+    } else {
+        (0.0, 0.0, 0.0, 0.0)
+    };
+
+    let mut status_codes: Vec<u16> = probes
+        .iter()
+        .filter_map(|(o, _)| o.as_ref().map(|o| o.status_code))
+        .collect();
+    status_codes.dedup();
+
+    let probes_json: Vec<serde_json::Value> = probes
+        .iter()
+        .map(|(outcome, err)| match outcome {
+            Some(o) => serde_json::json!({
+                "status_code": o.status_code,
+                "status": o.status,
+                "ttfb_ms": (o.ttfb_ms * 1000.0).round() / 1000.0,
+            }),
+            None => serde_json::json!({
+                "status_code": 0,
+                "status": "",
+                "ttfb_ms": 0.0,
+                "error": err.clone().unwrap_or_default(),
+            }),
+        })
+        .collect();
+
+    let payload = serde_json::json!({
+        "target": url,
+        "packets_sent": packets_sent,
+        "packets_received": packets_received,
+        "packet_loss_pct": (loss_pct * 100.0).round() / 100.0,
+        "min_ttfb_ms": (min_ttfb * 1000.0).round() / 1000.0,
+        "avg_ttfb_ms": (avg_ttfb * 1000.0).round() / 1000.0,
+        "max_ttfb_ms": (max_ttfb * 1000.0).round() / 1000.0,
+        "mdev_ttfb_ms": (mdev_ttfb * 1000.0).round() / 1000.0,
+        "status_codes": status_codes,
+        "probes": probes_json,
+    });
+
+    let json = match serde_json::to_string(&payload) {
+        Ok(s) => s,
+        Err(e) => {
+            return (
+                false,
+                -1,
+                String::new(),
+                format!("failed to serialize http probe result: {}", e),
+            )
+        }
+    };
+
+    let success = packets_received > 0;
+    let exit_code = if success { 0 } else { 1 };
+    // Surface the last probe error on stderr when every attempt failed.
+    let stderr = if success {
+        String::new()
+    } else {
+        probes
+            .last()
+            .and_then(|(_, e)| e.clone())
+            .unwrap_or_default()
+    };
+    (success, exit_code, json, stderr)
+}
+
 pub(crate) async fn run_cmd(program: &str, args: &[&str]) -> (bool, i32, String, String) {
     use tokio::process::Command;
     let mut cmd = Command::new(program);
@@ -1475,6 +1686,73 @@ mod tests {
             assert!(stdout.contains(r#""local_mss":"#), "stdout should contain local_mss: {}", stdout);
             assert!(stdout.contains(r#""remote_mss":"#), "stdout should contain remote_mss: {}", stdout);
         }
+    }
+
+    #[test]
+    fn test_is_valid_http_url() {
+        assert!(is_valid_http_url("http://example.com"));
+        assert!(is_valid_http_url("https://example.com/path?q=1#frag"));
+        assert!(is_valid_http_url("HTTPS://example.com:8443/"));
+        assert!(is_valid_http_url("http://[2001:db8::1]:80/"));
+        assert!(is_valid_http_url("http://1.1.1.1/"));
+
+        assert!(!is_valid_http_url("ftp://example.com"));
+        assert!(!is_valid_http_url("example.com"));
+        assert!(!is_valid_http_url("http://"));
+        assert!(!is_valid_http_url("http://user:pass@example.com"));
+        assert!(!is_valid_http_url("http://example.com:abc/"));
+        assert!(!is_valid_http_url("http://exa mple.com/"));
+        assert!(!is_valid_http_url(""));
+    }
+
+    #[tokio::test]
+    async fn test_run_http_probe_local() {
+        use std::net::TcpListener;
+
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+
+        let handle = std::thread::spawn(move || {
+            use std::io::{BufRead, BufReader, Write};
+            for _ in 0..2 {
+                if let Ok((stream, _)) = listener.accept() {
+                    let mut reader = BufReader::new(stream.try_clone().unwrap());
+                    let mut line = String::new();
+                    // Read the request line and headers up to the blank line
+                    while reader.read_line(&mut line).unwrap_or(0) > 0 {
+                        if line == "\r\n" {
+                            break;
+                        }
+                        line.clear();
+                    }
+                    let mut stream = stream;
+                    // Send headers only, then keep the connection open so the
+                    // probe must not wait for a body.
+                    let _ = stream.write_all(b"HTTP/1.1 404 Not Found\r\nContent-Length: 10\r\n\r\n");
+                    let _ = stream.flush();
+                    std::thread::sleep(Duration::from_millis(300));
+                }
+            }
+        });
+
+        let url = format!("http://127.0.0.1:{}/missing", port);
+        let (success, code, stdout, stderr) = run_http_probe(&url, 2, 2).await;
+        let _ = handle.join();
+
+        assert!(success, "stderr: {}", stderr);
+        assert_eq!(code, 0);
+        assert!(stdout.contains(r#""packets_sent":2"#), "stdout: {}", stdout);
+        assert!(stdout.contains(r#""packets_received":2"#), "stdout: {}", stdout);
+        assert!(stdout.contains(r#""status_code":404"#), "stdout: {}", stdout);
+        assert!(stdout.contains(r#""status_codes":[404]"#), "stdout: {}", stdout);
+    }
+
+    #[tokio::test]
+    async fn test_run_http_probe_invalid_url() {
+        let (success, code, _, stderr) = run_http_probe("ftp://example.com", 1, 1).await;
+        assert!(!success);
+        assert_eq!(code, -1);
+        assert!(stderr.contains("invalid http(s) URL"));
     }
 
     #[tokio::test]

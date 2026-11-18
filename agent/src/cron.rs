@@ -6,7 +6,7 @@ use tokio::time::sleep;
 use tracing::{error, info, warn};
 
 use crate::collector::proto;
-use crate::executor::{run_cmd, run_tcp_ping};
+use crate::executor::{run_cmd, run_http_probe, run_tcp_ping};
 
 /// Howard Hinnant algorithm to convert days since 1970-01-01 to (year, month 1..12, day 1..31)
 fn civil_from_days(days: i64) -> (i32, u32, u32) {
@@ -263,13 +263,17 @@ impl CronScheduler {
                         spec.task_id,
                         (next_run - now).max(0)
                     );
+                    // HTTP probes default to a single request: one task run should
+                    // not hammer the target URL.
+                    let default_count = if spec.task_type == "http" { 1 } else { 4 };
+                    let count = if spec.count > 0 { spec.count } else { default_count };
                     new_tasks.push(ScheduledCronTask {
                         task_id: spec.task_id,
                         name: spec.name,
                         task_type: spec.task_type,
                         cron_expr_str: spec.cron_expr,
                         target: spec.target,
-                        count: if spec.count > 0 { spec.count } else { 4 },
+                        count: count,
                         timeout_seconds: if spec.timeout_seconds > 0 {
                             spec.timeout_seconds
                         } else {
@@ -347,6 +351,9 @@ impl CronScheduler {
         let (success, exit_code, stdout, stderr) = match task.task_type.as_str() {
             "tcp_ping" => {
                 run_tcp_ping(&task.target, task.count, task.timeout_seconds).await
+            }
+            "http" => {
+                run_http_probe(&task.target, task.count, task.timeout_seconds).await
             }
             _ => {
                 // Default: ping

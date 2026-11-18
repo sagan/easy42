@@ -525,31 +525,35 @@ Built-in template IDs are `default_wg`, `default_bird`, and `default_nft`. Selec
 | `description`  | `string`   | Optional description.                                                                                           |
 | `category`     | `string`   | `BGP / Routing`, `Connectivity`, `Diagnostics`, or `Custom`.                                                    |
 | `command_tmpl` | `string`   | Command template. Parameters are substituted as `{{key}}` and escaped by the server.                            |
-| `parser`       | `string`   | `bird_route`, `bird_protocols`, `ping`, `tcp_ping`, `traceroute`, `mtr`, or `raw`.                              |
+| `parser`       | `string`   | `bird_route`, `bird_protocols`, `ping`, `tcp_ping`, `http`, `traceroute`, `mtr`, or `raw`.                      |
 | `params`       | `object[]` | Parameter definitions (`key`, `label`, `type`, `description`, `default_value`, `required`, `options`, `regex`). |
 | `is_builtin`   | `boolean`  | `true` for read-only built-ins.                                                                                 |
 | `timeout_sec`  | `integer`  | Execution timeout in seconds.                                                                                   |
 
-Built-in tasks include `ping`, `tcp_ping`, `traceroute`, `mtr`, `bird_show_protocols`, `bird_show_route`, `bird_show_route_where`, `bird_show_status`, `ip_route_get`, and `whois_dn42`.
+Parameter `type` values are `string`, `ip_or_cidr`, `number`, `select`, `boolean`, `host_port`, and `url` (validated as an `http://` or `https://` URL with a host).
+
+Built-in tasks include `ping`, `tcp_ping`, `http`, `traceroute`, `mtr`, `bird_show_protocols`, `bird_show_route`, `bird_show_route_where`, `bird_show_status`, `ip_route_get`, and `whois_dn42`.
+
+The `http` built-in task (`command_tmpl: "http {{target}} {{count}}"`) sends a plain `GET` request from the node agent and does **not** follow redirects or read the response body — it stops as soon as the response header is received. Latency is reported as time to first byte (TTFB), and a probe counts as successful once a response header arrives; `4xx`/`5xx` status codes are recorded but are not treated as failures. `target` is a required `http(s)://` URL, `count` defaults to `1` and is clamped to `1`–`5`, and the task requires the node to run in agent mode. It is also available as an ad-hoc command (`http https://example.com/ 1`) with the `HTTP Metrics` visualizer.
 
 ### `cron_tasks`
 
-Scheduled `ping`/`tcp_ping` probes executed by node agents on a selector-matched set of nodes. This is distinct from per-node Looking Glass tasks (which are run manually from the Looking Glass UI) and from cron-type workload Apps (see [Apps](#apps-and-app_variables)).
+Scheduled `ping`/`tcp_ping`/`http` probes executed by node agents on a selector-matched set of nodes. This is distinct from per-node Looking Glass tasks (which are run manually from the Looking Glass UI) and from cron-type workload Apps (see [Apps](#apps-and-app_variables)).
 
 | Field                      | Type        | Description                                                                                             |
 | :------------------------- | :---------- | :------------------------------------------------------------------------------------------------------ |
 | `id`                       | `string`    | Unique task ID.                                                                                         |
 | `name`                     | `string`    | Display name.                                                                                           |
 | `description`              | `string`    | Optional description.                                                                                   |
-| `task_type`                | `string`    | `ping` (ICMP) or `tcp_ping`.                                                                            |
+| `task_type`                | `string`    | `ping` (ICMP), `tcp_ping`, or `http`.                                                                   |
 | `cron_expr`                | `string`    | 5-field (`min hour dom mon dow`) or 6-field (`sec min hour dom mon dow`) cron expression.               |
 | `selector`                 | `object`    | Node selector (`name`, `tag`, `env:<NAME>`; AND). Empty matches every managed node.                     |
-| `params`                   | `object`    | Probe parameters. `ping` uses `target` and `count`; `tcp_ping` uses `target` (`host:port`) and `count`. |
+| `params`                   | `object`    | Probe parameters. `ping`/`http` use `target` and `count`; `tcp_ping` uses `target` (`host:port`) and `count`. |
 | `timeout_sec`              | `integer`   | Optional timeout in seconds (default `15`, capped at `60`).                                             |
 | `enabled`                  | `boolean`   | Whether the schedule is active.                                                                         |
 | `created_at`, `updated_at` | `timestamp` | Timestamps managed by the server.                                                                       |
 
-`params.count` defaults to `4` (clamped to `1`–`20`; invalid values fall back to `4`). A cron task that matches no managed node is rejected on save. Results are stored in `data.db` and presented in the node's Cron Tasks view; summarized status is `ok`, `degraded`, or `failed`, and repeated failures record a fleet event (see [Events](integrations.md#8-events)).
+`params.count` defaults to `4` (clamped to `1`–`20`; invalid values fall back to `4`). For `http` tasks, `target` must be a valid `http(s)://` URL and `params.count` defaults to `1` with a maximum of `5` (invalid or over-limit values fall back to `1`). A cron task that matches no managed node is rejected on save. Results are stored in `data.db` and presented in the node's Cron Tasks view; summarized status is `ok`, `degraded`, or `failed`, and repeated failures record a fleet event (see [Events](integrations.md#8-events)).
 
 ### `server_tasks`
 

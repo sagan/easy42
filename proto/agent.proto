@@ -190,6 +190,7 @@ message LookingGlassCmd {
     BIRDC = 2;
     CUSTOM = 3;
     TCP_PING = 4;
+    HTTP = 5;
   }
   Tool tool = 1;
   string target = 2;
@@ -235,7 +236,7 @@ message SyncCronTasks {
 message CronTaskSpec {
   string task_id = 1;
   string name = 2;
-  string task_type = 3; // "ping" or "tcp_ping"
+  string task_type = 3; // "ping", "tcp_ping" or "http"
   string cron_expr = 4;
   string target = 5;
   uint32 count = 6;

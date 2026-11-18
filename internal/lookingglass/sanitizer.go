@@ -3,6 +3,7 @@ package lookingglass
 import (
 	"fmt"
 	"net"
+	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
@@ -35,8 +36,52 @@ var (
 		"whois ",
 		"dig ",
 		"tcp_ping ",
+		"http ",
 	}
 )
+
+// ValidateHTTPURL checks that val is a well-formed http:// or https:// URL with a host
+func ValidateHTTPURL(val string) error {
+	u, err := url.Parse(strings.TrimSpace(val))
+	if err != nil {
+		return fmt.Errorf("must be a valid http:// or https:// URL: %v", err)
+	}
+	scheme := strings.ToLower(u.Scheme)
+	if scheme != "http" && scheme != "https" {
+		return fmt.Errorf("must use the http:// or https:// scheme")
+	}
+	if u.Hostname() == "" {
+		return fmt.Errorf("must include a host")
+	}
+	return nil
+}
+
+// ParseHTTPCommand extracts the target URL and probe count from an `http <url> [count]` command
+func ParseHTTPCommand(cmd string) (target string, count int, err error) {
+	fields := strings.Fields(strings.TrimSpace(cmd))
+	if len(fields) < 2 || fields[0] != "http" {
+		return "", 0, fmt.Errorf("expected 'http <url> [count]'")
+	}
+	target = fields[1]
+	if err := ValidateHTTPURL(target); err != nil {
+		return "", 0, err
+	}
+	count = 1
+	if len(fields) >= 3 {
+		parsed, parseErr := strconv.Atoi(fields[2])
+		if parseErr != nil {
+			return "", 0, fmt.Errorf("probe count must be an integer")
+		}
+		count = parsed
+	}
+	if count < 1 {
+		count = 1
+	}
+	if count > config.HTTPProbeMaxCount {
+		count = config.HTTPProbeMaxCount
+	}
+	return target, count, nil
+}
 
 // SanitizeParam validates and returns a clean parameter string according to TaskParam spec
 func SanitizeParam(spec config.TaskParam, val string) (string, error) {
@@ -127,6 +172,12 @@ func SanitizeParam(spec config.TaskParam, val string) (string, error) {
 			return fmt.Sprintf("[%s]:%d", host, port), nil
 		}
 		return fmt.Sprintf("%s:%d", host, port), nil
+
+	case config.ParamTypeURL:
+		if err := ValidateHTTPURL(val); err != nil {
+			return "", fmt.Errorf("parameter '%s' %v", spec.Label, err)
+		}
+		return val, nil
 
 	case config.ParamTypeString:
 		fallthrough
@@ -241,6 +292,10 @@ func ValidateAdHocCommand(cmd string) error {
 	case "birdc":
 		if len(fields) < 2 || fields[1] != "show" {
 			return fmt.Errorf("only 'birdc show' subcommands are permitted")
+		}
+	case "http":
+		if _, _, err := ParseHTTPCommand(cmd); err != nil {
+			return err
 		}
 	}
 

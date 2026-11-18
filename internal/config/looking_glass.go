@@ -1,5 +1,7 @@
 package config
 
+import "fmt"
+
 // ParameterType defines the UI input type and validation rule for task parameters
 type ParameterType string
 
@@ -10,7 +12,12 @@ const (
 	ParamTypeSelect   ParameterType = "select"
 	ParamTypeBoolean  ParameterType = "boolean"
 	ParamTypeHostPort ParameterType = "host_port"
+	ParamTypeURL      ParameterType = "url"
 )
+
+// HTTPProbeMaxCount is the upper bound for the HTTP Looking Glass probe count.
+// Keeping it low limits the load a single HTTP task can place on the target.
+const HTTPProbeMaxCount = 5
 
 // TaskParam defines a user-configurable parameter in a Looking Glass task
 type TaskParam struct {
@@ -93,6 +100,34 @@ func DefaultLookingGlassTasks() []LookingGlassTask {
 					Description:  "Number of TCP connection attempts (1-20)",
 					Required:     false,
 					DefaultValue: "4",
+				},
+			},
+		},
+		{
+			ID:          "http",
+			Name:        "HTTP(S) Request",
+			Description: "Send a GET request and measure time to first byte (TTFB) and success rate (Agent required)",
+			Category:    "Connectivity",
+			CommandTmpl: "http {{target}} {{count}}",
+			Parser:      "http",
+			TimeoutSec:  15,
+			IsBuiltin:   true,
+			Params: []TaskParam{
+				{
+					Key:          "target",
+					Label:        "Target URL",
+					Type:         ParamTypeURL,
+					Description:  "http:// or https:// URL to request (GET only, redirects are not followed)",
+					Required:     true,
+					DefaultValue: "https://example.com/",
+				},
+				{
+					Key:          "count",
+					Label:        "Probe Count",
+					Type:         ParamTypeNumber,
+					Description:  fmt.Sprintf("Number of HTTP requests to send (1-%d)", HTTPProbeMaxCount),
+					Required:     false,
+					DefaultValue: "1",
 				},
 			},
 		},

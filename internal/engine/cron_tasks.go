@@ -80,7 +80,7 @@ func (m *Manager) setupAgentCronTasksListeners() {
 			hasRecent, err := m.stateStore.HasRecentCronTaskFailure(record.TaskID, record.NodeName, 24*time.Hour)
 			if err == nil && !hasRecent {
 				title := fmt.Sprintf("Cron task '%s' failed on %s", record.TaskName, record.NodeName)
-				message := fmt.Sprintf("Looking Glass cron task '%s' (%s) failed on node %s: all packets timed out (100%% packet loss) targeting %s", record.TaskName, record.TaskType, record.NodeName, record.Target)
+				message := fmt.Sprintf("Looking Glass cron task '%s' (%s) failed on node %s: all probes failed (100%% loss) targeting %s", record.TaskName, record.TaskType, record.NodeName, record.Target)
 				if record.Error != "" {
 					message = fmt.Sprintf("Looking Glass cron task '%s' (%s) failed on node %s: %s", record.TaskName, record.TaskType, record.NodeName, record.Error)
 				}
@@ -132,7 +132,26 @@ func PopulateCronTaskParsedMetrics(record *config.CronTaskResultRecord) {
 		return
 	}
 
-	if record.TaskType == "tcp_ping" {
+	if record.TaskType == "http" {
+		httpRes := lookingglass.ParseHTTP(record.RawOutput, record.Target)
+		if httpRes != nil {
+			record.PacketsSent = httpRes.PacketsSent
+			record.PacketsReceived = httpRes.PacketsReceived
+			record.PacketLossPct = httpRes.PacketLossPct
+			record.MinRTTMs = httpRes.MinTTFBMs
+			record.AvgRTTMs = httpRes.AvgTTFBMs
+			record.MaxRTTMs = httpRes.MaxTTFBMs
+			record.MdevRTTMs = httpRes.MdevTTFBMs
+			if record.Target == "" {
+				record.Target = httpRes.Target
+			}
+			if record.ParsedJSON == "" {
+				if jsonBytes, err := json.Marshal(httpRes); err == nil {
+					record.ParsedJSON = string(jsonBytes)
+				}
+			}
+		}
+	} else if record.TaskType == "tcp_ping" {
 		parsed := lookingglass.ParseOutput("tcp_ping", record.RawOutput, record.Target)
 		var tcpRes *lookingglass.TCPPingResult
 		if tp, ok := parsed.(*lookingglass.TCPPingResult); ok && tp != nil {
@@ -212,8 +231,8 @@ func (m *Manager) SaveCronTask(task config.CronTask) (config.CronTask, error) {
 	}
 
 	task.TaskType = strings.TrimSpace(task.TaskType)
-	if task.TaskType != "ping" && task.TaskType != "tcp_ping" {
-		return task, fmt.Errorf("only 'ping' and 'tcp_ping' task types are supported for cron tasks")
+	if task.TaskType != "ping" && task.TaskType != "tcp_ping" && task.TaskType != "http" {
+		return task, fmt.Errorf("only 'ping', 'tcp_ping' and 'http' task types are supported for cron tasks")
 	}
 
 	task.CronExpr = strings.TrimSpace(task.CronExpr)
@@ -229,17 +248,28 @@ func (m *Manager) SaveCronTask(task config.CronTask) (config.CronTask, error) {
 		return task, fmt.Errorf("task parameter 'target' is required")
 	}
 
-	// Validate count
+	// Validate target format per task type
+	if task.TaskType == "http" {
+		if err := lookingglass.ValidateHTTPURL(task.Params["target"]); err != nil {
+			return task, fmt.Errorf("invalid http target URL: %w", err)
+		}
+	}
+
+	// Validate count (HTTP probes are capped lower to limit target load)
+	defaultCount, maxCount := 4, 20
+	if task.TaskType == "http" {
+		defaultCount, maxCount = 1, config.HTTPProbeMaxCount
+	}
 	if countStr, ok := task.Params["count"]; ok && countStr != "" {
 		c, err := strconv.Atoi(countStr)
-		if err != nil || c < 1 || c > 20 {
-			task.Params["count"] = "4"
+		if err != nil || c < 1 || c > maxCount {
+			task.Params["count"] = strconv.Itoa(defaultCount)
 		}
 	} else {
 		if task.Params == nil {
 			task.Params = make(map[string]string)
 		}
-		task.Params["count"] = "4"
+		task.Params["count"] = strconv.Itoa(defaultCount)
 	}
 
 	if task.TimeoutSec <= 0 {
@@ -416,6 +446,9 @@ func (m *Manager) SyncCronTasksToNode(nodeName string) {
 
 		target := ""
 		count := uint32(4)
+		if t.TaskType == "http" {
+			count = 1
+		}
 		if t.Params != nil {
 			target = t.Params["target"]
 			if cStr, ok := t.Params["count"]; ok && cStr != "" {

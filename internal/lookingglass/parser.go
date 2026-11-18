@@ -38,6 +38,8 @@ func ParseOutput(parser string, raw string, target string) interface{} {
 		return ParseMTR(raw, target)
 	case "tcp_ping":
 		return ParseTCPPing(raw)
+	case "http":
+		return ParseHTTP(raw, target)
 	default:
 		return nil
 	}
@@ -446,16 +448,39 @@ func ParseMTR(raw string, target string) MTRResult {
 
 // ParseTCPPing parses the JSON output produced by the agent's TCP ping tool
 func ParseTCPPing(raw string) *TCPPingResult {
+	var res TCPPingResult
+	if !decodeJSONOutput(raw, &res) {
+		return nil
+	}
+	return &res
+}
+
+// ParseHTTP parses the JSON output produced by the agent's HTTP probing tool
+func ParseHTTP(raw string, target string) *HTTPResult {
+	var res HTTPResult
+	if !decodeJSONOutput(raw, &res) {
+		return nil
+	}
+	if res.Target == "" {
+		res.Target = target
+	}
+	if res.Probes == nil {
+		res.Probes = []HTTPProbe{}
+	}
+	if res.StatusCodes == nil {
+		res.StatusCodes = []int{}
+	}
+	return &res
+}
+
+// decodeJSONOutput extracts the embedded JSON object from raw command output
+// (which may contain leading/trailing noise) and unmarshals it into out.
+func decodeJSONOutput(raw string, out interface{}) bool {
 	trimmed := strings.TrimSpace(raw)
 	start := strings.Index(trimmed, "{")
 	end := strings.LastIndex(trimmed, "}")
 	if start != -1 && end != -1 && end >= start {
 		trimmed = trimmed[start : end+1]
 	}
-	var res TCPPingResult
-	if err := json.Unmarshal([]byte(trimmed), &res); err != nil {
-		return nil
-	}
-	return &res
+	return json.Unmarshal([]byte(trimmed), out) == nil
 }
-
