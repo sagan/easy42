@@ -33,6 +33,8 @@ import {
   Code,
   FileText,
   FileCode,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
 import { api } from "../../api/client";
 import { Node, Entrypoint, KernelRouteRule, ConfigHook, ConfigTemplate, GraphBlock } from "../../types/api";
@@ -401,6 +403,21 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
     setEntrypoints((prev) => {
       if (prev.length <= 1) return prev;
       return ensureFallbackLast(prev.filter((e) => e.id !== id));
+    });
+  };
+
+  const handleMoveEntrypoint = (id: string, direction: "up" | "down") => {
+    setEntrypoints((prev) => {
+      // The fixed NAT fallback entrypoint is always kept last and cannot be
+      // reordered; only shuffle the direct (non-fallback) entrypoints around it.
+      const index = prev.findIndex((e) => e.id === id);
+      if (index < 0 || prev[index].isNone) return prev;
+      const target = direction === "up" ? index - 1 : index + 1;
+      if (target < 0 || target >= prev.length || prev[target].isNone) return prev;
+      const next = [...prev];
+      const [moved] = next.splice(index, 1);
+      next.splice(target, 0, moved);
+      return ensureFallbackLast(next);
     });
   };
 
@@ -954,17 +971,47 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                         >
                           Endpoint {entrypoints.length > 1 ? `#${idx + 1}` : ""}
                         </Typography>
-                        {entrypoints.length > 1 && (
-                          <Tooltip title="Remove endpoint">
-                            <IconButton
-                              size="small"
-                              onClick={() => handleRemoveEntrypoint(ep.id)}
-                              sx={{ color: "#94A3B8", p: 0.5 }}
-                            >
-                              <Trash2 size={14} />
-                            </IconButton>
-                          </Tooltip>
-                        )}
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 0.3 }}>
+                          {!ep.isNone && (
+                            <>
+                              <Tooltip title="Move up">
+                                <span>
+                                  <IconButton
+                                    size="small"
+                                    disabled={idx === 0 || saving}
+                                    onClick={() => handleMoveEntrypoint(ep.id, "up")}
+                                    sx={{ color: "#94A3B8", p: 0.5 }}
+                                  >
+                                    <ArrowUp size={14} />
+                                  </IconButton>
+                                </span>
+                              </Tooltip>
+                              <Tooltip title="Move down">
+                                <span>
+                                  <IconButton
+                                    size="small"
+                                    disabled={idx >= entrypoints.length - 2 || saving}
+                                    onClick={() => handleMoveEntrypoint(ep.id, "down")}
+                                    sx={{ color: "#94A3B8", p: 0.5 }}
+                                  >
+                                    <ArrowDown size={14} />
+                                  </IconButton>
+                                </span>
+                              </Tooltip>
+                            </>
+                          )}
+                          {entrypoints.length > 1 && (
+                            <Tooltip title="Remove endpoint">
+                              <IconButton
+                                size="small"
+                                onClick={() => handleRemoveEntrypoint(ep.id)}
+                                sx={{ color: "#94A3B8", p: 0.5 }}
+                              >
+                                <Trash2 size={14} />
+                              </IconButton>
+                            </Tooltip>
+                          )}
+                        </Box>
                       </Box>
 
                       <Box sx={{ display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: 1 }}>
@@ -1284,7 +1331,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                 </Box>
 
                 <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
-                  {entrypoints.map((ep) => {
+                  {entrypoints.map((ep, idx) => {
                     if (ep.isNone) {
                       return (
                         <Box
@@ -1369,15 +1416,41 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                               Direct Entrypoint
                             </Typography>
                           </Box>
-                          <Tooltip title="Remove entrypoint">
-                            <IconButton
-                              size="small"
-                              onClick={() => handleRemoveEntrypoint(ep.id)}
-                              sx={{ color: "#94A3B8", "&:hover": { color: "#E11D48" } }}
-                            >
-                              <Trash2 size={15} />
-                            </IconButton>
-                          </Tooltip>
+                          <Box sx={{ display: "flex", alignItems: "center" }}>
+                            <Tooltip title="Move up">
+                              <span>
+                                <IconButton
+                                  size="small"
+                                  disabled={idx === 0 || saving}
+                                  onClick={() => handleMoveEntrypoint(ep.id, "up")}
+                                  sx={{ color: "#94A3B8", "&:hover": { color: "#0891B2" } }}
+                                >
+                                  <ArrowUp size={15} />
+                                </IconButton>
+                              </span>
+                            </Tooltip>
+                            <Tooltip title="Move down">
+                              <span>
+                                <IconButton
+                                  size="small"
+                                  disabled={idx >= entrypoints.length - 2 || saving}
+                                  onClick={() => handleMoveEntrypoint(ep.id, "down")}
+                                  sx={{ color: "#94A3B8", "&:hover": { color: "#0891B2" } }}
+                                >
+                                  <ArrowDown size={15} />
+                                </IconButton>
+                              </span>
+                            </Tooltip>
+                            <Tooltip title="Remove entrypoint">
+                              <IconButton
+                                size="small"
+                                onClick={() => handleRemoveEntrypoint(ep.id)}
+                                sx={{ color: "#94A3B8", "&:hover": { color: "#E11D48" } }}
+                              >
+                                <Trash2 size={15} />
+                              </IconButton>
+                            </Tooltip>
+                          </Box>
                         </Box>
 
                         <Box sx={{ display: "grid", gridTemplateColumns: "1.2fr 0.9fr 1fr 0.7fr", gap: 1.2 }}>
