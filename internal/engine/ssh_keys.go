@@ -216,9 +216,12 @@ func (m *Manager) GetSSHKeysOverview() []SSHKeyNodeState {
 		if node.IsExternal {
 			continue
 		}
+		// Keys must always be a JSON array (never null) so every client can
+		// iterate over it unconditionally, including for unsupported nodes.
 		state := SSHKeyNodeState{
 			Name:       node.Name,
 			Mode:       node.Mode,
+			Keys:       []config.SSHPublicKey{},
 			FileHashes: map[string]string{},
 		}
 		if m.agentHub != nil {
@@ -296,14 +299,14 @@ func (m *Manager) planSSHKeyFilesForNode(cfg *config.Config, dstNode config.Node
 		if !rule.Enabled {
 			continue
 		}
-		if !config.AppTargetsNode(config.App{Selector: rule.DstSelector}, &dstNode, dstNode.Name) {
+		if !config.AppTargetsNode(config.App{Selector: config.ExpandAllNodesSelector(rule.DstSelector)}, &dstNode, dstNode.Name) {
 			continue
 		}
 		for _, src := range cfg.Nodes {
 			if src.Name == dstNode.Name {
 				continue
 			}
-			if !config.AppTargetsNode(config.App{Selector: rule.SrcSelector}, &src, src.Name) {
+			if !config.AppTargetsNode(config.App{Selector: config.ExpandAllNodesSelector(rule.SrcSelector)}, &src, src.Name) {
 				continue
 			}
 			if !m.sshKeysEnabled(src) {
@@ -345,7 +348,7 @@ func (m *Manager) sshRuleTargetsNode(cfg *config.Config, node config.Node) bool 
 		if !rule.Enabled {
 			continue
 		}
-		if config.AppTargetsNode(config.App{Selector: rule.DstSelector}, &node, node.Name) {
+		if config.AppTargetsNode(config.App{Selector: config.ExpandAllNodesSelector(rule.DstSelector)}, &node, node.Name) {
 			return true
 		}
 	}

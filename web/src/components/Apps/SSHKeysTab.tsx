@@ -62,6 +62,22 @@ const RULE_TYPE_OPTIONS: { value: SSHKeyRuleType; label: string; description: st
   { value: "authorized_keys", label: "authorized_keys", description: "Allow source keys to log in as root" },
 ];
 
+// Explicit "All nodes" marker shared with the server (config.AllNodesSelectorKey).
+// An empty selector means "nothing chosen" and is never treated as "all".
+const ALL_NODES_SELECTOR: Record<string, string> = { all: "true" };
+
+export function isAllNodesSelector(selector: Record<string, string> | null | undefined): boolean {
+  return !!selector && Object.keys(selector).some((k) => k.trim().toLowerCase() === "all");
+}
+
+/** Determines which editor mode should be shown for a stored selector. */
+function selectorMode(selector: Record<string, string> | null | undefined): SelectorTargetMode {
+  if (isAllNodesSelector(selector)) return "all";
+  const mode = detectTargetMode(selector || {});
+  // An empty selector is treated as "no selection" (specific nodes).
+  return mode === "all" ? "manual" : mode;
+}
+
 const RULE_TYPE_COLORS: Record<SSHKeyRuleType, { bg: string; fg: string }> = {
   all: { bg: "#EEF2FF", fg: "#4F46E5" },
   known_hosts: { bg: "#ECFDF5", fg: "#047857" },
@@ -128,37 +144,49 @@ const SSHKeyRuleDialog: React.FC<{
     setEnabled(rule ? rule.enabled : true);
     const src = rule?.src_selector || {};
     const dst = rule?.dst_selector || {};
-    setSrcMode(detectTargetMode(src) === "custom" ? "manual" : (detectTargetMode(src) as SelectorMode));
+    setSrcMode(selectorMode(src));
     setSrcNames(splitSelectorList(getSelectorValue(src, "name")));
     setSrcTag(getSelectorValue(src, "tag"));
-    setDstMode(detectTargetMode(dst) === "custom" ? "manual" : (detectTargetMode(dst) as SelectorMode));
+    setDstMode(selectorMode(dst));
     setDstNames(splitSelectorList(getSelectorValue(dst, "name")));
     setDstTag(getSelectorValue(dst, "tag"));
     setCustomSrc(JSON.stringify(src, null, 2));
     setCustomDst(JSON.stringify(dst, null, 2));
   }, [open, rule]);
 
+  // Builds the selector for a mode. Returns null on invalid input or when the
+  // mode has no actual selection (empty is NOT silently treated as "all": the
+  // "All nodes" mode writes the explicit ALL_NODES_SELECTOR marker instead).
   const buildSelector = (mode: SelectorTargetMode, names: string[], tag: string, custom: string): Record<string, string> | null => {
-    if (mode === "all") return {};
-    if (mode === "tag") return tag.trim() ? { tag: tag.trim() } : {};
-    if (mode === "manual") return names.length ? { name: names.join(",") } : {};
+    if (mode === "all") return ALL_NODES_SELECTOR;
+    if (mode === "tag") return tag.trim() ? { tag: tag.trim() } : null;
+    if (mode === "manual") return names.length ? { name: names.join(",") } : null;
     const parsed = parseSelectorJSON(custom);
-    return parsed.selector;
+    if (parsed.error || !parsed.selector) return null;
+    return Object.keys(parsed.selector).length ? parsed.selector : ALL_NODES_SELECTOR;
   };
 
   const handleSave = async () => {
     const src = buildSelector(srcMode, srcNames, srcTag, customSrc);
     const dst = buildSelector(dstMode, dstNames, dstTag, customDst);
     if (src === null) {
-      setError("Source selector JSON is invalid.");
+      if (srcMode === "tag") {
+        setError("Enter a tag name for the source nodes, or pick another target mode.");
+      } else if (srcMode === "manual") {
+        setError("Select at least one source node, or choose \"All nodes\".");
+      } else {
+        setError("Source selector JSON is invalid.");
+      }
       return;
     }
     if (dst === null) {
-      setError("Destination selector JSON is invalid.");
-      return;
-    }
-    if (Object.keys(dst).length === 0) {
-      setError("Choose at least one destination node (or a destination selector). Keys are never distributed implicitly.");
+      if (dstMode === "tag") {
+        setError("Enter a tag name for the destination nodes, or pick another target mode.");
+      } else if (dstMode === "manual") {
+        setError("Choose at least one destination node (or select \"All nodes\"). Keys are never distributed implicitly.");
+      } else {
+        setError("Destination selector JSON is invalid.");
+      }
       return;
     }
     setError(null);
@@ -459,13 +487,18 @@ export const SSHKeysTab: React.FC = () => {
   };
 
   const describeSelector = (selector: Record<string, string>): string => {
+    if (isAllNodesSelector(selector)) return "All nodes";
     const entries = Object.entries(selector || {});
-    if (entries.length === 0) return "All nodes";
+    if (entries.length === 0) return "—";
     return entries.map(([k, v]) => `${k}: ${v}`).join(" · ");
   };
 
-  const matchedNames = (selector: Record<string, string>): string[] =>
-    nodes.filter((n) => !n.is_external && matchesTaskSelector(n, selector)).map((n) => n.name);
+  const matchedNames = (selector: Record<string, string>): string[] => {
+    if (Object.keys(selector || {}).length === 0) return [];
+    return nodes
+      .filter((n) => !n.is_external && matchesTaskSelector(n, isAllNodesSelector(selector) ? {} : selector))
+      .map((n) => n.name);
+  };
 
   const renderKeyRow = (node: SSHKeyNodeState, keyIndex: number) => {
     const key = node.keys[keyIndex];
@@ -531,7 +564,11 @@ export const SSHKeysTab: React.FC = () => {
   };
 
   const summary = data?.summary;
-  const keyRows = (data?.nodes || []).flatMap((n) => n.keys.map((_, i) => ({ node: n, i })));
+  // The API always returns arrays, but tolerate null/missing fields from older
+  // servers so the tab never crashes on unexpected payloads.
+  const keyRows = (data?.nodes || []).flatMap((n) =>
+    (Array.isArray(n.keys) ? n.keys : []).map((_, i) => ({ node: n, i })),
+  );
   const unsupportedNodes = (data?.nodes || []).filter((n) => !n.supported);
   const rules = data?.rules || [];
 

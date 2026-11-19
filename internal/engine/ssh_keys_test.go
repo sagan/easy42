@@ -537,3 +537,46 @@ func waitForCondition(t *testing.T, cond func() bool) {
 	}
 	t.Fatal("condition not met within timeout")
 }
+
+func TestSSHKeyRuleAllNodesTargeting(t *testing.T) {
+	mgr := newSSHTestManager(t)
+	saveSSHTestConfig(t, mgr, &config.Config{
+		Nodes: []config.Node{
+			{Name: "core1", Mode: "agent", AgentToken: "t1", AgentVersion: "0.1.18", Tags: []string{"core"}},
+			{Name: "edge1", Mode: "agent", AgentToken: "t2", AgentVersion: "0.1.18"},
+			{Name: "edge2", Mode: "agent", AgentToken: "t3", AgentVersion: "0.1.18"},
+			{Name: "other", Mode: "agent", AgentToken: "t4", AgentVersion: "0.1.18"},
+		},
+		SSHKeyRules: []config.SSHKeyRule{
+			{
+				ID:          "all-to-all",
+				Type:        "all",
+				SrcSelector: map[string]string{config.AllNodesSelectorKey: "true"},
+				DstSelector: map[string]string{config.AllNodesSelectorKey: "true"},
+				Enabled:     true,
+			},
+		},
+	})
+	coreKey := sshTestKey("ssh-ed25519", "core", "core1")
+	mgr.agentHub.SetNodeMeta("core1", agentNodeMeta("core1", "0.1.18", coreKey))
+	for _, name := range []string{"edge1", "edge2", "other"} {
+		mgr.agentHub.SetNodeMeta(name, agentNodeMeta(name, "0.1.18"))
+	}
+
+	actions, err := mgr.PlanSync()
+	if err != nil {
+		t.Fatalf("PlanSync failed: %v", err)
+	}
+	// Every node except the source must receive the core key in both files.
+	for _, name := range []string{"edge1", "edge2", "other"} {
+		for _, path := range []string{config.SSHKnownHostsPath, config.SSHAuthorizedKeysPath} {
+			act := findSSHKeyAction(actions, name, path)
+			if act == nil || !strings.Contains(act.FileContent, coreKey.Key) {
+				t.Fatalf("expected %s %s to include the core key via the all-nodes rule, got %+v", name, path, act)
+			}
+		}
+	}
+	if act := findSSHKeyAction(actions, "core1", config.SSHAuthorizedKeysPath); act != nil {
+		t.Fatalf("source nodes must not target themselves, got %+v", act)
+	}
+}

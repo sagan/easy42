@@ -149,3 +149,34 @@ func TestSSHKeyRuleTargetFiles(t *testing.T) {
 		t.Fatal("identity files are not managed targets")
 	}
 }
+
+func TestSSHKeyRuleAllNodesSelector(t *testing.T) {
+	allNodes := SSHKeyRule{
+		Type:        SSHKeyFileAuthorizedKeys,
+		SrcSelector: map[string]string{AllNodesSelectorKey: "true"},
+		DstSelector: map[string]string{AllNodesSelectorKey: "true"},
+	}
+	if err := ValidateSSHKeyRule(allNodes); err != nil {
+		t.Fatalf("all-nodes selector must be valid: %v", err)
+	}
+	if !IsAllNodesSelector(allNodes.DstSelector) {
+		t.Fatal("expected the all-nodes marker to be recognized")
+	}
+	if got := ExpandAllNodesSelector(allNodes.DstSelector); len(got) != 0 {
+		t.Fatalf("expected the marker to expand to an empty (match-all) selector, got %v", got)
+	}
+
+	// The marker must not be combined with other conditions.
+	combined := allNodes
+	combined.DstSelector = map[string]string{AllNodesSelectorKey: "true", "tag": "edge"}
+	if err := ValidateSSHKeyRule(combined); err == nil {
+		t.Fatal("expected combined all-nodes selector to be rejected")
+	}
+
+	// An empty destination selector is still rejected (never implicit "all").
+	empty := allNodes
+	empty.DstSelector = nil
+	if err := ValidateSSHKeyRule(empty); err == nil {
+		t.Fatal("expected empty destination selector to be rejected")
+	}
+}

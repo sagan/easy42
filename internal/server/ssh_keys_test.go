@@ -58,6 +58,11 @@ func TestSSHKeysAPI(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
 	}
+	// The UI iterates over node keys unconditionally, so the payload must never
+	// encode a nil slice as JSON null (regression: crashed the SSH tab).
+	if strings.Contains(w.Body.String(), `"keys":null`) {
+		t.Fatalf("node keys must be JSON arrays, never null: %s", w.Body.String())
+	}
 	var overview sshKeysResponse
 	if err := json.Unmarshal(w.Body.Bytes(), &overview); err != nil {
 		t.Fatalf("failed to parse overview: %v", err)
@@ -107,6 +112,31 @@ func TestSSHKeysAPI(t *testing.T) {
 	if created.ID == "" || created.Type != "all" {
 		t.Fatalf("unexpected created rule: %+v", created)
 	}
+
+	// 2b. "All nodes" selectors (sent by the UI) are accepted for both sides.
+	allBody, _ := json.Marshal(map[string]any{
+		"type":         "authorized_keys",
+		"src_selector": map[string]string{"all": "true"},
+		"dst_selector": map[string]string{"all": "true"},
+		"enabled":      true,
+	})
+	req = httptest.NewRequest("POST", "/api/ssh-keys/rules", bytes.NewReader(allBody))
+	req.Header.Set("Content-Type", "application/json")
+	w = httptest.NewRecorder()
+	srv.handleCreateSSHKeyRule(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected 201 for an all-nodes rule, got %d: %s", w.Code, w.Body.String())
+	}
+	var allRule config.SSHKeyRule
+	_ = json.Unmarshal(w.Body.Bytes(), &allRule)
+	if !config.IsAllNodesSelector(allRule.DstSelector) {
+		t.Fatalf("expected the all-nodes marker to be preserved, got %+v", allRule.DstSelector)
+	}
+	// Clean up so later assertions see a single rule.
+	req = httptest.NewRequest("DELETE", "/api/ssh-keys/rules/"+allRule.ID, nil)
+	req = withURLParam(req, "id", allRule.ID)
+	w = httptest.NewRecorder()
+	srv.handleDeleteSSHKeyRule(w, req)
 
 	// 3. Invalid rules are rejected.
 	for name, payload := range map[string]map[string]any{

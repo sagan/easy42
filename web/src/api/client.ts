@@ -753,13 +753,20 @@ export const api = {
   getAppVariables: () => request<AppVariable[]>("/apps/variables"),
 
   // SSH Keys (agent mode only)
-  getSSHKeys: () => request<SSHKeysResponse>("/ssh-keys"),
+  getSSHKeys: () =>
+    request<SSHKeysResponse>("/ssh-keys").then((res) => ({
+      ...res,
+      // Go marshals nil slices as null; normalize so the UI can iterate safely.
+      nodes: (res?.nodes || []).map((n) => ({ ...n, keys: n.keys || [] })),
+      rules: res?.rules || [],
+      summary: res?.summary || { nodes_with_keys: 0, total_keys: 0, rule_count: 0, enabled_rules: 0 },
+    })),
   refreshSSHKeys: (node?: string) =>
     request<{ message: string; refreshed: string[] }>("/ssh-keys/refresh", {
       method: "POST",
       body: JSON.stringify(node ? { node } : {}),
     }),
-  getSSHKeyRules: () => request<SSHKeyRule[]>("/ssh-keys/rules"),
+  getSSHKeyRules: () => request<SSHKeyRule[]>("/ssh-keys/rules").then((res) => res || []),
   createSSHKeyRule: (rule: Partial<SSHKeyRule>) =>
     request<SSHKeyRule>("/ssh-keys/rules", {
       method: "POST",
