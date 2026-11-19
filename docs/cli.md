@@ -354,7 +354,7 @@ easy42 mcp --role read_only
 | :------- | :------------- | :------------------------------------------------------- |
 | `--role` | `full_control` | Access role: `full_control` (read-write) or `read_only`. |
 
-See [MCP Server](integrations.md#10-mcp-server) for tokens, OAuth, and the HTTP endpoints.
+See [MCP Server](integrations.md#11-mcp-server) for tokens, OAuth, and the HTTP endpoints.
 
 ---
 

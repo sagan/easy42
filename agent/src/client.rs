@@ -26,6 +26,10 @@ impl AgentClient {
         collector.set_apps_manager(executor.apps_manager());
         let exec_for_col = executor.clone();
         collector.set_disable_apps_checker(move || exec_for_col.is_apps_disabled());
+        // SSH key management is bound to app management: a node with
+        // `disable_apps = true` must neither publish nor accept SSH keys.
+        let exec_for_ssh = executor.clone();
+        collector.set_ssh_keys_checker(move || !exec_for_ssh.is_apps_disabled());
         Self {
             executor,
             collector: Arc::new(Mutex::new(collector)),
@@ -222,6 +226,7 @@ impl AgentClient {
 
         // Reader future processing incoming server messages with read timeout (45s)
         let executor = self.executor.clone();
+        let collector_for_sync = self.collector.clone();
         let tx_cmd_resp = tx.clone();
         let tx_pong = tx.clone();
         let reader_fut = async {
@@ -252,7 +257,11 @@ impl AgentClient {
                                         cmd.command,
                                         Some(proto::command_request::Command::ProbeSystem(_))
                                     );
-                                    let col_opt = if is_probe || is_flush {
+                                    let is_fetch_ssh_keys = matches!(
+                                        cmd.command,
+                                        Some(proto::command_request::Command::FetchSshKeys(_))
+                                    );
+                                    let col_opt = if is_probe || is_flush || is_fetch_ssh_keys {
                                         Some(self.collector.clone())
                                     } else {
                                         None
@@ -264,6 +273,9 @@ impl AgentClient {
                                                 let mut c = col.lock().await;
                                                 if is_flush || is_probe {
                                                     c.flush_interface_cache();
+                                                }
+                                                if is_fetch_ssh_keys {
+                                                    c.flush_ssh_keys_cache();
                                                 }
                                                 c.collect_telemetry().await
                                             };
@@ -315,6 +327,12 @@ impl AgentClient {
                                         Err(e) => {
                                             warn!("Hosts sync failed: {}", e);
                                         }
+                                    }
+                                    // Re-read the SSH public keys on the next telemetry cycle so
+                                    // the server converges immediately after a hosts push.
+                                    {
+                                        let mut col = collector_for_sync.lock().await;
+                                        col.flush_ssh_keys_cache();
                                     }
                                 }
                                 Some(proto::agent_message::Payload::SyncApps(sync)) => {

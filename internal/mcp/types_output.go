@@ -61,9 +61,9 @@ type CommandOutput struct {
 }
 
 type NodeTelemetryOutput struct {
-	Node      string                  `json:"node"`
-	Connected bool                    `json:"connected"`
-	LastSeen  *time.Time              `json:"last_seen,omitempty"`
+	Node      string                   `json:"node"`
+	Connected bool                     `json:"connected"`
+	LastSeen  *time.Time               `json:"last_seen,omitempty"`
 	Telemetry *agentpb.TelemetryReport `json:"telemetry,omitempty"`
 }
 
@@ -193,6 +193,19 @@ type SaveLookingGlassTaskOutput struct {
 }
 
 // --- Cron Tasks Outputs ---
+
+// --- SSH Keys Outputs ---
+
+type ListSSHKeysOutput struct {
+	Nodes   []engine.SSHKeyNodeState `json:"nodes"`
+	Rules   []config.SSHKeyRule      `json:"rules"`
+	Summary engine.SSHKeysSummary    `json:"summary"`
+}
+
+type SSHKeyRuleMutationOutput struct {
+	Message string            `json:"message"`
+	Rule    config.SSHKeyRule `json:"rule"`
+}
 
 type ListCronTasksOutput struct {
 	Tasks []config.CronTask `json:"tasks"`

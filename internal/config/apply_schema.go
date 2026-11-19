@@ -60,6 +60,10 @@ const ConfigChangeJSONSchema = `{
           "type": "array",
           "items": { "$ref": "#/definitions/CronTask" }
         },
+        "ssh_key_rules": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/SSHKeyRule" }
+        },
         "database": { "$ref": "#/definitions/DatabaseSettingsPatch" },
         "integrations": { "$ref": "#/definitions/IntegrationsSettingsPatch" }
       }
@@ -302,6 +306,23 @@ const ConfigChangeJSONSchema = `{
         }
       }
     },
+    "SSHKeyRule": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string" },
+        "type": { "type": "string", "enum": ["known_hosts", "authorized_keys", "all"] },
+        "src_selector": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        },
+        "dst_selector": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        },
+        "enabled": { "type": "boolean" }
+      }
+    },
     "AppPatch": {
       "type": "object",
       "required": ["name"],
@@ -345,6 +366,7 @@ type ConfigPatch struct {
 	Templates       *[]ConfigTemplate          `json:"templates,omitempty" yaml:"templates,omitempty"`
 	ServerTasks     *[]ServerTaskConfig        `json:"server_tasks,omitempty" yaml:"server_tasks,omitempty"`
 	CronTasks       *[]CronTask                `json:"cron_tasks,omitempty" yaml:"cron_tasks,omitempty"`
+	SSHKeyRules     *[]SSHKeyRule              `json:"ssh_key_rules,omitempty" yaml:"ssh_key_rules,omitempty"`
 	Database        *DatabaseSettingsPatch     `json:"database,omitempty" yaml:"database,omitempty"`
 	Integrations    *IntegrationsSettingsPatch `json:"integrations,omitempty" yaml:"integrations,omitempty"`
 }
@@ -388,41 +410,41 @@ type NetworkSettingsPatch struct {
 
 // NodePatch holds partial changes to a node
 type NodePatch struct {
-	Name                string             `json:"name" yaml:"name"`
-	Host                *string            `json:"host,omitempty" yaml:"host,omitempty"`
-	IsExternal          *bool              `json:"is_external,omitempty" yaml:"is_external,omitempty"`
-	Caption             *string            `json:"caption,omitempty" yaml:"caption,omitempty"`
-	Description         *string            `json:"description,omitempty" yaml:"description,omitempty"`
-	Note                *string            `json:"note,omitempty" yaml:"note,omitempty"`
-	IP                  *string            `json:"ip,omitempty" yaml:"ip,omitempty"`
-	IP6                 *string            `json:"ip6,omitempty" yaml:"ip6,omitempty"`
-	ExternalIP          *string            `json:"external_ip,omitempty" yaml:"external_ip,omitempty"`
-	ExternalIP6         *string            `json:"external_ip6,omitempty" yaml:"external_ip6,omitempty"`
-	Interface           *string            `json:"interface,omitempty" yaml:"interface,omitempty"`
-	ASN                 *uint64            `json:"asn,omitempty" yaml:"asn,omitempty"`
-	Entrypoints         *[]Entrypoint      `json:"entrypoints,omitempty" yaml:"entrypoints,omitempty"`
-	Tags                *[]string          `json:"tags,omitempty" yaml:"tags,omitempty"`
-	TagsAdd             *[]string          `json:"tags_add,omitempty" yaml:"tags_add,omitempty"`
-	TagsDel             *[]string          `json:"tags_del,omitempty" yaml:"tags_del,omitempty"`
-	Table               *int               `json:"table,omitempty" yaml:"table,omitempty"`
-	ExternalTable       *int               `json:"external_table,omitempty" yaml:"external_table,omitempty"`
-	InternetTable       *int               `json:"internet_table,omitempty" yaml:"internet_table,omitempty"`
-	Metric              *int               `json:"metric,omitempty" yaml:"metric,omitempty"`
-	StaticRoutes        *[]string          `json:"static_routes,omitempty" yaml:"static_routes,omitempty"`
-	StaticRoutesAdd     *[]string          `json:"static_routes_add,omitempty" yaml:"static_routes_add,omitempty"`
-	StaticRoutesDel     *[]string          `json:"static_routes_del,omitempty" yaml:"static_routes_del,omitempty"`
-	Routes              *[]KernelRouteRule `json:"routes,omitempty" yaml:"routes,omitempty"`
-	ConfigHooks         *[]ConfigHook      `json:"config_hooks,omitempty" yaml:"config_hooks,omitempty"`
-	WgTemplate          *string            `json:"wg_template,omitempty" yaml:"wg_template,omitempty"`
-	BirdTemplate        *string            `json:"bird_template,omitempty" yaml:"bird_template,omitempty"`
-	NftTemplate         *string            `json:"nft_template,omitempty" yaml:"nft_template,omitempty"`
-	X                   *float64           `json:"x,omitempty" yaml:"x,omitempty"`
-	Y                   *float64           `json:"y,omitempty" yaml:"y,omitempty"`
-	Mode                *string            `json:"mode,omitempty" yaml:"mode,omitempty"`
-	EnableFA            *bool              `json:"enable_fa,omitempty" yaml:"enable_fa,omitempty"`
-	UpdateHosts         *bool              `json:"update_hosts,omitempty" yaml:"update_hosts,omitempty"`
-	ExtraHosts          *string            `json:"extra_hosts,omitempty" yaml:"extra_hosts,omitempty"`
-	CustomNetworkScript *string            `json:"custom_network_script,omitempty" yaml:"custom_network_script,omitempty"`
+	Name                    string             `json:"name" yaml:"name"`
+	Host                    *string            `json:"host,omitempty" yaml:"host,omitempty"`
+	IsExternal              *bool              `json:"is_external,omitempty" yaml:"is_external,omitempty"`
+	Caption                 *string            `json:"caption,omitempty" yaml:"caption,omitempty"`
+	Description             *string            `json:"description,omitempty" yaml:"description,omitempty"`
+	Note                    *string            `json:"note,omitempty" yaml:"note,omitempty"`
+	IP                      *string            `json:"ip,omitempty" yaml:"ip,omitempty"`
+	IP6                     *string            `json:"ip6,omitempty" yaml:"ip6,omitempty"`
+	ExternalIP              *string            `json:"external_ip,omitempty" yaml:"external_ip,omitempty"`
+	ExternalIP6             *string            `json:"external_ip6,omitempty" yaml:"external_ip6,omitempty"`
+	Interface               *string            `json:"interface,omitempty" yaml:"interface,omitempty"`
+	ASN                     *uint64            `json:"asn,omitempty" yaml:"asn,omitempty"`
+	Entrypoints             *[]Entrypoint      `json:"entrypoints,omitempty" yaml:"entrypoints,omitempty"`
+	Tags                    *[]string          `json:"tags,omitempty" yaml:"tags,omitempty"`
+	TagsAdd                 *[]string          `json:"tags_add,omitempty" yaml:"tags_add,omitempty"`
+	TagsDel                 *[]string          `json:"tags_del,omitempty" yaml:"tags_del,omitempty"`
+	Table                   *int               `json:"table,omitempty" yaml:"table,omitempty"`
+	ExternalTable           *int               `json:"external_table,omitempty" yaml:"external_table,omitempty"`
+	InternetTable           *int               `json:"internet_table,omitempty" yaml:"internet_table,omitempty"`
+	Metric                  *int               `json:"metric,omitempty" yaml:"metric,omitempty"`
+	StaticRoutes            *[]string          `json:"static_routes,omitempty" yaml:"static_routes,omitempty"`
+	StaticRoutesAdd         *[]string          `json:"static_routes_add,omitempty" yaml:"static_routes_add,omitempty"`
+	StaticRoutesDel         *[]string          `json:"static_routes_del,omitempty" yaml:"static_routes_del,omitempty"`
+	Routes                  *[]KernelRouteRule `json:"routes,omitempty" yaml:"routes,omitempty"`
+	ConfigHooks             *[]ConfigHook      `json:"config_hooks,omitempty" yaml:"config_hooks,omitempty"`
+	WgTemplate              *string            `json:"wg_template,omitempty" yaml:"wg_template,omitempty"`
+	BirdTemplate            *string            `json:"bird_template,omitempty" yaml:"bird_template,omitempty"`
+	NftTemplate             *string            `json:"nft_template,omitempty" yaml:"nft_template,omitempty"`
+	X                       *float64           `json:"x,omitempty" yaml:"x,omitempty"`
+	Y                       *float64           `json:"y,omitempty" yaml:"y,omitempty"`
+	Mode                    *string            `json:"mode,omitempty" yaml:"mode,omitempty"`
+	EnableFA                *bool              `json:"enable_fa,omitempty" yaml:"enable_fa,omitempty"`
+	UpdateHosts             *bool              `json:"update_hosts,omitempty" yaml:"update_hosts,omitempty"`
+	ExtraHosts              *string            `json:"extra_hosts,omitempty" yaml:"extra_hosts,omitempty"`
+	CustomNetworkScript     *string            `json:"custom_network_script,omitempty" yaml:"custom_network_script,omitempty"`
 	RouteReflector          *bool              `json:"route_reflector,omitempty" yaml:"route_reflector,omitempty"`
 	EnableDynamicBirdConfig *bool              `json:"enable_dynamic_bird_config,omitempty" yaml:"enable_dynamic_bird_config,omitempty"`
 }
@@ -617,6 +639,20 @@ func ParseAndValidateConfigChange(raw []byte) (*ConfigPatch, string, error) {
 		for i := range *patch.Apps {
 			if err := validateAppPatch(&(*patch.Apps)[i]); err != nil {
 				return nil, format, fmt.Errorf("apps[%d] (%s): %w", i, (*patch.Apps)[i].Name, err)
+			}
+		}
+	}
+
+	// Validate SSH key rules
+	if patch.SSHKeyRules != nil {
+		for i := range *patch.SSHKeyRules {
+			rule := (*patch.SSHKeyRules)[i]
+			rule.Type = strings.TrimSpace(rule.Type)
+			if rule.Type == "" {
+				rule.Type = SSHKeyRuleTypeAll
+			}
+			if err := ValidateSSHKeyRule(rule); err != nil {
+				return nil, format, fmt.Errorf("ssh_key_rules[%d]: %w", i, err)
 			}
 		}
 	}
@@ -879,4 +915,3 @@ func validateAppPatch(a *AppPatch) error {
 
 	return nil
 }
-

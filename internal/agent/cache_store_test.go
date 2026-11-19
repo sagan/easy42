@@ -132,9 +132,15 @@ func TestAgentCacheTableComesFromSharedMigrations(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if v != 6 {
-		t.Errorf("current migration version = %d, want 6 (0006_agent_cache.sql)", v)
+	allMigrations, err := migrate.LoadMigrations()
+	if err != nil {
+		t.Fatal(err)
 	}
+	latest := allMigrations[len(allMigrations)-1].Version
+	if v != latest {
+		t.Errorf("current migration version = %d, want %d", v, latest)
+	}
+	// The agent cache lives in the 0006 migration regardless of later versions.
 	var migName string
 	if err := db.QueryRow("SELECT name FROM schema_migrations WHERE version = 6").Scan(&migName); err != nil {
 		t.Fatalf("schema_migrations row for version 6 missing: %v", err)
@@ -143,8 +149,8 @@ func TestAgentCacheTableComesFromSharedMigrations(t *testing.T) {
 		t.Errorf("version 6 migration = %q, want 0006_agent_cache.sql", migName)
 	}
 	var userVersion int
-	if err := db.QueryRow("PRAGMA user_version").Scan(&userVersion); err != nil || userVersion != 6 {
-		t.Errorf("user_version = %d (err=%v), want 6", userVersion, err)
+	if err := db.QueryRow("PRAGMA user_version").Scan(&userVersion); err != nil || userVersion != latest {
+		t.Errorf("user_version = %d (err=%v), want %d", userVersion, err, latest)
 	}
 
 	// Write through the cache store, then re-apply migrations (idempotency).

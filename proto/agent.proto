@@ -71,6 +71,10 @@ message TelemetryReport {
   string hosts_hash = 6;
   repeated AppStatus apps = 7;
   bool disable_apps = 8;
+  // Root user SSH public keys (OpenSSH default identity *.pub files) collected
+  // by the agent. Empty for agents that predate SSH key management or when the
+  // key management feature is disabled on the node.
+  repeated SshPublicKey ssh_keys = 9;
 }
 
 message DiskMetrics {
@@ -136,6 +140,7 @@ message CommandRequest {
     SyncActionCmd sync_action = 19;
     DeleteConfigFile delete_config = 20;
     AppActionCmd app_action = 21;
+    FetchSshKeysCmd fetch_ssh_keys = 22;
   }
 }
 
@@ -149,6 +154,7 @@ message SyncActionCmd {
   repeated HostRecord hosts = 7; // For sync_hosts
   string description = 8;        // Action description
   string diff_status = 9;        // "create" | "update" | "delete" | "synced"
+  repeated SshPublicKey ssh_keys = 10; // For sync_ssh_keys: public keys to install into target_file
 }
 
 message ApplyConfigFile {
@@ -203,6 +209,19 @@ message LookingGlassCmd {
 message ProbeSystemCmd {}
 
 message FlushCacheCmd {}
+
+// FetchSshKeysCmd asks the agent to collect and return the root user's OpenSSH
+// default identity public keys. The response payload is JSON and contains both
+// the collected keys and the current known_hosts / authorized_keys block hashes.
+message FetchSshKeysCmd {}
+
+// SshPublicKey is a single OpenSSH public key file line.
+message SshPublicKey {
+  string algorithm = 1; // e.g. "ssh-ed25519"
+  string key = 2;       // Base64 key blob
+  string comment = 3;   // Optional trailing comment
+  string path = 4;      // Source *.pub file path (e.g. "/root/.ssh/id_ed25519.pub")
+}
 
 message RestartServiceCmd {
   string service_name = 1; // "wireguard", "bird"

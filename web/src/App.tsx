@@ -38,6 +38,8 @@ const AppContent: React.FC = () => {
       document.title = `Global Variables - ${netName}`;
     } else if (path === "/apps/scripts") {
       document.title = `Scripts - ${netName}`;
+    } else if (path === "/apps/ssh") {
+      document.title = `SSH Keys - ${netName}`;
     } else if (path.startsWith("/apps")) {
       document.title = `Apps - ${netName}`;
     } else if (path.startsWith("/looking-glass")) {
@@ -92,7 +94,7 @@ const AppContent: React.FC = () => {
         <Route index element={<Navigate to="/nodes" replace />} />
         <Route path="nodes" element={<NodesPage />} />
         <Route path="nodes/:nodeName" element={<NodeDetailPage />} />
-        {/* Apps: /apps (Workload Apps) and /apps/variables (Global Variables) */}
+        {/* Apps: /apps (Workload Apps), /apps/scripts, /apps/variables and /apps/ssh */}
         <Route path="apps/:tab?" element={<AppsPage />} />
         <Route path="topology" element={<TopologyPage />} />
         <Route path="looking-glass" element={<LookingGlassPage />} />

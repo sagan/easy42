@@ -5,6 +5,7 @@ mod container;
 mod cron;
 mod executor;
 mod hosts;
+mod ssh_keys;
 mod sysinfo;
 pub mod apps;
 pub mod crontab;
@@ -45,6 +46,10 @@ struct Cli {
     /// Telemetry reporting interval in seconds
     #[arg(short, long)]
     interval: Option<u64>,
+
+    /// Disable app management (and, with it, SSH key management) on this node
+    #[arg(long)]
+    disable_apps: bool,
 }
 
 #[tokio::main]
@@ -96,6 +101,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     if let Some(inv) = cli.interval {
         config.telemetry_interval_secs = inv;
+    }
+    if cli.disable_apps {
+        config.disable_apps = true;
     }
 
     // 2. Initialize tracing

@@ -46,7 +46,7 @@ Instead of manually compiling binaries and configuring service units, Easy42 pro
 
 Every 10 seconds (configurable via `telemetry_interval_secs`), the agent samples and streams real-time system metrics to the controller:
 
-Every report also carries `hosts_hash`, the current workload-App statuses, and `disable_apps`.
+Every report also carries `hosts_hash`, the current workload-App statuses, `disable_apps`, and the collected root SSH public keys (`ssh_keys`, see [SSH Key Management](integrations.md#3-ssh-key-management-agent-mode)).
 
 1. **System Load & Compute**:
    - Total CPU utilization percentage (`cpu_percent`; the first sample is `0%`).
@@ -79,7 +79,7 @@ The agent executes scheduled network latency and connectivity probes directly fr
 - **Reporting**: Each run returns a Protobuf `CronTaskReport` containing the task ID, node name, execution timestamp, exit code, duration, raw stdout/stderr, and an error message. The controller persists results in SQLite (with parsed RTT/loss/min/avg/max/mdev and `ok`/`degraded`/`failed` summaries) for the UI and API, and records a fleet event on repeated failures.
 - **Looking Glass allowlist**: Ad-hoc Looking Glass commands are restricted to `ping`, `traceroute`, `birdc`, `ip`, `wg`, `mtr`, `whois`, and `dig` (`Custom` category), with host/port validation and ping-count clamps (`1–30` for ping, `1–20` for `tcp_ping`). The native `http` task and the ad-hoc `http <url> [count]` command are dispatched on the `HTTP` tool over gRPC with a validated `http(s)://` URL and are not run through the shell.
 
-> **Note:** The agent also runs **cron-type workload Apps** (system crontab entries installed via the Apps feature, delimited by `### EASY42_START`/`### EASY42_END` markers). That system is separate from cron probes and has no `count`/`timeout` semantics — see [Workload Apps](integrations.md#9-workload-apps-apps).
+> **Note:** The agent also runs **cron-type workload Apps** (system crontab entries installed via the Apps feature, delimited by `### EASY42_START`/`### EASY42_END` markers). That system is separate from cron probes and has no `count`/`timeout` semantics — see [Workload Apps](integrations.md#10-workload-apps-apps).
 
 ---
 
@@ -127,7 +127,7 @@ Hooks are executed with `sh -c "<command>"` under a 60-second timeout. The agent
 | Environment Variable      |   Available In   | Description                                                                                                                             |
 | :------------------------ | :--------------: | :-------------------------------------------------------------------------------------------------------------------------------------- |
 | `EASY42_SYNC_NODE`        |       Both       | The name of the node undergoing sync (e.g. `node-frankfurt`).                                                                           |
-| `EASY42_SYNC_ACTION`      |       Both       | Action type: `sync_wg`, `sync_bird`, `sync_nftables`, `sync_roa`, `sync_hosts`, `delete_config`, `delete_file`, `delete_wg`, `down_wg`. |
+| `EASY42_SYNC_ACTION`      |       Both       | Action type: `sync_wg`, `sync_bird`, `sync_nftables`, `sync_roa`, `sync_hosts`, `sync_ssh_keys`, `delete_config`, `delete_file`, `delete_wg`, `down_wg`. |
 | `EASY42_SYNC_INTERFACE`   |       Both       | Name of the network interface involved (e.g. `wg42lon`), if applicable.                                                                 |
 | `EASY42_SYNC_TARGET_FILE` |       Both       | Target file path on disk (e.g. `/etc/wireguard/wg42lon.conf`).                                                                          |
 | `EASY42_SYNC_DESCRIPTION` |       Both       | Human-readable description of the sync step.                                                                                            |
@@ -180,11 +180,11 @@ fi
 
 ## Workload Apps, Obfuscators & `disable_apps`
 
-- **Apps**: The agent declaratively syncs Docker Compose apps to `/etc/ezappc/ezapp-<name>/compose.yaml` + `.env` (`0600`), systemd apps to `/etc/systemd/system/ezapp-<name>.service` + `.env` (or `/etc/init.d/ezapp-*` + `/etc/conf.d/ezapp-*` on OpenRC/procd), auxiliary files and artifacts to `/etc/ezapp/<name>/`, and cron apps into the system crontab. Orphaned files are garbage-collected via a `.easy42-managed.json` manifest (preserving user bind-mounts). Actions `start`/`stop`/`restart`/`logs` are supported (cron apps reject actions). See [Workload Apps](integrations.md#9-workload-apps-apps).
-- **Platform reporting**: On registration the agent reports `os_info` as `<os> <arch> [<endian>]`, using `uname -m` for the architecture rather than the compile-time value (a `mipsel` binary reports `mips` on every MIPS host otherwise). MIPS hosts additionally report `little`/`big`, which the server uses to pick the correct upstream artifact. See [Artifacts](integrations.md#9-workload-apps-apps).
+- **Apps**: The agent declaratively syncs Docker Compose apps to `/etc/ezappc/ezapp-<name>/compose.yaml` + `.env` (`0600`), systemd apps to `/etc/systemd/system/ezapp-<name>.service` + `.env` (or `/etc/init.d/ezapp-*` + `/etc/conf.d/ezapp-*` on OpenRC/procd), auxiliary files and artifacts to `/etc/ezapp/<name>/`, and cron apps into the system crontab. Orphaned files are garbage-collected via a `.easy42-managed.json` manifest (preserving user bind-mounts). Actions `start`/`stop`/`restart`/`logs` are supported (cron apps reject actions). See [Workload Apps](integrations.md#10-workload-apps-apps).
+- **Platform reporting**: On registration the agent reports `os_info` as `<os> <arch> [<endian>]`, using `uname -m` for the architecture rather than the compile-time value (a `mipsel` binary reports `mips` on every MIPS host otherwise). MIPS hosts additionally report `little`/`big`, which the server uses to pick the correct upstream artifact. See [Artifacts](integrations.md#10-workload-apps-apps).
 - **Init system reporting**: The agent also reports `init_system` (`systemd`, `procd` for OpenWrt, or `openrc` for Alpine), detected from `/run/systemd/system`, `/etc/openwrt_release`/`/sbin/procd`, and `/sbin/openrc-run`/`/run/openrc`. The server uses this to transpile systemd units into procd/OpenRC init scripts. Agents older than this field are handled with an `os_info` heuristic, which cannot detect OpenWrt (since `os_info` never contains `openwrt`), so OpenWrt nodes require an agent that reports `init_system`.
 - **Obfuscators**: The agent installs and supervises one Phantun service per obfuscated link endpoint (`<interface>-obfuscator`). See [WireGuard Obfuscation](architecture.md#wireguard-obfuscation-phantun).
-- **`disable_apps`**: Setting `"disable_apps": true` in `agent.json` makes the agent refuse `SyncApps`/`AppAction` requests and omit app statuses from telemetry. The `install.sh` agent installer supports configuring this flag (`--disable-apps`) in a new or existing `agent.json`.
+- **`disable_apps`**: Setting `"disable_apps": true` in `agent.json` makes the agent refuse `SyncApps`/`AppAction` requests and omit app statuses from telemetry. It also disables [SSH key management](integrations.md#3-ssh-key-management-agent-mode): the agent stops publishing root public keys and refuses `sync_ssh_keys` actions. The `install.sh` agent installer supports configuring this flag (`--disable-apps`) in a new or existing `agent.json`, and the binary accepts `--disable-apps` on the command line.
 - **`install.sh` Custom Node Options**: The `/api/agent/install.sh` installer supports `--pre-sync <cmd>` and `--post-sync <cmd>` (configured via node Note data `agent_pre_sync` and `agent_post_sync`), `--disable-apps` (`agent_disable_apps`), `--node-name <name>`, and `--overwrite-config`. When installing or upgrading, any passed hooks or flags are written or updated in `/etc/easy42/agent.json`.
 
 ---

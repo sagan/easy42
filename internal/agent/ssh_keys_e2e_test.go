@@ -1,0 +1,390 @@
+package agent_test
+
+import (
+	"context"
+	"encoding/base64"
+	"encoding/binary"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
+	"easy42/internal/agent"
+	agentpb "easy42/internal/agent/proto"
+	"easy42/internal/config"
+)
+
+// sshKeyBlob builds a minimal but well-formed SSH public key blob.
+func sshKeyBlob(algorithm, payload string) string {
+	buf := make([]byte, 4)
+	binary.BigEndian.PutUint32(buf, uint32(len(algorithm)))
+	buf = append(buf, algorithm...)
+	buf = append(buf, payload...)
+	return base64.StdEncoding.EncodeToString(buf)
+}
+
+type runningAgent struct {
+	name   string
+	sshDir string
+	cancel context.CancelFunc
+}
+
+func findAgentBinary(t *testing.T) string {
+	t.Helper()
+	candidates := []string{
+		filepath.Join("..", "..", "bin", "easy42-agent"),
+		filepath.Join("..", "..", "agent", "target", "x86_64-unknown-linux-musl", "release", "easy42-agent"),
+	}
+	for _, c := range candidates {
+		if _, err := os.Stat(c); err == nil {
+			return c
+		}
+	}
+	t.Skipf("agent binary not found, skipping e2e test")
+	return ""
+}
+
+// startAgent runs the real easy42-agent binary with an isolated SSH directory.
+func startAgent(t *testing.T, agentBin, serverURL, token, name string, extraArgs ...string) *runningAgent {
+	t.Helper()
+	sshDir := t.TempDir()
+	ctx, cancel := context.WithCancel(context.Background())
+	args := append([]string{
+		"--server", serverURL,
+		"--token", token,
+		"--node-name", name,
+		"--interval", "1",
+		"--config", filepath.Join(t.TempDir(), "agent.json"),
+	}, extraArgs...)
+	cmd := exec.CommandContext(ctx, agentBin, args...)
+	cmd.Env = append(os.Environ(), "EASY42_SSH_DIR="+sshDir, "EASY42_HOSTS_PATH="+filepath.Join(t.TempDir(), "hosts"))
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Start(); err != nil {
+		cancel()
+		t.Fatalf("failed to start agent %s: %v", name, err)
+	}
+	t.Cleanup(func() {
+		cancel()
+		_ = cmd.Wait()
+	})
+	return &runningAgent{name: name, sshDir: sshDir, cancel: cancel}
+}
+
+func waitFor(t *testing.T, what string, timeout time.Duration, cond func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if cond() {
+			return
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	t.Fatalf("timed out waiting for %s", what)
+}
+
+func TestRustAgentSSHKeysEndToEnd(t *testing.T) {
+	agentBin := findAgentBinary(t)
+
+	hub := agent.NewHub()
+	tokenA := "e42_e2e_ssh_a"
+	tokenB := "e42_e2e_ssh_b"
+	nodeA := "e2e-ssh-a"
+	nodeB := "e2e-ssh-b"
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/agent/ws" {
+			http.NotFound(w, r)
+			return
+		}
+		var name string
+		switch r.Header.Get("Authorization") {
+		case "Bearer " + tokenA:
+			name = nodeA
+		case "Bearer " + tokenB:
+			name = nodeB
+		default:
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		ws, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			return
+		}
+		conn := agent.NewConnection(name, ws, hub)
+		hub.Register(conn)
+		go conn.ReadLoop()
+	}))
+	defer server.Close()
+
+	// Node A has two default identity keys plus a non-default key that must be
+	// ignored by the collector.
+	runA := startAgent(t, agentBin, server.URL, tokenA, nodeA)
+	keyA := sshKeyBlob("ssh-ed25519", "node-a-key")
+	if err := os.WriteFile(filepath.Join(runA.sshDir, "id_ed25519.pub"),
+		[]byte("ssh-ed25519 "+keyA+" root@node-a\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	rsaA := sshKeyBlob("ssh-rsa", "node-a-rsa")
+	if err := os.WriteFile(filepath.Join(runA.sshDir, "id_rsa.pub"),
+		[]byte("ssh-rsa "+rsaA+" root@node-a-rsa\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(runA.sshDir, "custom.pub"),
+		[]byte("ssh-ed25519 "+sshKeyBlob("ssh-ed25519", "ignored")+" custom\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	runB := startAgent(t, agentBin, server.URL, tokenB, nodeB)
+	keyB := sshKeyBlob("ssh-ed25519", "node-b-key")
+	if err := os.WriteFile(filepath.Join(runB.sshDir, "id_ed25519.pub"),
+		[]byte("ssh-ed25519 "+keyB+" root@node-b\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	waitFor(t, "both agents to connect", 10*time.Second, func() bool {
+		return hub.IsConnected(nodeA) && hub.IsConnected(nodeB)
+	})
+
+	// 1. Keys are collected automatically via telemetry.
+	waitFor(t, "node A keys to be collected", 10*time.Second, func() bool {
+		return len(hub.GetSSHKeys(nodeA)) == 2
+	})
+	waitFor(t, "node B keys to be collected", 10*time.Second, func() bool {
+		return len(hub.GetSSHKeys(nodeB)) == 1
+	})
+	for _, k := range hub.GetSSHKeys(nodeA) {
+		if k.Comment == "custom" {
+			t.Fatalf("non-default identity files must not be collected: %+v", k)
+		}
+	}
+
+	// 2. The explicit fetch command returns the keys and the current block hashes.
+	fetchCtx, fetchCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer fetchCancel()
+	fetchResp, err := hub.SendCommand(fetchCtx, nodeA, &agentpb.CommandRequest{
+		Command: &agentpb.CommandRequest_FetchSshKeys{
+			FetchSshKeys: &agentpb.FetchSshKeysCmd{},
+		},
+	})
+	if err != nil || !fetchResp.Success {
+		t.Fatalf("fetch SSH keys failed: %v %v", err, fetchResp)
+	}
+	var fetched struct {
+		SSHKeys            []struct{ Algorithm, Key, Comment, Path string } `json:"ssh_keys"`
+		SSHKeysEnabled     bool                                             `json:"ssh_keys_enabled"`
+		KnownHostsHash     string                                           `json:"known_hosts_hash"`
+		AuthorizedKeysHash string                                           `json:"authorized_keys_hash"`
+	}
+	if err := json.Unmarshal([]byte(fetchResp.Stdout), &fetched); err != nil {
+		t.Fatalf("invalid fetch response: %v (%s)", err, fetchResp.Stdout)
+	}
+	if !fetched.SSHKeysEnabled || len(fetched.SSHKeys) != 2 {
+		t.Fatalf("unexpected fetch result: %+v", fetched)
+	}
+	if fetched.KnownHostsHash != "" || fetched.AuthorizedKeysHash != "" {
+		t.Fatalf("no managed block exists yet, expected empty hashes: %+v", fetched)
+	}
+
+	// 3. Apply an authorized_keys sync action directly through the agent and
+	// verify it is idempotent, atomic and preserves foreign content.
+	foreign := "ssh-ed25519 " + sshKeyBlob("ssh-ed25519", "manual") + " manually-added\n"
+	if err := os.WriteFile(filepath.Join(runB.sshDir, "authorized_keys"), []byte(foreign), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	sendSync := func() *agentpb.CommandResponse {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		resp, err := hub.SendCommand(ctx, nodeB, &agentpb.CommandRequest{
+			Command: &agentpb.CommandRequest_SyncAction{
+				SyncAction: &agentpb.SyncActionCmd{
+					ActionType: "sync_ssh_keys",
+					TargetFile: config.SSHAuthorizedKeysPath,
+					FileMode:   0644,
+					DiffStatus: "create",
+					SshKeys: []*agentpb.SshPublicKey{
+						{Algorithm: "ssh-ed25519", Key: keyA, Comment: "root@node-a"},
+						{Algorithm: "ssh-rsa", Key: rsaA, Comment: "root@node-a-rsa"},
+					},
+				},
+			},
+		})
+		if err != nil {
+			t.Fatalf("SendCommand failed: %v", err)
+		}
+		return resp
+	}
+
+	resp := sendSync()
+	if !resp.Success {
+		t.Fatalf("authorized_keys sync failed: %s %s", resp.Stderr, resp.Stdout)
+	}
+	if !strings.Contains(resp.Stdout, "modified=true") {
+		t.Fatalf("expected first sync to modify the file, got %q", resp.Stdout)
+	}
+
+	content, err := os.ReadFile(filepath.Join(runB.sshDir, "authorized_keys"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(content)
+	if !strings.Contains(text, "manually-added") {
+		t.Fatalf("foreign authorized_keys lines must be preserved, got:\n%s", text)
+	}
+	if !strings.Contains(text, "ssh-ed25519 "+keyA+" easy42 root@node-a\n") {
+		t.Fatalf("expected managed ed25519 line, got:\n%s", text)
+	}
+	if !strings.Contains(text, "ssh-rsa "+rsaA+" easy42 root@node-a-rsa\n") {
+		t.Fatalf("expected managed rsa line, got:\n%s", text)
+	}
+	if !strings.HasPrefix(text, foreign) {
+		t.Fatalf("foreign content must stay at the top of the file, got:\n%s", text)
+	}
+	info, err := os.Stat(filepath.Join(runB.sshDir, "authorized_keys"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0600 {
+		t.Fatalf("authorized_keys must be mode 0600, got %o", info.Mode().Perm())
+	}
+
+	resp = sendSync()
+	if !resp.Success || !strings.Contains(resp.Stdout, "modified=false") {
+		t.Fatalf("second sync must be a no-op, got success=%v stdout=%q", resp.Success, resp.Stdout)
+	}
+
+	// 4. known_hosts is managed the same way with mode 0644.
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	resp, err = hub.SendCommand(ctx, nodeB, &agentpb.CommandRequest{
+		Command: &agentpb.CommandRequest_SyncAction{
+			SyncAction: &agentpb.SyncActionCmd{
+				ActionType: "sync_ssh_keys",
+				TargetFile: config.SSHKnownHostsPath,
+				FileMode:   0644,
+				DiffStatus: "create",
+				SshKeys: []*agentpb.SshPublicKey{
+					{Algorithm: "ssh-ed25519", Key: keyA, Comment: "root@node-a"},
+				},
+			},
+		},
+	})
+	if err != nil || !resp.Success {
+		t.Fatalf("known_hosts sync failed: %v %v", err, resp)
+	}
+	khInfo, err := os.Stat(filepath.Join(runB.sshDir, "known_hosts"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if khInfo.Mode().Perm() != 0644 {
+		t.Fatalf("known_hosts must be mode 0644, got %o", khInfo.Mode().Perm())
+	}
+
+	// 5. An empty key set removes the block but keeps foreign lines.
+	resp, err = hub.SendCommand(ctx, nodeB, &agentpb.CommandRequest{
+		Command: &agentpb.CommandRequest_SyncAction{
+			SyncAction: &agentpb.SyncActionCmd{
+				ActionType: "sync_ssh_keys",
+				TargetFile: config.SSHAuthorizedKeysPath,
+				FileMode:   0644,
+				DiffStatus: "create",
+			},
+		},
+	})
+	if err != nil || !resp.Success {
+		t.Fatalf("authorized_keys cleanup failed: %v %v", err, resp)
+	}
+	content, _ = os.ReadFile(filepath.Join(runB.sshDir, "authorized_keys"))
+	text = string(content)
+	if strings.Contains(text, config.SSHKeysStartMarker) {
+		t.Fatalf("empty key set must remove the managed block, got:\n%s", text)
+	}
+	if !strings.Contains(text, "manually-added") {
+		t.Fatalf("cleanup must keep foreign lines, got:\n%s", text)
+	}
+
+	// 6. Unmanaged targets are rejected.
+	resp, err = hub.SendCommand(ctx, nodeB, &agentpb.CommandRequest{
+		Command: &agentpb.CommandRequest_SyncAction{
+			SyncAction: &agentpb.SyncActionCmd{
+				ActionType: "sync_ssh_keys",
+				TargetFile: "/root/.ssh/id_ed25519",
+				DiffStatus: "create",
+			},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.Success {
+		t.Fatal("expected unmanaged target paths to be rejected")
+	}
+}
+
+func TestRustAgentSSHKeysDisabledViaFlag(t *testing.T) {
+	agentBin := findAgentBinary(t)
+
+	hub := agent.NewHub()
+	token := "e42_e2e_ssh_disabled"
+	node := "e2e-ssh-disabled"
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/agent/ws" || r.Header.Get("Authorization") != "Bearer "+token {
+			http.NotFound(w, r)
+			return
+		}
+		ws, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			return
+		}
+		conn := agent.NewConnection(node, ws, hub)
+		hub.Register(conn)
+		go conn.ReadLoop()
+	}))
+	defer server.Close()
+
+	run := startAgent(t, agentBin, server.URL, token, node, "--disable-apps")
+	key := sshKeyBlob("ssh-ed25519", "disabled-key")
+	if err := os.WriteFile(filepath.Join(run.sshDir, "id_ed25519.pub"),
+		[]byte("ssh-ed25519 "+key+" root@disabled\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	waitFor(t, "agent to connect", 10*time.Second, func() bool { return hub.IsConnected(node) })
+	waitFor(t, "agent to report disable_apps", 10*time.Second, func() bool { return hub.IsAppsDisabled(node) })
+
+	// Give telemetry a couple of cycles; keys must never be published.
+	time.Sleep(2500 * time.Millisecond)
+	if keys := hub.GetSSHKeys(node); len(keys) != 0 {
+		t.Fatalf("keys must not be collected with disable_apps = true, got %+v", keys)
+	}
+
+	// A sync action is refused as well.
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	resp, err := hub.SendCommand(ctx, node, &agentpb.CommandRequest{
+		Command: &agentpb.CommandRequest_SyncAction{
+			SyncAction: &agentpb.SyncActionCmd{
+				ActionType: "sync_ssh_keys",
+				TargetFile: config.SSHAuthorizedKeysPath,
+				DiffStatus: "create",
+				SshKeys:    []*agentpb.SshPublicKey{{Algorithm: "ssh-ed25519", Key: key}},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.Success || !strings.Contains(resp.Stderr, "disabled") {
+		t.Fatalf("expected the sync to be refused, got success=%v stderr=%q", resp.Success, resp.Stderr)
+	}
+	if _, err := os.Stat(filepath.Join(run.sshDir, "authorized_keys")); err == nil {
+		t.Fatal("authorized_keys must not be written on a disable_apps node")
+	}
+}

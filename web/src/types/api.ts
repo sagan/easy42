@@ -1218,6 +1218,51 @@ export interface InterpolatePreviewResponse {
   rendered: string;
 }
 
+// --- SSH Keys (agent mode only) ---
+
+export type SSHKeyRuleType = "known_hosts" | "authorized_keys" | "all";
+
+export interface SSHPublicKey {
+  algorithm: string;
+  key: string;
+  comment?: string;
+  path?: string;
+}
+
+export interface SSHKeyRule {
+  id: string;
+  type: SSHKeyRuleType;
+  src_selector: Record<string, string>;
+  dst_selector: Record<string, string>;
+  enabled: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface SSHKeyNodeState {
+  name: string;
+  mode?: string;
+  connected: boolean;
+  agent_version?: string;
+  supported: boolean;
+  reason?: string;
+  keys: SSHPublicKey[];
+  file_hashes?: Record<string, string>;
+}
+
+export interface SSHKeysSummary {
+  nodes_with_keys: number;
+  total_keys: number;
+  rule_count: number;
+  enabled_rules: number;
+}
+
+export interface SSHKeysResponse {
+  nodes: SSHKeyNodeState[];
+  rules: SSHKeyRule[];
+  summary: SSHKeysSummary;
+}
+
 export type EventType = "node_offline" | "node_online" | "cron_task_failure";
 
 export interface EventItem {

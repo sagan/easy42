@@ -205,6 +205,7 @@ type Config struct {
 	CronTasks         []CronTask           `json:"cron_tasks,omitempty"`
 	Apps              []App                `json:"apps,omitempty"`
 	AppVariables      []AppVariable        `json:"app_variables,omitempty"`
+	SSHKeyRules       []SSHKeyRule         `json:"ssh_key_rules,omitempty"`
 	Blocks            []Block              `json:"blocks,omitempty"`
 	DNS               DNSConfig            `json:"dns,omitempty"`
 	Templates         []ConfigTemplate     `json:"templates,omitempty"`
@@ -722,6 +723,8 @@ const (
 	ActionSyncNftablesConfig ActionType = "sync_nftables"
 	ActionSyncRoaConfig      ActionType = "sync_roa"
 	ActionSyncHosts          ActionType = "sync_hosts"
+	ActionSyncSSHKeys        ActionType = "sync_ssh_keys"
+	ActionCleanupSSHKeys     ActionType = "cleanup_ssh_keys"
 	ActionSyncObfuscators    ActionType = "sync_obfuscators"
 	ActionSyncApp            ActionType = "sync_app"
 	ActionDeleteApp          ActionType = "delete_app"

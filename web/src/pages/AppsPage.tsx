@@ -81,6 +81,7 @@ import {
   HardDrive,
   ShieldCheck,
   Play,
+  KeyRound,
 } from "lucide-react";
 import { api } from "../api/client";
 import { useMesh } from "../context/MeshContext";
@@ -108,6 +109,7 @@ import {
 } from "../utils/taskSelector";
 import { resolveHomepageUrl, isHttpUrl } from "../utils/appUrl";
 import { RenameAppModal } from "../components/Modals/RenameAppModal";
+import { SSHKeysTab } from "../components/Apps/SSHKeysTab";
 
 const DOCKER_SAMPLE = `version: '3.8'
 services:
@@ -237,8 +239,10 @@ export const AppsPage: React.FC = () => {
   // Top-level Navigation: separated URLs /apps (Workload Apps), /apps/scripts (Scripts), and /apps/variables (Global Variables)
   const { tab: tabParam } = useParams<{ tab?: string }>();
   const navigate = useNavigate();
-  const activeTab: "apps" | "scripts" | "variables" =
-    tabParam === "variables" ? "variables" : tabParam === "scripts" ? "scripts" : "apps";
+  type AppsTab = "apps" | "scripts" | "variables" | "ssh";
+  const TABS: AppsTab[] = ["apps", "scripts", "variables", "ssh"];
+  const activeTab: AppsTab =
+    tabParam === "variables" ? "variables" : tabParam === "scripts" ? "scripts" : tabParam === "ssh" ? "ssh" : "apps";
 
   const handleTabChange = (_: React.SyntheticEvent, newValue: string) => {
     if (newValue === activeTab) return;
@@ -246,6 +250,8 @@ export const AppsPage: React.FC = () => {
       navigate("/apps/variables");
     } else if (newValue === "scripts") {
       navigate("/apps/scripts");
+    } else if (newValue === "ssh") {
+      navigate("/apps/ssh");
     } else {
       navigate("/apps");
     }
@@ -294,10 +300,13 @@ export const AppsPage: React.FC = () => {
   const [scriptNodeFilter, setScriptNodeFilter] = useState("all");
   const [scriptGroupFilter, setScriptGroupFilter] = useState("all");
   const [varSearch, setVarSearch] = useState(() => (activeTab === "variables" ? urlSearch : ""));
+  // The Apps-specific toolbar (search box, create button) is hidden on the SSH tab,
+  // which renders its own header inside the tab component.
+  const showToolbar = activeTab === "apps" || activeTab === "scripts" || activeTab === "variables";
 
   // Normalize unknown sub-paths and legacy ?tab= params to canonical separated URLs
   useEffect(() => {
-    if (tabParam && tabParam !== "variables" && tabParam !== "scripts") {
+    if (tabParam && !TABS.includes(tabParam as AppsTab)) {
       navigate("/apps", { replace: true });
       return;
     }
@@ -312,7 +321,7 @@ export const AppsPage: React.FC = () => {
     } else if (queryTab === "apps" && activeTab !== "apps") {
       setSearch(urlSearch);
       navigate(`/apps${urlSearch ? `?search=${encodeURIComponent(urlSearch)}` : ""}`, { replace: true });
-    } else if (queryTab !== "variables" && queryTab !== "scripts" && queryTab !== "apps") {
+    } else if (queryTab !== "variables" && queryTab !== "scripts" && queryTab !== "apps" && queryTab !== "ssh") {
       setSearchParams(
         (prev) => {
           const next = new URLSearchParams(prev);
@@ -1907,34 +1916,38 @@ export const AppsPage: React.FC = () => {
                 Workloads & Variables
               </Typography>
               <Typography variant="body2" sx={{ color: "#64748B", fontWeight: 500 }}>
-                Manage Docker Compose, Native Systemd services, and cluster-wide global variables
+                {activeTab === "ssh"
+                  ? "Collect node SSH public keys and manage cluster known_hosts / authorized_keys rules"
+                  : "Manage Docker Compose, Native Systemd services, and cluster-wide global variables"}
               </Typography>
             </Box>
           </Box>
         </Box>
 
-        {/* Global Action Buttons */}
+        {/* Global Action Buttons (the SSH tab renders its own actions) */}
         <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
-          <Button
-            variant="outlined"
-            startIcon={<RefreshCw size={15} />}
-            onClick={() => {
-              loadApps();
-              loadVariables();
-            }}
-            disabled={loadingApps || loadingVars}
-            sx={{
-              borderColor: "#CBD5E1",
-              color: "#475569",
-              textTransform: "none",
-              fontWeight: 600,
-              fontSize: "0.85rem",
-              bgcolor: "#FFFFFF",
-              "&:hover": { borderColor: "#94A3B8", bgcolor: "#F8FAFC" },
-            }}
-          >
-            Refresh
-          </Button>
+          {showToolbar && (
+            <Button
+              variant="outlined"
+              startIcon={<RefreshCw size={15} />}
+              onClick={() => {
+                loadApps();
+                loadVariables();
+              }}
+              disabled={loadingApps || loadingVars}
+              sx={{
+                borderColor: "#CBD5E1",
+                color: "#475569",
+                textTransform: "none",
+                fontWeight: 600,
+                fontSize: "0.85rem",
+                bgcolor: "#FFFFFF",
+                "&:hover": { borderColor: "#94A3B8", bgcolor: "#F8FAFC" },
+              }}
+            >
+              Refresh
+            </Button>
+          )}
 
           {activeTab === "apps" && (
             <>
@@ -2127,6 +2140,12 @@ export const AppsPage: React.FC = () => {
                 />
               </Box>
             }
+          />
+          <Tab
+            value="ssh"
+            icon={<KeyRound size={18} />}
+            iconPosition="start"
+            label={<span>SSH</span>}
           />
         </Tabs>
       </Paper>
@@ -4788,6 +4807,11 @@ export const AppsPage: React.FC = () => {
           )}
         </Box>
       )}
+
+      {/* ========================================================================================= */}
+      {/* TAB 4: SSH KEYS (agent mode)                                                              */}
+      {/* ========================================================================================= */}
+      {activeTab === "ssh" && <SSHKeysTab />}
 
       {/* ========================================================================================= */}
       {/* VARIABLE CREATE / EDIT MODAL                                                              */}

@@ -60,6 +60,8 @@ import type {
   CustomAPITestRequest,
   CustomAPITestResponse,
   AppClusterActionResponse,
+  SSHKeyRule,
+  SSHKeysResponse,
 } from "../types/api";
 
 const API_BASE = "/api";
@@ -749,6 +751,33 @@ export const api = {
 
   // Global App Variables
   getAppVariables: () => request<AppVariable[]>("/apps/variables"),
+
+  // SSH Keys (agent mode only)
+  getSSHKeys: () => request<SSHKeysResponse>("/ssh-keys"),
+  refreshSSHKeys: (node?: string) =>
+    request<{ message: string; refreshed: string[] }>("/ssh-keys/refresh", {
+      method: "POST",
+      body: JSON.stringify(node ? { node } : {}),
+    }),
+  getSSHKeyRules: () => request<SSHKeyRule[]>("/ssh-keys/rules"),
+  createSSHKeyRule: (rule: Partial<SSHKeyRule>) =>
+    request<SSHKeyRule>("/ssh-keys/rules", {
+      method: "POST",
+      body: JSON.stringify(rule),
+    }),
+  updateSSHKeyRule: (id: string, rule: Partial<SSHKeyRule>) =>
+    request<SSHKeyRule>(`/ssh-keys/rules/${encodeURIComponent(id)}`, {
+      method: "PUT",
+      body: JSON.stringify(rule),
+    }),
+  deleteSSHKeyRule: (id: string) =>
+    request<{ deleted: boolean }>(`/ssh-keys/rules/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    }),
+  toggleSSHKeyRule: (id: string) =>
+    request<SSHKeyRule>(`/ssh-keys/rules/${encodeURIComponent(id)}/toggle`, {
+      method: "POST",
+    }),
   saveAppVariable: (variable: AppVariable) =>
     request<AppVariable>("/apps/variables", {
       method: "POST",

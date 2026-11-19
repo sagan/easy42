@@ -39,7 +39,13 @@ pub struct MetricsCollector {
     cached_primary_iface: Option<String>,
     apps_manager: Option<std::sync::Arc<crate::apps::AppsManager>>,
     disable_apps_checker: Option<std::sync::Arc<dyn Fn() -> bool + Send + Sync>>,
+    ssh_keys_checker: Option<std::sync::Arc<dyn Fn() -> bool + Send + Sync>>,
+    ssh_keys_cache: Option<(std::time::Instant, Vec<proto::SshPublicKey>)>,
 }
+
+/// How long collected root SSH public keys are cached before re-reading the
+/// `.ssh` directory. Keys change rarely, so this keeps the telemetry loop cheap.
+const SSH_KEYS_CACHE_TTL: std::time::Duration = std::time::Duration::from_secs(60);
 
 impl Default for MetricsCollector {
     fn default() -> Self {
@@ -56,6 +62,8 @@ impl MetricsCollector {
             cached_primary_iface: None,
             apps_manager: None,
             disable_apps_checker: None,
+            ssh_keys_checker: None,
+            ssh_keys_cache: None,
         }
     }
 
@@ -68,6 +76,44 @@ impl MetricsCollector {
         F: Fn() -> bool + Send + Sync + 'static,
     {
         self.disable_apps_checker = Some(std::sync::Arc::new(checker));
+    }
+
+    /// Registers a checker that reports whether SSH key management is enabled
+    /// on this node. It is disabled when the agent config sets `disable_apps`.
+    pub fn set_ssh_keys_checker<F>(&mut self, checker: F)
+    where
+        F: Fn() -> bool + Send + Sync + 'static,
+    {
+        self.ssh_keys_checker = Some(std::sync::Arc::new(checker));
+    }
+
+    pub fn is_ssh_keys_enabled(&self) -> bool {
+        self.ssh_keys_checker
+            .as_ref()
+            .map(|f| f())
+            .unwrap_or(true)
+    }
+
+    /// Returns the collected root SSH public keys, honoring the short cache.
+    pub fn collect_ssh_keys(&mut self) -> Vec<proto::SshPublicKey> {
+        if !self.is_ssh_keys_enabled() {
+            self.ssh_keys_cache = None;
+            return Vec::new();
+        }
+        if let Some((at, keys)) = &self.ssh_keys_cache {
+            if at.elapsed() < SSH_KEYS_CACHE_TTL {
+                return keys.clone();
+            }
+        }
+        let keys = crate::ssh_keys::collect_public_keys(&crate::ssh_keys::get_ssh_dir());
+        self.ssh_keys_cache = Some((std::time::Instant::now(), keys.clone()));
+        keys
+    }
+
+    /// Drops the SSH public key cache so the next telemetry cycle re-reads the
+    /// key files (used after the server pushes an SSH key sync).
+    pub fn flush_ssh_keys_cache(&mut self) {
+        self.ssh_keys_cache = None;
     }
 
     pub fn flush_interface_cache(&mut self) {
@@ -99,6 +145,7 @@ impl MetricsCollector {
             hosts_hash: crate::hosts::get_current_hosts_hash(&crate::hosts::get_hosts_path()),
             apps,
             disable_apps: is_apps_disabled,
+            ssh_keys: self.collect_ssh_keys(),
         }
     }
 

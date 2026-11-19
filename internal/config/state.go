@@ -62,6 +62,8 @@ type StateNode struct {
 	RoaAppliedAt         map[string]time.Time      `json:"roa_applied_at,omitempty"`
 	HostsConfigHash      string                    `json:"hosts_config_hash,omitempty"`
 	HostsAppliedAt       *time.Time                `json:"hosts_applied_at,omitempty"`
+	SSHKeyFileHashes     map[string]string         `json:"ssh_key_file_hashes,omitempty"` // key: target file path, val: sha256 hash of the managed block
+	SSHKeyAppliedAt      map[string]time.Time      `json:"ssh_key_applied_at,omitempty"`  // key: target file path
 	AppConfigHashes      map[string]string         `json:"app_config_hashes,omitempty"`   // key: app name, val: sha256 hash
 	AppArtifactHashes    map[string]string         `json:"app_artifact_hashes,omitempty"` // key: app name, val: sha256 of the synced artifact set
 	AppAppliedAt         map[string]time.Time      `json:"app_applied_at,omitempty"`
@@ -336,7 +338,8 @@ func (s *StateStore) Load() (*NetworkState, error) {
 		       nftables_config_hash, nftables_applied_at, roa_config_hashes,
 		       roa_applied_at, hosts_config_hash, hosts_applied_at, interfaces,
 		       app_config_hashes, app_artifact_hashes, app_applied_at, app_enabled, app_statuses,
-		       obfuscator_config_hash, obfuscator_applied_at
+		       obfuscator_config_hash, obfuscator_applied_at,
+		       ssh_key_file_hashes, ssh_key_applied_at
 		FROM node_states
 	`)
 	if err != nil {
@@ -358,6 +361,7 @@ func (s *StateStore) Load() (*NetworkState, error) {
 			appAppliedJSON, appEnabledJSON               string
 			appStatusesJSON                              string
 			ifacesJSON                                   string
+			sshKeyHashesJSON, sshKeyAppliedJSON          string
 		)
 
 		if err := rows.Scan(
@@ -366,6 +370,7 @@ func (s *StateStore) Load() (*NetworkState, error) {
 			&hostsHash, &hostsAppliedUnix, &ifacesJSON,
 			&appHashesJSON, &appArtifactHashesJSON, &appAppliedJSON, &appEnabledJSON, &appStatusesJSON,
 			&obfuscatorHash, &obfuscatorAppliedUnix,
+			&sshKeyHashesJSON, &sshKeyAppliedJSON,
 		); err != nil {
 			continue
 		}
@@ -384,6 +389,8 @@ func (s *StateStore) Load() (*NetworkState, error) {
 			AppAppliedAt:         make(map[string]time.Time),
 			AppEnabled:           make(map[string]bool),
 			AppStatuses:          make(map[string]AppStateRecord),
+			SSHKeyFileHashes:     make(map[string]string),
+			SSHKeyAppliedAt:      make(map[string]time.Time),
 			Interfaces:           make(map[string]StateInterface),
 		}
 
@@ -428,6 +435,12 @@ func (s *StateStore) Load() (*NetworkState, error) {
 		if appStatusesJSON != "" {
 			_ = json.Unmarshal([]byte(appStatusesJSON), &node.AppStatuses)
 		}
+		if sshKeyHashesJSON != "" {
+			_ = json.Unmarshal([]byte(sshKeyHashesJSON), &node.SSHKeyFileHashes)
+		}
+		if sshKeyAppliedJSON != "" {
+			_ = json.Unmarshal([]byte(sshKeyAppliedJSON), &node.SSHKeyAppliedAt)
+		}
 		if ifacesJSON != "" {
 			_ = json.Unmarshal([]byte(ifacesJSON), &node.Interfaces)
 		}
@@ -462,6 +475,8 @@ func (s *StateStore) saveNodeLocked(node StateNode) error {
 	appAppliedJSON, _ := json.Marshal(node.AppAppliedAt)
 	appEnabledJSON, _ := json.Marshal(node.AppEnabled)
 	appStatusesJSON, _ := json.Marshal(node.AppStatuses)
+	sshKeyHashesJSON, _ := json.Marshal(node.SSHKeyFileHashes)
+	sshKeyAppliedJSON, _ := json.Marshal(node.SSHKeyAppliedAt)
 	ifacesJSON, _ := json.Marshal(node.Interfaces)
 
 	var lastSeenUnix *int64
@@ -500,8 +515,9 @@ func (s *StateStore) saveNodeLocked(node StateNode) error {
 		nftables_config_hash, nftables_applied_at, roa_config_hashes,
 		roa_applied_at, hosts_config_hash, hosts_applied_at, interfaces,
 		app_config_hashes, app_artifact_hashes, app_applied_at, app_enabled, app_statuses,
-		obfuscator_config_hash, obfuscator_applied_at
-	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		obfuscator_config_hash, obfuscator_applied_at,
+		ssh_key_file_hashes, ssh_key_applied_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	ON CONFLICT(node_name) DO UPDATE SET
 		host=excluded.host,
 		last_seen=excluded.last_seen,
@@ -520,7 +536,9 @@ func (s *StateStore) saveNodeLocked(node StateNode) error {
 		app_enabled=excluded.app_enabled,
 		app_statuses=excluded.app_statuses,
 		obfuscator_config_hash=excluded.obfuscator_config_hash,
-		obfuscator_applied_at=excluded.obfuscator_applied_at;
+		obfuscator_applied_at=excluded.obfuscator_applied_at,
+		ssh_key_file_hashes=excluded.ssh_key_file_hashes,
+		ssh_key_applied_at=excluded.ssh_key_applied_at;
 	`
 
 	_, err := s.db.Exec(query,
@@ -529,6 +547,7 @@ func (s *StateStore) saveNodeLocked(node StateNode) error {
 		node.HostsConfigHash, hostsUnix, string(ifacesJSON),
 		string(appHashesJSON), string(appArtifactHashesJSON), string(appAppliedJSON), string(appEnabledJSON), string(appStatusesJSON),
 		node.ObfuscatorConfigHash, obfuscatorUnix,
+		string(sshKeyHashesJSON), string(sshKeyAppliedJSON),
 	)
 	return err
 }
@@ -567,6 +586,8 @@ func (s *StateStore) Save(st *NetworkState) (err error) {
 		appAppliedJSON, _ := json.Marshal(node.AppAppliedAt)
 		appEnabledJSON, _ := json.Marshal(node.AppEnabled)
 		appStatusesJSON, _ := json.Marshal(node.AppStatuses)
+		sshKeyHashesJSON, _ := json.Marshal(node.SSHKeyFileHashes)
+		sshKeyAppliedJSON, _ := json.Marshal(node.SSHKeyAppliedAt)
 		ifacesJSON, _ := json.Marshal(node.Interfaces)
 
 		var lastSeenUnix *int64
@@ -605,8 +626,9 @@ func (s *StateStore) Save(st *NetworkState) (err error) {
 			nftables_config_hash, nftables_applied_at, roa_config_hashes,
 			roa_applied_at, hosts_config_hash, hosts_applied_at, interfaces,
 			app_config_hashes, app_artifact_hashes, app_applied_at, app_enabled, app_statuses,
-			obfuscator_config_hash, obfuscator_applied_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+			obfuscator_config_hash, obfuscator_applied_at,
+			ssh_key_file_hashes, ssh_key_applied_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 		`
 		if _, err := tx.Exec(query,
 			node.Name, node.Host, lastSeenUnix, node.BirdConfigHash, birdUnix,
@@ -614,6 +636,7 @@ func (s *StateStore) Save(st *NetworkState) (err error) {
 			node.HostsConfigHash, hostsUnix, string(ifacesJSON),
 			string(appHashesJSON), string(appArtifactHashesJSON), string(appAppliedJSON), string(appEnabledJSON), string(appStatusesJSON),
 			node.ObfuscatorConfigHash, obfuscatorUnix,
+			string(sshKeyHashesJSON), string(sshKeyAppliedJSON),
 		); err != nil {
 			return err
 		}
@@ -3150,4 +3173,75 @@ func (s *StateStore) CleanEventsOlderThan(retention time.Duration) (int64, error
 	}
 
 	return res.RowsAffected()
+}
+
+// UpdateSSHKeyState records the hash of the Easy42-managed block applied to a
+// managed SSH key file (known_hosts / authorized_keys) on a node.
+func (s *StateStore) UpdateSSHKeyState(nodeName, host, targetFile, blockHash string, appliedAt time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if err := s.initDBLocked(); err != nil {
+		return err
+	}
+
+	if s.state == nil {
+		s.state = &NetworkState{
+			Version:   1,
+			UpdatedAt: time.Now(),
+			Nodes:     make(map[string]StateNode),
+		}
+	}
+
+	node, exists := s.state.Nodes[nodeName]
+	if !exists {
+		node = StateNode{
+			Name:       nodeName,
+			Host:       host,
+			LastSeen:   time.Now(),
+			Interfaces: make(map[string]StateInterface),
+		}
+	}
+	if node.Interfaces == nil {
+		node.Interfaces = make(map[string]StateInterface)
+	}
+	if node.SSHKeyFileHashes == nil {
+		node.SSHKeyFileHashes = make(map[string]string)
+	}
+	if node.SSHKeyAppliedAt == nil {
+		node.SSHKeyAppliedAt = make(map[string]time.Time)
+	}
+	node.Host = host
+	node.LastSeen = time.Now()
+	node.SSHKeyFileHashes[targetFile] = blockHash
+	node.SSHKeyAppliedAt[targetFile] = appliedAt
+	s.state.Nodes[nodeName] = node
+	s.state.UpdatedAt = time.Now()
+
+	return s.saveNodeLocked(node)
+}
+
+// RemoveSSHKeyState forgets the applied records of a managed SSH key file,
+// e.g. after every key rule targeting it was deleted.
+func (s *StateStore) RemoveSSHKeyState(nodeName, targetFile string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if err := s.initDBLocked(); err != nil {
+		return err
+	}
+	node, exists := s.state.Nodes[nodeName]
+	if !exists {
+		return nil
+	}
+	if _, ok := node.SSHKeyFileHashes[targetFile]; !ok {
+		if _, ok := node.SSHKeyAppliedAt[targetFile]; !ok {
+			return nil
+		}
+	}
+	delete(node.SSHKeyFileHashes, targetFile)
+	delete(node.SSHKeyAppliedAt, targetFile)
+	s.state.Nodes[nodeName] = node
+	s.state.UpdatedAt = time.Now()
+	return s.saveNodeLocked(node)
 }

@@ -45,8 +45,8 @@ func TestApplyFreshDB(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CurrentVersion failed: %v", err)
 	}
-	if v != 6 {
-		t.Errorf("Expected current version 6, got %d", v)
+	if v != 7 {
+		t.Errorf("Expected current version 7, got %d", v)
 	}
 
 	// Verify PRAGMA user_version
@@ -54,8 +54,8 @@ func TestApplyFreshDB(t *testing.T) {
 	if err := db.QueryRow("PRAGMA user_version").Scan(&userVersion); err != nil {
 		t.Fatalf("Failed to query user_version: %v", err)
 	}
-	if userVersion != 6 {
-		t.Errorf("Expected PRAGMA user_version 6, got %d", userVersion)
+	if userVersion != 7 {
+		t.Errorf("Expected PRAGMA user_version 7, got %d", userVersion)
 	}
 
 	// Verify key baseline tables exist
@@ -115,8 +115,8 @@ func TestApplyLegacyDB(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CurrentVersion failed: %v", err)
 	}
-	if v != 6 {
-		t.Errorf("Expected current version 6, got %d", v)
+	if v != 7 {
+		t.Errorf("Expected current version 7, got %d", v)
 	}
 
 	// Verify that hosts_config_hash and hosts_applied_at columns were added

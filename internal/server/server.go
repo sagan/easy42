@@ -367,6 +367,16 @@ func New(cfg Config) *Server {
 			r.Get("/nodes/{name}/apps", s.handleGetNodeApps)
 			r.Post("/nodes/{name}/apps/{appName}/action", s.handleNodeAppAction)
 
+			// SSH Keys (agent mode only)
+			r.Get("/ssh-keys", s.handleGetSSHKeys)
+			r.Post("/ssh-keys/refresh", s.handleRefreshSSHKeys)
+			r.Get("/ssh-keys/rules", s.handleGetSSHKeyRules)
+			r.Post("/ssh-keys/rules", s.handleCreateSSHKeyRule)
+			r.Get("/ssh-keys/rules/{id}", s.handleGetSSHKeyRule)
+			r.Put("/ssh-keys/rules/{id}", s.handleUpdateSSHKeyRule)
+			r.Delete("/ssh-keys/rules/{id}", s.handleDeleteSSHKeyRule)
+			r.Post("/ssh-keys/rules/{id}/toggle", s.handleToggleSSHKeyRule)
+
 			// FlapAlerted Metrics
 			r.Get("/flaps/metrics/stream", s.handleFlapAlertedMetricsStream)
 			r.Get("/flaps/metrics", s.handleFlapAlertedMetrics)

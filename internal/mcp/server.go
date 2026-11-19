@@ -97,6 +97,7 @@ func NewServer(mgr *engine.Manager) *Server {
 	registerDeviceHelperTaskTools(mcpServer, mgr)
 	registerLookingGlassTools(mcpServer, mgr)
 	registerCronTaskTools(mcpServer, mgr)
+	registerSSHKeyTools(mcpServer, mgr)
 	registerDatabaseAndIntegrationsTools(mcpServer, mgr)
 
 	// Register helpful MCP Resources

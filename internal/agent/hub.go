@@ -46,6 +46,11 @@ type NodeMeta struct {
 	Hostname     string `json:"hostname,omitempty"`
 	HostsHash    string `json:"hosts_hash,omitempty"`
 	DisableApps  bool   `json:"disable_apps,omitempty"`
+	// SSHKeys are the root user SSH public keys collected by the agent.
+	SSHKeys []config.SSHPublicKey `json:"ssh_keys,omitempty"`
+	// SSHKeyFileHashes maps managed SSH key file paths (known_hosts /
+	// authorized_keys) to the hash of their Easy42 block on the node.
+	SSHKeyFileHashes map[string]string `json:"ssh_key_file_hashes,omitempty"`
 }
 
 // Hub manages active agent connections and cached telemetry
@@ -660,6 +665,19 @@ func (h *Hub) GetProbeConfigs(nodeName string) map[string]ProbeConfigFile {
 	return cp
 }
 
+// sshKeysEqual reports whether two collected key sets are identical.
+func sshKeysEqual(a, b []config.SSHPublicKey) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i].Normalize() != b[i].Normalize() {
+			return false
+		}
+	}
+	return true
+}
+
 // NotifyRegister triggers registered registration listeners
 func (h *Hub) NotifyRegister(conn *AgentConnection) {
 	h.mu.RLock()
@@ -773,7 +791,7 @@ func (h *Hub) UpdateTelemetry(nodeName string, t *agentpb.TelemetryReport) {
 		h.nodeMeta = make(map[string]*NodeMeta)
 	}
 	meta := h.nodeMeta[nodeName]
-	if meta == nil && (t.HostsHash != "" || t.DisableApps) {
+	if meta == nil && (t.HostsHash != "" || t.DisableApps || len(t.SshKeys) > 0) {
 		meta = &NodeMeta{}
 		h.nodeMeta[nodeName] = meta
 	}
@@ -787,6 +805,24 @@ func (h *Hub) UpdateTelemetry(nodeName string, t *agentpb.TelemetryReport) {
 			meta.DisableApps = t.DisableApps
 			metaChanged = true
 		}
+		// Agents that support SSH key collection always report the complete
+		// key set, so an empty list means "no keys".
+		var reportedKeys []config.SSHPublicKey
+		for _, k := range t.SshKeys {
+			reportedKeys = append(reportedKeys, config.SSHPublicKey{
+				Algorithm: k.Algorithm,
+				Key:       k.Key,
+				Comment:   k.Comment,
+				Path:      k.Path,
+			})
+		}
+		if len(reportedKeys) == 0 {
+			reportedKeys = nil
+		}
+		if !sshKeysEqual(meta.SSHKeys, reportedKeys) {
+			meta.SSHKeys = reportedKeys
+			metaChanged = true
+		}
 		if metaChanged {
 			h.persistMetaLocked(nodeName, meta)
 		}
@@ -797,6 +833,91 @@ func (h *Hub) UpdateTelemetry(nodeName string, t *agentpb.TelemetryReport) {
 	for _, l := range listeners {
 		go l(nodeName, t)
 	}
+}
+
+// SetSSHKeys replaces the collected root SSH public keys of a node and persists
+// them so they stay available while the agent is offline.
+func (h *Hub) SetSSHKeys(nodeName string, keys []config.SSHPublicKey) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.nodeMeta == nil {
+		h.nodeMeta = make(map[string]*NodeMeta)
+	}
+	meta := h.nodeMeta[nodeName]
+	if meta == nil {
+		meta = &NodeMeta{}
+		h.nodeMeta[nodeName] = meta
+	}
+	cp := make([]config.SSHPublicKey, len(keys))
+	for i, k := range keys {
+		cp[i] = k.Normalize()
+	}
+	if len(cp) == 0 {
+		cp = nil
+	}
+	meta.SSHKeys = cp
+	h.persistMetaLocked(nodeName, meta)
+}
+
+// GetSSHKeys returns the collected root SSH public keys of a node.
+func (h *Hub) GetSSHKeys(nodeName string) []config.SSHPublicKey {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	meta := h.nodeMeta[nodeName]
+	if meta == nil || len(meta.SSHKeys) == 0 {
+		return nil
+	}
+	res := make([]config.SSHPublicKey, len(meta.SSHKeys))
+	copy(res, meta.SSHKeys)
+	return res
+}
+
+// SetSSHKeyFileHashes records the reported hashes of the Easy42 blocks of the
+// managed SSH key files of a node and persists them.
+func (h *Hub) SetSSHKeyFileHashes(nodeName string, hashes map[string]string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.nodeMeta == nil {
+		h.nodeMeta = make(map[string]*NodeMeta)
+	}
+	meta := h.nodeMeta[nodeName]
+	if meta == nil {
+		meta = &NodeMeta{}
+		h.nodeMeta[nodeName] = meta
+	}
+	if meta.SSHKeyFileHashes == nil {
+		meta.SSHKeyFileHashes = make(map[string]string)
+	}
+	changed := false
+	for path, hash := range hashes {
+		if meta.SSHKeyFileHashes[path] != hash {
+			meta.SSHKeyFileHashes[path] = hash
+			changed = true
+		}
+	}
+	if changed {
+		h.persistMetaLocked(nodeName, meta)
+	}
+}
+
+// SetSSHKeyFileHash records the reported hash of the Easy42 block of a single
+// managed SSH key file of a node.
+func (h *Hub) SetSSHKeyFileHash(nodeName, path, hash string) {
+	h.SetSSHKeyFileHashes(nodeName, map[string]string{path: hash})
+}
+
+// GetSSHKeyFileHashes returns the reported hashes of the managed SSH key files
+// of a node (falling back to the persisted registration metadata when offline).
+func (h *Hub) GetSSHKeyFileHashes(nodeName string) map[string]string {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	res := make(map[string]string)
+	if meta := h.nodeMeta[nodeName]; meta != nil {
+		for k, v := range meta.SSHKeyFileHashes {
+			res[k] = v
+		}
+	}
+	return res
 }
 
 // GetTelemetry retrieves the latest telemetry report for a node

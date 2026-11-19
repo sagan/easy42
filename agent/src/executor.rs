@@ -247,6 +247,10 @@ impl CommandExecutor {
                 let (s, c, o, e) = self.sync_hosts(sync);
                 (s, c, o, e, 0, 0)
             }
+            Some(proto::command_request::Command::FetchSshKeys(_)) => {
+                let (s, c, o, e) = self.fetch_ssh_keys();
+                (s, c, o, e, 0, 0)
+            }
             Some(proto::command_request::Command::SyncAction(sync_act)) => {
                 let (s, c, o, e) = self.execute_sync_action(sync_act).await;
                 (s, c, o, e, 0, 0)
@@ -761,6 +765,111 @@ done"#;
         }
     }
 
+    /// Collects the root SSH public keys and reports the current hashes of the
+    /// Easy42 blocks in known_hosts / authorized_keys.
+    fn fetch_ssh_keys(&self) -> (bool, i32, String, String) {
+        #[derive(Serialize)]
+        struct SerializableSshKey {
+            algorithm: String,
+            key: String,
+            comment: String,
+            path: String,
+        }
+
+        #[derive(Serialize)]
+        struct SshKeysResult {
+            ssh_keys: Vec<SerializableSshKey>,
+            ssh_keys_enabled: bool,
+            known_hosts_hash: String,
+            authorized_keys_hash: String,
+        }
+
+        let enabled = !self.is_apps_disabled();
+        let ssh_dir = crate::ssh_keys::get_ssh_dir();
+        let keys = if enabled {
+            crate::ssh_keys::collect_public_keys(&ssh_dir)
+        } else {
+            Vec::new()
+        };
+        let result = SshKeysResult {
+            ssh_keys: keys
+                .into_iter()
+                .map(|k| SerializableSshKey {
+                    algorithm: k.algorithm,
+                    key: k.key,
+                    comment: k.comment,
+                    path: k.path,
+                })
+                .collect(),
+            ssh_keys_enabled: enabled,
+            known_hosts_hash: crate::ssh_keys::get_current_block_hash(
+                &crate::ssh_keys::known_hosts_path(),
+            ),
+            authorized_keys_hash: crate::ssh_keys::get_current_block_hash(
+                &crate::ssh_keys::authorized_keys_path(),
+            ),
+        };
+
+        match serde_json::to_string(&result) {
+            Ok(json) => (true, 0, json, String::new()),
+            Err(e) => (
+                false,
+                -1,
+                String::new(),
+                format!("failed to serialize SSH keys result: {}", e),
+            ),
+        }
+    }
+
+    /// Atomically writes the desired Easy42 block into known_hosts or authorized_keys.
+    fn sync_ssh_keys(&self, req: &proto::SyncActionCmd) -> (bool, i32, String, String) {
+        if self.is_apps_disabled() {
+            return (
+                false,
+                1,
+                String::new(),
+                "SSH key management is disabled on this node (disable_apps = true in agent.json)"
+                    .to_string(),
+            );
+        }
+        let kind = match crate::ssh_keys::SshKeyFileKind::from_target_path(&req.target_file) {
+            Some(k) => k,
+            None => {
+                return (
+                    false,
+                    -1,
+                    String::new(),
+                    format!(
+                        "target file '{}' is not managed by Easy42 (expected /root/.ssh/known_hosts or /root/.ssh/authorized_keys)",
+                        req.target_file
+                    ),
+                )
+            }
+        };
+        match crate::ssh_keys::update_key_file(
+            &crate::ssh_keys::get_ssh_dir(),
+            kind,
+            &req.ssh_keys,
+            &format!(".ez42tmp.{}", std::process::id()),
+        ) {
+            Ok((modified, hash)) => (
+                true,
+                0,
+                format!(
+                    "{} updated: modified={}, hash={}",
+                    req.target_file, modified, hash
+                ),
+                String::new(),
+            ),
+            Err(e) => (
+                false,
+                1,
+                String::new(),
+                format!("failed to update {}: {}", req.target_file, e),
+            ),
+        }
+    }
+
     fn sync_hosts(&self, req: proto::SyncHostsCmd) -> (bool, i32, String, String) {
         match crate::hosts::update_hosts_file(
             &crate::hosts::get_hosts_path(),
@@ -892,6 +1001,7 @@ done"#;
                         hosts: req.hosts,
                     })
                 }
+                "sync_ssh_keys" => self.sync_ssh_keys(&req),
             "sync_bird" => {
                 let content_str = String::from_utf8_lossy(&req.file_content);
                 if content_str.contains("/etc/bird_easy42_dynamic.conf") {
@@ -1554,6 +1664,7 @@ mod tests {
             hosts: Vec::new(),
             description: "Apply ROA test".to_string(),
             diff_status: "update".to_string(),
+            ssh_keys: Vec::new(),
         };
 
         let (success, code, _stdout, stderr) = executor.execute_sync_action(req).await;
@@ -1599,6 +1710,7 @@ mod tests {
             hosts: Vec::new(),
             description: "Apply blocked ROA".to_string(),
             diff_status: "update".to_string(),
+            ssh_keys: Vec::new(),
         };
 
         let (success, code, _stdout, stderr) = executor.execute_sync_action(req).await;
@@ -1643,6 +1755,7 @@ mod tests {
             hosts: Vec::new(),
             description: "Dynamic reload test".to_string(),
             diff_status: "update".to_string(),
+            ssh_keys: Vec::new(),
         };
 
         let (success, code, _, _) = executor.execute_sync_action(req).await;
@@ -1812,6 +1925,7 @@ mod tests {
             hosts: Vec::new(),
             description: "Remove deleted interface wg42_del".to_string(),
             diff_status: "delete".to_string(),
+            ssh_keys: Vec::new(),
         };
 
         let (success, code, stdout, stderr) = executor.execute_sync_action(req).await;
@@ -1854,6 +1968,7 @@ mod tests {
             hosts: Vec::new(),
             description: "Remove wg42_hook_del".to_string(),
             diff_status: "delete".to_string(),
+            ssh_keys: Vec::new(),
         };
 
         let (success, code, _, stderr) = executor.execute_sync_action(req).await;

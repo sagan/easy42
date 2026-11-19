@@ -129,6 +129,7 @@ func NewManager(store *config.Store) *Manager {
 	m.setupAgentMetricsListeners()
 	m.setupAgentCronTasksListeners()
 	m.setupAgentHostsListeners()
+	m.setupAgentSSHKeysListeners()
 	m.setupAgentObfuscatorListeners()
 	m.loadAppStatuses()
 	m.setupAgentAppsListeners()
@@ -786,6 +787,9 @@ func (m *Manager) applyNodeRenameLocked(cfg *config.Config, oldName, newName str
 		}
 	}
 
+	// Update SSH key rule selectors if matching oldName
+	renameSSHKeyRuleRefsLocked(cfg, oldName, newName)
+
 	// Update block nodes if matching oldName
 	for bIdx := range cfg.Blocks {
 		for nIdx := range cfg.Blocks[bIdx].Nodes {
@@ -983,6 +987,10 @@ func (m *Manager) DeleteNode(name string) error {
 	}
 	cfg.Links = newLinks
 
+	// Drop the deleted node from SSH key rule selectors (and rules left without
+	// any destination).
+	pruneSSHKeyRulesForNodeLocked(cfg, name)
+
 	// Remove deleted node from any blocks
 	for bIdx := range cfg.Blocks {
 		var updatedBlockNodes []string
@@ -1026,6 +1034,7 @@ func (m *Manager) DeleteNode(name string) error {
 	}
 	m.triggerDNSDeleteForNode(cfg.DNS, name)
 	go m.SyncHostsToAgents()
+	go m.SyncSSHKeysToNodes()
 	return nil
 }
 
@@ -3833,6 +3842,17 @@ func (m *Manager) PlanSyncWithScope(scope string, nodeNames ...string) ([]config
 		})
 	}
 
+	// 5b. Node SSH key files (/root/.ssh/known_hosts & authorized_keys)
+	for _, n := range nodes {
+		if n.IsExternal {
+			continue
+		}
+		if isPartial && !targetMap[n.Name] {
+			continue
+		}
+		actions = m.planSSHKeyActions(n, currentState, actions)
+	}
+
 	// 6. Node Apps configuration
 	for _, n := range nodes {
 		if n.IsExternal {
@@ -4607,6 +4627,10 @@ func (m *Manager) ExecuteSyncNodesWithScope(isForce bool, scope string, nodeName
 	m.lastSync = time.Now()
 	m.lastResults = results
 	m.mu.Unlock()
+
+	// Converge SSH key files whose desired state was just applied: the pushed
+	// copy updates the reported hashes so nothing is left looking stale.
+	go m.SyncSSHKeysToNodes()
 
 	return results, nil
 }
@@ -6005,6 +6029,10 @@ func (m *Manager) executeAgentSyncAction(act config.SyncAction, res *config.Sync
 		if m.stateStore != nil {
 			_ = m.stateStore.UpdateObfuscatorState(act.NodeName, act.Host, hash, time.Now())
 		}
+		return
+	}
+
+	if m.executeSSHKeySyncAction(act, res) {
 		return
 	}
 

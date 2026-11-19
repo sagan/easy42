@@ -553,7 +553,7 @@ Scheduled `ping`/`tcp_ping`/`http` probes executed by node agents on a selector-
 | `enabled`                  | `boolean`   | Whether the schedule is active.                                                                         |
 | `created_at`, `updated_at` | `timestamp` | Timestamps managed by the server.                                                                       |
 
-`params.count` defaults to `4` (clamped to `1`–`20`; invalid values fall back to `4`). For `http` tasks, `target` must be a valid `http(s)://` URL and `params.count` defaults to `1` with a maximum of `5` (invalid or over-limit values fall back to `1`). A cron task that matches no managed node is rejected on save. Results are stored in `data.db` and presented in the node's Cron Tasks view; summarized status is `ok`, `degraded`, or `failed`, and repeated failures record a fleet event (see [Events](integrations.md#8-events)).
+`params.count` defaults to `4` (clamped to `1`–`20`; invalid values fall back to `4`). For `http` tasks, `target` must be a valid `http(s)://` URL and `params.count` defaults to `1` with a maximum of `5` (invalid or over-limit values fall back to `1`). A cron task that matches no managed node is rejected on save. Results are stored in `data.db` and presented in the node's Cron Tasks view; summarized status is `ok`, `degraded`, or `failed`, and repeated failures record a fleet event (see [Events](integrations.md#9-events)).
 
 ### `server_tasks`
 
@@ -597,7 +597,7 @@ Cleanup runs hourly after an initial pass, and telemetry is rolled up into 5-min
 
 ### `mcp`
 
-Model Context Protocol (MCP) server settings. The MCP server is enabled by default and exposes cluster inspection/mutation tools over Streamable HTTP (`/mcp`, `/api/mcp`) and SSE (`/mcp/sse`, `/mcp/message`), with OAuth 2.0/2.1 discovery under `/.well-known/*` and `/oauth/*`. There is also a stdio CLI (`easy42 mcp --role full_control|read_only`). See [MCP Server](integrations.md#10-mcp-server).
+Model Context Protocol (MCP) server settings. The MCP server is enabled by default and exposes cluster inspection/mutation tools over Streamable HTTP (`/mcp`, `/api/mcp`) and SSE (`/mcp/sse`, `/mcp/message`), with OAuth 2.0/2.1 discovery under `/.well-known/*` and `/oauth/*`. There is also a stdio CLI (`easy42 mcp --role full_control|read_only`). See [MCP Server](integrations.md#11-mcp-server).
 
 | Field                 | Type      | Description                                                                                                 |
 | :-------------------- | :-------- | :---------------------------------------------------------------------------------------------------------- |
@@ -611,7 +611,7 @@ Tokens are accepted as `Authorization: Bearer <token>` (or `?token=<token>`). Ma
 
 ### `apps` and `app_variables`
 
-Workload apps deployed to agent-managed nodes (see [Workload Apps](integrations.md#9-workload-apps-apps)). Apps are **not** part of the declarative apply schema; manage them through the UI/API (`/api/apps`, `/api/apps/variables`).
+Workload apps deployed to agent-managed nodes (see [Workload Apps](integrations.md#10-workload-apps-apps)). Apps are **not** part of the declarative apply schema; manage them through the UI/API (`/api/apps`, `/api/apps/variables`).
 
 | Field (`apps[]`)           | Type        | Description                                                                                                                  |
 | :------------------------- | :---------- | :--------------------------------------------------------------------------------------------------------------------------- |

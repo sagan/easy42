@@ -203,14 +203,21 @@ func (c *AgentConnection) handleIncomingMessage(msg *agentpb.AgentMessage) {
 		c.disableApps = req.DisableApps
 		// Persist the registration metadata so it stays available while the
 		// agent is offline (e.g. after a server restart, before reconnect).
-		c.hub.SetNodeMeta(c.nodeName, NodeMeta{
+		// Registry-only data (collected SSH keys and the hashes of the managed
+		// SSH key files) is carried over from the previous cache entry.
+		meta := NodeMeta{
 			AgentVersion: req.AgentVersion,
 			OSInfo:       req.OsInfo,
 			InitSystem:   req.InitSystem,
 			Hostname:     req.Hostname,
 			HostsHash:    req.HostsHash,
 			DisableApps:  req.DisableApps,
-		})
+		}
+		if prev := c.hub.GetNodeMeta(c.nodeName); prev != nil {
+			meta.SSHKeys = prev.SSHKeys
+			meta.SSHKeyFileHashes = prev.SSHKeyFileHashes
+		}
+		c.hub.SetNodeMeta(c.nodeName, meta)
 		c.hub.RecordLiveReport(c.nodeName)
 
 		// Acknowledge registration

@@ -16,7 +16,12 @@ This document describes Easy42's third-party integrations and advanced managemen
       - [D. Linux Host System (node\_exporter Compatible)](#d-linux-host-system-node_exporter-compatible)
   - [2. `/etc/hosts` Automatic Management](#2-etchosts-automatic-management)
     - [How It Works](#how-it-works)
-  - [3. WireGuard PSK (Preshared Key) Support](#3-wireguard-psk-preshared-key-support)
+  - [3. SSH Key Management (agent mode)](#3-ssh-key-management-agent-mode)
+    - [1. Public key collection](#1-public-key-collection)
+    - [2. Distribution rules](#2-distribution-rules)
+    - [3. Writing the key files](#3-writing-the-key-files)
+    - [4. Scheduling and idempotency](#4-scheduling-and-idempotency)
+  - [4. WireGuard PSK (Preshared Key) Support](#4-wireguard-psk-preshared-key-support)
     - [Key Capabilities](#key-capabilities)
   - [4. Database Management \& Data Retention](#4-database-management--data-retention)
     - [Retention Settings](#retention-settings)
@@ -37,6 +42,9 @@ This document describes Easy42's third-party integrations and advanced managemen
   - [9. Workload Apps (`apps`)](#9-workload-apps-apps)
   - [10. MCP Server](#10-mcp-server)
   - [11. Scheduled Tasks](#11-scheduled-tasks)
+    - [Server tasks (`server_tasks`)](#server-tasks-server_tasks)
+    - [Cron probes (`cron_tasks`)](#cron-probes-cron_tasks)
+    - [Ping Table](#ping-table)
     - [Server tasks (`server_tasks`)](#server-tasks-server_tasks)
     - [Cron probes (`cron_tasks`)](#cron-probes-cron_tasks)
     - [Ping Table](#ping-table)
@@ -174,7 +182,49 @@ Hosts sync requires agent mode; SSH-only nodes are not modified.
 
 ---
 
-## 3. WireGuard PSK (Preshared Key) Support
+## 3. SSH Key Management (agent mode)
+
+Easy42 can make root SSH between cluster nodes password-less and free of host-key prompts. It is **agent-only**, requires agent **v0.1.18+**, and is disabled on nodes whose agent config sets `disable_apps: true`.
+
+### 1. Public key collection
+
+- Every supporting agent collects root's OpenSSH **default identity** public keys: `~/.ssh/id_rsa.pub`, `id_ecdsa.pub`, `id_ecdsa_sk.pub`, `id_ed25519.pub`, `id_ed25519_sk.pub`, and `id_dsa.pub`.
+- When the matching private key can be parsed (unencrypted OpenSSH, PEM RSA, or PEM EC), the agent verifies the `.pub` file actually belongs to it and ignores stale or hand-edited files. Non-default files (`id_custom.pub`, keys generated with `-f`) are never collected.
+- Keys are reported in telemetry and can be refreshed on demand. Files are re-read at most once per minute.
+
+### 2. Distribution rules
+
+Keys are **never** distributed implicitly. A rule maps a **source selector** (the nodes whose keys are distributed) onto a **destination selector** (the nodes whose SSH key files are updated) with one of three types:
+
+| Type              | Target file                          |
+| :---------------- | :----------------------------------- |
+| `known_hosts`     | `/root/.ssh/known_hosts` (mode 0644) |
+| `authorized_keys` | `/root/.ssh/authorized_keys` (0600)  |
+| `all`             | Both files                           |
+
+Selectors use the same node selector format as workload apps and cron probes (`name`, `tag`, `env:<NAME>`). The destination selector may not be empty. Rules are managed from the **SSH** tab of the Apps page (`/apps/ssh`), the REST API (`/api/ssh-keys/rules`), or MCP (`list_ssh_keys`, `create_ssh_key_rule`, `update_ssh_key_rule`, `delete_ssh_key_rule`).
+
+### 3. Writing the key files
+
+`/root/.ssh/known_hosts` and `/root/.ssh/authorized_keys` are managed exactly like `/etc/hosts`: the desired lines are assembled into a deterministic block, every other line is preserved, and the file is replaced atomically (`fsync` + `rename`) only when its content actually changes.
+
+```
+### EASY42_START
+ssh-ed25519 AAAAC3NzaC1lZDI1NTE5... easy42 root@node-fra
+### EASY42_END
+```
+
+Entries written to `authorized_keys` are prefixed with the `easy42` comment marker so cluster-managed keys can be told apart from manually added ones. Removing every rule that granted a key removes the block (and its surrounding separator line) again, restoring the previous file contents byte for byte.
+
+### 4. Scheduling and idempotency
+
+- The sync plan contains one `sync_ssh_keys` action per destination node and target file, compared against the hash of the block last applied (state store) and the hash last reported by the agent. Synced files are not re-sent.
+- When a node agent registers or a source key changes, the latest applied state is re-pushed automatically, mirroring the `/etc/hosts` auto-remediation. Changes that were never synced are never deployed silently.
+- A source key rotation invalidates every plan that includes it on the next sync.
+
+---
+
+## 4. WireGuard PSK (Preshared Key) Support
 
 Easy42 supports WireGuard **preshared keys** for an additional symmetric layer on top of Curve25519.
 
@@ -189,7 +239,7 @@ There is **no `--psk` flag** on `easy42 link add`. Declarative patches can set `
 
 ---
 
-## 4. Database Management & Data Retention
+## 5. Database Management & Data Retention
 
 Easy42 stores telemetry in an embedded SQLite database at `<data-dir>/data.db`.
 
@@ -214,7 +264,7 @@ Easy42 stores telemetry in an embedded SQLite database at `<data-dir>/data.db`.
 
 ---
 
-## 5. Cloudflare DNS Automation
+## 6. Cloudflare DNS Automation
 
 Easy42 can publish overlay addresses to Cloudflare. DNS sync is skipped unless `zone_id`, `api_token`, and `base_domain` are all configured.
 
@@ -253,7 +303,7 @@ All records are created with automatic TTL and are not proxied. Easy42 manages A
 
 ---
 
-## 6. Telegram Bot
+## 7. Telegram Bot
 
 The Telegram integration provides read-only cluster queries and on-demand probes from a chat.
 
@@ -288,7 +338,7 @@ If no node is given to `/ping` or `/tcp_ping`, Easy42 uses the first available m
 
 ---
 
-## 7. Config Templates Engine & Hooks
+## 8. Config Templates Engine & Hooks
 
 Easy42 compiles WireGuard, BIRD, and nftables configuration with Go's `text/template` engine.
 
@@ -344,7 +394,7 @@ For `wg.peer`, an optional `target` limits the snippet to a matching interface o
 
 ---
 
-## 8. Events
+## 9. Events
 
 Easy42 records fleet events in SQLite (`data.db`) and broadcasts them over the client WebSocket (`event_created`) and to Telegram via the bot's notify path.
 
@@ -359,7 +409,7 @@ Easy42 records fleet events in SQLite (`data.db`) and broadcasts them over the c
 
 Producers: node online/offline transitions from the Telegram monitor (90s grace, debounce 2), and cron-task failures (debounced to at most one event per task/node per 24h). API: `GET /api/events` (with `limit`/`offset`/`unread_only`/`type`/`node_name` filters, returning `events`, `total`, `unread_count`), `GET /api/events/unread-count`, `POST /api/events/{id}/read`, `POST /api/events/read-all`, `DELETE /api/events/{id}`, `DELETE /api/events`.
 
-## 9. Workload Apps (`apps`)
+## 10. Workload Apps (`apps`)
 
 Workload Apps are declarative units of work deployed to agent-managed nodes from the Web UI or `/api/apps`. External nodes are never targets, and nodes whose agent reports `disable_apps: true` refuse app sync/actions.
 
@@ -383,7 +433,7 @@ The target init system is taken from the `init_system` value the agent reports o
 - **Lifecycle API**: `GET/POST /api/apps`, `PUT/DELETE /api/apps/{id}`, `POST …/toggle`, `POST …/toggle-published`, `POST/PUT …/rename`, `POST/PUT …/duplicate` (forces `published: false`, `enabled: false` and auto-increments trailing digits), `GET/POST /api/apps/variables`, `DELETE /api/apps/variables/{key}`, `GET /api/nodes/{name}/apps`, `POST /api/nodes/{name}/apps/{appName}/action` (`start`/`stop`/`restart`/`logs`, default tail `100`).
 - **Note JSON**: An App's `note` may carry a fenced `json` block exposed as `.data` in its templates, like node/link notes.
 
-## 10. MCP Server
+## 11. MCP Server
 
 Easy42 ships a Model Context Protocol server so AI tools and automation can inspect (and, with a full-control token, modify) the cluster.
 
@@ -392,7 +442,7 @@ Easy42 ships a Model Context Protocol server so AI tools and automation can insp
 - **Tools & resources**: ~50 tools covering cluster info, nodes, links, network policies, templates, config apply, sync, tasks, Looking Glass, cron tasks, database, and integrations (see `internal/mcp/tools_*.go`). Resources: `easy42://cluster/summary`, `easy42://cluster/nodes`, `easy42://cluster/links`. Prompts: `cluster_health_audit`, `add_node_wizard`.
 - **Settings**: `mcp.enabled`, `mcp.read_only_token`, `mcp.full_control_token`, `mcp.oauth_client_id`, `mcp.oauth_client_secret` in `config.json` (see [Configuration](configuration.md#mcp)). Manage via `GET/PUT /api/settings/mcp` and `POST /api/settings/mcp/reset-token`.
 
-## 11. Scheduled Tasks
+## 12. Scheduled Tasks
 
 Easy42 has two scheduler layers.
 
