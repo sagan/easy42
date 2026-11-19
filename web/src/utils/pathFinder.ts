@@ -276,6 +276,21 @@ export function findBestPath(
   return { from, to, hops: pathHops, totalCost, edgeIds };
 }
 
+/**
+ * Two directed paths use the same route when they traverse the same physical links in
+ * opposite order. A directed link id encodes the link's configured end order (from→to), so
+ * comparing raw id sequences is wrong: when a link is configured B→A but traversed A→B, the
+ * id is identical in both directions and a symmetric route looks asymmetric. Compare the
+ * undirected pair keys instead.
+ */
+function isMirrorRoute(a: DirectedLink[], b: DirectedLink[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i].pairKey !== b[b.length - 1 - i].pairKey) return false;
+  }
+  return true;
+}
+
 /** Computes the best path in both directions between `a` and `b`. */
 export function findBestPathPair(
   adjacency: Map<string, DirectedLink[]>,
@@ -285,26 +300,20 @@ export function findBestPathPair(
   const forward = findBestPath(adjacency, a, b);
   const reverse = findBestPath(adjacency, b, a);
 
-  const forwardPairs = new Set<string>();
-  const reversePairs = new Set<string>();
-  const collect = (path: DirectedPath | null, target: Set<string>) => {
-    if (!path) return;
-    getPathSteps(adjacency, path).forEach((edge) => target.add(edge.pairKey));
-  };
-  collect(forward, forwardPairs);
-  collect(reverse, reversePairs);
+  const forwardSteps = forward ? getPathSteps(adjacency, forward) : [];
+  const reverseSteps = reverse ? getPathSteps(adjacency, reverse) : [];
 
+  // Asymmetric means one direction is unreachable, the two directions do not share the same
+  // physical links, or an identical route accumulates a different cost per direction.
   const isAsymmetric =
     Boolean(forward) !== Boolean(reverse) ||
-    (Boolean(forward) &&
-      Boolean(reverse) &&
-      (forward!.edgeIds.join("|") !== reverse!.edgeIds.join("|") ||
-        forward!.totalCost !== reverse!.totalCost));
+    (forward !== null &&
+      reverse !== null &&
+      (!isMirrorRoute(forwardSteps, reverseSteps) ||
+        forward.totalCost !== reverse.totalCost));
 
   // Node-pair keys drive the canvas filter (always show links on the path), while the
   // per-link direction map drives styling so parallel interfaces are attributed correctly.
-  const forwardSteps = forward ? getPathSteps(adjacency, forward) : [];
-  const reverseSteps = reverse ? getPathSteps(adjacency, reverse) : [];
   const nodePairKeys = new Set<string>();
   [...forwardSteps, ...reverseSteps].forEach((edge) =>
     nodePairKeys.add(getNodePairKey(edge.from, edge.to)),
