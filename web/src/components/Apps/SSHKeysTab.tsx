@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   Box,
@@ -50,13 +50,19 @@ import { useMesh } from "../../context/MeshContext";
 import type { Node, SSHKeyNodeState, SSHKeyRule, SSHKeyRuleType, SSHKeysResponse } from "../../types/api";
 import { matchesTaskSelector } from "../../utils/taskSelector";
 import { isAllNodesSelector, NodeSelector } from "../Common/NodeSelector";
+import { KeyFingerprints, sshKeyFingerprints } from "../../utils/sshFingerprint";
 
 const RULE_TYPE_OPTIONS: { value: SSHKeyRuleType; label: string; description: string }[] = [
-  { value: "all", label: "All", description: "Both files: SSH server host keys into known_hosts, root login keys into authorized_keys" },
+  {
+    value: "all",
+    label: "All",
+    description: "Both files: SSH server host keys into known_hosts, root login keys into authorized_keys",
+  },
   {
     value: "known_hosts",
     label: "known_hosts",
-    description: "Add the source nodes' SSH server host keys to the destinations, so the destinations can verify those nodes when connecting to them",
+    description:
+      "Add the source nodes' SSH server host keys to the destinations, so the destinations can verify those nodes when connecting to them",
   },
   {
     value: "authorized_keys",
@@ -126,11 +132,11 @@ const SSHKeyRuleDialog: React.FC<{
   // "every node" requires the explicit {"all": "1"} selector from the All nodes tab.
   const handleSave = async () => {
     if (Object.keys(srcSelector).length === 0) {
-      setError("Select at least one source node, a tag, or \"All nodes\".");
+      setError('Select at least one source node, a tag, or "All nodes".');
       return;
     }
     if (Object.keys(dstSelector).length === 0) {
-      setError("Choose at least one destination node (or select \"All nodes\"). Keys are never distributed implicitly.");
+      setError('Choose at least one destination node (or select "All nodes"). Keys are never distributed implicitly.');
       return;
     }
     setError(null);
@@ -251,6 +257,9 @@ export const SSHKeysTab: React.FC = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [busyRuleId, setBusyRuleId] = useState<string | null>(null);
   const [revealedKeys, setRevealedKeys] = useState<Record<string, boolean>>({});
+  // Fingerprints are computed on reveal (async, via WebCrypto) and cached per
+  // key id, so re-opening a revealed key does not recompute or flicker.
+  const [keyFingerprints, setKeyFingerprints] = useState<Record<string, KeyFingerprints | "loading">>({});
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingRule, setEditingRule] = useState<SSHKeyRule | null>(null);
@@ -357,9 +366,107 @@ export const SSHKeysTab: React.FC = () => {
 
   const matchedNames = (selector: Record<string, string>): string[] => {
     if (Object.keys(selector || {}).length === 0) return [];
-    return nodes
-      .filter((n) => !n.is_external && matchesTaskSelector(n, selector))
-      .map((n) => n.name);
+    return nodes.filter((n) => !n.is_external && matchesTaskSelector(n, selector)).map((n) => n.name);
+  };
+
+  // Computes and caches the MD5/SHA1/SHA256 fingerprints of a key the first time
+  // it is revealed. Hashing is async (WebCrypto); MD5 is done in TS because
+  // WebCrypto has no MD5.
+  const pendingFingerprints = useRef<Set<string>>(new Set());
+  const ensureFingerprints = useCallback(async (id: string, algorithm: string, blob: string) => {
+    // A ref (not state) tracks in-flight work so a double click cannot start the
+    // same hash twice, independently of React batching/StrictMode replay.
+    if (pendingFingerprints.current.has(id)) return;
+    pendingFingerprints.current.add(id);
+    try {
+      const fp = await sshKeyFingerprints(`${algorithm} ${blob}`);
+      setKeyFingerprints((prev) => ({ ...prev, [id]: fp }));
+    } catch {
+      setKeyFingerprints((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+    }
+  }, []);
+
+  const toggleReveal = (id: string, algorithm: string, blob: string) => {
+    const nextRevealed = !revealedKeys[id];
+    setRevealedKeys((prev) => ({ ...prev, [id]: nextRevealed }));
+    if (nextRevealed) void ensureFingerprints(id, algorithm, blob);
+  };
+
+  const renderFingerprintLines = (entry: KeyFingerprints | "loading" | undefined) => {
+    if (!entry || entry === "loading") {
+      return (
+        <Box sx={{ display: "flex", alignItems: "center", gap: 0.6, mt: 0.4 }}>
+          <CircularProgress size={10} />
+          <Typography component="span" sx={{ fontFamily: "monospace", fontSize: "0.7rem", color: "#94A3B8" }}>
+            computing fingerprints…
+          </Typography>
+        </Box>
+      );
+    }
+    // `paste` is what OpenSSH accepts at the
+    // "Are you sure you want to continue connecting (yes/no/[fingerprint])?" prompt.
+    // Only the exact `SHA256:<base64>` form is accepted there; the sha1/md5
+    // variants copy their own (displayed) value, which is useful when comparing
+    // against other tools but is not a valid answer to that prompt.
+    const lines: { text: string; paste: string; promptable: boolean }[] = [];
+    if (entry.sha256) {
+      const paste = `SHA256:${entry.sha256.base64}`;
+      lines.push({ text: `sha256:${entry.sha256.base64} (${entry.sha256.hex})`, paste, promptable: true });
+    }
+    if (entry.sha1) {
+      lines.push({
+        text: `sha1:${entry.sha1.base64} (${entry.sha1.hex})`,
+        paste: `SHA1:${entry.sha1.base64}`,
+        promptable: false,
+      });
+    }
+    if (entry.md5) {
+      // OpenSSH's MD5 form is colon-separated, uppercase: aa:bb:cc:...
+      const colonHex = (entry.md5.hex.match(/.{2}/g) || []).join(":").toUpperCase();
+      lines.push({ text: `md5:${colonHex}`, paste: `MD5:${colonHex}`, promptable: false });
+    }
+    return (
+      <Box sx={{ mt: 0.4, display: "flex", flexDirection: "column", gap: 0.1 }}>
+        {lines.map((line) => {
+          const copyId = `fp-${line.paste}`;
+          const done = copied === copyId;
+          return (
+            <Box key={line.text} sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+              <Typography
+                component="span"
+                sx={{ fontFamily: "monospace", fontSize: "0.7rem", color: "#64748B", wordBreak: "break-all", flex: 1 }}
+              >
+                {line.text}
+              </Typography>
+              <Tooltip
+                title={
+                  done
+                    ? "Copied!"
+                    : line.promptable
+                      ? "Copy — pasteable at the ssh host key confirmation prompt"
+                      : "Copy fingerprint"
+                }
+              >
+                <IconButton
+                  size="small"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    copy(line.paste, copyId);
+                  }}
+                  sx={{ color: done ? "#10B981" : "#CBD5E1", p: 0.2 }}
+                >
+                  {done ? <Check size={12} /> : <Copy size={12} />}
+                </IconButton>
+              </Tooltip>
+            </Box>
+          );
+        })}
+      </Box>
+    );
   };
 
   const renderKeyRow = (node: SSHKeyNodeState, keyIndex: number) => {
@@ -406,13 +513,16 @@ export const SSHKeysTab: React.FC = () => {
         </TableCell>
         <TableCell>
           <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-            <Typography component="span" sx={{ fontFamily: "monospace", fontSize: "0.78rem", color: "#334155", wordBreak: "break-all" }}>
+            <Typography
+              component="span"
+              sx={{ fontFamily: "monospace", fontSize: "0.78rem", color: "#334155", wordBreak: "break-all" }}
+            >
               {revealed ? `${key.algorithm} ${key.key}` : short}
             </Typography>
-            <Tooltip title={revealed ? "Hide full key" : "Show full key"}>
+            <Tooltip title={revealed ? "Hide full key" : "Show full key and fingerprints"}>
               <IconButton
                 size="small"
-                onClick={() => setRevealedKeys((prev) => ({ ...prev, [id]: !prev[id] }))}
+                onClick={() => toggleReveal(id, key.algorithm, key.key)}
                 sx={{ color: "#94A3B8" }}
               >
                 {revealed ? <EyeOff size={14} /> : <Eye size={14} />}
@@ -428,6 +538,7 @@ export const SSHKeysTab: React.FC = () => {
               </IconButton>
             </Tooltip>
           </Box>
+          {revealed && renderFingerprintLines(keyFingerprints[id])}
         </TableCell>
         <TableCell>
           <Typography variant="caption" sx={{ color: "#64748B" }}>
@@ -447,8 +558,7 @@ export const SSHKeysTab: React.FC = () => {
   // The API always returns arrays, but tolerate null/missing fields from older
   // servers so the tab never crashes on unexpected payloads.
   const keyRows = useMemo(
-    () =>
-      (data?.nodes || []).flatMap((n) => (Array.isArray(n.keys) ? n.keys : []).map((_, i) => ({ node: n, i }))),
+    () => (data?.nodes || []).flatMap((n) => (Array.isArray(n.keys) ? n.keys : []).map((_, i) => ({ node: n, i }))),
     [data],
   );
   const unsupportedNodes = (data?.nodes || []).filter((n) => !n.supported);
@@ -508,10 +618,10 @@ export const SSHKeysTab: React.FC = () => {
           <Typography variant="body2" sx={{ color: "#4338CA", fontSize: "0.85rem", lineHeight: 1.5 }}>
             Each agent collects two kinds of public keys: root's login identities (<code>~/.ssh/id_*.pub</code>) and the
             node&apos;s SSH <strong>server</strong> host keys (<code>/etc/ssh/ssh_host_*_key.pub</code> on OpenSSH,{" "}
-            <code>/etc/dropbear/dropbear_*_host_key</code> on Dropbear/OpenWrt). Rules install the source nodes&apos; host
-            keys into <code>/root/.ssh/known_hosts</code> (so destinations can verify them when connecting) and their
-            login keys into <code>/root/.ssh/authorized_keys</code> (so they can log in as root). Changes apply on the next
-            sync. Only the Easy42-managed block of these files is touched; other lines are preserved.
+            <code>/etc/dropbear/dropbear_*_host_key</code> on Dropbear/OpenWrt). Rules install the source nodes&apos;
+            host keys into <code>/root/.ssh/known_hosts</code> (so destinations can verify them when connecting) and
+            their login keys into <code>/root/.ssh/authorized_keys</code> (so they can log in as root). Changes apply on
+            the next sync. Only the Easy42-managed block of these files is touched; other lines are preserved.
           </Typography>
         </Box>
       </Paper>
@@ -532,7 +642,10 @@ export const SSHKeysTab: React.FC = () => {
             <Typography variant="h5" sx={{ fontWeight: 800, color: stat.color, lineHeight: 1.1 }}>
               {stat.value}
             </Typography>
-            <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600, bgcolor: stat.bg, px: 0.8, py: 0.2, borderRadius: "6px" }}>
+            <Typography
+              variant="caption"
+              sx={{ color: "#64748B", fontWeight: 600, bgcolor: stat.bg, px: 0.8, py: 0.2, borderRadius: "6px" }}
+            >
               {stat.label}
             </Typography>
           </Paper>
@@ -564,7 +677,13 @@ export const SSHKeysTab: React.FC = () => {
               setEditingRule(null);
               setDialogOpen(true);
             }}
-            sx={{ bgcolor: "#4F46E5", fontWeight: 700, textTransform: "none", borderRadius: "10px", "&:hover": { bgcolor: "#4338CA" } }}
+            sx={{
+              bgcolor: "#4F46E5",
+              fontWeight: 700,
+              textTransform: "none",
+              borderRadius: "10px",
+              "&:hover": { bgcolor: "#4338CA" },
+            }}
           >
             Add Rule
           </Button>
@@ -586,7 +705,13 @@ export const SSHKeysTab: React.FC = () => {
                 setEditingRule(null);
                 setDialogOpen(true);
               }}
-              sx={{ textTransform: "none", fontWeight: 700, borderColor: "#4F46E5", color: "#4F46E5", borderRadius: "10px" }}
+              sx={{
+                textTransform: "none",
+                fontWeight: 700,
+                borderColor: "#4F46E5",
+                color: "#4F46E5",
+                borderRadius: "10px",
+              }}
             >
               Add First Rule
             </Button>
@@ -612,7 +737,10 @@ export const SSHKeysTab: React.FC = () => {
                   const dsts = matchedNames(rule.dst_selector);
                   const busy = busyRuleId === rule.id;
                   return (
-                    <TableRow key={rule.id} sx={{ "&:hover": { bgcolor: "#F8FAFC" }, "& td": { borderColor: "#F1F5F9" } }}>
+                    <TableRow
+                      key={rule.id}
+                      sx={{ "&:hover": { bgcolor: "#F8FAFC" }, "& td": { borderColor: "#F1F5F9" } }}
+                    >
                       <TableCell>
                         <Chip
                           size="small"
@@ -802,7 +930,7 @@ export const SSHKeysTab: React.FC = () => {
                 <TableRow>
                   <TableCell sx={{ fontWeight: 800, color: "#475569" }}>NODE</TableCell>
                   <TableCell sx={{ fontWeight: 800, color: "#475569" }}>KEY</TableCell>
-                  <TableCell sx={{ fontWeight: 800, color: "#475569" }}>PUBLIC KEY</TableCell>
+                  <TableCell sx={{ fontWeight: 800, color: "#475569", minWidth: 200 }}>PUBLIC KEY</TableCell>
                   <TableCell sx={{ fontWeight: 800, color: "#475569" }}>COMMENT</TableCell>
                   <TableCell sx={{ fontWeight: 800, color: "#475569" }}>SOURCE FILE</TableCell>
                 </TableRow>
@@ -833,7 +961,6 @@ export const SSHKeysTab: React.FC = () => {
         )}
       </Paper>
 
-
       <SSHKeyRuleDialog
         open={dialogOpen}
         rule={editingRule}
@@ -860,7 +987,12 @@ export const SSHKeysTab: React.FC = () => {
           <Button onClick={() => setDeleteRule(null)} sx={{ textTransform: "none", color: "#64748B" }}>
             Cancel
           </Button>
-          <Button variant="contained" color="error" onClick={handleDeleteRule} sx={{ textTransform: "none", fontWeight: 600 }}>
+          <Button
+            variant="contained"
+            color="error"
+            onClick={handleDeleteRule}
+            sx={{ textTransform: "none", fontWeight: 600 }}
+          >
             Delete Rule
           </Button>
         </DialogActions>
