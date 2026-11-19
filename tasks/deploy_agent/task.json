@@ -3,5 +3,8 @@
   "title": "Deploy Agent",
   "description": "Deploys or upgrades the bundled Easy42 node agent binary and system service unit.",
   "category": "Services",
-  "weight": 5
+  "weight": 5,
+  "selector": {
+    "all": "1"
+  }
 }

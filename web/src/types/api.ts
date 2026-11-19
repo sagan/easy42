@@ -1227,6 +1227,10 @@ export interface SSHPublicKey {
   key: string;
   comment?: string;
   path?: string;
+  /** "user" (root login identity, -> authorized_keys) or "host" (SSH server host key, -> known_hosts). */
+  kind?: "user" | "host";
+  /** Host names the key is valid for (known_hosts entries only). */
+  hostnames?: string[];
 }
 
 export interface SSHKeyRule {

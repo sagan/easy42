@@ -3,5 +3,8 @@
   "title": "Install BIRD",
   "description": "Installs the BIRD Internet Routing Daemon on the device using the native package manager.",
   "category": "Packages",
-  "weight": 20
+  "weight": 20,
+  "selector": {
+    "all": "1"
+  }
 }

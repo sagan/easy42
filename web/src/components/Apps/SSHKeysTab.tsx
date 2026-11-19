@@ -47,9 +47,17 @@ import { matchesTaskSelector } from "../../utils/taskSelector";
 import { isAllNodesSelector, NodeSelector } from "../Common/NodeSelector";
 
 const RULE_TYPE_OPTIONS: { value: SSHKeyRuleType; label: string; description: string }[] = [
-  { value: "all", label: "All", description: "Both known_hosts and authorized_keys" },
-  { value: "known_hosts", label: "known_hosts", description: "Trust destination host keys (no host key prompt)" },
-  { value: "authorized_keys", label: "authorized_keys", description: "Allow source keys to log in as root" },
+  { value: "all", label: "All", description: "Both files: SSH server host keys into known_hosts, root login keys into authorized_keys" },
+  {
+    value: "known_hosts",
+    label: "known_hosts",
+    description: "Add the source nodes' SSH server host keys to the destinations, so the destinations can verify those nodes when connecting to them",
+  },
+  {
+    value: "authorized_keys",
+    label: "authorized_keys",
+    description: "Allow the source nodes' root login keys to log in to the destinations as root",
+  },
 ];
 
 const RULE_TYPE_COLORS: Record<SSHKeyRuleType, { bg: string; fg: string }> = {
@@ -62,6 +70,11 @@ const RULE_TYPE_COLORS: Record<SSHKeyRuleType, { bg: string; fg: string }> = {
 export function shortKeyFingerprint(algorithm: string, key: string): string {
   const tail = key.length > 12 ? key.slice(-12) : key;
   return `${algorithm} …${tail}`;
+}
+
+/** SSH server host keys (installed into known_hosts); anything else is a root login identity. */
+export function isHostKey(key: { kind?: string }): boolean {
+  return (key.kind || "").trim().toLowerCase() === "host";
 }
 
 function useCopy() {
@@ -177,7 +190,7 @@ const SSHKeyRuleDialog: React.FC<{
         <NodeSelector
           compact
           label="Source nodes"
-          description="Public keys of the matching nodes are installed on the destinations."
+          description="The nodes whose keys are distributed: their SSH server host keys (known_hosts) and/or root login keys (authorized_keys)."
           nodes={nodes}
           value={srcSelector}
           onChange={setSrcSelector}
@@ -186,7 +199,7 @@ const SSHKeyRuleDialog: React.FC<{
         <NodeSelector
           compact
           label="Destination nodes"
-          description="The known_hosts / authorized_keys files of the matching nodes are updated."
+          description="The nodes whose known_hosts / authorized_keys files are updated."
           nodes={nodes}
           value={dstSelector}
           onChange={setDstSelector}
@@ -357,11 +370,29 @@ export const SSHKeysTab: React.FC = () => {
           </Box>
         </TableCell>
         <TableCell>
-          <Chip
-            size="small"
-            label={key.algorithm}
-            sx={{ height: 20, fontSize: "0.7rem", fontWeight: 700, bgcolor: "#F1F5F9", color: "#334155" }}
-          />
+          <Box sx={{ display: "flex", alignItems: "center", gap: 0.6 }}>
+            <Chip
+              size="small"
+              label={key.algorithm}
+              sx={{ height: 20, fontSize: "0.7rem", fontWeight: 700, bgcolor: "#F1F5F9", color: "#334155" }}
+            />
+            <Chip
+              size="small"
+              label={isHostKey(key) ? "host" : "user"}
+              title={
+                isHostKey(key)
+                  ? "SSH server host key (/etc/ssh/ssh_host_*.pub) — installed into known_hosts"
+                  : "Root login identity (~/.ssh/id_*.pub) — installed into authorized_keys"
+              }
+              sx={{
+                height: 20,
+                fontSize: "0.66rem",
+                fontWeight: 700,
+                bgcolor: isHostKey(key) ? "#ECFDF5" : "#FFF7ED",
+                color: isHostKey(key) ? "#047857" : "#C2410C",
+              }}
+            />
+          </Box>
         </TableCell>
         <TableCell>
           <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
@@ -435,11 +466,12 @@ export const SSHKeysTab: React.FC = () => {
             Cluster-wide SSH key management (agent mode)
           </Typography>
           <Typography variant="body2" sx={{ color: "#4338CA", fontSize: "0.85rem", lineHeight: 1.5 }}>
-            Each agent collects root's OpenSSH default identity public keys (<code>~/.ssh/id_*.pub</code>). Add rules to
-            install the keys of the source nodes into the <code>/root/.ssh/known_hosts</code> and/or{" "}
-            <code>/root/.ssh/authorized_keys</code> files of the destination nodes, so root can SSH between cluster nodes
-            without prompts. Changes apply on the next sync. Only the Easy42-managed block of these files is touched;
-            other lines are preserved.
+            Each agent collects two kinds of public keys: root's login identities (<code>~/.ssh/id_*.pub</code>) and the
+            node&apos;s SSH <strong>server</strong> host keys (<code>/etc/ssh/ssh_host_*.pub</code>). Rules install the
+            source nodes&apos; host keys into <code>/root/.ssh/known_hosts</code> (so destinations can verify them when
+            connecting) and their login keys into <code>/root/.ssh/authorized_keys</code> (so they can log in as root).
+            Changes apply on the next sync. Only the Easy42-managed block of these files is touched; other lines are
+            preserved.
           </Typography>
         </Box>
       </Paper>
@@ -484,7 +516,7 @@ export const SSHKeysTab: React.FC = () => {
             {keyRows.length} key(s)
           </Typography>
           <Box sx={{ flex: 1 }} />
-          <Tooltip title="Ask all connected supporting agents to re-read their ~/.ssh/*.pub files">
+          <Tooltip title="Ask all connected supporting agents to re-read their ~/.ssh/*.pub and /etc/ssh/ssh_host_*_key.pub files">
             <Button
               size="small"
               startIcon={refreshing ? <CircularProgress size={14} /> : <RefreshCw size={15} />}
@@ -523,7 +555,8 @@ export const SSHKeysTab: React.FC = () => {
               No public keys collected
             </Typography>
             <Typography variant="body2" sx={{ color: "#64748B", maxWidth: 520, mx: "auto" }}>
-              Keys appear here once agent-mode nodes with agent v0.1.18+ report their <code>~/.ssh/id_*.pub</code> files.
+              Keys appear here once agent-mode nodes with agent v0.1.19+ report their <code>~/.ssh/id_*.pub</code> and{" "}
+              <code>/etc/ssh/ssh_host_*_key.pub</code> files.
             </Typography>
           </Box>
         ) : (
@@ -532,7 +565,7 @@ export const SSHKeysTab: React.FC = () => {
               <TableHead sx={{ bgcolor: "#F8FAFC" }}>
                 <TableRow>
                   <TableCell sx={{ fontWeight: 800, color: "#475569" }}>NODE</TableCell>
-                  <TableCell sx={{ fontWeight: 800, color: "#475569" }}>TYPE</TableCell>
+                  <TableCell sx={{ fontWeight: 800, color: "#475569" }}>KEY</TableCell>
                   <TableCell sx={{ fontWeight: 800, color: "#475569" }}>PUBLIC KEY</TableCell>
                   <TableCell sx={{ fontWeight: 800, color: "#475569" }}>COMMENT</TableCell>
                   <TableCell sx={{ fontWeight: 800, color: "#475569" }}>SOURCE FILE</TableCell>

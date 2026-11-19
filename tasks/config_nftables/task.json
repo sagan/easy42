@@ -3,5 +3,8 @@
   "title": "Configure Nftables Autostart",
   "description": "Includes /etc/easy42.nft in system nftables configuration or registers easy42-nftables service, ensuring autostart.",
   "category": "Configuration",
-  "weight": 35
+  "weight": 35,
+  "selector": {
+    "all": "1"
+  }
 }

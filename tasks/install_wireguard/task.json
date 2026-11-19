@@ -3,5 +3,8 @@
   "title": "Install WireGuard",
   "description": "Installs WireGuard and wireguard-tools on the device using the native package manager.",
   "category": "Packages",
-  "weight": 10
+  "weight": 10,
+  "selector": {
+    "all": "1"
+  }
 }

@@ -4292,7 +4292,18 @@ func (m *Manager) PlanSyncWithScope(scope string, nodeNames ...string) ([]config
 		for _, appName := range orphanedAppNames {
 			targetFile := fmt.Sprintf("/etc/systemd/system/ezapp-%s.service", appName)
 			desc := fmt.Sprintf("Remove unassigned app '%s' service unit from %s", appName, node.Name)
-			if _, ok := deployedAppFiles[fmt.Sprintf("/etc/ezscript/%s", appName)]; ok {
+			liveType := ""
+			if st, ok := liveStatuses[appName]; ok {
+				liveType = st.AppType
+			}
+			// Script apps never have a systemd unit: their only artifact is
+			// /etc/ezscript/<name>. Checking the live app type also covers the
+			// window where the app sync already removed the file but a stale
+			// status/hash is still reported (a ".service" target would then
+			// never converge). The probe is preferred because it names the
+			// exact file that is still on disk.
+			_, scriptOnDisk := deployedAppFiles[fmt.Sprintf("/etc/ezscript/%s", appName)]
+			if scriptOnDisk || liveType == "script" {
 				targetFile = fmt.Sprintf("/etc/ezscript/%s", appName)
 				desc = fmt.Sprintf("Remove unassigned script '%s' from %s", appName, node.Name)
 			}
@@ -6061,10 +6072,12 @@ func (m *Manager) executeAgentSyncAction(act config.SyncAction, res *config.Sync
 			isWholeAppDelete := strings.HasSuffix(act.TargetFile, ".service") ||
 				strings.HasSuffix(act.TargetFile, "compose.yaml") ||
 				strings.HasPrefix(act.TargetFile, "/etc/init.d/ezapp-") ||
+				strings.HasPrefix(act.TargetFile, "/etc/ezscript/") ||
 				strings.HasPrefix(act.TargetFile, "crontab:ezapp-")
 
 			if isWholeAppDelete {
 				_ = m.stateStore.RemoveAppState(act.NodeName, act.Interface)
+				m.removeAppStatus(act.NodeName, act.Interface)
 				if m.agentHub != nil {
 					m.agentHub.RemoveAppHash(act.NodeName, act.Interface)
 					m.agentHub.RemoveAppFile(act.NodeName, act.TargetFile)

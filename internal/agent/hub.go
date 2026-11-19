@@ -671,7 +671,8 @@ func sshKeysEqual(a, b []config.SSHPublicKey) bool {
 		return false
 	}
 	for i := range a {
-		if a[i].Normalize() != b[i].Normalize() {
+		na, nb := a[i].Normalize(), b[i].Normalize()
+		if na.Algorithm != nb.Algorithm || na.Key != nb.Key || na.Comment != nb.Comment || na.Path != nb.Path {
 			return false
 		}
 	}
@@ -814,6 +815,7 @@ func (h *Hub) UpdateTelemetry(nodeName string, t *agentpb.TelemetryReport) {
 				Key:       k.Key,
 				Comment:   k.Comment,
 				Path:      k.Path,
+				Kind:      k.Kind,
 			})
 		}
 		if len(reportedKeys) == 0 {

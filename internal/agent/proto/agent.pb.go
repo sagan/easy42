@@ -723,9 +723,10 @@ type TelemetryReport struct {
 	HostsHash     string                 `protobuf:"bytes,6,opt,name=hosts_hash,json=hostsHash,proto3" json:"hosts_hash,omitempty"`
 	Apps          []*AppStatus           `protobuf:"bytes,7,rep,name=apps,proto3" json:"apps,omitempty"`
 	DisableApps   bool                   `protobuf:"varint,8,opt,name=disable_apps,json=disableApps,proto3" json:"disable_apps,omitempty"`
-	// Root user SSH public keys (OpenSSH default identity *.pub files) collected
-	// by the agent. Empty for agents that predate SSH key management or when the
-	// key management feature is disabled on the node.
+	// Root user SSH public keys collected by the agent: the OpenSSH default
+	// identity *.pub files (kind "user") and the SSH server host keys
+	// /etc/ssh/ssh_host_*.pub (kind "host"). Empty for agents that predate SSH key
+	// management or when the key management feature is disabled on the node.
 	SshKeys       []*SshPublicKey `protobuf:"bytes,9,rep,name=ssh_keys,json=sshKeys,proto3" json:"ssh_keys,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -2083,11 +2084,18 @@ func (*FetchSshKeysCmd) Descriptor() ([]byte, []int) {
 
 // SshPublicKey is a single OpenSSH public key file line.
 type SshPublicKey struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Algorithm     string                 `protobuf:"bytes,1,opt,name=algorithm,proto3" json:"algorithm,omitempty"` // e.g. "ssh-ed25519"
-	Key           string                 `protobuf:"bytes,2,opt,name=key,proto3" json:"key,omitempty"`             // Base64 key blob
-	Comment       string                 `protobuf:"bytes,3,opt,name=comment,proto3" json:"comment,omitempty"`     // Optional trailing comment
-	Path          string                 `protobuf:"bytes,4,opt,name=path,proto3" json:"path,omitempty"`           // Source *.pub file path (e.g. "/root/.ssh/id_ed25519.pub")
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	Algorithm string                 `protobuf:"bytes,1,opt,name=algorithm,proto3" json:"algorithm,omitempty"` // e.g. "ssh-ed25519"
+	Key       string                 `protobuf:"bytes,2,opt,name=key,proto3" json:"key,omitempty"`             // Base64 key blob
+	Comment   string                 `protobuf:"bytes,3,opt,name=comment,proto3" json:"comment,omitempty"`     // Optional trailing comment
+	Path      string                 `protobuf:"bytes,4,opt,name=path,proto3" json:"path,omitempty"`           // Source *.pub file path (e.g. "/root/.ssh/id_ed25519.pub")
+	// Key role:
+	//
+	//	"user" (default, empty is treated as "user"): a root login identity
+	//	  (~/.ssh/id_*.pub). Installed into authorized_keys so the node can log in.
+	//	"host": the node's SSH server host key (/etc/ssh/ssh_host_*.pub). Installed
+	//	  into known_hosts so other nodes can verify this node's server identity.
+	Kind          string `protobuf:"bytes,5,opt,name=kind,proto3" json:"kind,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2146,6 +2154,13 @@ func (x *SshPublicKey) GetComment() string {
 func (x *SshPublicKey) GetPath() string {
 	if x != nil {
 		return x.Path
+	}
+	return ""
+}
+
+func (x *SshPublicKey) GetKind() string {
+	if x != nil {
+		return x.Kind
 	}
 	return ""
 }
@@ -3573,12 +3588,13 @@ const file_proto_agent_proto_rawDesc = "" +
 	"\x04HTTP\x10\x05\"\x10\n" +
 	"\x0eProbeSystemCmd\"\x0f\n" +
 	"\rFlushCacheCmd\"\x11\n" +
-	"\x0fFetchSshKeysCmd\"l\n" +
+	"\x0fFetchSshKeysCmd\"\x80\x01\n" +
 	"\fSshPublicKey\x12\x1c\n" +
 	"\talgorithm\x18\x01 \x01(\tR\talgorithm\x12\x10\n" +
 	"\x03key\x18\x02 \x01(\tR\x03key\x12\x18\n" +
 	"\acomment\x18\x03 \x01(\tR\acomment\x12\x12\n" +
-	"\x04path\x18\x04 \x01(\tR\x04path\"6\n" +
+	"\x04path\x18\x04 \x01(\tR\x04path\x12\x12\n" +
+	"\x04kind\x18\x05 \x01(\tR\x04kind\"6\n" +
 	"\x11RestartServiceCmd\x12!\n" +
 	"\fservice_name\x18\x01 \x01(\tR\vserviceName\"\xf2\x01\n" +
 	"\x0fCommandResponse\x12\x1d\n" +

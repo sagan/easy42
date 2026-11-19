@@ -44,12 +44,35 @@ var SSHKeyFilePaths = map[string][]string{
 	SSHKeyRuleTypeAll:        {SSHKnownHostsPath, SSHAuthorizedKeysPath},
 }
 
-// SSHPublicKey is a root user public key reported by a node agent.
+// SSH key roles. A node publishes two kinds of public keys: the root login
+// identities used by its SSH *client* and the SSH *server* host keys its sshd
+// presents.
+const (
+	// SSHKeyKindUser is a root login identity (an agent's ~/.ssh/id_*.pub file).
+	// It is installed into authorized_keys, which lets this node log in.
+	SSHKeyKindUser = "user"
+	// SSHKeyKindHost is an SSH server host key (an agent's /etc/ssh/ssh_host_*_key.pub
+	// file). It is installed into known_hosts, which lets other nodes verify this
+	// node's server identity when connecting to it.
+	SSHKeyKindHost = "host"
+)
+
+// SSHPublicKey is a public key reported by a node agent.
 type SSHPublicKey struct {
 	Algorithm string `json:"algorithm"`         // e.g. "ssh-ed25519"
 	Key       string `json:"key"`               // Base64 key blob
 	Comment   string `json:"comment,omitempty"` // Optional trailing comment
 	Path      string `json:"path,omitempty"`    // Source *.pub file on the node
+	// Kind is the key role: SSHKeyKindUser (root login identity, default) or
+	// SSHKeyKindHost (SSH server host key). It decides which managed file the
+	// key belongs to: user keys go to authorized_keys, host keys to known_hosts.
+	Kind string `json:"kind,omitempty"`
+	// Hostnames are the host names this key is valid for. They are only used
+	// in the known_hosts block, where OpenSSH requires a comma separated host
+	// list (or a hashed host) before the key. Entries in authorized_keys ignore
+	// them. They are never reported by an agent; the controller fills them in
+	// from the owning node definition.
+	Hostnames []string `json:"hostnames,omitempty"`
 }
 
 // Normalize trims all fields and returns the normalized key.
@@ -59,7 +82,94 @@ func (k SSHPublicKey) Normalize() SSHPublicKey {
 		Key:       strings.TrimSpace(k.Key),
 		Comment:   strings.TrimSpace(k.Comment),
 		Path:      strings.TrimSpace(k.Path),
+		Kind:      k.NormalizedKind(),
+		Hostnames: normalizeSSHHostnames(k.Hostnames),
 	}
+}
+
+// NormalizedKind returns the key role, defaulting to a user key when the agent
+// did not report one (agents that predate host key collection).
+func (k SSHPublicKey) NormalizedKind() string {
+	if strings.EqualFold(strings.TrimSpace(k.Kind), SSHKeyKindHost) {
+		return SSHKeyKindHost
+	}
+	return SSHKeyKindUser
+}
+
+// IsHostKey reports whether the key is an SSH server host key.
+func (k SSHPublicKey) IsHostKey() bool {
+	return k.NormalizedKind() == SSHKeyKindHost
+}
+
+// ForFile reports whether the key belongs in the given managed file: known_hosts
+// holds SSH server host keys, authorized_keys holds root login identities.
+func (k SSHPublicKey) ForFile(authorizedKeys bool) bool {
+	if authorizedKeys {
+		return !k.IsHostKey()
+	}
+	return k.IsHostKey()
+}
+
+// normalizeSSHHostnames trims, lowercases and deduplicates host names while
+// preserving their order.
+func normalizeSSHHostnames(hostnames []string) []string {
+	if len(hostnames) == 0 {
+		return nil
+	}
+	res := make([]string, 0, len(hostnames))
+	seen := make(map[string]bool, len(hostnames))
+	for _, h := range hostnames {
+		h = strings.ToLower(strings.TrimSpace(h))
+		if h == "" || seen[h] {
+			continue
+		}
+		seen[h] = true
+		res = append(res, h)
+	}
+	if len(res) == 0 {
+		return nil
+	}
+	return res
+}
+
+// NormalizeBaseDomain cleans a Cloudflare "Base Domain" setting so it can be
+// appended to a node name (scheme, path and surrounding dots are dropped).
+func NormalizeBaseDomain(domain string) string {
+	d := strings.ToLower(strings.TrimSpace(domain))
+	d = strings.TrimPrefix(d, "https://")
+	d = strings.TrimPrefix(d, "http://")
+	if idx := strings.Index(d, "/"); idx != -1 {
+		d = d[:idx]
+	}
+	return strings.Trim(d, ".")
+}
+
+// NodeKnownHostsHostnames returns the host names a node is reachable under and
+// therefore which identities it may be known as in known_hosts: the main and
+// external IP addresses, the node name, <name>.internal and, when a DNS base
+// domain is configured, <name>.<base domain>.
+func NodeKnownHostsHostnames(node Node, baseDomain string) []string {
+	var raw []string
+	if ip := CleanCIDR(node.IP); ip != "" {
+		raw = append(raw, ip)
+	}
+	if ip6 := CleanCIDR(node.IP6); ip6 != "" {
+		raw = append(raw, ip6)
+	}
+	if ip := CleanCIDR(node.ExternalIP); ip != "" {
+		raw = append(raw, ip)
+	}
+	if ip6 := CleanCIDR(node.ExternalIP6); ip6 != "" {
+		raw = append(raw, ip6)
+	}
+	name := strings.TrimSpace(node.Name)
+	if name != "" {
+		raw = append(raw, name, name+".internal")
+		if base := NormalizeBaseDomain(baseDomain); base != "" {
+			raw = append(raw, name+"."+base)
+		}
+	}
+	return normalizeSSHHostnames(raw)
 }
 
 // IsValid reports whether the key has a supported algorithm and a well formed
@@ -255,32 +365,47 @@ func parseAgentVersion(v string) []int {
 
 // SSHKeyLine builds the single line written for a key. Entries installed into
 // authorized_keys get a fixed comment prefix so cluster managed keys can be
-// told apart from manually added ones.
+// told apart from manually added ones. Entries installed into known_hosts are
+// prefixed with the comma separated host name list, which OpenSSH requires
+// before the key type; keys without host names are skipped there because such
+// a line is invalid and would make the whole file unparsable.
 func SSHKeyLine(key SSHPublicKey, authorizedKeys bool) string {
 	key = key.Normalize()
 	comment := key.Comment
+	prefix := ""
 	if authorizedKeys {
 		if comment == "" {
 			comment = "easy42"
 		} else {
 			comment = "easy42 " + comment
 		}
+	} else {
+		prefix = strings.Join(key.Hostnames, ",")
+		if prefix == "" {
+			return ""
+		}
+	}
+	line := key.Algorithm + " " + key.Key
+	if prefix != "" {
+		line = prefix + " " + line
 	}
 	if comment == "" {
-		return fmt.Sprintf("%s %s", key.Algorithm, key.Key)
+		return line
 	}
-	return fmt.Sprintf("%s %s %s", key.Algorithm, key.Key, comment)
+	return line + " " + comment
 }
 
 // BuildSSHKeysBlock assembles the deterministic Easy42 block for the given keys.
-// Invalid keys and duplicate key material are skipped. Lines are sorted so the
-// resulting block hash only changes when the effective key set changes.
+// Invalid keys, duplicate key material and keys that do not belong in the target
+// file (user identities in known_hosts, host keys in authorized_keys) are
+// skipped. Lines are sorted so the resulting block hash only changes when the
+// effective key set changes.
 func BuildSSHKeysBlock(keys []SSHPublicKey, authorizedKeys bool) string {
 	lines := make([]string, 0, len(keys))
 	seen := make(map[string]bool, len(keys))
 	for _, k := range keys {
 		k = k.Normalize()
-		if !k.IsValid() {
+		if !k.IsValid() || !k.ForFile(authorizedKeys) {
 			continue
 		}
 		fp := k.fingerprint()
@@ -288,6 +413,9 @@ func BuildSSHKeysBlock(keys []SSHPublicKey, authorizedKeys bool) string {
 			continue
 		}
 		seen[fp] = true
+		if !authorizedKeys && len(k.Hostnames) == 0 {
+			continue
+		}
 		lines = append(lines, SSHKeyLine(k, authorizedKeys))
 	}
 	sort.Strings(lines)

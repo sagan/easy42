@@ -66,15 +66,15 @@ func TestCompareAgentVersions(t *testing.T) {
 }
 
 func TestBuildSSHKeysBlock(t *testing.T) {
-	a := SSHPublicKey{Algorithm: "ssh-ed25519", Key: testSSHKeyBlob("ssh-ed25519", "a"), Comment: "node-a"}
-	b := SSHPublicKey{Algorithm: "ssh-rsa", Key: testSSHKeyBlob("ssh-rsa", "b")}
+	a := SSHPublicKey{Algorithm: "ssh-ed25519", Key: testSSHKeyBlob("ssh-ed25519", "a"), Comment: "node-a", Kind: SSHKeyKindHost, Hostnames: []string{"10.0.0.1", "node-a"}}
+	b := SSHPublicKey{Algorithm: "ssh-rsa", Key: testSSHKeyBlob("ssh-rsa", "b"), Kind: SSHKeyKindHost, Hostnames: []string{"10.0.0.2"}}
 	dup := SSHPublicKey{Algorithm: "ssh-ed25519", Key: testSSHKeyBlob("ssh-ed25519", "a"), Comment: "duplicate"}
 	invalid := SSHPublicKey{Algorithm: "ssh-ed25519", Key: "garbage"}
 
 	block := BuildSSHKeysBlock([]SSHPublicKey{a, b, dup, invalid}, false)
 	want := "### EASY42_START\n" +
-		"ssh-ed25519 " + a.Key + " node-a\n" +
-		"ssh-rsa " + b.Key + "\n" +
+		"10.0.0.1,node-a ssh-ed25519 " + a.Key + " node-a\n" +
+		"10.0.0.2 ssh-rsa " + b.Key + "\n" +
 		"### EASY42_END\n"
 	if block != want {
 		t.Fatalf("unexpected block:\n%q\nwant:\n%q", block, want)
@@ -86,12 +86,87 @@ func TestBuildSSHKeysBlock(t *testing.T) {
 		t.Fatal("expected identical hash regardless of key order")
 	}
 
-	authBlock := BuildSSHKeysBlock([]SSHPublicKey{a, b}, true)
+	// authorized_keys only accepts root login identities (user keys); host keys
+	// belong in known_hosts.
+	user := SSHPublicKey{Algorithm: "ssh-ed25519", Key: testSSHKeyBlob("ssh-ed25519", "a"), Comment: "node-a", Kind: SSHKeyKindUser}
+	legacy := SSHPublicKey{Algorithm: "ssh-rsa", Key: testSSHKeyBlob("ssh-rsa", "b")}
+	authBlock := BuildSSHKeysBlock([]SSHPublicKey{a, user, legacy}, true)
 	if !strings.Contains(authBlock, "ssh-ed25519 "+a.Key+" easy42 node-a\n") {
 		t.Fatalf("authorized_keys entries must carry the easy42 comment, got:\n%s", authBlock)
 	}
 	if !strings.Contains(authBlock, "ssh-rsa "+b.Key+" easy42\n") {
-		t.Fatalf("authorized_keys entries without comment must get the easy42 comment, got:\n%s", authBlock)
+		t.Fatalf("keyless-role keys must be treated as user keys, got:\n%s", authBlock)
+	}
+	// A host key must never be installed into authorized_keys.
+	if got := BuildSSHKeysBlock([]SSHPublicKey{a}, true); !strings.Contains(got, "### EASY42_START\n### EASY42_END\n") {
+		t.Fatalf("host keys must be excluded from authorized_keys, got:\n%s", got)
+	}
+	// authorized_keys entries never carry host names.
+	if strings.Contains(authBlock, "10.0.0.1") {
+		t.Fatalf("authorized_keys entries must not carry host names, got:\n%s", authBlock)
+	}
+}
+
+func TestSSHKeyKindRouting(t *testing.T) {
+	user := SSHPublicKey{Kind: SSHKeyKindUser}
+	host := SSHPublicKey{Kind: SSHKeyKindHost}
+	legacy := SSHPublicKey{}
+	if user.IsHostKey() || legacy.IsHostKey() || !host.IsHostKey() {
+		t.Fatal("host key detection is wrong")
+	}
+	if !user.ForFile(true) || host.ForFile(true) {
+		t.Fatal("authorized_keys must only receive user keys")
+	}
+	if !host.ForFile(false) || user.ForFile(false) || legacy.ForFile(false) {
+		t.Fatal("known_hosts must only receive host keys")
+	}
+	if got := host.Normalize().Kind; got != SSHKeyKindHost {
+		t.Fatalf("expected normalized host kind, got %q", got)
+	}
+	if got := legacy.Normalize().Kind; got != SSHKeyKindUser {
+		t.Fatalf("expected legacy keys to normalize to user, got %q", got)
+	}
+}
+
+func TestBuildSSHKeysBlockKnownHostsRequiresHostnames(t *testing.T) {
+	noHosts := SSHPublicKey{Algorithm: "ssh-ed25519", Key: testSSHKeyBlob("ssh-ed25519", "a"), Comment: "node-a"}
+	block := BuildSSHKeysBlock([]SSHPublicKey{noHosts}, false)
+	want := "### EASY42_START\n### EASY42_END\n"
+	if block != want {
+		t.Fatalf("known_hosts keys without host names must be skipped, got:\n%q", block)
+	}
+	// authorized_keys still accepts them.
+	if authBlock := BuildSSHKeysBlock([]SSHPublicKey{noHosts}, true); !strings.Contains(authBlock, noHosts.Key) {
+		t.Fatalf("authorized_keys must keep keys without host names, got:\n%s", authBlock)
+	}
+}
+
+func TestNodeKnownHostsHostnames(t *testing.T) {
+	node := Node{
+		Name:        "njrlubuntu",
+		IP:          "192.168.100.1",
+		IP6:         "fd42::1",
+		ExternalIP:  "172.20.0.1",
+		ExternalIP6: "fd42:1::1/64",
+	}
+
+	got := NodeKnownHostsHostnames(node, "")
+	want := []string{"192.168.100.1", "fd42::1", "172.20.0.1", "fd42:1::1", "njrlubuntu", "njrlubuntu.internal"}
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Fatalf("unexpected host names: %v, want %v", got, want)
+	}
+
+	withDomain := NodeKnownHostsHostnames(node, " https://Easy42.Example.com/ ")
+	last := withDomain[len(withDomain)-1]
+	if last != "njrlubuntu.easy42.example.com" {
+		t.Fatalf("expected base domain host name, got %v", withDomain)
+	}
+
+	// Missing values are skipped and duplicates removed.
+	sparse := NodeKnownHostsHostnames(Node{Name: "n1", IP: "10.0.0.1", IP6: "10.0.0.1"}, "example.com")
+	wantSparse := []string{"10.0.0.1", "n1", "n1.internal", "n1.example.com"}
+	if strings.Join(sparse, ",") != strings.Join(wantSparse, ",") {
+		t.Fatalf("unexpected sparse host names: %v, want %v", sparse, wantSparse)
 	}
 }
 

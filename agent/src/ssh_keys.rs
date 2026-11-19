@@ -43,6 +43,24 @@ pub const DEFAULT_IDENTITY_FILES: &[&str] = &[
     "id_dsa",
 ];
 
+/// Key role reported to the controller (and used to route keys into key files).
+pub const SSH_KEY_KIND_USER: &str = "user";
+pub const SSH_KEY_KIND_HOST: &str = "host";
+
+/// Directory holding the SSH *server* host keys (`/etc/ssh/ssh_host_*_key.pub`).
+pub const DEFAULT_HOST_KEY_DIR: &str = "/etc/ssh";
+
+/// Returns the directory holding the node's SSH server host keys, honouring
+/// `EASY42_SSH_HOST_KEY_DIR` (used by tests).
+pub fn get_host_key_dir() -> PathBuf {
+    if let Ok(dir) = std::env::var("EASY42_SSH_HOST_KEY_DIR") {
+        if !dir.trim().is_empty() {
+            return PathBuf::from(dir.trim());
+        }
+    }
+    PathBuf::from(DEFAULT_HOST_KEY_DIR)
+}
+
 /// Returns the root SSH directory, honouring `EASY42_SSH_DIR` (used by tests).
 pub fn get_ssh_dir() -> PathBuf {
     if let Ok(dir) = std::env::var("EASY42_SSH_DIR") {
@@ -703,8 +721,9 @@ pub fn encode_base64(data: &[u8]) -> String {
 
 /// Collects the root user's OpenSSH default identity public keys.
 ///
-/// Each `.pub` file is included only when its key blob matches the
-/// corresponding private key (when verification is possible), so stale or
+/// These are the *client* keys used when this node logs in elsewhere, hence
+/// `kind = "user"`. Each `.pub` file is included only when its key blob matches
+/// the corresponding private key (when verification is possible), so stale or
 /// hand-edited public files never make it into other nodes' key files.
 pub fn collect_public_keys(ssh_dir: &Path) -> Vec<SshPublicKey> {
     let mut keys = Vec::new();
@@ -743,16 +762,103 @@ pub fn collect_public_keys(ssh_dir: &Path) -> Vec<SshPublicKey> {
             key: parsed.key,
             comment: parsed.comment,
             path: pub_path.to_string_lossy().to_string(),
+            kind: SSH_KEY_KIND_USER.to_string(),
         });
     }
     keys
 }
 
+/// Collects the node's SSH *server* host public keys.
+///
+/// These are the identities the node's `sshd` presents (`ssh_host_<algorithm>_key.pub`),
+/// which is what other nodes must trust in `known_hosts`. Client identities in
+/// `~/.ssh/id_*` are unrelated to them. As with user keys, a `.pub` file is only
+/// included when it matches its private key, so a stale public file cannot make
+/// other nodes reject this host (which would be a hard host-key mismatch).
+pub fn collect_host_keys(host_key_dir: &Path) -> Vec<SshPublicKey> {
+    let mut keys = Vec::new();
+    let mut seen = HashSet::new();
+    let entries = match fs::read_dir(host_key_dir) {
+        Ok(e) => e,
+        Err(_) => return keys,
+    };
+    let mut paths: Vec<PathBuf> = entries
+        .flatten()
+        .filter(|e| e.file_type().map(|t| t.is_file()).unwrap_or(false))
+        .map(|e| e.path())
+        .filter(|p| {
+            let name = p.file_name().and_then(|n| n.to_str()).unwrap_or("");
+            name.starts_with("ssh_host_") && name.ends_with("_key.pub")
+        })
+        .collect();
+    paths.sort();
+
+    for pub_path in paths {
+        let pub_content = match fs::read_to_string(&pub_path) {
+            Ok(c) => c,
+            Err(_) => continue,
+        };
+        let parsed = match ParsedKey::parse(&pub_content) {
+            Some(p) => p,
+            None => {
+                tracing::debug!("Ignoring malformed SSH host key file {:?}", pub_path);
+                continue;
+            }
+        };
+        // `/etc/ssh/ssh_host_ed25519_key.pub` -> `/etc/ssh/ssh_host_ed25519_key`
+        let priv_path = pub_path.with_extension("");
+        if let Ok(priv_content) = fs::read_to_string(&priv_path) {
+            if let Some(expected) = public_key_base64_from_private_key(&priv_content) {
+                if expected != parsed.key {
+                    tracing::warn!(
+                        "Ignoring SSH host key {:?}: it does not match its private key",
+                        pub_path
+                    );
+                    continue;
+                }
+            }
+        }
+        let fingerprint = parsed.fingerprint();
+        if !seen.insert(fingerprint) {
+            continue;
+        }
+        keys.push(SshPublicKey {
+            algorithm: parsed.algorithm,
+            key: parsed.key,
+            comment: parsed.comment,
+            path: pub_path.to_string_lossy().to_string(),
+            kind: SSH_KEY_KIND_HOST.to_string(),
+        });
+    }
+    keys
+}
+
+/// Collects every key published by the node: client (user) identities first,
+/// then SSH server host keys.
+pub fn collect_all_public_keys(ssh_dir: &Path, host_key_dir: &Path) -> Vec<SshPublicKey> {
+    let mut keys = collect_public_keys(ssh_dir);
+    keys.extend(collect_host_keys(host_key_dir));
+    keys
+}
+
 /// Builds the deterministic Easy42 block for the given keys.
+///
+/// Only keys of the matching role are included: `authorized_keys` gets root
+/// login identities (`kind = "user"`), `known_hosts` gets SSH server host keys
+/// (`kind = "host"`). The controller normally sends the rendered block, so this
+/// is only used as a fallback for older controllers.
 pub fn build_block(keys: &[SshPublicKey], kind: SshKeyFileKind) -> String {
     let mut lines: Vec<String> = Vec::new();
     let mut seen = HashSet::new();
     for key in keys {
+        let key_kind = key.kind.trim();
+        let matches_file = match kind {
+            SshKeyFileKind::AuthorizedKeys => key_kind.is_empty() || key_kind == SSH_KEY_KIND_USER,
+            SshKeyFileKind::KnownHosts => key_kind == SSH_KEY_KIND_HOST,
+        };
+        if !matches_file {
+            continue;
+        }
         let algorithm = key.algorithm.trim();
         let blob = key.key.trim();
         if ParsedKey::validate(algorithm, blob).is_none() {
@@ -894,19 +1000,35 @@ fn splice_block(content: &str, block: &str) -> String {
 /// Atomically and idempotently writes the desired Easy42 block into the target
 /// SSH key file.
 ///
+/// `desired_block` is the block prepared by the controller and must be written
+/// verbatim (it is authoritative: it carries the known_hosts host name lists,
+/// which cannot be reconstructed from the key list alone). When it is empty the
+/// agent falls back to building a block from `keys`, so older controllers keep
+/// working.
+///
 /// Returns `Ok((modified, new_hash))`. When the resulting file content is
 /// unchanged no write happens and `modified` is `false`.
 pub fn update_key_file(
     ssh_dir: &Path,
     kind: SshKeyFileKind,
     keys: &[SshPublicKey],
+    desired_block: Option<&str>,
     tmp_suffix: &str,
 ) -> Result<(bool, String), String> {
-    let block = build_block(keys, kind);
-    let new_hash = hash_block(&block);
-    let block_has_keys = keys.iter().any(|k| {
-        ParsedKey::validate(k.algorithm.trim(), k.key.trim()).is_some()
-    });
+    let block = match desired_block {
+        Some(b) if !b.trim().is_empty() => b.replace("\r\n", "\n"),
+        _ => build_block(keys, kind),
+    };    let new_hash = hash_block(&block);
+    // The block carries keys when it has at least one line between the markers.
+    let block_has_keys = match extract_block(&block) {
+        Some((body, _)) => body
+            .trim_start_matches(START_MARKER)
+            .trim_end_matches(END_MARKER)
+            .trim()
+            .lines()
+            .any(|l| !l.trim().is_empty()),
+        None => false,
+    };
 
     let path = kind.resolve_path(ssh_dir);
     let existing = match fs::read_to_string(&path) {
@@ -1014,11 +1136,16 @@ mod tests {
     }
 
     fn key(alg: &str, payload: &str, comment: &str) -> SshPublicKey {
+        key_of_kind(alg, payload, comment, SSH_KEY_KIND_HOST)
+    }
+
+    fn key_of_kind(alg: &str, payload: &str, comment: &str, kind: &str) -> SshPublicKey {
         SshPublicKey {
             algorithm: alg.to_string(),
             key: blob(alg, payload.as_bytes()),
             comment: comment.to_string(),
             path: String::new(),
+            kind: kind.to_string(),
         }
     }
 
@@ -1057,7 +1184,7 @@ mod tests {
 
     #[test]
     fn test_build_block_authorized_keys() {
-        let keys = vec![key("ssh-ed25519", "e", "")];
+        let keys = vec![key_of_kind("ssh-ed25519", "e", "", SSH_KEY_KIND_USER)];
         let block = build_block(&keys, SshKeyFileKind::AuthorizedKeys);
         assert_eq!(
             block,
@@ -1115,12 +1242,116 @@ mod tests {
     }
 
     #[test]
+    fn test_build_block_separates_key_roles() {
+        // known_hosts only accepts host keys, authorized_keys only user keys.
+        let user = key_of_kind("ssh-ed25519", "user", "root@node1", SSH_KEY_KIND_USER);
+        let host = key_of_kind("ssh-ed25519", "host", "root@node1", SSH_KEY_KIND_HOST);
+        let keys = vec![user.clone(), host.clone()];
+
+        let kh = build_block(&keys, SshKeyFileKind::KnownHosts);
+        assert!(kh.contains(&host.key), "known_hosts must contain the host key");
+        assert!(!kh.contains(&user.key), "known_hosts must not contain a user identity: {}", kh);
+
+        let ak = build_block(&keys, SshKeyFileKind::AuthorizedKeys);
+        assert!(ak.contains(&user.key), "authorized_keys must contain the user key");
+        assert!(!ak.contains(&host.key), "authorized_keys must not contain a host key");
+
+        // Agents that predate the role field report keys without a kind; they
+        // are treated as user keys so existing rules keep working.
+        let legacy = SshPublicKey { kind: String::new(), ..user.clone() };
+        let ak = build_block(&[legacy], SshKeyFileKind::AuthorizedKeys);
+        assert!(ak.contains(&user.key));
+    }
+
+    #[test]
+    fn test_collect_host_keys() {
+        let host_dir = temp_dir("hostkeys");
+        let ed = blob("ssh-ed25519", b"host-ed25519");
+        fs::write(
+            host_dir.join("ssh_host_ed25519_key.pub"),
+            format!("ssh-ed25519 {} root@node1\n", ed),
+        )
+        .unwrap();
+        fs::write(
+            host_dir.join("ssh_host_rsa_key.pub"),
+            format!("ssh-rsa {} root@node1\n", blob("ssh-rsa", b"host-rsa")),
+        )
+        .unwrap();
+        // Unrelated files must be ignored.
+        fs::write(host_dir.join("ssh_config"), "Host *\n").unwrap();
+        fs::write(host_dir.join("ssh_host_ed25519_key"), "PRIVATE\n").unwrap();
+
+        let keys = collect_host_keys(&host_dir);
+        assert_eq!(keys.len(), 2, "expected both host public keys, got {:?}", keys);
+        for k in &keys {
+            assert_eq!(k.kind, SSH_KEY_KIND_HOST);
+            assert!(k.path.contains("ssh_host_"));
+        }
+
+        // `collect_all_public_keys` merges user and host keys.
+        let ssh_dir = temp_dir("allkeys");
+        fs::write(
+            ssh_dir.join("id_ed25519.pub"),
+            format!("ssh-ed25519 {} root@node1\n", blob("ssh-ed25519", b"user")),
+        )
+        .unwrap();
+        let all = collect_all_public_keys(&ssh_dir, &host_dir);
+        assert_eq!(all.len(), 3);
+        assert_eq!(all.iter().filter(|k| k.kind == SSH_KEY_KIND_HOST).count(), 2);
+        assert_eq!(all.iter().filter(|k| k.kind == SSH_KEY_KIND_USER).count(), 1);
+    }
+
+    #[test]
+    fn test_update_key_file_writes_server_block_verbatim() {
+        let dir = temp_dir("verbatim");
+        fs::write(dir.join("known_hosts"), "github.com ssh-ed25519 AAAAuser\n").unwrap();
+        let ed = blob("ssh-ed25519", b"nodekey");
+        let block = format!(
+            "### EASY42_START\n10.0.0.1,node1,node1.internal ssh-ed25519 {} root@node1\n### EASY42_END\n",
+            ed
+        );
+
+        // The controller block is authoritative: keys are only a fallback.
+        let (modified, hash) = update_key_file(
+            &dir,
+            SshKeyFileKind::KnownHosts,
+            &[],
+            Some(&block),
+            ".tmp",
+        )
+        .unwrap();
+        assert!(modified, "a server block with keys must be written");
+        let content = fs::read_to_string(dir.join("known_hosts")).unwrap();
+        assert!(content.contains(&block), "block must be written verbatim, got:\n{}", content);
+        assert!(content.contains("github.com"));
+        assert_eq!(get_current_block_hash(&dir.join("known_hosts")), hash);
+
+        // Idempotent.
+        let (modified2, _) = update_key_file(
+            &dir,
+            SshKeyFileKind::KnownHosts,
+            &[],
+            Some(&block),
+            ".tmp",
+        )
+        .unwrap();
+        assert!(!modified2);
+
+        // An empty (header-only) block removes the managed block only.
+        let empty = format!("{}\n{}\n", START_MARKER, END_MARKER);
+        update_key_file(&dir, SshKeyFileKind::KnownHosts, &[], Some(&empty), ".tmp").unwrap();
+        let content = fs::read_to_string(dir.join("known_hosts")).unwrap();
+        assert!(!content.contains(START_MARKER));
+        assert_eq!(content, "github.com ssh-ed25519 AAAAuser\n");
+    }
+
+    #[test]
     fn test_update_key_file_atomic_idempotent() {
         let dir = temp_dir("ker");
         fs::write(dir.join("authorized_keys"), "manual-key comment\n\n").unwrap();
-        let keys = vec![key("ssh-ed25519", "cluster", "node1")];
+        let keys = vec![key_of_kind("ssh-ed25519", "cluster", "node1", SSH_KEY_KIND_USER)];
         let (modified, hash) =
-            update_key_file(&dir, SshKeyFileKind::AuthorizedKeys, &keys, ".tmp").unwrap();
+            update_key_file(&dir, SshKeyFileKind::AuthorizedKeys, &keys, None, ".tmp").unwrap();
         assert!(modified);
         let content = fs::read_to_string(dir.join("authorized_keys")).unwrap();
         assert!(content.contains(&format!(
@@ -1131,20 +1362,20 @@ mod tests {
 
         // Second run must not modify the file.
         let (modified2, hash2) =
-            update_key_file(&dir, SshKeyFileKind::AuthorizedKeys, &keys, ".tmp").unwrap();
+            update_key_file(&dir, SshKeyFileKind::AuthorizedKeys, &keys, None, ".tmp").unwrap();
         assert!(!modified2);
         assert_eq!(hash, hash2);
 
         // Removing the keys leaves no empty block behind and restores the
         // manually managed content.
         let (modified3, _) =
-            update_key_file(&dir, SshKeyFileKind::AuthorizedKeys, &[], ".tmp").unwrap();
+            update_key_file(&dir, SshKeyFileKind::AuthorizedKeys, &[], None, ".tmp").unwrap();
         assert!(modified3);
         let content = fs::read_to_string(dir.join("authorized_keys")).unwrap();
         assert!(!content.contains(START_MARKER));
         assert_eq!(content, "manual-key comment\n");
         let (modified4, _) =
-            update_key_file(&dir, SshKeyFileKind::AuthorizedKeys, &[], ".tmp").unwrap();
+            update_key_file(&dir, SshKeyFileKind::AuthorizedKeys, &[], None, ".tmp").unwrap();
         assert!(!modified4);
     }
 
@@ -1152,7 +1383,7 @@ mod tests {
     fn test_update_key_file_no_block_when_absent() {
         let dir = temp_dir("absent");
         let (modified, hash) =
-            update_key_file(&dir, SshKeyFileKind::KnownHosts, &[], ".tmp").unwrap();
+            update_key_file(&dir, SshKeyFileKind::KnownHosts, &[], None, ".tmp").unwrap();
         assert!(!modified);
         assert_eq!(hash, hash_block("### EASY42_START\n### EASY42_END\n"));
         assert!(!dir.join("known_hosts").exists());

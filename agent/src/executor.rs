@@ -774,6 +774,7 @@ done"#;
             key: String,
             comment: String,
             path: String,
+            kind: String,
         }
 
         #[derive(Serialize)]
@@ -785,9 +786,11 @@ done"#;
         }
 
         let enabled = !self.is_apps_disabled();
-        let ssh_dir = crate::ssh_keys::get_ssh_dir();
         let keys = if enabled {
-            crate::ssh_keys::collect_public_keys(&ssh_dir)
+            crate::ssh_keys::collect_all_public_keys(
+                &crate::ssh_keys::get_ssh_dir(),
+                &crate::ssh_keys::get_host_key_dir(),
+            )
         } else {
             Vec::new()
         };
@@ -799,6 +802,7 @@ done"#;
                     key: k.key,
                     comment: k.comment,
                     path: k.path,
+                    kind: k.kind,
                 })
                 .collect(),
             ssh_keys_enabled: enabled,
@@ -846,10 +850,15 @@ done"#;
                 )
             }
         };
+        // The controller sends the fully rendered block in `file_content`, which
+        // is authoritative (known_hosts entries carry host name lists that are
+        // not part of `ssh_keys`). `ssh_keys` is only used by older controllers.
+        let desired_block = std::str::from_utf8(&req.file_content).ok();
         match crate::ssh_keys::update_key_file(
             &crate::ssh_keys::get_ssh_dir(),
             kind,
             &req.ssh_keys,
+            desired_block,
             &format!(".ez42tmp.{}", std::process::id()),
         ) {
             Ok((modified, hash)) => (
@@ -934,7 +943,14 @@ done"#;
             "delete_config" | "delete_wg" | "down_wg" | "delete_file" | "down_interface"
         ) || req.diff_status.as_str() == "delete";
 
-        let (action_ok, action_code, mut action_out, action_err) = if is_delete {
+        let (action_ok, action_code, mut action_out, action_err) = if is_delete
+            && crate::ssh_keys::SshKeyFileKind::from_target_path(&req.target_file).is_some()
+        {
+            // Managed SSH key files are never deleted as a whole: a "delete"
+            // action removes only the Easy42 block and keeps every foreign line
+            // (removing the file would wipe manually added trusted hosts/keys).
+            self.sync_ssh_keys(&req)
+        } else if is_delete {
             let mut iface = req.interface_name.clone();
             if iface.is_empty() && !req.target_file.is_empty() {
                 if let Some(name) = Path::new(&req.target_file)
@@ -1607,7 +1623,8 @@ mod tests {
         assert!(!is_allowed_config_path(Path::new("/etc/nftables.conf")));
         assert!(!is_allowed_config_path(Path::new("/etc/easy42/evil.sh")));
         assert!(!is_allowed_config_path(Path::new("/etc/cron.d/backdoor")));
-        assert!(!is_allowed_config_path(Path::new("/root/.ssh/authorized_keys")));
+        assert!(!is_allowed_config_path(Path::new("/root/.ssh/id_ed25519")));
+        assert!(!is_allowed_config_path(Path::new("/root/.ssh/config")));
         assert!(!is_allowed_config_path(Path::new("/etc/sudoers.d/easy42")));
 
         // Path traversal attempts
@@ -2036,6 +2053,58 @@ mod tests {
         assert!(c3.contains(FUNC_DYNAMIC_EXPORT_FILTER));
 
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// A `delete` sync action for a managed SSH key file must not try to remove
+    /// the file (that path is rejected by the security policy and would wipe
+    /// manual entries): it removes only the Easy42 block.
+    #[tokio::test]
+    async fn test_sync_action_delete_ssh_key_file_removes_block_only() {
+        let ssh_dir = std::env::temp_dir().join(format!(
+            "easy42_exec_ssh_{}_{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir_all(&ssh_dir).unwrap();
+        // SAFETY: tests in this module do not run concurrently against this
+        // variable (no other test reads or writes EASY42_SSH_DIR).
+        std::env::set_var("EASY42_SSH_DIR", &ssh_dir);
+
+        let auth_path = ssh_dir.join("authorized_keys");
+        fs::write(
+            &auth_path,
+            "manual-key comment\n\n### EASY42_START\nssh-ed25519 AAAA easy42 node1\n### EASY42_END\n",
+        )
+        .unwrap();
+
+        let executor = CommandExecutor::default();
+        let req = proto::SyncActionCmd {
+            action_type: "sync_ssh_keys".to_string(),
+            interface_name: "ssh_authorized_keys".to_string(),
+            target_file: "/root/.ssh/authorized_keys".to_string(),
+            file_content: b"### EASY42_START\n### EASY42_END\n".to_vec(),
+            file_mode: 0o600,
+            sha256_hash: String::new(),
+            hosts: Vec::new(),
+            description: "Remove Easy42 SSH keys from /root/.ssh/authorized_keys".to_string(),
+            diff_status: "delete".to_string(),
+            ssh_keys: Vec::new(),
+        };
+
+        let (success, code, _stdout, stderr) = executor.execute_sync_action(req).await;
+        assert!(success, "delete must not fail on the path policy: {}", stderr);
+        assert_eq!(code, 0);
+        assert!(auth_path.exists(), "authorized_keys must not be removed");
+
+        let content = fs::read_to_string(&auth_path).unwrap();
+        assert!(!content.contains(crate::ssh_keys::START_MARKER));
+        assert!(content.contains("manual-key comment"));
+
+        std::env::remove_var("EASY42_SSH_DIR");
+        let _ = fs::remove_dir_all(&ssh_dir);
     }
 }
 

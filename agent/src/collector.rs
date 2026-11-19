@@ -95,6 +95,10 @@ impl MetricsCollector {
     }
 
     /// Returns the collected root SSH public keys, honoring the short cache.
+    ///
+    /// Both roles are reported: client identities (`~/.ssh/id_*.pub`, kind
+    /// "user") and SSH server host keys (`/etc/ssh/ssh_host_*_key.pub`, kind
+    /// "host").
     pub fn collect_ssh_keys(&mut self) -> Vec<proto::SshPublicKey> {
         if !self.is_ssh_keys_enabled() {
             self.ssh_keys_cache = None;
@@ -105,7 +109,10 @@ impl MetricsCollector {
                 return keys.clone();
             }
         }
-        let keys = crate::ssh_keys::collect_public_keys(&crate::ssh_keys::get_ssh_dir());
+        let keys = crate::ssh_keys::collect_all_public_keys(
+            &crate::ssh_keys::get_ssh_dir(),
+            &crate::ssh_keys::get_host_key_dir(),
+        );
         self.ssh_keys_cache = Some((std::time::Instant::now(), keys.clone()));
         keys
     }
@@ -716,3 +723,25 @@ mod tests {
     }
 }
 
+
+#[cfg(test)]
+mod kind_wire_test {
+    use prost::Message;
+
+    #[test]
+    fn ssh_key_kind_survives_proto_roundtrip() {
+        let report = crate::proto::TelemetryReport {
+            ssh_keys: vec![crate::proto::SshPublicKey {
+                algorithm: "ssh-ed25519".into(),
+                key: "AAAA".into(),
+                comment: "c".into(),
+                path: "/etc/ssh/ssh_host_ed25519_key.pub".into(),
+                kind: "host".into(),
+            }],
+            ..Default::default()
+        };
+        let buf = report.encode_to_vec();
+        let back = crate::proto::TelemetryReport::decode(&buf[..]).unwrap();
+        assert_eq!(back.ssh_keys[0].kind, "host");
+    }
+}

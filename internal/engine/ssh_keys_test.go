@@ -144,8 +144,14 @@ func TestSSHKeyRulePlanning(t *testing.T) {
 	src1 := sshTestKey("ssh-ed25519", "src1", "src1")
 	src2 := sshTestKey("ssh-rsa", "src2", "src2")
 	legacy := sshTestKey("ssh-ed25519", "legacy", "legacy")
-	mgr.agentHub.SetNodeMeta("src1", agentNodeMeta("src1", "0.1.18", src1))
-	mgr.agentHub.SetNodeMeta("src2", agentNodeMeta("src2", "0.1.18", src2))
+	// Each node also publishes its SSH server host keys, which are the only
+	// keys that belong in known_hosts.
+	src1Host := sshTestKey("ssh-ed25519", "src1-host", "src1")
+	src1Host.Kind = config.SSHKeyKindHost
+	src2Host := sshTestKey("ssh-ed25519", "src2-host", "src2")
+	src2Host.Kind = config.SSHKeyKindHost
+	mgr.agentHub.SetNodeMeta("src1", agentNodeMeta("src1", "0.1.18", src1, src1Host))
+	mgr.agentHub.SetNodeMeta("src2", agentNodeMeta("src2", "0.1.18", src2, src2Host))
 	mgr.agentHub.SetNodeMeta("legacy", agentNodeMeta("legacy", "0.1.17", legacy))
 	mgr.agentHub.SetNodeMeta("dst1", agentNodeMeta("dst1", "0.1.18"))
 	mgr.agentHub.SetNodeMeta("dst2", agentNodeMeta("dst2", "0.1.18"))
@@ -155,17 +161,26 @@ func TestSSHKeyRulePlanning(t *testing.T) {
 		t.Fatalf("PlanSync failed: %v", err)
 	}
 
-	// dst1: rule r1 (all) + r2 (known_hosts) -> both files.
-	for _, path := range []string{config.SSHKnownHostsPath, config.SSHAuthorizedKeysPath} {
-		act := findSSHKeyAction(actions, "dst1", path)
+	// dst1: rule r1 (all) + r2 (known_hosts) -> both files, each with the keys
+	// of the matching role (host keys -> known_hosts, login keys -> authorized_keys).
+	for _, tc := range []struct {
+		path     string
+		wantKeys []string
+	}{
+		{config.SSHKnownHostsPath, []string{src1Host.Key, src2Host.Key}},
+		{config.SSHAuthorizedKeysPath, []string{src1.Key, src2.Key}},
+	} {
+		act := findSSHKeyAction(actions, "dst1", tc.path)
 		if act == nil {
-			t.Fatalf("expected SSH key action for dst1 %s", path)
+			t.Fatalf("expected SSH key action for dst1 %s", tc.path)
 		}
 		if !act.NeedsApply {
-			t.Fatalf("expected NeedsApply=true for dst1 %s", path)
+			t.Fatalf("expected NeedsApply=true for dst1 %s", tc.path)
 		}
-		if !strings.Contains(act.FileContent, src1.Key) || !strings.Contains(act.FileContent, src2.Key) {
-			t.Fatalf("expected dst1 %s block to contain both core keys, got:\n%s", path, act.FileContent)
+		for _, want := range tc.wantKeys {
+			if !strings.Contains(act.FileContent, want) {
+				t.Fatalf("expected dst1 %s block to contain %s, got:\n%s", tc.path, want, act.FileContent)
+			}
 		}
 		if strings.Contains(act.FileContent, legacy.Key) {
 			t.Fatalf("legacy agent key must not be distributed")
@@ -178,7 +193,7 @@ func TestSSHKeyRulePlanning(t *testing.T) {
 	}
 
 	// dst2 is only covered by rule r1.
-	if act := findSSHKeyAction(actions, "dst2", config.SSHKnownHostsPath); act == nil || !strings.Contains(act.FileContent, src2.Key) {
+	if act := findSSHKeyAction(actions, "dst2", config.SSHKnownHostsPath); act == nil || !strings.Contains(act.FileContent, src2Host.Key) {
 		t.Fatalf("expected dst2 known_hosts to be managed by rule r1")
 	}
 	// The disabled rule r3 would target dst1 with src1 only; its effect is
@@ -216,8 +231,9 @@ func TestSSHKeyRulePlanning(t *testing.T) {
 	}
 
 	// A source key change must invalidate the target plan.
-	rotatedKey := sshTestKey("ssh-ed25519", "rotated", "src1")
-	mgr.agentHub.SetNodeMeta("src1", agentNodeMeta("src1", "0.1.18", rotatedKey))
+	rotatedHostKey := sshTestKey("ssh-ed25519", "rotated-host", "src1")
+	rotatedHostKey.Kind = config.SSHKeyKindHost
+	mgr.agentHub.SetNodeMeta("src1", agentNodeMeta("src1", "0.1.18", src1, rotatedHostKey))
 	actionsRotated, err := mgr.PlanSync()
 	if err != nil {
 		t.Fatalf("PlanSync after rotation failed: %v", err)
@@ -226,8 +242,8 @@ func TestSSHKeyRulePlanning(t *testing.T) {
 	if rotated == nil || !rotated.NeedsApply {
 		t.Fatalf("expected pending SSH key action after source key rotation")
 	}
-	if !strings.Contains(rotated.FileContent, rotatedKey.Key) || strings.Contains(rotated.FileContent, src1.Key) {
-		t.Fatalf("expected rotated key in block, got:\n%s", rotated.FileContent)
+	if !strings.Contains(rotated.FileContent, rotatedHostKey.Key) || strings.Contains(rotated.FileContent, src1Host.Key) {
+		t.Fatalf("expected rotated host key in block, got:\n%s", rotated.FileContent)
 	}
 }
 
@@ -538,6 +554,84 @@ func waitForCondition(t *testing.T, cond func() bool) {
 	t.Fatal("condition not met within timeout")
 }
 
+func TestSSHKeyKnownHostsHostnames(t *testing.T) {
+	mgr := newSSHTestManager(t)
+	saveSSHTestConfig(t, mgr, &config.Config{
+		DNS: config.DNSConfig{BaseDomain: "easy42.example.com"},
+		Nodes: []config.Node{
+			{
+				Name:         "njrlubuntu",
+				Mode:         "agent",
+				AgentToken:   "t1",
+				AgentVersion: "0.1.18",
+				IP:           "192.168.100.1",
+				IP6:          "fd42::1",
+				ExternalIP:   "172.20.0.1",
+				ExternalIP6:  "fd42:1::1",
+			},
+			{Name: "dst", Mode: "agent", AgentToken: "t2", AgentVersion: "0.1.18", IP: "192.168.100.2"},
+		},
+		SSHKeyRules: []config.SSHKeyRule{
+			{ID: "r", Type: "all", SrcSelector: config.AllNodesSelector(), DstSelector: map[string]string{"name": "dst"}, Enabled: true},
+		},
+	})
+	hostKey := sshTestKey("ssh-ed25519", "src-host", "root@njrlubuntu")
+	hostKey.Kind = config.SSHKeyKindHost
+	userKey := sshTestKey("ssh-ed25519", "src-user", "root@njrlubuntu")
+	userKey.Kind = config.SSHKeyKindUser
+	mgr.agentHub.SetNodeMeta("njrlubuntu", agentNodeMeta("njrlubuntu", "0.1.18", hostKey, userKey))
+	mgr.agentHub.SetNodeMeta("dst", agentNodeMeta("dst", "0.1.18"))
+
+	actions, err := mgr.PlanSync()
+	if err != nil {
+		t.Fatalf("PlanSync failed: %v", err)
+	}
+
+	kh := findSSHKeyAction(actions, "dst", config.SSHKnownHostsPath)
+	if kh == nil {
+		t.Fatal("expected known_hosts action")
+	}
+	wantLine := "192.168.100.1,fd42::1,172.20.0.1,fd42:1::1,njrlubuntu,njrlubuntu.internal,njrlubuntu.easy42.example.com " +
+		"ssh-ed25519 " + hostKey.Key + " root@njrlubuntu"
+	if !strings.Contains(kh.FileContent, wantLine+"\n") {
+		t.Fatalf("expected known_hosts line %q, got:\n%s", wantLine, kh.FileContent)
+	}
+	// known_hosts must only carry SSH server host keys, never login identities.
+	if strings.Contains(kh.FileContent, userKey.Key) {
+		t.Fatalf("known_hosts must not contain root login identities, got:\n%s", kh.FileContent)
+	}
+
+	auth := findSSHKeyAction(actions, "dst", config.SSHAuthorizedKeysPath)
+	if auth == nil {
+		t.Fatal("expected authorized_keys action")
+	}
+	if strings.Contains(auth.FileContent, "njrlubuntu.internal") || strings.Contains(auth.FileContent, "192.168.100.1") {
+		t.Fatalf("authorized_keys entries must not carry host names, got:\n%s", auth.FileContent)
+	}
+	if !strings.Contains(auth.FileContent, "ssh-ed25519 "+userKey.Key+" easy42 root@njrlubuntu\n") {
+		t.Fatalf("unexpected authorized_keys line:\n%s", auth.FileContent)
+	}
+	// authorized_keys must only carry login identities, never host keys.
+	if strings.Contains(auth.FileContent, hostKey.Key) {
+		t.Fatalf("authorized_keys must not contain SSH server host keys, got:\n%s", auth.FileContent)
+	}
+
+	// Configuring the base domain later must change the known_hosts plan.
+	cfg := mgr.store.Get()
+	cfg.DNS.BaseDomain = ""
+	if err := mgr.store.Save(cfg); err != nil {
+		t.Fatalf("failed to save config: %v", err)
+	}
+	actions, err = mgr.PlanSync()
+	if err != nil {
+		t.Fatalf("PlanSync failed: %v", err)
+	}
+	kh = findSSHKeyAction(actions, "dst", config.SSHKnownHostsPath)
+	if kh == nil || strings.Contains(kh.FileContent, ".easy42.example.com") {
+		t.Fatalf("expected no base domain host name without DNS config, got:\n%v", kh)
+	}
+}
+
 func TestSSHKeyRuleAllNodesTargeting(t *testing.T) {
 	mgr := newSSHTestManager(t)
 	saveSSHTestConfig(t, mgr, &config.Config{
@@ -558,7 +652,9 @@ func TestSSHKeyRuleAllNodesTargeting(t *testing.T) {
 		},
 	})
 	coreKey := sshTestKey("ssh-ed25519", "core", "core1")
-	mgr.agentHub.SetNodeMeta("core1", agentNodeMeta("core1", "0.1.18", coreKey))
+	coreHostKey := sshTestKey("ssh-ed25519", "core-host", "core1")
+	coreHostKey.Kind = config.SSHKeyKindHost
+	mgr.agentHub.SetNodeMeta("core1", agentNodeMeta("core1", "0.1.18", coreKey, coreHostKey))
 	for _, name := range []string{"edge1", "edge2", "other"} {
 		mgr.agentHub.SetNodeMeta(name, agentNodeMeta(name, "0.1.18"))
 	}
@@ -567,12 +663,19 @@ func TestSSHKeyRuleAllNodesTargeting(t *testing.T) {
 	if err != nil {
 		t.Fatalf("PlanSync failed: %v", err)
 	}
-	// Every node except the source must receive the core key in both files.
+	// Every node except the source must receive the matching core key in both
+	// files: the login identity in authorized_keys and the host key in known_hosts.
 	for _, name := range []string{"edge1", "edge2", "other"} {
-		for _, path := range []string{config.SSHKnownHostsPath, config.SSHAuthorizedKeysPath} {
-			act := findSSHKeyAction(actions, name, path)
-			if act == nil || !strings.Contains(act.FileContent, coreKey.Key) {
-				t.Fatalf("expected %s %s to include the core key via the all-nodes rule, got %+v", name, path, act)
+		for _, tc := range []struct {
+			path string
+			key  string
+		}{
+			{config.SSHKnownHostsPath, coreHostKey.Key},
+			{config.SSHAuthorizedKeysPath, coreKey.Key},
+		} {
+			act := findSSHKeyAction(actions, name, tc.path)
+			if act == nil || !strings.Contains(act.FileContent, tc.key) {
+				t.Fatalf("expected %s %s to include the core key via the all-nodes rule, got %+v", name, tc.path, act)
 			}
 		}
 	}

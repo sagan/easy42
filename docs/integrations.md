@@ -188,19 +188,29 @@ Easy42 can make root SSH between cluster nodes password-less and free of host-ke
 
 ### 1. Public key collection
 
-- Every supporting agent collects root's OpenSSH **default identity** public keys: `~/.ssh/id_rsa.pub`, `id_ecdsa.pub`, `id_ecdsa_sk.pub`, `id_ed25519.pub`, `id_ed25519_sk.pub`, and `id_dsa.pub`.
-- When the matching private key can be parsed (unencrypted OpenSSH, PEM RSA, or PEM EC), the agent verifies the `.pub` file actually belongs to it and ignores stale or hand-edited files. Non-default files (`id_custom.pub`, keys generated with `-f`) are never collected.
+Each supporting agent reports **two kinds of public keys**, tagged with a `kind`:
+
+| Kind   | Files                                              | Purpose                                                                 |
+| :----- | :------------------------------------------------- | :---------------------------------------------------------------------- |
+| `user` | `~/.ssh/id_rsa.pub`, `id_ecdsa.pub`, `id_ecdsa_sk.pub`, `id_ed25519.pub`, `id_ed25519_sk.pub`, `id_dsa.pub` | Root **login** identities used by the node's SSH *client*. Installed into `authorized_keys` so this node can log in elsewhere. |
+| `host` | `/etc/ssh/ssh_host_*_key.pub`                      | SSH **server** host keys presented by the node's `sshd`. Installed into `known_hosts` so other nodes can verify this node when connecting to it. |
+
+The distinction matters: `~/.ssh/id_*` keys are *client* keys and have nothing to do with the identity the node's SSH server presents. Only the `host` keys belong in `known_hosts`. Host key collection is agent **v0.1.19+**.
+
+- When the matching private key can be parsed (unencrypted OpenSSH, PEM RSA, or PEM EC), the agent verifies the `.pub` file actually belongs to it and ignores stale or hand-edited files. Non-default identity files (`id_custom.pub`, keys generated with `-f`) are never collected.
 - Keys are reported in telemetry and can be refreshed on demand. Files are re-read at most once per minute.
 
 ### 2. Distribution rules
 
 Keys are **never** distributed implicitly. A rule maps a **source selector** (the nodes whose keys are distributed) onto a **destination selector** (the nodes whose SSH key files are updated) with one of three types:
 
-| Type              | Target file                          |
-| :---------------- | :----------------------------------- |
-| `known_hosts`     | `/root/.ssh/known_hosts` (mode 0644) |
-| `authorized_keys` | `/root/.ssh/authorized_keys` (0600)  |
-| `all`             | Both files                           |
+| Type              | Target file                          | Keys installed                                  |
+| :---------------- | :----------------------------------- | :---------------------------------------------- |
+| `known_hosts`     | `/root/.ssh/known_hosts` (mode 0644) | The source nodes' SSH **server host keys**, so the destination can verify them when connecting to those nodes. |
+| `authorized_keys` | `/root/.ssh/authorized_keys` (0600)  | The source nodes' root **login keys**, so they can log in to the destination as root. |
+| `all`             | Both files                           | Each file receives only the matching key kind.  |
+
+`known_hosts` never receives login identities and `authorized_keys` never receives host keys; keys of the wrong kind are skipped even if a rule targets both files.
 
 Selectors use the same node selector format as workload apps and cron probes (`name`, `tag`, `env:<NAME>`, or `{"all":"1"}` for every node). Neither selector may be empty: an empty selector matches no node. Rules are managed from the **SSH** tab of the Apps page (`/apps/ssh`), the REST API (`/api/ssh-keys/rules`), or MCP (`list_ssh_keys`, `create_ssh_key_rule`, `update_ssh_key_rule`, `delete_ssh_key_rule`).
 
@@ -210,11 +220,15 @@ Selectors use the same node selector format as workload apps and cron probes (`n
 
 ```
 ### EASY42_START
-ssh-ed25519 AAAAC3NzaC1lZDI1NTE5... easy42 root@node-fra
+node-fra,node-fra.internal,node-fra.example.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5... root@node-fra
 ### EASY42_END
 ```
 
+`known_hosts` lines follow the OpenSSH format `hostnames keytype base64-key [comment]`. Each source key is written once per source node with the host names that node is reachable under, in this order: the main IPv4/IPv6 addresses, the external IPv4/IPv6 addresses, `<name>`, `<name>.internal` and, when a **Base Domain** is set on the DNS settings page, `<name>.<base domain>`. Missing values are skipped. A key without any host name is left out of `known_hosts` (such a line would be invalid), while it is still written to `authorized_keys`.
+
 Entries written to `authorized_keys` are prefixed with the `easy42` comment marker so cluster-managed keys can be told apart from manually added ones. Removing every rule that granted a key removes the block (and its surrounding separator line) again, restoring the previous file contents byte for byte.
+
+The controller sends the rendered block in the `sync_ssh_keys` action's `file_content`, and the agent writes it verbatim (host name lists in `known_hosts` cannot be rebuilt from the key list alone). The agent only rebuilds a block from the `ssh_keys` field when no content is supplied, which keeps older controllers working.
 
 ### 4. Scheduling and idempotency
 
@@ -418,6 +432,9 @@ Workload Apps are declarative units of work deployed to agent-managed nodes from
 | `docker`  | `/etc/ezappc/ezapp-<name>/compose.yaml` + `.env` (`0600`)                                                         | `docker compose up` runs asynchronously (900s timeout); status is probed.                                                                                         |
 | `systemd` | `/etc/systemd/system/ezapp-<name>.service` + `.env` (plus `EnvironmentFile=/etc/systemd/system/ezapp-<name>.env`) | Transpiled to OpenRC (`/etc/init.d/ezapp-*` + `/etc/conf.d/ezapp-*`) or procd on Alpine/OpenWrt; sandboxing/cgroup directives are dropped with `# NOTE:` headers. |
 | `cron`    | System crontab between `### EASY42_START`/`### EASY42_END` markers                                                | Sorted entries; disabled apps are `#`-prefixed. Distinct from cron **probes** below.                                                                              |
+| `script`  | `/etc/ezscript/<name>` (`0755`)                                                                                   | Standalone executable script; there is no service unit or daemon.                                                                                                 |
+
+A disabled or deleted app is removed from the next sync (`Remove unassigned …`). Script apps are cleaned up by removing `/etc/ezscript/<name>`; their type is resolved from the agent probe or the reported app status, so the plan converges even after the file is gone and never falls back to a nonexistent service unit.
 
 Auxiliary `files` and artifacts are written to `/etc/ezapp/<name>/`. Orphaned files from deleted/renamed apps are garbage-collected via a `.easy42-managed.json` manifest (user bind-mounts are preserved). Deployment is hash-based (`ComputeAppHash` / `ComputeAppSpecFilesHash`) and skipped entirely when `is_apps_disabled` on the node.
 

@@ -884,6 +884,17 @@ func (m *Manager) SyncAppsToAgents() {
 	}
 }
 
+// removeAppStatus drops the cached live status of a removed app so a stale
+// telemetry record cannot keep an unassigned app looking deployed (and thus
+// stuck in the sync plan as a never-converging delete).
+func (m *Manager) removeAppStatus(nodeName, appName string) {
+	m.appStatusesMu.Lock()
+	if nodeMap := m.appStatuses[nodeName]; nodeMap != nil {
+		delete(nodeMap, appName)
+	}
+	m.appStatusesMu.Unlock()
+}
+
 // GetNodeAppsStatus returns the latest reported statuses for apps on nodeName
 func (m *Manager) GetNodeAppsStatus(nodeName string) []AppStatusRecord {
 	m.appStatusesMu.RLock()

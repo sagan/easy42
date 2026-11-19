@@ -3,5 +3,8 @@
   "title": "Install wg-quick (OpenWrt)",
   "description": "Installs wg-quick (wg-quick-op) for OpenWrt or other systems missing wg-quick.",
   "category": "Packages",
-  "weight": 12
+  "weight": 12,
+  "selector": {
+    "all": "1"
+  }
 }

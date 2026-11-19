@@ -352,7 +352,7 @@ GET /api/tasks
 ]
 ```
 
-Custom tasks may additionally include a `selector` object describing the nodes the task is allowed to run on. Built-in tasks omit this field.
+Custom tasks may additionally include a `selector` object describing the nodes the task is allowed to run on. Built-in tasks declare the all-nodes selector (`{"all": "1"}`), so they can run on every managed node.
 
 ### 2. Read Task Source Files
 
@@ -503,7 +503,7 @@ Directories whose names begin with `_` are skipped. Directories without a valid 
 
 ### Task Selector
 
-The optional `selector` object in `task.json` defines the scope of nodes a task can be executed on. It is intended for custom Device Helper tasks. The Device Helper page deselects and disables every non-matching node, and the backend independently verifies each target node before dispatching the task. A task without a selector (or with an empty one) targets no node.
+The optional `selector` object in `task.json` defines the scope of nodes a task can be executed on. Built-in tasks ship with `{"all": "1"}`; custom tasks can narrow the scope to specific nodes. The Device Helper page deselects and disables every non-matching node, and the backend independently verifies each target node before dispatching the task. A task without a selector (or with an empty one) targets no node.
 
 ```json
 "selector": {
@@ -605,7 +605,7 @@ _(Default: `~/.config/easy42/tasks/<task_id>/`, or overridden by the `--data-dir
 
 1. **`run.sh`** (_Required_): Executable shell script run natively on target nodes as root or with sudo. Must exit `0` on success or non-zero on error.
 2. **`status.sh`** (_Optional_): Probes remote node state. If omitted, Device Helper automatically marks the task as **Ready to Execute** (`0`).
-3. **`task.json`** (_Optional_): Metadata defining `title`, `description`, `category`, `weight`, and an optional `selector` that restricts the task to matching nodes. If omitted, the title is automatically derived from the directory name (e.g. `install_bird` becomes `"Install Bird"`), category defaults to `"Custom"`, and weight defaults to `500`.
+3. **`task.json`** (_Optional_): Metadata defining `title`, `description`, `category`, `weight`, and an optional `selector` that restricts the task to matching nodes (`{"all": "1"}` targets every managed node; an omitted or empty selector matches no node). If omitted, the title is automatically derived from the directory name (e.g. `install_bird` becomes `"Install Bird"`), category defaults to `"Custom"`, and weight defaults to `500`.
 4. **Access to `common.sh`**:
    Custom tasks automatically have access to Easy42's shared `common.sh` helper library in their working directory:
    ```sh

@@ -38,6 +38,14 @@ func TestGetTasks(t *testing.T) {
 		if task.Description == "" {
 			t.Errorf("task %s has empty description", task.ID)
 		}
+		// A task without a selector matches no node, so the Device Helper page
+		// would offer no target device. Every built-in task targets all nodes.
+		if len(task.Selector) != 1 || task.Selector["all"] != "1" {
+			t.Errorf("built-in task %s must declare the all-nodes selector, got %#v", task.ID, task.Selector)
+		}
+		if task.Custom {
+			t.Errorf("built-in task %s must not be marked custom", task.ID)
+		}
 
 		// Check status.sh and run.sh existence
 		statusData, err := tasksEmbed.ReadFile(task.ID + "/status.sh")

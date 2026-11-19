@@ -29,9 +29,10 @@ func sshKeyBlob(algorithm, payload string) string {
 }
 
 type runningAgent struct {
-	name   string
-	sshDir string
-	cancel context.CancelFunc
+	name       string
+	sshDir     string
+	hostKeyDir string
+	cancel     context.CancelFunc
 }
 
 func findAgentBinary(t *testing.T) string {
@@ -62,7 +63,11 @@ func startAgent(t *testing.T, agentBin, serverURL, token, name string, extraArgs
 		"--config", filepath.Join(t.TempDir(), "agent.json"),
 	}, extraArgs...)
 	cmd := exec.CommandContext(ctx, agentBin, args...)
-	cmd.Env = append(os.Environ(), "EASY42_SSH_DIR="+sshDir, "EASY42_HOSTS_PATH="+filepath.Join(t.TempDir(), "hosts"))
+	hostKeyDir := t.TempDir()
+	cmd.Env = append(os.Environ(),
+		"EASY42_SSH_DIR="+sshDir,
+		"EASY42_SSH_HOST_KEY_DIR="+hostKeyDir,
+		"EASY42_HOSTS_PATH="+filepath.Join(t.TempDir(), "hosts"))
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Start(); err != nil {
@@ -73,7 +78,7 @@ func startAgent(t *testing.T, agentBin, serverURL, token, name string, extraArgs
 		cancel()
 		_ = cmd.Wait()
 	})
-	return &runningAgent{name: name, sshDir: sshDir, cancel: cancel}
+	return &runningAgent{name: name, sshDir: sshDir, hostKeyDir: hostKeyDir, cancel: cancel}
 }
 
 func waitFor(t *testing.T, what string, timeout time.Duration, cond func() bool) {
@@ -139,6 +144,13 @@ func TestRustAgentSSHKeysEndToEnd(t *testing.T) {
 		[]byte("ssh-ed25519 "+sshKeyBlob("ssh-ed25519", "ignored")+" custom\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
+	// Node A also publishes its SSH *server* host key. It is a different key from
+	// the login identities above and must be tagged with kind "host".
+	hostKeyA := sshKeyBlob("ssh-ed25519", "node-a-host-key")
+	if err := os.WriteFile(filepath.Join(runA.hostKeyDir, "ssh_host_ed25519_key.pub"),
+		[]byte("ssh-ed25519 "+hostKeyA+" root@node-a\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
 
 	runB := startAgent(t, agentBin, server.URL, tokenB, nodeB)
 	keyB := sshKeyBlob("ssh-ed25519", "node-b-key")
@@ -151,9 +163,19 @@ func TestRustAgentSSHKeysEndToEnd(t *testing.T) {
 		return hub.IsConnected(nodeA) && hub.IsConnected(nodeB)
 	})
 
-	// 1. Keys are collected automatically via telemetry.
+	// 1. Keys are collected automatically via telemetry: two login identities and
+	// one SSH server host key for node A.
 	waitFor(t, "node A keys to be collected", 10*time.Second, func() bool {
-		return len(hub.GetSSHKeys(nodeA)) == 2
+		keys := hub.GetSSHKeys(nodeA)
+		host, user := 0, 0
+		for _, k := range keys {
+			if k.Kind == config.SSHKeyKindHost {
+				host++
+			} else {
+				user++
+			}
+		}
+		return len(keys) == 3 && host == 1 && user == 2
 	})
 	waitFor(t, "node B keys to be collected", 10*time.Second, func() bool {
 		return len(hub.GetSSHKeys(nodeB)) == 1
@@ -161,6 +183,14 @@ func TestRustAgentSSHKeysEndToEnd(t *testing.T) {
 	for _, k := range hub.GetSSHKeys(nodeA) {
 		if k.Comment == "custom" {
 			t.Fatalf("non-default identity files must not be collected: %+v", k)
+		}
+		if k.Kind == config.SSHKeyKindHost {
+			if k.Key != hostKeyA {
+				t.Fatalf("unexpected host key collected: %+v", k)
+			}
+			if !strings.Contains(k.Path, "ssh_host_ed25519_key.pub") {
+				t.Fatalf("host key path must point at /etc/ssh/ssh_host_*_key.pub, got %q", k.Path)
+			}
 		}
 	}
 
@@ -184,7 +214,7 @@ func TestRustAgentSSHKeysEndToEnd(t *testing.T) {
 	if err := json.Unmarshal([]byte(fetchResp.Stdout), &fetched); err != nil {
 		t.Fatalf("invalid fetch response: %v (%s)", err, fetchResp.Stdout)
 	}
-	if !fetched.SSHKeysEnabled || len(fetched.SSHKeys) != 2 {
+	if !fetched.SSHKeysEnabled || len(fetched.SSHKeys) != 3 {
 		t.Fatalf("unexpected fetch result: %+v", fetched)
 	}
 	if fetched.KnownHostsHash != "" || fetched.AuthorizedKeysHash != "" {
@@ -270,7 +300,7 @@ func TestRustAgentSSHKeysEndToEnd(t *testing.T) {
 				FileMode:   0644,
 				DiffStatus: "create",
 				SshKeys: []*agentpb.SshPublicKey{
-					{Algorithm: "ssh-ed25519", Key: keyA, Comment: "root@node-a"},
+					{Algorithm: "ssh-ed25519", Key: keyA, Comment: "root@node-a", Kind: config.SSHKeyKindHost},
 				},
 			},
 		},
@@ -284,6 +314,33 @@ func TestRustAgentSSHKeysEndToEnd(t *testing.T) {
 	}
 	if khInfo.Mode().Perm() != 0644 {
 		t.Fatalf("known_hosts must be mode 0644, got %o", khInfo.Mode().Perm())
+	}
+
+	// 4b. The agent writes the file content it receives verbatim (newlines and
+	// all); it must never re-flow the block into a single line.
+	khBlock := "### EASY42_START\n" +
+		"10.0.0.1,node-a,node-a.internal ssh-ed25519 " + keyA + " root@node-a\n" +
+		"### EASY42_END\n"
+	resp, err = hub.SendCommand(ctx, nodeB, &agentpb.CommandRequest{
+		Command: &agentpb.CommandRequest_SyncAction{
+			SyncAction: &agentpb.SyncActionCmd{
+				ActionType:  "sync_ssh_keys",
+				TargetFile:  config.SSHKnownHostsPath,
+				FileMode:    0644,
+				DiffStatus:  "update",
+				FileContent: []byte(khBlock),
+			},
+		},
+	})
+	if err != nil || !resp.Success {
+		t.Fatalf("known_hosts content sync failed: %v %v", err, resp)
+	}
+	kh, err := os.ReadFile(filepath.Join(runB.sshDir, "known_hosts"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := string(kh); got != khBlock {
+		t.Fatalf("known_hosts content must be written verbatim, got:\n%q\nwant:\n%q", got, khBlock)
 	}
 
 	// 5. An empty key set removes the block but keeps foreign lines.

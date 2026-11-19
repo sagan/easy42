@@ -60,6 +60,7 @@ func sshPublicKeysFromProto(keys []*agentpb.SshPublicKey) []config.SSHPublicKey 
 			Key:       k.Key,
 			Comment:   k.Comment,
 			Path:      k.Path,
+			Kind:      k.Kind,
 		})
 	}
 	return res
@@ -78,6 +79,7 @@ func sshKeysToProto(keys []config.SSHPublicKey) []*agentpb.SshPublicKey {
 			Key:       k.Key,
 			Comment:   k.Comment,
 			Path:      k.Path,
+			Kind:      k.Kind,
 		})
 	}
 	return res
@@ -128,6 +130,7 @@ func (m *Manager) FetchNodeSSHKeys(nodeName string) ([]config.SSHPublicKey, map[
 			Key       string `json:"key"`
 			Comment   string `json:"comment"`
 			Path      string `json:"path"`
+			Kind      string `json:"kind"`
 		} `json:"ssh_keys"`
 		SSHKeysEnabled     *bool  `json:"ssh_keys_enabled"`
 		KnownHostsHash     string `json:"known_hosts_hash"`
@@ -144,6 +147,7 @@ func (m *Manager) FetchNodeSSHKeys(nodeName string) ([]config.SSHPublicKey, map[
 			Key:       k.Key,
 			Comment:   k.Comment,
 			Path:      k.Path,
+			Kind:      k.Kind,
 		})
 	}
 	hashes := map[string]string{
@@ -316,6 +320,7 @@ func (m *Manager) planSSHKeyFilesForNode(cfg *config.Config, dstNode config.Node
 			if len(keys) == 0 {
 				continue
 			}
+			keys = withSSHKeyHostnames(keys, src, cfg.DNS.BaseDomain)
 			for _, path := range rule.TargetFiles() {
 				a := collected[path]
 				if a == nil {
@@ -340,6 +345,24 @@ func (m *Manager) planSSHKeyFilesForNode(cfg *config.Config, dstNode config.Node
 		}
 	}
 	return result
+}
+
+// withSSHKeyHostnames returns the keys annotated with the host names the owning
+// node is reachable under. known_hosts entries need the host list in front of
+// the key (`[marker] hostnames keytype base64-key [comment]`); authorized_keys
+// entries ignore it. The input keys are not modified.
+func withSSHKeyHostnames(keys []config.SSHPublicKey, node config.Node, baseDomain string) []config.SSHPublicKey {
+	hostnames := config.NodeKnownHostsHostnames(node, baseDomain)
+	res := make([]config.SSHPublicKey, 0, len(keys))
+	for _, k := range keys {
+		if k.IsHostKey() {
+			k.Hostnames = hostnames
+		} else {
+			k.Hostnames = nil
+		}
+		res = append(res, k)
+	}
+	return res
 }
 
 // sshRuleTargetsNode reports whether any enabled SSH key rule targets a node.
