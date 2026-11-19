@@ -2,6 +2,8 @@
 
 all: frontend build-agent build
 
+server: frontend build
+
 proto:
 	PATH="$$PATH:$$(go env GOPATH)/bin:/root/go/bin" protoc --go_out=. --go_opt=module=easy42 proto/agent.proto
 

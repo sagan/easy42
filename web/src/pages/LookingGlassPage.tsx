@@ -10,11 +10,5 @@ export const LookingGlassPage: React.FC = () => {
   const initialNode = searchParams.get("node") || undefined;
   const initialTask = searchParams.get("task") || undefined;
 
-  return (
-    <LookingGlassModal
-      nodes={nodes}
-      initialNode={initialNode}
-      initialTask={initialTask}
-    />
-  );
+  return <LookingGlassModal nodes={nodes} initialNode={initialNode} initialTask={initialTask} />;
 };

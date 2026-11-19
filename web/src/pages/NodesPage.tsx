@@ -989,7 +989,7 @@ export const NodesPage: React.FC = () => {
 
           {/* Block Filter Dropdown (rendered only if managed nodes belong to blocks) */}
           {managedBlocks.length > 0 && (
-            <FormControl size="small" sx={{ minWidth: { xs: "100%", sm: 150 } }}>
+            <FormControl size="small" sx={{ minWidth: 150 }}>
               <Select
                 value={managedBlocks.includes(urlBlock) ? urlBlock : "All"}
                 onChange={(e) => handleSelectBlock(e.target.value)}

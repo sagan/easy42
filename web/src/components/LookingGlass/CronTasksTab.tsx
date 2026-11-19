@@ -697,11 +697,7 @@ export const CronTasksTab: React.FC<CronTasksTabProps> = ({ nodes, onExecuteNow 
 
             <TextField
               label={
-                isHTTPType
-                  ? "Target URL"
-                  : formType === "tcp_ping"
-                    ? "Target (<host>:<port>)"
-                    : "Target Host or IP"
+                isHTTPType ? "Target URL" : formType === "tcp_ping" ? "Target (<host>:<port>)" : "Target Host or IP"
               }
               required
               fullWidth

@@ -64,12 +64,7 @@ import { Node, Link, NodeStatus, NetworkState, GraphBlock, NetworkPolicy } from 
 import { api } from "../../api/client";
 import { getEffectiveLinkCost } from "../../utils/cost";
 import { calculateGraphCentrality, getLinkId } from "../../utils/graphCentrality";
-import {
-  BestPathPair,
-  buildDirectedLinkGraph,
-  findBestPathPair,
-  getNodePairKey,
-} from "../../utils/pathFinder";
+import { BestPathPair, buildDirectedLinkGraph, findBestPathPair, getNodePairKey } from "../../utils/pathFinder";
 import { findInitialNodePosition, findInitialBlockPosition } from "../../utils/nodePlacement";
 
 const STORAGE_KEY_VIEWPORT = "easy42_graph_viewport";
@@ -2292,8 +2287,7 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
   const bestPathFocusNode = pinnedNodeNames.size === 1 ? Array.from(pinnedNodeNames)[0] : null;
 
   const bestPathRequested =
-    Boolean(bestPathEnabled && bestPathFocusNode) &&
-    Boolean(hoveredNodeName && hoveredNodeName !== bestPathFocusNode);
+    Boolean(bestPathEnabled && bestPathFocusNode) && Boolean(hoveredNodeName && hoveredNodeName !== bestPathFocusNode);
 
   // Latch the hovered node so the path stays visible when the pointer moves onto an edge or
   // the legend; a new hover replaces it.
@@ -2386,9 +2380,9 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
       const isExternal = Boolean(node.is_external);
       const isAgentMode = Boolean(
         node.mode === "agent" ||
-          node.agent_token ||
-          nodeStatuses[node.name]?.mode === "agent" ||
-          nodeStatuses[node.name]?.connected,
+        node.agent_token ||
+        nodeStatuses[node.name]?.mode === "agent" ||
+        nodeStatuses[node.name]?.connected,
       );
       const isOnline = isExternal ? true : Boolean(nodeStatuses[node.name]?.connected);
       const nodeLinks = links.filter((l) => l.from.name === node.name || l.to.name === node.name);
@@ -2529,11 +2523,7 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
       const isFocusNode = bestPathFocusNode === node.name;
       const isBestPathNode = bestPathNodeNames.has(node.name);
       const isHighlighted = isBestPathNode || (activeFocusNodeSet ? activeFocusNodeSet.has(node.name) : false);
-      const isDimmed = isBestPathNode
-        ? false
-        : activeFocusNodeSet
-          ? !activeFocusNodeSet.has(node.name)
-          : false;
+      const isDimmed = isBestPathNode ? false : activeFocusNodeSet ? !activeFocusNodeSet.has(node.name) : false;
       // In best path mode, mark nodes that cannot reach (or be reached by) the focus node.
       const isBestPathUnreachable = Boolean(
         bestPathFocusNode && !isBestPathNode && bestPathEnabled && !bestPathReachable.has(node.name),
@@ -3304,7 +3294,7 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
 
         {/* Best Path summary: pinned focus node ⇄ hovered node */}
         {bestPathPair && bestPathEnabled ? (
-          <Panel position="bottom-center" style={{ margin: 14 }}>
+          <Panel position="bottom-center" style={{ margin: 14, zIndex: 9999 }}>
             <BestPathOverlay pair={bestPathPair} adjacency={bestPathAdjacency} onFocusHop={handleFocusBestPathNode} />
           </Panel>
         ) : bestPathEnabled && bestPathFocusNode && !bestPathTarget ? (
