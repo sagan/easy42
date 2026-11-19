@@ -330,30 +330,28 @@ export const AppDetailsDrawer: React.FC<AppDetailsDrawerProps> = ({
                 No nodes currently match.
               </Typography>
             )}
-            {selectorEntries.length > 0 && (
-              <Box sx={{ mt: 1 }}>
-                <Typography variant="caption" sx={{ color: "#94A3B8", fontWeight: 600 }}>
-                  Selector:
-                </Typography>
-                <Box
-                  component="pre"
-                  sx={{
-                    m: 0,
-                    mt: 0.5,
-                    p: 1,
-                    bgcolor: "#FFFFFF",
-                    borderRadius: 1,
-                    border: "1px solid #E2E8F0",
-                    fontFamily: "monospace",
-                    fontSize: "0.72rem",
-                    color: "#334155",
-                    overflowX: "auto",
-                  }}
-                >
-                  {JSON.stringify(Object.fromEntries(selectorEntries), null, 2)}
-                </Box>
+            <Box sx={{ mt: 1 }}>
+              <Typography variant="caption" sx={{ color: "#94A3B8", fontWeight: 600 }}>
+                Selector:
+              </Typography>
+              <Box
+                component="pre"
+                sx={{
+                  m: 0,
+                  mt: 0.5,
+                  p: 1,
+                  bgcolor: "#FFFFFF",
+                  borderRadius: 1,
+                  border: "1px solid #E2E8F0",
+                  fontFamily: "monospace",
+                  fontSize: "0.72rem",
+                  color: "#334155",
+                  overflowX: "auto",
+                }}
+              >
+                {JSON.stringify(Object.fromEntries(selectorEntries), null, 2)}
               </Box>
-            )}
+            </Box>
             {status?.status_text && (
               <Typography variant="caption" sx={{ color: "#64748B", display: "block", mt: 1 }}>
                 Status: {status.status_text}

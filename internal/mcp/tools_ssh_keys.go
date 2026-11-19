@@ -47,8 +47,8 @@ func registerSSHKeyTools(s *server.MCPServer, mgr *engine.Manager) {
 		mcp.WithOpenWorldHintAnnotation(false),
 		mcp.WithOutputSchema[SSHKeyRuleMutationOutput](),
 		mcp.WithString("type", mcp.Required(), mcp.Description("Target file type: 'known_hosts', 'authorized_keys' or 'all'")),
-		mcp.WithObject("src_selector", mcp.Required(), mcp.Description("Node selector for the source nodes whose public keys are distributed, e.g. {\"tag\":\"core\"}. An empty selector matches every node."), mcp.AdditionalProperties(map[string]any{"type": "string"})),
-		mcp.WithObject("dst_selector", mcp.Required(), mcp.Description("Node selector for the destination nodes whose SSH key files are updated, e.g. {\"name\":\"node-a,node-b\"}. Must not be empty."), mcp.AdditionalProperties(map[string]any{"type": "string"})),
+		mcp.WithObject("src_selector", mcp.Required(), mcp.Description("Node selector for the source nodes whose public keys are distributed, e.g. {\"tag\":\"core\"}. Use {\"all\":\"1\"} for every node; an empty selector matches no node."), mcp.AdditionalProperties(map[string]any{"type": "string"})),
+		mcp.WithObject("dst_selector", mcp.Required(), mcp.Description("Node selector for the destination nodes whose SSH key files are updated, e.g. {\"name\":\"node-a,node-b\"}. Use {\"all\":\"1\"} for every node."), mcp.AdditionalProperties(map[string]any{"type": "string"})),
 		mcp.WithBoolean("enabled", mcp.Description("Enable the rule immediately (default true)")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		if err := RequireFullControl(ctx); err != nil {
@@ -101,7 +101,7 @@ func registerSSHKeyTools(s *server.MCPServer, mgr *engine.Manager) {
 		mcp.WithString("id", mcp.Required(), mcp.Description("SSH key rule ID")),
 		mcp.WithString("type", mcp.Required(), mcp.Description("Target file type: 'known_hosts', 'authorized_keys' or 'all'")),
 		mcp.WithObject("src_selector", mcp.Required(), mcp.Description("Node selector for the source nodes"), mcp.AdditionalProperties(map[string]any{"type": "string"})),
-		mcp.WithObject("dst_selector", mcp.Required(), mcp.Description("Node selector for the destination nodes (must not be empty)"), mcp.AdditionalProperties(map[string]any{"type": "string"})),
+		mcp.WithObject("dst_selector", mcp.Required(), mcp.Description("Node selector for the destination nodes (use {\"all\":\"1\"} for every node)"), mcp.AdditionalProperties(map[string]any{"type": "string"})),
 		mcp.WithBoolean("enabled", mcp.Description("Whether the rule is enabled (default true)")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		if err := RequireFullControl(ctx); err != nil {

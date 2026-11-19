@@ -99,60 +99,24 @@ func normalizeSSHKeyRuleType(t string) (string, error) {
 	}
 }
 
-// validateSSHRuleSelector validates a rule selector, allowing the special
-// all-nodes marker in addition to the regular selector keys.
-func validateSSHRuleSelector(selector map[string]string) error {
-	if IsAllNodesSelector(selector) {
-		if len(selector) != 1 {
-			return fmt.Errorf("the '%s' selector cannot be combined with other conditions", AllNodesSelectorKey)
-		}
-		return nil
-	}
-	return ValidateSelector(selector)
-}
-
-// AllNodesSelectorKey marks a destination selector as "every managed node".
-// An empty selector keeps meaning "nothing selected" so a rule can never be
-// saved or applied with no explicit intent. The value is ignored.
-const AllNodesSelectorKey = "all"
-
-// ExpandAllNodesSelector turns the special all-nodes marker used by SSH key
-// rule source selectors into an empty selector (which the generic selector
-// matcher treats as "matches every node"). Other selectors are returned as-is.
-func ExpandAllNodesSelector(selector map[string]string) map[string]string {
-	if IsAllNodesSelector(selector) {
-		return nil
-	}
-	return selector
-}
-
-// IsAllNodesSelector reports whether a selector explicitly selects every node
-// via the all-nodes marker.
-func IsAllNodesSelector(selector map[string]string) bool {
-	for key := range selector {
-		if strings.EqualFold(strings.TrimSpace(key), AllNodesSelectorKey) {
-			return true
-		}
-	}
-	return false
-}
-
-// ValidateSSHKeyRule validates a rule definition.
+// ValidateSSHKeyRule validates a rule definition. Both selectors must be
+// explicit: an empty selector matches no node, so a rule can never be saved or
+// applied without an intentional target.
 func ValidateSSHKeyRule(rule SSHKeyRule) error {
 	if _, err := normalizeSSHKeyRuleType(rule.Type); err != nil {
 		return err
 	}
-	if err := validateSSHRuleSelector(rule.SrcSelector); err != nil {
+	if err := ValidateSelector(rule.SrcSelector); err != nil {
 		return fmt.Errorf("source node selector: %w", err)
 	}
-	if err := validateSSHRuleSelector(rule.DstSelector); err != nil {
+	if err := ValidateSelector(rule.DstSelector); err != nil {
 		return fmt.Errorf("destination node selector: %w", err)
 	}
-	// An empty destination selector would be ambiguous; require an explicit
-	// choice ("all nodes" or a real selector) so keys are never distributed by
-	// accident.
+	if len(rule.SrcSelector) == 0 {
+		return fmt.Errorf("source node selector cannot be empty: choose the source nodes explicitly or select all nodes")
+	}
 	if len(rule.DstSelector) == 0 {
-		return fmt.Errorf("destination node selector cannot be empty: choose the target nodes explicitly or select all nodes")
+		return fmt.Errorf("destination node selector cannot be empty: choose the destination nodes explicitly or select all nodes")
 	}
 	return nil
 }

@@ -3,7 +3,8 @@ package engine
 import "easy42/internal/config"
 
 // NodeMatchesTaskSelector reports whether a node satisfies every condition in a
-// task selector. An empty selector matches every node.
+// task selector. An empty selector matches no node; the all-nodes selector
+// {"all": "1"} matches every node.
 //
 // Supported selector keys:
 //   - name: comma-separated whitelist of node names.

@@ -165,10 +165,10 @@ func (m *Manager) RunTask(ctx context.Context, taskID string, nodeNames []string
 	}
 
 	if len(targetMap) == 0 {
-		if len(meta.Selector) > 0 {
-			return nil, fmt.Errorf("no target nodes match the task selector")
+		if len(meta.Selector) == 0 {
+			return nil, fmt.Errorf("no valid target nodes specified: the task has no selector")
 		}
-		return nil, fmt.Errorf("no valid target nodes specified")
+		return nil, fmt.Errorf("no target nodes match the task selector")
 	}
 
 	results := make(map[string]tasks.TaskRunResult)

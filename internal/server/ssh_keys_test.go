@@ -116,8 +116,8 @@ func TestSSHKeysAPI(t *testing.T) {
 	// 2b. "All nodes" selectors (sent by the UI) are accepted for both sides.
 	allBody, _ := json.Marshal(map[string]any{
 		"type":         "authorized_keys",
-		"src_selector": map[string]string{"all": "true"},
-		"dst_selector": map[string]string{"all": "true"},
+		"src_selector": map[string]string{"all": "1"},
+		"dst_selector": map[string]string{"all": "1"},
 		"enabled":      true,
 	})
 	req = httptest.NewRequest("POST", "/api/ssh-keys/rules", bytes.NewReader(allBody))

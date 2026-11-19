@@ -219,8 +219,8 @@ The default data directory is `~/.config/easy42` (override with the global `--da
 ### 6. Apps Not Deploying on an Agent Node
 
 - **Symptom**: An enabled App never appears on a node, or app actions return `app management is disabled`.
-- **Root Cause**: The agent's `agent.json` has `"disable_apps": true`, or the App's `selector` does not match the node, or the App is unpublished/disabled.
-- **Fix**: Check `disable_apps` in `/etc/easy42/agent.json` (the agent reloads it on every sync action; restart the agent if you edit it by hand), verify the selector against the node's `name`/`tag`/`env:` context, and ensure the App is both `published` and `enabled`.
+- **Root Cause**: The agent's `agent.json` has `"disable_apps": true`, or the App's `selector` does not match the node (an empty selector matches no node), or the App is unpublished/disabled.
+- **Fix**: Check `disable_apps` in `/etc/easy42/agent.json` (the agent reloads it on every sync action; restart the agent if you edit it by hand), verify the selector against the node's `name`/`tag`/`env:` context (or use `{"all":"1"}`), and ensure the App is both `published` and `enabled`.
 
 ### 7. Obfuscated Link Sync Failure
 

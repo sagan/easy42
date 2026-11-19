@@ -551,8 +551,8 @@ func TestSSHKeyRuleAllNodesTargeting(t *testing.T) {
 			{
 				ID:          "all-to-all",
 				Type:        "all",
-				SrcSelector: map[string]string{config.AllNodesSelectorKey: "true"},
-				DstSelector: map[string]string{config.AllNodesSelectorKey: "true"},
+				SrcSelector: config.AllNodesSelector(),
+				DstSelector: config.AllNodesSelector(),
 				Enabled:     true,
 			},
 		},

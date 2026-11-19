@@ -2,6 +2,15 @@ import { Node } from "../types/api";
 
 export type SelectorTargetMode = "manual" | "all" | "tag" | "custom";
 
+/** The canonical all-nodes selector, mirrors the server's config.AllNodesSelector(). */
+export const ALL_NODES_SELECTOR: Record<string, string> = { all: "1" };
+
+/** Reports whether the selector is exactly the canonical all-nodes selector {"all": "1"}. */
+export function isAllNodesSelector(selector?: Record<string, string> | null): boolean {
+  const entries = Object.entries(selector || {});
+  return entries.length === 1 && entries[0][0].trim().toLowerCase() === "all" && entries[0][1].trim() === "1";
+}
+
 export function getSelectorValue(selector: Record<string, string>, key: string): string {
   const target = key.trim().toLowerCase();
   const entry = Object.entries(selector).find(([k]) => k.trim().toLowerCase() === target);
@@ -10,7 +19,9 @@ export function getSelectorValue(selector: Record<string, string>, key: string):
 
 export function detectTargetMode(selector: Record<string, string>): SelectorTargetMode {
   const keys = Object.keys(selector).map((k) => k.trim().toLowerCase());
-  if (keys.length === 0) return "all";
+  // An empty selector matches no node; every node requires {"all": "1"}.
+  if (keys.length === 0) return "manual";
+  if (isAllNodesSelector(selector)) return "all";
   if (keys.length === 1 && keys[0] === "name") return "manual";
   if (keys.length === 1 && keys[0] === "tag") return "tag";
   return "custom";
@@ -213,7 +224,7 @@ export function buildNodeContextVars(node: Node): Record<string, string> {
 
 /**
  * Returns true when the node satisfies every condition in the task selector.
- * An empty or missing selector matches every node.
+ * An empty or missing selector matches no node; {"all": "1"} matches every node.
  *
  * Supported keys:
  * - name: comma-separated node name whitelist.
@@ -222,9 +233,10 @@ export function buildNodeContextVars(node: Node): Record<string, string> {
  *   NODE_DATA_*).
  */
 export function matchesTaskSelector(node: Node, selector?: Record<string, string> | null): boolean {
-  if (!selector) return true;
+  if (!selector) return false;
   const entries = Object.entries(selector);
-  if (entries.length === 0) return true;
+  if (entries.length === 0) return false;
+  if (isAllNodesSelector(selector)) return true;
 
   const contextVars = buildNodeContextVars(node);
   const nodeName = (node.name || "").trim();
@@ -241,6 +253,9 @@ export function matchesTaskSelector(node: Node, selector?: Record<string, string
     } else if (lowerKey === "tag") {
       const items = splitSelectorList(rawValue);
       if (items.length === 0 || !items.some((item) => nodeTags.includes(item))) return false;
+    } else if (lowerKey === "all") {
+      // The "all" key is only valid on its own (handled above).
+      return false;
     } else if (lowerKey.startsWith("env:")) {
       const envKey = key.slice("env:".length).trim().toUpperCase();
       if (!envKey) return false;

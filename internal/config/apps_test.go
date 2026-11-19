@@ -29,16 +29,23 @@ func TestAppTargetsNode(t *testing.T) {
 		t.Errorf("manualApp should NOT target node2")
 	}
 
-	// An empty selector matches every node.
+	// The explicit all-nodes selector targets every node.
 	allApp := App{
-		ID:   "app-all",
-		Name: "all-app",
+		ID:       "app-all",
+		Name:     "all-app",
+		Selector: AllNodesSelector(),
 	}
 	if !AppTargetsNode(allApp, node1, "") {
 		t.Errorf("allApp should target node1")
 	}
 	if !AppTargetsNode(allApp, node2, "") {
 		t.Errorf("allApp should target node2")
+	}
+
+	// An empty (or missing) selector matches no node.
+	emptyApp := App{ID: "app-empty", Name: "empty-app"}
+	if AppTargetsNode(emptyApp, node1, "") || AppTargetsNode(emptyApp, node2, "") {
+		t.Errorf("empty selector must not target any node")
 	}
 
 	// Selecting none with an empty name list.
@@ -96,9 +103,30 @@ func TestValidateAppSelector(t *testing.T) {
 		MainContent: "version: '3.8'\nservices:\n  app:\n    image: nginx",
 	}
 
-	// Empty selector is valid and targets all nodes.
+	// Empty selector is valid and matches no node.
 	if err := ValidateApp(base); err != nil {
 		t.Errorf("expected empty selector to be valid, got: %v", err)
+	}
+
+	// The all-nodes selector is valid.
+	appAll := base
+	appAll.Selector = AllNodesSelector()
+	if err := ValidateApp(appAll); err != nil {
+		t.Errorf("expected all-nodes selector to be valid, got: %v", err)
+	}
+
+	// The all-nodes marker cannot be combined with other conditions.
+	appCombined := base
+	appCombined.Selector = map[string]string{"all": "1", "tag": "edge"}
+	if err := ValidateApp(appCombined); err == nil {
+		t.Errorf("expected combined all-nodes selector to be rejected")
+	}
+
+	// A comma-separated env value is rejected (only one exact value matches).
+	appEnvList := base
+	appEnvList.Selector = map[string]string{"env:NODE_IP": "10.0.0.1,10.0.0.2"}
+	if err := ValidateApp(appEnvList); err == nil {
+		t.Errorf("expected comma-separated env selector to be rejected")
 	}
 
 	// Valid manual selection with an empty list.

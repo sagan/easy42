@@ -23,8 +23,10 @@ func TestNodeMatchesTaskSelector(t *testing.T) {
 		selector map[string]string
 		want     bool
 	}{
-		{name: "nil selector", selector: nil, want: true},
-		{name: "empty selector", selector: map[string]string{}, want: true},
+		{name: "nil selector matches nothing", selector: nil, want: false},
+		{name: "empty selector matches nothing", selector: map[string]string{}, want: false},
+		{name: "all-nodes selector", selector: map[string]string{"all": "1"}, want: true},
+		{name: "all-nodes selector with wrong value", selector: map[string]string{"all": "true"}, want: false},
 		{name: "matching name", selector: map[string]string{"name": "edge-1,edge-2"}, want: true},
 		{name: "non-matching name", selector: map[string]string{"name": "edge-2,edge-3"}, want: false},
 		{name: "empty name list", selector: map[string]string{"name": " , "}, want: false},

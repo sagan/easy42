@@ -246,7 +246,7 @@ This document is the reference for Easy42's state file, stored in `<data-dir>/co
       "main_content": "services:\n  web:\n    image: nginx:latest\n",
       "env_content": "APP_ENV=production\n",
       "files": {},
-      "selector": {},
+      "selector": { "all": "1" },
       "published": true,
       "enabled": true,
       "created_at": "2026-01-01T00:00:00Z",
@@ -547,7 +547,7 @@ Scheduled `ping`/`tcp_ping`/`http` probes executed by node agents on a selector-
 | `description`              | `string`    | Optional description.                                                                                   |
 | `task_type`                | `string`    | `ping` (ICMP), `tcp_ping`, or `http`.                                                                   |
 | `cron_expr`                | `string`    | 5-field (`min hour dom mon dow`) or 6-field (`sec min hour dom mon dow`) cron expression.               |
-| `selector`                 | `object`    | Node selector (`name`, `tag`, `env:<NAME>`; AND). Empty matches every managed node.                     |
+| `selector`                 | `object`    | Node selector (`name`, `tag`, `env:<NAME>`; AND). Use `{"all":"1"}` for every node; `{}` matches none.  |
 | `params`                   | `object`    | Probe parameters. `ping`/`http` use `target` and `count`; `tcp_ping` uses `target` (`host:port`) and `count`. |
 | `timeout_sec`              | `integer`   | Optional timeout in seconds (default `15`, capped at `60`).                                             |
 | `enabled`                  | `boolean`   | Whether the schedule is active.                                                                         |
@@ -624,7 +624,7 @@ Workload apps deployed to agent-managed nodes (see [Workload Apps](integrations.
 | `main_content`             | `string`    | Docker Compose YAML, systemd unit content, or cron expression + command. Required.                                           |
 | `env_content`              | `string`    | `.env` content (`KEY=VAL` lines). Interpolated.                                                                              |
 | `files`                    | `object`    | Map of relative filename to content for auxiliary config files. Paths must not contain `..` or start with `/`.               |
-| `selector`                 | `object`    | Node selector (`name`, `tag`, `env:<NAME>`; AND). Empty matches every node. See [Selectors](device-helper.md#task-selector). |
+| `selector`                 | `object`    | Node selector (`name`, `tag`, `env:<NAME>`; AND). Use `{"all":"1"}` for every node; `{}` matches none. See [Selectors](device-helper.md#task-selector). |
 | `published`                | `boolean`   | Whether the app is published/visible. Duplicating an app forces `published: false`.                                          |
 | `enabled`                  | `boolean`   | Whether the app is enabled (deployed). Disabled apps are not synced.                                                         |
 | `created_at`, `updated_at` | `timestamp` | Server-managed timestamps.                                                                                                   |

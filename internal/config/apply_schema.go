@@ -306,20 +306,19 @@ const ConfigChangeJSONSchema = `{
         }
       }
     },
+    "NodeSelector": {
+      "type": "object",
+      "description": "Node selector object. Empty ({}) matches no node; use {\"all\": \"1\"} to target every managed node.",
+      "additionalProperties": { "type": "string" }
+    },
     "SSHKeyRule": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
         "id": { "type": "string" },
         "type": { "type": "string", "enum": ["known_hosts", "authorized_keys", "all"] },
-        "src_selector": {
-          "type": "object",
-          "additionalProperties": { "type": "string" }
-        },
-        "dst_selector": {
-          "type": "object",
-          "additionalProperties": { "type": "string" }
-        },
+        "src_selector": { "$ref": "#/definitions/NodeSelector" },
+        "dst_selector": { "$ref": "#/definitions/NodeSelector" },
         "enabled": { "type": "boolean" }
       }
     },
@@ -343,10 +342,7 @@ const ConfigChangeJSONSchema = `{
           "additionalProperties": { "type": "string" }
         },
         "artifact": { "$ref": "#/definitions/ArtifactSpec" },
-        "selector": {
-          "type": "object",
-          "additionalProperties": { "type": "string" }
-        },
+        "selector": { "$ref": "#/definitions/NodeSelector" },
         "published": { "type": "boolean" },
         "enabled": { "type": "boolean" }
       }

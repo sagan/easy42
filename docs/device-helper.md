@@ -503,7 +503,7 @@ Directories whose names begin with `_` are skipped. Directories without a valid 
 
 ### Task Selector
 
-The optional `selector` object in `task.json` defines the scope of nodes a task can be executed on. It is intended for custom Device Helper tasks. When present, the Device Helper page deselects and disables every non-matching node, and the backend independently verifies each target node before dispatching the task.
+The optional `selector` object in `task.json` defines the scope of nodes a task can be executed on. It is intended for custom Device Helper tasks. The Device Helper page deselects and disables every non-matching node, and the backend independently verifies each target node before dispatching the task. A task without a selector (or with an empty one) targets no node.
 
 ```json
 "selector": {
@@ -515,13 +515,24 @@ The optional `selector` object in `task.json` defines the scope of nodes a task 
 
 Supported keys:
 
-| Key          | Value                                                                                                                                        |
-| :----------- | :------------------------------------------------------------------------------------------------------------------------------------------- |
-| `name`       | Comma-separated node name whitelist. The node name must exactly match one entry.                                                             |
-| `tag`        | Comma-separated node tag whitelist. The node must have at least one of the listed tags.                                                      |
-| `env:<NAME>` | Required node metadata value. `<NAME>` can be any node context variable listed in [Network Configuration Task](#network-configuration-task). |
+| Key                | Value                                                                                                                                        |
+| :----------------- | :------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`             | Comma-separated node name whitelist. The node name must exactly match one entry.                                                             |
+| `tag`              | Comma-separated node tag whitelist. The node must have at least one of the listed tags.                                                      |
+| `env:<NAME>`       | Required node metadata value (one exact value, no commas). `<NAME>` can be any node context variable listed in [Network Configuration Task](#network-configuration-task). |
+| `all`              | Target every managed node: must be exactly `{"all": "1"}` and cannot be combined with other keys.                                            |
 
-If multiple keys are present, **all of them must match (AND)**. An empty selector (or an omitted `selector` field) matches every managed node. Unknown selector keys fail closed: no node matches. `name`/`tag` keys are matched case-insensitively by key name; `env:` keys are uppercased while values are compared exactly.
+If multiple keys are present, **all of them must match (AND)**.
+
+**An empty selector (`{}`) or an omitted `selector` field matches no node.** To target every managed node, use the explicit all-nodes selector:
+
+```json
+"selector": {
+  "all": "1"
+}
+```
+
+Unknown selector keys fail closed: no node matches. `name`/`tag`/`all` keys are matched case-insensitively by key name; `env:` keys are uppercased while values are compared exactly. To require several tags, compare the complete sorted tag list with `"env:NODE_TAGS": "core,edge"`.
 
 The same selector mechanism is shared by Device Helper tasks (`TaskMeta.selector`), workload Apps (`apps[].selector`), and cron probes (`cron_tasks[].selector`) — the semantics above apply to all three.
 

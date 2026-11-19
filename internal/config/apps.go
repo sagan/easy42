@@ -23,9 +23,9 @@ type App struct {
 	EnvContent  string            `json:"env_content,omitempty"` // .env content KEY=VAL
 	Files       map[string]string `json:"files,omitempty"`       // relative_filename -> content
 	Artifact    *ArtifactSpec     `json:"artifact,omitempty" yaml:"artifact,omitempty"`
-	// Selector optionally restricts which nodes the app is deployed to.
-	// Supported keys are "name", "tag" and "env:<NAME>". All conditions must match (AND).
-	// An empty selector matches every node.
+	// Selector restricts which nodes the app is deployed to. Supported keys are
+	// "name", "tag" and "env:<NAME>" (all must match, AND), or the all-nodes
+	// selector {"all": "1"}. An empty selector matches no node.
 	Selector  map[string]string `json:"selector,omitempty"`
 	Published bool              `json:"published"`
 	Enabled   bool              `json:"enabled"`
@@ -154,9 +154,6 @@ func ValidateApp(app App) error {
 // evaluated. Selectors relying on node tags or environment variables require
 // the full node definition.
 func AppTargetsNode(app App, node *Node, nodeName string) bool {
-	if len(app.Selector) == 0 {
-		return true
-	}
 	if node == nil {
 		return nodeMatchesSelector(nil, nodeName, app.Selector)
 	}

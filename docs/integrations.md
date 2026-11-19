@@ -202,7 +202,7 @@ Keys are **never** distributed implicitly. A rule maps a **source selector** (th
 | `authorized_keys` | `/root/.ssh/authorized_keys` (0600)  |
 | `all`             | Both files                           |
 
-Selectors use the same node selector format as workload apps and cron probes (`name`, `tag`, `env:<NAME>`). The destination selector may not be empty. Rules are managed from the **SSH** tab of the Apps page (`/apps/ssh`), the REST API (`/api/ssh-keys/rules`), or MCP (`list_ssh_keys`, `create_ssh_key_rule`, `update_ssh_key_rule`, `delete_ssh_key_rule`).
+Selectors use the same node selector format as workload apps and cron probes (`name`, `tag`, `env:<NAME>`, or `{"all":"1"}` for every node). Neither selector may be empty: an empty selector matches no node. Rules are managed from the **SSH** tab of the Apps page (`/apps/ssh`), the REST API (`/api/ssh-keys/rules`), or MCP (`list_ssh_keys`, `create_ssh_key_rule`, `update_ssh_key_rule`, `delete_ssh_key_rule`).
 
 ### 3. Writing the key files
 
@@ -423,7 +423,7 @@ Auxiliary `files` and artifacts are written to `/etc/ezapp/<name>/`. Orphaned fi
 
 The target init system is taken from the `init_system` value the agent reports on registration (`systemd`, `procd`, or `openrc`). Only agents that report `procd`/`openrc` get their systemd units transpiled; older agents fall back to matching `os_info`, which cannot identify OpenWrt.
 
-- **Selectors**: `apps[].selector` uses the shared `name`/`tag`/`env:<NAME>` semantics (AND; empty matches all). See [Task Selector](device-helper.md#task-selector).
+- **Selectors**: `apps[].selector` uses the shared `name`/`tag`/`env:<NAME>` semantics (AND). Use `{"all":"1"}` for every node; an empty selector matches no node. See [Task Selector](device-helper.md#task-selector).
 - **Artifacts**: `apps[].artifact` downloads a binary from a URL template or a GitHub Release and serves it to the agent, which installs it on the node. The server resolves one artifact per node architecture, so the template must be architecture-aware.
   - **Architecture variables**: `${ARCH}` (Go: `amd64`/`arm64`/`armv7`/`mipsel`), `${ARCH_GNU}` (`x86_64`/`aarch64`/`armv7l`/`mipsel`), `${ARCH_RUST}` (`x86_64`/`aarch64`/`armv7`/`mipsel`), `${ARCH_DEB}` (`amd64`/`arm64`/`armhf`), `${OS}`, and `${APP_NAME}`.
   - **MIPS endianness**: MIPS kernels often report a bare `mips` for both byte orders (common on OpenWrt/MT7621). Agents therefore report `os_info` as `<os> <arch> <endian>` — e.g. `linux mips little` — and the server resolves the endianness before expanding the template, so `mips` + `little` becomes `mipsel` (and `mips64` + `little` becomes `mips64le`). Use `${ARCH_RUST}` in Rust-style asset names: `wg-watcher-${ARCH_RUST}-unknown-linux-musl` yields `wg-watcher-mipsel-unknown-linux-musl`.

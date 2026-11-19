@@ -1353,7 +1353,7 @@ func TestScriptAppDeploymentAndAction(t *testing.T) {
 	_ = srv.mgr.Store().Save(cfg)
 
 	// 1. Create a script app
-	scriptBody := `{"name":"ez-backup","app_type":"script","main_content":"#!/bin/sh\necho \"backup $VAR\"","env_content":"VAR=daily_backup","published":true,"enabled":true}`
+	scriptBody := `{"name":"ez-backup","app_type":"script","main_content":"#!/bin/sh\necho \"backup $VAR\"","env_content":"VAR=daily_backup","selector":{"all":"1"},"published":true,"enabled":true}`
 	req := httptest.NewRequest(http.MethodPost, "/api/apps", strings.NewReader(scriptBody))
 	w := httptest.NewRecorder()
 	srv.handleCreateApp(w, req)

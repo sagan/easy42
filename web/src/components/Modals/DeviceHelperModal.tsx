@@ -232,12 +232,13 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
     return tasks.find((t) => t.id === selectedTaskId) || tasks[0] || null;
   }, [tasks, selectedTaskId, isCustomTaskHelp]);
 
-  // Optional task selector: restricts the nodes this task can run on.
+  // Optional task selector: restricts the nodes this task can run on. A task
+  // without a selector targets no device (an empty selector matches nothing;
+  // {"all": "1"} targets every device).
   const activeSelector = selectedTask?.selector;
   const hasSelector = Boolean(activeSelector && Object.keys(activeSelector).length > 0);
 
   const selectorMatchedNodes = useMemo(() => {
-    if (!activeSelector) return managedNodes;
     return managedNodes.filter((node) => matchesTaskSelector(node, activeSelector));
   }, [managedNodes, activeSelector]);
 
@@ -334,13 +335,12 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
 
   // A task selector automatically deselects nodes outside the task scope.
   useEffect(() => {
-    if (!hasSelector) return;
     setSelectedNodes((prev) => {
       const next = prev.filter((name) => selectorMatchedSet.has(name));
       if (next.length === prev.length) return prev;
       return next;
     });
-  }, [hasSelector, selectorMatchedSet]);
+  }, [selectorMatchedSet]);
 
   const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
     const filteredNames = new Set(selectableFilteredNodes.map((n) => n.name));
@@ -1038,7 +1038,7 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
                 <Typography variant="body2" color="text.secondary">
                   {selectedTask.description}
                 </Typography>
-                {hasSelector && (
+                {hasSelector ? (
                   <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, mt: 1, flexWrap: "wrap" }}>
                     <Chip
                       size="small"
@@ -1054,6 +1054,17 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
                     <Typography variant="caption" sx={{ color: "text.secondary" }}>
                       Only {selectorMatchedNodes.length} of {managedNodes.length} managed device(s) match this
                       task&apos;s selector. Other devices are disabled.
+                    </Typography>
+                  </Box>
+                ) : (
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, mt: 1 }}>
+                    <Chip
+                      size="small"
+                      label="No Target"
+                      sx={{ height: 20, fontSize: "0.68rem", fontWeight: 700, bgcolor: "#F1F5F9", color: "#64748B" }}
+                    />
+                    <Typography variant="caption" sx={{ color: "text.secondary" }}>
+                      This task has no selector, so it cannot run on any device.
                     </Typography>
                   </Box>
                 )}
@@ -1087,7 +1098,7 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
                 >
                   <Typography variant="subtitle2" sx={{ fontWeight: 700, fontSize: { xs: "0.8rem", sm: "0.875rem" } }}>
                     Target Devices ({selectedNodes.length} /{" "}
-                    {hasSelector ? selectorMatchedNodes.length : managedNodes.length} selected)
+                    {selectorMatchedNodes.length} selected)
                   </Typography>
 
                   {/* Tag Filter Selector */}

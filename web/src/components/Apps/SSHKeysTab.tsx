@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Alert,
-  Autocomplete,
   Box,
   Button,
   Chip,
@@ -23,9 +22,6 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  Tab,
-  Tabs,
-  TextField,
   Tooltip,
   Typography,
 } from "@mui/material";
@@ -47,14 +43,8 @@ import {
 import { api } from "../../api/client";
 import { useMesh } from "../../context/MeshContext";
 import type { Node, SSHKeyNodeState, SSHKeyRule, SSHKeyRuleType, SSHKeysResponse } from "../../types/api";
-import {
-  detectTargetMode,
-  getSelectorValue,
-  matchesTaskSelector,
-  parseSelectorJSON,
-  splitSelectorList,
-} from "../../utils/taskSelector";
-import type { SelectorTargetMode } from "../../utils/taskSelector";
+import { matchesTaskSelector } from "../../utils/taskSelector";
+import { isAllNodesSelector, NodeSelector } from "../Common/NodeSelector";
 
 const RULE_TYPE_OPTIONS: { value: SSHKeyRuleType; label: string; description: string }[] = [
   { value: "all", label: "All", description: "Both known_hosts and authorized_keys" },
@@ -62,31 +52,11 @@ const RULE_TYPE_OPTIONS: { value: SSHKeyRuleType; label: string; description: st
   { value: "authorized_keys", label: "authorized_keys", description: "Allow source keys to log in as root" },
 ];
 
-// Explicit "All nodes" marker shared with the server (config.AllNodesSelectorKey).
-// An empty selector means "nothing chosen" and is never treated as "all".
-const ALL_NODES_SELECTOR: Record<string, string> = { all: "true" };
-
-export function isAllNodesSelector(selector: Record<string, string> | null | undefined): boolean {
-  return !!selector && Object.keys(selector).some((k) => k.trim().toLowerCase() === "all");
-}
-
-/** Determines which editor mode should be shown for a stored selector. */
-function selectorMode(selector: Record<string, string> | null | undefined): SelectorTargetMode {
-  if (isAllNodesSelector(selector)) return "all";
-  const mode = detectTargetMode(selector || {});
-  // An empty selector is treated as "no selection" (specific nodes).
-  return mode === "all" ? "manual" : mode;
-}
-
 const RULE_TYPE_COLORS: Record<SSHKeyRuleType, { bg: string; fg: string }> = {
   all: { bg: "#EEF2FF", fg: "#4F46E5" },
   known_hosts: { bg: "#ECFDF5", fg: "#047857" },
   authorized_keys: { bg: "#FFF7ED", fg: "#C2410C" },
 };
-
-// "custom" (raw JSON selector) is a fourth, separate editor mode next to the
-// three presets exposed by detectTargetMode.
-type SelectorMode = SelectorTargetMode;
 
 /** Short, non-reversible fingerprint of a key blob (first 16 base64 chars of its SHA-256 is overkill here). */
 export function shortKeyFingerprint(algorithm: string, key: string): string {
@@ -119,161 +89,35 @@ const SSHKeyRuleDialog: React.FC<{
 }> = ({ open, rule, nodes, saving, onClose, onSave }) => {
   const [type, setType] = useState<SSHKeyRuleType>("all");
   const [enabled, setEnabled] = useState(true);
-  const [srcMode, setSrcMode] = useState<SelectorMode>("manual");
-  const [srcNames, setSrcNames] = useState<string[]>([]);
-  const [srcTag, setSrcTag] = useState("");
-  const [dstMode, setDstMode] = useState<SelectorMode>("manual");
-  const [dstNames, setDstNames] = useState<string[]>([]);
-  const [dstTag, setDstTag] = useState("");
-  const [customSrc, setCustomSrc] = useState("");
-  const [customDst, setCustomDst] = useState("");
+  const [srcSelector, setSrcSelector] = useState<Record<string, string>>({});
+  const [dstSelector, setDstSelector] = useState<Record<string, string>>({});
+  const [selectorError, setSelectorError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-
-  const agentNodes = useMemo(() => nodes.filter((n) => !n.is_external), [nodes]);
-  const nodeNames = useMemo(() => agentNodes.map((n) => n.name).sort(), [agentNodes]);
-  const allTags = useMemo(() => {
-    const tags = new Set<string>();
-    agentNodes.forEach((n) => (n.tags || []).forEach((t) => t.trim() && tags.add(t.trim())));
-    return Array.from(tags).sort();
-  }, [agentNodes]);
 
   useEffect(() => {
     if (!open) return;
     setError(null);
+    setSelectorError(null);
     setType((rule?.type as SSHKeyRuleType) || "all");
     setEnabled(rule ? rule.enabled : true);
-    const src = rule?.src_selector || {};
-    const dst = rule?.dst_selector || {};
-    setSrcMode(selectorMode(src));
-    setSrcNames(splitSelectorList(getSelectorValue(src, "name")));
-    setSrcTag(getSelectorValue(src, "tag"));
-    setDstMode(selectorMode(dst));
-    setDstNames(splitSelectorList(getSelectorValue(dst, "name")));
-    setDstTag(getSelectorValue(dst, "tag"));
-    setCustomSrc(JSON.stringify(src, null, 2));
-    setCustomDst(JSON.stringify(dst, null, 2));
+    setSrcSelector(rule?.src_selector || {});
+    setDstSelector(rule?.dst_selector || {});
   }, [open, rule]);
 
-  // Builds the selector for a mode. Returns null on invalid input or when the
-  // mode has no actual selection (empty is NOT silently treated as "all": the
-  // "All nodes" mode writes the explicit ALL_NODES_SELECTOR marker instead).
-  const buildSelector = (mode: SelectorTargetMode, names: string[], tag: string, custom: string): Record<string, string> | null => {
-    if (mode === "all") return ALL_NODES_SELECTOR;
-    if (mode === "tag") return tag.trim() ? { tag: tag.trim() } : null;
-    if (mode === "manual") return names.length ? { name: names.join(",") } : null;
-    const parsed = parseSelectorJSON(custom);
-    if (parsed.error || !parsed.selector) return null;
-    return Object.keys(parsed.selector).length ? parsed.selector : ALL_NODES_SELECTOR;
-  };
-
+  // Both sides must be chosen explicitly: an empty selector matches no node, so
+  // "every node" requires the explicit {"all": "1"} selector from the All nodes tab.
   const handleSave = async () => {
-    const src = buildSelector(srcMode, srcNames, srcTag, customSrc);
-    const dst = buildSelector(dstMode, dstNames, dstTag, customDst);
-    if (src === null) {
-      if (srcMode === "tag") {
-        setError("Enter a tag name for the source nodes, or pick another target mode.");
-      } else if (srcMode === "manual") {
-        setError("Select at least one source node, or choose \"All nodes\".");
-      } else {
-        setError("Source selector JSON is invalid.");
-      }
+    if (Object.keys(srcSelector).length === 0) {
+      setError("Select at least one source node, a tag, or \"All nodes\".");
       return;
     }
-    if (dst === null) {
-      if (dstMode === "tag") {
-        setError("Enter a tag name for the destination nodes, or pick another target mode.");
-      } else if (dstMode === "manual") {
-        setError("Choose at least one destination node (or select \"All nodes\"). Keys are never distributed implicitly.");
-      } else {
-        setError("Destination selector JSON is invalid.");
-      }
+    if (Object.keys(dstSelector).length === 0) {
+      setError("Choose at least one destination node (or select \"All nodes\"). Keys are never distributed implicitly.");
       return;
     }
     setError(null);
-    await onSave({ type, src_selector: src, dst_selector: dst, enabled });
+    await onSave({ type, src_selector: srcSelector, dst_selector: dstSelector, enabled });
   };
-
-  const renderSelectorEditor = (
-    title: string,
-    hint: string,
-    mode: SelectorMode,
-    setMode: (m: SelectorMode) => void,
-    names: string[],
-    setNames: (n: string[]) => void,
-    tag: string,
-    setTag: (t: string) => void,
-    custom: string,
-    setCustom: (t: string) => void,
-  ) => (
-    <Box sx={{ border: "1px solid #E2E8F0", borderRadius: "12px", p: 1.5, bgcolor: "#FCFCFD" }}>
-      <Typography variant="subtitle2" sx={{ fontWeight: 800, color: "#1E293B", mb: 0.3 }}>
-        {title}
-      </Typography>
-      <Typography variant="caption" sx={{ color: "#64748B", display: "block", mb: 1 }}>
-        {hint}
-      </Typography>
-      <Tabs
-        value={mode}
-        onChange={(_, v) => setMode(v)}
-        sx={{
-          minHeight: 34,
-          mb: 1.2,
-          "& .MuiTab-root": { textTransform: "none", fontWeight: 700, fontSize: "0.78rem", minHeight: 34, px: 1.5 },
-          "& .Mui-selected": { color: "#4F46E5" },
-          "& .MuiTabs-indicator": { bgcolor: "#4F46E5" },
-        }}
-      >
-        <Tab value="manual" label="Specific nodes" />
-        <Tab value="tag" label="By tag" />
-        <Tab value="all" label="All nodes" />
-        <Tab value="custom" label="Custom JSON" />
-      </Tabs>
-
-      {mode === "manual" && (
-        <Autocomplete
-          multiple
-          size="small"
-          options={nodeNames}
-          value={names}
-          onChange={(_, v) => setNames(v)}
-          renderInput={(params) => <TextField {...params} placeholder="Select nodes" />}
-          renderTags={(value, getTagProps) =>
-            value.map((option, index) => {
-              const { key, ...tagProps } = getTagProps({ index });
-              return <Chip key={key} size="small" label={option} {...tagProps} />;
-            })
-          }
-        />
-      )}
-      {mode === "tag" && (
-        <Autocomplete
-          freeSolo
-          size="small"
-          options={allTags}
-          value={tag}
-          onInputChange={(_, v) => setTag(v)}
-          renderInput={(params) => <TextField {...params} placeholder="Tag name, e.g. core" />}
-        />
-      )}
-      {mode === "all" && (
-        <Typography variant="caption" sx={{ color: "#475569" }}>
-          Matches every managed cluster node.
-        </Typography>
-      )}
-      {mode === "custom" && (
-        <TextField
-          fullWidth
-          multiline
-          minRows={3}
-          size="small"
-          value={custom}
-          onChange={(e) => setCustom(e.target.value)}
-          placeholder='{"tag": "core", "env:NODE_IP": "192.168.100.1"}'
-          inputProps={{ style: { fontFamily: "monospace", fontSize: "0.8rem" } }}
-        />
-      )}
-    </Box>
-  );
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth PaperProps={{ sx: { borderRadius: "16px" } }}>
@@ -330,30 +174,24 @@ const SSHKeyRuleDialog: React.FC<{
 
         <Divider />
 
-        {renderSelectorEditor(
-          "Source nodes",
-          "Public keys of the matching nodes are installed on the destinations.",
-          srcMode,
-          setSrcMode,
-          srcNames,
-          setSrcNames,
-          srcTag,
-          setSrcTag,
-          customSrc,
-          setCustomSrc,
-        )}
-        {renderSelectorEditor(
-          "Destination nodes",
-          "The known_hosts / authorized_keys files of the matching nodes are updated.",
-          dstMode,
-          setDstMode,
-          dstNames,
-          setDstNames,
-          dstTag,
-          setDstTag,
-          customDst,
-          setCustomDst,
-        )}
+        <NodeSelector
+          compact
+          label="Source nodes"
+          description="Public keys of the matching nodes are installed on the destinations."
+          nodes={nodes}
+          value={srcSelector}
+          onChange={setSrcSelector}
+          onErrorChange={setSelectorError}
+        />
+        <NodeSelector
+          compact
+          label="Destination nodes"
+          description="The known_hosts / authorized_keys files of the matching nodes are updated."
+          nodes={nodes}
+          value={dstSelector}
+          onChange={setDstSelector}
+          onErrorChange={setSelectorError}
+        />
 
         <FormControlLabel
           control={<Switch checked={enabled} onChange={(e) => setEnabled(e.target.checked)} color="primary" />}
@@ -364,6 +202,7 @@ const SSHKeyRuleDialog: React.FC<{
           }
         />
 
+        {selectorError && <Alert severity="warning">{selectorError}</Alert>}
         {error && <Alert severity="error">{error}</Alert>}
       </DialogContent>
 
@@ -496,7 +335,7 @@ export const SSHKeysTab: React.FC = () => {
   const matchedNames = (selector: Record<string, string>): string[] => {
     if (Object.keys(selector || {}).length === 0) return [];
     return nodes
-      .filter((n) => !n.is_external && matchesTaskSelector(n, isAllNodesSelector(selector) ? {} : selector))
+      .filter((n) => !n.is_external && matchesTaskSelector(n, selector))
       .map((n) => n.name);
   };
 

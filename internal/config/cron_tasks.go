@@ -14,9 +14,9 @@ type CronTask struct {
 	Description string `json:"description,omitempty"`
 	TaskType    string `json:"task_type"` // "ping" or "tcp_ping"
 	CronExpr    string `json:"cron_expr"` // e.g. "0 */1 * * *" or "*/5 * * * *"
-	// Selector optionally restricts which nodes execute this task.
-	// Supported keys are "name", "tag" and "env:<NAME>". All conditions must match (AND).
-	// An empty selector matches every node.
+	// Selector restricts which nodes execute this task. Supported keys are
+	// "name", "tag" and "env:<NAME>" (all must match, AND), or the all-nodes
+	// selector {"all": "1"}. An empty selector matches no node.
 	Selector   map[string]string `json:"selector,omitempty"`
 	Params     map[string]string `json:"params"` // Task parameters (e.g. target, count)
 	TimeoutSec int               `json:"timeout_sec,omitempty"`
@@ -84,9 +84,6 @@ func ValidateCronTask(task CronTask) error {
 // evaluated. Selectors relying on node tags or environment variables require
 // the full node definition.
 func CronTaskTargetsNode(task CronTask, node *Node, nodeName string) bool {
-	if len(task.Selector) == 0 {
-		return true
-	}
 	if node == nil {
 		return nodeMatchesSelector(nil, nodeName, task.Selector)
 	}

@@ -299,14 +299,14 @@ func (m *Manager) planSSHKeyFilesForNode(cfg *config.Config, dstNode config.Node
 		if !rule.Enabled {
 			continue
 		}
-		if !config.AppTargetsNode(config.App{Selector: config.ExpandAllNodesSelector(rule.DstSelector)}, &dstNode, dstNode.Name) {
+		if !config.AppTargetsNode(config.App{Selector: rule.DstSelector}, &dstNode, dstNode.Name) {
 			continue
 		}
 		for _, src := range cfg.Nodes {
 			if src.Name == dstNode.Name {
 				continue
 			}
-			if !config.AppTargetsNode(config.App{Selector: config.ExpandAllNodesSelector(rule.SrcSelector)}, &src, src.Name) {
+			if !config.AppTargetsNode(config.App{Selector: rule.SrcSelector}, &src, src.Name) {
 				continue
 			}
 			if !m.sshKeysEnabled(src) {
@@ -348,7 +348,7 @@ func (m *Manager) sshRuleTargetsNode(cfg *config.Config, node config.Node) bool 
 		if !rule.Enabled {
 			continue
 		}
-		if config.AppTargetsNode(config.App{Selector: config.ExpandAllNodesSelector(rule.DstSelector)}, &node, node.Name) {
+		if config.AppTargetsNode(config.App{Selector: rule.DstSelector}, &node, node.Name) {
 			return true
 		}
 	}
@@ -766,7 +766,7 @@ func (m *Manager) SaveSSHKeyRule(rule config.SSHKeyRule) (config.SSHKeyRule, err
 }
 
 // normalizeSelectorMap trims selector keys/values and returns nil for empty
-// selectors so the persisted JSON stays clean.
+// selectors (which match no node) so the persisted JSON stays clean.
 func normalizeSelectorMap(selector map[string]string) map[string]string {
 	if len(selector) == 0 {
 		return nil

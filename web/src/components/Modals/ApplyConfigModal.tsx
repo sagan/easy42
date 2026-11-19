@@ -168,7 +168,9 @@ export function generateAppApplySnippet(app: App): string {
   if (app.env_content !== undefined && app.env_content !== "") p.env_content = app.env_content;
   if (app.files && Object.keys(app.files).length > 0) p.files = app.files;
   if (app.artifact) p.artifact = app.artifact;
-  if (app.selector && Object.keys(app.selector).length > 0) p.selector = app.selector;
+  // Always emit the selector: an empty selector means "no node" and must not be
+  // silently replaced by an implicit default.
+  p.selector = app.selector && Object.keys(app.selector).length > 0 ? app.selector : {};
   if (app.published !== undefined) p.published = app.published;
   if (app.enabled !== undefined) p.enabled = app.enabled;
 

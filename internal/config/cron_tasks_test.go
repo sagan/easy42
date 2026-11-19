@@ -56,10 +56,16 @@ func TestCronTaskTargetsNode(t *testing.T) {
 		t.Errorf("expected manual task not to target node-fra")
 	}
 
-	// An empty selector matches every node.
-	allTask := CronTask{}
+	// The explicit all-nodes selector matches every node.
+	allTask := CronTask{Selector: AllNodesSelector()}
 	if !CronTaskTargetsNode(allTask, node1, "") || !CronTaskTargetsNode(allTask, node2, "") {
-		t.Errorf("expected empty selector to match every node")
+		t.Errorf("expected all-nodes selector to match every node")
+	}
+
+	// An empty (or missing) selector matches no node.
+	emptyTask := CronTask{}
+	if CronTaskTargetsNode(emptyTask, node1, "") || CronTaskTargetsNode(emptyTask, node2, "") {
+		t.Errorf("expected empty selector to match no node")
 	}
 
 	// A name selector with an empty value matches no node.
@@ -87,7 +93,13 @@ func TestCronTaskTargetsNode(t *testing.T) {
 
 func TestValidateCronTaskSelector(t *testing.T) {
 	if err := ValidateCronTask(CronTask{}); err != nil {
-		t.Errorf("expected empty selector to be valid, got: %v", err)
+		t.Errorf("expected empty selector to be valid (matches no node), got: %v", err)
+	}
+	if err := ValidateCronTask(CronTask{Selector: AllNodesSelector()}); err != nil {
+		t.Errorf("expected all-nodes selector to be valid, got: %v", err)
+	}
+	if err := ValidateCronTask(CronTask{Selector: map[string]string{"all": "1", "tag": "edge"}}); err == nil {
+		t.Errorf("expected combined all-nodes selector to be rejected")
 	}
 	if err := ValidateCronTask(CronTask{Selector: map[string]string{"tag": "edge"}}); err != nil {
 		t.Errorf("expected tag selector to be valid, got: %v", err)

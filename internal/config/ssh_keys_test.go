@@ -153,30 +153,40 @@ func TestSSHKeyRuleTargetFiles(t *testing.T) {
 func TestSSHKeyRuleAllNodesSelector(t *testing.T) {
 	allNodes := SSHKeyRule{
 		Type:        SSHKeyFileAuthorizedKeys,
-		SrcSelector: map[string]string{AllNodesSelectorKey: "true"},
-		DstSelector: map[string]string{AllNodesSelectorKey: "true"},
+		SrcSelector: AllNodesSelector(),
+		DstSelector: AllNodesSelector(),
 	}
 	if err := ValidateSSHKeyRule(allNodes); err != nil {
 		t.Fatalf("all-nodes selector must be valid: %v", err)
 	}
 	if !IsAllNodesSelector(allNodes.DstSelector) {
-		t.Fatal("expected the all-nodes marker to be recognized")
-	}
-	if got := ExpandAllNodesSelector(allNodes.DstSelector); len(got) != 0 {
-		t.Fatalf("expected the marker to expand to an empty (match-all) selector, got %v", got)
+		t.Fatal("expected the all-nodes selector to be recognized")
 	}
 
 	// The marker must not be combined with other conditions.
 	combined := allNodes
-	combined.DstSelector = map[string]string{AllNodesSelectorKey: "true", "tag": "edge"}
+	combined.DstSelector = map[string]string{AllNodesSelectorKey: AllNodesSelectorValue, "tag": "edge"}
 	if err := ValidateSSHKeyRule(combined); err == nil {
 		t.Fatal("expected combined all-nodes selector to be rejected")
 	}
 
-	// An empty destination selector is still rejected (never implicit "all").
-	empty := allNodes
-	empty.DstSelector = nil
-	if err := ValidateSSHKeyRule(empty); err == nil {
-		t.Fatal("expected empty destination selector to be rejected")
+	// A legacy "all" value is not the all-nodes selector anymore.
+	legacy := allNodes
+	legacy.DstSelector = map[string]string{AllNodesSelectorKey: "true"}
+	if err := ValidateSSHKeyRule(legacy); err == nil {
+		t.Fatal("expected legacy all-nodes value to be rejected")
+	}
+
+	// An empty selector matches no node and is rejected on both sides.
+	for _, side := range []string{"source", "destination"} {
+		empty := allNodes
+		if side == "source" {
+			empty.SrcSelector = nil
+		} else {
+			empty.DstSelector = nil
+		}
+		if err := ValidateSSHKeyRule(empty); err == nil {
+			t.Fatalf("expected empty %s selector to be rejected", side)
+		}
 	}
 }
