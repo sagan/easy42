@@ -310,14 +310,27 @@ func (m *Manager) planSSHKeyFilesForNode(cfg *config.Config, dstNode config.Node
 			if src.Name == dstNode.Name {
 				continue
 			}
+			// External peers (DN42/IXP) have no agent and can never publish keys.
+			// They match an "all nodes" selector but are not a gap, so they are
+			// neither sources nor "skipped" — listing 25 of them on every action
+			// buried the sync dialog in noise.
+			if src.IsExternal {
+				continue
+			}
 			if !config.AppTargetsNode(config.App{Selector: rule.SrcSelector}, &src, src.Name) {
 				continue
 			}
 			if !m.sshKeysEnabled(src) {
+				// A node that is simply not set up for SSH key management (SSH
+				// mode, older agent, apps disabled) is excluded by configuration;
+				// it is not a temporary gap worth explaining on every sync.
 				continue
 			}
 			keys := m.GetNodeSSHKeys(src.Name)
 			if len(keys) == 0 {
+				// Agent-mode node with key management available but no keys yet.
+				// It simply contributes nothing; the next sync picks its keys up
+				// automatically once the agent reports them.
 				continue
 			}
 			keys = withSSHKeyHostnames(keys, src, cfg.DNS.BaseDomain)
@@ -334,6 +347,12 @@ func (m *Manager) planSSHKeyFilesForNode(cfg *config.Config, dstNode config.Node
 	}
 
 	for path, a := range collected {
+		// A file with no keys and no reason to manage it stays out of the plan:
+		// an empty block only carries skip notes and would otherwise look like a
+		// rule that targets the node.
+		if len(a.keys) == 0 {
+			continue
+		}
 		authorized := config.IsAuthorizedKeysPath(path)
 		block := config.BuildSSHKeysBlock(a.keys, authorized)
 		result[path] = plannedSSHKeyFile{
@@ -475,6 +494,11 @@ func (m *Manager) planSSHKeyActions(node config.Node, currentState *config.Netwo
 		if config.IsAuthorizedKeysPath(path) {
 			label = "authorized_keys"
 		}
+		// The description stays short and stable: it is shown on every row of the
+		// sync dialog, and appending the list of source nodes that contributed
+		// nothing turned every key rotation into an unreadable wall of text. The
+		// diff below already shows exactly which keys changed.
+		desc := fmt.Sprintf("Update SSH %s (%s) on %s", label, path, node.Name)
 		actions = append(actions, config.SyncAction{
 			NodeName:    node.Name,
 			Host:        node.Host,
@@ -482,7 +506,7 @@ func (m *Manager) planSSHKeyActions(node config.Node, currentState *config.Netwo
 			Interface:   "ssh_" + label,
 			TargetFile:  path,
 			FileContent: d.Block,
-			Description: fmt.Sprintf("Update SSH %s (%s) on %s", label, path, node.Name),
+			Description: desc,
 			NeedsApply:  needsApply,
 			Status:      status,
 			DiffStatus:  diffStatus,

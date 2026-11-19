@@ -7,14 +7,44 @@ import (
 	"testing"
 )
 
-// testSSHKeyBlob builds a minimal SSH public key blob that embeds algorithm as
-// its first SSH string, so it passes ValidateSSHPublicKey.
+// testSSHKeyBlob builds a well-formed SSH public key blob whose public fields
+// are derived from payload, so it passes ValidateSSHPublicKey (which requires
+// exactly the public fields and nothing else).
 func testSSHKeyBlob(algorithm string, payload string) string {
-	buf := make([]byte, 4)
-	binary.BigEndian.PutUint32(buf, uint32(len(algorithm)))
-	buf = append(buf, algorithm...)
-	buf = append(buf, payload...)
-	return base64.StdEncoding.EncodeToString(buf)
+	return base64.StdEncoding.EncodeToString(sshTestPublicBlob(algorithm, []byte(payload)))
+}
+
+// sshTestPublicBlob returns algorithm followed by exactly the public fields the
+// algorithm defines, filled from seed so distinct payloads give distinct keys.
+func sshTestPublicBlob(algorithm string, seed []byte) []byte {
+	appendField := func(buf []byte, field []byte) []byte {
+		var l [4]byte
+		binary.BigEndian.PutUint32(l[:], uint32(len(field)))
+		buf = append(buf, l[:]...)
+		return append(buf, field...)
+	}
+	derive := func(n int) []byte {
+		out := make([]byte, n)
+		for i := range out {
+			if len(seed) == 0 {
+				out[i] = byte(i)
+			} else {
+				out[i] = seed[i%len(seed)]
+			}
+		}
+		return out
+	}
+
+	buf := appendField(nil, []byte(algorithm))
+	switch algorithm {
+	case "ssh-rsa":
+		buf = appendField(buf, []byte{0x01, 0x00, 0x01})
+		modulus := append([]byte{0x01}, derive(32)...)
+		buf = appendField(buf, modulus)
+	default: // ssh-ed25519
+		buf = appendField(buf, derive(32))
+	}
+	return buf
 }
 
 func TestValidateSSHPublicKey(t *testing.T) {
@@ -35,6 +65,68 @@ func TestValidateSSHPublicKey(t *testing.T) {
 	if err := ValidateSSHPublicKey("", ""); err == nil {
 		t.Fatal("expected empty algorithm error")
 	}
+}
+
+// Regression for the Dropbear Ed25519 bug: the agent used to publish the whole
+// `private scalar || public point` field (64 bytes), producing an 83-byte blob.
+// An OpenSSH client compares the 32-byte point it receives with the stored
+// blob, so such a key never matched and every connection prompted.
+func TestValidateSSHPublicKeyRejectsOverlongDropbearRecord(t *testing.T) {
+	// The exact blob Easy42 used to write for a real OpenWrt node.
+	overlong := "AAAAC3NzaC1lZDI1NTE5AAAAQCFU8KveP2LWnDvSSUn9ZMnV+SBhmY0AXwev2GgLz0kPEIUCoG9TXXZ/vFp17idehMxMWyxdWNCUJS0pyVyOxXU="
+	if err := ValidateSSHPublicKey("ssh-ed25519", overlong); err == nil {
+		t.Fatal("expected the over-long Dropbear ed25519 record to be rejected")
+	}
+	if IsExactSSHPublicKeyBlob("ssh-ed25519", mustBase64(t, overlong)) {
+		t.Fatal("IsExactSSHPublicKeyBlob must reject the 64-byte-point blob")
+	}
+
+	// The correct key for the same node, as `ssh-keyscan` reports it.
+	exact := "AAAAC3NzaC1lZDI1NTE5AAAAIBCFAqBvU112f7xade4nXoTMTFssXVjQlCUtKclcjsV1"
+	if err := ValidateSSHPublicKey("ssh-ed25519", exact); err != nil {
+		t.Fatalf("expected the exact 32-byte key to be valid, got %v", err)
+	}
+
+	// The current home2 keys must survive the round trip through the block
+	// builder, or the fix would be cosmetic.
+	node := SSHPublicKey{
+		Algorithm: "ssh-ed25519",
+		Key:       exact,
+		Kind:      SSHKeyKindHost,
+		Hostnames: []string{"192.168.2.1", "home2"},
+	}
+	block := BuildSSHKeysBlock([]SSHPublicKey{node}, false)
+	if !strings.Contains(block, exact) {
+		t.Fatalf("known_hosts block must contain the exact key, got:\n%s", block)
+	}
+}
+
+func TestIsExactSSHPublicKeyBlob(t *testing.T) {
+	ed := mustBase64(t, testSSHKeyBlob("ssh-ed25519", "node"))
+	if !IsExactSSHPublicKeyBlob("ssh-ed25519", ed) {
+		t.Fatal("well-formed ed25519 key must be exact")
+	}
+	if IsExactSSHPublicKeyBlob("ssh-ed25519", append(append([]byte{}, ed...), 0x00)) {
+		t.Fatal("trailing byte must be rejected")
+	}
+
+	rsa := mustBase64(t, testSSHKeyBlob("ssh-rsa", "node"))
+	if !IsExactSSHPublicKeyBlob("ssh-rsa", rsa) {
+		t.Fatal("well-formed rsa key must be exact")
+	}
+	// RSA records carry d/p/q after n; they must be rejected too.
+	if IsExactSSHPublicKeyBlob("ssh-rsa", append(append([]byte{}, rsa...), 0, 0, 0, 1, 9)) {
+		t.Fatal("rsa key with private fields appended must be rejected")
+	}
+}
+
+func mustBase64(t *testing.T, s string) []byte {
+	t.Helper()
+	b, err := base64.StdEncoding.DecodeString(s)
+	if err != nil {
+		t.Fatalf("invalid base64 fixture: %v", err)
+	}
+	return b
 }
 
 func TestCompareAgentVersions(t *testing.T) {
@@ -125,6 +217,18 @@ func TestSSHKeyKindRouting(t *testing.T) {
 	}
 	if got := legacy.Normalize().Kind; got != SSHKeyKindUser {
 		t.Fatalf("expected legacy keys to normalize to user, got %q", got)
+	}
+}
+
+func TestBuildSSHKeysBlockKnownHostsMergesSharedKeys(t *testing.T) {
+	// Cloned images share their host key; both nodes' host names must survive.
+	key := testSSHKeyBlob("ssh-ed25519", "shared")
+	a := SSHPublicKey{Algorithm: "ssh-ed25519", Key: key, Kind: SSHKeyKindHost, Hostnames: []string{"10.0.0.1", "node-a"}}
+	b := SSHPublicKey{Algorithm: "ssh-ed25519", Key: key, Kind: SSHKeyKindHost, Hostnames: []string{"10.0.0.2", "node-b"}}
+	block := BuildSSHKeysBlock([]SSHPublicKey{a, b}, false)
+	want := "### EASY42_START\n10.0.0.1,node-a,10.0.0.2,node-b ssh-ed25519 " + key + "\n### EASY42_END\n"
+	if block != want {
+		t.Fatalf("shared host key names must be merged, got:\n%q\nwant:\n%q", block, want)
 	}
 }
 

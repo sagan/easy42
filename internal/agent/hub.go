@@ -672,7 +672,10 @@ func sshKeysEqual(a, b []config.SSHPublicKey) bool {
 	}
 	for i := range a {
 		na, nb := a[i].Normalize(), b[i].Normalize()
-		if na.Algorithm != nb.Algorithm || na.Key != nb.Key || na.Comment != nb.Comment || na.Path != nb.Path {
+		// Kind is part of the identity: a key that changed role (e.g. a login
+		// identity that is now reported as a host key) must not look unchanged.
+		if na.Algorithm != nb.Algorithm || na.Key != nb.Key || na.Comment != nb.Comment ||
+			na.Path != nb.Path || na.Kind != nb.Kind {
 			return false
 		}
 	}

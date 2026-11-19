@@ -12,6 +12,7 @@ import {
   Divider,
   FormControlLabel,
   IconButton,
+  InputAdornment,
   Paper,
   Radio,
   RadioGroup,
@@ -22,6 +23,9 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  TextField,
+  ToggleButton,
+  ToggleButtonGroup,
   Tooltip,
   Typography,
 } from "@mui/material";
@@ -36,6 +40,7 @@ import {
   KeyRound,
   Plus,
   RefreshCw,
+  Search,
   ShieldCheck,
   Trash2,
   X,
@@ -252,6 +257,11 @@ export const SSHKeysTab: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [deleteRule, setDeleteRule] = useState<SSHKeyRule | null>(null);
 
+  // Collected-keys filters. The table can be very long on big clusters, so it is
+  // filtered by key role and a free-text search over node, key and comment.
+  const [keyRoleFilter, setKeyRoleFilter] = useState<"all" | "user" | "host">("all");
+  const [keySearch, setKeySearch] = useState("");
+
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
     try {
@@ -436,11 +446,41 @@ export const SSHKeysTab: React.FC = () => {
   const summary = data?.summary;
   // The API always returns arrays, but tolerate null/missing fields from older
   // servers so the tab never crashes on unexpected payloads.
-  const keyRows = (data?.nodes || []).flatMap((n) =>
-    (Array.isArray(n.keys) ? n.keys : []).map((_, i) => ({ node: n, i })),
+  const keyRows = useMemo(
+    () =>
+      (data?.nodes || []).flatMap((n) => (Array.isArray(n.keys) ? n.keys : []).map((_, i) => ({ node: n, i }))),
+    [data],
   );
   const unsupportedNodes = (data?.nodes || []).filter((n) => !n.supported);
   const rules = data?.rules || [];
+
+  // Role counts are computed from the unfiltered set so the toggle always shows
+  // how many of each kind exist.
+  const roleCounts = useMemo(() => {
+    let user = 0;
+    let host = 0;
+    keyRows.forEach(({ node, i }) => {
+      if (isHostKey(node.keys[i])) host += 1;
+      else user += 1;
+    });
+    return { all: user + host, user, host };
+  }, [keyRows]);
+
+  const filteredKeyRows = useMemo(() => {
+    const query = keySearch.trim().toLowerCase();
+    return keyRows.filter(({ node, i }) => {
+      const key = node.keys[i];
+      if (keyRoleFilter === "user" && isHostKey(key)) return false;
+      if (keyRoleFilter === "host" && !isHostKey(key)) return false;
+      if (!query) return true;
+      return (
+        node.name.toLowerCase().includes(query) ||
+        key.key.toLowerCase().includes(query) ||
+        (key.comment || "").toLowerCase().includes(query) ||
+        (key.path || "").toLowerCase().includes(query)
+      );
+    });
+  }, [keyRows, keyRoleFilter, keySearch]);
 
   return (
     <Box>
@@ -467,11 +507,11 @@ export const SSHKeysTab: React.FC = () => {
           </Typography>
           <Typography variant="body2" sx={{ color: "#4338CA", fontSize: "0.85rem", lineHeight: 1.5 }}>
             Each agent collects two kinds of public keys: root's login identities (<code>~/.ssh/id_*.pub</code>) and the
-            node&apos;s SSH <strong>server</strong> host keys (<code>/etc/ssh/ssh_host_*.pub</code>). Rules install the
-            source nodes&apos; host keys into <code>/root/.ssh/known_hosts</code> (so destinations can verify them when
-            connecting) and their login keys into <code>/root/.ssh/authorized_keys</code> (so they can log in as root).
-            Changes apply on the next sync. Only the Easy42-managed block of these files is touched; other lines are
-            preserved.
+            node&apos;s SSH <strong>server</strong> host keys (<code>/etc/ssh/ssh_host_*_key.pub</code> on OpenSSH,{" "}
+            <code>/etc/dropbear/dropbear_*_host_key</code> on Dropbear/OpenWrt). Rules install the source nodes&apos; host
+            keys into <code>/root/.ssh/known_hosts</code> (so destinations can verify them when connecting) and their
+            login keys into <code>/root/.ssh/authorized_keys</code> (so they can log in as root). Changes apply on the next
+            sync. Only the Easy42-managed block of these files is touched; other lines are preserved.
           </Typography>
         </Box>
       </Paper>
@@ -505,100 +545,8 @@ export const SSHKeysTab: React.FC = () => {
         </Alert>
       )}
 
-      {/* Collected keys */}
+      {/* Rules (first: they are what operators configure; the key list can be long) */}
       <Paper elevation={0} sx={{ borderRadius: "14px", border: "1px solid #E2E8F0", bgcolor: "#FFFFFF", mb: 3 }}>
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1, p: 2, pb: 1 }}>
-          <Fingerprint size={18} style={{ color: "#4F46E5" }} />
-          <Typography variant="subtitle1" sx={{ fontWeight: 800, color: "#1E293B" }}>
-            Collected Public Keys
-          </Typography>
-          <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600 }}>
-            {keyRows.length} key(s)
-          </Typography>
-          <Box sx={{ flex: 1 }} />
-          <Tooltip title="Ask all connected supporting agents to re-read their ~/.ssh/*.pub and /etc/ssh/ssh_host_*_key.pub files">
-            <Button
-              size="small"
-              startIcon={refreshing ? <CircularProgress size={14} /> : <RefreshCw size={15} />}
-              onClick={handleRefresh}
-              disabled={refreshing}
-              sx={{ textTransform: "none", fontWeight: 700, color: "#4F46E5" }}
-            >
-              Refresh
-            </Button>
-          </Tooltip>
-        </Box>
-
-        {loading ? (
-          <Box sx={{ display: "flex", justifyContent: "center", py: 6 }}>
-            <CircularProgress size={28} sx={{ color: "#4F46E5" }} />
-          </Box>
-        ) : keyRows.length === 0 ? (
-          <Box sx={{ py: 6, px: 3, textAlign: "center" }}>
-            <Box
-              sx={{
-                width: 52,
-                height: 52,
-                borderRadius: "50%",
-                bgcolor: "#EEF2FF",
-                color: "#4F46E5",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                mx: "auto",
-                mb: 1,
-              }}
-            >
-              <KeyRound size={26} />
-            </Box>
-            <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#1E293B" }}>
-              No public keys collected
-            </Typography>
-            <Typography variant="body2" sx={{ color: "#64748B", maxWidth: 520, mx: "auto" }}>
-              Keys appear here once agent-mode nodes with agent v0.1.19+ report their <code>~/.ssh/id_*.pub</code> and{" "}
-              <code>/etc/ssh/ssh_host_*_key.pub</code> files.
-            </Typography>
-          </Box>
-        ) : (
-          <TableContainer sx={{ overflowX: "auto" }}>
-            <Table sx={{ minWidth: 760 }}>
-              <TableHead sx={{ bgcolor: "#F8FAFC" }}>
-                <TableRow>
-                  <TableCell sx={{ fontWeight: 800, color: "#475569" }}>NODE</TableCell>
-                  <TableCell sx={{ fontWeight: 800, color: "#475569" }}>KEY</TableCell>
-                  <TableCell sx={{ fontWeight: 800, color: "#475569" }}>PUBLIC KEY</TableCell>
-                  <TableCell sx={{ fontWeight: 800, color: "#475569" }}>COMMENT</TableCell>
-                  <TableCell sx={{ fontWeight: 800, color: "#475569" }}>SOURCE FILE</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>{keyRows.map((r) => renderKeyRow(r.node, r.i))}</TableBody>
-            </Table>
-          </TableContainer>
-        )}
-
-        {unsupportedNodes.length > 0 && (
-          <Box sx={{ p: 2, borderTop: "1px solid #F1F5F9" }}>
-            <Typography variant="caption" sx={{ fontWeight: 700, color: "#64748B" }}>
-              Nodes not collecting keys:
-            </Typography>
-            <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.8, mt: 0.8 }}>
-              {unsupportedNodes.map((n) => (
-                <Tooltip key={n.name} title={n.reason || "Not supported"}>
-                  <Chip
-                    size="small"
-                    icon={<ShieldCheck size={12} />}
-                    label={n.name}
-                    sx={{ bgcolor: "#F8FAFC", color: "#64748B", fontWeight: 600, fontSize: "0.72rem" }}
-                  />
-                </Tooltip>
-              ))}
-            </Box>
-          </Box>
-        )}
-      </Paper>
-
-      {/* Rules */}
-      <Paper elevation={0} sx={{ borderRadius: "14px", border: "1px solid #E2E8F0", bgcolor: "#FFFFFF" }}>
         <Box sx={{ display: "flex", alignItems: "center", gap: 1, p: 2, pb: 1 }}>
           <ShieldCheck size={18} style={{ color: "#4F46E5" }} />
           <Typography variant="subtitle1" sx={{ fontWeight: 800, color: "#1E293B" }}>
@@ -725,6 +673,166 @@ export const SSHKeysTab: React.FC = () => {
           </TableContainer>
         ) : null}
       </Paper>
+
+      {/* Collected keys (filterable: the table can be long on large clusters) */}
+      <Paper elevation={0} sx={{ borderRadius: "14px", border: "1px solid #E2E8F0", bgcolor: "#FFFFFF" }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1, p: 2, pb: 1, flexWrap: "wrap" }}>
+          <Fingerprint size={18} style={{ color: "#4F46E5" }} />
+          <Typography variant="subtitle1" sx={{ fontWeight: 800, color: "#1E293B" }}>
+            Collected Public Keys
+          </Typography>
+          <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600 }}>
+            {filteredKeyRows.length === keyRows.length
+              ? `${keyRows.length} key(s)`
+              : `${filteredKeyRows.length} of ${keyRows.length} key(s)`}
+          </Typography>
+          <Box sx={{ flex: 1 }} />
+          <Tooltip title="Ask all connected supporting agents to re-read their ~/.ssh/*.pub, /etc/ssh/ssh_host_*_key.pub and /etc/dropbear/dropbear_*_host_key files">
+            <Button
+              size="small"
+              startIcon={refreshing ? <CircularProgress size={14} /> : <RefreshCw size={15} />}
+              onClick={handleRefresh}
+              disabled={refreshing}
+              sx={{ textTransform: "none", fontWeight: 700, color: "#4F46E5" }}
+            >
+              Refresh
+            </Button>
+          </Tooltip>
+        </Box>
+
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, px: 2, pb: 1.5, flexWrap: "wrap" }}>
+          <ToggleButtonGroup
+            size="small"
+            exclusive
+            value={keyRoleFilter}
+            onChange={(_, value) => {
+              if (value !== null) setKeyRoleFilter(value);
+            }}
+            sx={{
+              "& .MuiToggleButton-root": {
+                textTransform: "none",
+                fontWeight: 700,
+                fontSize: "0.75rem",
+                px: 1.4,
+                py: 0.4,
+                borderColor: "#E2E8F0",
+                color: "#475569",
+                "&.Mui-selected": { bgcolor: "#EEF2FF", color: "#4F46E5", borderColor: "#C7D2FE" },
+              },
+            }}
+          >
+            <ToggleButton value="all">All ({roleCounts.all})</ToggleButton>
+            <ToggleButton value="user">User ({roleCounts.user})</ToggleButton>
+            <ToggleButton value="host">Host ({roleCounts.host})</ToggleButton>
+          </ToggleButtonGroup>
+
+          <TextField
+            size="small"
+            placeholder="Filter by node, key or comment…"
+            value={keySearch}
+            onChange={(e) => setKeySearch(e.target.value)}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <Search size={15} />
+                </InputAdornment>
+              ),
+              endAdornment: keySearch ? (
+                <InputAdornment position="end">
+                  <IconButton size="small" onClick={() => setKeySearch("")} sx={{ color: "#94A3B8" }}>
+                    <X size={14} />
+                  </IconButton>
+                </InputAdornment>
+              ) : undefined,
+            }}
+            sx={{ ml: "auto", width: { xs: "100%", sm: 300 } }}
+          />
+        </Box>
+
+        {loading ? (
+          <Box sx={{ display: "flex", justifyContent: "center", py: 6 }}>
+            <CircularProgress size={28} sx={{ color: "#4F46E5" }} />
+          </Box>
+        ) : keyRows.length === 0 ? (
+          <Box sx={{ py: 6, px: 3, textAlign: "center" }}>
+            <Box
+              sx={{
+                width: 52,
+                height: 52,
+                borderRadius: "50%",
+                bgcolor: "#EEF2FF",
+                color: "#4F46E5",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                mx: "auto",
+                mb: 1,
+              }}
+            >
+              <KeyRound size={26} />
+            </Box>
+            <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#1E293B" }}>
+              No public keys collected
+            </Typography>
+            <Typography variant="body2" sx={{ color: "#64748B", maxWidth: 520, mx: "auto" }}>
+              Keys appear here once agent-mode nodes with agent v0.1.19+ report their <code>~/.ssh/id_*.pub</code>,{" "}
+              <code>/etc/ssh/ssh_host_*_key.pub</code> and <code>/etc/dropbear/dropbear_*_host_key</code> files.
+            </Typography>
+          </Box>
+        ) : filteredKeyRows.length === 0 ? (
+          <Box sx={{ py: 5, px: 3, textAlign: "center" }}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#1E293B" }}>
+              No keys match the current filter
+            </Typography>
+            <Button
+              size="small"
+              onClick={() => {
+                setKeySearch("");
+                setKeyRoleFilter("all");
+              }}
+              sx={{ textTransform: "none", fontWeight: 700, color: "#4F46E5", mt: 1 }}
+            >
+              Clear filters
+            </Button>
+          </Box>
+        ) : (
+          <TableContainer sx={{ overflowX: "auto" }}>
+            <Table sx={{ minWidth: 760 }}>
+              <TableHead sx={{ bgcolor: "#F8FAFC" }}>
+                <TableRow>
+                  <TableCell sx={{ fontWeight: 800, color: "#475569" }}>NODE</TableCell>
+                  <TableCell sx={{ fontWeight: 800, color: "#475569" }}>KEY</TableCell>
+                  <TableCell sx={{ fontWeight: 800, color: "#475569" }}>PUBLIC KEY</TableCell>
+                  <TableCell sx={{ fontWeight: 800, color: "#475569" }}>COMMENT</TableCell>
+                  <TableCell sx={{ fontWeight: 800, color: "#475569" }}>SOURCE FILE</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>{filteredKeyRows.map((r) => renderKeyRow(r.node, r.i))}</TableBody>
+            </Table>
+          </TableContainer>
+        )}
+
+        {unsupportedNodes.length > 0 && (
+          <Box sx={{ p: 2, borderTop: "1px solid #F1F5F9" }}>
+            <Typography variant="caption" sx={{ fontWeight: 700, color: "#64748B" }}>
+              Nodes not collecting keys:
+            </Typography>
+            <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.8, mt: 0.8 }}>
+              {unsupportedNodes.map((n) => (
+                <Tooltip key={n.name} title={n.reason || "Not supported"}>
+                  <Chip
+                    size="small"
+                    icon={<ShieldCheck size={12} />}
+                    label={n.name}
+                    sx={{ bgcolor: "#F8FAFC", color: "#64748B", fontWeight: 600, fontSize: "0.72rem" }}
+                  />
+                </Tooltip>
+              ))}
+            </Box>
+          </Box>
+        )}
+      </Paper>
+
 
       <SSHKeyRuleDialog
         open={dialogOpen}

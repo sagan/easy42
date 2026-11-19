@@ -666,6 +666,75 @@ func (m *ArtifactManager) loadExtractedFromCache(appName, version, arch string, 
 	return res, nil
 }
 
+// CachedArtifact resolves an app's artifact strictly from the local cache. It
+// never contacts upstream servers and never downloads anything: callers that
+// only need to preview a plan use it so planning stays fast. It returns an empty
+// (nil) map when the artifact has not been cached yet.
+func (m *ArtifactManager) CachedArtifact(app config.App, nodeArch, osName, endian string) (map[string]*ExtractedFileInfo, error) {
+	if app.Artifact == nil {
+		return nil, nil
+	}
+	version := app.Version
+	if version == "" {
+		version = "latest"
+	}
+	arch := NormalizeArch(nodeArch, app.Artifact.ArchMapping)
+	arch = ResolveMipsEndianness(arch, endian)
+	if osName == "" {
+		osName = "linux"
+	}
+
+	cacheKey := fmt.Sprintf("%s:%s:%s", app.Name, version, arch)
+	// If a download is currently in flight, report "not cached" instead of
+	// blocking the preview on it.
+	m.mu.RLock()
+	_, downloading := m.inFlight[cacheKey]
+	m.mu.RUnlock()
+	if downloading {
+		return nil, nil
+	}
+
+	meta, _ := m.LoadAppMeta(app.Name)
+	if meta != nil && meta.Versions != nil {
+		if vMeta, ok := meta.Versions[version]; ok && vMeta != nil {
+			if aMeta, ok := vMeta.Architectures[arch]; ok && aMeta != nil && aMeta.ExtractedFiles != nil {
+				allMetaPresent := true
+				for _, reqFile := range app.Artifact.Files {
+					if _, exists := aMeta.ExtractedFiles[reqFile.Name]; !exists {
+						allMetaPresent = false
+						break
+					}
+				}
+				if allMetaPresent {
+					res := make(map[string]*ExtractedFileInfo, len(aMeta.ExtractedFiles))
+					for k, v := range aMeta.ExtractedFiles {
+						res[k] = &ExtractedFileInfo{
+							Name:      v.Name,
+							LocalPath: v.LocalPath,
+							SHA256:    v.SHA256,
+							Size:      v.Size,
+						}
+					}
+					return res, nil
+				}
+			}
+		}
+	}
+
+	// Legacy layout: extracted files on disk without metadata.
+	destDir := filepath.Join(m.CacheDir, "extracted", app.Name, version, arch)
+	for _, reqFile := range app.Artifact.Files {
+		if _, err := os.Stat(filepath.Join(destDir, reqFile.Name)); err != nil {
+			return nil, nil
+		}
+	}
+	files, err := m.loadExtractedFromCache(app.Name, version, arch, app.Artifact.Files)
+	if err != nil {
+		return nil, nil
+	}
+	return files, nil
+}
+
 func (m *ArtifactManager) doEnsureArtifact(ctx context.Context, app config.App, version, arch, osName, endian string, globalVars map[string]string) (map[string]*ExtractedFileInfo, error) {
 	destDir := filepath.Join(m.CacheDir, "extracted", app.Name, version, arch)
 

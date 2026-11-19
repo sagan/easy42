@@ -1,6 +1,7 @@
 package agent_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/binary"
@@ -19,20 +20,57 @@ import (
 	"easy42/internal/config"
 )
 
-// sshKeyBlob builds a minimal but well-formed SSH public key blob.
+// sshKeyBlob builds a well-formed SSH public key blob. The public fields are
+// filled from payload, so distinct payloads give distinct keys while the blob
+// stays exactly one valid public key.
 func sshKeyBlob(algorithm, payload string) string {
-	buf := make([]byte, 4)
-	binary.BigEndian.PutUint32(buf, uint32(len(algorithm)))
-	buf = append(buf, algorithm...)
-	buf = append(buf, payload...)
+	appendField := func(buf []byte, field []byte) []byte {
+		var l [4]byte
+		binary.BigEndian.PutUint32(l[:], uint32(len(field)))
+		buf = append(buf, l[:]...)
+		return append(buf, field...)
+	}
+	derive := func(n int) []byte {
+		out := make([]byte, n)
+		for i := range out {
+			out[i] = payload[i%len(payload)]
+		}
+		return out
+	}
+	buf := appendField(nil, []byte(algorithm))
+	if algorithm == "ssh-rsa" {
+		buf = appendField(buf, []byte{0x01, 0x00, 0x01})
+		buf = appendField(buf, append([]byte{0x01}, derive(32)...))
+	} else {
+		buf = appendField(buf, derive(32))
+	}
 	return base64.StdEncoding.EncodeToString(buf)
 }
 
+// dropbearEd25519Record builds a native Dropbear Ed25519 key file: the key type
+// followed by one string holding `private scalar || public point`. Only the
+// 32-byte point is the public key. Returns the record and the base64 blob the
+// agent must publish (`algorithm || string(point)`).
+func dropbearEd25519Record(scalar, point []byte) (record []byte, publicKey string) {
+	record = []byte{0, 0, 0, 11}
+	record = append(record, "ssh-ed25519"...)
+	record = append(record, 0, 0, 0, 64)
+	record = append(record, scalar...)
+	record = append(record, point...)
+
+	pub := []byte{0, 0, 0, 11}
+	pub = append(pub, "ssh-ed25519"...)
+	pub = append(pub, 0, 0, 0, 32)
+	pub = append(pub, point...)
+	return record, base64.StdEncoding.EncodeToString(pub)
+}
+
 type runningAgent struct {
-	name       string
-	sshDir     string
-	hostKeyDir string
-	cancel     context.CancelFunc
+	name        string
+	sshDir      string
+	hostKeyDir  string
+	dropbearDir string
+	cancel      context.CancelFunc
 }
 
 func findAgentBinary(t *testing.T) string {
@@ -64,9 +102,10 @@ func startAgent(t *testing.T, agentBin, serverURL, token, name string, extraArgs
 	}, extraArgs...)
 	cmd := exec.CommandContext(ctx, agentBin, args...)
 	hostKeyDir := t.TempDir()
+	dropbearDir := t.TempDir()
 	cmd.Env = append(os.Environ(),
 		"EASY42_SSH_DIR="+sshDir,
-		"EASY42_SSH_HOST_KEY_DIR="+hostKeyDir,
+		"EASY42_SSH_HOST_KEY_DIR="+hostKeyDir+":"+dropbearDir,
 		"EASY42_HOSTS_PATH="+filepath.Join(t.TempDir(), "hosts"))
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -78,7 +117,7 @@ func startAgent(t *testing.T, agentBin, serverURL, token, name string, extraArgs
 		cancel()
 		_ = cmd.Wait()
 	})
-	return &runningAgent{name: name, sshDir: sshDir, hostKeyDir: hostKeyDir, cancel: cancel}
+	return &runningAgent{name: name, sshDir: sshDir, hostKeyDir: hostKeyDir, dropbearDir: dropbearDir, cancel: cancel}
 }
 
 func waitFor(t *testing.T, what string, timeout time.Duration, cond func() bool) {
@@ -158,6 +197,17 @@ func TestRustAgentSSHKeysEndToEnd(t *testing.T) {
 		[]byte("ssh-ed25519 "+keyB+" root@node-b\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
+	// Node B runs Dropbear (OpenWrt): its host key lives in a single binary file
+	// with no `.pub` companion and must still be collected. The record holds the
+	// private scalar and the public point, and only the point may be published.
+	dropbearFile, hostKeyB := dropbearEd25519Record(
+		bytes.Repeat([]byte{0x11}, 32),
+		bytes.Repeat([]byte{0x42}, 32),
+	)
+	if err := os.WriteFile(filepath.Join(runB.hostKeyDir, "dropbear_ed25519_host_key"),
+		dropbearFile, 0600); err != nil {
+		t.Fatal(err)
+	}
 
 	waitFor(t, "both agents to connect", 10*time.Second, func() bool {
 		return hub.IsConnected(nodeA) && hub.IsConnected(nodeB)
@@ -177,9 +227,32 @@ func TestRustAgentSSHKeysEndToEnd(t *testing.T) {
 		}
 		return len(keys) == 3 && host == 1 && user == 2
 	})
+	// Node B: one login identity plus one Dropbear host key.
+	var dropbearKey config.SSHPublicKey
 	waitFor(t, "node B keys to be collected", 10*time.Second, func() bool {
-		return len(hub.GetSSHKeys(nodeB)) == 1
+		keys := hub.GetSSHKeys(nodeB)
+		host, user := 0, 0
+		for _, k := range keys {
+			if k.Kind == config.SSHKeyKindHost {
+				host++
+				dropbearKey = k
+			} else {
+				user++
+			}
+		}
+		return len(keys) == 2 && host == 1 && user == 1
 	})
+	if dropbearKey.Key != hostKeyB {
+		t.Fatalf("Dropbear host key must be extracted from dropbear_ed25519_host_key, got %+v", dropbearKey)
+	}
+	// The private scalar must not leak into the published key, and the key must
+	// be a valid, exact public key (otherwise known_hosts never matches).
+	if err := config.ValidateSSHPublicKey(dropbearKey.Algorithm, dropbearKey.Key); err != nil {
+		t.Fatalf("published Dropbear key is not an exact public key: %v", err)
+	}
+	if !strings.Contains(dropbearKey.Path, "dropbear_ed25519_host_key") {
+		t.Fatalf("unexpected Dropbear host key path %q", dropbearKey.Path)
+	}
 	for _, k := range hub.GetSSHKeys(nodeA) {
 		if k.Comment == "custom" {
 			t.Fatalf("non-default identity files must not be collected: %+v", k)

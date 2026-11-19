@@ -193,9 +193,13 @@ Each supporting agent reports **two kinds of public keys**, tagged with a `kind`
 | Kind   | Files                                              | Purpose                                                                 |
 | :----- | :------------------------------------------------- | :---------------------------------------------------------------------- |
 | `user` | `~/.ssh/id_rsa.pub`, `id_ecdsa.pub`, `id_ecdsa_sk.pub`, `id_ed25519.pub`, `id_ed25519_sk.pub`, `id_dsa.pub` | Root **login** identities used by the node's SSH *client*. Installed into `authorized_keys` so this node can log in elsewhere. |
-| `host` | `/etc/ssh/ssh_host_*_key.pub`                      | SSH **server** host keys presented by the node's `sshd`. Installed into `known_hosts` so other nodes can verify this node when connecting to it. |
+| `host` | `/etc/ssh/ssh_host_*_key.pub` (OpenSSH) and `/etc/dropbear/dropbear_*_host_key` (Dropbear/OpenWrt) | SSH **server** host keys presented by the node's SSH server. Installed into `known_hosts` so other nodes can verify this node when connecting to it. |
 
 The distinction matters: `~/.ssh/id_*` keys are *client* keys and have nothing to do with the identity the node's SSH server presents. Only the `host` keys belong in `known_hosts`. Host key collection is agent **v0.1.19+**.
+
+Both server layouts are detected automatically: OpenSSH `.pub` files and the Dropbear single-file key format used on OpenWrt (`dropbear_ed25519_host_key`, `dropbear_rsa_host_key`, `dropbear_ecdsa_host_key`, `dropbear_dss_host_key`). For Dropbear the public key is extracted from the binary key file; there is no `.pub` companion to verify against.
+
+Dropbear writes the SSH private-key structure (`string keytype` followed by the private parameters: RSA `e, n, d, p, q`, ECDSA `curve, Q, d`, Ed25519 `string(private scalar ‖ public point)`). Only the leading public fields are published, and the Ed25519 point is truncated to its 32-byte public half. A key is only reported when its blob is **exactly** one public key (algorithm plus its public fields, nothing after them), both in the agent and in the controller; anything else is treated as unreadable instead of being written to `known_hosts`. This matters because OpenSSH compares the stored blob structurally with the key the server presents, so an over-long blob (private material included) would never match and every connection would prompt for host key confirmation.
 
 - When the matching private key can be parsed (unencrypted OpenSSH, PEM RSA, or PEM EC), the agent verifies the `.pub` file actually belongs to it and ignores stale or hand-edited files. Non-default identity files (`id_custom.pub`, keys generated with `-f`) are never collected.
 - Keys are reported in telemetry and can be refreshed on demand. Files are re-read at most once per minute.
@@ -211,6 +215,12 @@ Keys are **never** distributed implicitly. A rule maps a **source selector** (th
 | `all`             | Both files                           | Each file receives only the matching key kind.  |
 
 `known_hosts` never receives login identities and `authorized_keys` never receives host keys; keys of the wrong kind are skipped even if a rule targets both files.
+
+A source node that matches a rule but contributes nothing (no keys collected yet, SSH key management unavailable because it is not in agent mode, runs an older agent, or has `disable_apps: true`) is silently left out of the block. The sync action description stays short and stable (`Update SSH known_hosts (…) on node`); the diff shows exactly which keys changed, so a node that cannot contribute never turns the description into a wall of text.
+
+**External peers are never sources.** DN42/IXP peers (`is_external`) have no agent and can never publish keys: they are not reported as "skipped" even though they match an "all nodes" selector. You can therefore select "all nodes" as the source without the 25+ external peers polluting every sync entry.
+
+When several nodes publish the **same** host key (cloned VM images, a shared key), the host name lists are merged into one `known_hosts` line so no node is left untrusted.
 
 Selectors use the same node selector format as workload apps and cron probes (`name`, `tag`, `env:<NAME>`, or `{"all":"1"}` for every node). Neither selector may be empty: an empty selector matches no node. Rules are managed from the **SSH** tab of the Apps page (`/apps/ssh`), the REST API (`/api/ssh-keys/rules`), or MCP (`list_ssh_keys`, `create_ssh_key_rule`, `update_ssh_key_rule`, `delete_ssh_key_rule`).
 

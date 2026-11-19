@@ -111,7 +111,7 @@ impl MetricsCollector {
         }
         let keys = crate::ssh_keys::collect_all_public_keys(
             &crate::ssh_keys::get_ssh_dir(),
-            &crate::ssh_keys::get_host_key_dir(),
+            &crate::ssh_keys::get_host_key_dirs(),
         );
         self.ssh_keys_cache = Some((std::time::Instant::now(), keys.clone()));
         keys

@@ -293,7 +293,80 @@ func ValidateSSHPublicKey(algorithm, key string) error {
 	if nameLen != len(algorithm) || nameLen > len(blob)-4 || string(blob[4:4+nameLen]) != algorithm {
 		return fmt.Errorf("invalid SSH public key blob: algorithm mismatch")
 	}
+	// The blob must contain exactly the public fields. A longer blob (for
+	// example a Dropbear Ed25519 record with the private scalar left in front of
+	// the 32-byte point) parses as a valid key here but never matches the key an
+	// OpenSSH client compares against, so reject it instead of publishing a
+	// known_hosts entry that cannot work.
+	if !IsExactSSHPublicKeyBlob(algorithm, blob) {
+		return fmt.Errorf("invalid SSH public key blob: unexpected trailing data")
+	}
 	return nil
+}
+
+// IsExactSSHPublicKeyBlob reports whether blob is exactly one SSH public key of
+// the given algorithm: the algorithm string followed by just its public fields
+// and nothing else. The caller has already checked the algorithm string.
+func IsExactSSHPublicKeyBlob(algorithm string, blob []byte) bool {
+	fields := blob[4+len(algorithm):]
+	pos := 0
+	// next consumes one length-prefixed field and returns its bytes.
+	next := func() ([]byte, bool) {
+		if len(fields)-pos < 4 {
+			return nil, false
+		}
+		n := int(binary.BigEndian.Uint32(fields[pos : pos+4]))
+		start := pos + 4
+		if n < 0 || n > len(fields)-start {
+			return nil, false
+		}
+		pos = start + n
+		return fields[start:pos], true
+	}
+
+	switch algorithm {
+	case "ssh-rsa":
+		// e, n
+		if e, ok := next(); !ok || len(e) == 0 {
+			return false
+		}
+		if n, ok := next(); !ok || len(n) == 0 {
+			return false
+		}
+	case "ssh-ed25519":
+		// Q: exactly one 32-byte point.
+		if q, ok := next(); !ok || len(q) != 32 {
+			return false
+		}
+	case "ecdsa-sha2-nistp256", "ecdsa-sha2-nistp384", "ecdsa-sha2-nistp521":
+		// curve name, Q
+		curve, ok := next()
+		if !ok || string(curve) != strings.TrimPrefix(algorithm, "ecdsa-sha2-") {
+			return false
+		}
+		q, ok := next()
+		if !ok || len(q) == 0 || q[0] != 0x04 {
+			return false
+		}
+		want := map[string]int{
+			"ecdsa-sha2-nistp256": 65,
+			"ecdsa-sha2-nistp384": 97,
+			"ecdsa-sha2-nistp521": 133,
+		}[algorithm]
+		if len(q) != want {
+			return false
+		}
+	case "ssh-dss":
+		// p, q, g, y
+		for i := 0; i < 4; i++ {
+			if f, ok := next(); !ok || len(f) == 0 {
+				return false
+			}
+		}
+	default:
+		return false
+	}
+	return pos == len(fields)
 }
 
 // SSHKeySupportedByAgent reports whether an agent version supports SSH key
@@ -403,20 +476,46 @@ func SSHKeyLine(key SSHPublicKey, authorizedKeys bool) string {
 func BuildSSHKeysBlock(keys []SSHPublicKey, authorizedKeys bool) string {
 	lines := make([]string, 0, len(keys))
 	seen := make(map[string]bool, len(keys))
+
+	// Identical key material can be published by several nodes (cloned VM images
+	// share their SSH host key). known_hosts needs one line per key, so for host
+	// keys the host name lists of all publishers are merged; dropping later nodes
+	// would silently leave those hosts untrusted.
+	type hostKeyEntry struct {
+		key   SSHPublicKey
+		names []string
+	}
+	merged := make(map[string]*hostKeyEntry, len(keys))
+	order := make([]string, 0, len(keys))
+
 	for _, k := range keys {
 		k = k.Normalize()
 		if !k.IsValid() || !k.ForFile(authorizedKeys) {
 			continue
 		}
 		fp := k.fingerprint()
-		if seen[fp] {
+		if authorizedKeys {
+			if seen[fp] {
+				continue
+			}
+			seen[fp] = true
+			lines = append(lines, SSHKeyLine(k, authorizedKeys))
 			continue
 		}
-		seen[fp] = true
-		if !authorizedKeys && len(k.Hostnames) == 0 {
+		if len(k.Hostnames) == 0 {
 			continue
 		}
-		lines = append(lines, SSHKeyLine(k, authorizedKeys))
+		if e, ok := merged[fp]; ok {
+			e.names = append(e.names, k.Hostnames...)
+			continue
+		}
+		merged[fp] = &hostKeyEntry{key: k, names: append([]string(nil), k.Hostnames...)}
+		order = append(order, fp)
+	}
+	for _, fp := range order {
+		e := merged[fp]
+		e.key.Hostnames = normalizeSSHHostnames(e.names)
+		lines = append(lines, SSHKeyLine(e.key, false))
 	}
 	sort.Strings(lines)
 	// Defensive dedupe for keys that only differ by comment.

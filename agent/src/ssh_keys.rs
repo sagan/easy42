@@ -50,15 +50,31 @@ pub const SSH_KEY_KIND_HOST: &str = "host";
 /// Directory holding the SSH *server* host keys (`/etc/ssh/ssh_host_*_key.pub`).
 pub const DEFAULT_HOST_KEY_DIR: &str = "/etc/ssh";
 
-/// Returns the directory holding the node's SSH server host keys, honouring
-/// `EASY42_SSH_HOST_KEY_DIR` (used by tests).
-pub fn get_host_key_dir() -> PathBuf {
+/// Directory holding Dropbear host keys (`dropbear_<alg>_host_key`), used on
+/// OpenWrt and other Dropbear-based systems. Dropbear writes the private and
+/// public key into one file per algorithm and has no `.pub` companion.
+pub const DEFAULT_DROPBEAR_KEY_DIR: &str = "/etc/dropbear";
+
+/// Returns the directories that may hold the node's SSH server host keys,
+/// honouring `EASY42_SSH_HOST_KEY_DIR` (used by tests).
+///
+/// Both OpenSSH (`/etc/ssh/ssh_host_*_key.pub`) and Dropbear
+/// (`/etc/dropbear/dropbear_*_host_key`) layouts are scanned, so a node that runs
+/// either (or both) server reports its real host identities.
+pub fn get_host_key_dirs() -> Vec<PathBuf> {
     if let Ok(dir) = std::env::var("EASY42_SSH_HOST_KEY_DIR") {
         if !dir.trim().is_empty() {
-            return PathBuf::from(dir.trim());
+            return dir
+                .split(':')
+                .map(|d| PathBuf::from(d.trim()))
+                .filter(|d| !d.as_os_str().is_empty())
+                .collect();
         }
     }
-    PathBuf::from(DEFAULT_HOST_KEY_DIR)
+    vec![
+        PathBuf::from(DEFAULT_HOST_KEY_DIR),
+        PathBuf::from(DEFAULT_DROPBEAR_KEY_DIR),
+    ]
 }
 
 /// Returns the root SSH directory, honouring `EASY42_SSH_DIR` (used by tests).
@@ -147,7 +163,11 @@ impl ParsedKey {
         if key.is_empty() || !is_valid_base64(key) {
             return None;
         }
-        // An SSH public key blob is an SSH string holding the algorithm name.
+        // An SSH public key blob is an SSH string holding the algorithm name
+        // followed by a fixed set of public fields. Reject anything that has
+        // bytes after the public fields (for example the private scalar of a
+        // Dropbear Ed25519 record), because OpenSSH compares keys structurally
+        // and an over-long blob never matches the server's key.
         let decoded = base64_decode(key)?;
         if decoded.len() < 4 + algorithm.len() {
             return None;
@@ -156,6 +176,7 @@ impl ParsedKey {
         if name_len != algorithm.len() || &decoded[4..4 + name_len] != algorithm.as_bytes() {
             return None;
         }
+        public_key_len(algorithm, &decoded[4 + name_len..])?;
         Some(())
     }
 
@@ -163,6 +184,68 @@ impl ParsedKey {
     pub fn fingerprint(&self) -> String {
         format!("{}\u{0}{}", self.algorithm, self.key)
     }
+}
+
+/// Returns the total length consumed by the public fields (`data`) of a key of
+/// the given algorithm, or `None` when the fields are malformed or followed by
+/// extra bytes. `data` starts right after the algorithm string.
+fn public_key_len(algorithm: &str, data: &[u8]) -> Option<usize> {
+    let mut pos = 0usize;
+    let field = |pos: &mut usize| -> Option<&[u8]> {
+        if data.len() < *pos + 4 {
+            return None;
+        }
+        let len = u32::from_be_bytes(data[*pos..*pos + 4].try_into().ok()?) as usize;
+        *pos += 4;
+        if data.len() < *pos + len {
+            return None;
+        }
+        let f = &data[*pos..*pos + len];
+        *pos += len;
+        Some(f)
+    };
+
+    match algorithm {
+        "ssh-rsa" => {
+            if field(&mut pos)?.is_empty() || field(&mut pos)?.is_empty() {
+                return None;
+            }
+        }
+        "ssh-ed25519" => {
+            // Q: exactly one 32-byte point.
+            if field(&mut pos)?.len() != 32 {
+                return None;
+            }
+        }
+        "ecdsa-sha2-nistp256" | "ecdsa-sha2-nistp384" | "ecdsa-sha2-nistp521" => {
+            let curve = field(&mut pos)?;
+            if curve != algorithm.trim_start_matches("ecdsa-sha2-").as_bytes() {
+                return None;
+            }
+            let q = field(&mut pos)?;
+            let expected = match algorithm {
+                "ecdsa-sha2-nistp256" => 65,
+                "ecdsa-sha2-nistp384" => 97,
+                _ => 133,
+            };
+            if q.len() != expected || q.first() != Some(&0x04) {
+                return None;
+            }
+        }
+        "ssh-dss" => {
+            for _ in 0..4 {
+                if field(&mut pos)?.is_empty() {
+                    return None;
+                }
+            }
+        }
+        _ => return None,
+    }
+
+    if pos != data.len() {
+        return None;
+    }
+    Some(pos)
 }
 
 /// Returns true when the algorithm is a known OpenSSH public key algorithm.
@@ -768,76 +851,267 @@ pub fn collect_public_keys(ssh_dir: &Path) -> Vec<SshPublicKey> {
     keys
 }
 
-/// Collects the node's SSH *server* host public keys.
+/// Returns the private-key path used to verify a host key's `.pub` companion, or
+/// `None` when the key cannot be verified (Dropbear stores one binary file).
 ///
-/// These are the identities the node's `sshd` presents (`ssh_host_<algorithm>_key.pub`),
-/// which is what other nodes must trust in `known_hosts`. Client identities in
-/// `~/.ssh/id_*` are unrelated to them. As with user keys, a `.pub` file is only
-/// included when it matches its private key, so a stale public file cannot make
-/// other nodes reject this host (which would be a hard host-key mismatch).
-pub fn collect_host_keys(host_key_dir: &Path) -> Vec<SshPublicKey> {
-    let mut keys = Vec::new();
-    let mut seen = HashSet::new();
-    let entries = match fs::read_dir(host_key_dir) {
-        Ok(e) => e,
-        Err(_) => return keys,
-    };
-    let mut paths: Vec<PathBuf> = entries
-        .flatten()
-        .filter(|e| e.file_type().map(|t| t.is_file()).unwrap_or(false))
-        .map(|e| e.path())
-        .filter(|p| {
-            let name = p.file_name().and_then(|n| n.to_str()).unwrap_or("");
-            name.starts_with("ssh_host_") && name.ends_with("_key.pub")
-        })
-        .collect();
-    paths.sort();
+/// `/etc/ssh/ssh_host_ed25519_key.pub` -> `/etc/ssh/ssh_host_ed25519_key`.
+fn host_key_private_path(pub_path: &Path) -> Option<PathBuf> {
+    let name = pub_path.file_name()?.to_str()?;
+    if dropbear_key_type(name).is_some() {
+        // Dropbear stores a single binary file; its format is not parseable by
+        // the OpenSSH/PEM verifier, so there is nothing to compare against.
+        return None;
+    }
+    if name.starts_with("ssh_host_") && name.ends_with("_key.pub") {
+        return Some(pub_path.with_extension(""));
+    }
+    None
+}
 
-    for pub_path in paths {
-        let pub_content = match fs::read_to_string(&pub_path) {
-            Ok(c) => c,
-            Err(_) => continue,
-        };
-        let parsed = match ParsedKey::parse(&pub_content) {
-            Some(p) => p,
-            None => {
-                tracing::debug!("Ignoring malformed SSH host key file {:?}", pub_path);
+/// Dropbear key file name -> the algorithm whose public key it contains.
+fn dropbear_key_type(name: &str) -> Option<&'static str> {
+    match name {
+        "dropbear_ed25519_host_key" => Some("ssh-ed25519"),
+        "dropbear_rsa_host_key" => Some("ssh-rsa"),
+        "dropbear_ecdsa_host_key" => Some("ecdsa-sha2-nistp256"),
+        "dropbear_dss_host_key" => Some("ssh-dss"),
+        _ => None,
+    }
+}
+
+/// Extracts a Dropbear host key from its binary key file.
+///
+/// Dropbear stores the public values in the key file itself (no `.pub`
+/// companion). Depending on the Dropbear version and build the file holds either
+///
+/// - the SSH wire-format private key structure: `string keytype` followed by the
+///   private parameters (RSA `e, n, d, p, q`, ECDSA `curve, Q, d`, Ed25519
+///   `Q(64 bytes = private scalar ‖ public point)`), or
+/// - a bare SSH public key blob: `string keytype` followed by exactly the public
+///   fields (`e, n`, `curve, Q`, `Q`).
+///
+/// Either way the public fields are the *leading* fields and the file may carry
+/// private material after them, so the blob must be truncated after the last
+/// public field. The previous implementation walked length-prefixed fields until
+/// the end of the file, which for Ed25519 (whose record is `string(keytype) ‖
+/// string(private scalar ‖ public bytes)`) produced an 83-byte "public key" whose
+/// 64-byte point can never match the 32-byte key the server presents, and for
+/// RSA kept `d, p, q` in the blob. Both reached `known_hosts` and made every
+/// connection prompt for host key confirmation.
+///
+/// Only an exact, fully validated public-key encoding is returned, so a
+/// malformed or foreign key file is reported as unreadable instead of being
+/// published.
+pub fn dropbear_public_key(file: &[u8], algorithm: &str) -> Option<String> {
+    let alg = algorithm.as_bytes();
+    // The key starts with a 4-byte big-endian length followed by the algorithm.
+    // Anything before it (unused by the supported versions) is skipped. The
+    // length is always big-endian, so no alignment concerns apply.
+    let mut start = None;
+    if file.len() >= 4 {
+        for i in 0..=file.len() - 4 {
+            let len = u32::from_be_bytes(file[i..i + 4].try_into().ok()?) as usize;
+            if len != alg.len() || i + 4 + len > file.len() {
                 continue;
             }
-        };
-        // `/etc/ssh/ssh_host_ed25519_key.pub` -> `/etc/ssh/ssh_host_ed25519_key`
-        let priv_path = pub_path.with_extension("");
-        if let Ok(priv_content) = fs::read_to_string(&priv_path) {
-            if let Some(expected) = public_key_base64_from_private_key(&priv_content) {
-                if expected != parsed.key {
-                    tracing::warn!(
-                        "Ignoring SSH host key {:?}: it does not match its private key",
-                        pub_path
-                    );
-                    continue;
-                }
+            if &file[i + 4..i + 4 + len] == alg {
+                start = Some(i + 4 + len);
+                break;
             }
         }
-        let fingerprint = parsed.fingerprint();
-        if !seen.insert(fingerprint) {
-            continue;
+    }
+    let mut pos = match start {
+        Some(p) => p,
+        None => return None,
+    };
+    let next_field = |pos: &mut usize| read_ssh_field(file, pos);
+
+    // Walk the leading public fields of this algorithm. RSA/ECDSA/DSS stop right
+    // after them, so the generic re-encoding below copies exactly the public
+    // part; Ed25519 is re-encoded explicitly because its private record embeds
+    // the scalar inside the same field as the point.
+    match algorithm {
+        "ssh-rsa" => {
+            let e = next_field(&mut pos)?;
+            let n = next_field(&mut pos)?;
+            if e.is_empty() || n.is_empty() {
+                return None;
+            }
+            // RSA records are `e, n, d, p, q`: the public part ends after `n`,
+            // which `pos` already points at.
         }
-        keys.push(SshPublicKey {
-            algorithm: parsed.algorithm,
-            key: parsed.key,
-            comment: parsed.comment,
-            path: pub_path.to_string_lossy().to_string(),
-            kind: SSH_KEY_KIND_HOST.to_string(),
-        });
+        "ssh-ed25519" => {
+            let q_start = pos;
+            let q = next_field(&mut pos)?;
+            let point = match q.len() {
+                // Public blob: the field already is exactly the point.
+                32 => q,
+                // Private record: one field holds `private scalar ‖ public
+                // point` (32 + 32). Only the 32-byte tail is public.
+                64 => &file[q_start + 4 + 32..pos],
+                _ => return None,
+            };
+            let mut blob = Vec::with_capacity(4 + alg.len() + 4 + 32);
+            blob.extend_from_slice(&(alg.len() as u32).to_be_bytes());
+            blob.extend_from_slice(alg);
+            blob.extend_from_slice(&32u32.to_be_bytes());
+            blob.extend_from_slice(point);
+            let encoded = encode_base64(&blob);
+            // The controller validates keys the same way; only exact public keys
+            // pass.
+            return ParsedKey::validate(algorithm, &encoded).map(|_| encoded);
+        }
+        "ecdsa-sha2-nistp256" | "ecdsa-sha2-nistp384" | "ecdsa-sha2-nistp521" => {
+            let curve = next_field(&mut pos)?;
+            if curve != algorithm.trim_start_matches("ecdsa-sha2-").as_bytes() {
+                return None;
+            }
+            let q = next_field(&mut pos)?;
+            let expected_len = match algorithm {
+                "ecdsa-sha2-nistp256" => 65,
+                "ecdsa-sha2-nistp384" => 97,
+                _ => 133,
+            };
+            if q.len() != expected_len || q.first() != Some(&0x04) {
+                return None;
+            }
+        }
+        "ssh-dss" => {
+            // p, q, g, y
+            for _ in 0..4 {
+                next_field(&mut pos)?;
+            }
+        }
+        _ => return None,
+    }
+
+    let start = start?;
+    let mut blob = Vec::with_capacity(pos);
+    blob.extend_from_slice(&(alg.len() as u32).to_be_bytes());
+    blob.extend_from_slice(alg);
+    blob.extend_from_slice(&file[start..pos]);
+    let encoded = encode_base64(&blob);
+    // The controller validates keys the same way; only exact public keys pass.
+    ParsedKey::validate(algorithm, &encoded)?;
+    Some(encoded)
+}
+
+/// Reads one SSH length-prefixed string from `data` at `*pos`, advancing `*pos`
+/// past it. Returns `None` when the field is truncated.
+fn read_ssh_field<'a>(data: &'a [u8], pos: &mut usize) -> Option<&'a [u8]> {
+    if data.len() < *pos + 4 {
+        return None;
+    }
+    let len = u32::from_be_bytes(data[*pos..*pos + 4].try_into().ok()?) as usize;
+    *pos += 4;
+    if data.len() < *pos + len {
+        return None;
+    }
+    let field = &data[*pos..*pos + len];
+    *pos += len;
+    Some(field)
+}
+
+/// Collects the node's SSH *server* host public keys.
+///
+/// These are the identities the node's SSH server presents, which is what other
+/// nodes must trust in `known_hosts`. Client identities in `~/.ssh/id_*` are
+/// unrelated to them. Two layouts are supported:
+///
+/// - OpenSSH: `/etc/ssh/ssh_host_<algorithm>_key.pub` (verified against the
+///   matching private key when it can be parsed).
+/// - Dropbear (OpenWrt): `/etc/dropbear/dropbear_<algorithm>_host_key`, whose
+///   public key is extracted from the binary key file.
+///
+/// As with user keys, an OpenSSH `.pub` file is only included when it matches its
+/// private key, so a stale public file cannot make other nodes reject this host.
+pub fn collect_host_keys(host_key_dirs: &[PathBuf]) -> Vec<SshPublicKey> {
+    let mut keys = Vec::new();
+    let mut seen = HashSet::new();
+
+    for host_key_dir in host_key_dirs {
+        let entries = match fs::read_dir(host_key_dir) {
+            Ok(e) => e,
+            Err(_) => continue,
+        };
+        let mut paths: Vec<PathBuf> = entries
+            .flatten()
+            .filter(|e| e.file_type().map(|t| t.is_file()).unwrap_or(false))
+            .map(|e| e.path())
+            .filter(|p| {
+                let name = p.file_name().and_then(|n| n.to_str()).unwrap_or("");
+                (name.starts_with("ssh_host_") && name.ends_with("_key.pub"))
+                    || dropbear_key_type(name).is_some()
+            })
+            .collect();
+        paths.sort();
+
+        for pub_path in paths {
+            let (algorithm, key) = match pub_path.file_name().and_then(|n| n.to_str()) {
+                Some(name) if dropbear_key_type(name).is_some() => {
+                    let algorithm = dropbear_key_type(name).unwrap_or_default();
+                    let raw = match fs::read(&pub_path) {
+                        Ok(b) => b,
+                        Err(_) => continue,
+                    };
+                    match dropbear_public_key(&raw, algorithm) {
+                        Some(key) => (algorithm.to_string(), key),
+                        None => {
+                            tracing::debug!("Ignoring unreadable Dropbear host key {:?}", pub_path);
+                            continue;
+                        }
+                    }
+                }
+                _ => {
+                    let pub_content = match fs::read_to_string(&pub_path) {
+                        Ok(c) => c,
+                        Err(_) => continue,
+                    };
+                    let parsed = match ParsedKey::parse(&pub_content) {
+                        Some(p) => p,
+                        None => {
+                            tracing::debug!("Ignoring malformed SSH host key file {:?}", pub_path);
+                            continue;
+                        }
+                    };
+                    if let Some(priv_path) = host_key_private_path(&pub_path) {
+                        if let Ok(priv_content) = fs::read_to_string(&priv_path) {
+                            if let Some(expected) = public_key_base64_from_private_key(&priv_content) {
+                                if expected != parsed.key {
+                                    tracing::warn!(
+                                        "Ignoring SSH host key {:?}: it does not match its private key",
+                                        pub_path
+                                    );
+                                    continue;
+                                }
+                            }
+                        }
+                    }
+                    (parsed.algorithm, parsed.key)
+                }
+            };
+
+            let identity = format!("{}\u{0}{}", algorithm, key);
+            if !seen.insert(identity) {
+                continue;
+            }
+            keys.push(SshPublicKey {
+                algorithm,
+                key,
+                comment: String::new(),
+                path: pub_path.to_string_lossy().to_string(),
+                kind: SSH_KEY_KIND_HOST.to_string(),
+            });
+        }
     }
     keys
 }
 
 /// Collects every key published by the node: client (user) identities first,
 /// then SSH server host keys.
-pub fn collect_all_public_keys(ssh_dir: &Path, host_key_dir: &Path) -> Vec<SshPublicKey> {
+pub fn collect_all_public_keys(ssh_dir: &Path, host_key_dirs: &[PathBuf]) -> Vec<SshPublicKey> {
     let mut keys = collect_public_keys(ssh_dir);
-    keys.extend(collect_host_keys(host_key_dir));
+    keys.extend(collect_host_keys(host_key_dirs));
     keys
 }
 
@@ -1127,12 +1401,49 @@ mod tests {
         dir
     }
 
+    /// Builds a well-formed SSH public key blob. The payload is expanded to the
+    /// public key length required by the algorithm (so the placeholder identities
+    /// stay valid now that `ParsedKey::validate` rejects extra bytes).
     fn blob(algorithm: &str, payload: &[u8]) -> String {
-        let mut data = Vec::new();
-        data.extend_from_slice(&(algorithm.len() as u32).to_be_bytes());
-        data.extend_from_slice(algorithm.as_bytes());
-        data.extend_from_slice(payload);
+        let data = public_blob(algorithm, payload);
         encode_base64(&data)
+    }
+
+    fn public_blob(algorithm: &str, seed: &[u8]) -> Vec<u8> {
+        let alg = algorithm.as_bytes();
+        let mut data = Vec::new();
+        data.extend_from_slice(&(alg.len() as u32).to_be_bytes());
+        data.extend_from_slice(alg);
+        match algorithm {
+            "ssh-rsa" => {
+                // e (small odd exponent), then n (roughly 256 bytes).
+                let mut e = seed.to_vec();
+                if e.is_empty() {
+                    e.push(3);
+                }
+                let mut n = vec![0x01];
+                for i in 0..256 {
+                    n.push(seed.get(i % seed.len().max(1)).copied().unwrap_or(0) ^ (i as u8));
+                }
+                if n[1] & 0x80 != 0 {
+                    n.insert(1, 0x00);
+                }
+                data.extend_from_slice(&(e.len() as u32).to_be_bytes());
+                data.extend_from_slice(&e);
+                data.extend_from_slice(&(n.len() as u32).to_be_bytes());
+                data.extend_from_slice(&n);
+            }
+            _ => {
+                // ssh-ed25519: one 32-byte point.
+                let mut q = vec![0u8; 32];
+                for (i, b) in q.iter_mut().enumerate() {
+                    *b = seed.get(i % seed.len().max(1)).copied().unwrap_or(0) ^ (i as u8);
+                }
+                data.extend_from_slice(&(q.len() as u32).to_be_bytes());
+                data.extend_from_slice(&q);
+            }
+        }
+        data
     }
 
     fn key(alg: &str, payload: &str, comment: &str) -> SshPublicKey {
@@ -1281,7 +1592,7 @@ mod tests {
         fs::write(host_dir.join("ssh_config"), "Host *\n").unwrap();
         fs::write(host_dir.join("ssh_host_ed25519_key"), "PRIVATE\n").unwrap();
 
-        let keys = collect_host_keys(&host_dir);
+        let keys = collect_host_keys(&[host_dir.clone()]);
         assert_eq!(keys.len(), 2, "expected both host public keys, got {:?}", keys);
         for k in &keys {
             assert_eq!(k.kind, SSH_KEY_KIND_HOST);
@@ -1295,10 +1606,161 @@ mod tests {
             format!("ssh-ed25519 {} root@node1\n", blob("ssh-ed25519", b"user")),
         )
         .unwrap();
-        let all = collect_all_public_keys(&ssh_dir, &host_dir);
+        let all = collect_all_public_keys(&ssh_dir, &[host_dir.clone()]);
         assert_eq!(all.len(), 3);
         assert_eq!(all.iter().filter(|k| k.kind == SSH_KEY_KIND_HOST).count(), 2);
         assert_eq!(all.iter().filter(|k| k.kind == SSH_KEY_KIND_USER).count(), 1);
+    }
+
+    #[test]
+    fn test_collect_dropbear_host_keys() {
+        // Dropbear keeps everything in one binary file: `<alg>_host_key` for the
+        // key type, followed by the public blob embedded in the file.
+        let dir = temp_dir("dropbear");
+        // Dropbear Ed25519 record: `string(keytype)` then one string holding
+        // `private scalar ‖ public point`. Only the tail is the public key.
+        let ed_public = public_blob("ssh-ed25519", b"dropbear-ed25519-key-material");
+        let ed_point = &ed_public[ed_public.len() - 32..];
+        let mut ed_record = Vec::new();
+        ed_record.extend_from_slice(&(11u32).to_be_bytes());
+        ed_record.extend_from_slice(b"ssh-ed25519");
+        ed_record.extend_from_slice(&(64u32).to_be_bytes());
+        ed_record.extend_from_slice(&[0x42u8; 32]); // private scalar
+        ed_record.extend_from_slice(ed_point);
+        fs::write(dir.join("dropbear_ed25519_host_key"), &ed_record).unwrap();
+
+        // Dropbear RSA record: `string(keytype)` then `e, n, d, p, q`. Only `e`
+        // and `n` belong in the published key.
+        let rsa_public = public_blob("ssh-rsa", b"dropbear-rsa-key-material");
+        let mut rsa_record = rsa_public.clone();
+        for _ in 0..3 {
+            rsa_record.extend_from_slice(&(4u32).to_be_bytes());
+            rsa_record.extend_from_slice(b"priv");
+        }
+        fs::write(dir.join("dropbear_rsa_host_key"), &rsa_record).unwrap();
+
+        // Dropbear also keeps an authorized_keys file in this directory; it must
+        // not be mistaken for a host key.
+        fs::write(dir.join("authorized_keys"), "ssh-ed25519 AAAA user\n").unwrap();
+
+        let keys = collect_host_keys(&[dir.clone()]);
+        assert_eq!(keys.len(), 2, "expected both Dropbear host keys, got {:?}", keys);
+        for k in &keys {
+            assert_eq!(k.kind, SSH_KEY_KIND_HOST);
+            assert!(k.path.contains("dropbear_"), "unexpected path {}", k.path);
+        }
+        assert!(keys
+            .iter()
+            .any(|k| k.algorithm == "ssh-ed25519" && k.key == encode_base64(&ed_public)));
+        assert!(keys
+            .iter()
+            .any(|k| k.algorithm == "ssh-rsa" && k.key == encode_base64(&rsa_public)));
+
+        // The extracted key is valid for a known_hosts line.
+        let block = build_block(&keys, SshKeyFileKind::KnownHosts);
+        assert!(block.contains(&encode_base64(&ed_public)));
+    }
+
+    #[test]
+    fn test_dropbear_public_key_rejects_wrong_algorithm() {
+        let blob_bytes = base64_decode(&blob("ssh-rsa", b"x")).unwrap();
+        assert!(dropbear_public_key(&blob_bytes, "ssh-rsa").is_some());
+        assert!(dropbear_public_key(&blob_bytes, "ssh-ed25519").is_none());
+        assert!(dropbear_public_key(b"", "ssh-ed25519").is_none());
+        assert!(dropbear_public_key(b"garbage", "ssh-rsa").is_none());
+    }
+
+    /// A native Dropbear Ed25519 key file (the exact bytes from a real OpenWrt
+    /// node). Its single string is `private scalar ‖ public point` (32 + 32
+    /// bytes), which is what `dropbearkey -t ed25519` writes and what the
+    /// node's server actually presents the tail of.
+    #[test]
+    fn test_dropbear_ed25519_record_public_key() {
+        let raw = base64_decode(
+            "AAAAC3NzaC1lZDI1NTE5AAAAQCFU8KveP2LWnDvSSUn9ZMnV+SBhmY0AXwev2GgLz0kPEIUCoG9T\
+             XXZ/vFp17idehMxMWyxdWNCUJS0pyVyOxXU=",
+        )
+        .unwrap();
+        // What `ssh-keyscan` reports for the same node: algorithm + 32-byte point.
+        let want = "AAAAC3NzaC1lZDI1NTE5AAAAIBCFAqBvU112f7xade4nXoTMTFssXVjQlCUtKclcjsV1";
+
+        let got = dropbear_public_key(&raw, "ssh-ed25519").expect("ed25519 record");
+        assert_eq!(got, want);
+        // The published blob must be a valid, exact 51-byte public key.
+        assert!(ParsedKey::validate("ssh-ed25519", &got).is_some());
+        assert_eq!(base64_decode(&got).unwrap().len(), 51);
+    }
+
+    /// A native Dropbear RSA key file (`e, n, d, p, q`). Only `e` and `n` are
+    /// public and must be copied into the known_hosts blob.
+    #[test]
+    fn test_dropbear_rsa_record_drops_private_fields() {
+        let raw = base64_decode(
+            "AAAAB3NzaC1yc2EAAAADAQABAAABAQCwnBc8IcOxK8WpMcZk26emrH4O+teuYoiZ26hdrCwji9pl\
+             qydsfWtjfp0YIUC6KTFsiVevgwswHsWnoaWPe9f+6gHnWzSIcVfoMAKbsLixkEY5dwgaTGcZzkfU\
+             NyfgRy5ukLIFg33Z8bsWo6yP0llu+NpmS8xlWW0Kjms8hJSX+2vPv2isIpFMRXYColPyDvvAwlMG\
+             36Yo0opl3curRVWUUNWUd4DYaIogHTj0p9vgOBacyqvGsq7BR2JCLt9kl7CTXgkpS7rILHxYKkk5\
+             RY6fsCXl3DjCDKhc5jZTyYWG7LyI67pZXXBN95WyIgp/HAI8Kf8uh8zio/Vb5k+VDa2TAAABAB8k\
+             14AWIDFNG8Uzbt34Uj81KeGwYHpzC82+C5nBM+Ns1S2amhAqqdZYzJElxAlQHFQcgCcGP+HTe12N\
+             Runfl/5u+7j1v3TUMAFU/hDAgEFnxMp7cCVbFc9aLhaBR3noc4qx34LTZk0ZsLlUUajnGjhUkAb8\
+             FOZGd9Elvklkw+Ns+rtzZ73e2LXPAqUbcU392d3A177LBC6fabPyf2qdZtaxX2zkkIl4CTT0NIS0\
+             qo/V3qCsiZtO61Qrw/G2Bvj+BJgVVXCVKgM4ex5Ip4Z+ZRvOMsX+Kj4V5IjCvLRnKW85HddP7sg/\
+             +MpUVEA6hGIa3hWrh8/7DWHu7KuWaZIYQTEAAACBAMgbhRwTdU9IUQrOmdQG/BivjgNZTQ0d4zOj\
+             l3bsNnUQwZOs5oxI8cS6zk38eXcU7CZfy8T8EspGTP2M5/cj+9naxIWYyfhD5Hsr0Sy8gJpig8Ol\
+             fm/75nq950jiYAnHMYezPdl4AwhWEOhdjXRS5t75ZkFz3tw+vlAYWjmrdiBZAAAAgQDh8GMTOBAa\
+             8taSOxjy5Rbr77fmVedqM4Cki6VOiqFrIhzBgtLHXxhv04uI7kaN++if+Q4AmdYVAurL5kDu9raE\
+             j30mIhIEQKpNtd30nLaFNpwfhzT0YkoBQpkABlCF0bSrnxTx/7/3yeQBjv95YnjfHLez0PgT57HX\
+             zSAvJ0lfyw==",
+        )
+        .unwrap();
+        let got = dropbear_public_key(&raw, "ssh-rsa").expect("rsa record");
+        assert!(ParsedKey::validate("ssh-rsa", &got).is_some());
+
+        // The blob is algorithm + e + n and nothing else (3 + 257 bytes of
+        // fields after the 11-byte algorithm prefix once length headers are
+        // removed), so the private modulus inverses are gone.
+        let decoded = base64_decode(&got).unwrap();
+        assert_eq!(decoded.len(), 4 + 7 + (4 + 3) + (4 + 257));
+        let mut pos = 4 + 7;
+        let e_len = u32::from_be_bytes(decoded[pos..pos + 4].try_into().unwrap()) as usize;
+        pos += 4 + e_len;
+        let n_len = u32::from_be_bytes(decoded[pos..pos + 4].try_into().unwrap()) as usize;
+        pos += 4 + n_len;
+        assert_eq!(pos, decoded.len(), "private fields must not be copied");
+    }
+
+    /// A public-format Dropbear file (`algorithm ‖ public fields`) and a
+    /// file with extra bytes after the private record still work.
+    #[test]
+    fn test_dropbear_record_tolerates_trailing_bytes() {
+        let mut raw = base64_decode(
+            "AAAAC3NzaC1lZDI1NTE5AAAAQCFU8KveP2LWnDvSSUn9ZMnV+SBhmY0AXwev2GgLz0kPEIUCoG9T\
+             XXZ/vFp17idehMxMWyxdWNCUJS0pyVyOxXU=",
+        )
+        .unwrap();
+        raw.extend_from_slice(&[0u8; 7]);
+        let got = dropbear_public_key(&raw, "ssh-ed25519").unwrap();
+        assert!(ParsedKey::validate("ssh-ed25519", &got).is_some());
+    }
+
+    /// Truncated or malformed records are reported as unreadable, never
+    /// published as a known_hosts key.
+    #[test]
+    fn test_dropbear_record_rejects_malformed() {
+        let raw = base64_decode(
+            "AAAAC3NzaC1lZDI1NTE5AAAAQCFU8KveP2LWnDvSSUn9ZMnV+SBhmY0AXwev2GgLz0kPEIUCoG9T\
+             XXZ/vFp17idehMxMWyxdWNCUJS0pyVyOxXU=",
+        )
+        .unwrap();
+        // Truncate inside the key material.
+        assert!(dropbear_public_key(&raw[..raw.len() - 10], "ssh-ed25519").is_none());
+        // A 48-byte point is neither the public blob nor the private record.
+        let mut odd = Vec::new();
+        odd.extend_from_slice(&(11u32).to_be_bytes());
+        odd.extend_from_slice(b"ssh-ed25519");
+        odd.extend_from_slice(&(48u32).to_be_bytes());
+        odd.extend_from_slice(&[7u8; 48]);
+        assert!(dropbear_public_key(&odd, "ssh-ed25519").is_none());
     }
 
     #[test]

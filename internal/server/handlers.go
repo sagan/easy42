@@ -518,42 +518,41 @@ func (s *Server) handleGetLinks(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, links)
 }
 
-
 type addLinkRequest struct {
-	Type       string          `json:"type,omitempty"`
-	FromNode   string          `json:"from_node"`
-	ToNode     string          `json:"to_node"`
-	FromPort   int             `json:"from_port,omitempty"`
-	ToPort     int             `json:"to_port,omitempty"`
-	FromMTU    int             `json:"from_mtu,omitempty"`
-	ToMTU      int             `json:"to_mtu,omitempty"`
-	FromUseIP  *bool           `json:"from_use_ip,omitempty"`
-	ToUseIP    *bool           `json:"to_use_ip,omitempty"`
-	FromPolicy string          `json:"from_policy,omitempty"`
-	ToPolicy   string          `json:"to_policy,omitempty"`
-	FromCost       *int            `json:"from_cost,omitempty"`
-	ToCost         *int            `json:"to_cost,omitempty"`
-	FromFwmark     *string         `json:"from_fwmark,omitempty"`
-	ToFwmark       *string         `json:"to_fwmark,omitempty"`
-	FromPreference *int            `json:"from_preference,omitempty"`
-	ToPreference   *int            `json:"to_preference,omitempty"`
-	FromMark       *string         `json:"from_mark,omitempty"`
-	ToMark         *string         `json:"to_mark,omitempty"`
-	FromRoutingPolicy string      `json:"from_routing_policy,omitempty"`
-	ToRoutingPolicy   string      `json:"to_routing_policy,omitempty"`
-	FromAddPaths      string      `json:"from_add_paths,omitempty"`
-	ToAddPaths        string      `json:"to_add_paths,omitempty"`
-	FromNote       *string         `json:"from_note,omitempty"`
-	ToNote         *string         `json:"to_note,omitempty"`
-	Note           *string         `json:"note,omitempty"`
-	MTU            int             `json:"mtu,omitempty"`
-	Tags           []string        `json:"tags,omitempty"`
-	AssignIPv4     *bool           `json:"assign_ipv4,omitempty"`
-	Psk            *string         `json:"psk,omitempty"`
-	DisableBFD     *bool           `json:"disable_bfd,omitempty"`
-	Disabled       *bool           `json:"disabled,omitempty"`
-	From           *config.LinkEnd `json:"from,omitempty"`
-	To             *config.LinkEnd `json:"to,omitempty"`
+	Type              string          `json:"type,omitempty"`
+	FromNode          string          `json:"from_node"`
+	ToNode            string          `json:"to_node"`
+	FromPort          int             `json:"from_port,omitempty"`
+	ToPort            int             `json:"to_port,omitempty"`
+	FromMTU           int             `json:"from_mtu,omitempty"`
+	ToMTU             int             `json:"to_mtu,omitempty"`
+	FromUseIP         *bool           `json:"from_use_ip,omitempty"`
+	ToUseIP           *bool           `json:"to_use_ip,omitempty"`
+	FromPolicy        string          `json:"from_policy,omitempty"`
+	ToPolicy          string          `json:"to_policy,omitempty"`
+	FromCost          *int            `json:"from_cost,omitempty"`
+	ToCost            *int            `json:"to_cost,omitempty"`
+	FromFwmark        *string         `json:"from_fwmark,omitempty"`
+	ToFwmark          *string         `json:"to_fwmark,omitempty"`
+	FromPreference    *int            `json:"from_preference,omitempty"`
+	ToPreference      *int            `json:"to_preference,omitempty"`
+	FromMark          *string         `json:"from_mark,omitempty"`
+	ToMark            *string         `json:"to_mark,omitempty"`
+	FromRoutingPolicy string          `json:"from_routing_policy,omitempty"`
+	ToRoutingPolicy   string          `json:"to_routing_policy,omitempty"`
+	FromAddPaths      string          `json:"from_add_paths,omitempty"`
+	ToAddPaths        string          `json:"to_add_paths,omitempty"`
+	FromNote          *string         `json:"from_note,omitempty"`
+	ToNote            *string         `json:"to_note,omitempty"`
+	Note              *string         `json:"note,omitempty"`
+	MTU               int             `json:"mtu,omitempty"`
+	Tags              []string        `json:"tags,omitempty"`
+	AssignIPv4        *bool           `json:"assign_ipv4,omitempty"`
+	Psk               *string         `json:"psk,omitempty"`
+	DisableBFD        *bool           `json:"disable_bfd,omitempty"`
+	Disabled          *bool           `json:"disabled,omitempty"`
+	From              *config.LinkEnd `json:"from,omitempty"`
+	To                *config.LinkEnd `json:"to,omitempty"`
 }
 
 func (s *Server) handleAddLink(w http.ResponseWriter, r *http.Request) {
@@ -786,40 +785,40 @@ func (s *Server) handleCreateMeshLinks(w http.ResponseWriter, r *http.Request) {
 }
 
 type updateLinkRequest struct {
-	Type       string          `json:"type,omitempty"`
-	FromNode   string          `json:"from_node"`
-	ToNode     string          `json:"to_node"`
-	FromPort   int             `json:"from_port,omitempty"`
-	ToPort     int             `json:"to_port,omitempty"`
-	FromMTU    int             `json:"from_mtu,omitempty"`
-	ToMTU      int             `json:"to_mtu,omitempty"`
-	FromUseIP  *bool           `json:"from_use_ip,omitempty"`
-	ToUseIP    *bool           `json:"to_use_ip,omitempty"`
-	FromPolicy string          `json:"from_policy,omitempty"`
-	ToPolicy   string          `json:"to_policy,omitempty"`
-	FromCost       *int            `json:"from_cost,omitempty"`
-	ToCost         *int            `json:"to_cost,omitempty"`
-	FromFwmark     *string         `json:"from_fwmark,omitempty"`
-	ToFwmark       *string         `json:"to_fwmark,omitempty"`
-	FromPreference *int            `json:"from_preference,omitempty"`
-	ToPreference   *int            `json:"to_preference,omitempty"`
-	FromMark       *string         `json:"from_mark,omitempty"`
-	ToMark         *string         `json:"to_mark,omitempty"`
-	FromRoutingPolicy string      `json:"from_routing_policy,omitempty"`
-	ToRoutingPolicy   string      `json:"to_routing_policy,omitempty"`
-	FromAddPaths      string      `json:"from_add_paths,omitempty"`
-	ToAddPaths        string      `json:"to_add_paths,omitempty"`
-	FromNote       *string         `json:"from_note,omitempty"`
-	ToNote         *string         `json:"to_note,omitempty"`
-	Note           *string         `json:"note,omitempty"`
-	MTU            int             `json:"mtu,omitempty"`
-	Tags           []string        `json:"tags,omitempty"`
-	AssignIPv4     *bool           `json:"assign_ipv4,omitempty"`
-	Psk            *string         `json:"psk,omitempty"`
-	DisableBFD     *bool           `json:"disable_bfd,omitempty"`
-	Disabled       *bool           `json:"disabled,omitempty"`
-	From           *config.LinkEnd `json:"from,omitempty"`
-	To             *config.LinkEnd `json:"to,omitempty"`
+	Type              string          `json:"type,omitempty"`
+	FromNode          string          `json:"from_node"`
+	ToNode            string          `json:"to_node"`
+	FromPort          int             `json:"from_port,omitempty"`
+	ToPort            int             `json:"to_port,omitempty"`
+	FromMTU           int             `json:"from_mtu,omitempty"`
+	ToMTU             int             `json:"to_mtu,omitempty"`
+	FromUseIP         *bool           `json:"from_use_ip,omitempty"`
+	ToUseIP           *bool           `json:"to_use_ip,omitempty"`
+	FromPolicy        string          `json:"from_policy,omitempty"`
+	ToPolicy          string          `json:"to_policy,omitempty"`
+	FromCost          *int            `json:"from_cost,omitempty"`
+	ToCost            *int            `json:"to_cost,omitempty"`
+	FromFwmark        *string         `json:"from_fwmark,omitempty"`
+	ToFwmark          *string         `json:"to_fwmark,omitempty"`
+	FromPreference    *int            `json:"from_preference,omitempty"`
+	ToPreference      *int            `json:"to_preference,omitempty"`
+	FromMark          *string         `json:"from_mark,omitempty"`
+	ToMark            *string         `json:"to_mark,omitempty"`
+	FromRoutingPolicy string          `json:"from_routing_policy,omitempty"`
+	ToRoutingPolicy   string          `json:"to_routing_policy,omitempty"`
+	FromAddPaths      string          `json:"from_add_paths,omitempty"`
+	ToAddPaths        string          `json:"to_add_paths,omitempty"`
+	FromNote          *string         `json:"from_note,omitempty"`
+	ToNote            *string         `json:"to_note,omitempty"`
+	Note              *string         `json:"note,omitempty"`
+	MTU               int             `json:"mtu,omitempty"`
+	Tags              []string        `json:"tags,omitempty"`
+	AssignIPv4        *bool           `json:"assign_ipv4,omitempty"`
+	Psk               *string         `json:"psk,omitempty"`
+	DisableBFD        *bool           `json:"disable_bfd,omitempty"`
+	Disabled          *bool           `json:"disabled,omitempty"`
+	From              *config.LinkEnd `json:"from,omitempty"`
+	To                *config.LinkEnd `json:"to,omitempty"`
 }
 
 func (s *Server) handleUpdateLink(w http.ResponseWriter, r *http.Request) {
@@ -1340,7 +1339,6 @@ func (s *Server) handleDeleteTemplate(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"message": "Template deleted successfully"})
 }
 
-
 func (s *Server) handleRefreshAllROA(w http.ResponseWriter, r *http.Request) {
 	if err := s.mgr.RefreshAllROA(r.Context(), true); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
@@ -1571,7 +1569,6 @@ func (s *Server) handleResetLinkPrivateKey(w http.ResponseWriter, r *http.Reques
 	})
 }
 
-
 // Sync Handlers
 
 func (s *Server) handleSyncPreview(w http.ResponseWriter, r *http.Request) {
@@ -1586,7 +1583,9 @@ func (s *Server) handleSyncPreview(w http.ResponseWriter, r *http.Request) {
 	}
 	scope := r.URL.Query().Get("scope")
 
-	actions, err := s.mgr.PlanSyncWithScope(scope, targetNodes...)
+	// Preview is read-only: it is computed from cached state and never triggers
+	// upstream artifact downloads, so opening the sync dialog stays fast.
+	actions, err := s.mgr.PlanSyncPreview(scope, targetNodes...)
 	if err != nil {
 		if err == crypto.ErrVaultLocked {
 			writeError(w, http.StatusLocked, "Vault is locked. Unlock with password first.")

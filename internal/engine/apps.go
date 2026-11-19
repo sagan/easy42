@@ -648,6 +648,14 @@ func (m *Manager) DeleteAppVariable(key string) error {
 // automatically handling transpilation for non-systemd nodes (OpenWrt/Procd, Alpine/OpenRC)
 // and interpolating global variables and node context variables.
 func (m *Manager) BuildAppSpecsForNode(nodeName string) ([]*agentpb.AppSpec, error) {
+	return m.BuildAppSpecsForNodeWithOptions(nodeName, true)
+}
+
+// BuildAppSpecsForNodeWithOptions builds the desired app specs for a node. When
+// allowArtifactFetch is false (preview/planning), apps whose artifact is not in
+// the local cache are emitted without artifact entries instead of downloading it
+// from upstream; the next execute resolves it.
+func (m *Manager) BuildAppSpecsForNodeWithOptions(nodeName string, allowArtifactFetch bool) ([]*agentpb.AppSpec, error) {
 	cfg := m.store.Get()
 	if cfg == nil {
 		var err error
@@ -789,9 +797,18 @@ func (m *Manager) BuildAppSpecsForNode(nodeName string) ([]*agentpb.AppSpec, err
 		if rawApp.Artifact != nil && (strings.ToLower(rawApp.AppType) == "systemd" || strings.ToLower(rawApp.AppType) == "cron") && m.artifactMgr != nil && m.artifactTokens != nil {
 			osName := "linux"
 
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
-			extractedFiles, err := m.artifactMgr.EnsureArtifact(ctx, rawApp, nodeArch, osName, nodeEndian, globalVars)
-			cancel()
+			var extractedFiles map[string]*apps.ExtractedFileInfo
+			var err error
+			if allowArtifactFetch {
+				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+				extractedFiles, err = m.artifactMgr.EnsureArtifact(ctx, rawApp, nodeArch, osName, nodeEndian, globalVars)
+				cancel()
+			} else {
+				// Preview: only look at the local cache. A cache miss is not an
+				// error; the app is planned without artifact entries and the
+				// download happens when the sync is actually executed.
+				extractedFiles, err = m.artifactMgr.CachedArtifact(rawApp, nodeArch, osName, nodeEndian)
+			}
 			if err != nil {
 				// Failed to download or verify artifact upstream
 			} else {

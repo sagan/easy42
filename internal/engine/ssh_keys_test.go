@@ -3,6 +3,7 @@ package engine
 import (
 	"encoding/base64"
 	"encoding/binary"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -20,10 +21,28 @@ import (
 )
 
 func sshTestKey(algorithm, payload, comment string) config.SSHPublicKey {
-	buf := make([]byte, 4)
-	binary.BigEndian.PutUint32(buf, uint32(len(algorithm)))
-	buf = append(buf, algorithm...)
-	buf = append(buf, payload...)
+	appendField := func(buf []byte, field []byte) []byte {
+		var l [4]byte
+		binary.BigEndian.PutUint32(l[:], uint32(len(field)))
+		buf = append(buf, l[:]...)
+		return append(buf, field...)
+	}
+	derive := func(n int) []byte {
+		out := make([]byte, n)
+		for i := range out {
+			out[i] = payload[i%len(payload)]
+		}
+		return out
+	}
+	alg := []byte(algorithm)
+	buf := appendField(nil, alg)
+	if algorithm == "ssh-rsa" {
+		buf = appendField(buf, []byte{0x01, 0x00, 0x01})
+		buf = appendField(buf, append([]byte{0x01}, derive(32)...))
+	} else {
+		// ssh-ed25519: exactly one 32-byte point.
+		buf = appendField(buf, derive(32))
+	}
 	return config.SSHPublicKey{
 		Algorithm: algorithm,
 		Key:       base64.StdEncoding.EncodeToString(buf),
@@ -629,6 +648,57 @@ func TestSSHKeyKnownHostsHostnames(t *testing.T) {
 	kh = findSSHKeyAction(actions, "dst", config.SSHKnownHostsPath)
 	if kh == nil || strings.Contains(kh.FileContent, ".easy42.example.com") {
 		t.Fatalf("expected no base domain host name without DNS config, got:\n%v", kh)
+	}
+}
+
+// A source node that matches the rule but has no keys must be reported in the
+// action description, so a surprisingly small block is explainable.
+// The sync dialog shows the description on every row, so it must stay short.
+// A rule whose source is "all nodes" matches every external DN42 peer too; those
+// can never publish keys and must not turn the description into a wall of text.
+func TestSSHKeyDescriptionStaysShort(t *testing.T) {
+	mgr := newSSHTestManager(t)
+	nodes := []config.Node{
+		{Name: "have", Mode: "agent", AgentToken: "t1", AgentVersion: "0.1.19", Tags: []string{"trust"}},
+		{Name: "empty", Mode: "agent", AgentToken: "t2", AgentVersion: "0.1.19", Tags: []string{"trust"}},
+		{Name: "notmgd", Mode: "agent", AgentToken: "t3", AgentVersion: "0.1.17", Tags: []string{"trust"}},
+		{Name: "sshmode", Mode: "ssh", Tags: []string{"trust"}},
+		{Name: "dst", Mode: "agent", AgentToken: "t4", AgentVersion: "0.1.19"},
+	}
+	for i := 0; i < 30; i++ {
+		nodes = append(nodes, config.Node{
+			Name: fmt.Sprintf("peer-%02d", i), IsExternal: true, Tags: []string{"trust"},
+		})
+	}
+	saveSSHTestConfig(t, mgr, &config.Config{
+		Nodes: nodes,
+		SSHKeyRules: []config.SSHKeyRule{{
+			ID: "r", Type: "known_hosts",
+			SrcSelector: map[string]string{"all": "1"},
+			DstSelector: map[string]string{"name": "dst"}, Enabled: true,
+		}},
+	})
+	host := sshTestKey("ssh-ed25519", "have-host", "root@have")
+	host.Kind = config.SSHKeyKindHost
+	mgr.agentHub.SetNodeMeta("have", agentNodeMeta("have", "0.1.19", host))
+	mgr.agentHub.SetNodeMeta("empty", agentNodeMeta("empty", "0.1.19"))
+
+	actions, err := mgr.PlanSync()
+	if err != nil {
+		t.Fatalf("PlanSync failed: %v", err)
+	}
+	act := findSSHKeyAction(actions, "dst", config.SSHKnownHostsPath)
+	if act == nil {
+		t.Fatal("expected known_hosts action")
+	}
+	want := "Update SSH known_hosts (/root/.ssh/known_hosts) on dst"
+	if act.Description != want {
+		t.Fatalf("description must be short and stable, got %q (want %q)", act.Description, want)
+	}
+	// The contributing node's key still lands in the block; the empty,
+	// unmanaged and external nodes just add nothing.
+	if !strings.Contains(act.FileContent, host.Key) {
+		t.Fatalf("expected the collected host key in the block, got:\n%s", act.FileContent)
 	}
 }
 

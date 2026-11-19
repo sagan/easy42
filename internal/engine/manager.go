@@ -3218,11 +3218,25 @@ func (m *Manager) cachedProbeConfigs(nodes []config.Node, targetMap map[string]b
 // PlanSync computes the sync actions required to bring remote devices up to date.
 // If nodeNames are provided, only changes for those target nodes are computed.
 func (m *Manager) PlanSync(nodeNames ...string) ([]config.SyncAction, error) {
-	return m.PlanSyncWithScope("", nodeNames...)
+	return m.planSync("", true, nodeNames...)
 }
 
 // PlanSyncWithScope computes sync actions with a scope filter ("public", "full", or "")
 func (m *Manager) PlanSyncWithScope(scope string, nodeNames ...string) ([]config.SyncAction, error) {
+	return m.planSync(scope, true, nodeNames...)
+}
+
+// PlanSyncPreview is PlanSyncWithScope for read-only previews (e.g. the sync
+// dialog). It never triggers an upstream artifact download: apps whose artifact
+// is not cached yet are planned from the cached metadata alone, so opening the
+// dialog stays fast. A subsequent execute resolves artifacts as usual.
+func (m *Manager) PlanSyncPreview(scope string, nodeNames ...string) ([]config.SyncAction, error) {
+	return m.planSync(scope, false, nodeNames...)
+}
+
+// planSync builds the sync plan. When allowArtifactFetch is false, planning may
+// only read the local artifact cache and never contacts upstream servers.
+func (m *Manager) planSync(scope string, allowArtifactFetch bool, nodeNames ...string) ([]config.SyncAction, error) {
 	m.mu.RLock()
 	isVaultUnlocked := m.vault.IsUnlocked()
 	if strings.EqualFold(scope, "public") {
@@ -3255,12 +3269,17 @@ func (m *Manager) PlanSyncWithScope(scope string, nodeNames ...string) ([]config
 	currentState := m.stateStore.Get()
 	actions := make([]config.SyncAction, 0)
 
-	// The sync plan is computed exclusively from cached state (recorded device
-	// state plus data already reported by connected agents). It never opens SSH
-	// sessions nor sends commands to agents, so opening the sync dialog is
-	// immediate. Live device data is collected by UpdateState (triggered by the
-	// "Update State from Devices" / apply / force sync flows) which refreshes the
-	// cached state used here.
+	// The sync plan is computed from cached state (recorded device state plus data
+	// already reported by connected agents). It never opens SSH sessions nor sends
+	// commands to agents, so opening the sync dialog does not contact devices.
+	// Live device data is collected by UpdateState (triggered by the "Update State
+	// from Devices" / apply / force sync flows), which refreshes the cached state
+	// used here.
+	//
+	// Note: apps with an upstream `artifact` are resolved through the local
+	// artifact cache. A cache miss triggers an upstream download (GitHub releases
+	// or the configured URL, not the node), which is why a preview can take a
+	// moment the first time. Subsequent plans hit the cache and are instant.
 	probedConfigsPerNode := m.cachedProbeConfigs(nodes, targetMap, isPartial)
 	// Recorded interface state is used as a fallback to locate the live config
 	// path when the full content is not cached.
@@ -3880,7 +3899,7 @@ func (m *Manager) PlanSyncWithScope(scope string, nodeNames ...string) ([]config
 		}
 		initSystem := apps.DetectInitSystem(reportedInitSystem, osInfo)
 
-		desiredSpecs, err := m.BuildAppSpecsForNode(node.Name)
+		desiredSpecs, err := m.BuildAppSpecsForNodeWithOptions(node.Name, allowArtifactFetch)
 		if err != nil {
 			continue
 		}
