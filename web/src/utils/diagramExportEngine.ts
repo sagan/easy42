@@ -500,6 +500,7 @@ export function generateTopologySvg(
     const nameText = formatExportNodeName(node, options.nodeNameSource);
     const ipText = formatExportNodeIp(node, options.nodeIpSource);
     const isExternal = Boolean(node.is_external);
+    const isClient = Boolean(node.is_client);
     const isRR = Boolean(node.route_reflector);
 
     const nodeCentrality = centralityResult.nodes.get(node.name);
@@ -511,14 +512,22 @@ export function generateTopologySvg(
           ? 2
           : 1.5;
 
-    let borderColor = isExternal ? "#A855F7" : isRR ? "#6366F1" : "#CBD5E1";
-    if (isCoreNode && !isExternal && !isRR) {
+    let borderColor = isClient ? "#0D9488" : isExternal ? "#A855F7" : isRR ? "#6366F1" : "#CBD5E1";
+    if (isCoreNode && !isExternal && !isClient && !isRR) {
       borderColor = "#059669";
     }
-    const borderDash = isExternal ? 'stroke-dasharray="5 3"' : "";
-    const dotColor = isExternal ? "#A855F7" : isRR ? "#6366F1" : isCoreNode ? "#059669" : "#10B981";
+    const borderDash = isExternal || isClient ? 'stroke-dasharray="5 3"' : "";
+    const dotColor = isClient ? "#0D9488" : isExternal ? "#A855F7" : isRR ? "#6366F1" : isCoreNode ? "#059669" : "#10B981";
 
     let rightOffset = 10;
+    let clientBadgeSvg = "";
+    if (isClient) {
+      rightOffset += 44;
+      clientBadgeSvg = `      <rect x="${pos.cardX + pos.width - rightOffset}" y="${pos.cardY + 10}" width="44" height="16" rx="4" fill="#F0FDFA" stroke="#99F6E4" stroke-width="1" />
+      <text x="${pos.cardX + pos.width - rightOffset + 22}" y="${pos.cardY + 21.5}" font-size="8.5" font-family="ui-monospace, monospace" font-weight="700" fill="#0F766E" text-anchor="middle">CLIENT</text>\n`;
+      rightOffset += 6;
+    }
+
     let extBadgeSvg = "";
     if (isExternal) {
       rightOffset += 32;
@@ -551,6 +560,7 @@ export function generateTopologySvg(
 
       <!-- Node Name -->
       <text x="${pos.cardX + 27}" y="${pos.cardY + 26}" font-size="12.5" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-weight="700" fill="#0F172A">${escapeXml(nameText)}</text>
+      ${clientBadgeSvg}
       ${extBadgeSvg}
       ${rrBadgeSvg}
       ${coreBadgeSvg}

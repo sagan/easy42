@@ -2889,6 +2889,7 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
         return {
           ...n,
           position: pos,
+          selected: existing?.selected ?? n.selected,
           measured:
             (existing as any)?.measured ||
             n.measured ||

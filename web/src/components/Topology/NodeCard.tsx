@@ -16,6 +16,7 @@ import {
   Activity,
   Camera,
   Radio,
+  Computer,
   AlertOctagon,
 } from "lucide-react";
 import { Node, NodeStatus } from "../../types/api";
@@ -120,15 +121,14 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
           width: 155,
           height: 44,
           backgroundColor: isOffline ? "#FEF2F2" : "#FFFFFF",
-          border:
-            isBestPathFocus
-              ? "2px solid #059669"
-              : isFocused || isHighlighted
-                ? "2px solid #4F46E5"
-                : isClient
-                  ? "2px dashed #0D9488"
-                  : isExternal
-                    ? "2px dashed #8B5CF6"
+          border: isBestPathFocus
+            ? "2px solid #059669"
+            : isFocused || isHighlighted
+              ? "2px solid #4F46E5"
+              : isClient
+                ? "2px dashed #0D9488"
+                : isExternal
+                  ? "2px dashed #8B5CF6"
                   : isOffline
                     ? "1.5px solid #EF4444"
                     : isRouteReflector
@@ -137,18 +137,17 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
                         ? "2px solid #059669"
                         : "1.5px solid #CBD5E1",
           borderRadius: 1,
-          boxShadow:
-            isBestPathFocus
-              ? "0 0 0 3px rgba(5, 150, 105, 0.3)"
-              : isBestPathNode
-                ? "0 0 0 3px rgba(16, 185, 129, 0.25)"
-                : isFocused || isHighlighted
-                  ? "0 0 0 3px rgba(79, 70, 229, 0.25)"
-                  : isCore
-                    ? "0 0 0 2px rgba(16, 185, 129, 0.25), 0 2px 6px rgba(16, 185, 129, 0.15)"
-                    : isRouteReflector
-                      ? "0 0 0 1px rgba(99, 102, 241, 0.3), 0 2px 6px rgba(99, 102, 241, 0.15)"
-                      : "0 2px 6px rgba(0,0,0,0.06)",
+          boxShadow: isBestPathFocus
+            ? "0 0 0 3px rgba(5, 150, 105, 0.3)"
+            : isBestPathNode
+              ? "0 0 0 3px rgba(16, 185, 129, 0.25)"
+              : isFocused || isHighlighted
+                ? "0 0 0 3px rgba(79, 70, 229, 0.25)"
+                : isCore
+                  ? "0 0 0 2px rgba(16, 185, 129, 0.25), 0 2px 6px rgba(16, 185, 129, 0.15)"
+                  : isRouteReflector
+                    ? "0 0 0 1px rgba(99, 102, 241, 0.3), 0 2px 6px rgba(99, 102, 241, 0.15)"
+                    : "0 2px 6px rgba(0,0,0,0.06)",
           opacity: isDimmed ? 0.3 : isBestPathUnreachable ? 0.35 : 1,
           display: "flex",
           alignItems: "center",
@@ -293,41 +292,39 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
     <Box
       sx={{
         width: 260,
-        backgroundColor:
-          isOffline
+        backgroundColor: isOffline
+          ? "#FFFDFD"
+          : inBlock && !isHealthy
             ? "#FFFDFD"
-            : inBlock && !isHealthy
-              ? "#FFFDFD"
-              : inBlock && !isBlockFullMesh
-                ? "#FAFBFD"
-                : "#FFFFFF",
+            : inBlock && !isBlockFullMesh
+              ? "#FAFBFD"
+              : "#FFFFFF",
         border: cardBorder,
         borderTop: cardBorderTop,
         borderRadius: 1,
         opacity: isBestPathUnreachable ? 0.35 : isDimmed ? 0.3 : 1,
         filter: isDimmed ? "grayscale(40%)" : "none",
-        boxShadow:
-          isBestPathFocus
-            ? "0 0 0 3px rgba(5, 150, 105, 0.3), 0 12px 28px rgba(5, 150, 105, 0.22)"
-            : isBestPathNode
-              ? "0 0 0 3px rgba(16, 185, 129, 0.24), 0 10px 24px rgba(16, 185, 129, 0.18)"
-              : isFocused || isHighlighted
-                ? "0 0 0 3px rgba(79, 70, 229, 0.25), 0 12px 28px rgba(79, 70, 229, 0.2)"
-                : isCore
-              ? "0 0 0 2px rgba(16, 185, 129, 0.25), 0 8px 20px rgba(16, 185, 129, 0.15)"
-              : inBlock && isBlockFullMesh && isHealthy
-                ? `0 4px 14px ${blockColor || "#6366F1"}25, 0 1px 3px rgba(0, 0, 0, 0.05)`
-                : inBlock && !isHealthy
-                  ? "0 4px 14px rgba(239, 68, 68, 0.15), 0 1px 3px rgba(239, 68, 68, 0.08)"
-                  : isExternal
-                    ? "0 4px 6px -1px rgba(139, 92, 246, 0.08), 0 2px 4px -2px rgba(139, 92, 246, 0.05)"
-                    : isOffline
-                      ? "0 4px 10px rgba(239, 68, 68, 0.15), 0 2px 4px rgba(239, 68, 68, 0.1)"
-                      : isRouteReflector
-                        ? "0 4px 14px rgba(79, 70, 229, 0.15), 0 2px 5px rgba(79, 70, 229, 0.08)"
-                        : isAgentWorking
-                          ? "0 4px 12px -1px rgba(16, 185, 129, 0.12), 0 2px 4px -2px rgba(16, 185, 129, 0.08)"
-                          : "0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05)",
+        boxShadow: isBestPathFocus
+          ? "0 0 0 3px rgba(5, 150, 105, 0.3), 0 12px 28px rgba(5, 150, 105, 0.22)"
+          : isBestPathNode
+            ? "0 0 0 3px rgba(16, 185, 129, 0.24), 0 10px 24px rgba(16, 185, 129, 0.18)"
+            : isFocused || isHighlighted
+              ? "0 0 0 3px rgba(79, 70, 229, 0.25), 0 12px 28px rgba(79, 70, 229, 0.2)"
+              : isCore
+                ? "0 0 0 2px rgba(16, 185, 129, 0.25), 0 8px 20px rgba(16, 185, 129, 0.15)"
+                : inBlock && isBlockFullMesh && isHealthy
+                  ? `0 4px 14px ${blockColor || "#6366F1"}25, 0 1px 3px rgba(0, 0, 0, 0.05)`
+                  : inBlock && !isHealthy
+                    ? "0 4px 14px rgba(239, 68, 68, 0.15), 0 1px 3px rgba(239, 68, 68, 0.08)"
+                    : isExternal
+                      ? "0 4px 6px -1px rgba(139, 92, 246, 0.08), 0 2px 4px -2px rgba(139, 92, 246, 0.05)"
+                      : isOffline
+                        ? "0 4px 10px rgba(239, 68, 68, 0.15), 0 2px 4px rgba(239, 68, 68, 0.1)"
+                        : isRouteReflector
+                          ? "0 4px 14px rgba(79, 70, 229, 0.15), 0 2px 5px rgba(79, 70, 229, 0.08)"
+                          : isAgentWorking
+                            ? "0 4px 12px -1px rgba(16, 185, 129, 0.12), 0 2px 4px -2px rgba(16, 185, 129, 0.08)"
+                            : "0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05)",
         overflow: "hidden",
         cursor: "pointer",
         transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
@@ -516,9 +513,7 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
               ) : isOffline ? (
                 <Tooltip
                   title={`Agent offline or unreachable. Last seen: ${
-                    status?.last_seen
-                      ? new Date(status.last_seen).toISOString()
-                      : node.agent_last_seen || "Unknown"
+                    status?.last_seen ? new Date(status.last_seen).toISOString() : node.agent_last_seen || "Unknown"
                   }`}
                 >
                   <Chip
@@ -564,6 +559,25 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
                       letterSpacing: "0.5px",
                       px: 0,
                       "& .MuiChip-label": { px: 0.5 },
+                    }}
+                  />
+                </Tooltip>
+              ) : node.is_client ? (
+                <Tooltip title="Client node">
+                  <Chip
+                    icon={<Computer size={9} style={{ color: "#64748B", marginLeft: 4 }} />}
+                    label="Client"
+                    size="small"
+                    sx={{
+                      height: 16,
+                      fontSize: "0.55rem",
+                      fontWeight: 700,
+                      backgroundColor: "#F1F5F9",
+                      color: "#475569",
+                      border: "1px solid #CBD5E1",
+                      letterSpacing: "0.3px",
+                      px: 0,
+                      "& .MuiChip-label": { px: 0.4 },
                     }}
                   />
                 </Tooltip>
