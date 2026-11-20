@@ -381,6 +381,37 @@ func BuildWgLinkContext(
 		ctx["fwmark"] = fwmark
 	}
 
+	if selfNode != nil && selfNode.IsClient {
+		wgDNS := "1.1.1.1, 1.0.0.1"
+		if rawDNS, exists := nodeData["wg_dns"]; exists {
+			switch v := rawDNS.(type) {
+			case string:
+				wgDNS = strings.TrimSpace(v)
+			case []any:
+				var parts []string
+				for _, item := range v {
+					if s, ok := item.(string); ok {
+						if trimmed := strings.TrimSpace(s); trimmed != "" {
+							parts = append(parts, trimmed)
+						}
+					}
+				}
+				wgDNS = strings.Join(parts, ", ")
+			case []string:
+				var parts []string
+				for _, s := range v {
+					if trimmed := strings.TrimSpace(s); trimmed != "" {
+						parts = append(parts, trimmed)
+					}
+				}
+				wgDNS = strings.Join(parts, ", ")
+			}
+		}
+		if wgDNS != "" {
+			ctx["dns"] = wgDNS
+		}
+	}
+
 	ifaceName := ""
 	if selfEnd != nil && selfEnd.Interface != "" {
 		ifaceName = selfEnd.Interface

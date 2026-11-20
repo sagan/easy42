@@ -13,6 +13,9 @@ ListenPort = {{ .listen_port }}
 PrivateKey = {{ .private_key }}
 {{ end -}}
 MTU = {{ .mtu }}
+{{- if .dns }}
+DNS = {{ .dns }}
+{{- end }}
 {{ if .fwmark -}}
 FwMark = {{ .fwmark }}
 {{ end -}}
