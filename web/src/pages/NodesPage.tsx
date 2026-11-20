@@ -23,6 +23,8 @@ import {
   Select,
   MenuItem,
   FormControl,
+  FormControlLabel,
+  Checkbox,
 } from "@mui/material";
 import {
   Server,
@@ -129,6 +131,7 @@ export const NodesPage: React.FC = () => {
   const urlSearch = searchParams.get("search") || "";
   const urlTag = searchParams.get("tag") || "All";
   const urlBlock = searchParams.get("block") || "All";
+  const showAllNodes = searchParams.get("all") === "1";
   const urlView = (searchParams.get("view") === "table" ? "table" : "cards") as "cards" | "table";
   const subView = (searchParams.get("subview") === "network" ? "network" : "general") as "general" | "network";
   const rawSort = searchParams.get("sort");
@@ -302,6 +305,24 @@ export const NodesPage: React.FC = () => {
     updateQueryParam({ view });
   };
 
+  const handleToggleShowAll = useCallback(
+    (checked: boolean) => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          if (checked) {
+            next.set("all", "1");
+          } else {
+            next.delete("all");
+          }
+          return next;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
+
   const handleClearFilters = () => {
     setSearchTerm("");
     setSelectedTag("All");
@@ -317,10 +338,14 @@ export const NodesPage: React.FC = () => {
     );
   };
 
-  // Requirement 2: Completely exclude external nodes from Nodes monitoring page
+  // Exclude external and client nodes by default unless "All" (all=1) is checked
   const managedNodes = useMemo(() => {
     return nodes.filter((n) => !n.is_external && !n.is_client);
   }, [nodes]);
+
+  const visibleNodes = useMemo(() => {
+    return showAllNodes ? nodes : managedNodes;
+  }, [showAllNodes, nodes, managedNodes]);
 
   // Map each node to its belonging blocks (excluding external-only blocks or blocks named "external")
   const nodeBlocksMap = useMemo(() => {
@@ -339,23 +364,23 @@ export const NodesPage: React.FC = () => {
     return map;
   }, [blocks]);
 
-  // Unique block names that belong to at least one managed node, excluding "external"
+  // Unique block names that belong to at least one visible node, excluding "external"
   const managedBlocks = useMemo(() => {
     const set = new Set<string>();
-    const managedNames = new Set(managedNodes.map((n) => n.name));
+    const visibleNames = new Set(visibleNodes.map((n) => n.name));
     (blocks || []).forEach((b) => {
       if (
         b.name &&
         b.name.toLowerCase() !== "external" &&
         b.nodes &&
         Array.isArray(b.nodes) &&
-        b.nodes.some((name) => managedNames.has(name))
+        b.nodes.some((name) => visibleNames.has(name))
       ) {
         set.add(b.name);
       }
     });
     return Array.from(set).sort();
-  }, [blocks, managedNodes]);
+  }, [blocks, visibleNodes]);
 
   // Map node name to live telemetry status
   const liveMap = useMemo(() => {
@@ -389,10 +414,10 @@ export const NodesPage: React.FC = () => {
     return "#E11D48"; // red
   };
 
-  // Set of managed nodes where agent is installed but is currently offline
+  // Set of visible nodes where agent is installed but is currently offline
   const offlineNodeNames = useMemo(() => {
     const set = new Set<string>();
-    managedNodes.forEach((n) => {
+    visibleNodes.forEach((n) => {
       const live = liveMap.get(n.name);
       const status = nodeStatuses[n.name];
       const isOnline = Boolean(live?.connected ?? status?.connected);
@@ -407,7 +432,7 @@ export const NodesPage: React.FC = () => {
       }
     });
     return set;
-  }, [managedNodes, liveMap, nodeStatuses]);
+  }, [visibleNodes, liveMap, nodeStatuses]);
 
   const nodeLinksCountMap = useMemo(() => {
     const map = new Map<string, number>();
@@ -439,33 +464,33 @@ export const NodesPage: React.FC = () => {
     return map;
   }, [links, networkState, nodeStatuses]);
 
-  // Set of managed nodes which are not healthy (at least 1 link is down)
+  // Set of visible nodes which are not healthy (at least 1 link is down)
   const unhealthyNodeNames = useMemo(() => {
     const set = new Set<string>();
-    const managedNames = new Set(managedNodes.map((n) => n.name));
+    const visibleNames = new Set(visibleNodes.map((n) => n.name));
     nodeDownLinksCountMap.forEach((count, name) => {
-      if (count > 0 && managedNames.has(name)) {
+      if (count > 0 && visibleNames.has(name)) {
         set.add(name);
       }
     });
     return set;
-  }, [managedNodes, nodeDownLinksCountMap]);
+  }, [visibleNodes, nodeDownLinksCountMap]);
 
   const noLinkNodeNames = useMemo(() => {
     const set = new Set<string>();
-    const managedNames = new Set(managedNodes.map((n) => n.name));
-    managedNames.forEach((name) => {
+    const visibleNames = new Set(visibleNodes.map((n) => n.name));
+    visibleNames.forEach((name) => {
       if (!nodeLinksCountMap.get(name)) {
         set.add(name);
       }
     });
     return set;
-  }, [managedNodes, nodeLinksCountMap]);
+  }, [visibleNodes, nodeLinksCountMap]);
 
-  // Unique tags from managed (non-external) nodes only, excluding "external" and special tags
+  // Unique tags from visible nodes only, excluding "external" and special tags
   const managedTags = useMemo(() => {
     const set = new Set<string>();
-    managedNodes.forEach((n) => {
+    visibleNodes.forEach((n) => {
       n.tags?.forEach((t) => {
         const trimmed = t.trim();
         if (trimmed && trimmed.toLowerCase() !== "external" && !trimmed.startsWith("$")) {
@@ -474,7 +499,7 @@ export const NodesPage: React.FC = () => {
       });
     });
     return Array.from(set).sort();
-  }, [managedNodes]);
+  }, [visibleNodes]);
 
   // Filter items including All, special state tags ($offline, $unhealthy), and node tags with counts
   const tagFilterItems = useMemo(() => {
@@ -482,7 +507,7 @@ export const NodesPage: React.FC = () => {
       {
         id: "All",
         label: "All",
-        count: managedNodes.length,
+        count: visibleNodes.length,
       },
       {
         id: "$offline",
@@ -502,7 +527,7 @@ export const NodesPage: React.FC = () => {
     ];
 
     managedTags.forEach((tag) => {
-      const count = managedNodes.filter((n) => n.tags && n.tags.includes(tag)).length;
+      const count = visibleNodes.filter((n) => n.tags && n.tags.includes(tag)).length;
       items.push({
         id: tag,
         label: tag,
@@ -511,11 +536,11 @@ export const NodesPage: React.FC = () => {
     });
 
     return items;
-  }, [managedNodes, offlineNodeNames, unhealthyNodeNames, noLinkNodeNames, managedTags]);
+  }, [visibleNodes, offlineNodeNames, unhealthyNodeNames, noLinkNodeNames, managedTags]);
 
   // Requirement 3: Filter nodes by tag, block, and search term
   const filteredNodes = useMemo(() => {
-    return managedNodes.filter((n) => {
+    return visibleNodes.filter((n) => {
       let matchTag = true;
       if (urlTag === "$offline") {
         matchTag = offlineNodeNames.has(n.name);
@@ -546,7 +571,7 @@ export const NodesPage: React.FC = () => {
       return matchTag && matchBlock && matchSearch;
     });
   }, [
-    managedNodes,
+    visibleNodes,
     urlTag,
     urlBlock,
     searchTerm,
@@ -1018,6 +1043,36 @@ export const NodesPage: React.FC = () => {
             </FormControl>
           )}
 
+          {/* All checkbox (include external & client nodes) */}
+          <Tooltip title="Include external nodes and client nodes">
+            <FormControlLabel
+              control={
+                <Checkbox
+                  size="small"
+                  checked={showAllNodes}
+                  onChange={(e) => handleToggleShowAll(e.target.checked)}
+                  sx={{ p: 0.5 }}
+                />
+              }
+              label="All"
+              sx={{
+                m: 0,
+                pl: 0.5,
+                pr: 1,
+                height: 36,
+                borderRadius: 1,
+                bgcolor: "#F8FAFC",
+                border: "1px solid #E2E8F0",
+                "& .MuiFormControlLabel-label": {
+                  fontSize: "0.85rem",
+                  fontWeight: 500,
+                  color: "#334155",
+                  userSelect: "none",
+                },
+              }}
+            />
+          </Tooltip>
+
           {/* Clear filter indicator if filtering */}
           <Button
             size="small"
@@ -1027,7 +1082,7 @@ export const NodesPage: React.FC = () => {
             startIcon={<X size={14} />}
             sx={{ color: "#64748B", fontSize: "0.75rem", textTransform: "none", py: 0.4 }}
           >
-            Clear ({filteredNodes.length}/{managedNodes.length})
+            Clear ({filteredNodes.length}/{visibleNodes.length})
           </Button>
 
           {/* Actions & View Toggle */}
@@ -1350,6 +1405,21 @@ export const NodesPage: React.FC = () => {
                           <Typography variant="subtitle1" sx={{ fontWeight: 700, color: "#0F172A", lineHeight: 1.2 }}>
                             {n.name}
                           </Typography>
+                          {(n.is_client || n.is_external) && (
+                            <Chip
+                              label={n.is_client ? "CLIENT" : "EXTERNAL"}
+                              size="small"
+                              sx={{
+                                height: 18,
+                                fontSize: "0.62rem",
+                                fontWeight: 800,
+                                bgcolor: n.is_client ? "#F0FDFA" : "#FEF3C7",
+                                color: n.is_client ? "#0F766E" : "#92400E",
+                                border: n.is_client ? "1px solid #99F6E4" : "1px solid #FDE68A",
+                                "& .MuiChip-label": { px: 0.5 },
+                              }}
+                            />
+                          )}
                           {n.route_reflector && (
                             <Chip
                               icon={<Radio size={10} style={{ color: "#4338CA", marginLeft: 4 }} />}
@@ -1651,7 +1721,11 @@ export const NodesPage: React.FC = () => {
                       <Typography variant="caption" sx={{ color: "#94A3B8", fontSize: "0.7rem" }}>
                         {agentInstalled
                           ? `${live?.os_info || "Linux"}${currentAgentVer ? ` • v${currentAgentVer.replace(/^[vV]/, "")}` : ""}`
-                          : "Mesh Managed Node"}
+                          : n.is_client
+                            ? "Client Node"
+                            : n.is_external
+                              ? "External Node"
+                              : "Mesh Managed Node"}
                       </Typography>
                       {agentInstalled && isOutdated && (
                         <Tooltip
@@ -2095,6 +2169,22 @@ export const NodesPage: React.FC = () => {
                           }}
                         >
                           {n.name}
+                          {(n.is_client || n.is_external) && (
+                            <Chip
+                              label={n.is_client ? "CLIENT" : "EXTERNAL"}
+                              size="small"
+                              sx={{
+                                height: 16,
+                                fontSize: "0.58rem",
+                                fontWeight: 800,
+                                bgcolor: n.is_client ? "#F0FDFA" : "#FEF3C7",
+                                color: n.is_client ? "#0F766E" : "#92400E",
+                                border: n.is_client ? "1px solid #99F6E4" : "1px solid #FDE68A",
+                                px: 0,
+                                "& .MuiChip-label": { px: 0.4 },
+                              }}
+                            />
+                          )}
                           {n.route_reflector && (
                             <Chip
                               label="RR"
