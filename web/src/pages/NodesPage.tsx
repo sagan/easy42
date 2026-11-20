@@ -1692,6 +1692,9 @@ export const NodesPage: React.FC = () => {
                                 "&.Mui-disabled": { bgcolor: "#F1F5F9", color: "#CBD5E1" },
                                 p: 0.7,
                               }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                              }}
                             >
                               <Terminal size={15} />
                             </IconButton>
@@ -1786,9 +1789,9 @@ export const NodesPage: React.FC = () => {
               <TableRow>
                 <TableCell
                   sortDirection={sortField === "name" ? sortOrder : false}
-                  sx={{ fontWeight: 700, color: "#475569", minWidth: 220 }}
+                  sx={{ fontWeight: 700, color: "#475569", minWidth: 200 }}
                 >
-                  <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1 }}>
+                  <Box sx={{ display: "flex", alignItems: "center", justifyContent: "flex-start", gap: 0 }}>
                     <TableSortLabel
                       active={sortField === "name"}
                       direction={sortField === "name" ? sortOrder : "asc"}

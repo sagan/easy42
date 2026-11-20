@@ -136,8 +136,6 @@ chmod +x ~/.config/easy42/tasks/hello_world/*.sh`;
   return (
     <Box
       sx={{
-        flex: 1,
-        overflowY: "auto",
         p: 1,
         bgcolor: "#f8fafc",
         display: "flex",

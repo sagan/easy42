@@ -214,9 +214,14 @@ export const AppLayout: React.FC = () => {
                   return (
                     <Button
                       key={item.path}
-                      onClick={() => navigate(item.path)}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        navigate(item.path);
+                      }}
                       startIcon={item.icon}
                       title={item.title}
+                      href={item.path}
                       sx={{
                         px: 1,
                         py: 1,
@@ -457,7 +462,12 @@ export const AppLayout: React.FC = () => {
             <Tooltip title={unreadEventsCount > 0 ? `Events (${unreadEventsCount} unread)` : "Events & Notifications"}>
               <IconButton
                 size="small"
-                onClick={() => navigate("/events")}
+                href="/events"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  navigate("/events");
+                }}
                 sx={{
                   color: currentPath === "/events" ? "#4F46E5" : "#64748B",
                   bgcolor: currentPath === "/events" ? "#EEF2FF" : "transparent",
@@ -607,10 +617,13 @@ export const AppLayout: React.FC = () => {
               return (
                 <ListItem key={item.path} disablePadding sx={{ mb: 0.5 }} title={item.title}>
                   <ListItemButton
-                    onClick={() => {
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
                       navigate(item.path);
                       setMobileDrawerOpen(false);
                     }}
+                    href={item.path}
                     sx={{
                       borderRadius: 1,
                       bgcolor: isActive ? "#EEF2FF" : "transparent",
@@ -633,7 +646,10 @@ export const AppLayout: React.FC = () => {
             {/* Events Item (Mobile Sidebar Drawer) */}
             <ListItem disablePadding sx={{ mb: 0.5 }} title="Events & Notifications">
               <ListItemButton
-                onClick={() => {
+                href="/events"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
                   navigate("/events");
                   setMobileDrawerOpen(false);
                 }}

@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://example.com/community-tasks-catalog.schema.json",
-  "title": "Community Tasks Catalog",
+  "$id": "https://sagan.me/easy42/task-repository-manifest.json",
+  "title": "Easy42 Tasks Catalog",
   "description": "Schema for Easy42 host automation tasks catalog",
   "type": "object",
   "properties": {
@@ -17,6 +17,13 @@
       "type": "string",
       "pattern": "^[0-9]+\\.[0-9]+(\\.[0-9]+)?$",
       "description": "Catalog version string."
+    },
+    "selector": {
+      "type": "object",
+      "description": "Key-value pairs used to match target hosts.",
+      "additionalProperties": {
+        "type": "string"
+      }
     },
     "tasks": {
       "type": "array",
@@ -56,23 +63,11 @@
             "uniqueItems": true
           }
         },
-        "required": [
-          "id",
-          "title",
-          "description",
-          "category",
-          "weight",
-          "files"
-        ],
+        "required": ["id", "title", "description", "category", "weight", "files"],
         "additionalProperties": false
       }
     }
   },
-  "required": [
-    "name",
-    "description",
-    "version",
-    "tasks"
-  ],
+  "required": ["name", "description", "version", "tasks"],
   "additionalProperties": false
 }

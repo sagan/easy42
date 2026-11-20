@@ -43,8 +43,6 @@ import {
   Plus,
   DownloadCloud,
   Trash2,
-  ChevronDown,
-  ChevronUp,
 } from "lucide-react";
 import { api } from "../../api/client";
 import { Node, TaskMeta, TaskStatusResult, TaskRunResult } from "../../types/api";
@@ -99,6 +97,8 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
 
   // Selected node names for check / run
   const [selectedNodes, setSelectedNodes] = useState<string[]>([]);
+  const lastSetNodeParamRef = useRef<string | null>(null);
+  const hasInitializedNodesRef = useRef<boolean>(false);
 
   // Task statuses: map[nodeName]TaskStatusResult
   const [statuses, setStatuses] = useState<Record<string, TaskStatusResult>>({});
@@ -119,6 +119,17 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
 
   // Load tasks on mount
   useEffect(() => {
+    loadTasks();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Initialize or externally sync selected nodes when initialNode or managedNodes changes
+  useEffect(() => {
+    const nodeParam = initialNode || "";
+    if (hasInitializedNodesRef.current && lastSetNodeParamRef.current === nodeParam) {
+      return;
+    }
+
     setError(null);
     setStatuses({});
     setRunResults({});
@@ -128,15 +139,47 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
     setSelectedTag("All");
     setHasCheckedStatus(false);
 
-    // Default selected nodes: initialNode if provided and managed, otherwise all managed nodes
-    if (initialNode && managedNodes.some((n) => n.name === initialNode)) {
-      setSelectedNodes([initialNode]);
+    // Default selected nodes: initialNode (comma-separated) if provided and managed, otherwise none
+    if (initialNode) {
+      const requested = initialNode
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const valid = requested.filter((name) => managedNodes.some((n) => n.name === name));
+      setSelectedNodes(valid);
     } else {
-      setSelectedNodes(managedNodes.map((n) => n.name));
+      setSelectedNodes([]);
     }
 
-    loadTasks();
+    if (managedNodes.length > 0) {
+      hasInitializedNodesRef.current = true;
+    }
   }, [initialNode, managedNodes]);
+
+  // Live sync current selected nodes to the URL "node" query string via replaceState
+  useEffect(() => {
+    if (!hasInitializedNodesRef.current) return;
+
+    const nextNodeParam = selectedNodes.join(",");
+    lastSetNodeParamRef.current = nextNodeParam;
+
+    setSearchParams(
+      (prev) => {
+        if (nextNodeParam) {
+          if (prev.get("node") === nextNodeParam) return prev;
+          const next = new URLSearchParams(prev);
+          next.set("node", nextNodeParam);
+          return next;
+        } else {
+          if (!prev.has("node")) return prev;
+          const next = new URLSearchParams(prev);
+          next.delete("node");
+          return next;
+        }
+      },
+      { replace: true },
+    );
+  }, [selectedNodes, setSearchParams]);
 
   const handleSelectTask = useCallback(
     (taskId: string) => {
@@ -253,7 +296,6 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
 
   // Task search filter state and View Source modal state
   const [taskFilter, setTaskFilter] = useState<string>("");
-  const [mobileTasksOpen, setMobileTasksOpen] = useState<boolean>(false);
   const [sourceModalOpen, setSourceModalOpen] = useState<boolean>(false);
   const [installModalOpen, setInstallModalOpen] = useState<boolean>(false);
   const [confirmDeleteTask, setConfirmDeleteTask] = useState<string | null>(null);
@@ -335,12 +377,13 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
 
   // A task selector automatically deselects nodes outside the task scope.
   useEffect(() => {
+    if (!selectedTask) return;
     setSelectedNodes((prev) => {
       const next = prev.filter((name) => selectorMatchedSet.has(name));
       if (next.length === prev.length) return prev;
       return next;
     });
-  }, [selectorMatchedSet]);
+  }, [selectedTask, selectorMatchedSet]);
 
   const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
     const filteredNames = new Set(selectableFilteredNodes.map((n) => n.name));
@@ -532,8 +575,9 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
       sx={{
         p: 1,
         height: { xs: "auto", md: "100%" },
-        minHeight: 0,
-        overflowY: { xs: "visible", md: "auto" },
+        minHeight: { xs: "auto", md: 0 },
+        flexShrink: { xs: 0, md: 1 },
+        overflow: { xs: "visible", md: "hidden" },
         display: "flex",
         flexDirection: "column",
       }}
@@ -542,14 +586,14 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
       <Paper
         elevation={0}
         sx={{
-          flex: 1,
-          minHeight: { xs: "auto", md: 600 },
+          flex: { xs: "none", md: 1 },
+          minHeight: { xs: "auto", md: 0 },
           borderRadius: 1,
           border: "1px solid #E2E8F0",
           bgcolor: "#FFFFFF",
           overflow: { xs: "visible", md: "hidden" },
           display: "flex",
-          flexDirection: { xs: "column", md: "row" },
+          flexDirection: { xs: "column-reverse", md: "row" },
         }}
       >
         {/* Left Sidebar: Task List */}
@@ -557,19 +601,20 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
           sx={{
             width: { xs: "100%", md: 300 },
             borderRight: { xs: 0, md: 1 },
-            borderBottom: { xs: 1, md: 0 },
+            borderTop: { xs: 1, md: 0 },
             borderColor: "divider",
             display: "flex",
             flexDirection: "column",
             bgcolor: "background.default",
             flexShrink: 0,
+            minHeight: { xs: "auto", md: 0 },
+            overflowY: { xs: "visible", md: "auto" },
           }}
         >
           <Box
             sx={{
               p: 1,
-              pb: { xs: mobileTasksOpen ? 1 : 1.5, md: 1 },
-              borderBottom: { xs: mobileTasksOpen ? 1 : 0, md: 1 },
+              borderBottom: 1,
               borderColor: "divider",
             }}
           >
@@ -578,10 +623,8 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "space-between",
-                mb: { xs: mobileTasksOpen ? 1 : 0, md: 1 },
-                cursor: { xs: "pointer", md: "default" },
+                mb: 1,
               }}
-              onClick={() => setMobileTasksOpen((prev) => !prev)}
             >
               <Box
                 sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap", flex: 1, minWidth: 0, mr: 1 }}
@@ -599,22 +642,6 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
                 >
                   Tasks
                 </Typography>
-                {/* On mobile when collapsed, display current task title */}
-                <Box sx={{ display: { xs: "flex", md: "none" }, alignItems: "center", gap: 0.5, minWidth: 0 }}>
-                  <Chip
-                    size="small"
-                    label={isCustomTaskHelp ? "+ Task Guide" : selectedTask?.title || "Select Task"}
-                    color="primary"
-                    variant="outlined"
-                    sx={{
-                      height: 22,
-                      fontSize: "0.72rem",
-                      fontWeight: 600,
-                      maxWidth: { xs: 160, sm: 240 },
-                      "& .MuiChip-label": { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
-                    }}
-                  />
-                </Box>
                 {taskFilter.trim() && (
                   <Chip
                     size="small"
@@ -628,10 +655,7 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
                 <Button
                   size="small"
                   variant="text"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setInstallModalOpen(true);
-                  }}
+                  onClick={() => setInstallModalOpen(true)}
                   startIcon={<DownloadCloud size={13} />}
                   sx={{
                     fontSize: "0.72rem",
@@ -643,20 +667,11 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
                 >
                   Install
                 </Button>
-
-                {/* Mobile Expand / Collapse Chevron */}
-                <IconButton
-                  size="small"
-                  sx={{ display: { xs: "inline-flex", md: "none" }, p: 0.25, color: "text.secondary" }}
-                  aria-label="Toggle task list"
-                >
-                  {mobileTasksOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                </IconButton>
               </Box>
             </Box>
 
-            {/* Filter Search Input (visible on desktop, or on mobile when expanded) */}
-            <Box sx={{ display: { xs: mobileTasksOpen ? "block" : "none", md: "block" } }}>
+            {/* Filter Search Input */}
+            <Box>
               <TextField
                 size="small"
                 fullWidth
@@ -695,15 +710,7 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
             </Box>
           </Box>
 
-          <Box
-            sx={{
-              flex: 1,
-              overflowY: "auto",
-              p: 1,
-              display: { xs: mobileTasksOpen ? "block" : "none", md: "block" },
-              maxHeight: { xs: 260, md: "none" },
-            }}
-          >
+          <Box sx={{ p: 1 }}>
             {loadingTasks ? (
               <Box sx={{ display: "flex", justifyContent: "center", p: 4 }}>
                 <CircularProgress size={24} />
@@ -746,7 +753,6 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
                           key={task.id}
                           onClick={() => {
                             handleSelectTask(task.id);
-                            setMobileTasksOpen(false);
                           }}
                           sx={{
                             p: 1,
@@ -833,7 +839,6 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
                         key={task.id}
                         onClick={() => {
                           handleSelectTask(task.id);
-                          setMobileTasksOpen(false);
                         }}
                         sx={{
                           p: 1,
@@ -887,7 +892,6 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
                     <Box
                       onClick={() => {
                         handleSelectTask(CUSTOM_TASK_HELP_ID);
-                        setMobileTasksOpen(false);
                       }}
                       sx={{
                         p: 1,
@@ -943,11 +947,11 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
         {/* Right Main Area: Task Details, Node Selection & Status Matrix */}
         <Box
           sx={{
-            flex: 1,
+            flex: { xs: "none", md: 1 },
             display: "flex",
             flexDirection: "column",
-            overflow: { xs: "visible", md: "hidden" },
-            minHeight: 0,
+            overflowY: { xs: "visible", md: "auto" },
+            minHeight: { xs: "auto", md: 0 },
           }}
         >
           {isCustomTaskHelp ? (
@@ -959,10 +963,8 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
           ) : selectedTask ? (
             <Box
               sx={{
-                flex: 1,
                 display: "flex",
                 flexDirection: "column",
-                overflowY: { xs: "visible", md: "auto" },
                 p: 1,
               }}
             >
@@ -1215,10 +1217,6 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
                 component={Paper}
                 variant="outlined"
                 sx={{
-                  flex: 1,
-                  minHeight: { xs: 260, md: 200 },
-                  maxHeight: { xs: 450, md: "none" },
-                  overflowY: "auto",
                   overflowX: "auto",
                   mb: 1,
                 }}
