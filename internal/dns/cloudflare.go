@@ -256,6 +256,9 @@ func (c *Client) DeleteRecord(ctx context.Context, id string) error {
 
 // ExpectedRecordsForNode calculates the expected DNS records for a given node
 func ExpectedRecordsForNode(node config.Node, baseDomain string, publishIPv6OwnName bool) []DNSRecord {
+	if !node.HasRoutableMainIP() {
+		return nil
+	}
 	var records []DNSRecord
 
 	nodeName := strings.ToLower(strings.TrimSpace(node.Name))
@@ -501,6 +504,9 @@ func Sync(ctx context.Context, client *Client, nodes []config.Node, dnsCfg confi
 	validNodeNames := make(map[string]bool)
 
 	for _, node := range nodes {
+		if !node.HasRoutableMainIP() {
+			continue
+		}
 		cleanName := strings.ToLower(strings.TrimSpace(node.Name))
 		if cleanName == "" {
 			continue

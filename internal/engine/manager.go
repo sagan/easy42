@@ -510,7 +510,7 @@ func (m *Manager) AddNode(node config.Node) error {
 	if err := m.store.Save(cfg); err != nil {
 		return err
 	}
-	if !node.IsClient {
+	if node.HasRoutableMainIP() {
 		m.triggerDNSUpdateForNode(cfg.DNS, node, "")
 		go m.SyncHostsToAgents()
 	}
@@ -1197,7 +1197,9 @@ func (m *Manager) DeleteNode(name string) error {
 	if err := m.store.Save(cfg); err != nil {
 		return err
 	}
-	m.triggerDNSDeleteForNode(cfg.DNS, name)
+	for delName := range deletedNames {
+		m.triggerDNSDeleteForNode(cfg.DNS, delName)
+	}
 	go m.SyncHostsToAgents()
 	go m.SyncSSHKeysToNodes()
 	return nil

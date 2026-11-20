@@ -37,7 +37,7 @@ func (m *Manager) GetClusterHostRecords() []config.HostRecord {
 	}
 	var records []config.HostRecord
 	for _, n := range cfg.Nodes {
-		if !n.IsUnmanaged() && strings.TrimSpace(n.IP) != "" {
+		if n.HasRoutableMainIP() && strings.TrimSpace(n.IP) != "" {
 			name := strings.TrimSpace(n.Name)
 			records = append(records, config.HostRecord{
 				Name:    name,

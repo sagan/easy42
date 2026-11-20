@@ -435,6 +435,18 @@ func (n *Node) IsUnmanaged() bool {
 	return n.IsExternal || n.IsClient
 }
 
+// HasRoutableMainIP returns true if the node's main IP/IP6 is routable in the Easy42 cluster
+// (all managed internal nodes, plus client nodes with ClientAdvertiseMainIP enabled).
+func (n *Node) HasRoutableMainIP() bool {
+	if n == nil {
+		return false
+	}
+	if !n.IsUnmanaged() {
+		return true
+	}
+	return n.IsClient && n.ClientAdvertiseMainIP
+}
+
 // IsAgentMode returns true if the node is configured to use the agent
 func (n *Node) IsAgentMode() bool {
 	if n == nil {
