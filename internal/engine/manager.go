@@ -429,11 +429,15 @@ func (m *Manager) AddNode(node config.Node) error {
 		if strings.EqualFold(compiler.GetInterfaceName(existing.Name, existing.IsExternal), newIface) {
 			return fmt.Errorf("interface name %s conflicts with existing node %s", newIface, existing.Name)
 		}
-		if node.IP != "" && !node.IsUnmanaged() && !existing.IsUnmanaged() && existing.IP == node.IP {
-			return fmt.Errorf("node with IP %s already exists (%s)", node.IP, existing.Name)
-		}
-		if node.IP6 != "" && !node.IsUnmanaged() && !existing.IsUnmanaged() && existing.IP6 != "" && existing.IP6 == node.IP6 {
-			return fmt.Errorf("node with IPv6 %s already exists (%s)", node.IP6, existing.Name)
+		participatesNew := !node.IsUnmanaged() || (node.IsClient && node.ClientAdvertiseMainIP)
+		participatesExisting := !existing.IsUnmanaged() || (existing.IsClient && existing.ClientAdvertiseMainIP)
+		if participatesNew && participatesExisting {
+			if node.IP != "" && config.CleanCIDR(existing.IP) == config.CleanCIDR(node.IP) {
+				return fmt.Errorf("node with IP %s already exists (%s)", node.IP, existing.Name)
+			}
+			if node.IP6 != "" && existing.IP6 != "" && config.CleanCIDR(existing.IP6) == config.CleanCIDR(node.IP6) {
+				return fmt.Errorf("node with IPv6 %s already exists (%s)", node.IP6, existing.Name)
+			}
 		}
 		if node.IsClient && existing.Name == node.ClientParent {
 			clientParentNode = existing
@@ -477,12 +481,16 @@ func (m *Manager) AddNode(node config.Node) error {
 
 	var autoLink *config.Link
 	if node.IsClient {
+		parentPolicy := config.PolicyAccess
+		if node.ClientAdvertiseMainIP {
+			parentPolicy = config.PolicyDefault
+		}
 		link, err := m.buildLink(cfg, clientParentNode, &node, 0, 0, nil, 0, 0, &config.Link{
 			AssignIPv4: true,
 			DisableBFD: true,
 			From: config.LinkEnd{
 				Name:   clientParentNode.Name,
-				Policy: config.PolicyAccess,
+				Policy: parentPolicy,
 			},
 			To: config.LinkEnd{
 				Name: node.Name,
@@ -569,9 +577,18 @@ func (m *Manager) UpdateNode(name string, updated config.Node) error {
 	if idx := strings.Index(updated.IP6, "/"); idx != -1 {
 		updated.IP6 = strings.TrimSpace(updated.IP6[:idx])
 	}
-	if updated.IP6 != "" && !updated.IsUnmanaged() {
+	if !updated.IsUnmanaged() || (updated.IsClient && updated.ClientAdvertiseMainIP) {
 		for _, existing := range cfg.Nodes {
-			if existing.Name != name && !existing.IsUnmanaged() && existing.IP6 != "" && existing.IP6 == updated.IP6 {
+			if existing.Name == name {
+				continue
+			}
+			if existing.IsUnmanaged() && !(existing.IsClient && existing.ClientAdvertiseMainIP) {
+				continue
+			}
+			if updated.IP != "" && existing.IP != "" && config.CleanCIDR(existing.IP) == config.CleanCIDR(updated.IP) {
+				return fmt.Errorf("node with IP %s already exists (%s)", updated.IP, existing.Name)
+			}
+			if updated.IP6 != "" && existing.IP6 != "" && config.CleanCIDR(existing.IP6) == config.CleanCIDR(updated.IP6) {
 				return fmt.Errorf("node with IPv6 %s already exists (%s)", updated.IP6, existing.Name)
 			}
 		}
@@ -669,6 +686,75 @@ func (m *Manager) UpdateNode(name string, updated config.Node) error {
 					}
 				}
 			}
+		}
+	}
+
+	if oldNode.IsClient {
+		var parentNode *config.Node
+		for i := range cfg.Nodes {
+			if cfg.Nodes[i].Name == updated.ClientParent {
+				parentNode = &cfg.Nodes[i]
+				break
+			}
+		}
+		for i := range cfg.Links {
+			l := &cfg.Links[i]
+			var clientEnd, parentEnd *config.LinkEnd
+			if l.From.Name == updated.Name && l.To.Name == updated.ClientParent {
+				clientEnd = &l.From
+				parentEnd = &l.To
+			} else if l.To.Name == updated.Name && l.From.Name == updated.ClientParent {
+				clientEnd = &l.To
+				parentEnd = &l.From
+			} else {
+				continue
+			}
+
+			// Toggle internal node link policy between "access" and "default" (preserve custom policies)
+			if !oldNode.ClientAdvertiseMainIP && updated.ClientAdvertiseMainIP {
+				if parentEnd.Policy == "" || parentEnd.Policy == config.PolicyAccess {
+					parentEnd.Policy = config.PolicyDefault
+				}
+			} else if oldNode.ClientAdvertiseMainIP && !updated.ClientAdvertiseMainIP {
+				if parentEnd.Policy == "" || parentEnd.Policy == config.PolicyDefault {
+					parentEnd.Policy = config.PolicyAccess
+				}
+			}
+
+			// Sync client node end IPv4 tunnel address
+			if updated.ClientAdvertiseMainIP && config.CleanCIDR(updated.IP) != "" {
+				clientEnd.Address4 = config.CleanCIDR(updated.IP) + "/32"
+			} else {
+				parentMainIP := ""
+				if parentNode != nil {
+					parentMainIP = parentNode.IP
+					if parentMainIP == "" {
+						parentMainIP = parentNode.ExternalIP
+					}
+				}
+				clientMainIP := config.CleanCIDR(updated.IP)
+				if clientMainIP == "" {
+					clientMainIP = updated.Name
+				}
+				if parentMainIP != "" && clientMainIP != "" {
+					if _, aClient, err := compiler.DeriveIPv4LinkLocal(parentMainIP, clientMainIP, 0); err == nil {
+						clientEnd.Address4 = aClient
+					}
+				}
+			}
+
+			// Sync client node end IPv6 tunnel address
+			if updated.ClientAdvertiseMainIP && config.CleanCIDR(updated.IP6) != "" {
+				clientEnd.Address = config.CleanCIDR(updated.IP6) + "/128"
+			} else if !strings.HasSuffix(clientEnd.Address, "/127") {
+				if ula1, ula2, err := compiler.GenerateRandomClientIPv6ULA127(); err == nil {
+					parentEnd.Address = ula1
+					clientEnd.Address = ula2
+				}
+			}
+
+			l.ModifiedAt = now
+			break
 		}
 	}
 
@@ -1343,14 +1429,22 @@ func (m *Manager) buildLink(cfg *config.Config, n1, n2 *config.Node, listenPort1
 					toAddr = ula1
 				}
 				if fromAddr == "" {
-					fromAddr = ula2
+					if fromNode.ClientAdvertiseMainIP && config.CleanCIDR(fromNode.IP6) != "" {
+						fromAddr = config.CleanCIDR(fromNode.IP6) + "/128"
+					} else {
+						fromAddr = ula2
+					}
 				}
 			} else {
 				if fromAddr == "" {
 					fromAddr = ula1
 				}
 				if toAddr == "" {
-					toAddr = ula2
+					if toNode.ClientAdvertiseMainIP && config.CleanCIDR(toNode.IP6) != "" {
+						toAddr = config.CleanCIDR(toNode.IP6) + "/128"
+					} else {
+						toAddr = ula2
+					}
 				}
 			}
 		}
@@ -1759,6 +1853,12 @@ func (m *Manager) buildLink(cfg *config.Config, n1, n2 *config.Node, listenPort1
 				fromAddr4 = a1
 				toAddr4 = a2
 			}
+		}
+		if fromNode.IsClient && fromNode.ClientAdvertiseMainIP && config.CleanCIDR(fromNode.IP) != "" {
+			fromAddr4 = config.CleanCIDR(fromNode.IP) + "/32"
+		}
+		if toNode.IsClient && toNode.ClientAdvertiseMainIP && config.CleanCIDR(toNode.IP) != "" {
+			toAddr4 = config.CleanCIDR(toNode.IP) + "/32"
 		}
 	}
 	if customFromEnd != nil && customFromEnd.Address4 != "" {

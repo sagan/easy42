@@ -133,6 +133,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
   const [isClient, setIsClient] = useState(false);
   const [clientParent, setClientParent] = useState("");
   const [clientAllowedIPsStr, setClientAllowedIPsStr] = useState("0.0.0.0/1, 128.0.0.0/1, ::/1, 8000::/1");
+  const [clientAdvertiseMainIp, setClientAdvertiseMainIp] = useState(false);
   const [caption, setCaption] = useState("");
   const [description, setDescription] = useState("");
   const [note, setNote] = useState("");
@@ -197,6 +198,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
           ? nodeToEdit.client_allowed_ips.join(", ")
           : "0.0.0.0/1, 128.0.0.0/1, ::/1, 8000::/1",
       );
+      setClientAdvertiseMainIp(Boolean(nodeToEdit.client_advertise_main_ip));
       setCaption(nodeToEdit.caption || "");
       setDescription(nodeToEdit.description || "");
       setNote(nodeToEdit.note || "");
@@ -292,6 +294,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
       setIsClient(Boolean(initialClientParent));
       setClientParent(initialClientParent || "");
       setClientAllowedIPsStr("0.0.0.0/1, 128.0.0.0/1, ::/1, 8000::/1");
+      setClientAdvertiseMainIp(false);
       setCaption("");
       setDescription("");
       setNote("");
@@ -493,11 +496,40 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
       getInterfaceName(n.name, Boolean(n.is_external)).toLowerCase() === generatedIface.toLowerCase(),
   );
 
+  const stripCidr = (v?: string) => (v || "").trim().split("/")[0].trim().toLowerCase();
+  const cleanIp = stripCidr(ip);
+  const cleanIp6 = stripCidr(ip6);
+  const checkClusterIpUniqueness = !isExternal && (!isClient || clientAdvertiseMainIp);
+  const duplicateIpNode =
+    checkClusterIpUniqueness && cleanIp
+      ? effectiveNodes.find(
+          (n) =>
+            (!nodeToEdit || n.name.toLowerCase() !== nodeToEdit.name.toLowerCase()) &&
+            !n.is_external &&
+            (!n.is_client || n.client_advertise_main_ip) &&
+            stripCidr(n.ip) === cleanIp,
+        )
+      : undefined;
+  const duplicateIp6Node =
+    checkClusterIpUniqueness && cleanIp6
+      ? effectiveNodes.find(
+          (n) =>
+            (!nodeToEdit || n.name.toLowerCase() !== nodeToEdit.name.toLowerCase()) &&
+            !n.is_external &&
+            (!n.is_client || n.client_advertise_main_ip) &&
+            stripCidr(n.ip6) === cleanIp6,
+        )
+      : undefined;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isClient) {
       if (!name.trim() || !clientParent.trim()) {
         setSaveError("Client Name and Parent Internal Node are required");
+        return;
+      }
+      if (clientAdvertiseMainIp && !ip.trim()) {
+        setSaveError("Main IPv4 is required when Use & Advertise Main IP is enabled");
         return;
       }
     } else if (isExternal) {
@@ -520,6 +552,14 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
       setSaveError(
         `Generated WireGuard interface "${generatedIface}" conflicts with existing node "${conflictingIfaceNode.name}"`,
       );
+      return;
+    }
+    if (duplicateIpNode) {
+      setSaveError(`IPv4 address "${cleanIp}" already exists on node "${duplicateIpNode.name}"`);
+      return;
+    }
+    if (duplicateIp6Node) {
+      setSaveError(`IPv6 address "${cleanIp6}" already exists on node "${duplicateIp6Node.name}"`);
       return;
     }
 
@@ -623,6 +663,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
         is_client: true,
         client_parent: clientParent.trim(),
         client_allowed_ips: parsedAllowedIPs,
+        client_advertise_main_ip: clientAdvertiseMainIp,
         entrypoints: finalEntrypoints.length > 0 ? finalEntrypoints : undefined,
         caption: caption.trim() || undefined,
         description: description.trim() || undefined,
@@ -959,12 +1000,22 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
 
               <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1 }}>
                 <TextFieldWithCopy
-                  label="Main IPv4 (Optional)"
+                  label={clientAdvertiseMainIp ? "Main IPv4" : "Main IPv4 (Optional)"}
                   size="small"
                   value={ip}
                   onChange={(e) => setIp(e.target.value)}
                   placeholder="e.g. 192.168.100.50"
-                  helperText="Optional display IPv4"
+                  required={clientAdvertiseMainIp}
+                  error={Boolean(duplicateIpNode)}
+                  helperText={
+                    duplicateIpNode ? (
+                      <span style={{ color: "#DC2626" }}>
+                        IPv4 &quot;{cleanIp}&quot; already exists on &quot;{duplicateIpNode.name}&quot;!
+                      </span>
+                    ) : (
+                      "Optional display / advertised IPv4"
+                    )
+                  }
                   disabled={saving}
                 />
                 <TextFieldWithCopy
@@ -973,8 +1024,43 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                   value={ip6}
                   onChange={(e) => setIp6(e.target.value)}
                   placeholder="e.g. fd42::50"
-                  helperText="Optional display IPv6"
+                  error={Boolean(duplicateIp6Node)}
+                  helperText={
+                    duplicateIp6Node ? (
+                      <span style={{ color: "#DC2626" }}>
+                        IPv6 &quot;{cleanIp6}&quot; already exists on &quot;{duplicateIp6Node.name}&quot;!
+                      </span>
+                    ) : (
+                      "Optional display / advertised IPv6"
+                    )
+                  }
                   disabled={saving}
+                />
+              </Box>
+
+              <Box sx={{ p: 1.2, borderRadius: 1, backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      size="small"
+                      checked={clientAdvertiseMainIp}
+                      onChange={(e) => setClientAdvertiseMainIp(e.target.checked)}
+                      disabled={saving}
+                    />
+                  }
+                  label={
+                    <Box>
+                      <Typography variant="body2" sx={{ fontSize: "0.85rem", fontWeight: 600, color: "#0F172A" }}>
+                        Use &amp; Advertise Main IP
+                      </Typography>
+                      <Typography variant="caption" sx={{ color: "#64748B", display: "block" }}>
+                        Use Main IP (/32) and IPv6 (/128) as the client WireGuard tunnel addresses (when set), advertise
+                        them via the parent node&apos;s BGP, and toggle parent link policy between &quot;access&quot;
+                        (NAT) and &quot;default&quot; (no NAT).
+                      </Typography>
+                    </Box>
+                  }
+                  sx={{ alignItems: "flex-start", ml: 0 }}
                 />
               </Box>
 
@@ -2587,8 +2673,10 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
               !name ||
               Boolean(duplicateNameNode) ||
               Boolean(conflictingIfaceNode) ||
+              Boolean(duplicateIpNode) ||
+              Boolean(duplicateIp6Node) ||
               (!isExternal && !isClient && (!sshHost || !ip)) ||
-              (isClient && !clientParent)
+              (isClient && (!clientParent || (clientAdvertiseMainIp && !ip.trim())))
             }
             startIcon={saving ? <CircularProgress size={16} color="inherit" /> : null}
           >

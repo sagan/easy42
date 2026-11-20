@@ -99,6 +99,7 @@ const ConfigChangeJSONSchema = `{
         "is_client": { "type": "boolean" },
         "client_parent": { "type": "string" },
         "client_allowed_ips": { "type": "array", "items": { "type": "string" } },
+        "client_advertise_main_ip": { "type": "boolean" },
         "caption": { "type": "string" },
         "description": { "type": "string" },
         "note": { "type": "string" },
@@ -415,6 +416,7 @@ type NodePatch struct {
 	IsClient                *bool              `json:"is_client,omitempty" yaml:"is_client,omitempty"`
 	ClientParent            *string            `json:"client_parent,omitempty" yaml:"client_parent,omitempty"`
 	ClientAllowedIPs        *[]string          `json:"client_allowed_ips,omitempty" yaml:"client_allowed_ips,omitempty"`
+	ClientAdvertiseMainIP   *bool              `json:"client_advertise_main_ip,omitempty" yaml:"client_advertise_main_ip,omitempty"`
 	Caption                 *string            `json:"caption,omitempty" yaml:"caption,omitempty"`
 	Description             *string            `json:"description,omitempty" yaml:"description,omitempty"`
 	Note                    *string            `json:"note,omitempty" yaml:"note,omitempty"`

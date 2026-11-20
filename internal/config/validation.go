@@ -248,6 +248,9 @@ func ValidateNode(node *Node) error {
 		if strings.EqualFold(node.ClientParent, node.Name) {
 			return fmt.Errorf("client node %s cannot belong to itself", node.Name)
 		}
+		if node.ClientAdvertiseMainIP && strings.TrimSpace(node.IP) == "" {
+			return fmt.Errorf("IPv4 address is required for client node %s when client_advertise_main_ip is enabled", node.Name)
+		}
 		if node.IP != "" && !IsValidIPv4(node.IP) {
 			return fmt.Errorf("invalid IPv4 address '%s' for client node %s", node.IP, node.Name)
 		}

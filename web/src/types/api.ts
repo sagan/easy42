@@ -159,6 +159,7 @@ export interface Node {
   is_client?: boolean;
   client_parent?: string;
   client_allowed_ips?: string[];
+  client_advertise_main_ip?: boolean;
   caption?: string;
   description?: string;
   note?: string;

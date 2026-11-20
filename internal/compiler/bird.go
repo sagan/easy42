@@ -439,6 +439,28 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 			}
 		}
 	}
+	for _, cn := range allNodes {
+		if cn.IsClient && cn.ClientParent == node.Name && cn.ClientAdvertiseMainIP {
+			if ip4 := config.CleanCIDR(cn.IP); ip4 != "" {
+				r4 := ip4 + "/32"
+				if !slices.Contains(staticV4, r4) && !slices.Contains(staticV4, ip4) {
+					staticV4 = append(staticV4, r4)
+				}
+				if !slices.Contains(staticV4NoExport, r4) {
+					staticV4NoExport = append(staticV4NoExport, r4)
+				}
+			}
+			if ip6 := config.CleanCIDR(cn.IP6); ip6 != "" {
+				r6 := ip6 + "/128"
+				if !slices.Contains(staticV6, r6) && !slices.Contains(staticV6, ip6) {
+					staticV6 = append(staticV6, r6)
+				}
+				if !slices.Contains(staticV6NoExport, r6) {
+					staticV6NoExport = append(staticV6NoExport, r6)
+				}
+			}
+		}
+	}
 	if staticV4 == nil {
 		staticV4 = []string{}
 	}

@@ -390,6 +390,7 @@ type Node struct {
 	IsClient                bool              `json:"is_client,omitempty"`               // True if client node (unmanaged, belongs to one internal node, WireGuard-only)
 	ClientParent            string            `json:"client_parent,omitempty"`           // Name of the internal node this client node belongs to
 	ClientAllowedIPs        []string          `json:"client_allowed_ips,omitempty"`      // Extra AllowedIPs CIDRs for the client node's downloaded wg.conf
+	ClientAdvertiseMainIP   bool              `json:"client_advertise_main_ip,omitempty"` // Use client's main IP/IP6 as wg tunnel IP and advertise via parent BGP
 	Caption                 string            `json:"caption,omitempty"`                 // Optional short description (plain text, one short sentence) of the node
 	Description             string            `json:"description,omitempty"`  // Optional description / contact info
 	Note                    string            `json:"note,omitempty"`         // Markdown format text note

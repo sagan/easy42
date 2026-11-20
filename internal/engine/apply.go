@@ -615,6 +615,10 @@ func mergeNode(target *config.Node, patch config.NodePatch, now time.Time) ([]Ap
 		checkField("client_allowed_ips", target.ClientAllowedIPs, *patch.ClientAllowedIPs)
 		target.ClientAllowedIPs = append([]string(nil), (*patch.ClientAllowedIPs)...)
 	}
+	if patch.ClientAdvertiseMainIP != nil && *patch.ClientAdvertiseMainIP != target.ClientAdvertiseMainIP {
+		checkField("client_advertise_main_ip", target.ClientAdvertiseMainIP, *patch.ClientAdvertiseMainIP)
+		target.ClientAdvertiseMainIP = *patch.ClientAdvertiseMainIP
+	}
 	if patch.Caption != nil && *patch.Caption != target.Caption {
 		checkField("caption", target.Caption, *patch.Caption)
 		target.Caption = *patch.Caption
@@ -786,6 +790,9 @@ func createNodeFromPatch(patch config.NodePatch, now time.Time) (*config.Node, [
 	}
 	if patch.ClientAllowedIPs != nil {
 		node.ClientAllowedIPs = append([]string(nil), (*patch.ClientAllowedIPs)...)
+	}
+	if patch.ClientAdvertiseMainIP != nil {
+		node.ClientAdvertiseMainIP = *patch.ClientAdvertiseMainIP
 	}
 	if patch.Caption != nil {
 		node.Caption = *patch.Caption
