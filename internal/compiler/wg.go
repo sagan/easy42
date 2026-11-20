@@ -63,7 +63,7 @@ func BuildWgLinkContext(
 	if selfEnd != nil {
 		listenPort = selfEnd.ListenPort
 	}
-	if listenPort == 0 && peerNode != nil && !peerNode.IsExternal && peerNode.IP != "" {
+	if listenPort == 0 && (selfNode == nil || !selfNode.IsClient) && peerNode != nil && !peerNode.IsUnmanaged() && peerNode.IP != "" {
 		listenPort = DerivePortFromIP(peerNode.IP)
 	}
 
@@ -250,7 +250,24 @@ func BuildWgLinkContext(
 			peerV4 = peerV4 + "/32"
 		}
 	}
-	if peerV4 == "" {
+	if selfNode != nil && selfNode.IsClient {
+		parts := []string{peerAddrOnly + "/128"}
+		if peerV4 != "" {
+			parts = append(parts, peerV4)
+		}
+		seen := make(map[string]bool, len(parts))
+		for _, p := range parts {
+			seen[p] = true
+		}
+		for _, cidr := range selfNode.ClientAllowedIPs {
+			c := strings.TrimSpace(cidr)
+			if c != "" && !seen[c] {
+				seen[c] = true
+				parts = append(parts, c)
+			}
+		}
+		allowedIPs = strings.Join(parts, ", ")
+	} else if peerV4 == "" {
 		allowedIPs = fmt.Sprintf("%s/128, 0.0.0.0/0, ::/0", peerAddrOnly)
 	} else {
 		allowedIPs = fmt.Sprintf("%s/128, %s, 0.0.0.0/0, ::/0", peerAddrOnly, peerV4)
@@ -333,6 +350,7 @@ func BuildWgLinkContext(
 		"endpoint":             endpoint,
 		"persistent_keepalive": keepalive,
 		"assign_ipv4":          assignIPv4,
+		"is_client":            selfNode != nil && selfNode.IsClient,
 	}
 
 	if linkForEnd != nil {

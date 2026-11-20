@@ -108,7 +108,7 @@ export const CronTasksTab: React.FC<CronTasksTabProps> = ({ nodes, onExecuteNow 
 
   // Managed nodes only (exclude external nodes)
   const availableNodes = React.useMemo(() => {
-    return (nodes || []).filter((n) => !n.is_external);
+    return (nodes || []).filter((n) => !n.is_external && !n.is_client);
   }, [nodes]);
 
   const applyFormSelector = (selector: Record<string, string>) => {

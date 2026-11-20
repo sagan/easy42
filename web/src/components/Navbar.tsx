@@ -495,7 +495,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               </Typography>
             </Box>
             {nodes
-              ?.filter((n) => !n.is_external)
+              ?.filter((n) => !n.is_external && !n.is_client)
               .map((n) => {
                 const st = nodeStatuses?.[n.name];
                 const isOnline = Boolean(st?.connected);

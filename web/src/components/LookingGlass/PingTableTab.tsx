@@ -49,7 +49,7 @@ export const PingTableTab: React.FC<PingTableTabProps> = ({ nodes }) => {
 
   // Managed nodes (internal nodes only)
   const internalNodes = useMemo(() => {
-    return nodes.filter((n) => !n.is_external).sort((a, b) => a.name.localeCompare(b.name));
+    return nodes.filter((n) => !n.is_external && !n.is_client).sort((a, b) => a.name.localeCompare(b.name));
   }, [nodes]);
 
   // Load history list

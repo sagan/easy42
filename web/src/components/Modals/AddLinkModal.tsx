@@ -32,6 +32,7 @@ import {
   Network,
   AlertCircle,
   Activity,
+  RotateCcw,
 } from "lucide-react";
 import { api } from "../../api/client";
 import { Node, Link, NetworkPolicy, NetworkSettings } from "../../types/api";
@@ -142,7 +143,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const { networkSettings: ctxNetworkSettings } = useMesh();
+  const { networkSettings: ctxNetworkSettings, loadData } = useMesh();
   const [networkSettings, setNetworkSettings] = useState<NetworkSettings | null>(ctxNetworkSettings);
 
   useEffect(() => {
@@ -160,6 +161,12 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
 
   const fromNode = nodes.find((n) => n.name === fromNodeName);
   const toNode = nodes.find((n) => n.name === toNodeName);
+  const isFromClient = Boolean(fromNode?.is_client);
+  const isToClient = Boolean(toNode?.is_client);
+  const isClientLink = isFromClient || isToClient;
+  const clientNode = isFromClient ? fromNode : isToClient ? toNode : undefined;
+  const [resettingIPv6, setResettingIPv6] = useState(false);
+  const [resetIPv6Success, setResetIPv6Success] = useState<string | null>(null);
   const isBothExternal = Boolean(fromNode?.is_external && toNode?.is_external);
   const isExternalLink = !isBothExternal && Boolean(fromNode?.is_external || toNode?.is_external);
   const managedNode = fromNode?.is_external ? (toNode?.is_external ? undefined : toNode) : fromNode;
@@ -218,9 +225,11 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
       const fNode = nodes.find((n) => n.name === linkToEdit.from.name);
       const tNode = nodes.find((n) => n.name === linkToEdit.to.name);
       const isExt = Boolean(fNode?.is_external || tNode?.is_external);
+      const isCli = Boolean(fNode?.is_client || tNode?.is_client);
 
-      setFromPolicy(linkToEdit.from.policy || (isExt ? "dn42" : "default"));
-      setToPolicy(linkToEdit.to.policy || (isExt ? "dn42" : "default"));
+      setFromPolicy(linkToEdit.from.policy || (isCli && !fNode?.is_client ? "access" : isExt ? "dn42" : "default"));
+      setToPolicy(linkToEdit.to.policy || (isCli && !tNode?.is_client ? "access" : isExt ? "dn42" : "default"));
+      setResetIPv6Success(null);
 
       if (fNode?.is_external) {
         setLocalAddress(linkToEdit.to.address || "fe80::1/64");
@@ -1050,7 +1059,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
               required
               disabled={submitting || Boolean(linkToEdit)}
             >
-              {nodes.map((n) => {
+              {nodes.filter((n) => !n.is_client).map((n) => {
                 const isSelf = n.name === toNodeName;
                 const isBothExt = Boolean(toNode?.is_external && n.is_external);
                 return (
@@ -1094,7 +1103,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
               required
               disabled={submitting || Boolean(linkToEdit)}
             >
-              {nodes.map((n) => {
+              {nodes.filter((n) => !n.is_client).map((n) => {
                 const isSelf = n.name === fromNodeName;
                 const isBothExt = Boolean(fromNode?.is_external && n.is_external);
                 return (
@@ -1239,7 +1248,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
           <Divider sx={{ borderColor: "#E2E8F0" }} />
 
           {/* BFD Option: Enable BFD */}
-          {linkType !== "virtual" && (
+          {linkType !== "virtual" && !isClientLink && (
             <Box
               sx={{
                 p: 1.75,
@@ -2812,8 +2821,66 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                   }}
                 >
                   <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#3730A3", mb: 1.2 }}>
-                    End 1: {fromNode.name}
+                    End 1: {fromNode.name} {isFromClient ? "(Client Node)" : ""}
                   </Typography>
+                  {isFromClient ? (
+                    <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                      <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1 }}>
+                        <TextFieldWithCopy
+                          label="Interface"
+                          size="small"
+                          value={linkToEdit ? linkToEdit.from.interface : ""}
+                          disabled
+                        />
+                        <TextFieldWithCopy
+                          label="MTU"
+                          type="number"
+                          size="small"
+                          value={fromMtu}
+                          onChange={(e) => setFromMtu(Number(e.target.value))}
+                          helperText="Default: 1420 (-80 overhead)"
+                        />
+                      </Box>
+                      {linkToEdit && clientNode && (
+                        <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1, p: 1, borderRadius: 1, backgroundColor: "#F0FDFA", border: "1px solid #99F6E4" }}>
+                          <Box>
+                            <Typography variant="caption" sx={{ color: "#0F766E", fontWeight: 700, display: "block" }}>
+                              Client IPv6 ULA (/127): <span className="mono-font">{linkToEdit.from.address || "—"}</span>
+                            </Typography>
+                            {resetIPv6Success && (
+                              <Typography variant="caption" sx={{ color: "#059669", fontWeight: 600 }}>
+                                {resetIPv6Success}
+                              </Typography>
+                            )}
+                          </Box>
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            disabled={resettingIPv6}
+                            startIcon={resettingIPv6 ? <CircularProgress size={14} /> : <RotateCcw size={14} />}
+                            onClick={async () => {
+                              setResettingIPv6(true);
+                              setError(null);
+                              setResetIPv6Success(null);
+                              try {
+                                await api.resetClientNodeIPv6(clientNode.name);
+                                await loadData();
+                                setResetIPv6Success("Assigned new random IPv6 /127");
+                              } catch (err: any) {
+                                setError(err?.message || "Failed to reset IPv6");
+                              } finally {
+                                setResettingIPv6(false);
+                              }
+                            }}
+                            sx={{ color: "#0F766E", borderColor: "#5EEAD4", textTransform: "none", fontWeight: 600 }}
+                          >
+                            Reset Client IPv6 (/127)
+                          </Button>
+                        </Box>
+                      )}
+                    </Box>
+                  ) : (
+                    <>
                   <Box sx={{ display: "grid", gridTemplateColumns: "1.2fr 1fr 1fr", gap: 1 }}>
                     <TextFieldWithCopy
                       label="Interface"
@@ -2925,7 +2992,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                     />
                   </Box>
 
-                  <Box sx={{ mt: 1, display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 1 }}>
+                  <Box sx={{ mt: 1, display: "grid", gridTemplateColumns: isClientLink ? "1fr" : "1fr 1fr 1fr", gap: 1 }}>
                     <TextField
                       select
                       fullWidth
@@ -2933,7 +3000,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                       label="Network Policy"
                       value={fromPolicy}
                       onChange={(e) => setFromPolicy(e.target.value)}
-                      helperText="Firewall & BGP routing policy applied on this endpoint"
+                      helperText={isClientLink ? "Firewall & NAT policy applied on this endpoint" : "Firewall & BGP routing policy applied on this endpoint"}
                     >
                       {networkPolicies.map((p) => (
                         <MenuItem key={p.id} value={p.id}>
@@ -2941,6 +3008,8 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                         </MenuItem>
                       ))}
                     </TextField>
+                    {!isClientLink && (
+                      <>
                     <TextField
                       select
                       fullWidth
@@ -2966,8 +3035,10 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                       placeholder="Policy default"
                       helperText="Overrides policy cost if set (non-zero)"
                     />
+                      </>
+                    )}
                   </Box>
-                  <Box sx={{ mt: 1, display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 1 }}>
+                  <Box sx={{ mt: 1, display: "grid", gridTemplateColumns: isClientLink ? "1fr 1fr" : "1fr 1fr 1fr 1fr", gap: 1 }}>
                     <TextFieldWithCopy
                       fullWidth
                       size="small"
@@ -2977,6 +3048,8 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                       placeholder="Policy default"
                       helperText="Overrides policy WireGuard FwMark"
                     />
+                    {!isClientLink && (
+                      <>
                     <TextFieldWithCopy
                       fullWidth
                       size="small"
@@ -3002,6 +3075,8 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                       <MenuItem value="rx">Rx — Receive only</MenuItem>
                       <MenuItem value="tx">Tx — Transmit only</MenuItem>
                     </TextField>
+                      </>
+                    )}
                     <TextFieldWithCopy
                       fullWidth
                       size="small"
@@ -3012,6 +3087,8 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                       helperText="Overrides policy netfilter mark"
                     />
                   </Box>
+                    </>
+                  )}
 
                   {/* Node 1 Endpoint Note */}
                   <Box sx={{ mt: 1, p: 1, borderRadius: 1, backgroundColor: "#FFFFFF", border: "1px solid #C7D2FE" }}>
@@ -3087,8 +3164,66 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                   }}
                 >
                   <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0E7490", mb: 1.2 }}>
-                    End 2: {toNode.name}
+                    End 2: {toNode.name} {isToClient ? "(Client Node)" : ""}
                   </Typography>
+                  {isToClient ? (
+                    <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                      <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1 }}>
+                        <TextFieldWithCopy
+                          label="Interface"
+                          size="small"
+                          value={linkToEdit ? linkToEdit.to.interface : ""}
+                          disabled
+                        />
+                        <TextFieldWithCopy
+                          label="MTU"
+                          type="number"
+                          size="small"
+                          value={toMtu}
+                          onChange={(e) => setToMtu(Number(e.target.value))}
+                          helperText="Default: 1420 (-80 overhead)"
+                        />
+                      </Box>
+                      {linkToEdit && clientNode && (
+                        <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1, p: 1, borderRadius: 1, backgroundColor: "#F0FDFA", border: "1px solid #99F6E4" }}>
+                          <Box>
+                            <Typography variant="caption" sx={{ color: "#0F766E", fontWeight: 700, display: "block" }}>
+                              Client IPv6 ULA (/127): <span className="mono-font">{linkToEdit.to.address || "—"}</span>
+                            </Typography>
+                            {resetIPv6Success && (
+                              <Typography variant="caption" sx={{ color: "#059669", fontWeight: 600 }}>
+                                {resetIPv6Success}
+                              </Typography>
+                            )}
+                          </Box>
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            disabled={resettingIPv6}
+                            startIcon={resettingIPv6 ? <CircularProgress size={14} /> : <RotateCcw size={14} />}
+                            onClick={async () => {
+                              setResettingIPv6(true);
+                              setError(null);
+                              setResetIPv6Success(null);
+                              try {
+                                await api.resetClientNodeIPv6(clientNode.name);
+                                await loadData();
+                                setResetIPv6Success("Assigned new random IPv6 /127");
+                              } catch (err: any) {
+                                setError(err?.message || "Failed to reset IPv6");
+                              } finally {
+                                setResettingIPv6(false);
+                              }
+                            }}
+                            sx={{ color: "#0F766E", borderColor: "#5EEAD4", textTransform: "none", fontWeight: 600 }}
+                          >
+                            Reset Client IPv6 (/127)
+                          </Button>
+                        </Box>
+                      )}
+                    </Box>
+                  ) : (
+                    <>
                   <Box sx={{ display: "grid", gridTemplateColumns: "1.2fr 1fr 1fr", gap: 1 }}>
                     <TextFieldWithCopy
                       label="Interface"
@@ -3200,7 +3335,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                     />
                   </Box>
 
-                  <Box sx={{ mt: 1, display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 1 }}>
+                  <Box sx={{ mt: 1, display: "grid", gridTemplateColumns: isClientLink ? "1fr" : "1fr 1fr 1fr", gap: 1 }}>
                     <TextField
                       select
                       fullWidth
@@ -3208,7 +3343,7 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                       label="Network Policy"
                       value={toPolicy}
                       onChange={(e) => setToPolicy(e.target.value)}
-                      helperText="Firewall & BGP routing policy applied on this endpoint"
+                      helperText={isClientLink ? "Firewall & NAT policy applied on this endpoint" : "Firewall & BGP routing policy applied on this endpoint"}
                     >
                       {networkPolicies.map((p) => (
                         <MenuItem key={p.id} value={p.id}>
@@ -3216,6 +3351,8 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                         </MenuItem>
                       ))}
                     </TextField>
+                    {!isClientLink && (
+                      <>
                     <TextField
                       select
                       fullWidth
@@ -3241,8 +3378,10 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                       placeholder="Policy default"
                       helperText="Overrides policy cost if set (non-zero)"
                     />
+                      </>
+                    )}
                   </Box>
-                  <Box sx={{ mt: 1, display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 1 }}>
+                  <Box sx={{ mt: 1, display: "grid", gridTemplateColumns: isClientLink ? "1fr 1fr" : "1fr 1fr 1fr 1fr", gap: 1 }}>
                     <TextFieldWithCopy
                       fullWidth
                       size="small"
@@ -3252,6 +3391,8 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                       placeholder="Policy default"
                       helperText="Overrides policy WireGuard FwMark"
                     />
+                    {!isClientLink && (
+                      <>
                     <TextFieldWithCopy
                       fullWidth
                       size="small"
@@ -3277,6 +3418,8 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                       <MenuItem value="rx">Rx — Receive only</MenuItem>
                       <MenuItem value="tx">Tx — Transmit only</MenuItem>
                     </TextField>
+                      </>
+                    )}
                     <TextFieldWithCopy
                       fullWidth
                       size="small"
@@ -3287,6 +3430,8 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                       helperText="Overrides policy netfilter mark"
                     />
                   </Box>
+                    </>
+                  )}
 
                   {/* Node 2 Endpoint Note */}
                   <Box sx={{ mt: 1, p: 1, borderRadius: 1, backgroundColor: "#FFFFFF", border: "1px solid #A5F3FC" }}>

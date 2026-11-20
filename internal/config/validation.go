@@ -216,7 +216,11 @@ func ValidateNode(node *Node) error {
 		return fmt.Errorf("invalid interface name '%s' for node %s", node.Interface, node.Name)
 	}
 
-	if !node.IsExternal {
+	if node.IsExternal && node.IsClient {
+		return fmt.Errorf("node %s cannot be both external and client", node.Name)
+	}
+
+	if !node.IsExternal && !node.IsClient {
 		// Managed node requirements
 		if strings.TrimSpace(node.Host) == "" {
 			return fmt.Errorf("host is required for managed node %s", node.Name)
@@ -234,6 +238,30 @@ func ValidateNode(node *Node) error {
 
 		if node.IP6 != "" && !IsValidIPv6(node.IP6) {
 			return fmt.Errorf("invalid IPv6 address '%s' for node %s", node.IP6, node.Name)
+		}
+	} else if node.IsClient {
+		// Client node requirements
+		node.ClientParent = strings.TrimSpace(node.ClientParent)
+		if node.ClientParent == "" {
+			return fmt.Errorf("client_parent is required for client node %s", node.Name)
+		}
+		if strings.EqualFold(node.ClientParent, node.Name) {
+			return fmt.Errorf("client node %s cannot belong to itself", node.Name)
+		}
+		if node.IP != "" && !IsValidIPv4(node.IP) {
+			return fmt.Errorf("invalid IPv4 address '%s' for client node %s", node.IP, node.Name)
+		}
+		if node.IP6 != "" && !IsValidIPv6(node.IP6) {
+			return fmt.Errorf("invalid IPv6 address '%s' for client node %s", node.IP6, node.Name)
+		}
+		for _, cidr := range node.ClientAllowedIPs {
+			clean := strings.TrimSpace(cidr)
+			if clean == "" {
+				continue
+			}
+			if _, _, err := net.ParseCIDR(clean); err != nil {
+				return fmt.Errorf("invalid client_allowed_ips CIDR '%s' for client node %s", clean, node.Name)
+			}
 		}
 	} else {
 		// External node requirements

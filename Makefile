@@ -23,7 +23,7 @@ VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev
 COMMIT  ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "none")
 DATE    ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 
-build: build-agent
+build:
 	go build -trimpath -ldflags "-s -w -X easy42/internal/version.Version=$(VERSION) -X easy42/internal/version.Commit=$(COMMIT) -X easy42/internal/version.Date=$(DATE) -X easy42/internal/version.BuiltBy=make" -o bin/easy42 main.go
 
 test:

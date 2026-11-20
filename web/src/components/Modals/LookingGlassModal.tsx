@@ -119,7 +119,7 @@ export const LookingGlassModal: React.FC<LookingGlassModalProps> = ({ nodes, ini
 
   // Managed nodes (exclude external)
   const managedNodes = useMemo(() => {
-    return nodes.filter((n) => !n.is_external);
+    return nodes.filter((n) => !n.is_external && !n.is_client);
   }, [nodes]);
 
   // Tag filter

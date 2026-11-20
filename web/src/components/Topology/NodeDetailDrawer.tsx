@@ -40,8 +40,11 @@ import {
   Cpu,
   Camera,
   AlertTriangle,
+  Download,
+  Laptop,
 } from "lucide-react";
 import { api } from "../../api/client";
+import { downloadTextFile } from "../../utils/common";
 import { Node, NodeStatus } from "../../types/api";
 import { useMesh } from "../../context/MeshContext";
 import { isAgentVersionOutdated } from "../../utils/version";
@@ -100,7 +103,8 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
   onSyncNode,
   onNodeUpdated,
 }) => {
-  const { serverAgentVersion } = useMesh();
+  const { serverAgentVersion, links, loadData, openCreateClientNode } = useMesh();
+  const [resettingIPv6, setResettingIPv6] = useState(false);
   const isAgentMode = Boolean(
     node?.mode === "agent" ||
       node?.agent_token ||
@@ -339,6 +343,22 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
                   }}
                 />
               )}
+              {node.is_client && (
+                <Chip
+                  icon={<Laptop size={10} style={{ color: "#0D9488", marginLeft: 4 }} />}
+                  label="CLIENT"
+                  size="small"
+                  sx={{
+                    height: 18,
+                    fontSize: "0.62rem",
+                    fontWeight: 800,
+                    backgroundColor: "#F0FDFA",
+                    color: "#0F766E",
+                    border: "1px solid #99F6E4",
+                    "& .MuiChip-label": { px: 0.5 },
+                  }}
+                />
+              )}
               {node.enable_dynamic_bird_config && (
                 <Chip
                   icon={<FileCode size={10} style={{ color: "#0D9488", marginLeft: 4 }} />}
@@ -357,7 +377,7 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
               )}
             </Box>
             <Typography variant="caption" className="mono-font" sx={{ color: "#64748B" }}>
-              {node.host}
+              {node.is_client ? `Gateway: ${node.client_parent || "—"}` : node.host}
             </Typography>
             {node.caption && node.caption.trim() !== "" && (
               <Typography variant="caption" sx={{ color: "#94A3B8", display: "block", mt: 0.2 }}>
@@ -368,7 +388,7 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
         </Box>
 
         <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-          {!node.is_external && onSyncNode && (
+          {!node.is_external && !node.is_client && onSyncNode && (
             <IconButton
               id="sync-node-header-btn"
               title="Sync Node"
@@ -1162,7 +1182,7 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
         </Box>
 
         {/* Nftables Firewall & NAT */}
-        {!node.is_external && (
+        {!node.is_external && !node.is_client && (
           <Box sx={{ mt: 1 }}>
             <Box
               sx={{
@@ -1328,7 +1348,7 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
               </Box>
 
               {/* Informational note when in SSH Snapshot mode */}
-              {!isAgentMode && !node.is_external && (
+              {!isAgentMode && !node.is_external && !node.is_client && (
                 <Box
                   sx={{
                     p: 1,
@@ -1651,6 +1671,113 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
           </Box>
         )}
 
+        {node.is_client && (() => {
+          const clientLink = links.find(
+            (l) =>
+              (l.from.name === node.name && l.to.name === node.client_parent) ||
+              (l.to.name === node.name && l.from.name === node.client_parent),
+          );
+          const clientEnd = clientLink
+            ? clientLink.from.name === node.name
+              ? clientLink.from
+              : clientLink.to
+            : undefined;
+          const parentEnd = clientLink
+            ? clientLink.from.name === node.name
+              ? clientLink.to
+              : clientLink.from
+            : undefined;
+          if (!clientLink || !clientEnd || !parentEnd) return null;
+          return (
+            <Box
+              sx={{
+                p: 1.5,
+                borderRadius: 2,
+                border: "1px solid #99F6E4",
+                backgroundColor: "#F0FDFA",
+                display: "flex",
+                flexDirection: "column",
+                gap: 1,
+              }}
+            >
+              <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <Typography variant="caption" sx={{ fontWeight: 700, color: "#0F766E", textTransform: "uppercase" }}>
+                  WireGuard Tunnel Addresses
+                </Typography>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  disabled={resettingIPv6}
+                  startIcon={resettingIPv6 ? <CircularProgress size={12} /> : <RotateCcw size={12} />}
+                  onClick={async () => {
+                    setResettingIPv6(true);
+                    setError(null);
+                    try {
+                      await api.resetClientNodeIPv6(node.name);
+                      await loadData();
+                      setActionSuccess("Assigned new random IPv6 ULA /127 to client link");
+                    } catch (err: any) {
+                      setError(err?.message || "Failed to reset IPv6");
+                    } finally {
+                      setResettingIPv6(false);
+                    }
+                  }}
+                  sx={{
+                    textTransform: "none",
+                    fontSize: "0.72rem",
+                    fontWeight: 600,
+                    py: 0.25,
+                    px: 1,
+                    color: "#0F766E",
+                    borderColor: "#5EEAD4",
+                    "&:hover": { borderColor: "#0D9488", backgroundColor: "rgba(13, 148, 136, 0.08)" },
+                  }}
+                >
+                  Reset IPv6 (/127)
+                </Button>
+              </Box>
+              <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
+                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 1 }}>
+                  <Typography variant="caption" sx={{ color: "#475569" }}>
+                    Client IPv6:
+                  </Typography>
+                  <Typography variant="caption" className="mono-font" sx={{ fontWeight: 600, color: "#0F172A" }}>
+                    {clientEnd.address || "—"}
+                  </Typography>
+                </Box>
+                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 1 }}>
+                  <Typography variant="caption" sx={{ color: "#475569" }}>
+                    Gateway IPv6:
+                  </Typography>
+                  <Typography variant="caption" className="mono-font" sx={{ fontWeight: 600, color: "#0F172A" }}>
+                    {parentEnd.address || "—"}
+                  </Typography>
+                </Box>
+                {(clientEnd.address4 || parentEnd.address4) && (
+                  <>
+                    <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 1 }}>
+                      <Typography variant="caption" sx={{ color: "#475569" }}>
+                        Client IPv4:
+                      </Typography>
+                      <Typography variant="caption" className="mono-font" sx={{ fontWeight: 600, color: "#0F172A" }}>
+                        {clientEnd.address4 || "—"}
+                      </Typography>
+                    </Box>
+                    <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 1 }}>
+                      <Typography variant="caption" sx={{ color: "#475569" }}>
+                        Gateway IPv4:
+                      </Typography>
+                      <Typography variant="caption" className="mono-font" sx={{ fontWeight: 600, color: "#0F172A" }}>
+                        {parentEnd.address4 || "—"}
+                      </Typography>
+                    </Box>
+                  </>
+                )}
+              </Box>
+            </Box>
+          );
+        })()}
+
         {actionSuccess && (
           <Alert severity="success" sx={{ borderRadius: 2 }}>
             {actionSuccess}
@@ -1666,7 +1793,63 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
 
       {/* Footer Actions */}
       <Box sx={{ mt: "auto", pt: 3, display: "flex", flexDirection: "column", gap: 1 }}>
-        {!node.is_external && onSyncNode && (
+        {node.is_client && (
+          <Button
+            id="download-client-wg-btn"
+            fullWidth
+            variant="contained"
+            startIcon={<Download size={16} />}
+            onClick={async () => {
+              try {
+                const res = await api.getClientWgConfig(node.name);
+                downloadTextFile(
+                  res.filename || `wg-${node.name}-${node.client_parent || "gateway"}.conf`,
+                  res.config,
+                );
+              } catch (err: any) {
+                alert(err?.message || "Failed to download wg.conf");
+              }
+            }}
+            sx={{
+              background: "linear-gradient(135deg, #0D9488 0%, #0F766E 100%)",
+              color: "#FFFFFF",
+              fontWeight: 700,
+              textTransform: "none",
+              py: 1,
+              boxShadow: "0 2px 6px rgba(13, 148, 136, 0.25)",
+              "&:hover": {
+                background: "linear-gradient(135deg, #0F766E 0%, #115E59 100%)",
+                boxShadow: "0 4px 10px rgba(13, 148, 136, 0.35)",
+              },
+            }}
+          >
+            Download wg.conf
+          </Button>
+        )}
+        {!node.is_external && !node.is_client && (
+          <Button
+            id="create-client-node-btn"
+            fullWidth
+            variant="outlined"
+            startIcon={<Laptop size={16} />}
+            onClick={() => openCreateClientNode(node.name)}
+            disabled={updatingState || refreshing || deleting}
+            sx={{
+              color: "#0D9488",
+              borderColor: "#99F6E4",
+              fontWeight: 700,
+              textTransform: "none",
+              py: 0.9,
+              "&:hover": {
+                borderColor: "#0D9488",
+                backgroundColor: "rgba(13, 148, 136, 0.06)",
+              },
+            }}
+          >
+            Create Client Node
+          </Button>
+        )}
+        {!node.is_external && !node.is_client && onSyncNode && (
           <Button
             id="sync-node-btn"
             fullWidth
@@ -1691,7 +1874,7 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
           </Button>
         )}
 
-        {!node.is_external && onUpdateNodeState && (
+        {!node.is_external && !node.is_client && onUpdateNodeState && (
           <Button
             fullWidth
             variant="contained"
@@ -1732,7 +1915,7 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
           Node Details
         </Button>
 
-        {onOpenHelper && !node.is_external && (
+        {onOpenHelper && !node.is_external && !node.is_client && (
           <Button
             fullWidth
             variant="outlined"
@@ -1754,7 +1937,7 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
           </Button>
         )}
 
-        {onOpenLookingGlass && !node.is_external && (
+        {onOpenLookingGlass && !node.is_external && !node.is_client && (
           <Button
             fullWidth
             variant="outlined"
@@ -1776,7 +1959,7 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
           </Button>
         )}
 
-        {!node.is_external && (
+        {!node.is_external && !node.is_client && (
           <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1 }}>
             <Button
               id="restart-all-wg-btn"

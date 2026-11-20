@@ -40,8 +40,10 @@ import {
   Lock,
   Eye,
   EyeOff,
+  Download,
 } from "lucide-react";
 import { api } from "../../api/client";
+import { downloadTextFile } from "../../utils/common";
 import { Link, NetworkState, Node, NetworkPolicy, NodeStatus, NetworkSettings } from "../../types/api";
 import { MarkdownView } from "../Common/MarkdownView";
 import { getEffectiveLinkCost } from "../../utils/cost";
@@ -168,6 +170,7 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
   const toNode = effectiveNodes.find((n) => n.name === link.to.name);
   const isFromExternal = fromNode?.is_external;
   const isToExternal = toNode?.is_external;
+  const clientNode = fromNode?.is_client ? fromNode : toNode?.is_client ? toNode : undefined;
   const isManual = !isVirtual && (link.type === "manual" || link.from.type === "manual" || link.to.type === "manual");
 
   const isExternalLink = Boolean(isFromExternal || isToExternal);
@@ -2736,16 +2739,52 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
         >
           Edit Link
         </Button>
-        <Button
-          fullWidth
-          variant="outlined"
-          color="error"
-          startIcon={deleting ? <CircularProgress size={16} color="inherit" /> : <Trash2 size={16} />}
-          onClick={handleDelete}
-          disabled={deleting}
-        >
-          {deleting ? "Deleting..." : "Delete WireGuard Link"}
-        </Button>
+        {clientNode ? (
+          <>
+            <Button
+              fullWidth
+              variant="contained"
+              startIcon={<Download size={16} />}
+              onClick={async () => {
+                try {
+                  const res = await api.getClientWgConfig(clientNode.name);
+                  downloadTextFile(
+                    res.filename || `wg-${clientNode.name}-${clientNode.client_parent || "gateway"}.conf`,
+                    res.config,
+                  );
+                } catch (err: any) {
+                  setError(err?.message || "Failed to download wg.conf");
+                }
+              }}
+              sx={{
+                background: "linear-gradient(135deg, #0D9488 0%, #0F766E 100%)",
+                color: "#FFFFFF",
+                fontWeight: 700,
+                textTransform: "none",
+                "&:hover": {
+                  background: "linear-gradient(135deg, #0F766E 0%, #115E59 100%)",
+                },
+              }}
+            >
+              Download Client wg.conf
+            </Button>
+            <Alert severity="info" sx={{ borderRadius: 1.5, py: 0.5 }}>
+              This link is managed as a single unit with client node <strong>{clientNode.name}</strong>. Delete the
+              client node to remove this link.
+            </Alert>
+          </>
+        ) : (
+          <Button
+            fullWidth
+            variant="outlined"
+            color="error"
+            startIcon={deleting ? <CircularProgress size={16} color="inherit" /> : <Trash2 size={16} />}
+            onClick={handleDelete}
+            disabled={deleting}
+          >
+            {deleting ? "Deleting..." : "Delete WireGuard Link"}
+          </Button>
+        )}
       </Box>
 
       <LinkKeyActionModal

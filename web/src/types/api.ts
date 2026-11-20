@@ -156,6 +156,9 @@ export interface Node {
   name: string;
   host?: string;
   is_external?: boolean;
+  is_client?: boolean;
+  client_parent?: string;
+  client_allowed_ips?: string[];
   caption?: string;
   description?: string;
   note?: string;

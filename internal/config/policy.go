@@ -11,6 +11,7 @@ const (
 	PolicyDefault = "default"
 	PolicyDN42    = "dn42"
 	PolicyNone    = "none"
+	PolicyAccess  = "access"
 )
 
 const (
@@ -526,6 +527,25 @@ func GetBuiltinPolicies(netSettings *NetworkSettings) []NetworkPolicy {
 			RejectInternet: false,
 			FilterForward:  false,
 			FilterInput:    false,
+		},
+		{
+			ID:             PolicyAccess,
+			Name:           "Access (Client Gateway)",
+			Description:    "Gateway policy for client node links with output masquerade and forward SNAT to main IP",
+			IsInternal:     true,
+			Cost:           100,
+			RoutingPolicy:  RoutingPolicyFull,
+			AddPaths:       AddPathsOff,
+			RejectInternet: true,
+			FilterForward:  false,
+			FilterInput:    false,
+			SNAT: &SNATConfig{
+				Enabled:   true,
+				Condition: "all",
+				Target:    "masquerade",
+			},
+			ForwardSNAT:       true,
+			ForwardSNATTarget: "main_ip",
 		},
 	}
 }

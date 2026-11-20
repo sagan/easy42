@@ -6,13 +6,14 @@ import (
 
 func TestGetBuiltinPolicies(t *testing.T) {
 	policies := GetBuiltinPolicies(nil)
-	if len(policies) != 3 {
-		t.Fatalf("expected 3 builtin policies, got %d", len(policies))
+	if len(policies) != 4 {
+		t.Fatalf("expected 4 builtin policies, got %d", len(policies))
 	}
 
 	foundDefault := false
 	foundDN42 := false
 	foundNone := false
+	foundAccess := false
 
 	for _, p := range policies {
 		if !p.IsInternal {
@@ -37,11 +38,19 @@ func TestGetBuiltinPolicies(t *testing.T) {
 			if p.RejectInternet || p.FilterForward || p.FilterInput || p.SNAT != nil {
 				t.Errorf("expected none policy to have no restrictions")
 			}
+		case PolicyAccess:
+			foundAccess = true
+			if p.SNAT == nil || !p.SNAT.Enabled || p.SNAT.Condition != "all" || p.SNAT.Target != "masquerade" {
+				t.Errorf("expected access policy to have output SNAT all->masquerade, got %+v", p.SNAT)
+			}
+			if !p.ForwardSNAT || p.ForwardSNATTarget != "main_ip" {
+				t.Errorf("expected access policy to have forward SNAT to main_ip")
+			}
 		}
 	}
 
-	if !foundDefault || !foundDN42 || !foundNone {
-		t.Errorf("missing expected built-in policies: default=%v, dn42=%v, none=%v", foundDefault, foundDN42, foundNone)
+	if !foundDefault || !foundDN42 || !foundNone || !foundAccess {
+		t.Errorf("missing expected built-in policies: default=%v, dn42=%v, none=%v, access=%v", foundDefault, foundDN42, foundNone, foundAccess)
 	}
 }
 

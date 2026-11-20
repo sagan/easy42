@@ -598,7 +598,7 @@ export const AppsPage: React.FC = () => {
   const [deleteApp, setDeleteApp] = useState<App | null>(null);
 
   const managedNodes = useMemo(() => {
-    return nodes.filter((n) => !n.is_external);
+    return nodes.filter((n) => !n.is_external && !n.is_client);
   }, [nodes]);
 
   // Validated node filter for display + filtering (unknown names fall back to "all")
@@ -3855,7 +3855,7 @@ export const AppsPage: React.FC = () => {
                 >
                   <MenuItem value="all">All Nodes</MenuItem>
                   {nodes
-                    .filter((n) => !n.is_external)
+                    .filter((n) => !n.is_external && !n.is_client)
                     .map((n) => (
                       <MenuItem key={n.name} value={n.name}>
                         {n.name}

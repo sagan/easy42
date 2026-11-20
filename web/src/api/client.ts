@@ -168,6 +168,12 @@ export const api = {
     request<{ node: string; config: string }>(`/nodes/${encodeURIComponent(name)}/bird`),
   getNodeNftablesConfig: (name: string) =>
     request<{ node: string; config: string }>(`/nodes/${encodeURIComponent(name)}/nftables`),
+  getClientWgConfig: (name: string) =>
+    request<{ node: string; filename?: string; config: string }>(`/nodes/${encodeURIComponent(name)}/wg-conf`),
+  resetClientNodeIPv6: (name: string) =>
+    request<Link>(`/nodes/${encodeURIComponent(name)}/reset-client-ipv6`, {
+      method: "POST",
+    }),
   restartNodeWg: (name: string) =>
     request<{ success: boolean; message: string; output?: string }>(`/nodes/${encodeURIComponent(name)}/restart-wg`, {
       method: "POST",

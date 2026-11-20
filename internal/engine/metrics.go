@@ -399,7 +399,7 @@ func (m *Manager) GetFleetLiveStatus() (config.FleetMetricsSummary, []config.Nod
 
 	for _, n := range nodes {
 		// External nodes are completely excluded from fleet server monitoring
-		if n.IsExternal {
+		if n.IsUnmanaged() {
 			continue
 		}
 

@@ -298,7 +298,7 @@ func (m *Manager) SaveCronTask(task config.CronTask) (config.CronTask, error) {
 	matched := false
 	for i := range cfg.Nodes {
 		n := &cfg.Nodes[i]
-		if !n.IsExternal && config.CronTaskTargetsNode(task, n, n.Name) {
+		if !n.IsUnmanaged() && config.CronTaskTargetsNode(task, n, n.Name) {
 			matched = true
 			break
 		}
@@ -404,7 +404,7 @@ func (m *Manager) SyncCronTasksToAgents() {
 	}
 
 	for _, node := range cfg.Nodes {
-		if node.IsExternal {
+		if node.IsUnmanaged() {
 			continue
 		}
 		m.SyncCronTasksToNode(node.Name)
@@ -426,7 +426,7 @@ func (m *Manager) SyncCronTasksToNode(nodeName string) {
 	for i := range cfg.Nodes {
 		n := &cfg.Nodes[i]
 		if n.Name == nodeName {
-			if n.IsExternal {
+			if n.IsUnmanaged() {
 				return
 			}
 			targetNode = n

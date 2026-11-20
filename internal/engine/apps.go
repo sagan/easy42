@@ -891,7 +891,7 @@ func (m *Manager) SyncAppsToAgents() {
 	}
 
 	for _, node := range cfg.Nodes {
-		if node.IsExternal {
+		if node.IsUnmanaged() {
 			continue
 		}
 		if m.agentHub.IsAppsDisabled(node.Name) {

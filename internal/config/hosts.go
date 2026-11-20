@@ -185,7 +185,7 @@ func MergeHostRecords(nodeExtraHostsText, globalExtraHostsText string, clusterNo
 
 	// 3. Process easy42 cluster nodes (priority 3)
 	for _, n := range clusterNodes {
-		if n.IsExternal {
+		if n.IsUnmanaged() {
 			continue
 		}
 		ip := strings.TrimSpace(n.IP)
@@ -219,7 +219,7 @@ func MergeHostRecords(nodeExtraHostsText, globalExtraHostsText string, clusterNo
 	// Map cluster node main IP -> cluster node name
 	clusterNodeIPToName := make(map[string]string)
 	for _, n := range clusterNodes {
-		if n.IsExternal {
+		if n.IsUnmanaged() {
 			continue
 		}
 		ip := strings.TrimSpace(n.IP)

@@ -319,7 +319,7 @@ export const NodesPage: React.FC = () => {
 
   // Requirement 2: Completely exclude external nodes from Nodes monitoring page
   const managedNodes = useMemo(() => {
-    return nodes.filter((n) => !n.is_external);
+    return nodes.filter((n) => !n.is_external && !n.is_client);
   }, [nodes]);
 
   // Map each node to its belonging blocks (excluding external-only blocks or blocks named "external")

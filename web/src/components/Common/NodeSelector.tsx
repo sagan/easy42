@@ -249,7 +249,7 @@ export const NodeSelector: React.FC<NodeSelectorProps> = ({
   const [syntaxHelpOpen, setSyntaxHelpOpen] = React.useState(false);
 
   const agentNodes = React.useMemo(
-    () => nodes.filter((n) => !n.is_external),
+    () => nodes.filter((n) => !n.is_external && !n.is_client),
     [nodes],
   );
   const allNames = React.useMemo(

@@ -101,4 +101,42 @@ func TestValidateNode(t *testing.T) {
 	if err := ValidateNode(validExt); err != nil {
 		t.Errorf("Expected valid external node to pass, got: %v", err)
 	}
+
+	validClient := &Node{
+		Name:             "laptop-1",
+		IsClient:         true,
+		ClientParent:     "node-1",
+		ClientAllowedIPs: DefaultClientAllowedIPs(),
+	}
+	if err := ValidateNode(validClient); err != nil {
+		t.Errorf("Expected valid client node to pass, got: %v", err)
+	}
+
+	missingParentClient := &Node{
+		Name:     "laptop-2",
+		IsClient: true,
+	}
+	if err := ValidateNode(missingParentClient); err == nil {
+		t.Errorf("Expected client node without client_parent to fail")
+	}
+
+	bothFlagsClient := &Node{
+		Name:         "laptop-3",
+		IsClient:     true,
+		IsExternal:   true,
+		ClientParent: "node-1",
+	}
+	if err := ValidateNode(bothFlagsClient); err == nil {
+		t.Errorf("Expected node with both is_client and is_external to fail")
+	}
+
+	invalidCIDRClient := &Node{
+		Name:             "laptop-4",
+		IsClient:         true,
+		ClientParent:     "node-1",
+		ClientAllowedIPs: []string{"not-a-cidr"},
+	}
+	if err := ValidateNode(invalidCIDRClient); err == nil {
+		t.Errorf("Expected client node with invalid CIDR to fail")
+	}
 }

@@ -3090,6 +3090,9 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
       if (srcNode?.is_external && tgtNode?.is_external) {
         return false;
       }
+      if (srcNode?.is_client || tgtNode?.is_client) {
+        return false;
+      }
       return true;
     },
     [nodes],
@@ -3101,6 +3104,9 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
         const srcNode = nodes.find((n) => n.name === connection.source);
         const tgtNode = nodes.find((n) => n.name === connection.target);
         if (srcNode?.is_external && tgtNode?.is_external) {
+          return;
+        }
+        if (srcNode?.is_client || tgtNode?.is_client) {
           return;
         }
         onConnectNodes(connection.source, connection.target);

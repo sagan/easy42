@@ -74,7 +74,7 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
 
   // Exclude external unmanaged nodes
   const managedNodes = useMemo(() => {
-    return nodes.filter((n) => !n.is_external);
+    return nodes.filter((n) => !n.is_external && !n.is_client);
   }, [nodes]);
 
   // Unique tags across all managed nodes

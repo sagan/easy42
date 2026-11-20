@@ -2,6 +2,7 @@ package compiler
 
 import (
 	"bytes"
+	"crypto/rand"
 	"fmt"
 	"hash/fnv"
 	"net"
@@ -212,4 +213,30 @@ func ParsePortRange(rangeStr string) (int, int, error) {
 		return 0, 0, err
 	}
 	return start, end, nil
+}
+
+// DeriveClientIPv6ULA derives a deterministic ULA IPv6 address (fd42:c11e:<h1:x>:<h2:x>::2/128)
+// for a client node connected to its parent internal node, so IPv6 traffic can be forwarded.
+func DeriveClientIPv6ULA(parentName, clientName string) string {
+	h := fnv.New32a()
+	fmt.Fprintf(h, "%s/%s", strings.TrimSpace(parentName), strings.TrimSpace(clientName))
+	sum := h.Sum32()
+	p1 := uint16(sum >> 16)
+	p2 := uint16(sum & 0xffff)
+	return fmt.Sprintf("fd42:c11e:%x:%x::2/128", p1, p2)
+}
+
+// GenerateRandomClientIPv6ULA127 generates a random RFC 4193 ULA /127 point-to-point IPv6 pair
+// (e.g. fdXX:...::0/127 and fdXX:...::1/127) for a client node link's two endpoints.
+func GenerateRandomClientIPv6ULA127() (string, string, error) {
+	var b [16]byte
+	if _, err := rand.Read(b[1:]); err != nil {
+		return "", "", fmt.Errorf("failed to generate random IPv6 ULA: %w", err)
+	}
+	b[0] = 0xfd // RFC 4193 ULA prefix fd00::/8
+	b[15] &= 0xfe
+	addr1 := net.IP(append([]byte(nil), b[:]...)).String() + "/127"
+	b[15] |= 0x01
+	addr2 := net.IP(append([]byte(nil), b[:]...)).String() + "/127"
+	return addr1, addr2, nil
 }

@@ -377,12 +377,20 @@ type ConfigHook struct {
 // Hook is an alias for ConfigHook
 type Hook = ConfigHook
 
+// DefaultClientAllowedIPs returns the default extra AllowedIPs CIDRs for a client node's WireGuard peer.
+func DefaultClientAllowedIPs() []string {
+	return []string{"0.0.0.0/1", "128.0.0.0/1", "::/1", "8000::/1"}
+}
+
 // Node represents a device/node in the network
 type Node struct {
-	Name                    string            `json:"name"`                   // Node name / hostname (WireGuard interface wg42* is truncated to 15 chars)
-	Host                    string            `json:"host,omitempty"`         // SSH host / alias / IP (omitted for external peers)
-	IsExternal              bool              `json:"is_external,omitempty"`  // True if external unmanaged peer (e.g. DN42)
-	Caption                 string            `json:"caption,omitempty"`      // Optional short description (plain text, one short sentence) of the node
+	Name                    string            `json:"name"`                              // Node name / hostname (WireGuard interface wg42* is truncated to 15 chars)
+	Host                    string            `json:"host,omitempty"`                    // SSH host / alias / IP (omitted for external/client peers)
+	IsExternal              bool              `json:"is_external,omitempty"`             // True if external unmanaged peer (e.g. DN42)
+	IsClient                bool              `json:"is_client,omitempty"`               // True if client node (unmanaged, belongs to one internal node, WireGuard-only)
+	ClientParent            string            `json:"client_parent,omitempty"`           // Name of the internal node this client node belongs to
+	ClientAllowedIPs        []string          `json:"client_allowed_ips,omitempty"`      // Extra AllowedIPs CIDRs for the client node's downloaded wg.conf
+	Caption                 string            `json:"caption,omitempty"`                 // Optional short description (plain text, one short sentence) of the node
 	Description             string            `json:"description,omitempty"`  // Optional description / contact info
 	Note                    string            `json:"note,omitempty"`         // Markdown format text note
 	IP                      string            `json:"ip,omitempty"`           // Main IPv4 (e.g. 192.168.100.1)
@@ -416,6 +424,14 @@ type Node struct {
 	CustomNetworkScript     string            `json:"custom_network_script,omitempty"`                                                  // Custom shell script for node network manager (e.g. policy routing)
 	RouteReflector          bool              `json:"route_reflector,omitempty" yaml:"route_reflector,omitempty"`                       // True if node acts as BGP Route Reflector for internal iBGP peers
 	EnableDynamicBirdConfig bool              `json:"enable_dynamic_bird_config,omitempty" yaml:"enable_dynamic_bird_config,omitempty"` // Enable dynamic BIRD config file (/etc/bird_easy42_dynamic.conf)
+}
+
+// IsUnmanaged returns true if the node is not managed by Easy42 via SSH or agent (external or client node).
+func (n *Node) IsUnmanaged() bool {
+	if n == nil {
+		return false
+	}
+	return n.IsExternal || n.IsClient
 }
 
 // IsAgentMode returns true if the node is configured to use the agent

@@ -101,12 +101,14 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
     refreshingNodeName,
   } = nodeData;
   const isExternal = Boolean(node.is_external);
-  const isOnline = isExternal ? true : Boolean(status?.connected);
+  const isClient = Boolean(node.is_client);
+  const isUnmanaged = isExternal || isClient;
+  const isOnline = isUnmanaged ? true : Boolean(status?.connected);
   const isRefreshing = refreshingNodeName === node.name;
   const isAgentConfigured = node.mode === "agent" || Boolean(node.agent_token);
   const isAgentMode = status?.mode === "agent" || isAgentConfigured || Boolean(status?.connected);
-  const isOffline = !isExternal && isAgentMode && !isOnline;
-  const isAgentWorking = isAgentMode && isOnline && !isExternal;
+  const isOffline = !isUnmanaged && isAgentMode && !isOnline;
+  const isAgentWorking = isAgentMode && isOnline && !isUnmanaged;
   const isRouteReflector = Boolean(node.route_reflector);
   const isCore = Boolean(isCentralityActive && centralityInfo?.isCore);
 
@@ -123,8 +125,10 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
               ? "2px solid #059669"
               : isFocused || isHighlighted
                 ? "2px solid #4F46E5"
-                : isExternal
-                  ? "2px dashed #8B5CF6"
+                : isClient
+                  ? "2px dashed #0D9488"
+                  : isExternal
+                    ? "2px dashed #8B5CF6"
                   : isOffline
                     ? "1.5px solid #EF4444"
                     : isRouteReflector

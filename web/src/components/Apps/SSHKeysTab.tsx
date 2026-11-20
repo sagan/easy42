@@ -366,7 +366,7 @@ export const SSHKeysTab: React.FC = () => {
 
   const matchedNames = (selector: Record<string, string>): string[] => {
     if (Object.keys(selector || {}).length === 0) return [];
-    return nodes.filter((n) => !n.is_external && matchesTaskSelector(n, selector)).map((n) => n.name);
+    return nodes.filter((n) => !n.is_external && !n.is_client && matchesTaskSelector(n, selector)).map((n) => n.name);
   };
 
   // Computes and caches the MD5/SHA1/SHA256 fingerprints of a key the first time

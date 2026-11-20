@@ -458,6 +458,59 @@ func (s *Server) handleGetNodeNftablesConfig(w http.ResponseWriter, r *http.Requ
 	})
 }
 
+func (s *Server) handleGetClientNodeWgConfig(w http.ResponseWriter, r *http.Request) {
+	name := chi.URLParam(r, "name")
+	wgConfig, err := s.mgr.GenerateClientWgConfig(name)
+	if err != nil {
+		status := http.StatusBadRequest
+		if errors.Is(err, engine.ErrNodeNotFound) {
+			status = http.StatusNotFound
+		} else if errors.Is(err, crypto.ErrVaultLocked) {
+			status = http.StatusForbidden
+		}
+		writeError(w, status, err.Error())
+		return
+	}
+
+	filename := "wg.conf"
+	if n := s.mgr.FindNode(name); n != nil && n.ClientParent != "" {
+		filename = fmt.Sprintf("wg-%s-%s.conf", n.Name, n.ClientParent)
+	}
+
+	if r.URL.Query().Get("download") == "true" {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
+		_, _ = w.Write([]byte(wgConfig))
+		return
+	}
+
+	if r.URL.Query().Get("raw") == "true" || r.Header.Get("Accept") == "text/plain" {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		_, _ = w.Write([]byte(wgConfig))
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"node":     name,
+		"filename": filename,
+		"config":   wgConfig,
+	})
+}
+
+func (s *Server) handleResetClientNodeIPv6(w http.ResponseWriter, r *http.Request) {
+	name := chi.URLParam(r, "name")
+	link, err := s.mgr.ResetClientNodeIPv6(name)
+	if err != nil {
+		status := http.StatusBadRequest
+		if errors.Is(err, engine.ErrNodeNotFound) {
+			status = http.StatusNotFound
+		}
+		writeError(w, status, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, link)
+}
+
 func (s *Server) handleRestartNodeWg(w http.ResponseWriter, r *http.Request) {
 	name := chi.URLParam(r, "name")
 	out, err := s.mgr.RestartNodeWireGuardInterfaces(name)

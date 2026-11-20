@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"time"
 
@@ -602,6 +603,18 @@ func mergeNode(target *config.Node, patch config.NodePatch, now time.Time) ([]Ap
 		checkField("is_external", target.IsExternal, *patch.IsExternal)
 		target.IsExternal = *patch.IsExternal
 	}
+	if patch.IsClient != nil && *patch.IsClient != target.IsClient {
+		checkField("is_client", target.IsClient, *patch.IsClient)
+		target.IsClient = *patch.IsClient
+	}
+	if patch.ClientParent != nil && *patch.ClientParent != target.ClientParent {
+		checkField("client_parent", target.ClientParent, *patch.ClientParent)
+		target.ClientParent = *patch.ClientParent
+	}
+	if patch.ClientAllowedIPs != nil && !slices.Equal(target.ClientAllowedIPs, *patch.ClientAllowedIPs) {
+		checkField("client_allowed_ips", target.ClientAllowedIPs, *patch.ClientAllowedIPs)
+		target.ClientAllowedIPs = append([]string(nil), (*patch.ClientAllowedIPs)...)
+	}
 	if patch.Caption != nil && *patch.Caption != target.Caption {
 		checkField("caption", target.Caption, *patch.Caption)
 		target.Caption = *patch.Caption
@@ -764,6 +777,15 @@ func createNodeFromPatch(patch config.NodePatch, now time.Time) (*config.Node, [
 	}
 	if patch.IsExternal != nil {
 		node.IsExternal = *patch.IsExternal
+	}
+	if patch.IsClient != nil {
+		node.IsClient = *patch.IsClient
+	}
+	if patch.ClientParent != nil {
+		node.ClientParent = *patch.ClientParent
+	}
+	if patch.ClientAllowedIPs != nil {
+		node.ClientAllowedIPs = append([]string(nil), (*patch.ClientAllowedIPs)...)
 	}
 	if patch.Caption != nil {
 		node.Caption = *patch.Caption

@@ -73,8 +73,10 @@ import {
   Key,
   ChevronDown,
   FileCode2,
+  Download,
 } from "lucide-react";
 import { useMesh } from "../context/MeshContext";
+import { downloadTextFile } from "../utils/common";
 import { api } from "../api/client";
 import { Node, NodeMetricPoint, GraphBlock, Link, NetworkPolicy } from "../types/api";
 import { MetricAreaChart } from "../components/Nodes/MetricAreaChart";
@@ -210,7 +212,8 @@ export const NodeDetailPage: React.FC = () => {
 
   // Tabs state synced with query params
   const tabParam = searchParams.get("tab") || "overview";
-  const validTabs = node?.is_external
+  const validTabs =
+    node?.is_external || node?.is_client
     ? ["overview", "networking"]
     : [
         "overview",
@@ -227,7 +230,7 @@ export const NodeDetailPage: React.FC = () => {
   const currentTab = validTabs.includes(tabParam) ? (tabParam === "telemetry" ? "metrics" : tabParam) : "overview";
 
   useEffect(() => {
-    if (node?.is_external && tabParam !== "overview" && tabParam !== "networking") {
+    if ((node?.is_external || node?.is_client) && tabParam !== "overview" && tabParam !== "networking") {
       setSearchParams(
         (prev) => {
           const next = new URLSearchParams(prev);
@@ -359,7 +362,7 @@ export const NodeDetailPage: React.FC = () => {
 
   // When visiting the agent tab, query existing token from server if not yet loaded
   useEffect(() => {
-    if (currentTab === "agent" && node && !node.is_external && !node.agent_token && !agentToken) {
+    if (currentTab === "agent" && node && !node.is_external && !node.is_client && !node.agent_token && !agentToken) {
       api
         .getNodeAgent(node.name)
         .then((res) => {
@@ -1138,7 +1141,7 @@ export const NodeDetailPage: React.FC = () => {
               </Button>
             </Tooltip>
 
-            {!node?.is_external && (
+            {!node?.is_external && !node?.is_client && (
               <Button
                 size="small"
                 variant="contained"
@@ -1210,7 +1213,7 @@ export const NodeDetailPage: React.FC = () => {
               >
                 <Tag size={16} color="#4F46E5" /> Rename Node
               </MenuItem>
-              {!node?.is_external && (
+              {!node?.is_external && !node?.is_client && (
                 <MenuItem
                   onClick={() => {
                     setMoreMenuAnchor(null);
@@ -1222,7 +1225,7 @@ export const NodeDetailPage: React.FC = () => {
                   <Radio size={16} color="#0284C7" /> Update State & WireGuard
                 </MenuItem>
               )}
-              {!node?.is_external && (
+              {!node?.is_external && !node?.is_client && (
                 <MenuItem
                   onClick={() => {
                     setMoreMenuAnchor(null);
@@ -1234,7 +1237,7 @@ export const NodeDetailPage: React.FC = () => {
                   <RotateCcw size={16} color="#0284C7" /> Restart All WireGuard
                 </MenuItem>
               )}
-              {!node?.is_external && (
+              {!node?.is_external && !node?.is_client && (
                 <MenuItem
                   onClick={() => {
                     setMoreMenuAnchor(null);
@@ -1246,7 +1249,7 @@ export const NodeDetailPage: React.FC = () => {
                   <RotateCcw size={16} color="#D97706" /> Restart BIRD Service
                 </MenuItem>
               )}
-              {!node?.is_external && (
+              {!node?.is_external && !node?.is_client && (
                 <MenuItem
                   onClick={() => {
                     setMoreMenuAnchor(null);
@@ -1257,7 +1260,7 @@ export const NodeDetailPage: React.FC = () => {
                   <Compass size={16} color="#0891B2" /> Looking Glass
                 </MenuItem>
               )}
-              {!node?.is_external && (
+              {!node?.is_external && !node?.is_client && (
                 <MenuItem
                   onClick={() => {
                     setMoreMenuAnchor(null);
@@ -1331,7 +1334,7 @@ export const NodeDetailPage: React.FC = () => {
                   </Typography>
 
                   {/* Status chip */}
-                  {!node?.is_external && (
+                  {!node?.is_external && !node?.is_client && (
                     <Chip
                       label={isOnline ? "Online" : agentInstalled ? "Offline" : "No Agent"}
                       size="small"
@@ -1432,7 +1435,7 @@ export const NodeDetailPage: React.FC = () => {
                   <Typography variant="body2" sx={{ color: "#64748B" }}>
                     ASN: <strong style={{ color: "#0F172A" }}>{node?.asn || 424242}</strong>
                   </Typography>
-                  {!node?.is_external && (
+                  {!node?.is_external && !node?.is_client && (
                     <>
                       <Typography variant="caption" sx={{ color: "#CBD5E1" }}>
                         •
@@ -1449,8 +1452,63 @@ export const NodeDetailPage: React.FC = () => {
               </Box>
             </Box>
 
+            {/* Client Node wg.conf download button */}
+            {node?.is_client && (
+              <Box sx={{ display: "flex", gap: 1 }}>
+                <Button
+                  variant="contained"
+                  size="small"
+                  startIcon={<Download size={15} />}
+                  onClick={async () => {
+                    try {
+                      const res = await api.getClientWgConfig(node.name);
+                      downloadTextFile(
+                        res.filename || `wg-${node.name}-${node.client_parent || "gateway"}.conf`,
+                        res.config,
+                      );
+                    } catch (err: any) {
+                      alert(err?.message || "Failed to download wg.conf");
+                    }
+                  }}
+                  sx={{
+                    backgroundColor: "#0D9488",
+                    color: "#FFFFFF",
+                    fontWeight: 700,
+                    textTransform: "none",
+                    borderRadius: 1.5,
+                    "&:hover": { backgroundColor: "#0F766E" },
+                  }}
+                >
+                  Download wg.conf
+                </Button>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  startIcon={<RotateCcw size={15} />}
+                  onClick={async () => {
+                    try {
+                      await api.resetClientNodeIPv6(node.name);
+                      await loadData();
+                    } catch (err: any) {
+                      alert(err?.message || "Failed to reset IPv6");
+                    }
+                  }}
+                  sx={{
+                    color: "#0F766E",
+                    borderColor: "#5EEAD4",
+                    fontWeight: 600,
+                    textTransform: "none",
+                    borderRadius: 1.5,
+                    "&:hover": { borderColor: "#0D9488", backgroundColor: "rgba(13, 148, 136, 0.08)" },
+                  }}
+                >
+                  Reset IPv6 (/127)
+                </Button>
+              </Box>
+            )}
+
             {/* Quick action buttons row */}
-            {!node?.is_external && (
+            {!node?.is_external && !node?.is_client && (
               <Box sx={{ display: "flex", gap: 1 }}>
                 {!!node?.ip && !!networkSettings?.data?.node_web_terminal_url && (
                   <Button
@@ -1522,7 +1580,7 @@ export const NodeDetailPage: React.FC = () => {
           </Box>
 
           {/* Quick Realtime Metrics Bar */}
-          {!node?.is_external && agentInstalled && (
+          {!node?.is_external && !node?.is_client && agentInstalled && (
             <Box
               sx={{
                 display: "grid",
@@ -1657,7 +1715,7 @@ export const NodeDetailPage: React.FC = () => {
               label="Overview"
               title="Overview & Specs"
             />
-            {!node?.is_external && (
+            {!node?.is_external && !node?.is_client && (
               <Tab
                 value="metrics"
                 icon={<Activity size={16} />}
@@ -1673,7 +1731,7 @@ export const NodeDetailPage: React.FC = () => {
               label="Network"
               title={`Network & Links (${nodeLinks.length})`}
             />
-            {!node?.is_external && (
+            {!node?.is_external && !node?.is_client && (
               <Tab
                 value="routing"
                 icon={<Radio size={16} />}
@@ -1682,7 +1740,7 @@ export const NodeDetailPage: React.FC = () => {
                 title="Routing & BIRD"
               />
             )}
-            {!node?.is_external && (
+            {!node?.is_external && !node?.is_client && (
               <Tab
                 value="firewall"
                 icon={<Shield size={16} />}
@@ -1691,10 +1749,10 @@ export const NodeDetailPage: React.FC = () => {
                 title="Firewall & Security"
               />
             )}
-            {!node?.is_external && (
+            {!node?.is_external && !node?.is_client && (
               <Tab value="agent" icon={<Zap size={16} />} iconPosition="start" label="Agent" title="Agent" />
             )}
-            {!node?.is_external && (
+            {!node?.is_external && !node?.is_client && (
               <Tab
                 value="apps"
                 icon={<Layers size={16} />}
@@ -1703,10 +1761,10 @@ export const NodeDetailPage: React.FC = () => {
                 title="Workloads & Apps"
               />
             )}
-            {!node?.is_external && (
+            {!node?.is_external && !node?.is_client && (
               <Tab value="scripts" icon={<Terminal size={16} />} iconPosition="start" label="Scripts" title="Scripts" />
             )}
-            {!node?.is_external && (
+            {!node?.is_external && !node?.is_client && (
               <Tab
                 value="cron_tasks"
                 icon={<Clock size={16} />}
@@ -1941,7 +1999,7 @@ export const NodeDetailPage: React.FC = () => {
                               )}
                             </IconButton>
                           </Tooltip>
-                          {!node.is_external && (
+                          {!node.is_external && !node.is_client && (
                             <Button
                               size="small"
                               variant="outlined"
@@ -2143,20 +2201,32 @@ export const NodeDetailPage: React.FC = () => {
                         Management Mode:
                       </Typography>
                       <Chip
-                        label={node.is_external ? "EXTERNAL" : isAgentMode ? "AGENT" : "SSH"}
+                        label={node.is_client ? "CLIENT" : node.is_external ? "EXTERNAL" : isAgentMode ? "AGENT" : "SSH"}
                         size="small"
                         sx={{
                           height: 20,
                           fontSize: "0.68rem",
                           fontWeight: 700,
-                          bgcolor: node.is_external ? "#FEF3C7" : isAgentMode ? "#EEF2FF" : "#F1F5F9",
-                          color: node.is_external ? "#92400E" : isAgentMode ? "#4F46E5" : "#475569",
+                          bgcolor: node.is_client
+                            ? "#F0FDFA"
+                            : node.is_external
+                              ? "#FEF3C7"
+                              : isAgentMode
+                                ? "#EEF2FF"
+                                : "#F1F5F9",
+                          color: node.is_client
+                            ? "#0F766E"
+                            : node.is_external
+                              ? "#92400E"
+                              : isAgentMode
+                                ? "#4F46E5"
+                                : "#475569",
                         }}
                       />
                     </Box>
                     <Divider />
 
-                    {!node.is_external && (
+                    {!node.is_external && !node.is_client && (
                       <>
                         <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                           <Typography variant="body2" sx={{ color: "#64748B" }}>
@@ -2370,7 +2440,7 @@ export const NodeDetailPage: React.FC = () => {
         )}
 
         {/* Tab 2: Telemetry & Historical Charts */}
-        {currentTab === "metrics" && !node?.is_external && (
+        {currentTab === "metrics" && !node?.is_external && !node?.is_client && (
           <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
             {/* Range and controls */}
             <Paper
@@ -2880,7 +2950,7 @@ export const NodeDetailPage: React.FC = () => {
                   <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0F172A" }}>
                     WireGuard Kernel Interfaces Status
                   </Typography>
-                  {!node?.is_external && (
+                  {!node?.is_external && !node?.is_client && (
                     <Button
                       size="small"
                       variant="outlined"
@@ -3084,7 +3154,7 @@ export const NodeDetailPage: React.FC = () => {
         )}
 
         {/* Tab 4: Routing & BIRD */}
-        {currentTab === "routing" && node && !node.is_external && (
+        {currentTab === "routing" && node && !node.is_external && !node.is_client && (
           <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
             <Paper elevation={0} sx={{ p: 1, borderRadius: 1, bgcolor: "#FFFFFF", border: "1px solid #E2E8F0" }}>
               <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
@@ -3104,7 +3174,7 @@ export const NodeDetailPage: React.FC = () => {
                   >
                     View Generated BIRD Config
                   </Button>
-                  {!node.is_external && (
+                  {!node.is_external && !node.is_client && (
                     <Button
                       size="small"
                       variant="outlined"
@@ -3395,7 +3465,7 @@ export const NodeDetailPage: React.FC = () => {
         )}
 
         {/* Tab 5: Firewall & Security */}
-        {currentTab === "firewall" && node && !node.is_external && (
+        {currentTab === "firewall" && node && !node.is_external && !node.is_client && (
           <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
             <Paper elevation={0} sx={{ p: 1, borderRadius: 1, bgcolor: "#FFFFFF", border: "1px solid #E2E8F0" }}>
               <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
@@ -3497,7 +3567,7 @@ export const NodeDetailPage: React.FC = () => {
         )}
 
         {/* Tab 6: Agent Management */}
-        {currentTab === "agent" && node && !node.is_external && (
+        {currentTab === "agent" && node && !node.is_external && !node.is_client && (
           <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
             {/* Status Hero Card */}
             <Paper
@@ -3904,13 +3974,13 @@ export const NodeDetailPage: React.FC = () => {
         )}
 
         {/* Tab: Workload Apps */}
-        {currentTab === "apps" && node && !node.is_external && <NodeAppsTab nodeName={node.name} />}
+        {currentTab === "apps" && node && !node.is_external && !node.is_client && <NodeAppsTab nodeName={node.name} />}
 
         {/* Tab: Scripts */}
-        {currentTab === "scripts" && node && !node.is_external && <NodeScriptsTab nodeName={node.name} />}
+        {currentTab === "scripts" && node && !node.is_external && !node.is_client && <NodeScriptsTab nodeName={node.name} />}
 
         {/* Tab 7: Cron Tasks */}
-        {currentTab === "cron_tasks" && node && !node.is_external && <NodeCronTasksTab nodeName={node.name} />}
+        {currentTab === "cron_tasks" && node && !node.is_external && !node.is_client && <NodeCronTasksTab nodeName={node.name} />}
       </Box>
 
       {/* BIRD Config Dialog */}
@@ -4203,7 +4273,7 @@ export const NodeDetailPage: React.FC = () => {
               Reset WireGuard PSK
             </MenuItem>
 
-            {!node?.is_external && (
+            {!node?.is_external && !node?.is_client && (
               <>
                 <Divider sx={{ my: 0.5 }} />
                 <MenuItem

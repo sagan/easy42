@@ -313,7 +313,7 @@ func (e *PrometheusExporter) generateMetrics(startTime time.Time) []byte {
 		}
 
 		isExtStr := "0"
-		if node.IsExternal {
+		if node.IsUnmanaged() {
 			isExtStr = "1"
 		}
 

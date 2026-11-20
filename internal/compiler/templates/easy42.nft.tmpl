@@ -83,6 +83,13 @@ table inet easy42 {
     flags interval
     elements = $tunnel_ifname
   }
+{{- if .nft_client_ifname }}
+  set client_ifname {
+    type ifname
+    flags interval
+    elements = {{ .nft_client_ifname }}
+  }
+{{- end }}
 {{- range .nft_policies }}
   set pol_{{ .id }}_ifname {
     type ifname
@@ -302,6 +309,10 @@ table inet easy42 {
   }
   chain nat_postrouting {
     type nat hook postrouting priority srcnat - 1; policy accept;
+{{- if .nft_client_ifname }}
+    # Client nodes leaving Easy42 mesh (e.g. Internet egress): masquerade to WAN IP
+    iifname @client_ifname oifname != @easy42_ifname masquerade
+{{- end }}
 {{- range .nft_policies }}
   {{- if .snat }}
     {{- if eq .snat_action "masquerade" }}

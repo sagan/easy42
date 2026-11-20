@@ -140,7 +140,7 @@ func (m *Manager) RunLookingGlass(ctx context.Context, req lookingglass.RunReque
 		if !exists {
 			return lookingglass.RunResponse{}, fmt.Errorf("node '%s' not found in configuration", name)
 		}
-		if node.IsExternal {
+		if node.IsUnmanaged() {
 			return lookingglass.RunResponse{}, fmt.Errorf("node '%s' is an external node; cannot run tasks via SSH", name)
 		}
 		targetNodes = append(targetNodes, node)

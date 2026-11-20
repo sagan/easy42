@@ -476,7 +476,7 @@ func validateNodeObfuscatorConfiguration(cfg *config.Config, node *config.Node) 
 		if fromNode == nil || toNode == nil {
 			return fmt.Errorf("link %s <-> %s uses a WireGuard obfuscator but one of its endpoints does not exist", link.From.Name, link.To.Name)
 		}
-		if fromNode.IsExternal || toNode.IsExternal {
+		if fromNode.IsUnmanaged() || toNode.IsUnmanaged() {
 			return fmt.Errorf("link %s <-> %s uses a WireGuard obfuscator but one of its endpoints is external", link.From.Name, link.To.Name)
 		}
 		if !fromNode.IsAgentMode() || !toNode.IsAgentMode() {
@@ -566,7 +566,7 @@ func (m *Manager) SyncObfuscatorsToAgents() {
 	currentState := m.stateStore.Get()
 	for i := range cfg.Nodes {
 		node := &cfg.Nodes[i]
-		if node.IsExternal || !node.IsAgentMode() {
+		if node.IsUnmanaged() || !node.IsAgentMode() {
 			continue
 		}
 		if err := validateNodeObfuscatorConfiguration(cfg, node); err != nil {
@@ -620,7 +620,7 @@ func (m *Manager) planObfuscatorActions(cfg *config.Config, nodes []config.Node,
 	// produces a clear agent-mode error rather than a downstream resolution error.
 	for i := range nodes {
 		node := &nodes[i]
-		if node.IsExternal || (isPartial && !targetMap[node.Name]) {
+		if node.IsUnmanaged() || (isPartial && !targetMap[node.Name]) {
 			continue
 		}
 		if err := validateNodeObfuscatorConfiguration(cfg, node); err != nil {
@@ -631,7 +631,7 @@ func (m *Manager) planObfuscatorActions(cfg *config.Config, nodes []config.Node,
 	actions := make([]config.SyncAction, 0)
 	for i := range nodes {
 		node := &nodes[i]
-		if node.IsExternal {
+		if node.IsUnmanaged() {
 			continue
 		}
 		if isPartial && !targetMap[node.Name] {

@@ -87,8 +87,8 @@ func ResolveUnderlyingLinkEndpoint(
 
 	endpoint := ""
 
-	// 1. If selfNode is an external peer, its remote endpoint is ALWAYS the managed peerNode's endpoint
-	if selfNode != nil && selfNode.IsExternal && peerNode != nil && !peerNode.IsExternal {
+	// 1. If selfNode is an unmanaged peer (external or client), its remote endpoint is ALWAYS the managed peerNode's endpoint
+	if selfNode != nil && selfNode.IsUnmanaged() && peerNode != nil && !peerNode.IsUnmanaged() {
 		peerListenPort := 0
 		if peerEnd != nil && peerEnd.ListenPort > 0 {
 			peerListenPort = peerEnd.ListenPort

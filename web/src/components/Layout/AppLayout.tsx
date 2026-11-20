@@ -74,6 +74,8 @@ export const AppLayout: React.FC = () => {
     updatingState,
     addNodeOpen,
     setAddNodeOpen,
+    addClientParent,
+    setAddClientParent,
     nodeToEdit,
     setLocateNodeName,
     renameModalOpen,
@@ -763,8 +765,12 @@ export const AppLayout: React.FC = () => {
       {/* Global Modals */}
       <AddNodeModal
         open={addNodeOpen}
-        onClose={() => setAddNodeOpen(false)}
+        onClose={() => {
+          setAddNodeOpen(false);
+          setAddClientParent(null);
+        }}
         nodeToEdit={nodeToEdit}
+        initialClientParent={addClientParent}
         existingNodes={nodes}
         blocks={blocks}
         onNodeAdded={(saved) => {

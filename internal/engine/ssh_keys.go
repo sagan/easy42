@@ -169,7 +169,7 @@ func firstNonEmpty(values ...string) string {
 // sshKeysEnabled returns whether SSH key management is available for a node:
 // agent mode, a supporting agent version and app management not disabled.
 func (m *Manager) sshKeysEnabled(node config.Node) bool {
-	if node.IsExternal || !node.IsAgentMode() {
+	if node.IsUnmanaged() || !node.IsAgentMode() {
 		return false
 	}
 	if m.agentHub == nil {
@@ -217,7 +217,7 @@ func (m *Manager) GetSSHKeysOverview() []SSHKeyNodeState {
 
 	res := make([]SSHKeyNodeState, 0, len(cfg.Nodes))
 	for _, node := range cfg.Nodes {
-		if node.IsExternal {
+		if node.IsUnmanaged() {
 			continue
 		}
 		// Keys must always be a JSON array (never null) so every client can
@@ -314,7 +314,7 @@ func (m *Manager) planSSHKeyFilesForNode(cfg *config.Config, dstNode config.Node
 			// They match an "all nodes" selector but are not a gap, so they are
 			// neither sources nor "skipped" — listing 25 of them on every action
 			// buried the sync dialog in noise.
-			if src.IsExternal {
+			if src.IsUnmanaged() {
 				continue
 			}
 			if !config.AppTargetsNode(config.App{Selector: rule.SrcSelector}, &src, src.Name) {

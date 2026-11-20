@@ -158,7 +158,7 @@ func ValidateLinkObfuscator(link *Link, fromNode, toNode *Node) error {
 	if fromNode == nil || toNode == nil {
 		return fmt.Errorf("obfuscator link endpoints must reference existing nodes")
 	}
-	if fromNode.IsExternal || toNode.IsExternal {
+	if fromNode.IsUnmanaged() || toNode.IsUnmanaged() {
 		return fmt.Errorf("obfuscator is only supported for links between managed nodes")
 	}
 	if !fromNode.IsAgentMode() || !toNode.IsAgentMode() {

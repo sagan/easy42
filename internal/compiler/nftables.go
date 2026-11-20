@@ -203,17 +203,26 @@ func BuildNftablesNodeContext(
 	ctx["nft_prefixes_v4"] = FormatNftPrefixList(prefixes, []string{"172.20.0.0/14"}, false)
 	ctx["nft_prefixes_v6"] = FormatNftPrefixList(prefixes, []string{"fd00::/8"}, true)
 
+	nodeByName := make(map[string]*config.Node, len(allNodes))
+	for i := range allNodes {
+		nodeByName[allNodes[i].Name] = &allNodes[i]
+	}
+
 	// Collect easy42 interface names: defaults to "wg42*", plus manual link interfaces on this node
 	easy42Ifnames := []string{`"wg42*"`}
+	var clientIfnames []string
 	for _, l := range links {
 		if l.Disabled || l.IsVirtual() {
 			continue
 		}
 		var localEnd *config.LinkEnd
+		var remoteName string
 		if l.From.Name == node.Name {
 			localEnd = &l.From
+			remoteName = l.To.Name
 		} else if l.To.Name == node.Name {
 			localEnd = &l.To
+			remoteName = l.From.Name
 		} else {
 			continue
 		}
@@ -224,11 +233,58 @@ func BuildNftablesNodeContext(
 				easy42Ifnames = append(easy42Ifnames, quoted)
 			}
 		}
+		if rn := nodeByName[remoteName]; rn != nil && rn.IsClient {
+			iface := strings.TrimSpace(localEnd.Interface)
+			if iface == "" {
+				iface = GetInterfaceName(rn.Name, false)
+			}
+			quoted := `"` + iface + `"`
+			if !slices.Contains(clientIfnames, quoted) {
+				clientIfnames = append(clientIfnames, quoted)
+			}
+		}
 	}
 	ctx["easy42_ifname"] = "{ " + strings.Join(easy42Ifnames, ", ") + " }"
+	if len(clientIfnames) > 0 {
+		sort.Strings(clientIfnames)
+		ctx["nft_client_ifname"] = "{ " + strings.Join(clientIfnames, ", ") + " }"
+	} else {
+		ctx["nft_client_ifname"] = ""
+	}
 
 	// Collect interfaces per policy
 	policyIfnames := make(map[string][]string)
+
+	for _, l := range links {
+		if l.Disabled || l.IsVirtual() {
+			continue
+		}
+		var localEnd *config.LinkEnd
+		var remoteName string
+		if l.From.Name == node.Name {
+			localEnd = &l.From
+			remoteName = l.To.Name
+		} else if l.To.Name == node.Name {
+			localEnd = &l.To
+			remoteName = l.From.Name
+		} else {
+			continue
+		}
+		if rn := nodeByName[remoteName]; rn != nil && rn.IsClient {
+			iface := strings.TrimSpace(localEnd.Interface)
+			if iface == "" {
+				iface = GetInterfaceName(rn.Name, false)
+			}
+			polID := strings.TrimSpace(localEnd.Policy)
+			if polID == "" {
+				polID = config.PolicyAccess
+			}
+			quoted := `"` + iface + `"`
+			if !slices.Contains(policyIfnames[polID], quoted) {
+				policyIfnames[polID] = append(policyIfnames[polID], quoted)
+			}
+		}
+	}
 
 	linksCtx, _ := ctx["links"].([]map[string]any)
 	for _, l := range linksCtx {

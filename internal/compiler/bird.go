@@ -525,6 +525,11 @@ func BuildNodeContext(node *config.Node, allNodes []config.Node, links []config.
 			continue
 		}
 
+		// Client node links are WireGuard-only (no BGP peering)
+		if (remoteNode != nil && remoteNode.IsClient) || node.IsClient {
+			continue
+		}
+
 		isRemoteExternal := remoteNode != nil && remoteNode.IsExternal
 		policyID := localEnd.EffectivePolicy(isRemoteExternal)
 		pol, ok := policyMap[policyID]

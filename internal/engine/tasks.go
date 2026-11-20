@@ -76,7 +76,7 @@ func (m *Manager) CheckTaskStatus(ctx context.Context, taskID string, nodeNames 
 	targetMap := make(map[string]config.Node)
 	if len(nodeNames) == 0 {
 		for _, n := range cfg.Nodes {
-			if !n.IsExternal && NodeMatchesTaskSelector(n, meta.Selector) {
+			if !n.IsUnmanaged() && NodeMatchesTaskSelector(n, meta.Selector) {
 				targetMap[n.Name] = n
 			}
 		}
@@ -86,7 +86,7 @@ func (m *Manager) CheckTaskStatus(ctx context.Context, taskID string, nodeNames 
 			allowed[name] = true
 		}
 		for _, n := range cfg.Nodes {
-			if allowed[n.Name] && !n.IsExternal && NodeMatchesTaskSelector(n, meta.Selector) {
+			if allowed[n.Name] && !n.IsUnmanaged() && NodeMatchesTaskSelector(n, meta.Selector) {
 				targetMap[n.Name] = n
 			}
 		}
@@ -159,7 +159,7 @@ func (m *Manager) RunTask(ctx context.Context, taskID string, nodeNames []string
 		allowed[name] = true
 	}
 	for _, n := range cfg.Nodes {
-		if allowed[n.Name] && !n.IsExternal && NodeMatchesTaskSelector(n, meta.Selector) {
+		if allowed[n.Name] && !n.IsUnmanaged() && NodeMatchesTaskSelector(n, meta.Selector) {
 			targetMap[n.Name] = n
 		}
 	}

@@ -63,6 +63,9 @@ interface MeshContextType {
   // Modals & Drawers
   addNodeOpen: boolean;
   setAddNodeOpen: (open: boolean) => void;
+  addClientParent: string | null;
+  setAddClientParent: (parent: string | null) => void;
+  openCreateClientNode: (parentName: string) => void;
   nodeToEdit: Node | null;
   setNodeToEdit: (node: Node | null) => void;
   locateNodeName: string | null;
@@ -159,7 +162,13 @@ export const MeshProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Modals
   const [addNodeOpen, setAddNodeOpen] = useState(false);
+  const [addClientParent, setAddClientParent] = useState<string | null>(null);
   const [nodeToEdit, setNodeToEdit] = useState<Node | null>(null);
+  const openCreateClientNode = useCallback((parentName: string) => {
+    setNodeToEdit(null);
+    setAddClientParent(parentName);
+    setAddNodeOpen(true);
+  }, []);
   const [locateNodeName, setLocateNodeName] = useState<string | null>(null);
   const [renameModalOpen, setRenameModalOpen] = useState(false);
   const [nodeToRename, setNodeToRename] = useState<Node | null>(null);
@@ -225,7 +234,7 @@ export const MeshProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Unreachable nodes (only applies to agent mode nodes)
   const unreachableNodes = useMemo(() => {
     return nodes.filter((n) => {
-      if (n.is_external) return false;
+      if (n.is_external || n.is_client) return false;
       const isAgent = n.mode === "agent" || Boolean(n.agent_token) || nodeStatuses[n.name]?.mode === "agent";
       return isAgent && nodeStatuses[n.name] && !nodeStatuses[n.name].connected;
     });
@@ -262,7 +271,7 @@ export const MeshProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [links, displayedNodes]);
 
   const displayedInternalNodes = useMemo(() => {
-    return displayedNodes.filter((n) => !n.is_external);
+    return displayedNodes.filter((n) => !n.is_external && !n.is_client);
   }, [displayedNodes]);
 
   const missingMeshLinksCount = useMemo(() => {
@@ -715,6 +724,9 @@ export const MeshProvider: React.FC<{ children: React.ReactNode }> = ({ children
     handleCreateFullMesh,
     addNodeOpen,
     setAddNodeOpen,
+    addClientParent,
+    setAddClientParent,
+    openCreateClientNode,
     nodeToEdit,
     setNodeToEdit,
     locateNodeName,

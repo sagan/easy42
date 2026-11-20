@@ -35,6 +35,7 @@ import {
   FileCode,
   ArrowUp,
   ArrowDown,
+  Laptop,
 } from "lucide-react";
 import { api } from "../../api/client";
 import { Node, Entrypoint, KernelRouteRule, ConfigHook, ConfigTemplate, GraphBlock } from "../../types/api";
@@ -59,6 +60,7 @@ const HOOK_TYPES = [
 interface AddNodeModalProps {
   open: boolean;
   nodeToEdit?: Node | null;
+  initialClientParent?: string | null;
   existingNodes?: Node[];
   blocks?: GraphBlock[];
   onClose: () => void;
@@ -105,6 +107,7 @@ export const isNonLinkLocalIPv6 = (addrStr: string): boolean => {
 export const AddNodeModal: React.FC<AddNodeModalProps> = ({
   open,
   nodeToEdit,
+  initialClientParent,
   existingNodes = [],
   blocks,
   onClose,
@@ -127,6 +130,9 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
   const [asn, setAsn] = useState<number>(4224420001);
   const [nodeTags, setNodeTags] = useState("");
   const [isExternal, setIsExternal] = useState(false);
+  const [isClient, setIsClient] = useState(false);
+  const [clientParent, setClientParent] = useState("");
+  const [clientAllowedIPsStr, setClientAllowedIPsStr] = useState("0.0.0.0/1, 128.0.0.0/1, ::/1, 8000::/1");
   const [caption, setCaption] = useState("");
   const [description, setDescription] = useState("");
   const [note, setNote] = useState("");
@@ -184,6 +190,13 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
       setIface(nodeToEdit.interface || "lo");
       setAsn(nodeToEdit.asn);
       setIsExternal(Boolean(nodeToEdit.is_external));
+      setIsClient(Boolean(nodeToEdit.is_client));
+      setClientParent(nodeToEdit.client_parent || "");
+      setClientAllowedIPsStr(
+        nodeToEdit.client_allowed_ips
+          ? nodeToEdit.client_allowed_ips.join(", ")
+          : "0.0.0.0/1, 128.0.0.0/1, ::/1, 8000::/1",
+      );
       setCaption(nodeToEdit.caption || "");
       setDescription(nodeToEdit.description || "");
       setNote(nodeToEdit.note || "");
@@ -276,6 +289,9 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
       setIface("lo");
       setAsn(4224420001);
       setIsExternal(false);
+      setIsClient(Boolean(initialClientParent));
+      setClientParent(initialClientParent || "");
+      setClientAllowedIPsStr("0.0.0.0/1, 128.0.0.0/1, ::/1, 8000::/1");
       setCaption("");
       setDescription("");
       setNote("");
@@ -303,7 +319,7 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
       setProbeError(null);
       setSaveError(null);
     }
-  }, [open, nodeToEdit]);
+  }, [open, nodeToEdit, initialClientParent]);
 
   const handleProbe = async () => {
     if (!sshHost.trim()) return;
@@ -479,7 +495,12 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isExternal) {
+    if (isClient) {
+      if (!name.trim() || !clientParent.trim()) {
+        setSaveError("Client Name and Parent Internal Node are required");
+        return;
+      }
+    } else if (isExternal) {
       if (!name.trim() || !asn) {
         setSaveError("Node Name and ASN are required for external peer");
         return;
@@ -588,7 +609,29 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
       posY = initialPos.y;
     }
 
-    if (isExternal) {
+    if (isClient) {
+      const finalEntrypoints = buildFinalEntrypoints(entrypoints, false);
+      const parsedAllowedIPs = clientAllowedIPsStr
+        .split(/[\n,]+/)
+        .map((s) => s.trim())
+        .filter(Boolean);
+      newNode = {
+        name: name.trim(),
+        asn: 0,
+        ip: ip.trim() || undefined,
+        ip6: ip6.trim() || undefined,
+        is_client: true,
+        client_parent: clientParent.trim(),
+        client_allowed_ips: parsedAllowedIPs,
+        entrypoints: finalEntrypoints.length > 0 ? finalEntrypoints : undefined,
+        caption: caption.trim() || undefined,
+        description: description.trim() || undefined,
+        note: note.trim() || undefined,
+        tags: parsedTags.length > 0 ? parsedTags : undefined,
+        x: posX,
+        y: posY,
+      };
+    } else if (isExternal) {
       const finalEntrypoints = buildFinalEntrypoints(entrypoints, true);
       newNode = {
         name: name.trim(),
@@ -699,23 +742,39 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
             width: 34,
             height: 34,
             borderRadius: 1,
-            backgroundColor: isExternal ? "rgba(139, 92, 246, 0.1)" : "rgba(79, 70, 229, 0.1)",
+            backgroundColor: isClient
+              ? "rgba(13, 148, 136, 0.1)"
+              : isExternal
+                ? "rgba(139, 92, 246, 0.1)"
+                : "rgba(79, 70, 229, 0.1)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            color: isExternal ? "#8B5CF6" : "#4F46E5",
+            color: isClient ? "#0D9488" : isExternal ? "#8B5CF6" : "#4F46E5",
           }}
         >
-          {isExternal ? <Globe size={18} /> : nodeToEdit ? <Edit2 size={18} /> : <Server size={18} />}
+          {isClient ? (
+            <Laptop size={18} />
+          ) : isExternal ? (
+            <Globe size={18} />
+          ) : nodeToEdit ? (
+            <Edit2 size={18} />
+          ) : (
+            <Server size={18} />
+          )}
         </Box>
         <Typography variant="h6" sx={{ fontWeight: 700, color: "#0F172A" }}>
           {nodeToEdit
-            ? isExternal
-              ? `Edit External Peer: ${nodeToEdit.name}`
-              : `Edit Node: ${nodeToEdit.name}`
-            : isExternal
-              ? "Add External Peer (DN42)"
-              : "Add New Mesh Node"}
+            ? isClient
+              ? `Edit Client Node: ${nodeToEdit.name}`
+              : isExternal
+                ? `Edit External Peer: ${nodeToEdit.name}`
+                : `Edit Node: ${nodeToEdit.name}`
+            : isClient
+              ? "Add Client Node"
+              : isExternal
+                ? "Add External Peer (DN42)"
+                : "Add New Mesh Node"}
         </Typography>
       </DialogTitle>
 
@@ -725,10 +784,11 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
           {!nodeToEdit && (
             <Box sx={{ display: "flex", gap: 1 }}>
               <Button
-                variant={!isExternal ? "contained" : "outlined"}
+                variant={!isExternal && !isClient ? "contained" : "outlined"}
                 size="small"
                 onClick={() => {
                   setIsExternal(false);
+                  setIsClient(false);
                   setEntrypoints((prev) => {
                     // Filter out any default unconfigured external entrypoint
                     const nonExternalDefault = prev.filter(
@@ -750,10 +810,29 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                 Managed Node
               </Button>
               <Button
+                variant={isClient ? "contained" : "outlined"}
+                size="small"
+                onClick={() => {
+                  setIsClient(true);
+                  setIsExternal(false);
+                  if (!clientParent) {
+                    const firstInternal = effectiveNodes.find((n) => !n.is_external && !n.is_client);
+                    if (firstInternal) {
+                      setClientParent(firstInternal.name);
+                    }
+                  }
+                }}
+                startIcon={<Laptop size={16} />}
+                sx={{ flex: 1, textTransform: "none", fontWeight: 600 }}
+              >
+                Client Node
+              </Button>
+              <Button
                 variant={isExternal ? "contained" : "outlined"}
                 size="small"
                 onClick={() => {
                   setIsExternal(true);
+                  setIsClient(false);
                   setEntrypoints((prev) => {
                     // Remove internal nat-fallback endpoints for external peers
                     const filtered = prev.filter((e) => !e.isNone && e.id !== "nat-fallback");
@@ -780,7 +859,312 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
             </Box>
           )}
 
-          {isExternal ? (
+          {isClient ? (
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+              <Alert severity="info" sx={{ borderRadius: 2 }}>
+                Client nodes are unmanaged devices (e.g. laptops, phones) that connect to a single internal node via
+                WireGuard only (no BGP, no SSH/agent). The internal node acts as its gateway to Easy42 and/or the
+                Internet.
+              </Alert>
+
+              <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1 }}>
+                <TextFieldWithCopy
+                  label="Client Name"
+                  size="small"
+                  value={name}
+                  onChange={(e) => setName(e.target.value.toLowerCase().replace(/[^a-z0-9-_]/g, ""))}
+                  error={Boolean(name && (duplicateNameNode || conflictingIfaceNode))}
+                  helperText={
+                    duplicateNameNode ? (
+                      <span style={{ color: "#DC2626" }}>Node name &quot;{cleanName}&quot; already exists!</span>
+                    ) : conflictingIfaceNode ? (
+                      <span style={{ color: "#DC2626" }}>
+                        Interface &quot;{generatedIface}&quot; conflicts with node &quot;{conflictingIfaceNode.name}
+                        &quot;!
+                      </span>
+                    ) : generatedIface ? (
+                      `Interface on parent: ${generatedIface}`
+                    ) : (
+                      "Unique client node identifier"
+                    )
+                  }
+                  placeholder="e.g. my-laptop"
+                  required
+                  fullWidth
+                />
+
+                <TextField
+                  select
+                  label="Parent Internal Node"
+                  size="small"
+                  value={clientParent}
+                  onChange={(e) => setClientParent(e.target.value)}
+                  disabled={Boolean(nodeToEdit)}
+                  required
+                  fullWidth
+                  helperText={
+                    nodeToEdit
+                      ? "Parent internal node cannot be changed after creation"
+                      : "Internal node that serves as gateway/ISP"
+                  }
+                >
+                  {effectiveNodes
+                    .filter((n) => !n.is_external && !n.is_client)
+                    .map((n) => (
+                      <MenuItem key={n.name} value={n.name}>
+                        {n.name} ({n.ip || "no IP"})
+                      </MenuItem>
+                    ))}
+                </TextField>
+              </Box>
+
+              <TextField
+                label="Extra Peer AllowedIPs (CIDRs)"
+                size="small"
+                multiline
+                minRows={2}
+                value={clientAllowedIPsStr}
+                onChange={(e) => setClientAllowedIPsStr(e.target.value)}
+                placeholder="0.0.0.0/1, 128.0.0.0/1, ::/1, 8000::/1"
+                helperText="Comma or newline separated CIDRs added to [Peer] AllowedIPs in downloaded wg.conf (in addition to the peer's link-local IPs)"
+                fullWidth
+              />
+
+              <TextFieldWithCopy
+                label="Caption (Optional)"
+                size="small"
+                value={caption}
+                onChange={(e) => setCaption(e.target.value)}
+                placeholder="Short one-line description"
+                fullWidth
+              />
+
+              <TextField
+                label="Description (Optional)"
+                size="small"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Device info or notes"
+                fullWidth
+              />
+
+              <TextField
+                label="Tags (comma-separated, optional)"
+                size="small"
+                value={nodeTags}
+                onChange={(e) => setNodeTags(e.target.value)}
+                placeholder="e.g. mobile, laptop"
+                fullWidth
+              />
+
+              <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1 }}>
+                <TextFieldWithCopy
+                  label="Main IPv4 (Optional)"
+                  size="small"
+                  value={ip}
+                  onChange={(e) => setIp(e.target.value)}
+                  placeholder="e.g. 192.168.100.50"
+                  helperText="Optional display IPv4"
+                  disabled={saving}
+                />
+                <TextFieldWithCopy
+                  label="Main IPv6 (Optional)"
+                  size="small"
+                  value={ip6}
+                  onChange={(e) => setIp6(e.target.value)}
+                  placeholder="e.g. fd42::50"
+                  helperText="Optional display IPv6"
+                  disabled={saving}
+                />
+              </Box>
+
+              {/* Client Node Markdown Note */}
+              <Box sx={{ p: 1, borderRadius: 1, backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0" }}>
+                <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1 }}>
+                  <Typography
+                    variant="caption"
+                    sx={{ color: "#475569", fontWeight: 700, display: "flex", alignItems: "center", gap: 0.8 }}
+                  >
+                    <FileText size={14} color="#0D9488" /> NOTE (MARKDOWN)
+                  </Typography>
+                  <Box sx={{ display: "flex", gap: 0.5 }}>
+                    <Button
+                      size="small"
+                      variant={noteTab === "write" ? "contained" : "text"}
+                      onClick={() => setNoteTab("write")}
+                      sx={{ minWidth: "auto", px: 1.2, py: 0.2, fontSize: "0.72rem", textTransform: "none" }}
+                    >
+                      Write
+                    </Button>
+                    <Button
+                      size="small"
+                      variant={noteTab === "preview" ? "contained" : "text"}
+                      onClick={() => setNoteTab("preview")}
+                      sx={{ minWidth: "auto", px: 1.2, py: 0.2, fontSize: "0.72rem", textTransform: "none" }}
+                    >
+                      Preview
+                    </Button>
+                  </Box>
+                </Box>
+                {noteTab === "write" ? (
+                  <TextField
+                    fullWidth
+                    multiline
+                    minRows={3}
+                    maxRows={8}
+                    size="small"
+                    placeholder="Arbitrary markdown text..."
+                    value={note}
+                    onChange={(e) => setNote(e.target.value)}
+                    disabled={saving}
+                    sx={{
+                      "& .MuiInputBase-root": {
+                        fontSize: "0.825rem",
+                        fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+                      },
+                    }}
+                  />
+                ) : (
+                  <Box
+                    sx={{
+                      p: 1,
+                      minHeight: 75,
+                      maxHeight: 200,
+                      overflowY: "auto",
+                      backgroundColor: "#FFFFFF",
+                      borderRadius: 1,
+                      border: "1px solid #E2E8F0",
+                    }}
+                  >
+                    <MarkdownView content={note} emptyText="No markdown note written yet" />
+                  </Box>
+                )}
+              </Box>
+
+              {/* Client Node Entrypoints */}
+              <Box sx={{ mt: 0.5 }}>
+                <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1.2 }}>
+                  <Typography variant="caption" sx={{ color: "#475569", fontWeight: 700, letterSpacing: "0.5px" }}>
+                    ENTRYPOINTS
+                  </Typography>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    startIcon={<Plus size={14} />}
+                    onClick={handleAddEntrypoint}
+                    sx={{ fontSize: "0.75rem", py: 0.3 }}
+                  >
+                    Add Entrypoint
+                  </Button>
+                </Box>
+
+                <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                  {entrypoints.map((ep, idx) => (
+                    <Box
+                      key={ep.id}
+                      sx={{
+                        p: 1,
+                        borderRadius: 1,
+                        backgroundColor: ep.isNone ? "#F8FAFC" : "#F0FDFA",
+                        border: ep.isNone ? "1px solid #E2E8F0" : "1px solid #99F6E4",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 1,
+                      }}
+                    >
+                      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <Typography
+                          variant="caption"
+                          sx={{
+                            color: ep.isNone ? "#64748B" : "#0F766E",
+                            fontWeight: 700,
+                            textTransform: "uppercase",
+                          }}
+                        >
+                          {ep.isNone ? "NAT / Dynamic IP (Fallback)" : `Endpoint ${entrypoints.length > 1 ? `#${idx + 1}` : ""}`}
+                        </Typography>
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 0.3 }}>
+                          {!ep.isNone && (
+                            <>
+                              <Tooltip title="Move up">
+                                <span>
+                                  <IconButton
+                                    size="small"
+                                    disabled={idx === 0 || saving}
+                                    onClick={() => handleMoveEntrypoint(ep.id, "up")}
+                                    sx={{ color: "#94A3B8", p: 0.5 }}
+                                  >
+                                    <ArrowUp size={14} />
+                                  </IconButton>
+                                </span>
+                              </Tooltip>
+                              <Tooltip title="Move down">
+                                <span>
+                                  <IconButton
+                                    size="small"
+                                    disabled={idx >= entrypoints.length - 2 || saving}
+                                    onClick={() => handleMoveEntrypoint(ep.id, "down")}
+                                    sx={{ color: "#94A3B8", p: 0.5 }}
+                                  >
+                                    <ArrowDown size={14} />
+                                  </IconButton>
+                                </span>
+                              </Tooltip>
+                            </>
+                          )}
+                          {!ep.isNone && entrypoints.length > 1 && (
+                            <Tooltip title="Remove endpoint">
+                              <IconButton
+                                size="small"
+                                onClick={() => handleRemoveEntrypoint(ep.id)}
+                                sx={{ color: "#94A3B8", p: 0.5 }}
+                              >
+                                <Trash2 size={14} />
+                              </IconButton>
+                            </Tooltip>
+                          )}
+                        </Box>
+                      </Box>
+
+                      {ep.isNone ? (
+                        <TextFieldWithCopy
+                          label="Tags"
+                          size="small"
+                          placeholder="e.g. nat, dynamic"
+                          value={ep.tagStr}
+                          onChange={(e) => handleUpdateEntrypoint(ep.id, "tagStr", e.target.value)}
+                          helperText="Entrypoint tags for matching"
+                          disabled={saving}
+                          fullWidth
+                        />
+                      ) : (
+                        <Box sx={{ display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: 1 }}>
+                          <TextFieldWithCopy
+                            label="Endpoint Host / IP"
+                            size="small"
+                            placeholder="e.g. client.example.com or 198.51.100.1"
+                            value={ep.ip}
+                            onChange={(e) => handleUpdateEntrypoint(ep.id, "ip", e.target.value)}
+                            helperText="Public IP or DDNS hostname"
+                            disabled={saving}
+                          />
+                          <TextFieldWithCopy
+                            label="Tags"
+                            size="small"
+                            placeholder="e.g. direct, nat"
+                            value={ep.tagStr}
+                            onChange={(e) => handleUpdateEntrypoint(ep.id, "tagStr", e.target.value)}
+                            helperText="Entrypoint tags for matching"
+                            disabled={saving}
+                          />
+                        </Box>
+                      )}
+                    </Box>
+                  ))}
+                </Box>
+              </Box>
+            </Box>
+          ) : isExternal ? (
             <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
               <Alert severity="info" sx={{ borderRadius: 2 }}>
                 External peers represent unmanaged private or DN42 network nodes. easy42 does not connect via SSH to
@@ -2203,7 +2587,8 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
               !name ||
               Boolean(duplicateNameNode) ||
               Boolean(conflictingIfaceNode) ||
-              (!isExternal && (!sshHost || !ip))
+              (!isExternal && !isClient && (!sshHost || !ip)) ||
+              (isClient && !clientParent)
             }
             startIcon={saving ? <CircularProgress size={16} color="inherit" /> : null}
           >

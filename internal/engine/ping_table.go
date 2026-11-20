@@ -48,7 +48,7 @@ func (m *Manager) RunPingTable(latencyType string) (*config.PingTableTask, error
 	// Filter and sort internal nodes (!n.IsExternal)
 	var internalNodes []*config.Node
 	for _, n := range cfg.Nodes {
-		if !n.IsExternal {
+		if !n.IsUnmanaged() {
 			nodeCopy := n
 			internalNodes = append(internalNodes, &nodeCopy)
 		}

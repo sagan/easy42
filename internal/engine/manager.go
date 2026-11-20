@@ -411,23 +411,45 @@ func (m *Manager) AddNode(node config.Node) error {
 	}
 
 	cfg := m.store.Get()
+	if node.IsClient {
+		node.Host = ""
+		node.IsExternal = false
+		if node.ClientAllowedIPs == nil {
+			node.ClientAllowedIPs = config.DefaultClientAllowedIPs()
+		}
+	}
+
+	var clientParentNode *config.Node
 	newIface := compiler.GetInterfaceName(node.Name, node.IsExternal)
-	for _, existing := range cfg.Nodes {
+	for i := range cfg.Nodes {
+		existing := &cfg.Nodes[i]
 		if strings.EqualFold(existing.Name, node.Name) {
 			return fmt.Errorf("node with name %s already exists", node.Name)
 		}
 		if strings.EqualFold(compiler.GetInterfaceName(existing.Name, existing.IsExternal), newIface) {
 			return fmt.Errorf("interface name %s conflicts with existing node %s", newIface, existing.Name)
 		}
-		if node.IP != "" && !node.IsExternal && !existing.IsExternal && existing.IP == node.IP {
+		if node.IP != "" && !node.IsUnmanaged() && !existing.IsUnmanaged() && existing.IP == node.IP {
 			return fmt.Errorf("node with IP %s already exists (%s)", node.IP, existing.Name)
 		}
-		if node.IP6 != "" && !node.IsExternal && !existing.IsExternal && existing.IP6 != "" && existing.IP6 == node.IP6 {
+		if node.IP6 != "" && !node.IsUnmanaged() && !existing.IsUnmanaged() && existing.IP6 != "" && existing.IP6 == node.IP6 {
 			return fmt.Errorf("node with IPv6 %s already exists (%s)", node.IP6, existing.Name)
+		}
+		if node.IsClient && existing.Name == node.ClientParent {
+			clientParentNode = existing
 		}
 	}
 
-	if !node.IsExternal {
+	if node.IsClient {
+		if clientParentNode == nil {
+			return fmt.Errorf("parent internal node %s not found for client node %s", node.ClientParent, node.Name)
+		}
+		if clientParentNode.IsUnmanaged() {
+			return fmt.Errorf("client node %s must belong to an internal node, not %s", node.Name, clientParentNode.Name)
+		}
+	}
+
+	if !node.IsUnmanaged() {
 		// Ensure "none" entrypoint exists at the end
 		var nones []config.Entrypoint
 		var normals []config.Entrypoint
@@ -452,12 +474,38 @@ func (m *Manager) AddNode(node config.Node) error {
 	}
 
 	node.ModifiedAt = time.Now().UTC()
+
+	var autoLink *config.Link
+	if node.IsClient {
+		link, err := m.buildLink(cfg, clientParentNode, &node, 0, 0, nil, 0, 0, &config.Link{
+			AssignIPv4: true,
+			DisableBFD: true,
+			From: config.LinkEnd{
+				Name:   clientParentNode.Name,
+				Policy: config.PolicyAccess,
+			},
+			To: config.LinkEnd{
+				Name: node.Name,
+			},
+		})
+		if err != nil {
+			return fmt.Errorf("failed to create link for client node %s: %w", node.Name, err)
+		}
+		link.ModifiedAt = node.ModifiedAt
+		autoLink = link
+	}
+
 	cfg.Nodes = append(cfg.Nodes, node)
+	if autoLink != nil {
+		cfg.Links = append(cfg.Links, *autoLink)
+	}
 	if err := m.store.Save(cfg); err != nil {
 		return err
 	}
-	m.triggerDNSUpdateForNode(cfg.DNS, node, "")
-	go m.SyncHostsToAgents()
+	if !node.IsClient {
+		m.triggerDNSUpdateForNode(cfg.DNS, node, "")
+		go m.SyncHostsToAgents()
+	}
 	return nil
 }
 
@@ -479,10 +527,23 @@ func (m *Manager) UpdateNode(name string, updated config.Node) error {
 	}
 
 	oldNode := cfg.Nodes[idx]
-	if updated.Host == "" && !updated.IsExternal {
+	if oldNode.IsClient {
+		updated.IsClient = true
+		updated.IsExternal = false
+		updated.Host = ""
+		if strings.TrimSpace(updated.ClientParent) == "" {
+			updated.ClientParent = oldNode.ClientParent
+		} else if updated.ClientParent != oldNode.ClientParent {
+			return fmt.Errorf("cannot change client_parent of existing client node %s", name)
+		}
+		if updated.ClientAllowedIPs == nil {
+			updated.ClientAllowedIPs = oldNode.ClientAllowedIPs
+		}
+	}
+	if updated.Host == "" && !updated.IsUnmanaged() {
 		updated.Host = oldNode.Host
 	}
-	if updated.IP == "" && !updated.IsExternal {
+	if updated.IP == "" && !updated.IsUnmanaged() {
 		updated.IP = oldNode.IP
 	}
 
@@ -508,15 +569,15 @@ func (m *Manager) UpdateNode(name string, updated config.Node) error {
 	if idx := strings.Index(updated.IP6, "/"); idx != -1 {
 		updated.IP6 = strings.TrimSpace(updated.IP6[:idx])
 	}
-	if updated.IP6 != "" && !updated.IsExternal {
+	if updated.IP6 != "" && !updated.IsUnmanaged() {
 		for _, existing := range cfg.Nodes {
-			if existing.Name != name && !existing.IsExternal && existing.IP6 != "" && existing.IP6 == updated.IP6 {
+			if existing.Name != name && !existing.IsUnmanaged() && existing.IP6 != "" && existing.IP6 == updated.IP6 {
 				return fmt.Errorf("node with IPv6 %s already exists (%s)", updated.IP6, existing.Name)
 			}
 		}
 	}
 
-	if !updated.IsExternal {
+	if !updated.IsUnmanaged() {
 		// Ensure "none" endpoint exists at the end
 		var nones []config.Entrypoint
 		var normals []config.Entrypoint
@@ -694,6 +755,12 @@ func (m *Manager) UpdateNode(name string, updated config.Node) error {
 // applyNodeRenameLocked updates all references to a node name across config, links, interface names, and state.
 // Caller must hold m.mu Lock.
 func (m *Manager) applyNodeRenameLocked(cfg *config.Config, oldName, newName string, isExternal bool, now time.Time) {
+	for i := range cfg.Nodes {
+		if cfg.Nodes[i].IsClient && cfg.Nodes[i].ClientParent == oldName {
+			cfg.Nodes[i].ClientParent = newName
+			cfg.Nodes[i].ModifiedAt = now
+		}
+	}
 	oldIfaceInternal := compiler.GetInterfaceName(oldName, false)
 	oldIfaceExternal := compiler.GetInterfaceName(oldName, true)
 	newIface := compiler.GetInterfaceName(newName, isExternal)
@@ -967,35 +1034,44 @@ func (m *Manager) DeleteNode(name string) error {
 	defer m.mu.Unlock()
 
 	cfg := m.store.Get()
+	deletedNames := map[string]bool{name: true}
+	for _, n := range cfg.Nodes {
+		if n.IsClient && n.ClientParent == name {
+			deletedNames[n.Name] = true
+		}
+	}
+
 	var deletedHost string
 	newNodes := make([]config.Node, 0)
 	for _, n := range cfg.Nodes {
-		if n.Name != name {
+		if !deletedNames[n.Name] {
 			newNodes = append(newNodes, n)
-		} else {
+		} else if n.Name == name {
 			deletedHost = n.Host
 		}
 	}
 	cfg.Nodes = newNodes
 
-	// Remove links connected to this node
+	// Remove links connected to deleted node(s)
 	newLinks := make([]config.Link, 0)
 	for _, l := range cfg.Links {
-		if l.From.Name != name && l.To.Name != name {
+		if !deletedNames[l.From.Name] && !deletedNames[l.To.Name] {
 			newLinks = append(newLinks, l)
 		}
 	}
 	cfg.Links = newLinks
 
-	// Drop the deleted node from SSH key rule selectors (and rules left without
+	// Drop the deleted node(s) from SSH key rule selectors (and rules left without
 	// any destination).
-	pruneSSHKeyRulesForNodeLocked(cfg, name)
+	for delName := range deletedNames {
+		pruneSSHKeyRulesForNodeLocked(cfg, delName)
+	}
 
-	// Remove deleted node from any blocks
+	// Remove deleted node(s) from any blocks
 	for bIdx := range cfg.Blocks {
 		var updatedBlockNodes []string
 		for _, nodeName := range cfg.Blocks[bIdx].Nodes {
-			if nodeName != name {
+			if !deletedNames[nodeName] {
 				updatedBlockNodes = append(updatedBlockNodes, nodeName)
 			}
 		}
@@ -1003,11 +1079,14 @@ func (m *Manager) DeleteNode(name string) error {
 	}
 
 	// Purge in-memory statuses and sync results
-	delete(m.statuses, name)
+	for delName := range deletedNames {
+		delete(m.statuses, delName)
+		_ = m.stateStore.RemoveNode(delName)
+	}
 
 	newResults := make([]config.SyncResult, 0, len(m.lastResults))
 	for _, res := range m.lastResults {
-		if res.NodeName != name {
+		if !deletedNames[res.NodeName] {
 			newResults = append(newResults, res)
 		}
 	}
@@ -1082,8 +1161,8 @@ func (m *Manager) buildLink(cfg *config.Config, n1, n2 *config.Node, listenPort1
 		fromCustomMTU, toCustomMTU = toCustomMTU, fromCustomMTU
 	}
 
-	if fromNode.IsExternal && toNode.IsExternal {
-		return nil, errors.New("cannot link two external nodes")
+	if fromNode.IsUnmanaged() && toNode.IsUnmanaged() {
+		return nil, errors.New("cannot link two unmanaged nodes")
 	}
 
 	var customFromEnd, customToEnd *config.LinkEnd
@@ -1253,6 +1332,28 @@ func (m *Manager) buildLink(cfg *config.Config, n1, n2 *config.Node, listenPort1
 		toNeighborAddr = fromAddr
 	} else if isVirtual {
 		// Virtual links do not auto-generate link-local addresses
+	} else if fromNode.IsClient || toNode.IsClient {
+		if fromAddr == "" || toAddr == "" {
+			ula1, ula2, err := compiler.GenerateRandomClientIPv6ULA127()
+			if err != nil {
+				return nil, err
+			}
+			if fromNode.IsClient {
+				if toAddr == "" {
+					toAddr = ula1
+				}
+				if fromAddr == "" {
+					fromAddr = ula2
+				}
+			} else {
+				if fromAddr == "" {
+					fromAddr = ula1
+				}
+				if toAddr == "" {
+					toAddr = ula2
+				}
+			}
+		}
 	} else {
 		if fromAddr == "" && fromNode.IP != "" {
 			fromAddr, _ = compiler.DeriveIPv6LinkLocal(fromNode.IP)
@@ -1390,14 +1491,30 @@ func (m *Manager) buildLink(cfg *config.Config, n1, n2 *config.Node, listenPort1
 		baseFromPort := 0
 		if toNode.IP != "" {
 			baseFromPort = compiler.DerivePortFromIP(toNode.IP)
+		} else if toNode.IsClient {
+			baseFromPort = compiler.DerivePortFromIP(toNode.Name)
 		} else {
 			baseFromPort = 51820
 		}
 		baseToPort := 0
 		if fromNode.IP != "" {
 			baseToPort = compiler.DerivePortFromIP(fromNode.IP)
+		} else if fromNode.IsClient {
+			baseToPort = compiler.DerivePortFromIP(fromNode.Name)
 		} else {
 			baseToPort = 51820
+		}
+
+		isPortUsedOnNode := func(nodeName string, port int) bool {
+			for _, l := range cfg.Links {
+				if l.From.Name == nodeName && l.From.ListenPort == port {
+					return true
+				}
+				if l.To.Name == nodeName && l.To.ListenPort == port {
+					return true
+				}
+			}
+			return false
 		}
 
 		if customFromEnd != nil && customFromEnd.ListenPort > 0 {
@@ -1406,11 +1523,21 @@ func (m *Manager) buildLink(cfg *config.Config, n1, n2 *config.Node, listenPort1
 		if customToEnd != nil && customToEnd.ListenPort > 0 {
 			toPort = customToEnd.ListenPort
 		}
-		if fromPort == 0 && !fromNode.IsExternal {
+		if fromPort == 0 && !fromNode.IsUnmanaged() {
 			fromPort = baseFromPort + linkIndex
+			if toNode.IsClient {
+				for isPortUsedOnNode(fromNode.Name, fromPort) {
+					fromPort++
+				}
+			}
 		}
-		if toPort == 0 && !toNode.IsExternal {
+		if toPort == 0 && !toNode.IsUnmanaged() {
 			toPort = baseToPort + linkIndex
+			if fromNode.IsClient {
+				for isPortUsedOnNode(toNode.Name, toPort) {
+					toPort++
+				}
+			}
 		}
 
 		if customFromEnd != nil && customFromEnd.Endpoint != "" {
@@ -1420,8 +1547,8 @@ func (m *Manager) buildLink(cfg *config.Config, n1, n2 *config.Node, listenPort1
 			toEP = customToEnd.Endpoint
 		}
 
-		if fromNode.IsExternal {
-			// fromNode is external, connecting to toNode (managed internal)
+		if fromNode.IsUnmanaged() {
+			// fromNode is unmanaged (external or client), connecting to toNode (managed internal)
 			fromEP, _, epTo = compiler.ResolvePeerEndpointWithEntrypoint(fromNode, toNode, nil, toPort)
 			if toEP == "" {
 				toEP, _, epFrom = compiler.ResolvePeerEndpointWithEntrypoint(toNode, fromNode, nil, fromPort)
@@ -1429,8 +1556,8 @@ func (m *Manager) buildLink(cfg *config.Config, n1, n2 *config.Node, listenPort1
 			if toEP == "" && customFromEnd != nil && customFromEnd.Endpoint != "" && customFromEnd.Endpoint != fromEP {
 				toEP = customFromEnd.Endpoint
 			}
-		} else if toNode.IsExternal {
-			// toNode is external, connecting to fromNode (managed internal)
+		} else if toNode.IsUnmanaged() {
+			// toNode is unmanaged (external or client), connecting to fromNode (managed internal)
 			toEP, _, epFrom = compiler.ResolvePeerEndpointWithEntrypoint(toNode, fromNode, nil, fromPort)
 			if fromEP == "" {
 				fromEP, _, epTo = compiler.ResolvePeerEndpointWithEntrypoint(fromNode, toNode, nil, toPort)
@@ -1617,9 +1744,15 @@ func (m *Manager) buildLink(cfg *config.Config, n1, n2 *config.Node, listenPort1
 		if fromMainIP == "" {
 			fromMainIP = fromNode.ExternalIP
 		}
+		if fromMainIP == "" && fromNode.IsClient {
+			fromMainIP = fromNode.Name
+		}
 		toMainIP := toNode.IP
 		if toMainIP == "" {
 			toMainIP = toNode.ExternalIP
+		}
+		if toMainIP == "" && toNode.IsClient {
+			toMainIP = toNode.Name
 		}
 		if fromMainIP != "" && toMainIP != "" {
 			if a1, a2, err := compiler.DeriveIPv4LinkLocal(fromMainIP, toMainIP, linkIndex); err == nil {
@@ -1783,6 +1916,10 @@ func (m *Manager) AddLinkWithAllOptionsAndNote(node1Name, node2Name string, from
 		customMTU2 = customMTU[1]
 	}
 
+	if n1.IsClient || n2.IsClient {
+		return nil, errors.New("cannot manually create link for a client node (managed automatically with its parent node)")
+	}
+
 	// Lexicographical ordering: from.Name < to.Name
 	fromName, toName := n1.Name, n2.Name
 	if strings.Compare(fromName, toName) > 0 {
@@ -1869,7 +2006,7 @@ func (m *Manager) CreateFullMesh(nodeNames []string) ([]*config.Link, error) {
 		}
 		for _, name := range nodeNames {
 			if n, ok := nodeMap[name]; ok {
-				if !n.IsExternal {
+				if !n.IsUnmanaged() {
 					targetNodes = append(targetNodes, n)
 				}
 			}
@@ -2415,9 +2552,15 @@ func (m *Manager) UpdateLinkWithAllOptions(node1Name, node2Name string, customFr
 		if fromMainIP == "" {
 			fromMainIP = fromNode.ExternalIP
 		}
+		if fromMainIP == "" && fromNode.IsClient {
+			fromMainIP = fromNode.Name
+		}
 		toMainIP := toNode.IP
 		if toMainIP == "" {
 			toMainIP = toNode.ExternalIP
+		}
+		if toMainIP == "" && toNode.IsClient {
+			toMainIP = toNode.Name
 		}
 		if fromMainIP != "" && toMainIP != "" {
 			if a1, a2, err := compiler.DeriveIPv4LinkLocal(fromMainIP, toMainIP, linkIndex); err == nil {
@@ -2534,6 +2677,11 @@ func (m *Manager) DeleteLink(node1Name, node2Name string, ifaces ...string) erro
 	}
 
 	cfg := m.store.Get()
+	for _, n := range cfg.Nodes {
+		if (n.Name == node1Name || n.Name == node2Name) && n.IsClient {
+			return fmt.Errorf("cannot manually delete link for client node %s (delete the client node instead)", n.Name)
+		}
+	}
 	newLinks := make([]config.Link, 0)
 	found := false
 	for _, l := range cfg.Links {
@@ -2877,7 +3025,7 @@ func (m *Manager) RefreshNodeStatus(nodeName string) (*config.NodeStatus, error)
 		return nil, ErrNodeNotFound
 	}
 
-	if node.IsExternal {
+	if node.IsUnmanaged() {
 		status := &config.NodeStatus{
 			Name:      node.Name,
 			Host:      "external",
@@ -2959,7 +3107,7 @@ func (m *Manager) FlushFleetInterfaceCache(ctx context.Context) {
 
 	var wg sync.WaitGroup
 	for _, n := range nodes {
-		if n.IsExternal || !n.IsAgentMode() || !m.agentHub.IsConnected(n.Name) {
+		if n.IsUnmanaged() || !n.IsAgentMode() || !m.agentHub.IsConnected(n.Name) {
 			continue
 		}
 		wg.Add(1)
@@ -2983,7 +3131,7 @@ func (m *Manager) RestartNodeWireGuardInterfaces(nodeName string) (string, error
 	if node == nil {
 		return "", ErrNodeNotFound
 	}
-	if node.IsExternal {
+	if node.IsUnmanaged() {
 		return "", fmt.Errorf("node %s is external and cannot be managed", nodeName)
 	}
 
@@ -3043,7 +3191,7 @@ func (m *Manager) RestartNodeBird(nodeName string) (string, error) {
 	if node == nil {
 		return "", ErrNodeNotFound
 	}
-	if node.IsExternal {
+	if node.IsUnmanaged() {
 		return "", fmt.Errorf("node %s is external and cannot be managed", nodeName)
 	}
 
@@ -3095,7 +3243,7 @@ func (m *Manager) RestartNodeInterface(nodeName string, iface string) (string, e
 	if node == nil {
 		return "", ErrNodeNotFound
 	}
-	if node.IsExternal {
+	if node.IsUnmanaged() {
 		return "", fmt.Errorf("node %s is external and cannot be managed", nodeName)
 	}
 
@@ -3154,7 +3302,7 @@ func (m *Manager) GetNodeStatuses() map[string]config.NodeStatus {
 	if cfg != nil {
 		for _, n := range cfg.Nodes {
 			activeNodes[n.Name] = true
-			if n.IsExternal {
+			if n.IsUnmanaged() {
 				if _, ok := m.statuses[n.Name]; !ok {
 					m.statuses[n.Name] = &config.NodeStatus{
 						Name:      n.Name,
@@ -3199,7 +3347,7 @@ func (m *Manager) cachedProbeConfigs(nodes []config.Node, targetMap map[string]b
 		return res
 	}
 	for _, n := range nodes {
-		if n.IsExternal {
+		if n.IsUnmanaged() {
 			continue
 		}
 		if isPartial && !targetMap[n.Name] {
@@ -3326,7 +3474,7 @@ func (m *Manager) planSync(scope string, allowArtifactFetch bool, nodeNames ...s
 		// No SSH connections are opened here; live interface discovery happens
 		// during UpdateState.
 		for _, n := range nodes {
-			if n.IsExternal {
+			if n.IsUnmanaged() {
 				continue
 			}
 			if isPartial && !targetMap[n.Name] {
@@ -3395,7 +3543,7 @@ func (m *Manager) planSync(scope string, allowArtifactFetch bool, nodeNames ...s
 
 		// Also check stateStore for recorded interfaces that are no longer expected
 		for _, n := range nodes {
-			if n.IsExternal {
+			if n.IsUnmanaged() {
 				continue
 			}
 			if isPartial && !targetMap[n.Name] {
@@ -3458,7 +3606,7 @@ func (m *Manager) planSync(scope string, allowArtifactFetch bool, nodeNames ...s
 			}
 
 			// 1. From node end (only if fromNode is managed)
-			if !fromNode.IsExternal && (!isPartial || targetMap[fromNode.Name]) {
+			if !fromNode.IsUnmanaged() && (!isPartial || targetMap[fromNode.Name]) {
 				fromConf, err := compiler.GenerateWgConfigContent(fromNode, toNode, &link.From, &link.To, m.vault, cfg, &link)
 				if err == nil {
 					targetFile := fmt.Sprintf("/etc/wireguard/%s.conf", link.From.Interface)
@@ -3508,7 +3656,7 @@ func (m *Manager) planSync(scope string, allowArtifactFetch bool, nodeNames ...s
 			}
 
 			// 2. To node end (only if toNode is managed)
-			if !toNode.IsExternal && (!isPartial || targetMap[toNode.Name]) {
+			if !toNode.IsUnmanaged() && (!isPartial || targetMap[toNode.Name]) {
 				toConf, err := compiler.GenerateWgConfigContent(toNode, fromNode, &link.To, &link.From, m.vault, cfg, &link)
 				if err == nil {
 					targetFile := fmt.Sprintf("/etc/wireguard/%s.conf", link.To.Interface)
@@ -3582,7 +3730,7 @@ func (m *Manager) planSync(scope string, allowArtifactFetch bool, nodeNames ...s
 
 	// 3. Node ROA & BIRD configurations
 	for _, n := range nodes {
-		if n.IsExternal {
+		if n.IsUnmanaged() {
 			continue
 		}
 		if isPartial && !targetMap[n.Name] {
@@ -3754,7 +3902,7 @@ func (m *Manager) planSync(scope string, allowArtifactFetch bool, nodeNames ...s
 
 	// 4. Node nftables configurations
 	for _, n := range nodes {
-		if n.IsExternal {
+		if n.IsUnmanaged() {
 			continue
 		}
 		if isPartial && !targetMap[n.Name] {
@@ -3802,7 +3950,7 @@ func (m *Manager) planSync(scope string, allowArtifactFetch bool, nodeNames ...s
 
 	// 5. Node /etc/hosts configuration
 	for _, n := range nodes {
-		if n.IsExternal {
+		if n.IsUnmanaged() {
 			continue
 		}
 		if isPartial && !targetMap[n.Name] {
@@ -3863,7 +4011,7 @@ func (m *Manager) planSync(scope string, allowArtifactFetch bool, nodeNames ...s
 
 	// 5b. Node SSH key files (/root/.ssh/known_hosts & authorized_keys)
 	for _, n := range nodes {
-		if n.IsExternal {
+		if n.IsUnmanaged() {
 			continue
 		}
 		if isPartial && !targetMap[n.Name] {
@@ -3874,7 +4022,7 @@ func (m *Manager) planSync(scope string, allowArtifactFetch bool, nodeNames ...s
 
 	// 6. Node Apps configuration
 	for _, n := range nodes {
-		if n.IsExternal {
+		if n.IsUnmanaged() {
 			continue
 		}
 		if isPartial && !targetMap[n.Name] {
@@ -4965,7 +5113,7 @@ func (m *Manager) UpdateState(nodeNames ...string) (*config.NetworkState, []stri
 			continue
 		}
 
-		if node.IsExternal {
+		if node.IsUnmanaged() {
 			m.mu.Lock()
 			m.statuses[node.Name] = &config.NodeStatus{
 				Name:      node.Name,
@@ -5253,7 +5401,7 @@ func (m *Manager) UpdateState(nodeNames ...string) (*config.NetworkState, []stri
 		allActiveNodes := make(map[string]bool)
 		for _, n := range nodes {
 			allActiveNodes[n.Name] = true
-			if !n.IsExternal {
+			if !n.IsUnmanaged() {
 				activeInternalNodes[n.Name] = true
 			}
 		}
@@ -5382,6 +5530,112 @@ func (m *Manager) GenerateNftablesConfigWithTemplate(nodeName string, tmplConten
 	}
 
 	return compiler.GenerateNftablesConfigWithTemplate(tmplContent, targetNode, cfg.Nodes, cfg.Links, &cfg.NetworkSettings, cfg.NetworkPolicies)
+}
+
+// GenerateClientWgConfig generates the WireGuard configuration (wg.conf) for a client node's side of its link.
+func (m *Manager) GenerateClientWgConfig(nodeName string) (string, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	if !m.vault.IsUnlocked() {
+		return "", crypto.ErrVaultLocked
+	}
+
+	cfg := m.store.Get()
+	nodeMap := make(map[string]*config.Node, len(cfg.Nodes))
+	for i := range cfg.Nodes {
+		nodeMap[cfg.Nodes[i].Name] = &cfg.Nodes[i]
+	}
+
+	clientNode := nodeMap[nodeName]
+	if clientNode == nil {
+		return "", ErrNodeNotFound
+	}
+	if !clientNode.IsClient {
+		return "", fmt.Errorf("node %s is not a client node", nodeName)
+	}
+
+	parentNode := nodeMap[clientNode.ClientParent]
+	if parentNode == nil {
+		return "", fmt.Errorf("parent node %s not found for client node %s", clientNode.ClientParent, nodeName)
+	}
+
+	var matchedLink *config.Link
+	var clientEnd, parentEnd *config.LinkEnd
+	for i := range cfg.Links {
+		l := &cfg.Links[i]
+		if l.From.Name == clientNode.Name && l.To.Name == parentNode.Name {
+			matchedLink = l
+			clientEnd = &l.From
+			parentEnd = &l.To
+			break
+		}
+		if l.To.Name == clientNode.Name && l.From.Name == parentNode.Name {
+			matchedLink = l
+			clientEnd = &l.To
+			parentEnd = &l.From
+			break
+		}
+	}
+	if matchedLink == nil {
+		return "", fmt.Errorf("link between client node %s and parent node %s not found", clientNode.Name, parentNode.Name)
+	}
+
+	return compiler.GenerateWgConfigContent(clientNode, parentNode, clientEnd, parentEnd, m.vault, matchedLink, cfg)
+}
+
+// ResetClientNodeIPv6 assigns a new random RFC 4193 ULA /127 IPv6 pair to a client node's link endpoints.
+func (m *Manager) ResetClientNodeIPv6(nodeName string) (*config.Link, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	cfg := m.store.Get()
+	var clientNode *config.Node
+	for i := range cfg.Nodes {
+		if cfg.Nodes[i].Name == nodeName {
+			clientNode = &cfg.Nodes[i]
+			break
+		}
+	}
+	if clientNode == nil {
+		return nil, ErrNodeNotFound
+	}
+	if !clientNode.IsClient {
+		return nil, fmt.Errorf("node %s is not a client node", nodeName)
+	}
+
+	ula1, ula2, err := compiler.GenerateRandomClientIPv6ULA127()
+	if err != nil {
+		return nil, err
+	}
+
+	var updatedLink *config.Link
+	for i := range cfg.Links {
+		l := &cfg.Links[i]
+		if l.From.Name == clientNode.Name && l.To.Name == clientNode.ClientParent {
+			l.To.Address = ula1
+			l.From.Address = ula2
+			l.ModifiedAt = time.Now().UTC()
+			updatedLink = l
+			break
+		}
+		if l.To.Name == clientNode.Name && l.From.Name == clientNode.ClientParent {
+			l.From.Address = ula1
+			l.To.Address = ula2
+			l.ModifiedAt = time.Now().UTC()
+			updatedLink = l
+			break
+		}
+	}
+	if updatedLink == nil {
+		return nil, fmt.Errorf("link between client node %s and parent node %s not found", clientNode.Name, clientNode.ClientParent)
+	}
+
+	if err := m.store.Save(cfg); err != nil {
+		return nil, err
+	}
+	cp := *updatedLink
+	return &cp, nil
 }
 
 // GetNetworkPolicies returns all policies (built-in virtual policies + custom policies)
