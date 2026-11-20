@@ -823,6 +823,7 @@ export const NodesPage: React.FC = () => {
                     display: "flex",
                     alignItems: "center",
                     gap: 1,
+                    lineHeight: 2,
                     fontSize: { xs: "0.75rem", sm: "1rem" },
                   }}
                 >
@@ -836,6 +837,7 @@ export const NodesPage: React.FC = () => {
                     display: "flex",
                     alignItems: "center",
                     gap: 1,
+                    lineHeight: 2,
                     fontSize: { xs: "0.75rem", sm: "1rem" },
                   }}
                 >
