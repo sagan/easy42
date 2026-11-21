@@ -1,18 +1,7 @@
 import React, { useState } from "react";
 import { Box, Chip, Typography } from "@mui/material";
-import {
-  ArrowLeft,
-  ArrowLeftRight,
-  ArrowRight,
-  GitBranch,
-  Info,
-  X,
-} from "lucide-react";
-import {
-  BestPathPair,
-  DirectedLink,
-  DirectedPath,
-} from "../../utils/pathFinder";
+import { ArrowLeft, ArrowLeftRight, ArrowRight, GitBranch, Info, X } from "lucide-react";
+import { BestPathPair, DirectedLink, DirectedPath } from "../../utils/pathFinder";
 
 export interface BestPathOverlayProps {
   pair: BestPathPair;
@@ -53,9 +42,7 @@ const RouteLine: React.FC<{
     >
       {path.hops.map((hop, idx) => (
         <React.Fragment key={`${hop.node}-${idx}`}>
-          {idx > 0 && (
-            <Arrow size={11} color="#94A3B8" style={{ flexShrink: 0 }} />
-          )}
+          {idx > 0 && <Arrow size={11} color="#94A3B8" style={{ flexShrink: 0 }} />}
           <Box
             component="span"
             onClick={() => onFocusHop?.(hop.node)}
@@ -65,8 +52,7 @@ const RouteLine: React.FC<{
               fontSize: "0.68rem",
               fontWeight: idx === 0 || idx === lastIdx ? 800 : 600,
               color: "#1E293B",
-              backgroundColor:
-                idx === 0 || idx === lastIdx ? "#E2E8F0" : "transparent",
+              backgroundColor: idx === 0 || idx === lastIdx ? "#E2E8F0" : "transparent",
               px: idx === 0 || idx === lastIdx ? 0.4 : 0,
               borderRadius: 0.5,
               cursor: onFocusHop ? "pointer" : "default",
@@ -76,10 +62,7 @@ const RouteLine: React.FC<{
             {hop.node}
           </Box>
           {hop.viaCost !== undefined && (
-            <Typography
-              component="span"
-              sx={{ fontSize: "0.58rem", color: "#94A3B8", fontWeight: 600 }}
-            >
+            <Typography component="span" sx={{ fontSize: "0.58rem", color: "#94A3B8", fontWeight: 600 }}>
               +{formatCost(hop.viaCost)}
             </Typography>
           )}
@@ -136,33 +119,20 @@ const DirectionRow: React.FC<{
                 "& .MuiChip-label": { px: 0.5 },
               }}
             />
-            <Typography
-              variant="caption"
-              sx={{ fontSize: "0.6rem", color: "#94A3B8", fontWeight: 600 }}
-            >
+            <Typography variant="caption" sx={{ fontSize: "0.6rem", color: "#94A3B8", fontWeight: 600 }}>
               {path.hops.length - 1} hop{path.hops.length - 1 === 1 ? "" : "s"}
             </Typography>
           </>
         ) : (
-          <Typography
-            variant="caption"
-            sx={{ fontSize: "0.6rem", color: NO_PATH_COLOR, fontWeight: 700 }}
-          >
+          <Typography variant="caption" sx={{ fontSize: "0.6rem", color: NO_PATH_COLOR, fontWeight: 700 }}>
             unreachable
           </Typography>
         )}
       </Box>
       {path ? (
-        <RouteLine
-          path={path}
-          reverseIsPrimary={reverseIsPrimary}
-          onFocusHop={onFocusHop}
-        />
+        <RouteLine path={path} reverseIsPrimary={reverseIsPrimary} onFocusHop={onFocusHop} />
       ) : (
-        <Typography
-          variant="caption"
-          sx={{ fontSize: "0.65rem", color: "#94A3B8", fontStyle: "italic" }}
-        >
+        <Typography variant="caption" sx={{ fontSize: "0.65rem", color: "#94A3B8", fontStyle: "italic" }}>
           No link path between these nodes
         </Typography>
       )}
@@ -175,10 +145,7 @@ const DirectionRow: React.FC<{
  * node. Rendered only in "best path mode"; can be collapsed into a compact chip so the
  * path stays drawn on the canvas while the user explores.
  */
-export const BestPathOverlay: React.FC<BestPathOverlayProps> = ({
-  pair,
-  onFocusHop,
-}) => {
+export const BestPathOverlay: React.FC<BestPathOverlayProps> = ({ pair, onFocusHop }) => {
   const [collapsed, setCollapsed] = useState(false);
 
   if (collapsed) {
@@ -199,27 +166,14 @@ export const BestPathOverlay: React.FC<BestPathOverlayProps> = ({
           cursor: "pointer",
         }}
       >
-        <GitBranch
-          size={13}
-          color={pair.forward ? FORWARD_COLOR : NO_PATH_COLOR}
-        />
-        <Typography
-          variant="caption"
-          sx={{ fontWeight: 700, fontSize: "0.7rem", color: "#0F172A" }}
-        >
+        <GitBranch size={13} color={pair.forward ? FORWARD_COLOR : NO_PATH_COLOR} />
+        <Typography variant="caption" sx={{ fontWeight: 700, fontSize: "0.7rem", color: "#0F172A" }}>
           Best Path
         </Typography>
-        <Typography
-          variant="caption"
-          className="mono-font"
-          sx={{ fontSize: "0.65rem", color: "#64748B" }}
-        >
+        <Typography variant="caption" className="mono-font" sx={{ fontSize: "0.65rem", color: "#64748B" }}>
           {pair.from} {pair.isAsymmetric ? "⇄" : "⇢"} {pair.to}
         </Typography>
-        <Typography
-          variant="caption"
-          sx={{ fontSize: "0.65rem", fontWeight: 800, color: FORWARD_COLOR }}
-        >
+        <Typography variant="caption" sx={{ fontSize: "0.65rem", fontWeight: 800, color: FORWARD_COLOR }}>
           {pair.forward ? formatCost(pair.forward.totalCost) : "unreachable"}
         </Typography>
       </Box>
@@ -264,8 +218,7 @@ export const BestPathOverlay: React.FC<BestPathOverlayProps> = ({
         backdropFilter: "blur(8px)",
         border: "1px solid #E2E8F0",
         borderRadius: 1,
-        boxShadow:
-          "0 4px 16px -2px rgba(15, 23, 42, 0.12), 0 2px 6px -1px rgba(15, 23, 42, 0.05)",
+        boxShadow: "0 4px 16px -2px rgba(15, 23, 42, 0.12), 0 2px 6px -1px rgba(15, 23, 42, 0.05)",
         px: 1.25,
         py: 1,
         minWidth: 260,
@@ -277,10 +230,7 @@ export const BestPathOverlay: React.FC<BestPathOverlayProps> = ({
     >
       <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
         <GitBranch size={14} color="#4F46E5" />
-        <Typography
-          variant="caption"
-          sx={{ fontSize: "0.68rem", fontWeight: 800, color: "#0F172A" }}
-        >
+        <Typography variant="caption" sx={{ fontSize: "0.68rem", fontWeight: 800, color: "#0F172A" }}>
           Best Path
         </Typography>
         {endChip(pair.from, FORWARD_COLOR)}
@@ -324,15 +274,8 @@ export const BestPathOverlay: React.FC<BestPathOverlayProps> = ({
       )}
 
       <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.4 }}>
-        <Info
-          size={10}
-          color="#94A3B8"
-          style={{ marginTop: 2, flexShrink: 0 }}
-        />
-        <Typography
-          variant="caption"
-          sx={{ fontSize: "0.58rem", color: "#94A3B8", lineHeight: 1.35 }}
-        >
+        <Info size={10} color="#94A3B8" style={{ marginTop: 2, flexShrink: 0 }} />
+        <Typography variant="caption" sx={{ fontSize: "0.58rem", color: "#94A3B8", lineHeight: 1.35 }}>
           {pair.isAsymmetric
             ? "Asymmetric: directions prefer different links. Costs use per-link BIRD cost (local-pref); custom BIRD filters can override this."
             : "Symmetric: both directions share the same path. Preview only — custom BIRD filters can override it."}

@@ -292,10 +292,7 @@ export const MeshProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const checkAuth = useCallback(async () => {
     try {
-      const [res, ver] = await Promise.all([
-        api.getAuthStatus(),
-        api.getVersion().catch(() => null),
-      ]);
+      const [res, ver] = await Promise.all([api.getAuthStatus(), api.getVersion().catch(() => null)]);
       setAuthenticated(res.authenticated);
       setIsUnlocked(res.unlocked);
       if (res.network_name) {
@@ -681,9 +678,7 @@ export const MeshProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [displayedInternalNodes, missingMeshLinksCount, isUnlocked, loadData]);
 
   const updateNodePosition = useCallback((name: string, x: number, y: number) => {
-    setNodes((prev) =>
-      prev.map((n) => (n.name === name ? { ...n, x, y } : n))
-    );
+    setNodes((prev) => prev.map((n) => (n.name === name ? { ...n, x, y } : n)));
   }, []);
 
   const value: MeshContextType = {

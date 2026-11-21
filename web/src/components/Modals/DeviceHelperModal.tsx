@@ -1099,8 +1099,7 @@ export const DeviceHelperModal: React.FC<DeviceHelperModalProps> = ({ nodes, ini
                   }}
                 >
                   <Typography variant="subtitle2" sx={{ fontWeight: 700, fontSize: { xs: "0.8rem", sm: "0.875rem" } }}>
-                    Target Devices ({selectedNodes.length} /{" "}
-                    {selectorMatchedNodes.length} selected)
+                    Target Devices ({selectedNodes.length} / {selectorMatchedNodes.length} selected)
                   </Typography>
 
                   {/* Tag Filter Selector */}

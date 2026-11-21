@@ -12,13 +12,7 @@ export interface Easy42LogoProps extends Omit<BoxProps, "children"> {
  * It features an interconnected mesh topology badge embodying DN42 and WireGuard overlay tunnels,
  * forming the iconic "42" overlay graph with node vertices.
  */
-export const Easy42Logo: React.FC<Easy42LogoProps> = ({
-  size = 32,
-  variant = "mark",
-  badge = true,
-  sx,
-  ...rest
-}) => {
+export const Easy42Logo: React.FC<Easy42LogoProps> = ({ size = 32, variant = "mark", badge = true, sx, ...rest }) => {
   return (
     <Box
       component="span"
@@ -34,12 +28,7 @@ export const Easy42Logo: React.FC<Easy42LogoProps> = ({
       }}
       {...rest}
     >
-      <svg
-        viewBox="0 0 512 512"
-        width="100%"
-        height="100%"
-        style={{ display: "block", overflow: "visible" }}
-      >
+      <svg viewBox="0 0 512 512" width="100%" height="100%" style={{ display: "block", overflow: "visible" }}>
         <defs>
           <linearGradient id="easy42-bg-grad" x1="0%" y1="0%" x2="100%" y2="100%">
             <stop offset="0%" stopColor="#3730A3" />
@@ -99,24 +88,8 @@ export const Easy42Logo: React.FC<Easy42LogoProps> = ({
             opacity="0.75"
           >
             <line x1="250" y1="265" x2="335" y2="305" />
-            <line
-              x1="165"
-              y1="125"
-              x2="355"
-              y2="125"
-              opacity="0.4"
-              strokeDasharray="8 8"
-              strokeWidth="8"
-            />
-            <line
-              x1="230"
-              y1="395"
-              x2="290"
-              y2="395"
-              strokeDasharray="none"
-              strokeWidth="14"
-              opacity="0.9"
-            />
+            <line x1="165" y1="125" x2="355" y2="125" opacity="0.4" strokeDasharray="8 8" strokeWidth="8" />
+            <line x1="230" y1="395" x2="290" y2="395" strokeDasharray="none" strokeWidth="14" opacity="0.9" />
           </g>
 
           {/* Main WireGuard Topology Paths */}

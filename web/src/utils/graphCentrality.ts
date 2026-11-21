@@ -373,7 +373,8 @@ export function calculateGraphCentrality(
 
     // Apply power curve for non-linear scale interpolation
     const normalizedScore = Math.min(1, Math.max(0, Math.pow(baseNorm, powerCurve)));
-    const isCore = normalizedScore >= 0.6 || (sortedNodes.length >= 4 && index < Math.max(1, Math.ceil(sortedNodes.length * 0.2)));
+    const isCore =
+      normalizedScore >= 0.6 || (sortedNodes.length >= 4 && index < Math.max(1, Math.ceil(sortedNodes.length * 0.2)));
 
     // Scale dimensions: 1.0 (base) to 1.22
     const scale = 1.0 + normalizedScore * 0.22;
@@ -406,7 +407,8 @@ export function calculateGraphCentrality(
     const bVal = rawLinkBetweenness.get(lid) || 0;
     const baseNorm = maxLinkBetweenness > 0 ? bVal / maxLinkBetweenness : 0;
     const normalizedScore = Math.min(1, Math.max(0, Math.pow(baseNorm, powerCurve)));
-    const isCore = normalizedScore >= 0.5 || (sortedLinks.length >= 4 && index < Math.max(1, Math.ceil(sortedLinks.length * 0.2)));
+    const isCore =
+      normalizedScore >= 0.5 || (sortedLinks.length >= 4 && index < Math.max(1, Math.ceil(sortedLinks.length * 0.2)));
 
     // Edge thickness: 1.8px (base) to 5.5px
     const strokeWidth = 1.8 + normalizedScore * 3.7;

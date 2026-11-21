@@ -1,21 +1,6 @@
 import React from "react";
-import {
-  Box,
-  Button,
-  Chip,
-  Tab,
-  Tabs,
-  TextField,
-  Typography,
-} from "@mui/material";
-import {
-  AlertTriangle,
-  CheckCircle2,
-  Globe,
-  Search,
-  Tag,
-  X,
-} from "lucide-react";
+import { Box, Button, Chip, Tab, Tabs, TextField, Typography } from "@mui/material";
+import { AlertTriangle, CheckCircle2, Globe, Search, Tag, X } from "lucide-react";
 import type { Node } from "../../types/api";
 import {
   ALL_NODES_SELECTOR,
@@ -88,8 +73,7 @@ export function resolveSelector(
 ): { matched: Node[]; error: string | null } {
   const entries = Object.entries(selector || {});
   if (entries.length === 0) return { matched: [], error: null };
-  if (isAllNodesSelector(selector))
-    return { matched: nodes.slice(), error: null };
+  if (isAllNodesSelector(selector)) return { matched: nodes.slice(), error: null };
   const fail = (error: string) => ({ matched: [] as Node[], error });
   for (const [rawKey, rawValue] of entries) {
     const key = (rawKey || "").trim();
@@ -97,9 +81,7 @@ export function resolveSelector(
     const values = splitList(rawValue);
     if (!key) return fail("Selector keys cannot be empty.");
     if (lower === "all") {
-      return fail(
-        'Invalid "all" selector: it must be {"all": "1"} and cannot be combined with other conditions.',
-      );
+      return fail('Invalid "all" selector: it must be {"all": "1"} and cannot be combined with other conditions.');
     }
     if (lower === "name" || lower === "tag") {
       if (values.length === 0) {
@@ -109,17 +91,13 @@ export function resolveSelector(
       }
     } else if (lower.startsWith("env:")) {
       if (!key.slice("env:".length).trim()) {
-        return fail(
-          `Invalid selector key "${rawKey}": environment variable name cannot be empty.`,
-        );
+        return fail(`Invalid selector key "${rawKey}": environment variable name cannot be empty.`);
       }
       if (strict && values.length > 1) {
         return fail(`"${key}" must be one exact value (found "${rawValue}").`);
       }
     } else {
-      return fail(
-        `Unsupported selector key "${rawKey}". Use "name", "tag", "env:<NAME>", or {"all": "1"}.`,
-      );
+      return fail(`Unsupported selector key "${rawKey}". Use "name", "tag", "env:<NAME>", or {"all": "1"}.`);
     }
   }
   return {
@@ -143,10 +121,7 @@ const matchChipSx = {
 function MatchList({ nodes }: { nodes: Node[] }) {
   if (nodes.length === 0) {
     return (
-      <Typography
-        variant="caption"
-        sx={{ color: "#94A3B8", fontStyle: "italic" }}
-      >
+      <Typography variant="caption" sx={{ color: "#94A3B8", fontStyle: "italic" }}>
         No managed nodes match this selector.
       </Typography>
     );
@@ -171,28 +146,19 @@ const SelectorSyntaxHelp: React.FC = () => (
       border: "1px solid #99F6E4",
     }}
   >
-    <Typography
-      variant="caption"
-      component="div"
-      sx={{ color: "#134E4A", lineHeight: 1.7, "& code": mono }}
-    >
-      A JSON object of conditions; every condition must match (AND), and values
-      are compared exactly.
+    <Typography variant="caption" component="div" sx={{ color: "#134E4A", lineHeight: 1.7, "& code": mono }}>
+      A JSON object of conditions; every condition must match (AND), and values are compared exactly.
       <br />
-      <code>name</code> — comma-separated node names; the node name must be one
-      of them.
+      <code>name</code> — comma-separated node names; the node name must be one of them.
       <br />
-      <code>tag</code> — comma-separated tags; the node must have{" "}
-      <em>at least one</em> of them.
+      <code>tag</code> — comma-separated tags; the node must have <em>at least one</em> of them.
       <br />
-      <code>env:&lt;NAME&gt;</code> — one exact node value: <code>NODE_IP</code>
-      , <code>NODE_IP6</code>, <code>NODE_EXTERNAL_IP</code>,{" "}
-      <code>NODE_INTERFACE</code>, <code>NODE_TAGS</code>,{" "}
-      <code>NODE_TAG_&lt;TAG&gt;</code> (e.g. <code>env:NODE_TAG_EDGE</code> ={" "}
-      <code>"1"</code>), or <code>NODE_DATA_*</code> from the node note.
+      <code>env:&lt;NAME&gt;</code> — one exact node value: <code>NODE_IP</code>, <code>NODE_IP6</code>,{" "}
+      <code>NODE_EXTERNAL_IP</code>, <code>NODE_INTERFACE</code>, <code>NODE_TAGS</code>,{" "}
+      <code>NODE_TAG_&lt;TAG&gt;</code> (e.g. <code>env:NODE_TAG_EDGE</code> = <code>"1"</code>), or{" "}
+      <code>NODE_DATA_*</code> from the node note.
       <br />
-      <code>all</code> — <code>{'{"all": "1"}'}</code> targets every node (this
-      is what the “All nodes” tab stores).
+      <code>all</code> — <code>{'{"all": "1"}'}</code> targets every node (this is what the “All nodes” tab stores).
       <br />
       <code>{"{}"}</code> matches no node. Unknown keys match nothing.
     </Typography>
@@ -248,19 +214,11 @@ export const NodeSelector: React.FC<NodeSelectorProps> = ({
   const [tagQuery, setTagQuery] = React.useState("");
   const [syntaxHelpOpen, setSyntaxHelpOpen] = React.useState(false);
 
-  const agentNodes = React.useMemo(
-    () => nodes.filter((n) => !n.is_external && !n.is_client),
-    [nodes],
-  );
-  const allNames = React.useMemo(
-    () => agentNodes.map((n) => n.name).sort(),
-    [agentNodes],
-  );
+  const agentNodes = React.useMemo(() => nodes.filter((n) => !n.is_external && !n.is_client), [nodes]);
+  const allNames = React.useMemo(() => agentNodes.map((n) => n.name).sort(), [agentNodes]);
   const allTags = React.useMemo(() => {
     const set = new Set<string>();
-    agentNodes.forEach((n) =>
-      n.tags?.forEach((t) => t.trim() && set.add(t.trim())),
-    );
+    agentNodes.forEach((n) => n.tags?.forEach((t) => t.trim() && set.add(t.trim())));
     return Array.from(set).sort();
   }, [agentNodes]);
 
@@ -371,22 +329,13 @@ export const NodeSelector: React.FC<NodeSelectorProps> = ({
     : agentNodes;
 
   const visibleTags = tagQuery.trim()
-    ? allTags.filter((t) =>
-        t.toLowerCase().includes(tagQuery.trim().toLowerCase()),
-      )
+    ? allTags.filter((t) => t.toLowerCase().includes(tagQuery.trim().toLowerCase()))
     : allTags;
 
-  const tagNodeCount = (tag: string) =>
-    agentNodes.filter((n) => (n.tags || []).includes(tag)).length;
-  const unavailableNames = selectedNames.filter(
-    (name) => !allNames.includes(name),
-  );
-  const allSelected =
-    agentNodes.length > 0 && selectedNames.length === agentNodes.length;
-  const matchedIsAll =
-    agentNodes.length > 0 &&
-    resolution.matched.length === agentNodes.length &&
-    !resolution.error;
+  const tagNodeCount = (tag: string) => agentNodes.filter((n) => (n.tags || []).includes(tag)).length;
+  const unavailableNames = selectedNames.filter((name) => !allNames.includes(name));
+  const allSelected = agentNodes.length > 0 && selectedNames.length === agentNodes.length;
+  const matchedIsAll = agentNodes.length > 0 && resolution.matched.length === agentNodes.length && !resolution.error;
 
   const smallButtonSx = {
     textTransform: "none",
@@ -408,17 +357,11 @@ export const NodeSelector: React.FC<NodeSelectorProps> = ({
         bgcolor: "#FCFCFD",
       }}
     >
-      <Typography
-        variant="subtitle2"
-        sx={{ fontWeight: 800, color: "#1E293B", mb: 0.3 }}
-      >
+      <Typography variant="subtitle2" sx={{ fontWeight: 800, color: "#1E293B", mb: 0.3 }}>
         {label}
       </Typography>
       {description && (
-        <Typography
-          variant="caption"
-          sx={{ color: "#64748B", display: "block", mb: 1 }}
-        >
+        <Typography variant="caption" sx={{ color: "#64748B", display: "block", mb: 1 }}>
           {description}
         </Typography>
       )}
@@ -481,20 +424,9 @@ export const NodeSelector: React.FC<NodeSelectorProps> = ({
               value={nodeQuery}
               onChange={(e) => setNodeQuery(e.target.value)}
               InputProps={{
-                startAdornment: (
-                  <Search
-                    size={15}
-                    color="#94A3B8"
-                    style={{ marginRight: 6 }}
-                  />
-                ),
+                startAdornment: <Search size={15} color="#94A3B8" style={{ marginRight: 6 }} />,
                 endAdornment: nodeQuery ? (
-                  <X
-                    size={14}
-                    color="#94A3B8"
-                    style={{ cursor: "pointer" }}
-                    onClick={() => setNodeQuery("")}
-                  />
+                  <X size={14} color="#94A3B8" style={{ cursor: "pointer" }} onClick={() => setNodeQuery("")} />
                 ) : undefined,
                 sx: { height: 32, fontSize: "0.8rem", bgcolor: "#FFFFFF" },
               }}
@@ -542,9 +474,7 @@ export const NodeSelector: React.FC<NodeSelectorProps> = ({
                   color: "#94A3B8",
                 }}
               >
-                {agentNodes.length === 0
-                  ? "No managed nodes available"
-                  : `No nodes matching "${nodeQuery}"`}
+                {agentNodes.length === 0 ? "No managed nodes available" : `No nodes matching "${nodeQuery}"`}
               </Typography>
             ) : (
               visibleNodes.map((n) => {
@@ -554,9 +484,7 @@ export const NodeSelector: React.FC<NodeSelectorProps> = ({
                     key={n.name}
                     role="checkbox"
                     aria-checked={isSelected}
-                    onClick={() =>
-                      commit({ name: toggle(selectedNames, n.name) })
-                    }
+                    onClick={() => commit({ name: toggle(selectedNames, n.name) })}
                     sx={{
                       p: 0.6,
                       px: 0.9,
@@ -568,17 +496,12 @@ export const NodeSelector: React.FC<NodeSelectorProps> = ({
                       display: "flex",
                       alignItems: "center",
                       gap: 0.6,
-                      transition:
-                        "border-color 0.15s ease, background-color 0.15s ease",
+                      transition: "border-color 0.15s ease, background-color 0.15s ease",
                       "&:hover": { borderColor: "#818CF8" },
                     }}
                   >
                     {isSelected ? (
-                      <CheckCircle2
-                        size={15}
-                        color="#4F46E5"
-                        style={{ flexShrink: 0 }}
-                      />
+                      <CheckCircle2 size={15} color="#4F46E5" style={{ flexShrink: 0 }} />
                     ) : (
                       <Box
                         sx={{
@@ -636,8 +559,7 @@ export const NodeSelector: React.FC<NodeSelectorProps> = ({
             >
               <AlertTriangle size={14} />
               <Typography variant="caption">
-                Not a managed node (never matched):{" "}
-                <strong>{unavailableNames.join(", ")}</strong>
+                Not a managed node (never matched): <strong>{unavailableNames.join(", ")}</strong>
               </Typography>
             </Box>
           )}
@@ -662,13 +584,7 @@ export const NodeSelector: React.FC<NodeSelectorProps> = ({
               value={tagQuery}
               onChange={(e) => setTagQuery(e.target.value)}
               InputProps={{
-                startAdornment: (
-                  <Search
-                    size={15}
-                    color="#94A3B8"
-                    style={{ marginRight: 6 }}
-                  />
-                ),
+                startAdornment: <Search size={15} color="#94A3B8" style={{ marginRight: 6 }} />,
                 sx: { height: 32, fontSize: "0.8rem", bgcolor: "#FFFFFF" },
               }}
             />
@@ -702,10 +618,7 @@ export const NodeSelector: React.FC<NodeSelectorProps> = ({
             }}
           >
             {visibleTags.length === 0 ? (
-              <Typography
-                variant="caption"
-                sx={{ color: "#94A3B8", fontStyle: "italic" }}
-              >
+              <Typography variant="caption" sx={{ color: "#94A3B8", fontStyle: "italic" }}>
                 {allTags.length === 0
                   ? "No node tags defined. Enter a tag below to match nodes tagged later."
                   : `No tags matching "${tagQuery}"`}
@@ -741,9 +654,7 @@ export const NodeSelector: React.FC<NodeSelectorProps> = ({
             onChange={(e) => commit({ tag: splitList(e.target.value) })}
             sx={{ mt: 0.8 }}
             InputProps={{
-              startAdornment: (
-                <Tag size={15} color="#8B5CF6" style={{ marginRight: 6 }} />
-              ),
+              startAdornment: <Tag size={15} color="#8B5CF6" style={{ marginRight: 6 }} />,
               sx: { bgcolor: "#FFFFFF" },
             }}
           />
@@ -761,18 +672,12 @@ export const NodeSelector: React.FC<NodeSelectorProps> = ({
         >
           <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
             <Globe size={16} color="#0284C7" />
-            <Typography
-              variant="body2"
-              sx={{ fontWeight: 700, color: "#0369A1" }}
-            >
+            <Typography variant="body2" sx={{ fontWeight: 700, color: "#0369A1" }}>
               All nodes ({agentNodes.length} managed node
               {agentNodes.length === 1 ? "" : "s"})
             </Typography>
           </Box>
-          <Typography
-            variant="caption"
-            sx={{ color: "#0C4A6E", display: "block", mt: 0.3 }}
-          >
+          <Typography variant="caption" sx={{ color: "#0C4A6E", display: "block", mt: 0.3 }}>
             Applies to every managed node, including nodes added later.
           </Typography>
         </Box>
@@ -790,8 +695,7 @@ export const NodeSelector: React.FC<NodeSelectorProps> = ({
             }}
           >
             <Typography variant="caption" sx={{ color: "#64748B" }}>
-              Editing the selector directly. Changes apply to the other tabs
-              once the JSON is valid.
+              Editing the selector directly. Changes apply to the other tabs once the JSON is valid.
             </Typography>
             <Typography
               component="button"
@@ -837,20 +741,14 @@ export const NodeSelector: React.FC<NodeSelectorProps> = ({
       )}
 
       {mode !== "custom" && (currentError || error) && (
-        <Typography
-          variant="caption"
-          sx={{ color: "#DC2626", display: "block", mt: 0.8 }}
-        >
+        <Typography variant="caption" sx={{ color: "#DC2626", display: "block", mt: 0.8 }}>
           {currentError || error}
         </Typography>
       )}
 
       <Box sx={{ mt: 1 }}>
         <Box sx={{ display: "flex", alignItems: "center", gap: 0.6, mb: 0.5 }}>
-          <Typography
-            variant="caption"
-            sx={{ color: "#475569", fontWeight: 700 }}
-          >
+          <Typography variant="caption" sx={{ color: "#475569", fontWeight: 700 }}>
             Matched nodes ({resolution.matched.length}
             {!matchedIsAll ? ` of ${agentNodes.length}` : ""})
           </Typography>

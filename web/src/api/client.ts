@@ -209,12 +209,9 @@ export const api = {
       telemetry?: any;
     }>(`/nodes/${encodeURIComponent(name)}/agent`),
   uninstallAgent: (name: string) =>
-    request<{ success: boolean; message: string; node: string }>(
-      `/nodes/${encodeURIComponent(name)}/agent/uninstall`,
-      {
-        method: "POST",
-      },
-    ),
+    request<{ success: boolean; message: string; node: string }>(`/nodes/${encodeURIComponent(name)}/agent/uninstall`, {
+      method: "POST",
+    }),
 
   // Links
   getLinks: () => request<Link[]>("/links"),
@@ -399,13 +396,10 @@ export const api = {
     telegram_admin_id?: number | string;
     server_url?: string;
   }) =>
-    request<{ success: boolean; bot_username?: string; message?: string }>(
-      "/settings/integrations/telegram/test",
-      {
-        method: "POST",
-        body: JSON.stringify(data),
-      }
-    ),
+    request<{ success: boolean; bot_username?: string; message?: string }>("/settings/integrations/telegram/test", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
 
   // Network Policies
   getNetworkPolicies: () => request<import("../types/api").NetworkPolicy[]>("/network-policies"),
@@ -560,12 +554,10 @@ export const api = {
     request<{ cancelled: boolean }>("/looking-glass/ping-table/cancel", {
       method: "POST",
     }),
-  getCurrentPingTable: () =>
-    request<PingTableTask | null>("/looking-glass/ping-table/current"),
+  getCurrentPingTable: () => request<PingTableTask | null>("/looking-glass/ping-table/current"),
   getPingTableHistory: (limit = 50) =>
     request<PingTableTaskSummary[]>(`/looking-glass/ping-table/history?limit=${limit}`),
-  getPingTableTask: (id: string) =>
-    request<PingTableTask>(`/looking-glass/ping-table/tasks/${encodeURIComponent(id)}`),
+  getPingTableTask: (id: string) => request<PingTableTask>(`/looking-glass/ping-table/tasks/${encodeURIComponent(id)}`),
   deletePingTableTask: (id: string) =>
     request<{ deleted: boolean }>(`/looking-glass/ping-table/tasks/${encodeURIComponent(id)}`, {
       method: "DELETE",
@@ -580,17 +572,14 @@ export const api = {
     }),
 
   // Monitoring
-  getFleetLiveStatus: (flush?: boolean) =>
-    request<FleetLiveResponse>(flush ? "/nodes/live?flush=true" : "/nodes/live"),
+  getFleetLiveStatus: (flush?: boolean) => request<FleetLiveResponse>(flush ? "/nodes/live?flush=true" : "/nodes/live"),
   getNodeMetrics: (nodeName: string, range?: string, flush?: boolean, iface?: string) => {
     const params = new URLSearchParams();
     if (range) params.append("range", range);
     if (flush) params.append("flush", "true");
     if (iface) params.append("interface", iface);
     const qs = params.toString();
-    return request<NodeMetricsResponse>(
-      `/nodes/${encodeURIComponent(nodeName)}/metrics${qs ? `?${qs}` : ""}`,
-    );
+    return request<NodeMetricsResponse>(`/nodes/${encodeURIComponent(nodeName)}/metrics${qs ? `?${qs}` : ""}`);
   },
   getNodeTraffic: (nodeName: string, iface?: string, range?: string, start?: number, end?: number) => {
     const params = new URLSearchParams();
@@ -599,9 +588,7 @@ export const api = {
     if (start) params.append("start", start.toString());
     if (end) params.append("end", end.toString());
     const qs = params.toString();
-    return request<NodeInterfaceTrafficSummary>(
-      `/nodes/${encodeURIComponent(nodeName)}/traffic${qs ? `?${qs}` : ""}`,
-    );
+    return request<NodeInterfaceTrafficSummary>(`/nodes/${encodeURIComponent(nodeName)}/traffic${qs ? `?${qs}` : ""}`);
   },
 
   // Cron Tasks
@@ -720,8 +707,7 @@ export const api = {
       method: "POST",
       body: JSON.stringify(req),
     }),
-  getNodeApps: (nodeName: string) =>
-    request<NodeAppsResponse>(`/nodes/${encodeURIComponent(nodeName)}/apps`),
+  getNodeApps: (nodeName: string) => request<NodeAppsResponse>(`/nodes/${encodeURIComponent(nodeName)}/apps`),
   triggerNodeAppAction: (nodeName: string, appName: string, action: string, appType: string, logLines?: number) =>
     request<AppActionResponse>(`/nodes/${encodeURIComponent(nodeName)}/apps/${encodeURIComponent(appName)}/action`, {
       method: "POST",
@@ -734,10 +720,8 @@ export const api = {
     }),
 
   // Artifact Cache & Validation
-  getAppArtifactStatus: (id: string) =>
-    request<AppArtifactStatus>(`/apps/${encodeURIComponent(id)}/artifact/status`),
-  getAllAppArtifactStatus: () =>
-    request<AppArtifactStatus[]>("/apps/artifact/status"),
+  getAppArtifactStatus: (id: string) => request<AppArtifactStatus>(`/apps/${encodeURIComponent(id)}/artifact/status`),
+  getAllAppArtifactStatus: () => request<AppArtifactStatus[]>("/apps/artifact/status"),
   validateAppArtifact: (id: string) =>
     request<ArtifactValidationResult>(`/apps/${encodeURIComponent(id)}/artifact/validate`, {
       method: "POST",
@@ -835,4 +819,3 @@ export const api = {
       method: "DELETE",
     }),
 };
-

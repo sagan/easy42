@@ -106,10 +106,7 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
   const { serverAgentVersion, links, loadData, openCreateClientNode } = useMesh();
   const [resettingIPv6, setResettingIPv6] = useState(false);
   const isAgentMode = Boolean(
-    node?.mode === "agent" ||
-      node?.agent_token ||
-      status?.mode === "agent" ||
-      status?.connected,
+    node?.mode === "agent" || node?.agent_token || status?.mode === "agent" || status?.connected,
   );
   const [refreshing, setRefreshing] = useState(false);
   const [updatingState, setUpdatingState] = useState(false);
@@ -1671,112 +1668,113 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
           </Box>
         )}
 
-        {node.is_client && (() => {
-          const clientLink = links.find(
-            (l) =>
-              (l.from.name === node.name && l.to.name === node.client_parent) ||
-              (l.to.name === node.name && l.from.name === node.client_parent),
-          );
-          const clientEnd = clientLink
-            ? clientLink.from.name === node.name
-              ? clientLink.from
-              : clientLink.to
-            : undefined;
-          const parentEnd = clientLink
-            ? clientLink.from.name === node.name
-              ? clientLink.to
-              : clientLink.from
-            : undefined;
-          if (!clientLink || !clientEnd || !parentEnd) return null;
-          return (
-            <Box
-              sx={{
-                p: 1.5,
-                borderRadius: 2,
-                border: "1px solid #99F6E4",
-                backgroundColor: "#F0FDFA",
-                display: "flex",
-                flexDirection: "column",
-                gap: 1,
-              }}
-            >
-              <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <Typography variant="caption" sx={{ fontWeight: 700, color: "#0F766E", textTransform: "uppercase" }}>
-                  WireGuard Tunnel Addresses
-                </Typography>
-                <Button
-                  size="small"
-                  variant="outlined"
-                  disabled={resettingIPv6}
-                  startIcon={resettingIPv6 ? <CircularProgress size={12} /> : <RotateCcw size={12} />}
-                  onClick={async () => {
-                    setResettingIPv6(true);
-                    setError(null);
-                    try {
-                      await api.resetClientNodeIPv6(node.name);
-                      await loadData();
-                      setActionSuccess("Assigned new random IPv6 ULA /127 to client link");
-                    } catch (err: any) {
-                      setError(err?.message || "Failed to reset IPv6");
-                    } finally {
-                      setResettingIPv6(false);
-                    }
-                  }}
-                  sx={{
-                    textTransform: "none",
-                    fontSize: "0.72rem",
-                    fontWeight: 600,
-                    py: 0.25,
-                    px: 1,
-                    color: "#0F766E",
-                    borderColor: "#5EEAD4",
-                    "&:hover": { borderColor: "#0D9488", backgroundColor: "rgba(13, 148, 136, 0.08)" },
-                  }}
-                >
-                  Reset IPv6 (/127)
-                </Button>
-              </Box>
-              <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
-                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 1 }}>
-                  <Typography variant="caption" sx={{ color: "#475569" }}>
-                    Client IPv6:
+        {node.is_client &&
+          (() => {
+            const clientLink = links.find(
+              (l) =>
+                (l.from.name === node.name && l.to.name === node.client_parent) ||
+                (l.to.name === node.name && l.from.name === node.client_parent),
+            );
+            const clientEnd = clientLink
+              ? clientLink.from.name === node.name
+                ? clientLink.from
+                : clientLink.to
+              : undefined;
+            const parentEnd = clientLink
+              ? clientLink.from.name === node.name
+                ? clientLink.to
+                : clientLink.from
+              : undefined;
+            if (!clientLink || !clientEnd || !parentEnd) return null;
+            return (
+              <Box
+                sx={{
+                  p: 1.5,
+                  borderRadius: 2,
+                  border: "1px solid #99F6E4",
+                  backgroundColor: "#F0FDFA",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 1,
+                }}
+              >
+                <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <Typography variant="caption" sx={{ fontWeight: 700, color: "#0F766E", textTransform: "uppercase" }}>
+                    WireGuard Tunnel Addresses
                   </Typography>
-                  <Typography variant="caption" className="mono-font" sx={{ fontWeight: 600, color: "#0F172A" }}>
-                    {clientEnd.address || "—"}
-                  </Typography>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    disabled={resettingIPv6}
+                    startIcon={resettingIPv6 ? <CircularProgress size={12} /> : <RotateCcw size={12} />}
+                    onClick={async () => {
+                      setResettingIPv6(true);
+                      setError(null);
+                      try {
+                        await api.resetClientNodeIPv6(node.name);
+                        await loadData();
+                        setActionSuccess("Assigned new random IPv6 ULA /127 to client link");
+                      } catch (err: any) {
+                        setError(err?.message || "Failed to reset IPv6");
+                      } finally {
+                        setResettingIPv6(false);
+                      }
+                    }}
+                    sx={{
+                      textTransform: "none",
+                      fontSize: "0.72rem",
+                      fontWeight: 600,
+                      py: 0.25,
+                      px: 1,
+                      color: "#0F766E",
+                      borderColor: "#5EEAD4",
+                      "&:hover": { borderColor: "#0D9488", backgroundColor: "rgba(13, 148, 136, 0.08)" },
+                    }}
+                  >
+                    Reset IPv6 (/127)
+                  </Button>
                 </Box>
-                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 1 }}>
-                  <Typography variant="caption" sx={{ color: "#475569" }}>
-                    Gateway IPv6:
-                  </Typography>
-                  <Typography variant="caption" className="mono-font" sx={{ fontWeight: 600, color: "#0F172A" }}>
-                    {parentEnd.address || "—"}
-                  </Typography>
+                <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
+                  <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 1 }}>
+                    <Typography variant="caption" sx={{ color: "#475569" }}>
+                      Client IPv6:
+                    </Typography>
+                    <Typography variant="caption" className="mono-font" sx={{ fontWeight: 600, color: "#0F172A" }}>
+                      {clientEnd.address || "—"}
+                    </Typography>
+                  </Box>
+                  <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 1 }}>
+                    <Typography variant="caption" sx={{ color: "#475569" }}>
+                      Gateway IPv6:
+                    </Typography>
+                    <Typography variant="caption" className="mono-font" sx={{ fontWeight: 600, color: "#0F172A" }}>
+                      {parentEnd.address || "—"}
+                    </Typography>
+                  </Box>
+                  {(clientEnd.address4 || parentEnd.address4) && (
+                    <>
+                      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 1 }}>
+                        <Typography variant="caption" sx={{ color: "#475569" }}>
+                          Client IPv4:
+                        </Typography>
+                        <Typography variant="caption" className="mono-font" sx={{ fontWeight: 600, color: "#0F172A" }}>
+                          {clientEnd.address4 || "—"}
+                        </Typography>
+                      </Box>
+                      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 1 }}>
+                        <Typography variant="caption" sx={{ color: "#475569" }}>
+                          Gateway IPv4:
+                        </Typography>
+                        <Typography variant="caption" className="mono-font" sx={{ fontWeight: 600, color: "#0F172A" }}>
+                          {parentEnd.address4 || "—"}
+                        </Typography>
+                      </Box>
+                    </>
+                  )}
                 </Box>
-                {(clientEnd.address4 || parentEnd.address4) && (
-                  <>
-                    <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 1 }}>
-                      <Typography variant="caption" sx={{ color: "#475569" }}>
-                        Client IPv4:
-                      </Typography>
-                      <Typography variant="caption" className="mono-font" sx={{ fontWeight: 600, color: "#0F172A" }}>
-                        {clientEnd.address4 || "—"}
-                      </Typography>
-                    </Box>
-                    <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 1 }}>
-                      <Typography variant="caption" sx={{ color: "#475569" }}>
-                        Gateway IPv4:
-                      </Typography>
-                      <Typography variant="caption" className="mono-font" sx={{ fontWeight: 600, color: "#0F172A" }}>
-                        {parentEnd.address4 || "—"}
-                      </Typography>
-                    </Box>
-                  </>
-                )}
               </Box>
-            </Box>
-          );
-        })()}
+            );
+          })()}
 
         {actionSuccess && (
           <Alert severity="success" sx={{ borderRadius: 2 }}>
@@ -1802,10 +1800,7 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
             onClick={async () => {
               try {
                 const res = await api.getClientWgConfig(node.name);
-                downloadTextFile(
-                  res.filename || `wg-${node.name}-${node.client_parent || "gateway"}.conf`,
-                  res.config,
-                );
+                downloadTextFile(res.filename || `wg-${node.name}-${node.client_parent || "gateway"}.conf`, res.config);
               } catch (err: any) {
                 alert(err?.message || "Failed to download wg.conf");
               }

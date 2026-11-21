@@ -2088,12 +2088,7 @@ export const AppsPage: React.FC = () => {
               </Box>
             }
           />
-          <Tab
-            value="ssh"
-            icon={<KeyRound size={18} />}
-            iconPosition="start"
-            label={<span>SSH</span>}
-          />
+          <Tab value="ssh" icon={<KeyRound size={18} />} iconPosition="start" label={<span>SSH</span>} />
         </Tabs>
       </Paper>
 
@@ -3506,7 +3501,8 @@ export const AppsPage: React.FC = () => {
                       <Box sx={{ mb: 1 }}>
                         {(() => {
                           const selector = app.selector || {};
-                          const mode: SelectorTargetMode | "none" = Object.keys(selector).length === 0 ? "none" : detectTargetMode(selector);
+                          const mode: SelectorTargetMode | "none" =
+                            Object.keys(selector).length === 0 ? "none" : detectTargetMode(selector);
                           const manualNodes = splitSelectorList(getSelectorValue(selector, "name"));
                           const tagValue = getSelectorValue(selector, "tag");
                           const matchingNodes = managedNodes.filter((n) => matchesTaskSelector(n, selector));

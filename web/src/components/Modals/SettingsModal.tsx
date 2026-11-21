@@ -6763,7 +6763,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                   borderRadius: 1,
                   bgcolor: "#F8FAFC",
                   border: "1px solid #E2E8F0",
-                }}
+                }} 
               >
                 <Typography
                   variant="subtitle2"

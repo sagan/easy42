@@ -1183,9 +1183,7 @@ export const LookingGlassModal: React.FC<LookingGlassModalProps> = ({ nodes, ini
           <CronTasksTab
             nodes={managedNodes}
             onExecuteNow={(task) => {
-              setSelectedTaskId(
-                task.task_type === "tcp_ping" || task.task_type === "http" ? task.task_type : "ping",
-              );
+              setSelectedTaskId(task.task_type === "tcp_ping" || task.task_type === "http" ? task.task_type : "ping");
               setSelectedNodes(
                 managedNodes
                   .filter((n) => matchesTaskSelector(n, task.selector || {}))

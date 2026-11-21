@@ -397,10 +397,8 @@ export function generateTopologySvg(
       const linkId = getLinkId(link);
       const linkCentrality = centralityResult.links.get(linkId);
       const isCoreLink = Boolean(options.emphasizeCentrality !== false && linkCentrality?.isCore);
-      const strokeWidth =
-        options.emphasizeCentrality !== false && linkCentrality ? linkCentrality.strokeWidth : 2;
-      const strokeOpacity =
-        options.emphasizeCentrality !== false && linkCentrality ? linkCentrality.opacity : 0.85;
+      const strokeWidth = options.emphasizeCentrality !== false && linkCentrality ? linkCentrality.strokeWidth : 2;
+      const strokeOpacity = options.emphasizeCentrality !== false && linkCentrality ? linkCentrality.opacity : 0.85;
 
       let strokeColor = "#10B981"; // Emerald
       let strokeDash = "";
@@ -448,7 +446,10 @@ export function generateTopologySvg(
 
       linksSvg += `    <path d="${pathD}" fill="none" stroke="${strokeColor}" stroke-width="${strokeWidth.toFixed(1)}" stroke-linecap="round" stroke-opacity="${strokeOpacity.toFixed(2)}" ${strokeDash} />\n`;
 
-      if (options.displayLinkCost && (!isVirtual || Boolean((link.from?.cost && link.from.cost !== 0) || (link.to?.cost && link.to.cost !== 0)))) {
+      if (
+        options.displayLinkCost &&
+        (!isVirtual || Boolean((link.from?.cost && link.from.cost !== 0) || (link.to?.cost && link.to.cost !== 0)))
+      ) {
         const fromIsRemoteExternal = Boolean(nodeTo?.is_external);
         const toIsRemoteExternal = Boolean(nodeFrom?.is_external);
         const fromCost = getEffectiveLinkCost(link.from, fromIsRemoteExternal, networkPolicies);
@@ -517,7 +518,15 @@ export function generateTopologySvg(
       borderColor = "#059669";
     }
     const borderDash = isExternal || isClient ? 'stroke-dasharray="5 3"' : "";
-    const dotColor = isClient ? "#0D9488" : isExternal ? "#A855F7" : isRR ? "#6366F1" : isCoreNode ? "#059669" : "#10B981";
+    const dotColor = isClient
+      ? "#0D9488"
+      : isExternal
+        ? "#A855F7"
+        : isRR
+          ? "#6366F1"
+          : isCoreNode
+            ? "#059669"
+            : "#10B981";
 
     let rightOffset = 10;
     let clientBadgeSvg = "";
@@ -579,11 +588,9 @@ export function generateTopologySvg(
   const hasExternalNodes = effectiveNodes.some((n) => n.is_external);
   const hasRRNodes = effectiveNodes.some((n) => n.route_reflector);
   const hasCoreNodes =
-    options.emphasizeCentrality !== false &&
-    Array.from(centralityResult.nodes.values()).some((n) => n.isCore);
+    options.emphasizeCentrality !== false && Array.from(centralityResult.nodes.values()).some((n) => n.isCore);
   const hasCoreLinks =
-    options.emphasizeCentrality !== false &&
-    Array.from(centralityResult.links.values()).some((l) => l.isCore);
+    options.emphasizeCentrality !== false && Array.from(centralityResult.links.values()).some((l) => l.isCore);
 
   const legendItems: string[] = [];
   let curOffset = 0;

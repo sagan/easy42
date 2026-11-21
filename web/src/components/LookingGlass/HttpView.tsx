@@ -1,16 +1,6 @@
 import React from "react";
 import { Box, Typography, Paper, LinearProgress, Chip, Tooltip } from "@mui/material";
-import {
-  ArrowDown,
-  ArrowUp,
-  Zap,
-  ShieldAlert,
-  CheckCircle2,
-  XCircle,
-  Globe,
-  Clock,
-  Info,
-} from "lucide-react";
+import { ArrowDown, ArrowUp, Zap, ShieldAlert, CheckCircle2, XCircle, Globe, Clock, Info } from "lucide-react";
 import { HttpResult, HttpProbe } from "../../types/api";
 
 interface HttpViewProps {
@@ -274,9 +264,9 @@ export const HttpView: React.FC<HttpViewProps> = ({ http }) => {
             GET request with no redirects followed; response body is not read
           </Typography>
           <Typography variant="caption" sx={{ color: "#475569", lineHeight: 1.4 }}>
-            A probe counts as successful once the HTTP response header is received. 4xx and 5xx status codes are
-            still considered successful responses and are reported above. TTFB measures elapsed time until the
-            response header arrives.
+            A probe counts as successful once the HTTP response header is received. 4xx and 5xx status codes are still
+            considered successful responses and are reported above. TTFB measures elapsed time until the response header
+            arrives.
           </Typography>
         </Box>
       </Box>
@@ -360,7 +350,14 @@ export const HttpView: React.FC<HttpViewProps> = ({ http }) => {
                     <Tooltip title={probe.status}>
                       <Typography
                         variant="caption"
-                        sx={{ color: "#64748B", fontFamily: "monospace", maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                        sx={{
+                          color: "#64748B",
+                          fontFamily: "monospace",
+                          maxWidth: 140,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
                       >
                         {probe.status}
                       </Typography>

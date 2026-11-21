@@ -21,8 +21,7 @@
  * connecting?" prompt even though it decodes to the same bytes.
  */
 
-const BASE64_ALPHABET =
-  "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+const BASE64_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
 /**
  * Encode bytes as base64.
@@ -69,13 +68,9 @@ function toHex(bytes: Uint8Array): string {
 export function base64ToBytes(input: string): Uint8Array | null {
   const cleaned = (input || "").trim().replace(/\s+/g, "");
   if (!cleaned) return new Uint8Array();
-  const padded = cleaned.padEnd(
-    cleaned.length + ((4 - (cleaned.length % 4)) % 4),
-    "=",
-  );
+  const padded = cleaned.padEnd(cleaned.length + ((4 - (cleaned.length % 4)) % 4), "=");
   const lookup = new Map<string, number>();
-  for (let i = 0; i < BASE64_ALPHABET.length; i++)
-    lookup.set(BASE64_ALPHABET[i], i);
+  for (let i = 0; i < BASE64_ALPHABET.length; i++) lookup.set(BASE64_ALPHABET[i], i);
 
   const bytes: number[] = [];
   for (let i = 0; i < padded.length; i += 4) {
@@ -102,16 +97,11 @@ export function base64ToBytes(input: string): Uint8Array | null {
 // well-known fingerprint format; it is never a security primitive.
 
 const MD5_S = [
-  7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22, 5, 9, 14, 20, 5,
-  9, 14, 20, 5, 9, 14, 20, 5, 9, 14, 20, 4, 11, 16, 23, 4, 11, 16, 23, 4, 11,
-  16, 23, 4, 11, 16, 23, 6, 10, 15, 21, 6, 10, 15, 21, 6, 10, 15, 21, 6, 10, 15,
-  21,
+  7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22, 5, 9, 14, 20, 5, 9, 14, 20, 5, 9, 14, 20, 5, 9, 14, 20, 4,
+  11, 16, 23, 4, 11, 16, 23, 4, 11, 16, 23, 4, 11, 16, 23, 6, 10, 15, 21, 6, 10, 15, 21, 6, 10, 15, 21, 6, 10, 15, 21,
 ];
 
-const MD5_K = Array.from(
-  { length: 64 },
-  (_, i) => Math.floor(Math.abs(Math.sin(i + 1)) * 2 ** 32) >>> 0,
-);
+const MD5_K = Array.from({ length: 64 }, (_, i) => Math.floor(Math.abs(Math.sin(i + 1)) * 2 ** 32) >>> 0);
 
 /** Compute the MD5 digest of `input`. */
 export function md5(input: Uint8Array): Uint8Array {
@@ -144,8 +134,7 @@ export function md5(input: Uint8Array): Uint8Array {
   for (let offset = 0; offset < msg.length; offset += 64) {
     for (let j = 0; j < 16; j++) {
       const p = offset + j * 4;
-      m[j] =
-        msg[p] | (msg[p + 1] << 8) | (msg[p + 2] << 16) | (msg[p + 3] << 24);
+      m[j] = msg[p] | (msg[p + 1] << 8) | (msg[p + 2] << 16) | (msg[p + 3] << 24);
     }
     let a = a0;
     let b = b0;
@@ -192,20 +181,11 @@ export function md5(input: Uint8Array): Uint8Array {
 
 // --- SHA-1 / SHA-256 (via WebCrypto) --------------------------------------
 
-async function subtleDigest(
-  algo: "SHA-1" | "SHA-256",
-  data: Uint8Array,
-): Promise<Uint8Array | null> {
-  const subtle =
-    typeof globalThis.crypto !== "undefined"
-      ? globalThis.crypto.subtle
-      : undefined;
+async function subtleDigest(algo: "SHA-1" | "SHA-256", data: Uint8Array): Promise<Uint8Array | null> {
+  const subtle = typeof globalThis.crypto !== "undefined" ? globalThis.crypto.subtle : undefined;
   if (!subtle) return null;
   // Copy into a fresh ArrayBuffer so the DOM typings accept the buffer source.
-  const buf = data.buffer.slice(
-    data.byteOffset,
-    data.byteOffset + data.byteLength,
-  ) as ArrayBuffer;
+  const buf = data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength) as ArrayBuffer;
   const digest = await subtle.digest(algo, buf);
   return new Uint8Array(digest);
 }
@@ -231,9 +211,7 @@ export interface KeyFingerprints {
  * bare base64 key blob. The digest is taken over the key blob exactly as it
  * appears on the wire, matching `ssh-keygen -l`.
  */
-export async function sshKeyFingerprints(
-  keyLineOrBlob: string,
-): Promise<KeyFingerprints> {
+export async function sshKeyFingerprints(keyLineOrBlob: string): Promise<KeyFingerprints> {
   const parts = keyLineOrBlob.trim().split(/\s+/).filter(Boolean);
   // A full key line is `algorithm blob [comment]`; a bare blob is one token.
   const blobToken = parts.length >= 2 ? parts[1] : parts[0] || "";

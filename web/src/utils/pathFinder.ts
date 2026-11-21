@@ -77,9 +77,7 @@ export function buildDirectedLinkGraph(
   networkPolicies?: NetworkPolicy[],
   workingStates?: Map<string, "working" | "not_working" | "unknown">,
 ): Map<string, DirectedLink[]> {
-  const isExternal = new Map(
-    nodes.map((n) => [n.name, Boolean(n.is_external)]),
-  );
+  const isExternal = new Map(nodes.map((n) => [n.name, Boolean(n.is_external)]));
   const adjacency = new Map<string, DirectedLink[]>();
 
   const push = (edge: DirectedLink) => {
@@ -94,16 +92,8 @@ export function buildDirectedLinkGraph(
   links.forEach((link) => {
     if (link.disabled) return;
 
-    const forwardCost = getEffectiveLinkCost(
-      link.from,
-      isExternal.get(link.to.name),
-      networkPolicies,
-    );
-    const reverseCost = getEffectiveLinkCost(
-      link.to,
-      isExternal.get(link.from.name),
-      networkPolicies,
-    );
+    const forwardCost = getEffectiveLinkCost(link.from, isExternal.get(link.to.name), networkPolicies);
+    const reverseCost = getEffectiveLinkCost(link.to, isExternal.get(link.from.name), networkPolicies);
     const pairKey = getLinkPairKey(link);
     const state = workingStates?.get(getLinkId(link));
 
@@ -175,15 +165,10 @@ class CostHeap {
         const left = i * 2 + 1;
         const right = left + 1;
         let smallest = i;
-        if (left < len && this.less(this.items[left], this.items[smallest]))
-          smallest = left;
-        if (right < len && this.less(this.items[right], this.items[smallest]))
-          smallest = right;
+        if (left < len && this.less(this.items[left], this.items[smallest])) smallest = left;
+        if (right < len && this.less(this.items[right], this.items[smallest])) smallest = right;
         if (smallest === i) break;
-        [this.items[i], this.items[smallest]] = [
-          this.items[smallest],
-          this.items[i],
-        ];
+        [this.items[i], this.items[smallest]] = [this.items[smallest], this.items[i]];
         i = smallest;
       }
     }
@@ -198,11 +183,7 @@ class CostHeap {
  * with fewer hops (BIRD does not do this itself, but it makes the highlighted path stable
  * and readable when all links share the same default cost).
  */
-export function findBestPath(
-  adjacency: Map<string, DirectedLink[]>,
-  from: string,
-  to: string,
-): DirectedPath | null {
+export function findBestPath(adjacency: Map<string, DirectedLink[]>, from: string, to: string): DirectedPath | null {
   if (from === to) {
     return { from, to, hops: [{ node: from }], totalCost: 0, edgeIds: [] };
   }
@@ -234,11 +215,7 @@ export function findBestPath(
       const knownCost = distances.get(edge.to);
       const knownHops = hops.get(edge.to) ?? Number.POSITIVE_INFINITY;
 
-      if (
-        knownCost === undefined ||
-        nextCost < knownCost ||
-        (nextCost === knownCost && nextHops < knownHops)
-      ) {
+      if (knownCost === undefined || nextCost < knownCost || (nextCost === knownCost && nextHops < knownHops)) {
         distances.set(edge.to, nextCost);
         hops.set(edge.to, nextHops);
         previous.set(edge.to, { node: current.node, edge });
@@ -292,11 +269,7 @@ function isMirrorRoute(a: DirectedLink[], b: DirectedLink[]): boolean {
 }
 
 /** Computes the best path in both directions between `a` and `b`. */
-export function findBestPathPair(
-  adjacency: Map<string, DirectedLink[]>,
-  a: string,
-  b: string,
-): BestPathPair {
+export function findBestPathPair(adjacency: Map<string, DirectedLink[]>, a: string, b: string): BestPathPair {
   const forward = findBestPath(adjacency, a, b);
   const reverse = findBestPath(adjacency, b, a);
 
@@ -309,15 +282,12 @@ export function findBestPathPair(
     Boolean(forward) !== Boolean(reverse) ||
     (forward !== null &&
       reverse !== null &&
-      (!isMirrorRoute(forwardSteps, reverseSteps) ||
-        forward.totalCost !== reverse.totalCost));
+      (!isMirrorRoute(forwardSteps, reverseSteps) || forward.totalCost !== reverse.totalCost));
 
   // Node-pair keys drive the canvas filter (always show links on the path), while the
   // per-link direction map drives styling so parallel interfaces are attributed correctly.
   const nodePairKeys = new Set<string>();
-  [...forwardSteps, ...reverseSteps].forEach((edge) =>
-    nodePairKeys.add(getNodePairKey(edge.from, edge.to)),
-  );
+  [...forwardSteps, ...reverseSteps].forEach((edge) => nodePairKeys.add(getNodePairKey(edge.from, edge.to)));
 
   const linkDirections = new Map<string, { forward: boolean; reverse: boolean }>();
   const mark = (edges: DirectedLink[], key: "forward" | "reverse") => {
@@ -338,17 +308,12 @@ export function findBestPathPair(
  * Returns the in-edge for each hop (index 0 has none), i.e. the directed edge traversed to
  * arrive at `path.hops[i].node` from `path.hops[i-1].node`.
  */
-export function getPathSteps(
-  adjacency: Map<string, DirectedLink[]>,
-  path: DirectedPath,
-): DirectedLink[] {
+export function getPathSteps(adjacency: Map<string, DirectedLink[]>, path: DirectedPath): DirectedLink[] {
   const steps: DirectedLink[] = [];
   for (let i = 1; i < path.hops.length; i++) {
     const edgeId = path.hops[i].viaEdgeId;
     const from = path.hops[i - 1].node;
-    const edge = edgeId
-      ? (adjacency.get(from) || []).find((e) => e.id === edgeId)
-      : undefined;
+    const edge = edgeId ? (adjacency.get(from) || []).find((e) => e.id === edgeId) : undefined;
     if (edge) steps.push(edge);
   }
   return steps;

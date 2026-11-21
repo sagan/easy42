@@ -1,12 +1,12 @@
-import fs from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { Resvg } from '@resvg/resvg-js';
-import pngToIco from 'png-to-ico';
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { Resvg } from "@resvg/resvg-js";
+import pngToIco from "png-to-ico";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const publicDir = path.resolve(__dirname, '../public');
+const publicDir = path.resolve(__dirname, "../public");
 
 // Master Icon SVG: 512x512
 // Features: Modern rounded squircle badge, gradient mesh background, interconnected "42" topology nodes and WireGuard links
@@ -57,7 +57,7 @@ const createLogoSvg = (options = { transparent: false, paddingRatio: 0 }) => {
 
   ${
     transparent
-      ? ''
+      ? ""
       : `
   <!-- Main Badge Container -->
   <rect width="512" height="512" rx="116" fill="url(#bgGrad)" />
@@ -135,22 +135,22 @@ const createLogoSvg = (options = { transparent: false, paddingRatio: 0 }) => {
 };
 
 async function generate() {
-  console.log('Generating Easy42 branding assets...');
+  console.log("Generating Easy42 branding assets...");
 
   // 1. Write SVGs
   const standardSvg = createLogoSvg({ transparent: false, paddingRatio: 0 });
   const maskableSvg = createLogoSvg({ transparent: false, paddingRatio: 0.1 });
   const transparentSvg = createLogoSvg({ transparent: true, paddingRatio: 0 });
 
-  fs.writeFileSync(path.join(publicDir, 'logo.svg'), standardSvg);
-  fs.writeFileSync(path.join(publicDir, 'favicon.svg'), standardSvg);
-  fs.writeFileSync(path.join(publicDir, 'logo-transparent.svg'), transparentSvg);
+  fs.writeFileSync(path.join(publicDir, "logo.svg"), standardSvg);
+  fs.writeFileSync(path.join(publicDir, "favicon.svg"), standardSvg);
+  fs.writeFileSync(path.join(publicDir, "logo-transparent.svg"), transparentSvg);
 
   // 2. Render PNGs using @resvg/resvg-js
   const renderPng = (svgContent, width) => {
     const resvg = new Resvg(svgContent, {
       fitTo: {
-        mode: 'width',
+        mode: "width",
         value: width,
       },
     });
@@ -158,13 +158,13 @@ async function generate() {
   };
 
   const sizes = [
-    { name: 'favicon-16x16.png', size: 16, svg: standardSvg },
-    { name: 'favicon-32x32.png', size: 32, svg: standardSvg },
-    { name: 'favicon-48x48.png', size: 48, svg: standardSvg },
-    { name: 'apple-touch-icon.png', size: 180, svg: standardSvg },
-    { name: 'pwa-192x192.png', size: 192, svg: standardSvg },
-    { name: 'pwa-512x512.png', size: 512, svg: standardSvg },
-    { name: 'pwa-512x512-maskable.png', size: 512, svg: maskableSvg },
+    { name: "favicon-16x16.png", size: 16, svg: standardSvg },
+    { name: "favicon-32x32.png", size: 32, svg: standardSvg },
+    { name: "favicon-48x48.png", size: 48, svg: standardSvg },
+    { name: "apple-touch-icon.png", size: 180, svg: standardSvg },
+    { name: "pwa-192x192.png", size: 192, svg: standardSvg },
+    { name: "pwa-512x512.png", size: 512, svg: standardSvg },
+    { name: "pwa-512x512-maskable.png", size: 512, svg: maskableSvg },
   ];
 
   const pngBuffers = {};
@@ -177,17 +177,17 @@ async function generate() {
 
   // 3. Generate multi-resolution favicon.ico (16, 32, 48)
   const icoBuffer = await pngToIco([
-    path.join(publicDir, 'favicon-16x16.png'),
-    path.join(publicDir, 'favicon-32x32.png'),
-    path.join(publicDir, 'favicon-48x48.png'),
+    path.join(publicDir, "favicon-16x16.png"),
+    path.join(publicDir, "favicon-32x32.png"),
+    path.join(publicDir, "favicon-48x48.png"),
   ]);
-  fs.writeFileSync(path.join(publicDir, 'favicon.ico'), icoBuffer);
-  console.log('Generated favicon.ico (16x16, 32x32, 48x48)');
+  fs.writeFileSync(path.join(publicDir, "favicon.ico"), icoBuffer);
+  console.log("Generated favicon.ico (16x16, 32x32, 48x48)");
 
-  console.log('All assets generated successfully in web/public!');
+  console.log("All assets generated successfully in web/public!");
 }
 
 generate().catch((err) => {
-  console.error('Asset generation failed:', err);
+  console.error("Asset generation failed:", err);
   process.exit(1);
 });

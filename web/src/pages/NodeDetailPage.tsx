@@ -214,19 +214,19 @@ export const NodeDetailPage: React.FC = () => {
   const tabParam = searchParams.get("tab") || "overview";
   const validTabs =
     node?.is_external || node?.is_client
-    ? ["overview", "networking"]
-    : [
-        "overview",
-        "metrics",
-        "telemetry",
-        "networking",
-        "routing",
-        "firewall",
-        "agent",
-        "apps",
-        "scripts",
-        "cron_tasks",
-      ];
+      ? ["overview", "networking"]
+      : [
+          "overview",
+          "metrics",
+          "telemetry",
+          "networking",
+          "routing",
+          "firewall",
+          "agent",
+          "apps",
+          "scripts",
+          "cron_tasks",
+        ];
   const currentTab = validTabs.includes(tabParam) ? (tabParam === "telemetry" ? "metrics" : tabParam) : "overview";
 
   useEffect(() => {
@@ -1433,7 +1433,7 @@ export const NodeDetailPage: React.FC = () => {
                     •
                   </Typography>
                   <Typography variant="body2" sx={{ color: "#64748B" }}>
-                    ASN: <strong style={{ color: "#0F172A" }}>{node?.asn || 424242}</strong>
+                    ASN: <strong style={{ color: "#0F172A" }}>{node?.asn || 0}</strong>
                   </Typography>
                   {!node?.is_external && !node?.is_client && (
                     <>
@@ -1480,29 +1480,6 @@ export const NodeDetailPage: React.FC = () => {
                   }}
                 >
                   Download wg.conf
-                </Button>
-                <Button
-                  variant="outlined"
-                  size="small"
-                  startIcon={<RotateCcw size={15} />}
-                  onClick={async () => {
-                    try {
-                      await api.resetClientNodeIPv6(node.name);
-                      await loadData();
-                    } catch (err: any) {
-                      alert(err?.message || "Failed to reset IPv6");
-                    }
-                  }}
-                  sx={{
-                    color: "#0F766E",
-                    borderColor: "#5EEAD4",
-                    fontWeight: 600,
-                    textTransform: "none",
-                    borderRadius: 1.5,
-                    "&:hover": { borderColor: "#0D9488", backgroundColor: "rgba(13, 148, 136, 0.08)" },
-                  }}
-                >
-                  Reset IPv6 (/127)
                 </Button>
               </Box>
             )}
@@ -2201,7 +2178,9 @@ export const NodeDetailPage: React.FC = () => {
                         Management Mode:
                       </Typography>
                       <Chip
-                        label={node.is_client ? "CLIENT" : node.is_external ? "EXTERNAL" : isAgentMode ? "AGENT" : "SSH"}
+                        label={
+                          node.is_client ? "CLIENT" : node.is_external ? "EXTERNAL" : isAgentMode ? "AGENT" : "SSH"
+                        }
                         size="small"
                         sx={{
                           height: 20,
@@ -3977,10 +3956,14 @@ export const NodeDetailPage: React.FC = () => {
         {currentTab === "apps" && node && !node.is_external && !node.is_client && <NodeAppsTab nodeName={node.name} />}
 
         {/* Tab: Scripts */}
-        {currentTab === "scripts" && node && !node.is_external && !node.is_client && <NodeScriptsTab nodeName={node.name} />}
+        {currentTab === "scripts" && node && !node.is_external && !node.is_client && (
+          <NodeScriptsTab nodeName={node.name} />
+        )}
 
         {/* Tab 7: Cron Tasks */}
-        {currentTab === "cron_tasks" && node && !node.is_external && !node.is_client && <NodeCronTasksTab nodeName={node.name} />}
+        {currentTab === "cron_tasks" && node && !node.is_external && !node.is_client && (
+          <NodeCronTasksTab nodeName={node.name} />
+        )}
       </Box>
 
       {/* BIRD Config Dialog */}

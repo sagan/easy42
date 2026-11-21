@@ -1167,7 +1167,9 @@ export const AddNodeModal: React.FC<AddNodeModalProps> = ({
                             textTransform: "uppercase",
                           }}
                         >
-                          {ep.isNone ? "NAT / Dynamic IP (Fallback)" : `Endpoint ${entrypoints.length > 1 ? `#${idx + 1}` : ""}`}
+                          {ep.isNone
+                            ? "NAT / Dynamic IP (Fallback)"
+                            : `Endpoint ${entrypoints.length > 1 ? `#${idx + 1}` : ""}`}
                         </Typography>
                         <Box sx={{ display: "flex", alignItems: "center", gap: 0.3 }}>
                           {!ep.isNone && (

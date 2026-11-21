@@ -28,9 +28,7 @@ export function generatePingTableSvg(
   networkNameOrOptions?: string | PingTableExportOptions,
 ): string {
   const options: PingTableExportOptions =
-    typeof networkNameOrOptions === "string"
-      ? { networkName: networkNameOrOptions }
-      : networkNameOrOptions || {};
+    typeof networkNameOrOptions === "string" ? { networkName: networkNameOrOptions } : networkNameOrOptions || {};
 
   const rawNodes = task.nodes || [];
   const nodeMap = new Map<string, Node>((options.nodes || []).map((n) => [n.name, n]));
@@ -291,16 +289,13 @@ export async function exportPingTableFile(
   action: PingTableExportAction = "download",
 ): Promise<void> {
   const options: PingTableExportOptions =
-    typeof networkNameOrOptions === "string"
-      ? { networkName: networkNameOrOptions }
-      : networkNameOrOptions || {};
+    typeof networkNameOrOptions === "string" ? { networkName: networkNameOrOptions } : networkNameOrOptions || {};
 
   const svgString = generatePingTableSvg(task, options);
   const dateStr = new Date(task.created_at ? task.created_at * 1000 : Date.now()).toISOString().slice(0, 10);
   const trimmedNet = options.networkName?.trim() || "easy42";
-  const safePrefix = trimmedNet.toLowerCase() === "easy42"
-    ? "easy42"
-    : trimmedNet.replace(/\s+/g, "-").replace(/[/\\?%*:|"<>]/g, "");
+  const safePrefix =
+    trimmedNet.toLowerCase() === "easy42" ? "easy42" : trimmedNet.replace(/\s+/g, "-").replace(/[/\\?%*:|"<>]/g, "");
   const baseFilename = `${safePrefix}-ping-table-${task.latency_type}-${dateStr}`;
 
   // If opening in a new tab, open immediately to avoid popup blockers

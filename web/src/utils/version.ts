@@ -10,8 +10,14 @@ export function compareVersions(v1: string, v2: string): number {
   if (!clean1) return -1;
   if (!clean2) return 1;
 
-  const parts1 = clean1.split(/[-+]/)[0].split(".").map((n) => parseInt(n, 10) || 0);
-  const parts2 = clean2.split(/[-+]/)[0].split(".").map((n) => parseInt(n, 10) || 0);
+  const parts1 = clean1
+    .split(/[-+]/)[0]
+    .split(".")
+    .map((n) => parseInt(n, 10) || 0);
+  const parts2 = clean2
+    .split(/[-+]/)[0]
+    .split(".")
+    .map((n) => parseInt(n, 10) || 0);
 
   const maxLength = Math.max(parts1.length, parts2.length);
   for (let i = 0; i < maxLength; i++) {
@@ -26,10 +32,7 @@ export function compareVersions(v1: string, v2: string): number {
 /**
  * Checks whether an agent's version is older than the target (latest bundled) agent version.
  */
-export function isAgentVersionOutdated(
-  nodeVersion?: string | null,
-  targetVersion?: string | null
-): boolean {
+export function isAgentVersionOutdated(nodeVersion?: string | null, targetVersion?: string | null): boolean {
   if (!nodeVersion || !targetVersion) return false;
   const cleanNode = nodeVersion.trim();
   const cleanTarget = targetVersion.trim();

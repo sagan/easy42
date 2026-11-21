@@ -26,15 +26,7 @@ import {
   TableBody,
   TableContainer,
 } from "@mui/material";
-import {
-  Clock,
-  Plus,
-  Trash2,
-  Edit2,
-  Play,
-  Activity,
-  RefreshCw,
-} from "lucide-react";
+import { Clock, Plus, Trash2, Edit2, Play, Activity, RefreshCw } from "lucide-react";
 import { api } from "../../api/client";
 import type { CronTask, Node } from "../../types/api";
 import { matchesTaskSelector } from "../../utils/taskSelector";
@@ -713,7 +705,10 @@ export const CronTasksTab: React.FC<CronTasksTabProps> = ({ nodes, onExecuteNow 
             onChange={setFormSelector}
             onErrorChange={setFormSelectorError}
             action={
-              <Typography variant="caption" sx={{ color: "#64748B", maxWidth: 280, display: "block", textAlign: "right" }}>
+              <Typography
+                variant="caption"
+                sx={{ color: "#64748B", maxWidth: 280, display: "block", textAlign: "right" }}
+              >
                 Cron tasks run on node agents only; a node without an active agent runs the task once it comes online.
               </Typography>
             }

@@ -5,11 +5,7 @@
  * If the truncated result ends with an invalid character such as "-", it is automatically converted
  * to a valid name in a deterministic way (by trimming trailing hyphens/underscores).
  */
-export function getInterfaceNameWithSuffix(
-  peerName: string,
-  suffix: string = "",
-  isExternal: boolean = false,
-): string {
+export function getInterfaceNameWithSuffix(peerName: string, suffix: string = "", isExternal: boolean = false): string {
   const cleanName = (peerName || "").trim();
   const prefix = isExternal ? "wg42-" : "wg42";
 

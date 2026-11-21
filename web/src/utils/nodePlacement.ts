@@ -43,11 +43,7 @@ export function isPositionOccupied(
     const nodeRight = node.x + NODE_CARD_WIDTH + NODE_MARGIN;
     const nodeBottom = node.y + NODE_CARD_HEIGHT + NODE_MARGIN;
 
-    const overlap =
-      candRight > nodeLeft &&
-      x < nodeRight &&
-      candBottom > nodeTop &&
-      y < nodeBottom;
+    const overlap = candRight > nodeLeft && x < nodeRight && candBottom > nodeTop && y < nodeBottom;
 
     if (overlap) {
       return true;
@@ -61,11 +57,7 @@ export function isPositionOccupied(
     const blockRight = block.x + block.width + BLOCK_MARGIN;
     const blockBottom = block.y + block.height + BLOCK_MARGIN;
 
-    const overlap =
-      candRight > blockLeft &&
-      x < blockRight &&
-      candBottom > blockTop &&
-      y < blockBottom;
+    const overlap = candRight > blockLeft && x < blockRight && candBottom > blockTop && y < blockBottom;
 
     if (overlap) {
       return true;
@@ -92,10 +84,7 @@ export function isPositionOccupied(
  * 2. Not overlap with any existing node or block.
  * 3. Be placed near the existing graph elements instead of far away.
  */
-export function findInitialNodePosition(
-  existingNodes: Node[] = [],
-  blocks: GraphBlock[] = [],
-): Position {
+export function findInitialNodePosition(existingNodes: Node[] = [], blocks: GraphBlock[] = []): Position {
   // Extract all existing nodes that have valid coordinates
   const placedNodes: { x: number; y: number }[] = [];
   for (const n of existingNodes) {
@@ -303,11 +292,7 @@ export function isBlockPositionOccupied(
     const bRight = block.x + bW + margin;
     const bBottom = block.y + bH + margin;
 
-    const overlap =
-      candRight > bLeft &&
-      x < bRight &&
-      candBottom > bTop &&
-      y < bBottom;
+    const overlap = candRight > bLeft && x < bRight && candBottom > bTop && y < bBottom;
 
     if (overlap) {
       return true;
@@ -321,11 +306,7 @@ export function isBlockPositionOccupied(
     const nRight = node.x + NODE_CARD_WIDTH + margin;
     const nBottom = node.y + NODE_CARD_HEIGHT + margin;
 
-    const overlap =
-      candRight > nLeft &&
-      x < nRight &&
-      candBottom > nTop &&
-      y < nBottom;
+    const overlap = candRight > nLeft && x < nRight && candBottom > nTop && y < nBottom;
 
     if (overlap) {
       return true;

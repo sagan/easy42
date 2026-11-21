@@ -36,5 +36,8 @@
     "typescript": "~5.7.2",
     "vite": "^6.4.6",
     "vite-plugin-pwa": "^2.0.0"
+  },
+  "prettier": {
+    "printWidth": 120
   }
 }

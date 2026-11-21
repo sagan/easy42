@@ -1059,16 +1059,18 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
               required
               disabled={submitting || Boolean(linkToEdit)}
             >
-              {nodes.filter((n) => !n.is_client).map((n) => {
-                const isSelf = n.name === toNodeName;
-                const isBothExt = Boolean(toNode?.is_external && n.is_external);
-                return (
-                  <MenuItem key={n.name} value={n.name} disabled={isSelf || isBothExt}>
-                    {n.name} {n.is_external ? "(External Peer)" : n.ip ? `(${n.ip})` : ""}
-                    {isBothExt ? " — cannot link to another external peer" : ""}
-                  </MenuItem>
-                );
-              })}
+              {nodes
+                .filter((n) => !n.is_client)
+                .map((n) => {
+                  const isSelf = n.name === toNodeName;
+                  const isBothExt = Boolean(toNode?.is_external && n.is_external);
+                  return (
+                    <MenuItem key={n.name} value={n.name} disabled={isSelf || isBothExt}>
+                      {n.name} {n.is_external ? "(External Peer)" : n.ip ? `(${n.ip})` : ""}
+                      {isBothExt ? " — cannot link to another external peer" : ""}
+                    </MenuItem>
+                  );
+                })}
             </TextField>
 
             <Box
@@ -1103,16 +1105,18 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
               required
               disabled={submitting || Boolean(linkToEdit)}
             >
-              {nodes.filter((n) => !n.is_client).map((n) => {
-                const isSelf = n.name === fromNodeName;
-                const isBothExt = Boolean(fromNode?.is_external && n.is_external);
-                return (
-                  <MenuItem key={n.name} value={n.name} disabled={isSelf || isBothExt}>
-                    {n.name} {n.is_external ? "(External Peer)" : n.ip ? `(${n.ip})` : ""}
-                    {isBothExt ? " — cannot link to another external peer" : ""}
-                  </MenuItem>
-                );
-              })}
+              {nodes
+                .filter((n) => !n.is_client)
+                .map((n) => {
+                  const isSelf = n.name === fromNodeName;
+                  const isBothExt = Boolean(fromNode?.is_external && n.is_external);
+                  return (
+                    <MenuItem key={n.name} value={n.name} disabled={isSelf || isBothExt}>
+                      {n.name} {n.is_external ? "(External Peer)" : n.ip ? `(${n.ip})` : ""}
+                      {isBothExt ? " — cannot link to another external peer" : ""}
+                    </MenuItem>
+                  );
+                })}
             </TextField>
           </Box>
 
@@ -2842,10 +2846,22 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                         />
                       </Box>
                       {linkToEdit && clientNode && (
-                        <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1, p: 1, borderRadius: 1, backgroundColor: "#F0FDFA", border: "1px solid #99F6E4" }}>
+                        <Box
+                          sx={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            gap: 1,
+                            p: 1,
+                            borderRadius: 1,
+                            backgroundColor: "#F0FDFA",
+                            border: "1px solid #99F6E4",
+                          }}
+                        >
                           <Box>
                             <Typography variant="caption" sx={{ color: "#0F766E", fontWeight: 700, display: "block" }}>
-                              Client IPv6 ULA (/127): <span className="mono-font">{linkToEdit.from.address || "—"}</span>
+                              Client IPv6 ULA (/127):{" "}
+                              <span className="mono-font">{linkToEdit.from.address || "—"}</span>
                             </Typography>
                             {resetIPv6Success && (
                               <Typography variant="caption" sx={{ color: "#059669", fontWeight: 600 }}>
@@ -2881,212 +2897,237 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                     </Box>
                   ) : (
                     <>
-                  <Box sx={{ display: "grid", gridTemplateColumns: "1.2fr 1fr 1fr", gap: 1 }}>
-                    <TextFieldWithCopy
-                      label="Interface"
-                      size="small"
-                      value={
-                        linkToEdit
-                          ? linkToEdit.from.interface
-                          : toNode
-                            ? getInterfaceNameWithSuffix(toNode.name, linkSuffix, toNode.is_external)
-                            : ""
-                      }
-                      disabled
-                    />
-                    <TextFieldWithCopy
-                      label="Listen Port"
-                      type="number"
-                      size="small"
-                      value={fromPort || ""}
-                      onChange={(e) => setFromPort(e.target.value === "" ? 0 : Number(e.target.value))}
-                      helperText={toNode.ip ? `Derived from ${toNode.ip}` : "Default port: 20000"}
-                    />
-                    <TextFieldWithCopy
-                      label="MTU"
-                      type="number"
-                      size="small"
-                      value={fromMtu}
-                      onChange={(e) => setFromMtu(Number(e.target.value))}
-                      helperText="Default: 1420 (-80 overhead)"
-                    />
-                  </Box>
+                      <Box sx={{ display: "grid", gridTemplateColumns: "1.2fr 1fr 1fr", gap: 1 }}>
+                        <TextFieldWithCopy
+                          label="Interface"
+                          size="small"
+                          value={
+                            linkToEdit
+                              ? linkToEdit.from.interface
+                              : toNode
+                                ? getInterfaceNameWithSuffix(toNode.name, linkSuffix, toNode.is_external)
+                                : ""
+                          }
+                          disabled
+                        />
+                        <TextFieldWithCopy
+                          label="Listen Port"
+                          type="number"
+                          size="small"
+                          value={fromPort || ""}
+                          onChange={(e) => setFromPort(e.target.value === "" ? 0 : Number(e.target.value))}
+                          helperText={toNode.ip ? `Derived from ${toNode.ip}` : "Default port: 20000"}
+                        />
+                        <TextFieldWithCopy
+                          label="MTU"
+                          type="number"
+                          size="small"
+                          value={fromMtu}
+                          onChange={(e) => setFromMtu(Number(e.target.value))}
+                          helperText="Default: 1420 (-80 overhead)"
+                        />
+                      </Box>
 
-                  <Box
-                    sx={{
-                      mt: 1,
-                      p: 1,
-                      borderRadius: 1,
-                      backgroundColor: "rgba(255, 255, 255, 0.7)",
-                      border: "1px solid #C7D2FE",
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: 1,
-                    }}
-                  >
-                    <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600 }}>
-                        Peer Endpoint:
-                      </Typography>
-                      <Box sx={{ display: "flex", alignItems: "center", gap: 0.8 }}>
-                        <Typography variant="caption" className="mono-font" sx={{ color: "#0F172A", fontWeight: 700 }}>
-                          {fromUseIp
-                            ? linkToEdit?.from.resolved_endpoint || "(Resolves domain to IP on server)"
-                            : (() => {
-                                const resolved = resolvePeerEntrypoint(fromNode, toNode);
-                                const port = toPort || (fromNode?.ip ? derivePortFromIP(fromNode.ip) : 20000);
-                                if (resolved.entrypoint?.ip) {
-                                  return `${resolved.entrypoint.ip}:${port}`;
-                                }
-                                if (linkToEdit?.from.endpoint) {
-                                  const parts = linkToEdit.from.endpoint.split(":");
-                                  if (parts.length === 2 && port) {
-                                    return `${parts[0]}:${port}`;
-                                  }
-                                  return linkToEdit.from.endpoint;
-                                }
-                                return "Dynamic / Automatic";
-                              })()}
-                        </Typography>
-                        {fromUseIp && (
-                          <Chip
-                            label="IP"
-                            size="small"
-                            sx={{
-                              height: 16,
-                              fontSize: "0.6rem",
-                              fontWeight: 800,
-                              bgcolor: "rgba(16, 185, 129, 0.15)",
-                              color: "#059669",
-                              borderRadius: "4px",
-                            }}
-                          />
+                      <Box
+                        sx={{
+                          mt: 1,
+                          p: 1,
+                          borderRadius: 1,
+                          backgroundColor: "rgba(255, 255, 255, 0.7)",
+                          border: "1px solid #C7D2FE",
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: 1,
+                        }}
+                      >
+                        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600 }}>
+                            Peer Endpoint:
+                          </Typography>
+                          <Box sx={{ display: "flex", alignItems: "center", gap: 0.8 }}>
+                            <Typography
+                              variant="caption"
+                              className="mono-font"
+                              sx={{ color: "#0F172A", fontWeight: 700 }}
+                            >
+                              {fromUseIp
+                                ? linkToEdit?.from.resolved_endpoint || "(Resolves domain to IP on server)"
+                                : (() => {
+                                    const resolved = resolvePeerEntrypoint(fromNode, toNode);
+                                    const port = toPort || (fromNode?.ip ? derivePortFromIP(fromNode.ip) : 20000);
+                                    if (resolved.entrypoint?.ip) {
+                                      return `${resolved.entrypoint.ip}:${port}`;
+                                    }
+                                    if (linkToEdit?.from.endpoint) {
+                                      const parts = linkToEdit.from.endpoint.split(":");
+                                      if (parts.length === 2 && port) {
+                                        return `${parts[0]}:${port}`;
+                                      }
+                                      return linkToEdit.from.endpoint;
+                                    }
+                                    return "Dynamic / Automatic";
+                                  })()}
+                            </Typography>
+                            {fromUseIp && (
+                              <Chip
+                                label="IP"
+                                size="small"
+                                sx={{
+                                  height: 16,
+                                  fontSize: "0.6rem",
+                                  fontWeight: 800,
+                                  bgcolor: "rgba(16, 185, 129, 0.15)",
+                                  color: "#059669",
+                                  borderRadius: "4px",
+                                }}
+                              />
+                            )}
+                          </Box>
+                        </Box>
+
+                        <FormControlLabel
+                          control={
+                            <Switch
+                              size="small"
+                              checked={fromUseIp}
+                              onChange={(e) => setFromUseIp(e.target.checked)}
+                              color="primary"
+                            />
+                          }
+                          label={
+                            <Box>
+                              <Typography
+                                variant="body2"
+                                sx={{ fontSize: "0.8rem", fontWeight: 600, color: "#1E293B" }}
+                              >
+                                Use IP (Resolve peer endpoint domain to IP)
+                              </Typography>
+                              <Typography
+                                variant="caption"
+                                sx={{ color: "#64748B", display: "block", fontSize: "0.72rem" }}
+                              >
+                                Resolves peer's endpoint hostname to IP in easy42 server and uses IP in {fromNode.name}
+                                's WireGuard config.
+                              </Typography>
+                            </Box>
+                          }
+                          sx={{ alignItems: "flex-start", ml: 0, mt: 0.5 }}
+                        />
+                      </Box>
+
+                      <Box
+                        sx={{
+                          mt: 1,
+                          display: "grid",
+                          gridTemplateColumns: isClientLink ? "1fr" : "1fr 1fr 1fr",
+                          gap: 1,
+                        }}
+                      >
+                        <TextField
+                          select
+                          fullWidth
+                          size="small"
+                          label="Network Policy"
+                          value={fromPolicy}
+                          onChange={(e) => setFromPolicy(e.target.value)}
+                          helperText={
+                            isClientLink
+                              ? "Firewall & NAT policy applied on this endpoint"
+                              : "Firewall & BGP routing policy applied on this endpoint"
+                          }
+                        >
+                          {networkPolicies.map((p) => (
+                            <MenuItem key={p.id} value={p.id}>
+                              {p.name} ({p.id}){p.is_internal ? " — Built-in" : ""}
+                            </MenuItem>
+                          ))}
+                        </TextField>
+                        {!isClientLink && (
+                          <>
+                            <TextField
+                              select
+                              fullWidth
+                              size="small"
+                              label="Routing Policy (Optional)"
+                              value={fromRoutingPolicy}
+                              onChange={(e) => setFromRoutingPolicy(e.target.value)}
+                              helperText="Overrides policy routing policy"
+                            >
+                              <MenuItem value="">Policy default</MenuItem>
+                              <MenuItem value="full">Full (Default) — All valid routes</MenuItem>
+                              <MenuItem value="stub">Stub — Receive all, only send local</MenuItem>
+                              <MenuItem value="receive_only">Receive Only — Import only</MenuItem>
+                              <MenuItem value="advertise_only">Advertise Only — Export only</MenuItem>
+                            </TextField>
+                            <TextFieldWithCopy
+                              fullWidth
+                              size="small"
+                              label="Link Cost (Optional)"
+                              type="number"
+                              value={fromCost}
+                              onChange={(e) => setFromCost(e.target.value === "" ? "" : Number(e.target.value))}
+                              placeholder="Policy default"
+                              helperText="Overrides policy cost if set (non-zero)"
+                            />
+                          </>
                         )}
                       </Box>
-                    </Box>
-
-                    <FormControlLabel
-                      control={
-                        <Switch
+                      <Box
+                        sx={{
+                          mt: 1,
+                          display: "grid",
+                          gridTemplateColumns: isClientLink ? "1fr 1fr" : "1fr 1fr 1fr 1fr",
+                          gap: 1,
+                        }}
+                      >
+                        <TextFieldWithCopy
+                          fullWidth
                           size="small"
-                          checked={fromUseIp}
-                          onChange={(e) => setFromUseIp(e.target.checked)}
-                          color="primary"
+                          label="WireGuard FwMark (Optional)"
+                          value={fromFwmark}
+                          onChange={(e) => setFromFwmark(e.target.value)}
+                          placeholder="Policy default"
+                          helperText="Overrides policy WireGuard FwMark"
                         />
-                      }
-                      label={
-                        <Box>
-                          <Typography variant="body2" sx={{ fontSize: "0.8rem", fontWeight: 600, color: "#1E293B" }}>
-                            Use IP (Resolve peer endpoint domain to IP)
-                          </Typography>
-                          <Typography
-                            variant="caption"
-                            sx={{ color: "#64748B", display: "block", fontSize: "0.72rem" }}
-                          >
-                            Resolves peer's endpoint hostname to IP in easy42 server and uses IP in {fromNode.name}'s
-                            WireGuard config.
-                          </Typography>
-                        </Box>
-                      }
-                      sx={{ alignItems: "flex-start", ml: 0, mt: 0.5 }}
-                    />
-                  </Box>
-
-                  <Box sx={{ mt: 1, display: "grid", gridTemplateColumns: isClientLink ? "1fr" : "1fr 1fr 1fr", gap: 1 }}>
-                    <TextField
-                      select
-                      fullWidth
-                      size="small"
-                      label="Network Policy"
-                      value={fromPolicy}
-                      onChange={(e) => setFromPolicy(e.target.value)}
-                      helperText={isClientLink ? "Firewall & NAT policy applied on this endpoint" : "Firewall & BGP routing policy applied on this endpoint"}
-                    >
-                      {networkPolicies.map((p) => (
-                        <MenuItem key={p.id} value={p.id}>
-                          {p.name} ({p.id}){p.is_internal ? " — Built-in" : ""}
-                        </MenuItem>
-                      ))}
-                    </TextField>
-                    {!isClientLink && (
-                      <>
-                    <TextField
-                      select
-                      fullWidth
-                      size="small"
-                      label="Routing Policy (Optional)"
-                      value={fromRoutingPolicy}
-                      onChange={(e) => setFromRoutingPolicy(e.target.value)}
-                      helperText="Overrides policy routing policy"
-                    >
-                      <MenuItem value="">Policy default</MenuItem>
-                      <MenuItem value="full">Full (Default) — All valid routes</MenuItem>
-                      <MenuItem value="stub">Stub — Receive all, only send local</MenuItem>
-                      <MenuItem value="receive_only">Receive Only — Import only</MenuItem>
-                      <MenuItem value="advertise_only">Advertise Only — Export only</MenuItem>
-                    </TextField>
-                    <TextFieldWithCopy
-                      fullWidth
-                      size="small"
-                      label="Link Cost (Optional)"
-                      type="number"
-                      value={fromCost}
-                      onChange={(e) => setFromCost(e.target.value === "" ? "" : Number(e.target.value))}
-                      placeholder="Policy default"
-                      helperText="Overrides policy cost if set (non-zero)"
-                    />
-                      </>
-                    )}
-                  </Box>
-                  <Box sx={{ mt: 1, display: "grid", gridTemplateColumns: isClientLink ? "1fr 1fr" : "1fr 1fr 1fr 1fr", gap: 1 }}>
-                    <TextFieldWithCopy
-                      fullWidth
-                      size="small"
-                      label="WireGuard FwMark (Optional)"
-                      value={fromFwmark}
-                      onChange={(e) => setFromFwmark(e.target.value)}
-                      placeholder="Policy default"
-                      helperText="Overrides policy WireGuard FwMark"
-                    />
-                    {!isClientLink && (
-                      <>
-                    <TextFieldWithCopy
-                      fullWidth
-                      size="small"
-                      type="number"
-                      label="BGP Preference (Optional)"
-                      value={fromPreference}
-                      onChange={(e) => setFromPreference(e.target.value === "" ? "" : Number(e.target.value))}
-                      placeholder="Policy default"
-                      helperText="Overrides policy BGP preference"
-                    />
-                    <TextField
-                      select
-                      fullWidth
-                      size="small"
-                      label="BGP Add-Paths (Optional)"
-                      value={fromAddPaths}
-                      onChange={(e) => setFromAddPaths(e.target.value)}
-                      helperText="Overrides policy add paths"
-                    >
-                      <MenuItem value="">Policy default</MenuItem>
-                      <MenuItem value="off">Off — Disabled</MenuItem>
-                      <MenuItem value="on">On — Both rx and tx</MenuItem>
-                      <MenuItem value="rx">Rx — Receive only</MenuItem>
-                      <MenuItem value="tx">Tx — Transmit only</MenuItem>
-                    </TextField>
-                      </>
-                    )}
-                    <TextFieldWithCopy
-                      fullWidth
-                      size="small"
-                      label="Netfilter Mark (Optional)"
-                      value={fromMark}
-                      onChange={(e) => setFromMark(e.target.value)}
-                      placeholder="Policy default"
-                      helperText="Overrides policy netfilter mark"
-                    />
-                  </Box>
+                        {!isClientLink && (
+                          <>
+                            <TextFieldWithCopy
+                              fullWidth
+                              size="small"
+                              type="number"
+                              label="BGP Preference (Optional)"
+                              value={fromPreference}
+                              onChange={(e) => setFromPreference(e.target.value === "" ? "" : Number(e.target.value))}
+                              placeholder="Policy default"
+                              helperText="Overrides policy BGP preference"
+                            />
+                            <TextField
+                              select
+                              fullWidth
+                              size="small"
+                              label="BGP Add-Paths (Optional)"
+                              value={fromAddPaths}
+                              onChange={(e) => setFromAddPaths(e.target.value)}
+                              helperText="Overrides policy add paths"
+                            >
+                              <MenuItem value="">Policy default</MenuItem>
+                              <MenuItem value="off">Off — Disabled</MenuItem>
+                              <MenuItem value="on">On — Both rx and tx</MenuItem>
+                              <MenuItem value="rx">Rx — Receive only</MenuItem>
+                              <MenuItem value="tx">Tx — Transmit only</MenuItem>
+                            </TextField>
+                          </>
+                        )}
+                        <TextFieldWithCopy
+                          fullWidth
+                          size="small"
+                          label="Netfilter Mark (Optional)"
+                          value={fromMark}
+                          onChange={(e) => setFromMark(e.target.value)}
+                          placeholder="Policy default"
+                          helperText="Overrides policy netfilter mark"
+                        />
+                      </Box>
                     </>
                   )}
 
@@ -3185,7 +3226,18 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                         />
                       </Box>
                       {linkToEdit && clientNode && (
-                        <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1, p: 1, borderRadius: 1, backgroundColor: "#F0FDFA", border: "1px solid #99F6E4" }}>
+                        <Box
+                          sx={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            gap: 1,
+                            p: 1,
+                            borderRadius: 1,
+                            backgroundColor: "#F0FDFA",
+                            border: "1px solid #99F6E4",
+                          }}
+                        >
                           <Box>
                             <Typography variant="caption" sx={{ color: "#0F766E", fontWeight: 700, display: "block" }}>
                               Client IPv6 ULA (/127): <span className="mono-font">{linkToEdit.to.address || "—"}</span>
@@ -3224,212 +3276,237 @@ export const AddLinkModal: React.FC<AddLinkModalProps> = ({
                     </Box>
                   ) : (
                     <>
-                  <Box sx={{ display: "grid", gridTemplateColumns: "1.2fr 1fr 1fr", gap: 1 }}>
-                    <TextFieldWithCopy
-                      label="Interface"
-                      size="small"
-                      value={
-                        linkToEdit
-                          ? linkToEdit.to.interface
-                          : fromNode
-                            ? getInterfaceNameWithSuffix(fromNode.name, linkSuffix, fromNode.is_external)
-                            : ""
-                      }
-                      disabled
-                    />
-                    <TextFieldWithCopy
-                      label="Listen Port"
-                      type="number"
-                      size="small"
-                      value={toPort || ""}
-                      onChange={(e) => setToPort(e.target.value === "" ? 0 : Number(e.target.value))}
-                      helperText={fromNode.ip ? `Derived from ${fromNode.ip}` : "Default port: 20000"}
-                    />
-                    <TextFieldWithCopy
-                      label="MTU"
-                      type="number"
-                      size="small"
-                      value={toMtu}
-                      onChange={(e) => setToMtu(Number(e.target.value))}
-                      helperText="Default: 1420 (-80 overhead)"
-                    />
-                  </Box>
+                      <Box sx={{ display: "grid", gridTemplateColumns: "1.2fr 1fr 1fr", gap: 1 }}>
+                        <TextFieldWithCopy
+                          label="Interface"
+                          size="small"
+                          value={
+                            linkToEdit
+                              ? linkToEdit.to.interface
+                              : fromNode
+                                ? getInterfaceNameWithSuffix(fromNode.name, linkSuffix, fromNode.is_external)
+                                : ""
+                          }
+                          disabled
+                        />
+                        <TextFieldWithCopy
+                          label="Listen Port"
+                          type="number"
+                          size="small"
+                          value={toPort || ""}
+                          onChange={(e) => setToPort(e.target.value === "" ? 0 : Number(e.target.value))}
+                          helperText={fromNode.ip ? `Derived from ${fromNode.ip}` : "Default port: 20000"}
+                        />
+                        <TextFieldWithCopy
+                          label="MTU"
+                          type="number"
+                          size="small"
+                          value={toMtu}
+                          onChange={(e) => setToMtu(Number(e.target.value))}
+                          helperText="Default: 1420 (-80 overhead)"
+                        />
+                      </Box>
 
-                  <Box
-                    sx={{
-                      mt: 1,
-                      p: 1,
-                      borderRadius: 1,
-                      backgroundColor: "rgba(255, 255, 255, 0.7)",
-                      border: "1px solid #A5F3FC",
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: 1,
-                    }}
-                  >
-                    <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600 }}>
-                        Peer Endpoint:
-                      </Typography>
-                      <Box sx={{ display: "flex", alignItems: "center", gap: 0.8 }}>
-                        <Typography variant="caption" className="mono-font" sx={{ color: "#0F172A", fontWeight: 700 }}>
-                          {toUseIp
-                            ? linkToEdit?.to.resolved_endpoint || "(Resolves domain to IP on server)"
-                            : (() => {
-                                const resolved = resolvePeerEntrypoint(toNode, fromNode);
-                                const port = fromPort || (toNode?.ip ? derivePortFromIP(toNode.ip) : 20000);
-                                if (resolved.entrypoint?.ip) {
-                                  return `${resolved.entrypoint.ip}:${port}`;
-                                }
-                                if (linkToEdit?.to.endpoint) {
-                                  const parts = linkToEdit.to.endpoint.split(":");
-                                  if (parts.length === 2 && port) {
-                                    return `${parts[0]}:${port}`;
-                                  }
-                                  return linkToEdit.to.endpoint;
-                                }
-                                return "Dynamic / Automatic";
-                              })()}
-                        </Typography>
-                        {toUseIp && (
-                          <Chip
-                            label="IP"
-                            size="small"
-                            sx={{
-                              height: 16,
-                              fontSize: "0.6rem",
-                              fontWeight: 800,
-                              bgcolor: "rgba(16, 185, 129, 0.15)",
-                              color: "#059669",
-                              borderRadius: "4px",
-                            }}
-                          />
+                      <Box
+                        sx={{
+                          mt: 1,
+                          p: 1,
+                          borderRadius: 1,
+                          backgroundColor: "rgba(255, 255, 255, 0.7)",
+                          border: "1px solid #A5F3FC",
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: 1,
+                        }}
+                      >
+                        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600 }}>
+                            Peer Endpoint:
+                          </Typography>
+                          <Box sx={{ display: "flex", alignItems: "center", gap: 0.8 }}>
+                            <Typography
+                              variant="caption"
+                              className="mono-font"
+                              sx={{ color: "#0F172A", fontWeight: 700 }}
+                            >
+                              {toUseIp
+                                ? linkToEdit?.to.resolved_endpoint || "(Resolves domain to IP on server)"
+                                : (() => {
+                                    const resolved = resolvePeerEntrypoint(toNode, fromNode);
+                                    const port = fromPort || (toNode?.ip ? derivePortFromIP(toNode.ip) : 20000);
+                                    if (resolved.entrypoint?.ip) {
+                                      return `${resolved.entrypoint.ip}:${port}`;
+                                    }
+                                    if (linkToEdit?.to.endpoint) {
+                                      const parts = linkToEdit.to.endpoint.split(":");
+                                      if (parts.length === 2 && port) {
+                                        return `${parts[0]}:${port}`;
+                                      }
+                                      return linkToEdit.to.endpoint;
+                                    }
+                                    return "Dynamic / Automatic";
+                                  })()}
+                            </Typography>
+                            {toUseIp && (
+                              <Chip
+                                label="IP"
+                                size="small"
+                                sx={{
+                                  height: 16,
+                                  fontSize: "0.6rem",
+                                  fontWeight: 800,
+                                  bgcolor: "rgba(16, 185, 129, 0.15)",
+                                  color: "#059669",
+                                  borderRadius: "4px",
+                                }}
+                              />
+                            )}
+                          </Box>
+                        </Box>
+
+                        <FormControlLabel
+                          control={
+                            <Switch
+                              size="small"
+                              checked={toUseIp}
+                              onChange={(e) => setToUseIp(e.target.checked)}
+                              color="primary"
+                            />
+                          }
+                          label={
+                            <Box>
+                              <Typography
+                                variant="body2"
+                                sx={{ fontSize: "0.8rem", fontWeight: 600, color: "#1E293B" }}
+                              >
+                                Use IP (Resolve peer endpoint domain to IP)
+                              </Typography>
+                              <Typography
+                                variant="caption"
+                                sx={{ color: "#64748B", display: "block", fontSize: "0.72rem" }}
+                              >
+                                Resolves peer's endpoint hostname to IP in easy42 server and uses IP in {toNode.name}'s
+                                WireGuard config.
+                              </Typography>
+                            </Box>
+                          }
+                          sx={{ alignItems: "flex-start", ml: 0, mt: 0.5 }}
+                        />
+                      </Box>
+
+                      <Box
+                        sx={{
+                          mt: 1,
+                          display: "grid",
+                          gridTemplateColumns: isClientLink ? "1fr" : "1fr 1fr 1fr",
+                          gap: 1,
+                        }}
+                      >
+                        <TextField
+                          select
+                          fullWidth
+                          size="small"
+                          label="Network Policy"
+                          value={toPolicy}
+                          onChange={(e) => setToPolicy(e.target.value)}
+                          helperText={
+                            isClientLink
+                              ? "Firewall & NAT policy applied on this endpoint"
+                              : "Firewall & BGP routing policy applied on this endpoint"
+                          }
+                        >
+                          {networkPolicies.map((p) => (
+                            <MenuItem key={p.id} value={p.id}>
+                              {p.name} ({p.id}){p.is_internal ? " — Built-in" : ""}
+                            </MenuItem>
+                          ))}
+                        </TextField>
+                        {!isClientLink && (
+                          <>
+                            <TextField
+                              select
+                              fullWidth
+                              size="small"
+                              label="Routing Policy (Optional)"
+                              value={toRoutingPolicy}
+                              onChange={(e) => setToRoutingPolicy(e.target.value)}
+                              helperText="Overrides policy routing policy"
+                            >
+                              <MenuItem value="">Policy default</MenuItem>
+                              <MenuItem value="full">Full (Default) — All valid routes</MenuItem>
+                              <MenuItem value="stub">Stub — Receive all, only send local</MenuItem>
+                              <MenuItem value="receive_only">Receive Only — Import only</MenuItem>
+                              <MenuItem value="advertise_only">Advertise Only — Export only</MenuItem>
+                            </TextField>
+                            <TextFieldWithCopy
+                              fullWidth
+                              size="small"
+                              label="Link Cost (Optional)"
+                              type="number"
+                              value={toCost}
+                              onChange={(e) => setToCost(e.target.value === "" ? "" : Number(e.target.value))}
+                              placeholder="Policy default"
+                              helperText="Overrides policy cost if set (non-zero)"
+                            />
+                          </>
                         )}
                       </Box>
-                    </Box>
-
-                    <FormControlLabel
-                      control={
-                        <Switch
+                      <Box
+                        sx={{
+                          mt: 1,
+                          display: "grid",
+                          gridTemplateColumns: isClientLink ? "1fr 1fr" : "1fr 1fr 1fr 1fr",
+                          gap: 1,
+                        }}
+                      >
+                        <TextFieldWithCopy
+                          fullWidth
                           size="small"
-                          checked={toUseIp}
-                          onChange={(e) => setToUseIp(e.target.checked)}
-                          color="primary"
+                          label="WireGuard FwMark (Optional)"
+                          value={toFwmark}
+                          onChange={(e) => setToFwmark(e.target.value)}
+                          placeholder="Policy default"
+                          helperText="Overrides policy WireGuard FwMark"
                         />
-                      }
-                      label={
-                        <Box>
-                          <Typography variant="body2" sx={{ fontSize: "0.8rem", fontWeight: 600, color: "#1E293B" }}>
-                            Use IP (Resolve peer endpoint domain to IP)
-                          </Typography>
-                          <Typography
-                            variant="caption"
-                            sx={{ color: "#64748B", display: "block", fontSize: "0.72rem" }}
-                          >
-                            Resolves peer's endpoint hostname to IP in easy42 server and uses IP in {toNode.name}'s
-                            WireGuard config.
-                          </Typography>
-                        </Box>
-                      }
-                      sx={{ alignItems: "flex-start", ml: 0, mt: 0.5 }}
-                    />
-                  </Box>
-
-                  <Box sx={{ mt: 1, display: "grid", gridTemplateColumns: isClientLink ? "1fr" : "1fr 1fr 1fr", gap: 1 }}>
-                    <TextField
-                      select
-                      fullWidth
-                      size="small"
-                      label="Network Policy"
-                      value={toPolicy}
-                      onChange={(e) => setToPolicy(e.target.value)}
-                      helperText={isClientLink ? "Firewall & NAT policy applied on this endpoint" : "Firewall & BGP routing policy applied on this endpoint"}
-                    >
-                      {networkPolicies.map((p) => (
-                        <MenuItem key={p.id} value={p.id}>
-                          {p.name} ({p.id}){p.is_internal ? " — Built-in" : ""}
-                        </MenuItem>
-                      ))}
-                    </TextField>
-                    {!isClientLink && (
-                      <>
-                    <TextField
-                      select
-                      fullWidth
-                      size="small"
-                      label="Routing Policy (Optional)"
-                      value={toRoutingPolicy}
-                      onChange={(e) => setToRoutingPolicy(e.target.value)}
-                      helperText="Overrides policy routing policy"
-                    >
-                      <MenuItem value="">Policy default</MenuItem>
-                      <MenuItem value="full">Full (Default) — All valid routes</MenuItem>
-                      <MenuItem value="stub">Stub — Receive all, only send local</MenuItem>
-                      <MenuItem value="receive_only">Receive Only — Import only</MenuItem>
-                      <MenuItem value="advertise_only">Advertise Only — Export only</MenuItem>
-                    </TextField>
-                    <TextFieldWithCopy
-                      fullWidth
-                      size="small"
-                      label="Link Cost (Optional)"
-                      type="number"
-                      value={toCost}
-                      onChange={(e) => setToCost(e.target.value === "" ? "" : Number(e.target.value))}
-                      placeholder="Policy default"
-                      helperText="Overrides policy cost if set (non-zero)"
-                    />
-                      </>
-                    )}
-                  </Box>
-                  <Box sx={{ mt: 1, display: "grid", gridTemplateColumns: isClientLink ? "1fr 1fr" : "1fr 1fr 1fr 1fr", gap: 1 }}>
-                    <TextFieldWithCopy
-                      fullWidth
-                      size="small"
-                      label="WireGuard FwMark (Optional)"
-                      value={toFwmark}
-                      onChange={(e) => setToFwmark(e.target.value)}
-                      placeholder="Policy default"
-                      helperText="Overrides policy WireGuard FwMark"
-                    />
-                    {!isClientLink && (
-                      <>
-                    <TextFieldWithCopy
-                      fullWidth
-                      size="small"
-                      type="number"
-                      label="BGP Preference (Optional)"
-                      value={toPreference}
-                      onChange={(e) => setToPreference(e.target.value === "" ? "" : Number(e.target.value))}
-                      placeholder="Policy default"
-                      helperText="Overrides policy BGP preference"
-                    />
-                    <TextField
-                      select
-                      fullWidth
-                      size="small"
-                      label="BGP Add-Paths (Optional)"
-                      value={toAddPaths}
-                      onChange={(e) => setToAddPaths(e.target.value)}
-                      helperText="Overrides policy add paths"
-                    >
-                      <MenuItem value="">Policy default</MenuItem>
-                      <MenuItem value="off">Off — Disabled</MenuItem>
-                      <MenuItem value="on">On — Both rx and tx</MenuItem>
-                      <MenuItem value="rx">Rx — Receive only</MenuItem>
-                      <MenuItem value="tx">Tx — Transmit only</MenuItem>
-                    </TextField>
-                      </>
-                    )}
-                    <TextFieldWithCopy
-                      fullWidth
-                      size="small"
-                      label="Netfilter Mark (Optional)"
-                      value={toMark}
-                      onChange={(e) => setToMark(e.target.value)}
-                      placeholder="Policy default"
-                      helperText="Overrides policy netfilter mark"
-                    />
-                  </Box>
+                        {!isClientLink && (
+                          <>
+                            <TextFieldWithCopy
+                              fullWidth
+                              size="small"
+                              type="number"
+                              label="BGP Preference (Optional)"
+                              value={toPreference}
+                              onChange={(e) => setToPreference(e.target.value === "" ? "" : Number(e.target.value))}
+                              placeholder="Policy default"
+                              helperText="Overrides policy BGP preference"
+                            />
+                            <TextField
+                              select
+                              fullWidth
+                              size="small"
+                              label="BGP Add-Paths (Optional)"
+                              value={toAddPaths}
+                              onChange={(e) => setToAddPaths(e.target.value)}
+                              helperText="Overrides policy add paths"
+                            >
+                              <MenuItem value="">Policy default</MenuItem>
+                              <MenuItem value="off">Off — Disabled</MenuItem>
+                              <MenuItem value="on">On — Both rx and tx</MenuItem>
+                              <MenuItem value="rx">Rx — Receive only</MenuItem>
+                              <MenuItem value="tx">Tx — Transmit only</MenuItem>
+                            </TextField>
+                          </>
+                        )}
+                        <TextFieldWithCopy
+                          fullWidth
+                          size="small"
+                          label="Netfilter Mark (Optional)"
+                          value={toMark}
+                          onChange={(e) => setToMark(e.target.value)}
+                          placeholder="Policy default"
+                          helperText="Overrides policy netfilter mark"
+                        />
+                      </Box>
                     </>
                   )}
 

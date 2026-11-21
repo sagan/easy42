@@ -138,4 +138,3 @@ export function getLinkType(
   if (isManualLink(link)) return "manual";
   return "wireguard";
 }
-
