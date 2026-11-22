@@ -7,8 +7,10 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  FormControlLabel,
   IconButton,
   MenuItem,
+  Switch,
   TextField,
   Tooltip,
   Typography,
@@ -25,6 +27,7 @@ interface DNSCustomRecordsSectionProps {
 }
 
 const RECORD_TYPES: DNSCustomRecordType[] = ["A", "AAAA", "CNAME", "TXT", "SRV"];
+const PROXYABLE_TYPES = new Set<DNSCustomRecordType>(["A", "AAAA", "CNAME"]);
 
 const TYPE_COLORS: Record<DNSCustomRecordType, { bg: string; color: string }> = {
   A: { bg: "#E0E7FF", color: "#4338CA" },
@@ -59,6 +62,7 @@ export const DNSCustomRecordsSection: React.FC<DNSCustomRecordsSectionProps> = (
   const [formType, setFormType] = useState<DNSCustomRecordType>("A");
   const [formValue, setFormValue] = useState("");
   const [formTTL, setFormTTL] = useState("Auto");
+  const [formProxied, setFormProxied] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
   const openAddDialog = () => {
@@ -69,19 +73,22 @@ export const DNSCustomRecordsSection: React.FC<DNSCustomRecordsSectionProps> = (
     setFormType("A");
     setFormValue("");
     setFormTTL("Auto");
+    setFormProxied(false);
     setFormError(null);
     setDialogOpen(true);
   };
 
   const openEditDialog = (index: number) => {
     const rule = rules[index];
+    const rType = (rule.type as DNSCustomRecordType) || "A";
     setEditingIndex(index);
     setFormSelector(rule.target_nodes && Object.keys(rule.target_nodes).length > 0 ? rule.target_nodes : {});
     setFormSelectorError(null);
     setFormName(rule.name || "");
-    setFormType((rule.type as DNSCustomRecordType) || "A");
+    setFormType(rType);
     setFormValue(rule.value || "");
     setFormTTL(rule.ttl && rule.ttl.trim() !== "" ? rule.ttl : "Auto");
+    setFormProxied(PROXYABLE_TYPES.has(rType) && Boolean(rule.proxied));
     setFormError(null);
     setDialogOpen(true);
   };
@@ -121,6 +128,7 @@ export const DNSCustomRecordsSection: React.FC<DNSCustomRecordsSectionProps> = (
       type: formType,
       value,
       ttl: ttl || "Auto",
+      ...(PROXYABLE_TYPES.has(formType) ? { proxied: formProxied } : {}),
     };
 
     if (editingIndex !== null) {
@@ -283,6 +291,19 @@ export const DNSCustomRecordsSection: React.FC<DNSCustomRecordsSectionProps> = (
                       variant="outlined"
                       sx={{ height: 18, fontSize: "0.68rem", color: "#475569", borderColor: "#CBD5E1" }}
                     />
+                    {PROXYABLE_TYPES.has(rule.type) && (
+                      <Chip
+                        label={rule.proxied ? "Proxied" : "DNS Only"}
+                        size="small"
+                        sx={{
+                          height: 18,
+                          fontSize: "0.68rem",
+                          fontWeight: 600,
+                          bgcolor: rule.proxied ? "#FFEDD5" : "#F1F5F9",
+                          color: rule.proxied ? "#C2410C" : "#475569",
+                        }}
+                      />
+                    )}
                   </Box>
                 </Box>
 
@@ -352,7 +373,13 @@ export const DNSCustomRecordsSection: React.FC<DNSCustomRecordsSectionProps> = (
               size="small"
               label="Type"
               value={formType}
-              onChange={(e) => setFormType(e.target.value as DNSCustomRecordType)}
+              onChange={(e) => {
+                const nextType = e.target.value as DNSCustomRecordType;
+                setFormType(nextType);
+                if (!PROXYABLE_TYPES.has(nextType)) {
+                  setFormProxied(false);
+                }
+              }}
             >
               {RECORD_TYPES.map((t) => (
                 <MenuItem key={t} value={t}>
@@ -392,6 +419,42 @@ export const DNSCustomRecordsSection: React.FC<DNSCustomRecordsSectionProps> = (
             helperText={getValueHelperText(formType)}
             InputProps={{ sx: { fontFamily: "monospace", fontSize: "0.85rem" } }}
           />
+
+          {PROXYABLE_TYPES.has(formType) && (
+            <Box
+              sx={{
+                px: 1.5,
+                py: 0.8,
+                borderRadius: 1,
+                border: "1px solid #E2E8F0",
+                bgcolor: "#F8FAFC",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 1,
+              }}
+            >
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={formProxied}
+                    onChange={(e) => setFormProxied(e.target.checked)}
+                    color="warning"
+                  />
+                }
+                label={
+                  <Typography variant="body2" sx={{ fontWeight: 600, color: "#1E293B" }}>
+                    Proxy ({formProxied ? "Proxied" : "DNS Only"})
+                  </Typography>
+                }
+              />
+              <Typography variant="caption" sx={{ color: "#64748B" }}>
+                {formProxied
+                  ? "Traffic is proxied through Cloudflare (orange cloud)."
+                  : "DNS resolution only; traffic goes directly to the record value."}
+              </Typography>
+            </Box>
+          )}
         </DialogContent>
         <DialogActions sx={{ px: 2.5, py: 1.5 }}>
           <Button onClick={() => setDialogOpen(false)} sx={{ textTransform: "none", color: "#64748B" }}>

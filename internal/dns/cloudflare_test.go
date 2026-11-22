@@ -430,11 +430,12 @@ func TestSyncCustomRecordsAndOverride(t *testing.T) {
 				Value:       `{"priority": 10, "weight": 5, "port": ${NODE_DATA_SVC_PORT}, "target": "${NODE_NAME}.${BASE}"}`,
 			},
 			{
-				// CNAME record under base domain (must not be deleted by Force Sync)
+				// CNAME record under base domain (must not be deleted by Force Sync), proxied
 				TargetNodes: map[string]string{"name": "node2"},
 				Name:        "alias.${BASE}",
 				Type:        "CNAME",
 				Value:       "${NODE_NAME}.${BASE}",
+				Proxied:     true,
 			},
 		},
 	}
@@ -487,9 +488,9 @@ func TestSyncCustomRecordsAndOverride(t *testing.T) {
 		t.Fatalf("SRV record data mismatch: %+v", srvRec[0].Data)
 	}
 
-	// 5. Check CNAME record
+	// 5. Check CNAME record (proxied)
 	cnameRec := findAll("CNAME", "alias.easy42.example.com")
-	if len(cnameRec) != 1 || cnameRec[0].Content != "node2.easy42.example.com" || cnameRec[0].TTL != 1 {
+	if len(cnameRec) != 1 || cnameRec[0].Content != "node2.easy42.example.com" || cnameRec[0].TTL != 1 || !cnameRec[0].Proxied {
 		t.Fatalf("unexpected CNAME record: %+v", cnameRec)
 	}
 
@@ -500,6 +501,20 @@ func TestSyncCustomRecordsAndOverride(t *testing.T) {
 	}
 	if res2.Created != 0 || res2.Updated != 0 || res2.Deleted != 0 {
 		t.Fatalf("expected no changes on second sync, got: %+v", res2)
+	}
+
+	// 7. Toggle Proxied to false on CNAME -> should update 1 record
+	dnsCfg.CustomRecords[4].Proxied = false
+	res3, err := Sync(context.Background(), client, nodes, dnsCfg, true, globalVars)
+	if err != nil {
+		t.Fatalf("third Sync failed: %v", err)
+	}
+	if res3.Updated != 1 {
+		t.Fatalf("expected 1 updated when toggling proxied=false, got: %+v", res3)
+	}
+	cnameRecAfter := findAll("CNAME", "alias.easy42.example.com")
+	if len(cnameRecAfter) != 1 || cnameRecAfter[0].Proxied {
+		t.Fatalf("expected proxied=false after update, got: %+v", cnameRecAfter)
 	}
 }
 

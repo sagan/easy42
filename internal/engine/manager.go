@@ -6168,6 +6168,11 @@ func (m *Manager) UpdateDNSConfig(dnsCfg config.DNSConfig) error {
 		dnsCfg.CustomRecords[i].Type = strings.ToUpper(strings.TrimSpace(dnsCfg.CustomRecords[i].Type))
 		dnsCfg.CustomRecords[i].Value = strings.TrimSpace(dnsCfg.CustomRecords[i].Value)
 		dnsCfg.CustomRecords[i].TTL = strings.TrimSpace(dnsCfg.CustomRecords[i].TTL)
+		switch dnsCfg.CustomRecords[i].Type {
+		case "A", "AAAA", "CNAME":
+		default:
+			dnsCfg.CustomRecords[i].Proxied = false
+		}
 	}
 	for i := range dnsCfg.SSHFPRules {
 		seen := make(map[int]bool, len(dnsCfg.SSHFPRules[i].Algorithms))

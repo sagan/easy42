@@ -132,6 +132,7 @@ type DNSCustomRecordRule struct {
 	Type        string            `json:"type"`
 	Value       string            `json:"value"`
 	TTL         string            `json:"ttl,omitempty"`
+	Proxied     bool              `json:"proxied,omitempty"`
 }
 
 // DNSSSHFPRule defines a rule for generating SSHFP DNS records from agent-collected SSH host keys

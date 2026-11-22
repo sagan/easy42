@@ -253,7 +253,7 @@ func buildRecordPayload(rec DNSRecord) map[string]any {
 		"type":    rec.Type,
 		"name":    rec.Name,
 		"ttl":     ttl,
-		"proxied": false,
+		"proxied": rec.Proxied,
 		"comment": easy42RecordComment,
 	}
 	if len(rec.Data) > 0 {
@@ -705,11 +705,12 @@ func ExpectedCustomRecordsForNode(node config.Node, rules []config.DNSCustomReco
 			ttl = parsedTTL
 		}
 
+		proxied := rule.Proxied && (recType == "A" || recType == "AAAA" || recType == "CNAME")
 		rec := DNSRecord{
 			Type:    recType,
 			Name:    name,
 			TTL:     ttl,
-			Proxied: false,
+			Proxied: proxied,
 			Comment: easy42RecordComment,
 		}
 

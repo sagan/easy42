@@ -375,6 +375,9 @@ func ValidateDNSConfig(cfg *DNSConfig) error {
 		default:
 			return fmt.Errorf("custom_records[%d]: unsupported record type '%s' (supported: A, AAAA, CNAME, TXT, SRV)", i, rule.Type)
 		}
+		if rule.Proxied && recType != "A" && recType != "AAAA" && recType != "CNAME" {
+			return fmt.Errorf("custom_records[%d]: proxied is only supported for A, AAAA, and CNAME records", i)
+		}
 		if strings.TrimSpace(rule.Value) == "" {
 			return fmt.Errorf("custom_records[%d]: value cannot be empty", i)
 		}

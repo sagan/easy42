@@ -58,6 +58,7 @@ export interface DNSCustomRecordRule {
   type: DNSCustomRecordType;
   value: string;
   ttl?: string;
+  proxied?: boolean;
 }
 
 export type DNSSSHFPAlgorithm = 3 | 4 | 6;
