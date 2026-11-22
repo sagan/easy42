@@ -1462,10 +1462,7 @@ export const NodeDetailPage: React.FC = () => {
                   onClick={async () => {
                     try {
                       const res = await api.getClientWgConfig(node.name);
-                      downloadTextFile(
-                        res.filename || `wg-${node.name}-${node.client_parent || "gateway"}.conf`,
-                        res.config,
-                      );
+                      downloadTextFile(res.filename || `wgc-${node.name}.conf`, res.config);
                     } catch (err: any) {
                       alert(err?.message || "Failed to download wg.conf");
                     }

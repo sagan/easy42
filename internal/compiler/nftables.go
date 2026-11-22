@@ -550,21 +550,64 @@ func BuildNftablesNodeContext(
 
 	// Collect interfaces per mark (from effective marks on local link ends)
 	markIfnames := make(map[string][]string)
-	for _, l := range linksCtx {
-		local, _ := l["local"].(map[string]any)
-		iface, _ := local["interface"].(string)
-		mark, _ := local["mark"].(string)
+	addMarkIface := func(iface, mark string) error {
+		iface = strings.TrimSpace(iface)
 		mark = strings.TrimSpace(mark)
 		if iface == "" || mark == "" {
-			continue
+			return nil
 		}
 		formattedMark, err := FormatNftMarkAction(mark)
 		if err != nil {
-			return nil, fmt.Errorf("invalid mark format %q for interface %s: %w", mark, iface, err)
+			return fmt.Errorf("invalid mark format %q for interface %s: %w", mark, iface, err)
 		}
 		quoted := `"` + iface + `"`
 		if !slices.Contains(markIfnames[formattedMark], quoted) {
 			markIfnames[formattedMark] = append(markIfnames[formattedMark], quoted)
+		}
+		return nil
+	}
+
+	for _, l := range linksCtx {
+		local, _ := l["local"].(map[string]any)
+		iface, _ := local["interface"].(string)
+		mark, _ := local["mark"].(string)
+		if err := addMarkIface(iface, mark); err != nil {
+			return nil, err
+		}
+	}
+
+	// Client node links are excluded from linksCtx (no BGP peering), so collect their marks directly.
+	for _, l := range links {
+		if l.Disabled || l.IsVirtual() {
+			continue
+		}
+		var localEnd *config.LinkEnd
+		var remoteName string
+		if l.From.Name == node.Name {
+			localEnd = &l.From
+			remoteName = l.To.Name
+		} else if l.To.Name == node.Name {
+			localEnd = &l.To
+			remoteName = l.From.Name
+		} else {
+			continue
+		}
+		if rn := nodeByName[remoteName]; rn != nil && rn.IsClient {
+			iface := strings.TrimSpace(localEnd.Interface)
+			if iface == "" {
+				iface = GetInterfaceName(rn.Name, false)
+			}
+			polID := strings.TrimSpace(localEnd.Policy)
+			if polID == "" {
+				polID = config.PolicyAccess
+			}
+			var polPtr *config.NetworkPolicy
+			if pol, ok := policyMap[polID]; ok {
+				polPtr = &pol
+			}
+			if err := addMarkIface(iface, localEnd.EffectiveMark(polPtr)); err != nil {
+				return nil, err
+			}
 		}
 	}
 

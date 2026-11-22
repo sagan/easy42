@@ -2748,10 +2748,7 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
               onClick={async () => {
                 try {
                   const res = await api.getClientWgConfig(clientNode.name);
-                  downloadTextFile(
-                    res.filename || `wg-${clientNode.name}-${clientNode.client_parent || "gateway"}.conf`,
-                    res.config,
-                  );
+                  downloadTextFile(res.filename || `wgc-${clientNode.name}.conf`, res.config);
                 } catch (err: any) {
                   setError(err?.message || "Failed to download wg.conf");
                 }

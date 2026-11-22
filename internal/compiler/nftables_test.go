@@ -1128,6 +1128,84 @@ func TestGenerateNftablesConfig_NetfilterMark(t *testing.T) {
 	}
 }
 
+func TestGenerateNftablesConfig_ClientNodeNetfilterMark(t *testing.T) {
+	node := config.Node{
+		Name: "router1",
+		IP:   "172.20.0.1",
+		ASN:  4242420001,
+	}
+	allNodes := []config.Node{
+		node,
+		{Name: "client1", IsClient: true, IP: "172.20.0.10"},
+		{Name: "client2", IsClient: true, IP: "172.20.0.11"},
+		{Name: "client3", IsClient: true, IP: "172.20.0.12"},
+		{Name: "client4", IsClient: true, IP: "172.20.0.13"},
+	}
+
+	customPolicies := []config.NetworkPolicy{
+		{
+			ID:   "pol-client-marked",
+			Name: "Client policy with mark",
+			Mark: "0x1234",
+		},
+	}
+
+	links := []config.Link{
+		// Client 1: internal end sets explicit Netfilter Mark -> 0x42, default interface name wg42client1
+		{
+			From: config.LinkEnd{Name: "router1", Mark: "0x42"},
+			To:   config.LinkEnd{Name: "client1"},
+		},
+		// Client 2: internal end inherits mark from policy -> 0x1234, explicit interface name
+		{
+			From: config.LinkEnd{Name: "client2"},
+			To:   config.LinkEnd{Name: "router1", Interface: "wg42-c2", Policy: "pol-client-marked"},
+		},
+		// Client 3: no mark on link end or default access policy -> should not appear in mark rules
+		{
+			From: config.LinkEnd{Name: "router1"},
+			To:   config.LinkEnd{Name: "client3"},
+		},
+		// Client 4: disabled link with mark -> should not appear in mark rules
+		{
+			Disabled: true,
+			From:     config.LinkEnd{Name: "router1", Mark: "0x99"},
+			To:       config.LinkEnd{Name: "client4"},
+		},
+	}
+
+	conf, err := GenerateNftablesConfig(&node, allNodes, links, nil, customPolicies)
+	if err != nil {
+		t.Fatalf("GenerateNftablesConfig failed: %v", err)
+	}
+
+	markChainIdx := strings.Index(conf, "chain mangle_prerouting_mark {")
+	if markChainIdx == -1 {
+		t.Fatalf("Expected mangle_prerouting_mark chain in conf, got:\n%s", conf)
+	}
+	markChain := conf[markChainIdx:]
+	if endIdx := strings.Index(markChain, "\n  }"); endIdx != -1 {
+		markChain = markChain[:endIdx]
+	}
+
+	expectedC1 := `iifname "wg42client1" meta mark set 0x42`
+	if !strings.Contains(markChain, expectedC1) {
+		t.Errorf("Expected rule %q in mangle_prerouting_mark, got:\n%s", expectedC1, markChain)
+	}
+
+	expectedC2 := `iifname "wg42-c2" meta mark set 0x1234`
+	if !strings.Contains(markChain, expectedC2) {
+		t.Errorf("Expected rule %q in mangle_prerouting_mark, got:\n%s", expectedC2, markChain)
+	}
+
+	if strings.Contains(markChain, "wg42client3") {
+		t.Errorf("Did not expect wg42client3 in mark rules, got:\n%s", markChain)
+	}
+	if strings.Contains(markChain, "wg42client4") {
+		t.Errorf("Did not expect disabled wg42client4 in mark rules, got:\n%s", markChain)
+	}
+}
+
 func TestFormatNftMarkAction(t *testing.T) {
 	tests := []struct {
 		input       string

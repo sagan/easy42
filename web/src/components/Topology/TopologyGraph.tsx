@@ -2284,7 +2284,7 @@ export const TopologyGraph: React.FC<TopologyGraphProps> = ({
     [links, nodes, networkPolicies, bestPathWorkingStates],
   );
 
-  const bestPathFocusNode = pinnedNodeNames.size === 1 ? Array.from(pinnedNodeNames)[0] : null;
+  const bestPathFocusNode = bestPathEnabled && pinnedNodeNames.size === 1 ? Array.from(pinnedNodeNames)[0] : null;
 
   const bestPathRequested =
     Boolean(bestPathEnabled && bestPathFocusNode) && Boolean(hoveredNodeName && hoveredNodeName !== bestPathFocusNode);
