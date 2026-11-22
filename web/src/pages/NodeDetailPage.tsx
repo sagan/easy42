@@ -975,7 +975,12 @@ export const NodeDetailPage: React.FC = () => {
           size="small"
           variant="outlined"
           startIcon={<ArrowLeft size={14} />}
-          onClick={() => navigate("/nodes")}
+          onClick={(e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            navigate("/nodes");
+          }}
+          href="/nodes"
           sx={{
             py: 0.7,
             fontSize: "0.78rem",
@@ -1030,7 +1035,16 @@ export const NodeDetailPage: React.FC = () => {
             <Typography variant="body2" sx={{ color: "#64748B", mb: 3 }}>
               Node <strong>"{decodedNodeName}"</strong> was not found in the current Easy42 mesh topology.
             </Typography>
-            <Button variant="contained" startIcon={<ArrowLeft size={16} />} onClick={() => navigate("/nodes")}>
+            <Button
+              variant="contained"
+              startIcon={<ArrowLeft size={16} />}
+              href="/nodes"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                navigate("/nodes");
+              }}
+            >
               Return to Nodes List
             </Button>
           </Paper>
@@ -1104,7 +1118,12 @@ export const NodeDetailPage: React.FC = () => {
               size="small"
               variant="text"
               startIcon={<ArrowLeft size={15} />}
-              onClick={() => navigate("/nodes")}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                navigate("/nodes");
+              }}
+              href="/nodes"
               sx={{ color: "#64748B", fontWeight: 600, fontSize: "0.8rem", px: 1 }}
             >
               Back to Nodes
@@ -1251,7 +1270,10 @@ export const NodeDetailPage: React.FC = () => {
               )}
               {!node?.is_external && !node?.is_client && (
                 <MenuItem
-                  onClick={() => {
+                  href={`/looking-glass/presets?node=${encodeURIComponent(node?.name || "")}`}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
                     setMoreMenuAnchor(null);
                     navigate(`/looking-glass/presets?node=${encodeURIComponent(node?.name || "")}`);
                   }}
@@ -1262,10 +1284,13 @@ export const NodeDetailPage: React.FC = () => {
               )}
               {!node?.is_external && !node?.is_client && (
                 <MenuItem
-                  onClick={() => {
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
                     setMoreMenuAnchor(null);
                     navigate(`/helper?node=${encodeURIComponent(node?.name || "")}`);
                   }}
+                  href={`/helper?node=${encodeURIComponent(node?.name || "")}`}
                   sx={{ fontSize: "0.82rem", gap: 1.2, py: 1 }}
                 >
                   <Wrench size={16} color="#475569" /> Device Config Helper
@@ -1978,9 +2003,12 @@ export const NodeDetailPage: React.FC = () => {
                               size="small"
                               variant="outlined"
                               startIcon={<Wrench size={13} />}
-                              onClick={() =>
-                                navigate(`/helper?node=${encodeURIComponent(node.name)}&task=config_network`)
-                              }
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                navigate(`/helper?node=${encodeURIComponent(node.name)}&task=config_network`);
+                              }}
+                              href={`/helper?node=${encodeURIComponent(node.name)}&task=config_network`}
                               sx={{ fontSize: "0.72rem", py: 0.2, px: 1, borderColor: "#CBD5E1", color: "#334155" }}
                             >
                               Configure
@@ -2090,6 +2118,7 @@ export const NodeDetailPage: React.FC = () => {
                             href={`/nodes?tag=${encodeURIComponent(t)}`}
                             onClick={(e) => {
                               e.preventDefault();
+                              e.stopPropagation();
                               navigate(`/nodes?tag=${encodeURIComponent(t)}`);
                             }}
                             sx={{
@@ -2878,7 +2907,12 @@ export const NodeDetailPage: React.FC = () => {
                                 <Button
                                   size="small"
                                   variant="text"
-                                  onClick={() => navigate(`/nodes/${encodeURIComponent(peerEnd.name)}`)}
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    navigate(`/nodes/${encodeURIComponent(peerEnd.name)}?tab=networking`);
+                                  }}
+                                  href={`/nodes/${encodeURIComponent(peerEnd.name)}?tab=networking`}
                                   sx={{ fontSize: "0.75rem", p: 0.5 }}
                                 >
                                   View Peer

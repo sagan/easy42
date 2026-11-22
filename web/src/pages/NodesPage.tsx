@@ -2592,7 +2592,12 @@ export const NodesPage: React.FC = () => {
                         <span>
                           <IconButton
                             size="small"
-                            onClick={() => navigate(`/nodes/${encodeURIComponent(n.name)}?tab=metrics`)}
+                            href={`/nodes/${encodeURIComponent(n.name)}?tab=metrics`}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              navigate(`/nodes/${encodeURIComponent(n.name)}?tab=metrics`);
+                            }}
                             disabled={!agentInstalled}
                             sx={{
                               color: "#4F46E5",
@@ -2606,7 +2611,12 @@ export const NodesPage: React.FC = () => {
                       <Tooltip title="Looking Glass">
                         <IconButton
                           size="small"
-                          onClick={() => navigate(`/looking-glass/presets?node=${encodeURIComponent(n.name)}`)}
+                          href={`/looking-glass/presets?node=${encodeURIComponent(n.name)}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            navigate(`/looking-glass/presets?node=${encodeURIComponent(n.name)}`);
+                          }}
                           sx={{ color: "#0891B2" }}
                         >
                           <Compass size={16} />
@@ -2615,7 +2625,12 @@ export const NodesPage: React.FC = () => {
                       <Tooltip title="Node Details">
                         <IconButton
                           size="small"
-                          onClick={() => navigate(`/nodes/${encodeURIComponent(n.name)}`)}
+                          href={`/nodes/${encodeURIComponent(n.name)}`}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            navigate(`/nodes/${encodeURIComponent(n.name)}`);
+                          }}
                           sx={{ color: "#64748B" }}
                         >
                           <Info size={16} />

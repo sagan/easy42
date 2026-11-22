@@ -928,7 +928,12 @@ export const EventsPage: React.FC = () => {
                   <Box sx={{ display: "flex", justifyContent: "flex-end", pt: 0.2 }}>
                     <Button
                       size="small"
-                      onClick={() => navigate(`/nodes/${encodeURIComponent(event.node_name)}`)}
+                      href={`/nodes/${encodeURIComponent(event.node_name)}`}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        navigate(`/nodes/${encodeURIComponent(event.node_name)}`);
+                      }}
                       endIcon={<ExternalLink size={13} />}
                       sx={{
                         textTransform: "none",
