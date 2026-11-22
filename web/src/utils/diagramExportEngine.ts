@@ -25,11 +25,17 @@ export interface DiagramExportOptions {
 
 const BLOCK_PALETTE: Record<string, string> = {
   indigo: "#6366F1",
+  blue: "#3B82F6",
   cyan: "#06B6D4",
+  teal: "#14B8A6",
   emerald: "#10B981",
+  lime: "#84CC16",
   amber: "#F59E0B",
+  orange: "#F97316",
   purple: "#A855F7",
+  pink: "#EC4899",
   rose: "#F43F5E",
+  slate: "#64748B",
 };
 
 function resolveBlockColor(colorStr?: string): string {

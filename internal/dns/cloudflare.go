@@ -3,15 +3,21 @@ package dns
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 
+	"easy42/internal/apps"
 	"easy42/internal/config"
 )
 
@@ -22,15 +28,17 @@ const (
 
 // DNSRecord represents a Cloudflare DNS record
 type DNSRecord struct {
-	ID       string `json:"id,omitempty"`
-	Type     string `json:"type"`
-	Name     string `json:"name"`
-	Content  string `json:"content"`
-	TTL      int    `json:"ttl"`
-	Proxied  bool   `json:"proxied"`
-	Comment  string `json:"comment,omitempty"`
-	ZoneID   string `json:"zone_id,omitempty"`
-	ZoneName string `json:"zone_name,omitempty"`
+	ID       string         `json:"id,omitempty"`
+	Type     string         `json:"type"`
+	Name     string         `json:"name"`
+	Content  string         `json:"content,omitempty"`
+	Data     map[string]any `json:"data,omitempty"`
+	Priority *int           `json:"priority,omitempty"`
+	TTL      int            `json:"ttl"`
+	Proxied  bool           `json:"proxied"`
+	Comment  string         `json:"comment,omitempty"`
+	ZoneID   string         `json:"zone_id,omitempty"`
+	ZoneName string         `json:"zone_name,omitempty"`
 }
 
 // SyncResult details the outcome of a DNS sync operation
@@ -71,6 +79,8 @@ type Client struct {
 	zoneID     string
 	apiToken   string
 	baseDomain string
+	mu         sync.Mutex
+	zoneName   string
 }
 
 // NewClient creates a new Cloudflare DNS client
@@ -175,6 +185,33 @@ func (c *Client) doRequest(ctx context.Context, method, endpoint string, body an
 	return cfResp.Info, nil
 }
 
+// GetZoneName fetches and caches the Cloudflare zone's root domain name (e.g. "example.com")
+func (c *Client) GetZoneName(ctx context.Context) (string, error) {
+	c.mu.Lock()
+	cached := c.zoneName
+	c.mu.Unlock()
+	if cached != "" {
+		return cached, nil
+	}
+
+	endpoint := fmt.Sprintf("/zones/%s", c.zoneID)
+	var zone struct {
+		Name string `json:"name"`
+	}
+	if _, err := c.doRequest(ctx, http.MethodGet, endpoint, nil, &zone); err != nil {
+		return "", err
+	}
+	name := NormalizeDomain(zone.Name)
+	if name == "" {
+		return "", fmt.Errorf("cloudflare zone %s returned empty name", c.zoneID)
+	}
+
+	c.mu.Lock()
+	c.zoneName = name
+	c.mu.Unlock()
+	return name, nil
+}
+
 // ListRecords lists DNS records in the zone, optionally filtered by name
 func (c *Client) ListRecords(ctx context.Context, nameFilter string) ([]DNSRecord, error) {
 	var allRecords []DNSRecord
@@ -207,17 +244,30 @@ func (c *Client) ListRecords(ctx context.Context, nameFilter string) ([]DNSRecor
 	return allRecords, nil
 }
 
-// CreateRecord creates a new DNS record
-func (c *Client) CreateRecord(ctx context.Context, rec DNSRecord) (*DNSRecord, error) {
-	endpoint := fmt.Sprintf("/zones/%s/dns_records", c.zoneID)
+func buildRecordPayload(rec DNSRecord) map[string]any {
+	ttl := rec.TTL
+	if ttl <= 0 {
+		ttl = 1 // Automatic TTL
+	}
 	payload := map[string]any{
 		"type":    rec.Type,
 		"name":    rec.Name,
-		"content": rec.Content,
-		"ttl":     1, // Automatic TTL
+		"ttl":     ttl,
 		"proxied": false,
 		"comment": easy42RecordComment,
 	}
+	if len(rec.Data) > 0 {
+		payload["data"] = rec.Data
+	} else {
+		payload["content"] = rec.Content
+	}
+	return payload
+}
+
+// CreateRecord creates a new DNS record
+func (c *Client) CreateRecord(ctx context.Context, rec DNSRecord) (*DNSRecord, error) {
+	endpoint := fmt.Sprintf("/zones/%s/dns_records", c.zoneID)
+	payload := buildRecordPayload(rec)
 
 	var created DNSRecord
 	_, err := c.doRequest(ctx, http.MethodPost, endpoint, payload, &created)
@@ -230,14 +280,7 @@ func (c *Client) CreateRecord(ctx context.Context, rec DNSRecord) (*DNSRecord, e
 // UpdateRecord updates an existing DNS record
 func (c *Client) UpdateRecord(ctx context.Context, id string, rec DNSRecord) (*DNSRecord, error) {
 	endpoint := fmt.Sprintf("/zones/%s/dns_records/%s", c.zoneID, id)
-	payload := map[string]any{
-		"type":    rec.Type,
-		"name":    rec.Name,
-		"content": rec.Content,
-		"ttl":     1,
-		"proxied": false,
-		"comment": easy42RecordComment,
-	}
+	payload := buildRecordPayload(rec)
 
 	var updated DNSRecord
 	_, err := c.doRequest(ctx, http.MethodPut, endpoint, payload, &updated)
@@ -343,8 +386,468 @@ func IPMatches(ip1, ip2 string) bool {
 	return strings.EqualFold(strings.TrimSpace(ip1), strings.TrimSpace(ip2))
 }
 
+func normalizeTTL(ttl int) int {
+	if ttl <= 0 {
+		return 1
+	}
+	return ttl
+}
+
+func toInt(v any) (int, bool) {
+	switch n := v.(type) {
+	case int:
+		return n, true
+	case int64:
+		return int(n), true
+	case float64:
+		return int(n), true
+	case string:
+		i, err := strconv.Atoi(strings.TrimSpace(n))
+		return i, err == nil
+	default:
+		return 0, false
+	}
+}
+
+func parseSRVValue(val string) (map[string]any, error) {
+	val = strings.TrimSpace(val)
+	if val == "" {
+		return nil, fmt.Errorf("SRV value cannot be empty")
+	}
+	if strings.HasPrefix(val, "{") {
+		var raw map[string]any
+		if err := json.Unmarshal([]byte(val), &raw); err != nil {
+			return nil, fmt.Errorf("invalid SRV JSON value: %w", err)
+		}
+		targetRaw, ok := raw["target"].(string)
+		if !ok || strings.Trim(strings.TrimSpace(targetRaw), ".") == "" {
+			return nil, fmt.Errorf("SRV JSON value requires non-empty 'target'")
+		}
+		data := make(map[string]any, len(raw))
+		for k, v := range raw {
+			data[k] = v
+		}
+		data["target"] = strings.ToLower(strings.Trim(strings.TrimSpace(targetRaw), "."))
+		for _, numKey := range []string{"priority", "weight", "port"} {
+			if rawVal, exists := raw[numKey]; exists {
+				if iv, ok := toInt(rawVal); ok {
+					data[numKey] = iv
+				} else {
+					return nil, fmt.Errorf("SRV JSON field '%s' must be an integer", numKey)
+				}
+			}
+		}
+		if _, exists := data["port"]; !exists {
+			return nil, fmt.Errorf("SRV JSON value requires 'port'")
+		}
+		if _, exists := data["priority"]; !exists {
+			data["priority"] = 0
+		}
+		if _, exists := data["weight"]; !exists {
+			data["weight"] = 0
+		}
+		return data, nil
+	}
+
+	fields := strings.Fields(val)
+	if len(fields) != 4 {
+		return nil, fmt.Errorf("invalid SRV value '%s': expected JSON object or '<priority> <weight> <port> <target>'", val)
+	}
+	priority, err := strconv.Atoi(fields[0])
+	if err != nil || priority < 0 {
+		return nil, fmt.Errorf("invalid SRV priority '%s'", fields[0])
+	}
+	weight, err := strconv.Atoi(fields[1])
+	if err != nil || weight < 0 {
+		return nil, fmt.Errorf("invalid SRV weight '%s'", fields[1])
+	}
+	port, err := strconv.Atoi(fields[2])
+	if err != nil || port < 1 || port > 65535 {
+		return nil, fmt.Errorf("invalid SRV port '%s'", fields[2])
+	}
+	target := strings.ToLower(strings.Trim(strings.TrimSpace(fields[3]), "."))
+	if target == "" {
+		return nil, fmt.Errorf("SRV target cannot be empty")
+	}
+	return map[string]any{
+		"priority": priority,
+		"weight":   weight,
+		"port":     port,
+		"target":   target,
+	}, nil
+}
+
+func extractSRVTuple(rec DNSRecord) (priority, weight, port int, target string, ok bool) {
+	if len(rec.Data) > 0 {
+		p, okP := toInt(rec.Data["priority"])
+		if !okP && rec.Priority != nil {
+			p = *rec.Priority
+			okP = true
+		}
+		w, okW := toInt(rec.Data["weight"])
+		pt, okPt := toInt(rec.Data["port"])
+		t, okT := rec.Data["target"].(string)
+		if okW && okPt && okT {
+			return p, w, pt, strings.ToLower(strings.Trim(strings.TrimSpace(t), ".")), okP || rec.Priority == nil
+		}
+	}
+	// Fallback: Cloudflare content string "<weight> <port> <target>" with rec.Priority, or "<priority> <weight> <port> <target>"
+	fields := strings.Fields(rec.Content)
+	if len(fields) == 3 && rec.Priority != nil {
+		w, errW := strconv.Atoi(fields[0])
+		pt, errPt := strconv.Atoi(fields[1])
+		if errW == nil && errPt == nil {
+			return *rec.Priority, w, pt, strings.ToLower(strings.Trim(fields[2], ".")), true
+		}
+	} else if len(fields) == 4 {
+		p, errP := strconv.Atoi(fields[0])
+		w, errW := strconv.Atoi(fields[1])
+		pt, errPt := strconv.Atoi(fields[2])
+		if errP == nil && errW == nil && errPt == nil {
+			return p, w, pt, strings.ToLower(strings.Trim(fields[3], ".")), true
+		}
+	}
+	return 0, 0, 0, "", false
+}
+
+func srvDataEqual(a, b DNSRecord) bool {
+	pa, wa, pta, ta, okA := extractSRVTuple(a)
+	pb, wb, ptb, tb, okB := extractSRVTuple(b)
+	if !okA || !okB {
+		return false
+	}
+	return pa == pb && wa == wb && pta == ptb && ta == tb
+}
+
+func sshfpAlgorithmForKey(alg string) (int, bool) {
+	switch strings.ToLower(strings.TrimSpace(alg)) {
+	case "ecdsa-sha2-nistp256", "ecdsa-sha2-nistp384", "ecdsa-sha2-nistp521":
+		return 3, true
+	case "ssh-ed25519":
+		return 4, true
+	case "ssh-ed448":
+		return 6, true
+	default:
+		return 0, false
+	}
+}
+
+func sshfpFingerprintSHA256(base64Key string) (string, error) {
+	raw, err := base64.StdEncoding.DecodeString(strings.TrimSpace(base64Key))
+	if err != nil || len(raw) == 0 {
+		return "", fmt.Errorf("invalid base64 SSH key")
+	}
+	sum := sha256.Sum256(raw)
+	return hex.EncodeToString(sum[:]), nil
+}
+
+func extractSSHFPTuple(rec DNSRecord) (algorithm, fpType int, fingerprint string, ok bool) {
+	if len(rec.Data) > 0 {
+		alg, okA := toInt(rec.Data["algorithm"])
+		ft, okT := toInt(rec.Data["type"])
+		fp, okF := rec.Data["fingerprint"].(string)
+		if okA && okT && okF {
+			return alg, ft, strings.ToLower(strings.TrimSpace(fp)), true
+		}
+	}
+	fields := strings.Fields(rec.Content)
+	if len(fields) == 3 {
+		alg, errA := strconv.Atoi(fields[0])
+		ft, errT := strconv.Atoi(fields[1])
+		if errA == nil && errT == nil {
+			return alg, ft, strings.ToLower(strings.TrimSpace(fields[2])), true
+		}
+	}
+	return 0, 0, "", false
+}
+
+func sshfpDataEqual(a, b DNSRecord) bool {
+	aa, fta, fpa, okA := extractSSHFPTuple(a)
+	ab, ftb, fpb, okB := extractSSHFPTuple(b)
+	if !okA || !okB {
+		return false
+	}
+	return aa == ab && fta == ftb && fpa == fpb
+}
+
+func recordsMatch(existing, expected DNSRecord) bool {
+	if normalizeTTL(existing.TTL) != normalizeTTL(expected.TTL) || existing.Proxied != expected.Proxied {
+		return false
+	}
+	switch strings.ToUpper(expected.Type) {
+	case "A", "AAAA":
+		return IPMatches(existing.Content, expected.Content)
+	case "CNAME":
+		return strings.EqualFold(strings.Trim(strings.TrimSpace(existing.Content), "."), strings.Trim(strings.TrimSpace(expected.Content), "."))
+	case "TXT":
+		return strings.TrimSpace(existing.Content) == strings.TrimSpace(expected.Content)
+	case "SRV":
+		return srvDataEqual(existing, expected)
+	case "SSHFP":
+		return sshfpDataEqual(existing, expected)
+	default:
+		return strings.TrimSpace(existing.Content) == strings.TrimSpace(expected.Content)
+	}
+}
+
+// ExpectedSSHFPRecordsForNode evaluates SSHFP DNS record rules for a single node using its agent-collected host keys
+func ExpectedSSHFPRecordsForNode(node config.Node, rules []config.DNSSSHFPRule, baseDomain string, nodeKeys []config.SSHPublicKey) []DNSRecord {
+	if len(rules) == 0 || len(nodeKeys) == 0 {
+		return nil
+	}
+	nodeName := strings.ToLower(strings.TrimSpace(node.Name))
+	baseDomain = NormalizeDomain(baseDomain)
+	if nodeName == "" || baseDomain == "" {
+		return nil
+	}
+
+	allowedAlgs := make(map[int]bool)
+	for _, rule := range rules {
+		if !config.NodeMatchesSelector(node, rule.TargetNodes) {
+			continue
+		}
+		for _, alg := range rule.Algorithms {
+			if alg == 3 || alg == 4 || alg == 6 {
+				allowedAlgs[alg] = true
+			}
+		}
+	}
+	if len(allowedAlgs) == 0 {
+		return nil
+	}
+
+	fqdn := fmt.Sprintf("%s.%s", nodeName, baseDomain)
+	var records []DNSRecord
+	for _, k := range nodeKeys {
+		if !k.IsHostKey() {
+			continue
+		}
+		algNum, ok := sshfpAlgorithmForKey(k.Algorithm)
+		if !ok || !allowedAlgs[algNum] {
+			continue
+		}
+		fp, err := sshfpFingerprintSHA256(k.Key)
+		if err != nil {
+			continue
+		}
+		records = append(records, DNSRecord{
+			Type:    "SSHFP",
+			Name:    fqdn,
+			TTL:     1,
+			Proxied: false,
+			Comment: easy42RecordComment,
+			Data: map[string]any{
+				"algorithm":   algNum,
+				"type":        2, // SHA-256
+				"fingerprint": fp,
+			},
+		})
+	}
+	return records
+}
+
+// ExpectedCustomRecordsForNode evaluates custom DNS record rules for a single node
+func ExpectedCustomRecordsForNode(node config.Node, rules []config.DNSCustomRecordRule, baseDomain, rootDomain string, globalVars map[string]string) ([]DNSRecord, []string) {
+	if len(rules) == 0 {
+		return nil, nil
+	}
+
+	baseDomain = NormalizeDomain(baseDomain)
+	rootDomain = NormalizeDomain(rootDomain)
+
+	contextVars := config.BuildNodeContextVars(node)
+	evalVars := make(map[string]string, len(contextVars)+2)
+	for k, v := range contextVars {
+		evalVars[k] = v
+	}
+	if baseDomain != "" {
+		evalVars["BASE"] = baseDomain
+	}
+	if rootDomain != "" {
+		evalVars["ROOT"] = rootDomain
+	}
+
+	var records []DNSRecord
+	var errs []string
+
+	for i, rule := range rules {
+		if !config.NodeMatchesSelector(node, rule.TargetNodes) {
+			continue
+		}
+
+		recType := strings.ToUpper(strings.TrimSpace(rule.Type))
+		renderedName := apps.InterpolateVariables(rule.Name, globalVars, evalVars)
+		name := strings.ToLower(strings.Trim(strings.TrimSpace(renderedName), "."))
+		if name == "" {
+			continue
+		}
+		if name == "@" {
+			if rootDomain != "" {
+				name = rootDomain
+			}
+		} else if rootDomain != "" && name != rootDomain && !strings.HasSuffix(name, "."+rootDomain) {
+			name = name + "." + rootDomain
+		}
+
+		renderedVal := strings.TrimSpace(apps.InterpolateVariables(rule.Value, globalVars, evalVars))
+		if renderedVal == "" {
+			continue
+		}
+
+		renderedTTL := strings.TrimSpace(apps.InterpolateVariables(rule.TTL, globalVars, evalVars))
+		ttl := 1
+		if renderedTTL != "" && !strings.EqualFold(renderedTTL, "auto") {
+			parsedTTL, err := strconv.Atoi(renderedTTL)
+			if err != nil || parsedTTL < 1 {
+				errs = append(errs, fmt.Sprintf("custom_records[%d] (%s) for node %s: invalid TTL '%s'", i, name, node.Name, renderedTTL))
+				continue
+			}
+			ttl = parsedTTL
+		}
+
+		rec := DNSRecord{
+			Type:    recType,
+			Name:    name,
+			TTL:     ttl,
+			Proxied: false,
+			Comment: easy42RecordComment,
+		}
+
+		switch recType {
+		case "A":
+			parsed := net.ParseIP(CleanIP(renderedVal))
+			if parsed == nil || parsed.To4() == nil {
+				errs = append(errs, fmt.Sprintf("custom_records[%d] (%s) for node %s: invalid IPv4 address '%s'", i, name, node.Name, renderedVal))
+				continue
+			}
+			rec.Content = parsed.String()
+		case "AAAA":
+			parsed := net.ParseIP(CleanIP(renderedVal))
+			if parsed == nil || parsed.To4() != nil {
+				errs = append(errs, fmt.Sprintf("custom_records[%d] (%s) for node %s: invalid IPv6 address '%s'", i, name, node.Name, renderedVal))
+				continue
+			}
+			rec.Content = parsed.String()
+		case "CNAME":
+			cname := strings.ToLower(strings.Trim(renderedVal, "."))
+			if cname == "" {
+				continue
+			}
+			rec.Content = cname
+		case "TXT":
+			rec.Content = renderedVal
+		case "SRV":
+			data, err := parseSRVValue(renderedVal)
+			if err != nil {
+				errs = append(errs, fmt.Sprintf("custom_records[%d] (%s) for node %s: %v", i, name, node.Name, err))
+				continue
+			}
+			rec.Data = data
+		default:
+			errs = append(errs, fmt.Sprintf("custom_records[%d] (%s): unsupported record type '%s'", i, name, recType))
+			continue
+		}
+
+		records = append(records, rec)
+	}
+
+	return records, errs
+}
+
+type dnsRecordKey struct {
+	Type string
+	Name string
+}
+
+func appendUniqueRecord(list []DNSRecord, rec DNSRecord) []DNSRecord {
+	for _, existing := range list {
+		if recordsMatch(existing, rec) {
+			return list
+		}
+	}
+	return append(list, rec)
+}
+
+func reconcileRecordGroup(ctx context.Context, client *Client, expectedList, existingList []DNSRecord, result *SyncResult) {
+	matchedExisting := make([]bool, len(existingList))
+	matchedExpected := make([]bool, len(expectedList))
+
+	// First pass: keep exact matches
+	for ei, exp := range expectedList {
+		for xi, ex := range existingList {
+			if matchedExisting[xi] {
+				continue
+			}
+			if recordsMatch(ex, exp) {
+				matchedExisting[xi] = true
+				matchedExpected[ei] = true
+				if result != nil {
+					result.Ignored++
+				}
+				break
+			}
+		}
+	}
+
+	// Second pass: update unmatched existing records in-place to match unmatched expected records
+	for ei, exp := range expectedList {
+		if matchedExpected[ei] {
+			continue
+		}
+		updated := false
+		for xi, ex := range existingList {
+			if matchedExisting[xi] {
+				continue
+			}
+			matchedExisting[xi] = true
+			matchedExpected[ei] = true
+			if _, err := client.UpdateRecord(ctx, ex.ID, exp); err != nil {
+				if result != nil {
+					result.Errors = append(result.Errors, fmt.Sprintf("failed to update %s %s: %v", exp.Type, exp.Name, err))
+				}
+			} else if result != nil {
+				result.Updated++
+			}
+			updated = true
+			break
+		}
+		if !updated {
+			if _, err := client.CreateRecord(ctx, exp); err != nil {
+				if result != nil {
+					result.Errors = append(result.Errors, fmt.Sprintf("failed to create %s %s: %v", exp.Type, exp.Name, err))
+				}
+			} else if result != nil {
+				result.Created++
+			}
+		}
+	}
+
+	// Third pass: delete leftover existing records for this (Type, Name)
+	for xi, ex := range existingList {
+		if matchedExisting[xi] {
+			continue
+		}
+		if err := client.DeleteRecord(ctx, ex.ID); err != nil {
+			if result != nil {
+				result.Errors = append(result.Errors, fmt.Sprintf("failed to delete duplicate %s: %v", ex.Name, err))
+			}
+		} else if result != nil {
+			result.Deleted++
+		}
+	}
+}
+
 // SyncNode updates DNS records for a single node (best-effort)
-func SyncNode(ctx context.Context, client *Client, node config.Node, oldName string, dnsCfg config.DNSConfig) error {
+func SyncNode(ctx context.Context, client *Client, node config.Node, oldName string, dnsCfg config.DNSConfig, globalVars ...map[string]string) error {
+	var gVars map[string]string
+	if len(globalVars) > 0 {
+		gVars = globalVars[0]
+	}
+	return SyncNodeWithSSHKeys(ctx, client, node, oldName, dnsCfg, gVars, nil)
+}
+
+// SyncNodeWithSSHKeys updates DNS records for a single node including SSHFP records derived from agent-collected host keys
+func SyncNodeWithSSHKeys(ctx context.Context, client *Client, node config.Node, oldName string, dnsCfg config.DNSConfig, globalVars map[string]string, nodeKeys []config.SSHPublicKey) error {
 	if client == nil || !dnsCfg.IsConfigured() {
 		return nil
 	}
@@ -365,17 +868,49 @@ func SyncNode(ctx context.Context, client *Client, node config.Node, oldName str
 		return nil
 	}
 
-	expectedRecords := ExpectedRecordsForNode(node, baseDomain, dnsCfg.PublishIPv6OwnName)
+	expectedMap := make(map[dnsRecordKey][]DNSRecord)
+	for _, r := range ExpectedRecordsForNode(node, baseDomain, dnsCfg.PublishIPv6OwnName) {
+		key := dnsRecordKey{Type: strings.ToUpper(r.Type), Name: strings.ToLower(r.Name)}
+		expectedMap[key] = appendUniqueRecord(expectedMap[key], r)
+	}
 
-	// Fetch existing records for this node's potential hostnames
-	namesToQuery := []string{
-		fmt.Sprintf("%s.%s", nodeName, baseDomain),
-		fmt.Sprintf("*.%s.%s", nodeName, baseDomain),
-		fmt.Sprintf("%s6.%s", nodeName, baseDomain),
+	for _, r := range ExpectedSSHFPRecordsForNode(node, dnsCfg.SSHFPRules, baseDomain, nodeKeys) {
+		key := dnsRecordKey{Type: strings.ToUpper(r.Type), Name: strings.ToLower(r.Name)}
+		expectedMap[key] = appendUniqueRecord(expectedMap[key], r)
+	}
+
+	if len(dnsCfg.CustomRecords) > 0 {
+		rootDomain, err := client.GetZoneName(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to resolve Cloudflare zone domain: %w", err)
+		}
+		customRecs, _ := ExpectedCustomRecordsForNode(node, dnsCfg.CustomRecords, baseDomain, rootDomain, globalVars)
+		customMap := make(map[dnsRecordKey][]DNSRecord)
+		for _, r := range customRecs {
+			key := dnsRecordKey{Type: strings.ToUpper(r.Type), Name: strings.ToLower(r.Name)}
+			customMap[key] = appendUniqueRecord(customMap[key], r)
+		}
+		for key, recs := range customMap {
+			expectedMap[key] = recs
+		}
+	}
+
+	// Fetch existing records for this node's built-in hostnames and any custom record names
+	builtinNames := map[string]bool{
+		fmt.Sprintf("%s.%s", nodeName, baseDomain):   true,
+		fmt.Sprintf("*.%s.%s", nodeName, baseDomain): true,
+		fmt.Sprintf("%s6.%s", nodeName, baseDomain):  true,
+	}
+	namesToQuery := make(map[string]bool, len(builtinNames)+len(expectedMap))
+	for n := range builtinNames {
+		namesToQuery[n] = true
+	}
+	for key := range expectedMap {
+		namesToQuery[key.Name] = true
 	}
 
 	var existing []DNSRecord
-	for _, n := range namesToQuery {
+	for n := range namesToQuery {
 		recs, err := client.ListRecords(ctx, n)
 		if err != nil {
 			return fmt.Errorf("failed to query records for %s: %w", n, err)
@@ -383,41 +918,38 @@ func SyncNode(ctx context.Context, client *Client, node config.Node, oldName str
 		existing = append(existing, recs...)
 	}
 
-	type recordKey struct {
-		Type string
-		Name string
-	}
-
-	expectedMap := make(map[recordKey]DNSRecord)
-	for _, r := range expectedRecords {
-		expectedMap[recordKey{Type: strings.ToUpper(r.Type), Name: strings.ToLower(r.Name)}] = r
-	}
-
-	existingGrouped := make(map[recordKey][]DNSRecord)
+	existingGrouped := make(map[dnsRecordKey][]DNSRecord)
 	for _, r := range existing {
-		key := recordKey{Type: strings.ToUpper(r.Type), Name: strings.ToLower(strings.Trim(r.Name, "."))}
+		key := dnsRecordKey{Type: strings.ToUpper(r.Type), Name: strings.ToLower(strings.Trim(r.Name, "."))}
 		existingGrouped[key] = append(existingGrouped[key], r)
 	}
 
 	// Reconcile expected records
-	for key, expected := range expectedMap {
-		matches := existingGrouped[key]
-		if len(matches) == 0 {
-			_, _ = client.CreateRecord(ctx, expected)
+	for key, expectedList := range expectedMap {
+		if builtinNames[key.Name] {
+			reconcileRecordGroup(ctx, client, expectedList, existingGrouped[key], nil)
 		} else {
-			keep := matches[0]
-			if !IPMatches(keep.Content, expected.Content) || keep.Proxied != expected.Proxied {
-				_, _ = client.UpdateRecord(ctx, keep.ID, expected)
-			}
-			for i := 1; i < len(matches); i++ {
-				_ = client.DeleteRecord(ctx, matches[i].ID)
+			// For custom names outside built-in hostnames, ensure this node's expected records exist
+			// without deleting records that may belong to other nodes sharing the same name.
+			existingList := existingGrouped[key]
+			for _, exp := range expectedList {
+				found := false
+				for _, ex := range existingList {
+					if recordsMatch(ex, exp) {
+						found = true
+						break
+					}
+				}
+				if !found {
+					_, _ = client.CreateRecord(ctx, exp)
+				}
 			}
 		}
 	}
 
-	// Delete any existing A or AAAA records for this node that are no longer expected
+	// Delete any existing A or AAAA records for this node's built-in hostnames that are no longer expected
 	for key, matches := range existingGrouped {
-		if key.Type != "A" && key.Type != "AAAA" {
+		if !builtinNames[key.Name] || (key.Type != "A" && key.Type != "AAAA") {
 			continue
 		}
 		if _, isExpected := expectedMap[key]; !isExpected {
@@ -458,7 +990,7 @@ func DeleteNodeRecords(ctx context.Context, client *Client, nodeName string, dns
 			continue
 		}
 		for _, r := range recs {
-			if r.Type == "A" || r.Type == "AAAA" {
+			if r.Type == "A" || r.Type == "AAAA" || r.Type == "SSHFP" {
 				if err := client.DeleteRecord(ctx, r.ID); err != nil {
 					errs = append(errs, err.Error())
 				}
@@ -473,7 +1005,16 @@ func DeleteNodeRecords(ctx context.Context, client *Client, nodeName string, dns
 }
 
 // Sync synchronizes all easy42 nodes to Cloudflare DNS
-func Sync(ctx context.Context, client *Client, nodes []config.Node, dnsCfg config.DNSConfig, force bool) (*SyncResult, error) {
+func Sync(ctx context.Context, client *Client, nodes []config.Node, dnsCfg config.DNSConfig, force bool, globalVars ...map[string]string) (*SyncResult, error) {
+	var gVars map[string]string
+	if len(globalVars) > 0 {
+		gVars = globalVars[0]
+	}
+	return SyncWithSSHKeys(ctx, client, nodes, dnsCfg, force, gVars, nil)
+}
+
+// SyncWithSSHKeys synchronizes all easy42 nodes to Cloudflare DNS, including SSHFP records from agent-collected host keys
+func SyncWithSSHKeys(ctx context.Context, client *Client, nodes []config.Node, dnsCfg config.DNSConfig, force bool, globalVars map[string]string, hostKeysByNode map[string][]config.SSHPublicKey) (*SyncResult, error) {
 	if client == nil {
 		return nil, fmt.Errorf("dns client is nil")
 	}
@@ -488,41 +1029,66 @@ func Sync(ctx context.Context, client *Client, nodes []config.Node, dnsCfg confi
 
 	result := &SyncResult{}
 
+	var rootDomain string
+	if len(dnsCfg.CustomRecords) > 0 {
+		var err error
+		rootDomain, err = client.GetZoneName(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve Cloudflare zone domain: %w", err)
+		}
+	}
+
 	// 1. Fetch all records for the zone
 	allRecords, err := client.ListRecords(ctx, "")
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch zone DNS records: %w", err)
 	}
 
-	// 2. Build map of expected records from easy42 nodes
-	type recordKey struct {
-		Type string
-		Name string
-	}
-
-	expectedMap := make(map[recordKey]*DNSRecord)
+	// 2. Build map of expected records from easy42 nodes (built-in + SSHFP + custom, where custom overrides)
+	expectedMap := make(map[dnsRecordKey][]DNSRecord)
+	customMap := make(map[dnsRecordKey][]DNSRecord)
 	validNodeNames := make(map[string]bool)
 
 	for _, node := range nodes {
-		if !node.HasRoutableMainIP() {
-			continue
-		}
 		cleanName := strings.ToLower(strings.TrimSpace(node.Name))
-		if cleanName == "" {
-			continue
+		if node.HasRoutableMainIP() && cleanName != "" {
+			validNodeNames[cleanName] = true
+			for _, rec := range ExpectedRecordsForNode(node, baseDomain, dnsCfg.PublishIPv6OwnName) {
+				key := dnsRecordKey{Type: strings.ToUpper(rec.Type), Name: strings.ToLower(rec.Name)}
+				expectedMap[key] = appendUniqueRecord(expectedMap[key], rec)
+			}
 		}
-		validNodeNames[cleanName] = true
 
-		for _, rec := range ExpectedRecordsForNode(node, baseDomain, dnsCfg.PublishIPv6OwnName) {
-			r := rec
-			expectedMap[recordKey{Type: r.Type, Name: strings.ToLower(r.Name)}] = &r
+		if len(dnsCfg.SSHFPRules) > 0 && cleanName != "" && len(hostKeysByNode) > 0 {
+			nodeKeys := hostKeysByNode[cleanName]
+			if len(nodeKeys) == 0 {
+				nodeKeys = hostKeysByNode[node.Name]
+			}
+			for _, rec := range ExpectedSSHFPRecordsForNode(node, dnsCfg.SSHFPRules, baseDomain, nodeKeys) {
+				key := dnsRecordKey{Type: strings.ToUpper(rec.Type), Name: strings.ToLower(rec.Name)}
+				expectedMap[key] = appendUniqueRecord(expectedMap[key], rec)
+			}
+		}
+
+		if len(dnsCfg.CustomRecords) > 0 {
+			customRecs, customErrs := ExpectedCustomRecordsForNode(node, dnsCfg.CustomRecords, baseDomain, rootDomain, globalVars)
+			result.Errors = append(result.Errors, customErrs...)
+			for _, rec := range customRecs {
+				key := dnsRecordKey{Type: strings.ToUpper(rec.Type), Name: strings.ToLower(rec.Name)}
+				customMap[key] = appendUniqueRecord(customMap[key], rec)
+			}
 		}
 	}
 
+	// Custom records have higher priority and override built-in records for the same (Type, Name)
+	for key, recs := range customMap {
+		expectedMap[key] = recs
+	}
+
 	// 3. Index existing records by (type, name)
-	existingMap := make(map[recordKey][]DNSRecord)
+	existingMap := make(map[dnsRecordKey][]DNSRecord)
 	for _, rec := range allRecords {
-		key := recordKey{
+		key := dnsRecordKey{
 			Type: strings.ToUpper(rec.Type),
 			Name: strings.ToLower(strings.Trim(rec.Name, ".")),
 		}
@@ -530,39 +1096,8 @@ func Sync(ctx context.Context, client *Client, nodes []config.Node, dnsCfg confi
 	}
 
 	// 4. Create or update expected records
-	for key, expected := range expectedMap {
-		existingList := existingMap[key]
-		if len(existingList) == 0 {
-			// Create record
-			_, err := client.CreateRecord(ctx, *expected)
-			if err != nil {
-				result.Errors = append(result.Errors, fmt.Sprintf("failed to create %s %s: %v", expected.Type, expected.Name, err))
-			} else {
-				result.Created++
-			}
-		} else {
-			// Keep first record, check if matching
-			primary := existingList[0]
-			if IPMatches(primary.Content, expected.Content) && primary.Proxied == expected.Proxied {
-				result.Ignored++
-			} else {
-				_, err := client.UpdateRecord(ctx, primary.ID, *expected)
-				if err != nil {
-					result.Errors = append(result.Errors, fmt.Sprintf("failed to update %s %s: %v", expected.Type, expected.Name, err))
-				} else {
-					result.Updated++
-				}
-			}
-
-			// Delete extra duplicate records with the same name and type
-			for i := 1; i < len(existingList); i++ {
-				if err := client.DeleteRecord(ctx, existingList[i].ID); err != nil {
-					result.Errors = append(result.Errors, fmt.Sprintf("failed to delete duplicate %s: %v", existingList[i].Name, err))
-				} else {
-					result.Deleted++
-				}
-			}
-		}
+	for key, expectedList := range expectedMap {
+		reconcileRecordGroup(ctx, client, expectedList, existingMap[key], result)
 	}
 
 	// 5. In non-force sync, clean up stale AAAA records for existing nodes when toggle changed
@@ -573,33 +1108,33 @@ func Sync(ctx context.Context, client *Client, nodes []config.Node, dnsCfg confi
 			nodeName6Domain := fmt.Sprintf("%s6.%s", cleanNodeName, baseDomain)
 
 			if dnsCfg.PublishIPv6OwnName {
-				// Old <name>.<domain> and *.<name>.<domain> AAAA records should be removed
-				if recs, ok := existingMap[recordKey{Type: "AAAA", Name: nodeNameDomain}]; ok {
-					for _, r := range recs {
-						if err := client.DeleteRecord(ctx, r.ID); err != nil {
-							result.Errors = append(result.Errors, fmt.Sprintf("failed to delete stale AAAA %s: %v", r.Name, err))
-						} else {
-							result.Deleted++
-						}
+				// Old <name>.<domain> and *.<name>.<domain> AAAA records should be removed (unless overridden by custom rule)
+				for _, staleName := range []string{nodeNameDomain, nodeWildDomain} {
+					staleKey := dnsRecordKey{Type: "AAAA", Name: staleName}
+					if _, expected := expectedMap[staleKey]; expected {
+						continue
 					}
-				}
-				if recs, ok := existingMap[recordKey{Type: "AAAA", Name: nodeWildDomain}]; ok {
-					for _, r := range recs {
-						if err := client.DeleteRecord(ctx, r.ID); err != nil {
-							result.Errors = append(result.Errors, fmt.Sprintf("failed to delete stale AAAA %s: %v", r.Name, err))
-						} else {
-							result.Deleted++
+					if recs, ok := existingMap[staleKey]; ok {
+						for _, r := range recs {
+							if err := client.DeleteRecord(ctx, r.ID); err != nil {
+								result.Errors = append(result.Errors, fmt.Sprintf("failed to delete stale AAAA %s: %v", r.Name, err))
+							} else {
+								result.Deleted++
+							}
 						}
 					}
 				}
 			} else {
-				// Old <name>6.<domain> AAAA records should be removed
-				if recs, ok := existingMap[recordKey{Type: "AAAA", Name: nodeName6Domain}]; ok {
-					for _, r := range recs {
-						if err := client.DeleteRecord(ctx, r.ID); err != nil {
-							result.Errors = append(result.Errors, fmt.Sprintf("failed to delete stale AAAA %s: %v", r.Name, err))
-						} else {
-							result.Deleted++
+				// Old <name>6.<domain> AAAA records should be removed (unless overridden by custom rule)
+				staleKey := dnsRecordKey{Type: "AAAA", Name: nodeName6Domain}
+				if _, expected := expectedMap[staleKey]; !expected {
+					if recs, ok := existingMap[staleKey]; ok {
+						for _, r := range recs {
+							if err := client.DeleteRecord(ctx, r.ID); err != nil {
+								result.Errors = append(result.Errors, fmt.Sprintf("failed to delete stale AAAA %s: %v", r.Name, err))
+							} else {
+								result.Deleted++
+							}
 						}
 					}
 				}
@@ -619,8 +1154,13 @@ func Sync(ctx context.Context, client *Client, nodes []config.Node, dnsCfg confi
 				continue
 			}
 
-			// We manage A, AAAA, and CNAME records under *.<baseDomain>
-			if recType != "A" && recType != "AAAA" && recType != "CNAME" {
+			// We manage A, AAAA, CNAME, and SSHFP records under *.<baseDomain>
+			if recType != "A" && recType != "AAAA" && recType != "CNAME" && recType != "SSHFP" {
+				continue
+			}
+
+			// Never delete records that are expected (e.g. custom records)
+			if _, expected := expectedMap[dnsRecordKey{Type: recType, Name: recName}]; expected {
 				continue
 			}
 

@@ -50,11 +50,30 @@ export interface FlapAlertedMetrics {
   Sessions: number;
 }
 
+export type DNSCustomRecordType = "A" | "AAAA" | "CNAME" | "TXT" | "SRV";
+
+export interface DNSCustomRecordRule {
+  target_nodes: Record<string, string>;
+  name: string;
+  type: DNSCustomRecordType;
+  value: string;
+  ttl?: string;
+}
+
+export type DNSSSHFPAlgorithm = 3 | 4 | 6;
+
+export interface DNSSSHFPRule {
+  target_nodes: Record<string, string>;
+  algorithms: DNSSSHFPAlgorithm[];
+}
+
 export interface CloudflareDNSConfig {
   zone_id?: string;
   api_token?: string;
   base_domain?: string;
   publish_ipv6_own_name?: boolean;
+  custom_records?: DNSCustomRecordRule[];
+  sshfp_rules?: DNSSSHFPRule[];
 }
 
 export interface DNSSyncResult {

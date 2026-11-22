@@ -19,11 +19,17 @@ import { GraphBlock } from "../../types/api";
 
 export const BLOCK_PALETTE = [
   { name: "Indigo", color: "#6366F1", bg: "rgba(99, 102, 241, 0.04)", border: "#6366F1" },
+  { name: "Blue", color: "#3B82F6", bg: "rgba(59, 130, 246, 0.04)", border: "#3B82F6" },
   { name: "Cyan", color: "#06B6D4", bg: "rgba(6, 182, 212, 0.04)", border: "#06B6D4" },
+  { name: "Teal", color: "#14B8A6", bg: "rgba(20, 184, 166, 0.04)", border: "#14B8A6" },
   { name: "Emerald", color: "#10B981", bg: "rgba(16, 185, 129, 0.04)", border: "#10B981" },
+  { name: "Lime", color: "#84CC16", bg: "rgba(132, 204, 22, 0.04)", border: "#84CC16" },
   { name: "Amber", color: "#F59E0B", bg: "rgba(245, 158, 11, 0.04)", border: "#F59E0B" },
+  { name: "Orange", color: "#F97316", bg: "rgba(249, 115, 22, 0.04)", border: "#F97316" },
   { name: "Purple", color: "#A855F7", bg: "rgba(168, 85, 247, 0.04)", border: "#A855F7" },
+  { name: "Pink", color: "#EC4899", bg: "rgba(236, 72, 153, 0.04)", border: "#EC4899" },
   { name: "Rose", color: "#F43F5E", bg: "rgba(244, 63, 94, 0.04)", border: "#F43F5E" },
+  { name: "Slate", color: "#64748B", bg: "rgba(100, 116, 139, 0.04)", border: "#64748B" },
 ];
 
 export interface BlockNodeData {
@@ -642,6 +648,14 @@ export const BlockNode: React.FC<NodeProps> = memo(({ data, selected }) => {
                   p: 0.5,
                   borderRadius: 1,
                   boxShadow: "0 8px 16px rgba(0,0,0,0.1)",
+                },
+              },
+              list: {
+                sx: {
+                  display: "grid",
+                  gridTemplateColumns: "repeat(2, minmax(112px, 1fr))",
+                  gap: 0.25,
+                  p: 0,
                 },
               },
             }}

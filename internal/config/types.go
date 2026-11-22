@@ -125,12 +125,29 @@ type Block struct {
 	Nodes  []string `json:"nodes,omitempty"`
 }
 
+// DNSCustomRecordRule defines a rule for generating custom Cloudflare DNS records per matching node
+type DNSCustomRecordRule struct {
+	TargetNodes map[string]string `json:"target_nodes,omitempty"`
+	Name        string            `json:"name"`
+	Type        string            `json:"type"`
+	Value       string            `json:"value"`
+	TTL         string            `json:"ttl,omitempty"`
+}
+
+// DNSSSHFPRule defines a rule for generating SSHFP DNS records from agent-collected SSH host keys
+type DNSSSHFPRule struct {
+	TargetNodes map[string]string `json:"target_nodes,omitempty"`
+	Algorithms  []int             `json:"algorithms"`
+}
+
 // DNSConfig represents Cloudflare DNS integration configuration
 type DNSConfig struct {
-	ZoneID             string `json:"zone_id,omitempty"`
-	APIToken           string `json:"api_token,omitempty"`
-	BaseDomain         string `json:"base_domain,omitempty"`
-	PublishIPv6OwnName bool   `json:"publish_ipv6_own_name,omitempty"`
+	ZoneID             string                `json:"zone_id,omitempty"`
+	APIToken           string                `json:"api_token,omitempty"`
+	BaseDomain         string                `json:"base_domain,omitempty"`
+	PublishIPv6OwnName bool                  `json:"publish_ipv6_own_name,omitempty"`
+	CustomRecords      []DNSCustomRecordRule `json:"custom_records,omitempty"`
+	SSHFPRules         []DNSSSHFPRule        `json:"sshfp_rules,omitempty"`
 }
 
 func (d *DNSConfig) UnmarshalJSON(data []byte) error {

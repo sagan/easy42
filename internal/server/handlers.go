@@ -13,6 +13,7 @@ import (
 	"easy42/internal/crypto"
 	"easy42/internal/engine"
 	"easy42/internal/version"
+
 	"github.com/go-chi/chi/v5"
 )
 
@@ -473,8 +474,8 @@ func (s *Server) handleGetClientNodeWgConfig(w http.ResponseWriter, r *http.Requ
 	}
 
 	filename := "wg.conf"
-	if n := s.mgr.FindNode(name); n != nil && n.ClientParent != "" {
-		filename = fmt.Sprintf("wg-%s-%s.conf", n.Name, n.ClientParent)
+	if n := s.mgr.FindNode(name); n != nil {
+		filename = fmt.Sprintf("wgc-%s.conf", n.Name)
 	}
 
 	if r.URL.Query().Get("download") == "true" {

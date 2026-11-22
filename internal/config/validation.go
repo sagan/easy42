@@ -362,6 +362,45 @@ func ValidateDNSConfig(cfg *DNSConfig) error {
 			return fmt.Errorf("invalid DNS base_domain: '%s'", domain)
 		}
 	}
+	for i, rule := range cfg.CustomRecords {
+		if err := ValidateSelector(rule.TargetNodes); err != nil {
+			return fmt.Errorf("custom_records[%d]: invalid target_nodes: %w", i, err)
+		}
+		if strings.TrimSpace(rule.Name) == "" {
+			return fmt.Errorf("custom_records[%d]: name cannot be empty", i)
+		}
+		recType := strings.ToUpper(strings.TrimSpace(rule.Type))
+		switch recType {
+		case "A", "AAAA", "CNAME", "TXT", "SRV":
+		default:
+			return fmt.Errorf("custom_records[%d]: unsupported record type '%s' (supported: A, AAAA, CNAME, TXT, SRV)", i, rule.Type)
+		}
+		if strings.TrimSpace(rule.Value) == "" {
+			return fmt.Errorf("custom_records[%d]: value cannot be empty", i)
+		}
+		ttl := strings.TrimSpace(rule.TTL)
+		if ttl != "" && !strings.EqualFold(ttl, "auto") && !strings.Contains(ttl, "${") {
+			ttlVal, err := strconv.Atoi(ttl)
+			if err != nil || ttlVal < 1 {
+				return fmt.Errorf("custom_records[%d]: invalid ttl '%s' (must be 'Auto' or a positive integer)", i, rule.TTL)
+			}
+		}
+	}
+	for i, rule := range cfg.SSHFPRules {
+		if err := ValidateSelector(rule.TargetNodes); err != nil {
+			return fmt.Errorf("sshfp_rules[%d]: invalid target_nodes: %w", i, err)
+		}
+		if len(rule.Algorithms) == 0 {
+			return fmt.Errorf("sshfp_rules[%d]: at least one algorithm (3=ECDSA, 4=Ed25519, 6=Ed448) must be selected", i)
+		}
+		for _, alg := range rule.Algorithms {
+			switch alg {
+			case 3, 4, 6:
+			default:
+				return fmt.Errorf("sshfp_rules[%d]: unsupported SSHFP algorithm %d (supported: 3=ECDSA, 4=Ed25519, 6=Ed448)", i, alg)
+			}
+		}
+	}
 	return nil
 }
 

@@ -74,7 +74,10 @@ import {
   NetworkSettings,
   NetworkPolicy,
   CloudflareDNSConfig,
+  DNSCustomRecordRule,
+  DNSSSHFPRule,
   DNSSyncResult,
+  Node,
   ConfigTemplate,
   ServerTask,
   DatabaseInfo,
@@ -87,6 +90,8 @@ import { Easy42Logo } from "../Logo/Easy42Logo";
 import { flushCacheAndServiceWorker } from "../../utils/pwa";
 import { MCPSettingsTab } from "../Settings/MCPSettingsTab";
 import { APISettingsTab } from "../Settings/APISettingsTab";
+import { DNSCustomRecordsSection } from "../Settings/DNSCustomRecordsSection";
+import { DNSSSHFPRulesSection } from "../Settings/DNSSSHFPRulesSection";
 
 export const parsePrefixList = (input: string): string[] => {
   const result: string[] = [];
@@ -259,6 +264,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
   const [cfApiToken, setCfApiToken] = useState("");
   const [cfBaseDomain, setCfBaseDomain] = useState("");
   const [cfPublishIPv6OwnName, setCfPublishIPv6OwnName] = useState(false);
+  const [cfCustomRecords, setCfCustomRecords] = useState<DNSCustomRecordRule[]>([]);
+  const [cfSSHFPRules, setCfSSHFPRules] = useState<DNSSSHFPRule[]>([]);
+  const [dnsNodes, setDnsNodes] = useState<Node[]>([]);
   const [showCfToken, setShowCfToken] = useState(false);
   const [dnsLoading, setDnsLoading] = useState(false);
   const [dnsSaving, setDnsSaving] = useState(false);
@@ -665,11 +673,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
     setDnsLoading(true);
     setDnsError(null);
     try {
-      const cfg = await api.getDNSConfig();
+      const [cfg, nodesList] = await Promise.all([api.getDNSConfig(), api.getNodes().catch(() => [] as Node[])]);
       setCfZoneId(cfg.zone_id || "");
       setCfApiToken(cfg.api_token || "");
       setCfBaseDomain(cfg.base_domain || "");
       setCfPublishIPv6OwnName(Boolean(cfg.publish_ipv6_own_name));
+      setCfCustomRecords(Array.isArray(cfg.custom_records) ? cfg.custom_records : []);
+      setCfSSHFPRules(Array.isArray(cfg.sshfp_rules) ? cfg.sshfp_rules : []);
+      setDnsNodes(Array.isArray(nodesList) ? nodesList : []);
     } catch (err: unknown) {
       const e = err as Error;
       setDnsError(e.message || "Failed to load Cloudflare DNS settings.");
@@ -690,6 +701,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
       api_token: cfApiToken.trim(),
       base_domain: cfBaseDomain.trim(),
       publish_ipv6_own_name: cfPublishIPv6OwnName,
+      custom_records: cfCustomRecords,
+      sshfp_rules: cfSSHFPRules,
     };
 
     try {
@@ -3284,6 +3297,22 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                         : "When disabled, main IPv4 (A) and main IPv6 (AAAA) are both published under <name>.<domain> and *.<name>.<domain>."}
                     </Typography>
                   </Box>
+
+                  {/* Custom Record Rules */}
+                  <DNSCustomRecordsSection
+                    rules={cfCustomRecords}
+                    onChange={setCfCustomRecords}
+                    nodes={dnsNodes}
+                    disabled={dnsSaving || dnsSyncing || dnsForceSyncing}
+                  />
+
+                  {/* SSHFP Records Rules */}
+                  <DNSSSHFPRulesSection
+                    rules={cfSSHFPRules}
+                    onChange={setCfSSHFPRules}
+                    nodes={dnsNodes}
+                    disabled={dnsSaving || dnsSyncing || dnsForceSyncing}
+                  />
 
                   {/* Live DNS Record Preview */}
                   <Box

@@ -6163,6 +6163,24 @@ func (m *Manager) UpdateDNSConfig(dnsCfg config.DNSConfig) error {
 	dnsCfg.ZoneID = strings.TrimSpace(dnsCfg.ZoneID)
 	dnsCfg.APIToken = strings.TrimSpace(dnsCfg.APIToken)
 	dnsCfg.BaseDomain = strings.TrimSpace(dnsCfg.BaseDomain)
+	for i := range dnsCfg.CustomRecords {
+		dnsCfg.CustomRecords[i].Name = strings.TrimSpace(dnsCfg.CustomRecords[i].Name)
+		dnsCfg.CustomRecords[i].Type = strings.ToUpper(strings.TrimSpace(dnsCfg.CustomRecords[i].Type))
+		dnsCfg.CustomRecords[i].Value = strings.TrimSpace(dnsCfg.CustomRecords[i].Value)
+		dnsCfg.CustomRecords[i].TTL = strings.TrimSpace(dnsCfg.CustomRecords[i].TTL)
+	}
+	for i := range dnsCfg.SSHFPRules {
+		seen := make(map[int]bool, len(dnsCfg.SSHFPRules[i].Algorithms))
+		dedup := make([]int, 0, len(dnsCfg.SSHFPRules[i].Algorithms))
+		for _, alg := range dnsCfg.SSHFPRules[i].Algorithms {
+			if !seen[alg] {
+				seen[alg] = true
+				dedup = append(dedup, alg)
+			}
+		}
+		sort.Ints(dedup)
+		dnsCfg.SSHFPRules[i].Algorithms = dedup
+	}
 	cfg.DNS = dnsCfg
 	return m.store.Save(cfg)
 }
@@ -6178,14 +6196,25 @@ func (m *Manager) SyncDNS(ctx context.Context, force bool) (*dns.SyncResult, err
 	dnsCfg := cfg.DNS
 	nodes := make([]config.Node, len(cfg.Nodes))
 	copy(nodes, cfg.Nodes)
+	globalVars := apps.VariablesToMap(cfg.AppVariables)
 	m.mu.RUnlock()
 
 	if !dnsCfg.IsConfigured() {
 		return nil, errors.New("Cloudflare DNS is not configured. Please specify Zone ID, API Token, and Base Domain.")
 	}
 
+	var hostKeysByNode map[string][]config.SSHPublicKey
+	if len(dnsCfg.SSHFPRules) > 0 {
+		hostKeysByNode = make(map[string][]config.SSHPublicKey, len(nodes))
+		for _, node := range nodes {
+			if keys := m.GetNodeSSHKeys(node.Name); len(keys) > 0 {
+				hostKeysByNode[strings.ToLower(strings.TrimSpace(node.Name))] = keys
+			}
+		}
+	}
+
 	client := dns.NewClient(dnsCfg.ZoneID, dnsCfg.APIToken, dnsCfg.BaseDomain)
-	return dns.Sync(ctx, client, nodes, dnsCfg, force)
+	return dns.SyncWithSSHKeys(ctx, client, nodes, dnsCfg, force, globalVars, hostKeysByNode)
 }
 
 func (m *Manager) triggerDNSUpdateForNode(dnsCfg config.DNSConfig, node config.Node, oldName string) {
@@ -6193,11 +6222,25 @@ func (m *Manager) triggerDNSUpdateForNode(dnsCfg config.DNSConfig, node config.N
 		return
 	}
 
+	var globalVars map[string]string
+	if len(dnsCfg.CustomRecords) > 0 {
+		m.mu.RLock()
+		if cfg := m.store.Get(); cfg != nil {
+			globalVars = apps.VariablesToMap(cfg.AppVariables)
+		}
+		m.mu.RUnlock()
+	}
+
+	var nodeKeys []config.SSHPublicKey
+	if len(dnsCfg.SSHFPRules) > 0 {
+		nodeKeys = m.GetNodeSSHKeys(node.Name)
+	}
+
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
 		client := dns.NewClient(dnsCfg.ZoneID, dnsCfg.APIToken, dnsCfg.BaseDomain)
-		if err := dns.SyncNode(ctx, client, node, oldName, dnsCfg); err != nil {
+		if err := dns.SyncNodeWithSSHKeys(ctx, client, node, oldName, dnsCfg, globalVars, nodeKeys); err != nil {
 			log.Printf("[CF DNS] Error updating DNS for node %s: %v", node.Name, err)
 		}
 	}()
