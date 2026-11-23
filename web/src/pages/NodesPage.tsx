@@ -49,7 +49,7 @@ import {
   Terminal,
 } from "lucide-react";
 import { useMesh } from "../context/MeshContext";
-import { NodeLiveStatus } from "../types/api";
+import { Node, NodeLiveStatus } from "../types/api";
 import { getLinkWorkingState } from "../components/Topology/TopologyGraph";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { isAgentVersionOutdated } from "../utils/version";
@@ -105,6 +105,149 @@ export const SORT_FIELD_LABELS: Record<SortField, string> = {
   memory: "Memory",
   disk: "Disk",
   network: "Network",
+};
+
+interface NodeRoutePrefixItem {
+  prefix: string;
+  source: "static" | "routes";
+  table?: number;
+}
+
+function getNodeMergedPrefixes(node: Node): { v4: NodeRoutePrefixItem[]; v6: NodeRoutePrefixItem[] } {
+  const v4: NodeRoutePrefixItem[] = [];
+  const v6: NodeRoutePrefixItem[] = [];
+
+  for (const sr of node.static_routes || []) {
+    const trimmed = sr.trim();
+    if (!trimmed) continue;
+    const clean = trimmed.startsWith("@") ? trimmed.slice(1).trim() : trimmed;
+    if (!clean) continue;
+    const item: NodeRoutePrefixItem = { prefix: trimmed, source: "static" };
+    if (clean.includes(":")) {
+      v6.push(item);
+    } else {
+      v4.push(item);
+    }
+  }
+
+  for (const rule of node.routes || []) {
+    for (const p of rule.prefixes || []) {
+      const trimmed = p.trim();
+      if (!trimmed) continue;
+      const item: NodeRoutePrefixItem = { prefix: trimmed, source: "routes", table: rule.table };
+      if (trimmed.includes(":")) {
+        v6.push(item);
+      } else {
+        v4.push(item);
+      }
+    }
+  }
+
+  return { v4, v6 };
+}
+
+interface NetworkIpCellProps {
+  nodeName: string;
+  ip?: string;
+  ipColor: string;
+  copyKeyPrefix: string;
+  copyTooltip: string;
+  prefixes: NodeRoutePrefixItem[];
+  copiedId: string | null;
+  onCopy: (id: string, text: string) => void;
+}
+
+const NetworkIpCell: React.FC<NetworkIpCellProps> = ({
+  nodeName,
+  ip,
+  ipColor,
+  copyKeyPrefix,
+  copyTooltip,
+  prefixes,
+  copiedId,
+  onCopy,
+}) => {
+  if (!ip && prefixes.length === 0) {
+    return (
+      <Typography variant="caption" sx={{ color: "#94A3B8" }}>
+        —
+      </Typography>
+    );
+  }
+
+  return (
+    <Box sx={{ display: "flex", flexDirection: "column", gap: 0.4 }}>
+      {ip && (
+        <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, whiteSpace: "nowrap" }}>
+          <Typography variant="body2" className="mono-font" sx={{ fontWeight: 600, color: ipColor, fontSize: "0.82rem" }}>
+            {ip}
+          </Typography>
+          <Tooltip title={copiedId === `${nodeName}-${copyKeyPrefix}` ? "Copied!" : copyTooltip}>
+            <IconButton
+              size="small"
+              onClick={() => onCopy(`${nodeName}-${copyKeyPrefix}`, ip)}
+              sx={{ p: 0.2, color: copiedId === `${nodeName}-${copyKeyPrefix}` ? "#059669" : "#94A3B8" }}
+            >
+              {copiedId === `${nodeName}-${copyKeyPrefix}` ? <Check size={12} /> : <Copy size={12} />}
+            </IconButton>
+          </Tooltip>
+        </Box>
+      )}
+      {prefixes.map((item, idx) => {
+        const isStatic = item.source === "static";
+        const itemCopyId = `${nodeName}-${copyKeyPrefix}-${item.source}-${idx}`;
+        const sourceLabel = isStatic ? "static" : item.table !== undefined ? `kernel:${item.table}` : "kernel";
+        const sourceTooltip = isStatic
+          ? "Static route (unconditionally advertised by Bird)"
+          : `Kernel route${item.table !== undefined ? ` (table ${item.table})` : ""} — learned from kernel routing table and advertised`;
+
+        return (
+          <Box
+            key={`${item.source}-${item.table ?? "static"}-${item.prefix}-${idx}`}
+            sx={{ display: "flex", alignItems: "center", gap: 0.5, whiteSpace: "nowrap" }}
+          >
+            <Tooltip title={sourceTooltip}>
+              <Chip
+                label={sourceLabel}
+                size="small"
+                sx={{
+                  height: 16,
+                  fontSize: "0.6rem",
+                  fontWeight: 700,
+                  lineHeight: 1,
+                  bgcolor: isStatic ? "#EDE9FE" : "#FEF3C7",
+                  color: isStatic ? "#6D28D9" : "#B45309",
+                  border: isStatic ? "1px solid #DDD6FE" : "1px solid #FDE68A",
+                  "& .MuiChip-label": { px: 0.6 },
+                }}
+              />
+            </Tooltip>
+            <Typography
+              variant="body2"
+              className="mono-font"
+              sx={{
+                fontWeight: 500,
+                color: isStatic ? "#5B21B6" : "#92400E",
+                fontSize: "0.76rem",
+                lineHeight: 1.3,
+              }}
+            >
+              {item.prefix}
+            </Typography>
+            <Tooltip title={copiedId === itemCopyId ? "Copied!" : "Copy Prefix"}>
+              <IconButton
+                size="small"
+                onClick={() => onCopy(itemCopyId, item.prefix)}
+                sx={{ p: 0.2, color: copiedId === itemCopyId ? "#059669" : "#94A3B8" }}
+              >
+                {copiedId === itemCopyId ? <Check size={11} /> : <Copy size={11} />}
+              </IconButton>
+            </Tooltip>
+          </Box>
+        );
+      })}
+    </Box>
+  );
 };
 
 export const NodesPage: React.FC = () => {
@@ -567,7 +710,9 @@ export const NodesPage: React.FC = () => {
         (n.external_ip || "").toLowerCase().includes(q) ||
         (n.external_ip6 || "").toLowerCase().includes(q) ||
         (n.interface || "").toLowerCase().includes(q) ||
-        String(n.asn || "").includes(q);
+        String(n.asn || "").includes(q) ||
+        (n.static_routes && n.static_routes.some((sr) => sr.toLowerCase().includes(q))) ||
+        (n.routes && n.routes.some((r) => r.prefixes?.some((p) => p.toLowerCase().includes(q))));
       return matchTag && matchBlock && matchSearch;
     });
   }, [
@@ -2140,6 +2285,7 @@ export const NodesPage: React.FC = () => {
                 const rxRate = live?.metrics?.net_rx_rate ?? 0;
                 const txRate = live?.metrics?.net_tx_rate ?? 0;
                 const nodeBlocks = nodeBlocksMap.get(n.name) || [];
+                const mergedPrefixes = getNodeMergedPrefixes(n);
                 const currentAgentVer = live?.agent_version || status?.agent_version || n.agent_version;
                 const isOutdated = isAgentVersionOutdated(currentAgentVer, serverAgentVersion);
 
@@ -2427,60 +2573,32 @@ export const NodesPage: React.FC = () => {
                           )}
                         </TableCell>
 
-                        {/* IPv4 (ip) */}
+                        {/* IPv4 (ip) + static_routes / routes */}
                         <TableCell>
-                          {n.ip ? (
-                            <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-                              <Typography
-                                variant="body2"
-                                className="mono-font"
-                                sx={{ fontWeight: 600, color: "#0F172A", fontSize: "0.82rem" }}
-                              >
-                                {n.ip}
-                              </Typography>
-                              <Tooltip title={copiedId === `${n.name}-ip` ? "Copied!" : "Copy IPv4"}>
-                                <IconButton
-                                  size="small"
-                                  onClick={() => handleCopy(`${n.name}-ip`, n.ip!)}
-                                  sx={{ p: 0.2, color: copiedId === `${n.name}-ip` ? "#059669" : "#94A3B8" }}
-                                >
-                                  {copiedId === `${n.name}-ip` ? <Check size={12} /> : <Copy size={12} />}
-                                </IconButton>
-                              </Tooltip>
-                            </Box>
-                          ) : (
-                            <Typography variant="caption" sx={{ color: "#94A3B8" }}>
-                              —
-                            </Typography>
-                          )}
+                          <NetworkIpCell
+                            nodeName={n.name}
+                            ip={n.ip}
+                            ipColor="#0F172A"
+                            copyKeyPrefix="ip"
+                            copyTooltip="Copy IPv4"
+                            prefixes={mergedPrefixes.v4}
+                            copiedId={copiedId}
+                            onCopy={handleCopy}
+                          />
                         </TableCell>
 
-                        {/* IPv6 (ip6) */}
+                        {/* IPv6 (ip6) + static_routes / routes */}
                         <TableCell>
-                          {n.ip6 ? (
-                            <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-                              <Typography
-                                variant="body2"
-                                className="mono-font"
-                                sx={{ fontWeight: 600, color: "#0891B2", fontSize: "0.82rem" }}
-                              >
-                                {n.ip6}
-                              </Typography>
-                              <Tooltip title={copiedId === `${n.name}-ip6` ? "Copied!" : "Copy IPv6"}>
-                                <IconButton
-                                  size="small"
-                                  onClick={() => handleCopy(`${n.name}-ip6`, n.ip6!)}
-                                  sx={{ p: 0.2, color: copiedId === `${n.name}-ip6` ? "#059669" : "#94A3B8" }}
-                                >
-                                  {copiedId === `${n.name}-ip6` ? <Check size={12} /> : <Copy size={12} />}
-                                </IconButton>
-                              </Tooltip>
-                            </Box>
-                          ) : (
-                            <Typography variant="caption" sx={{ color: "#94A3B8" }}>
-                              —
-                            </Typography>
-                          )}
+                          <NetworkIpCell
+                            nodeName={n.name}
+                            ip={n.ip6}
+                            ipColor="#0891B2"
+                            copyKeyPrefix="ip6"
+                            copyTooltip="Copy IPv6"
+                            prefixes={mergedPrefixes.v6}
+                            copiedId={copiedId}
+                            onCopy={handleCopy}
+                          />
                         </TableCell>
 
                         {/* External IPv4 (external_ip) */}
