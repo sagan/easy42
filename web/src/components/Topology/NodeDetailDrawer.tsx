@@ -340,10 +340,26 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
                   }}
                 />
               )}
+              {node.is_external && (
+                <Chip
+                  label="Ext"
+                  title="External"
+                  size="small"
+                  sx={{
+                    height: 18,
+                    fontSize: "0.62rem",
+                    fontWeight: 800,
+                    bgcolor: "#FEF3C7",
+                    color: "#92400E",
+                    border: "1px solid #fedb4d",
+                    "& .MuiChip-label": { px: 0.5 },
+                  }}
+                />
+              )}
               {node.is_client && (
                 <Chip
                   icon={<Laptop size={10} style={{ color: "#0D9488", marginLeft: 4 }} />}
-                  label="CLIENT"
+                  label="Client"
                   size="small"
                   sx={{
                     height: 18,

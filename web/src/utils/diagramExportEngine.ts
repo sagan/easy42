@@ -205,8 +205,9 @@ export function generateTopologySvg(
   const isLinkExternal = (l: Link) =>
     Boolean(nodeMap.get(l.from?.name)?.is_external || nodeMap.get(l.to?.name)?.is_external);
 
-  const internalNodes = effectiveNodes.filter((n) => !n.is_external);
+  const internalNodes = effectiveNodes.filter((n) => !n.is_external && !n.is_client);
   const externalNodes = effectiveNodes.filter((n) => Boolean(n.is_external));
+  const clientNodesCnt = effectiveNodes.filter((n) => Boolean(n.is_client)).length;
 
   const validLinks = effectiveLinks.filter((l) => nodePositions.has(l.from.name) && nodePositions.has(l.to.name));
   const internalLinks = validLinks.filter((l) => !isLinkExternal(l));
@@ -660,8 +661,8 @@ export function generateTopologySvg(
   const mainStatsText = `${internalNodes.length} nodes · ${internalLinks.length} links${groupText}${centralityLabel}`;
 
   let externalStatsSvg = "";
-  if (hasExternalElements) {
-    externalStatsSvg = `\n    <text x="${headerX}" y="${headerY + 31}" font-size="9.5" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="500" fill="#64748B">${externalNodes.length} external nodes · ${externalLinks.length} external links</text>`;
+  if (clientNodesCnt > 0 || hasExternalElements) {
+    externalStatsSvg = `\n    <text x="${headerX}" y="${headerY + 31}" font-size="9.5" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="500" fill="#64748B">${clientNodesCnt} client nodes · ${externalNodes.length} external nodes · ${externalLinks.length} external links</text>`;
   }
 
   const headerSvg = `  <!-- Header & Legend -->

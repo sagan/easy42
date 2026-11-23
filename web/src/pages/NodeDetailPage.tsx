@@ -957,6 +957,14 @@ export const NodeDetailPage: React.FC = () => {
                               sx={{ height: 16, fontSize: "0.6rem", bgcolor: "#FEF3C7", color: "#B45309" }}
                             />
                           )}
+                          {n.is_client && (
+                            <Chip
+                              label="Client"
+                              title="Client"
+                              size="small"
+                              sx={{ height: 16, fontSize: "0.6rem", backgroundColor: "#F1F5F9", color: "#475569" }}
+                            />
+                          )}
                         </Box>
                       </Paper>
                     );
@@ -1401,7 +1409,8 @@ export const NodeDetailPage: React.FC = () => {
 
                   {node?.is_external && (
                     <Chip
-                      label="External Node"
+                      label="External"
+                      title="External Node"
                       size="small"
                       sx={{
                         height: 24,
@@ -1409,6 +1418,21 @@ export const NodeDetailPage: React.FC = () => {
                         fontWeight: 700,
                         bgcolor: "#FEF3C7",
                         color: "#92400E",
+                      }}
+                    />
+                  )}
+
+                  {node?.is_client && (
+                    <Chip
+                      label="Client"
+                      title="Client Node"
+                      size="small"
+                      sx={{
+                        height: 24,
+                        fontSize: "0.72rem",
+                        fontWeight: 700,
+                        backgroundColor: "#F1F5F9",
+                        color: "#475569",
                       }}
                     />
                   )}
