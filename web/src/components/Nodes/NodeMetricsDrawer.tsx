@@ -190,6 +190,11 @@ export const NodeMetricsDrawer: React.FC<NodeMetricsDrawerProps> = ({ open, onCl
               </Typography>
               <Typography variant="h6" sx={{ fontWeight: 700, color: "#0F172A" }}>
                 {nodeLive.metrics.cpu_percent.toFixed(1)}%
+                {nodeLive.cpu_cores ? (
+                  <span style={{ fontSize: "0.8rem", color: "#64748B", fontWeight: 500 }}>
+                    {" "}({nodeLive.cpu_cores} {nodeLive.cpu_cores === 1 ? "Core" : "Cores"})
+                  </span>
+                ) : null}
               </Typography>
             </Box>
           </Grid>

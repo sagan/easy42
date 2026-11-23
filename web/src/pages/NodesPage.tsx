@@ -1505,6 +1505,7 @@ export const NodesPage: React.FC = () => {
 
             const metrics = live?.metrics ?? status?.metrics;
             const cpuPercent = metrics?.cpu_percent ?? 0;
+            const cpuCores = live?.cpu_cores ?? status?.metrics?.cpu_cores ?? 0;
             const memUsedGB = metrics ? metrics.memory_used_bytes / (1024 * 1024 * 1024) : 0;
             const memTotalGB = metrics ? metrics.memory_total_bytes / (1024 * 1024 * 1024) : 0;
             const memPercent = memTotalGB > 0 ? (memUsedGB / memTotalGB) * 100 : 0;
@@ -1712,6 +1713,7 @@ export const NodesPage: React.FC = () => {
                             </Typography>
                             <Typography variant="caption" sx={{ fontWeight: 700, color: getCpuColor(cpuPercent) }}>
                               {cpuPercent.toFixed(1)}%
+                              {cpuCores > 0 ? ` (${cpuCores} ${cpuCores === 1 ? "Core" : "Cores"})` : ""}
                             </Typography>
                           </Box>
                           <LinearProgress
@@ -2285,6 +2287,7 @@ export const NodesPage: React.FC = () => {
 
                 const metrics = live?.metrics ?? status?.metrics;
                 const cpuPercent = metrics?.cpu_percent ?? 0;
+                const cpuCores = live?.cpu_cores ?? status?.metrics?.cpu_cores ?? 0;
                 const memUsedGB = metrics ? metrics.memory_used_bytes / (1024 * 1024 * 1024) : 0;
                 const memTotalGB = metrics ? metrics.memory_total_bytes / (1024 * 1024 * 1024) : 0;
                 const disks = status?.metrics?.disks || status?.disks || [];
@@ -2472,6 +2475,15 @@ export const NodesPage: React.FC = () => {
                           {agentInstalled ? (
                             <Typography variant="body2" sx={{ fontWeight: 700, color: getCpuColor(cpuPercent) }}>
                               {cpuPercent.toFixed(1)}%
+                              {cpuCores > 0 && (
+                                <Typography
+                                  component="span"
+                                  variant="caption"
+                                  sx={{ color: "#64748B", fontWeight: 500, ml: 0.5 }}
+                                >
+                                  ({cpuCores}C)
+                                </Typography>
+                              )}
                             </Typography>
                           ) : (
                             <Typography variant="body2" sx={{ color: "#94A3B8" }}>

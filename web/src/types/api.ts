@@ -372,6 +372,7 @@ export interface DiskMetrics {
 
 export interface SystemMetrics {
   cpu_percent: number;
+  cpu_cores?: number;
   memory_used_bytes: number;
   memory_total_bytes: number;
   uptime_seconds?: number;

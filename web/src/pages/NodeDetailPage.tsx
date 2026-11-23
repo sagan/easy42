@@ -765,6 +765,7 @@ export const NodeDetailPage: React.FC = () => {
   // Live quick metrics stats
   const metrics = live?.metrics || status?.metrics;
   const cpuPercent = metrics?.cpu_percent ?? 0;
+  const cpuCores = live?.cpu_cores ?? status?.metrics?.cpu_cores ?? 0;
   const memUsedGB = metrics ? metrics.memory_used_bytes / (1024 * 1024 * 1024) : 0;
   const memTotalGB = metrics ? metrics.memory_total_bytes / (1024 * 1024 * 1024) : 0;
   const memPercent = memTotalGB > 0 ? (memUsedGB / memTotalGB) * 100 : 0;
@@ -1622,6 +1623,11 @@ export const NodeDetailPage: React.FC = () => {
                 </Box>
                 <Typography variant="h6" sx={{ fontWeight: 800, color: "#0F172A", fontSize: "1.15rem" }}>
                   {cpuPercent.toFixed(1)}%
+                  {cpuCores > 0 && (
+                    <span style={{ fontSize: "0.8rem", color: "#64748B", fontWeight: 500 }}>
+                      {" "}({cpuCores} {cpuCores === 1 ? "Core" : "Cores"})
+                    </span>
+                  )}
                 </Typography>
                 <LinearProgress
                   variant="determinate"

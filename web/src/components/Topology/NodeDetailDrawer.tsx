@@ -1463,6 +1463,9 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
                         }}
                       >
                         {status.metrics.cpu_percent.toFixed(1)}%
+                        {status.metrics.cpu_cores
+                          ? ` (${status.metrics.cpu_cores} ${status.metrics.cpu_cores === 1 ? "Core" : "Cores"})`
+                          : ""}
                       </Typography>
                     </Box>
                     <LinearProgress

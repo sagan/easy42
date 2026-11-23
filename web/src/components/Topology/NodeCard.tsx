@@ -966,7 +966,13 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
               <Box sx={{ display: "grid", gridTemplateColumns: "auto auto", gap: "3px 12px", fontSize: "0.72rem" }}>
                 <span style={{ color: "#94A3B8" }}>CPU Usage:</span>
                 <span style={{ fontWeight: 700, color: "#FFFFFF" }}>
-                  {status?.metrics ? `${status.metrics.cpu_percent.toFixed(1)}%` : "Awaiting..."}
+                  {status?.metrics
+                    ? `${status.metrics.cpu_percent.toFixed(1)}%${
+                        status.metrics.cpu_cores
+                          ? ` (${status.metrics.cpu_cores} ${status.metrics.cpu_cores === 1 ? "Core" : "Cores"})`
+                          : ""
+                      }`
+                    : "Awaiting..."}
                 </span>
                 <span style={{ color: "#94A3B8" }}>RAM Usage:</span>
                 <span style={{ fontWeight: 700, color: "#FFFFFF" }}>
@@ -1073,7 +1079,10 @@ export const NodeCard: React.FC<NodeProps> = memo(({ data }) => {
                   }}
                 >
                   <Cpu size={10} style={{ opacity: 0.8 }} />
-                  <span className="mono-font">{Math.round(status.metrics.cpu_percent)}%</span>
+                  <span className="mono-font">
+                    {Math.round(status.metrics.cpu_percent)}%
+                    {status.metrics.cpu_cores ? ` · ${status.metrics.cpu_cores}C` : ""}
+                  </span>
                 </Box>
 
                 {/* RAM Pill */}
