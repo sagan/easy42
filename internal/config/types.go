@@ -732,6 +732,7 @@ type DiskMetrics struct {
 // SystemMetrics represents live hardware metrics reported by a node agent
 type SystemMetrics struct {
 	CPUPercent       float32       `json:"cpu_percent"`
+	CPUCores         uint32        `json:"cpu_cores,omitempty"`
 	MemoryUsedBytes  uint64        `json:"memory_used_bytes"`
 	MemoryTotalBytes uint64        `json:"memory_total_bytes"`
 	UptimeSeconds    uint64        `json:"uptime_seconds"`

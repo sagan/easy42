@@ -45,8 +45,8 @@ func TestApplyFreshDB(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CurrentVersion failed: %v", err)
 	}
-	if v != 7 {
-		t.Errorf("Expected current version 7, got %d", v)
+	if v != 8 {
+		t.Errorf("Expected current version 8, got %d", v)
 	}
 
 	// Verify PRAGMA user_version
@@ -54,8 +54,8 @@ func TestApplyFreshDB(t *testing.T) {
 	if err := db.QueryRow("PRAGMA user_version").Scan(&userVersion); err != nil {
 		t.Fatalf("Failed to query user_version: %v", err)
 	}
-	if userVersion != 7 {
-		t.Errorf("Expected PRAGMA user_version 7, got %d", userVersion)
+	if userVersion != 8 {
+		t.Errorf("Expected PRAGMA user_version 8, got %d", userVersion)
 	}
 
 	// Verify key baseline tables exist
@@ -115,8 +115,8 @@ func TestApplyLegacyDB(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CurrentVersion failed: %v", err)
 	}
-	if v != 7 {
-		t.Errorf("Expected current version 7, got %d", v)
+	if v != 8 {
+		t.Errorf("Expected current version 8, got %d", v)
 	}
 
 	// Verify that hosts_config_hash and hosts_applied_at columns were added
@@ -159,6 +159,14 @@ func TestApplyExistingDBWithMissingColumns(t *testing.T) {
 		hosts_config_hash TEXT NOT NULL DEFAULT '',
 		hosts_applied_at INTEGER,
 		interfaces TEXT NOT NULL DEFAULT '{}'
+	);
+	CREATE TABLE node_info (
+		node_name TEXT PRIMARY KEY,
+		agent_version TEXT NOT NULL DEFAULT '',
+		os_info TEXT NOT NULL DEFAULT '',
+		hostname TEXT NOT NULL DEFAULT '',
+		uptime_seconds INTEGER NOT NULL DEFAULT 0,
+		last_seen INTEGER
 	);
 	`
 	if _, err := db.Exec(initSQL); err != nil {

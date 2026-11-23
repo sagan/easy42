@@ -91,6 +91,7 @@ message SystemMetrics {
   uint64 memory_total_bytes = 3;
   uint64 uptime_seconds = 4;
   repeated float load_avg = 5; // [1m, 5m, 15m]
+  uint32 cpu_cores = 6;
 }
 
 message InterfaceMetrics {

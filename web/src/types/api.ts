@@ -839,6 +839,8 @@ export interface FleetMetricsSummary {
   total_tx_rate: number;
   average_cpu: number;
   average_mem_perc: number;
+  total_cpu_cores?: number;
+  total_memory_bytes?: number;
   agent_version?: string;
 }
 
@@ -848,6 +850,7 @@ export interface NodeLiveStatus {
   os_info: string;
   agent_version: string;
   uptime_seconds: number;
+  cpu_cores?: number;
   connected: boolean;
   agent_installed?: boolean;
   last_seen: string;

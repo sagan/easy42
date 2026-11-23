@@ -26,6 +26,7 @@ func (m *Manager) setupAgentMetricsListeners() {
 		}
 		if t.System != nil {
 			input.CPUPercent = t.System.CpuPercent
+			input.CPUCores = t.System.CpuCores
 			input.MemoryUsedBytes = t.System.MemoryUsedBytes
 			input.MemoryTotalBytes = t.System.MemoryTotalBytes
 			input.UptimeSeconds = t.System.UptimeSeconds
@@ -385,14 +386,17 @@ func (m *Manager) GetFleetLiveStatus() (config.FleetMetricsSummary, []config.Nod
 	latestMetrics, _ := m.stateStore.GetLatestMetrics()
 
 	var (
-		onlineCount  int
-		offlineCount int
-		noAgentCount int
-		totalRxRate  float64
-		totalTxRate  float64
-		cpuSum       float64
-		memPercSum   float64
-		activeCount  int
+		onlineCount        int
+		offlineCount       int
+		noAgentCount       int
+		totalRxRate        float64
+		totalTxRate        float64
+		weightedCPUSum     float64
+		activeCPUWeightSum uint64
+		activeMemUsedSum   float64
+		activeMemTotalSum  float64
+		totalCPUCores      uint64
+		totalMemoryBytes   uint64
 	)
 
 	list := make([]config.NodeLiveStatus, 0, len(nodes))
@@ -424,8 +428,12 @@ func (m *Manager) GetFleetLiveStatus() (config.FleetMetricsSummary, []config.Nod
 			status.Hostname = n.Host
 		}
 
+		cpuCores := info.CPUCores
 		if m.agentHub != nil {
 			if telem := m.agentHub.GetTelemetry(n.Name); telem != nil {
+				if telem.System != nil && telem.System.CpuCores > 0 {
+					cpuCores = telem.System.CpuCores
+				}
 				for _, iface := range telem.Interfaces {
 					if (iface.Flags & config.IfaceFlagPrimary) != 0 {
 						status.PrimaryInterface = iface.Name
@@ -434,6 +442,8 @@ func (m *Manager) GetFleetLiveStatus() (config.FleetMetricsSummary, []config.Nod
 				}
 			}
 		}
+		status.CPUCores = cpuCores
+		totalCPUCores += uint64(cpuCores)
 
 		pt, hasMetrics := latestMetrics[n.Name]
 		if hasMetrics {
@@ -443,12 +453,18 @@ func (m *Manager) GetFleetLiveStatus() (config.FleetMetricsSummary, []config.Nod
 			}
 			totalRxRate += pt.NetRxRate
 			totalTxRate += pt.NetTxRate
+			totalMemoryBytes += pt.MemoryTotalBytes
 			if connected {
-				cpuSum += float64(pt.CPUPercent)
-				if pt.MemoryTotalBytes > 0 {
-					memPercSum += float64(pt.MemoryUsedBytes) / float64(pt.MemoryTotalBytes) * 100.0
+				weight := uint64(cpuCores)
+				if weight == 0 {
+					weight = 1
 				}
-				activeCount++
+				weightedCPUSum += float64(pt.CPUPercent) * float64(weight)
+				activeCPUWeightSum += weight
+				if pt.MemoryTotalBytes > 0 {
+					activeMemUsedSum += float64(pt.MemoryUsedBytes)
+					activeMemTotalSum += float64(pt.MemoryTotalBytes)
+				}
 			}
 		}
 
@@ -470,21 +486,25 @@ func (m *Manager) GetFleetLiveStatus() (config.FleetMetricsSummary, []config.Nod
 	}
 
 	var avgCPU, avgMem float32
-	if activeCount > 0 {
-		avgCPU = float32(cpuSum / float64(activeCount))
-		avgMem = float32(memPercSum / float64(activeCount))
+	if activeCPUWeightSum > 0 {
+		avgCPU = float32(weightedCPUSum / float64(activeCPUWeightSum))
+	}
+	if activeMemTotalSum > 0 {
+		avgMem = float32(activeMemUsedSum / activeMemTotalSum * 100.0)
 	}
 
 	summary := config.FleetMetricsSummary{
-		TotalNodes:     len(list),
-		OnlineNodes:    onlineCount,
-		OfflineNodes:   offlineCount,
-		NoAgentNodes:   noAgentCount,
-		TotalRxRate:    totalRxRate,
-		TotalTxRate:    totalTxRate,
-		AverageCPU:     avgCPU,
-		AverageMemPerc: avgMem,
-		AgentVersion:   version.AgentVersion,
+		TotalNodes:       len(list),
+		OnlineNodes:      onlineCount,
+		OfflineNodes:     offlineCount,
+		NoAgentNodes:     noAgentCount,
+		TotalRxRate:      totalRxRate,
+		TotalTxRate:      totalTxRate,
+		AverageCPU:       avgCPU,
+		AverageMemPerc:   avgMem,
+		TotalCPUCores:    totalCPUCores,
+		TotalMemoryBytes: totalMemoryBytes,
+		AgentVersion:     version.AgentVersion,
 	}
 
 	return summary, list, nil

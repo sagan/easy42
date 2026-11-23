@@ -900,6 +900,7 @@ type SystemMetrics struct {
 	MemoryTotalBytes uint64                 `protobuf:"varint,3,opt,name=memory_total_bytes,json=memoryTotalBytes,proto3" json:"memory_total_bytes,omitempty"`
 	UptimeSeconds    uint64                 `protobuf:"varint,4,opt,name=uptime_seconds,json=uptimeSeconds,proto3" json:"uptime_seconds,omitempty"`
 	LoadAvg          []float32              `protobuf:"fixed32,5,rep,packed,name=load_avg,json=loadAvg,proto3" json:"load_avg,omitempty"` // [1m, 5m, 15m]
+	CpuCores         uint32                 `protobuf:"varint,6,opt,name=cpu_cores,json=cpuCores,proto3" json:"cpu_cores,omitempty"`
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
@@ -967,6 +968,13 @@ func (x *SystemMetrics) GetLoadAvg() []float32 {
 		return x.LoadAvg
 	}
 	return nil
+}
+
+func (x *SystemMetrics) GetCpuCores() uint32 {
+	if x != nil {
+		return x.CpuCores
+	}
+	return 0
 }
 
 type InterfaceMetrics struct {
@@ -3469,14 +3477,15 @@ const file_proto_agent_proto_rawDesc = "" +
 	"\n" +
 	"used_bytes\x18\x03 \x01(\x04R\tusedBytes\x12\x1d\n" +
 	"\n" +
-	"free_bytes\x18\x04 \x01(\x04R\tfreeBytes\"\xcc\x01\n" +
+	"free_bytes\x18\x04 \x01(\x04R\tfreeBytes\"\xe9\x01\n" +
 	"\rSystemMetrics\x12\x1f\n" +
 	"\vcpu_percent\x18\x01 \x01(\x02R\n" +
 	"cpuPercent\x12*\n" +
 	"\x11memory_used_bytes\x18\x02 \x01(\x04R\x0fmemoryUsedBytes\x12,\n" +
 	"\x12memory_total_bytes\x18\x03 \x01(\x04R\x10memoryTotalBytes\x12%\n" +
 	"\x0euptime_seconds\x18\x04 \x01(\x04R\ruptimeSeconds\x12\x19\n" +
-	"\bload_avg\x18\x05 \x03(\x02R\aloadAvg\"\x9d\x02\n" +
+	"\bload_avg\x18\x05 \x03(\x02R\aloadAvg\x12\x1b\n" +
+	"\tcpu_cores\x18\x06 \x01(\rR\bcpuCores\"\x9d\x02\n" +
 	"\x10InterfaceMetrics\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x13\n" +
 	"\x05is_up\x18\x02 \x01(\bR\x04isUp\x12\x19\n" +

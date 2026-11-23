@@ -1001,6 +1001,7 @@ func (h *Hub) NodeStatus(nodeName string) *config.NodeStatus {
 		if telemetry.System != nil {
 			status.Metrics = &config.SystemMetrics{
 				CPUPercent:       telemetry.System.CpuPercent,
+				CPUCores:         telemetry.System.CpuCores,
 				MemoryUsedBytes:  telemetry.System.MemoryUsedBytes,
 				MemoryTotalBytes: telemetry.System.MemoryTotalBytes,
 				UptimeSeconds:    telemetry.System.UptimeSeconds,

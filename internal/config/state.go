@@ -99,6 +99,7 @@ type InterfaceMetricInput struct {
 type NodeMetricInput struct {
 	Timestamp        time.Time
 	CPUPercent       float32
+	CPUCores         uint32
 	MemoryUsedBytes  uint64
 	MemoryTotalBytes uint64
 	UptimeSeconds    uint64
@@ -160,20 +161,23 @@ type NodeInfo struct {
 	OSInfo        string    `json:"os_info"`
 	Hostname      string    `json:"hostname"`
 	UptimeSeconds uint64    `json:"uptime_seconds"`
+	CPUCores      uint32    `json:"cpu_cores,omitempty"`
 	LastSeen      time.Time `json:"last_seen"`
 }
 
 // FleetMetricsSummary represents high-level metrics across all nodes
 type FleetMetricsSummary struct {
-	TotalNodes     int     `json:"total_nodes"`
-	OnlineNodes    int     `json:"online_nodes"`
-	OfflineNodes   int     `json:"offline_nodes"`
-	NoAgentNodes   int     `json:"no_agent_nodes"`
-	TotalRxRate    float64 `json:"total_rx_rate"`    // bytes/sec aggregate
-	TotalTxRate    float64 `json:"total_tx_rate"`    // bytes/sec aggregate
-	AverageCPU     float32 `json:"average_cpu"`      // fleet average CPU %
-	AverageMemPerc float32 `json:"average_mem_perc"` // fleet average Mem %
-	AgentVersion   string  `json:"agent_version,omitempty"`
+	TotalNodes       int     `json:"total_nodes"`
+	OnlineNodes      int     `json:"online_nodes"`
+	OfflineNodes     int     `json:"offline_nodes"`
+	NoAgentNodes     int     `json:"no_agent_nodes"`
+	TotalRxRate      float64 `json:"total_rx_rate"`    // bytes/sec aggregate
+	TotalTxRate      float64 `json:"total_tx_rate"`    // bytes/sec aggregate
+	AverageCPU       float32 `json:"average_cpu"`      // fleet weighted average CPU %
+	AverageMemPerc   float32 `json:"average_mem_perc"` // fleet weighted average Mem %
+	TotalCPUCores    uint64  `json:"total_cpu_cores"`
+	TotalMemoryBytes uint64  `json:"total_memory_bytes"`
+	AgentVersion     string  `json:"agent_version,omitempty"`
 }
 
 // NodeLiveStatus represents live node info + latest metric snapshot
@@ -183,6 +187,7 @@ type NodeLiveStatus struct {
 	OSInfo           string           `json:"os_info"`
 	AgentVersion     string           `json:"agent_version"`
 	UptimeSeconds    uint64           `json:"uptime_seconds"`
+	CPUCores         uint32           `json:"cpu_cores,omitempty"`
 	Connected        bool             `json:"connected"`
 	AgentInstalled   bool             `json:"agent_installed"`
 	LastSeen         time.Time        `json:"last_seen"`
@@ -1528,14 +1533,15 @@ func (s *StateStore) RecordMetrics(nodeName string, input NodeMetricInput) error
 		_ = s.updateInterfaceTrafficStatsLocked(nodeName, "")
 	}
 
-	// Update node_info last_seen & uptime
+	// Update node_info last_seen, uptime, and cpu_cores
 	_, _ = s.db.Exec(`
-		INSERT INTO node_info (node_name, uptime_seconds, last_seen)
-		VALUES (?, ?, ?)
+		INSERT INTO node_info (node_name, uptime_seconds, cpu_cores, last_seen)
+		VALUES (?, ?, ?, ?)
 		ON CONFLICT(node_name) DO UPDATE SET
 			uptime_seconds=excluded.uptime_seconds,
+			cpu_cores=CASE WHEN excluded.cpu_cores > 0 THEN excluded.cpu_cores ELSE node_info.cpu_cores END,
 			last_seen=excluded.last_seen;
-	`, nodeName, input.UptimeSeconds, ts)
+	`, nodeName, input.UptimeSeconds, input.CPUCores, ts)
 
 	return err
 }
@@ -1590,9 +1596,9 @@ func (s *StateStore) GetNodeInfo(nodeName string) (*NodeInfo, error) {
 	)
 	info.NodeName = nodeName
 	err := s.db.QueryRow(`
-		SELECT agent_version, os_info, hostname, uptime_seconds, last_seen
+		SELECT agent_version, os_info, hostname, uptime_seconds, cpu_cores, last_seen
 		FROM node_info WHERE node_name = ?
-	`, nodeName).Scan(&info.AgentVersion, &info.OSInfo, &info.Hostname, &info.UptimeSeconds, &lastSeen)
+	`, nodeName).Scan(&info.AgentVersion, &info.OSInfo, &info.Hostname, &info.UptimeSeconds, &info.CPUCores, &lastSeen)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
@@ -1616,7 +1622,7 @@ func (s *StateStore) GetAllNodeInfo() (map[string]NodeInfo, error) {
 	}
 
 	rows, err := s.db.Query(`
-		SELECT node_name, agent_version, os_info, hostname, uptime_seconds, last_seen
+		SELECT node_name, agent_version, os_info, hostname, uptime_seconds, cpu_cores, last_seen
 		FROM node_info
 	`)
 	if err != nil {
@@ -1628,14 +1634,16 @@ func (s *StateStore) GetAllNodeInfo() (map[string]NodeInfo, error) {
 		var (
 			name, ver, osI, host string
 			uptime, lastSeen     int64
+			cpuCores             uint32
 		)
-		if err := rows.Scan(&name, &ver, &osI, &host, &uptime, &lastSeen); err == nil {
+		if err := rows.Scan(&name, &ver, &osI, &host, &uptime, &cpuCores, &lastSeen); err == nil {
 			info := NodeInfo{
 				NodeName:      name,
 				AgentVersion:  ver,
 				OSInfo:        osI,
 				Hostname:      host,
 				UptimeSeconds: uint64(uptime),
+				CPUCores:      cpuCores,
 			}
 			if lastSeen > 0 {
 				info.LastSeen = time.Unix(lastSeen, 0)

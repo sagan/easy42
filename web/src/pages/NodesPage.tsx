@@ -541,6 +541,14 @@ export const NodesPage: React.FC = () => {
     return `${bytesPerSec.toFixed(0)} B/s`;
   };
 
+  const formatMemorySize = (bytes?: number) => {
+    if (!bytes || bytes <= 0) return "0 GB";
+    if (bytes >= 1024 ** 4) return `${(bytes / 1024 ** 4).toFixed(2)} TB`;
+    if (bytes >= 1024 ** 3) return `${(bytes / 1024 ** 3).toFixed(1)} GB`;
+    if (bytes >= 1024 ** 2) return `${(bytes / 1024 ** 2).toFixed(0)} MB`;
+    return `${bytes} B`;
+  };
+
   const formatUptime = (secs?: number) => {
     if (!secs) return "Offline";
     const d = Math.floor(secs / 86400);
@@ -1049,7 +1057,7 @@ export const NodesPage: React.FC = () => {
             <Box sx={{ minWidth: 0 }}>
               <Typography
                 variant="caption"
-                title="Average CPU"
+                title="Weighted Average CPU"
                 sx={{ color: "#64748B", fontWeight: 600, fontSize: { xs: "0.65rem", sm: "0.75rem" } }}
               >
                 CPU
@@ -1059,6 +1067,9 @@ export const NodesPage: React.FC = () => {
                 sx={{ fontWeight: 800, color: "#0F172A", fontSize: { xs: "1.2rem", sm: "1.5rem" } }}
               >
                 {(fleetLive?.summary.average_cpu ?? 0).toFixed(1)}%
+              </Typography>
+              <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600, fontSize: "0.7rem" }}>
+                {fleetLive?.summary.total_cpu_cores ?? 0} Cores
               </Typography>
             </Box>
           </Paper>
@@ -1095,7 +1106,7 @@ export const NodesPage: React.FC = () => {
             <Box sx={{ minWidth: 0 }}>
               <Typography
                 variant="caption"
-                title="Average Memory"
+                title="Weighted Average Memory"
                 sx={{ color: "#64748B", fontWeight: 600, fontSize: { xs: "0.65rem", sm: "0.75rem" } }}
               >
                 Memory
@@ -1105,6 +1116,9 @@ export const NodesPage: React.FC = () => {
                 sx={{ fontWeight: 800, color: "#0F172A", fontSize: { xs: "1.2rem", sm: "1.5rem" } }}
               >
                 {(fleetLive?.summary.average_mem_perc ?? 0).toFixed(1)}%
+              </Typography>
+              <Typography variant="caption" sx={{ color: "#64748B", fontWeight: 600, fontSize: "0.7rem" }}>
+                {formatMemorySize(fleetLive?.summary.total_memory_bytes)} Total
               </Typography>
             </Box>
           </Paper>

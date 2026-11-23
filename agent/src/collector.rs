@@ -173,6 +173,7 @@ impl MetricsCollector {
         let (mem_used, mem_total) = self.read_memory();
         let uptime = self.read_uptime();
         let load_avg = self.read_load_avg();
+        let cpu_cores = self.read_cpu_cores();
 
         proto::SystemMetrics {
             cpu_percent,
@@ -180,6 +181,7 @@ impl MetricsCollector {
             memory_total_bytes: mem_total,
             uptime_seconds: uptime,
             load_avg,
+            cpu_cores,
         }
     }
 
@@ -211,6 +213,18 @@ impl MetricsCollector {
             }
         }
         (0.0, 0, 0)
+    }
+
+    fn read_cpu_cores(&self) -> u32 {
+        if let Ok(stat) = fs::read_to_string("/proc/stat") {
+            let count = count_cpu_cores_in_proc_stat(&stat);
+            if count > 0 {
+                return count;
+            }
+        }
+        std::thread::available_parallelism()
+            .map(|n| n.get() as u32)
+            .unwrap_or(0)
     }
 
     fn read_memory(&self) -> (u64, u64) {
@@ -548,6 +562,16 @@ pub fn collect_disk_usage(path: &str) -> Option<proto::DiskMetrics> {
     })
 }
 
+fn count_cpu_cores_in_proc_stat(stat: &str) -> u32 {
+    stat.lines()
+        .filter(|line| {
+            line.strip_prefix("cpu")
+                .and_then(|rest| rest.as_bytes().first())
+                .is_some_and(|b| b.is_ascii_digit())
+        })
+        .count() as u32
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -720,6 +744,18 @@ mod tests {
 
         let route_sample3 = "10.0.0.0/8 dev eth0 proto kernel\n";
         assert_eq!(parse_default_route_interface(route_sample3), None);
+    }
+
+    #[test]
+    fn test_count_cpu_cores_in_proc_stat() {
+        let stat = "cpu  100 0 50 1000 0 0 0 0 0 0\n\
+                    cpu0 25 0 10 250 0 0 0 0 0 0\n\
+                    cpu1 25 0 15 250 0 0 0 0 0 0\n\
+                    cpu2 25 0 10 250 0 0 0 0 0 0\n\
+                    cpu3 25 0 15 250 0 0 0 0 0 0\n\
+                    intr 12345\n";
+        assert_eq!(count_cpu_cores_in_proc_stat(stat), 4);
+        assert_eq!(count_cpu_cores_in_proc_stat("cpu  100 0 50 1000\n"), 0);
     }
 }
 
