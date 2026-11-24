@@ -533,9 +533,12 @@ export const ApplyConfigModal: React.FC<ApplyConfigModalProps> = ({
   };
 
   // Delete saved snippet
-  const handleDeleteSnippet = async (id: string) => {
+  const handleDeleteSnippet = async (s: ConfigChange) => {
+    if (!confirm(`Are you sure to delete apply config snippet "${s.name}"`)) {
+      return;
+    }
     try {
-      await api.deleteConfigChange(id);
+      await api.deleteConfigChange(s.id);
       await loadSavedSnippets();
     } catch (err: any) {
       setApplyError(err.message || "Failed to delete snippet");
@@ -1336,7 +1339,7 @@ export const ApplyConfigModal: React.FC<ApplyConfigModalProps> = ({
                       >
                         Load into Editor
                       </Button>
-                      <IconButton size="small" color="error" onClick={() => handleDeleteSnippet(s.id)}>
+                      <IconButton size="small" color="error" onClick={() => handleDeleteSnippet(s)}>
                         <Trash2 size={16} />
                       </IconButton>
                     </Box>

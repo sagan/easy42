@@ -786,7 +786,7 @@ export const NodeDetailPage: React.FC = () => {
           <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
             <Server size={18} color="#4F46E5" />
             <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#0F172A" }}>
-              Nodes Explorer
+              Nodes List
             </Typography>
           </Box>
           <Chip
@@ -999,7 +999,7 @@ export const NodeDetailPage: React.FC = () => {
             bgcolor: "#FFFFFF",
           }}
         >
-          All Nodes View
+          All Nodes
         </Button>
       </Box>
     </Box>
@@ -1013,7 +1013,7 @@ export const NodeDetailPage: React.FC = () => {
         {!isMobile && (
           <Box
             sx={{
-              width: 300,
+              width: 200,
               flexShrink: 0,
               borderRight: "1px solid #E2E8F0",
               bgcolor: "#FFFFFF",
@@ -1068,7 +1068,7 @@ export const NodeDetailPage: React.FC = () => {
       {!isMobile && (
         <Box
           sx={{
-            width: 300,
+            width: 200,
             flexShrink: 0,
             borderRight: "1px solid #E2E8F0",
             bgcolor: "#FFFFFF",
@@ -1086,7 +1086,7 @@ export const NodeDetailPage: React.FC = () => {
         anchor="left"
         open={mobileDrawerOpen}
         onClose={() => setMobileDrawerOpen(false)}
-        PaperProps={{ sx: { width: 310, bgcolor: "#FFFFFF" } }}
+        PaperProps={{ sx: { width: 210, bgcolor: "#FFFFFF" } }}
       >
         {sidebarContent}
       </Drawer>
@@ -1625,7 +1625,8 @@ export const NodeDetailPage: React.FC = () => {
                   {cpuPercent.toFixed(1)}%
                   {cpuCores > 0 && (
                     <span style={{ fontSize: "0.8rem", color: "#64748B", fontWeight: 500 }}>
-                      {" "}({cpuCores} {cpuCores === 1 ? "Core" : "Cores"})
+                      {" "}
+                      ({cpuCores} {cpuCores === 1 ? "Core" : "Cores"})
                     </span>
                   )}
                 </Typography>
