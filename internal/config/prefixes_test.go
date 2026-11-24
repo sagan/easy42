@@ -67,6 +67,40 @@ func TestCleanPrefixes(t *testing.T) {
 				"fd00::/8{44,64}",
 			},
 		},
+		{
+			name: "hash comments full line and inline",
+			input: []string{
+				"# Header comment",
+				"172.20.0.0/14{21, 29} # inline comment with, comma and {brace",
+				"10.0.0.0/8, 192.168.0.0/16 # two on one line",
+				"fd00::/8{44,64}#no space before hash",
+				"# trailing comment",
+			},
+			expected: []string{
+				"172.20.0.0/14{21,29}",
+				"10.0.0.0/8",
+				"192.168.0.0/16",
+				"fd00::/8{44,64}",
+			},
+		},
+		{
+			name: "multiline string with comments",
+			input: []string{
+				"# Customer A\n172.20.10.0/24 # office\n\n# Customer B\nfd00:1::/48 # ipv6\r\n",
+			},
+			expected: []string{
+				"172.20.10.0/24",
+				"fd00:1::/48",
+			},
+		},
+		{
+			name: "only comments",
+			input: []string{
+				"# comment 1",
+				"# comment 2",
+			},
+			expected: nil,
+		},
 	}
 
 	for _, tc := range tests {

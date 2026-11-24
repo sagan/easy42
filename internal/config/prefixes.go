@@ -5,21 +5,21 @@ import (
 )
 
 // CleanPrefixes normalizes and repairs prefix lists.
-// It repairs prefixes that were improperly split at commas within BIRD brace syntax (such as "172.20.0.0/14{21" and "29}"),
-// splits items that contain multiple prefixes separated by commas or newlines (outside of braces),
-// strips extraneous spaces within braces (e.g. {21, 29} -> {21,29}), and removes empty entries.
+// It strips "# ..." comments, repairs prefixes that were improperly split at commas within BIRD brace syntax
+// (such as "172.20.0.0/14{21" and "29}"), splits items that contain multiple prefixes separated by commas or newlines
+// (outside of braces), strips extraneous spaces within braces (e.g. {21, 29} -> {21,29}), and removes empty entries.
 func CleanPrefixes(prefixes []string) []string {
 	if len(prefixes) == 0 {
 		return nil
 	}
 
-	// 1. Repair fragments where braces were split across multiple array elements.
+	// 1. Strip comments and repair fragments where braces were split across multiple array elements.
 	var repaired []string
 	var current strings.Builder
 	inBrace := false
 
 	for _, p := range prefixes {
-		trimmed := strings.TrimSpace(p)
+		trimmed := strings.TrimSpace(stripPrefixComments(p))
 		if trimmed == "" {
 			continue
 		}
@@ -88,4 +88,18 @@ func CleanPrefixes(prefixes []string) []string {
 	}
 
 	return result
+}
+
+// stripPrefixComments removes "# ..." comments to the end of each line.
+func stripPrefixComments(s string) string {
+	if !strings.Contains(s, "#") {
+		return s
+	}
+	lines := strings.Split(s, "\n")
+	for i, line := range lines {
+		if idx := strings.IndexByte(line, '#'); idx != -1 {
+			lines[i] = strings.TrimSpace(line[:idx])
+		}
+	}
+	return strings.Join(lines, "\n")
 }

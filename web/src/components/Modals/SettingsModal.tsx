@@ -97,9 +97,26 @@ export const parsePrefixList = (input: string): string[] => {
   const result: string[] = [];
   let current = "";
   let inBraces = false;
+  let inComment = false;
 
   for (let i = 0; i < input.length; i++) {
     const char = input[i];
+    if (inComment) {
+      if (char === "\n" || char === "\r") {
+        inComment = false;
+        inBraces = false;
+        const trimmed = current.trim();
+        if (trimmed) {
+          result.push(trimmed);
+        }
+        current = "";
+      }
+      continue;
+    }
+    if (char === "#") {
+      inComment = true;
+      continue;
+    }
     if (char === "{") {
       inBraces = true;
       current += char;
@@ -6703,7 +6720,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                 value={policyAllowedDst}
                 onChange={(e) => setPolicyAllowedDst(e.target.value)}
                 disabled={policyDialogMode === "view" || policyDialogSaving}
-                helperText="Restricts traffic dst IP via nftables (return traffic allowed) & filters BGP export routes. Leave empty for unrestricted."
+                helperText="Restricts traffic dst IP via nftables (return traffic allowed) & filters BGP export routes. Supports # comments. Leave empty for unrestricted."
               />
 
               <TextField
@@ -6716,7 +6733,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                 value={policyAllowedSrc}
                 onChange={(e) => setPolicyAllowedSrc(e.target.value)}
                 disabled={policyDialogMode === "view" || policyDialogSaving}
-                helperText="Anti-spoofing & BGP route import filter: drops inbound traffic with source IP not matching, and BGP import only permits routes matching these subnets. Leave empty for unrestricted."
+                helperText="Anti-spoofing & BGP route import filter: drops inbound traffic with source IP not matching, and BGP import only permits routes matching these subnets. Supports # comments. Leave empty for unrestricted."
               />
 
               <TextField
@@ -6729,7 +6746,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                 value={policyDisallowedDst}
                 onChange={(e) => setPolicyDisallowedDst(e.target.value)}
                 disabled={policyDialogMode === "view" || policyDialogSaving}
-                helperText="Reverse of Allowed Dst: drops inbound traffic to these subnets, blocks BGP export, and triggers SNAT (under not_dst) for egress traffic originating from these subnets (e.g. private LAN subnets carved out of DN42 ULA fd00::/8)."
+                helperText="Reverse of Allowed Dst: drops inbound traffic to these subnets, blocks BGP export, and triggers SNAT (under not_dst) for egress traffic originating from these subnets (e.g. private LAN subnets carved out of DN42 ULA fd00::/8). Supports # comments."
               />
 
               <TextField
@@ -6742,7 +6759,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, onLogoutA
                 value={policyDisallowedSrc}
                 onChange={(e) => setPolicyDisallowedSrc(e.target.value)}
                 disabled={policyDialogMode === "view" || policyDialogSaving}
-                helperText="Reverse of Allowed Src: inbound traffic on this link matching these source subnets will be dropped, and blocks matching BGP import routes. Leave empty for unrestricted."
+                helperText="Reverse of Allowed Src: inbound traffic on this link matching these source subnets will be dropped, and blocks matching BGP import routes. Supports # comments. Leave empty for unrestricted."
               />
 
               <Box
