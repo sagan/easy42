@@ -6,8 +6,8 @@ set -e
 
 # Load node environment if injected by easy42 controller
 COMMON_DIR="$(cd "$(dirname "$0")" && pwd)"
-if [ -f "$COMMON_DIR/node_ip.env" ]; then
-    . "$COMMON_DIR/node_ip.env"
+if [ -f "$COMMON_DIR/.env" ]; then
+    . "$COMMON_DIR/.env"
 fi
 
 # Detect privilege

@@ -5,8 +5,8 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 if [ -f "$SCRIPT_DIR/common.sh" ]; then
     . "$SCRIPT_DIR/common.sh"
 fi
-if [ -f "$SCRIPT_DIR/node_ip.env" ]; then
-    . "$SCRIPT_DIR/node_ip.env"
+if [ -f "$SCRIPT_DIR/.env" ]; then
+    . "$SCRIPT_DIR/.env"
 fi
 
 # Ensure standard PATH

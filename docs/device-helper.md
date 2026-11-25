@@ -73,7 +73,7 @@ Device Helper packages these operational workflows into **embedded tasks**. Each
                     ▼                                      ▼
  ┌─────────────────────────────────────────────────────────────────────────────┐
  │                      Task Execution Engine (tasks.go)                       │
- │    - Dynamic payload injection (agent binary/agent.json, node_ip.env)       │
+ │    - Dynamic payload injection (agent binary/agent.json, .env)       │
  │    - Optional custom_network.sh payload from node configuration             │
  │    - Ephemeral SFTP upload to /tmp/.easy42_task_<id>_<rand>                 │
  │    - SSH remote execution through `sh` with root/sudo privilege detection   │
@@ -96,7 +96,7 @@ Device Helper packages these operational workflows into **embedded tasks**. Each
 3. **Privilege Elevation**: The shared `common.sh` detects whether the SSH session runs as `root`. If not, it uses `sudo` and fails with a clear error when `sudo` is unavailable.
 4. **Targeted Fleet Filtering**: Nodes can be filtered by user-defined tags (`#cloud`, `#edge`, `#eu`, etc.) or selected individually for precise, progressive rollouts. External nodes are never eligible for helper tasks.
 5. **Non-Destructive Status Inspection**: Before applying any change, Device Helper queries target nodes to determine whether a task is already satisfied, ready to apply, or incompatible.
-6. **Payload-Aware Tasks**: `deploy_agent` and `config_network` receive generated files at execution time (`easy42-agent`, `agent.json`, `node_ip.env`, and optionally `custom_network.sh`) rather than relying on static scripts alone.
+6. **Payload-Aware Tasks**: `deploy_agent` and `config_network` receive generated files at execution time (`easy42-agent`, `agent.json`, `.env`, and optionally `custom_network.sh`) rather than relying on static scripts alone.
 
 ### SSH Authentication & Host Key Verification
 
@@ -148,7 +148,7 @@ The task list API returns the manifest fields exactly as stored in each `task.js
 
 ### Inputs
 
-The controller generates a `node_ip.env` file from the node configuration and injects it into both `status.sh` and `run.sh`:
+The controller generates a `.env` file from the node configuration and injects it into both `status.sh` and `run.sh`:
 
 | Variable                  | Source                       | Notes                                                                                                                                                                                                                                                              |
 | :------------------------ | :--------------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -515,12 +515,12 @@ The optional `selector` object in `task.json` defines the scope of nodes a task 
 
 Supported keys:
 
-| Key                | Value                                                                                                                                        |
-| :----------------- | :------------------------------------------------------------------------------------------------------------------------------------------- |
-| `name`             | Comma-separated node name whitelist. The node name must exactly match one entry.                                                             |
-| `tag`              | Comma-separated node tag whitelist. The node must have at least one of the listed tags.                                                      |
-| `env:<NAME>`       | Required node metadata value (one exact value, no commas). `<NAME>` can be any node context variable listed in [Network Configuration Task](#network-configuration-task). |
-| `all`              | Target every managed node: must be exactly `{"all": "1"}` and cannot be combined with other keys.                                            |
+| Key          | Value                                                                                                                                                                     |
+| :----------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `name`       | Comma-separated node name whitelist. The node name must exactly match one entry.                                                                                          |
+| `tag`        | Comma-separated node tag whitelist. The node must have at least one of the listed tags.                                                                                   |
+| `env:<NAME>` | Required node metadata value (one exact value, no commas). `<NAME>` can be any node context variable listed in [Network Configuration Task](#network-configuration-task). |
+| `all`        | Target every managed node: must be exactly `{"all": "1"}` and cannot be combined with other keys.                                                                         |
 
 If multiple keys are present, **all of them must match (AND)**.
 

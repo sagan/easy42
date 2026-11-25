@@ -121,7 +121,7 @@ func (m *Manager) CheckTaskStatus(ctx context.Context, taskID string, nodeNames 
 				res = tasks.CheckStatusWithPayload(sshClient, sftpClient, taskID, n.Name, payload, m.customTasksDir())
 			} else {
 				payload := map[string][]byte{
-					"node_ip.env": []byte(buildNodeEnv(n)),
+					".env": []byte(buildNodeEnv(n)),
 				}
 				res = tasks.CheckStatusWithPayload(sshClient, sftpClient, taskID, n.Name, payload, m.customTasksDir())
 			}
@@ -270,7 +270,7 @@ func (m *Manager) RunTask(ctx context.Context, taskID string, nodeNames []string
 				payload := map[string][]byte{
 					"easy42-agent": binData,
 					"agent.json":   agentJSON,
-					"node_ip.env":  []byte(buildNodeEnv(n)),
+					".env":         []byte(buildNodeEnv(n)),
 				}
 				res = tasks.RunTaskWithPayload(sshClient, sftpClient, taskID, n.Name, payload, m.customTasksDir())
 				if res.Success {
@@ -288,7 +288,7 @@ func (m *Manager) RunTask(ctx context.Context, taskID string, nodeNames []string
 				}
 			} else {
 				payload := map[string][]byte{
-					"node_ip.env": []byte(buildNodeEnv(n)),
+					".env": []byte(buildNodeEnv(n)),
 				}
 				res = tasks.RunTaskWithPayload(sshClient, sftpClient, taskID, n.Name, payload, m.customTasksDir())
 			}
@@ -478,7 +478,7 @@ func buildConfigureNetworkPayload(n config.Node) map[string][]byte {
 	customScript := strings.TrimSpace(n.CustomNetworkScript)
 
 	payload := map[string][]byte{
-		"node_ip.env": []byte(envContent),
+		".env": []byte(envContent),
 	}
 
 	if customScript != "" {

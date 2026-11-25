@@ -23,9 +23,9 @@ func TestBuildConfigureIPPayload(t *testing.T) {
 		t.Fatalf("expected non-nil payload")
 	}
 
-	envBytes, ok := payload["node_ip.env"]
+	envBytes, ok := payload[".env"]
 	if !ok || len(envBytes) == 0 {
-		t.Fatalf("expected node_ip.env in payload")
+		t.Fatalf("expected .env in payload")
 	}
 
 	envStr := string(envBytes)
@@ -96,9 +96,9 @@ func TestBuildConfigureNetworkPayloadWithCustomScript(t *testing.T) {
 		t.Fatalf("expected non-nil payload")
 	}
 
-	envBytes, ok := payload["node_ip.env"]
+	envBytes, ok := payload[".env"]
 	if !ok || len(envBytes) == 0 {
-		t.Fatalf("expected node_ip.env in payload")
+		t.Fatalf("expected .env in payload")
 	}
 	if !strings.Contains(string(envBytes), `HAS_CUSTOM_SCRIPT="1"`) {
 		t.Errorf("expected HAS_CUSTOM_SCRIPT=\"1\" in env, got: %s", string(envBytes))
@@ -138,7 +138,7 @@ func TestBuildNodeEnv_NodeData(t *testing.T) {
 		Name:      "edge-1",
 		Interface: "eth0",
 		IP:        "192.168.100.1",
-		Note: "# Edge Server\n```json\n{\n  \"type\": \"server\",\n  \"meta\": {\n    \"id\": 1,\n    \"level\": \"center\",\n    \"data\": {\n      \"nested_deep\": 42\n    }\n  },\n  \"tags\": [\"a\", \"b\"],\n  \"enabled\": true,\n  \"description\": \"Main gateway server\"\n}\n```\n",
+		Note:      "# Edge Server\n```json\n{\n  \"type\": \"server\",\n  \"meta\": {\n    \"id\": 1,\n    \"level\": \"center\",\n    \"data\": {\n      \"nested_deep\": 42\n    }\n  },\n  \"tags\": [\"a\", \"b\"],\n  \"enabled\": true,\n  \"description\": \"Main gateway server\"\n}\n```\n",
 	}
 
 	envStr := buildNodeEnv(node)
