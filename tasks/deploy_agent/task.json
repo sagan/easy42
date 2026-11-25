@@ -1,4 +1,5 @@
 {
+  "$schema": "https://raw.githubusercontent.com/sagan/easy42/refs/heads/master/docs/schemas/task.json",
   "id": "deploy_agent",
   "title": "Deploy Agent",
   "description": "Deploys or upgrades the bundled Easy42 node agent binary and system service unit.",

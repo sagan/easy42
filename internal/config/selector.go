@@ -71,7 +71,7 @@ func ValidateSelector(selector map[string]string) error {
 		switch {
 		case strings.EqualFold(key, "name"), strings.EqualFold(key, "tag"):
 			// Supported built-in selector.
-		case strings.HasPrefix(strings.ToLower(key), "env:"):
+		case strings.HasPrefix(key, "env:"):
 			if strings.TrimSpace(key[len("env:"):]) == "" {
 				return fmt.Errorf("invalid selector key '%s': environment variable name cannot be empty", rawKey)
 			}
@@ -173,7 +173,7 @@ func nodeMatchesSelector(n *Node, nodeName string, selector map[string]string) b
 				return false
 			}
 
-		case strings.HasPrefix(strings.ToLower(key), "env:"):
+		case strings.HasPrefix(key, "env:"):
 			if n == nil {
 				return false
 			}

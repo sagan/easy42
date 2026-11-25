@@ -1,4 +1,5 @@
 {
+  "$schema": "https://raw.githubusercontent.com/sagan/easy42/refs/heads/master/docs/schemas/task.json",
   "id": "install_wireguard",
   "title": "Install WireGuard",
   "description": "Installs WireGuard and wireguard-tools on the device using the native package manager.",

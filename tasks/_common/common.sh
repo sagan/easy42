@@ -4,17 +4,6 @@
 # Ensure safe execution
 set -e
 
-# Ensure standard PATH includes /usr/local/bin and /usr/local/sbin (vital on OpenWrt and minimal distros)
-case ":$PATH:" in
-    *:/usr/local/bin:*) ;;
-    *) PATH="/usr/local/bin:$PATH" ;;
-esac
-case ":$PATH:" in
-    *:/usr/local/sbin:*) ;;
-    *) PATH="/usr/local/sbin:$PATH" ;;
-esac
-export PATH
-
 # Load node environment if injected by easy42 controller
 COMMON_DIR="$(cd "$(dirname "$0")" && pwd)"
 if [ -f "$COMMON_DIR/node_ip.env" ]; then

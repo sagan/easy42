@@ -1,4 +1,5 @@
 {
+  "$schema": "https://raw.githubusercontent.com/sagan/easy42/refs/heads/master/docs/schemas/task.json",
   "id": "config_bird",
   "title": "Configure BIRD Main Config",
   "description": "Includes /etc/bird_easy42.conf in the main BIRD configuration file (/etc/bird/bird.conf or /etc/bird.conf).",

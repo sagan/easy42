@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sagan.me/easy42/task.json",
+  "title": "Easy42 Task",
+  "description": "Schema for Easy42 host automation task",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9_]+$",
+      "description": "Unique identifier for the task."
+    },
+    "title": {
+      "type": "string",
+      "description": "Human-readable name of the task."
+    },
+    "description": {
+      "type": "string",
+      "description": "Detailed explanation of what the task does."
+    },
+    "category": {
+      "type": "string",
+      "description": "Classification group for the task (e.g., Packages, Monitoring)."
+    },
+    "weight": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Execution or sorting priority weight."
+    },
+    "selector": {
+      "description": "Selects managed nodes. An empty object matches no nodes.",
+      "oneOf": [
+        {
+          "description": "Empty selector (matches no nodes)",
+          "type": "object",
+          "maxProperties": 0
+        },
+        {
+          "description": "All-nodes selector (matches every managed node)",
+          "type": "object",
+          "required": ["all"],
+          "properties": {
+            "all": {
+              "const": "1"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "description": "Filtered selector matching nodes that satisfy all specified conditions",
+          "type": "object",
+          "minProperties": 1,
+          "properties": {
+            "name": {
+              "type": "string",
+              "description": "Comma-separated whitelist of node names"
+            },
+            "tag": {
+              "type": "string",
+              "description": "Comma-separated whitelist of node tags"
+            }
+          },
+          "patternProperties": {
+            "^env:\\S+$": {
+              "type": "string",
+              "not": {
+                "pattern": ","
+              },
+              "description": "Exact metadata/environment variable match (commas are disallowed)"
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    }
+  },
+  "required": ["id", "title", "description", "category", "weight", "selector"],
+  "additionalProperties": false
+}

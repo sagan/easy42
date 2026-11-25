@@ -1,4 +1,5 @@
 {
+  "$schema": "https://raw.githubusercontent.com/sagan/easy42/refs/heads/master/docs/schemas/task.json",
   "id": "config_network",
   "title": "Configure Network",
   "description": "Configures permanent node IP addresses and custom network rules (e.g. policy routing) using native network managers (systemd-networkd/networkd-dispatcher, /etc/network/interfaces).",

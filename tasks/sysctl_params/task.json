@@ -1,4 +1,5 @@
 {
+  "$schema": "https://raw.githubusercontent.com/sagan/easy42/refs/heads/master/docs/schemas/task.json",
   "id": "sysctl_params",
   "title": "Configure Sysctl Parameters",
   "description": "Configures IP forwarding and loose reverse path filtering (rp_filter=0) in /etc/sysctl.d/99-easy42.conf for asymmetric routing.",

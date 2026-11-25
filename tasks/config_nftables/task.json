@@ -1,4 +1,5 @@
 {
+  "$schema": "https://raw.githubusercontent.com/sagan/easy42/refs/heads/master/docs/schemas/task.json",
   "id": "config_nftables",
   "title": "Configure Nftables Autostart",
   "description": "Includes /etc/easy42.nft in system nftables configuration or registers easy42-nftables service, ensuring autostart.",
