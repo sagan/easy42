@@ -171,6 +171,21 @@ func TestSSHKeysAPI(t *testing.T) {
 		t.Fatalf("expected 200 for get, got %d", w.Code)
 	}
 
+	req = httptest.NewRequest("GET", "/api/ssh-keys/rules/"+created.ID+"/keys", nil)
+	req = withURLParam(req, "id", created.ID)
+	w = httptest.NewRecorder()
+	srv.handleGetSSHKeyRuleKeys(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 for get rule keys, got %d: %s", w.Code, w.Body.String())
+	}
+	var matched engine.SSHKeyRuleMatchedKeys
+	if err := json.Unmarshal(w.Body.Bytes(), &matched); err != nil {
+		t.Fatalf("failed to parse matched keys: %v", err)
+	}
+	if matched.RuleID != created.ID || matched.Type != "all" {
+		t.Fatalf("unexpected matched keys payload: %+v", matched)
+	}
+
 	req = httptest.NewRequest("POST", "/api/ssh-keys/rules/"+created.ID+"/toggle", nil)
 	req = withURLParam(req, "id", created.ID)
 	w = httptest.NewRecorder()

@@ -774,6 +774,66 @@ func (m *Manager) GetSSHKeyRule(id string) (*config.SSHKeyRule, error) {
 	return nil, fmt.Errorf("SSH key rule '%s' not found", id)
 }
 
+// SSHKeyRuleMatchedKeys holds the formatted SSH keys matched by a rule.
+type SSHKeyRuleMatchedKeys struct {
+	RuleID         string   `json:"rule_id"`
+	Type           string   `json:"type"`
+	SourceNodes    []string `json:"source_nodes"`
+	KnownHosts     string   `json:"known_hosts,omitempty"`
+	AuthorizedKeys string   `json:"authorized_keys,omitempty"`
+}
+
+// GetSSHKeyRuleMatchedKeys resolves a rule's source nodes and formats the
+// matched public keys in known_hosts and/or authorized_keys file format.
+func (m *Manager) GetSSHKeyRuleMatchedKeys(id string) (*SSHKeyRuleMatchedKeys, error) {
+	rule, err := m.GetSSHKeyRule(id)
+	if err != nil {
+		return nil, err
+	}
+
+	m.mu.RLock()
+	cfg := m.store.Get()
+	m.mu.RUnlock()
+
+	res := &SSHKeyRuleMatchedKeys{
+		RuleID:      rule.ID,
+		Type:        rule.NormalizedType(),
+		SourceNodes: []string{},
+	}
+	if cfg == nil {
+		return res, nil
+	}
+
+	var allKeys []config.SSHPublicKey
+	for _, src := range cfg.Nodes {
+		if src.IsUnmanaged() {
+			continue
+		}
+		if !config.AppTargetsNode(config.App{Selector: rule.SrcSelector}, &src, src.Name) {
+			continue
+		}
+		if !m.sshKeysEnabled(src) {
+			continue
+		}
+		res.SourceNodes = append(res.SourceNodes, src.Name)
+		keys := m.GetNodeSSHKeys(src.Name)
+		if len(keys) == 0 {
+			continue
+		}
+		allKeys = append(allKeys, withSSHKeyHostnames(keys, src, cfg.DNS.BaseDomain)...)
+	}
+	sort.Strings(res.SourceNodes)
+
+	for _, path := range rule.TargetFiles() {
+		if config.IsAuthorizedKeysPath(path) {
+			res.AuthorizedKeys = strings.Join(config.BuildSSHKeysLines(allKeys, true), "\n")
+		} else {
+			res.KnownHosts = strings.Join(config.BuildSSHKeysLines(allKeys, false), "\n")
+		}
+	}
+	return res, nil
+}
+
 // SaveSSHKeyRule creates or updates an SSH key rule.
 func (m *Manager) SaveSSHKeyRule(rule config.SSHKeyRule) (config.SSHKeyRule, error) {
 	if err := config.ValidateSSHKeyRule(rule); err != nil {

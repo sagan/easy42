@@ -61,6 +61,7 @@ import type {
   CustomAPITestResponse,
   AppClusterActionResponse,
   SSHKeyRule,
+  SSHKeyRuleMatchedKeys,
   SSHKeysResponse,
 } from "../types/api";
 
@@ -757,6 +758,8 @@ export const api = {
       body: JSON.stringify(node ? { node } : {}),
     }),
   getSSHKeyRules: () => request<SSHKeyRule[]>("/ssh-keys/rules").then((res) => res || []),
+  getSSHKeyRuleKeys: (id: string) =>
+    request<SSHKeyRuleMatchedKeys>(`/ssh-keys/rules/${encodeURIComponent(id)}/keys`),
   createSSHKeyRule: (rule: Partial<SSHKeyRule>) =>
     request<SSHKeyRule>("/ssh-keys/rules", {
       method: "POST",

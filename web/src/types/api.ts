@@ -1295,6 +1295,14 @@ export interface SSHKeysResponse {
   summary: SSHKeysSummary;
 }
 
+export interface SSHKeyRuleMatchedKeys {
+  rule_id: string;
+  type: SSHKeyRuleType;
+  source_nodes: string[];
+  known_hosts?: string;
+  authorized_keys?: string;
+}
+
 export type EventType = "node_offline" | "node_online" | "cron_task_failure";
 
 export interface EventItem {

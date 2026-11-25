@@ -17,12 +17,14 @@ import {
   Radio,
   RadioGroup,
   Switch,
+  Tab,
   Table,
   TableBody,
   TableCell,
   TableContainer,
   TableHead,
   TableRow,
+  Tabs,
   TextField,
   ToggleButton,
   ToggleButtonGroup,
@@ -47,7 +49,14 @@ import {
 } from "lucide-react";
 import { api } from "../../api/client";
 import { useMesh } from "../../context/MeshContext";
-import type { Node, SSHKeyNodeState, SSHKeyRule, SSHKeyRuleType, SSHKeysResponse } from "../../types/api";
+import type {
+  Node,
+  SSHKeyNodeState,
+  SSHKeyRule,
+  SSHKeyRuleMatchedKeys,
+  SSHKeyRuleType,
+  SSHKeysResponse,
+} from "../../types/api";
 import { matchesTaskSelector } from "../../utils/taskSelector";
 import { isAllNodesSelector, NodeSelector } from "../Common/NodeSelector";
 import { KeyFingerprints, sshKeyFingerprints } from "../../utils/sshFingerprint";
@@ -247,6 +256,213 @@ const SSHKeyRuleDialog: React.FC<{
   );
 };
 
+/** Modal dialog that fetches and displays matched SSH keys of a rule in authorized_keys / known_hosts format. */
+const SSHKeyRuleKeysDialog: React.FC<{
+  open: boolean;
+  rule: SSHKeyRule | null;
+  describeSelector: (selector: Record<string, string>) => string;
+  onClose: () => void;
+}> = ({ open, rule, describeSelector, onClose }) => {
+  const { copied, copy } = useCopy();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [matched, setMatched] = useState<SSHKeyRuleMatchedKeys | null>(null);
+  const [activeTab, setActiveTab] = useState<"known_hosts" | "authorized_keys">("known_hosts");
+
+  useEffect(() => {
+    if (!open || !rule) return;
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    setMatched(null);
+    setActiveTab(rule.type === "authorized_keys" ? "authorized_keys" : "known_hosts");
+    api
+      .getSSHKeyRuleKeys(rule.id)
+      .then((res) => {
+        if (!cancelled) setMatched(res);
+      })
+      .catch((e: any) => {
+        if (!cancelled) setError(e.message || "Failed to fetch matched SSH keys");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, rule]);
+
+  const ruleColors = rule ? RULE_TYPE_COLORS[rule.type] || RULE_TYPE_COLORS.all : RULE_TYPE_COLORS.all;
+  const knownHostsText = matched?.known_hosts || "";
+  const authorizedKeysText = matched?.authorized_keys || "";
+  const knownHostsCount = knownHostsText ? knownHostsText.split("\n").filter(Boolean).length : 0;
+  const authorizedKeysCount = authorizedKeysText ? authorizedKeysText.split("\n").filter(Boolean).length : 0;
+
+  const renderFormatBlock = (format: "known_hosts" | "authorized_keys", content: string, count: number) => {
+    const filePath = format === "known_hosts" ? "/root/.ssh/known_hosts" : "/root/.ssh/authorized_keys";
+    const copyId = `rule-keys-${rule?.id}-${format}`;
+    const isCopied = copied === copyId;
+
+    return (
+      <Box>
+        <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1 }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+            <Typography variant="caption" sx={{ fontFamily: "monospace", fontWeight: 700, color: "#334155" }}>
+              {filePath}
+            </Typography>
+            <Chip
+              size="small"
+              label={`${count} ${count === 1 ? "entry" : "entries"}`}
+              sx={{ height: 20, fontSize: "0.7rem", fontWeight: 700, bgcolor: "#F1F5F9", color: "#475569" }}
+            />
+          </Box>
+          {content && (
+            <Button
+              size="small"
+              startIcon={isCopied ? <Check size={14} /> : <Copy size={14} />}
+              onClick={() => copy(content, copyId)}
+              sx={{
+                textTransform: "none",
+                fontWeight: 600,
+                fontSize: "0.75rem",
+                color: isCopied ? "#10B981" : "#4F46E5",
+              }}
+            >
+              {isCopied ? "Copied!" : "Copy"}
+            </Button>
+          )}
+        </Box>
+        {content ? (
+          <Box
+            component="pre"
+            sx={{
+              m: 0,
+              p: 1.5,
+              borderRadius: "10px",
+              bgcolor: "#F8FAFC",
+              border: "1px solid #E2E8F0",
+              fontFamily: "monospace",
+              fontSize: "0.76rem",
+              lineHeight: 1.6,
+              color: "#1E293B",
+              overflowX: "auto",
+              maxHeight: 380,
+              overflowY: "auto",
+              whiteSpace: "pre",
+            }}
+          >
+            {content}
+          </Box>
+        ) : (
+          <Box
+            sx={{
+              p: 3,
+              borderRadius: "10px",
+              bgcolor: "#F8FAFC",
+              border: "1px dashed #CBD5E1",
+              textAlign: "center",
+            }}
+          >
+            <Typography variant="body2" sx={{ color: "#64748B" }}>
+              No matched keys for <code>{format}</code>.
+            </Typography>
+          </Box>
+        )}
+      </Box>
+    );
+  };
+
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth PaperProps={{ sx: { borderRadius: "16px" } }}>
+      <DialogTitle sx={{ display: "flex", alignItems: "center", gap: 1.2, pb: 1 }}>
+        <Box
+          sx={{
+            width: 36,
+            height: 36,
+            borderRadius: "8px",
+            bgcolor: "#EEF2FF",
+            color: "#4F46E5",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <Eye size={20} />
+        </Box>
+        <Box sx={{ minWidth: 0, flex: 1 }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
+            <Typography variant="h6" sx={{ fontWeight: 800, lineHeight: 1.2 }}>
+              Matched SSH Keys
+            </Typography>
+            {rule && (
+              <Chip
+                size="small"
+                label={rule.type}
+                sx={{ fontWeight: 700, fontSize: "0.7rem", bgcolor: ruleColors.bg, color: ruleColors.fg }}
+              />
+            )}
+          </Box>
+          {rule && (
+            <Typography variant="caption" sx={{ color: "#64748B", display: "block", mt: 0.2 }}>
+              {describeSelector(rule.src_selector)} → {describeSelector(rule.dst_selector)}
+              {matched && matched.source_nodes.length > 0
+                ? ` · ${matched.source_nodes.length} source node(s): ${matched.source_nodes.join(", ")}`
+                : ""}
+            </Typography>
+          )}
+        </Box>
+        <IconButton size="small" onClick={onClose} sx={{ color: "#94A3B8" }}>
+          <X size={18} />
+        </IconButton>
+      </DialogTitle>
+
+      <DialogContent sx={{ pt: 1, display: "flex", flexDirection: "column", gap: 1.5 }}>
+        {loading ? (
+          <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", py: 5, gap: 1.2 }}>
+            <CircularProgress size={22} sx={{ color: "#4F46E5" }} />
+            <Typography variant="body2" sx={{ color: "#64748B" }}>
+              Fetching matched SSH keys…
+            </Typography>
+          </Box>
+        ) : error ? (
+          <Alert severity="error">{error}</Alert>
+        ) : matched ? (
+          rule?.type === "all" ? (
+            <Box>
+              <Tabs
+                value={activeTab}
+                onChange={(_, v) => setActiveTab(v)}
+                sx={{
+                  mb: 1.5,
+                  minHeight: 36,
+                  borderBottom: "1px solid #E2E8F0",
+                  "& .MuiTab-root": { textTransform: "none", fontWeight: 700, fontSize: "0.82rem", minHeight: 36 },
+                }}
+              >
+                <Tab value="known_hosts" label={`known_hosts (${knownHostsCount})`} />
+                <Tab value="authorized_keys" label={`authorized_keys (${authorizedKeysCount})`} />
+              </Tabs>
+              {activeTab === "known_hosts"
+                ? renderFormatBlock("known_hosts", knownHostsText, knownHostsCount)
+                : renderFormatBlock("authorized_keys", authorizedKeysText, authorizedKeysCount)}
+            </Box>
+          ) : rule?.type === "authorized_keys" ? (
+            renderFormatBlock("authorized_keys", authorizedKeysText, authorizedKeysCount)
+          ) : (
+            renderFormatBlock("known_hosts", knownHostsText, knownHostsCount)
+          )
+        ) : null}
+      </DialogContent>
+
+      <DialogActions sx={{ px: 3, pb: 2 }}>
+        <Button onClick={onClose} sx={{ textTransform: "none", fontWeight: 600, color: "#64748B" }}>
+          Close
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+};
+
 export const SSHKeysTab: React.FC = () => {
   const { nodes, setStateToast } = useMesh();
   const { copied, copy } = useCopy();
@@ -265,6 +481,7 @@ export const SSHKeysTab: React.FC = () => {
   const [editingRule, setEditingRule] = useState<SSHKeyRule | null>(null);
   const [saving, setSaving] = useState(false);
   const [deleteRule, setDeleteRule] = useState<SSHKeyRule | null>(null);
+  const [viewingRule, setViewingRule] = useState<SSHKeyRule | null>(null);
 
   // Collected-keys filters. The table can be very long on big clusters, so it is
   // filtered by key role and a free-text search over node, key and comment.
@@ -725,7 +942,7 @@ export const SSHKeysTab: React.FC = () => {
                   <TableCell sx={{ fontWeight: 800, color: "#475569" }}>SOURCE NODES</TableCell>
                   <TableCell sx={{ fontWeight: 800, color: "#475569" }}>DESTINATION NODES</TableCell>
                   <TableCell sx={{ fontWeight: 800, color: "#475569", width: 120 }}>ENABLED</TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 800, color: "#475569", width: 120 }}>
+                  <TableCell align="right" sx={{ fontWeight: 800, color: "#475569", width: 136 }}>
                     ACTIONS
                   </TableCell>
                 </TableRow>
@@ -774,6 +991,15 @@ export const SSHKeysTab: React.FC = () => {
                       </TableCell>
                       <TableCell align="right">
                         <Box sx={{ display: "flex", justifyContent: "flex-end", gap: 0.5 }}>
+                          <Tooltip title="View matched SSH keys">
+                            <IconButton
+                              size="small"
+                              onClick={() => setViewingRule(rule)}
+                              sx={{ color: "#64748B", "&:hover": { color: "#4F46E5" } }}
+                            >
+                              <Eye size={16} />
+                            </IconButton>
+                          </Tooltip>
                           <Tooltip title="Edit rule">
                             <IconButton
                               size="small"
@@ -971,6 +1197,13 @@ export const SSHKeysTab: React.FC = () => {
           setEditingRule(null);
         }}
         onSave={handleSaveRule}
+      />
+
+      <SSHKeyRuleKeysDialog
+        open={!!viewingRule}
+        rule={viewingRule}
+        describeSelector={describeSelector}
+        onClose={() => setViewingRule(null)}
       />
 
       <Dialog open={!!deleteRule} onClose={() => setDeleteRule(null)} maxWidth="xs" fullWidth>

@@ -468,12 +468,12 @@ func SSHKeyLine(key SSHPublicKey, authorizedKeys bool) string {
 	return line + " " + comment
 }
 
-// BuildSSHKeysBlock assembles the deterministic Easy42 block for the given keys.
+// BuildSSHKeysLines assembles the deterministic Easy42 lines for the given keys.
 // Invalid keys, duplicate key material and keys that do not belong in the target
 // file (user identities in known_hosts, host keys in authorized_keys) are
-// skipped. Lines are sorted so the resulting block hash only changes when the
+// skipped. Lines are sorted so the resulting output only changes when the
 // effective key set changes.
-func BuildSSHKeysBlock(keys []SSHPublicKey, authorizedKeys bool) string {
+func BuildSSHKeysLines(keys []SSHPublicKey, authorizedKeys bool) []string {
 	lines := make([]string, 0, len(keys))
 	seen := make(map[string]bool, len(keys))
 
@@ -526,6 +526,16 @@ func BuildSSHKeysBlock(keys []SSHPublicKey, authorizedKeys bool) string {
 		}
 		uniq = append(uniq, l)
 	}
+	return uniq
+}
+
+// BuildSSHKeysBlock assembles the deterministic Easy42 block for the given keys.
+// Invalid keys, duplicate key material and keys that do not belong in the target
+// file (user identities in known_hosts, host keys in authorized_keys) are
+// skipped. Lines are sorted so the resulting block hash only changes when the
+// effective key set changes.
+func BuildSSHKeysBlock(keys []SSHPublicKey, authorizedKeys bool) string {
+	uniq := BuildSSHKeysLines(keys, authorizedKeys)
 
 	var sb strings.Builder
 	sb.WriteString(SSHKeysStartMarker)

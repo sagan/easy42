@@ -236,11 +236,8 @@ func (m *Manager) BuildAPIContext(r *http.Request) (map[string]any, error) {
 
 	ctx := map[string]any{
 		"config":  cfgMap,
-		"Config":  cfgCopy,
 		"state":   stateMap,
-		"State":   state,
 		"request": reqMap,
-		"Request": reqMap,
 	}
 
 	// Merge top-level config keys for convenience so both {{ .nodes }} and {{ .config.nodes }} work

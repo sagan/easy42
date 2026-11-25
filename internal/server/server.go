@@ -375,6 +375,7 @@ func New(cfg Config) *Server {
 			r.Get("/ssh-keys/rules", s.handleGetSSHKeyRules)
 			r.Post("/ssh-keys/rules", s.handleCreateSSHKeyRule)
 			r.Get("/ssh-keys/rules/{id}", s.handleGetSSHKeyRule)
+			r.Get("/ssh-keys/rules/{id}/keys", s.handleGetSSHKeyRuleKeys)
 			r.Put("/ssh-keys/rules/{id}", s.handleUpdateSSHKeyRule)
 			r.Delete("/ssh-keys/rules/{id}", s.handleDeleteSSHKeyRule)
 			r.Post("/ssh-keys/rules/{id}/toggle", s.handleToggleSSHKeyRule)

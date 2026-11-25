@@ -56,6 +56,18 @@ func (s *Server) handleGetSSHKeyRule(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, rule)
 }
 
+// handleGetSSHKeyRuleKeys returns the matched SSH keys for a single rule in
+// authorized_keys / known_hosts file format.
+func (s *Server) handleGetSSHKeyRuleKeys(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	matched, err := s.mgr.GetSSHKeyRuleMatchedKeys(id)
+	if err != nil {
+		writeError(w, http.StatusNotFound, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, matched)
+}
+
 // handleCreateSSHKeyRule creates a new SSH key rule.
 func (s *Server) handleCreateSSHKeyRule(w http.ResponseWriter, r *http.Request) {
 	var rule config.SSHKeyRule
