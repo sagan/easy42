@@ -317,4 +317,102 @@ func TestParseAndValidateConfigChange_AppsForbidden(t *testing.T) {
 	}
 }
 
+func TestParseAndValidateConfigChange_AdditionalResourceTypes(t *testing.T) {
+	snippet := `{
+		"network_policies": [
+			{
+				"id": "pol-edge",
+				"name": "Edge Policy",
+				"cost": 150,
+				"reject_internet": true
+			}
+		],
+		"blocks": [
+			{
+				"id": "blk-eu",
+				"name": "EU Region",
+				"x": 100,
+				"y": 200,
+				"nodes": ["foobar"]
+			}
+		],
+		"templates": [
+			{
+				"id": "tmpl-bird",
+				"name": "Custom BIRD",
+				"type": "bird",
+				"content": "router id {{ .ip }};"
+			}
+		],
+		"server_tasks": [
+			{
+				"id": "update_roa",
+				"cron_expr": "0 * * * *",
+				"enabled": true
+			}
+		],
+		"cron_tasks": [
+			{
+				"id": "cron-ping",
+				"name": "Ping Check",
+				"task_type": "ping",
+				"cron_expr": "*/5 * * * *",
+				"selector": {"all": "1"},
+				"params": {"target": "1.1.1.1"}
+			}
+		],
+		"ssh_key_rules": [
+			{
+				"id": "ssh-admin",
+				"type": "authorized_keys",
+				"source_keys": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA test@host",
+				"dst_selector": {"all": "1"},
+				"enabled": true
+			}
+		]
+	}`
+
+	patch, format, err := ParseAndValidateConfigChange([]byte(snippet))
+	if err != nil {
+		t.Fatalf("unexpected error parsing additional resource types: %v", err)
+	}
+	if format != "json" {
+		t.Errorf("expected format json, got %s", format)
+	}
+	if patch.NetworkPolicies == nil || len(*patch.NetworkPolicies) != 1 {
+		t.Fatalf("expected 1 network policy, got %v", patch.NetworkPolicies)
+	}
+	if patch.Blocks == nil || len(*patch.Blocks) != 1 {
+		t.Fatalf("expected 1 block, got %v", patch.Blocks)
+	}
+	if patch.Templates == nil || len(*patch.Templates) != 1 {
+		t.Fatalf("expected 1 template, got %v", patch.Templates)
+	}
+	if patch.ServerTasks == nil || len(*patch.ServerTasks) != 1 {
+		t.Fatalf("expected 1 server task, got %v", patch.ServerTasks)
+	}
+	if patch.CronTasks == nil || len(*patch.CronTasks) != 1 {
+		t.Fatalf("expected 1 cron task, got %v", patch.CronTasks)
+	}
+	if patch.SSHKeyRules == nil || len(*patch.SSHKeyRules) != 1 {
+		t.Fatalf("expected 1 ssh key rule, got %v", patch.SSHKeyRules)
+	}
+}
+
+func TestParseAndValidateConfigChange_RejectsInvalidAdditionalResources(t *testing.T) {
+	invalidSnippets := []string{
+		`{"network_policies": [{"id": "default", "name": "override"}]}`,
+		`{"templates": [{"id": "default_bird", "name": "override", "type": "bird"}]}`,
+		`{"server_tasks": [{"id": "nonexistent_task", "enabled": false}]}`,
+		`{"cron_tasks": [{"name": "bad", "task_type": "invalid", "cron_expr": "* * * * *"}]}`,
+		`{"blocks": [{"color": "#fff"}]}`,
+	}
+
+	for _, s := range invalidSnippets {
+		if _, _, err := ParseAndValidateConfigChange([]byte(s)); err == nil {
+			t.Errorf("expected error for invalid snippet %s, got nil", s)
+		}
+	}
+}
+
 

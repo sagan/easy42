@@ -243,11 +243,105 @@ const ConfigChangeJSONSchema = `{
         "server_url": { "type": "string" }
       }
     },
-    "NetworkPolicy": { "type": "object" },
-    "Block": { "type": "object" },
-    "ConfigTemplate": { "type": "object" },
-    "ServerTaskConfig": { "type": "object" },
-    "CronTask": { "type": "object" },
+    "NetworkPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "cost": { "type": "integer", "minimum": 0 },
+        "local_networks": { "type": "array", "items": { "type": "string" } },
+        "allowed_dst_cidrs": { "type": "array", "items": { "type": "string" } },
+        "allowed_src_cidrs": { "type": "array", "items": { "type": "string" } },
+        "disallowed_dst_cidrs": { "type": "array", "items": { "type": "string" } },
+        "disallowed_src_cidrs": { "type": "array", "items": { "type": "string" } },
+        "reject_internet": { "type": "boolean" },
+        "filter_forward": { "type": "boolean" },
+        "filter_input": { "type": "boolean" },
+        "input_allow_icmp": { "type": "boolean" },
+        "input_allow_icmp6": { "type": "boolean" },
+        "input_tcp_ports": { "type": "array", "items": { "type": "string" } },
+        "input_udp_ports": { "type": "array", "items": { "type": "string" } },
+        "snat": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "condition": { "type": "string" },
+            "target": { "type": "string" }
+          }
+        },
+        "forward_snat": { "type": "boolean" },
+        "forward_snat_target": { "type": "string" },
+        "dscp_ingress": { "type": "string" },
+        "dscp_egress": { "type": "string" },
+        "block_ingress_new": { "type": "string", "enum": ["", "all", "forward"] },
+        "ingress_new_whitelist": { "type": "array", "items": { "type": "string" } },
+        "roa4": { "type": "string" },
+        "roa6": { "type": "string" },
+        "roa_strict": { "type": "boolean" },
+        "fwmark": { "type": "string" },
+        "preference": { "type": ["integer", "null"] },
+        "mark": { "type": "string" },
+        "routing_policy": { "type": "string", "enum": ["", "full", "stub", "receive_only", "advertise_only"] },
+        "add_paths": { "type": "string", "enum": ["", "off", "on", "rx", "tx"] },
+        "bird_import_filter": { "type": "string" },
+        "bird_export_filter": { "type": "string" },
+        "bird_pre_snippet": { "type": "string" },
+        "bird_post_snippet": { "type": "string" }
+      }
+    },
+    "Block": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "color": { "type": "string" },
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "width": { "type": "number" },
+        "height": { "type": "number" },
+        "nodes": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "ConfigTemplate": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "type": { "type": "string", "enum": ["wg", "bird", "nft"] },
+        "description": { "type": "string" },
+        "content": { "type": "string" }
+      }
+    },
+    "ServerTaskConfig": {
+      "type": "object",
+      "required": ["id"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string" },
+        "cron_expr": { "type": "string" },
+        "enabled": { "type": "boolean" }
+      }
+    },
+    "CronTask": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "task_type": { "type": "string", "enum": ["ping", "tcp_ping", "http"] },
+        "cron_expr": { "type": "string" },
+        "selector": { "$ref": "#/definitions/NodeSelector" },
+        "params": { "type": "object", "additionalProperties": { "type": "string" } },
+        "timeout_sec": { "type": "integer", "minimum": 1, "maximum": 60 },
+        "enabled": { "type": "boolean" }
+      }
+    },
     "KernelRouteRule": {
       "type": "object",
       "additionalProperties": false,
@@ -359,18 +453,108 @@ const ConfigChangeJSONSchema = `{
 // ConfigPatch represents the validated top-level patch object
 type ConfigPatch struct {
 	NetworkSettings *NetworkSettingsPatch      `json:"network_settings,omitempty" yaml:"network_settings,omitempty"`
-	NetworkPolicies *[]NetworkPolicy           `json:"network_policies,omitempty" yaml:"network_policies,omitempty"`
+	NetworkPolicies *[]NetworkPolicyPatch      `json:"network_policies,omitempty" yaml:"network_policies,omitempty"`
 	Nodes           *[]NodePatch               `json:"nodes,omitempty" yaml:"nodes,omitempty"`
 	Links           *[]LinkPatch               `json:"links,omitempty" yaml:"links,omitempty"`
 	Apps            *[]AppPatch                `json:"apps,omitempty" yaml:"apps,omitempty"`
-	Blocks          *[]Block                   `json:"blocks,omitempty" yaml:"blocks,omitempty"`
+	Blocks          *[]BlockPatch              `json:"blocks,omitempty" yaml:"blocks,omitempty"`
 	DNS             *DNSPatch                  `json:"dns,omitempty" yaml:"dns,omitempty"`
-	Templates       *[]ConfigTemplate          `json:"templates,omitempty" yaml:"templates,omitempty"`
-	ServerTasks     *[]ServerTaskConfig        `json:"server_tasks,omitempty" yaml:"server_tasks,omitempty"`
-	CronTasks       *[]CronTask                `json:"cron_tasks,omitempty" yaml:"cron_tasks,omitempty"`
-	SSHKeyRules     *[]SSHKeyRule              `json:"ssh_key_rules,omitempty" yaml:"ssh_key_rules,omitempty"`
+	Templates       *[]ConfigTemplatePatch     `json:"templates,omitempty" yaml:"templates,omitempty"`
+	ServerTasks     *[]ServerTaskPatch         `json:"server_tasks,omitempty" yaml:"server_tasks,omitempty"`
+	CronTasks       *[]CronTaskPatch           `json:"cron_tasks,omitempty" yaml:"cron_tasks,omitempty"`
+	SSHKeyRules     *[]SSHKeyRulePatch         `json:"ssh_key_rules,omitempty" yaml:"ssh_key_rules,omitempty"`
 	Database        *DatabaseSettingsPatch     `json:"database,omitempty" yaml:"database,omitempty"`
 	Integrations    *IntegrationsSettingsPatch `json:"integrations,omitempty" yaml:"integrations,omitempty"`
+}
+
+// NetworkPolicyPatch holds partial changes to a network policy
+type NetworkPolicyPatch struct {
+	ID                  *string     `json:"id,omitempty" yaml:"id,omitempty"`
+	Name                *string     `json:"name,omitempty" yaml:"name,omitempty"`
+	Description         *string     `json:"description,omitempty" yaml:"description,omitempty"`
+	Cost                *int        `json:"cost,omitempty" yaml:"cost,omitempty"`
+	LocalNetworks       *[]string   `json:"local_networks,omitempty" yaml:"local_networks,omitempty"`
+	AllowedDstCIDRs     *[]string   `json:"allowed_dst_cidrs,omitempty" yaml:"allowed_dst_cidrs,omitempty"`
+	AllowedSrcCIDRs     *[]string   `json:"allowed_src_cidrs,omitempty" yaml:"allowed_src_cidrs,omitempty"`
+	DisallowedDstCIDRs  *[]string   `json:"disallowed_dst_cidrs,omitempty" yaml:"disallowed_dst_cidrs,omitempty"`
+	DisallowedSrcCIDRs  *[]string   `json:"disallowed_src_cidrs,omitempty" yaml:"disallowed_src_cidrs,omitempty"`
+	RejectInternet      *bool       `json:"reject_internet,omitempty" yaml:"reject_internet,omitempty"`
+	FilterForward       *bool       `json:"filter_forward,omitempty" yaml:"filter_forward,omitempty"`
+	FilterInput         *bool       `json:"filter_input,omitempty" yaml:"filter_input,omitempty"`
+	InputAllowICMP      *bool       `json:"input_allow_icmp,omitempty" yaml:"input_allow_icmp,omitempty"`
+	InputAllowICMP6     *bool       `json:"input_allow_icmp6,omitempty" yaml:"input_allow_icmp6,omitempty"`
+	InputTCPPorts       *[]string   `json:"input_tcp_ports,omitempty" yaml:"input_tcp_ports,omitempty"`
+	InputUDPPorts       *[]string   `json:"input_udp_ports,omitempty" yaml:"input_udp_ports,omitempty"`
+	SNAT                *SNATConfig `json:"snat,omitempty" yaml:"snat,omitempty"`
+	ForwardSNAT         *bool       `json:"forward_snat,omitempty" yaml:"forward_snat,omitempty"`
+	ForwardSNATTarget   *string     `json:"forward_snat_target,omitempty" yaml:"forward_snat_target,omitempty"`
+	DSCPIngress         *string     `json:"dscp_ingress,omitempty" yaml:"dscp_ingress,omitempty"`
+	DSCPEgress          *string     `json:"dscp_egress,omitempty" yaml:"dscp_egress,omitempty"`
+	BlockIngressNew     *string     `json:"block_ingress_new,omitempty" yaml:"block_ingress_new,omitempty"`
+	IngressNewWhitelist *[]string   `json:"ingress_new_whitelist,omitempty" yaml:"ingress_new_whitelist,omitempty"`
+	ROA4                *string     `json:"roa4,omitempty" yaml:"roa4,omitempty"`
+	ROA6                *string     `json:"roa6,omitempty" yaml:"roa6,omitempty"`
+	ROAStrict           *bool       `json:"roa_strict,omitempty" yaml:"roa_strict,omitempty"`
+	Fwmark              *string     `json:"fwmark,omitempty" yaml:"fwmark,omitempty"`
+	Preference          *int        `json:"preference,omitempty" yaml:"preference,omitempty"`
+	Mark                *string     `json:"mark,omitempty" yaml:"mark,omitempty"`
+	RoutingPolicy       *string     `json:"routing_policy,omitempty" yaml:"routing_policy,omitempty"`
+	AddPaths            *string     `json:"add_paths,omitempty" yaml:"add_paths,omitempty"`
+	BirdImportFilter    *string     `json:"bird_import_filter,omitempty" yaml:"bird_import_filter,omitempty"`
+	BirdExportFilter    *string     `json:"bird_export_filter,omitempty" yaml:"bird_export_filter,omitempty"`
+	BirdPreSnippet      *string     `json:"bird_pre_snippet,omitempty" yaml:"bird_pre_snippet,omitempty"`
+	BirdPostSnippet     *string     `json:"bird_post_snippet,omitempty" yaml:"bird_post_snippet,omitempty"`
+}
+
+// BlockPatch holds partial changes to a topology block
+type BlockPatch struct {
+	ID     *string   `json:"id,omitempty" yaml:"id,omitempty"`
+	Name   *string   `json:"name,omitempty" yaml:"name,omitempty"`
+	Color  *string   `json:"color,omitempty" yaml:"color,omitempty"`
+	X      *float64  `json:"x,omitempty" yaml:"x,omitempty"`
+	Y      *float64  `json:"y,omitempty" yaml:"y,omitempty"`
+	Width  *float64  `json:"width,omitempty" yaml:"width,omitempty"`
+	Height *float64  `json:"height,omitempty" yaml:"height,omitempty"`
+	Nodes  *[]string `json:"nodes,omitempty" yaml:"nodes,omitempty"`
+}
+
+// ConfigTemplatePatch holds partial changes to a config template
+type ConfigTemplatePatch struct {
+	ID          *string `json:"id,omitempty" yaml:"id,omitempty"`
+	Name        *string `json:"name,omitempty" yaml:"name,omitempty"`
+	Type        *string `json:"type,omitempty" yaml:"type,omitempty"`
+	Description *string `json:"description,omitempty" yaml:"description,omitempty"`
+	Content     *string `json:"content,omitempty" yaml:"content,omitempty"`
+}
+
+// ServerTaskPatch holds partial changes to a predefined server task
+type ServerTaskPatch struct {
+	ID       string  `json:"id" yaml:"id"`
+	CronExpr *string `json:"cron_expr,omitempty" yaml:"cron_expr,omitempty"`
+	Enabled  *bool   `json:"enabled,omitempty" yaml:"enabled,omitempty"`
+}
+
+// CronTaskPatch holds partial changes to a cron task
+type CronTaskPatch struct {
+	ID          *string            `json:"id,omitempty" yaml:"id,omitempty"`
+	Name        *string            `json:"name,omitempty" yaml:"name,omitempty"`
+	Description *string            `json:"description,omitempty" yaml:"description,omitempty"`
+	TaskType    *string            `json:"task_type,omitempty" yaml:"task_type,omitempty"`
+	CronExpr    *string            `json:"cron_expr,omitempty" yaml:"cron_expr,omitempty"`
+	Selector    *map[string]string `json:"selector,omitempty" yaml:"selector,omitempty"`
+	Params      *map[string]string `json:"params,omitempty" yaml:"params,omitempty"`
+	TimeoutSec  *int               `json:"timeout_sec,omitempty" yaml:"timeout_sec,omitempty"`
+	Enabled     *bool              `json:"enabled,omitempty" yaml:"enabled,omitempty"`
+}
+
+// SSHKeyRulePatch holds partial changes to an SSH key rule
+type SSHKeyRulePatch struct {
+	ID          *string            `json:"id,omitempty" yaml:"id,omitempty"`
+	Type        *string            `json:"type,omitempty" yaml:"type,omitempty"`
+	SrcSelector *map[string]string `json:"src_selector,omitempty" yaml:"src_selector,omitempty"`
+	SourceKeys  *string            `json:"source_keys,omitempty" yaml:"source_keys,omitempty"`
+	DstSelector *map[string]string `json:"dst_selector,omitempty" yaml:"dst_selector,omitempty"`
+	Enabled     *bool              `json:"enabled,omitempty" yaml:"enabled,omitempty"`
 }
 
 // AppPatch holds partial changes to an app
@@ -649,16 +833,93 @@ func ParseAndValidateConfigChange(raw []byte) (*ConfigPatch, string, error) {
 		}
 	}
 
+	// Validate NetworkPolicies
+	if patch.NetworkPolicies != nil {
+		for i := range *patch.NetworkPolicies {
+			if err := validateNetworkPolicyPatch(&(*patch.NetworkPolicies)[i]); err != nil {
+				return nil, format, fmt.Errorf("network_policies[%d]: %w", i, err)
+			}
+		}
+	}
+
+	// Validate Blocks
+	if patch.Blocks != nil {
+		for i := range *patch.Blocks {
+			b := (*patch.Blocks)[i]
+			idEmpty := b.ID == nil || strings.TrimSpace(*b.ID) == ""
+			nameEmpty := b.Name == nil || strings.TrimSpace(*b.Name) == ""
+			if idEmpty && nameEmpty {
+				return nil, format, fmt.Errorf("blocks[%d]: either 'id' or 'name' is required", i)
+			}
+		}
+	}
+
+	// Validate Templates
+	if patch.Templates != nil {
+		for i := range *patch.Templates {
+			if err := validateTemplatePatch(&(*patch.Templates)[i]); err != nil {
+				return nil, format, fmt.Errorf("templates[%d]: %w", i, err)
+			}
+		}
+	}
+
+	// Validate ServerTasks
+	if patch.ServerTasks != nil {
+		for i := range *patch.ServerTasks {
+			st := &(*patch.ServerTasks)[i]
+			st.ID = strings.TrimSpace(st.ID)
+			if st.ID == "" {
+				return nil, format, fmt.Errorf("server_tasks[%d]: 'id' is required", i)
+			}
+			if !IsPredefinedServerTask(st.ID) {
+				return nil, format, fmt.Errorf("server_tasks[%d]: task '%s' is not an editable server task", i, st.ID)
+			}
+			if st.CronExpr != nil {
+				expr := strings.TrimSpace(*st.CronExpr)
+				if err := ValidateCronExpr(expr); err != nil {
+					return nil, format, fmt.Errorf("server_tasks[%d] (%s): invalid cron_expr: %w", i, st.ID, err)
+				}
+			}
+		}
+	}
+
+	// Validate CronTasks
+	if patch.CronTasks != nil {
+		for i := range *patch.CronTasks {
+			if err := validateCronTaskPatch(&(*patch.CronTasks)[i]); err != nil {
+				return nil, format, fmt.Errorf("cron_tasks[%d]: %w", i, err)
+			}
+		}
+	}
+
 	// Validate SSH key rules
 	if patch.SSHKeyRules != nil {
 		for i := range *patch.SSHKeyRules {
-			rule := (*patch.SSHKeyRules)[i]
-			rule.Type = strings.TrimSpace(rule.Type)
-			if rule.Type == "" {
-				rule.Type = SSHKeyRuleTypeAll
+			rp := (*patch.SSHKeyRules)[i]
+			if rp.ID != nil && strings.TrimSpace(*rp.ID) != "" {
+				if err := ValidateSSHKeyRuleID(strings.TrimSpace(*rp.ID)); err != nil {
+					return nil, format, fmt.Errorf("ssh_key_rules[%d]: %w", i, err)
+				}
 			}
-			if err := ValidateSSHKeyRule(rule); err != nil {
-				return nil, format, fmt.Errorf("ssh_key_rules[%d]: %w", i, err)
+			if rp.Type != nil {
+				if _, err := normalizeSSHKeyRuleType(*rp.Type); err != nil {
+					return nil, format, fmt.Errorf("ssh_key_rules[%d]: %w", i, err)
+				}
+			}
+			if rp.SrcSelector != nil {
+				if err := ValidateSelector(*rp.SrcSelector); err != nil {
+					return nil, format, fmt.Errorf("ssh_key_rules[%d]: invalid src_selector: %w", i, err)
+				}
+			}
+			if rp.DstSelector != nil {
+				if err := ValidateSelector(*rp.DstSelector); err != nil {
+					return nil, format, fmt.Errorf("ssh_key_rules[%d]: invalid dst_selector: %w", i, err)
+				}
+			}
+			if rp.SourceKeys != nil && strings.TrimSpace(*rp.SourceKeys) != "" {
+				if _, err := ParseSSHSourceKeys(*rp.SourceKeys); err != nil {
+					return nil, format, fmt.Errorf("ssh_key_rules[%d]: invalid source_keys: %w", i, err)
+				}
 			}
 		}
 	}
@@ -966,5 +1227,71 @@ func validateAppPatch(a *AppPatch) error {
 		}
 	}
 
+	return nil
+}
+
+func validateNetworkPolicyPatch(p *NetworkPolicyPatch) error {
+	idEmpty := p.ID == nil || strings.TrimSpace(*p.ID) == ""
+	nameEmpty := p.Name == nil || strings.TrimSpace(*p.Name) == ""
+	if idEmpty && nameEmpty {
+		return errors.New("either 'id' or 'name' is required")
+	}
+	if p.ID != nil {
+		id := strings.TrimSpace(*p.ID)
+		if id == PolicyDefault || id == PolicyDN42 || id == PolicyNone {
+			return fmt.Errorf("cannot modify built-in policy %q", id)
+		}
+	}
+	if p.Cost != nil && *p.Cost < 0 {
+		return fmt.Errorf("cost must be >= 0")
+	}
+	return nil
+}
+
+func validateTemplatePatch(t *ConfigTemplatePatch) error {
+	idEmpty := t.ID == nil || strings.TrimSpace(*t.ID) == ""
+	nameEmpty := t.Name == nil || strings.TrimSpace(*t.Name) == ""
+	if idEmpty && nameEmpty {
+		return errors.New("either 'id' or 'name' is required")
+	}
+	if t.ID != nil {
+		id := strings.TrimSpace(*t.ID)
+		if id == DefaultWgTemplateID || id == DefaultBirdTemplateID || id == DefaultNftTemplateID || id == "default" {
+			return fmt.Errorf("cannot modify system default template %q", id)
+		}
+	}
+	if t.Type != nil && strings.TrimSpace(*t.Type) != "" {
+		if !IsValidTemplateType(*t.Type) {
+			return fmt.Errorf("invalid template type %q: must be wg, bird, or nft", *t.Type)
+		}
+	}
+	return nil
+}
+
+func validateCronTaskPatch(c *CronTaskPatch) error {
+	idEmpty := c.ID == nil || strings.TrimSpace(*c.ID) == ""
+	nameEmpty := c.Name == nil || strings.TrimSpace(*c.Name) == ""
+	if idEmpty && nameEmpty {
+		return errors.New("either 'id' or 'name' is required")
+	}
+	if c.TaskType != nil {
+		tt := strings.TrimSpace(*c.TaskType)
+		if tt != "ping" && tt != "tcp_ping" && tt != "http" {
+			return fmt.Errorf("unsupported task_type %q: must be 'ping', 'tcp_ping', or 'http'", *c.TaskType)
+		}
+	}
+	if c.CronExpr != nil {
+		if err := ValidateCronExpr(strings.TrimSpace(*c.CronExpr)); err != nil {
+			return fmt.Errorf("invalid cron_expr: %w", err)
+		}
+	}
+	if c.Selector != nil {
+		if err := ValidateSelector(*c.Selector); err != nil {
+			return fmt.Errorf("invalid selector: %w", err)
+		}
+	}
+	if c.TimeoutSec != nil && (*c.TimeoutSec < 1 || *c.TimeoutSec > 60) {
+		return fmt.Errorf("timeout_sec must be between 1 and 60")
+	}
 	return nil
 }

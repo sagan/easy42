@@ -686,5 +686,191 @@ func TestApply_CreateAndUpdateApp(t *testing.T) {
 	}
 }
 
+func TestApply_AdditionalResourceTypes(t *testing.T) {
+	mgr, tmpDir := setupTestManager(t)
+	defer os.RemoveAll(tmpDir)
+	defer mgr.Close()
+
+	// 1. Create all 6 resource types via ApplyConfigChange
+	createPatch := `{
+		"network_policies": [
+			{
+				"id": "pol-edge",
+				"name": "Edge Policy",
+				"description": "Initial policy",
+				"cost": 150,
+				"reject_internet": true
+			}
+		],
+		"blocks": [
+			{
+				"id": "blk-eu",
+				"name": "EU Region",
+				"color": "#3b82f6",
+				"x": 10,
+				"y": 20,
+				"nodes": ["foobar"]
+			}
+		],
+		"templates": [
+			{
+				"id": "tmpl-bird",
+				"name": "Custom BIRD",
+				"type": "bird",
+				"content": "router id {{ .ip }};"
+			}
+		],
+		"server_tasks": [
+			{
+				"id": "update_roa",
+				"cron_expr": "0 */2 * * *",
+				"enabled": false
+			}
+		],
+		"cron_tasks": [
+			{
+				"id": "cron-ping",
+				"name": "Ping Check",
+				"task_type": "ping",
+				"cron_expr": "*/5 * * * *",
+				"selector": {"all": "1"},
+				"params": {"target": "1.1.1.1"}
+			}
+		],
+		"ssh_key_rules": [
+			{
+				"id": "ssh-admin",
+				"type": "authorized_keys",
+				"source_keys": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA test@host",
+				"dst_selector": {"all": "1"},
+				"enabled": true
+			}
+		]
+	}`
+
+	preview, err := mgr.PreviewApply(createPatch)
+	if err != nil {
+		t.Fatalf("PreviewApply failed: %v", err)
+	}
+	if !preview.Valid {
+		t.Fatalf("expected preview to be valid")
+	}
+	if preview.Summary.AddedNetworkPolicies != 1 ||
+		preview.Summary.AddedBlocks != 1 ||
+		preview.Summary.AddedTemplates != 1 ||
+		preview.Summary.ModifiedServerTasks != 1 ||
+		preview.Summary.AddedCronTasks != 1 ||
+		preview.Summary.AddedSSHKeyRules != 1 {
+		t.Fatalf("unexpected summary counts: %+v", preview.Summary)
+	}
+
+	res, err := mgr.ApplyConfigChange(createPatch)
+	if err != nil {
+		t.Fatalf("ApplyConfigChange failed: %v", err)
+	}
+	if !res.Success {
+		t.Fatalf("expected success = true")
+	}
+
+	cfg := mgr.store.Get()
+	if len(cfg.NetworkPolicies) != 1 || cfg.NetworkPolicies[0].ID != "pol-edge" || cfg.NetworkPolicies[0].Cost != 150 {
+		t.Errorf("unexpected network policies: %+v", cfg.NetworkPolicies)
+	}
+	if len(cfg.Blocks) != 1 || cfg.Blocks[0].ID != "blk-eu" || cfg.Blocks[0].Name != "EU Region" {
+		t.Errorf("unexpected blocks: %+v", cfg.Blocks)
+	}
+	if len(cfg.Templates) != 1 || cfg.Templates[0].ID != "tmpl-bird" || cfg.Templates[0].Type != "bird" {
+		t.Errorf("unexpected templates: %+v", cfg.Templates)
+	}
+	var foundServerTask bool
+	for _, st := range cfg.ServerTasks {
+		if st.ID == "update_roa" {
+			foundServerTask = true
+			if st.CronExpr != "0 */2 * * *" || st.Enabled {
+				t.Errorf("unexpected update_roa task: %+v", st)
+			}
+		}
+	}
+	if !foundServerTask {
+		t.Errorf("expected update_roa in server_tasks")
+	}
+	if len(cfg.CronTasks) != 1 || cfg.CronTasks[0].ID != "cron-ping" || cfg.CronTasks[0].Params["target"] != "1.1.1.1" {
+		t.Errorf("unexpected cron tasks: %+v", cfg.CronTasks)
+	}
+	if len(cfg.SSHKeyRules) != 1 || cfg.SSHKeyRules[0].ID != "ssh-admin" || !cfg.SSHKeyRules[0].Enabled {
+		t.Errorf("unexpected ssh key rules: %+v", cfg.SSHKeyRules)
+	}
+
+	// 2. Partial update of all 6 resource types by ID
+	updatePatch := `{
+		"network_policies": [
+			{
+				"id": "pol-edge",
+				"cost": 200
+			}
+		],
+		"blocks": [
+			{
+				"id": "blk-eu",
+				"x": 50
+			}
+		],
+		"templates": [
+			{
+				"id": "tmpl-bird",
+				"description": "Updated BIRD template"
+			}
+		],
+		"server_tasks": [
+			{
+				"id": "update_roa",
+				"enabled": true
+			}
+		],
+		"cron_tasks": [
+			{
+				"id": "cron-ping",
+				"enabled": false
+			}
+		],
+		"ssh_key_rules": [
+			{
+				"id": "ssh-admin",
+				"enabled": false
+			}
+		]
+	}`
+
+	resUpdate, err := mgr.ApplyConfigChange(updatePatch)
+	if err != nil {
+		t.Fatalf("ApplyConfigChange update failed: %v", err)
+	}
+	if resUpdate.Summary.ModifiedNetworkPolicies != 1 ||
+		resUpdate.Summary.ModifiedBlocks != 1 ||
+		resUpdate.Summary.ModifiedTemplates != 1 ||
+		resUpdate.Summary.ModifiedServerTasks != 1 ||
+		resUpdate.Summary.ModifiedCronTasks != 1 ||
+		resUpdate.Summary.ModifiedSSHKeyRules != 1 {
+		t.Fatalf("unexpected update summary counts: %+v", resUpdate.Summary)
+	}
+
+	cfg = mgr.store.Get()
+	if cfg.NetworkPolicies[0].Cost != 200 || cfg.NetworkPolicies[0].Name != "Edge Policy" {
+		t.Errorf("expected partial update to preserve name and update cost, got %+v", cfg.NetworkPolicies[0])
+	}
+	if cfg.Blocks[0].X != 50 || cfg.Blocks[0].Y != 20 {
+		t.Errorf("expected partial update to preserve Y=20 and update X=50, got %+v", cfg.Blocks[0])
+	}
+	if cfg.Templates[0].Description != "Updated BIRD template" || cfg.Templates[0].Content == "" {
+		t.Errorf("expected partial update to preserve content and update description, got %+v", cfg.Templates[0])
+	}
+	if cfg.CronTasks[0].Enabled || cfg.CronTasks[0].Name != "Ping Check" {
+		t.Errorf("expected cron task disabled with name preserved, got %+v", cfg.CronTasks[0])
+	}
+	if cfg.SSHKeyRules[0].Enabled || cfg.SSHKeyRules[0].Type != "authorized_keys" {
+		t.Errorf("expected ssh key rule disabled with type preserved, got %+v", cfg.SSHKeyRules[0])
+	}
+}
+
 
 

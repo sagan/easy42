@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -16,6 +17,8 @@ import (
 	"easy42/internal/compiler"
 	"easy42/internal/config"
 	"easy42/internal/crypto"
+	"easy42/internal/lookingglass"
+	"easy42/internal/roa"
 
 	"github.com/google/uuid"
 )
@@ -55,41 +58,72 @@ type ApplySettingsDiff struct {
 	Changes  []ApplyFieldDiff `json:"changes"`
 }
 
+// ApplyResourceDiff represents modifications to a generic identifiable resource
+type ApplyResourceDiff struct {
+	ID      string           `json:"id"`
+	Name    string           `json:"name,omitempty"`
+	Action  string           `json:"action"` // "create" or "update"
+	Changes []ApplyFieldDiff `json:"changes"`
+}
+
 // ApplySummary summarizes planned changes
 type ApplySummary struct {
-	AddedNodes    int `json:"added_nodes"`
-	ModifiedNodes int `json:"modified_nodes"`
-	AddedLinks    int `json:"added_links"`
-	ModifiedLinks int `json:"modified_links"`
-	AddedApps     int `json:"added_apps,omitempty"`
-	ModifiedApps  int `json:"modified_apps,omitempty"`
-	TotalChanges  int `json:"total_changes"`
+	AddedNodes              int `json:"added_nodes"`
+	ModifiedNodes           int `json:"modified_nodes"`
+	AddedLinks              int `json:"added_links"`
+	ModifiedLinks           int `json:"modified_links"`
+	AddedApps               int `json:"added_apps,omitempty"`
+	ModifiedApps            int `json:"modified_apps,omitempty"`
+	AddedNetworkPolicies    int `json:"added_network_policies,omitempty"`
+	ModifiedNetworkPolicies int `json:"modified_network_policies,omitempty"`
+	AddedBlocks             int `json:"added_blocks,omitempty"`
+	ModifiedBlocks          int `json:"modified_blocks,omitempty"`
+	AddedTemplates          int `json:"added_templates,omitempty"`
+	ModifiedTemplates       int `json:"modified_templates,omitempty"`
+	ModifiedServerTasks     int `json:"modified_server_tasks,omitempty"`
+	AddedCronTasks          int `json:"added_cron_tasks,omitempty"`
+	ModifiedCronTasks       int `json:"modified_cron_tasks,omitempty"`
+	AddedSSHKeyRules        int `json:"added_ssh_key_rules,omitempty"`
+	ModifiedSSHKeyRules     int `json:"modified_ssh_key_rules,omitempty"`
+	TotalChanges            int `json:"total_changes"`
 }
 
 // ApplyPreviewResult contains full validation and diff details
 type ApplyPreviewResult struct {
-	Valid          bool                `json:"valid"`
-	Format         string              `json:"format"`
-	Summary        ApplySummary        `json:"summary"`
-	Nodes          []ApplyNodeDiff     `json:"nodes"`
-	Links          []ApplyLinkDiff     `json:"links"`
-	Apps           []ApplyAppDiff      `json:"apps"`
-	Settings       []ApplySettingsDiff `json:"settings"`
-	UnifiedDiff    string              `json:"unified_diff"`
-	Errors         []string            `json:"errors,omitempty"`
-	NormalizedJSON string              `json:"normalized_json,omitempty"`
+	Valid           bool                `json:"valid"`
+	Format          string              `json:"format"`
+	Summary         ApplySummary        `json:"summary"`
+	Nodes           []ApplyNodeDiff     `json:"nodes"`
+	Links           []ApplyLinkDiff     `json:"links"`
+	Apps            []ApplyAppDiff      `json:"apps"`
+	NetworkPolicies []ApplyResourceDiff `json:"network_policies,omitempty"`
+	Blocks          []ApplyResourceDiff `json:"blocks,omitempty"`
+	Templates       []ApplyResourceDiff `json:"templates,omitempty"`
+	ServerTasks     []ApplyResourceDiff `json:"server_tasks,omitempty"`
+	CronTasks       []ApplyResourceDiff `json:"cron_tasks,omitempty"`
+	SSHKeyRules     []ApplyResourceDiff `json:"ssh_key_rules,omitempty"`
+	Settings        []ApplySettingsDiff `json:"settings"`
+	UnifiedDiff     string              `json:"unified_diff"`
+	Errors          []string            `json:"errors,omitempty"`
+	NormalizedJSON  string              `json:"normalized_json,omitempty"`
 }
 
 // ApplyResult represents the outcome of an applied config change
 type ApplyResult struct {
-	Success       bool               `json:"success"`
-	AppliedAt     time.Time          `json:"applied_at"`
-	Summary       ApplySummary       `json:"summary"`
-	AffectedNodes []string           `json:"affected_nodes"`
-	AffectedLinks []string           `json:"affected_links"`
-	AffectedApps  []string           `json:"affected_apps,omitempty"`
-	BackupFile    string             `json:"backup_file,omitempty"`
-	Plan          ApplyPreviewResult `json:"plan"`
+	Success                 bool               `json:"success"`
+	AppliedAt               time.Time          `json:"applied_at"`
+	Summary                 ApplySummary       `json:"summary"`
+	AffectedNodes           []string           `json:"affected_nodes"`
+	AffectedLinks           []string           `json:"affected_links"`
+	AffectedApps            []string           `json:"affected_apps,omitempty"`
+	AffectedNetworkPolicies []string           `json:"affected_network_policies,omitempty"`
+	AffectedBlocks          []string           `json:"affected_blocks,omitempty"`
+	AffectedTemplates       []string           `json:"affected_templates,omitempty"`
+	AffectedServerTasks     []string           `json:"affected_server_tasks,omitempty"`
+	AffectedCronTasks       []string           `json:"affected_cron_tasks,omitempty"`
+	AffectedSSHKeyRules     []string           `json:"affected_ssh_key_rules,omitempty"`
+	BackupFile              string             `json:"backup_file,omitempty"`
+	Plan                    ApplyPreviewResult `json:"plan"`
 }
 
 // GetNode returns a copy of a node by name
@@ -247,15 +281,47 @@ func (m *Manager) ApplyConfigChange(content string) (*ApplyResult, error) {
 		}
 	}
 
+	collectAffected := func(diffs []ApplyResourceDiff) []string {
+		if len(diffs) == 0 {
+			return nil
+		}
+		out := make([]string, 0, len(diffs))
+		for _, d := range diffs {
+			if d.Name != "" {
+				out = append(out, d.Name)
+			} else {
+				out = append(out, d.ID)
+			}
+		}
+		return out
+	}
+
+	affectedPolicies := collectAffected(preview.NetworkPolicies)
+	affectedBlocks := collectAffected(preview.Blocks)
+	affectedTemplates := collectAffected(preview.Templates)
+	affectedServerTasks := collectAffected(preview.ServerTasks)
+	affectedCronTasks := collectAffected(preview.CronTasks)
+	affectedSSHKeyRules := collectAffected(preview.SSHKeyRules)
+
+	if len(affectedCronTasks) > 0 {
+		go m.SyncCronTasksToAgents()
+	}
+
 	return &ApplyResult{
-		Success:       true,
-		AppliedAt:     now,
-		Summary:       preview.Summary,
-		AffectedNodes: affectedNodes,
-		AffectedLinks: affectedLinks,
-		AffectedApps:  affectedApps,
-		BackupFile:    backupFile,
-		Plan:          *preview,
+		Success:                 true,
+		AppliedAt:               now,
+		Summary:                 preview.Summary,
+		AffectedNodes:           affectedNodes,
+		AffectedLinks:           affectedLinks,
+		AffectedApps:            affectedApps,
+		AffectedNetworkPolicies: affectedPolicies,
+		AffectedBlocks:          affectedBlocks,
+		AffectedTemplates:       affectedTemplates,
+		AffectedServerTasks:     affectedServerTasks,
+		AffectedCronTasks:       affectedCronTasks,
+		AffectedSSHKeyRules:     affectedSSHKeyRules,
+		BackupFile:              backupFile,
+		Plan:                    *preview,
 	}, nil
 }
 
@@ -482,6 +548,287 @@ func (m *Manager) simulateApply(cfg *config.Config, patch *config.ConfigPatch) (
 				Changes:  diffs,
 			})
 			result.Summary.TotalChanges += len(diffs)
+		}
+	}
+
+	// 7. Apply NetworkPolicies
+	if patch.NetworkPolicies != nil {
+		for _, pp := range *patch.NetworkPolicies {
+			existingIdx := -1
+			patchID := ""
+			if pp.ID != nil {
+				patchID = strings.TrimSpace(*pp.ID)
+			}
+			patchName := ""
+			if pp.Name != nil {
+				patchName = strings.TrimSpace(*pp.Name)
+			}
+			for i, existing := range cfg.NetworkPolicies {
+				if (patchID != "" && existing.ID == patchID) || (patchID == "" && patchName != "" && strings.EqualFold(existing.Name, patchName)) {
+					existingIdx = i
+					break
+				}
+			}
+			if existingIdx >= 0 {
+				if cfg.NetworkPolicies[existingIdx].IsInternal {
+					return nil, nil, fmt.Errorf("cannot modify built-in policy %q", cfg.NetworkPolicies[existingIdx].ID)
+				}
+				diffs, err := mergeNetworkPolicy(&cfg.NetworkPolicies[existingIdx], pp)
+				if err != nil {
+					return nil, nil, err
+				}
+				if len(diffs) > 0 {
+					result.NetworkPolicies = append(result.NetworkPolicies, ApplyResourceDiff{
+						ID:      cfg.NetworkPolicies[existingIdx].ID,
+						Name:    cfg.NetworkPolicies[existingIdx].Name,
+						Action:  "update",
+						Changes: diffs,
+					})
+					result.Summary.ModifiedNetworkPolicies++
+					result.Summary.TotalChanges += len(diffs)
+				}
+			} else {
+				newPol, diffs, err := createNetworkPolicyFromPatch(pp)
+				if err != nil {
+					return nil, nil, err
+				}
+				cfg.NetworkPolicies = append(cfg.NetworkPolicies, *newPol)
+				result.NetworkPolicies = append(result.NetworkPolicies, ApplyResourceDiff{
+					ID:      newPol.ID,
+					Name:    newPol.Name,
+					Action:  "create",
+					Changes: diffs,
+				})
+				result.Summary.AddedNetworkPolicies++
+				result.Summary.TotalChanges += len(diffs)
+			}
+		}
+	}
+
+	// 8. Apply Blocks
+	if patch.Blocks != nil {
+		for _, bp := range *patch.Blocks {
+			existingIdx := -1
+			patchID := ""
+			if bp.ID != nil {
+				patchID = strings.TrimSpace(*bp.ID)
+			}
+			patchName := ""
+			if bp.Name != nil {
+				patchName = strings.TrimSpace(*bp.Name)
+			}
+			for i, existing := range cfg.Blocks {
+				if (patchID != "" && existing.ID == patchID) || (patchID == "" && patchName != "" && strings.EqualFold(existing.Name, patchName)) {
+					existingIdx = i
+					break
+				}
+			}
+			if existingIdx >= 0 {
+				diffs := mergeBlock(&cfg.Blocks[existingIdx], bp)
+				if len(diffs) > 0 {
+					result.Blocks = append(result.Blocks, ApplyResourceDiff{
+						ID:      cfg.Blocks[existingIdx].ID,
+						Name:    cfg.Blocks[existingIdx].Name,
+						Action:  "update",
+						Changes: diffs,
+					})
+					result.Summary.ModifiedBlocks++
+					result.Summary.TotalChanges += len(diffs)
+				}
+			} else {
+				newBlock, diffs, err := createBlockFromPatch(bp)
+				if err != nil {
+					return nil, nil, err
+				}
+				cfg.Blocks = append(cfg.Blocks, *newBlock)
+				result.Blocks = append(result.Blocks, ApplyResourceDiff{
+					ID:      newBlock.ID,
+					Name:    newBlock.Name,
+					Action:  "create",
+					Changes: diffs,
+				})
+				result.Summary.AddedBlocks++
+				result.Summary.TotalChanges += len(diffs)
+			}
+		}
+	}
+
+	// 9. Apply Templates
+	if patch.Templates != nil {
+		for _, tp := range *patch.Templates {
+			existingIdx := -1
+			patchID := ""
+			if tp.ID != nil {
+				patchID = strings.TrimSpace(*tp.ID)
+			}
+			patchName := ""
+			if tp.Name != nil {
+				patchName = strings.TrimSpace(*tp.Name)
+			}
+			for i, existing := range cfg.Templates {
+				if (patchID != "" && existing.ID == patchID) || (patchID == "" && patchName != "" && strings.EqualFold(existing.Name, patchName)) {
+					existingIdx = i
+					break
+				}
+			}
+			if existingIdx >= 0 {
+				if cfg.Templates[existingIdx].IsBuiltin {
+					return nil, nil, fmt.Errorf("cannot modify system default template %q", cfg.Templates[existingIdx].ID)
+				}
+				diffs, err := mergeTemplate(&cfg.Templates[existingIdx], tp, now)
+				if err != nil {
+					return nil, nil, err
+				}
+				if len(diffs) > 0 {
+					result.Templates = append(result.Templates, ApplyResourceDiff{
+						ID:      cfg.Templates[existingIdx].ID,
+						Name:    cfg.Templates[existingIdx].Name,
+						Action:  "update",
+						Changes: diffs,
+					})
+					result.Summary.ModifiedTemplates++
+					result.Summary.TotalChanges += len(diffs)
+				}
+			} else {
+				newTmpl, diffs, err := createTemplateFromPatch(tp, now)
+				if err != nil {
+					return nil, nil, err
+				}
+				cfg.Templates = append(cfg.Templates, *newTmpl)
+				result.Templates = append(result.Templates, ApplyResourceDiff{
+					ID:      newTmpl.ID,
+					Name:    newTmpl.Name,
+					Action:  "create",
+					Changes: diffs,
+				})
+				result.Summary.AddedTemplates++
+				result.Summary.TotalChanges += len(diffs)
+			}
+		}
+	}
+
+	// 10. Apply ServerTasks
+	if patch.ServerTasks != nil {
+		cfg.ServerTasks = config.NormalizeServerTasks(cfg.ServerTasks)
+		for _, stp := range *patch.ServerTasks {
+			existingIdx := -1
+			for i, existing := range cfg.ServerTasks {
+				if existing.ID == stp.ID {
+					existingIdx = i
+					break
+				}
+			}
+			if existingIdx == -1 {
+				return nil, nil, fmt.Errorf("server task %q not found", stp.ID)
+			}
+			diffs := mergeServerTask(&cfg.ServerTasks[existingIdx], stp)
+			if len(diffs) > 0 {
+				result.ServerTasks = append(result.ServerTasks, ApplyResourceDiff{
+					ID:      cfg.ServerTasks[existingIdx].ID,
+					Action:  "update",
+					Changes: diffs,
+				})
+				result.Summary.ModifiedServerTasks++
+				result.Summary.TotalChanges += len(diffs)
+			}
+		}
+	}
+
+	// 11. Apply CronTasks
+	if patch.CronTasks != nil {
+		for _, ctp := range *patch.CronTasks {
+			existingIdx := -1
+			patchID := ""
+			if ctp.ID != nil {
+				patchID = strings.TrimSpace(*ctp.ID)
+			}
+			patchName := ""
+			if ctp.Name != nil {
+				patchName = strings.TrimSpace(*ctp.Name)
+			}
+			for i, existing := range cfg.CronTasks {
+				if (patchID != "" && existing.ID == patchID) || (patchID == "" && patchName != "" && strings.EqualFold(existing.Name, patchName)) {
+					existingIdx = i
+					break
+				}
+			}
+			if existingIdx >= 0 {
+				diffs, err := mergeCronTask(&cfg.CronTasks[existingIdx], ctp, cfg.Nodes, now)
+				if err != nil {
+					return nil, nil, err
+				}
+				if len(diffs) > 0 {
+					result.CronTasks = append(result.CronTasks, ApplyResourceDiff{
+						ID:      cfg.CronTasks[existingIdx].ID,
+						Name:    cfg.CronTasks[existingIdx].Name,
+						Action:  "update",
+						Changes: diffs,
+					})
+					result.Summary.ModifiedCronTasks++
+					result.Summary.TotalChanges += len(diffs)
+				}
+			} else {
+				newTask, diffs, err := createCronTaskFromPatch(ctp, cfg.Nodes, now)
+				if err != nil {
+					return nil, nil, err
+				}
+				cfg.CronTasks = append(cfg.CronTasks, *newTask)
+				result.CronTasks = append(result.CronTasks, ApplyResourceDiff{
+					ID:      newTask.ID,
+					Name:    newTask.Name,
+					Action:  "create",
+					Changes: diffs,
+				})
+				result.Summary.AddedCronTasks++
+				result.Summary.TotalChanges += len(diffs)
+			}
+		}
+	}
+
+	// 12. Apply SSHKeyRules
+	if patch.SSHKeyRules != nil {
+		for _, rp := range *patch.SSHKeyRules {
+			existingIdx := -1
+			patchID := ""
+			if rp.ID != nil {
+				patchID = strings.TrimSpace(*rp.ID)
+			}
+			if patchID != "" {
+				for i, existing := range cfg.SSHKeyRules {
+					if existing.ID == patchID {
+						existingIdx = i
+						break
+					}
+				}
+			}
+			if existingIdx >= 0 {
+				diffs, err := mergeSSHKeyRule(&cfg.SSHKeyRules[existingIdx], rp, now)
+				if err != nil {
+					return nil, nil, err
+				}
+				if len(diffs) > 0 {
+					result.SSHKeyRules = append(result.SSHKeyRules, ApplyResourceDiff{
+						ID:      cfg.SSHKeyRules[existingIdx].ID,
+						Action:  "update",
+						Changes: diffs,
+					})
+					result.Summary.ModifiedSSHKeyRules++
+					result.Summary.TotalChanges += len(diffs)
+				}
+			} else {
+				newRule, diffs, err := createSSHKeyRuleFromPatch(rp, now)
+				if err != nil {
+					return nil, nil, err
+				}
+				cfg.SSHKeyRules = append(cfg.SSHKeyRules, *newRule)
+				result.SSHKeyRules = append(result.SSHKeyRules, ApplyResourceDiff{
+					ID:      newRule.ID,
+					Action:  "create",
+					Changes: diffs,
+				})
+				result.Summary.AddedSSHKeyRules++
+				result.Summary.TotalChanges += len(diffs)
+			}
 		}
 	}
 
@@ -1484,6 +1831,783 @@ func mergeIntegrationsSettings(target *config.IntegrationsSettings, patch *confi
 	return diffs
 }
 
+func mergeNetworkPolicy(target *config.NetworkPolicy, patch config.NetworkPolicyPatch) ([]ApplyFieldDiff, error) {
+	var diffs []ApplyFieldDiff
+	checkField := func(name string, oldVal, newVal interface{}) {
+		if !reflect.DeepEqual(oldVal, newVal) {
+			diffs = append(diffs, ApplyFieldDiff{
+				Field:    name,
+				OldValue: oldVal,
+				NewValue: newVal,
+			})
+		}
+	}
+
+	if patch.Name != nil {
+		name := strings.TrimSpace(*patch.Name)
+		if name == "" {
+			return nil, errors.New("policy name cannot be empty")
+		}
+		if name != target.Name {
+			checkField("name", target.Name, name)
+			target.Name = name
+		}
+	}
+	if patch.Description != nil {
+		desc := strings.TrimSpace(*patch.Description)
+		if desc != target.Description {
+			checkField("description", target.Description, desc)
+			target.Description = desc
+		}
+	}
+	if patch.Cost != nil {
+		cost := *patch.Cost
+		if cost <= 0 {
+			cost = 100
+		}
+		if cost != target.Cost {
+			checkField("cost", target.Cost, cost)
+			target.Cost = cost
+		}
+	}
+	if patch.LocalNetworks != nil {
+		cleaned := config.CleanPrefixes(*patch.LocalNetworks)
+		if !sliceEqual(target.LocalNetworks, cleaned) {
+			checkField("local_networks", target.LocalNetworks, cleaned)
+			target.LocalNetworks = cleaned
+		}
+	}
+	if patch.AllowedDstCIDRs != nil {
+		cleaned := config.CleanPrefixes(*patch.AllowedDstCIDRs)
+		if !sliceEqual(target.AllowedDstCIDRs, cleaned) {
+			checkField("allowed_dst_cidrs", target.AllowedDstCIDRs, cleaned)
+			target.AllowedDstCIDRs = cleaned
+		}
+	}
+	if patch.AllowedSrcCIDRs != nil {
+		cleaned := config.CleanPrefixes(*patch.AllowedSrcCIDRs)
+		if !sliceEqual(target.AllowedSrcCIDRs, cleaned) {
+			checkField("allowed_src_cidrs", target.AllowedSrcCIDRs, cleaned)
+			target.AllowedSrcCIDRs = cleaned
+		}
+	}
+	if patch.DisallowedDstCIDRs != nil {
+		cleaned := config.CleanPrefixes(*patch.DisallowedDstCIDRs)
+		if !sliceEqual(target.DisallowedDstCIDRs, cleaned) {
+			checkField("disallowed_dst_cidrs", target.DisallowedDstCIDRs, cleaned)
+			target.DisallowedDstCIDRs = cleaned
+		}
+	}
+	if patch.DisallowedSrcCIDRs != nil {
+		cleaned := config.CleanPrefixes(*patch.DisallowedSrcCIDRs)
+		if !sliceEqual(target.DisallowedSrcCIDRs, cleaned) {
+			checkField("disallowed_src_cidrs", target.DisallowedSrcCIDRs, cleaned)
+			target.DisallowedSrcCIDRs = cleaned
+		}
+	}
+	if patch.RejectInternet != nil && *patch.RejectInternet != target.RejectInternet {
+		checkField("reject_internet", target.RejectInternet, *patch.RejectInternet)
+		target.RejectInternet = *patch.RejectInternet
+	}
+	if patch.FilterForward != nil && *patch.FilterForward != target.FilterForward {
+		checkField("filter_forward", target.FilterForward, *patch.FilterForward)
+		target.FilterForward = *patch.FilterForward
+	}
+	if patch.FilterInput != nil && *patch.FilterInput != target.FilterInput {
+		checkField("filter_input", target.FilterInput, *patch.FilterInput)
+		target.FilterInput = *patch.FilterInput
+	}
+	if patch.InputAllowICMP != nil && *patch.InputAllowICMP != target.InputAllowICMP {
+		checkField("input_allow_icmp", target.InputAllowICMP, *patch.InputAllowICMP)
+		target.InputAllowICMP = *patch.InputAllowICMP
+	}
+	if patch.InputAllowICMP6 != nil && *patch.InputAllowICMP6 != target.InputAllowICMP6 {
+		checkField("input_allow_icmp6", target.InputAllowICMP6, *patch.InputAllowICMP6)
+		target.InputAllowICMP6 = *patch.InputAllowICMP6
+	}
+	if patch.InputTCPPorts != nil {
+		cleaned := config.CleanPortList(*patch.InputTCPPorts)
+		if !sliceEqual(target.InputTCPPorts, cleaned) {
+			checkField("input_tcp_ports", target.InputTCPPorts, cleaned)
+			target.InputTCPPorts = cleaned
+		}
+	}
+	if patch.InputUDPPorts != nil {
+		cleaned := config.CleanPortList(*patch.InputUDPPorts)
+		if !sliceEqual(target.InputUDPPorts, cleaned) {
+			checkField("input_udp_ports", target.InputUDPPorts, cleaned)
+			target.InputUDPPorts = cleaned
+		}
+	}
+	if patch.SNAT != nil && !reflect.DeepEqual(target.SNAT, patch.SNAT) {
+		checkField("snat", target.SNAT, patch.SNAT)
+		snatCopy := *patch.SNAT
+		target.SNAT = &snatCopy
+	}
+	if patch.ForwardSNAT != nil && *patch.ForwardSNAT != target.ForwardSNAT {
+		checkField("forward_snat", target.ForwardSNAT, *patch.ForwardSNAT)
+		target.ForwardSNAT = *patch.ForwardSNAT
+	}
+	if patch.ForwardSNATTarget != nil {
+		val := strings.TrimSpace(*patch.ForwardSNATTarget)
+		if val != target.ForwardSNATTarget {
+			checkField("forward_snat_target", target.ForwardSNATTarget, val)
+			target.ForwardSNATTarget = val
+		}
+	}
+	if patch.DSCPIngress != nil {
+		val := config.ValidateDSCP(*patch.DSCPIngress)
+		if val != target.DSCPIngress {
+			checkField("dscp_ingress", target.DSCPIngress, val)
+			target.DSCPIngress = val
+		}
+	}
+	if patch.DSCPEgress != nil {
+		val := config.ValidateDSCP(*patch.DSCPEgress)
+		if val != target.DSCPEgress {
+			checkField("dscp_egress", target.DSCPEgress, val)
+			target.DSCPEgress = val
+		}
+	}
+	if patch.BlockIngressNew != nil {
+		val := config.NormalizeBlockIngressNew(*patch.BlockIngressNew)
+		if val != target.BlockIngressNew {
+			checkField("block_ingress_new", target.BlockIngressNew, val)
+			target.BlockIngressNew = val
+		}
+	}
+	if patch.IngressNewWhitelist != nil {
+		cleaned := config.CleanIngressNewWhitelist(*patch.IngressNewWhitelist)
+		if !sliceEqual(target.IngressNewWhitelist, cleaned) {
+			checkField("ingress_new_whitelist", target.IngressNewWhitelist, cleaned)
+			target.IngressNewWhitelist = cleaned
+		}
+	}
+	if patch.ROA4 != nil {
+		val := strings.TrimSpace(*patch.ROA4)
+		if err := roa.ValidateROAURL(val); err != nil {
+			return nil, fmt.Errorf("invalid roa4: %w", err)
+		}
+		if val != target.ROA4 {
+			checkField("roa4", target.ROA4, val)
+			target.ROA4 = val
+		}
+	}
+	if patch.ROA6 != nil {
+		val := strings.TrimSpace(*patch.ROA6)
+		if err := roa.ValidateROAURL(val); err != nil {
+			return nil, fmt.Errorf("invalid roa6: %w", err)
+		}
+		if val != target.ROA6 {
+			checkField("roa6", target.ROA6, val)
+			target.ROA6 = val
+		}
+	}
+	if patch.ROAStrict != nil && *patch.ROAStrict != target.ROAStrict {
+		checkField("roa_strict", target.ROAStrict, *patch.ROAStrict)
+		target.ROAStrict = *patch.ROAStrict
+	}
+	if patch.Fwmark != nil {
+		val := strings.TrimSpace(*patch.Fwmark)
+		if val != target.Fwmark {
+			checkField("fwmark", target.Fwmark, val)
+			target.Fwmark = val
+		}
+	}
+	if patch.Preference != nil && !reflect.DeepEqual(target.Preference, patch.Preference) {
+		checkField("preference", target.Preference, patch.Preference)
+		prefCopy := *patch.Preference
+		target.Preference = &prefCopy
+	}
+	if patch.Mark != nil {
+		val := strings.TrimSpace(*patch.Mark)
+		if val != target.Mark {
+			checkField("mark", target.Mark, val)
+			target.Mark = val
+		}
+	}
+	if patch.RoutingPolicy != nil {
+		val := config.NormalizeRoutingPolicy(*patch.RoutingPolicy)
+		if val != target.RoutingPolicy {
+			checkField("routing_policy", target.RoutingPolicy, val)
+			target.RoutingPolicy = val
+		}
+	}
+	if patch.AddPaths != nil {
+		val := config.NormalizeAddPaths(*patch.AddPaths)
+		if val != target.AddPaths {
+			checkField("add_paths", target.AddPaths, val)
+			target.AddPaths = val
+		}
+	}
+	if patch.BirdImportFilter != nil {
+		val := strings.TrimSpace(*patch.BirdImportFilter)
+		if val != target.BirdImportFilter {
+			checkField("bird_import_filter", target.BirdImportFilter, val)
+			target.BirdImportFilter = val
+		}
+	}
+	if patch.BirdExportFilter != nil {
+		val := strings.TrimSpace(*patch.BirdExportFilter)
+		if val != target.BirdExportFilter {
+			checkField("bird_export_filter", target.BirdExportFilter, val)
+			target.BirdExportFilter = val
+		}
+	}
+	if patch.BirdPreSnippet != nil {
+		val := strings.TrimSpace(*patch.BirdPreSnippet)
+		if val != target.BirdPreSnippet {
+			checkField("bird_pre_snippet", target.BirdPreSnippet, val)
+			target.BirdPreSnippet = val
+		}
+	}
+	if patch.BirdPostSnippet != nil {
+		val := strings.TrimSpace(*patch.BirdPostSnippet)
+		if val != target.BirdPostSnippet {
+			checkField("bird_post_snippet", target.BirdPostSnippet, val)
+			target.BirdPostSnippet = val
+		}
+	}
+
+	return diffs, nil
+}
+
+func createNetworkPolicyFromPatch(patch config.NetworkPolicyPatch) (*config.NetworkPolicy, []ApplyFieldDiff, error) {
+	id := ""
+	if patch.ID != nil {
+		id = strings.TrimSpace(*patch.ID)
+	}
+	if id == "" {
+		id = "policy_" + uuid.New().String()[:8]
+	}
+	name := ""
+	if patch.Name != nil {
+		name = strings.TrimSpace(*patch.Name)
+	}
+	if name == "" {
+		return nil, nil, fmt.Errorf("policy name is required when creating network policy %q", id)
+	}
+
+	pol := config.NetworkPolicy{
+		ID:   id,
+		Name: name,
+		Cost: 100,
+	}
+	if _, err := mergeNetworkPolicy(&pol, patch); err != nil {
+		return nil, nil, err
+	}
+
+	diffs := []ApplyFieldDiff{
+		{
+			Field:    "network_policy",
+			OldValue: nil,
+			NewValue: pol.Name,
+		},
+	}
+	return &pol, diffs, nil
+}
+
+func mergeBlock(target *config.Block, patch config.BlockPatch) []ApplyFieldDiff {
+	var diffs []ApplyFieldDiff
+	checkField := func(name string, oldVal, newVal interface{}) {
+		if !reflect.DeepEqual(oldVal, newVal) {
+			diffs = append(diffs, ApplyFieldDiff{
+				Field:    name,
+				OldValue: oldVal,
+				NewValue: newVal,
+			})
+		}
+	}
+
+	if patch.Name != nil && strings.TrimSpace(*patch.Name) != target.Name {
+		name := strings.TrimSpace(*patch.Name)
+		checkField("name", target.Name, name)
+		target.Name = name
+	}
+	if patch.Color != nil && *patch.Color != target.Color {
+		checkField("color", target.Color, *patch.Color)
+		target.Color = *patch.Color
+	}
+	if patch.X != nil && *patch.X != target.X {
+		checkField("x", target.X, *patch.X)
+		target.X = *patch.X
+	}
+	if patch.Y != nil && *patch.Y != target.Y {
+		checkField("y", target.Y, *patch.Y)
+		target.Y = *patch.Y
+	}
+	if patch.Width != nil && *patch.Width != target.Width {
+		checkField("width", target.Width, *patch.Width)
+		target.Width = *patch.Width
+	}
+	if patch.Height != nil && *patch.Height != target.Height {
+		checkField("height", target.Height, *patch.Height)
+		target.Height = *patch.Height
+	}
+	if patch.Nodes != nil && !sliceEqual(target.Nodes, *patch.Nodes) {
+		checkField("nodes", target.Nodes, *patch.Nodes)
+		target.Nodes = append([]string(nil), (*patch.Nodes)...)
+	}
+
+	return diffs
+}
+
+func createBlockFromPatch(patch config.BlockPatch) (*config.Block, []ApplyFieldDiff, error) {
+	id := ""
+	if patch.ID != nil {
+		id = strings.TrimSpace(*patch.ID)
+	}
+	if id == "" {
+		id = "block_" + uuid.New().String()[:8]
+	}
+	name := ""
+	if patch.Name != nil {
+		name = strings.TrimSpace(*patch.Name)
+	}
+	if name == "" {
+		return nil, nil, fmt.Errorf("block name is required when creating block %q", id)
+	}
+
+	block := config.Block{
+		ID:   id,
+		Name: name,
+	}
+	mergeBlock(&block, patch)
+
+	diffs := []ApplyFieldDiff{
+		{
+			Field:    "block",
+			OldValue: nil,
+			NewValue: block.Name,
+		},
+	}
+	return &block, diffs, nil
+}
+
+func mergeTemplate(target *config.ConfigTemplate, patch config.ConfigTemplatePatch, now time.Time) ([]ApplyFieldDiff, error) {
+	var diffs []ApplyFieldDiff
+	checkField := func(name string, oldVal, newVal interface{}) {
+		if !reflect.DeepEqual(oldVal, newVal) {
+			diffs = append(diffs, ApplyFieldDiff{
+				Field:    name,
+				OldValue: oldVal,
+				NewValue: newVal,
+			})
+		}
+	}
+
+	if patch.Name != nil {
+		name := strings.TrimSpace(*patch.Name)
+		if name == "" {
+			return nil, errors.New("template name cannot be empty")
+		}
+		if name != target.Name {
+			checkField("name", target.Name, name)
+			target.Name = name
+		}
+	}
+	if patch.Type != nil && strings.TrimSpace(*patch.Type) != "" {
+		tmplType := strings.ToLower(strings.TrimSpace(*patch.Type))
+		if !config.IsValidTemplateType(tmplType) {
+			return nil, fmt.Errorf("invalid template type %q: must be wg, bird, or nft", tmplType)
+		}
+		if tmplType != target.Type {
+			checkField("type", target.Type, tmplType)
+			target.Type = tmplType
+		}
+	}
+	if patch.Description != nil {
+		desc := strings.TrimSpace(*patch.Description)
+		if desc != target.Description {
+			checkField("description", target.Description, desc)
+			target.Description = desc
+		}
+	}
+	if patch.Content != nil && *patch.Content != target.Content {
+		checkField("content", target.Content, *patch.Content)
+		target.Content = *patch.Content
+	}
+
+	if err := compiler.ValidateTemplate(target.Type, target.Content); err != nil {
+		return nil, err
+	}
+
+	if len(diffs) > 0 {
+		target.ModifiedAt = now
+	}
+	return diffs, nil
+}
+
+func createTemplateFromPatch(patch config.ConfigTemplatePatch, now time.Time) (*config.ConfigTemplate, []ApplyFieldDiff, error) {
+	id := ""
+	if patch.ID != nil {
+		id = strings.TrimSpace(*patch.ID)
+	}
+	if id == "" {
+		id = "tmpl_" + uuid.New().String()[:8]
+	}
+	name := ""
+	if patch.Name != nil {
+		name = strings.TrimSpace(*patch.Name)
+	}
+	if name == "" {
+		return nil, nil, fmt.Errorf("template name is required when creating template %q", id)
+	}
+	tmplType := ""
+	if patch.Type != nil {
+		tmplType = strings.ToLower(strings.TrimSpace(*patch.Type))
+	}
+	if !config.IsValidTemplateType(tmplType) {
+		return nil, nil, fmt.Errorf("valid template type (wg, bird, or nft) is required when creating template %q", id)
+	}
+	content := ""
+	if patch.Content != nil {
+		content = *patch.Content
+	}
+	if err := compiler.ValidateTemplate(tmplType, content); err != nil {
+		return nil, nil, err
+	}
+
+	tmpl := config.ConfigTemplate{
+		ID:         id,
+		Name:       name,
+		Type:       tmplType,
+		Content:    content,
+		ModifiedAt: now,
+	}
+	if patch.Description != nil {
+		tmpl.Description = strings.TrimSpace(*patch.Description)
+	}
+
+	diffs := []ApplyFieldDiff{
+		{
+			Field:    "template",
+			OldValue: nil,
+			NewValue: tmpl.Name,
+		},
+	}
+	return &tmpl, diffs, nil
+}
+
+func mergeServerTask(target *config.ServerTaskConfig, patch config.ServerTaskPatch) []ApplyFieldDiff {
+	var diffs []ApplyFieldDiff
+	if patch.CronExpr != nil {
+		expr := strings.TrimSpace(*patch.CronExpr)
+		if expr != target.CronExpr {
+			diffs = append(diffs, ApplyFieldDiff{
+				Field:    "cron_expr",
+				OldValue: target.CronExpr,
+				NewValue: expr,
+			})
+			target.CronExpr = expr
+		}
+	}
+	if patch.Enabled != nil && *patch.Enabled != target.Enabled {
+		diffs = append(diffs, ApplyFieldDiff{
+			Field:    "enabled",
+			OldValue: target.Enabled,
+			NewValue: *patch.Enabled,
+		})
+		target.Enabled = *patch.Enabled
+	}
+	return diffs
+}
+
+func validateCronTaskFields(task config.CronTask, nodes []config.Node) error {
+	if strings.TrimSpace(task.Name) == "" {
+		return fmt.Errorf("cron task name cannot be empty")
+	}
+	if task.TaskType != "ping" && task.TaskType != "tcp_ping" && task.TaskType != "http" {
+		return fmt.Errorf("only 'ping', 'tcp_ping' and 'http' task types are supported for cron tasks")
+	}
+	if err := config.ValidateCronExpr(task.CronExpr); err != nil {
+		return fmt.Errorf("invalid cron expression: %w", err)
+	}
+	if err := config.ValidateCronTask(task); err != nil {
+		return err
+	}
+	if task.Params == nil || strings.TrimSpace(task.Params["target"]) == "" {
+		return fmt.Errorf("task parameter 'target' is required")
+	}
+	if task.TaskType == "http" {
+		if err := lookingglass.ValidateHTTPURL(task.Params["target"]); err != nil {
+			return fmt.Errorf("invalid http target URL: %w", err)
+		}
+	}
+	matched := false
+	for i := range nodes {
+		n := &nodes[i]
+		if !n.IsUnmanaged() && config.CronTaskTargetsNode(task, n, n.Name) {
+			matched = true
+			break
+		}
+	}
+	if !matched {
+		return fmt.Errorf("no managed nodes match the cron task selector")
+	}
+	return nil
+}
+
+func normalizeCronTaskParams(task *config.CronTask) {
+	defaultCount, maxCount := 4, 20
+	if task.TaskType == "http" {
+		defaultCount, maxCount = 1, config.HTTPProbeMaxCount
+	}
+	if task.Params == nil {
+		task.Params = make(map[string]string)
+	}
+	if countStr, ok := task.Params["count"]; ok && countStr != "" {
+		c, err := strconv.Atoi(countStr)
+		if err != nil || c < 1 || c > maxCount {
+			task.Params["count"] = strconv.Itoa(defaultCount)
+		}
+	} else {
+		task.Params["count"] = strconv.Itoa(defaultCount)
+	}
+	if task.TimeoutSec <= 0 {
+		task.TimeoutSec = 15
+	}
+	if task.TimeoutSec > 60 {
+		task.TimeoutSec = 60
+	}
+}
+
+func mergeCronTask(target *config.CronTask, patch config.CronTaskPatch, nodes []config.Node, now time.Time) ([]ApplyFieldDiff, error) {
+	var diffs []ApplyFieldDiff
+	checkField := func(name string, oldVal, newVal interface{}) {
+		if !reflect.DeepEqual(oldVal, newVal) {
+			diffs = append(diffs, ApplyFieldDiff{
+				Field:    name,
+				OldValue: oldVal,
+				NewValue: newVal,
+			})
+		}
+	}
+
+	if patch.Name != nil {
+		name := strings.TrimSpace(*patch.Name)
+		if name != target.Name {
+			checkField("name", target.Name, name)
+			target.Name = name
+		}
+	}
+	if patch.Description != nil {
+		desc := strings.TrimSpace(*patch.Description)
+		if desc != target.Description {
+			checkField("description", target.Description, desc)
+			target.Description = desc
+		}
+	}
+	if patch.TaskType != nil {
+		tt := strings.TrimSpace(*patch.TaskType)
+		if tt != target.TaskType {
+			checkField("task_type", target.TaskType, tt)
+			target.TaskType = tt
+		}
+	}
+	if patch.CronExpr != nil {
+		expr := strings.TrimSpace(*patch.CronExpr)
+		if expr != target.CronExpr {
+			checkField("cron_expr", target.CronExpr, expr)
+			target.CronExpr = expr
+		}
+	}
+	if patch.Selector != nil && !reflect.DeepEqual(*patch.Selector, target.Selector) {
+		checkField("selector", target.Selector, *patch.Selector)
+		target.Selector = normalizeSelectorMap(*patch.Selector)
+	}
+	if patch.Params != nil && !reflect.DeepEqual(*patch.Params, target.Params) {
+		checkField("params", target.Params, *patch.Params)
+		paramsCopy := make(map[string]string, len(*patch.Params))
+		for k, v := range *patch.Params {
+			paramsCopy[k] = v
+		}
+		target.Params = paramsCopy
+	}
+	if patch.TimeoutSec != nil && *patch.TimeoutSec != target.TimeoutSec {
+		checkField("timeout_sec", target.TimeoutSec, *patch.TimeoutSec)
+		target.TimeoutSec = *patch.TimeoutSec
+	}
+	if patch.Enabled != nil && *patch.Enabled != target.Enabled {
+		checkField("enabled", target.Enabled, *patch.Enabled)
+		target.Enabled = *patch.Enabled
+	}
+
+	normalizeCronTaskParams(target)
+	if err := validateCronTaskFields(*target, nodes); err != nil {
+		return nil, err
+	}
+
+	if len(diffs) > 0 {
+		target.UpdatedAt = now
+	}
+	return diffs, nil
+}
+
+func createCronTaskFromPatch(patch config.CronTaskPatch, nodes []config.Node, now time.Time) (*config.CronTask, []ApplyFieldDiff, error) {
+	id := ""
+	if patch.ID != nil {
+		id = strings.TrimSpace(*patch.ID)
+	}
+	if id == "" {
+		id = "cron_" + uuid.New().String()[:8]
+	}
+
+	task := config.CronTask{
+		ID:        id,
+		Enabled:   true,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	if patch.Name != nil {
+		task.Name = strings.TrimSpace(*patch.Name)
+	}
+	if patch.Description != nil {
+		task.Description = strings.TrimSpace(*patch.Description)
+	}
+	if patch.TaskType != nil {
+		task.TaskType = strings.TrimSpace(*patch.TaskType)
+	}
+	if patch.CronExpr != nil {
+		task.CronExpr = strings.TrimSpace(*patch.CronExpr)
+	}
+	if patch.Selector != nil {
+		task.Selector = normalizeSelectorMap(*patch.Selector)
+	}
+	if patch.Params != nil {
+		task.Params = make(map[string]string, len(*patch.Params))
+		for k, v := range *patch.Params {
+			task.Params[k] = v
+		}
+	}
+	if patch.TimeoutSec != nil {
+		task.TimeoutSec = *patch.TimeoutSec
+	}
+	if patch.Enabled != nil {
+		task.Enabled = *patch.Enabled
+	}
+
+	normalizeCronTaskParams(&task)
+	if err := validateCronTaskFields(task, nodes); err != nil {
+		return nil, nil, err
+	}
+
+	diffs := []ApplyFieldDiff{
+		{
+			Field:    "cron_task",
+			OldValue: nil,
+			NewValue: task.Name,
+		},
+	}
+	return &task, diffs, nil
+}
+
+func mergeSSHKeyRule(target *config.SSHKeyRule, patch config.SSHKeyRulePatch, now time.Time) ([]ApplyFieldDiff, error) {
+	var diffs []ApplyFieldDiff
+	checkField := func(name string, oldVal, newVal interface{}) {
+		if !reflect.DeepEqual(oldVal, newVal) {
+			diffs = append(diffs, ApplyFieldDiff{
+				Field:    name,
+				OldValue: oldVal,
+				NewValue: newVal,
+			})
+		}
+	}
+
+	if patch.Type != nil {
+		t := strings.TrimSpace(*patch.Type)
+		if t == "" {
+			t = config.SSHKeyRuleTypeAll
+		}
+		if t != target.Type {
+			checkField("type", target.Type, t)
+			target.Type = t
+		}
+	}
+	if patch.SrcSelector != nil {
+		norm := normalizeSelectorMap(*patch.SrcSelector)
+		if !reflect.DeepEqual(norm, target.SrcSelector) {
+			checkField("src_selector", target.SrcSelector, norm)
+			target.SrcSelector = norm
+		}
+	}
+	if patch.SourceKeys != nil {
+		norm := config.NormalizeSourceKeys(*patch.SourceKeys)
+		if norm != target.SourceKeys {
+			checkField("source_keys", target.SourceKeys, norm)
+			target.SourceKeys = norm
+		}
+	}
+	if patch.DstSelector != nil {
+		norm := normalizeSelectorMap(*patch.DstSelector)
+		if !reflect.DeepEqual(norm, target.DstSelector) {
+			checkField("dst_selector", target.DstSelector, norm)
+			target.DstSelector = norm
+		}
+	}
+	if patch.Enabled != nil && *patch.Enabled != target.Enabled {
+		checkField("enabled", target.Enabled, *patch.Enabled)
+		target.Enabled = *patch.Enabled
+	}
+
+	if err := config.ValidateSSHKeyRule(*target); err != nil {
+		return nil, err
+	}
+	target.Type = target.NormalizedType()
+
+	if len(diffs) > 0 {
+		target.UpdatedAt = now
+	}
+	return diffs, nil
+}
+
+func createSSHKeyRuleFromPatch(patch config.SSHKeyRulePatch, now time.Time) (*config.SSHKeyRule, []ApplyFieldDiff, error) {
+	id := ""
+	if patch.ID != nil {
+		id = strings.TrimSpace(*patch.ID)
+	}
+	if id == "" {
+		id = "sshrule_" + uuid.New().String()[:8]
+	}
+
+	rule := config.SSHKeyRule{
+		ID:        id,
+		Type:      config.SSHKeyRuleTypeAll,
+		Enabled:   true,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	if patch.Type != nil && strings.TrimSpace(*patch.Type) != "" {
+		rule.Type = strings.TrimSpace(*patch.Type)
+	}
+	if patch.SrcSelector != nil {
+		rule.SrcSelector = normalizeSelectorMap(*patch.SrcSelector)
+	}
+	if patch.SourceKeys != nil {
+		rule.SourceKeys = config.NormalizeSourceKeys(*patch.SourceKeys)
+	}
+	if patch.DstSelector != nil {
+		rule.DstSelector = normalizeSelectorMap(*patch.DstSelector)
+	}
+	if patch.Enabled != nil {
+		rule.Enabled = *patch.Enabled
+	}
+
+	if err := config.ValidateSSHKeyRule(rule); err != nil {
+		return nil, nil, err
+	}
+	rule.Type = rule.NormalizedType()
+
+	diffs := []ApplyFieldDiff{
+		{
+			Field:    "ssh_key_rule",
+			OldValue: nil,
+			NewValue: rule.ID,
+		},
+	}
+	return &rule, diffs, nil
+}
+
 func (m *Manager) recomputeLinksAndEndpoints(cfg *config.Config, now time.Time) {
 	for i := range cfg.Links {
 		l := &cfg.Links[i]
@@ -1632,6 +2756,24 @@ func filterDiffConfig(c *config.Config) map[string]interface{} {
 			}
 		}
 		m["apps"] = appsList
+	}
+	if len(c.NetworkPolicies) > 0 {
+		m["network_policies"] = c.NetworkPolicies
+	}
+	if len(c.Blocks) > 0 {
+		m["blocks"] = c.Blocks
+	}
+	if len(c.Templates) > 0 {
+		m["templates"] = c.Templates
+	}
+	if len(c.ServerTasks) > 0 {
+		m["server_tasks"] = c.ServerTasks
+	}
+	if len(c.CronTasks) > 0 {
+		m["cron_tasks"] = c.CronTasks
+	}
+	if len(c.SSHKeyRules) > 0 {
+		m["ssh_key_rules"] = c.SSHKeyRules
 	}
 	return m
 }

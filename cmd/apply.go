@@ -156,6 +156,39 @@ func handleApplyPreview(content, serverURL string, store *config.Store, cfg *con
 	if preview.Summary.AddedApps > 0 {
 		summaryParts = append(summaryParts, fmt.Sprintf("%d added app(s)", preview.Summary.AddedApps))
 	}
+	if preview.Summary.ModifiedNetworkPolicies > 0 {
+		summaryParts = append(summaryParts, fmt.Sprintf("%d modified network policy(ies)", preview.Summary.ModifiedNetworkPolicies))
+	}
+	if preview.Summary.AddedNetworkPolicies > 0 {
+		summaryParts = append(summaryParts, fmt.Sprintf("%d added network policy(ies)", preview.Summary.AddedNetworkPolicies))
+	}
+	if preview.Summary.ModifiedBlocks > 0 {
+		summaryParts = append(summaryParts, fmt.Sprintf("%d modified block(s)", preview.Summary.ModifiedBlocks))
+	}
+	if preview.Summary.AddedBlocks > 0 {
+		summaryParts = append(summaryParts, fmt.Sprintf("%d added block(s)", preview.Summary.AddedBlocks))
+	}
+	if preview.Summary.ModifiedTemplates > 0 {
+		summaryParts = append(summaryParts, fmt.Sprintf("%d modified template(s)", preview.Summary.ModifiedTemplates))
+	}
+	if preview.Summary.AddedTemplates > 0 {
+		summaryParts = append(summaryParts, fmt.Sprintf("%d added template(s)", preview.Summary.AddedTemplates))
+	}
+	if preview.Summary.ModifiedServerTasks > 0 {
+		summaryParts = append(summaryParts, fmt.Sprintf("%d modified server task(s)", preview.Summary.ModifiedServerTasks))
+	}
+	if preview.Summary.ModifiedCronTasks > 0 {
+		summaryParts = append(summaryParts, fmt.Sprintf("%d modified cron task(s)", preview.Summary.ModifiedCronTasks))
+	}
+	if preview.Summary.AddedCronTasks > 0 {
+		summaryParts = append(summaryParts, fmt.Sprintf("%d added cron task(s)", preview.Summary.AddedCronTasks))
+	}
+	if preview.Summary.ModifiedSSHKeyRules > 0 {
+		summaryParts = append(summaryParts, fmt.Sprintf("%d modified SSH key rule(s)", preview.Summary.ModifiedSSHKeyRules))
+	}
+	if preview.Summary.AddedSSHKeyRules > 0 {
+		summaryParts = append(summaryParts, fmt.Sprintf("%d added SSH key rule(s)", preview.Summary.AddedSSHKeyRules))
+	}
 	fmt.Printf("Summary: %s (Total changes: %d)\n\n", strings.Join(summaryParts, ", "), preview.Summary.TotalChanges)
 
 	if len(preview.Nodes) > 0 {
@@ -193,6 +226,31 @@ func handleApplyPreview(content, serverURL string, store *config.Store, cfg *con
 		w.Flush()
 		fmt.Println()
 	}
+
+	printResourceDiffs := func(header string, diffs []engine.ApplyResourceDiff) {
+		if len(diffs) == 0 {
+			return
+		}
+		w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
+		fmt.Fprintf(w, "%s\tACTION\tFIELD\tOLD VALUE\tNEW VALUE\n", header)
+		for _, rd := range diffs {
+			label := rd.ID
+			if rd.Name != "" {
+				label = fmt.Sprintf("%s (%s)", rd.Name, rd.ID)
+			}
+			for _, ch := range rd.Changes {
+				fmt.Fprintf(w, "%s\t%s\t%s\t%v\t%v\n", label, rd.Action, ch.Field, ch.OldValue, ch.NewValue)
+			}
+		}
+		w.Flush()
+		fmt.Println()
+	}
+	printResourceDiffs("NETWORK POLICY", preview.NetworkPolicies)
+	printResourceDiffs("BLOCK", preview.Blocks)
+	printResourceDiffs("TEMPLATE", preview.Templates)
+	printResourceDiffs("SERVER TASK", preview.ServerTasks)
+	printResourceDiffs("CRON TASK", preview.CronTasks)
+	printResourceDiffs("SSH KEY RULE", preview.SSHKeyRules)
 
 	if len(preview.Settings) > 0 {
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
@@ -240,6 +298,24 @@ func handleApplyExecute(content, serverURL string, store *config.Store, cfg *con
 	}
 	if len(result.AffectedApps) > 0 {
 		fmt.Printf("Affected Apps: %s\n", strings.Join(result.AffectedApps, ", "))
+	}
+	if len(result.AffectedNetworkPolicies) > 0 {
+		fmt.Printf("Affected Network Policies: %s\n", strings.Join(result.AffectedNetworkPolicies, ", "))
+	}
+	if len(result.AffectedBlocks) > 0 {
+		fmt.Printf("Affected Blocks: %s\n", strings.Join(result.AffectedBlocks, ", "))
+	}
+	if len(result.AffectedTemplates) > 0 {
+		fmt.Printf("Affected Templates: %s\n", strings.Join(result.AffectedTemplates, ", "))
+	}
+	if len(result.AffectedServerTasks) > 0 {
+		fmt.Printf("Affected Server Tasks: %s\n", strings.Join(result.AffectedServerTasks, ", "))
+	}
+	if len(result.AffectedCronTasks) > 0 {
+		fmt.Printf("Affected Cron Tasks: %s\n", strings.Join(result.AffectedCronTasks, ", "))
+	}
+	if len(result.AffectedSSHKeyRules) > 0 {
+		fmt.Printf("Affected SSH Key Rules: %s\n", strings.Join(result.AffectedSSHKeyRules, ", "))
 	}
 	if result.BackupFile != "" {
 		fmt.Printf("Config backup saved to: %s\n", result.BackupFile)
