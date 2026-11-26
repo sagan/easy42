@@ -335,6 +335,25 @@ func VerifyChecksum(filePath, expectedChecksum string) error {
 	return nil
 }
 
+const maxArtifactBytes = 1 << 30 // 1 GiB
+
+// safeJoin joins rel onto baseDir while guaranteeing the resulting path stays strictly inside baseDir.
+func safeJoin(baseDir, rel string) (string, error) {
+	if err := config.ValidateSafePathSegment(rel, "path segment"); err != nil {
+		return "", err
+	}
+	absBase, err := filepath.Abs(baseDir)
+	if err != nil {
+		return "", err
+	}
+	dest := filepath.Join(absBase, rel)
+	r, err := filepath.Rel(absBase, dest)
+	if err != nil || r == "." || strings.HasPrefix(r, "..") {
+		return "", fmt.Errorf("path %q escapes base directory", rel)
+	}
+	return dest, nil
+}
+
 // DecompressAndExtract unpacks target files from archivePath into destDir
 func DecompressAndExtract(archivePath string, files []config.ArtifactFile, destDir string) (map[string]*ExtractedFileInfo, error) {
 	if err := os.MkdirAll(destDir, 0755); err != nil {
@@ -401,7 +420,11 @@ func extractZip(archivePath string, files []config.ArtifactFile, destDir string,
 					return fmt.Errorf("failed to read zip entry %s: %w", f.Name, err)
 				}
 
-				destPath := filepath.Join(destDir, reqFile.Name)
+				destPath, err := safeJoin(destDir, reqFile.Name)
+				if err != nil {
+					rc.Close()
+					return err
+				}
 				info, err := copyAndHash(rc, destPath)
 				rc.Close()
 				if err != nil {
@@ -468,7 +491,10 @@ func extractTarStream(tr *tar.Reader, files []config.ArtifactFile, destDir strin
 				pat = reqFile.Name
 			}
 			if MatchExtractPath(hdr.Name, pat) {
-				destPath := filepath.Join(destDir, reqFile.Name)
+				destPath, err := safeJoin(destDir, reqFile.Name)
+				if err != nil {
+					return err
+				}
 				info, err := copyAndHash(tr, destPath)
 				if err != nil {
 					return err
@@ -497,7 +523,10 @@ func extractSingleGz(archivePath string, files []config.ArtifactFile, destDir st
 	defer gzr.Close()
 
 	for _, reqFile := range files {
-		destPath := filepath.Join(destDir, reqFile.Name)
+		destPath, err := safeJoin(destDir, reqFile.Name)
+		if err != nil {
+			return err
+		}
 		info, err := copyAndHash(gzr, destPath)
 		if err != nil {
 			return err
@@ -517,7 +546,10 @@ func extractRawBinary(archivePath string, files []config.ArtifactFile, destDir s
 	defer f.Close()
 
 	for _, reqFile := range files {
-		destPath := filepath.Join(destDir, reqFile.Name)
+		destPath, err := safeJoin(destDir, reqFile.Name)
+		if err != nil {
+			return err
+		}
 		info, err := copyAndHash(f, destPath)
 		if err != nil {
 			return err
@@ -530,21 +562,31 @@ func extractRawBinary(archivePath string, files []config.ArtifactFile, destDir s
 }
 
 func copyAndHash(src io.Reader, destPath string) (*ExtractedFileInfo, error) {
-	// Write to temp file first to prevent partial files
-	tmpPath := destPath + ".tmp"
-	out, err := os.OpenFile(tmpPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0755)
+	// Write to a unique temp file with O_CREATE|O_EXCL (0600) to prevent symlink races
+	out, err := os.CreateTemp(filepath.Dir(destPath), ".easy42-extract-*")
 	if err != nil {
 		return nil, fmt.Errorf("failed to create temp file: %w", err)
 	}
+	tmpPath := out.Name()
 
 	hasher := sha256.New()
 	multiWriter := io.MultiWriter(out, hasher)
-	size, err := io.Copy(multiWriter, src)
+	limited := io.LimitReader(src, maxArtifactBytes+1)
+	size, err := io.Copy(multiWriter, limited)
 	out.Close()
 
 	if err != nil {
 		_ = os.Remove(tmpPath)
 		return nil, fmt.Errorf("failed to write file: %w", err)
+	}
+	if size > maxArtifactBytes {
+		_ = os.Remove(tmpPath)
+		return nil, fmt.Errorf("extracted file exceeds maximum allowed size (%d bytes)", maxArtifactBytes)
+	}
+
+	if err := os.Chmod(tmpPath, 0755); err != nil {
+		_ = os.Remove(tmpPath)
+		return nil, fmt.Errorf("failed to set file permissions: %w", err)
 	}
 
 	if err := os.Rename(tmpPath, destPath); err != nil {
@@ -803,6 +845,15 @@ func (m *ArtifactManager) doEnsureArtifact(ctx context.Context, app config.App, 
 }
 
 func (m *ArtifactManager) downloadAndExtract(ctx context.Context, app config.App, version, arch, osName, endian string, globalVars map[string]string) (map[string]*ExtractedFileInfo, error) {
+	if err := config.ValidateAppName(app.Name); err != nil {
+		return nil, err
+	}
+	if err := config.ValidateSafePathSegment(version, "version"); err != nil {
+		return nil, err
+	}
+	if err := config.ValidateSafePathSegment(arch, "arch"); err != nil {
+		return nil, err
+	}
 	destDir := filepath.Join(m.CacheDir, "extracted", app.Name, version, arch)
 
 	// 1. Resolve upstream artifact URL and version
@@ -1295,8 +1346,11 @@ func (m *ArtifactManager) flushArchFiles(appName, version, arch string) {
 	}
 }
 
-func (m *ArtifactManager) downloadFile(ctx context.Context, url, destPath string) (*ArchiveFileInfo, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+func (m *ArtifactManager) downloadFile(ctx context.Context, rawURL, destPath string) (*ArchiveFileInfo, error) {
+	if !strings.HasPrefix(strings.ToLower(rawURL), "http://") && !strings.HasPrefix(strings.ToLower(rawURL), "https://") {
+		return nil, fmt.Errorf("unsupported artifact URL scheme: %s", rawURL)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -1312,21 +1366,27 @@ func (m *ArtifactManager) downloadFile(ctx context.Context, url, destPath string
 		return nil, fmt.Errorf("download returned HTTP status %d %s", resp.StatusCode, resp.Status)
 	}
 
-	tmpPath := destPath + ".tmp"
-	out, err := os.OpenFile(tmpPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+	out, err := os.CreateTemp(filepath.Dir(destPath), ".easy42-dl-*")
 	if err != nil {
 		return nil, err
 	}
+	tmpPath := out.Name()
 
 	hasher := sha256.New()
 	mw := io.MultiWriter(out, hasher)
-	size, err := io.Copy(mw, resp.Body)
+	limited := io.LimitReader(resp.Body, maxArtifactBytes+1)
+	size, err := io.Copy(mw, limited)
 	out.Close()
 	if err != nil {
 		_ = os.Remove(tmpPath)
 		return nil, err
 	}
+	if size > maxArtifactBytes {
+		_ = os.Remove(tmpPath)
+		return nil, fmt.Errorf("artifact download exceeds maximum allowed size (%d bytes)", maxArtifactBytes)
+	}
 
+	_ = os.Chmod(tmpPath, 0644)
 	if err := os.Rename(tmpPath, destPath); err != nil {
 		_ = os.Remove(tmpPath)
 		return nil, err

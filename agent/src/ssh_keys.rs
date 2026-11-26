@@ -141,6 +141,10 @@ impl ParsedKey {
         if trimmed.is_empty() || trimmed.starts_with('#') {
             return None;
         }
+        // Reject multi-line inputs or control characters to prevent comment newline injection
+        if trimmed.contains('\n') || trimmed.contains('\r') || trimmed.chars().any(|c| c.is_control()) {
+            return None;
+        }
         let mut parts = trimmed.splitn(3, char::is_whitespace);
         let algorithm = parts.next()?.trim();
         let key = parts.next()?.trim();

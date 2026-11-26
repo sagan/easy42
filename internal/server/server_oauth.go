@@ -68,7 +68,7 @@ func (s *Server) handleOAuthAuthorizationServerMetadata(w http.ResponseWriter, r
 		"registration_endpoint":                 baseURL + "/oauth/register",
 		"response_types_supported":              []string{"code"},
 		"grant_types_supported":                 []string{"authorization_code", "client_credentials", "refresh_token"},
-		"code_challenge_methods_supported":      []string{"S256", "plain"},
+		"code_challenge_methods_supported":      []string{"S256"},
 		"token_endpoint_auth_methods_supported": []string{"client_secret_post", "client_secret_basic"},
 		"scopes_supported":                      []string{"read", "write", "mcp:all"},
 	}
@@ -95,6 +95,12 @@ func (s *Server) handleOAuthToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !oauthRateLimiter.allow("token:" + clientIPFromRequest(r)) {
+		writeOAuthError(w, http.StatusTooManyRequests, "temporarily_unavailable", "Too many token requests, please try again later")
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, 32*1024)
 	// Parse parameters from query, form-data, or JSON body
 	_ = r.ParseForm()
 
@@ -210,14 +216,32 @@ func writeOAuthError(w http.ResponseWriter, status int, errCode, errDesc string)
 	})
 }
 
+// isValidOAuthRedirectURL validates that a redirect URI uses http or https with a valid host and no fragment.
+func isValidOAuthRedirectURL(raw string) (*url.URL, bool) {
+	u, err := url.Parse(raw)
+	if err != nil || !u.IsAbs() || u.Host == "" || u.Fragment != "" {
+		return nil, false
+	}
+	scheme := strings.ToLower(u.Scheme)
+	if scheme != "http" && scheme != "https" {
+		return nil, false
+	}
+	return u, true
+}
+
 // handleOAuthAuthorize handles GET and POST for the user consent flow
 func (s *Server) handleOAuthAuthorize(w http.ResponseWriter, r *http.Request) {
-	setOAuthCORS(w)
 	if r.Method == http.MethodOptions {
 		w.WriteHeader(http.StatusOK)
 		return
 	}
 
+	if s.mcpServer == nil || s.mcpServer.OAuthServer() == nil {
+		http.Error(w, "MCP OAuth server not available", http.StatusInternalServerError)
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, 32*1024)
 	_ = r.ParseForm()
 
 	responseType := r.FormValue("response_type")
@@ -237,10 +261,31 @@ func (s *Server) handleOAuthAuthorize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Verify redirect_uri is a valid URL
-	parsedRedirect, err := url.Parse(redirectURI)
-	if err != nil || (!parsedRedirect.IsAbs() && !strings.HasPrefix(redirectURI, "http://") && !strings.HasPrefix(redirectURI, "https://")) {
-		http.Error(w, "invalid redirect_uri", http.StatusBadRequest)
+	// Verify redirect_uri is a valid http/https URL
+	parsedRedirect, ok := isValidOAuthRedirectURL(redirectURI)
+	if !ok {
+		http.Error(w, "invalid redirect_uri: must be an absolute http or https URL", http.StatusBadRequest)
+		return
+	}
+
+	// Validate client_id and redirect_uri against registered clients
+	_, isDynClient, err := s.mcpServer.OAuthServer().ValidateClientRedirect(clientID, redirectURI)
+	if err != nil {
+		http.Error(w, "invalid client_id or redirect_uri: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// For the built-in static client, only permit https:// or loopback http:// redirect URIs
+	if !isDynClient && strings.ToLower(parsedRedirect.Scheme) == "http" {
+		h := strings.ToLower(parsedRedirect.Hostname())
+		if h != "localhost" && h != "127.0.0.1" && h != "::1" {
+			http.Error(w, "invalid redirect_uri: non-loopback redirect_uri requires https or explicit client registration", http.StatusBadRequest)
+			return
+		}
+	}
+
+	if codeChallenge != "" && !strings.EqualFold(codeChallengeMethod, "S256") {
+		http.Error(w, "code_challenge_method must be 'S256'", http.StatusBadRequest)
 		return
 	}
 
@@ -259,14 +304,20 @@ func (s *Server) handleOAuthAuthorize(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodPost {
 		action := r.FormValue("action")
 		if action == "deny" {
-			redirectWithOAuthError(w, redirectURI, "access_denied", "The user denied the authorization request", state)
+			redirectWithOAuthError(w, r, redirectURI, "access_denied", "The user denied the authorization request", state)
 			return
 		}
 
 		// Verify authentication: either session cookie or password submitted
 		if !isAuthenticated {
+			if !loginRateLimiter.allow("oauth_auth:" + clientIPFromRequest(r)) {
+				renderConsentPage(w, r, clientID, redirectURI, state, scope, codeChallenge, codeChallengeMethod, false, "Too many failed attempts. Please wait a few minutes and try again.")
+				return
+			}
 			password := r.FormValue("password")
+			acquireArgon2Slot()
 			valid, _ := crypto.VerifyPassword(password, cfg.PasswordHash)
+			releaseArgon2Slot()
 			if cfg == nil || !valid {
 				renderConsentPage(w, r, clientID, redirectURI, state, scope, codeChallenge, codeChallengeMethod, false, "Invalid master password. Please enter the correct password to authorize.")
 				return
@@ -301,7 +352,7 @@ func (s *Server) handleOAuthAuthorize(w http.ResponseWriter, r *http.Request) {
 	renderConsentPage(w, r, clientID, redirectURI, state, scope, codeChallenge, codeChallengeMethod, isAuthenticated, "")
 }
 
-func redirectWithOAuthError(w http.ResponseWriter, redirectURI, errCode, errDesc, state string) {
+func redirectWithOAuthError(w http.ResponseWriter, r *http.Request, redirectURI, errCode, errDesc, state string) {
 	u, err := url.Parse(redirectURI)
 	if err != nil {
 		http.Error(w, errDesc, http.StatusBadRequest)
@@ -314,7 +365,7 @@ func redirectWithOAuthError(w http.ResponseWriter, redirectURI, errCode, errDesc
 		q.Set("state", state)
 	}
 	u.RawQuery = q.Encode()
-	http.Redirect(w, nil, u.String(), http.StatusFound)
+	http.Redirect(w, r, u.String(), http.StatusFound)
 }
 
 func renderConsentPage(w http.ResponseWriter, r *http.Request, clientID, redirectURI, state, scope, codeChallenge, method string, isAuth bool, errorMsg string) {
@@ -377,6 +428,7 @@ func renderConsentPage(w http.ResponseWriter, r *http.Request, clientID, redirec
       <div>
         <div style="font-size:0.75rem; color:#64748B; font-weight:600; text-transform:uppercase;">Application</div>
         <div class="app-name">{{.ClientName}}</div>
+        <div style="font-size:0.75rem; color:#64748B; margin-top:4px; word-break:break-all;">Redirect to: <strong>{{.RedirectURI}}</strong></div>
       </div>
       <div style="font-size:0.75rem; background:#E0E7FF; color:#4338CA; font-weight:700; padding:4px 8px; border-radius:6px;">MCP Client</div>
     </div>
@@ -465,14 +517,8 @@ func renderConsentPage(w http.ResponseWriter, r *http.Request, clientID, redirec
 	_ = t.Execute(w, data)
 }
 
-// handleOAuthRegister handles RFC 7591 Dynamic Client Registration
+// handleOAuthRegister handles RFC 7591 Dynamic Client Registration (requires admin session)
 func (s *Server) handleOAuthRegister(w http.ResponseWriter, r *http.Request) {
-	setOAuthCORS(w)
-	if r.Method == http.MethodOptions {
-		w.WriteHeader(http.StatusOK)
-		return
-	}
-
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -483,17 +529,54 @@ func (s *Server) handleOAuthRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Require authenticated admin session
+	var sessionToken string
+	if cookie, err := r.Cookie("easy42_session"); err == nil && cookie.Value != "" {
+		sessionToken = cookie.Value
+	} else if authHeader := r.Header.Get("Authorization"); strings.HasPrefix(authHeader, "Bearer ") {
+		sessionToken = strings.TrimPrefix(authHeader, "Bearer ")
+	}
+	cfg := s.mgr.Store().Get()
+	if cfg == nil || sessionToken == "" || !crypto.VerifySessionToken(sessionToken, cfg.SessionSecret, cfg.PasswordHash) {
+		writeOAuthError(w, http.StatusUnauthorized, "unauthorized", "Admin authentication required to register OAuth clients")
+		return
+	}
+
+	if !oauthRateLimiter.allow("register:" + clientIPFromRequest(r)) {
+		writeOAuthError(w, http.StatusTooManyRequests, "temporarily_unavailable", "Too many registration requests")
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, 16*1024)
 	var req struct {
 		ClientName   string   `json:"client_name"`
 		RedirectURIs []string `json:"redirect_uris"`
 	}
-	_ = json.NewDecoder(r.Body).Decode(&req)
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeOAuthError(w, http.StatusBadRequest, "invalid_client_metadata", "Invalid JSON body")
+		return
+	}
+
+	if len(req.RedirectURIs) == 0 {
+		writeOAuthError(w, http.StatusBadRequest, "invalid_redirect_uri", "At least one redirect_uri is required")
+		return
+	}
+	for _, u := range req.RedirectURIs {
+		if _, ok := isValidOAuthRedirectURL(u); !ok {
+			writeOAuthError(w, http.StatusBadRequest, "invalid_redirect_uri", "All redirect_uris must be valid http or https URLs")
+			return
+		}
+	}
 
 	if req.ClientName == "" {
 		req.ClientName = "AI Client"
 	}
 
-	reg := s.mcpServer.OAuthServer().RegisterClient(req.ClientName, req.RedirectURIs)
+	reg, err := s.mcpServer.OAuthServer().RegisterClient(req.ClientName, req.RedirectURIs)
+	if err != nil {
+		writeOAuthError(w, http.StatusTooManyRequests, "invalid_client_metadata", err.Error())
+		return
+	}
 
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(http.StatusCreated)

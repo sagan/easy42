@@ -132,6 +132,14 @@ func New(cfg Config) *Server {
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
+	r.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("X-Content-Type-Options", "nosniff")
+			w.Header().Set("X-Frame-Options", "DENY")
+			w.Header().Set("Referrer-Policy", "no-referrer")
+			next.ServeHTTP(w, r)
+		})
+	})
 	r.Use(middleware.Timeout(60 * time.Second))
 
 	// CORS for local development with Vite dev server
@@ -624,8 +632,9 @@ func isAllowedOrigin(originStr, reqHost string) bool {
 	if strings.EqualFold(uHostname, reqHostname) {
 		return true
 	}
-	// Local development origins
-	if uHostname == "localhost" || uHostname == "127.0.0.1" || uHostname == "::1" {
+	// Local development origins are only trusted when the server itself is accessed via loopback
+	if (reqHostname == "localhost" || reqHostname == "127.0.0.1" || reqHostname == "::1") &&
+		(uHostname == "localhost" || uHostname == "127.0.0.1" || uHostname == "::1") {
 		return true
 	}
 	return false

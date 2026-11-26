@@ -335,12 +335,12 @@ func buildNodeEnv(n config.Node) string {
 	customScript := strings.TrimSpace(n.CustomNetworkScript)
 
 	var envBuf strings.Builder
-	fmt.Fprintf(&envBuf, "NODE_NAME=%q\n", name)
-	fmt.Fprintf(&envBuf, "NODE_INTERFACE=%q\n", iface)
-	fmt.Fprintf(&envBuf, "NODE_IP=%q\n", nodeIP)
-	fmt.Fprintf(&envBuf, "NODE_IP6=%q\n", nodeIP6)
-	fmt.Fprintf(&envBuf, "NODE_EXTERNAL_IP=%q\n", nodeExtIP)
-	fmt.Fprintf(&envBuf, "NODE_EXTERNAL_IP6=%q\n", nodeExtIP6)
+	fmt.Fprintf(&envBuf, "NODE_NAME=%s\n", shellSingleQuote(name))
+	fmt.Fprintf(&envBuf, "NODE_INTERFACE=%s\n", shellSingleQuote(iface))
+	fmt.Fprintf(&envBuf, "NODE_IP=%s\n", shellSingleQuote(nodeIP))
+	fmt.Fprintf(&envBuf, "NODE_IP6=%s\n", shellSingleQuote(nodeIP6))
+	fmt.Fprintf(&envBuf, "NODE_EXTERNAL_IP=%s\n", shellSingleQuote(nodeExtIP))
+	fmt.Fprintf(&envBuf, "NODE_EXTERNAL_IP6=%s\n", shellSingleQuote(nodeExtIP6))
 	if customScript != "" {
 		fmt.Fprintf(&envBuf, "HAS_CUSTOM_SCRIPT=\"1\"\n")
 	} else {
@@ -359,7 +359,7 @@ func buildNodeEnv(n config.Node) string {
 	}
 	sort.Strings(cleanTags)
 	nodeTags := strings.Join(cleanTags, ",")
-	fmt.Fprintf(&envBuf, "NODE_TAGS=%q\n", nodeTags)
+	fmt.Fprintf(&envBuf, "NODE_TAGS=%s\n", shellSingleQuote(nodeTags))
 	for _, t := range cleanTags {
 		tagKey := sanitizeEnvKey(t)
 		if tagKey != "" {
@@ -385,6 +385,18 @@ func sanitizeEnvKey(k string) string {
 	return b.String()
 }
 
+// shellSingleQuote safely single-quotes a value for POSIX sh / bash .env sourcing,
+// stripping CR/LF/NUL bytes so values cannot inject new lines or shell expansions.
+func shellSingleQuote(s string) string {
+	s = strings.Map(func(r rune) rune {
+		if r == '\r' || r == '\n' || r == 0 {
+			return -1
+		}
+		return r
+	}, s)
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
+
 // formatEnvValue formats primitive values (string, bool, numbers) for .env injection.
 func formatEnvValue(v any) (string, bool) {
 	switch val := v.(type) {
@@ -393,7 +405,7 @@ func formatEnvValue(v any) (string, bool) {
 			return `""`, true
 		}
 		if strings.ContainsAny(val, " \t\n\r\"'$`\\;&|<>*?~#()[]{}=") {
-			return fmt.Sprintf("%q", val), true
+			return shellSingleQuote(val), true
 		}
 		return val, true
 	case bool:

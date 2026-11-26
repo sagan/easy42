@@ -101,9 +101,9 @@ trap cleanup EXIT INT TERM
 TAR_FILE="$TMP_DIR/wg-quick-op.tar.gz"
 
 if command -v curl >/dev/null 2>&1; then
-    curl -fsSL -o "$TAR_FILE" "$DOWNLOAD_URL" || curl -kfsSL -o "$TAR_FILE" "$DOWNLOAD_URL"
+    curl -fsSL -o "$TAR_FILE" "$DOWNLOAD_URL"
 elif command -v wget >/dev/null 2>&1; then
-    wget -q -O "$TAR_FILE" "$DOWNLOAD_URL" || wget --no-check-certificate -q -O "$TAR_FILE" "$DOWNLOAD_URL" || wget -O "$TAR_FILE" "$DOWNLOAD_URL"
+    wget -q -O "$TAR_FILE" "$DOWNLOAD_URL"
 else
     echo "Error: neither curl nor wget is available to download $DOWNLOAD_URL" >&2
     exit 1

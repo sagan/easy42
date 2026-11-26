@@ -14,6 +14,13 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 )
 
+func sanitizeNodeForMCP(n config.Node) config.Node {
+	if n.AgentToken != "" {
+		n.AgentToken = "******"
+	}
+	return n
+}
+
 func registerNodeTools(s *server.MCPServer, mgr *engine.Manager) {
 	// 1. list_nodes
 	s.AddTool(mcp.NewTool("list_nodes",
@@ -40,6 +47,9 @@ func registerNodeTools(s *server.MCPServer, mgr *engine.Manager) {
 			}
 			nodes = filtered
 		}
+		for i := range nodes {
+			nodes[i] = sanitizeNodeForMCP(nodes[i])
+		}
 		return jsonResult(ListNodesOutput{Nodes: nodes})
 	})
 
@@ -65,8 +75,9 @@ func registerNodeTools(s *server.MCPServer, mgr *engine.Manager) {
 			return errorResult(fmt.Errorf("node %q not found", name))
 		}
 
+		nodeCopy := sanitizeNodeForMCP(*node)
 		result := GetNodeOutput{
-			Node: node,
+			Node: &nodeCopy,
 		}
 
 		if req.GetBool("include_bird", false) {
@@ -295,6 +306,20 @@ func registerNodeTools(s *server.MCPServer, mgr *engine.Manager) {
 			return errorResult(err)
 		}
 		nodeName := req.GetString("node_name", "")
+		// Prevent arbitrary host scanning (SSRF) by read-only tokens:
+		// allow read-only tokens to probe only configured node hosts.
+		if err := RequireFullControl(ctx); err != nil {
+			isKnownHost := false
+			for _, n := range mgr.GetNodes() {
+				if strings.EqualFold(n.Host, host) || strings.EqualFold(n.IP, host) || strings.EqualFold(n.IP6, host) || strings.EqualFold(n.Name, host) {
+					isKnownHost = true
+					break
+				}
+			}
+			if !isKnownHost {
+				return errorResult(fmt.Errorf("probing arbitrary hosts requires full-control token"))
+			}
+		}
 		res, err := mgr.ProbeHost(host, nodeName)
 		if err != nil {
 			return errorResult(err)

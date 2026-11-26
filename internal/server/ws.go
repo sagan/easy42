@@ -115,6 +115,7 @@ func (h *ClientHub) Stop() {
 	if !h.running {
 		return
 	}
+	h.running = false
 	close(h.stopCh)
 }
 
@@ -246,18 +247,25 @@ func (c *ClientConn) writePump() {
 			return
 
 		case message, ok := <-c.send:
+			c.mu.Lock()
 			_ = c.ws.SetWriteDeadline(time.Now().Add(10 * time.Second))
 			if !ok {
 				_ = c.ws.WriteMessage(websocket.CloseMessage, []byte{})
+				c.mu.Unlock()
 				return
 			}
-			if err := c.ws.WriteMessage(websocket.TextMessage, message); err != nil {
+			err := c.ws.WriteMessage(websocket.TextMessage, message)
+			c.mu.Unlock()
+			if err != nil {
 				return
 			}
 
 		case <-ticker.C:
+			c.mu.Lock()
 			_ = c.ws.SetWriteDeadline(time.Now().Add(10 * time.Second))
-			if err := c.ws.WriteMessage(websocket.PingMessage, nil); err != nil {
+			err := c.ws.WriteMessage(websocket.PingMessage, nil)
+			c.mu.Unlock()
+			if err != nil {
 				return
 			}
 		}

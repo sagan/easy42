@@ -1164,10 +1164,13 @@ func (m *Manager) DeleteNode(name string) error {
 		cfg.Blocks[bIdx].Nodes = updatedBlockNodes
 	}
 
-	// Purge in-memory statuses and sync results
+	// Purge in-memory statuses, agent connections/caches, and sync results
 	for delName := range deletedNames {
 		delete(m.statuses, delName)
 		_ = m.stateStore.RemoveNode(delName)
+		if m.agentHub != nil {
+			m.agentHub.RemoveNode(delName)
+		}
 	}
 
 	newResults := make([]config.SyncResult, 0, len(m.lastResults))
@@ -5494,23 +5497,15 @@ func (m *Manager) UpdateState(nodeNames ...string) (*config.NetworkState, []stri
 	}
 	wg.Wait()
 
-	// Update state store
-	currentState = m.stateStore.Get()
-
-	// Remove deleted or external nodes from state ONLY on full cluster updates
+	// Update state store atomically under StateStore.mu
+	var activeInternalNodes map[string]bool
 	if !isPartialUpdate {
-		activeInternalNodes := make(map[string]bool)
+		activeInternalNodes = make(map[string]bool)
 		allActiveNodes := make(map[string]bool)
 		for _, n := range nodes {
 			allActiveNodes[n.Name] = true
 			if !n.IsUnmanaged() {
 				activeInternalNodes[n.Name] = true
-			}
-		}
-
-		for stName := range currentState.Nodes {
-			if !activeInternalNodes[stName] {
-				delete(currentState.Nodes, stName)
 			}
 		}
 
@@ -5523,24 +5518,35 @@ func (m *Manager) UpdateState(nodeNames ...string) (*config.NetworkState, []stri
 		m.mu.Unlock()
 	}
 
-	// Merge probed node interfaces. All other recorded values (BIRD, nftables,
-	// ROA, hosts, app and obfuscator hashes) are preserved: a state refresh only
-	// observes live interfaces and must never discard what was recorded as
-	// applied, otherwise every configuration would show up as pending.
-	for _, res := range results {
-		existingNode := currentState.Nodes[res.nodeName]
-		existingNode.Name = res.nodeName
-		existingNode.Host = res.host
-		existingNode.LastSeen = time.Now()
-		existingNode.Interfaces = res.ifaces
-		currentState.Nodes[res.nodeName] = existingNode
-	}
+	var updatedSnapshot *config.NetworkState
+	if err := m.stateStore.Update(func(st *config.NetworkState) error {
+		if !isPartialUpdate {
+			for stName := range st.Nodes {
+				if !activeInternalNodes[stName] {
+					delete(st.Nodes, stName)
+				}
+			}
+		}
 
-	if err := m.stateStore.Save(currentState); err != nil {
+		// Merge probed node interfaces. All other recorded values (BIRD, nftables,
+		// ROA, hosts, app and obfuscator hashes) are preserved: a state refresh only
+		// observes live interfaces and must never discard what was recorded as
+		// applied, otherwise every configuration would show up as pending.
+		for _, res := range results {
+			existingNode := st.Nodes[res.nodeName]
+			existingNode.Name = res.nodeName
+			existingNode.Host = res.host
+			existingNode.LastSeen = time.Now()
+			existingNode.Interfaces = res.ifaces
+			st.Nodes[res.nodeName] = existingNode
+		}
+		updatedSnapshot = st
+		return nil
+	}); err != nil {
 		return nil, warnings, fmt.Errorf("failed to save updated state: %w", err)
 	}
 
-	return currentState, warnings, nil
+	return updatedSnapshot, warnings, nil
 }
 
 // GetLastSyncResults returns the latest sync execution results

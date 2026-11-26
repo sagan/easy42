@@ -253,6 +253,35 @@ func (s *Store) Save(cfg *Config) error {
 	return err
 }
 
+// Update atomically reads, mutates, and persists the config under the store write lock
+// so concurrent writers cannot overwrite unrelated fields such as password_hash or session_secret.
+func (s *Store) Update(fn func(*Config) error) error {
+	s.mu.Lock()
+	cfg := s.config
+	if cfg == nil {
+		s.mu.Unlock()
+		var err error
+		cfg, err = s.Load()
+		if err != nil {
+			return err
+		}
+		s.mu.Lock()
+		if s.config != nil {
+			cfg = s.config
+		}
+	}
+	if err := fn(cfg); err != nil {
+		s.mu.Unlock()
+		return err
+	}
+	err := s.saveLocked(cfg)
+	s.mu.Unlock()
+	if err == nil {
+		s.notifyChange()
+	}
+	return err
+}
+
 func (s *Store) saveLocked(cfg *Config) error {
 	if err := os.MkdirAll(s.dataDir, 0700); err != nil {
 		return fmt.Errorf("failed to create data dir: %w", err)

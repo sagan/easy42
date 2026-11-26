@@ -1765,30 +1765,30 @@ func (s *BotService) FormatEventForTelegram(evt *config.Event, serverURL string)
 	case config.EventTypeNodeOffline:
 		hostname := ""
 		if h, ok := evt.Metadata["hostname"].(string); ok {
-			hostname = h
+			hostname = html.EscapeString(h)
 		}
 		return fmt.Sprintf(`🔴 <b>easy42 Alert: Node Offline</b>
 
 Node: <b>%s</b>
 Hostname: <code>%s</code>
 Status: <b>Disconnected / Unreachable</b>
-Time: <code>%s UTC</code>%s`, evt.NodeName, hostname, eventTime, dashLink)
+Time: <code>%s UTC</code>%s`, html.EscapeString(evt.NodeName), hostname, eventTime, dashLink)
 
 	case config.EventTypeNodeOnline:
 		hostname := ""
 		if h, ok := evt.Metadata["hostname"].(string); ok {
-			hostname = h
+			hostname = html.EscapeString(h)
 		}
 		agentVer := "active"
 		if av, ok := evt.Metadata["agent_version"].(string); ok && av != "" {
-			agentVer = av
+			agentVer = html.EscapeString(av)
 		}
 		return fmt.Sprintf(`🟢 <b>easy42 Alert: Node Online</b>
 
 Node: <b>%s</b>
 Hostname: <code>%s</code>
 Status: <b>Connected & Active</b> (%s)
-Time: <code>%s UTC</code>%s`, evt.NodeName, hostname, agentVer, eventTime, dashLink)
+Time: <code>%s UTC</code>%s`, html.EscapeString(evt.NodeName), hostname, agentVer, eventTime, dashLink)
 
 	case config.EventTypeCronTaskFailure:
 		taskName := evt.TaskID

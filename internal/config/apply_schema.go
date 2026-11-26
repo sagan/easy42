@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/netip"
 	"regexp"
 	"strings"
 
@@ -842,6 +843,33 @@ func validateLinkPatch(l *LinkPatch) error {
 		return fmt.Errorf("invalid to.mtu %d: must be 0-9000", *l.To.MTU)
 	}
 
+	validateEnd := func(side string, end *LinkEndPatch) error {
+		if end.Interface != nil && strings.TrimSpace(*end.Interface) != "" {
+			iface := strings.TrimSpace(*end.Interface)
+			if !IsValidInterfaceName(iface) {
+				return fmt.Errorf("invalid %s.interface '%s': must be 1-15 chars [a-zA-Z0-9_-]", side, iface)
+			}
+			*end.Interface = iface
+		}
+		for _, addrPtr := range []*string{end.Address, end.Address4} {
+			if addrPtr != nil && strings.TrimSpace(*addrPtr) != "" {
+				addr := strings.TrimSpace(*addrPtr)
+				if _, err := netip.ParsePrefix(addr); err != nil {
+					if _, err2 := netip.ParseAddr(addr); err2 != nil {
+						return fmt.Errorf("invalid IP/CIDR %q in %s", addr, side)
+					}
+				}
+			}
+		}
+		return nil
+	}
+	if err := validateEnd("from", l.From); err != nil {
+		return err
+	}
+	if err := validateEnd("to", l.To); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -864,6 +892,11 @@ func validateAppPatch(a *AppPatch) error {
 	a.Name = strings.TrimSpace(a.Name)
 	if err := ValidateAppName(a.Name); err != nil {
 		return err
+	}
+	if a.Version != nil && strings.TrimSpace(*a.Version) != "" {
+		if err := ValidateSafePathSegment(*a.Version, "app version"); err != nil {
+			return err
+		}
 	}
 
 	if a.AppType != nil {
@@ -903,9 +936,24 @@ func validateAppPatch(a *AppPatch) error {
 		if len(a.Artifact.Files) == 0 {
 			return fmt.Errorf("artifact must specify at least one file to extract")
 		}
+		for k, v := range a.Artifact.ArchMapping {
+			if strings.TrimSpace(k) != "" {
+				if err := ValidateSafePathSegment(k, "artifact arch_mapping key"); err != nil {
+					return err
+				}
+			}
+			if strings.TrimSpace(v) != "" {
+				if err := ValidateSafePathSegment(v, "artifact arch_mapping value"); err != nil {
+					return err
+				}
+			}
+		}
 		for i, f := range a.Artifact.Files {
 			if strings.TrimSpace(f.Name) == "" {
 				return fmt.Errorf("artifact file #%d name cannot be empty", i+1)
+			}
+			if err := ValidateSafePathSegment(f.Name, fmt.Sprintf("artifact file #%d name", i+1)); err != nil {
+				return err
 			}
 			if strings.TrimSpace(f.TargetPath) == "" {
 				return fmt.Errorf("artifact file '%s' target_path cannot be empty", f.Name)

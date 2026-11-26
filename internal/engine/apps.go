@@ -222,53 +222,53 @@ func (m *Manager) SaveApp(app config.App) (config.App, error) {
 		return app, err
 	}
 
-	cfg, err := m.store.Load()
-	if err != nil {
-		return app, fmt.Errorf("failed to load config: %w", err)
-	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
-	now := time.Now()
-	if app.ID == "" {
-		app.ID = "app_" + uuid.New().String()[:8]
-		app.CreatedAt = now
-		app.UpdatedAt = now
-		app.Enabled = true
-	} else {
-		app.UpdatedAt = now
-	}
-
-	// Check if another app already uses the same name
-	for _, existing := range cfg.Apps {
-		if existing.ID != app.ID && strings.EqualFold(existing.Name, app.Name) {
-			return app, fmt.Errorf("app with name '%s' already exists", app.Name)
+	err := m.store.Update(func(cfg *config.Config) error {
+		now := time.Now()
+		if app.ID == "" {
+			app.ID = "app_" + uuid.New().String()[:8]
+			app.CreatedAt = now
+			app.UpdatedAt = now
+			app.Enabled = true
+		} else {
+			app.UpdatedAt = now
 		}
-	}
 
-	if strings.ToLower(app.AppType) == "systemd" {
-		app.MainContent = apps.EnsureSystemdEnvironmentFile(app.Name, app.MainContent)
-	}
-
-	found := false
-	for i, existing := range cfg.Apps {
-		if existing.ID == app.ID {
-			if existing.Name != app.Name {
-				m.appStatusesMu.Lock()
-				for _, nodeMap := range m.appStatuses {
-					delete(nodeMap, existing.Name)
-				}
-				m.appStatusesMu.Unlock()
+		// Check if another app already uses the same name
+		for _, existing := range cfg.Apps {
+			if existing.ID != app.ID && strings.EqualFold(existing.Name, app.Name) {
+				return fmt.Errorf("app with name '%s' already exists", app.Name)
 			}
-			app.CreatedAt = existing.CreatedAt
-			cfg.Apps[i] = app
-			found = true
-			break
 		}
-	}
-	if !found {
-		cfg.Apps = append(cfg.Apps, app)
-	}
 
-	if err := m.store.Save(cfg); err != nil {
+		if strings.ToLower(app.AppType) == "systemd" {
+			app.MainContent = apps.EnsureSystemdEnvironmentFile(app.Name, app.MainContent)
+		}
+
+		found := false
+		for i, existing := range cfg.Apps {
+			if existing.ID == app.ID {
+				if existing.Name != app.Name {
+					m.appStatusesMu.Lock()
+					for _, nodeMap := range m.appStatuses {
+						delete(nodeMap, existing.Name)
+					}
+					m.appStatusesMu.Unlock()
+				}
+				app.CreatedAt = existing.CreatedAt
+				cfg.Apps[i] = app
+				found = true
+				break
+			}
+		}
+		if !found {
+			cfg.Apps = append(cfg.Apps, app)
+		}
+		return nil
+	})
+	if err != nil {
 		return app, fmt.Errorf("failed to save config: %w", err)
 	}
 

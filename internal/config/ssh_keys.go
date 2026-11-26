@@ -442,9 +442,36 @@ func parseAgentVersion(v string) []int {
 // prefixed with the comma separated host name list, which OpenSSH requires
 // before the key type; keys without host names are skipped there because such
 // a line is invalid and would make the whole file unparsable.
+func sanitizeSSHComment(s string) string {
+	var b strings.Builder
+	b.Grow(len(s))
+	for _, r := range s {
+		if r == '\r' || r == '\n' {
+			break
+		}
+		if r < 0x20 || r == 0x7f {
+			continue
+		}
+		b.WriteRune(r)
+	}
+	return strings.TrimSpace(b.String())
+}
+
+func hasControlOrNewline(s string) bool {
+	for _, r := range s {
+		if r < 0x20 || r == 0x7f {
+			return true
+		}
+	}
+	return false
+}
+
 func SSHKeyLine(key SSHPublicKey, authorizedKeys bool) string {
 	key = key.Normalize()
-	comment := key.Comment
+	if hasControlOrNewline(key.Algorithm) || hasControlOrNewline(key.Key) {
+		return ""
+	}
+	comment := sanitizeSSHComment(key.Comment)
 	prefix := ""
 	if authorizedKeys {
 		if comment == "" {
@@ -454,7 +481,7 @@ func SSHKeyLine(key SSHPublicKey, authorizedKeys bool) string {
 		}
 	} else {
 		prefix = strings.Join(key.Hostnames, ",")
-		if prefix == "" {
+		if prefix == "" || hasControlOrNewline(prefix) {
 			return ""
 		}
 	}

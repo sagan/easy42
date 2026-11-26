@@ -96,6 +96,9 @@ func registerDatabaseAndIntegrationsTools(s *server.MCPServer, mgr *engine.Manag
 		if display.TelegramSecretToken != "" {
 			display.TelegramSecretToken = "******"
 		}
+		if display.PrometheusAuthToken != "" {
+			display.PrometheusAuthToken = "******"
+		}
 		return jsonResult(display)
 	})
 

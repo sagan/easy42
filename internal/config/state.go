@@ -567,6 +567,37 @@ func (s *StateStore) Save(st *NetworkState) (err error) {
 		}
 	}()
 
+	return s.saveLocked(st)
+}
+
+// Update atomically mutates and persists the in-memory NetworkState under s.mu.
+func (s *StateStore) Update(fn func(*NetworkState) error) (err error) {
+	s.mu.Lock()
+	defer func() {
+		s.mu.Unlock()
+		if err == nil {
+			s.notifyChange()
+		}
+	}()
+
+	if s.state == nil {
+		s.state = &NetworkState{
+			Version:   1,
+			UpdatedAt: time.Now(),
+			Nodes:     make(map[string]StateNode),
+		}
+	}
+	if s.state.Nodes == nil {
+		s.state.Nodes = make(map[string]StateNode)
+	}
+	if err := fn(s.state); err != nil {
+		return err
+	}
+	return s.saveLocked(s.state)
+}
+
+func (s *StateStore) saveLocked(st *NetworkState) (err error) {
+
 	if err := s.initDBLocked(); err != nil {
 		return err
 	}

@@ -50,6 +50,12 @@ type authStatusResponse struct {
 }
 
 func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
+	if !loginRateLimiter.allow("login:" + clientIPFromRequest(r)) {
+		writeError(w, http.StatusTooManyRequests, "Too many login attempts. Please wait a few minutes and try again.")
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, 8*1024)
 	var req loginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid request body")
@@ -66,7 +72,9 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	acquireArgon2Slot()
 	valid, err := crypto.VerifyPassword(req.Password, cfg.PasswordHash)
+	releaseArgon2Slot()
 	if err != nil || !valid {
 		writeError(w, http.StatusUnauthorized, "Invalid password")
 		return
@@ -176,7 +184,17 @@ func (s *Server) handleLock(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
-	s.mgr.Lock()
+	// Only lock the key vault if the caller presents a valid authenticated session,
+	// preventing unauthenticated cross-site DoS attacks from locking the cluster.
+	var sessionToken string
+	if cookie, err := r.Cookie("easy42_session"); err == nil && cookie.Value != "" {
+		sessionToken = cookie.Value
+	} else if authHeader := r.Header.Get("Authorization"); strings.HasPrefix(authHeader, "Bearer ") {
+		sessionToken = strings.TrimPrefix(authHeader, "Bearer ")
+	}
+	if cfg := s.mgr.Store().Get(); cfg != nil && sessionToken != "" && crypto.VerifySessionToken(sessionToken, cfg.SessionSecret, cfg.PasswordHash) {
+		s.mgr.Lock()
+	}
 	http.SetCookie(w, &http.Cookie{
 		Name:     "easy42_session",
 		Value:    "",

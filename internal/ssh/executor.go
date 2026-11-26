@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"easy42/internal/config"
@@ -19,6 +20,34 @@ func RunCommand(client *ssh.Client, command string) (string, error) {
 	return RunCommandWithTimeout(client, command, 15*time.Second)
 }
 
+const maxSSHOutputBytes = 10 * 1024 * 1024 // 10 MiB
+
+type limitedSyncBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+	max int
+}
+
+func (b *limitedSyncBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	rem := b.max - b.buf.Len()
+	if rem > 0 {
+		if len(p) > rem {
+			_, _ = b.buf.Write(p[:rem])
+		} else {
+			_, _ = b.buf.Write(p)
+		}
+	}
+	return len(p), nil
+}
+
+func (b *limitedSyncBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
+}
+
 // RunCommandWithTimeout executes a command on the remote host bounded by a timeout
 func RunCommandWithTimeout(client *ssh.Client, command string, timeout time.Duration) (string, error) {
 	session, err := client.NewSession()
@@ -27,9 +56,10 @@ func RunCommandWithTimeout(client *ssh.Client, command string, timeout time.Dura
 	}
 	defer session.Close()
 
-	var stdout, stderr bytes.Buffer
-	session.Stdout = &stdout
-	session.Stderr = &stderr
+	stdout := &limitedSyncBuffer{max: maxSSHOutputBytes}
+	stderr := &limitedSyncBuffer{max: maxSSHOutputBytes}
+	session.Stdout = stdout
+	session.Stderr = stderr
 
 	if timeout <= 0 {
 		timeout = 15 * time.Second
@@ -70,9 +100,10 @@ func RunCommandWithExitCodeTimeout(client *ssh.Client, command string, timeout t
 	}
 	defer session.Close()
 
-	var stdout, stderr bytes.Buffer
-	session.Stdout = &stdout
-	session.Stderr = &stderr
+	stdout := &limitedSyncBuffer{max: maxSSHOutputBytes}
+	stderr := &limitedSyncBuffer{max: maxSSHOutputBytes}
+	session.Stdout = stdout
+	session.Stderr = stderr
 
 	if timeout <= 0 {
 		timeout = 10 * time.Minute
@@ -168,6 +199,9 @@ func GetInterfaceMTU(client *ssh.Client, iface string) (int, error) {
 
 // IsInterfaceStarted checks if a network interface is in started state (exists, is up, and recognized by wireguard)
 func IsInterfaceStarted(client *ssh.Client, iface string) bool {
+	if !config.IsValidInterfaceName(iface) {
+		return false
+	}
 	out, err := RunCommand(client, fmt.Sprintf("ip link show %s", iface))
 	if err != nil {
 		return false
@@ -185,6 +219,9 @@ func IsInterfaceStarted(client *ssh.Client, iface string) bool {
 // StartWireGuardInterface brings up a WireGuard interface using wg-quick up.
 // If a stale or unconfigured interface device with the same name exists, it tears it down first to avoid "already exists" errors.
 func StartWireGuardInterface(client *ssh.Client, iface string) error {
+	if !config.IsValidInterfaceName(iface) {
+		return fmt.Errorf("invalid interface name: %q", iface)
+	}
 	if InterfaceExists(client, iface) {
 		_ = DownWireGuard(client, iface)
 		_, _ = RunCommand(client, fmt.Sprintf("ip link del dev %s", iface))

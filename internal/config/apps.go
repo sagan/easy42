@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
@@ -72,10 +73,31 @@ func ValidateAppName(name string) error {
 	return nil
 }
 
+// ValidateSafePathSegment ensures a path segment or relative filename (such as version, arch, or artifact file name)
+// cannot escape its parent directory via traversal or absolute paths.
+func ValidateSafePathSegment(val, field string) error {
+	val = strings.TrimSpace(val)
+	if val == "" {
+		return fmt.Errorf("%s cannot be empty", field)
+	}
+	if strings.ContainsRune(val, 0) || strings.Contains(val, "..") || strings.ContainsAny(val, `/\`) {
+		return fmt.Errorf("invalid %s '%s': must not contain '..', '/', '\\', or null bytes", field, val)
+	}
+	if !filepath.IsLocal(val) {
+		return fmt.Errorf("invalid %s '%s': must be a local path", field, val)
+	}
+	return nil
+}
+
 // ValidateApp validates an App definition
 func ValidateApp(app App) error {
 	if err := ValidateAppName(app.Name); err != nil {
 		return err
+	}
+	if strings.TrimSpace(app.Version) != "" {
+		if err := ValidateSafePathSegment(app.Version, "app version"); err != nil {
+			return err
+		}
 	}
 
 	appType := strings.TrimSpace(strings.ToLower(app.AppType))
@@ -122,9 +144,24 @@ func ValidateApp(app App) error {
 		if len(app.Artifact.Files) == 0 {
 			return fmt.Errorf("artifact must specify at least one file to extract")
 		}
+		for k, v := range app.Artifact.ArchMapping {
+			if strings.TrimSpace(k) != "" {
+				if err := ValidateSafePathSegment(k, "artifact arch_mapping key"); err != nil {
+					return err
+				}
+			}
+			if strings.TrimSpace(v) != "" {
+				if err := ValidateSafePathSegment(v, "artifact arch_mapping value"); err != nil {
+					return err
+				}
+			}
+		}
 		for i, f := range app.Artifact.Files {
 			if strings.TrimSpace(f.Name) == "" {
 				return fmt.Errorf("artifact file #%d name cannot be empty", i+1)
+			}
+			if err := ValidateSafePathSegment(f.Name, fmt.Sprintf("artifact file #%d name", i+1)); err != nil {
+				return err
 			}
 			if strings.TrimSpace(f.TargetPath) == "" {
 				return fmt.Errorf("artifact file '%s' target_path cannot be empty", f.Name)

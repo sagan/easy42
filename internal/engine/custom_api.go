@@ -208,10 +208,34 @@ func (m *Manager) BuildAPIContext(r *http.Request) (map[string]any, error) {
 	var cfgCopy config.Config
 	if cfg != nil {
 		cfgCopy = *cfg
-		// Sanitize sensitive credentials
+		// Sanitize sensitive credentials and cluster secrets
 		cfgCopy.PasswordHash = ""
 		cfgCopy.EncryptedDEK = ""
 		cfgCopy.SessionSecret = ""
+		cfgCopy.MCP = config.MCPSettings{}
+		cfgCopy.Integrations.PrometheusAuthToken = ""
+		cfgCopy.Integrations.TelegramBotToken = ""
+		cfgCopy.Integrations.TelegramSecretToken = ""
+		cfgCopy.DNS.APIToken = ""
+		cfgCopy.ConfigChanges = nil
+		if len(cfg.Nodes) > 0 {
+			nodesCopy := make([]config.Node, len(cfg.Nodes))
+			copy(nodesCopy, cfg.Nodes)
+			for i := range nodesCopy {
+				nodesCopy[i].AgentToken = ""
+			}
+			cfgCopy.Nodes = nodesCopy
+		}
+		if len(cfg.Links) > 0 {
+			linksCopy := make([]config.Link, len(cfg.Links))
+			copy(linksCopy, cfg.Links)
+			for i := range linksCopy {
+				linksCopy[i].Psk = ""
+				linksCopy[i].From.PrivateKey = ""
+				linksCopy[i].To.PrivateKey = ""
+			}
+			cfgCopy.Links = linksCopy
+		}
 
 		if cfgBytes, err := json.Marshal(cfgCopy); err == nil {
 			decoder := json.NewDecoder(bytes.NewReader(cfgBytes))

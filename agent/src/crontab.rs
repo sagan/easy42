@@ -193,10 +193,6 @@ pub async fn apply_crontab(new_content: &str) -> Result<(), String> {
         return Ok(());
     }
 
-    // Write to a temporary file, then run `crontab <temp_path>`
-    let temp_dir = std::env::temp_dir();
-    let temp_file_path = temp_dir.join(format!("easy42-cron-tmp-{}", std::process::id()));
-
     // Ensure content ends with newline (standard cron requirement)
     let content_to_write = if new_content.ends_with('\n') {
         new_content.to_string()
@@ -204,16 +200,32 @@ pub async fn apply_crontab(new_content: &str) -> Result<(), String> {
         format!("{}\n", new_content)
     };
 
-    std::fs::write(&temp_file_path, content_to_write.as_bytes())
-        .map_err(|e| format!("failed to write temp cron file {:?}: {}", temp_file_path, e))?;
+    // Pipe directly to `crontab -` via stdin to avoid predictable /tmp files and TOCTOU/symlink races
+    use tokio::io::AsyncWriteExt;
+    let mut child = tokio::process::Command::new("crontab")
+        .arg("-")
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .map_err(|e| format!("failed to spawn crontab: {}", e))?;
 
-    let cmd = format!("crontab {}", crate::apps::shell_quote(temp_file_path.to_str().unwrap_or("")));
-    let (success, code, stdout, stderr) = run_shell(&cmd).await;
+    if let Some(mut stdin) = child.stdin.take() {
+        stdin
+            .write_all(content_to_write.as_bytes())
+            .await
+            .map_err(|e| format!("failed to write to crontab stdin: {}", e))?;
+    }
 
-    // Clean up temp file
-    let _ = std::fs::remove_file(&temp_file_path);
+    let output = child
+        .wait_with_output()
+        .await
+        .map_err(|e| format!("failed to wait for crontab: {}", e))?;
 
-    if !success {
+    if !output.status.success() {
+        let code = output.status.code().unwrap_or(-1);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
         return Err(format!("crontab installation failed (code {}): {} {}", code, stdout, stderr));
     }
 

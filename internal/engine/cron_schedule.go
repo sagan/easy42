@@ -86,7 +86,7 @@ func parseField(field string, min, max int, target []bool) error {
 			}
 			base := subParts[0]
 			step, err := strconv.Atoi(subParts[1])
-			if err != nil || step <= 0 {
+			if err != nil || step <= 0 || step > max+1 {
 				return fmt.Errorf("invalid step value: %s", subParts[1])
 			}
 

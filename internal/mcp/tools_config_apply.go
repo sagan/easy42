@@ -78,6 +78,9 @@ func registerConfigApplyTools(s *server.MCPServer, mgr *engine.Manager) {
 		mcp.WithOpenWorldHintAnnotation(false),
 		mcp.WithOutputSchema[ListConfigChangesOutput](),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		if err := RequireFullControl(ctx); err != nil {
+			return errorResult(err)
+		}
 		changes := mgr.ListConfigChanges()
 		if changes == nil {
 			changes = []config.ConfigChange{}
@@ -96,6 +99,9 @@ func registerConfigApplyTools(s *server.MCPServer, mgr *engine.Manager) {
 		mcp.WithOutputSchema[config.ConfigChange](),
 		mcp.WithString("id", mcp.Required(), mcp.Description("Saved change ID")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		if err := RequireFullControl(ctx); err != nil {
+			return errorResult(err)
+		}
 		id, err := req.RequireString("id")
 		if err != nil {
 			return errorResult(err)
