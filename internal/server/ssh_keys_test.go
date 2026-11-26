@@ -243,4 +243,53 @@ func TestSSHKeysAPI(t *testing.T) {
 	if w.Code != http.StatusNotFound {
 		t.Fatalf("expected 404 after delete, got %d", w.Code)
 	}
+
+	// 5. Custom rule ID on create, duplicate rejection, and rename on update.
+	customBody, _ := json.Marshal(map[string]any{
+		"id":           "my-custom-rule",
+		"type":         "all",
+		"src_selector": map[string]string{"name": "node1"},
+		"dst_selector": map[string]string{"name": "node2"},
+		"enabled":      true,
+	})
+	req = httptest.NewRequest("POST", "/api/ssh-keys/rules", bytes.NewReader(customBody))
+	w = httptest.NewRecorder()
+	srv.handleCreateSSHKeyRule(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected 201 for custom ID create, got %d: %s", w.Code, w.Body.String())
+	}
+	var customCreated config.SSHKeyRule
+	_ = json.Unmarshal(w.Body.Bytes(), &customCreated)
+	if customCreated.ID != "my-custom-rule" {
+		t.Fatalf("expected custom ID 'my-custom-rule', got %q", customCreated.ID)
+	}
+
+	// Duplicate ID must be rejected.
+	req = httptest.NewRequest("POST", "/api/ssh-keys/rules", bytes.NewReader(customBody))
+	w = httptest.NewRecorder()
+	srv.handleCreateSSHKeyRule(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for duplicate custom ID, got %d: %s", w.Code, w.Body.String())
+	}
+
+	// Rename ID on update.
+	renameBody, _ := json.Marshal(map[string]any{
+		"id":           "renamed-rule",
+		"type":         "all",
+		"src_selector": map[string]string{"name": "node1"},
+		"dst_selector": map[string]string{"name": "node2"},
+		"enabled":      true,
+	})
+	req = httptest.NewRequest("PUT", "/api/ssh-keys/rules/my-custom-rule", bytes.NewReader(renameBody))
+	req = withURLParam(req, "id", "my-custom-rule")
+	w = httptest.NewRecorder()
+	srv.handleUpdateSSHKeyRule(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 for rename update, got %d: %s", w.Code, w.Body.String())
+	}
+	var renamed config.SSHKeyRule
+	_ = json.Unmarshal(w.Body.Bytes(), &renamed)
+	if renamed.ID != "renamed-rule" {
+		t.Fatalf("expected renamed ID 'renamed-rule', got %q", renamed.ID)
+	}
 }

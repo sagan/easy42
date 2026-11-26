@@ -369,3 +369,104 @@ func TestSSHKeyRuleAllNodesSelector(t *testing.T) {
 		}
 	}
 }
+
+func TestSSHKeyRuleSourceKeysValidation(t *testing.T) {
+	userBlob := testSSHKeyBlob("ssh-ed25519", "direct-user")
+	hostBlob := testSSHKeyBlob("ssh-ed25519", "direct-host")
+
+	authLine := "ssh-ed25519 " + userBlob + " admin@laptop"
+	knownHostLine := "git.example.com,192.0.2.10 ssh-ed25519 " + hostBlob + " git host"
+
+	// Valid authorized_keys rule with direct source keys.
+	if err := ValidateSSHKeyRule(SSHKeyRule{
+		Type:        SSHKeyFileAuthorizedKeys,
+		SourceKeys:  "# comment\n\n" + authLine + "\n",
+		DstSelector: AllNodesSelector(),
+	}); err != nil {
+		t.Fatalf("expected valid authorized_keys source_keys rule, got %v", err)
+	}
+
+	// Valid known_hosts rule with direct source keys.
+	if err := ValidateSSHKeyRule(SSHKeyRule{
+		Type:        SSHKeyFileKnownHosts,
+		SourceKeys:  knownHostLine,
+		DstSelector: AllNodesSelector(),
+	}); err != nil {
+		t.Fatalf("expected valid known_hosts source_keys rule, got %v", err)
+	}
+
+	// Valid "all" rule with both authorized_keys and known_hosts lines.
+	if err := ValidateSSHKeyRule(SSHKeyRule{
+		Type:        SSHKeyRuleTypeAll,
+		SourceKeys:  authLine + "\n" + knownHostLine,
+		DstSelector: AllNodesSelector(),
+	}); err != nil {
+		t.Fatalf("expected valid 'all' source_keys rule, got %v", err)
+	}
+
+	// Reject setting both src_selector and source_keys.
+	if err := ValidateSSHKeyRule(SSHKeyRule{
+		Type:        SSHKeyFileAuthorizedKeys,
+		SrcSelector: AllNodesSelector(),
+		SourceKeys:  authLine,
+		DstSelector: AllNodesSelector(),
+	}); err == nil {
+		t.Fatal("expected error when both src_selector and source_keys are set")
+	}
+
+	// Reject known_hosts line in authorized_keys rule.
+	if err := ValidateSSHKeyRule(SSHKeyRule{
+		Type:        SSHKeyFileAuthorizedKeys,
+		SourceKeys:  knownHostLine,
+		DstSelector: AllNodesSelector(),
+	}); err == nil {
+		t.Fatal("expected error for known_hosts line in authorized_keys rule")
+	}
+
+	// Reject authorized_keys line in known_hosts rule.
+	if err := ValidateSSHKeyRule(SSHKeyRule{
+		Type:        SSHKeyFileKnownHosts,
+		SourceKeys:  authLine,
+		DstSelector: AllNodesSelector(),
+	}); err == nil {
+		t.Fatal("expected error for authorized_keys line in known_hosts rule")
+	}
+
+	// Reject invalid key line.
+	if err := ValidateSSHKeyRule(SSHKeyRule{
+		Type:        SSHKeyRuleTypeAll,
+		SourceKeys:  "not-a-valid-key-line",
+		DstSelector: AllNodesSelector(),
+	}); err == nil {
+		t.Fatal("expected error for invalid source key line")
+	}
+
+	// Reject comment-only / whitespace source_keys.
+	if err := ValidateSSHKeyRule(SSHKeyRule{
+		Type:        SSHKeyRuleTypeAll,
+		SourceKeys:  "# only a comment\n   \n",
+		DstSelector: AllNodesSelector(),
+	}); err == nil {
+		t.Fatal("expected error for comment-only source_keys")
+	}
+
+	// Custom rule IDs.
+	if err := ValidateSSHKeyRule(SSHKeyRule{
+		ID:          "admin-keys_1.0",
+		Type:        SSHKeyFileAuthorizedKeys,
+		SourceKeys:  authLine,
+		DstSelector: AllNodesSelector(),
+	}); err != nil {
+		t.Fatalf("expected valid custom rule ID, got %v", err)
+	}
+	for _, badID := range []string{"bad/id", "has space", "-leading-dash"} {
+		if err := ValidateSSHKeyRule(SSHKeyRule{
+			ID:          badID,
+			Type:        SSHKeyFileAuthorizedKeys,
+			SourceKeys:  authLine,
+			DstSelector: AllNodesSelector(),
+		}); err == nil {
+			t.Fatalf("expected invalid rule ID %q to be rejected", badID)
+		}
+	}
+}

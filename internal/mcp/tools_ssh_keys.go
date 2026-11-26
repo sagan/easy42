@@ -39,15 +39,17 @@ func registerSSHKeyTools(s *server.MCPServer, mgr *engine.Manager) {
 
 	// 2. create_ssh_key_rule
 	s.AddTool(mcp.NewTool("create_ssh_key_rule",
-		mcp.WithDescription("Create a rule that installs the SSH public keys of the source nodes into the known_hosts and/or authorized_keys files of the destination nodes, so root can SSH between cluster nodes without password. Requires full-control token."),
+		mcp.WithDescription("Create a rule that installs the SSH public keys of the source nodes (or direct source key lines) into the known_hosts and/or authorized_keys files of the destination nodes. Requires full-control token."),
 		mcp.WithTitleAnnotation("Create SSH Key Rule"),
 		mcp.WithReadOnlyHintAnnotation(false),
 		mcp.WithDestructiveHintAnnotation(false),
 		mcp.WithIdempotentHintAnnotation(false),
 		mcp.WithOpenWorldHintAnnotation(false),
 		mcp.WithOutputSchema[SSHKeyRuleMutationOutput](),
+		mcp.WithString("id", mcp.Description("Optional custom SSH key rule ID (1-64 chars: letters, digits, '.', '_', '-'). Auto-generated if omitted.")),
 		mcp.WithString("type", mcp.Required(), mcp.Description("Target file type: 'known_hosts', 'authorized_keys' or 'all'")),
-		mcp.WithObject("src_selector", mcp.Required(), mcp.Description("Node selector for the source nodes whose public keys are distributed, e.g. {\"tag\":\"core\"}. Use {\"all\":\"1\"} for every node; an empty selector matches no node."), mcp.AdditionalProperties(map[string]any{"type": "string"})),
+		mcp.WithObject("src_selector", mcp.Description("Node selector for the source nodes whose public keys are distributed, e.g. {\"tag\":\"core\"}. Use {\"all\":\"1\"} for every node. Provide either src_selector or source_keys."), mcp.AdditionalProperties(map[string]any{"type": "string"})),
+		mcp.WithString("source_keys", mcp.Description("Direct source key lines in authorized_keys ('<algorithm> <key> [comment]') or known_hosts ('<hostnames> <algorithm> <key> [comment]') format, one per line. Provide either src_selector or source_keys.")),
 		mcp.WithObject("dst_selector", mcp.Required(), mcp.Description("Node selector for the destination nodes whose SSH key files are updated, e.g. {\"name\":\"node-a,node-b\"}. Use {\"all\":\"1\"} for every node."), mcp.AdditionalProperties(map[string]any{"type": "string"})),
 		mcp.WithBoolean("enabled", mcp.Description("Enable the rule immediately (default true)")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -58,10 +60,11 @@ func registerSSHKeyTools(s *server.MCPServer, mgr *engine.Manager) {
 		if err != nil {
 			return errorResult(err)
 		}
-		srcSelector, err := parseRequiredSelectorArg(req, "src_selector")
+		srcSelector, err := parseOptionalSelectorArg(req, "src_selector")
 		if err != nil {
 			return errorResult(err)
 		}
+		sourceKeys := req.GetString("source_keys", "")
 		dstSelector, err := parseRequiredSelectorArg(req, "dst_selector")
 		if err != nil {
 			return errorResult(err)
@@ -74,9 +77,11 @@ func registerSSHKeyTools(s *server.MCPServer, mgr *engine.Manager) {
 			}
 		}
 
-		saved, err := mgr.SaveSSHKeyRule(config.SSHKeyRule{
+		saved, err := mgr.CreateSSHKeyRule(config.SSHKeyRule{
+			ID:          req.GetString("id", ""),
 			Type:        ruleType,
 			SrcSelector: srcSelector,
+			SourceKeys:  sourceKeys,
 			DstSelector: dstSelector,
 			Enabled:     enabled,
 		})
@@ -99,8 +104,10 @@ func registerSSHKeyTools(s *server.MCPServer, mgr *engine.Manager) {
 		mcp.WithOpenWorldHintAnnotation(false),
 		mcp.WithOutputSchema[SSHKeyRuleMutationOutput](),
 		mcp.WithString("id", mcp.Required(), mcp.Description("SSH key rule ID")),
+		mcp.WithString("new_id", mcp.Description("Optional new SSH key rule ID when renaming the rule")),
 		mcp.WithString("type", mcp.Required(), mcp.Description("Target file type: 'known_hosts', 'authorized_keys' or 'all'")),
-		mcp.WithObject("src_selector", mcp.Required(), mcp.Description("Node selector for the source nodes"), mcp.AdditionalProperties(map[string]any{"type": "string"})),
+		mcp.WithObject("src_selector", mcp.Description("Node selector for the source nodes. Provide either src_selector or source_keys."), mcp.AdditionalProperties(map[string]any{"type": "string"})),
+		mcp.WithString("source_keys", mcp.Description("Direct source key lines in authorized_keys or known_hosts format, one per line. Provide either src_selector or source_keys.")),
 		mcp.WithObject("dst_selector", mcp.Required(), mcp.Description("Node selector for the destination nodes (use {\"all\":\"1\"} for every node)"), mcp.AdditionalProperties(map[string]any{"type": "string"})),
 		mcp.WithBoolean("enabled", mcp.Description("Whether the rule is enabled (default true)")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -118,20 +125,26 @@ func registerSSHKeyTools(s *server.MCPServer, mgr *engine.Manager) {
 		if err != nil {
 			return errorResult(err)
 		}
-		srcSelector, err := parseRequiredSelectorArg(req, "src_selector")
+		srcSelector, err := parseOptionalSelectorArg(req, "src_selector")
 		if err != nil {
 			return errorResult(err)
 		}
+		sourceKeys := req.GetString("source_keys", "")
 		dstSelector, err := parseRequiredSelectorArg(req, "dst_selector")
 		if err != nil {
 			return errorResult(err)
 		}
 		enabled := req.GetBool("enabled", true)
 
-		saved, err := mgr.SaveSSHKeyRule(config.SSHKeyRule{
-			ID:          id,
+		newID := req.GetString("new_id", "")
+		if newID == "" {
+			newID = id
+		}
+		saved, err := mgr.UpdateSSHKeyRule(id, config.SSHKeyRule{
+			ID:          newID,
 			Type:        ruleType,
 			SrcSelector: srcSelector,
+			SourceKeys:  sourceKeys,
 			DstSelector: dstSelector,
 			Enabled:     enabled,
 		})
@@ -167,6 +180,19 @@ func registerSSHKeyTools(s *server.MCPServer, mgr *engine.Manager) {
 		}
 		return successText(fmt.Sprintf("SSH key rule %q deleted", id))
 	})
+}
+
+// parseOptionalSelectorArg parses an optional string-valued selector object argument.
+func parseOptionalSelectorArg(req mcp.CallToolRequest, name string) (map[string]string, error) {
+	args := req.GetArguments()
+	if args == nil {
+		return nil, nil
+	}
+	raw, ok := args[name]
+	if !ok || raw == nil {
+		return nil, nil
+	}
+	return parseRequiredSelectorArg(req, name)
 }
 
 // parseRequiredSelectorArg parses a required string-valued selector object argument.

@@ -288,8 +288,6 @@ export const AppsPage: React.FC = () => {
   // Local search terms (per-tab, synced to that tab's `?search` via replaceState)
   const [search, setSearch] = useState(() => (activeTab === "apps" ? urlSearch : ""));
   const [scriptSearch, setScriptSearch] = useState(() => (activeTab === "scripts" ? urlSearch : ""));
-  const [scriptNodeFilter, setScriptNodeFilter] = useState("all");
-  const [scriptGroupFilter, setScriptGroupFilter] = useState("all");
   const [varSearch, setVarSearch] = useState(() => (activeTab === "variables" ? urlSearch : ""));
   // The Apps-specific toolbar (search box, create button) is hidden on the SSH tab,
   // which renders its own header inside the tab component.
@@ -308,7 +306,10 @@ export const AppsPage: React.FC = () => {
       navigate(`/apps/variables${urlSearch ? `?search=${encodeURIComponent(urlSearch)}` : ""}`, { replace: true });
     } else if (queryTab === "scripts" && activeTab !== "scripts") {
       setScriptSearch(urlSearch);
-      navigate(`/apps/scripts${urlSearch ? `?search=${encodeURIComponent(urlSearch)}` : ""}`, { replace: true });
+      const next = new URLSearchParams(searchParams);
+      next.delete("tab");
+      const qs = next.toString();
+      navigate(`/apps/scripts${qs ? `?${qs}` : ""}`, { replace: true });
     } else if (queryTab === "apps" && activeTab !== "apps") {
       setSearch(urlSearch);
       navigate(`/apps${urlSearch ? `?search=${encodeURIComponent(urlSearch)}` : ""}`, { replace: true });
@@ -484,6 +485,20 @@ export const AppsPage: React.FC = () => {
         const next = new URLSearchParams(prev);
         next.delete("search");
         next.delete("type");
+        next.delete("node");
+        next.delete("group");
+        return next;
+      },
+      { replace: true },
+    );
+  };
+
+  const handleClearScriptFilters = () => {
+    setScriptSearch("");
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete("search");
         next.delete("node");
         next.delete("group");
         return next;
@@ -1425,20 +1440,20 @@ export const AppsPage: React.FC = () => {
         const matchGroup = a.group?.toLowerCase().includes(q);
         if (!matchName && !matchDesc && !matchNote && !matchGroup) return false;
       }
-      if (scriptNodeFilter !== "all") {
-        const nodeObj = nodes.find((n) => n.name === scriptNodeFilter);
+      if (nodeFilter !== "all") {
+        const nodeObj = nodes.find((n) => n.name === nodeFilter);
         if (!nodeObj || !matchesTaskSelector(nodeObj, a.selector)) return false;
       }
-      if (scriptGroupFilter !== "all") {
-        if (scriptGroupFilter === "ungrouped") {
+      if (groupFilter !== "all") {
+        if (groupFilter === "ungrouped") {
           if (a.group && a.group.trim()) return false;
         } else {
-          if ((a.group || "").trim().toLowerCase() !== scriptGroupFilter.trim().toLowerCase()) return false;
+          if ((a.group || "").trim().toLowerCase() !== groupFilter.trim().toLowerCase()) return false;
         }
       }
       return true;
     });
-  }, [scriptApps, scriptSearch, scriptNodeFilter, scriptGroupFilter, nodes]);
+  }, [scriptApps, scriptSearch, nodeFilter, groupFilter, nodes]);
 
   const appGroups = useMemo(() => {
     const set = new Set<string>();
@@ -3845,9 +3860,9 @@ export const AppsPage: React.FC = () => {
               <FormControl size="small" sx={{ minWidth: 160 }}>
                 <InputLabel>Target Node</InputLabel>
                 <Select
-                  value={scriptNodeFilter}
+                  value={nodeFilter}
                   label="Target Node"
-                  onChange={(e) => setScriptNodeFilter(e.target.value)}
+                  onChange={(e) => handleSelectNode(e.target.value)}
                 >
                   <MenuItem value="all">All Nodes</MenuItem>
                   {nodes
@@ -3862,12 +3877,8 @@ export const AppsPage: React.FC = () => {
 
               <Button
                 size="small"
-                onClick={() => {
-                  setScriptSearch("");
-                  setScriptNodeFilter("all");
-                  setScriptGroupFilter("all");
-                }}
-                disabled={!scriptSearch && scriptNodeFilter === "all" && scriptGroupFilter === "all"}
+                onClick={handleClearScriptFilters}
+                disabled={!scriptSearch && nodeFilter === "all" && groupFilter === "all"}
                 startIcon={<X size={14} />}
                 sx={{ textTransform: "none", color: "#64748B", fontSize: "0.78rem" }}
               >
@@ -3908,9 +3919,9 @@ export const AppsPage: React.FC = () => {
                 <Chip
                   size="small"
                   label={`All (${scriptApps.length})`}
-                  onClick={() => setScriptGroupFilter("all")}
-                  color={scriptGroupFilter === "all" ? "primary" : "default"}
-                  variant={scriptGroupFilter === "all" ? "filled" : "outlined"}
+                  onClick={() => updateQueryParam({ group: "all" })}
+                  color={groupFilter === "all" ? "primary" : "default"}
+                  variant={groupFilter === "all" ? "filled" : "outlined"}
                   clickable
                   sx={{
                     fontWeight: 600,
@@ -3918,7 +3929,7 @@ export const AppsPage: React.FC = () => {
                     height: 26,
                     cursor: "pointer",
                     transition: "all 0.15s ease",
-                    ...(scriptGroupFilter === "all"
+                    ...(groupFilter === "all"
                       ? {
                           bgcolor: "#0F766E",
                           color: "#FFFFFF",
@@ -3935,13 +3946,13 @@ export const AppsPage: React.FC = () => {
 
                 {scriptGroups.map((grp) => {
                   const count = scriptApps.filter((a) => (a.group || "").trim() === grp).length;
-                  const isSelected = scriptGroupFilter.toLowerCase() === grp.toLowerCase();
+                  const isSelected = groupFilter.toLowerCase() === grp.toLowerCase();
                   return (
                     <Chip
                       key={grp}
                       size="small"
                       label={`${grp} (${count})`}
-                      onClick={() => setScriptGroupFilter(isSelected ? "all" : grp)}
+                      onClick={() => updateQueryParam({ group: isSelected ? "all" : grp })}
                       color={isSelected ? "primary" : "default"}
                       variant={isSelected ? "filled" : "outlined"}
                       clickable
@@ -3972,9 +3983,9 @@ export const AppsPage: React.FC = () => {
                   <Chip
                     size="small"
                     label={`Ungrouped (${ungroupedScriptsCount})`}
-                    onClick={() => setScriptGroupFilter(scriptGroupFilter === "ungrouped" ? "all" : "ungrouped")}
-                    color={scriptGroupFilter === "ungrouped" ? "primary" : "default"}
-                    variant={scriptGroupFilter === "ungrouped" ? "filled" : "outlined"}
+                    onClick={() => handleSelectGroup("ungrouped")}
+                    color={groupFilter === "ungrouped" ? "primary" : "default"}
+                    variant={groupFilter === "ungrouped" ? "filled" : "outlined"}
                     clickable
                     sx={{
                       fontWeight: 600,
@@ -3983,7 +3994,7 @@ export const AppsPage: React.FC = () => {
                       cursor: "pointer",
                       transition: "all 0.15s ease",
                       fontStyle: "italic",
-                      ...(scriptGroupFilter === "ungrouped"
+                      ...(groupFilter === "ungrouped"
                         ? {
                             bgcolor: "#0F766E",
                             color: "#FFFFFF",
@@ -4074,11 +4085,7 @@ export const AppsPage: React.FC = () => {
               </Typography>
               <Button
                 size="small"
-                onClick={() => {
-                  setScriptSearch("");
-                  setScriptNodeFilter("all");
-                  setScriptGroupFilter("all");
-                }}
+                onClick={handleClearScriptFilters}
                 sx={{ mt: 1, textTransform: "none" }}
               >
                 Clear Filters
@@ -4166,11 +4173,12 @@ export const AppsPage: React.FC = () => {
                                     label={script.group}
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      setScriptGroupFilter(
-                                        scriptGroupFilter.toLowerCase() === script.group!.trim().toLowerCase()
-                                          ? "all"
-                                          : script.group!.trim(),
-                                      );
+                                      updateQueryParam({
+                                        group:
+                                          groupFilter.toLowerCase() === script.group!.trim().toLowerCase()
+                                            ? "all"
+                                            : script.group!.trim(),
+                                      });
                                     }}
                                     clickable
                                     sx={{
@@ -4178,11 +4186,11 @@ export const AppsPage: React.FC = () => {
                                       fontSize: "0.65rem",
                                       fontWeight: 700,
                                       bgcolor:
-                                        scriptGroupFilter.toLowerCase() === script.group.trim().toLowerCase()
+                                        groupFilter.toLowerCase() === script.group.trim().toLowerCase()
                                           ? "#CCFBF1"
                                           : "#F1F5F9",
                                       color:
-                                        scriptGroupFilter.toLowerCase() === script.group.trim().toLowerCase()
+                                        groupFilter.toLowerCase() === script.group.trim().toLowerCase()
                                           ? "#0F766E"
                                           : "#475569",
                                       cursor: "pointer",

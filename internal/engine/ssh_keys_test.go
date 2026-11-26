@@ -753,3 +753,66 @@ func TestSSHKeyRuleAllNodesTargeting(t *testing.T) {
 		t.Fatalf("source nodes must not target themselves, got %+v", act)
 	}
 }
+
+func TestSSHKeyRuleDirectSourceKeysPlanningAndMatched(t *testing.T) {
+	mgr := newSSHTestManager(t)
+	userKey := sshTestKey("ssh-ed25519", "direct-user", "admin@laptop")
+	hostKey := sshTestKey("ssh-ed25519", "direct-host", "git-host")
+
+	sourceKeys := strings.Join([]string{
+		fmt.Sprintf("%s %s %s", userKey.Algorithm, userKey.Key, userKey.Comment),
+		fmt.Sprintf("git.example.com,192.0.2.10 %s %s %s", hostKey.Algorithm, hostKey.Key, hostKey.Comment),
+	}, "\n")
+
+	saveSSHTestConfig(t, mgr, &config.Config{
+		Nodes: []config.Node{
+			{Name: "edge1", Mode: "agent", AgentToken: "t1", AgentVersion: "0.1.18"},
+			{Name: "edge2", Mode: "agent", AgentToken: "t2", AgentVersion: "0.1.18"},
+		},
+	})
+
+	saved, err := mgr.SaveSSHKeyRule(config.SSHKeyRule{
+		Type:        config.SSHKeyRuleTypeAll,
+		SourceKeys:  sourceKeys,
+		DstSelector: config.AllNodesSelector(),
+		Enabled:     true,
+	})
+	if err != nil {
+		t.Fatalf("SaveSSHKeyRule failed: %v", err)
+	}
+	if len(saved.SrcSelector) != 0 {
+		t.Fatalf("expected empty src_selector for direct source_keys rule, got %+v", saved.SrcSelector)
+	}
+
+	mgr.agentHub.SetNodeMeta("edge1", agentNodeMeta("edge1", "0.1.18"))
+	mgr.agentHub.SetNodeMeta("edge2", agentNodeMeta("edge2", "0.1.18"))
+
+	matched, err := mgr.GetSSHKeyRuleMatchedKeys(saved.ID)
+	if err != nil {
+		t.Fatalf("GetSSHKeyRuleMatchedKeys failed: %v", err)
+	}
+	if len(matched.SourceNodes) != 0 {
+		t.Fatalf("expected 0 source nodes for direct source_keys rule, got %v", matched.SourceNodes)
+	}
+	if !strings.Contains(matched.AuthorizedKeys, userKey.Key) {
+		t.Fatalf("expected user key in matched authorized_keys, got:\n%s", matched.AuthorizedKeys)
+	}
+	if !strings.Contains(matched.KnownHosts, "git.example.com,192.0.2.10") || !strings.Contains(matched.KnownHosts, hostKey.Key) {
+		t.Fatalf("expected host key in matched known_hosts, got:\n%s", matched.KnownHosts)
+	}
+
+	actions, err := mgr.PlanSync()
+	if err != nil {
+		t.Fatalf("PlanSync failed: %v", err)
+	}
+	for _, name := range []string{"edge1", "edge2"} {
+		authAct := findSSHKeyAction(actions, name, config.SSHAuthorizedKeysPath)
+		if authAct == nil || !strings.Contains(authAct.FileContent, userKey.Key) {
+			t.Fatalf("expected %s authorized_keys to include direct user key, got %+v", name, authAct)
+		}
+		khAct := findSSHKeyAction(actions, name, config.SSHKnownHostsPath)
+		if khAct == nil || !strings.Contains(khAct.FileContent, hostKey.Key) {
+			t.Fatalf("expected %s known_hosts to include direct host key, got %+v", name, khAct)
+		}
+	}
+}

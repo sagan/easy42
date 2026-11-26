@@ -3,6 +3,7 @@ package server
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 	"time"
 
 	"easy42/internal/config"
@@ -75,12 +76,11 @@ func (s *Server) handleCreateSSHKeyRule(w http.ResponseWriter, r *http.Request) 
 		writeError(w, http.StatusBadRequest, "Invalid JSON body: "+err.Error())
 		return
 	}
-	// IDs are server assigned.
-	rule.ID = ""
+	rule.ID = strings.TrimSpace(rule.ID)
 	rule.CreatedAt = time.Time{}
 	rule.UpdatedAt = time.Time{}
 
-	saved, err := s.mgr.SaveSSHKeyRule(rule)
+	saved, err := s.mgr.CreateSSHKeyRule(rule)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
@@ -95,22 +95,25 @@ func (s *Server) handleUpdateSSHKeyRule(w http.ResponseWriter, r *http.Request) 
 		writeError(w, http.StatusBadRequest, "Rule ID is required")
 		return
 	}
-	if _, err := s.mgr.GetSSHKeyRule(id); err != nil {
-		writeError(w, http.StatusNotFound, err.Error())
-		return
-	}
 
 	var rule config.SSHKeyRule
 	if err := json.NewDecoder(r.Body).Decode(&rule); err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid JSON body: "+err.Error())
 		return
 	}
-	rule.ID = id
+	rule.ID = strings.TrimSpace(rule.ID)
+	if rule.ID == "" {
+		rule.ID = id
+	}
 	rule.CreatedAt = time.Time{}
 	rule.UpdatedAt = time.Time{}
 
-	saved, err := s.mgr.SaveSSHKeyRule(rule)
+	saved, err := s.mgr.UpdateSSHKeyRule(id, rule)
 	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			writeError(w, http.StatusNotFound, err.Error())
+			return
+		}
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}

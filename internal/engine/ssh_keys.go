@@ -306,6 +306,20 @@ func (m *Manager) planSSHKeyFilesForNode(cfg *config.Config, dstNode config.Node
 		if !config.AppTargetsNode(config.App{Selector: rule.DstSelector}, &dstNode, dstNode.Name) {
 			continue
 		}
+		if rule.HasSourceKeys() {
+			if keys, err := config.ParseSSHSourceKeys(rule.SourceKeys); err == nil && len(keys) > 0 {
+				for _, path := range rule.TargetFiles() {
+					a := collected[path]
+					if a == nil {
+						a = &agg{}
+						collected[path] = a
+					}
+					a.keys = append(a.keys, keys...)
+					a.rules = append(a.rules, rule.ID)
+				}
+			}
+			continue
+		}
 		for _, src := range cfg.Nodes {
 			if src.Name == dstNode.Name {
 				continue
@@ -805,24 +819,30 @@ func (m *Manager) GetSSHKeyRuleMatchedKeys(id string) (*SSHKeyRuleMatchedKeys, e
 	}
 
 	var allKeys []config.SSHPublicKey
-	for _, src := range cfg.Nodes {
-		if src.IsUnmanaged() {
-			continue
+	if rule.HasSourceKeys() {
+		if keys, err := config.ParseSSHSourceKeys(rule.SourceKeys); err == nil {
+			allKeys = keys
 		}
-		if !config.AppTargetsNode(config.App{Selector: rule.SrcSelector}, &src, src.Name) {
-			continue
+	} else {
+		for _, src := range cfg.Nodes {
+			if src.IsUnmanaged() {
+				continue
+			}
+			if !config.AppTargetsNode(config.App{Selector: rule.SrcSelector}, &src, src.Name) {
+				continue
+			}
+			if !m.sshKeysEnabled(src) {
+				continue
+			}
+			res.SourceNodes = append(res.SourceNodes, src.Name)
+			keys := m.GetNodeSSHKeys(src.Name)
+			if len(keys) == 0 {
+				continue
+			}
+			allKeys = append(allKeys, withSSHKeyHostnames(keys, src, cfg.DNS.BaseDomain)...)
 		}
-		if !m.sshKeysEnabled(src) {
-			continue
-		}
-		res.SourceNodes = append(res.SourceNodes, src.Name)
-		keys := m.GetNodeSSHKeys(src.Name)
-		if len(keys) == 0 {
-			continue
-		}
-		allKeys = append(allKeys, withSSHKeyHostnames(keys, src, cfg.DNS.BaseDomain)...)
+		sort.Strings(res.SourceNodes)
 	}
-	sort.Strings(res.SourceNodes)
 
 	for _, path := range rule.TargetFiles() {
 		if config.IsAuthorizedKeysPath(path) {
@@ -834,13 +854,96 @@ func (m *Manager) GetSSHKeyRuleMatchedKeys(id string) (*SSHKeyRuleMatchedKeys, e
 	return res, nil
 }
 
-// SaveSSHKeyRule creates or updates an SSH key rule.
-func (m *Manager) SaveSSHKeyRule(rule config.SSHKeyRule) (config.SSHKeyRule, error) {
+// CreateSSHKeyRule creates a new SSH key rule. If rule.ID is empty, a unique ID
+// is generated; otherwise the custom ID must not already exist.
+func (m *Manager) CreateSSHKeyRule(rule config.SSHKeyRule) (config.SSHKeyRule, error) {
+	rule.ID = strings.TrimSpace(rule.ID)
 	if err := config.ValidateSSHKeyRule(rule); err != nil {
 		return rule, err
 	}
 	rule.Type = rule.NormalizedType()
 	rule.SrcSelector = normalizeSelectorMap(rule.SrcSelector)
+	rule.SourceKeys = config.NormalizeSourceKeys(rule.SourceKeys)
+	rule.DstSelector = normalizeSelectorMap(rule.DstSelector)
+
+	cfg, err := m.store.Load()
+	if err != nil {
+		return rule, fmt.Errorf("failed to load config: %w", err)
+	}
+
+	if rule.ID == "" {
+		rule.ID = "sshrule_" + uuid.New().String()[:8]
+	} else {
+		for _, existing := range cfg.SSHKeyRules {
+			if existing.ID == rule.ID {
+				return rule, fmt.Errorf("SSH key rule '%s' already exists", rule.ID)
+			}
+		}
+	}
+
+	now := time.Now()
+	rule.CreatedAt = now
+	rule.UpdatedAt = now
+	cfg.SSHKeyRules = append(cfg.SSHKeyRules, rule)
+
+	if err := m.store.Save(cfg); err != nil {
+		return rule, fmt.Errorf("failed to save config: %w", err)
+	}
+	return rule, nil
+}
+
+// UpdateSSHKeyRule updates an existing SSH key rule identified by oldID,
+// allowing its ID to be renamed if rule.ID differs from oldID.
+func (m *Manager) UpdateSSHKeyRule(oldID string, rule config.SSHKeyRule) (config.SSHKeyRule, error) {
+	oldID = strings.TrimSpace(oldID)
+	rule.ID = strings.TrimSpace(rule.ID)
+	if rule.ID == "" {
+		rule.ID = oldID
+	}
+	if err := config.ValidateSSHKeyRule(rule); err != nil {
+		return rule, err
+	}
+	rule.Type = rule.NormalizedType()
+	rule.SrcSelector = normalizeSelectorMap(rule.SrcSelector)
+	rule.SourceKeys = config.NormalizeSourceKeys(rule.SourceKeys)
+	rule.DstSelector = normalizeSelectorMap(rule.DstSelector)
+
+	cfg, err := m.store.Load()
+	if err != nil {
+		return rule, fmt.Errorf("failed to load config: %w", err)
+	}
+
+	targetIdx := -1
+	for i, existing := range cfg.SSHKeyRules {
+		if existing.ID == oldID {
+			targetIdx = i
+		} else if existing.ID == rule.ID {
+			return rule, fmt.Errorf("SSH key rule '%s' already exists", rule.ID)
+		}
+	}
+	if targetIdx == -1 {
+		return rule, fmt.Errorf("SSH key rule '%s' not found", oldID)
+	}
+
+	rule.CreatedAt = cfg.SSHKeyRules[targetIdx].CreatedAt
+	rule.UpdatedAt = time.Now()
+	cfg.SSHKeyRules[targetIdx] = rule
+
+	if err := m.store.Save(cfg); err != nil {
+		return rule, fmt.Errorf("failed to save config: %w", err)
+	}
+	return rule, nil
+}
+
+// SaveSSHKeyRule creates or updates an SSH key rule.
+func (m *Manager) SaveSSHKeyRule(rule config.SSHKeyRule) (config.SSHKeyRule, error) {
+	rule.ID = strings.TrimSpace(rule.ID)
+	if err := config.ValidateSSHKeyRule(rule); err != nil {
+		return rule, err
+	}
+	rule.Type = rule.NormalizedType()
+	rule.SrcSelector = normalizeSelectorMap(rule.SrcSelector)
+	rule.SourceKeys = config.NormalizeSourceKeys(rule.SourceKeys)
 	rule.DstSelector = normalizeSelectorMap(rule.DstSelector)
 
 	cfg, err := m.store.Load()

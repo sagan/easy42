@@ -27,8 +27,6 @@ import {
   TableBody,
   Paper,
   IconButton,
-  ToggleButton,
-  ToggleButtonGroup,
   useTheme,
   useMediaQuery,
 } from "@mui/material";
@@ -47,7 +45,25 @@ import {
   X,
 } from "lucide-react";
 import { api } from "../../api/client";
-import { ApplyPreviewResult, ApplyResult, ConfigChange, Node, Link, LinkEnd, App } from "../../types/api";
+import {
+  ApplyPreviewResult,
+  ApplyResult,
+  CloudflareDNSConfig,
+  ConfigChange,
+  ConfigTemplate,
+  CronTask,
+  DatabaseInfo,
+  GraphBlock,
+  IntegrationsSettings,
+  Link,
+  LinkEnd,
+  App,
+  NetworkPolicy,
+  NetworkSettings,
+  Node,
+  ServerTask,
+  SSHKeyRule,
+} from "../../types/api";
 
 interface ApplyConfigModalProps {
   open: boolean;
@@ -176,6 +192,128 @@ export function generateAppApplySnippet(app: App): string {
 
   return JSON.stringify({ apps: [p] }, null, 2);
 }
+
+export function generateSSHKeyRuleApplySnippet(rule: SSHKeyRule): string {
+  const p: Record<string, any> = {
+    id: rule.id,
+    type: rule.type,
+    dst_selector: rule.dst_selector || {},
+    enabled: rule.enabled,
+  };
+  if (rule.source_keys && rule.source_keys.trim() !== "") {
+    p.source_keys = rule.source_keys;
+  } else if (rule.src_selector && Object.keys(rule.src_selector).length > 0) {
+    p.src_selector = rule.src_selector;
+  }
+  return JSON.stringify({ ssh_key_rules: [p] }, null, 2);
+}
+
+export function generateNetworkSettingsApplySnippet(ns: NetworkSettings): string {
+  const p: Record<string, any> = {};
+  if (ns.name !== undefined && ns.name !== "") p.name = ns.name;
+  if (ns.public_asn !== undefined && ns.public_asn !== 0) p.public_asn = ns.public_asn;
+  if (ns.prefixes && ns.prefixes.length > 0) p.prefixes = ns.prefixes;
+  if (ns.disallowed_dn42_networks && ns.disallowed_dn42_networks.length > 0) {
+    p.disallowed_dn42_networks = ns.disallowed_dn42_networks;
+  }
+  if (ns.disallowed_dn42_cidrs && ns.disallowed_dn42_cidrs.length > 0) {
+    p.disallowed_dn42_cidrs = ns.disallowed_dn42_cidrs;
+  }
+  if (ns.flapalerted_address !== undefined && ns.flapalerted_address !== "") p.flapalerted_address = ns.flapalerted_address;
+  if (ns.flapalerted_port !== undefined && ns.flapalerted_port !== 0) p.flapalerted_port = ns.flapalerted_port;
+  if (ns.flapalerted_asn !== undefined && ns.flapalerted_asn !== 0) p.flapalerted_asn = ns.flapalerted_asn;
+  if (ns.flapalerted_url !== undefined && ns.flapalerted_url !== "") p.flapalerted_url = ns.flapalerted_url;
+  if (ns.extra_hosts !== undefined && ns.extra_hosts !== "") p.extra_hosts = ns.extra_hosts;
+  if (ns.bird_import_filter !== undefined && ns.bird_import_filter !== "") p.bird_import_filter = ns.bird_import_filter;
+  if (ns.bird_export_filter !== undefined && ns.bird_export_filter !== "") p.bird_export_filter = ns.bird_export_filter;
+  if (ns.bird_pre_snippet !== undefined && ns.bird_pre_snippet !== "") p.bird_pre_snippet = ns.bird_pre_snippet;
+  if (ns.bird_post_snippet !== undefined && ns.bird_post_snippet !== "") p.bird_post_snippet = ns.bird_post_snippet;
+  return JSON.stringify({ network_settings: p }, null, 2);
+}
+
+export function generateDNSApplySnippet(dns: CloudflareDNSConfig): string {
+  const p: Record<string, any> = {};
+  if (dns.zone_id !== undefined && dns.zone_id !== "") p.zone_id = dns.zone_id;
+  if (dns.api_token !== undefined && dns.api_token !== "") p.api_token = dns.api_token;
+  if (dns.base_domain !== undefined && dns.base_domain !== "") p.base_domain = dns.base_domain;
+  if (dns.publish_ipv6_own_name !== undefined) p.publish_ipv6_own_name = dns.publish_ipv6_own_name;
+  return JSON.stringify({ dns: p }, null, 2);
+}
+
+export function generateServerTaskApplySnippet(task: ServerTask): string {
+  return JSON.stringify(
+    {
+      server_tasks: [
+        {
+          id: task.id,
+          name: task.name,
+          description: task.description,
+          cron_expr: task.cron_expr,
+          enabled: task.enabled,
+        },
+      ],
+    },
+    null,
+    2,
+  );
+}
+
+export function generateDatabaseApplySnippet(db: DatabaseInfo): string {
+  const p: Record<string, any> = {
+    retention_days: db.retention_days,
+  };
+  if (db.raw_retention_days !== undefined && db.raw_retention_days > 0) {
+    p.raw_retention_days = db.raw_retention_days;
+  }
+  return JSON.stringify({ database: p }, null, 2);
+}
+
+export function generateIntegrationsApplySnippet(integ: IntegrationsSettings): string {
+  const p: Record<string, any> = {
+    prometheus_enabled: integ.prometheus_enabled,
+  };
+  if (integ.prometheus_auth_token) p.prometheus_auth_token = integ.prometheus_auth_token;
+  if (integ.telegram_enabled !== undefined) p.telegram_enabled = integ.telegram_enabled;
+  if (integ.telegram_bot_token) p.telegram_bot_token = integ.telegram_bot_token;
+  if (integ.telegram_admin_id !== undefined && integ.telegram_admin_id !== "") {
+    const numId = Number(integ.telegram_admin_id);
+    if (!Number.isNaN(numId) && Number.isInteger(numId)) p.telegram_admin_id = numId;
+  }
+  if (integ.telegram_secret_token) p.telegram_secret_token = integ.telegram_secret_token;
+  if (integ.server_url) p.server_url = integ.server_url;
+  return JSON.stringify({ integrations: p }, null, 2);
+}
+
+type GeneratorType =
+  | "node"
+  | "link"
+  | "app"
+  | "ssh_key_rule"
+  | "network_policy"
+  | "block"
+  | "template"
+  | "cron_task"
+  | "server_task"
+  | "network_settings"
+  | "dns"
+  | "database"
+  | "integrations";
+
+const GENERATOR_OPTIONS: { value: GeneratorType; label: string; singleton?: boolean }[] = [
+  { value: "node", label: "Node" },
+  { value: "link", label: "Link" },
+  { value: "app", label: "App" },
+  { value: "ssh_key_rule", label: "SSH Key Rule" },
+  { value: "network_policy", label: "Network Policy" },
+  { value: "block", label: "Block" },
+  { value: "template", label: "Template" },
+  { value: "cron_task", label: "Cron Task" },
+  { value: "server_task", label: "Server Task" },
+  { value: "network_settings", label: "Network Settings", singleton: true },
+  { value: "dns", label: "DNS", singleton: true },
+  { value: "database", label: "Database", singleton: true },
+  { value: "integrations", label: "Integrations", singleton: true },
+];
 
 const PRESET_SNIPPETS: { label: string; description: string; content: string }[] = [
   {
@@ -318,12 +456,23 @@ export const ApplyConfigModal: React.FC<ApplyConfigModalProps> = ({
   const [availableNodes, setAvailableNodes] = useState<Node[]>(nodes);
   const [availableLinks, setAvailableLinks] = useState<Link[]>(links);
   const [availableApps, setAvailableApps] = useState<App[]>(apps);
+  const [availableSSHKeyRules, setAvailableSSHKeyRules] = useState<SSHKeyRule[] | null>(null);
+  const [availablePolicies, setAvailablePolicies] = useState<NetworkPolicy[] | null>(null);
+  const [availableBlocks, setAvailableBlocks] = useState<GraphBlock[] | null>(null);
+  const [availableTemplates, setAvailableTemplates] = useState<ConfigTemplate[] | null>(null);
+  const [availableCronTasks, setAvailableCronTasks] = useState<CronTask[] | null>(null);
+  const [availableServerTasks, setAvailableServerTasks] = useState<ServerTask[] | null>(null);
+  const [currentNetworkSettings, setCurrentNetworkSettings] = useState<NetworkSettings | null>(null);
+  const [currentDNSConfig, setCurrentDNSConfig] = useState<CloudflareDNSConfig | null>(null);
+  const [currentDatabaseInfo, setCurrentDatabaseInfo] = useState<DatabaseInfo | null>(null);
+  const [currentIntegrations, setCurrentIntegrations] = useState<IntegrationsSettings | null>(null);
 
   // Generator UI state
-  const [genType, setGenType] = useState<"node" | "link" | "app">("node");
+  const [genType, setGenType] = useState<GeneratorType>("node");
   const [selectedGenNode, setSelectedGenNode] = useState<string>("");
   const [selectedGenLink, setSelectedGenLink] = useState<string>("");
   const [selectedGenApp, setSelectedGenApp] = useState<string>("");
+  const [selectedGenItem, setSelectedGenItem] = useState<string>("");
 
   // Validation state
   const [validating, setValidating] = useState<boolean>(false);
@@ -446,25 +595,159 @@ export const ApplyConfigModal: React.FC<ApplyConfigModalProps> = ({
     return () => clearTimeout(timer);
   }, [content]);
 
-  // Generate snippet from chosen node, link, or app current state
+  // Lazily fetch data for other generator object types when selected
+  useEffect(() => {
+    if (!open) return;
+    switch (genType) {
+      case "ssh_key_rule":
+        if (availableSSHKeyRules === null) {
+          api.getSSHKeyRules().then((res) => setAvailableSSHKeyRules(res || [])).catch(() => setAvailableSSHKeyRules([]));
+        }
+        break;
+      case "network_policy":
+        if (availablePolicies === null) {
+          api.getNetworkPolicies().then((res) => setAvailablePolicies(res || [])).catch(() => setAvailablePolicies([]));
+        }
+        break;
+      case "block":
+        if (availableBlocks === null) {
+          api.getBlocks().then((res) => setAvailableBlocks(res || [])).catch(() => setAvailableBlocks([]));
+        }
+        break;
+      case "template":
+        if (availableTemplates === null) {
+          api.getTemplates().then((res) => setAvailableTemplates(res || [])).catch(() => setAvailableTemplates([]));
+        }
+        break;
+      case "cron_task":
+        if (availableCronTasks === null) {
+          api.getCronTasks().then((res) => setAvailableCronTasks(res || [])).catch(() => setAvailableCronTasks([]));
+        }
+        break;
+      case "server_task":
+        if (availableServerTasks === null) {
+          api.getServerTasks().then((res) => setAvailableServerTasks(res || [])).catch(() => setAvailableServerTasks([]));
+        }
+        break;
+      case "network_settings":
+        if (currentNetworkSettings === null) {
+          api.getNetworkSettings().then((res) => setCurrentNetworkSettings(res)).catch(() => {});
+        }
+        break;
+      case "dns":
+        if (currentDNSConfig === null) {
+          api.getDNSConfig().then((res) => setCurrentDNSConfig(res)).catch(() => {});
+        }
+        break;
+      case "database":
+        if (currentDatabaseInfo === null) {
+          api.getDatabaseInfo().then((res) => setCurrentDatabaseInfo(res)).catch(() => {});
+        }
+        break;
+      case "integrations":
+        if (currentIntegrations === null) {
+          api.getIntegrationsSettings().then((res) => setCurrentIntegrations(res)).catch(() => {});
+        }
+        break;
+    }
+  }, [
+    open,
+    genType,
+    availableSSHKeyRules,
+    availablePolicies,
+    availableBlocks,
+    availableTemplates,
+    availableCronTasks,
+    availableServerTasks,
+    currentNetworkSettings,
+    currentDNSConfig,
+    currentDatabaseInfo,
+    currentIntegrations,
+  ]);
+
+  // Generate snippet from chosen object's current state
   const handleGenerateFromState = () => {
-    if (genType === "node") {
-      const target = availableNodes.find((n) => n.name === selectedGenNode);
-      if (target) {
-        setContent(generateNodeApplySnippet(target));
+    switch (genType) {
+      case "node": {
+        const target = availableNodes.find((n) => n.name === selectedGenNode);
+        if (target) setContent(generateNodeApplySnippet(target));
+        break;
       }
-    } else if (genType === "link") {
-      const target = availableLinks.find((l, idx) => `${l.from.name}<->${l.to.name}-${idx}` === selectedGenLink);
-      if (target) {
-        setContent(generateLinkApplySnippet(target));
+      case "link": {
+        const target = availableLinks.find((l, idx) => `${l.from.name}<->${l.to.name}-${idx}` === selectedGenLink);
+        if (target) setContent(generateLinkApplySnippet(target));
+        break;
       }
-    } else if (genType === "app") {
-      const target = availableApps.find((a) => a.name === selectedGenApp || a.id === selectedGenApp);
-      if (target) {
-        setContent(generateAppApplySnippet(target));
+      case "app": {
+        const target = availableApps.find((a) => a.name === selectedGenApp || a.id === selectedGenApp);
+        if (target) setContent(generateAppApplySnippet(target));
+        break;
       }
+      case "ssh_key_rule": {
+        const target = (availableSSHKeyRules || []).find((r) => r.id === selectedGenItem);
+        if (target) setContent(generateSSHKeyRuleApplySnippet(target));
+        break;
+      }
+      case "network_policy": {
+        const target = (availablePolicies || []).find((p) => p.id === selectedGenItem || p.name === selectedGenItem);
+        if (target) setContent(JSON.stringify({ network_policies: [target] }, null, 2));
+        break;
+      }
+      case "block": {
+        const target = (availableBlocks || []).find((b) => b.id === selectedGenItem);
+        if (target) setContent(JSON.stringify({ blocks: [target] }, null, 2));
+        break;
+      }
+      case "template": {
+        const target = (availableTemplates || []).find((t) => t.id === selectedGenItem || t.name === selectedGenItem);
+        if (target) setContent(JSON.stringify({ templates: [target] }, null, 2));
+        break;
+      }
+      case "cron_task": {
+        const target = (availableCronTasks || []).find((t) => t.id === selectedGenItem || t.name === selectedGenItem);
+        if (target) setContent(JSON.stringify({ cron_tasks: [target] }, null, 2));
+        break;
+      }
+      case "server_task": {
+        const target = (availableServerTasks || []).find((t) => t.id === selectedGenItem);
+        if (target) setContent(generateServerTaskApplySnippet(target));
+        break;
+      }
+      case "network_settings":
+        if (currentNetworkSettings) setContent(generateNetworkSettingsApplySnippet(currentNetworkSettings));
+        break;
+      case "dns":
+        if (currentDNSConfig) setContent(generateDNSApplySnippet(currentDNSConfig));
+        break;
+      case "database":
+        if (currentDatabaseInfo) setContent(generateDatabaseApplySnippet(currentDatabaseInfo));
+        break;
+      case "integrations":
+        if (currentIntegrations) setContent(generateIntegrationsApplySnippet(currentIntegrations));
+        break;
     }
   };
+
+  const canGenerateFromState = (() => {
+    switch (genType) {
+      case "node":
+        return Boolean(selectedGenNode);
+      case "link":
+        return Boolean(selectedGenLink);
+      case "app":
+        return Boolean(selectedGenApp);
+      case "network_settings":
+        return Boolean(currentNetworkSettings);
+      case "dns":
+        return Boolean(currentDNSConfig);
+      case "database":
+        return Boolean(currentDatabaseInfo);
+      case "integrations":
+        return Boolean(currentIntegrations);
+      default:
+        return Boolean(selectedGenItem);
+    }
+  })();
 
   // Run Preview / Dry-run
   const handlePreview = async () => {
@@ -835,26 +1118,23 @@ export const ApplyConfigModal: React.FC<ApplyConfigModalProps> = ({
                   justifyContent: "flex-end",
                 }}
               >
-                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                  <ToggleButtonGroup
-                    size="small"
-                    value={genType}
-                    exclusive
-                    onChange={(_, val) => {
-                      if (val) setGenType(val);
-                    }}
-                    sx={{ height: 32 }}
-                  >
-                    <ToggleButton value="node" sx={{ textTransform: "none", px: 1, py: 0.5, fontSize: 13 }}>
-                      Node
-                    </ToggleButton>
-                    <ToggleButton value="link" sx={{ textTransform: "none", px: 1, py: 0.5, fontSize: 13 }}>
-                      Link
-                    </ToggleButton>
-                    <ToggleButton value="app" sx={{ textTransform: "none", px: 1, py: 0.5, fontSize: 13 }}>
-                      App
-                    </ToggleButton>
-                  </ToggleButtonGroup>
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
+                  <FormControl size="small" sx={{ minWidth: 155 }}>
+                    <Select
+                      value={genType}
+                      onChange={(e) => {
+                        setGenType(e.target.value as GeneratorType);
+                        setSelectedGenItem("");
+                      }}
+                      sx={{ height: 32, fontSize: 13, backgroundColor: "#FFFFFF", fontWeight: 600 }}
+                    >
+                      {GENERATOR_OPTIONS.map((opt) => (
+                        <MenuItem key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
 
                   {genType === "node" ? (
                     <FormControl size="small" sx={{ minWidth: { xs: 140, sm: 200 }, flex: 1 }}>
@@ -895,7 +1175,7 @@ export const ApplyConfigModal: React.FC<ApplyConfigModalProps> = ({
                         })}
                       </Select>
                     </FormControl>
-                  ) : (
+                  ) : genType === "app" ? (
                     <FormControl size="small" sx={{ minWidth: { xs: 140, sm: 200 }, flex: 1 }}>
                       <Select
                         displayEmpty
@@ -913,15 +1193,62 @@ export const ApplyConfigModal: React.FC<ApplyConfigModalProps> = ({
                         ))}
                       </Select>
                     </FormControl>
-                  )}
+                  ) : !GENERATOR_OPTIONS.find((o) => o.value === genType)?.singleton ? (
+                    <FormControl size="small" sx={{ minWidth: { xs: 140, sm: 220 }, flex: 1 }}>
+                      <Select
+                        displayEmpty
+                        value={selectedGenItem}
+                        onChange={(e) => setSelectedGenItem(e.target.value)}
+                        sx={{ height: 32, fontSize: 13, backgroundColor: "#FFFFFF" }}
+                      >
+                        <MenuItem value="" disabled>
+                          <em>Select {GENERATOR_OPTIONS.find((o) => o.value === genType)?.label.toLowerCase()}...</em>
+                        </MenuItem>
+                        {genType === "ssh_key_rule" &&
+                          (availableSSHKeyRules || []).map((r) => (
+                            <MenuItem key={r.id} value={r.id}>
+                              {r.id} ({r.type})
+                            </MenuItem>
+                          ))}
+                        {genType === "network_policy" &&
+                          (availablePolicies || []).map((p) => (
+                            <MenuItem key={p.id || p.name} value={p.id || p.name}>
+                              {p.name || p.id}
+                            </MenuItem>
+                          ))}
+                        {genType === "block" &&
+                          (availableBlocks || []).map((b) => (
+                            <MenuItem key={b.id} value={b.id}>
+                              {b.name || b.id}
+                            </MenuItem>
+                          ))}
+                        {genType === "template" &&
+                          (availableTemplates || []).map((t) => (
+                            <MenuItem key={t.id || t.name} value={t.id || t.name}>
+                              {t.name} ({t.type})
+                            </MenuItem>
+                          ))}
+                        {genType === "cron_task" &&
+                          (availableCronTasks || []).map((t) => (
+                            <MenuItem key={t.id || t.name} value={t.id || t.name}>
+                              {t.name} ({t.cron_expr})
+                            </MenuItem>
+                          ))}
+                        {genType === "server_task" &&
+                          (availableServerTasks || []).map((t) => (
+                            <MenuItem key={t.id} value={t.id}>
+                              {t.name} ({t.cron_expr})
+                            </MenuItem>
+                          ))}
+                      </Select>
+                    </FormControl>
+                  ) : null}
                 </Box>
 
                 <Button
                   variant="contained"
                   size="small"
-                  disabled={
-                    genType === "node" ? !selectedGenNode : genType === "link" ? !selectedGenLink : !selectedGenApp
-                  }
+                  disabled={!canGenerateFromState}
                   onClick={handleGenerateFromState}
                   startIcon={<Sparkles size={14} />}
                   sx={{ textTransform: "none", height: 32, whiteSpace: "nowrap" }}

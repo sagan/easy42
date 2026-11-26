@@ -119,7 +119,10 @@ func normalizeSSHHostnames(hostnames []string) []string {
 	res := make([]string, 0, len(hostnames))
 	seen := make(map[string]bool, len(hostnames))
 	for _, h := range hostnames {
-		h = strings.ToLower(strings.TrimSpace(h))
+		h = strings.TrimSpace(h)
+		if !strings.HasPrefix(h, "|") {
+			h = strings.ToLower(h)
+		}
 		if h == "" || seen[h] {
 			continue
 		}
@@ -183,16 +186,130 @@ func (k SSHPublicKey) fingerprint() string {
 	return k.Algorithm + "\x00" + k.Key
 }
 
-// SSHKeyRule maps a set of source nodes' public keys onto the SSH key files of
-// a set of destination nodes.
+// SSHKeyRule maps a set of source nodes' public keys (or direct source key
+// lines) onto the SSH key files of a set of destination nodes.
 type SSHKeyRule struct {
 	ID          string            `json:"id"`
 	Type        string            `json:"type"` // "known_hosts" | "authorized_keys" | "all"
-	SrcSelector map[string]string `json:"src_selector"`
+	SrcSelector map[string]string `json:"src_selector,omitempty"`
+	SourceKeys  string            `json:"source_keys,omitempty"`
 	DstSelector map[string]string `json:"dst_selector"`
 	Enabled     bool              `json:"enabled"`
 	CreatedAt   time.Time         `json:"created_at"`
 	UpdatedAt   time.Time         `json:"updated_at"`
+}
+
+// HasSourceKeys reports whether the rule specifies direct source key lines
+// instead of a source node selector.
+func (r SSHKeyRule) HasSourceKeys() bool {
+	return strings.TrimSpace(r.SourceKeys) != ""
+}
+
+// NormalizeSourceKeys normalizes line endings and trims surrounding whitespace.
+func NormalizeSourceKeys(raw string) string {
+	norm := strings.ReplaceAll(raw, "\r\n", "\n")
+	norm = strings.ReplaceAll(norm, "\r", "\n")
+	return strings.TrimSpace(norm)
+}
+
+// ParseSSHSourceKeys parses direct source key lines in authorized_keys
+// (`<algorithm> <base64-key> [comment]`) or known_hosts
+// (`<hostnames> <algorithm> <base64-key> [comment]`) format.
+// Blank lines and `#` comments are ignored.
+func ParseSSHSourceKeys(raw string) ([]SSHPublicKey, error) {
+	norm := NormalizeSourceKeys(raw)
+	if norm == "" {
+		return nil, fmt.Errorf("cannot be empty: provide at least one valid SSH public key line")
+	}
+
+	lines := strings.Split(norm, "\n")
+	keys := make([]SSHPublicKey, 0, len(lines))
+	for i, rawLine := range lines {
+		lineNum := i + 1
+		line := strings.TrimSpace(rawLine)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		if hasControlOrNewline(line) {
+			return nil, fmt.Errorf("line %d: contains invalid control characters", lineNum)
+		}
+		fields := strings.Fields(line)
+		switch {
+		case len(fields) >= 2 && IsSupportedSSHKeyAlgorithm(fields[0]):
+			alg, blob := fields[0], fields[1]
+			if err := ValidateSSHPublicKey(alg, blob); err != nil {
+				return nil, fmt.Errorf("line %d: %w", lineNum, err)
+			}
+			keys = append(keys, SSHPublicKey{
+				Algorithm: alg,
+				Key:       blob,
+				Comment:   trailingSSHKeyComment(line, 2),
+				Kind:      SSHKeyKindUser,
+			})
+		case len(fields) >= 3 && IsSupportedSSHKeyAlgorithm(fields[1]):
+			hosts := normalizeSSHHostnames(strings.Split(fields[0], ","))
+			if len(hosts) == 0 {
+				return nil, fmt.Errorf("line %d: known_hosts entry must include at least one hostname", lineNum)
+			}
+			alg, blob := fields[1], fields[2]
+			if err := ValidateSSHPublicKey(alg, blob); err != nil {
+				return nil, fmt.Errorf("line %d: %w", lineNum, err)
+			}
+			keys = append(keys, SSHPublicKey{
+				Algorithm: alg,
+				Key:       blob,
+				Comment:   trailingSSHKeyComment(line, 3),
+				Kind:      SSHKeyKindHost,
+				Hostnames: hosts,
+			})
+		default:
+			return nil, fmt.Errorf("line %d: invalid SSH key line (expected '<algorithm> <key> [comment]' or '<hostnames> <algorithm> <key> [comment]')", lineNum)
+		}
+	}
+	if len(keys) == 0 {
+		return nil, fmt.Errorf("cannot be empty: provide at least one valid SSH public key line")
+	}
+	return keys, nil
+}
+
+// trailingSSHKeyComment returns the remainder of line after skipping n whitespace-delimited fields.
+func trailingSSHKeyComment(line string, skipFields int) string {
+	idx := 0
+	n := len(line)
+	for f := 0; f < skipFields; f++ {
+		for idx < n && (line[idx] == ' ' || line[idx] == '\t') {
+			idx++
+		}
+		for idx < n && line[idx] != ' ' && line[idx] != '\t' {
+			idx++
+		}
+	}
+	return strings.TrimSpace(line[idx:])
+}
+
+// ValidateSSHSourceKeysForType parses raw source keys and verifies that every
+// key matches the rule type (user keys for authorized_keys, host keys for
+// known_hosts, or either for all).
+func ValidateSSHSourceKeysForType(raw, ruleType string) ([]SSHPublicKey, error) {
+	keys, err := ParseSSHSourceKeys(raw)
+	if err != nil {
+		return nil, err
+	}
+	switch ruleType {
+	case SSHKeyFileAuthorizedKeys:
+		for _, k := range keys {
+			if k.IsHostKey() {
+				return nil, fmt.Errorf("known_hosts entry is not valid for rule type '%s' (expected '<algorithm> <key> [comment]')", SSHKeyFileAuthorizedKeys)
+			}
+		}
+	case SSHKeyFileKnownHosts:
+		for _, k := range keys {
+			if !k.IsHostKey() {
+				return nil, fmt.Errorf("authorized_keys entry is not valid for rule type '%s' (expected '<hostnames> <algorithm> <key> [comment]')", SSHKeyFileKnownHosts)
+			}
+		}
+	}
+	return keys, nil
 }
 
 // normalizeSSHKeyRuleType returns the canonical rule type or an error.
@@ -209,21 +326,38 @@ func normalizeSSHKeyRuleType(t string) (string, error) {
 	}
 }
 
-// ValidateSSHKeyRule validates a rule definition. Both selectors must be
-// explicit: an empty selector matches no node, so a rule can never be saved or
-// applied without an intentional target.
+// ValidateSSHKeyRule validates a rule definition. Either a source node selector
+// or direct source keys must be provided (never both), and the destination
+// selector must be explicit.
 func ValidateSSHKeyRule(rule SSHKeyRule) error {
+	if strings.TrimSpace(rule.ID) != "" {
+		if err := ValidateSSHKeyRuleID(rule.ID); err != nil {
+			return err
+		}
+	}
 	if _, err := normalizeSSHKeyRuleType(rule.Type); err != nil {
 		return err
 	}
-	if err := ValidateSelector(rule.SrcSelector); err != nil {
-		return fmt.Errorf("source node selector: %w", err)
+	hasSrcSelector := len(rule.SrcSelector) > 0
+	hasSourceKeys := rule.HasSourceKeys()
+	if hasSrcSelector && hasSourceKeys {
+		return fmt.Errorf("cannot specify both source node selector and source keys")
+	}
+	if !hasSrcSelector && !hasSourceKeys {
+		return fmt.Errorf("source node selector or source keys cannot be empty: choose source nodes or provide source key lines")
+	}
+	if hasSrcSelector {
+		if err := ValidateSelector(rule.SrcSelector); err != nil {
+			return fmt.Errorf("source node selector: %w", err)
+		}
+	}
+	if hasSourceKeys {
+		if _, err := ValidateSSHSourceKeysForType(rule.SourceKeys, rule.NormalizedType()); err != nil {
+			return fmt.Errorf("source keys: %w", err)
+		}
 	}
 	if err := ValidateSelector(rule.DstSelector); err != nil {
 		return fmt.Errorf("destination node selector: %w", err)
-	}
-	if len(rule.SrcSelector) == 0 {
-		return fmt.Errorf("source node selector cannot be empty: choose the source nodes explicitly or select all nodes")
 	}
 	if len(rule.DstSelector) == 0 {
 		return fmt.Errorf("destination node selector cannot be empty: choose the destination nodes explicitly or select all nodes")
@@ -262,6 +396,19 @@ var sshKeyAlgorithms = map[string]bool{
 }
 
 var sshKeyBase64Regex = regexp.MustCompile(`^[A-Za-z0-9+/]+={0,2}$`)
+var sshKeyRuleIDRegex = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`)
+
+// ValidateSSHKeyRuleID validates a custom SSH key rule ID.
+func ValidateSSHKeyRuleID(id string) error {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return fmt.Errorf("rule ID cannot be empty")
+	}
+	if !sshKeyRuleIDRegex.MatchString(id) {
+		return fmt.Errorf("invalid rule ID '%s': must be 1-64 characters, start with a letter or digit, and contain only letters, digits, '.', '_' or '-'", id)
+	}
+	return nil
+}
 
 // IsSupportedSSHKeyAlgorithm reports whether algorithm is a known OpenSSH key type.
 func IsSupportedSSHKeyAlgorithm(algorithm string) bool {

@@ -1264,7 +1264,8 @@ export interface SSHPublicKey {
 export interface SSHKeyRule {
   id: string;
   type: SSHKeyRuleType;
-  src_selector: Record<string, string>;
+  src_selector?: Record<string, string>;
+  source_keys?: string;
   dst_selector: Record<string, string>;
   enabled: boolean;
   created_at?: string;

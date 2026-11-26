@@ -111,7 +111,16 @@ function useCopy() {
   return { copied, copy };
 }
 
-/** Rule editor dialog: type + source/destination node selectors. */
+/** Count non-empty, non-comment lines in a direct source keys block. */
+function countSourceKeyLines(raw?: string): number {
+  if (!raw) return 0;
+  return raw
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0 && !l.startsWith("#")).length;
+}
+
+/** Rule editor dialog: type + source (nodes or direct keys) / destination node selectors. */
 const SSHKeyRuleDialog: React.FC<{
   open: boolean;
   rule: SSHKeyRule | null;
@@ -120,9 +129,12 @@ const SSHKeyRuleDialog: React.FC<{
   onClose: () => void;
   onSave: (rule: Partial<SSHKeyRule>) => Promise<void>;
 }> = ({ open, rule, nodes, saving, onClose, onSave }) => {
+  const [ruleId, setRuleId] = useState("");
   const [type, setType] = useState<SSHKeyRuleType>("all");
   const [enabled, setEnabled] = useState(true);
+  const [sourceMode, setSourceMode] = useState<"nodes" | "keys">("nodes");
   const [srcSelector, setSrcSelector] = useState<Record<string, string>>({});
+  const [sourceKeys, setSourceKeys] = useState("");
   const [dstSelector, setDstSelector] = useState<Record<string, string>>({});
   const [selectorError, setSelectorError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -131,17 +143,39 @@ const SSHKeyRuleDialog: React.FC<{
     if (!open) return;
     setError(null);
     setSelectorError(null);
+    setRuleId(rule?.id || "");
     setType((rule?.type as SSHKeyRuleType) || "all");
     setEnabled(rule ? rule.enabled : true);
+    const hasDirectKeys = Boolean(rule?.source_keys && rule.source_keys.trim());
+    setSourceMode(hasDirectKeys ? "keys" : "nodes");
     setSrcSelector(rule?.src_selector || {});
+    setSourceKeys(rule?.source_keys || "");
     setDstSelector(rule?.dst_selector || {});
   }, [open, rule]);
+
+  const sourceKeyLineCount = useMemo(() => countSourceKeyLines(sourceKeys), [sourceKeys]);
+
+  const sourceKeysPlaceholder =
+    type === "authorized_keys"
+      ? "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI... admin@laptop"
+      : type === "known_hosts"
+        ? "example.com,192.168.1.10 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI..."
+        : "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI... admin@laptop\nexample.com,192.168.1.10 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI...";
 
   // Both sides must be chosen explicitly: an empty selector matches no node, so
   // "every node" requires the explicit {"all": "1"} selector from the All nodes tab.
   const handleSave = async () => {
-    if (Object.keys(srcSelector).length === 0) {
+    const trimmedId = ruleId.trim();
+    if (rule && !trimmedId) {
+      setError("Rule ID cannot be empty.");
+      return;
+    }
+    if (sourceMode === "nodes" && Object.keys(srcSelector).length === 0) {
       setError('Select at least one source node, a tag, or "All nodes".');
+      return;
+    }
+    if (sourceMode === "keys" && sourceKeyLineCount === 0) {
+      setError("Enter at least one valid SSH public key line.");
       return;
     }
     if (Object.keys(dstSelector).length === 0) {
@@ -149,7 +183,18 @@ const SSHKeyRuleDialog: React.FC<{
       return;
     }
     setError(null);
-    await onSave({ type, src_selector: srcSelector, dst_selector: dstSelector, enabled });
+    try {
+      await onSave({
+        ...(trimmedId ? { id: trimmedId } : {}),
+        type,
+        src_selector: sourceMode === "nodes" ? srcSelector : {},
+        source_keys: sourceMode === "keys" ? sourceKeys.trim() : "",
+        dst_selector: dstSelector,
+        enabled,
+      });
+    } catch (e: any) {
+      setError(e?.message || "Failed to save SSH key rule");
+    }
   };
 
   return (
@@ -179,6 +224,24 @@ const SSHKeyRuleDialog: React.FC<{
       </DialogTitle>
 
       <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 1.5, pt: 1 }}>
+        <TextField
+          size="small"
+          fullWidth
+          label="Rule ID"
+          value={ruleId}
+          onChange={(e) => setRuleId(e.target.value)}
+          placeholder="Auto-generated (e.g. sshrule_ec06556c)"
+          helperText={
+            rule
+              ? "Unique identifier for this rule (1–64 chars: letters, digits, '.', '_', '-')."
+              : "Optional — leave blank to auto-generate (1–64 chars: letters, digits, '.', '_', '-')."
+          }
+          sx={{
+            mt: 0.5,
+            "& .MuiInputBase-input": { fontFamily: "monospace", fontSize: "0.84rem", fontWeight: 600 },
+          }}
+        />
+
         <Box>
           <Typography variant="subtitle2" sx={{ fontWeight: 800, color: "#1E293B", mb: 0.5 }}>
             Target files
@@ -207,15 +270,93 @@ const SSHKeyRuleDialog: React.FC<{
 
         <Divider />
 
-        <NodeSelector
-          compact
-          label="Source nodes"
-          description="The nodes whose keys are distributed: their SSH server host keys (known_hosts) and/or root login keys (authorized_keys)."
-          nodes={nodes}
-          value={srcSelector}
-          onChange={setSrcSelector}
-          onErrorChange={setSelectorError}
-        />
+        <Box>
+          <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1, flexWrap: "wrap", gap: 1 }}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 800, color: "#1E293B" }}>
+              Source
+            </Typography>
+            <ToggleButtonGroup
+              size="small"
+              exclusive
+              value={sourceMode}
+              onChange={(_, v) => {
+                if (v !== null) {
+                  setSourceMode(v);
+                  setError(null);
+                }
+              }}
+              sx={{
+                "& .MuiToggleButton-root": {
+                  textTransform: "none",
+                  fontWeight: 700,
+                  fontSize: "0.75rem",
+                  px: 1.5,
+                  py: 0.4,
+                  borderColor: "#E2E8F0",
+                  color: "#475569",
+                  "&.Mui-selected": { bgcolor: "#EEF2FF", color: "#4F46E5", borderColor: "#C7D2FE" },
+                },
+              }}
+            >
+              <ToggleButton value="nodes">Source nodes</ToggleButton>
+              <ToggleButton value="keys">Source keys</ToggleButton>
+            </ToggleButtonGroup>
+          </Box>
+
+          {sourceMode === "nodes" ? (
+            <NodeSelector
+              compact
+              label="Source nodes"
+              description="The nodes whose keys are distributed: their SSH server host keys (known_hosts) and/or root login keys (authorized_keys)."
+              nodes={nodes}
+              value={srcSelector}
+              onChange={setSrcSelector}
+              onErrorChange={setSelectorError}
+            />
+          ) : (
+            <Box
+              sx={{
+                p: 1.5,
+                borderRadius: "12px",
+                border: "1px solid #E2E8F0",
+                bgcolor: "#F8FAFC",
+              }}
+            >
+              <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 0.5 }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#1E293B" }}>
+                  Source keys
+                </Typography>
+                <Chip
+                  size="small"
+                  label={`${sourceKeyLineCount} ${sourceKeyLineCount === 1 ? "key" : "keys"}`}
+                  sx={{ height: 20, fontSize: "0.7rem", fontWeight: 700, bgcolor: "#EEF2FF", color: "#4F46E5" }}
+                />
+              </Box>
+              <Typography variant="caption" sx={{ color: "#64748B", display: "block", mb: 1 }}>
+                Enter one key per line in <code>authorized_keys</code> (<code>&lt;algorithm&gt; &lt;key&gt; [comment]</code>) or{" "}
+                <code>known_hosts</code> (<code>&lt;hostnames&gt; &lt;algorithm&gt; &lt;key&gt; [comment]</code>) format. Blank lines and{" "}
+                <code>#</code> comments are ignored.
+              </Typography>
+              <TextField
+                fullWidth
+                multiline
+                minRows={4}
+                maxRows={10}
+                value={sourceKeys}
+                onChange={(e) => setSourceKeys(e.target.value)}
+                placeholder={sourceKeysPlaceholder}
+                sx={{
+                  bgcolor: "#FFFFFF",
+                  "& .MuiInputBase-input": {
+                    fontFamily: "monospace",
+                    fontSize: "0.78rem",
+                    lineHeight: 1.5,
+                  },
+                }}
+              />
+            </Box>
+          )}
+        </Box>
         <NodeSelector
           compact
           label="Destination nodes"
@@ -397,6 +538,19 @@ const SSHKeyRuleKeysDialog: React.FC<{
             {rule && (
               <Chip
                 size="small"
+                label={rule.id}
+                sx={{
+                  fontFamily: "monospace",
+                  fontWeight: 700,
+                  fontSize: "0.7rem",
+                  bgcolor: "#F1F5F9",
+                  color: "#334155",
+                }}
+              />
+            )}
+            {rule && (
+              <Chip
+                size="small"
                 label={rule.type}
                 sx={{ fontWeight: 700, fontSize: "0.7rem", bgcolor: ruleColors.bg, color: ruleColors.fg }}
               />
@@ -404,7 +558,10 @@ const SSHKeyRuleKeysDialog: React.FC<{
           </Box>
           {rule && (
             <Typography variant="caption" sx={{ color: "#64748B", display: "block", mt: 0.2 }}>
-              {describeSelector(rule.src_selector)} → {describeSelector(rule.dst_selector)}
+              {rule.source_keys?.trim()
+                ? `Direct source keys (${countSourceKeyLines(rule.source_keys)})`
+                : describeSelector(rule.src_selector || {})}{" "}
+              → {describeSelector(rule.dst_selector)}
               {matched && matched.source_nodes.length > 0
                 ? ` · ${matched.source_nodes.length} source node(s): ${matched.source_nodes.join(", ")}`
                 : ""}
@@ -541,6 +698,7 @@ export const SSHKeysTab: React.FC = () => {
       setStateToast({ message: editingRule ? "SSH key rule updated." : "SSH key rule created.", severity: "success" });
     } catch (e: any) {
       setStateToast({ message: e.message || "Failed to save SSH key rule", severity: "error" });
+      throw e;
     } finally {
       setSaving(false);
     }
@@ -938,8 +1096,9 @@ export const SSHKeysTab: React.FC = () => {
             <Table sx={{ minWidth: 860 }}>
               <TableHead sx={{ bgcolor: "#F8FAFC" }}>
                 <TableRow>
-                  <TableCell sx={{ fontWeight: 800, color: "#475569", width: 150 }}>TYPE</TableCell>
-                  <TableCell sx={{ fontWeight: 800, color: "#475569" }}>SOURCE NODES</TableCell>
+                  <TableCell sx={{ fontWeight: 800, color: "#475569", width: 170 }}>ID</TableCell>
+                  <TableCell sx={{ fontWeight: 800, color: "#475569", width: 140 }}>TYPE</TableCell>
+                  <TableCell sx={{ fontWeight: 800, color: "#475569" }}>SOURCE</TableCell>
                   <TableCell sx={{ fontWeight: 800, color: "#475569" }}>DESTINATION NODES</TableCell>
                   <TableCell sx={{ fontWeight: 800, color: "#475569", width: 120 }}>ENABLED</TableCell>
                   <TableCell align="right" sx={{ fontWeight: 800, color: "#475569", width: 136 }}>
@@ -950,7 +1109,9 @@ export const SSHKeysTab: React.FC = () => {
               <TableBody>
                 {rules.map((rule) => {
                   const colors = RULE_TYPE_COLORS[rule.type] || RULE_TYPE_COLORS.all;
-                  const srcs = matchedNames(rule.src_selector);
+                  const hasDirectKeys = Boolean(rule.source_keys && rule.source_keys.trim());
+                  const directKeyCount = hasDirectKeys ? countSourceKeyLines(rule.source_keys) : 0;
+                  const srcs = hasDirectKeys ? [] : matchedNames(rule.src_selector || {});
                   const dsts = matchedNames(rule.dst_selector);
                   const busy = busyRuleId === rule.id;
                   return (
@@ -959,6 +1120,14 @@ export const SSHKeysTab: React.FC = () => {
                       sx={{ "&:hover": { bgcolor: "#F8FAFC" }, "& td": { borderColor: "#F1F5F9" } }}
                     >
                       <TableCell>
+                        <Typography
+                          variant="body2"
+                          sx={{ fontFamily: "monospace", fontWeight: 700, fontSize: "0.78rem", color: "#334155" }}
+                        >
+                          {rule.id}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
                         <Chip
                           size="small"
                           label={rule.type}
@@ -966,12 +1135,25 @@ export const SSHKeysTab: React.FC = () => {
                         />
                       </TableCell>
                       <TableCell>
-                        <Typography variant="body2" sx={{ fontWeight: 600, color: "#334155", fontSize: "0.82rem" }}>
-                          {describeSelector(rule.src_selector)}
-                        </Typography>
-                        <Typography variant="caption" sx={{ color: "#94A3B8" }}>
-                          {srcs.length ? `${srcs.length} node(s): ${srcs.join(", ")}` : "matches no node"}
-                        </Typography>
+                        {hasDirectKeys ? (
+                          <>
+                            <Typography variant="body2" sx={{ fontWeight: 600, color: "#334155", fontSize: "0.82rem" }}>
+                              Direct source keys
+                            </Typography>
+                            <Typography variant="caption" sx={{ color: "#94A3B8" }}>
+                              {directKeyCount} {directKeyCount === 1 ? "key line" : "key lines"}
+                            </Typography>
+                          </>
+                        ) : (
+                          <>
+                            <Typography variant="body2" sx={{ fontWeight: 600, color: "#334155", fontSize: "0.82rem" }}>
+                              {describeSelector(rule.src_selector || {})}
+                            </Typography>
+                            <Typography variant="caption" sx={{ color: "#94A3B8" }}>
+                              {srcs.length ? `${srcs.length} node(s): ${srcs.join(", ")}` : "matches no node"}
+                            </Typography>
+                          </>
+                        )}
                       </TableCell>
                       <TableCell>
                         <Typography variant="body2" sx={{ fontWeight: 600, color: "#334155", fontSize: "0.82rem" }}>
@@ -1210,8 +1392,15 @@ export const SSHKeysTab: React.FC = () => {
         <DialogTitle sx={{ fontWeight: 700 }}>Delete SSH Key Rule</DialogTitle>
         <DialogContent>
           <Typography variant="body2" sx={{ color: "#475569" }}>
-            Delete this <strong>{deleteRule?.type}</strong> rule from{" "}
-            <strong>{deleteRule ? describeSelector(deleteRule.src_selector) : ""}</strong> to{" "}
+            Delete this <strong>{deleteRule?.type}</strong> rule (<code>{deleteRule?.id}</code>) from{" "}
+            <strong>
+              {deleteRule
+                ? deleteRule.source_keys?.trim()
+                  ? "direct source keys"
+                  : describeSelector(deleteRule.src_selector || {})
+                : ""}
+            </strong>{" "}
+            to{" "}
             <strong>{deleteRule ? describeSelector(deleteRule.dst_selector) : ""}</strong>? Keys that are no longer
             granted by any rule are removed from the destination key files on the next sync.
           </Typography>

@@ -323,6 +323,7 @@ const ConfigChangeJSONSchema = `{
         "id": { "type": "string" },
         "type": { "type": "string", "enum": ["known_hosts", "authorized_keys", "all"] },
         "src_selector": { "$ref": "#/definitions/NodeSelector" },
+        "source_keys": { "type": "string" },
         "dst_selector": { "$ref": "#/definitions/NodeSelector" },
         "enabled": { "type": "boolean" }
       }
