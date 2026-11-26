@@ -1431,28 +1431,30 @@ export const AppsPage: React.FC = () => {
   }, [workloadApps, search, typeFilter, nodeFilter, groupFilter, nodes]);
 
   const filteredScripts = useMemo(() => {
-    return scriptApps.filter((a) => {
-      if (scriptSearch.trim()) {
-        const q = scriptSearch.trim().toLowerCase();
-        const matchName = a.name.toLowerCase().includes(q);
-        const matchDesc = a.description?.toLowerCase().includes(q);
-        const matchNote = a.note?.toLowerCase().includes(q);
-        const matchGroup = a.group?.toLowerCase().includes(q);
-        if (!matchName && !matchDesc && !matchNote && !matchGroup) return false;
-      }
-      if (nodeFilter !== "all") {
-        const nodeObj = nodes.find((n) => n.name === nodeFilter);
-        if (!nodeObj || !matchesTaskSelector(nodeObj, a.selector)) return false;
-      }
-      if (groupFilter !== "all") {
-        if (groupFilter === "ungrouped") {
-          if (a.group && a.group.trim()) return false;
-        } else {
-          if ((a.group || "").trim().toLowerCase() !== groupFilter.trim().toLowerCase()) return false;
+    return scriptApps
+      .filter((a) => {
+        if (scriptSearch.trim()) {
+          const q = scriptSearch.trim().toLowerCase();
+          const matchName = a.name.toLowerCase().includes(q);
+          const matchDesc = a.description?.toLowerCase().includes(q);
+          const matchNote = a.note?.toLowerCase().includes(q);
+          const matchGroup = a.group?.toLowerCase().includes(q);
+          if (!matchName && !matchDesc && !matchNote && !matchGroup) return false;
         }
-      }
-      return true;
-    });
+        if (nodeFilter !== "all") {
+          const nodeObj = nodes.find((n) => n.name === nodeFilter);
+          if (!nodeObj || !matchesTaskSelector(nodeObj, a.selector)) return false;
+        }
+        if (groupFilter !== "all") {
+          if (groupFilter === "ungrouped") {
+            if (a.group && a.group.trim()) return false;
+          } else {
+            if ((a.group || "").trim().toLowerCase() !== groupFilter.trim().toLowerCase()) return false;
+          }
+        }
+        return true;
+      })
+      .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" }));
   }, [scriptApps, scriptSearch, nodeFilter, groupFilter, nodes]);
 
   const appGroups = useMemo(() => {
@@ -1483,9 +1485,8 @@ export const AppsPage: React.FC = () => {
     return scriptApps.filter((a) => !a.group || !a.group.trim()).length;
   }, [scriptApps]);
 
-  // Sorted apps for the list (table) view; card view keeps API order
+  // Sorted apps for both list (table) and card views
   const sortedApps = useMemo(() => {
-    if (view !== "table") return filteredApps;
     const list = [...filteredApps];
     list.sort((a, b) => {
       let comparison = 0;
@@ -1511,7 +1512,7 @@ export const AppsPage: React.FC = () => {
       return sortOrder === "asc" ? comparison : -comparison;
     });
     return list;
-  }, [filteredApps, view, sortField, sortOrder]);
+  }, [filteredApps, sortField, sortOrder]);
 
   const isFiltering = Boolean(search.trim() || typeFilter !== "all" || nodeFilter !== "all" || groupFilter !== "all");
 
@@ -3154,7 +3155,7 @@ export const AppsPage: React.FC = () => {
           ) : (
             /* Full-Width Grid Cards */
             <Grid container spacing={2.5}>
-              {filteredApps.map((app) => (
+              {sortedApps.map((app) => (
                 <Grid item xs={12} sm={6} md={4} lg={3} xl={2.4} key={app.id}>
                   <Card
                     elevation={0}
