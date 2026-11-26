@@ -41,6 +41,7 @@ import {
   Eye,
   EyeOff,
   Download,
+  QrCode,
 } from "lucide-react";
 import { api } from "../../api/client";
 import { downloadTextFile } from "../../utils/common";
@@ -50,6 +51,7 @@ import { getEffectiveLinkCost } from "../../utils/cost";
 import { getLinkWorkingState } from "./TopologyGraph";
 import { isVirtualLink } from "../../utils/link";
 import { LinkKeyActionModal, LinkKeyActionMode } from "../Modals/LinkKeyActionModal";
+import { ClientWgQrModal } from "../Modals/ClientWgQrModal";
 import { MeshContext } from "../../context/MeshContext";
 
 interface LinkDetailDrawerProps {
@@ -113,6 +115,7 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [togglingDisabled, setTogglingDisabled] = useState(false);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [qrModalOpen, setQrModalOpen] = useState(false);
   const [copiedEndpoint, setCopiedEndpoint] = useState<string | null>(null);
   const [copiedField, setCopiedField] = useState<string | null>(null);
 
@@ -2741,30 +2744,50 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
         </Button>
         {clientNode ? (
           <>
-            <Button
-              fullWidth
-              variant="contained"
-              startIcon={<Download size={16} />}
-              onClick={async () => {
-                try {
-                  const res = await api.getClientWgConfig(clientNode.name);
-                  downloadTextFile(res.filename || `wgc-${clientNode.name}.conf`, res.config);
-                } catch (err: any) {
-                  setError(err?.message || "Failed to download wg.conf");
-                }
-              }}
-              sx={{
-                background: "linear-gradient(135deg, #0D9488 0%, #0F766E 100%)",
-                color: "#FFFFFF",
-                fontWeight: 700,
-                textTransform: "none",
-                "&:hover": {
-                  background: "linear-gradient(135deg, #0F766E 0%, #115E59 100%)",
-                },
-              }}
-            >
-              Download Client wg.conf
-            </Button>
+            <Box sx={{ display: "flex", gap: 1 }}>
+              <Button
+                fullWidth
+                variant="contained"
+                startIcon={<Download size={16} />}
+                onClick={async () => {
+                  try {
+                    const res = await api.getClientWgConfig(clientNode.name);
+                    downloadTextFile(res.filename || `wgc-${clientNode.name}.conf`, res.config);
+                  } catch (err: any) {
+                    setError(err?.message || "Failed to download wg.conf");
+                  }
+                }}
+                sx={{
+                  background: "linear-gradient(135deg, #0D9488 0%, #0F766E 100%)",
+                  color: "#FFFFFF",
+                  fontWeight: 700,
+                  textTransform: "none",
+                  "&:hover": {
+                    background: "linear-gradient(135deg, #0F766E 0%, #115E59 100%)",
+                  },
+                }}
+              >
+                Download Client wg.conf
+              </Button>
+              <Button
+                variant="outlined"
+                startIcon={<QrCode size={16} />}
+                onClick={() => setQrModalOpen(true)}
+                sx={{
+                  color: "#0D9488",
+                  borderColor: "#99F6E4",
+                  fontWeight: 700,
+                  textTransform: "none",
+                  flexShrink: 0,
+                  "&:hover": {
+                    borderColor: "#0D9488",
+                    backgroundColor: "rgba(13, 148, 136, 0.06)",
+                  },
+                }}
+              >
+                QR Code
+              </Button>
+            </Box>
             <Alert severity="info" sx={{ borderRadius: 1.5, py: 0.5 }}>
               This link is managed as a single unit with client node <strong>{clientNode.name}</strong>. Delete the
               client node to remove this link.
@@ -2942,6 +2965,8 @@ export const LinkDetailDrawer: React.FC<LinkDetailDrawerProps> = ({
           </form>
         )}
       </Dialog>
+
+      <ClientWgQrModal open={qrModalOpen} onClose={() => setQrModalOpen(false)} nodeName={clientNode?.name ?? null} />
     </Drawer>
   );
 };

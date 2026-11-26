@@ -74,10 +74,12 @@ import {
   ChevronDown,
   FileCode2,
   Download,
+  QrCode,
 } from "lucide-react";
 import { useMesh } from "../context/MeshContext";
 import { downloadTextFile } from "../utils/common";
 import { api } from "../api/client";
+import { ClientWgQrModal } from "../components/Modals/ClientWgQrModal";
 import { Node, NodeMetricPoint, GraphBlock, Link, NetworkPolicy } from "../types/api";
 import { MetricAreaChart } from "../components/Nodes/MetricAreaChart";
 import { MarkdownView } from "../components/Common/MarkdownView";
@@ -262,6 +264,7 @@ export const NodeDetailPage: React.FC = () => {
   // Sidebar states
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
   const [sidebarSearch, setSidebarSearch] = useState("");
+  const [qrModalOpen, setQrModalOpen] = useState(false);
 
   // Telemetry state
   const [range, setRange] = useState<string>("24h");
@@ -1502,7 +1505,7 @@ export const NodeDetailPage: React.FC = () => {
               </Box>
             </Box>
 
-            {/* Client Node wg.conf download button */}
+            {/* Client Node wg.conf download & QR code buttons */}
             {node?.is_client && (
               <Box sx={{ display: "flex", gap: 1 }}>
                 <Button
@@ -1528,6 +1531,30 @@ export const NodeDetailPage: React.FC = () => {
                 >
                   Download wg.conf
                 </Button>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  startIcon={<QrCode size={15} />}
+                  onClick={() => setQrModalOpen(true)}
+                  sx={{
+                    color: "#0D9488",
+                    borderColor: "#99F6E4",
+                    fontWeight: 700,
+                    textTransform: "none",
+                    borderRadius: 1.5,
+                    "&:hover": {
+                      borderColor: "#0D9488",
+                      backgroundColor: "rgba(13, 148, 136, 0.06)",
+                    },
+                  }}
+                >
+                  QR Code
+                </Button>
+                <ClientWgQrModal
+                  open={qrModalOpen}
+                  onClose={() => setQrModalOpen(false)}
+                  nodeName={node?.name ?? null}
+                />
               </Box>
             )}
 

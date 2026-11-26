@@ -42,12 +42,14 @@ import {
   AlertTriangle,
   Download,
   Laptop,
+  QrCode,
 } from "lucide-react";
 import { api } from "../../api/client";
 import { downloadTextFile } from "../../utils/common";
 import { Node, NodeStatus } from "../../types/api";
 import { useMesh } from "../../context/MeshContext";
 import { isAgentVersionOutdated } from "../../utils/version";
+import { ClientWgQrModal } from "../Modals/ClientWgQrModal";
 
 const formatBytes = (bytes?: number): string => {
   if (!bytes || isNaN(bytes) || bytes <= 0) return "0B";
@@ -113,6 +115,7 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [viewingBird, setViewingBird] = useState(false);
+  const [qrModalOpen, setQrModalOpen] = useState(false);
   const [birdConfig, setBirdConfig] = useState<string | null>(null);
   const [loadingBird, setLoadingBird] = useState(false);
   const [viewingNftables, setViewingNftables] = useState(false);
@@ -1811,34 +1814,56 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
       {/* Footer Actions */}
       <Box sx={{ mt: "auto", pt: 3, display: "flex", flexDirection: "column", gap: 1 }}>
         {node.is_client && (
-          <Button
-            id="download-client-wg-btn"
-            fullWidth
-            variant="contained"
-            startIcon={<Download size={16} />}
-            onClick={async () => {
-              try {
-                const res = await api.getClientWgConfig(node.name);
-                downloadTextFile(res.filename || `wgc-${node.name}.conf`, res.config);
-              } catch (err: any) {
-                alert(err?.message || "Failed to download wg.conf");
-              }
-            }}
-            sx={{
-              background: "linear-gradient(135deg, #0D9488 0%, #0F766E 100%)",
-              color: "#FFFFFF",
-              fontWeight: 700,
-              textTransform: "none",
-              py: 1,
-              boxShadow: "0 2px 6px rgba(13, 148, 136, 0.25)",
-              "&:hover": {
-                background: "linear-gradient(135deg, #0F766E 0%, #115E59 100%)",
-                boxShadow: "0 4px 10px rgba(13, 148, 136, 0.35)",
-              },
-            }}
-          >
-            Download wg.conf
-          </Button>
+          <Box sx={{ display: "flex", gap: 1 }}>
+            <Button
+              id="download-client-wg-btn"
+              fullWidth
+              variant="contained"
+              startIcon={<Download size={16} />}
+              onClick={async () => {
+                try {
+                  const res = await api.getClientWgConfig(node.name);
+                  downloadTextFile(res.filename || `wgc-${node.name}.conf`, res.config);
+                } catch (err: any) {
+                  alert(err?.message || "Failed to download wg.conf");
+                }
+              }}
+              sx={{
+                background: "linear-gradient(135deg, #0D9488 0%, #0F766E 100%)",
+                color: "#FFFFFF",
+                fontWeight: 700,
+                textTransform: "none",
+                py: 1,
+                boxShadow: "0 2px 6px rgba(13, 148, 136, 0.25)",
+                "&:hover": {
+                  background: "linear-gradient(135deg, #0F766E 0%, #115E59 100%)",
+                  boxShadow: "0 4px 10px rgba(13, 148, 136, 0.35)",
+                },
+              }}
+            >
+              Download wg.conf
+            </Button>
+            <Button
+              id="qr-client-wg-btn"
+              variant="outlined"
+              startIcon={<QrCode size={16} />}
+              onClick={() => setQrModalOpen(true)}
+              sx={{
+                color: "#0D9488",
+                borderColor: "#99F6E4",
+                fontWeight: 700,
+                textTransform: "none",
+                py: 1,
+                flexShrink: 0,
+                "&:hover": {
+                  borderColor: "#0D9488",
+                  backgroundColor: "rgba(13, 148, 136, 0.06)",
+                },
+              }}
+            >
+              QR Code
+            </Button>
+          </Box>
         )}
         {!node.is_external && !node.is_client && (
           <Button
@@ -2272,6 +2297,8 @@ export const NodeDetailDrawer: React.FC<NodeDetailDrawerProps> = ({
           </Button>
         </DialogActions>
       </Dialog>
+
+      <ClientWgQrModal open={qrModalOpen} onClose={() => setQrModalOpen(false)} nodeName={node?.name ?? null} />
     </Drawer>
   );
 };
